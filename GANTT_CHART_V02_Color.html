@@ -31,6 +31,28 @@
         --w-detail: 38%;     
         --w-chart: 12%;      
         --w-default: 2.5%;   
+
+        /* 🎨 동적 테마 색상 (CSS Variables) - JS에서 자동 제어됨 */
+        --c-l0-bg: #1a237e;
+        --c-l0-border: #0d47a1;
+        --c-l0-text: #ffffff;
+        --c-l0-chart-label: #e8eaf6;
+
+        --c-l1-bg: #dce2f2;
+        --c-l1-border: #b4bedc;
+        --c-l1-text: #1a237e;
+
+        --c-l2-bg: #e8eaf6;
+        --c-l2-border: #c5cae9;
+        --c-l2-text: #283593;
+
+        --c-l3-bg: #ffffff;
+        --c-l3-border: #dee2e6;
+        --c-l3-text: #333333;
+
+        --c-l4-bg: #f8f9fc;
+        --c-l4-border: #e9ecef;
+        --c-l4-text: #495057;
     }
 
     @media print {
@@ -70,7 +92,6 @@
     
     #table-info {
         display: flex;
-        justify-content: space-between;
         align-items: center;
         font-size: 15px;
         font-weight: bold;
@@ -92,51 +113,15 @@
     th, td { padding: var(--table-cell-padding); text-align: left; vertical-align: middle; line-height: var(--table-line-height); box-sizing: border-box; border: 1px solid #ddd; }
     th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 15px !important; padding-bottom: 15px !important; }
     
-    /* =============================================================
-       🖥️ 세련되고 정돈된 인디고 & 티알 계층별 색상 정의
-       ============================================================= */
-    /* Level 0 (최상위 - 개발단계): 신뢰감을 주는 Deep Indigo 베이스 */
-    .parent-row td {
-        background-color: #1a237e !important; 
-        font-weight: bold;
-        border-top: 3px solid #0d47a1; 
-        color: #ffffff !important; 
-        border-right: 1px solid #ffffff33; 
-    }
-    .parent-row .no-td, .parent-row .no-td .row-num-span { color: #ffffff !important; }
-    .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: #e8eaf6 !important; }
+    /* 🎨 적용된 동적 테마 CSS Variables */
+    .parent-row td { background-color: var(--c-l0-bg) !important; font-weight: bold; border-top: 3px solid var(--c-l0-border); color: var(--c-l0-text) !important; border-right: 1px solid #ffffff33; }
+    .parent-row .no-td, .parent-row .no-td .row-num-span { color: var(--c-l0-text) !important; }
+    .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: var(--c-l0-chart-label) !important; }
 
-    /* Level 1: Soft Indigo (연한 청색) */
-    .sub-parent-row td {
-        background-color: #c5cae9 !important; 
-        font-weight: bold;
-        border-top: 2px solid #9fa8da;
-        color: #1a237e; 
-    }
-
-    /* Level 2: Lighter Blue (아주 연한 청색) */
-    .sub-parent-row-2 td {
-        background-color: #e8eaf6 !important; 
-        font-weight: normal;
-        border-top: 1px dashed #c5cae9;
-        color: #283593;
-    }
-
-    /* Level 3: Pure White (가독성을 위한 화이트) */
-    .sub-parent-row-3 td {
-        background-color: #ffffff !important;
-        font-weight: normal;
-        border-top: 1px dashed #dee2e6;
-        color: #333333;
-    }
-
-    /* Level 4: Pale Blue Gray (푸른빛이 살짝 도는 화이트그레이) */
-    .sub-parent-row-4 td {
-        background-color: #f8f9fc !important;
-        font-weight: normal;
-        border-top: 1px dashed #e9ecef;
-        color: #495057;
-    }
+    .sub-parent-row td { background-color: var(--c-l1-bg) !important; font-weight: bold; border-top: 2px solid var(--c-l1-border); color: var(--c-l1-text); }
+    .sub-parent-row-2 td { background-color: var(--c-l2-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l2-border); color: var(--c-l2-text); }
+    .sub-parent-row-3 td { background-color: var(--c-l3-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l3-border); color: var(--c-l3-text); }
+    .sub-parent-row-4 td { background-color: var(--c-l4-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l4-border); color: var(--c-l4-text); }
 
     .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
@@ -206,7 +191,13 @@
     </div>
 
     <div id="table-info">
-        <span id="table-info-text">📊 Gantt Chart (파일을 업로드 해주세요)</span>
+        <span id="table-info-text">📊 Gantt Chart</span>
+        
+        <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
+            <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
+            <input type="color" id="themePicker" value="#1a237e" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+        </div>
+
         <div class="btn-group">
             <button class="action-btn history-btn" onclick="showHistoryModal()">🕒 수정 이력 확인</button>
             <button class="action-btn" onclick="location.reload()" style="border-color:#17a2b8; color:#17a2b8;">🔄 새로고침 (F5)</button>
@@ -239,12 +230,82 @@
     </div>
 
 <script>
+    // =========================================================
+    // 🎨 테마 그라데이션 자동 생성 로직 (HEX -> HSL 변환)
+    // =========================================================
+    function hexToHSL(H) {
+        let r = 0, g = 0, b = 0;
+        if (H.length === 4) { r = "0x" + H[1] + H[1]; g = "0x" + H[2] + H[2]; b = "0x" + H[3] + H[3]; } 
+        else if (H.length === 7) { r = "0x" + H[1] + H[2]; g = "0x" + H[3] + H[4]; b = "0x" + H[5] + H[6]; }
+        r /= 255; g /= 255; b /= 255;
+        let cmin = Math.min(r,g,b), cmax = Math.max(r,g,b), delta = cmax - cmin, h = 0, s = 0, l = 0;
+        if (delta === 0) h = 0;
+        else if (cmax === r) h = ((g - b) / delta) % 6;
+        else if (cmax === g) h = (b - r) / delta + 2;
+        else h = (r - g) / delta + 4;
+        h = Math.round(h * 60); if (h < 0) h += 360;
+        l = (cmax + cmin) / 2;
+        s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+        s = +(s * 100).toFixed(1); l = +(l * 100).toFixed(1);
+        return {h, s, l};
+    }
+
+    window.chartColors = { l0: "#1a237e", l1: "#3949ab", l2: "#7986cb", l3: "#c5cae9" };
+
+    window.updateThemeColor = function(baseHex) {
+        let hsl = hexToHSL(baseHex);
+        let h = hsl.h; let s = hsl.s; let l0 = hsl.l;
+
+        // 글자 가독성 자동 보정 (배경이 밝으면 검은 글씨, 어두우면 흰 글씨)
+        let l0Text = l0 > 60 ? '#333333' : '#ffffff';
+        let darkTextL = Math.min(l0, 40); // L1, L2 등 하위 레벨의 텍스트 색상을 진하게 유지
+
+        let root = document.documentElement;
+
+        // Level 0: 사용자가 선택한 메인 컬러
+        root.style.setProperty('--c-l0-bg', baseHex);
+        root.style.setProperty('--c-l0-border', `hsl(${h}, ${s}%, ${Math.max(0, l0 - 15)}%)`);
+        root.style.setProperty('--c-l0-text', l0Text);
+        root.style.setProperty('--c-l0-chart-label', l0Text === '#ffffff' ? `hsl(${h}, ${s}%, 90%)` : `hsl(${h}, ${s}%, 20%)`);
+
+        // Level 1: 밝게 처리
+        root.style.setProperty('--c-l1-bg', `hsl(${h}, ${Math.max(0, s - 10)}%, 88%)`);
+        root.style.setProperty('--c-l1-border', `hsl(${h}, ${Math.max(0, s - 10)}%, 75%)`);
+        root.style.setProperty('--c-l1-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
+
+        // Level 2: 더 밝게 처리
+        root.style.setProperty('--c-l2-bg', `hsl(${h}, ${Math.max(0, s - 15)}%, 94%)`);
+        root.style.setProperty('--c-l2-border', `hsl(${h}, ${Math.max(0, s - 15)}%, 85%)`);
+        root.style.setProperty('--c-l2-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
+
+        // Level 3 & 4 : 매우 밝은 흰색 계열 유지
+        root.style.setProperty('--c-l3-bg', `#ffffff`);
+        root.style.setProperty('--c-l3-border', `#dee2e6`);
+        root.style.setProperty('--c-l3-text', `#333333`);
+
+        root.style.setProperty('--c-l4-bg', `hsl(${h}, ${Math.max(0, s - 20)}%, 98%)`);
+        root.style.setProperty('--c-l4-border', `#e9ecef`);
+        root.style.setProperty('--c-l4-text', `#495057`);
+
+        // 차트 막대그래프 톤온톤 그라데이션 자동 생성
+        window.chartColors = {
+            l0: baseHex,
+            l1: `hsl(${h}, ${s}%, ${Math.min(l0 + 15, 60)}%)`,
+            l2: `hsl(${h}, ${s}%, ${Math.min(l0 + 30, 75)}%)`,
+            l3: `hsl(${h}, ${Math.max(0, s - 10)}%, 85%)`
+        };
+
+        // 화면 실시간 업데이트
+        if (globalData && globalData.length > 1) applyFilters();
+    };
+
+    // =========================================================
+
     window.exportFilenameStr = "GanttChart_All";
     window.ganttViewStartTs = null;
     window.ganttViewDuration = null;
     window.changeLogs = []; 
 
-    // 복구 완료된 2035년까지의 대한민국 공휴일 데이터
     const KOR_HOLIDAYS = [
         "2024-01-01", "2024-02-09", "2024-02-12", "2024-03-01", "2024-04-10", "2024-05-05", "2024-05-06", "2024-05-15", "2024-06-06", "2024-08-15", "2024-09-16", "2024-09-17", "2024-09-18", "2024-10-03", "2024-10-09", "2024-12-25",
         "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30", "2025-03-01", "2025-03-03", "2025-05-05", "2025-05-06", "2025-06-06", "2025-08-15", "2025-10-03", "2025-10-05", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-12-25",
@@ -679,7 +740,6 @@
         if (statusEl) statusEl.textContent = "일정을 재계산하는 중입니다...";
 
         setTimeout(() => {
-            // 1. [전체 WBS 소속 정보(Cascade) 강제 동기화] - 계층 변경 시 엉뚱한 연산 원천 차단
             let curD0 = "", curT1 = "", curT2 = "", curT3 = "", curT4 = "";
             for (let i = 1; i < globalData.length; i++) {
                 let row = globalData[i]; if (!row) continue;
@@ -701,7 +761,6 @@
                 if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level + 1; 
             }
 
-            // 실시간 필터 동기화
             generateFilters(globalData);
 
             let validRows = globalData.slice(1);
@@ -726,7 +785,6 @@
                     if (colIdx.plan !== -1) row[colIdx.plan] = formatTsToYMD(row._explicitPlanTs);
                 }
                 
-                // [버그 수정]: 파일 전체에서 가장 빠른 수동 시작일을 완벽하게 스캔
                 if (row._explicitStartTs) {
                     if (fileGlobalStartTs === null || row._explicitStartTs < fileGlobalStartTs) {
                         fileGlobalStartTs = row._explicitStartTs;
@@ -790,7 +848,6 @@
                     
                     scheduleNode(child, intendedStart);
                     
-                    // [중요 버그 수정]: 기준 업무(앵커)의 실제 계산된 시작일을 정확히 동기화
                     if (isFirstValid) {
                         groupStartTs = child.startTs;
                         isFirstValid = false;
@@ -820,7 +877,6 @@
                 
                 scheduleNode(l0Node, intendedStart);
                 
-                // [중요 버그 수정]: 최상위 레벨(L0) 앵커 동기화
                 if (isFirstValidL0) {
                     groupL0StartTs = l0Node.startTs;
                     isFirstValidL0 = false;
@@ -1469,7 +1525,9 @@
 
         let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
         let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
-        let barColorVar = level === 0 ? "#ff8787" : (level === 1 ? "#74c0fc" : (level === 2 ? "#ffe066" : "#8ce200"));
+        
+        // 동적 테마 색상을 차트 막대그래프에도 적용
+        let barColorVar = level === 0 ? window.chartColors.l0 : (level === 1 ? window.chartColors.l1 : (level === 2 ? window.chartColors.l2 : window.chartColors.l3));
         if (isCancel || isDrop) barColorVar = "#adb5bd"; 
 
         let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
@@ -1478,7 +1536,7 @@
 
         let labelHTML = ''; for (let i = 0; i <= 4; i++) { let pct = (i / 4) * 100; let ts = viewStartTs + (viewDuration * i / 4); let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5;">${formatChartLabel(ts)}</span>`; }
         let durationDays = countWorkingDays(tsStart, tsEnd);
-        return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class="chart-axis-wrapper">${labelHTML}</div><div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">${gridLines}${todayLine}<div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; background-color:${barColorVar}; border-radius:4px; z-index:2; opacity:0.95; display:flex; justify-content:flex-start; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div></div>`;
+        return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class=\"chart-axis-wrapper\">${labelHTML}</div><div style=\"position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;\">${gridLines}${todayLine}<div style=\"position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; background-color:${barColorVar}; border-radius:4px; z-index:2; opacity:0.95; display:flex; justify-content:flex-start; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);\"></div></div></div>`;
     }
 </script>
 </body>
