@@ -1,0 +1,1485 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>Gantt Chart</title>
+<script>
+    if (window.name !== 'gantt_popup') {
+        const w = screen.availWidth, h = screen.availHeight;
+        const newWin = window.open(location.href, 'gantt_popup',
+            `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
+        if (newWin) { newWin.focus(); window.close(); }
+    }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<style>
+    :root {
+        --table-font-size: 13px;       
+        --table-cell-padding: 4px 5px; 
+        --table-line-height: 1.3;      
+        --chart-label-size: 9px;       
+        --badge-bg: #e1f5fe;
+        --badge-text: #0f5132;
+        --badge-border: #badbcc;
+        --today-line: rgba(224, 49, 49, 0.9); 
+        --trans-text: #0056b3; 
+
+        --w-no: 2%;        
+        --w-date: 2.5%;      
+        --w-period: 2.5%;    
+        --w-wbs: 14%;        
+        --w-detail: 38%;     
+        --w-chart: 12%;      
+        --w-default: 2.5%;   
+    }
+
+    @media print {
+        :root {
+            --w-no: 3%;          
+            --w-date: 3%;        
+            --w-period: 3%;      
+            --w-wbs: 20%;        
+            --w-detail: 28%;     
+            --w-chart: 15%;      
+            --w-default: 3%;     
+        }
+    }
+
+    body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
+    
+    .btn-group { display: flex; gap: 5px; align-items: center; }
+    .action-btn { padding: 6px 12px; font-size: 13px; font-weight: bold; cursor: pointer; border: 2px solid #0056b3; background-color: #fff; color: #0056b3; border-radius: 6px; transition: 0.2s; height: 32px; box-sizing: border-box; display: flex; align-items: center; }
+    .action-btn:hover { background-color: #0056b3; color: #fff; }
+    .history-btn { border-color: #6f42c1; color: #6f42c1; }
+    .history-btn:hover { background-color: #6f42c1; color: #fff; }
+
+    .controls { margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; transition: 0.3s; }
+    .controls.drag-over { border: 2px dashed #007bff !important; background-color: #e7f1ff !important; }
+    
+    .filter-group { margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; transition: 0.3s; }
+    .filter-label { font-weight: bold; width: 80px; margin-right: 10px; background: #e9ecef; padding: 5px; text-align: center; border-radius: 4px; font-size: 13px; }
+    
+    .btn { padding: 6px 12px; margin: 3px; cursor: pointer; border: 1px solid #ccc; background-color: #fff; color: #333; border-radius: 20px; font-size: 13px; transition: 0.2s; }
+    .btn:hover { background-color: #e2e6ea; }
+    .btn.active { background-color: #007bff; color: white; border-color: #007bff; font-weight: bold; box-shadow: 0 0 5px rgba(0,123,255,0.4); }
+    .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
+    .btn.dimmed:hover { opacity: 0.8; background-color: #e2e6ea; color: #333; border: 1px solid #ccc; }
+    .btn.active.dimmed { opacity: 1; border-style: solid; }
+    .badge { background-color: #e9ecef; color: #333; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 4px; font-weight: bold; }
+    .btn.active .badge { background-color: #fff; color: #007bff; }
+    
+    #table-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 15px;
+        font-weight: bold;
+        margin: 0;
+        padding: 0 15px;
+        color: #0056b3;
+        background-color: #f8f9fa;
+        border: 1px solid #ccc;
+        border-bottom: none;
+        border-radius: 8px 8px 0 0;
+        box-sizing: border-box;
+        height: 50px;
+        position: sticky;
+        top: 0;
+        z-index: 100;
+    }
+
+    table { border-collapse: collapse; width: 100%; min-width: 100%; font-size: var(--table-font-size); table-layout: fixed; }
+    th, td { padding: var(--table-cell-padding); text-align: left; vertical-align: middle; line-height: var(--table-line-height); box-sizing: border-box; border: 1px solid #ddd; }
+    th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 15px !important; padding-bottom: 15px !important; }
+    
+    /* =============================================================
+       🖥️ 세련되고 정돈된 인디고 & 티알 계층별 색상 정의
+       ============================================================= */
+    /* Level 0 (최상위 - 개발단계): 신뢰감을 주는 Deep Indigo 베이스 */
+    .parent-row td {
+        background-color: #1a237e !important; 
+        font-weight: bold;
+        border-top: 3px solid #0d47a1; 
+        color: #ffffff !important; 
+        border-right: 1px solid #ffffff33; 
+    }
+    .parent-row .no-td, .parent-row .no-td .row-num-span { color: #ffffff !important; }
+    .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: #e8eaf6 !important; }
+
+    /* Level 1: Soft Indigo (연한 청색) */
+    .sub-parent-row td {
+        background-color: #c5cae9 !important; 
+        font-weight: bold;
+        border-top: 2px solid #9fa8da;
+        color: #1a237e; 
+    }
+
+    /* Level 2: Lighter Blue (아주 연한 청색) */
+    .sub-parent-row-2 td {
+        background-color: #e8eaf6 !important; 
+        font-weight: normal;
+        border-top: 1px dashed #c5cae9;
+        color: #283593;
+    }
+
+    /* Level 3: Pure White (가독성을 위한 화이트) */
+    .sub-parent-row-3 td {
+        background-color: #ffffff !important;
+        font-weight: normal;
+        border-top: 1px dashed #dee2e6;
+        color: #333333;
+    }
+
+    /* Level 4: Pale Blue Gray (푸른빛이 살짝 도는 화이트그레이) */
+    .sub-parent-row-4 td {
+        background-color: #f8f9fc !important;
+        font-weight: normal;
+        border-top: 1px dashed #e9ecef;
+        color: #495057;
+    }
+
+    .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; position: relative; }
+    #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
+    #file-status { margin-top: 5px; font-weight: bold; color: #28a745; font-size: 14px; }
+    #print-header { display: none; }
+
+    .chart-label { color: #000; font-weight: bold; font-size: var(--chart-label-size); }
+    .chart-axis-wrapper { position: relative; height: 10px; width: 100%; font-size: var(--chart-label-size); color: #adb5bd; line-height: 10px; white-space: nowrap; font-weight: normal; }
+    .date-clickable { cursor: pointer; border-bottom: 1px dashed #adb5bd; padding-bottom: 1px; transition: 0.2s; display: inline-block; }
+    .date-clickable:hover { color: #0056b3; border-bottom-color: #0056b3; font-weight: bold; }
+    
+    .calendar-popup { position: absolute; z-index: 9999; background: #fff; border: 1px solid #ced4da; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border-radius: 8px; padding: 12px; width: 230px; font-family: 'Malgun Gothic', sans-serif; display: none; }
+    .cal-header { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 8px; font-size: 13px; color: #333; align-items: center; }
+    .cal-nav { cursor: pointer; color: #6c757d; font-size: 12px; padding: 0 3px; user-select: none; transition: 0.2s; }
+    .cal-nav:hover { color: #007bff; transform: scale(1.2); }
+    .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+    .cal-day { font-size: 11px; color: #888; padding-bottom: 4px; border-bottom: 1px solid #eee; margin-bottom: 4px; }
+    .cal-date { font-size: 12px; padding: 4px 0; border-radius: 4px; cursor: pointer; transition: 0.2s; }
+    .cal-date:hover:not(.dim) { background: #e7f1ff; color: #0056b3; font-weight: bold; }
+    .cal-date.active { background: #007bff !important; color: #fff !important; font-weight: bold; box-shadow: 0 2px 4px rgba(0,123,255,0.3); }
+    .cal-date.dim { color: #dee2e6 !important; cursor: default; }
+    .cal-close { cursor: pointer; color: #adb5bd; font-size: 14px; line-height: 1; padding: 0 5px; margin-left: 5px; }
+    .cal-close:hover { color: #e03131; }
+
+    :fullscreen { background-color: #f4f6f8; overflow: auto; padding: 0; }
+    :fullscreen body { margin: 0; padding: 0; background-color: white; min-height: 100vh; }
+    :fullscreen .controls, :fullscreen hr { display: none !important; } 
+    :fullscreen #table-info { top: 0; border-radius: 0; margin: 0; width: 100%; border-bottom: 1px solid #ccc; }
+    :fullscreen .container { max-height: none; height: calc(100vh - 50px); border: none; border-radius: 0; overflow-x: auto; width: 100%; }
+
+    .content-cell-trans { position: relative; padding-left: 22px !important; }
+
+    td[ondblclick] { transition: background-color 0.2s; }
+    td[ondblclick]:hover { background-color: #fffde7 !important; cursor: text; }
+    td[contenteditable="true"] { outline: none; background-color: #fff9c4 !important; box-shadow: inset 0 0 0 2px #0056b3; cursor: text; }
+
+    .no-td { position: relative; padding: 2px !important; text-align: center; vertical-align: middle; cursor: pointer; transition: background-color 0.2s; }
+    .no-td:hover { background-color: #e9ecef !important; } 
+    .row-actions { display: none; gap: 2px; justify-content: center; margin-top: 3px; }
+    .row-actions.show { display: flex; } 
+    .row-action-btn { cursor: pointer; font-size: 9px; font-weight:bold; border-radius: 3px; padding: 0; width: 16px; height: 16px; line-height: 16px; text-align: center; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.15); border: 1px solid #333; color: #333; display: inline-flex; align-items: center; justify-content: center; }
+    .row-action-btn:hover { background: #333; color: #fff; }
+    .row-action-btn.add, .row-action-btn.del, .row-action-btn.lvl-up, .row-action-btn.lvl-dn { border-color: #333; color: #333; }
+
+    .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; }
+    .history-modal { background: #fff; width: 90%; max-width: 900px; height: 80vh; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: fadeIn 0.2s; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+    .history-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #dee2e6; font-weight: bold; font-size: 16px; background: #f8f9fa; border-radius: 8px 8px 0 0; }
+    .history-close { cursor: pointer; color: #868e96; font-size: 20px; transition: 0.2s; }
+    .history-close:hover { color: #dc3545; transform: scale(1.1); }
+    .history-body { padding: 0; overflow-y: auto; flex: 1; }
+    .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .history-table th, .history-table td { border: 1px solid #e9ecef; padding: 10px; text-align: left; word-break: break-all; }
+    .history-table th { background: #e9ecef; position: sticky; top: 0; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+    .history-empty { padding: 50px; text-align: center; color: #adb5bd; font-size: 15px; }
+    .val-old { color: #dc3545; text-decoration: line-through; }
+    .val-new { color: #0f5132; font-weight: bold; }
+</style>
+</head>
+<body>
+    
+    <div class="controls" id="drop-zone">
+        <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple />
+        <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
+        <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
+        <div id="dynamic-filters"></div>
+    </div>
+
+    <div id="table-info">
+        <span id="table-info-text">📊 Gantt Chart (파일을 업로드 해주세요)</span>
+        <div class="btn-group">
+            <button class="action-btn history-btn" onclick="showHistoryModal()">🕒 수정 이력 확인</button>
+            <button class="action-btn" onclick="location.reload()" style="border-color:#17a2b8; color:#17a2b8;">🔄 새로고침 (F5)</button>
+            <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
+            <button class="action-btn" onclick="exportToExcel()">💾 엑셀 저장</button>
+            <button class="action-btn" onclick="window.print()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
+        </div>
+    </div>
+
+    <div id="print-header"><h2 id="print-title"></h2><div id="print-date"></div></div>
+
+    <div class="container" id="table-container">
+        <table id="myTable">
+            <thead id="table-head"></thead>
+            <tbody id="table-body">
+                <tr><td colspan="20" style="text-align:center; padding: 50px; color: #777;">위에서 파일을 선택하시면 데이터가 표시됩니다.</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="history-overlay" class="modal-overlay" onclick="closeHistoryModal(event)">
+        <div class="history-modal" onclick="event.stopPropagation()">
+            <div class="history-header">
+                <span>🕒 변경 이력 (Session History)</span>
+                <span class="history-close" onclick="closeHistoryModal()">✖</span>
+            </div>
+            <div class="history-body" id="history-content">
+            </div>
+        </div>
+    </div>
+
+<script>
+    window.exportFilenameStr = "GanttChart_All";
+    window.ganttViewStartTs = null;
+    window.ganttViewDuration = null;
+    window.changeLogs = []; 
+
+    // 복구 완료된 2035년까지의 대한민국 공휴일 데이터
+    const KOR_HOLIDAYS = [
+        "2024-01-01", "2024-02-09", "2024-02-12", "2024-03-01", "2024-04-10", "2024-05-05", "2024-05-06", "2024-05-15", "2024-06-06", "2024-08-15", "2024-09-16", "2024-09-17", "2024-09-18", "2024-10-03", "2024-10-09", "2024-12-25",
+        "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30", "2025-03-01", "2025-03-03", "2025-05-05", "2025-05-06", "2025-06-06", "2025-08-15", "2025-10-03", "2025-10-05", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-12-25",
+        "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02", "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-06", "2026-08-15", "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-09", "2026-12-25",
+        "2027-01-01", "2027-02-06", "2027-02-07", "2027-02-08", "2027-02-09", "2027-03-01", "2027-03-03", "2027-05-05", "2027-05-13", "2027-06-06", "2027-08-15", "2027-08-16", "2027-09-14", "2027-09-15", "2027-09-16", "2027-10-03", "2027-10-04", "2027-10-09", "2027-10-11", "2027-12-25",
+        "2028-01-01", "2028-01-25", "2028-01-26", "2028-01-27", "2028-03-01", "2028-05-02", "2028-05-05", "2028-06-06", "2028-08-15", "2028-10-02", "2028-10-03", "2028-10-04", "2028-10-05", "2028-10-09", "2028-12-25",
+        "2029-01-01", "2029-02-12", "2029-02-13", "2029-02-14", "2029-03-01", "2029-05-05", "2029-05-07", "2029-05-20", "2029-05-21", "2029-06-06", "2029-08-15", "2029-09-21", "2029-09-22", "2029-09-23", "2029-09-24", "2029-10-03", "2029-10-09", "2029-12-25",
+        "2030-01-01", "2030-02-02", "2030-02-03", "2030-02-04", "2030-02-05", "2030-03-01", "2030-05-05", "2030-05-06", "2030-05-09", "2030-06-06", "2030-08-15", "2030-09-11", "2030-09-12", "2030-09-13", "2030-10-03", "2030-10-09", "2030-12-25",
+        "2031-01-01", "2031-01-22", "2031-01-23", "2031-01-24", "2031-03-01", "2031-03-03", "2031-05-05", "2031-05-28", "2031-06-06", "2031-08-15", "2031-09-30", "2031-10-01", "2031-10-02", "2031-10-03", "2031-10-09", "2031-12-25",
+        "2032-01-01", "2032-02-10", "2032-02-11", "2032-02-12", "2032-03-01", "2032-05-05", "2032-05-16", "2032-05-17", "2032-06-06", "2032-08-15", "2032-08-16", "2032-09-18", "2032-09-19", "2032-09-20", "2032-09-21", "2032-10-03", "2032-10-04", "2032-10-09", "2032-10-11", "2032-12-25",
+        "2033-01-01", "2033-01-30", "2033-01-31", "2033-02-01", "2033-03-01", "2033-05-05", "2033-05-06", "2033-06-06", "2033-08-15", "2033-10-03", "2033-10-06", "2033-10-07", "2033-10-08", "2033-10-09", "2033-10-10", "2033-12-25",
+        "2034-01-01", "2034-02-18", "2034-02-19", "2034-02-20", "2034-02-21", "2034-03-01", "2034-05-05", "2034-05-25", "2034-06-06", "2034-08-15", "2034-09-26", "2034-09-27", "2034-09-28", "2034-10-03", "2034-10-09", "2034-12-25",
+        "2035-01-01", "2035-02-07", "2035-02-08", "2035-02-09", "2035-03-01", "2035-05-05", "2035-05-07", "2035-05-15", "2035-06-06", "2035-08-15", "2035-09-15", "2035-09-16", "2035-09-17", "2035-09-18", "2035-10-03", "2035-10-09", "2035-12-25"
+    ];
+
+    function addWorkingDays(startDateTs, daysToAdd) {
+        let currentDate = new Date(startDateTs); currentDate.setHours(0,0,0,0);
+        if (daysToAdd <= 0) return currentDate.getTime(); 
+        let addedDays = 0;
+        while (addedDays < daysToAdd) {
+            currentDate.setDate(currentDate.getDate() + 1); let dayOfWeek = currentDate.getDay(); 
+            let dateStr = currentDate.getFullYear() + "-" + String(currentDate.getMonth() + 1).padStart(2, '0') + "-" + String(currentDate.getDate()).padStart(2, '0');
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !KOR_HOLIDAYS.includes(dateStr)) { addedDays++; }
+        }
+        return currentDate.getTime();
+    }
+
+    function countWorkingDays(startTs, endTs) {
+        if (!startTs || !endTs) return 0;
+        let count = 0; let cur = new Date(startTs); cur.setHours(0,0,0,0); let end = new Date(endTs); end.setHours(0,0,0,0);
+        if (cur > end) return 0;
+        while (cur <= end) {
+            let dayOfWeek = cur.getDay(); let dateStr = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, '0') + "-" + String(cur.getDate()).padStart(2, '0');
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !KOR_HOLIDAYS.includes(dateStr)) { count++; }
+            cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+    }
+
+    function toggleFullScreen() {
+        const doc = window.document; const docEl = doc.documentElement;
+        const requestFullScreen = docEl.requestFullscreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+        const cancelFullScreen = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+        if (!doc.fullscreenElement) requestFullScreen.call(docEl); else cancelFullScreen.call(doc);
+    }
+
+    function logChange(rowIndex, colIndex, oldVal, newVal) {
+        if (!globalData || globalData.length === 0) return;
+        let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
+        let rowName = rowIndex; 
+        let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (tr) {
+            let noTd = tr.querySelector('.no-td');
+            if (noTd) {
+                let span = noTd.querySelector('.row-num-span');
+                if (span && span.textContent) rowName = span.textContent.trim();
+                else if (noTd.textContent) rowName = noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim() || rowIndex;
+            }
+        } else if (globalData[rowIndex]) {
+            rowName = globalData[rowIndex][colIdx.no] || rowIndex;
+        }
+        window.changeLogs.push({ time: new Date().toLocaleString('ko-KR'), rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal });
+    }
+
+    window.showHistoryModal = function() {
+        let content = document.getElementById('history-content');
+        if (!window.changeLogs || window.changeLogs.length === 0) {
+            content.innerHTML = '<div class="history-empty">현재 편집 세션에서 수정된 데이터가 없습니다.</div>';
+        } else {
+            let html = `
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th style="width:18%;">변경 일시</th>
+                            <th style="width:10%;">No (행)</th>
+                            <th style="width:12%;">변경 항목</th>
+                            <th style="width:30%;">변경 전 (Old)</th>
+                            <th style="width:30%;">변경 후 (New)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            let reversedLogs = [...window.changeLogs].reverse();
+            reversedLogs.forEach(log => {
+                html += `
+                    <tr>
+                        <td style="color:#6c757d; font-size:11px;">${log.time}</td>
+                        <td style="font-weight:bold;">${escapeHtml(log.rowName)}</td>
+                        <td><span class="badge" style="background:#e7f1ff; color:#0056b3;">${escapeHtml(log.colName)}</span></td>
+                        <td class="val-old">${escapeHtml(log.oldVal || "-")}</td>
+                        <td class="val-new">${escapeHtml(log.newVal || "-")}</td>
+                    </tr>
+                `;
+            });
+            html += '</tbody></table>';
+            content.innerHTML = html;
+        }
+        document.getElementById('history-overlay').style.display = 'flex';
+    };
+
+    window.closeHistoryModal = function(e) {
+        if (e && e.target !== document.getElementById('history-overlay')) return;
+        document.getElementById('history-overlay').style.display = 'none';
+    };
+
+    window.toggleRowActions = function(td) {
+        document.querySelectorAll('.row-actions.show').forEach(el => {
+            if(el !== td.querySelector('.row-actions')) el.classList.remove('show');
+        });
+        let actions = td.querySelector('.row-actions');
+        if (actions) actions.classList.toggle('show');
+        if (window.getSelection) window.getSelection().removeAllRanges();
+    };
+
+    window.addRow = function(index) {
+        if (index <= 0) { alert("최상단 행에는 추가할 수 없습니다."); return; }
+        if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
+        
+        let parentRow = globalData[index]; 
+        let newRow = new Array(globalData[0].length).fill("");
+        
+        newRow._level = parentRow._level;
+        if (colIdx.status !== -1) newRow[colIdx.status] = parentRow[colIdx.status] || "진행";
+        
+        for(let i=0; i<globalData[0].length; i++) {
+            if ([colIdx.no, colIdx.bogo, colIdx.start, colIdx.plan, colIdx.period, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.chart, colIdx.content, colIdx.answer, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4].includes(i)) continue;
+            newRow[i] = parentRow[i] || "";
+        }
+
+        newRow._origDev = ""; newRow._origT1 = ""; newRow._origT2 = ""; newRow._origT3 = ""; newRow._origT4 = "";
+        let newTaskName = "새로운 업무";
+
+        if (newRow._level === 0) newRow._origDev = newTaskName;
+        else if (newRow._level === 1) newRow._origT1 = newTaskName;
+        else if (newRow._level === 2) newRow._origT2 = newTaskName;
+        else if (newRow._level === 3) newRow._origT3 = newTaskName;
+        else if (newRow._level === 4) newRow._origT4 = newTaskName;
+        
+        newRow._explicitStartTs = null; newRow._explicitPlanTs = null; newRow._finalDuration = 1;
+        if (colIdx.period !== -1) newRow[colIdx.period] = "1";
+        if (newRow._level === 1 && colIdx.dur1 !== -1) newRow[colIdx.dur1] = "1";
+        if (newRow._level === 2 && colIdx.dur2 !== -1) newRow[colIdx.dur2] = "1";
+        if (newRow._level === 3 && colIdx.dur3 !== -1) newRow[colIdx.dur3] = "1";
+        if (newRow._level === 4 && colIdx.dur4 !== -1) newRow[colIdx.dur4] = "1";
+
+        globalData.splice(index + 1, 0, newRow); 
+        logChange(index + 1, -1, "없음", "행 추가됨");
+        window.recalculateSchedules();
+    };
+
+    window.changeRowLevel = function(index, direction) {
+        if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
+        let row = globalData[index]; if (!row) return;
+
+        let oldLevel = row._level;
+        let newLevel = Math.max(0, Math.min(4, oldLevel + direction));
+        if (newLevel === oldLevel) return;
+
+        let taskTxt = "";
+        if (oldLevel === 0) taskTxt = row._origDev; else if (oldLevel === 1) taskTxt = row._origT1; else if (oldLevel === 2) taskTxt = row._origT2; else if (oldLevel === 3) taskTxt = row._origT3; else if (oldLevel === 4) taskTxt = row._origT4;
+        taskTxt = (taskTxt || "").toString().trim() || "새로운 업무";
+
+        let processChange = function() {
+            row._level = newLevel;
+            row._origDev = ""; row._origT1 = ""; row._origT2 = ""; row._origT3 = ""; row._origT4 = "";
+            if (newLevel === 0) row._origDev = taskTxt; else if (newLevel === 1) row._origT1 = taskTxt; else if (newLevel === 2) row._origT2 = taskTxt; else if (newLevel === 3) row._origT3 = taskTxt; else if (newLevel === 4) row._origT4 = taskTxt;
+            
+            let currentDur = row._finalDuration || 1;
+            if (colIdx.dur1 !== -1) row[colIdx.dur1] = (newLevel === 1) ? currentDur.toString() : "";
+            if (colIdx.dur2 !== -1) row[colIdx.dur2] = (newLevel === 2) ? currentDur.toString() : "";
+            if (colIdx.dur3 !== -1) row[colIdx.dur3] = (newLevel === 3) ? currentDur.toString() : "";
+            if (colIdx.dur4 !== -1) row[colIdx.dur4] = (newLevel === 4) ? currentDur.toString() : "";
+
+            let levelLabels = ["대분류(0)", "소요1(1)", "소요2(2)", "소요3(3)", "소요4(4)"];
+            logChange(index, -1, `계층 변경`, `${levelLabels[oldLevel]} → ${levelLabels[newLevel]}`);
+            window.recalculateSchedules();
+        };
+
+        if (newLevel === 0 && oldLevel > 0) {
+            let modal = document.getElementById('confirm-level0-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'confirm-level0-modal';
+                modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+                modal.innerHTML = `
+                    <div style="background:#fff;border-radius:10px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
+                        <div style="font-size:20px;margin-bottom:8px;">⚠️ 최상위 레벨 이동</div>
+                        <div style="font-size:14px;color:#495057;margin-bottom:20px;">
+                            해당 업무를 대분류(개발단계)로 이동하시겠습니까?<br>
+                            <span style="color:#e03131;font-size:12px;">이동 시 기존 필터 기준이 변경될 수 있습니다.</span>
+                        </div>
+                        <div style="display:flex;gap:12px;justify-content:center;">
+                            <button id="confirm-level0-ok" style="padding:9px 28px;background:#0056b3;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">이동</button>
+                            <button id="confirm-level0-cancel" style="padding:9px 28px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:14px;cursor:pointer;">취소</button>
+                        </div>
+                    </div>`;
+                document.body.appendChild(modal);
+            }
+            modal.style.display = 'flex';
+
+            let okBtn = document.getElementById('confirm-level0-ok'); let cancelBtn = document.getElementById('confirm-level0-cancel');
+            let newOk = okBtn.cloneNode(true); okBtn.parentNode.replaceChild(newOk, okBtn);
+            let newCancel = cancelBtn.cloneNode(true); cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+
+            document.getElementById('confirm-level0-ok').addEventListener('click', function() { modal.style.display = 'none'; processChange(); });
+            document.getElementById('confirm-level0-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
+        } else {
+            processChange();
+        }
+    };
+
+    window.deleteRow = function(index) {
+        if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
+        let tr = document.querySelector(`tr[data-row-index="${index}"]`); let rowName = index;
+        if (tr) {
+            let noTd = tr.querySelector('.no-td');
+            if (noTd) {
+                let span = noTd.querySelector('.row-num-span');
+                rowName = span && span.textContent ? span.textContent.trim() : noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim();
+            }
+        }
+
+        let modal = document.getElementById('confirm-delete-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'confirm-delete-modal';
+            modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+            modal.innerHTML = `
+                <div style="background:#fff;border-radius:10px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
+                    <div style="font-size:20px;margin-bottom:8px;">🗑️ 행 삭제</div>
+                    <div id="confirm-delete-msg" style="font-size:14px;color:#495057;margin-bottom:20px;"></div>
+                    <div style="display:flex;gap:12px;justify-content:center;">
+                        <button id="confirm-delete-ok" style="padding:9px 28px;background:#e03131;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">삭제</button>
+                        <button id="confirm-delete-cancel" style="padding:9px 28px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:14px;cursor:pointer;">취소</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(modal);
+        }
+        document.getElementById('confirm-delete-msg').textContent = `${rowName}번 행(업무)을 삭제하시겠습니까?`;
+        modal.style.display = 'flex';
+
+        let okBtn = document.getElementById('confirm-delete-ok'); let cancelBtn = document.getElementById('confirm-delete-cancel');
+        let newOk = okBtn.cloneNode(true); okBtn.parentNode.replaceChild(newOk, okBtn);
+        let newCancel = cancelBtn.cloneNode(true); cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+
+        document.getElementById('confirm-delete-ok').addEventListener('click', function() {
+            modal.style.display = 'none';
+            let deleted = globalData.splice(index, 1);
+            let taskName = "알 수 없는 업무";
+            if (deleted[0]) {
+                let l = deleted[0]._level;
+                taskName = (l===0?deleted[0]._origDev:(l===1?deleted[0]._origT1:(l===2?deleted[0]._origT2:(l===3?deleted[0]._origT3:deleted[0]._origT4)))) || "빈 업무";
+            }
+            window.changeLogs.push({ time: new Date().toLocaleString('ko-KR'), rowName: rowName, colName: "행 조작", oldVal: taskName, newVal: "삭제됨" });
+            window.recalculateSchedules();
+        });
+        document.getElementById('confirm-delete-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
+    };
+
+    const fileInput = document.getElementById('file-input');
+    fileInput.addEventListener('change', handleFiles, false);
+    window.addEventListener("dragover", function(e) { e.preventDefault(); }, false);
+    window.addEventListener("drop", function(e) { e.preventDefault(); }, false);
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragenter', function(e) { dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', function(e) { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault(); dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) handleFiles({ target: { files: e.dataTransfer.files } });
+    });
+
+    window.currentCalendarTarget = null; window.currentCalendarTs = null; window.currentViewYear = null; window.currentViewMonth = null; window.currentCalendarRow = null; window.currentCalendarCol = null;
+
+    window.showCalendar = function(btn, ts, rowIndex, colIndex) {
+        window.currentCalendarTarget = btn; window.currentCalendarTs = Number(ts); window.currentCalendarRow = rowIndex; window.currentCalendarCol = colIndex;
+        let d = new Date(window.currentCalendarTs);
+        window.currentViewYear = d.getFullYear(); window.currentViewMonth = d.getMonth();
+        window.calendarFixedPos = null;
+        renderCalendar(false);
+    };
+
+    window.changeCalendarMonth = function(e, deltaMonth, deltaYear) {
+        if (e) e.stopPropagation();
+        let d = new Date(window.currentViewYear + deltaYear, window.currentViewMonth + deltaMonth, 1);
+        window.currentViewYear = d.getFullYear(); window.currentViewMonth = d.getMonth();
+        renderCalendar(true);
+    };
+
+    window.selectDateFromCalendar = function(y, m, d) {
+        if (window.currentCalendarRow !== undefined && window.currentCalendarCol !== undefined) {
+            let str = y + "-" + String(m+1).padStart(2, '0') + "-" + String(d).padStart(2, '0');
+            let r = window.currentCalendarRow; let c = window.currentCalendarCol;
+            let oldVal = globalData[r][c] || "";
+            if (oldVal !== str) {
+                logChange(r, c, oldVal, str); 
+                globalData[r][c] = str;
+                if (c === colIdx.plan) {
+                    if (colIdx.period !== -1) globalData[r][colIdx.period] = "";
+                    if (colIdx.dur1 !== -1) globalData[r][colIdx.dur1] = "";
+                    if (colIdx.dur2 !== -1) globalData[r][colIdx.dur2] = "";
+                    if (colIdx.dur3 !== -1) globalData[r][colIdx.dur3] = "";
+                    if (colIdx.dur4 !== -1) globalData[r][colIdx.dur4] = "";
+                    globalData[r]._planForced = true; globalData[r]._startForced = false;
+                }
+                if (c === colIdx.start) {
+                    globalData[r]._startForced = true; globalData[r]._planForced = false;
+                    if (colIdx.plan !== -1) globalData[r][colIdx.plan] = "";
+                }
+                document.getElementById('calendar-popup').style.display = 'none';
+                window.recalculateSchedules(); 
+            } else { document.getElementById('calendar-popup').style.display = 'none'; }
+        }
+    };
+
+    window.renderCalendar = function(keepPos) {
+        let popup = document.getElementById('calendar-popup');
+        if (!popup) { popup = document.createElement('div'); popup.id = 'calendar-popup'; popup.className = 'calendar-popup'; document.body.appendChild(popup); }
+
+        let year = window.currentViewYear; let month = window.currentViewMonth;
+        let targetDate = new Date(window.currentCalendarTs);
+        let targetY = targetDate.getFullYear(); let targetM = targetDate.getMonth(); let targetD = targetDate.getDate();
+
+        let firstDay = new Date(year, month, 1).getDay(); let daysInMonth = new Date(year, month + 1, 0).getDate(); let prevDays = new Date(year, month, 0).getDate();
+
+        let html = `
+            <div class="cal-header">
+                <div><span class="cal-nav" onclick="changeCalendarMonth(event, 0, -1)" title="이전 년도">⏪</span><span class="cal-nav" onclick="changeCalendarMonth(event, -1, 0)" title="이전 달">◀</span></div>
+                <span style="margin: 0 10px;">${year}년 ${month + 1}월</span>
+                <div style="display:flex; align-items:center;"><span class="cal-nav" onclick="changeCalendarMonth(event, 1, 0)" title="다음 달">▶</span><span class="cal-nav" onclick="changeCalendarMonth(event, 0, 1)" title="다음 년도">⏩</span><span class="cal-close" onclick="event.stopPropagation(); document.getElementById('calendar-popup').style.display='none'" title="닫기">✖</span></div>
+            </div>
+            <div class="cal-grid"><div class="cal-day" style="color:#e03131;">일</div><div class="cal-day">월</div><div class="cal-day">화</div><div class="cal-day">수</div><div class="cal-day">목</div><div class="cal-day">금</div><div class="cal-day" style="color:#0056b3;">토</div>
+        `;
+
+        let cellCount = 0;
+        for (let i = firstDay - 1; i >= 0; i--) { html += `<div class="cal-date dim">${prevDays - i}</div>`; cellCount++; }
+        for (let i = 1; i <= daysInMonth; i++) {
+            let isTarget = (year === targetY && month === targetM && i === targetD) ? 'active' : '';
+            let isSunday = (cellCount % 7 === 0) ? 'color:#e03131;' : '';
+            let isSaturday = (cellCount % 7 === 6) ? 'color:#0056b3;' : '';
+            html += `<div class="cal-date ${isTarget}" style="${isTarget ? '' : isSunday + isSaturday}" onclick="selectDateFromCalendar(${year}, ${month}, ${i})">${i}</div>`;
+            cellCount++;
+        }
+        let nextDay = 1;
+        while (cellCount % 7 !== 0) { html += `<div class="cal-date dim">${nextDay++}</div>`; cellCount++; }
+        html += `</div>`;
+
+        popup.innerHTML = html; popup.style.display = 'block';
+
+        if (!keepPos && window.currentCalendarTarget) {
+            let rect = window.currentCalendarTarget.getBoundingClientRect();
+            popup.style.top = '0px'; popup.style.left = '0px'; 
+            let popupH = popup.offsetHeight;
+            let topPos = rect.bottom + window.scrollY + 5;
+            if (rect.bottom + popupH + 15 > window.innerHeight) topPos = Math.max(window.scrollY + 5, rect.top + window.scrollY - popupH - 5);
+            let leftPos = Math.min(rect.left + window.scrollX, window.innerWidth - popup.offsetWidth - 20);
+            window.calendarFixedPos = { top: topPos, left: leftPos };
+        }
+        if (window.calendarFixedPos) {
+            popup.style.top  = window.calendarFixedPos.top  + 'px';
+            popup.style.left = window.calendarFixedPos.left + 'px';
+        }
+    };
+
+    document.addEventListener('click', function(e) {
+        const popup = document.getElementById('calendar-popup');
+        if (popup && popup.style.display === 'block') { if (!popup.contains(e.target) && !e.target.closest('.date-clickable')) popup.style.display = 'none'; }
+        if (!e.target.closest('.no-td')) document.querySelectorAll('.row-actions.show').forEach(el => el.classList.remove('show'));
+    });
+
+    let filterColumns = []; let currentFilters = {}; let globalData = []; let existingDevStages = []; 
+    let colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
+
+    function escapeHtml(unsafe) { if (!unsafe) return ""; return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+
+    function linkifyAndEscape(text) {
+        if (!text) return ""; let safeText = escapeHtml(text);
+        const emailPattern = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gim; safeText = safeText.replace(emailPattern, '<a href="mailto:$1" style="text-decoration: none; display: inline-block; margin-left: 2px;" title="$1">📧</a>');
+        const urlPattern = /(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim; safeText = safeText.replace(urlPattern, '<a href="$1" target="_blank" style="text-decoration: none; display: inline-block; margin-left: 2px; font-size:11px;" title="$1">⬇️</a>');
+        const pseudoUrlPattern = /(^|[^\/a-zA-Z0-9])(www\.[\S]+(\b|$))/gim; safeText = safeText.replace(pseudoUrlPattern, '$1<a href="http://$2" target="_blank" style="text-decoration: none; display: inline-block; margin-left: 2px; font-size:11px;" title="$2">⬇️</a>');
+        safeText = safeText.replace(/\r/g, ''); safeText = safeText.replace(/\n{2,}/g, '\n'); return safeText.replace(/\n/g, '<br>'); 
+    }
+
+    function parseDateValue(value) {
+        if (value === "" || value === null || value === undefined) return null;
+        let y, m, d;
+        if (typeof value === 'number') {
+            const date = new Date((value - 25569) * 86400 * 1000); y = date.getUTCFullYear(); m = date.getUTCMonth(); d = date.getUTCDate();
+        } else if (typeof value === 'string') {
+            let str = value.trim();
+            let matchMMDD = str.match(/^(\d{1,2})[-/.](\d{1,2})$/);
+            if (matchMMDD) {
+                y = new Date().getFullYear(); m = parseInt(matchMMDD[1], 10) - 1; d = parseInt(matchMMDD[2], 10);
+            } else {
+                let match = str.match(/^(\d{2,4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+                if (match) { y = parseInt(match[1], 10); if (y < 100) y += 2000; m = parseInt(match[2], 10) - 1; d = parseInt(match[3], 10); } else return null;
+            }
+        } else return null;
+        if (y < 2010) y = new Date().getFullYear(); if (y < 2000 || y > 2100) return null; 
+        let dt = new Date(y, m, d); dt.setHours(0,0,0,0); return { ts: dt.getTime() };
+    }
+
+    function formatTableDate(ts) {
+        if (!ts) return ""; let d = new Date(ts); if (isNaN(d.getTime())) return "";
+        return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function formatTsToYMD(ts) {
+        if (!ts) return ""; let d = new Date(ts);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
+    }
+
+    function getDurationDays(val) {
+        if (val === undefined || val === null || val.toString().trim() === '') return null;
+        let match = val.toString().trim().match(/^(\d+)(일|days)?$/i);
+        if (match) { let days = parseInt(match[1], 10); if (days < 10000) return days; } return null;
+    }
+
+    function checkStrikeThrough(worksheet, r, c) {
+        try {
+            if (c === -1 || c === undefined) return false;
+            let cellAddress = XLSX.utils.encode_cell({r: r, c: c}); let cell = worksheet[cellAddress];
+            if (!cell) return false;
+            if (cell.s && cell.s.font && cell.s.font.strike) return true;
+            if (cell.r && Array.isArray(cell.r) && cell.r.some(run => run.s && run.s.strike)) return true;
+            if (cell.h && typeof cell.h === 'string' && (cell.h.includes('<s') || cell.h.includes('strike') || cell.h.includes('line-through'))) return true;
+        } catch (e) { } return false;
+    }
+
+    window.recalculateSchedules = function() {
+        if (globalData.length <= 1) return;
+        let statusEl = document.getElementById('file-status');
+        if (statusEl) statusEl.textContent = "일정을 재계산하는 중입니다...";
+
+        setTimeout(() => {
+            // 1. [전체 WBS 소속 정보(Cascade) 강제 동기화] - 계층 변경 시 엉뚱한 연산 원천 차단
+            let curD0 = "", curT1 = "", curT2 = "", curT3 = "", curT4 = "";
+            for (let i = 1; i < globalData.length; i++) {
+                let row = globalData[i]; if (!row) continue;
+                let text = "";
+                if (row._level === 0) text = row._origDev; else if (row._level === 1) text = row._origT1; else if (row._level === 2) text = row._origT2; else if (row._level === 3) text = row._origT3; else if (row._level === 4) text = row._origT4;
+                text = text || "";
+
+                if (row._level === 0) { curD0 = text; curT1 = ""; curT2 = ""; curT3 = ""; curT4 = ""; }
+                else if (row._level === 1) { curT1 = text; curT2 = ""; curT3 = ""; curT4 = ""; }
+                else if (row._level === 2) { curT2 = text; curT3 = ""; curT4 = ""; }
+                else if (row._level === 3) { curT3 = text; curT4 = ""; }
+                else if (row._level === 4) { curT4 = text; }
+                
+                row._origDev = curD0; if (colIdx.devStage !== -1) row[colIdx.devStage] = curD0;
+                row._origT1 = curT1; if (colIdx.taskType1 !== -1) row[colIdx.taskType1] = curT1;
+                row._origT2 = curT2; if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = curT2;
+                row._origT3 = curT3; if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = curT3;
+                row._origT4 = curT4; if (colIdx.taskType4 !== -1) row[colIdx.taskType4] = curT4;
+                if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level + 1; 
+            }
+
+            // 실시간 필터 동기화
+            generateFilters(globalData);
+
+            let validRows = globalData.slice(1);
+            let tree = []; let stack = {}; let fileGlobalStartTs = null;
+
+            for (let row of validRows) {
+                let rawStart = colIdx.start !== -1 ? row[colIdx.start] : ""; let pDateStart = parseDateValue(rawStart); let parsedStartTs = pDateStart ? pDateStart.ts : null;
+                let rawPlan = colIdx.plan !== -1 ? row[colIdx.plan] : ""; let pDatePlan = parseDateValue(rawPlan); let parsedPlanTs = pDatePlan ? pDatePlan.ts : null;
+                let dur1 = colIdx.dur1 !== -1 ? getDurationDays(row[colIdx.dur1]) : null; let dur2 = colIdx.dur2 !== -1 ? getDurationDays(row[colIdx.dur2]) : null; let dur3 = colIdx.dur3 !== -1 ? getDurationDays(row[colIdx.dur3]) : null; let dur4 = colIdx.dur4 !== -1 ? getDurationDays(row[colIdx.dur4]) : null; let pDur = colIdx.period !== -1 ? getDurationDays(row[colIdx.period]) : null;
+                let planStr = rawPlan !== null && rawPlan !== undefined ? rawPlan.toString().trim() : ""; let match = planStr.match(/^(\d+)(일|days)?$/i); 
+                let finalDur = 0; let hasDuration = (dur1 !== null || dur2 !== null || dur3 !== null || dur4 !== null || pDur !== null || match);
+                
+                if (row._level === 1 && dur1 !== null) finalDur = dur1; else if (row._level === 2 && dur2 !== null) finalDur = dur2; else if (row._level === 3 && dur3 !== null) finalDur = dur3; else if (row._level === 4 && dur4 !== null) finalDur = dur4; else if (pDur !== null) finalDur = pDur; else if (match && parseInt(match[1], 10) < 10000) finalDur = parseInt(match[1], 10);
+                
+                row._finalDuration = finalDur;
+                row._isExplicitZero = (finalDur === 0 && (dur1 === 0 || dur2 === 0 || dur3 === 0 || dur4 === 0 || pDur === 0 || (match && parseInt(match[1], 10) === 0)));
+
+                if (row._level === 0 || row._startForced || !hasDuration) row._explicitStartTs = parsedStartTs; else row._explicitStartTs = null;
+                if (row._level === 0 || row._planForced || !hasDuration) row._explicitPlanTs = parsedPlanTs; else row._explicitPlanTs = null;
+                if (row._explicitStartTs && row._explicitPlanTs && row._explicitPlanTs < row._explicitStartTs) {
+                    row._explicitPlanTs = row._explicitStartTs;
+                    if (colIdx.plan !== -1) row[colIdx.plan] = formatTsToYMD(row._explicitPlanTs);
+                }
+                
+                // [버그 수정]: 파일 전체에서 가장 빠른 수동 시작일을 완벽하게 스캔
+                if (row._explicitStartTs) {
+                    if (fileGlobalStartTs === null || row._explicitStartTs < fileGlobalStartTs) {
+                        fileGlobalStartTs = row._explicitStartTs;
+                    }
+                }
+
+                let taskName = "";
+                if (row._level === 0) taskName = row._origDev || ""; else if (row._level === 1) taskName = row._origT1 || ""; else if (row._level === 2) taskName = row._origT2 || ""; else if (row._level === 3) taskName = row._origT3 || ""; else if (row._level === 4) taskName = row._origT4 || "";
+                
+                let contentStr = colIdx.content !== -1 ? (row[colIdx.content] || "").toString() : "";
+                row._isParallel = taskName.includes('*') || taskName.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
+
+                let node = { row: row, level: row._level, isParallel: row._isParallel, explicitStartTs: row._explicitStartTs, explicitPlanTs: row._explicitPlanTs, duration: row._finalDuration, children: [], startTs: null, endTs: null };
+
+                if (node.level === 0) { tree.push(node); stack[0] = node; stack[1] = null; stack[2] = null; stack[3] = null; stack[4] = null; } 
+                else {
+                    let parentLvl = node.level - 1; while (parentLvl >= 0 && !stack[parentLvl]) parentLvl--;
+                    if (parentLvl >= 0 && stack[parentLvl]) stack[parentLvl].children.push(node); else tree.push(node); 
+                    stack[node.level] = node; for (let l = node.level + 1; l <= 4; l++) stack[l] = null; 
+                }
+            }
+
+            function markLastChild(node) {
+                if (!node.children || node.children.length === 0) return;
+                for (let i = 0; i < node.children.length; i++) { node.children[i].row._isLastChild = (i === node.children.length - 1); markLastChild(node.children[i]); }
+            }
+            for (let l0Node of tree) markLastChild(l0Node);
+
+            function propagateZero(node) {
+                if (node.children.length === 0) return !!node.row._isExplicitZero;
+                let allZero = true; for (let i = 0; i < node.children.length; i++) { if (!propagateZero(node.children[i])) allZero = false; }
+                node.row._isExplicitZero = allZero; return allZero;
+            }
+            for (let i = 0; i < tree.length; i++) propagateZero(tree[i]);
+
+            function scheduleNode(node, inheritedStartTs) {
+                if (node.explicitStartTs) node.startTs = node.explicitStartTs; else node.startTs = inheritedStartTs || new Date().setHours(0,0,0,0);
+                if (node.children.length === 0) {
+                    let dur = node.duration || 0;
+                    if (node.explicitPlanTs && (node.level === 0 || dur === 0 || node.row._planForced)) {
+                        node.endTs = node.explicitPlanTs; node.row._finalDuration = countWorkingDays(node.startTs, node.endTs);
+                    } else if (dur > 0) {
+                        node.endTs = addWorkingDays(node.startTs, dur - 1);
+                    } else { node.endTs = node.startTs; }
+                    return;
+                }
+                
+                let currentWaterfallStart = node.startTs; 
+                let maxChildEnd = node.startTs; 
+                let groupStartTs = node.startTs; 
+                let isFirstValid = true;
+
+                for (let i = 0; i < node.children.length; i++) {
+                    let child = node.children[i];
+                    if (child.row._isExplicitZero) { scheduleNode(child, currentWaterfallStart); continue; }
+                    
+                    let intendedStart;
+                    if (isFirstValid) intendedStart = node.startTs;
+                    else if (child.isParallel) intendedStart = groupStartTs;
+                    else intendedStart = currentWaterfallStart;
+                    
+                    scheduleNode(child, intendedStart);
+                    
+                    // [중요 버그 수정]: 기준 업무(앵커)의 실제 계산된 시작일을 정확히 동기화
+                    if (isFirstValid) {
+                        groupStartTs = child.startTs;
+                        isFirstValid = false;
+                    } else if (!child.isParallel) {
+                        groupStartTs = child.startTs;
+                    }
+                    
+                    if (child.endTs > maxChildEnd) maxChildEnd = child.endTs;
+                    currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
+                }
+                node.endTs = maxChildEnd;
+            }
+
+            let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0); 
+            let maxL0End = currentL0Start; 
+            let groupL0StartTs = currentL0Start; 
+            let isFirstValidL0 = true;
+
+            for (let i = 0; i < tree.length; i++) {
+                let l0Node = tree[i];
+                if (l0Node.row._isExplicitZero) { scheduleNode(l0Node, currentL0Start); continue; }
+                
+                let intendedStart;
+                if (isFirstValidL0) intendedStart = currentL0Start;
+                else if (l0Node.isParallel) intendedStart = groupL0StartTs;
+                else intendedStart = currentL0Start;
+                
+                scheduleNode(l0Node, intendedStart);
+                
+                // [중요 버그 수정]: 최상위 레벨(L0) 앵커 동기화
+                if (isFirstValidL0) {
+                    groupL0StartTs = l0Node.startTs;
+                    isFirstValidL0 = false;
+                } else if (!l0Node.isParallel) {
+                    groupL0StartTs = l0Node.startTs;
+                }
+                
+                if (l0Node.endTs > maxL0End) maxL0End = l0Node.endTs;
+                currentL0Start = addWorkingDays(maxL0End, 1);
+            }
+
+            function applyDatesToRow(node) { node.row._calcStartTs = node.startTs; node.row._calcPlanTs = node.endTs; for (let child of node.children) applyDatesToRow(child); }
+            for (let l0Node of tree) applyDatesToRow(l0Node);
+
+            let chartMinTs = null; let chartMaxTs = null;
+            for (let i = 1; i < globalData.length; i++) {
+                let rStart = globalData[i]._calcStartTs; let rEnd = globalData[i]._calcPlanTs;
+                if (rStart && (chartMinTs === null || rStart < chartMinTs)) chartMinTs = rStart;
+                if (rEnd && (chartMaxTs === null || rEnd > chartMaxTs)) chartMaxTs = rEnd;
+            }
+            if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
+            if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30); 
+            let totalDuration = chartMaxTs - chartMinTs; let padding = totalDuration * 0.05; if (padding === 0) padding = 86400000 * 7; 
+            window.ganttViewStartTs = chartMinTs - padding; window.ganttViewDuration = (chartMaxTs + padding) - window.ganttViewStartTs;
+
+            renderTable(globalData); applyFilters();
+            
+            if (statusEl) { statusEl.textContent = "✅ 일정이 업데이트 되었습니다."; }
+        }, 10);
+    };
+
+    function handleFiles(e) {
+        const files = e.target.files; if (!files || files.length === 0) return;
+        
+        globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {};
+        colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
+        let headerRow = []; let filesProcessed = 0; let totalFiles = files.length;
+        window.changeLogs = []; 
+        
+        document.getElementById('file-status').textContent = "데이터를 분석하고 일정을 연산하는 중입니다...";
+
+        for (let i = 0; i < totalFiles; i++) {
+            let file = files[i]; let reader = new FileReader();
+            reader.onload = function(e) {
+                let data = new Uint8Array(e.target.result); let workbook;
+                try { workbook = XLSX.read(data, {type: 'array', cellStyles: true, cellHTML: true}); } catch (readErr) { workbook = XLSX.read(data, {type: 'array'}); }
+                
+                let firstSheetName = workbook.SheetNames[0]; let worksheet = workbook.Sheets[firstSheetName];
+                let jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: true});
+                
+                let historySheetName = workbook.SheetNames.find(n => n.includes("수정이력"));
+                if (historySheetName && filesProcessed === 0) { 
+                    let historyWs = workbook.Sheets[historySheetName];
+                    let historyJson = XLSX.utils.sheet_to_json(historyWs, {header: 1, defval: ""});
+                    for (let k = 1; k < historyJson.length; k++) {
+                        let hRow = historyJson[k];
+                        if (hRow && hRow[0] && k > 0) { 
+                            window.changeLogs.push({ time: hRow[0], rowName: hRow[1], colName: hRow[2], oldVal: hRow[3], newVal: hRow[4] });
+                        }
+                    }
+                }
+
+                if(jsonData.length > 0) {
+                    if (headerRow.length === 0) {
+                        headerRow = jsonData[0];
+                        headerRow.forEach((h, idx) => {
+                            if(!h) return; let str = h.toString().replace(/\s+/g, ''); let strUpper = str.toUpperCase();
+                            if(strUpper.includes("NO")) colIdx.no = idx;
+                            else if(str === "보고" || strUpper === "VIEW" || strUpper === "LEVEL(WBS)" || strUpper === "LEVELWBS") colIdx.bogo = idx;
+                            else if(str.includes("시작")) colIdx.start = idx;
+                            else if(str.includes("계획") || str.includes("완료")) colIdx.plan = idx;
+                            else if(str === "기간" || str === "기간일") colIdx.period = idx;
+                            else if(str === "소요1") colIdx.dur1 = idx;
+                            else if(str === "소요2") colIdx.dur2 = idx;
+                            else if(str === "소요3" || str === "소요" || str.includes("소요일수")) colIdx.dur3 = idx;
+                            else if(str === "소요4") colIdx.dur4 = idx;
+                            else if(str.includes("담당자")) colIdx.assignee = idx;
+                            else if(str === "업무구분1" || str === "업무1") colIdx.taskType1 = idx;
+                            else if(str === "업무구분2" || str === "업무2") colIdx.taskType2 = idx;
+                            else if(str === "업무구분3" || str === "업무3") colIdx.taskType3 = idx;
+                            else if(str === "업무구분4" || str === "업무4") colIdx.taskType4 = idx;
+                            else if(str.includes("상태") || str.includes("업무상태")) colIdx.status = idx;
+                            else if(str.includes("고객")) colIdx.customer = idx;
+                            else if(str.includes("모델")) colIdx.model = idx;
+                            else if(str.includes("인치")) colIdx.inch = idx;
+                            else if(str.includes("단계") || str.includes("개발단계")) colIdx.devStage = idx;
+                            else if(str.includes("업무내용") || str.includes("요청내용") || str.includes("업무상세내용") || str.includes("상세내용")) colIdx.content = idx;
+                            else if(str.includes("답변") || str.includes("대응내용") || str.includes("대응")) colIdx.answer = idx;
+                            else if(str.includes("현황")) colIdx.chart = idx;
+                        });
+                        
+                        filterColumns = []; let orderedNames = ['LEVEL(WBS)', '개발단계', '업무상태'];
+                        orderedNames.forEach(name => {
+                            if (name === 'LEVEL(WBS)' && colIdx.bogo !== -1) filterColumns.push({ index: colIdx.bogo, name: 'LEVEL(WBS)' });
+                            else if (name === '개발단계' && colIdx.devStage !== -1) filterColumns.push({ index: colIdx.devStage, name: '개발단계' });
+                            else if (name === '업무상태' && colIdx.status !== -1) filterColumns.push({ index: colIdx.status, name: '업무상태' });
+                        });
+                    }
+                    
+                    let stageSet = new Set(); let lastDev = "", lastT1 = "", lastT2 = "", lastT3 = "", lastT4 = "";
+                    for (let j = 1; j < jsonData.length; j++) {
+                        if (!jsonData[j] || jsonData[j].length === 0) continue;
+                        if (jsonData[j].join('').trim() === '') continue;
+                        let row = jsonData[j];
+                        
+                        const stripPrefix = s => s.replace(/^[├└─\s]+/, '').trim();
+
+                        let origD0 = colIdx.devStage  !== -1 ? stripPrefix((row[colIdx.devStage]  || "").toString().trim()) : "";
+                        let origD1 = colIdx.taskType1 !== -1 ? stripPrefix((row[colIdx.taskType1] || "").toString().trim()) : "";
+                        let origD2 = colIdx.taskType2 !== -1 ? stripPrefix((row[colIdx.taskType2] || "").toString().trim()) : "";
+                        let origD3 = colIdx.taskType3 !== -1 ? stripPrefix((row[colIdx.taskType3] || "").toString().trim()) : "";
+                        let origD4 = colIdx.taskType4 !== -1 ? stripPrefix((row[colIdx.taskType4] || "").toString().trim()) : "";
+
+                        row._origDev = origD0; row._origT1 = origD1; row._origT2 = origD2; row._origT3 = origD3; row._origT4 = origD4;
+                        if (origD0 !== "") { lastDev = origD0; lastT1 = ""; lastT2 = ""; lastT3 = ""; lastT4 = ""; }
+                        if (origD1 !== "") { lastT1 = origD1; lastT2 = ""; lastT3 = ""; lastT4 = ""; }
+                        if (origD2 !== "") { lastT2 = origD2; lastT3 = ""; lastT4 = ""; }
+                        if (origD3 !== "") { lastT3 = origD3; lastT4 = ""; }
+                        if (origD4 !== "") { lastT4 = origD4; }
+
+                        if (colIdx.devStage !== -1) row[colIdx.devStage] = lastDev;
+                        if (colIdx.taskType1 !== -1) row[colIdx.taskType1] = lastT1;
+                        if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = lastT2;
+                        if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = lastT3;
+                        if (colIdx.taskType4 !== -1) row[colIdx.taskType4] = lastT4;
+
+                        if (origD4 !== "") row._level = 4; else if (origD3 !== "") row._level = 3; else if (origD2 !== "") row._level = 2; else if (origD1 !== "") row._level = 1; else if (origD0 !== "") row._level = 0; else row._level = 3;
+
+                        row._startForced = false; row._planForced  = false;
+                        row._isStrikeContent = checkStrikeThrough(worksheet, j, colIdx.content); row._isStrikeAnswer = checkStrikeThrough(worksheet, j, colIdx.answer);
+                        
+                        let name = ""; if (row._level === 0) name = origD0; if (row._level === 1) name = origD1; if (row._level === 2) name = origD2; if (row._level === 3) name = origD3; if (row._level === 4) name = origD4;
+                        let contentStr = colIdx.content !== -1 ? (row[colIdx.content] || "").toString() : "";
+                        row._isParallel = name.includes('*') || name.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
+
+                        globalData.push(row); 
+                    }
+                }
+                filesProcessed++;
+                if(filesProcessed === totalFiles) { 
+                    globalData = [headerRow, ...globalData]; 
+                    window.recalculateSchedules(); 
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    }
+
+    window.makeEditable = function(td) {
+        if(td.getAttribute('contenteditable') === 'true') return;
+        td.dataset.displayHtml = td.innerHTML;
+        td.setAttribute('contenteditable', 'true');
+        
+        let raw = td.getAttribute('data-raw');
+        if (raw) td.innerText = decodeURIComponent(raw);
+        else td.innerText = "";
+        
+        td.focus();
+        let range = document.createRange(); let sel = window.getSelection();
+        range.selectNodeContents(td); sel.removeAllRanges(); sel.addRange(range);
+    };
+
+    window.blurCell = function(td, rowIndex, colIndex) {
+        td.removeAttribute('contenteditable');
+        let newText = td.innerText.trim();
+        let rawAttr = td.getAttribute('data-raw');
+        let oldText = rawAttr ? decodeURIComponent(rawAttr).trim() : "";
+        
+        if (newText !== oldText) {
+            logChange(rowIndex, colIndex, oldText, newText); 
+            globalData[rowIndex][colIndex] = newText;
+            
+            let row = globalData[rowIndex];
+            if (colIndex === colIdx.devStage) row._origDev = newText;
+            if (colIndex === colIdx.taskType1) row._origT1 = newText;
+            if (colIndex === colIdx.taskType2) row._origT2 = newText;
+            if (colIndex === colIdx.taskType3) row._origT3 = newText;
+            if (colIndex === colIdx.taskType4) row._origT4 = newText;
+            
+            if (colIndex === colIdx.plan) {
+                if (colIdx.period !== -1) globalData[rowIndex][colIdx.period] = "";
+                if (colIdx.dur1 !== -1) globalData[rowIndex][colIdx.dur1] = "";
+                if (colIdx.dur2 !== -1) globalData[rowIndex][colIdx.dur2] = "";
+                if (colIdx.dur3 !== -1) globalData[rowIndex][colIdx.dur3] = "";
+                if (colIdx.dur4 !== -1) globalData[rowIndex][colIdx.dur4] = "";
+                globalData[rowIndex]._planForced = true;
+                globalData[rowIndex]._startForced = false; 
+            }
+            if (colIndex === colIdx.start) {
+                globalData[rowIndex]._startForced = true;
+                globalData[rowIndex]._planForced = false;
+                if (colIdx.plan !== -1) globalData[rowIndex][colIdx.plan] = "";
+            }
+            if (colIndex === colIdx.period || colIndex === colIdx.dur1 || colIndex === colIdx.dur2 || colIndex === colIdx.dur3 || colIndex === colIdx.dur4) {
+                globalData[rowIndex]._planForced = false;
+                if (colIdx.plan !== -1) globalData[rowIndex][colIdx.plan] = "";
+            }
+
+            td.setAttribute('data-raw', encodeURIComponent(newText));
+            
+            if ([colIdx.start, colIdx.plan, colIdx.period, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4].includes(colIndex)) {
+                window.recalculateSchedules();
+            } else {
+                renderTable(globalData); applyFilters();
+            }
+        } else {
+            td.innerHTML = td.dataset.displayHtml || oldText;
+        }
+    };
+
+    function renderTable(data) {
+        const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
+        if(!data || data.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; return; }
+
+        let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
+        let hasPeriodCol = colIdx.period !== -1;
+
+        let headHtml = '<tr>';
+        data[0].forEach((cell, idx) => {
+            if (hiddenCols.includes(idx)) return; 
+            let colName = cell ? cell.toString().replace(/\s+/g, '') : ""; let thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;"; 
+            let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
+            
+            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; } 
+            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;"; } 
+            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; } 
+            else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; } 
+            else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; } 
+            else { widthClass = "width: var(--w-default); min-width: 30px;"; }
+
+            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${escapeHtml(cell)}</div></th>`;
+            if (idx === colIdx.plan) {
+                 if (!hasPeriodCol) headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px;">기간</th>`;
+                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">개발업무 (WBS)</th>`;
+            }
+        });
+        headHtml += '</tr>'; thead.innerHTML = headHtml;
+
+        let bodyHtml = '';
+        for(let i = 1; i < data.length; i++) {
+            if (!data[i]) continue; let row = data[i];
+            let trClass = row._level === 0 ? 'class="parent-row"' : (row._level === 1 ? 'class="sub-parent-row"' : (row._level === 2 ? 'class="sub-parent-row-2"' : (row._level === 3 ? 'class="sub-parent-row-3"' : 'class="sub-parent-row-4"')));
+            bodyHtml += `<tr data-row-index="${i}" ${trClass}>`;
+            
+            for(let cellIndex = 0; cellIndex < data[0].length; cellIndex++) {
+                if (hiddenCols.includes(cellIndex)) continue; 
+                let cell = (row[cellIndex] !== undefined && row[cellIndex] !== null) ? row[cellIndex] : "";
+                let colName = data[0][cellIndex] ? data[0][cellIndex].toString().replace(/\s+/g, '') : "";
+                let colStr = colName.toLowerCase();
+                
+                let rawForEditing = cell.toString();
+                if (cellIndex === colIdx.start && row._calcStartTs) rawForEditing = formatTsToYMD(row._calcStartTs);
+                else if (cellIndex === colIdx.plan && row._calcPlanTs) rawForEditing = formatTsToYMD(row._calcPlanTs);
+                
+                let safeRawValue = encodeURIComponent(rawForEditing);
+                let tdAttrs = ` data-raw="${safeRawValue}"`;
+                
+                let nonEditableCols = [colIdx.no, colIdx.chart];
+                if (!nonEditableCols.includes(cellIndex) && !hiddenCols.includes(cellIndex)) {
+                    tdAttrs += ` ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능"`;
+                }
+
+                let tdStyle = ""; let tdHtml = '';
+                
+                if (cellIndex === colIdx.no) { 
+                    tdAttrs += ` class="no-td" ondblclick="toggleRowActions(this); event.stopPropagation();" title="더블클릭하여 추가/삭제/이동 메뉴 열기"`; 
+                    tdHtml = `
+                        <div style="display:flex; flex-direction:column; align-items:center;">
+                            <span class="row-num-span"></span>
+                            <div class="row-actions" style="flex-direction:column; gap:2px;">
+                                <div style="display:flex; gap:2px; justify-content:center;">
+                                    <span class="row-action-btn lvl-up" onclick="changeRowLevel(${i}, -1); event.stopPropagation();" title="WBS 레벨 올리기 (상위 레벨)">◀</span>
+                                    <span class="row-action-btn lvl-dn" onclick="changeRowLevel(${i}, +1); event.stopPropagation();" title="WBS 레벨 내리기 (하위 레벨)">▶</span>
+                                </div>
+                                <div style="display:flex; gap:2px; justify-content:center;">
+                                    <span class="row-action-btn add" onclick="addRow(${i}); event.stopPropagation();" title="아래에 빈 행 추가">➕</span>
+                                    <span class="row-action-btn del" onclick="deleteRow(${i}); event.stopPropagation();" title="이 행 삭제">➖</span>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
+                    tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
+                } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
+                    tdStyle = "text-align: center; white-space: nowrap;"; 
+                } else {
+                    tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
+                }
+
+                if (cellIndex !== colIdx.no) {
+                    if (cellIndex === colIdx.start) { 
+                        let tsArg = row._calcStartTs || new Date().getTime();
+                        let displayDate = row._calcStartTs ? formatTableDate(row._calcStartTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
+                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
+                    } 
+                    else if (cellIndex === colIdx.plan) { 
+                        let tsArg = row._calcPlanTs || new Date().getTime();
+                        let displayDate = row._calcPlanTs ? formatTableDate(row._calcPlanTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
+                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
+                        
+                        bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
+                        
+                        if (!hasPeriodCol) {
+                            let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
+                            bodyHtml += `<td style="text-align: center; font-weight: bold; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
+                        }
+                        
+                        let taskTxt = "";
+                        if (row._level === 0) taskTxt = row._origDev;
+                        else if (row._level === 1) taskTxt = row._origT1;
+                        else if (row._level === 2) taskTxt = row._origT2;
+                        else if (row._level === 3) taskTxt = row._origT3;
+                        else if (row._level === 4) taskTxt = row._origT4;
+                        if (taskTxt === undefined || taskTxt === null) taskTxt = "";
+                        
+                        let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
+                        let indentEm = (row._level || 0) * 1.2;
+                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; font-weight: ${row._level <= 1 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+
+                        let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
+                        let wbsRawValue = encodeURIComponent(taskTxt);
+                        let wbsAttrs = wbsColIdx !== -1 ? ` data-raw="${wbsRawValue}" ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${wbsColIdx})" title="더블클릭하여 수정 가능"` : ``;
+
+                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${prefix}${escapeHtml(taskTxt)}</td>`;
+                        continue; 
+                    } 
+                    else if (cellIndex === colIdx.period) {
+                        let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
+                        tdHtml = `<span style="color: #e03131; font-weight: bold;">${calcDays}</span>`;
+                        tdStyle = "text-align: center; white-space: nowrap;";
+                    }
+                    else if (cellIndex === colIdx.content || cellIndex === colIdx.answer) {
+                        let cellText = cell.toString().trim(); let hasKor = /[가-힣]/.test(cellText); let hasEng = /[a-zA-Z]/.test(cellText); let transMode = 0; 
+                        if (hasKor) transMode = 1; else if (hasEng) transMode = 2; 
+
+                        let isStrike = (cellIndex === colIdx.content && row._isStrikeContent) || (cellIndex === colIdx.answer && row._isStrikeAnswer);
+                        if (!isStrike && (cellText.includes('[취소]') || cellText.includes('(취소)') || cellText.includes('[Drop]') || cellText.includes('(Drop)'))) isStrike = true;
+                        if (isStrike) tdStyle += " text-decoration: line-through; color: #adb5bd;";
+
+                        if (transMode > 0) {
+                            let safeText = encodeURIComponent(cellText).replace(/'/g, "%27").replace(/\\/g, "\\\\");
+                            let displayHtml = linkifyAndEscape(cellText);
+                            tdStyle += " position: relative; padding-left: 22px;"; tdAttrs += ` class="content-cell-trans"`;
+                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border: 1px solid #ced4da; border-radius: 3px; padding: 2px 2px; color: #495057; background: #fff; z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + '); event.stopPropagation();">🌐</span>';
+                        } else { tdHtml = linkifyAndEscape(cellText); }
+                    } 
+                    else if (cellIndex === colIdx.chart) { 
+                        tdHtml = createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
+                        tdStyle += " position:relative;"; tdAttrs += ` class="chart-td"`;
+                    } 
+                    else { tdHtml = linkifyAndEscape(cell.toString().trim()); }
+                }
+
+                bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
+            }
+            bodyHtml += `</tr>`;
+        }
+        
+        tbody.innerHTML = bodyHtml; initColumnResizers();
+    }
+
+    function toggleTranslation(btn, encodedText, transMode) {
+        let container = btn.parentElement; let contentSpan = container.querySelector('.content-span');
+        if (btn.dataset.expanded === "true") { contentSpan.innerHTML = contentSpan.dataset.origHtml; btn.dataset.expanded = "false"; btn.style.backgroundColor = "#fff"; return; }
+        if (contentSpan.dataset.transHtml) { contentSpan.innerHTML = contentSpan.dataset.transHtml; btn.dataset.expanded = "true"; btn.style.backgroundColor = "#e2e6ea"; return; }
+
+        btn.style.pointerEvents = 'none'; btn.style.opacity = '0.5';
+        let text = decodeURIComponent(encodedText); let targetLang = transMode === 1 ? 'en' : 'ko'; let labelPrefix = transMode === 1 ? 'ENG' : '한글';
+
+        let urls = [];
+        let placeholderText = text.replace(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gim, function(match) { urls.push(match); return ` ZXZX${urls.length - 1}ZXZX `; });
+        placeholderText = placeholderText.replace(/(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim, function(match) { urls.push(match); return ` ZXZX${urls.length - 1}ZXZX `; });
+        placeholderText = placeholderText.replace(/(^|[^\/a-zA-Z0-9])(www\.[\S]+(\b|$))/gim, function(match, p1, p2) { urls.push(p2); return p1 + ` ZXZX${urls.length - 1}ZXZX `; });
+
+        fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(placeholderText)}`)
+        .then(res => res.json())
+        .then(tData => {
+            let translated = ''; tData[0].forEach(item => translated += item[0]);
+            urls.forEach((url, idx) => { let rx = new RegExp(`\\s*ZXZX${idx}ZXZX\\s*`, 'gi'); translated = translated.replace(rx, ' ' + url + ' '); });
+            let transDisplayHtml = linkifyAndEscape(translated.trim());
+            let cleanOrigHtml = contentSpan.innerHTML.replace(/(<br\s*\/?>|\s|&nbsp;)+$/gi, ' ').trim();
+            let finalHtml = cleanOrigHtml + '<br><span style="color: var(--trans-text); font-weight: normal;"><b>[' + labelPrefix + ']</b><br>' + transDisplayHtml + '</span>';
+            contentSpan.dataset.origHtml = cleanOrigHtml; contentSpan.dataset.transHtml = finalHtml; contentSpan.innerHTML = finalHtml;
+            btn.dataset.expanded = "true"; btn.style.backgroundColor = "#e2e6ea"; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
+        }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert("번역 중 오류가 발생했습니다."); });
+    }
+
+    function initColumnResizers() {
+        const table = document.getElementById('myTable'); const thElements = document.querySelectorAll('th');
+        thElements.forEach(th => {
+            if (th.querySelector('.resizer')) return;
+            const resizer = document.createElement('div'); resizer.className = 'resizer'; th.appendChild(resizer);
+            let startX, startWidth, startTableWidth;
+            resizer.addEventListener('mousedown', function(e) {
+                e.preventDefault(); startX = e.clientX; startWidth = th.offsetWidth; startTableWidth = table.offsetWidth;
+                let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
+                thElements.forEach((t, idx) => { if(!hiddenCols.includes(idx)) t.style.width = t.offsetWidth + 'px'; });
+                table.style.width = startTableWidth + 'px'; resizer.classList.add('resizing');
+                
+                const mouseMoveHandler = function(e) {
+                    const diff = e.clientX - startX; const newWidth = startWidth + diff;
+                    if (newWidth > 20) { th.style.width = `${newWidth}px`; table.style.width = `${startTableWidth + diff}px`; }
+                };
+                const mouseUpHandler = function() { resizer.classList.remove('resizing'); document.removeEventListener('mousemove', mouseMoveHandler); document.removeEventListener('mouseup', mouseUpHandler); };
+                document.addEventListener('mousemove', mouseMoveHandler); document.addEventListener('mouseup', mouseUpHandler);
+            });
+        });
+    }
+
+    function applyFilters() {
+        try {
+            const tbody = document.getElementById('table-body'); const trs = tbody.getElementsByTagName("tr"); let visibleCount = 1; 
+            for (let i = 0; i < trs.length; i++) {
+                let tr = trs[i]; let rowIndex = parseInt(tr.dataset.rowIndex, 10); if (isNaN(rowIndex)) continue; 
+                let rowData = globalData[rowIndex]; if (!rowData) continue;
+                let showRow = true; if (rowData._isExplicitZero) showRow = false;
+
+                if (showRow) {
+                    for (let colIndexStr in currentFilters) {
+                        let colIndex = parseInt(colIndexStr, 10); let filterSet = currentFilters[colIndex];
+                        if (!filterSet.has('All')) {
+                            let cellValue = rowData[colIndex] ? rowData[colIndex].toString().trim() : '';
+                            if (!filterSet.has(cellValue)) { showRow = false; break; }
+                        }
+                    }
+                }
+
+                if (showRow) {
+                    tr.style.display = "";
+                    let noTd = tr.querySelector('.no-td'); 
+                    if (noTd) { 
+                        let span = noTd.querySelector('.row-num-span');
+                        if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++; 
+                    } else if (tr.cells.length > 0) { tr.cells[0].textContent = visibleCount++; }
+                    let chartTd = tr.querySelector('.chart-td'); if (chartTd) { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level); }
+                } else { tr.style.display = "none"; }
+            }
+            updatePrintTitle(); updateFilterVisibility();
+        } catch(e) { console.error("Filter Apply Error: ", e); }
+    }
+
+    function generateFilters(data) {
+        let savedFilters = {};
+        for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
+
+        const filterContainer = document.getElementById('dynamic-filters'); filterContainer.innerHTML = ''; currentFilters = {}; 
+        existingDevStages = []; let assigneeModelsAll = {}; let assigneeModelsActive = {};
+
+        for(let i = 1; i < data.length; i++) {
+            if (!data[i] || data[i].join('').trim() === '') continue;
+            let assignee = colIdx.assignee !== -1 ? data[i][colIdx.assignee] : "";
+            let status = colIdx.status !== -1 && data[i][colIdx.status] ? data[i][colIdx.status].toString().toLowerCase() : "";
+            let model = colIdx.model !== -1 ? data[i][colIdx.model] : "";
+            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : "";
+            
+            if (devStage !== undefined && devStage !== null) {
+                let s = devStage.toString().trim();
+                if (s !== '' && !existingDevStages.includes(s)) existingDevStages.push(s);
+            }
+            
+            if (assignee !== undefined && assignee !== null && assignee.toString().trim() !== '') {
+                let strAssignee = assignee.toString().trim();
+                if (!assigneeModelsAll[strAssignee]) assigneeModelsAll[strAssignee] = new Set();
+                if (!assigneeModelsActive[strAssignee]) assigneeModelsActive[strAssignee] = new Set();
+                if (model !== undefined && model !== null && model.toString().trim() !== '') {
+                    let strModel = model.toString().trim(); assigneeModelsAll[strAssignee].add(strModel);
+                    let isDone = status.includes('complete') || status.includes('완료') || status.includes('cancel') || status.includes('취소') || status.includes('drop') || status.includes('드랍');
+                    if (!isDone) { assigneeModelsActive[strAssignee].add(strModel); }
+                }
+            }
+        }
+
+        filterColumns.forEach(col => {
+            let uniqueValues = new Set();
+            for(let i = 1; i < data.length; i++) {
+                if (!data[i] || data[i].join('').trim() === '') continue; 
+                let val = data[i][col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { uniqueValues.add(val.toString().trim()); }
+            }
+            
+            let valuesArray = Array.from(uniqueValues);
+            if (col.name === '개발단계') { valuesArray = existingDevStages; } else { valuesArray.sort(); }
+
+            currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
+
+            let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
+            let label = document.createElement('div'); label.className = 'filter-label'; label.textContent = col.name; groupDiv.appendChild(label);
+            let allBtn = document.createElement('button'); allBtn.className = 'btn btn-all'; 
+            if (currentFilters[col.index].has('All')) allBtn.classList.add('active');
+            allBtn.textContent = '전체 (All)'; allBtn.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); groupDiv.appendChild(allBtn);
+
+            valuesArray.forEach(val => {
+                let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
+                if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
+                if (col.name === '담당자') {
+                    let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
+                    btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
+                } else { btn.textContent = val; }
+                btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
+            });
+            filterContainer.appendChild(groupDiv);
+        });
+    }
+
+    function updatePrintTitle() {
+        let getFilterText = (idx) => { if (idx === -1 || !currentFilters[idx] || currentFilters[idx].has('All')) return "All"; return Array.from(currentFilters[idx]).join(', '); };
+        let customer = getFilterText(colIdx.customer); let model = getFilterText(colIdx.model); let inch = getFilterText(colIdx.inch); let assignee = getFilterText(colIdx.assignee);
+        if (customer === "All") { for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && globalData[i][colIdx.customer]) { customer = globalData[i][colIdx.customer]; break; } } }
+        if (model === "All") { for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && globalData[i][colIdx.model]) { model = globalData[i][colIdx.model]; break; } } }
+        if (inch === "All" || colIdx.inch === -1) { inch = ""; for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && colIdx.inch !== -1 && globalData[i][colIdx.inch]) { inch = globalData[i][colIdx.inch]; break; } } }
+        if (inch !== "") { const inchNum = parseFloat(inch); if (!isNaN(inchNum)) inch = inchNum.toFixed(1); }
+        if (assignee === "All") { for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && globalData[i][colIdx.assignee]) { assignee = globalData[i][colIdx.assignee]; break; } } }
+
+        const infoStr = inch ? `${customer} > ${model} > ${inch} > ${assignee}` : `${customer} > ${model} > ${assignee}`; const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_');
+        const printTitleElem = document.getElementById('print-title'); if (printTitleElem) printTitleElem.textContent = `[Gantt Chart] ` + infoStr;
+        
+        const tableInfoTextElem = document.getElementById('table-info-text'); 
+        if (tableInfoTextElem) { tableInfoTextElem.textContent = `📑 [Gantt Chart] ` + infoStr; }
+        
+        const today = new Date(); const yy = String(today.getFullYear()).slice(-2); const mm = String(today.getMonth() + 1).padStart(2, '0'); const dd = String(today.getDate()).padStart(2, '0');
+        const dateStringYYMMDD = `${yy}${mm}${dd}`; const dateStringFull = today.getFullYear() + "-" + mm + "-" + dd;
+        
+        document.getElementById('print-date').textContent = "인쇄일자: " + dateStringFull;
+        const exportName = `${dateStringYYMMDD}_[Gantt Chart] ${safeInfoStr}`; document.title = exportName; window.exportFilenameStr = exportName;
+    }
+
+    function updateFilterVisibility() {
+        filterColumns.forEach(col => {
+            let validValues = new Set();
+            for (let i = 1; i < globalData.length; i++) {
+                let rowData = globalData[i]; if (!rowData || rowData.join('').trim() === '') continue;
+                let isRowValidForThisCol = true;
+                for (let otherColIndexStr in currentFilters) {
+                    let otherColIndex = parseInt(otherColIndexStr, 10); if (otherColIndex === col.index) continue; 
+                    let filterSet = currentFilters[otherColIndex];
+                    if (!filterSet.has('All')) { let cellValue = rowData[otherColIndex] ? rowData[otherColIndex].toString().trim() : ''; if (!filterSet.has(cellValue)) { isRowValidForThisCol = false; break; } }
+                }
+                if (isRowValidForThisCol) { let val = rowData[col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { validValues.add(val.toString().trim()); } }
+            }
+            
+            const groupDiv = document.getElementById('filter-group-' + col.index);
+            if (groupDiv) {
+                const btns = groupDiv.querySelectorAll('.btn:not(.btn-all)');
+                btns.forEach(btn => {
+                    let btnValue = btn.dataset.value;
+                    if (col.name === '개발단계') { btn.style.display = 'inline-block'; if (!validValues.has(btnValue) && !btn.classList.contains('active')) btn.classList.add('dimmed'); else btn.classList.remove('dimmed'); } 
+                    else { if (validValues.has(btnValue) || btn.classList.contains('active')) btn.style.display = 'inline-block'; else btn.style.display = 'none'; }
+                });
+            }
+        });
+    }
+
+    function updateFilter(event, colIndex, value, groupDiv) {
+        const btn = event.currentTarget; const filterSet = currentFilters[colIndex]; const allBtn = groupDiv.querySelector('.btn-all');
+        if (value === 'All') { filterSet.clear(); filterSet.add('All'); const btns = groupDiv.querySelectorAll('.btn'); btns.forEach(b => b.classList.remove('active')); allBtn.classList.add('active'); } 
+        else {
+            if (filterSet.has('All')) { filterSet.delete('All'); allBtn.classList.remove('active'); }
+            if (filterSet.has(value)) { filterSet.delete(value); btn.classList.remove('active'); } else { filterSet.add(value); btn.classList.add('active'); }
+            if (filterSet.size === 0) { filterSet.add('All'); allBtn.classList.add('active'); }
+        }
+        applyFilters();
+    }
+
+    function exportToExcel() {
+        if (globalData.length <= 1) { alert("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요."); return; }
+        let exportData = []; let header = [...globalData[0]]; exportData.push(header);
+
+        let rowNumCounter = 1;
+        for (let i = 1; i < globalData.length; i++) {
+            let row = globalData[i]; if (!row || row._isExplicitZero) continue; 
+            let exportRow = [];
+            
+            let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
+
+            for (let c = 0; c < header.length; c++) {
+                let cellVal = row[c] !== undefined && row[c] !== null ? row[c] : "";
+                if (c === colIdx.chart) { cellVal = ""; } 
+                else if (c === colIdx.no) { cellVal = rowNumCounter; } 
+                else if (c === colIdx.bogo) { cellVal = row._level !== undefined ? row._level + 1 : ""; } 
+                else if (c === colIdx.devStage)  { cellVal = (row._level === 0) ? (row._origDev !== undefined ? row._origDev : "") : ""; }
+                else if (c === colIdx.taskType1) { cellVal = (row._level === 1) ? prefix + (row._origT1 !== undefined ? row._origT1 : "") : ""; }
+                else if (c === colIdx.taskType2) { cellVal = (row._level === 2) ? prefix + (row._origT2 !== undefined ? row._origT2 : "") : ""; }
+                else if (c === colIdx.taskType3) { cellVal = (row._level === 3) ? prefix + (row._origT3 !== undefined ? row._origT3 : "") : ""; }
+                else if (c === colIdx.taskType4) { cellVal = (row._level === 4) ? prefix + (row._origT4 !== undefined ? row._origT4 : "") : ""; }
+                else if (c === colIdx.dur4) { cellVal = (row._level === 4) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.start) { 
+                    if (row._level === 0 || row._startForced || !row._finalDuration) {
+                        cellVal = row._calcStartTs ? formatTsToYMD(row._calcStartTs) : ""; 
+                    } else { cellVal = ""; }
+                } 
+                else if (c === colIdx.plan) { 
+                    if (row._level === 0 || row._planForced || !row._finalDuration) {
+                        cellVal = row._calcPlanTs ? formatTsToYMD(row._calcPlanTs) : ""; 
+                    } else { cellVal = ""; }
+                } 
+                else if (c === colIdx.period) { cellVal = (colIdx.dur1 === -1 && colIdx.dur2 === -1 && colIdx.dur3 === -1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.dur1) { cellVal = (row._level === 1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.dur2) { cellVal = (row._level === 2) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.dur3) { cellVal = (row._level === 3) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                
+                exportRow.push(cellVal);
+            }
+            exportData.push(exportRow);
+            rowNumCounter++;
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        for (let key in ws) {
+            if (key[0] === '!') continue;
+            if (!ws[key].s) ws[key].s = {};
+            ws[key].s.font = { sz: 10, name: "맑은 고딕" };
+            if (typeof ws[key].v === 'string' && ws[key].v.includes('\n')) ws[key].s.alignment = { wrapText: true, vertical: "top" };
+            else ws[key].s.alignment = { vertical: "center" };
+        }
+
+        const wb = XLSX.utils.book_new(); 
+        XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
+
+        if (window.changeLogs && window.changeLogs.length > 0) {
+            let logData = [['변경 일시', 'No (행)', '변경 항목', '변경 전 (Old)', '변경 후 (New)']];
+            window.changeLogs.forEach(log => { logData.push([log.time, log.rowName, log.colName, log.oldVal, log.newVal]); });
+            const wsLog = XLSX.utils.aoa_to_sheet(logData);
+            for (let key in wsLog) {
+                if (key[0] === '!') continue;
+                if (!wsLog[key].s) wsLog[key].s = {};
+                wsLog[key].s.font = { sz: 10, name: "맑은 고딕" };
+                wsLog[key].s.alignment = { vertical: "center", wrapText: true };
+            }
+            wsLog['!cols'] = [{wch: 22}, {wch: 12}, {wch: 15}, {wch: 35}, {wch: 35}];
+            XLSX.utils.book_append_sheet(wb, wsLog, "수정이력");
+        }
+
+        const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; 
+        XLSX.writeFile(wb, fileName);
+    }
+
+    function formatChartLabel(ts) { let d = new Date(ts); return String(d.getFullYear()).slice(-2) + "." + String(d.getMonth() + 1).padStart(2, '0') + "." + String(d.getDate()).padStart(2, '0'); }
+
+    function createStatusChart(rowStartTs, rowPlanTs, statusVal, level) {
+        let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
+        let tsStart = rowStartTs; let tsEnd = rowPlanTs;
+        if (!tsStart && !tsEnd) return `<div>-</div>`; if (!tsEnd) tsEnd = tsStart; if (tsEnd < tsStart) tsEnd = tsStart;
+
+        let viewStartTs = window.ganttViewStartTs; let viewDuration = window.ganttViewDuration;
+        if (!viewStartTs || !viewDuration) return `<div>-</div>`;
+
+        let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
+        let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
+        let barColorVar = level === 0 ? "#ff8787" : (level === 1 ? "#74c0fc" : (level === 2 ? "#ffe066" : "#8ce200"));
+        if (isCancel || isDrop) barColorVar = "#adb5bd"; 
+
+        let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
+        let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
+        let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
+
+        let labelHTML = ''; for (let i = 0; i <= 4; i++) { let pct = (i / 4) * 100; let ts = viewStartTs + (viewDuration * i / 4); let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5;">${formatChartLabel(ts)}</span>`; }
+        let durationDays = countWorkingDays(tsStart, tsEnd);
+        return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class="chart-axis-wrapper">${labelHTML}</div><div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">${gridLines}${todayLine}<div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; background-color:${barColorVar}; border-radius:4px; z-index:2; opacity:0.95; display:flex; justify-content:flex-start; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div></div>`;
+    }
+</script>
+</body>
+</html>
