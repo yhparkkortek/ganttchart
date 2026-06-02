@@ -13,16 +13,16 @@
     }
 
     // =========================================================
-    // 🔑 [구글 연동 설정] 발급받으신 Key 값을 여기에 입력하세요.
+    // 🔑 [구글 연동 설정] 본인의 Key 값과 폴더 ID를 입력하세요.
     // =========================================================
     const CLIENT_ID = '107026313229-jh5qm0pbkhe505gt3pvgbpbjurg1v0ej.apps.googleusercontent.com';
     const API_KEY = 'AIzaSyCYavFb6m88K8T7rhKQwnfv5ygpwG9ah48';
+    
+    // 📂 팀 공용 폴더 ID (주소창 폴더 마지막 문자열)
+    const SHARED_FOLDER_ID = '1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS';
 
     const SCOPES = 'https://www.googleapis.com/auth/drive.file'; 
-    
-    // 현재 제어 중인 구글 드라이브 파일 ID를 추적 (새 파일 생성 vs 덮어쓰기 분기용)
     window.currentDriveFileId = null;
-
     let tokenClient;
     let gapiInited = false;
     let gisInited = false;
@@ -44,12 +44,11 @@
         gisInited = true;
     }
 
-    // 🔓 드라이브 연동 (로그인)
     function handleAuthClick() {
         tokenClient.callback = async (resp) => {
             if (resp.error !== undefined) { throw (resp); }
-            alert('구글 드라이브 연동에 성공했습니다! 이제 [원격 저장 / 불러오기]를 사용할 수 있습니다.');
-            document.getElementById('auth_button').innerText = "🟢 연동 완료";
+            alert('구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
+            document.getElementById('auth_button').innerText = "🟢 공용 드라이브 연동됨";
             document.getElementById('auth_button').disabled = true;
             document.getElementById('drive_save_btn').disabled = false;
             document.getElementById('drive_load_btn').disabled = false;
@@ -58,10 +57,21 @@
         else { tokenClient.requestAccessToken({prompt: ''}); }
     }
 
-    // 💾 프로젝트 동적 이름으로 저장 (신규 저장 or 덮어쓰기)
+    // 🔍 공용 폴더 안에서만 파일 검색하도록 쿼리 수정 ('SHARED_FOLDER_ID' in parents)
+    async function findSaveFile(dynamicFileName) {
+        try {
+            let response = await gapi.client.drive.files.list({
+                q: `name='${dynamicFileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+                fields: 'files(id, name)',
+                spaces: 'drive'
+            });
+            return response.result.files && response.result.files.length > 0 ? response.result.files[0].id : null;
+        } catch (err) { console.error("클라우드 파일 검색 실패:", err); return null; }
+    }
+
     async function saveToGoogleDrive() {
         if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
-        document.getElementById('file-status').textContent = "💾 구글 드라이브에 데이터를 저장하는 중...";
+        document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
         
         let dynamicFileName = (window.exportFilenameStr || "GanttChart_Project") + ".json";
 
@@ -71,30 +81,22 @@
             return obj;
         });
 
-        let saveData = {
-            globalData: serializedGlobalData,
-            changeLogs: window.changeLogs,
-            colIdx: colIdx,
-            filterColumns: filterColumns
-        };
+        let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns };
         
         try {
-            // 현재 활성화된 파일 ID가 없다면, 동일한 이름의 파일이 드라이브에 있는지 검색
             if (!window.currentDriveFileId) {
-                let response = await gapi.client.drive.files.list({
-                    q: `name='${dynamicFileName}' and trashed=false`,
-                    fields: 'files(id, name)',
-                    spaces: 'drive'
-                });
-                if (response.result.files && response.result.files.length > 0) {
-                    window.currentDriveFileId = response.result.files[0].id;
-                }
+                window.currentDriveFileId = await findSaveFile(dynamicFileName);
             }
 
             let fileId = window.currentDriveFileId;
             let boundary = 'foo_bar_baz';
+            
+            // 새 파일 생성 시(POST), parents 속성에 공용 폴더 ID를 지정하여 해당 폴더 안에 생성되도록 설정
+            let metadata = { name: dynamicFileName, mimeType: 'application/json' };
+            if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
+
             let multipartRequestBody =
-                "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ name: dynamicFileName, mimeType: 'application/json' }) +
+                "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) +
                 "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
 
             let request = gapi.client.request({
@@ -107,21 +109,20 @@
 
             request.execute(function(file) {
                 if (file.id) {
-                    window.currentDriveFileId = file.id; // 다음 저장을 위해 ID 유지
-                    alert(`🎉 [${dynamicFileName}] 파일로 구글 드라이브에 저장되었습니다!`);
-                    document.getElementById('file-status').textContent = `✅ 구글 드라이브 백업 완료: ${dynamicFileName}`;
-                } else { alert("저장에 실패했습니다. 자격 증명 설정을 다시 한 번 확인해 주세요."); }
+                    window.currentDriveFileId = file.id; 
+                    alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
+                    document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
+                } else { alert("저장에 실패했습니다. 공용 폴더 편집 권한이 있는지 확인해 주세요."); }
             });
         } catch (err) { alert("구글 드라이브 에러: " + err.message); }
     }
 
-    // 📂 프로젝트 목록 불러오기 (검색 및 UI 팝업)
     async function loadFromGoogleDrive() {
-        document.getElementById('file-status').textContent = "📂 구글 드라이브에서 프로젝트 목록을 불러오는 중...";
+        document.getElementById('file-status').textContent = "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
         try {
-            // Gantt 텍스트가 포함된 json 파일들만 최신순으로 검색
+            // 🔍 공용 폴더 안의 프로젝트만 긁어오도록 제한 ('SHARED_FOLDER_ID' in parents)
             let response = await gapi.client.drive.files.list({
-                q: `mimeType='application/json' and name contains 'Gantt' and trashed=false`,
+                q: `mimeType='application/json' and name contains 'Gantt' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
                 fields: 'files(id, name, modifiedTime)',
                 orderBy: 'modifiedTime desc',
                 spaces: 'drive'
@@ -129,18 +130,16 @@
             
             let files = response.result.files;
             if (!files || files.length === 0) {
-                alert("구글 드라이브에 저장된 간트차트 프로젝트 파일이 없습니다.");
-                document.getElementById('file-status').textContent = "기존에 저장된 클라우드 파일이 없습니다.";
+                alert("팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
+                document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
                 return;
             }
             
-            // UI 목록 모달창 띄우기
             window.showDriveFileModal(files);
-            document.getElementById('file-status').textContent = "✅ 프로젝트 목록을 성공적으로 불러왔습니다. 화면에서 파일을 선택해 주세요.";
-        } catch (err) { alert("목록 호출 실패: " + err.message); }
+            document.getElementById('file-status').textContent = "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.";
+        } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
-    // 📂 선택한 특정 파일 드라이브에서 다운로드 및 화면 복원
     window.executeLoadFile = async function(fileId, fileName) {
         window.closeDriveModal();
         document.getElementById('file-status').textContent = `📂 [${fileName}] 데이터를 가져오는 중...`;
@@ -158,12 +157,10 @@
                 colIdx = saveData.colIdx || colIdx;
                 filterColumns = saveData.filterColumns || filterColumns;
                 
-                // 불러온 파일을 현재 파일로 지정 (수정 후 덮어쓰기 위함)
                 window.currentDriveFileId = fileId;
-                
                 window.recalculateSchedules();
-                alert(`🎉 [${fileName}] 프로젝트 동기화 완료!`);
-                document.getElementById('file-status').textContent = `✅ 구글 드라이브 동기화 완료: ${fileName}`;
+                alert(`🎉 [${fileName}] 공용 프로젝트 동기화 완료!`);
+                document.getElementById('file-status').textContent = `✅ 공용 드라이브 동기화 완료: ${fileName}`;
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
