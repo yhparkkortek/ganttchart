@@ -1584,6 +1584,37 @@
         return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class=\"chart-axis-wrapper\">${labelHTML}</div><div style=\"position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;\">${gridLines}${todayLine}<div style=\"position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; background-color:${barColorVar}; border-radius:4px; z-index:2; opacity:0.95; display:flex; justify-content:flex-start; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);\"></div></div></div>`;
     }
 
+// =========================================================
+    // 🛠️ 누락된 테마 컨트롤 및 차트 색상 전역 변수 추가
+    // =========================================================
+    window.chartColors = {
+        l0: '#1a237e',
+        l1: '#5c6bc0',
+        l2: '#9fa8da',
+        l3: '#c5cae9'
+    };
+
+    window.updateThemeColor = function(baseColor) {
+        // 1. 차트 바(Bar) 색상 업데이트 (필요에 따라 단계별 색상 농도 조절 가능)
+        window.chartColors = {
+            l0: baseColor,
+            l1: baseColor,
+            l2: baseColor,
+            l3: baseColor
+        };
+        
+        // 2. 테이블 상위 행 배경색 CSS 변수 업데이트
+        document.documentElement.style.setProperty('--c-l0-bg', baseColor);
+        document.documentElement.style.setProperty('--c-l0-border', baseColor);
+        
+        // 3. 색상 적용 후 테이블 재렌더링
+        if (typeof globalData !== 'undefined' && globalData.length > 1) {
+            renderTable(globalData);
+            applyFilters();
+        }
+    };
+
+    // 기존 코드 위치 (이 줄 위에 코드를 붙여넣으세요)
     window.updateThemeColor('#b9b9b9');
 
     window.addEventListener('beforeunload', function (e) {
