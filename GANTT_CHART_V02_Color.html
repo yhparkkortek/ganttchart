@@ -463,17 +463,49 @@
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
 
+    // ── 브라우저 닫기 전 커스텀 저장 확인 모달 ──────────────────────────
+    window._closeConfirmPending = false;
+
     window.addEventListener('beforeunload', function (e) {
+        if (window._closeConfirmPending) return;
         if (window.changeLogs && window.changeLogs.length > window.lastSavedLogCount) {
-            const driveConnected = !document.getElementById('drive_save_btn').disabled;
-            const msg = driveConnected
-                ? '저장하지 않은 변경 사항이 있습니다.\n구글 드라이브에 저장 후 닫으시겠습니까?'
-                : '저장하지 않은 변경 사항이 있습니다. 정말 닫으시겠습니까?';
             e.preventDefault();
-            e.returnValue = msg;
-            return msg;
+            e.returnValue = '';
+            setTimeout(function() {
+                const driveConnected = !document.getElementById('drive_save_btn').disabled;
+                const overlay     = document.getElementById('close-confirm-overlay');
+                const msgEl       = document.getElementById('close-confirm-msg');
+                const driveBtns   = document.getElementById('close-confirm-drive-btns');
+                const nodriveBtns = document.getElementById('close-confirm-nodrive-btns');
+                if (driveConnected) {
+                    msgEl.textContent = '저장하지 않은 변경 사항이 있습니다.\n구글 드라이브에 저장 후 닫으시겠습니까?';
+                    driveBtns.style.display   = 'flex';
+                    nodriveBtns.style.display = 'none';
+                } else {
+                    msgEl.textContent = '저장하지 않은 변경 사항이 있습니다.\n저장하지 않으면 변경 내용이 사라집니다.';
+                    driveBtns.style.display   = 'none';
+                    nodriveBtns.style.display = 'flex';
+                }
+                overlay.style.display = 'flex';
+            }, 0);
         }
     });
+
+    window._closeConfirmSaveAndClose = async function() {
+        document.getElementById('close-confirm-overlay').style.display = 'none';
+        await saveToGoogleDrive();
+        window._closeConfirmPending = true;
+        window.close();
+    };
+    window._closeConfirmJustClose = function() {
+        document.getElementById('close-confirm-overlay').style.display = 'none';
+        window._closeConfirmPending = true;
+        window.close();
+    };
+    window._closeConfirmCancel = function() {
+        document.getElementById('close-confirm-overlay').style.display = 'none';
+    };
+    // ────────────────────────────────────────────────────────────────────
 
     window.showDriveFileModal = function(files) {
         let listContainer = document.getElementById('drive-file-list');
