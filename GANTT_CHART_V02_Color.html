@@ -260,6 +260,23 @@
         </div>
     </div>
 
+    <!-- 브라우저 닫기 전 저장 확인 커스텀 모달 -->
+    <div id="close-confirm-overlay" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:12px; padding:32px 36px; max-width:420px; width:90%; box-shadow:0 8px 40px rgba(0,0,0,0.25); text-align:center;">
+            <div style="font-size:36px; margin-bottom:12px;">💾</div>
+            <div id="close-confirm-msg" style="font-size:15px; color:#333; line-height:1.7; margin-bottom:24px; font-weight:500;"></div>
+            <div id="close-confirm-drive-btns" style="display:none; flex-direction:column; gap:10px; margin-bottom:10px;">
+                <button onclick="window._closeConfirmSaveAndClose()" style="padding:11px 0; background:#1a73e8; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; width:100%;">💾 드라이브에 저장하고 닫기</button>
+                <button onclick="window._closeConfirmJustClose()" style="padding:11px 0; background:#f1f3f4; color:#555; border:none; border-radius:8px; font-size:14px; cursor:pointer; width:100%;">저장 없이 닫기</button>
+                <button onclick="window._closeConfirmCancel()" style="padding:11px 0; background:#fff; color:#1a73e8; border:1px solid #1a73e8; border-radius:8px; font-size:14px; cursor:pointer; width:100%;">취소 (계속 작업)</button>
+            </div>
+            <div id="close-confirm-nodrive-btns" style="display:none; flex-direction:column; gap:10px;">
+                <button onclick="window._closeConfirmJustClose()" style="padding:11px 0; background:#e53935; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; width:100%;">저장 없이 닫기</button>
+                <button onclick="window._closeConfirmCancel()" style="padding:11px 0; background:#fff; color:#555; border:1px solid #ced4da; border-radius:8px; font-size:14px; cursor:pointer; width:100%;">취소 (계속 작업)</button>
+            </div>
+        </div>
+    </div>
+
     <div id="drive-file-modal-overlay" class="modal-overlay" onclick="window.closeDriveModal(event)">
         <div class="history-modal" onclick="event.stopPropagation()" style="height: auto; max-height: 80vh; max-width: 500px;">
             <div class="history-header" style="background-color: #ff9800; color: white;">
