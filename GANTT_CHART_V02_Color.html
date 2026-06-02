@@ -1697,21 +1697,35 @@
     });
     resetInactivityTimer(); // 최초 로드 시 타이머 시작
 
+<script>
     // =========================================================
-    // 3. WBS 레벨 그라디에이션 디자인 복원 (배경행 & 차트바)
+    // 3. WBS 1~4레벨 전용 그라디에이션 디자인 적용 (행 전체는 단색)
     // =========================================================
-    // 기존 background-color 강제 적용을 background로 덮어쓰기 위해 CSS 주입
+    
+    // 기존에 주입된 스타일이 있다면 중복 방지를 위해 제거
+    const existingStyle = document.getElementById('wbs-gradient-style');
+    if (existingStyle) existingStyle.remove();
+
+    // 행 전체는 단색, WBS 셀(.wbs-cell)에만 그라디에이션을 적용하는 CSS 주입
     document.head.insertAdjacentHTML('beforeend', `
-    <style>
+    <style id="wbs-gradient-style">
+        /* 행 전체 배경: 단색(투명도) 적용 */
         .parent-row td { background: var(--c-l0-bg) !important; }
         .sub-parent-row td { background: var(--c-l1-bg) !important; }
         .sub-parent-row-2 td { background: var(--c-l2-bg) !important; }
         .sub-parent-row-3 td { background: var(--c-l3-bg) !important; }
         .sub-parent-row-4 td { background: var(--c-l4-bg) !important; }
+
+        /* WBS 특정 셀 배경: 1~4레벨 모두 그라디에이션 덮어쓰기 */
+        .parent-row .wbs-cell { background: var(--c-l0-grad) !important; }
+        .sub-parent-row .wbs-cell { background: var(--c-l1-grad) !important; }
+        .sub-parent-row-2 .wbs-cell { background: var(--c-l2-grad) !important; }
+        .sub-parent-row-3 .wbs-cell { background: var(--c-l3-grad) !important; }
+        .sub-parent-row-4 .wbs-cell { background: var(--c-l4-grad) !important; }
     </style>
     `);
 
-    // 테마 색상 갱신 시 그라디에이션으로 변환하도록 함수 덮어쓰기
+    // 테마 색상 갱신 시 행 배경(단색)과 WBS 배경(그라디에이션)을 분리하여 생성
     window.updateThemeColor = function(baseColor) {
         // HEX를 RGB로 변환
         const hexToRgb = (hex) => {
@@ -1720,64 +1734,7 @@
             c = '0x' + c.join('');
             return [(c>>16)&255, (c>>8)&255, c&255];
         };
-        let rgb = hexToRgb(baseColor);
-        
-        // 차트 바 색상 데이터 갱신
-        window.chartColors = {
-            l0: baseColor,
-            l1: `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.8)`,
-            l2: `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.6)`,
-            l3: `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.4)`
-        };
-        
-        // WBS 행 배경 그라디에이션 적용
-        document.documentElement.style.setProperty('--c-l0-bg', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.9), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 1))`);
-        document.documentElement.style.setProperty('--c-l1-bg', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.15), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.25))`);
-        document.documentElement.style.setProperty('--c-l2-bg', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.05), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.1))`);
-        document.documentElement.style.setProperty('--c-l3-bg', '#ffffff');
-        document.documentElement.style.setProperty('--c-l4-bg', '#f8f9fc');
-
-        if (typeof globalData !== 'undefined' && globalData.length > 1) {
-            renderTable(globalData);
-            applyFilters();
-        }
-    };
-
-    // 차트 생성 함수 덮어쓰기 (차트 바 그라디에이션 적용)
-    window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level) {
-        let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
-        let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
-        let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
-        
-        let tsStart = rowStartTs; let tsEnd = rowPlanTs;
-        if (!tsStart && !tsEnd) return `<div>-</div>`; if (!tsEnd) tsEnd = tsStart; if (tsEnd < tsStart) tsEnd = tsStart;
-
-        let viewStartTs = window.ganttViewStartTs; let viewDuration = window.ganttViewDuration;
-        if (!viewStartTs || !viewDuration) return `<div>-</div>`;
-
-        let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); 
-        let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
-        let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
-        
-        let barColorVar = level === 0 ? window.chartColors.l0 : (level === 1 ? window.chartColors.l1 : (level === 2 ? window.chartColors.l2 : window.chartColors.l3));
-        
-        // 차트 바 자체의 그라디에이션 효과 생성
-        let gradientStyle = `background: linear-gradient(90deg, ${barColorVar}88 0%, ${barColorVar} 100%);`;
-        if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; barColorVar = "#adb5bd"; } // 취소/드랍은 회색 단색
-
-        let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
-        let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
-        let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
-
-        let labelHTML = ''; for (let i = 0; i <= 4; i++) { let pct = (i / 4) * 100; let ts = viewStartTs + (viewDuration * i / 4); let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5;">${formatChartLabel(ts)}</span>`; }
-        let durationDays = countWorkingDays(tsStart, tsEnd);
-        
-        return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class="chart-axis-wrapper">${labelHTML}</div><div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">${gridLines}${todayLine}<div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div></div>`;
-    };
-
-    // 스크립트 로드 시, 현재 설정된 테마 피커의 색상을 기반으로 그라디에이션 즉시 적용
-    window.updateThemeColor(document.getElementById('themePicker').value);
-</script>
+        let rgb = hexToRgb(
     
 </body>
 </html>
