@@ -393,7 +393,7 @@
         
         <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
             <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
-            <input type="color" id="themePicker" value="#1a237e" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+            <input type="color" id="themePicker" value="#9e9e9e" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
         </div>
 
         <div class="btn-group">
@@ -516,7 +516,7 @@
         root.style.setProperty('--c-l4-border', `#e9ecef`);
         root.style.setProperty('--c-l4-text', `#495057`);
 
-        window.chartColors = {
+window.chartColors = {
             l0: baseHex,
             l1: `hsl(${h}, ${s}%, ${Math.min(l0 + 15, 60)}%)`,
             l2: `hsl(${h}, ${s}%, ${Math.min(l0 + 30, 75)}%)`,
@@ -525,6 +525,9 @@
 
         if (globalData && globalData.length > 1) applyFilters();
     };
+
+    // 👇 페이지가 처음 열릴 때 기본 색상을 강제로 한 번 적용해 줍니다.
+    window.updateThemeColor('#9e9e9e');
 
     window.exportFilenameStr = "GanttChart_All";
     window.ganttViewStartTs = null;
