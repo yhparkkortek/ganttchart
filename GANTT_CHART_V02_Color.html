@@ -23,6 +23,10 @@
 
     const SCOPES = 'https://www.googleapis.com/auth/drive'; 
     window.currentDriveFileId = null;
+    
+    // ✅ 현재 접속자 이름 (기본값 설정)
+    window.currentUserName = "비로그인 (로컬)"; 
+
     let tokenClient;
     let gapiInited = false;
     let gisInited = false;
@@ -44,21 +48,33 @@
         gisInited = true;
     }
 
-// 🔓 강제 동의 창 띄우기 (권한 갱신)
+    // 🔓 드라이브 연동 (로그인 + 사용자 이름 식별 추가)
     function handleAuthClick() {
         tokenClient.callback = async (resp) => {
             if (resp.error !== undefined) { throw (resp); }
-            alert('구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
-            document.getElementById('auth_button').innerText = "🟢 공용 드라이브 연동됨";
+            
+            // ✅ 사용자 이름 가져오기
+            try {
+                let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
+                window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
+                alert(`구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
+                document.getElementById('auth_button').innerText = `🟢 ${window.currentUserName}`;
+            } catch(e) {
+                console.error("사용자 정보 가져오기 실패", e);
+                window.currentUserName = "익명 사용자";
+                alert('구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
+                document.getElementById('auth_button').innerText = "🟢 공용 드라이브 연동됨";
+            }
+
             document.getElementById('auth_button').disabled = true;
             document.getElementById('drive_save_btn').disabled = false;
             document.getElementById('drive_load_btn').disabled = false;
         };
-        // 캐시된 옛날 권한을 무시하고, 무조건 권한 동의 창을 다시 띄우도록 수정
+        // 무조건 권한 동의 창 띄우기
         tokenClient.requestAccessToken({prompt: 'consent'}); 
     }
 
-    // (findSaveFile과 loadFromGoogleDrive 함수는 기존에 수정한 그대로 유지)
+    // 🔍 공용 폴더 안에서 파일 검색 
     async function findSaveFile(dynamicFileName) {
         try {
             let response = await gapi.client.drive.files.list({
@@ -95,7 +111,6 @@
         } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
-    // 💾 저장 함수에 공유 드라이브 권한(supportsAllDrives) 필수 추가
     async function saveToGoogleDrive() {
         if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
         document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
@@ -130,7 +145,7 @@
                 'method': fileId ? 'PATCH' : 'POST',
                 'params': {
                     'uploadType': 'multipart',
-                    'supportsAllDrives': true  // ★ 이 옵션이 없으면 팀원이 저장할 때 거부됨 ★
+                    'supportsAllDrives': true 
                 },
                 'headers': {'Content-Type': 'multipart/related; boundary="' + boundary + '"'},
                 'body': multipartRequestBody
@@ -146,7 +161,6 @@
         } catch (err) { alert("구글 드라이브 에러: " + err.message); }
     }
 
-    // 📂 불러오기 함수에도 공유 드라이브 권한 필수 추가
     window.executeLoadFile = async function(fileId, fileName) {
         window.closeDriveModal();
         document.getElementById('file-status').textContent = `📂 [${fileName}] 데이터를 가져오는 중...`;
@@ -154,7 +168,7 @@
             let response = await gapi.client.drive.files.get({ 
                 fileId: fileId, 
                 alt: 'media',
-                supportsAllDrives: true  // ★ 여기도 필수 추가 ★
+                supportsAllDrives: true 
             });
             let saveData = response.result;
             
@@ -563,6 +577,7 @@
         if (!doc.fullscreenElement) requestFullScreen.call(docEl); else cancelFullScreen.call(doc);
     }
 
+    // ✅ 로그 생성 시 사용자 이름 포함 
     function logChange(rowIndex, colIndex, oldVal, newVal) {
         if (!globalData || globalData.length === 0) return;
         let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
@@ -578,9 +593,18 @@
         } else if (globalData[rowIndex]) {
             rowName = globalData[rowIndex][colIdx.no] || rowIndex;
         }
-        window.changeLogs.push({ time: new Date().toLocaleString('ko-KR'), rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal });
+        
+        window.changeLogs.push({ 
+            time: new Date().toLocaleString('ko-KR'), 
+            userName: window.currentUserName || "비로그인 (로컬)", // 수정자 추가
+            rowName: rowName, 
+            colName: colName, 
+            oldVal: oldVal, 
+            newVal: newVal 
+        });
     }
 
+    // ✅ 모달창에 '수정자' 열 추가
     window.showHistoryModal = function() {
         let content = document.getElementById('history-content');
         if (!window.changeLogs || window.changeLogs.length === 0) {
@@ -590,11 +614,12 @@
                 <table class="history-table">
                     <thead>
                         <tr>
-                            <th style="width:18%;">변경 일시</th>
+                            <th style="width:15%;">변경 일시</th>
+                            <th style="width:12%;">수정자</th>
                             <th style="width:10%;">No (행)</th>
                             <th style="width:12%;">변경 항목</th>
-                            <th style="width:30%;">변경 전 (Old)</th>
-                            <th style="width:30%;">변경 후 (New)</th>
+                            <th style="width:25%;">변경 전 (Old)</th>
+                            <th style="width:26%;">변경 후 (New)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -604,6 +629,7 @@
                 html += `
                     <tr>
                         <td style="color:#6c757d; font-size:11px;">${log.time}</td>
+                        <td style="font-weight:bold; color:#0056b3;">${escapeHtml(log.userName || "알 수 없음")}</td>
                         <td style="font-weight:bold;">${escapeHtml(log.rowName)}</td>
                         <td><span class="badge" style="background:#e7f1ff; color:#0056b3;">${escapeHtml(log.colName)}</span></td>
                         <td class="val-old">${escapeHtml(log.oldVal || "-")}</td>
@@ -1120,7 +1146,6 @@
     };
 
     function handleFiles(e) {
-        // [중요] 새로운 엑셀 파일 로컬 업로드 시, 기존 구글 드라이브 파일 덮어쓰기 방지
         window.currentDriveFileId = null;
         
         const files = e.target.files; if (!files || files.length === 0) return;
@@ -1141,6 +1166,7 @@
                 let firstSheetName = workbook.SheetNames[0]; let worksheet = workbook.Sheets[firstSheetName];
                 let jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: true});
                 
+                // ✅ 수정이력 시트 가져오기 (사용자 이름 식별 호환)
                 let historySheetName = workbook.SheetNames.find(n => n.includes("수정이력"));
                 if (historySheetName && filesProcessed === 0) { 
                     let historyWs = workbook.Sheets[historySheetName];
@@ -1148,7 +1174,12 @@
                     for (let k = 1; k < historyJson.length; k++) {
                         let hRow = historyJson[k];
                         if (hRow && hRow[0] && k > 0) { 
-                            window.changeLogs.push({ time: hRow[0], rowName: hRow[1], colName: hRow[2], oldVal: hRow[3], newVal: hRow[4] });
+                            // 엑셀 파일 열 개수에 따라 구버전/신버전 호환 처리
+                            if (hRow.length >= 6) {
+                                window.changeLogs.push({ time: hRow[0], userName: hRow[1], rowName: hRow[2], colName: hRow[3], oldVal: hRow[4], newVal: hRow[5] });
+                            } else {
+                                window.changeLogs.push({ time: hRow[0], userName: "이전 기록", rowName: hRow[1], colName: hRow[2], oldVal: hRow[3], newVal: hRow[4] });
+                            }
                         }
                     }
                 }
@@ -1657,6 +1688,7 @@
         applyFilters();
     }
 
+    // ✅ 엑셀 내보내기 시 '수정자' 항목 포함
     function exportToExcel() {
         if (globalData.length <= 1) { alert("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요."); return; }
         let exportData = []; let header = [...globalData[0]]; exportData.push(header);
@@ -1713,8 +1745,11 @@
         XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
 
         if (window.changeLogs && window.changeLogs.length > 0) {
-            let logData = [['변경 일시', 'No (행)', '변경 항목', '변경 전 (Old)', '변경 후 (New)']];
-            window.changeLogs.forEach(log => { logData.push([log.time, log.rowName, log.colName, log.oldVal, log.newVal]); });
+            // 수정자 헤더 추가
+            let logData = [['변경 일시', '수정자', 'No (행)', '변경 항목', '변경 전 (Old)', '변경 후 (New)']];
+            window.changeLogs.forEach(log => { 
+                logData.push([log.time, log.userName || "알 수 없음", log.rowName, log.colName, log.oldVal, log.newVal]); 
+            });
             const wsLog = XLSX.utils.aoa_to_sheet(logData);
             for (let key in wsLog) {
                 if (key[0] === '!') continue;
@@ -1722,7 +1757,7 @@
                 wsLog[key].s.font = { sz: 10, name: "맑은 고딕" };
                 wsLog[key].s.alignment = { vertical: "center", wrapText: true };
             }
-            wsLog['!cols'] = [{wch: 22}, {wch: 12}, {wch: 15}, {wch: 35}, {wch: 35}];
+            wsLog['!cols'] = [{wch: 22}, {wch: 15}, {wch: 12}, {wch: 15}, {wch: 35}, {wch: 35}]; // 수정자 너비 추가
             XLSX.utils.book_append_sheet(wb, wsLog, "수정이력");
         }
 
@@ -1743,7 +1778,6 @@
         let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
         let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
         
-        // 동적 테마 색상을 차트 막대그래프에도 적용
         let barColorVar = level === 0 ? window.chartColors.l0 : (level === 1 ? window.chartColors.l1 : (level === 2 ? window.chartColors.l2 : window.chartColors.l3));
         if (isCancel || isDrop) barColorVar = "#adb5bd"; 
 
