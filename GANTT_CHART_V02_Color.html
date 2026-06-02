@@ -429,9 +429,13 @@
             request.execute(function(file) {
                 if (file.id) {
                     window.currentDriveFileId = file.id; 
-                    window.lastSavedLogCount = window.changeLogs.length; 
-                    alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
-                    document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
+                    window.lastSavedLogCount = window.changeLogs.length;
+                    const savedTime = new Date().toLocaleTimeString('ko-KR');
+                    const isAutoSave = document.getElementById('file-status').textContent.includes('자동 저장 중');
+                    if (!isAutoSave) {
+                        alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
+                    }
+                    document.getElementById('file-status').textContent = `✅ ${isAutoSave ? '⏱ 자동' : '수동'} 저장 완료: ${dynamicFileName} (${savedTime})`;
                 } else { alert("저장에 실패했습니다. 공유 폴더 '편집자' 권한 및 구글 동의 화면을 확인해 주세요."); }
             });
         } catch (err) { alert("구글 드라이브 에러: " + err.message); }
@@ -463,33 +467,42 @@
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
 
-    // ── 브라우저 닫기 전 커스텀 저장 확인 모달 ──────────────────────────
-    window._closeConfirmPending = false;
-
+    // ── 브라우저 X 닫기: beforeunload 기본 확인창 (커스텀 문구 불가 - 브라우저 보안 정책) ──
+    // 변경사항이 있으면 브라우저 기본 "이 사이트를 벗어나시겠습니까?" 다이얼로그 표시
     window.addEventListener('beforeunload', function (e) {
-        if (window._closeConfirmPending) return;
+        if (window._closeConfirmPending) return; // 커스텀 모달에서 닫기 선택 시 통과
         if (window.changeLogs && window.changeLogs.length > window.lastSavedLogCount) {
             e.preventDefault();
-            e.returnValue = '';
-            setTimeout(function() {
-                const driveConnected = !document.getElementById('drive_save_btn').disabled;
-                const overlay     = document.getElementById('close-confirm-overlay');
-                const msgEl       = document.getElementById('close-confirm-msg');
-                const driveBtns   = document.getElementById('close-confirm-drive-btns');
-                const nodriveBtns = document.getElementById('close-confirm-nodrive-btns');
-                if (driveConnected) {
-                    msgEl.textContent = '저장하지 않은 변경 사항이 있습니다.\n구글 드라이브에 저장 후 닫으시겠습니까?';
-                    driveBtns.style.display   = 'flex';
-                    nodriveBtns.style.display = 'none';
-                } else {
-                    msgEl.textContent = '저장하지 않은 변경 사항이 있습니다.\n저장하지 않으면 변경 내용이 사라집니다.';
-                    driveBtns.style.display   = 'none';
-                    nodriveBtns.style.display = 'flex';
-                }
-                overlay.style.display = 'flex';
-            }, 0);
+            e.returnValue = ''; // 크롬/엣지는 커스텀 문구 무시, 브라우저 고정 문구 표시
         }
     });
+
+    // ── 앱 내 커스텀 닫기 확인 모달 (툴바 버튼용) ────────────────────────
+    window._closeConfirmPending = false;
+
+    window.showCloseConfirmModal = function() {
+        if (!window.changeLogs || window.changeLogs.length <= window.lastSavedLogCount) {
+            // 변경사항 없으면 바로 닫기
+            window._closeConfirmPending = true;
+            window.close();
+            return;
+        }
+        const driveConnected = !document.getElementById('drive_save_btn').disabled;
+        const overlay     = document.getElementById('close-confirm-overlay');
+        const msgEl       = document.getElementById('close-confirm-msg');
+        const driveBtns   = document.getElementById('close-confirm-drive-btns');
+        const nodriveBtns = document.getElementById('close-confirm-nodrive-btns');
+        if (driveConnected) {
+            msgEl.innerHTML = '저장하지 않은 변경 사항이 있습니다.<br>구글 드라이브에 저장 후 닫으시겠습니까?';
+            driveBtns.style.display   = 'flex';
+            nodriveBtns.style.display = 'none';
+        } else {
+            msgEl.innerHTML = '저장하지 않은 변경 사항이 있습니다.<br>저장하지 않으면 변경 내용이 사라집니다.';
+            driveBtns.style.display   = 'none';
+            nodriveBtns.style.display = 'flex';
+        }
+        overlay.style.display = 'flex';
+    };
 
     window._closeConfirmSaveAndClose = async function() {
         document.getElementById('close-confirm-overlay').style.display = 'none';
@@ -507,7 +520,38 @@
     };
     // ────────────────────────────────────────────────────────────────────
 
-    window.showDriveFileModal = function(files) {
+    // ── 3분 자동저장 (구글 연동 상태 + 변경사항 있을 때만) ────────────────
+    window._lastUserActivityTs = Date.now();
+    window._autoSaveTimer = null;
+    const AUTO_SAVE_IDLE_MS = 3 * 60 * 1000; // 3분
+    const AUTO_SAVE_CHECK_MS = 10 * 1000;     // 10초마다 체크
+
+    // 사용자 입력 감지 시 활동 시간 갱신
+    ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'].forEach(function(evt) {
+        document.addEventListener(evt, function() {
+            window._lastUserActivityTs = Date.now();
+        }, { passive: true });
+    });
+
+    function _autoSaveTick() {
+        const idleMs = Date.now() - window._lastUserActivityTs;
+        const driveConnected = !document.getElementById('drive_save_btn').disabled;
+        const hasChanges = window.changeLogs && window.changeLogs.length > window.lastSavedLogCount;
+
+        if (driveConnected && hasChanges && idleMs >= AUTO_SAVE_IDLE_MS) {
+            const statusEl = document.getElementById('file-status');
+            if (statusEl) statusEl.textContent = '⏱ 자동 저장 중...';
+            saveToGoogleDrive().then(function() {
+                console.log('[AutoSave] 자동 저장 완료');
+            }).catch(function(err) {
+                console.warn('[AutoSave] 자동 저장 실패:', err);
+                if (statusEl) statusEl.textContent = '⚠️ 자동 저장 실패 (수동 저장 권장)';
+            });
+        }
+    }
+
+    window._autoSaveTimer = setInterval(_autoSaveTick, AUTO_SAVE_CHECK_MS);
+    // ─────────────────────────────────────────────────────────────────────
         let listContainer = document.getElementById('drive-file-list');
         listContainer.innerHTML = '';
         files.forEach(file => {
