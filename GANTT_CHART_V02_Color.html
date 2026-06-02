@@ -57,16 +57,41 @@
         else { tokenClient.requestAccessToken({prompt: ''}); }
     }
 
-    // 🔍 공용 폴더 안에서만 파일 검색하도록 쿼리 수정 ('SHARED_FOLDER_ID' in parents)
+// 🔍 공용 폴더 안에서 파일 검색 (공유 문서함 검색 옵션 추가)
     async function findSaveFile(dynamicFileName) {
         try {
             let response = await gapi.client.drive.files.list({
                 q: `name='${dynamicFileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
                 fields: 'files(id, name)',
-                spaces: 'drive'
+                includeItemsFromAllDrives: true, // 추가: 공유 문서함 등 모든 드라이브 포함
+                supportsAllDrives: true          // 추가: 공유 드라이브 지원
             });
             return response.result.files && response.result.files.length > 0 ? response.result.files[0].id : null;
         } catch (err) { console.error("클라우드 파일 검색 실패:", err); return null; }
+    }
+
+    // 📂 프로젝트 목록 불러오기 (공유 문서함 검색 옵션 추가)
+    async function loadFromGoogleDrive() {
+        document.getElementById('file-status').textContent = "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
+        try {
+            let response = await gapi.client.drive.files.list({
+                q: `mimeType='application/json' and name contains 'Gantt' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+                fields: 'files(id, name, modifiedTime)',
+                orderBy: 'modifiedTime desc',
+                includeItemsFromAllDrives: true, // 추가: 공유 문서함 등 모든 드라이브 포함
+                supportsAllDrives: true          // 추가: 공유 드라이브 지원
+            });
+            
+            let files = response.result.files;
+            if (!files || files.length === 0) {
+                alert("팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
+                document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
+                return;
+            }
+            
+            window.showDriveFileModal(files);
+            document.getElementById('file-status').textContent = "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.";
+        } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
     async function saveToGoogleDrive() {
