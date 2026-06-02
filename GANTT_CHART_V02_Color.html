@@ -1687,30 +1687,25 @@
     ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
     resetInactivityTimer();
 
+<script>
     // =========================================================
-    // 3. 테마 색상 동적 반영 최적화 (성능 저하 방지 & WBS 그라디에이션)
+    // 3. 테마 색상 동적 반영 (0~4레벨 모든 행 전체 그라디에이션 적용, 열 개별 효과 제외)
     // =========================================================
     const existingStyle = document.getElementById('wbs-gradient-style');
     if (existingStyle) existingStyle.remove();
 
-    // 행 배경, WBS 전용 배경 CSS 주입
+    // 열(WBS 셀) 전용 효과 제거, 0~4레벨의 모든 행(td) 전체에 그라디에이션 지정
     document.head.insertAdjacentHTML('beforeend', `
     <style id="wbs-gradient-style">
-        .parent-row td { background: var(--c-l0-bg) !important; }
-        .sub-parent-row td { background: var(--c-l1-bg) !important; }
-        .sub-parent-row-2 td { background: var(--c-l2-bg) !important; }
-        .sub-parent-row-3 td { background: var(--c-l3-bg) !important; }
-        .sub-parent-row-4 td { background: var(--c-l4-bg) !important; }
-
-        .parent-row .wbs-cell { background: var(--c-l0-grad) !important; }
-        .sub-parent-row .wbs-cell { background: var(--c-l1-grad) !important; }
-        .sub-parent-row-2 .wbs-cell { background: var(--c-l2-grad) !important; }
-        .sub-parent-row-3 .wbs-cell { background: var(--c-l3-grad) !important; }
-        .sub-parent-row-4 .wbs-cell { background: var(--c-l4-grad) !important; }
+        /* 레벨 0~4 행 전체: 그라디에이션 변수 적용 */
+        .parent-row td { background: var(--c-l0-grad) !important; }
+        .sub-parent-row td { background: var(--c-l1-grad) !important; }
+        .sub-parent-row-2 td { background: var(--c-l2-grad) !important; }
+        .sub-parent-row-3 td { background: var(--c-l3-grad) !important; }
+        .sub-parent-row-4 td { background: var(--c-l4-grad) !important; }
     </style>
     `);
 
-    // 이제 렌더링 함수를 재호출하지 않고 가벼운 CSS 변수값만 실시간으로 변경합니다.
     window.updateThemeColor = function(baseColor) {
         const hexToRgb = (hex) => {
             let c = hex.substring(1).split('');
@@ -1720,28 +1715,21 @@
         };
         let rgb = hexToRgb(baseColor);
         
-        // 행 배경 단색 (투명도 적용)
-        document.documentElement.style.setProperty('--c-l0-bg', baseColor);
-        document.documentElement.style.setProperty('--c-l1-bg', `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.15)`);
-        document.documentElement.style.setProperty('--c-l2-bg', `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.05)`);
-        document.documentElement.style.setProperty('--c-l3-bg', '#ffffff');
-        document.documentElement.style.setProperty('--c-l4-bg', '#f8f9fc');
-
-        // WBS 셀 배경 그라디에이션 (1~4레벨 적용)
+        // 0~4레벨 행 전체용 그라디에이션 변수 설정 (단계별로 테마 색상 농도 조절)
         document.documentElement.style.setProperty('--c-l0-grad', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.85), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 1))`);
         document.documentElement.style.setProperty('--c-l1-grad', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.35))`);
         document.documentElement.style.setProperty('--c-l2-grad', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.08), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.18))`);
         document.documentElement.style.setProperty('--c-l3-grad', `linear-gradient(90deg, #ffffff, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.08))`);
         document.documentElement.style.setProperty('--c-l4-grad', `linear-gradient(90deg, #f8f9fc, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.05))`);
 
-        // 차트 바 색상 그라디에이션 (CSS 변수로 직접 주입)
+        // 차트 바 색상 그라디에이션 (기존 유지)
         document.documentElement.style.setProperty('--chart-l0', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.53), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 1))`);
         document.documentElement.style.setProperty('--chart-l1', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.4), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.8))`);
         document.documentElement.style.setProperty('--chart-l2', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.3), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.6))`);
         document.documentElement.style.setProperty('--chart-l3', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.4))`);
     };
 
-    // 차트 생성 함수 덮어쓰기 (JS 강제 적용이 아닌 CSS 변수를 참조하도록 하여 실시간 변경 처리)
+    // 차트 생성 로직 (수정사항 없음 - 기존 코드 유지)
     window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level) {
         let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
         let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
@@ -1757,7 +1745,6 @@
         let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
         let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
         
-        // 실시간 연동된 CSS 변수로 차트 바 스타일 적용
         let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : 'var(--chart-l3)'));
         let gradientStyle = `background: ${gradVar};`;
         if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
@@ -1772,7 +1759,6 @@
         return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class="chart-axis-wrapper">${labelHTML}</div><div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">${gridLines}${todayLine}<div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div></div>`;
     };
 
-    // 로드 시점에 최초 한 번 색상 적용
     window.updateThemeColor(document.getElementById('themePicker').value);
 </script>
 
