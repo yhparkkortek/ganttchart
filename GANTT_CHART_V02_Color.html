@@ -515,8 +515,6 @@
         if (globalData && globalData.length > 1) applyFilters();
     };
 
-    // ✅ 초기 테마 색상 강제 지정 (#9e9e9e)
-    window.updateThemeColor('#9e9e9e');
 
     const KOR_HOLIDAYS = [
         "2024-01-01", "2024-02-09", "2024-02-12", "2024-03-01", "2024-04-10", "2024-05-05", "2024-05-06", "2024-05-15", "2024-06-06", "2024-08-15", "2024-09-16", "2024-09-17", "2024-09-18", "2024-10-03", "2024-10-09", "2024-12-25",
@@ -1766,6 +1764,10 @@
         let durationDays = countWorkingDays(tsStart, tsEnd);
         return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class=\"chart-axis-wrapper\">${labelHTML}</div><div style=\"position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;\">${gridLines}${todayLine}<div style=\"position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; background-color:${barColorVar}; border-radius:4px; z-index:2; opacity:0.95; display:flex; justify-content:flex-start; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);\"></div></div></div>`;
     }
+
+// 👇 잘라낸 코드를 여기에 붙여넣으세요! (모든 준비가 끝난 후 마지막에 색상 적용)
+    window.updateThemeColor('#9e9e9e');
+    
 </script>
 
 </body>
