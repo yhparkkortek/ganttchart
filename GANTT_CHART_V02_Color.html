@@ -19,7 +19,9 @@
     const API_KEY = 'AIzaSyCYavFb6m88K8T7rhKQwnfv5ygpwG9ah48';
 
     const SCOPES = 'https://www.googleapis.com/auth/drive.file'; 
-    const TARGET_FILENAME = "GanttChart_SaveFile.json";          
+    
+    // 현재 제어 중인 구글 드라이브 파일 ID를 추적 (새 파일 생성 vs 덮어쓰기 분기용)
+    window.currentDriveFileId = null;
 
     let tokenClient;
     let gapiInited = false;
@@ -42,6 +44,7 @@
         gisInited = true;
     }
 
+    // 🔓 드라이브 연동 (로그인)
     function handleAuthClick() {
         tokenClient.callback = async (resp) => {
             if (resp.error !== undefined) { throw (resp); }
@@ -55,22 +58,13 @@
         else { tokenClient.requestAccessToken({prompt: ''}); }
     }
 
-    async function findSaveFile() {
-        try {
-            let response = await gapi.client.drive.files.list({
-                q: `name='${TARGET_FILENAME}' and trashed=false`,
-                fields: 'files(id, name)',
-                spaces: 'drive'
-            });
-            return response.result.files && response.result.files.length > 0 ? response.result.files[0].id : null;
-        } catch (err) { console.error("클라우드 파일 검색 실패:", err); return null; }
-    }
-
+    // 💾 프로젝트 동적 이름으로 저장 (신규 저장 or 덮어쓰기)
     async function saveToGoogleDrive() {
         if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
         document.getElementById('file-status').textContent = "💾 구글 드라이브에 데이터를 저장하는 중...";
         
-        // [버그 수정] 배열 내부의 WBS 레벨 등 숨겨진 속성값이 날아가지 않도록 안전하게 패키징
+        let dynamicFileName = (window.exportFilenameStr || "GanttChart_Project") + ".json";
+
         let serializedGlobalData = globalData.map(row => {
             let obj = { data: Array.from(row) };
             for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
@@ -85,10 +79,22 @@
         };
         
         try {
-            let fileId = await findSaveFile();
+            // 현재 활성화된 파일 ID가 없다면, 동일한 이름의 파일이 드라이브에 있는지 검색
+            if (!window.currentDriveFileId) {
+                let response = await gapi.client.drive.files.list({
+                    q: `name='${dynamicFileName}' and trashed=false`,
+                    fields: 'files(id, name)',
+                    spaces: 'drive'
+                });
+                if (response.result.files && response.result.files.length > 0) {
+                    window.currentDriveFileId = response.result.files[0].id;
+                }
+            }
+
+            let fileId = window.currentDriveFileId;
             let boundary = 'foo_bar_baz';
             let multipartRequestBody =
-                "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ name: TARGET_FILENAME, mimeType: 'application/json' }) +
+                "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ name: dynamicFileName, mimeType: 'application/json' }) +
                 "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
 
             let request = gapi.client.request({
@@ -101,24 +107,48 @@
 
             request.execute(function(file) {
                 if (file.id) {
-                    alert("🎉 구글 드라이브에 프로젝트가 성공적으로 백업되었습니다!");
-                    document.getElementById('file-status').textContent = "✅ 구글 드라이브 원격 백업 완료";
+                    window.currentDriveFileId = file.id; // 다음 저장을 위해 ID 유지
+                    alert(`🎉 [${dynamicFileName}] 파일로 구글 드라이브에 저장되었습니다!`);
+                    document.getElementById('file-status').textContent = `✅ 구글 드라이브 백업 완료: ${dynamicFileName}`;
                 } else { alert("저장에 실패했습니다. 자격 증명 설정을 다시 한 번 확인해 주세요."); }
             });
         } catch (err) { alert("구글 드라이브 에러: " + err.message); }
     }
 
+    // 📂 프로젝트 목록 불러오기 (검색 및 UI 팝업)
     async function loadFromGoogleDrive() {
-        document.getElementById('file-status').textContent = "📂 구글 드라이브로부터 데이터를 가져오는 중...";
+        document.getElementById('file-status').textContent = "📂 구글 드라이브에서 프로젝트 목록을 불러오는 중...";
         try {
-            let fileId = await findSaveFile();
-            if (!fileId) { alert("저장된 데이터 파일이 없습니다. 먼저 [드라이브에 저장]을 실행해 주세요."); return; }
+            // Gantt 텍스트가 포함된 json 파일들만 최신순으로 검색
+            let response = await gapi.client.drive.files.list({
+                q: `mimeType='application/json' and name contains 'Gantt' and trashed=false`,
+                fields: 'files(id, name, modifiedTime)',
+                orderBy: 'modifiedTime desc',
+                spaces: 'drive'
+            });
+            
+            let files = response.result.files;
+            if (!files || files.length === 0) {
+                alert("구글 드라이브에 저장된 간트차트 프로젝트 파일이 없습니다.");
+                document.getElementById('file-status').textContent = "기존에 저장된 클라우드 파일이 없습니다.";
+                return;
+            }
+            
+            // UI 목록 모달창 띄우기
+            window.showDriveFileModal(files);
+            document.getElementById('file-status').textContent = "✅ 프로젝트 목록을 성공적으로 불러왔습니다. 화면에서 파일을 선택해 주세요.";
+        } catch (err) { alert("목록 호출 실패: " + err.message); }
+    }
 
+    // 📂 선택한 특정 파일 드라이브에서 다운로드 및 화면 복원
+    window.executeLoadFile = async function(fileId, fileName) {
+        window.closeDriveModal();
+        document.getElementById('file-status').textContent = `📂 [${fileName}] 데이터를 가져오는 중...`;
+        try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
             let saveData = response.result;
             
             if (saveData && saveData.globalData) {
-                // 패키징된 데이터를 다시 배열과 속성으로 완벽 복원
                 globalData = saveData.globalData.map(obj => {
                     let row = obj.data;
                     for (let key in obj) { if (key !== 'data') row[key] = obj[key]; }
@@ -128,11 +158,14 @@
                 colIdx = saveData.colIdx || colIdx;
                 filterColumns = saveData.filterColumns || filterColumns;
                 
+                // 불러온 파일을 현재 파일로 지정 (수정 후 덮어쓰기 위함)
+                window.currentDriveFileId = fileId;
+                
                 window.recalculateSchedules();
-                alert("🎉 구글 드라이브 데이터 동기화 완료!");
-                document.getElementById('file-status').textContent = "✅ 구글 드라이브 동기화 완료";
+                alert(`🎉 [${fileName}] 프로젝트 동기화 완료!`);
+                document.getElementById('file-status').textContent = `✅ 구글 드라이브 동기화 완료: ${fileName}`;
             }
-        } catch (err) { alert("원격 호출 실패: " + err.message); }
+        } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
 </script>
 
@@ -160,7 +193,6 @@
         --w-chart: 12%;      
         --w-default: 2.5%;   
 
-        /* 🎨 동적 테마 색상 (CSS Variables) - JS에서 자동 제어됨 */
         --c-l0-bg: #1a237e;
         --c-l0-border: #0d47a1;
         --c-l0-text: #ffffff;
@@ -205,7 +237,6 @@
     .history-btn { border-color: #6f42c1; color: #6f42c1; }
     .history-btn:hover { background-color: #6f42c1; color: #fff; }
 
-    /* 구글 드라이브 버튼 커스텀 스타일 */
     .drive-save-style { background-color: #2da44e; color: white; border-color: #2da44e; }
     .drive-save-style:hover { background-color: #22863a; border-color: #22863a; }
     .drive-load-style { background-color: #ff9800; color: white; border-color: #ff9800; }
@@ -249,7 +280,6 @@
     th, td { padding: var(--table-cell-padding); text-align: left; vertical-align: middle; line-height: var(--table-line-height); box-sizing: border-box; border: 1px solid #ddd; }
     th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 15px !important; padding-bottom: 15px !important; }
     
-    /* 🎨 적용된 동적 테마 CSS Variables */
     .parent-row td { background-color: var(--c-l0-bg) !important; font-weight: bold; border-top: 3px solid var(--c-l0-border); color: var(--c-l0-text) !important; border-right: 1px solid #ffffff33; }
     .parent-row .no-td, .parent-row .no-td .row-num-span { color: var(--c-l0-text) !important; }
     .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: var(--c-l0-chart-label) !important; }
@@ -315,6 +345,11 @@
     .history-empty { padding: 50px; text-align: center; color: #adb5bd; font-size: 15px; }
     .val-old { color: #dc3545; text-decoration: line-through; }
     .val-new { color: #0f5132; font-weight: bold; }
+    
+    /* 파일 목록 커스텀 스크롤바 */
+    #drive-file-list::-webkit-scrollbar { width: 8px; }
+    #drive-file-list::-webkit-scrollbar-thumb { background: #adb5bd; border-radius: 4px; }
+    #drive-file-list::-webkit-scrollbar-track { background: #f1f3f5; }
 </style>
 </head>
 <body>
@@ -365,15 +400,57 @@
                 <span>🕒 변경 이력 (Session History)</span>
                 <span class="history-close" onclick="closeHistoryModal()">✖</span>
             </div>
-            <div class="history-body" id="history-content">
+            <div class="history-body" id="history-content"></div>
+        </div>
+    </div>
+
+    <div id="drive-file-modal-overlay" class="modal-overlay" onclick="window.closeDriveModal(event)">
+        <div class="history-modal" onclick="event.stopPropagation()" style="height: auto; max-height: 80vh; max-width: 500px;">
+            <div class="history-header" style="background-color: #ff9800; color: white;">
+                <span>📂 구글 드라이브 프로젝트 불러오기</span>
+                <span class="history-close" style="color: white;" onclick="window.closeDriveModal()">✖</span>
+            </div>
+            <div class="history-body" style="padding: 20px;">
+                <p style="margin-top:0; margin-bottom:15px; font-size: 14px; color: #555;">불러올 프로젝트 파일을 선택해 주세요.</p>
+                <div id="drive-file-list" style="display:flex; flex-direction:column; gap:10px; max-height: 400px; overflow-y: auto;">
+                    </div>
             </div>
         </div>
     </div>
 
 <script>
     // =========================================================
-    // 🎨 아래부터는 보내주신 원본 자바스크립트가 단 1글자도 변경 없이 유지됩니다.
+    // 🎨 UI 및 파일 컨트롤 원본 소스
     // =========================================================
+    
+    // 프로젝트 선택 모달 UI 제어 함수
+    window.showDriveFileModal = function(files) {
+        let listContainer = document.getElementById('drive-file-list');
+        listContainer.innerHTML = '';
+        files.forEach(file => {
+            let d = new Date(file.modifiedTime);
+            let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+            
+            let fileBtn = document.createElement('div');
+            fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
+            fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
+            fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+            fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
+            
+            fileBtn.innerHTML = `
+                <div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${file.name}</div>
+                <div style="font-size: 12px; color: #868e96;">${dateStr}</div>
+            `;
+            listContainer.appendChild(fileBtn);
+        });
+        document.getElementById('drive-file-modal-overlay').style.display = 'flex';
+    }
+    
+    window.closeDriveModal = function(e) {
+        if (e && e.target !== document.getElementById('drive-file-modal-overlay')) return;
+        document.getElementById('drive-file-modal-overlay').style.display = 'none';
+    }
+
     function hexToHSL(H) {
         let r = 0, g = 0, b = 0;
         if (H.length === 4) { r = "0x" + H[1] + H[1]; g = "0x" + H[2] + H[2]; b = "0x" + H[3] + H[3]; } 
@@ -396,29 +473,23 @@
     window.updateThemeColor = function(baseHex) {
         let hsl = hexToHSL(baseHex);
         let h = hsl.h; let s = hsl.s; let l0 = hsl.l;
-
         let l0Text = l0 > 60 ? '#333333' : '#ffffff';
-        let darkTextL = Math.min(l0, 40);
-
+        let darkTextL = Math.min(l0, 40); 
         let root = document.documentElement;
 
         root.style.setProperty('--c-l0-bg', baseHex);
         root.style.setProperty('--c-l0-border', `hsl(${h}, ${s}%, ${Math.max(0, l0 - 15)}%)`);
         root.style.setProperty('--c-l0-text', l0Text);
         root.style.setProperty('--c-l0-chart-label', l0Text === '#ffffff' ? `hsl(${h}, ${s}%, 90%)` : `hsl(${h}, ${s}%, 20%)`);
-
         root.style.setProperty('--c-l1-bg', `hsl(${h}, ${Math.max(0, s - 10)}%, 88%)`);
         root.style.setProperty('--c-l1-border', `hsl(${h}, ${Math.max(0, s - 10)}%, 75%)`);
         root.style.setProperty('--c-l1-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
-
         root.style.setProperty('--c-l2-bg', `hsl(${h}, ${Math.max(0, s - 15)}%, 94%)`);
         root.style.setProperty('--c-l2-border', `hsl(${h}, ${Math.max(0, s - 15)}%, 85%)`);
         root.style.setProperty('--c-l2-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
-
         root.style.setProperty('--c-l3-bg', `#ffffff`);
         root.style.setProperty('--c-l3-border', `#dee2e6`);
         root.style.setProperty('--c-l3-text', `#333333`);
-
         root.style.setProperty('--c-l4-bg', `hsl(${h}, ${Math.max(0, s - 20)}%, 98%)`);
         root.style.setProperty('--c-l4-border', `#e9ecef`);
         root.style.setProperty('--c-l4-text', `#495057`);
@@ -1041,6 +1112,9 @@
     };
 
     function handleFiles(e) {
+        // [중요] 새로운 엑셀 파일 로컬 업로드 시, 기존 구글 드라이브 파일 덮어쓰기 방지
+        window.currentDriveFileId = null;
+        
         const files = e.target.files; if (!files || files.length === 0) return;
         
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {};
@@ -1522,17 +1596,20 @@
         if (inch !== "") { const inchNum = parseFloat(inch); if (!isNaN(inchNum)) inch = inchNum.toFixed(1); }
         if (assignee === "All") { for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && globalData[i][colIdx.assignee]) { assignee = globalData[i][colIdx.assignee]; break; } } }
 
-        const infoStr = inch ? `${customer} > ${model} > ${inch} > ${assignee}` : `${customer} > ${model} > ${assignee}`; const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_');
-        const printTitleElem = document.getElementById('print-title'); if (printTitleElem) printTitleElem.textContent = `[Gantt Chart] ` + infoStr;
+        const infoStr = inch ? `${customer}_${model}_${inch}_${assignee}` : `${customer}_${model}_${assignee}`; const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_');
         
         const tableInfoTextElem = document.getElementById('table-info-text'); 
-        if (tableInfoTextElem) { tableInfoTextElem.textContent = `📑 [Gantt Chart] ` + infoStr; }
+        if (tableInfoTextElem) { tableInfoTextElem.textContent = `📑 [Gantt Chart] ` + infoStr.replace(/_/g, " > "); }
         
         const today = new Date(); const yy = String(today.getFullYear()).slice(-2); const mm = String(today.getMonth() + 1).padStart(2, '0'); const dd = String(today.getDate()).padStart(2, '0');
         const dateStringYYMMDD = `${yy}${mm}${dd}`; const dateStringFull = today.getFullYear() + "-" + mm + "-" + dd;
         
         document.getElementById('print-date').textContent = "인쇄일자: " + dateStringFull;
-        const exportName = `${dateStringYYMMDD}_[Gantt Chart] ${safeInfoStr}`; document.title = exportName; window.exportFilenameStr = exportName;
+        const exportName = `${dateStringYYMMDD}_[Gantt Chart] ${safeInfoStr}`; 
+        document.title = exportName; 
+        
+        // 이 변수가 구글 드라이브 동적 저장 파일명으로 사용됩니다
+        window.exportFilenameStr = exportName;
     }
 
     function updateFilterVisibility() {
@@ -1658,6 +1735,7 @@
         let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
         let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
         
+        // 동적 테마 색상을 차트 막대그래프에도 적용
         let barColorVar = level === 0 ? window.chartColors.l0 : (level === 1 ? window.chartColors.l1 : (level === 2 ? window.chartColors.l2 : window.chartColors.l3));
         if (isCancel || isDrop) barColorVar = "#adb5bd"; 
 
