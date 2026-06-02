@@ -44,6 +44,7 @@
         gisInited = true;
     }
 
+// 🔓 강제 동의 창 띄우기 (권한 갱신)
     function handleAuthClick() {
         tokenClient.callback = async (resp) => {
             if (resp.error !== undefined) { throw (resp); }
@@ -53,25 +54,24 @@
             document.getElementById('drive_save_btn').disabled = false;
             document.getElementById('drive_load_btn').disabled = false;
         };
-        if (gapi.client.getToken() === null) { tokenClient.requestAccessToken({prompt: 'consent'}); } 
-        else { tokenClient.requestAccessToken({prompt: ''}); }
+        // 캐시된 옛날 권한을 무시하고, 무조건 권한 동의 창을 다시 띄우도록 수정
+        tokenClient.requestAccessToken({prompt: 'consent'}); 
     }
 
-// 🔍 공용 폴더 안에서 파일 검색 (공유 문서함/공유 드라이브 완벽 호환)
+    // (findSaveFile과 loadFromGoogleDrive 함수는 기존에 수정한 그대로 유지)
     async function findSaveFile(dynamicFileName) {
         try {
             let response = await gapi.client.drive.files.list({
                 q: `name='${dynamicFileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
                 fields: 'files(id, name)',
-                corpora: 'allDrives',            // 회사 공유 드라이브까지 모두 검색 허용
-                includeItemsFromAllDrives: true, // 모든 드라이브 포함
-                supportsAllDrives: true          // 공유 드라이브 지원
+                corpora: 'allDrives',
+                includeItemsFromAllDrives: true,
+                supportsAllDrives: true
             });
             return response.result.files && response.result.files.length > 0 ? response.result.files[0].id : null;
         } catch (err) { console.error("클라우드 파일 검색 실패:", err); return null; }
     }
 
-    // 📂 프로젝트 목록 불러오기 (공유 문서함/공유 드라이브 완벽 호환)
     async function loadFromGoogleDrive() {
         document.getElementById('file-status').textContent = "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
         try {
@@ -79,9 +79,9 @@
                 q: `mimeType='application/json' and name contains 'Gantt' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
                 fields: 'files(id, name, modifiedTime)',
                 orderBy: 'modifiedTime desc',
-                corpora: 'allDrives',            // 회사 공유 드라이브까지 모두 검색 허용
-                includeItemsFromAllDrives: true, // 모든 드라이브 포함
-                supportsAllDrives: true          // 공유 드라이브 지원
+                corpora: 'allDrives',
+                includeItemsFromAllDrives: true,
+                supportsAllDrives: true
             });
             
             let files = response.result.files;
@@ -90,12 +90,12 @@
                 document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
                 return;
             }
-            
             window.showDriveFileModal(files);
             document.getElementById('file-status').textContent = "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.";
         } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
+    // 💾 저장 함수에 공유 드라이브 권한(supportsAllDrives) 필수 추가
     async function saveToGoogleDrive() {
         if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
         document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
@@ -118,7 +118,6 @@
             let fileId = window.currentDriveFileId;
             let boundary = 'foo_bar_baz';
             
-            // 새 파일 생성 시(POST), parents 속성에 공용 폴더 ID를 지정하여 해당 폴더 안에 생성되도록 설정
             let metadata = { name: dynamicFileName, mimeType: 'application/json' };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
 
@@ -129,7 +128,10 @@
             let request = gapi.client.request({
                 'path': '/upload/drive/v3/files' + (fileId ? '/' + fileId : ''),
                 'method': fileId ? 'PATCH' : 'POST',
-                'params': {'uploadType': 'multipart'},
+                'params': {
+                    'uploadType': 'multipart',
+                    'supportsAllDrives': true  // ★ 이 옵션이 없으면 팀원이 저장할 때 거부됨 ★
+                },
                 'headers': {'Content-Type': 'multipart/related; boundary="' + boundary + '"'},
                 'body': multipartRequestBody
             });
@@ -139,39 +141,21 @@
                     window.currentDriveFileId = file.id; 
                     alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
                     document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
-                } else { alert("저장에 실패했습니다. 공용 폴더 편집 권한이 있는지 확인해 주세요."); }
+                } else { alert("저장에 실패했습니다. 공유 폴더 '편집자' 권한 및 구글 동의 화면을 확인해 주세요."); }
             });
         } catch (err) { alert("구글 드라이브 에러: " + err.message); }
     }
 
-    async function loadFromGoogleDrive() {
-        document.getElementById('file-status').textContent = "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
-        try {
-            // 🔍 공용 폴더 안의 프로젝트만 긁어오도록 제한 ('SHARED_FOLDER_ID' in parents)
-            let response = await gapi.client.drive.files.list({
-                q: `mimeType='application/json' and name contains 'Gantt' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
-                fields: 'files(id, name, modifiedTime)',
-                orderBy: 'modifiedTime desc',
-                spaces: 'drive'
-            });
-            
-            let files = response.result.files;
-            if (!files || files.length === 0) {
-                alert("팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
-                document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
-                return;
-            }
-            
-            window.showDriveFileModal(files);
-            document.getElementById('file-status').textContent = "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.";
-        } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
-    }
-
+    // 📂 불러오기 함수에도 공유 드라이브 권한 필수 추가
     window.executeLoadFile = async function(fileId, fileName) {
         window.closeDriveModal();
         document.getElementById('file-status').textContent = `📂 [${fileName}] 데이터를 가져오는 중...`;
         try {
-            let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
+            let response = await gapi.client.drive.files.get({ 
+                fileId: fileId, 
+                alt: 'media',
+                supportsAllDrives: true  // ★ 여기도 필수 추가 ★
+            });
             let saveData = response.result;
             
             if (saveData && saveData.globalData) {
