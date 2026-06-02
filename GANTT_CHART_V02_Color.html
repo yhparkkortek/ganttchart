@@ -4,6 +4,28 @@
 <meta charset="utf-8">
 <title>Gantt Chart</title>
 
+<script>
+    // F5 새로고침 후 구글 버튼 먹통 방지: 함수를 SDK 로드보다 먼저 전역에 선언
+    function gapiLoaded() {
+        gapi.load('client', async function() {
+            await gapi.client.init({
+                apiKey: 'AIzaSyCYavFb6m88K8T7rhKQwnfv5ygpwG9ah48',
+                discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+            });
+            window._gapiInited = true;
+            window._tryEnableAuthButton && window._tryEnableAuthButton();
+        });
+    }
+    function gisLoaded() {
+        window._tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: '107026313229-jh5qm0pbkhe505gt3pvgbpbjurg1v0ej.apps.googleusercontent.com',
+            scope: 'https://www.googleapis.com/auth/drive',
+            callback: '',
+        });
+        window._gisInited = true;
+        window._tryEnableAuthButton && window._tryEnableAuthButton();
+    }
+</script>
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
@@ -238,6 +260,23 @@
         </div>
     </div>
 
+    <!-- 브라우저 닫기 전 저장 확인 커스텀 모달 -->
+    <div id="close-confirm-overlay" style="display:none; position:fixed; inset:0; z-index:999999; background:rgba(0,0,0,0.55); align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:12px; padding:32px 36px; max-width:420px; width:90%; box-shadow:0 8px 40px rgba(0,0,0,0.25); text-align:center;">
+            <div style="font-size:36px; margin-bottom:12px;">💾</div>
+            <div id="close-confirm-msg" style="font-size:15px; color:#333; line-height:1.7; margin-bottom:24px; font-weight:500;"></div>
+            <div id="close-confirm-drive-btns" style="display:none; flex-direction:column; gap:10px; margin-bottom:10px;">
+                <button onclick="window._closeConfirmSaveAndClose()" style="padding:11px 0; background:#1a73e8; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; width:100%;">💾 드라이브에 저장하고 닫기</button>
+                <button onclick="window._closeConfirmJustClose()" style="padding:11px 0; background:#f1f3f4; color:#555; border:none; border-radius:8px; font-size:14px; cursor:pointer; width:100%;">저장 없이 닫기</button>
+                <button onclick="window._closeConfirmCancel()" style="padding:11px 0; background:#fff; color:#1a73e8; border:1px solid #1a73e8; border-radius:8px; font-size:14px; cursor:pointer; width:100%;">취소 (계속 작업)</button>
+            </div>
+            <div id="close-confirm-nodrive-btns" style="display:none; flex-direction:column; gap:10px;">
+                <button onclick="window._closeConfirmJustClose()" style="padding:11px 0; background:#e53935; color:#fff; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; width:100%;">저장 없이 닫기</button>
+                <button onclick="window._closeConfirmCancel()" style="padding:11px 0; background:#fff; color:#555; border:1px solid #ced4da; border-radius:8px; font-size:14px; cursor:pointer; width:100%;">취소 (계속 작업)</button>
+            </div>
+        </div>
+    </div>
+
     <div id="drive-file-modal-overlay" class="modal-overlay" onclick="window.closeDriveModal(event)">
         <div class="history-modal" onclick="event.stopPropagation()" style="height: auto; max-height: 80vh; max-width: 500px;">
             <div class="history-header" style="background-color: #ff9800; color: white;">
@@ -253,15 +292,22 @@
     </div>
 
 <script>
-    // =========================================================
-    // 🛠️ 버그 차단 완벽 정비 자바스크립트 영역
-    // =========================================================
-    
-    // [중요] 1. 전역에서 사용되는 모든 핵심 변수를 최상단에 var 형식으로 완벽히 선언하여 순서 오류(TDZ) 원천 차단
+    // =========================================================================
+    // ✅ 모든 스크립트 로직을 하나의 <script> 태그로 묶어 TDZ(초기화 에러) 완벽 해결
+    // =========================================================================
+
+    if (window.name !== 'gantt_popup') {
+        const w = screen.availWidth, h = screen.availHeight;
+        const newWin = window.open(location.href, 'gantt_popup',
+            `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
+        if (newWin) { newWin.focus(); window.close(); }
+    }
+
+    // 1. 변수를 var 또는 window 객체로 최상단에 완전 선언 (ReferenceError 방지)
     var globalData = []; 
     var filterColumns = []; 
     var currentFilters = {}; 
-    var existingDevStages = [];
+    var existingDevStages = []; 
     var colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
 
     window.currentDriveFileId = null;
@@ -272,80 +318,72 @@
     window.ganttViewDuration = null;
     window.changeLogs = []; 
 
-    // ✅ 잘려나갔던 CLIENT_ID 주소를 안전한 복사값으로 재정렬 완료
     const CLIENT_ID = '107026313229-jh5qm0pbkhe505gt3pvgbpbjurg1v0ej.apps.googleusercontent.com';
     const API_KEY = 'AIzaSyCYavFb6m88K8T7rhKQwnfv5ygpwG9ah48';
     const SHARED_FOLDER_ID = '1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS';
     const SCOPES = 'https://www.googleapis.com/auth/drive'; 
-
-    let tokenClient;
-    let gapiInited = false;
-    let gisInited = false;
-
-    window.showDriveFileModal = function(files) {
-        let listContainer = document.getElementById('drive-file-list');
-        listContainer.innerHTML = '';
-        files.forEach(file => {
-            let d = new Date(file.modifiedTime);
-            let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-            
-            let fileBtn = document.createElement('div');
-            fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
-            fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
-            fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
-            fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
-            
-            fileBtn.innerHTML = `
-                <div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${file.name}</div>
-                <div style="font-size: 12px; color: #868e96;">${dateStr}</div>
-            `;
-            listContainer.appendChild(fileBtn);
-        });
-        document.getElementById('drive-file-modal-overlay').style.display = 'flex';
-    }
     
-    window.closeDriveModal = function(e) {
-        if (e && e.target !== document.getElementById('drive-file-modal-overlay')) return;
-        document.getElementById('drive-file-modal-overlay').style.display = 'none';
+    // ── 구글 SDK 초기화 + F5 후 자동 재연결 ─────────────────────────────
+    window._gapiInited = window._gapiInited || false;
+    window._gisInited  = window._gisInited  || false;
+
+    // 두 SDK 모두 준비되면 → 이전에 연동했던 경우 자동 재연결 시도
+    window._tryEnableAuthButton = function() {
+        if (!window._gapiInited || !window._gisInited) return;
+        const wasConnected = sessionStorage.getItem('driveConnected') === 'true';
+        if (wasConnected) {
+            // 사용자 개입 없이 조용히 토큰 재발급 시도 (prompt: '')
+            window._tokenClient.callback = async (resp) => {
+                if (resp.error) {
+                    // silent 실패 → 버튼만 활성화해서 수동 연동 유도
+                    sessionStorage.removeItem('driveConnected');
+                    _setAuthButtonReady();
+                    return;
+                }
+                await _onAuthSuccess(true); // true = 자동재연결(알림 없음)
+            };
+            window._tokenClient.requestAccessToken({prompt: ''});
+        } else {
+            _setAuthButtonReady();
+        }
+    };
+
+    function _setAuthButtonReady() {
+        const btn = document.getElementById('auth_button');
+        if (btn) { btn.disabled = false; }
     }
 
-    function gapiLoaded() { gapi.load('client', intializeGapiClient); }
-    async function intializeGapiClient() {
-        await gapi.client.init({
-            apiKey: API_KEY,
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
-        });
-        gapiInited = true;
-    }
-    function gisLoaded() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: '', 
-        });
-        gisInited = true;
+    async function _onAuthSuccess(silent) {
+        try {
+            let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
+            window.currentUserName = aboutResp.result.user.displayName || '알 수 없는 사용자';
+            document.getElementById('auth_button').innerText = `🟢 ${window.currentUserName}`;
+        } catch(e) {
+            window.currentUserName = '익명 사용자';
+            document.getElementById('auth_button').innerText = '🟢 공용 드라이브 연동됨';
+        }
+        document.getElementById('auth_button').disabled = true;
+        document.getElementById('drive_save_btn').disabled = false;
+        document.getElementById('drive_load_btn').disabled = false;
+        sessionStorage.setItem('driveConnected', 'true');
+        if (!silent) {
+            alert(`구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
+        } else {
+            const statusEl = document.getElementById('file-status');
+            if (statusEl) statusEl.textContent = `🔄 F5 후 자동 재연결 완료 (${window.currentUserName})`;
+        }
     }
 
     function handleAuthClick() {
-        tokenClient.callback = async (resp) => {
+        if (!window._tokenClient) { alert('구글 SDK가 아직 초기화 중입니다. 잠시 후 다시 시도해 주세요.'); return; }
+        window._tokenClient.callback = async (resp) => {
             if (resp.error !== undefined) { throw (resp); }
-            try {
-                let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
-                window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
-                alert(`구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
-                document.getElementById('auth_button').innerText = `🟢 ${window.currentUserName}`;
-            } catch(e) {
-                console.error("사용자 정보 가져오기 실패", e);
-                window.currentUserName = "익명 사용자";
-                alert('구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
-                document.getElementById('auth_button').innerText = "🟢 공용 드라이브 연동됨";
-            }
-            document.getElementById('auth_button').disabled = true;
-            document.getElementById('drive_save_btn').disabled = false;
-            document.getElementById('drive_load_btn').disabled = false;
+            await _onAuthSuccess(false);
         };
-        tokenClient.requestAccessToken({prompt: 'consent'}); 
+        // 첫 연동 또는 수동 재연동: 계정 선택창 표시
+        window._tokenClient.requestAccessToken({prompt: 'select_account'});
     }
+    // ─────────────────────────────────────────────────────────────────────
 
     async function findSaveFile(dynamicFileName) {
         try {
@@ -401,10 +439,8 @@
             if (!window.currentDriveFileId) {
                 window.currentDriveFileId = await findSaveFile(dynamicFileName);
             }
-
             let fileId = window.currentDriveFileId;
             let boundary = 'foo_bar_baz';
-            
             let metadata = { name: dynamicFileName, mimeType: 'application/json' };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
 
@@ -415,10 +451,7 @@
             let request = gapi.client.request({
                 'path': '/upload/drive/v3/files' + (fileId ? '/' + fileId : ''),
                 'method': fileId ? 'PATCH' : 'POST',
-                'params': {
-                    'uploadType': 'multipart',
-                    'supportsAllDrives': true  
-                },
+                'params': { 'uploadType': 'multipart', 'supportsAllDrives': true },
                 'headers': {'Content-Type': 'multipart/related; boundary="' + boundary + '"'},
                 'body': multipartRequestBody
             });
@@ -426,9 +459,13 @@
             request.execute(function(file) {
                 if (file.id) {
                     window.currentDriveFileId = file.id; 
-                    window.lastSavedLogCount = window.changeLogs.length; // ✅ 저장 시점의 이력 동기화
-                    alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
-                    document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
+                    window.lastSavedLogCount = window.changeLogs.length;
+                    const savedTime = new Date().toLocaleTimeString('ko-KR');
+                    const isAutoSave = document.getElementById('file-status').textContent.includes('자동 저장 중');
+                    if (!isAutoSave) {
+                        alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
+                    }
+                    document.getElementById('file-status').textContent = `✅ ${isAutoSave ? '⏱ 자동' : '수동'} 저장 완료: ${dynamicFileName} (${savedTime})`;
                 } else { alert("저장에 실패했습니다. 공유 폴더 '편집자' 권한 및 구글 동의 화면을 확인해 주세요."); }
             });
         } catch (err) { alert("구글 드라이브 에러: " + err.message); }
@@ -438,11 +475,7 @@
         window.closeDriveModal();
         document.getElementById('file-status').textContent = `📂 [${fileName}] 데이터를 가져오는 중...`;
         try {
-            let response = await gapi.client.drive.files.get({ 
-                fileId: fileId, 
-                alt: 'media',
-                supportsAllDrives: true  
-            });
+            let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
             
             if (saveData && saveData.globalData) {
@@ -452,7 +485,7 @@
                     return row;
                 });
                 window.changeLogs = saveData.changeLogs || [];
-                window.lastSavedLogCount = window.changeLogs.length; // ✅ 로드 시점의 이력 동기화
+                window.lastSavedLogCount = window.changeLogs.length; 
                 colIdx = saveData.colIdx || colIdx;
                 filterColumns = saveData.filterColumns || filterColumns;
                 
@@ -462,6 +495,211 @@
                 document.getElementById('file-status').textContent = `✅ 공용 드라이브 동기화 완료: ${fileName}`;
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
+    }
+
+    // ── 브라우저 X 닫기: beforeunload 기본 확인창 (커스텀 문구 불가 - 브라우저 보안 정책) ──
+    // 변경사항이 있으면 브라우저 기본 "이 사이트를 벗어나시겠습니까?" 다이얼로그 표시
+    window.addEventListener('beforeunload', function (e) {
+        if (window._closeConfirmPending) return; // 커스텀 모달에서 닫기 선택 시 통과
+        if (window.changeLogs && window.changeLogs.length > window.lastSavedLogCount) {
+            e.preventDefault();
+            e.returnValue = ''; // 크롬/엣지는 커스텀 문구 무시, 브라우저 고정 문구 표시
+        }
+    });
+
+    // ── 앱 내 커스텀 닫기 확인 모달 (툴바 버튼용) ────────────────────────
+    window._closeConfirmPending = false;
+
+    window.showCloseConfirmModal = function() {
+        if (!window.changeLogs || window.changeLogs.length <= window.lastSavedLogCount) {
+            // 변경사항 없으면 바로 닫기
+            window._closeConfirmPending = true;
+            window.close();
+            return;
+        }
+        const driveConnected = !document.getElementById('drive_save_btn').disabled;
+        const overlay     = document.getElementById('close-confirm-overlay');
+        const msgEl       = document.getElementById('close-confirm-msg');
+        const driveBtns   = document.getElementById('close-confirm-drive-btns');
+        const nodriveBtns = document.getElementById('close-confirm-nodrive-btns');
+        if (driveConnected) {
+            msgEl.innerHTML = '저장하지 않은 변경 사항이 있습니다.<br>구글 드라이브에 저장 후 닫으시겠습니까?';
+            driveBtns.style.display   = 'flex';
+            nodriveBtns.style.display = 'none';
+        } else {
+            msgEl.innerHTML = '저장하지 않은 변경 사항이 있습니다.<br>저장하지 않으면 변경 내용이 사라집니다.';
+            driveBtns.style.display   = 'none';
+            nodriveBtns.style.display = 'flex';
+        }
+        overlay.style.display = 'flex';
+    };
+
+    window._closeConfirmSaveAndClose = async function() {
+        document.getElementById('close-confirm-overlay').style.display = 'none';
+        await saveToGoogleDrive();
+        window._closeConfirmPending = true;
+        window.close();
+    };
+    window._closeConfirmJustClose = function() {
+        document.getElementById('close-confirm-overlay').style.display = 'none';
+        window._closeConfirmPending = true;
+        window.close();
+    };
+    window._closeConfirmCancel = function() {
+        document.getElementById('close-confirm-overlay').style.display = 'none';
+    };
+    // ────────────────────────────────────────────────────────────────────
+
+    // ── 3분 자동저장 (구글 연동 상태 + 변경사항 있을 때만) ────────────────
+    window._lastUserActivityTs = Date.now();
+    window._autoSaveTimer = null;
+    const AUTO_SAVE_IDLE_MS = 3 * 60 * 1000; // 3분
+    const AUTO_SAVE_CHECK_MS = 10 * 1000;     // 10초마다 체크
+
+    // 사용자 입력 감지 시 활동 시간 갱신
+    ['mousemove', 'keydown', 'mousedown', 'touchstart', 'scroll'].forEach(function(evt) {
+        document.addEventListener(evt, function() {
+            window._lastUserActivityTs = Date.now();
+        }, { passive: true });
+    });
+
+    function _autoSaveTick() {
+        const idleMs = Date.now() - window._lastUserActivityTs;
+        const driveConnected = !document.getElementById('drive_save_btn').disabled;
+        const hasChanges = window.changeLogs && window.changeLogs.length > window.lastSavedLogCount;
+
+        if (driveConnected && hasChanges && idleMs >= AUTO_SAVE_IDLE_MS) {
+            const statusEl = document.getElementById('file-status');
+            if (statusEl) statusEl.textContent = '⏱ 자동 저장 중...';
+            saveToGoogleDrive().then(function() {
+                console.log('[AutoSave] 자동 저장 완료');
+            }).catch(function(err) {
+                console.warn('[AutoSave] 자동 저장 실패:', err);
+                if (statusEl) statusEl.textContent = '⚠️ 자동 저장 실패 (수동 저장 권장)';
+            });
+        }
+    }
+
+    window._autoSaveTimer = setInterval(_autoSaveTick, AUTO_SAVE_CHECK_MS);
+    // ─────────────────────────────────────────────────────────────────────
+        let listContainer = document.getElementById('drive-file-list');
+        listContainer.innerHTML = '';
+        files.forEach(file => {
+            let d = new Date(file.modifiedTime);
+            let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+            
+            let fileBtn = document.createElement('div');
+            fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
+            fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
+            fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+            fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
+            
+            fileBtn.innerHTML = `
+                <div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${file.name}</div>
+                <div style="font-size: 12px; color: #868e96;">${dateStr}</div>
+            `;
+            listContainer.appendChild(fileBtn);
+        });
+        document.getElementById('drive-file-modal-overlay').style.display = 'flex';
+    }
+    
+    window.closeDriveModal = function(e) {
+        if (e && e.target !== document.getElementById('drive-file-modal-overlay')) return;
+        document.getElementById('drive-file-modal-overlay').style.display = 'none';
+    }
+
+    function hexToHSL(H) {
+        let r = 0, g = 0, b = 0;
+        if (H.length === 4) { r = "0x" + H[1] + H[1]; g = "0x" + H[2] + H[2]; b = "0x" + H[3] + H[3]; } 
+        else if (H.length === 7) { r = "0x" + H[1] + H[2]; g = "0x" + H[3] + H[4]; b = "0x" + H[5] + H[6]; }
+        r /= 255; g /= 255; b /= 255;
+        let cmin = Math.min(r,g,b), cmax = Math.max(r,g,b), delta = cmax - cmin, h = 0, s = 0, l = 0;
+        if (delta === 0) h = 0;
+        else if (cmax === r) h = ((g - b) / delta) % 6;
+        else if (cmax === g) h = (b - r) / delta + 2;
+        else h = (r - g) / delta + 4;
+        h = Math.round(h * 60); if (h < 0) h += 360;
+        l = (cmax + cmin) / 2;
+        s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+        s = +(s * 100).toFixed(1); l = +(l * 100).toFixed(1);
+        return {h, s, l};
+    }
+
+    window.chartColors = { l0: "#1a237e", l1: "#3949ab", l2: "#7986cb", l3: "#c5cae9" };
+
+    window.updateThemeColor = function(baseHex) {
+        let hsl = hexToHSL(baseHex);
+        let h = hsl.h; let s = hsl.s; let l0 = hsl.l;
+        let l0Text = l0 > 60 ? '#333333' : '#ffffff';
+        let darkTextL = Math.min(l0, 40); 
+        let root = document.documentElement;
+
+        root.style.setProperty('--c-l0-bg', baseHex);
+        root.style.setProperty('--c-l0-border', `hsl(${h}, ${s}%, ${Math.max(0, l0 - 15)}%)`);
+        root.style.setProperty('--c-l0-text', l0Text);
+        root.style.setProperty('--c-l0-chart-label', l0Text === '#ffffff' ? `hsl(${h}, ${s}%, 90%)` : `hsl(${h}, ${s}%, 20%)`);
+        root.style.setProperty('--c-l1-bg', `hsl(${h}, ${Math.max(0, s - 10)}%, 88%)`);
+        root.style.setProperty('--c-l1-border', `hsl(${h}, ${Math.max(0, s - 10)}%, 75%)`);
+        root.style.setProperty('--c-l1-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
+        root.style.setProperty('--c-l2-bg', `hsl(${h}, ${Math.max(0, s - 15)}%, 94%)`);
+        root.style.setProperty('--c-l2-border', `hsl(${h}, ${Math.max(0, s - 15)}%, 85%)`);
+        root.style.setProperty('--c-l2-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
+        root.style.setProperty('--c-l3-bg', `#ffffff`);
+        root.style.setProperty('--c-l3-border', `#dee2e6`);
+        root.style.setProperty('--c-l3-text', `#333333`);
+        root.style.setProperty('--c-l4-bg', `hsl(${h}, ${Math.max(0, s - 20)}%, 98%)`);
+        root.style.setProperty('--c-l4-border', `#e9ecef`);
+        root.style.setProperty('--c-l4-text', `#495057`);
+
+        window.chartColors = { l0: baseHex, l1: `hsl(${h}, ${s}%, ${Math.min(l0 + 15, 60)}%)`, l2: `hsl(${h}, ${s}%, ${Math.min(l0 + 30, 75)}%)`, l3: `hsl(${h}, ${Math.max(0, s - 10)}%, 85%)` };
+        if (globalData && globalData.length > 1) applyFilters();
+    };
+
+
+    const KOR_HOLIDAYS = [
+        "2024-01-01", "2024-02-09", "2024-02-12", "2024-03-01", "2024-04-10", "2024-05-05", "2024-05-06", "2024-05-15", "2024-06-06", "2024-08-15", "2024-09-16", "2024-09-17", "2024-09-18", "2024-10-03", "2024-10-09", "2024-12-25",
+        "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30", "2025-03-01", "2025-03-03", "2025-05-05", "2025-05-06", "2025-06-06", "2025-08-15", "2025-10-03", "2025-10-05", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-12-25",
+        "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02", "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-06", "2026-08-15", "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-09", "2026-12-25",
+        "2027-01-01", "2027-02-06", "2027-02-07", "2027-02-08", "2027-02-09", "2027-03-01", "2027-03-03", "2027-05-05", "2027-05-13", "2027-06-06", "2027-08-15", "2027-08-16", "2027-09-14", "2027-09-15", "2027-09-16", "2027-10-03", "2027-10-04", "2027-10-09", "2027-10-11", "2027-12-25",
+        "2028-01-01", "2028-01-25", "2028-01-26", "2028-01-27", "2028-03-01", "2028-05-02", "2028-05-05", "2028-06-06", "2028-08-15", "2028-10-02", "2028-10-03", "2028-10-04", "2028-10-05", "2028-10-09", "2028-12-25",
+        "2029-01-01", "2029-02-12", "2029-02-13", "2029-02-14", "2029-03-01", "2029-05-05", "2029-05-07", "2029-05-20", "2029-05-21", "2029-06-06", "2029-08-15", "2029-09-21", "2029-09-22", "2029-09-23", "2029-09-24", "2029-10-03", "2029-10-09", "2029-12-25",
+        "2030-01-01", "2030-02-02", "2030-02-03", "2030-02-04", "2030-02-05", "2030-03-01", "2030-05-05", "2030-05-06", "2030-05-09", "2030-06-06", "2030-08-15", "2030-09-11", "2030-09-12", "2030-09-13", "2030-10-03", "2030-10-09", "2030-12-25",
+        "2031-01-01", "2031-01-22", "2031-01-23", "2031-01-24", "2031-03-01", "2031-03-03", "2031-05-05", "2031-05-28", "2031-06-06", "2031-08-15", "2031-09-30", "2031-10-01", "2031-10-02", "2031-10-03", "2031-10-09", "2031-12-25",
+        "2032-01-01", "2032-02-10", "2032-02-11", "2032-02-12", "2032-03-01", "2032-05-05", "2032-05-16", "2032-05-17", "2032-06-06", "2032-08-15", "2032-08-16", "2032-09-18", "2032-09-19", "2032-09-20", "2032-09-21", "2032-10-03", "2032-10-04", "2032-10-09", "2032-10-11", "2032-12-25",
+        "2033-01-01", "2033-01-30", "2033-01-31", "2033-02-01", "2033-03-01", "2033-05-05", "2033-05-06", "2033-06-06", "2033-08-15", "2033-10-03", "2033-10-06", "2033-10-07", "2033-10-08", "2033-10-09", "2033-10-10", "2033-12-25",
+        "2034-01-01", "2034-02-18", "2034-02-19", "2034-02-20", "2034-02-21", "2034-03-01", "2034-05-05", "2034-05-25", "2034-06-06", "2034-08-15", "2034-09-26", "2034-09-27", "2034-09-28", "2034-10-03", "2034-10-09", "2034-12-25",
+        "2035-01-01", "2035-02-07", "2035-02-08", "2035-02-09", "2035-03-01", "2035-05-05", "2035-05-07", "2035-05-15", "2035-06-06", "2035-08-15", "2035-09-15", "2035-09-16", "2035-09-17", "2035-09-18", "2035-10-03", "2035-10-09", "2035-12-25"
+    ];
+
+    function addWorkingDays(startDateTs, daysToAdd) {
+        let currentDate = new Date(startDateTs); currentDate.setHours(0,0,0,0);
+        if (daysToAdd <= 0) return currentDate.getTime(); 
+        let addedDays = 0;
+        while (addedDays < daysToAdd) {
+            currentDate.setDate(currentDate.getDate() + 1); let dayOfWeek = currentDate.getDay(); 
+            let dateStr = currentDate.getFullYear() + "-" + String(currentDate.getMonth() + 1).padStart(2, '0') + "-" + String(currentDate.getDate()).padStart(2, '0');
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !KOR_HOLIDAYS.includes(dateStr)) { addedDays++; }
+        }
+        return currentDate.getTime();
+    }
+
+    function countWorkingDays(startTs, endTs) {
+        if (!startTs || !endTs) return 0;
+        let count = 0; let cur = new Date(startTs); cur.setHours(0,0,0,0); let end = new Date(endTs); end.setHours(0,0,0,0);
+        if (cur > end) return 0;
+        while (cur <= end) {
+            let dayOfWeek = cur.getDay(); let dateStr = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, '0') + "-" + String(cur.getDate()).padStart(2, '0');
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !KOR_HOLIDAYS.includes(dateStr)) { count++; }
+            cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+    }
+
+    function toggleFullScreen() {
+        const doc = window.document; const docEl = doc.documentElement;
+        const requestFullScreen = docEl.requestFullscreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+        const cancelFullScreen = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+        if (!doc.fullscreenElement) requestFullScreen.call(docEl); else cancelFullScreen.call(doc);
     }
 
     function logChange(rowIndex, colIndex, oldVal, newVal) {
@@ -686,6 +924,470 @@
         });
         document.getElementById('confirm-delete-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
     };
+
+    const fileInput = document.getElementById('file-input');
+    fileInput.addEventListener('change', handleFiles, false);
+    window.addEventListener("dragover", function(e) { e.preventDefault(); }, false);
+    window.addEventListener("drop", function(e) { e.preventDefault(); }, false);
+    const dropZone = document.getElementById('drop-zone');
+    dropZone.addEventListener('dragenter', function(e) { dropZone.classList.add('drag-over'); });
+    dropZone.addEventListener('dragleave', function(e) { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
+    dropZone.addEventListener('drop', function(e) {
+        e.preventDefault(); dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) handleFiles({ target: { files: e.dataTransfer.files } });
+    });
+
+    window.currentCalendarTarget = null; window.currentCalendarTs = null; window.currentViewYear = null; window.currentViewMonth = null; window.currentCalendarRow = null; window.currentCalendarCol = null;
+
+    window.showCalendar = function(btn, ts, rowIndex, colIndex) {
+        window.currentCalendarTarget = btn; window.currentCalendarTs = Number(ts); window.currentCalendarRow = rowIndex; window.currentCalendarCol = colIndex;
+        let d = new Date(window.currentCalendarTs);
+        window.currentViewYear = d.getFullYear(); window.currentViewMonth = d.getMonth();
+        window.calendarFixedPos = null;
+        renderCalendar(false);
+    };
+
+    window.changeCalendarMonth = function(e, deltaMonth, deltaYear) {
+        if (e) e.stopPropagation();
+        let d = new Date(window.currentViewYear + deltaYear, window.currentViewMonth + deltaMonth, 1);
+        window.currentViewYear = d.getFullYear(); window.currentViewMonth = d.getMonth();
+        renderCalendar(true);
+    };
+
+    window.selectDateFromCalendar = function(y, m, d) {
+        if (window.currentCalendarRow !== undefined && window.currentCalendarCol !== undefined) {
+            let str = y + "-" + String(m+1).padStart(2, '0') + "-" + String(d).padStart(2, '0');
+            let r = window.currentCalendarRow; let c = window.currentCalendarCol;
+            let oldVal = globalData[r][c] || "";
+            if (oldVal !== str) {
+                logChange(r, c, oldVal, str); 
+                globalData[r][c] = str;
+                if (c === colIdx.plan) {
+                    if (colIdx.period !== -1) globalData[r][colIdx.period] = "";
+                    if (colIdx.dur1 !== -1) globalData[r][colIdx.dur1] = "";
+                    if (colIdx.dur2 !== -1) globalData[r][colIdx.dur2] = "";
+                    if (colIdx.dur3 !== -1) globalData[r][colIdx.dur3] = "";
+                    if (colIdx.dur4 !== -1) globalData[r][colIdx.dur4] = "";
+                    globalData[r]._planForced = true; globalData[r]._startForced = false;
+                }
+                if (c === colIdx.start) {
+                    globalData[r]._startForced = true; globalData[r]._planForced = false;
+                    if (colIdx.plan !== -1) globalData[r][colIdx.plan] = "";
+                }
+                document.getElementById('calendar-popup').style.display = 'none';
+                window.recalculateSchedules(); 
+            } else { document.getElementById('calendar-popup').style.display = 'none'; }
+        }
+    };
+
+    window.renderCalendar = function(keepPos) {
+        let popup = document.getElementById('calendar-popup');
+        if (!popup) { popup = document.createElement('div'); popup.id = 'calendar-popup'; popup.className = 'calendar-popup'; document.body.appendChild(popup); }
+
+        let year = window.currentViewYear; let month = window.currentViewMonth;
+        let targetDate = new Date(window.currentCalendarTs);
+        let targetY = targetDate.getFullYear(); let targetM = targetDate.getMonth(); let targetD = targetDate.getDate();
+
+        let firstDay = new Date(year, month, 1).getDay(); let daysInMonth = new Date(year, month + 1, 0).getDate(); let prevDays = new Date(year, month, 0).getDate();
+
+        let html = `
+            <div class="cal-header">
+                <div><span class="cal-nav" onclick="changeCalendarMonth(event, 0, -1)" title="이전 년도">⏪</span><span class="cal-nav" onclick="changeCalendarMonth(event, -1, 0)" title="이전 달">◀</span></div>
+                <span style="margin: 0 10px;">${year}년 ${month + 1}월</span>
+                <div style="display:flex; align-items:center;"><span class="cal-nav" onclick="changeCalendarMonth(event, 1, 0)" title="다음 달">▶</span><span class="cal-nav" onclick="changeCalendarMonth(event, 0, 1)" title="다음 년도">⏩</span><span class="cal-close" onclick="event.stopPropagation(); document.getElementById('calendar-popup').style.display='none'" title="닫기">✖</span></div>
+            </div>
+            <div class="cal-grid"><div class="cal-day" style="color:#e03131;">일</div><div class="cal-day">월</div><div class="cal-day">화</div><div class="cal-day">수</div><div class="cal-day">목</div><div class="cal-day">금</div><div class="cal-day" style="color:#0056b3;">토</div>
+        `;
+
+        let cellCount = 0;
+        for (let i = firstDay - 1; i >= 0; i--) { html += `<div class="cal-date dim">${prevDays - i}</div>`; cellCount++; }
+        for (let i = 1; i <= daysInMonth; i++) {
+            let isTarget = (year === targetY && month === targetM && i === targetD) ? 'active' : '';
+            let isSunday = (cellCount % 7 === 0) ? 'color:#e03131;' : '';
+            let isSaturday = (cellCount % 7 === 6) ? 'color:#0056b3;' : '';
+            html += `<div class="cal-date ${isTarget}" style="${isTarget ? '' : isSunday + isSaturday}" onclick="selectDateFromCalendar(${year}, ${month}, ${i})">${i}</div>`;
+            cellCount++;
+        }
+        let nextDay = 1;
+        while (cellCount % 7 !== 0) { html += `<div class="cal-date dim">${nextDay++}</div>`; cellCount++; }
+        html += `</div>`;
+
+        popup.innerHTML = html; popup.style.display = 'block';
+
+        if (!keepPos && window.currentCalendarTarget) {
+            let rect = window.currentCalendarTarget.getBoundingClientRect();
+            popup.style.top = '0px'; popup.style.left = '0px'; 
+            let popupH = popup.offsetHeight;
+            let topPos = rect.bottom + window.scrollY + 5;
+            if (rect.bottom + popupH + 15 > window.innerHeight) topPos = Math.max(window.scrollY + 5, rect.top + window.scrollY - popupH - 5);
+            let leftPos = Math.min(rect.left + window.scrollX, window.innerWidth - popup.offsetWidth - 20);
+            window.calendarFixedPos = { top: topPos, left: leftPos };
+        }
+        if (window.calendarFixedPos) {
+            popup.style.top  = window.calendarFixedPos.top  + 'px';
+            popup.style.left = window.calendarFixedPos.left + 'px';
+        }
+    };
+
+    document.addEventListener('click', function(e) {
+        const popup = document.getElementById('calendar-popup');
+        if (popup && popup.style.display === 'block') { if (!popup.contains(e.target) && !e.target.closest('.date-clickable')) popup.style.display = 'none'; }
+        if (!e.target.closest('.no-td')) document.querySelectorAll('.row-actions.show').forEach(el => el.classList.remove('show'));
+    });
+
+    function escapeHtml(unsafe) { if (!unsafe) return ""; return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
+
+    function linkifyAndEscape(text) {
+        if (!text) return ""; let safeText = escapeHtml(text);
+        const emailPattern = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gim; safeText = safeText.replace(emailPattern, '<a href="mailto:$1" style="text-decoration: none; display: inline-block; margin-left: 2px;" title="$1">📧</a>');
+        const urlPattern = /(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim; safeText = safeText.replace(urlPattern, '<a href="$1" target="_blank" style="text-decoration: none; display: inline-block; margin-left: 2px; font-size:11px;" title="$1">⬇️</a>');
+        const pseudoUrlPattern = /(^|[^\/a-zA-Z0-9])(www\.[\S]+(\b|$))/gim; safeText = safeText.replace(pseudoUrlPattern, '$1<a href="http://$2" target="_blank" style="text-decoration: none; display: inline-block; margin-left: 2px; font-size:11px;" title="$2">⬇️</a>');
+        safeText = safeText.replace(/\r/g, ''); safeText = safeText.replace(/\n{2,}/g, '\n'); return safeText.replace(/\n/g, '<br>'); 
+    }
+
+    function parseDateValue(value) {
+        if (value === "" || value === null || value === undefined) return null;
+        let y, m, d;
+        if (typeof value === 'number') {
+            const date = new Date((value - 25569) * 86400 * 1000); y = date.getUTCFullYear(); m = date.getUTCMonth(); d = date.getUTCDate();
+        } else if (typeof value === 'string') {
+            let str = value.trim();
+            let matchMMDD = str.match(/^(\d{1,2})[-/.](\d{1,2})$/);
+            if (matchMMDD) {
+                y = new Date().getFullYear(); m = parseInt(matchMMDD[1], 10) - 1; d = parseInt(matchMMDD[2], 10);
+            } else {
+                let match = str.match(/^(\d{2,4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+                if (match) { y = parseInt(match[1], 10); if (y < 100) y += 2000; m = parseInt(match[2], 10) - 1; d = parseInt(match[3], 10); } else return null;
+            }
+        } else return null;
+        if (y < 2010) y = new Date().getFullYear(); if (y < 2000 || y > 2100) return null; 
+        let dt = new Date(y, m, d); dt.setHours(0,0,0,0); return { ts: dt.getTime() };
+    }
+
+    function formatTableDate(ts) {
+        if (!ts) return ""; let d = new Date(ts); if (isNaN(d.getTime())) return "";
+        return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+    }
+
+    function formatTsToYMD(ts) {
+        if (!ts) return ""; let d = new Date(ts);
+        return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, '0') + "-" + String(d.getDate()).padStart(2, '0');
+    }
+
+    function getDurationDays(val) {
+        if (val === undefined || val === null || val.toString().trim() === '') return null;
+        let match = val.toString().trim().match(/^(\d+)(일|days)?$/i);
+        if (match) { let days = parseInt(match[1], 10); if (days < 10000) return days; } return null;
+    }
+
+    function checkStrikeThrough(worksheet, r, c) {
+        try {
+            if (c === -1 || c === undefined) return false;
+            let cellAddress = XLSX.utils.encode_cell({r: r, c: c}); let cell = worksheet[cellAddress];
+            if (!cell) return false;
+            if (cell.s && cell.s.font && cell.s.font.strike) return true;
+            if (cell.r && Array.isArray(cell.r) && cell.r.some(run => run.s && run.s.strike)) return true;
+            if (cell.h && typeof cell.h === 'string' && (cell.h.includes('<s') || cell.h.includes('strike') || cell.h.includes('line-through'))) return true;
+        } catch (e) { } return false;
+    }
+
+    window.recalculateSchedules = function() {
+        if (globalData.length <= 1) return;
+        let statusEl = document.getElementById('file-status');
+        if (statusEl) statusEl.textContent = "일정을 재계산하는 중입니다...";
+
+        setTimeout(() => {
+            let curD0 = "", curT1 = "", curT2 = "", curT3 = "", curT4 = "";
+            for (let i = 1; i < globalData.length; i++) {
+                let row = globalData[i]; if (!row) continue;
+                let text = "";
+                if (row._level === 0) text = row._origDev; else if (row._level === 1) text = row._origT1; else if (row._level === 2) text = row._origT2; else if (row._level === 3) text = row._origT3; else if (row._level === 4) text = row._origT4;
+                text = text || "";
+
+                if (row._level === 0) { curD0 = text; curT1 = ""; curT2 = ""; curT3 = ""; curT4 = ""; }
+                else if (row._level === 1) { curT1 = text; curT2 = ""; curT3 = ""; curT4 = ""; }
+                else if (row._level === 2) { curT2 = text; curT3 = ""; curT4 = ""; }
+                else if (row._level === 3) { curT3 = text; curT4 = ""; }
+                else if (row._level === 4) { curT4 = text; }
+                
+                row._origDev = curD0; if (colIdx.devStage !== -1) row[colIdx.devStage] = curD0;
+                row._origT1 = curT1; if (colIdx.taskType1 !== -1) row[colIdx.taskType1] = curT1;
+                row._origT2 = curT2; if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = curT2;
+                row._origT3 = curT3; if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = curT3;
+                row._origT4 = curT4; if (colIdx.taskType4 !== -1) row[colIdx.taskType4] = curT4;
+                if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level + 1; 
+            }
+
+            generateFilters(globalData);
+
+            let validRows = globalData.slice(1);
+            let tree = []; let stack = {}; let fileGlobalStartTs = null;
+
+            for (let row of validRows) {
+                let rawStart = colIdx.start !== -1 ? row[colIdx.start] : ""; let pDateStart = parseDateValue(rawStart); let parsedStartTs = pDateStart ? pDateStart.ts : null;
+                let rawPlan = colIdx.plan !== -1 ? row[colIdx.plan] : ""; let pDatePlan = parseDateValue(rawPlan); let parsedPlanTs = pDatePlan ? pDatePlan.ts : null;
+                let dur1 = colIdx.dur1 !== -1 ? getDurationDays(row[colIdx.dur1]) : null; let dur2 = colIdx.dur2 !== -1 ? getDurationDays(row[colIdx.dur2]) : null; let dur3 = colIdx.dur3 !== -1 ? getDurationDays(row[colIdx.dur3]) : null; let dur4 = colIdx.dur4 !== -1 ? getDurationDays(row[colIdx.dur4]) : null; let pDur = colIdx.period !== -1 ? getDurationDays(row[colIdx.period]) : null;
+                let planStr = rawPlan !== null && rawPlan !== undefined ? rawPlan.toString().trim() : ""; let match = planStr.match(/^(\d+)(일|days)?$/i); 
+                let finalDur = 0; let hasDuration = (dur1 !== null || dur2 !== null || dur3 !== null || dur4 !== null || pDur !== null || match);
+                
+                if (row._level === 1 && dur1 !== null) finalDur = dur1; else if (row._level === 2 && dur2 !== null) finalDur = dur2; else if (row._level === 3 && dur3 !== null) finalDur = dur3; else if (row._level === 4 && dur4 !== null) finalDur = dur4; else if (pDur !== null) finalDur = pDur; else if (match && parseInt(match[1], 10) < 10000) finalDur = parseInt(match[1], 10);
+                
+                row._finalDuration = finalDur;
+                row._isExplicitZero = (finalDur === 0 && (dur1 === 0 || dur2 === 0 || dur3 === 0 || dur4 === 0 || pDur === 0 || (match && parseInt(match[1], 10) === 0)));
+
+                if (row._level === 0 || row._startForced || !hasDuration) row._explicitStartTs = parsedStartTs; else row._explicitStartTs = null;
+                if (row._level === 0 || row._planForced || !hasDuration) row._explicitPlanTs = parsedPlanTs; else row._explicitPlanTs = null;
+                if (row._explicitStartTs && row._explicitPlanTs && row._explicitPlanTs < row._explicitStartTs) {
+                    row._explicitPlanTs = row._explicitStartTs;
+                    if (colIdx.plan !== -1) row[colIdx.plan] = formatTsToYMD(row._explicitPlanTs);
+                }
+                
+                if (row._explicitStartTs) {
+                    if (fileGlobalStartTs === null || row._explicitStartTs < fileGlobalStartTs) {
+                        fileGlobalStartTs = row._explicitStartTs;
+                    }
+                }
+
+                let taskName = "";
+                if (row._level === 0) taskName = row._origDev || ""; else if (row._level === 1) taskName = row._origT1 || ""; else if (row._level === 2) taskName = row._origT2 || ""; else if (row._level === 3) taskName = row._origT3 || ""; else if (row._level === 4) taskName = row._origT4 || "";
+                
+                let contentStr = colIdx.content !== -1 ? (row[colIdx.content] || "").toString() : "";
+                row._isParallel = taskName.includes('*') || taskName.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
+
+                let node = { row: row, level: row._level, isParallel: row._isParallel, explicitStartTs: row._explicitStartTs, explicitPlanTs: row._explicitPlanTs, duration: row._finalDuration, children: [], startTs: null, endTs: null };
+
+                if (node.level === 0) { tree.push(node); stack[0] = node; stack[1] = null; stack[2] = null; stack[3] = null; stack[4] = null; } 
+                else {
+                    let parentLvl = node.level - 1; while (parentLvl >= 0 && !stack[parentLvl]) parentLvl--;
+                    if (parentLvl >= 0 && stack[parentLvl]) stack[parentLvl].children.push(node); else tree.push(node); 
+                    stack[node.level] = node; for (let l = node.level + 1; l <= 4; l++) stack[l] = null; 
+                }
+            }
+
+            function markLastChild(node) {
+                if (!node.children || node.children.length === 0) return;
+                for (let i = 0; i < node.children.length; i++) { node.children[i].row._isLastChild = (i === node.children.length - 1); markLastChild(node.children[i]); }
+            }
+            for (let l0Node of tree) markLastChild(l0Node);
+
+            function propagateZero(node) {
+                if (node.children.length === 0) return !!node.row._isExplicitZero;
+                let allZero = true; for (let i = 0; i < node.children.length; i++) { if (!propagateZero(node.children[i])) allZero = false; }
+                node.row._isExplicitZero = allZero; return allZero;
+            }
+            for (let i = 0; i < tree.length; i++) propagateZero(tree[i]);
+
+            function scheduleNode(node, inheritedStartTs) {
+                if (node.explicitStartTs) node.startTs = node.explicitStartTs; else node.startTs = inheritedStartTs || new Date().setHours(0,0,0,0);
+                if (node.children.length === 0) {
+                    let dur = node.duration || 0;
+                    if (node.explicitPlanTs && (node.level === 0 || dur === 0 || node.row._planForced)) {
+                        node.endTs = node.explicitPlanTs; node.row._finalDuration = countWorkingDays(node.startTs, node.endTs);
+                    } else if (dur > 0) {
+                        node.endTs = addWorkingDays(node.startTs, dur - 1);
+                    } else { node.endTs = node.startTs; }
+                    return;
+                }
+                
+                let currentWaterfallStart = node.startTs; 
+                let maxChildEnd = node.startTs; 
+                let groupStartTs = node.startTs; 
+                let isFirstValid = true;
+
+                for (let i = 0; i < node.children.length; i++) {
+                    let child = node.children[i];
+                    if (child.row._isExplicitZero) { scheduleNode(child, currentWaterfallStart); continue; }
+                    
+                    let intendedStart;
+                    if (isFirstValid) intendedStart = node.startTs;
+                    else if (child.isParallel) intendedStart = groupStartTs;
+                    else intendedStart = currentWaterfallStart;
+                    
+                    scheduleNode(child, intendedStart);
+                    
+                    if (isFirstValid) {
+                        groupStartTs = child.startTs;
+                        isFirstValid = false;
+                    } else if (!child.isParallel) {
+                        groupStartTs = child.startTs;
+                    }
+                    
+                    if (child.endTs > maxChildEnd) maxChildEnd = child.endTs;
+                    currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
+                }
+                node.endTs = maxChildEnd;
+            }
+
+            let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0); 
+            let maxL0End = currentL0Start; 
+            let groupL0StartTs = currentL0Start; 
+            let isFirstValidL0 = true;
+
+            for (let i = 0; i < tree.length; i++) {
+                let l0Node = tree[i];
+                if (l0Node.row._isExplicitZero) { scheduleNode(l0Node, currentL0Start); continue; }
+                
+                let intendedStart;
+                if (isFirstValidL0) intendedStart = currentL0Start;
+                else if (l0Node.isParallel) intendedStart = groupL0StartTs;
+                else intendedStart = currentL0Start;
+                
+                scheduleNode(l0Node, intendedStart);
+                
+                if (isFirstValidL0) {
+                    groupL0StartTs = l0Node.startTs;
+                    isFirstValidL0 = false;
+                } else if (!l0Node.isParallel) {
+                    groupL0StartTs = l0Node.startTs;
+                }
+                
+                if (l0Node.endTs > maxL0End) maxL0End = l0Node.endTs;
+                currentL0Start = addWorkingDays(maxL0End, 1);
+            }
+
+            function applyDatesToRow(node) { node.row._calcStartTs = node.startTs; node.row._calcPlanTs = node.endTs; for (let child of node.children) applyDatesToRow(child); }
+            for (let l0Node of tree) applyDatesToRow(l0Node);
+
+            let chartMinTs = null; let chartMaxTs = null;
+            for (let i = 1; i < globalData.length; i++) {
+                let rStart = globalData[i]._calcStartTs; let rEnd = globalData[i]._calcPlanTs;
+                if (rStart && (chartMinTs === null || rStart < chartMinTs)) chartMinTs = rStart;
+                if (rEnd && (chartMaxTs === null || rEnd > chartMaxTs)) chartMaxTs = rEnd;
+            }
+            if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
+            if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30); 
+            let totalDuration = chartMaxTs - chartMinTs; let padding = totalDuration * 0.05; if (padding === 0) padding = 86400000 * 7; 
+            window.ganttViewStartTs = chartMinTs - padding; window.ganttViewDuration = (chartMaxTs + padding) - window.ganttViewStartTs;
+
+            renderTable(globalData); applyFilters();
+            
+            if (statusEl) { statusEl.textContent = "✅ 일정이 업데이트 되었습니다."; }
+        }, 10);
+    };
+
+    function handleFiles(e) {
+        window.currentDriveFileId = null;
+        
+        const files = e.target.files; if (!files || files.length === 0) return;
+        
+        globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {};
+        colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
+        let headerRow = []; let filesProcessed = 0; let totalFiles = files.length;
+        window.changeLogs = []; 
+        window.lastSavedLogCount = 0; 
+        
+        document.getElementById('file-status').textContent = "데이터를 분석하고 일정을 연산하는 중입니다...";
+
+        for (let i = 0; i < totalFiles; i++) {
+            let file = files[i]; let reader = new FileReader();
+            reader.onload = function(e) {
+                let data = new Uint8Array(e.target.result); let workbook;
+                try { workbook = XLSX.read(data, {type: 'array', cellStyles: true, cellHTML: true}); } catch (readErr) { workbook = XLSX.read(data, {type: 'array'}); }
+                
+                let firstSheetName = workbook.SheetNames[0]; let worksheet = workbook.Sheets[firstSheetName];
+                let jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: true});
+                
+                let historySheetName = workbook.SheetNames.find(n => n.includes("수정이력"));
+                if (historySheetName && filesProcessed === 0) { 
+                    let historyWs = workbook.Sheets[historySheetName];
+                    let historyJson = XLSX.utils.sheet_to_json(historyWs, {header: 1, defval: ""});
+                    for (let k = 1; k < historyJson.length; k++) {
+                        let hRow = historyJson[k];
+                        if (hRow && hRow[0] && k > 0) { 
+                            if (hRow.length >= 6) {
+                                window.changeLogs.push({ time: hRow[0], userName: hRow[1], rowName: hRow[2], colName: hRow[3], oldVal: hRow[4], newVal: hRow[5] });
+                            } else {
+                                window.changeLogs.push({ time: hRow[0], userName: "이전 기록", rowName: hRow[1], colName: hRow[2], oldVal: hRow[3], newVal: hRow[4] });
+                            }
+                        }
+                    }
+                }
+
+                if(jsonData.length > 0) {
+                    if (headerRow.length === 0) {
+                        headerRow = jsonData[0];
+                        headerRow.forEach((h, idx) => {
+                            if(!h) return; let str = h.toString().replace(/\s+/g, ''); let strUpper = str.toUpperCase();
+                            if(strUpper.includes("NO")) colIdx.no = idx;
+                            else if(str === "보고" || strUpper === "VIEW" || strUpper === "LEVEL(WBS)" || strUpper === "LEVELWBS") colIdx.bogo = idx;
+                            else if(str.includes("시작")) colIdx.start = idx;
+                            else if(str.includes("계획") || str.includes("완료")) colIdx.plan = idx;
+                            else if(str === "기간" || str === "기간일") colIdx.period = idx;
+                            else if(str === "소요1") colIdx.dur1 = idx;
+                            else if(str === "소요2") colIdx.dur2 = idx;
+                            else if(str === "소요3" || str === "소요" || str.includes("소요일수")) colIdx.dur3 = idx;
+                            else if(str === "소요4") colIdx.dur4 = idx;
+                            else if(str.includes("담당자")) colIdx.assignee = idx;
+                            else if(str === "업무구분1" || str === "업무1") colIdx.taskType1 = idx;
+                            else if(str === "업무구분2" || str === "업무2") colIdx.taskType2 = idx;
+                            else if(str === "업무구분3" || str === "업무3") colIdx.taskType3 = idx;
+                            else if(str === "업무구분4" || str === "업무4") colIdx.taskType4 = idx;
+                            else if(str.includes("상태") || str.includes("업무상태")) colIdx.status = idx;
+                            else if(str.includes("고객")) colIdx.customer = idx;
+                            else if(str.includes("모델")) colIdx.model = idx;
+                            else if(str.includes("인치")) colIdx.inch = idx;
+                            else if(str.includes("단계") || str.includes("개발단계")) colIdx.devStage = idx;
+                            else if(str.includes("업무내용") || str.includes("요청내용") || str.includes("업무상세내용") || str.includes("상세내용")) colIdx.content = idx;
+                            else if(str.includes("답변") || str.includes("대응내용") || str.includes("대응")) colIdx.answer = idx;
+                            else if(str.includes("현황")) colIdx.chart = idx;
+                        });
+                        
+                        filterColumns = []; let orderedNames = ['LEVEL(WBS)', '개발단계', '업무상태'];
+                        orderedNames.forEach(name => {
+                            if (name === 'LEVEL(WBS)' && colIdx.bogo !== -1) filterColumns.push({ index: colIdx.bogo, name: 'LEVEL(WBS)' });
+                            else if (name === '개발단계' && colIdx.devStage !== -1) filterColumns.push({ index: colIdx.devStage, name: '개발단계' });
+                            else if (name === '업무상태' && colIdx.status !== -1) filterColumns.push({ index: colIdx.status, name: '업무상태' });
+                        });
+                    }
+                    
+                    let stageSet = new Set(); let lastDev = "", lastT1 = "", lastT2 = "", lastT3 = "", lastT4 = "";
+                    for (let j = 1; j < jsonData.length; j++) {
+                        if (!jsonData[j] || jsonData[j].length === 0) continue;
+                        if (jsonData[j].join('').trim() === '') continue;
+                        let row = jsonData[j];
+                        
+                        const stripPrefix = s => s.replace(/^[├└─\s]+/, '').trim();
+
+                        let origD0 = colIdx.devStage  !== -1 ? stripPrefix((row[colIdx.devStage]  || "").toString().trim()) : "";
+                        let origD1 = colIdx.taskType1 !== -1 ? stripPrefix((row[colIdx.taskType1] || "").toString().trim()) : "";
+                        let origD2 = colIdx.taskType2 !== -1 ? stripPrefix((row[colIdx.taskType2] || "").toString().trim()) : "";
+                        let origD3 = colIdx.taskType3 !== -1 ? stripPrefix((row[colIdx.taskType3] || "").toString().trim()) : "";
+                        let origD4 = colIdx.taskType4 !== -1 ? stripPrefix((row[colIdx.taskType4] || "").toString().trim()) : "";
+
+                        row._origDev = origD0; row._origT1 = origD1; row._origT2 = origD2; row._origT3 = origD3; row._origT4 = origD4;
+                        if (origD0 !== "") { lastDev = origD0; lastT1 = ""; lastT2 = ""; lastT3 = ""; lastT4 = ""; }
+                        if (origD1 !== "") { lastT1 = origD1; lastT2 = ""; lastT3 = ""; lastT4 = ""; }
+                        if (origD2 !== "") { lastT2 = origD2; lastT3 = ""; lastT4 = ""; }
+                        if (origD3 !== "") { lastT3 = origD3; lastT4 = ""; }
+                        if (origD4 !== "") { lastT4 = origD4; }
+
+                        if (colIdx.devStage !== -1) row[colIdx.devStage] = lastDev;
+                        if (colIdx.taskType1 !== -1) row[colIdx.taskType1] = lastT1;
+                        if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = lastT2;
+                        if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = lastT3;
+                        if (colIdx.taskType4 !== -1) row[colIdx.taskType4] = lastT4;
+
+                        if (origD4 !== "") row._level = 4; else if (origD3 !== "") row._level = 3; else if (origD2 !== "") row._level = 2; else if (origD1 !== "") row._level = 1; else if (origD0 !== "") row._level = 0; else row._level = 3;
+
+                        row._startForced = false; row._planForced  = false;
+                        row._isStrikeContent = checkStrikeThrough(worksheet, j, colIdx.content); row._isStrikeAnswer = checkStrikeThrough(worksheet, j, colIdx.answer);
+                        
+                        let name = ""; if (row._level === 0) name = origD0; if (row._level === 1) name = origD1; if (row._level === 2) name = origD2; if (row._level === 3) name = origD3; if (row._level === 4) name = origD4;
+                        let contentStr = colIdx.content !== -1 ? (row[colIdx.content] || "").toString() : "";
+                        row._isParallel = name.includes('*') || name.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
+
+                        globalData.push(row); 
+                    }
+                }
+                filesProcessed++;
+                if(filesProcessed === totalFiles) { 
+                    globalData = [headerRow, ...globalData]; 
+                    window.recalculateSchedules(); 
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    }
 
     window.makeEditable = function(td) {
         if(td.getAttribute('contenteditable') === 'true') return;
@@ -1203,15 +1905,10 @@
         return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class=\"chart-axis-wrapper\">${labelHTML}</div><div style=\"position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;\">${gridLines}${todayLine}<div style=\"position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; background-color:${barColorVar}; border-radius:4px; z-index:2; opacity:0.95; display:flex; justify-content:flex-start; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);\"></div></div></div>`;
     }
 
-    // ✅ [순서 보정 교정 완본] 모든 전역 객체 준비가 완벽히 끝난 최하단에서 RGB(185, 185, 185) 그레이 테마 강제 실행
+// 👇 잘라낸 코드를 여기에 붙여넣으세요! (모든 준비가 끝난 후 마지막에 색상 적용)
     window.updateThemeColor('#b9b9b9');
-
-    // ✅ [유실 방지 모니터링 완본] 브라우저 종료 및 강제 F5 새로고침을 실시간 방어하는 감지 장치 작동
-    window.addEventListener('beforeunload', function (e) {
-        if (window.changeLogs && window.changeLogs.length > window.lastSavedLogCount) {
-            e.preventDefault(); e.returnValue = ''; 
-        }
-    });
+    
 </script>
+
 </body>
 </html>
