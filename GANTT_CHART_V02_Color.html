@@ -1872,12 +1872,17 @@ window.handleAuthClick = function() {
     let labelFontSize = isMobile ? "7px" : "9px";
     let labelWeight = isMobile ? "normal" : "bold";
     
-    let labelHTML = ''; for (let i = 0; i <= 4; i++) { 
-        let pct = (i / 4) * 100; 
-        let ts = viewStartTs + (viewDuration * i / 4); 
-        let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); 
-        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: ${labelFontSize}; font-weight: ${labelWeight};">${formatChartLabel(ts)}</span>`; 
-    }
+    // 라벨 위치 커스텀: 2번(25%→33%), 4번(75%→67%)을 중심(3번 50%)쪽으로 이동
+    const labelPositions = [0, 33, 50, 67, 100];
+    const labelTs = labelPositions.map(pct => viewStartTs + (viewDuration * pct / 100));
+    
+    let labelHTML = '';
+    for (let i = 0; i <= 4; i++) {
+        let pct = labelPositions[i];
+        let ts = labelTs[i];
+        let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`);
+        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: ${labelFontSize}; font-weight: ${labelWeight};">${formatChartLabel(ts)}</span>`;
+    }    
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
     
