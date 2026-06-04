@@ -780,7 +780,26 @@ if (window.name !== 'gantt_popup') {
                 }
                 filesProcessed++;
                 if(filesProcessed === totalFiles) { 
-                    globalData = [headerRow, ...globalData]; 
+                    globalData = [headerRow, ...globalData];
+                    
+                    // ✅ 파일 로드 시 이름 확인
+                    if (window.currentUserName === "비로그인 (로컬)" || window.currentUserName === "익명 사용자") {
+                        let localName = localStorage.getItem('gantt_local_user');
+                        if (!localName) {
+                            localName = prompt("수정이력에 기록될 이름을 입력해주세요.", "");
+                            if (!localName) localName = "로컬 사용자";
+                            localStorage.setItem('gantt_local_user', localName);
+                        }
+                        window.currentUserName = localName;
+                        // ✅ 구글 연동처럼 버튼에 이름 표시
+                        const authBtn = document.getElementById('auth_button');
+                        if (authBtn && authBtn.innerText.includes('연동하기')) {
+                            authBtn.innerText = `👤 ${localName}`;
+                            authBtn.style.borderColor = '#28a745';
+                            authBtn.style.color = '#28a745';
+                        }
+                    }
+                    
                     window.recalculateSchedules(); 
                 }
             };
