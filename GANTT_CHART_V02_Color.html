@@ -188,20 +188,7 @@
 </head>
 <body>
     
-    <div class="controls" id="drop-zone">
-        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;">
-            <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="margin-bottom:0;" />
-            <button id="auth_button" class="action-btn" onclick="handleAuthClick()" style="border-color: #4285F4; color: #4285F4; height: 32px;">🔵 구글 드라이브 연동하기</button>
-            
-            <button class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
-            
-            <button id="drive_save_btn" class="action-btn drive-save-style" onclick="saveToGoogleDrive()" style="height: 32px;" disabled>💾 드라이브에 저장</button>
-            <button id="drive_load_btn" class="action-btn drive-load-style" onclick="loadFromGoogleDrive()" style="height: 32px;" disabled>📂 드라이브에서 불러오기</button>
-        </div>
-        <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
-        <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
-        <div id="dynamic-filters"></div>
-    </div>
+<div class="controls" id="drop-zone">
 
     <div id="table-info">
         <span id="table-info-text">📊 Gantt Chart</span>
@@ -1980,6 +1967,120 @@
     // 마우스 이동, 키보드 입력, 클릭, 휠 스크롤 등 사용자의 액션이 감지되면 타이머를 0으로 초기화
     ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
     resetInactivityTimer(); // 스크립트 로드 시 최초 타이머 시작
+</script>
+
+<script>
+    // =========================================================
+    // 🎛️ 필터 UI 개선: '전체(All)' 버튼 제거 및 라벨 클릭 기능 통합
+    // =========================================================
+    
+    // 라벨이 버튼처럼 보이도록 CSS 스타일 동적 주입
+    document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        .filter-label { cursor: pointer; transition: 0.2s; user-select: none; border: 1px solid transparent; }
+        .filter-label:hover { filter: brightness(0.92); }
+        .filter-label.active { background-color: #007bff !important; color: white !important; box-shadow: 0 0 5px rgba(0,123,255,0.4); border-color: #007bff; }
+    </style>
+    `);
+
+    // 기존 generateFilters 함수 덮어쓰기
+    window.generateFilters = function(data) {
+        let savedFilters = {};
+        for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
+
+        const filterContainer = document.getElementById('dynamic-filters'); filterContainer.innerHTML = ''; currentFilters = {}; 
+        existingDevStages = []; let assigneeModelsAll = {}; let assigneeModelsActive = {};
+
+        for(let i = 1; i < data.length; i++) {
+            if (!data[i] || data[i].join('').trim() === '') continue;
+            let assignee = colIdx.assignee !== -1 ? data[i][colIdx.assignee] : "";
+            let status = colIdx.status !== -1 && data[i][colIdx.status] ? data[i][colIdx.status].toString().toLowerCase() : "";
+            let model = colIdx.model !== -1 ? data[i][colIdx.model] : "";
+            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : "";
+            
+            if (devStage !== undefined && devStage !== null) {
+                let s = devStage.toString().trim(); if (s !== '' && !existingDevStages.includes(s)) existingDevStages.push(s);
+            }
+            if (assignee !== undefined && assignee !== null && assignee.toString().trim() !== '') {
+                let strAssignee = assignee.toString().trim();
+                if (!assigneeModelsAll[strAssignee]) assigneeModelsAll[strAssignee] = new Set();
+                if (!assigneeModelsActive[strAssignee]) assigneeModelsActive[strAssignee] = new Set();
+                if (model !== undefined && model !== null && model.toString().trim() !== '') {
+                    let strModel = model.toString().trim(); assigneeModelsAll[strAssignee].add(strModel);
+                    let isDone = status.includes('complete') || status.includes('완료') || status.includes('cancel') || status.includes('취소') || status.includes('drop') || status.includes('드랍');
+                    if (!isDone) { assigneeModelsActive[strAssignee].add(strModel); }
+                }
+            }
+        }
+
+        filterColumns.forEach(col => {
+            let uniqueValues = new Set();
+            for(let i = 1; i < data.length; i++) {
+                if (!data[i] || data[i].join('').trim() === '') continue; 
+                let val = data[i][col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { uniqueValues.add(val.toString().trim()); }
+            }
+            let valuesArray = Array.from(uniqueValues);
+            if (col.name === '개발단계') { valuesArray = existingDevStages; } else { valuesArray.sort(); }
+
+            currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
+            let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
+            
+            // 💡 라벨 생성 (이 라벨이 '전체' 버튼의 역할을 수행합니다)
+            let label = document.createElement('div'); 
+            label.className = 'filter-label'; 
+            label.textContent = col.name; 
+            if (currentFilters[col.index].has('All')) label.classList.add('active'); // 전체 선택 상태면 파란색
+            label.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); 
+            groupDiv.appendChild(label);
+
+            // '전체 (All)' 버튼 생성 로직 삭제됨
+
+            valuesArray.forEach(val => {
+                let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
+                if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
+                if (col.name === '담당자') {
+                    let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
+                    btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
+                } else { btn.textContent = val; }
+                btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
+            });
+            filterContainer.appendChild(groupDiv);
+        });
+    };
+
+    // 기존 updateFilter 함수 덮어쓰기 (라벨 클릭 연동)
+    window.updateFilter = function(event, colIndex, value, groupDiv) {
+        const btn = event.currentTarget; 
+        const filterSet = currentFilters[colIndex]; 
+        const labelAsAllBtn = groupDiv.querySelector('.filter-label'); // 그룹 내의 라벨 요소 찾기
+
+        if (value === 'All') { 
+            // 라벨을 클릭했을 때 (전체 선택)
+            filterSet.clear(); filterSet.add('All'); 
+            const btns = groupDiv.querySelectorAll('.btn'); 
+            btns.forEach(b => b.classList.remove('active')); // 다른 모든 버튼 비활성화
+            labelAsAllBtn.classList.add('active'); // 라벨 활성화 (파란색)
+        } else {
+            // 개별 버튼을 클릭했을 때
+            if (filterSet.has('All')) { 
+                filterSet.delete('All'); 
+                labelAsAllBtn.classList.remove('active'); // 라벨 비활성화 (회색)
+            }
+            if (filterSet.has(value)) { 
+                filterSet.delete(value); 
+                btn.classList.remove('active'); 
+            } else { 
+                filterSet.add(value); 
+                btn.classList.add('active'); 
+            }
+            // 모든 선택이 해제되면 다시 전체(All) 모드로 복귀
+            if (filterSet.size === 0) { 
+                filterSet.add('All'); 
+                labelAsAllBtn.classList.add('active'); 
+            }
+        }
+        applyFilters();
+    };
 </script>
     
 </body>
