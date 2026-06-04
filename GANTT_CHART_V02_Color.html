@@ -258,20 +258,27 @@
     // =========================================================
     // 🛠️ 전역 변수 선언 (순서 꼬임 및 TDZ 에러 방지)
     // =========================================================
+
 if (window.name !== 'gantt_popup') {
     const w = screen.availWidth, h = screen.availHeight;
     const newWin = window.open(location.href, 'gantt_popup',
         `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
     if (newWin) {
         newWin.focus();
-        // 전체화면 요청
-        newWin.addEventListener('load', function() {
-            const el = newWin.document.documentElement;
-            const req = el.requestFullscreen || el.webkitRequestFullScreen || el.msRequestFullscreen;
-            if (req) req.call(el);
-        });
         window.close();
     }
+}
+
+// 현재 창이 팝업이면 자동 전체화면 시도
+if (window.name === 'gantt_popup') {
+    window.addEventListener('click', function tryFullScreen() {
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullScreen || el.msRequestFullscreen;
+        if (req && !document.fullscreenElement) {
+            req.call(el);
+            window.removeEventListener('click', tryFullScreen);
+        }
+    }, { once: false });
 }
 
     var globalData = []; 
@@ -1908,6 +1915,7 @@ window.handleAuthClick = function() {
     let durationDays = countWorkingDays(tsStart, tsEnd);
     
     // 교체 - 막대 앞뒤 날짜 추가 10/28 → [========검은막대========] ← 12/18
+    
     let barStartLabel = tsStart ? formatTableDate(tsStart) + " →" : "";
     let barEndLabel = tsEnd ? "← " + formatTableDate(tsEnd) : "";
     
@@ -1916,8 +1924,8 @@ window.handleAuthClick = function() {
                 <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
                     <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);">
-                        <span style="position:absolute; left:2px; top:50%; transform:translateY(-50%); font-size:7px; color:#fff; white-space:nowrap; z-index:3; line-height:1;">${barStartLabel}</span>
-                        <span style="position:absolute; right:2px; top:50%; transform:translateY(-50%); font-size:7px; color:#fff; white-space:nowrap; z-index:3; line-height:1;">${barEndLabel}</span>
+                        <span style="position:absolute; right:100%; top:50%; transform:translateY(-50%); font-size:7px; color:#000; white-space:nowrap; z-index:3; line-height:1; padding-right:2px;">${barStartLabel}</span>
+                        <span style="position:absolute; left:100%; top:50%; transform:translateY(-50%); font-size:7px; color:#000; white-space:nowrap; z-index:3; line-height:1; padding-left:2px;">${barEndLabel}</span>
                     </div>
                 </div>
             </div>`;
