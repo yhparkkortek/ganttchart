@@ -1867,7 +1867,10 @@ window.handleAuthClick = function() {
     let durationDays = countWorkingDays(tsStart, tsEnd);
     
     // 💡 수정됨: 모바일 빗금 버그 방지를 위해 가로폭을 명시적으로 고정 (width: 100px)
-    return `<div style="display:flex; flex-direction:column; width:100px !important; min-width:100px !important;" title="소요일수: ${durationDays}일">
+    // return `<div style="display:flex; flex-direction:column; width:100px !important; min-width:100px !important;" title="소요일수: ${durationDays}일">
+    // createStatusChart 함수 내부 return 부분을 이렇게 수정되어 있는지 확인하세요
+    return `<div style="display:flex; flex-direction:column; width:100% !important; min-width:120px !important;">...</div>`;
+
                 <div class="chart-axis-wrapper" style="position:relative; height:12px;">${labelHTML}</div>
                 <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
@@ -2403,18 +2406,31 @@ window.handleAuthClick = function() {
 </script>
 
 <style>
+    /* 1. PC 및 공통 스타일 (기존 유지) */
+    .chart-td {
+        width: 15% !important; /* 고정값이 아닌 %로 설정해야 표와 같이 늘어납니다 */
+        min-width: 150px !important;
+        max-width: 200px !important;
+    }
+
     @media screen and (max-width: 768px) {
-        /* 현황 열 빗금 잘림 완벽 방지 */
-        .chart-td {
-            width: 100px !important; 
-            max-width: 100px !important;
-            overflow: hidden !important;
+        /* 2. 모바일에서 테이블이 화면을 뚫고 나가지 않게 */
+        #table-container {
+            width: 100vw !important;
+            overflow-x: auto !important;
+            background: #ffffff !important;
         }
         
-        /* 폰트 4px 강제 적용 */
-        .chart-label, .date-clickable {
+        table#myTable {
+            table-layout: auto !important; /* fixed를 auto로 변경하여 내용에 따라 늘어나게 함 */
+            width: 100% !important;        /* 100%로 설정하여 화면에 맞춤 */
+        }
+
+        /* 3. 차트 내부 축소 (글자가 겹치지 않게) */
+        .chart-label {
             font-size: 8px !important;
-            transform: scale(0.5) !important;
+            transform: scale(0.7) !important;
+            transform-origin: left center !important;
         }
     }
 </style>
