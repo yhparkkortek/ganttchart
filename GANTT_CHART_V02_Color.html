@@ -856,14 +856,84 @@ if (window.name !== 'gantt_popup') {
         document.getElementById('history-overlay').style.display = 'none';
     };
 
-    window.toggleRowActions = function(td) {
-        document.querySelectorAll('.row-actions.show').forEach(el => {
-            if(el !== td.querySelector('.row-actions')) el.classList.remove('show');
+    window.toggleRowActions = function(td, rowIndex) {
+    let popup = document.getElementById('row-action-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'row-action-popup';
+        popup.className = 'row-action-popup';
+        popup.innerHTML = `
+            <div style="display:grid; grid-template-columns:repeat(3,28px); grid-template-rows:repeat(4,28px); gap:3px; align-items:center; justify-items:center;">
+                <!-- 위로 -->
+                <div></div>
+                <span id="rap-up" class="row-action-btn" style="border-color:#0056b3;color:#0056b3;" title="위로 이동">▲</span>
+                <div></div>
+                <!-- 좌우 -->
+                <span id="rap-left" class="row-action-btn" style="border-color:#333;color:#333;" title="WBS 레벨 올리기">◀</span>
+                <div style="width:28px;height:28px;"></div>
+                <span id="rap-right" class="row-action-btn" style="border-color:#333;color:#333;" title="WBS 레벨 내리기">▶</span>
+                <!-- 아래 -->
+                <div></div>
+                <span id="rap-dn" class="row-action-btn" style="border-color:#0056b3;color:#0056b3;" title="아래로 이동">▼</span>
+                <div></div>
+                <!-- +/- -->
+                <div></div>
+                <div style="display:flex; gap:3px;">
+                    <span id="rap-add" class="row-action-btn" style="border-color:#28a745;color:#28a745;" title="행 추가">➕</span>
+                    <span id="rap-del" class="row-action-btn" style="border-color:#e03131;color:#e03131;" title="행 삭제">➖</span>
+                </div>
+                <div></div>
+            </div>`;
+        document.body.appendChild(popup);
+
+        // 외부 클릭 시 닫기
+        document.addEventListener('click', function(e) {
+            if (!popup.contains(e.target) && !e.target.closest('.no-td')) {
+                popup.style.display = 'none';
+            }
         });
-        let actions = td.querySelector('.row-actions');
-        if (actions) actions.classList.toggle('show');
-        if (window.getSelection) window.getSelection().removeAllRanges();
+    }
+
+    // 현재 팝업이 같은 행이면 닫기
+    if (popup.style.display === 'block' && popup.dataset.rowIndex === String(rowIndex)) {
+        popup.style.display = 'none';
+        return;
+    }
+
+    popup.dataset.rowIndex = rowIndex;
+
+    // 버튼 이벤트 재등록
+    let actions = {
+        'rap-up':    () => { popup.style.display='none'; window.moveRow(rowIndex, -1); },
+        'rap-dn':    () => { popup.style.display='none'; window.moveRow(rowIndex, +1); },
+        'rap-left':  () => { popup.style.display='none'; window.changeRowLevel(rowIndex, -1); },
+        'rap-right': () => { popup.style.display='none'; window.changeRowLevel(rowIndex, +1); },
+        'rap-add':   () => { popup.style.display='none'; window.addRow(rowIndex); },
+        'rap-del':   () => { popup.style.display='none'; window.deleteRow(rowIndex); },
     };
+    Object.entries(actions).forEach(([id, fn]) => {
+        let btn = document.getElementById(id);
+        let newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        document.getElementById(id).addEventListener('click', fn);
+    });
+
+    // 팝업 위치 (달력처럼 No 셀 옆에)
+    let rect = td.getBoundingClientRect();
+    popup.style.display = 'block';
+    let popupW = popup.offsetWidth;
+    let popupH = popup.offsetHeight;
+    let top = rect.top + window.scrollY;
+    let left = rect.right + window.scrollX + 5;
+
+    // 화면 밖으로 나가면 왼쪽에 표시
+    if (left + popupW > window.innerWidth) left = rect.left + window.scrollX - popupW - 5;
+    // 아래로 넘치면 위로 올림
+    if (top + popupH > window.innerHeight + window.scrollY) top = rect.bottom + window.scrollY - popupH;
+
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+};
 
     window.addRow = function(index) {
         if (index <= 0) { alert("최상단 행에는 추가할 수 없습니다."); return; }
@@ -1318,25 +1388,13 @@ if (window.name !== 'gantt_popup') {
                 let tdStyle = ""; let tdHtml = '';
                 
                 if (cellIndex === colIdx.no) { 
-                    tdAttrs += ` class="no-td" ondblclick="toggleRowActions(this); event.stopPropagation();" title="더블클릭하여 추가/삭제/이동 메뉴 열기"`; 
-                    tdHtml = `
-                    <div style="display:flex; flex-direction:column; align-items:center;">
-                        <span class="row-num-span"></span>
-                        <div class="row-actions" style="flex-direction:column; gap:2px;">
-                            <div style="display:flex; gap:2px; justify-content:center;">
-                                <span class="row-action-btn lvl-up" onclick="changeRowLevel(${i}, -1); event.stopPropagation();" title="WBS 레벨 올리기 (상위 레벨)">◀</span>
-                                <span class="row-action-btn lvl-dn" onclick="changeRowLevel(${i}, +1); event.stopPropagation();" title="WBS 레벨 내리기 (하위 레벨)">▶</span>
-                            </div>
-                            <div style="display:flex; gap:2px; justify-content:center;">
-                                <span class="row-action-btn" onclick="showMovePopup(${i}); event.stopPropagation();" title="행 이동" style="border-color:#0056b3; color:#0056b3; width:34px;">↕</span>
-                            </div>
-                            <div style="display:flex; gap:2px; justify-content:center;">
-                                <span class="row-action-btn add" onclick="addRow(${i}); event.stopPropagation();" title="아래에 빈 행 추가">➕</span>
-                                <span class="row-action-btn del" onclick="deleteRow(${i}); event.stopPropagation();" title="이 행 삭제">➖</span>
-                            </div>
-                        </div>
-                    </div>`;
-                }
+                    if (cellIndex === colIdx.no) { 
+                        tdAttrs += ` class="no-td" onclick="toggleRowActions(this, ${i}); event.stopPropagation();" title="클릭하여 메뉴 열기"`;
+                        tdHtml = `
+                            <div style="display:flex; flex-direction:column; align-items:center;">
+                                <span class="row-num-span"></span>
+                            </div>`;
+                    }
                 else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                 } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
@@ -2515,6 +2573,17 @@ window.handleAuthClick = function() {
             letter-spacing: -0.3px;
             font-weight: normal;
         }
+    }
+    /* 행 액션 팝업 */
+    .row-action-popup {
+        position: fixed;
+        z-index: 9999;
+        background: #fff;
+        border: 1px solid #ced4da;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        border-radius: 8px;
+        padding: 8px;
+        display: none;
     }
 </style>
     
