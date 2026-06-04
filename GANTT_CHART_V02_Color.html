@@ -1004,6 +1004,60 @@ if (window.name !== 'gantt_popup') {
         logChange(index, -1, `행 이동`, `${direction > 0 ? '아래' : '위'}로 이동`);
         window.recalculateSchedules();
     };
+
+    window.showMovePopup = function(index) {
+    let modal = document.getElementById('move-row-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'move-row-modal';
+        modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+        modal.innerHTML = `
+            <div style="background:#fff;border-radius:10px;padding:28px 32px;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
+                <div style="font-size:18px;margin-bottom:16px;font-weight:bold;">↕️ 행 이동</div>
+                <div id="move-row-msg" style="font-size:13px;color:#495057;margin-bottom:20px;"></div>
+                <div style="display:flex;gap:12px;justify-content:center;">
+                    <button id="move-row-up" style="padding:9px 24px;background:#0056b3;color:#fff;border:none;border-radius:7px;font-size:16px;font-weight:700;cursor:pointer;">▲ 위로</button>
+                    <button id="move-row-dn" style="padding:9px 24px;background:#0056b3;color:#fff;border:none;border-radius:7px;font-size:16px;font-weight:700;cursor:pointer;">▼ 아래로</button>
+                    <button id="move-row-cancel" style="padding:9px 24px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:14px;cursor:pointer;">✖ 닫기</button>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+    }
+
+    let tr = document.querySelector(`tr[data-row-index="${index}"]`);
+    let rowName = index;
+    if (tr) {
+        let span = tr.querySelector('.row-num-span');
+        if (span && span.textContent) rowName = span.textContent.trim();
+    }
+
+    document.getElementById('move-row-msg').textContent = `${rowName}번 행을 이동할 방향을 선택하세요.`;
+    modal.style.display = 'flex';
+
+    // 버튼 이벤트 재등록 (클론으로 중복 방지)
+    ['move-row-up', 'move-row-dn', 'move-row-cancel'].forEach(id => {
+        let btn = document.getElementById(id);
+        let newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+    });
+
+    document.getElementById('move-row-up').addEventListener('click', function() {
+        modal.style.display = 'none';
+        window.moveRow(index, -1);
+    });
+    document.getElementById('move-row-dn').addEventListener('click', function() {
+        modal.style.display = 'none';
+        window.moveRow(index, +1);
+    });
+    document.getElementById('move-row-cancel').addEventListener('click', function() {
+        modal.style.display = 'none';
+    });
+
+    // 배경 클릭 시 닫기
+    modal.onclick = function(e) {
+        if (e.target === modal) modal.style.display = 'none';
+    };
+};
     
     window.currentCalendarTarget = null; window.currentCalendarTs = null; window.currentViewYear = null; window.currentViewMonth = null; window.currentCalendarRow = null; window.currentCalendarCol = null;
 
@@ -1274,8 +1328,7 @@ if (window.name !== 'gantt_popup') {
                                 <span class="row-action-btn lvl-dn" onclick="changeRowLevel(${i}, +1); event.stopPropagation();" title="WBS 레벨 내리기 (하위 레벨)">▶</span>
                             </div>
                             <div style="display:flex; gap:2px; justify-content:center;">
-                                <span class="row-action-btn" onclick="moveRow(${i}, -1); event.stopPropagation();" title="위로 이동" style="border-color:#0056b3; color:#0056b3;">▲</span>
-                                <span class="row-action-btn" onclick="moveRow(${i}, +1); event.stopPropagation();" title="아래로 이동" style="border-color:#0056b3; color:#0056b3;">▼</span>
+                                <span class="row-action-btn" onclick="showMovePopup(${i}); event.stopPropagation();" title="행 이동" style="border-color:#0056b3; color:#0056b3; width:34px;">↕</span>
                             </div>
                             <div style="display:flex; gap:2px; justify-content:center;">
                                 <span class="row-action-btn add" onclick="addRow(${i}); event.stopPropagation();" title="아래에 빈 행 추가">➕</span>
