@@ -1913,13 +1913,12 @@ window.handleAuthClick = function() {
     
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px;" title="소요일수: ${durationDays}일">
                 <div class="chart-axis-wrapper" style="position:relative; height:12px;">${labelHTML}</div>
-                <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
-                    <span style="font-size:8px; color:#495057; white-space:nowrap; min-width:28px; text-align:right;">${barStartLabel}</span>
-                    <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; flex:1;">
-                        ${gridLines}${todayLine}
-                        <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
+                    ${gridLines}${todayLine}
+                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);">
+                        <span style="position:absolute; left:2px; top:50%; transform:translateY(-50%); font-size:7px; color:#fff; white-space:nowrap; z-index:3; line-height:1;">${barStartLabel}</span>
+                        <span style="position:absolute; right:2px; top:50%; transform:translateY(-50%); font-size:7px; color:#fff; white-space:nowrap; z-index:3; line-height:1;">${barEndLabel}</span>
                     </div>
-                    <span style="font-size:8px; color:#495057; white-space:nowrap; min-width:28px; text-align:left;">${barEndLabel}</span>
                 </div>
             </div>`;
     };
