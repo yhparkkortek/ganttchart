@@ -1379,19 +1379,16 @@ if (window.name !== 'gantt_popup') {
 
                 let tdStyle = ""; let tdHtml = '';
                 
-                // 교체 (정상 구조)
                 if (cellIndex === colIdx.no) { 
                     tdAttrs += ` class="no-td" onclick="toggleRowActions(this, ${i}); event.stopPropagation();" title="클릭하여 메뉴 열기"`;
                     tdHtml = `
                         <div style="display:flex; flex-direction:column; align-items:center;">
                             <span class="row-num-span"></span>
                         </div>`;
-                }
-                  else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
+                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                 } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
                     tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
-                }
                 } else {
                     tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
                 }
@@ -2561,7 +2558,7 @@ window.handleAuthClick = function() {
 
 <style>
     /* PC 기본 스타일 */
-    .date-clickable { font-size: 13px !important; font-weight: bold; }
+    .date-clickable { font-size: 13px !important; }
     .chart-label { font-size: 9px !important; font-weight: bold; }
 
     /* 모바일 전용 (768px 이하) */
