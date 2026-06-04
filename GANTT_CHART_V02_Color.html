@@ -2408,32 +2408,17 @@ window.handleAuthClick = function() {
 </script>
 
 <style>
-    /* 1. PC 기본 스타일 (영향받지 않도록 기본값 유지) */
-   
+    /* PC 기본 스타일 */
     .date-clickable { font-size: 13px !important; font-weight: bold; }
-    
+    .chart-label { font-size: 9px !important; font-weight: bold; }
+
+    /* 모바일 전용 (768px 이하) */
     @media screen and (max-width: 768px) {
         .date-clickable {
-            font-size: 9px !important;
+            font-size: 6.5px !important;
             transform: none !important;
-            letter-spacing: -0.5px;
-        }
-    .chart-label { font-size: 9px !important; }
-
-    /* 2. 모바일 전용 스타일 (768px 이하 기기에서만 작동) */
-    @media screen and (max-width: 768px) {
-        /* 날짜 폰트 축소 */
-        .date-clickable {
-            font-size: 8px !important;
-            transform: scale(0.8) !important;
-            transform-origin: left center !important;
-        }
-
-        /* 현황 그래프 위 날짜 축소 */
-        .chart-label {
-            font-size: 6px !important;
-            transform: scale(0.9) !important;
-            transform-origin: left center !important;
+            letter-spacing: -0.3px;
+            font-weight: normal;
         }
     }
 </style>
