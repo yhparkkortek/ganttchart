@@ -1390,7 +1390,8 @@ if (window.name !== 'gantt_popup') {
                   else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                 } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
-                    tdStyle = "text-align: center; white-space: nowrap;"; 
+                    tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
+                }
                 } else {
                     tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
                 }
