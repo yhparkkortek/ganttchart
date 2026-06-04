@@ -863,17 +863,17 @@ if (window.name !== 'gantt_popup') {
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-            <div style="display:grid; grid-template-columns:repeat(3,32px); grid-template-rows:repeat(2,32px); gap:4px; align-items:center; justify-items:center;">
+            <div style="display:grid; grid-template-columns:repeat(3,16px); grid-template-rows:repeat(2,16px); gap:3px; align-items:center; justify-items:center;">
                 
                 <!-- 1행: ▲ / ◀ / ▶ -->
-                <span id="rap-up" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:6px;background:#fff;color:#0056b3;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="위로 이동">▲</span>
-                <span id="rap-left" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:6px;background:#fff;color:#555;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 올리기">◀</span>
-                <span id="rap-right" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:6px;background:#fff;color:#555;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 내리기">▶</span>
+                <span id="rap-up" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:3px;background:#fff;color:#0056b3;font-size:9px;font-weight:bold;box-shadow:0 1px 2px rgba(0,0,0,0.15);" title="위로 이동">▲</span>
+                <span id="rap-left" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:3px;background:#fff;color:#555;font-size:9px;font-weight:bold;box-shadow:0 1px 2px rgba(0,0,0,0.15);" title="WBS 레벨 올리기">◀</span>
+                <span id="rap-right" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:3px;background:#fff;color:#555;font-size:9px;font-weight:bold;box-shadow:0 1px 2px rgba(0,0,0,0.15);" title="WBS 레벨 내리기">▶</span>
         
                 <!-- 2행: ▼ / + / - -->
-                <span id="rap-dn" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:6px;background:#fff;color:#0056b3;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="아래로 이동">▼</span>
-                <span id="rap-add" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #28a745;border-radius:6px;background:#fff;color:#28a745;font-size:18px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 추가">+</span>
-                <span id="rap-del" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #e03131;border-radius:6px;background:#fff;color:#e03131;font-size:18px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 삭제">-</span>
+                <span id="rap-dn" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:3px;background:#fff;color:#0056b3;font-size:9px;font-weight:bold;box-shadow:0 1px 2px rgba(0,0,0,0.15);" title="아래로 이동">▼</span>
+                <span id="rap-add" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #28a745;border-radius:3px;background:#fff;color:#28a745;font-size:11px;font-weight:bold;box-shadow:0 1px 2px rgba(0,0,0,0.15);" title="행 추가">+</span>
+                <span id="rap-del" style="width:16px;height:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #e03131;border-radius:3px;background:#fff;color:#e03131;font-size:11px;font-weight:bold;box-shadow:0 1px 2px rgba(0,0,0,0.15);" title="행 삭제">-</span>
         
             </div>`;
         document.body.appendChild(popup);
