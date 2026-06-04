@@ -1387,15 +1387,15 @@ if (window.name !== 'gantt_popup') {
 
                 let tdStyle = ""; let tdHtml = '';
                 
+                // 교체 (정상 구조)
                 if (cellIndex === colIdx.no) { 
-                    if (cellIndex === colIdx.no) { 
-                        tdAttrs += ` class="no-td" onclick="toggleRowActions(this, ${i}); event.stopPropagation();" title="클릭하여 메뉴 열기"`;
-                        tdHtml = `
-                            <div style="display:flex; flex-direction:column; align-items:center;">
-                                <span class="row-num-span"></span>
-                            </div>`;
-                    }
-                else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
+                    tdAttrs += ` class="no-td" onclick="toggleRowActions(this, ${i}); event.stopPropagation();" title="클릭하여 메뉴 열기"`;
+                    tdHtml = `
+                        <div style="display:flex; flex-direction:column; align-items:center;">
+                            <span class="row-num-span"></span>
+                        </div>`;
+                }
+                  else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                 } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
                     tdStyle = "text-align: center; white-space: nowrap;"; 
@@ -1807,9 +1807,11 @@ if (window.name !== 'gantt_popup') {
         }, 60000);
     }
     ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
-    resetInactivityTimer();
-    
+      resetInactivityTimer();
+</script>
+
 <script>
+    // 3. 구글 드라이브 연동 최적화
     // =========================================================
     // 3. 구글 드라이브 연동 최적화 (F5 캐시 꼬임 원천 차단 및 UI 안내)
     // =========================================================
@@ -2458,7 +2460,9 @@ window.handleAuthClick = function() {
                     
                     // 액션 실행 (No 셀이면 행 추가/삭제 메뉴, 일반 셀이면 텍스트 수정)
                     if (targetTd.classList.contains('no-td')) {
-                        window.toggleRowActions(targetTd);
+                        let tr = targetTd.closest('tr');
+                        let rowIndex = tr ? parseInt(tr.dataset.rowIndex, 10) : -1;
+                        if (rowIndex !== -1) window.toggleRowActions(targetTd, rowIndex);
                     } else {
                         window.makeEditable(targetTd);
                     }
@@ -2523,7 +2527,9 @@ window.handleAuthClick = function() {
                     if (navigator.vibrate) navigator.vibrate(50); // 진동 피드백 (안드로이드)
                     
                     if (targetTd.classList.contains('no-td')) {
-                        window.toggleRowActions(targetTd);
+                        let tr = targetTd.closest('tr');
+                        let rowIndex = tr ? parseInt(tr.dataset.rowIndex, 10) : -1;
+                        if (rowIndex !== -1) window.toggleRowActions(targetTd, rowIndex);
                     } else {
                         window.makeEditable(targetTd);
                         // 커서 맨 뒤로 보내고 강제 포커스
