@@ -1773,14 +1773,13 @@
 
 <script>
     // =========================================================
-    // 🎨 테마 색상 동적 반영 & 차트 막대(검은색 그라디에이션 고정)
+    // 🎨 테마 색상 동적 반영 & 차트 막대(단색 검은색 고정)
     // =========================================================
     const existingStyle = document.getElementById('wbs-gradient-style');
     if (existingStyle) existingStyle.remove();
 
     document.head.insertAdjacentHTML('beforeend', `
     <style id="wbs-gradient-style">
-        /* 각 열(td)이 아닌, 행(tr) 전체 박스에만 그라디에이션을 적용 */
         table#myTable tr.parent-row { background-image: var(--grad-0) !important; }
         table#myTable tr.sub-parent-row { background-image: var(--grad-1) !important; }
         table#myTable tr.sub-parent-row-2 { background-image: var(--grad-2) !important; }
@@ -1816,7 +1815,7 @@
         let darkTextL = Math.min(l, 40); 
         let root = document.documentElement;
 
-        // 1. 기존 고정 배경색 투명화 (tr 그라디에이션이 보이도록)
+        // 1. 기존 고정 배경색 투명화
         root.style.setProperty('--c-l0-bg', 'transparent');
         root.style.setProperty('--c-l1-bg', 'transparent');
         root.style.setProperty('--c-l2-bg', 'transparent');
@@ -1836,18 +1835,35 @@
         root.style.setProperty('--c-l4-border', `#e9ecef`);
         root.style.setProperty('--c-l4-text', `#495057`);
 
-        // 3. 0~4레벨 행(tr) 전체 그라디에이션 (테마 색상 연동 - 시간 방향인 좌우 90deg 유지)
-        root.style.setProperty('--grad-0', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.max(0, l - 5)}%), hsl(${h}, ${s}%, ${l}%))`);
-        root.style.setProperty('--grad-1', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(85, l + 15)}%), hsl(${h}, ${s}%, ${Math.min(90, l + 20)}%))`);
-        root.style.setProperty('--grad-2', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(92, l + 25)}%), hsl(${h}, ${s}%, ${Math.min(95, l + 30)}%))`);
-        root.style.setProperty('--grad-3', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(95, l + 35)}%), hsl(${h}, ${s}%, ${Math.min(97, l + 40)}%))`);
-        root.style.setProperty('--grad-4', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(97, l + 42)}%), hsl(${h}, ${s}%, 99%))`);
+        // =========================================================================
+        // 🛠️ [여기를 수정하세요 1] WBS 배경 그라디에이션 명도(밝기) 조절
+        // =========================================================================
+        // l + 숫자 (예: l + 25) 의 숫자를 키우면 색이 더 하얗게(연하게) 변합니다.
+        // 첫 번째 hsl(...)은 그라디에이션의 시작색, 두 번째 hsl(...)은 끝색입니다.
+        // 단계별 격차를 확 늘려두었습니다.
+        
+        // 레벨 0 (가장 진한 원본 테마색)
+        root.style.setProperty('--grad-0', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.max(0, l - 10)}%), hsl(${h}, ${s}%, ${l}%))`);
+        // 레벨 1 
+        root.style.setProperty('--grad-1', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(85, l + 25)}%), hsl(${h}, ${s}%, ${Math.min(90, l + 35)}%))`);
+        // 레벨 2
+        root.style.setProperty('--grad-2', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(92, l + 50)}%), hsl(${h}, ${s}%, ${Math.min(95, l + 60)}%))`);
+        // 레벨 3
+        root.style.setProperty('--grad-3', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(95, l + 70)}%), hsl(${h}, ${s}%, ${Math.min(97, l + 80)}%))`);
+        // 레벨 4 (가장 연한 흰색에 가까운 색)
+        root.style.setProperty('--grad-4', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(98, l + 85)}%), hsl(${h}, ${s}%, 99%))`);
 
-        // 4. 차트 바 색상 그라디에이션 ★ (시간 방향(90deg)을 상하(180deg) 입체감으로 변경하여 WBS 레벨 구분)
-        root.style.setProperty('--chart-l0', `linear-gradient(180deg, #4b4b4b, #000000)`);
-        root.style.setProperty('--chart-l1', `linear-gradient(180deg, #6c6c6c, #222222)`);
-        root.style.setProperty('--chart-l2', `linear-gradient(180deg, #8d8d8d, #444444)`);
-        root.style.setProperty('--chart-l3', `linear-gradient(180deg, #aaaaaa, #666666)`);
+
+        // =========================================================================
+        // 🛠️ [여기를 수정하세요 2] 차트 막대(스케줄 바) 색상 고정
+        // =========================================================================
+        // 단색을 원하시면 linear-gradient를 없애고 그냥 색상 코드(예: #000000)만 넣으시면 됩니다.
+        // 레벨별로 완전한 검은색으로 고정해 두었습니다.
+        
+        root.style.setProperty('--chart-l0', `#000000`); // 0레벨 막대 색상
+        root.style.setProperty('--chart-l1', `#000000`); // 1레벨 막대 색상
+        root.style.setProperty('--chart-l2', `#000000`); // 2레벨 막대 색상
+        root.style.setProperty('--chart-l3', `#000000`); // 3레벨 막대 색상
     };
 
     // 차트 생성 로직
@@ -1866,7 +1882,6 @@
         let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
         let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
         
-        // 고정된 검은색 계열 변수 호출 (상하 그라디에이션)
         let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : 'var(--chart-l3)'));
         let gradientStyle = `background: ${gradVar};`;
         if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
@@ -1881,7 +1896,6 @@
         return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class="chart-axis-wrapper">${labelHTML}</div><div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">${gridLines}${todayLine}<div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div></div>`;
     };
 
-    // 컬러 피커 이벤트 리스너 재등록
     setTimeout(() => {
         const picker = document.getElementById('themePicker');
         if (picker) {
