@@ -1773,12 +1773,11 @@
 
 <script>
     // =========================================================
-    // 🎨 테마 색상 동적 반영 (td 열 반복 제거, tr 행 전체 1개 그라디에이션)
+    // 🎨 테마 색상 동적 반영 & 차트 막대(검은색 그라디에이션 고정)
     // =========================================================
     const existingStyle = document.getElementById('wbs-gradient-style');
     if (existingStyle) existingStyle.remove();
 
-    // 💡 핵심 수정: 각각의 'td(열)' 칸마다 반복되던 그라디에이션을 빼고, 'tr(행)' 자체에만 단 한 번 넓게 칠합니다.
     document.head.insertAdjacentHTML('beforeend', `
     <style id="wbs-gradient-style">
         /* 각 열(td)이 아닌, 행(tr) 전체 박스에만 그라디에이션을 적용 */
@@ -1808,7 +1807,7 @@
         return { h, s, l };
     }
 
-    // 테마 색상 강제 덮어쓰기
+    // 테마 색상 동적 덮어쓰기
     window.updateThemeColor = function(baseHex) {
         let hsl = hexToHSL(baseHex);
         let h = hsl.h, s = hsl.s, l = hsl.l;
@@ -1817,7 +1816,7 @@
         let darkTextL = Math.min(l, 40); 
         let root = document.documentElement;
 
-        // 1. 기존 td(열)들이 가지고 있던 고정 배경색을 '투명(transparent)'하게 날려서, 밑에 깔린 tr의 그라디에이션이 비치게 만듭니다.
+        // 1. 기존 고정 배경색 투명화 (tr 그라디에이션이 보이도록)
         root.style.setProperty('--c-l0-bg', 'transparent');
         root.style.setProperty('--c-l1-bg', 'transparent');
         root.style.setProperty('--c-l2-bg', 'transparent');
@@ -1837,21 +1836,21 @@
         root.style.setProperty('--c-l4-border', `#e9ecef`);
         root.style.setProperty('--c-l4-text', `#495057`);
 
-        // 3. 0~4레벨 행(tr) 전체 그라디에이션
+        // 3. 0~4레벨 행(tr) 전체 그라디에이션 (테마 색상 연동)
         root.style.setProperty('--grad-0', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.max(0, l - 5)}%), hsl(${h}, ${s}%, ${l}%))`);
         root.style.setProperty('--grad-1', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(85, l + 15)}%), hsl(${h}, ${s}%, ${Math.min(90, l + 20)}%))`);
         root.style.setProperty('--grad-2', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(92, l + 25)}%), hsl(${h}, ${s}%, ${Math.min(95, l + 30)}%))`);
         root.style.setProperty('--grad-3', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(95, l + 35)}%), hsl(${h}, ${s}%, ${Math.min(97, l + 40)}%))`);
         root.style.setProperty('--grad-4', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(97, l + 42)}%), hsl(${h}, ${s}%, 99%))`);
 
-        // 4. 차트 바 색상 그라디에이션
-        root.style.setProperty('--chart-l0', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(100, l + 15)}%), hsl(${h}, ${s}%, ${Math.max(0, l - 5)}%))`);
-        root.style.setProperty('--chart-l1', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(100, l + 25)}%), hsl(${h}, ${s}%, ${Math.min(100, l + 5)}%))`);
-        root.style.setProperty('--chart-l2', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(100, l + 35)}%), hsl(${h}, ${s}%, ${Math.min(100, l + 15)}%))`);
-        root.style.setProperty('--chart-l3', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(100, l + 45)}%), hsl(${h}, ${s}%, ${Math.min(100, l + 25)}%))`);
+        // 4. 차트 바 색상 그라디에이션 ★ (테마와 무관하게 검은색~회색 톤으로 강제 고정)
+        root.style.setProperty('--chart-l0', `linear-gradient(90deg, #4b4b4b, #000000)`);
+        root.style.setProperty('--chart-l1', `linear-gradient(90deg, #6c6c6c, #222222)`);
+        root.style.setProperty('--chart-l2', `linear-gradient(90deg, #8d8d8d, #444444)`);
+        root.style.setProperty('--chart-l3', `linear-gradient(90deg, #aaaaaa, #666666)`);
     };
 
-    // 차트 생성 로직 (CSS 변수 --chart-lX 연동)
+    // 차트 생성 로직
     window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level) {
         let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
         let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
@@ -1867,6 +1866,7 @@
         let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
         let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
         
+        // 고정된 검은색 계열 변수 호출
         let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : 'var(--chart-l3)'));
         let gradientStyle = `background: ${gradVar};`;
         if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
