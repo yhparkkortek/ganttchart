@@ -2404,30 +2404,23 @@ window.handleAuthClick = function() {
 </script>
 
 <style>
-    /* 1. PC 및 공통 스타일 (기존 유지) */
-    .chart-td {
-        width: 15% !important; /* 고정값이 아닌 %로 설정해야 표와 같이 늘어납니다 */
-        min-width: 150px !important;
-        max-width: 200px !important;
-    }
+    /* 1. PC 기본 스타일 (영향받지 않도록 기본값 유지) */
+    .date-clickable { font-size: 13px !important; }
+    .chart-label { font-size: 9px !important; }
 
+    /* 2. 모바일 전용 스타일 (768px 이하 기기에서만 작동) */
     @media screen and (max-width: 768px) {
-        /* 2. 모바일에서 테이블이 화면을 뚫고 나가지 않게 */
-        #table-container {
-            width: 100vw !important;
-            overflow-x: auto !important;
-            background: #ffffff !important;
-        }
-        
-        table#myTable {
-            table-layout: auto !important; /* fixed를 auto로 변경하여 내용에 따라 늘어나게 함 */
-            width: 100% !important;        /* 100%로 설정하여 화면에 맞춤 */
+        /* 날짜 폰트 축소 */
+        .date-clickable {
+            font-size: 8px !important;
+            transform: scale(0.8) !important;
+            transform-origin: left center !important;
         }
 
-        /* 3. 차트 내부 축소 (글자가 겹치지 않게) */
+        /* 현황 그래프 위 날짜 축소 */
         .chart-label {
-            font-size: 8px !important;
-            transform: scale(0.7) !important;
+            font-size: 6px !important;
+            transform: scale(0.9) !important;
             transform-origin: left center !important;
         }
     }
