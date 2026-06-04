@@ -2389,34 +2389,35 @@ window.handleAuthClick = function() {
 
 <style>
     @media screen and (max-width: 768px) {
-        /* 1. 모바일 브라우저 임의 글자 확대 강제 차단 */
-        body {
-            -webkit-text-size-adjust: none !important;
+        /* 1. HTML과 BODY 전체가 배경색을 꽉 채우도록 설정 */
+        html, body {
+            width: 100% !important;
+            min-height: 100vh !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
 
-        /* 2. 테이블 내 시작/완료 날짜 폰트 크기 4px로 더 축소 */
-        .date-clickable {
-            font-size: 4px !important;
-            letter-spacing: -0.5px !important;
-        }
-
-        /* 3. 현황 그래프 상단 날짜 폰트 크기 4px로 축소 */
-        :root {
-            --chart-label-size: 4px !important;
-        }
-        .chart-label {
-            letter-spacing: -0.5px !important;
-        }
-        
-        /* 4. [버그 수정] 가로 스크롤 시 배경 테마색 끊김(짤림) 현상 완벽 해결 */
+        /* 2. 스크롤 컨테이너 설정 */
         #table-container {
+            width: 100vw !important; /* 화면 가로폭만큼 확보 */
             overflow-x: auto !important;
             -webkit-overflow-scrolling: touch;
+            background: inherit; /* 부모로부터 배경색 상속 */
         }
+
+        /* 3. 테이블 배경색 짤림 방지 핵심 */
         table#myTable {
-            /* 브라우저가 화면 폭까지만 계산하던 것을, 안 보이는 내용물 끝까지(max-content) 억지로 늘려서 배경색을 꽉 채우도록 강제함 */
-            width: max-content !important; 
+            display: table !important; /* 블록 속성 제거 */
+            width: max-content !important; /* 콘텐츠만큼 너비 확보 */
             min-width: 100% !important;
+        }
+
+        /* 4. 폰트 축소 (scale 0.5 적용) */
+        .date-clickable, .chart-label {
+            font-size: 8px !important;
+            transform: scale(0.5) !important;
+            transform-origin: left center !important;
+            display: inline-block !important;
         }
     }
 </style>
