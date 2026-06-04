@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, minimum-scale=1.0">
 <title>Gantt Chart</title>
 
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
@@ -2413,17 +2413,15 @@ window.handleAuthClick = function() {
 
 <style>
     /* PC 기본 스타일 */
-    .date-clickable { font-size: 13px !important; font-weight: bold; }
     .chart-label { font-size: 9px !important; font-weight: bold; }
 
-    /* 모바일 전용 (768px 이하) */
+    /* 모바일 레이아웃 보정 */
     @media screen and (max-width: 768px) {
-        .date-clickable {
-            font-size: 6.5px !important;
-            transform: none !important;
-            letter-spacing: -0.3px;
-            font-weight: normal;
-        }
+        body { margin: 5px !important; }
+        .controls { padding: 8px !important; }
+        #table-info { font-size: 11px !important; height: auto !important; flex-wrap: wrap; padding: 5px 8px !important; }
+        #table-info .btn-group { flex-wrap: wrap; gap: 3px; }
+        .action-btn { font-size: 10px !important; padding: 4px 6px !important; height: auto !important; }
     }
 </style>
     
