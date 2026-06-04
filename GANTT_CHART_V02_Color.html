@@ -1893,29 +1893,36 @@ window.handleAuthClick = function() {
     let labelFontSize = isMobile ? "7px" : "9px";
     let labelWeight = isMobile ? "normal" : "bold";
     
-    // 라벨 위치 커스텀: 2번(25%→33%), 4번(75%→67%)을 중심(3번 50%)쪽으로 이동
-    const labelPositions = [0, 33, 50, 67, 100];
+    // 교체 - 1,3,5번만 (양끝 + 중간)
+    const labelPositions = [0, 50, 100];
     const labelTs = labelPositions.map(pct => viewStartTs + (viewDuration * pct / 100));
     
     let labelHTML = '';
-    for (let i = 0; i <= 4; i++) {
+    for (let i = 0; i < 3; i++) {
         let pct = labelPositions[i];
         let ts = labelTs[i];
-        let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`);
+        let alignStyle = i === 0 ? "left: 0;" : (i === 2 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`);
         labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: ${labelFontSize}; font-weight: ${labelWeight};">${formatChartLabel(ts)}</span>`;
-    }    
+    }   
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
     
-    // 최종 리턴 (가로폭 유지)
+    // 교체 - 막대 앞뒤 날짜 추가
+    let barStartLabel = tsStart ? formatTableDate(tsStart) : "";
+    let barEndLabel = tsEnd ? formatTableDate(tsEnd) : "";
+    
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px;" title="소요일수: ${durationDays}일">
                 <div class="chart-axis-wrapper" style="position:relative; height:12px;">${labelHTML}</div>
-                <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
-                    ${gridLines}${todayLine}
-                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                <div style="display:flex; align-items:center; gap:3px; margin-top:2px;">
+                    <span style="font-size:8px; color:#495057; white-space:nowrap; min-width:28px; text-align:right;">${barStartLabel}</span>
+                    <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; flex:1;">
+                        ${gridLines}${todayLine}
+                        <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                    </div>
+                    <span style="font-size:8px; color:#495057; white-space:nowrap; min-width:28px; text-align:left;">${barEndLabel}</span>
                 </div>
             </div>`;
-};
+    };
 
     setTimeout(() => {
         const picker = document.getElementById('themePicker');
