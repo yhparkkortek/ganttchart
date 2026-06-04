@@ -1833,33 +1833,48 @@ window.handleAuthClick = function() {
 
     // 차트 생성 로직
     window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level) {
-        let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
-        let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
-        let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
-        
-        let tsStart = rowStartTs; let tsEnd = rowPlanTs;
-        if (!tsStart && !tsEnd) return `<div>-</div>`; if (!tsEnd) tsEnd = tsStart; if (tsEnd < tsStart) tsEnd = tsStart;
+    let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
+    let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
+    let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
+    
+    let tsStart = rowStartTs; let tsEnd = rowPlanTs;
+    if (!tsStart && !tsEnd) return `<div>-</div>`; if (!tsEnd) tsEnd = tsStart; if (tsEnd < tsStart) tsEnd = tsStart;
 
-        let viewStartTs = window.ganttViewStartTs; let viewDuration = window.ganttViewDuration;
-        if (!viewStartTs || !viewDuration) return `<div>-</div>`;
+    let viewStartTs = window.ganttViewStartTs; let viewDuration = window.ganttViewDuration;
+    if (!viewStartTs || !viewDuration) return `<div>-</div>`;
 
-        let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); 
-        let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
-        let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
-        
-        let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : 'var(--chart-l3)'));
-        let gradientStyle = `background: ${gradVar};`;
-        if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
+    let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); 
+    let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
+    let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
+    
+    let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : 'var(--chart-l3)'));
+    let gradientStyle = `background: ${gradVar};`;
+    if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
 
-        let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
-        let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
-        let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
+    let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
+    let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
+    let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
 
-        let labelHTML = ''; for (let i = 0; i <= 4; i++) { let pct = (i / 4) * 100; let ts = viewStartTs + (viewDuration * i / 4); let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5;">${formatChartLabel(ts)}</span>`; }
-        let durationDays = countWorkingDays(tsStart, tsEnd);
-        
-        return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class="chart-axis-wrapper">${labelHTML}</div><div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">${gridLines}${todayLine}<div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div></div>`;
-    };
+    // 💡 수정됨: 모바일 4px 대응을 위해 폰트 크기를 강제 축소
+    let labelHTML = ''; for (let i = 0; i <= 4; i++) { 
+        let pct = (i / 4) * 100; 
+        let ts = viewStartTs + (viewDuration * i / 4); 
+        let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); 
+        // 폰트 4px 적용 및 모바일 빗금 잘림 방지를 위해 transform scale 적용
+        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: 8px !important; transform: scale(0.5); transform-origin: center;">${formatChartLabel(ts)}</span>`; 
+    }
+    
+    let durationDays = countWorkingDays(tsStart, tsEnd);
+    
+    // 💡 수정됨: 모바일 빗금 버그 방지를 위해 가로폭을 명시적으로 고정 (width: 100px)
+    return `<div style="display:flex; flex-direction:column; width:100px !important; min-width:100px !important;" title="소요일수: ${durationDays}일">
+                <div class="chart-axis-wrapper" style="position:relative; height:12px;">${labelHTML}</div>
+                <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
+                    ${gridLines}${todayLine}
+                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                </div>
+            </div>`;
+};
 
     setTimeout(() => {
         const picker = document.getElementById('themePicker');
@@ -2389,37 +2404,17 @@ window.handleAuthClick = function() {
 
 <style>
     @media screen and (max-width: 768px) {
-        /* 1. 테이블 전체 레이아웃 고정 */
-        #table-container {
-            width: 100vw !important;
-            overflow-x: auto !important;
-            -webkit-overflow-scrolling: touch;
-        }
-
-        table#myTable {
-            table-layout: fixed !important; /* 레이아웃 꼬임 방지 */
-            width: 800px !important;        /* 표의 최소 가로폭을 강제 고정 */
-        }
-
-        /* 2. 폰트 강제 축소 (날짜 및 차트 라벨) */
-        .date-clickable, .chart-label {
-            font-size: 8px !important;
-            transform: scale(0.6) !important;
-            transform-origin: left center !important;
-            white-space: nowrap !important;
-        }
-
-        /* 3. 현황 열(그래프) 너비 최적화 */
+        /* 현황 열 빗금 잘림 완벽 방지 */
         .chart-td {
-            width: 100px !important;
-            padding: 0 !important;
+            width: 100px !important; 
+            max-width: 100px !important;
+            overflow: hidden !important;
         }
-
-        /* 4. 헤더 및 셀 여백 삭제 (글자 잘림 방지) */
-        th, td {
-            padding: 0 1px !important;
+        
+        /* 폰트 4px 강제 적용 */
+        .chart-label, .date-clickable {
             font-size: 8px !important;
-            line-height: 1 !important;
+            transform: scale(0.5) !important;
         }
     }
 </style>
