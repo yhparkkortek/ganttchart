@@ -189,6 +189,19 @@
 <body>
     
 <div class="controls" id="drop-zone">
+        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;">
+            <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="margin-bottom:0;" />
+            <!-- 연동 버튼에 말풍선(title) 추가 -->
+            <button id="auth_button" class="action-btn" onclick="handleAuthClick()" style="border-color: #4285F4; color: #4285F4; height: 32px;" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 구글 드라이브 연동하기</button>
+            <!-- 수정이력 확인 버튼 위치 이동 -->
+            <button class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
+            <button id="drive_save_btn" class="action-btn drive-save-style" onclick="saveToGoogleDrive()" style="height: 32px;" disabled>💾 드라이브에 저장</button>
+            <button id="drive_load_btn" class="action-btn drive-load-style" onclick="loadFromGoogleDrive()" style="height: 32px;" disabled>📂 드라이브에서 불러오기</button>
+        </div>
+        <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
+        <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
+        <div id="dynamic-filters"></div>
+    </div>
 
     <div id="table-info">
         <span id="table-info-text">📊 Gantt Chart</span>
@@ -1898,79 +1911,6 @@
 
 <script>
     // =========================================================
-    // ⏰ 1분 비활동 자동 저장 & 👤 로컬 사용자 이름 식별
-    // =========================================================
-
-    // 1. 드라이브 미연동 시 로컬 사용자 이름 묻기
-    window.getActiveUserName = function() {
-        if (window.currentUserName && window.currentUserName !== "비로그인 (로컬)" && window.currentUserName !== "익명 사용자") {
-            return window.currentUserName;
-        }
-        let localName = localStorage.getItem('gantt_local_user');
-        if (!localName) {
-            localName = prompt("드라이브 미연동 상태입니다.\n수정이력에 기록될 PC(또는 사용자) 이름을 입력해주세요.", "로컬 사용자");
-            if (!localName) localName = "로컬 사용자";
-            localStorage.setItem('gantt_local_user', localName);
-        }
-        return localName + " (PC)";
-    };
-
-    // 2. 수정 이력에 로컬 사용자 이름 반영되도록 기존 함수 덮어쓰기
-    window.logChange = function(rowIndex, colIndex, oldVal, newVal) {
-        if (!globalData || globalData.length === 0) return;
-        let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
-        let rowName = rowIndex; 
-        let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
-        if (tr) {
-            let noTd = tr.querySelector('.no-td');
-            if (noTd) {
-                let span = noTd.querySelector('.row-num-span');
-                if (span && span.textContent) rowName = span.textContent.trim();
-                else if (noTd.textContent) rowName = noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim() || rowIndex;
-            }
-        } else if (globalData[rowIndex]) { rowName = globalData[rowIndex][colIdx.no] || rowIndex; }
-        
-        window.changeLogs.push({ 
-            time: new Date().toLocaleString('ko-KR'), 
-            userName: window.getActiveUserName(), 
-            rowName: rowName, 
-            colName: colName, 
-            oldVal: oldVal, 
-            newVal: newVal 
-        });
-    };
-
-    const originalDeleteRow = window.deleteRow;
-    window.deleteRow = function(index) {
-        let tempUser = window.currentUserName; 
-        window.currentUserName = window.getActiveUserName(); 
-        originalDeleteRow(index); 
-        window.currentUserName = tempUser; 
-    };
-
-    // 3. 1분 비활동 시 구글 드라이브 자동 저장 기능
-    let inactivityTimer = null;
-    function resetInactivityTimer() {
-        clearTimeout(inactivityTimer);
-        inactivityTimer = setTimeout(() => {
-            // 구글 드라이브 파일 ID가 있고, 저장되지 않은 새로운 수정 이력이 존재할 때만 작동
-            let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
-            let savedLogs = window.lastSavedLogCount || 0;
-            
-            if (window.currentDriveFileId && currentLogs > savedLogs) {
-                document.getElementById('file-status').textContent = "⏳ 1분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
-                saveToGoogleDrive(); // 저장 완료 시 내부에서 lastSavedLogCount를 갱신함
-            }
-        }, 60000); // 60000ms = 1분
-    }
-
-    // 마우스 이동, 키보드 입력, 클릭, 휠 스크롤 등 사용자의 액션이 감지되면 타이머를 0으로 초기화
-    ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
-    resetInactivityTimer(); // 스크립트 로드 시 최초 타이머 시작
-</script>
-
-<script>
-    // =========================================================
     // 🎛️ 필터 UI 개선: '전체(All)' 버튼 제거 및 라벨 클릭 기능 통합
     // =========================================================
     
@@ -1983,7 +1923,16 @@
     </style>
     `);
 
-    // 기존 generateFilters 함수 덮어쓰기
+// 🎛️ 필터 라벨 버튼화 CSS 주입
+    document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        .filter-label { cursor: pointer; transition: 0.2s; user-select: none; border: 1px solid transparent; }
+        .filter-label:hover { filter: brightness(0.92); }
+        .filter-label.active { background-color: #007bff !important; color: white !important; box-shadow: 0 0 5px rgba(0,123,255,0.4); border-color: #007bff; }
+    </style>
+    `);
+
+    // 기존 generateFilters 덮어쓰기
     window.generateFilters = function(data) {
         let savedFilters = {};
         for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
@@ -2029,11 +1978,9 @@
             let label = document.createElement('div'); 
             label.className = 'filter-label'; 
             label.textContent = col.name; 
-            if (currentFilters[col.index].has('All')) label.classList.add('active'); // 전체 선택 상태면 파란색
+            if (currentFilters[col.index].has('All')) label.classList.add('active'); 
             label.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); 
             groupDiv.appendChild(label);
-
-            // '전체 (All)' 버튼 생성 로직 삭제됨
 
             valuesArray.forEach(val => {
                 let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
@@ -2048,23 +1995,21 @@
         });
     };
 
-    // 기존 updateFilter 함수 덮어쓰기 (라벨 클릭 연동)
+    // 기존 updateFilter 덮어쓰기
     window.updateFilter = function(event, colIndex, value, groupDiv) {
         const btn = event.currentTarget; 
         const filterSet = currentFilters[colIndex]; 
-        const labelAsAllBtn = groupDiv.querySelector('.filter-label'); // 그룹 내의 라벨 요소 찾기
+        const labelAsAllBtn = groupDiv.querySelector('.filter-label'); 
 
         if (value === 'All') { 
-            // 라벨을 클릭했을 때 (전체 선택)
             filterSet.clear(); filterSet.add('All'); 
             const btns = groupDiv.querySelectorAll('.btn'); 
-            btns.forEach(b => b.classList.remove('active')); // 다른 모든 버튼 비활성화
-            labelAsAllBtn.classList.add('active'); // 라벨 활성화 (파란색)
+            btns.forEach(b => b.classList.remove('active')); 
+            labelAsAllBtn.classList.add('active'); 
         } else {
-            // 개별 버튼을 클릭했을 때
             if (filterSet.has('All')) { 
                 filterSet.delete('All'); 
-                labelAsAllBtn.classList.remove('active'); // 라벨 비활성화 (회색)
+                labelAsAllBtn.classList.remove('active'); 
             }
             if (filterSet.has(value)) { 
                 filterSet.delete(value); 
@@ -2073,7 +2018,6 @@
                 filterSet.add(value); 
                 btn.classList.add('active'); 
             }
-            // 모든 선택이 해제되면 다시 전체(All) 모드로 복귀
             if (filterSet.size === 0) { 
                 filterSet.add('All'); 
                 labelAsAllBtn.classList.add('active'); 
@@ -2081,6 +2025,103 @@
         }
         applyFilters();
     };
+    
+</script>
+
+<script>
+    // =========================================================
+    // ⏰ 1분 자동 저장, 👤 로컬 사용자 식별, 🛡️ 안전장치 통합
+    // =========================================================
+
+    // 로컬 이름 묻기
+    window.getActiveUserName = function() {
+        if (window.currentUserName && window.currentUserName !== "비로그인 (로컬)" && window.currentUserName !== "익명 사용자") {
+            return window.currentUserName;
+        }
+        let localName = localStorage.getItem('gantt_local_user');
+        if (!localName) {
+            localName = prompt("드라이브 미연동 상태입니다.\n수정이력에 기록될 PC(또는 사용자) 이름을 입력해주세요.", "로컬 사용자");
+            if (!localName) localName = "로컬 사용자";
+            localStorage.setItem('gantt_local_user', localName);
+        }
+        return localName + " (PC)";
+    };
+
+    // 로그 변경 함수 가로채기 (이름 기록용)
+    const originalLogChange = window.logChange;
+    if(originalLogChange) {
+        window.logChange = function(rowIndex, colIndex, oldVal, newVal) {
+            let tempUser = window.currentUserName;
+            window.currentUserName = window.getActiveUserName();
+            originalLogChange(rowIndex, colIndex, oldVal, newVal);
+            window.currentUserName = tempUser;
+        };
+    } else {
+        window.logChange = function(rowIndex, colIndex, oldVal, newVal) {
+            if (!globalData || globalData.length === 0) return;
+            let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
+            let rowName = rowIndex; 
+            let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+            if (tr) {
+                let noTd = tr.querySelector('.no-td');
+                if (noTd) {
+                    let span = noTd.querySelector('.row-num-span');
+                    if (span && span.textContent) rowName = span.textContent.trim();
+                    else if (noTd.textContent) rowName = noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim() || rowIndex;
+                }
+            } else if (globalData[rowIndex]) { rowName = globalData[rowIndex][colIdx.no] || rowIndex; }
+            
+            window.changeLogs.push({ 
+                time: new Date().toLocaleString('ko-KR'), 
+                userName: window.getActiveUserName(), 
+                rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal 
+            });
+        };
+    }
+
+    const originalDeleteRow = window.deleteRow;
+    window.deleteRow = function(index) {
+        let tempUser = window.currentUserName; 
+        window.currentUserName = window.getActiveUserName(); 
+        originalDeleteRow(index); 
+        window.currentUserName = tempUser; 
+    };
+
+    // 1분 자동 저장 (마지막 저장 기록 대비 수정이 있을 때만 작동)
+    let inactivityTimer = null;
+    function resetInactivityTimer() {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+            let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
+            let savedLogs = window.lastSavedLogCount || 0;
+            if (window.currentDriveFileId && currentLogs > savedLogs) {
+                document.getElementById('file-status').textContent = "⏳ 1분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
+                saveToGoogleDrive(); 
+            }
+        }, 60000); 
+    }
+    ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
+    resetInactivityTimer();
+
+    // 안전장치: 뒤로가기(백스페이스) 차단
+    window.addEventListener('keydown', function(e) {
+        if (e.key === 'Backspace' || e.keyCode === 8) {
+            let activeEl = document.activeElement;
+            let isInput = activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable || activeEl.getAttribute('contenteditable') === 'true';
+            if (!isInput) e.preventDefault();
+        }
+    });
+
+    // 안전장치: 저장 안 하고 창 닫을 때 경고
+    window.addEventListener('beforeunload', function (e) {
+        let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
+        let savedLogs = window.lastSavedLogCount || 0;
+        if (currentLogs > savedLogs) {
+            e.preventDefault();
+            e.returnValue = ''; 
+            return '';
+        }
+    });
 </script>
     
 </body>
