@@ -863,26 +863,31 @@ if (window.name !== 'gantt_popup') {
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-            <div style="display:grid; grid-template-columns:repeat(3,28px); grid-template-rows:repeat(4,28px); gap:3px; align-items:center; justify-items:center;">
-                <!-- 위로 -->
+            <div style="display:grid; grid-template-columns:repeat(3,32px); grid-template-rows:repeat(3,32px); gap:4px; align-items:center; justify-items:center;">
+                
+                <!-- 1행: 빈칸 / ▲위로 / 빈칸 -->
                 <div></div>
-                <span id="rap-up" class="row-action-btn" style="border-color:#0056b3;color:#0056b3;" title="위로 이동">▲</span>
+                <span id="rap-up" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:6px;background:#fff;color:#0056b3;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="위로 이동">▲</span>
                 <div></div>
-                <!-- 좌우 -->
-                <span id="rap-left" class="row-action-btn" style="border-color:#333;color:#333;" title="WBS 레벨 올리기">◀</span>
-                <div style="width:28px;height:28px;"></div>
-                <span id="rap-right" class="row-action-btn" style="border-color:#333;color:#333;" title="WBS 레벨 내리기">▶</span>
-                <!-- 아래 -->
+        
+                <!-- 2행: ◀레벨업 / 빈칸 / ▶레벨다운 -->
+                <span id="rap-left" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:6px;background:#fff;color:#555;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 올리기">◀</span>
+                <div style="width:32px;height:32px;"></div>
+                <span id="rap-right" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:6px;background:#fff;color:#555;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 내리기">▶</span>
+        
+                <!-- 3행: 빈칸 / ▼아래로 / 빈칸 -->
                 <div></div>
-                <span id="rap-dn" class="row-action-btn" style="border-color:#0056b3;color:#0056b3;" title="아래로 이동">▼</span>
+                <span id="rap-dn" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:6px;background:#fff;color:#0056b3;font-size:14px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="아래로 이동">▼</span>
                 <div></div>
-                <!-- +/- -->
+        
+                <!-- 4행: 빈칸 / ➕➖ / 빈칸 -->
                 <div></div>
-                <div style="display:flex; gap:3px;">
-                    <span id="rap-add" class="row-action-btn" style="border-color:#28a745;color:#28a745;" title="행 추가">➕</span>
-                    <span id="rap-del" class="row-action-btn" style="border-color:#e03131;color:#e03131;" title="행 삭제">➖</span>
+                <div style="display:flex;gap:4px;">
+                    <span id="rap-add" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #28a745;border-radius:6px;background:#fff;color:#28a745;font-size:16px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 추가">+</span>
+                    <span id="rap-del" style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #e03131;border-radius:6px;background:#fff;color:#e03131;font-size:16px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 삭제">-</span>
                 </div>
                 <div></div>
+        
             </div>`;
         document.body.appendChild(popup);
 
