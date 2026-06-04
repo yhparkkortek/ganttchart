@@ -1689,47 +1689,79 @@
 
 <script>
     // =========================================================
-    // 3. 테마 색상 동적 반영 (행 전체 그라디에이션 확실한 적용)
+    // 🎨 테마 색상 동적 반영 (0~4레벨 모든 행 전체 그라디에이션 적용)
     // =========================================================
     const existingStyle = document.getElementById('wbs-gradient-style');
     if (existingStyle) existingStyle.remove();
 
-    // CSS 우선순위(background-color 덮어쓰기) 문제를 해결하기 위해 background-image 속성 사용
+    // 기존의 background-color를 덮어쓰고, 행 전체에 background-image(그라디에이션)를 강제 적용합니다.
     document.head.insertAdjacentHTML('beforeend', `
     <style id="wbs-gradient-style">
-        /* 레벨 0~4 행 전체: background-image로 그라디에이션 강제 적용 */
-        .parent-row td { background-image: var(--c-l0-grad) !important; }
-        .sub-parent-row td { background-image: var(--c-l1-grad) !important; }
-        .sub-parent-row-2 td { background-image: var(--c-l2-grad) !important; }
-        .sub-parent-row-3 td { background-image: var(--c-l3-grad) !important; }
-        .sub-parent-row-4 td { background-image: var(--c-l4-grad) !important; }
+        /* 레벨 0~4 행 전체: 그라디에이션 변수 적용 */
+        .parent-row td { background-image: var(--c-l0-grad) !important; background-color: transparent !important; }
+        .sub-parent-row td { background-image: var(--c-l1-grad) !important; background-color: transparent !important; }
+        .sub-parent-row-2 td { background-image: var(--c-l2-grad) !important; background-color: transparent !important; }
+        .sub-parent-row-3 td { background-image: var(--c-l3-grad) !important; background-color: transparent !important; }
+        .sub-parent-row-4 td { background-image: var(--c-l4-grad) !important; background-color: transparent !important; }
     </style>
     `);
 
-    window.updateThemeColor = function(baseColor) {
-        const hexToRgb = (hex) => {
-            let c = hex.substring(1).split('');
-            if(c.length === 3) c = [c[0], c[0], c[1], c[1], c[2], c[2]];
-            c = '0x' + c.join('');
-            return [(c>>16)&255, (c>>8)&255, c&255];
-        };
-        let rgb = hexToRgb(baseColor);
-        
-        // linear-gradient를 적용하여 그라디에이션 변수 실시간 업데이트
-        document.documentElement.style.setProperty('--c-l0-grad', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.85), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 1))`);
-        document.documentElement.style.setProperty('--c-l1-grad', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.35))`);
-        document.documentElement.style.setProperty('--c-l2-grad', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.08), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.18))`);
-        document.documentElement.style.setProperty('--c-l3-grad', `linear-gradient(90deg, #ffffff, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.08))`);
-        document.documentElement.style.setProperty('--c-l4-grad', `linear-gradient(90deg, #f8f9fc, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.05))`);
+    // 기존 updateThemeColor 함수를 덮어써서 그라디에이션 변수들을 추가 세팅합니다.
+    window.updateThemeColor = function(baseHex) {
+        // 내부에서 HEX를 HSL과 RGB로 모두 변환하여 사용 (텍스트 색상 유지 및 투명도 조절 목적)
+        function hexToHSL(H) {
+            let r = 0, g = 0, b = 0;
+            if (H.length === 4) { r = "0x" + H[1] + H[1]; g = "0x" + H[2] + H[2]; b = "0x" + H[3] + H[3]; } 
+            else if (H.length === 7) { r = "0x" + H[1] + H[2]; g = "0x" + H[3] + H[4]; b = "0x" + H[5] + H[6]; }
+            r /= 255; g /= 255; b /= 255;
+            let cmin = Math.min(r,g,b), cmax = Math.max(r,g,b), delta = cmax - cmin, h = 0, s = 0, l = 0;
+            if (delta === 0) h = 0;
+            else if (cmax === r) h = ((g - b) / delta) % 6;
+            else if (cmax === g) h = (b - r) / delta + 2;
+            else h = (r - g) / delta + 4;
+            h = Math.round(h * 60); if (h < 0) h += 360;
+            l = (cmax + cmin) / 2;
+            s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
+            s = +(s * 100).toFixed(1); l = +(l * 100).toFixed(1);
+            return { h, s, l, r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+        }
 
-        // 차트 바 색상 그라디에이션 (기존 유지)
-        document.documentElement.style.setProperty('--chart-l0', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.53), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 1))`);
-        document.documentElement.style.setProperty('--chart-l1', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.4), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.8))`);
-        document.documentElement.style.setProperty('--chart-l2', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.3), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.6))`);
-        document.documentElement.style.setProperty('--chart-l3', `linear-gradient(90deg, rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.2), rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, 0.4))`);
+        let colorInfo = hexToHSL(baseHex);
+        let h = colorInfo.h; let s = colorInfo.s; let l0 = colorInfo.l;
+        let r = colorInfo.r; let g = colorInfo.g; let b = colorInfo.b;
+        
+        let l0Text = l0 > 60 ? '#333333' : '#ffffff';
+        let darkTextL = Math.min(l0, 40); 
+        let root = document.documentElement;
+
+        // 1. 기존 텍스트 및 테두리 색상 세팅 (첨부 파일의 로직 완벽히 유지)
+        root.style.setProperty('--c-l0-border', `hsl(${h}, ${s}%, ${Math.max(0, l0 - 15)}%)`);
+        root.style.setProperty('--c-l0-text', l0Text);
+        root.style.setProperty('--c-l0-chart-label', l0Text === '#ffffff' ? `hsl(${h}, ${s}%, 90%)` : `hsl(${h}, ${s}%, 20%)`);
+        root.style.setProperty('--c-l1-border', `hsl(${h}, ${Math.max(0, s - 10)}%, 75%)`);
+        root.style.setProperty('--c-l1-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
+        root.style.setProperty('--c-l2-border', `hsl(${h}, ${Math.max(0, s - 15)}%, 85%)`);
+        root.style.setProperty('--c-l2-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
+        root.style.setProperty('--c-l3-border', `#dee2e6`);
+        root.style.setProperty('--c-l3-text', `#333333`);
+        root.style.setProperty('--c-l4-border', `#e9ecef`);
+        root.style.setProperty('--c-l4-text', `#495057`);
+
+        // 2. 0~4레벨 행 전체 그라디에이션 세팅 (linear-gradient 사용)
+        root.style.setProperty('--c-l0-grad', `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.85), rgba(${r}, ${g}, ${b}, 1))`);
+        root.style.setProperty('--c-l1-grad', `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.2), rgba(${r}, ${g}, ${b}, 0.35))`);
+        root.style.setProperty('--c-l2-grad', `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.08), rgba(${r}, ${g}, ${b}, 0.18))`);
+        root.style.setProperty('--c-l3-grad', `linear-gradient(90deg, #ffffff, rgba(${r}, ${g}, ${b}, 0.08))`);
+        root.style.setProperty('--c-l4-grad', `linear-gradient(90deg, #f8f9fc, rgba(${r}, ${g}, ${b}, 0.05))`);
+
+        // 3. 차트 바 색상 그라디에이션 변수 세팅
+        root.style.setProperty('--chart-l0', `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.53), rgba(${r}, ${g}, ${b}, 1))`);
+        root.style.setProperty('--chart-l1', `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.4), rgba(${r}, ${g}, ${b}, 0.8))`);
+        root.style.setProperty('--chart-l2', `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.3), rgba(${r}, ${g}, ${b}, 0.6))`);
+        root.style.setProperty('--chart-l3', `linear-gradient(90deg, rgba(${r}, ${g}, ${b}, 0.2), rgba(${r}, ${g}, ${b}, 0.4))`);
     };
 
-    // 차트 생성 로직 (수정사항 없음 - 기존 코드 유지)
+    // 차트 생성 로직 덮어쓰기 (CSS 변수 --chart-lX 를 바라보도록 수정)
     window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level) {
         let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
         let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
@@ -1759,9 +1791,11 @@
         return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class="chart-axis-wrapper">${labelHTML}</div><div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">${gridLines}${todayLine}<div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div></div></div>`;
     };
 
-    // 로드 시 최초 1회 색상 업데이트 실행
-    const picker = document.getElementById('themePicker');
-    if (picker) window.updateThemeColor(picker.value);
+    // 스크립트 로드 시, 컬러 피커에 세팅된 색상을 강제로 한 번 읽어와 최초 적용합니다.
+    setTimeout(() => {
+        const picker = document.getElementById('themePicker');
+        if (picker) window.updateThemeColor(picker.value);
+    }, 100);
 </script>
 
 <script>
