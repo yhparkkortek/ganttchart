@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1200, initial-scale=0.25">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gantt Chart</title>
 
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
@@ -1171,6 +1171,7 @@
     };
 
     function renderTable(data) {
+        let isMobile = window.matchMedia("(max-width: 768px)").matches; // 추가
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
         if(!data || data.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; return; }
 
@@ -1247,15 +1248,17 @@
                     tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
                 }
 
-                if (cellIndex !== colIdx.no) {
-                    if (cellIndex === colIdx.start) { 
-                        let tsArg = row._calcStartTs || new Date().getTime();
-                        let displayDate = row._calcStartTs ? formatTableDate(row._calcStartTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
-                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
-                    } 
+                    if (cellIndex !== colIdx.no) {
+                        if (cellIndex === colIdx.start) { 
+                            let tsArg = row._calcStartTs || new Date().getTime();
+                            let dateStyle = isMobile ? "font-size:6.5px;" : "font-size:13px; font-weight:bold;";
+                            let displayDate = row._calcStartTs ? `<span style="${dateStyle}">${formatTableDate(row._calcStartTs)}</span>` : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
+                            tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
+                        }
                     else if (cellIndex === colIdx.plan) { 
                         let tsArg = row._calcPlanTs || new Date().getTime();
-                        let displayDate = row._calcPlanTs ? formatTableDate(row._calcPlanTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
+                        let dateStyle = isMobile ? "font-size:6.5px;" : "font-size:13px; font-weight:bold;";
+                        let displayDate = row._calcPlanTs ? `<span style="${dateStyle}">${formatTableDate(row._calcPlanTs)}</span>` : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
                         tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
                         bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
                         if (!hasPeriodCol) {
