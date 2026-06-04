@@ -1678,9 +1678,8 @@
         gisInited = true;
     };
 
-    // 3) 버튼 클릭 핸들러 (캐시 꼬임 시 방어 로직 추가)
+    // 3) 버튼 클릭 핸들러 (캐시 꼬임 시 방어 로직 추가) + 동기화 이후 바로 드라이브에서 불러오기 팝업 이동
     window.handleAuthClick = function() {
-        // 스크립트 로딩 전 클릭 방어
         if (!tokenClient) {
             alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
             return;
@@ -1698,14 +1697,12 @@
                 return; 
             }
             
-            // 구글 Drive API 객체가 정상적으로 생성되었는지 최대 5초간 확인 (먹통 방지)
             let retries = 0;
             while (!(window.gapi && gapi.client && gapi.client.drive) && retries < 20) {
                 await new Promise(r => setTimeout(r, 250));
                 retries++;
             }
 
-            // 끝까지 로드되지 않았을 경우 (캐시 꼬임 확정 시) 안내창 출력 후 버튼 초기화
             if (!(window.gapi && gapi.client && gapi.client.drive)) {
                 alert("❌ 브라우저 캐시로 인해 구글 서버 연결이 꼬였습니다.\n키보드의 [Ctrl + F5]를 눌러 '강력 새로고침' 후 다시 시도해 주세요.");
                 authBtn.innerText = "🔵 구글 드라이브 연동하기";
@@ -1713,7 +1710,6 @@
                 return;
             }
 
-            // 정상 로드 완료 시 사용자 정보 호출
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
@@ -1723,6 +1719,12 @@
                 authBtn.innerText = `🟢 ${window.currentUserName}`;
                 document.getElementById('drive_save_btn').disabled = false;
                 document.getElementById('drive_load_btn').disabled = false;
+
+                // 💡 [핵심 추가] 인사 팝업을 닫은 직후 곧바로 프로젝트 파일 불러오기 모달 자동 띄우기
+                setTimeout(() => {
+                    loadFromGoogleDrive();
+                }, 100);
+
             } catch(e) {
                 console.error("사용자 정보 가져오기 에러:", e);
                 alert("❌ 권한 정보를 가져오는데 실패했습니다. 팝업 차단 여부를 확인해 주세요.");
@@ -1730,8 +1732,6 @@
                 authBtn.disabled = false;
             }
         };
-        
-        // 권한 동의 창 호출
         tokenClient.requestAccessToken({prompt: 'consent'}); 
     };
 </script>
