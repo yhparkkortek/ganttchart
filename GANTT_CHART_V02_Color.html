@@ -994,6 +994,23 @@ if (window.name !== 'gantt_popup') {
         document.getElementById('confirm-delete-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
     };
 
+    window.moveRow = function(index, direction) {
+        if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
+        
+        let targetIndex = index + direction;
+        
+        // 범위 체크 (1번 이상, 마지막 이하)
+        if (targetIndex < 1 || targetIndex >= globalData.length) return;
+        
+        // 두 행 교체
+        let temp = globalData[index];
+        globalData[index] = globalData[targetIndex];
+        globalData[targetIndex] = temp;
+        
+        logChange(index, -1, `행 이동`, `${direction > 0 ? '아래' : '위'}로 이동`);
+        window.recalculateSchedules();
+    };
+    
     window.currentCalendarTarget = null; window.currentCalendarTs = null; window.currentViewYear = null; window.currentViewMonth = null; window.currentCalendarRow = null; window.currentCalendarCol = null;
 
     window.showCalendar = function(btn, ts, rowIndex, colIndex) {
@@ -1234,19 +1251,23 @@ if (window.name !== 'gantt_popup') {
                 if (cellIndex === colIdx.no) { 
                     tdAttrs += ` class="no-td" ondblclick="toggleRowActions(this); event.stopPropagation();" title="더블클릭하여 추가/삭제/이동 메뉴 열기"`; 
                     tdHtml = `
-                        <div style="display:flex; flex-direction:column; align-items:center;">
-                            <span class="row-num-span"></span>
-                            <div class="row-actions" style="flex-direction:column; gap:2px;">
-                                <div style="display:flex; gap:2px; justify-content:center;">
-                                    <span class="row-action-btn lvl-up" onclick="changeRowLevel(${i}, -1); event.stopPropagation();" title="WBS 레벨 올리기 (상위 레벨)">◀</span>
-                                    <span class="row-action-btn lvl-dn" onclick="changeRowLevel(${i}, +1); event.stopPropagation();" title="WBS 레벨 내리기 (하위 레벨)">▶</span>
-                                </div>
-                                <div style="display:flex; gap:2px; justify-content:center;">
-                                    <span class="row-action-btn add" onclick="addRow(${i}); event.stopPropagation();" title="아래에 빈 행 추가">➕</span>
-                                    <span class="row-action-btn del" onclick="deleteRow(${i}); event.stopPropagation();" title="이 행 삭제">➖</span>
-                                </div>
+                    <div style="display:flex; flex-direction:column; align-items:center;">
+                        <span class="row-num-span"></span>
+                        <div class="row-actions" style="flex-direction:column; gap:2px;">
+                            <div style="display:flex; gap:2px; justify-content:center;">
+                                <span class="row-action-btn lvl-up" onclick="changeRowLevel(${i}, -1); event.stopPropagation();" title="WBS 레벨 올리기 (상위 레벨)">◀</span>
+                                <span class="row-action-btn lvl-dn" onclick="changeRowLevel(${i}, +1); event.stopPropagation();" title="WBS 레벨 내리기 (하위 레벨)">▶</span>
                             </div>
-                        </div>`;
+                            <div style="display:flex; gap:2px; justify-content:center;">
+                                <span class="row-action-btn" onclick="moveRow(${i}, -1); event.stopPropagation();" title="위로 이동" style="border-color:#0056b3; color:#0056b3;">▲</span>
+                                <span class="row-action-btn" onclick="moveRow(${i}, +1); event.stopPropagation();" title="아래로 이동" style="border-color:#0056b3; color:#0056b3;">▼</span>
+                            </div>
+                            <div style="display:flex; gap:2px; justify-content:center;">
+                                <span class="row-action-btn add" onclick="addRow(${i}); event.stopPropagation();" title="아래에 빈 행 추가">➕</span>
+                                <span class="row-action-btn del" onclick="deleteRow(${i}); event.stopPropagation();" title="이 행 삭제">➖</span>
+                            </div>
+                        </div>
+                    </div>`;
                 }
                 else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
@@ -2374,7 +2395,7 @@ window.handleAuthClick = function() {
         document.addEventListener('touchstart', function(e) {
             if (e.touches.length > 1) return; // 멀티터치 무시
             
-            let targetTd = e.target.closest('td[ondblclick]');
+            let targetTd = e.target.closest('td[ondblclick]') || e.target.closest('.no-td');
             // 수정 중인 셀이 아니면 실행
             if (!targetTd || targetTd.getAttribute('contenteditable') === 'true') return;
 
