@@ -1679,7 +1679,7 @@
     };
 
     // 3) 버튼 클릭 핸들러 (캐시 꼬임 시 방어 로직 추가) + 동기화 이후 바로 드라이브에서 불러오기 팝업 이동
-    window.handleAuthClick = function() {
+window.handleAuthClick = function() {
         if (!tokenClient) {
             alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
             return;
@@ -1720,10 +1720,10 @@
                 document.getElementById('drive_save_btn').disabled = false;
                 document.getElementById('drive_load_btn').disabled = false;
 
-                // 💡 [핵심 추가] 인사 팝업을 닫은 직후 곧바로 프로젝트 파일 불러오기 모달 자동 띄우기
+                // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
                 setTimeout(() => {
                     loadFromGoogleDrive();
-                }, 100);
+                }, 600);
 
             } catch(e) {
                 console.error("사용자 정보 가져오기 에러:", e);
