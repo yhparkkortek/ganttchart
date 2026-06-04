@@ -2386,6 +2386,36 @@ window.handleAuthClick = function() {
         });
     })();
 </script>
+
+<style>
+    @media screen and (max-width: 768px) {
+        /* 1. 모바일 브라우저(특히 아이폰 Safari)가 임의로 글자를 확대하는 자동 리사이징 기능 강제 차단 */
+        body {
+            -webkit-text-size-adjust: none !important;
+        }
+
+        /* 2. 테이블 내 시작/완료 날짜 폰트 크기 약 2/3로 축소 (기존 13px -> 9px) */
+        .date-clickable {
+            font-size: 9px !important;
+            letter-spacing: -0.5px !important; /* 자간을 살짝 좁혀 줄바꿈 방지 */
+        }
+
+        /* 3. 현황 그래프 상단 날짜 폰트 크기 축소 (기존 9px -> 6px) */
+        :root {
+            --chart-label-size: 6px !important;
+        }
+
+        /* 그래프 위 날짜의 자간도 좁혀서 서로 겹치는 현상 최소화 */
+        .chart-label {
+            letter-spacing: -0.5px !important;
+        }
+        
+        /* 4. (선택사항) 모바일에서 시작/완료/기간 열의 최소 너비를 조금 더 여유롭게 확보 */
+        th:nth-child(3), th:nth-child(4) { 
+            min-width: 40px !important; 
+        }
+    }
+</style>
     
 </body>
 </html>
