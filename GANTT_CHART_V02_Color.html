@@ -260,16 +260,10 @@
     // =========================================================
 
 if (window.name !== 'gantt_popup') {
-    const w = screen.availWidth;
-    const h = screen.availHeight;
     const newWin = window.open(location.href, 'gantt_popup',
-        `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no,resizable=yes`);
+        `width=${screen.availWidth},height=${screen.availHeight},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
     if (newWin) {
         newWin.focus();
-        setTimeout(() => {
-            newWin.moveTo(0, 0);
-            newWin.resizeTo(w, h);
-        }, 500);
         window.close();
     }
 }
