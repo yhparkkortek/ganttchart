@@ -1858,11 +1858,15 @@ window.handleAuthClick = function() {
     let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
 
     // 라벨 HTML 생성
+    let isMobile = window.matchMedia("(max-width: 768px)").matches;
+    let labelFontSize = isMobile ? "7px" : "9px";
+    let labelWeight = isMobile ? "normal" : "bold";
+    
     let labelHTML = ''; for (let i = 0; i <= 4; i++) { 
         let pct = (i / 4) * 100; 
         let ts = viewStartTs + (viewDuration * i / 4); 
         let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); 
-        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: 8px !important; transform: scale(0.6);">${formatChartLabel(ts)}</span>`; 
+        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: ${labelFontSize}; font-weight: ${labelWeight};">${formatChartLabel(ts)}</span>`; 
     }
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
@@ -2405,7 +2409,15 @@ window.handleAuthClick = function() {
 
 <style>
     /* 1. PC 기본 스타일 (영향받지 않도록 기본값 유지) */
-    .date-clickable { font-size: 13px !important; }
+   
+    .date-clickable { font-size: 13px !important; font-weight: bold; }
+    
+    @media screen and (max-width: 768px) {
+        .date-clickable {
+            font-size: 9px !important;
+            transform: none !important;
+            letter-spacing: -0.5px;
+        }
     .chart-label { font-size: 9px !important; }
 
     /* 2. 모바일 전용 스타일 (768px 이하 기기에서만 작동) */
