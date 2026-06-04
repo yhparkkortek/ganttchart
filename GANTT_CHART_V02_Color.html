@@ -1021,10 +1021,31 @@ if (window.name !== 'gantt_popup') {
         renderCalendar(true);
     };
 
-    window.selectDateFromCalendar = function(y, m, d) {
+   window.selectDateFromCalendar = function(y, m, d) {
         if (window.currentCalendarRow !== undefined && window.currentCalendarCol !== undefined) {
             let str = y + "-" + String(m+1).padStart(2, '0') + "-" + String(d).padStart(2, '0');
-            let r = window.currentCalendarRow; let c = window.currentCalendarCol; let oldVal = globalData[r][c] || "";
+            let r = window.currentCalendarRow; let c = window.currentCalendarCol;
+            let selectedTs = new Date(y, m, d).setHours(0,0,0,0);
+    
+            // ✅ 완료일이 시작일보다 빠른 경우 차단
+            if (c === colIdx.plan && colIdx.start !== -1) {
+                let startTs = globalData[r]._calcStartTs;
+                if (startTs && selectedTs < startTs) {
+                    alert(`⚠️ 완료일(${str})이 시작일(${formatTableDate(startTs)})보다 빠를 수 없습니다.`);
+                    return;
+                }
+            }
+    
+            // ✅ 시작일이 완료일보다 늦은 경우 차단
+            if (c === colIdx.start && colIdx.plan !== -1) {
+                let planTs = globalData[r]._calcPlanTs;
+                if (planTs && selectedTs > planTs) {
+                    alert(`⚠️ 시작일(${str})이 완료일(${formatTableDate(planTs)})보다 늦을 수 없습니다.`);
+                    return;
+                }
+            }
+    
+            let oldVal = globalData[r][c] || "";
             if (oldVal !== str) {
                 logChange(r, c, oldVal, str); globalData[r][c] = str;
                 if (c === colIdx.plan) {
