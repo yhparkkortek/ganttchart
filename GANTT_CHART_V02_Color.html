@@ -208,11 +208,11 @@
         
         <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
             <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
-            <input type="color" id="themePicker" value="#1a237e" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">    
         </div>
 
         <div class="btn-group">
-            <button class="action-btn" onclick="location.reload(true)" style="border-color:#17a2b8; color:#17a2b8;" title="캐시를 무시하고 최신 상태로 강제 새로고침 합니다.">🔄 강력 새로고침 (Ctrl+F5)</button>
+            <button class="action-btn" onclick="location.reload(true)" style="border-color:#17a2b8; color:#17a2b8;" title="캐시를 무시하고 최신 상태로 강제 새로고침 합니다.">🔄 새로고침 (Ctrl+F5)</button>
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button class="action-btn" onclick="exportToExcel()">💾 엑셀 저장</button>
             <button class="action-btn" onclick="window.print()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
@@ -1873,31 +1873,38 @@
 
 <script>
     // =========================================================
-    // 🛡️ 데이터 유실 방지 안전장치 (Safety Nets)
+    // 🛡️ 데이터 유실 방지 안전장치 (오류 수정 및 최신 브라우저 대응)
     // =========================================================
 
-    // 1. 뒤로가기(Backspace) 오작동 방지
-    // 표 밖에서 백스페이스를 눌러 페이지가 뒤로 넘어가는 대참사를 막습니다. (입력창 등 편집 중일 때는 정상 작동)
+    // 1. 백스페이스(뒤로가기) 오작동 완벽 차단
     window.addEventListener('keydown', function(e) {
         if (e.key === 'Backspace' || e.keyCode === 8) {
             let activeEl = document.activeElement;
+            // 현재 마우스 커서가 텍스트를 수정 중인 상태인지 확인
             let isInput = activeEl.tagName === 'INPUT' || 
                           activeEl.tagName === 'TEXTAREA' || 
                           activeEl.isContentEditable || 
-                          activeEl.hasAttribute('contenteditable');
+                          activeEl.getAttribute('contenteditable') === 'true';
+            
+            // 입력 중이 아닐 때 백스페이스를 누르면 뒤로가기 실행을 막음
             if (!isInput) {
-                e.preventDefault(); // 뒤로가기 차단
+                e.preventDefault();
             }
         }
     });
 
-    // 2. 미저장 상태에서 새로고침/창 닫기 시 경고창 띄우기
+    // 2. 미저장 상태에서 창 닫기 / 새로고침(F5) / 사이트 이탈 방어
     window.addEventListener('beforeunload', function (e) {
-        // changeLogs(수정이력)가 있고, 그 개수가 드라이브에 마지막으로 저장한 개수보다 많을 경우 = 저장되지 않은 변경사항 존재
-        if (window.changeLogs && window.lastSavedLogCount !== undefined && window.changeLogs.length > window.lastSavedLogCount) {
+        // 변수가 꼬여서 undefined 상태일 경우를 대비해 0으로 강제 초기화
+        let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
+        let savedLogs = window.lastSavedLogCount || 0;
+        
+        // 엑셀을 불러온 뒤 데이터를 한 번이라도 수정(추가/삭제/변경)했다면
+        if (currentLogs > savedLogs) {
             e.preventDefault();
-            e.returnValue = '저장되지 않은 변경사항이 있습니다. 정말로 종료하시겠습니까?'; // 브라우저 표준 경고창 호출
-            return e.returnValue;
+            // 최신 브라우저는 커스텀 텍스트를 무시하므로 표준 규약인 빈 문자열('')을 반환해야만 기본 경고창이 뜹니다.
+            e.returnValue = ''; 
+            return '';
         }
     });
 </script>
