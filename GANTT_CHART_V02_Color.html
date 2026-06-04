@@ -2389,40 +2389,37 @@ window.handleAuthClick = function() {
 
 <style>
     @media screen and (max-width: 768px) {
-        /* 1. 배경색 짤림 방지: 테이블과 컨테이너 배경을 강제로 꽉 채움 */
+        /* 1. 테이블 전체 레이아웃 고정 */
         #table-container {
             width: 100vw !important;
             overflow-x: auto !important;
-            background-color: #f8f9fa !important; /* 배경색이 끊기는 구간에 기본색 강제 지정 */
-        }
-        
-        table#myTable {
-            width: max-content !important; 
-            min-width: 100% !important;
-            background-color: #ffffff !important; /* 테이블 자체 배경을 흰색으로 고정하여 하얀 여백 제거 */
+            -webkit-overflow-scrolling: touch;
         }
 
-        /* 2. 폰트 4px 강제 축소: zoom과 scale을 병행하여 강제 적용 */
+        table#myTable {
+            table-layout: fixed !important; /* 레이아웃 꼬임 방지 */
+            width: 800px !important;        /* 표의 최소 가로폭을 강제 고정 */
+        }
+
+        /* 2. 폰트 강제 축소 (날짜 및 차트 라벨) */
         .date-clickable, .chart-label {
-            font-size: 8px !important;     /* 기본 폰트 사이즈 설정 */
-            transform: scale(0.5) !important; /* 8px을 4px로 시각적 축소 */
+            font-size: 8px !important;
+            transform: scale(0.6) !important;
             transform-origin: left center !important;
-            display: inline-block !important;
-            line-height: 1 !important;     /* 줄간격 좁히기 */
-            margin: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        /* 3. 현황 열(그래프) 너비 최적화 */
+        .chart-td {
+            width: 100px !important;
             padding: 0 !important;
         }
 
-        /* 3. '현황' 열(그래프 영역) 여백 및 크기 버그 수정 */
-        .chart-td {
-            min-width: 120px !important;   /* 그래프가 찌그러지지 않게 최소폭 유지 */
-            padding: 2px !important;
-        }
-
-        /* 4. 전체적인 셀 여백 줄이기 (글자 짤림 및 여백 과다 문제 해결) */
+        /* 4. 헤더 및 셀 여백 삭제 (글자 잘림 방지) */
         th, td {
-            padding: 1px 2px !important; 
-            font-size: 8px !important;     /* 전체 폰트도 줄여서 공간 확보 */
+            padding: 0 1px !important;
+            font-size: 8px !important;
+            line-height: 1 !important;
         }
     }
 </style>
