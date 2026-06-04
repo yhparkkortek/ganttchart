@@ -1916,8 +1916,9 @@ window.handleAuthClick = function() {
     
     // 교체 - 막대 앞뒤 날짜 추가 10/28 → [========검은막대========] ← 12/18
     
-    let barStartLabel = tsStart ? formatTableDate(tsStart) + " →" : "";
-    let barEndLabel = tsEnd ? "← " + formatTableDate(tsEnd) : "";
+    // 기존
+    // let barStartLabel = tsStart ? formatTableDate(tsStart) : "";
+    let barEndLabel = tsEnd ? formatTableDate(tsEnd) : "";
     
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px;" title="소요일수: ${durationDays}일">
                 <div class="chart-axis-wrapper" style="position:relative; height:12px;">${labelHTML}</div>
