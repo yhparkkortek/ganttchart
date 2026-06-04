@@ -2389,30 +2389,34 @@ window.handleAuthClick = function() {
 
 <style>
     @media screen and (max-width: 768px) {
-        /* 1. 모바일 브라우저(특히 아이폰 Safari)가 임의로 글자를 확대하는 자동 리사이징 기능 강제 차단 */
+        /* 1. 모바일 브라우저 임의 글자 확대 강제 차단 */
         body {
             -webkit-text-size-adjust: none !important;
         }
 
-        /* 2. 테이블 내 시작/완료 날짜 폰트 크기 약 2/3로 축소 (기존 13px -> 9px) */
+        /* 2. 테이블 내 시작/완료 날짜 폰트 크기 4px로 더 축소 */
         .date-clickable {
-            font-size: 9px !important;
-            letter-spacing: -0.5px !important; /* 자간을 살짝 좁혀 줄바꿈 방지 */
+            font-size: 4px !important;
+            letter-spacing: -0.5px !important;
         }
 
-        /* 3. 현황 그래프 상단 날짜 폰트 크기 축소 (기존 9px -> 6px) */
+        /* 3. 현황 그래프 상단 날짜 폰트 크기 4px로 축소 */
         :root {
-            --chart-label-size: 6px !important;
+            --chart-label-size: 4px !important;
         }
-
-        /* 그래프 위 날짜의 자간도 좁혀서 서로 겹치는 현상 최소화 */
         .chart-label {
             letter-spacing: -0.5px !important;
         }
         
-        /* 4. (선택사항) 모바일에서 시작/완료/기간 열의 최소 너비를 조금 더 여유롭게 확보 */
-        th:nth-child(3), th:nth-child(4) { 
-            min-width: 40px !important; 
+        /* 4. [버그 수정] 가로 스크롤 시 배경 테마색 끊김(짤림) 현상 완벽 해결 */
+        #table-container {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch;
+        }
+        table#myTable {
+            /* 브라우저가 화면 폭까지만 계산하던 것을, 안 보이는 내용물 끝까지(max-content) 억지로 늘려서 배경색을 꽉 채우도록 강제함 */
+            width: max-content !important; 
+            min-width: 100% !important;
         }
     }
 </style>
