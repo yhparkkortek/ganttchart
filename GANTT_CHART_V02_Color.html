@@ -1330,6 +1330,9 @@ if (window.name !== 'gantt_popup') {
     function renderTable(data) {
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
         if(!data || data.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; return; }
+        
+        // ✅ 추가: 레벨별 bold 한 곳에서 관리
+        const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';
 
         let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
         let hasPeriodCol = colIdx.period !== -1;
@@ -1422,7 +1425,7 @@ if (window.name !== 'gantt_popup') {
                     } 
                     else if (cellIndex === colIdx.period) {
                         let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
-                        tdHtml = `<span style="color: #e03131; font-weight: bold;">${calcDays}</span>`;
+                        tdHtml = `<span style="color: #e03131; font-weight: ${getFontWeight(row._level)};">${calcDays}</span>`;
                         tdStyle = "text-align: center; white-space: nowrap;";
                     }
                     else if (cellIndex === colIdx.content || cellIndex === colIdx.answer) {
@@ -1440,10 +1443,13 @@ if (window.name !== 'gantt_popup') {
                             tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border: 1px solid #ced4da; border-radius: 3px; padding: 2px 2px; color: #495057; background: #fff; z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + '); event.stopPropagation();">🌐</span>';
                         } else { tdHtml = linkifyAndEscape(cellText); }
                     } 
+                    // 교체
                     else if (cellIndex === colIdx.chart) { 
                         tdHtml = createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
-                        tdStyle += " position:relative;"; tdAttrs += ` class="chart-td"`;
-                    } 
+                        tdStyle = `font-weight: ${getFontWeight(row._level)}; position:relative;`;
+                        tdAttrs += ` class="chart-td"`;
+                    }
+
                     else { tdHtml = linkifyAndEscape(cell.toString().trim()); }
                 }
 
