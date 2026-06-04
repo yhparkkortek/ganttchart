@@ -2125,10 +2125,10 @@
 
 <script>
     // =========================================================
-    // 🎛️ UI 개선: 점선 제거, 필터 위치 재배치, 10글자 제한
+    // 🎛️ UI 개선: 점선 제거, 필터 위치 재배치, 10글자 물결(~) 제한
     // =========================================================
 
-    // 1. CSS 동적 주입 (날짜 점선 제거 & 필터 가로 배치 & 말줄임표)
+    // 1. CSS 동적 주입 (날짜 점선 제거 & 필터 가로 배치)
     document.head.insertAdjacentHTML('beforeend', `
     <style>
         /* 날짜 밑줄 점선 완전히 제거 */
@@ -2138,20 +2138,10 @@
         /* 필터 그룹들을 나란히 배치하기 위한 레이아웃 설정 */
         #dynamic-filters { display: flex; flex-wrap: wrap; gap: 5px 20px; }
         .filter-group { display: flex; align-items: center; flex-wrap: wrap; transition: 0.3s; margin-bottom: 0 !important; }
-        
-        /* 개발단계 버튼 글자수 약 10글자로 제한 (넘치면 ... 처리) */
-        .btn-dev-stage {
-            max-width: 120px; 
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-            display: inline-block;
-            vertical-align: middle;
-        }
     </style>
     `);
 
-    // 2. 필터 생성 로직 덮어쓰기 (순서 변경 및 개발단계 버튼 툴팁 추가)
+    // 2. 필터 생성 로직 덮어쓰기
     window.generateFilters = function(data) {
         let savedFilters = {};
         for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
@@ -2159,7 +2149,6 @@
         const filterContainer = document.getElementById('dynamic-filters'); filterContainer.innerHTML = ''; currentFilters = {}; 
         existingDevStages = []; let assigneeModelsAll = {}; let assigneeModelsActive = {};
 
-        // 데이터 순회 수집 (기존 동일)
         for(let i = 1; i < data.length; i++) {
             if (!data[i] || data[i].join('').trim() === '') continue;
             let assignee = colIdx.assignee !== -1 ? data[i][colIdx.assignee] : "";
@@ -2182,7 +2171,7 @@
             }
         }
 
-        // 💡 핵심: 필터 표시 순서를 강제로 조작 (LEVEL -> 업무상태 -> 개발단계)
+        // 필터 표시 순서 강제 조작 (LEVEL -> 업무상태 -> 개발단계)
         const orderMap = { 'LEVEL(WBS)': 1, '업무상태': 2, '개발단계': 3 };
         filterColumns.sort((a, b) => (orderMap[a.name] || 99) - (orderMap[b.name] || 99));
 
@@ -2198,7 +2187,7 @@
             currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
             let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
             
-            // 개발단계 그룹은 가로 폭을 100%로 주어 무조건 아랫줄로 넘어가게 강제 배치
+            // 개발단계 그룹 강제 줄바꿈
             if (col.name === '개발단계') {
                 groupDiv.style.width = '100%';
                 groupDiv.style.marginTop = '6px';
@@ -2215,16 +2204,18 @@
                 let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
                 if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
                 
-                // 💡 개발단계 버튼에만 10글자 제한 클래스 및 말풍선(title) 추가
+                // 💡 자바스크립트로 정확히 10글자 측정 후 넘치면 자르고 '~' 붙이기
                 if (col.name === '개발단계') {
-                    btn.classList.add('btn-dev-stage');
-                    btn.title = val; // 마우스 오버 시 말풍선 표시
-                }
-
-                if (col.name === '담당자') {
+                    btn.title = val; // 원본 전체 글자는 마우스 오버 시 툴팁으로 보존
+                    let displayVal = val.length > 10 ? val.substring(0, 10) + "~" : val;
+                    btn.textContent = displayVal;
+                } else if (col.name === '담당자') {
                     let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
                     btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
-                } else { btn.textContent = val; }
+                } else { 
+                    btn.textContent = val; 
+                }
+
                 btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
             });
             filterContainer.appendChild(groupDiv);
