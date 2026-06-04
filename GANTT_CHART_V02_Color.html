@@ -1657,15 +1657,8 @@
         gisInited = true;
     };
 
-<script>
-    // =========================================================
-    // 3. 구글 드라이브 연동 최적화 (F5 캐시 꼬임 원천 차단 및 UI 안내)
-    // =========================================================
-
-    // ... (상단 생략) ...
-
     // 3) 버튼 클릭 핸들러 (캐시 꼬임 시 방어 로직 추가) + 동기화 이후 바로 드라이브에서 불러오기 팝업 이동
-    window.handleAuthClick = function() {
+window.handleAuthClick = function() {
         if (!tokenClient) {
             alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
             return;
@@ -1696,17 +1689,20 @@
                 return;
             }
 
-            try {
+try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
                 
-                // 화면의 버튼과 상태 메시지만 조용히 업데이트
+                // 💡 1. 브라우저 흐름을 끊고 버그를 유발하던 alert 팝업을 과감히 삭제!
+                // alert(`✅ 구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
+                
+                // 2. 화면의 버튼과 상태 메시지만 조용히 업데이트
                 authBtn.innerText = `🟢 ${window.currentUserName}`;
                 document.getElementById('drive_save_btn').disabled = false;
                 document.getElementById('drive_load_btn').disabled = false;
                 document.getElementById('file-status').textContent = `✅ 반갑습니다, ${window.currentUserName}님! 프로젝트 목록을 불러옵니다...`;
 
-                // 💡 흐름이 끊기지 않았으므로 타이머 없이 즉시 불러오기 함수 실행
+                // 💡 3. 흐름이 끊기지 않았으므로 타이머 없이 즉시 불러오기 함수 실행
                 loadFromGoogleDrive();
 
             } catch(e) {
@@ -1716,10 +1712,7 @@
                 authBtn.disabled = false;
             }
         };
-
-        // 💡 [수정된 부분] 강제 확인창(prompt: 'consent') 제거
-        // 이미 연동된 사용자는 추가 버튼 클릭 없이 바로 콜백(파일 불러오기)으로 넘어갑니다.
-        tokenClient.requestAccessToken(); 
+        tokenClient.requestAccessToken({prompt: 'consent'}); 
     };
 </script>
 
