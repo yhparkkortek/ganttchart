@@ -1415,7 +1415,7 @@ if (window.name !== 'gantt_popup') {
                         if (taskTxt === undefined || taskTxt === null) taskTxt = "";
                         let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
                         let indentEm = (row._level || 0) * 1.2;
-                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; font-weight: ${row._level <= 1 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
+                        let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
                         let wbsRawValue = encodeURIComponent(taskTxt);
                         let wbsAttrs = wbsColIdx !== -1 ? ` data-raw="${wbsRawValue}" ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${wbsColIdx})" title="더블클릭하여 수정 가능"` : ``;
