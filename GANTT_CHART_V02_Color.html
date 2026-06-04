@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1200, initial-scale=0.25">
+<meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Gantt Chart</title>
 
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
@@ -258,12 +258,21 @@
     // =========================================================
     // 🛠️ 전역 변수 선언 (순서 꼬임 및 TDZ 에러 방지)
     // =========================================================
-    if (window.name !== 'gantt_popup') {
-        const w = screen.availWidth, h = screen.availHeight;
-        const newWin = window.open(location.href, 'gantt_popup',
-            `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
-        if (newWin) { newWin.focus(); window.close(); }
+if (window.name !== 'gantt_popup') {
+    const w = screen.availWidth, h = screen.availHeight;
+    const newWin = window.open(location.href, 'gantt_popup',
+        `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
+    if (newWin) {
+        newWin.focus();
+        // 전체화면 요청
+        newWin.addEventListener('load', function() {
+            const el = newWin.document.documentElement;
+            const req = el.requestFullscreen || el.webkitRequestFullScreen || el.msRequestFullscreen;
+            if (req) req.call(el);
+        });
+        window.close();
     }
+}
 
     var globalData = []; 
     var filterColumns = []; 
