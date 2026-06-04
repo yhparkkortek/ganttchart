@@ -259,7 +259,6 @@
     // 🛠️ 전역 변수 선언 (순서 꼬임 및 TDZ 에러 방지)
     // =========================================================
 
-// 교체
 if (window.name !== 'gantt_popup') {
     const w = screen.availWidth, h = screen.availHeight;
     const newWin = window.open(location.href, 'gantt_popup',
@@ -270,18 +269,6 @@ if (window.name !== 'gantt_popup') {
         newWin.focus();
         window.close();
     }
-}
-
-// 현재 창이 팝업이면 자동 전체화면 시도
-if (window.name === 'gantt_popup') {
-    window.addEventListener('click', function tryFullScreen() {
-        const el = document.documentElement;
-        const req = el.requestFullscreen || el.webkitRequestFullScreen || el.msRequestFullscreen;
-        if (req && !document.fullscreenElement) {
-            req.call(el);
-            window.removeEventListener('click', tryFullScreen);
-        }
-    }, { once: false });
 }
 
     var globalData = []; 
