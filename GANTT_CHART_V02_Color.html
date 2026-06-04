@@ -1710,7 +1710,7 @@ window.handleAuthClick = function() {
                 return;
             }
 
-        try {
+try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
                 
