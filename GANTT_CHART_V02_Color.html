@@ -1908,6 +1908,79 @@
         }
     });
 </script>
+
+<script>
+    // =========================================================
+    // ⏰ 1분 비활동 자동 저장 & 👤 로컬 사용자 이름 식별
+    // =========================================================
+
+    // 1. 드라이브 미연동 시 로컬 사용자 이름 묻기
+    window.getActiveUserName = function() {
+        if (window.currentUserName && window.currentUserName !== "비로그인 (로컬)" && window.currentUserName !== "익명 사용자") {
+            return window.currentUserName;
+        }
+        let localName = localStorage.getItem('gantt_local_user');
+        if (!localName) {
+            localName = prompt("드라이브 미연동 상태입니다.\n수정이력에 기록될 PC(또는 사용자) 이름을 입력해주세요.", "로컬 사용자");
+            if (!localName) localName = "로컬 사용자";
+            localStorage.setItem('gantt_local_user', localName);
+        }
+        return localName + " (PC)";
+    };
+
+    // 2. 수정 이력에 로컬 사용자 이름 반영되도록 기존 함수 덮어쓰기
+    window.logChange = function(rowIndex, colIndex, oldVal, newVal) {
+        if (!globalData || globalData.length === 0) return;
+        let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
+        let rowName = rowIndex; 
+        let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (tr) {
+            let noTd = tr.querySelector('.no-td');
+            if (noTd) {
+                let span = noTd.querySelector('.row-num-span');
+                if (span && span.textContent) rowName = span.textContent.trim();
+                else if (noTd.textContent) rowName = noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim() || rowIndex;
+            }
+        } else if (globalData[rowIndex]) { rowName = globalData[rowIndex][colIdx.no] || rowIndex; }
+        
+        window.changeLogs.push({ 
+            time: new Date().toLocaleString('ko-KR'), 
+            userName: window.getActiveUserName(), 
+            rowName: rowName, 
+            colName: colName, 
+            oldVal: oldVal, 
+            newVal: newVal 
+        });
+    };
+
+    const originalDeleteRow = window.deleteRow;
+    window.deleteRow = function(index) {
+        let tempUser = window.currentUserName; 
+        window.currentUserName = window.getActiveUserName(); 
+        originalDeleteRow(index); 
+        window.currentUserName = tempUser; 
+    };
+
+    // 3. 1분 비활동 시 구글 드라이브 자동 저장 기능
+    let inactivityTimer = null;
+    function resetInactivityTimer() {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+            // 구글 드라이브 파일 ID가 있고, 저장되지 않은 새로운 수정 이력이 존재할 때만 작동
+            let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
+            let savedLogs = window.lastSavedLogCount || 0;
+            
+            if (window.currentDriveFileId && currentLogs > savedLogs) {
+                document.getElementById('file-status').textContent = "⏳ 1분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
+                saveToGoogleDrive(); // 저장 완료 시 내부에서 lastSavedLogCount를 갱신함
+            }
+        }, 60000); // 60000ms = 1분
+    }
+
+    // 마우스 이동, 키보드 입력, 클릭, 휠 스크롤 등 사용자의 액션이 감지되면 타이머를 0으로 초기화
+    ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
+    resetInactivityTimer(); // 스크립트 로드 시 최초 타이머 시작
+</script>
     
 </body>
 </html>
