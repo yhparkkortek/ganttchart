@@ -1838,7 +1838,9 @@ window.handleAuthClick = function() {
     let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
     
     let tsStart = rowStartTs; let tsEnd = rowPlanTs;
-    if (!tsStart && !tsEnd) return `<div>-</div>`; if (!tsEnd) tsEnd = tsStart; if (tsEnd < tsStart) tsEnd = tsStart;
+    if (!tsStart && !tsEnd) return `<div>-</div>`; 
+    if (!tsEnd) tsEnd = tsStart; 
+    if (tsEnd < tsStart) tsEnd = tsStart;
 
     let viewStartTs = window.ganttViewStartTs; let viewDuration = window.ganttViewDuration;
     if (!viewStartTs || !viewDuration) return `<div>-</div>`;
@@ -1855,22 +1857,18 @@ window.handleAuthClick = function() {
     let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
     let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
 
-    // 💡 수정됨: 모바일 4px 대응을 위해 폰트 크기를 강제 축소
+    // 라벨 HTML 생성
     let labelHTML = ''; for (let i = 0; i <= 4; i++) { 
         let pct = (i / 4) * 100; 
         let ts = viewStartTs + (viewDuration * i / 4); 
         let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); 
-        // 폰트 4px 적용 및 모바일 빗금 잘림 방지를 위해 transform scale 적용
-        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: 8px !important; transform: scale(0.5); transform-origin: center;">${formatChartLabel(ts)}</span>`; 
+        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: 8px !important; transform: scale(0.6);">${formatChartLabel(ts)}</span>`; 
     }
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
     
-    // 💡 수정됨: 모바일 빗금 버그 방지를 위해 가로폭을 명시적으로 고정 (width: 100px)
-    // return `<div style="display:flex; flex-direction:column; width:100px !important; min-width:100px !important;" title="소요일수: ${durationDays}일">
-    // createStatusChart 함수 내부 return 부분을 이렇게 수정되어 있는지 확인하세요
-    return `<div style="display:flex; flex-direction:column; width:100% !important; min-width:120px !important;">...</div>`;
-
+    // 최종 리턴 (가로폭 유지)
+    return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px;" title="소요일수: ${durationDays}일">
                 <div class="chart-axis-wrapper" style="position:relative; height:12px;">${labelHTML}</div>
                 <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
