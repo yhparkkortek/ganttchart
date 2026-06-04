@@ -208,11 +208,10 @@
         
         <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
             <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
-            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">    
+            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
         </div>
 
         <div class="btn-group">
-            <button class="action-btn" onclick="location.reload(true)" style="border-color:#17a2b8; color:#17a2b8;" title="캐시를 무시하고 최신 상태로 강제 새로고침 합니다.">🔄 새로고침 (Ctrl+F5)</button>
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button class="action-btn" onclick="exportToExcel()">💾 엑셀 저장</button>
             <button class="action-btn" onclick="window.print()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
@@ -2122,6 +2121,115 @@
             return '';
         }
     });
+</script>
+
+<script>
+    // =========================================================
+    // 🎛️ UI 개선: 점선 제거, 필터 위치 재배치, 10글자 제한
+    // =========================================================
+
+    // 1. CSS 동적 주입 (날짜 점선 제거 & 필터 가로 배치 & 말줄임표)
+    document.head.insertAdjacentHTML('beforeend', `
+    <style>
+        /* 날짜 밑줄 점선 완전히 제거 */
+        .date-clickable { border-bottom: none !important; }
+        .date-clickable:hover { color: #0056b3; font-weight: bold; border-bottom: none !important; }
+
+        /* 필터 그룹들을 나란히 배치하기 위한 레이아웃 설정 */
+        #dynamic-filters { display: flex; flex-wrap: wrap; gap: 5px 20px; }
+        .filter-group { display: flex; align-items: center; flex-wrap: wrap; transition: 0.3s; margin-bottom: 0 !important; }
+        
+        /* 개발단계 버튼 글자수 약 10글자로 제한 (넘치면 ... 처리) */
+        .btn-dev-stage {
+            max-width: 120px; 
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: inline-block;
+            vertical-align: middle;
+        }
+    </style>
+    `);
+
+    // 2. 필터 생성 로직 덮어쓰기 (순서 변경 및 개발단계 버튼 툴팁 추가)
+    window.generateFilters = function(data) {
+        let savedFilters = {};
+        for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
+
+        const filterContainer = document.getElementById('dynamic-filters'); filterContainer.innerHTML = ''; currentFilters = {}; 
+        existingDevStages = []; let assigneeModelsAll = {}; let assigneeModelsActive = {};
+
+        // 데이터 순회 수집 (기존 동일)
+        for(let i = 1; i < data.length; i++) {
+            if (!data[i] || data[i].join('').trim() === '') continue;
+            let assignee = colIdx.assignee !== -1 ? data[i][colIdx.assignee] : "";
+            let status = colIdx.status !== -1 && data[i][colIdx.status] ? data[i][colIdx.status].toString().toLowerCase() : "";
+            let model = colIdx.model !== -1 ? data[i][colIdx.model] : "";
+            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : "";
+            
+            if (devStage !== undefined && devStage !== null) {
+                let s = devStage.toString().trim(); if (s !== '' && !existingDevStages.includes(s)) existingDevStages.push(s);
+            }
+            if (assignee !== undefined && assignee !== null && assignee.toString().trim() !== '') {
+                let strAssignee = assignee.toString().trim();
+                if (!assigneeModelsAll[strAssignee]) assigneeModelsAll[strAssignee] = new Set();
+                if (!assigneeModelsActive[strAssignee]) assigneeModelsActive[strAssignee] = new Set();
+                if (model !== undefined && model !== null && model.toString().trim() !== '') {
+                    let strModel = model.toString().trim(); assigneeModelsAll[strAssignee].add(strModel);
+                    let isDone = status.includes('complete') || status.includes('완료') || status.includes('cancel') || status.includes('취소') || status.includes('drop') || status.includes('드랍');
+                    if (!isDone) { assigneeModelsActive[strAssignee].add(strModel); }
+                }
+            }
+        }
+
+        // 💡 핵심: 필터 표시 순서를 강제로 조작 (LEVEL -> 업무상태 -> 개발단계)
+        const orderMap = { 'LEVEL(WBS)': 1, '업무상태': 2, '개발단계': 3 };
+        filterColumns.sort((a, b) => (orderMap[a.name] || 99) - (orderMap[b.name] || 99));
+
+        filterColumns.forEach(col => {
+            let uniqueValues = new Set();
+            for(let i = 1; i < data.length; i++) {
+                if (!data[i] || data[i].join('').trim() === '') continue; 
+                let val = data[i][col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { uniqueValues.add(val.toString().trim()); }
+            }
+            let valuesArray = Array.from(uniqueValues);
+            if (col.name === '개발단계') { valuesArray = existingDevStages; } else { valuesArray.sort(); }
+
+            currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
+            let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
+            
+            // 개발단계 그룹은 가로 폭을 100%로 주어 무조건 아랫줄로 넘어가게 강제 배치
+            if (col.name === '개발단계') {
+                groupDiv.style.width = '100%';
+                groupDiv.style.marginTop = '6px';
+            }
+            
+            let label = document.createElement('div'); 
+            label.className = 'filter-label'; 
+            label.textContent = col.name; 
+            if (currentFilters[col.index].has('All')) label.classList.add('active'); 
+            label.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); 
+            groupDiv.appendChild(label);
+
+            valuesArray.forEach(val => {
+                let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
+                if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
+                
+                // 💡 개발단계 버튼에만 10글자 제한 클래스 및 말풍선(title) 추가
+                if (col.name === '개발단계') {
+                    btn.classList.add('btn-dev-stage');
+                    btn.title = val; // 마우스 오버 시 말풍선 표시
+                }
+
+                if (col.name === '담당자') {
+                    let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
+                    btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
+                } else { btn.textContent = val; }
+                btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
+            });
+            filterContainer.appendChild(groupDiv);
+        });
+    };
 </script>
     
 </body>
