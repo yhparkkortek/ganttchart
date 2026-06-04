@@ -260,12 +260,8 @@
     // =========================================================
 
 if (window.name !== 'gantt_popup') {
-    const w = screen.availWidth, h = screen.availHeight;
-    const newWin = window.open(location.href, 'gantt_popup',
-        `width=${w},height=${h},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
+    const newWin = window.open(location.href, 'gantt_popup');
     if (newWin) {
-        newWin.moveTo(0, 0);
-        newWin.resizeTo(screen.availWidth, screen.availHeight);
         newWin.focus();
         window.close();
     }
