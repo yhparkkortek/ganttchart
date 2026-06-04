@@ -2417,11 +2417,36 @@ window.handleAuthClick = function() {
 
     /* 모바일 레이아웃 보정 */
     @media screen and (max-width: 768px) {
-        body { margin: 5px !important; }
-        .controls { padding: 8px !important; }
-        #table-info { font-size: 11px !important; height: auto !important; flex-wrap: wrap; padding: 5px 8px !important; }
+        body { margin: 3px !important; }
+        .controls { padding: 6px !important; font-size: 11px !important; }
+        
+        /* 헤더 버튼 줄바꿈 허용 */
+        #table-info { 
+            font-size: 10px !important; 
+            height: auto !important; 
+            min-height: 40px !important;
+            flex-wrap: wrap; 
+            padding: 4px 6px !important; 
+        }
         #table-info .btn-group { flex-wrap: wrap; gap: 3px; }
-        .action-btn { font-size: 10px !important; padding: 4px 6px !important; height: auto !important; }
+        .action-btn { font-size: 9px !important; padding: 3px 5px !important; height: auto !important; }
+
+        /* No 열 잘림 방지 */
+        td.no-td, th:first-child { 
+            min-width: 28px !important; 
+            width: 28px !important;
+            font-size: 10px !important;
+        }
+
+        /* 현황 날짜 라벨 겹침 방지 - 5개 중 양끝 2개만 표시 */
+        .chart-axis-wrapper span.chart-label:nth-child(2),
+        .chart-axis-wrapper span.chart-label:nth-child(3),
+        .chart-axis-wrapper span.chart-label:nth-child(4) {
+            display: none !important;
+        }
+
+        /* 현황 열 최소 너비 */
+        .chart-td { min-width: 100px !important; }
     }
 </style>
     
