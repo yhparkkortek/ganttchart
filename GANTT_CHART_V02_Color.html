@@ -2591,20 +2591,21 @@ window.analyzeMailContent = function() {
     document.getElementById('mail-error').style.display = 'none';
     document.getElementById('mail-analyze-btn').disabled = true;
 
-    // 현재 간트차트 담당자 정보 수집
-const colInfo = globalData && globalData.length > 0 ? globalData[0].join(', ') : '없음';
-let projectAssignee = "";
-if (colIdx.assignee !== -1) {
-    for (let i = 1; i < globalData.length; i++) {
-        if (globalData[i] && globalData[i][colIdx.assignee]) {
-            projectAssignee = globalData[i][colIdx.assignee].toString().trim();
-            break;
+    // ✅ 프로젝트 정보 함수 내부에서 직접 수집
+    let projectAssignee = "";
+    let projectCustomer = "";
+    let projectModel = "";
+    let projectInch = "";
+    if (globalData && globalData.length > 1) {
+        for (let i = 1; i < globalData.length; i++) {
+            let r = globalData[i]; if (!r) continue;
+            if (!projectAssignee && colIdx.assignee !== -1 && r[colIdx.assignee]) projectAssignee = r[colIdx.assignee].toString().trim();
+            if (!projectCustomer && colIdx.customer !== -1 && r[colIdx.customer]) projectCustomer = r[colIdx.customer].toString().trim();
+            if (!projectModel && colIdx.model !== -1 && r[colIdx.model]) projectModel = r[colIdx.model].toString().trim();
+            if (!projectInch && colIdx.inch !== -1 && r[colIdx.inch]) projectInch = r[colIdx.inch].toString().trim();
+            if (projectAssignee && projectCustomer && projectModel && projectInch) break;
         }
     }
-}
-let projectCustomer = colIdx.customer !== -1 && globalData[1] ? (globalData[1][colIdx.customer] || "") : "";
-let projectModel = colIdx.model !== -1 && globalData[1] ? (globalData[1][colIdx.model] || "") : "";
-let projectInch = colIdx.inch !== -1 && globalData[1] ? (globalData[1][colIdx.inch] || "") : "";
 
 const prompt = `아래 메일 내용을 분석해서 간트차트 업무 항목을 JSON으로 추출해주세요.
 
