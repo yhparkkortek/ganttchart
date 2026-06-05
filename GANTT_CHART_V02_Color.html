@@ -689,8 +689,19 @@ if (window.name !== 'gantt_popup') {
                 document.getElementById('file-input').value = '';
                 return;
             }
-            if (pw !== "kortek") {
-                alert("❌ 비밀번호가 틀렸습니다. 엑셀 로드가 취소되었습니다.");
+            let maxTry = 5;
+            let success = false;
+            for (let i = 0; i < maxTry; i++) {
+                if (pw.toLowerCase() === "kortek") { success = true; break; }
+                let remain = maxTry - i - 1;
+                if (remain === 0) break;
+                pw = prompt(
+                    `❌ 비밀번호가 틀렸습니다. (대/소문자 구분 없음)\n남은 시도: ${remain}회\n\n비밀번호를 다시 입력하세요.`
+                );
+                if (!pw) break;
+            }
+            if (!success) {
+                alert("❌ 비밀번호 인증 실패. 엑셀 로드가 취소되었습니다.");
                 document.getElementById('file-input').value = '';
                 return;
             }
