@@ -2565,17 +2565,17 @@ window.clearGeminiKey = function() {
 
 window.populateInsertPosition = function() {
     const select = document.getElementById('mail-insert-position');
-    select.innerHTML = '';
-    if (!globalData || globalData.length <= 1) {
-        select.innerHTML = '<option value="-1">맨 마지막에 추가</option>';
-        return;
-    }
     select.innerHTML = '<option value="-1">맨 마지막에 추가</option>';
+    if (!globalData || globalData.length <= 1) return;
     for (let i = 1; i < globalData.length; i++) {
         let row = globalData[i]; if (!row) continue;
         let taskName = row._origDev || row._origT1 || row._origT2 || row._origT3 || row._origT4 || `행 ${i}`;
-        let levelLabel = ['[L0]','[L1]','[L2]','[L3]','[L4]'][row._level || 0];
-        select.innerHTML += `<option value="${i}">${i}행 ${levelLabel} ${taskName} 아래에 추가</option>`;
+        let level = row._level || 0;
+        // ✅ WBS 형태로 표시
+        let prefix = level === 0 ? '' : (row._isLastChild ? '└ ' : '├ ');
+        let indent = '\u00A0'.repeat(level * 3);
+        let levelLabel = `[L${level}]`;
+        select.innerHTML += `<option value="${i}">${i}행 ${indent}${prefix}${levelLabel} ${taskName} 아래</option>`;
     }
 };
 
@@ -2591,21 +2591,41 @@ window.analyzeMailContent = function() {
     document.getElementById('mail-error').style.display = 'none';
     document.getElementById('mail-analyze-btn').disabled = true;
 
-    // 현재 간트차트 컬럼 정보 수집
-    const colInfo = globalData && globalData.length > 0 ? globalData[0].join(', ') : '없음';
+    // 현재 간트차트 담당자 정보 수집
+const colInfo = globalData && globalData.length > 0 ? globalData[0].join(', ') : '없음';
+let projectAssignee = "";
+if (colIdx.assignee !== -1) {
+    for (let i = 1; i < globalData.length; i++) {
+        if (globalData[i] && globalData[i][colIdx.assignee]) {
+            projectAssignee = globalData[i][colIdx.assignee].toString().trim();
+            break;
+        }
+    }
+}
+let projectCustomer = colIdx.customer !== -1 && globalData[1] ? (globalData[1][colIdx.customer] || "") : "";
+let projectModel = colIdx.model !== -1 && globalData[1] ? (globalData[1][colIdx.model] || "") : "";
+let projectInch = colIdx.inch !== -1 && globalData[1] ? (globalData[1][colIdx.inch] || "") : "";
 
-    const prompt = `아래 메일 내용을 분석해서 간트차트 업무 항목을 JSON으로 추출해주세요.
+const prompt = `아래 메일 내용을 분석해서 간트차트 업무 항목을 JSON으로 추출해주세요.
 
-간트차트 컬럼 구조: ${colInfo}
+프로젝트 정보:
+- 담당자(프로젝트): ${projectAssignee}
+- 고객: ${projectCustomer}
+- 모델: ${projectModel}
+- 인치: ${projectInch}
 
 추출 규칙:
 - 업무명: 메일에서 핵심 업무/요청 내용 (20자 이내로 요약)
-- 담당자: 수신자 또는 담당자 이름
+- 담당자: 반드시 프로젝트 담당자인 "${projectAssignee}" 를 사용
 - 시작일: 언급된 시작일 또는 오늘 날짜 (YYYY-MM-DD 형식)
 - 완료일: 마감일 또는 시작일+7일 (YYYY-MM-DD 형식)
 - 상태: 진행/대기/완료 중 하나
 - 개발단계: 메일 내용에서 유추 (없으면 빈값)
-- 상세내용: 메일 핵심 내용 요약 (100자 이내)
+- 고객: "${projectCustomer}"
+- 모델: "${projectModel}"
+- 인치: "${projectInch}"
+- 상세내용: 메일 핵심 내용을 200자 이내로 구체적으로 요약. 메일에서 언급된 업무담당자가 있으면 맨 뒤에 [업무담당자:이름] 형태로 추가
+- wbs레벨: 메일 내용의 업무 성격에 따라 0~4 중 적절한 숫자
 
 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만:
 {
@@ -2615,7 +2635,11 @@ window.analyzeMailContent = function() {
   "완료일": "",
   "상태": "",
   "개발단계": "",
-  "상세내용": ""
+  "고객": "",
+  "모델": "",
+  "인치": "",
+  "상세내용": "",
+  "wbs레벨": 3
 }
 
 메일 내용:
@@ -2662,21 +2686,36 @@ window.renderMailResult = function(result) {
         { key: '완료일', label: '📅 완료일' },
         { key: '상태', label: '🔖 상태' },
         { key: '개발단계', label: '🏗️ 개발단계' },
+        { key: '고객', label: '🏢 고객' },
+        { key: '모델', label: '📱 모델' },
+        { key: '인치', label: '📐 인치' },
         { key: '상세내용', label: '📝 상세내용' },
     ];
 
     let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
     fields.forEach(f => {
+        let inputType = f.key === '상세내용' ? 
+            `<textarea data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif; resize:vertical; min-height:60px;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>` :
+            `<input type="text" value="${escapeHtml(result[f.key] || '')}" data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">`;
         html += `<tr>
             <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; width:100px; white-space:nowrap;">${f.label}</td>
-            <td style="padding:7px 10px; border:1px solid #dee2e6;">
-                <input type="text" value="${escapeHtml(result[f.key] || '')}" 
-                    data-field="${f.key}"
-                    style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif;"
-                    onchange="window._mailAnalyzedResult['${f.key}'] = this.value">
-            </td>
+            <td style="padding:7px 10px; border:1px solid #dee2e6;">${inputType}</td>
         </tr>`;
     });
+
+    // ✅ WBS 레벨 선택
+    let levelOptions = [0,1,2,3,4].map(n => 
+        `<option value="${n}" ${result['wbs레벨'] == n ? 'selected' : ''}>Level ${n} ${['(대분류)','(소분류1)','(소분류2)','(세부업무)','(하위업무)'][n]}</option>`
+    ).join('');
+    html += `<tr>
+        <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; white-space:nowrap;">📊 WBS 레벨</td>
+        <td style="padding:7px 10px; border:1px solid #dee2e6;">
+            <select style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:4px; font-size:13px;" 
+                onchange="window._mailAnalyzedResult['wbs레벨'] = parseInt(this.value)">
+                ${levelOptions}
+            </select>
+        </td>
+    </tr>`;
     html += '</table>';
 
     document.getElementById('mail-result-table').innerHTML = html;
@@ -2689,30 +2728,45 @@ window.insertMailTask = function() {
 
     const r = window._mailAnalyzedResult;
     const insertAfter = parseInt(document.getElementById('mail-insert-position').value);
+    const wbsLevel = parseInt(r['wbs레벨'] ?? 3);
 
-    // 새 행 생성
     let newRow = new Array(globalData[0].length).fill("");
-    newRow._level = 3; // 기본 레벨 3
-    newRow._origDev = ""; newRow._origT1 = ""; newRow._origT2 = ""; newRow._origT3 = r['업무명'] || "새 업무"; newRow._origT4 = "";
+    newRow._level = wbsLevel;
+    newRow._origDev = ""; newRow._origT1 = ""; newRow._origT2 = ""; newRow._origT3 = ""; newRow._origT4 = "";
+    const taskName = r['업무명'] || "새 업무";
+    if (wbsLevel === 0) newRow._origDev = taskName;
+    else if (wbsLevel === 1) newRow._origT1 = taskName;
+    else if (wbsLevel === 2) newRow._origT2 = taskName;
+    else if (wbsLevel === 3) newRow._origT3 = taskName;
+    else if (wbsLevel === 4) newRow._origT4 = taskName;
+
     newRow._startForced = false; newRow._planForced = false;
 
-    // 컬럼 매핑
+    // ✅ 컬럼 매핑 (고객/모델/인치 포함)
     if (colIdx.assignee !== -1) newRow[colIdx.assignee] = r['담당자'] || "";
     if (colIdx.start !== -1 && r['시작일']) { newRow[colIdx.start] = r['시작일']; newRow._startForced = true; }
     if (colIdx.plan !== -1 && r['완료일']) { newRow[colIdx.plan] = r['완료일']; newRow._planForced = true; }
     if (colIdx.status !== -1) newRow[colIdx.status] = r['상태'] || "진행";
     if (colIdx.devStage !== -1) newRow[colIdx.devStage] = r['개발단계'] || "";
+    if (colIdx.customer !== -1) newRow[colIdx.customer] = r['고객'] || "";
+    if (colIdx.model !== -1) newRow[colIdx.model] = r['모델'] || "";
+    if (colIdx.inch !== -1) newRow[colIdx.inch] = r['인치'] || "";
     if (colIdx.content !== -1) newRow[colIdx.content] = r['상세내용'] || "";
-    if (colIdx.dur3 !== -1) newRow[colIdx.dur3] = "1";
 
-    // 삽입
+    // 소요일 설정
+    if (wbsLevel === 1 && colIdx.dur1 !== -1) newRow[colIdx.dur1] = "1";
+    else if (wbsLevel === 2 && colIdx.dur2 !== -1) newRow[colIdx.dur2] = "1";
+    else if (wbsLevel === 3 && colIdx.dur3 !== -1) newRow[colIdx.dur3] = "1";
+    else if (wbsLevel === 4 && colIdx.dur4 !== -1) newRow[colIdx.dur4] = "1";
+    else if (colIdx.period !== -1) newRow[colIdx.period] = "1";
+
     const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
     globalData.splice(pos, 0, newRow);
 
-    logChange(pos, -1, "없음", `메일 분석으로 추가: ${r['업무명']}`);
+    logChange(pos, -1, "없음", `메일 분석으로 추가: ${taskName}`);
     window.closeMailAnalyzer();
     window.recalculateSchedules();
-    alert(`✅ "${r['업무명']}" 업무가 추가되었습니다!`);
+    alert(`✅ "${taskName}" 업무가 추가되었습니다!`);
 };
 </script>
 
