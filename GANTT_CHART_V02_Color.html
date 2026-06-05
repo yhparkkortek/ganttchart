@@ -666,18 +666,40 @@ if (window.name !== 'gantt_popup') {
     dropZone.addEventListener('dragenter', function(e) { dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', function(e) { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
     dropZone.addEventListener('drop', function(e) {
-        e.preventDefault(); dropZone.classList.remove('drag-over');
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) handleFiles({ target: { files: e.dataTransfer.files } });
+    e.preventDefault(); dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            // ✅ 드래그앤드롭도 file-input 초기화 포함
+            document.getElementById('file-input').value = '';
+            handleFiles({ target: { files: e.dataTransfer.files } });
+        }
     });
 
-    function handleFiles(e) {
-        window.currentDriveFileId = null;
+        function handleFiles(e) {
         const files = e.target.files; if (!files || files.length === 0) return;
-        
+    
+        // ✅ 구글 드라이브 연동 상태에서 엑셀 로드 시 경고
+        if (window.currentDriveFileId) {
+            let confirmLoad = confirm(
+                "⚠️ 현재 구글 드라이브와 연동된 프로젝트가 있습니다.\n\n" +
+                "확인 → 드라이브 연동 유지 + 엑셀 데이터로 업데이트\n" +
+                "취소 → 엑셀 로드 취소 (드라이브 데이터 유지)"
+            );
+            if (!confirmLoad) {
+                document.getElementById('file-input').value = '';
+                return;
+            }
+            // 연동 유지 (currentDriveFileId 그대로)
+        } else {
+            window.currentDriveFileId = null;
+        }
+            
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {};
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
         let headerRow = []; let filesProcessed = 0; let totalFiles = files.length;
-        window.changeLogs = []; window.lastSavedLogCount = 0; 
+        // 드라이브 연동 유지 시 기존 로그 보존
+        if (!window.currentDriveFileId) {
+            window.changeLogs = []; window.lastSavedLogCount = 0;
+        } 
         
         document.getElementById('file-status').textContent = "데이터를 분석하고 일정을 연산하는 중입니다...";
 
@@ -783,18 +805,18 @@ if (window.name !== 'gantt_popup') {
                     globalData = [headerRow, ...globalData];
                     
                     // ✅ 파일 로드 시 이름 확인
+                    // 교체
                     if (window.currentUserName === "비로그인 (로컬)" || window.currentUserName === "익명 사용자") {
                         let localName = localStorage.getItem('gantt_local_user');
                         if (!localName) {
                             localName = prompt("수정이력에 기록될 이름을 입력해주세요.", "");
-                            if (!localName) localName = "로컬 사용자";
-                            localStorage.setItem('gantt_local_user', localName);
+                            if (!localName || localName.trim() === '') localName = "로컬 사용자";
+                            localStorage.setItem('gantt_local_user', localName.trim());
                         }
-                        window.currentUserName = localName;
-                        // ✅ 구글 연동처럼 버튼에 이름 표시
+                        window.currentUserName = localName.trim();
                         const authBtn = document.getElementById('auth_button');
                         if (authBtn && authBtn.innerText.includes('연동하기')) {
-                            authBtn.innerText = `👤 ${localName}`;
+                            authBtn.innerText = `👤 ${localName.trim()}`;
                             authBtn.style.borderColor = '#28a745';
                             authBtn.style.color = '#28a745';
                         }
