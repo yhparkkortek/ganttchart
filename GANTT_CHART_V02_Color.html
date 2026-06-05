@@ -356,6 +356,7 @@ if (window.name !== 'gantt_popup') {
 
     async function saveToGoogleDrive() {
         if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
+        updatePrintTitle(); // ✅ 저장 전 파일명 강제 갱신
         document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
         let dynamicFileName = (window.exportFilenameStr || "GanttChart_Project") + ".json";
         let serializedGlobalData = globalData.map(row => {
@@ -367,7 +368,8 @@ if (window.name !== 'gantt_popup') {
         let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns };
         
         try {
-            if (!window.currentDriveFileId) { window.currentDriveFileId = await findSaveFile(dynamicFileName); }
+            // ✅ 매번 파일명으로 재검색 (인치 다른 파일 혼용 방지)
+            window.currentDriveFileId = await findSaveFile(dynamicFileName);
             let fileId = window.currentDriveFileId; let boundary = 'foo_bar_baz';
             let metadata = { name: dynamicFileName, mimeType: 'application/json' };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
