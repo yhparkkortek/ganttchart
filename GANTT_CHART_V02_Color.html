@@ -814,7 +814,7 @@ if (window.name !== 'gantt_popup') {
                         }
                         window.currentUserName = localName.trim();
                         const authBtn = document.getElementById('auth_button');
-                        if (authBtn && authBtn.innerText.includes('연동하기')) {
+                        if (authBtn && !authBtn.innerText.includes('🟢')) {
                             authBtn.innerText = `👤 ${localName.trim()}`;
                             authBtn.style.borderColor = '#28a745';
                             authBtn.style.color = '#28a745';
