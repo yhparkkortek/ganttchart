@@ -2635,9 +2635,6 @@ const prompt = `아래 메일 내용을 분석해서 간트차트 업무 항목�
   "완료일": "",
   "상태": "",
   "개발단계": "",
-  "고객": "",
-  "모델": "",
-  "인치": "",
   "상세내용": "",
   "wbs레벨": 3
 }
@@ -2686,9 +2683,6 @@ window.renderMailResult = function(result) {
         { key: '완료일', label: '📅 완료일' },
         { key: '상태', label: '🔖 상태' },
         { key: '개발단계', label: '🏗️ 개발단계' },
-        { key: '고객', label: '🏢 고객' },
-        { key: '모델', label: '📱 모델' },
-        { key: '인치', label: '📐 인치' },
         { key: '상세내용', label: '📝 상세내용' },
     ];
 
@@ -2742,16 +2736,15 @@ window.insertMailTask = function() {
 
     newRow._startForced = false; newRow._planForced = false;
 
-    // ✅ 컬럼 매핑 (고객/모델/인치 포함)
-    if (colIdx.assignee !== -1) newRow[colIdx.assignee] = r['담당자'] || "";
-    if (colIdx.start !== -1 && r['시작일']) { newRow[colIdx.start] = r['시작일']; newRow._startForced = true; }
-    if (colIdx.plan !== -1 && r['완료일']) { newRow[colIdx.plan] = r['완료일']; newRow._planForced = true; }
-    if (colIdx.status !== -1) newRow[colIdx.status] = r['상태'] || "진행";
-    if (colIdx.devStage !== -1) newRow[colIdx.devStage] = r['개발단계'] || "";
-    if (colIdx.customer !== -1) newRow[colIdx.customer] = r['고객'] || "";
-    if (colIdx.model !== -1) newRow[colIdx.model] = r['모델'] || "";
-    if (colIdx.inch !== -1) newRow[colIdx.inch] = r['인치'] || "";
-    if (colIdx.content !== -1) newRow[colIdx.content] = r['상세내용'] || "";
+    // ✅ 고객/모델/인치/담당자는 기존 데이터에서 직접 복사
+    let refRow = null;
+    for (let i = 1; i < globalData.length; i++) {
+        if (globalData[i]) { refRow = globalData[i]; break; }
+    }
+    if (colIdx.assignee !== -1) newRow[colIdx.assignee] = refRow ? (refRow[colIdx.assignee] || "") : "";
+    if (colIdx.customer !== -1) newRow[colIdx.customer] = refRow ? (refRow[colIdx.customer] || "") : "";
+    if (colIdx.model !== -1) newRow[colIdx.model] = refRow ? (refRow[colIdx.model] || "") : "";
+    if (colIdx.inch !== -1) newRow[colIdx.inch] = refRow ? (refRow[colIdx.inch] || "") : "";
 
     // 소요일 설정
     if (wbsLevel === 1 && colIdx.dur1 !== -1) newRow[colIdx.dur1] = "1";
