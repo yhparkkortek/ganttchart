@@ -799,32 +799,30 @@ if (window.name !== 'gantt_popup') {
                         globalData.push(row); 
                     }
                 }
-                filesProcessed++;
-                if(filesProcessed === totalFiles) { 
-                    globalData = [headerRow, ...globalData];
-                    
-                    // ✅ 파일 로드 시 이름 확인
-                   
-                        if (window.currentUserName === "비로그인 (로컬)" || window.currentUserName === "익명 사용자") {
+                    filesProcessed++;
+                    if(filesProcessed === totalFiles) { 
+                        globalData = [headerRow, ...globalData];
+                        
+                        // ✅ 파일 로드 시 이름 확인
+                        const authBtn = document.getElementById('auth_button');
+                        const isGoogleLoggedIn = authBtn && authBtn.innerText.includes('🟢');
+                        
+                        if (!isGoogleLoggedIn) {
                             let savedName = localStorage.getItem('gantt_local_user') || "";
                             let localName = prompt("수정이력에 기록될 이름을 입력해주세요.", savedName);
                             if (!localName || localName.trim() === '') localName = savedName || "로컬 사용자";
-                            localStorage.setItem('gantt_local_user', localName.trim());
-                    
-                            if (!localName || localName.trim() === '') localName = "로컬 사용자";
-                            localStorage.setItem('gantt_local_user', localName.trim());
+                            localName = localName.trim();
+                            localStorage.setItem('gantt_local_user', localName);
+                            window.currentUserName = localName;
+                            if (authBtn && !authBtn.innerText.includes('🔄')) {
+                                authBtn.innerText = `👤 ${localName}`;
+                                authBtn.style.borderColor = '#28a745';
+                                authBtn.style.color = '#28a745';
+                            }
                         }
-                        window.currentUserName = localName.trim();
-                        const authBtn = document.getElementById('auth_button');
-                      if (authBtn && !authBtn.innerText.includes('🟢') && !authBtn.innerText.includes('🔄')) {
-                            authBtn.innerText = `👤 ${localName.trim()}`;
-                            authBtn.style.borderColor = '#28a745';
-                            authBtn.style.color = '#28a745';
-                        }
+                        
+                        window.recalculateSchedules(); 
                     }
-                    
-                    window.recalculateSchedules(); 
-                }
             };
             reader.readAsArrayBuffer(file);
         }
