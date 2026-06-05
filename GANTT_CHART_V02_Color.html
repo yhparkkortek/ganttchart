@@ -815,7 +815,7 @@ if (window.name !== 'gantt_popup') {
                             localStorage.setItem('gantt_local_user', localName);
                             window.currentUserName = localName;
                             if (authBtn && !authBtn.innerText.includes('🔄')) {
-                                authBtn.innerText = `👤 ${localName}`;
+                                authBtn.innerText = `👤 ${localName} (드라이브 연동하기)`;
                                 authBtn.style.borderColor = '#28a745';
                                 authBtn.style.color = '#28a745';
                             }
@@ -1796,10 +1796,20 @@ window.handleAuthClick = function() {
         authBtn.innerText = "🔄 연동 진행 중...";
         authBtn.disabled = true;
 
-        tokenClient.callback = async (resp) => {
-            if (resp.error !== undefined) { 
-                console.error("인증 실패 또는 취소:", resp.error); 
-                authBtn.innerText = "🔵 구글 드라이브 연동하기";
+            tokenClient.callback = async (resp) => {
+                 if (resp.error !== undefined) { 
+                console.error("인증 실패 또는 취소:", resp.error);
+                // ✅ 로컬 이름이 있으면 복원, 없으면 기본값
+                const savedName = localStorage.getItem('gantt_local_user');
+                if (savedName) {
+                    authBtn.innerText = `👤 ${savedName} (드라이브 연동하기)`;
+                    authBtn.style.borderColor = '#28a745';
+                    authBtn.style.color = '#28a745';
+                } else {
+                    authBtn.innerText = "🔵 구글 드라이브 연동하기";
+                    authBtn.style.borderColor = '#4285F4';
+                    authBtn.style.color = '#4285F4';
+                }
                 authBtn.disabled = false;
                 return; 
             }
