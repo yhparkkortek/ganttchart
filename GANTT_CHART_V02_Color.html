@@ -2656,7 +2656,8 @@ const defaultPrompt = `당신은 전자제품 개발 프로젝트 관리자입�
 ${mailText}`;
 
 // ✅ 저장된 커스텀 프롬프트가 있으면 사용
-window._defaultPromptTemplate = defaultPrompt;
+// 편집창용 템플릿은 mailText 치환 전 원본으로 저장
+window._defaultPromptTemplate = defaultPrompt.replace(mailText, '${mailText}');
 const savedPrompt = localStorage.getItem('gantt_mail_prompt');
 const prompt = savedPrompt 
     ? savedPrompt.replace('${mailText}', mailText)
