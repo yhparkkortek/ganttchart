@@ -1756,99 +1756,10 @@ if (window.name !== 'gantt_popup') {
 
     function formatChartLabel(ts) { let d = new Date(ts); return String(d.getFullYear()).slice(-2) + "." + String(d.getMonth() + 1).padStart(2, '0') + "." + String(d.getDate()).padStart(2, '0'); }
 
-    function createStatusChart(rowStartTs, rowPlanTs, statusVal, level) {
-        let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
-        let tsStart = rowStartTs; let tsEnd = rowPlanTs;
-        if (!tsStart && !tsEnd) return `<div>-</div>`; if (!tsEnd) tsEnd = tsStart; if (tsEnd < tsStart) tsEnd = tsStart;
-
-        let viewStartTs = window.ganttViewStartTs; let viewDuration = window.ganttViewDuration;
-        if (!viewStartTs || !viewDuration) return `<div>-</div>`;
-
-        let startPct = Math.max(0, Math.min(100, ((tsStart - viewStartTs) / viewDuration) * 100)); let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
-        let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
-        
-        let barColorVar = level === 0 ? window.chartColors.l0 : (level === 1 ? window.chartColors.l1 : (level === 2 ? window.chartColors.l2 : window.chartColors.l3));
-        if (isCancel || isDrop) barColorVar = "#adb5bd"; 
-
-        let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
-        let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
-        let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
-
-        let labelHTML = ''; for (let i = 0; i <= 4; i++) { let pct = (i / 4) * 100; let ts = viewStartTs + (viewDuration * i / 4); let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`); labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5;">${formatChartLabel(ts)}</span>`; }
-        let durationDays = countWorkingDays(tsStart, tsEnd);
-        return `<div style="display:flex; flex-direction:column; width:100%; min-width:180px;" title="소요일수: ${durationDays}일"><div class=\"chart-axis-wrapper\">${labelHTML}</div><div style=\"position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;\">${gridLines}${todayLine}<div style=\"position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; background-color:${barColorVar}; border-radius:4px; z-index:2; opacity:0.95; display:flex; justify-content:flex-start; align-items:center; box-shadow:0 1px 3px rgba(0,0,0,0.2);\"></div></div></div>`;
-    }
-
-</script>
-
-  <script>
-    // =========================================================
-    // 1. 드라이브 미연동 시 로컬 사용자 이름 저장 및 이력 기록
-    // =========================================================
-    window.getActiveUserName = function() {
-        if (window.currentUserName && window.currentUserName !== "비로그인 (로컬)" && window.currentUserName !== "익명 사용자") {
-            return window.currentUserName;
-        }
-        let localName = localStorage.getItem('gantt_local_user');
-        if (!localName) {
-            localName = prompt("드라이브 미연동 상태입니다.\n수정이력에 기록될 PC(또는 사용자) 이름을 입력해주세요.", "로컬 사용자");
-            if (!localName) localName = "로컬 사용자";
-            localStorage.setItem('gantt_local_user', localName);
-        }
-        return localName + " (PC)";
-    };
-
-    window.logChange = function(rowIndex, colIndex, oldVal, newVal) {
-        if (!globalData || globalData.length === 0) return;
-        let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
-        let rowName = rowIndex; 
-        let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
-        if (tr) {
-            let noTd = tr.querySelector('.no-td');
-            if (noTd) {
-                let span = noTd.querySelector('.row-num-span');
-                if (span && span.textContent) rowName = span.textContent.trim();
-                else if (noTd.textContent) rowName = noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim() || rowIndex;
-            }
-        } else if (globalData[rowIndex]) { rowName = globalData[rowIndex][colIdx.no] || rowIndex; }
-        
-        window.changeLogs.push({ 
-            time: new Date().toLocaleString('ko-KR'), 
-            userName: window.getActiveUserName(), 
-            rowName: rowName, 
-            colName: colName, 
-            oldVal: oldVal, 
-            newVal: newVal 
-        });
-    };
-
-    const originalDeleteRow = window.deleteRow;
-    window.deleteRow = function(index) {
-        let tempUser = window.currentUserName; 
-        window.currentUserName = window.getActiveUserName(); 
-        originalDeleteRow(index); 
-        window.currentUserName = tempUser; 
-    };
-
-    // =========================================================
-    // 2. 1분 비활동 시 구글 드라이브 자동 저장 기능
-    // =========================================================
-    let inactivityTimer = null;
-    function resetInactivityTimer() {
-        clearTimeout(inactivityTimer);
-        inactivityTimer = setTimeout(() => {
-            if (window.currentDriveFileId && window.changeLogs && window.changeLogs.length > window.lastSavedLogCount) {
-                document.getElementById('file-status').textContent = "⏳ 1분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
-                saveToGoogleDrive();
-            }
-        }, 60000);
-    }
-    ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
-      resetInactivityTimer();
 </script>
 
 <script>
-    // 3. 구글 드라이브 연동 최적화
+    
     // =========================================================
     // 3. 구글 드라이브 연동 최적화 (F5 캐시 꼬임 원천 차단 및 UI 안내)
     // =========================================================
