@@ -359,7 +359,7 @@ if (window.name !== 'gantt_popup') {
         if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
         updatePrintTitle(); // ✅ 저장 전 파일명 강제 갱신
         document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
-        let dynamicFileName = (window.exportFilenameStr || "GanttChart_Project") + ".json";
+        let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
         let serializedGlobalData = globalData.map(row => {
             let obj = { data: Array.from(row) };
             for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
@@ -1676,6 +1676,7 @@ if (window.name !== 'gantt_popup') {
         document.getElementById('print-date').textContent = "인쇄일자: " + dateStringFull;
         const exportName = `${dateStringYYMMDD}_[Gantt Chart] ${safeInfoStr}`; 
         document.title = exportName; window.exportFilenameStr = exportName;
+        window.driveSaveFilenameStr = `[Gantt Chart] ${safeInfoStr}`;  // 날짜 없는 드라이브 전용 파일명
     }
 
     function updateFilterVisibility() {
@@ -2946,8 +2947,15 @@ window.insertMailTask = function() {
     if (colIdx.model !== -1) newRow[colIdx.model] = refRow ? (refRow[colIdx.model] || "") : "";
     if (colIdx.inch !== -1) newRow[colIdx.inch] = refRow ? (refRow[colIdx.inch] || "") : "";
     // ✅ 분석 결과 매핑
-    if (colIdx.start !== -1 && r['시작일']) { newRow[colIdx.start] = r['시작일']; newRow._startForced = true; }
-    if (colIdx.plan !== -1 && r['완료일']) { newRow[colIdx.plan] = r['완료일']; newRow._planForced = true; }
+    const _fixYear = (d) => {
+    if (!d) return d;
+    const m = d.match(/^(\d{4})([-\/]\d{1,2}[-\/]\d{1,2})$/);
+    if (m && parseInt(m[1]) < new Date().getFullYear() - 1)
+        return new Date().getFullYear() + m[2];
+    return d;
+    };
+    if (colIdx.start !== -1 && r['시작일']) { newRow[colIdx.start] = _fixYear(r['시작일']); newRow._startForced = true; }
+    if (colIdx.plan !== -1 && r['완료일']) { newRow[colIdx.plan] = _fixYear(r['완료일']); newRow._planForced = true; }
     if (colIdx.status !== -1) newRow[colIdx.status] = (r['상태'] || "진행").toString().trim();
     if (colIdx.devStage !== -1) newRow[colIdx.devStage] = (r['개발단계'] || "").toString().trim();
     if (colIdx.content !== -1) newRow[colIdx.content] = (r['상세내용'] || "").toString().trim().replace(/\\n/g, '\n');
