@@ -1326,6 +1326,7 @@ if (window.name !== 'gantt_popup') {
         // ✅ [대괄호 단어] Bold 처리
         safeText = safeText.replace(/(\[[^\]]+\])/g, '<b>$1</b>');
         return safeText.replace(/\n/g, '<br>');
+    }  // ← 이 닫는 괄호가 빠져있음
 
     function parseDateValue(value) {
         if (value === "" || value === null || value === undefined) return null;
