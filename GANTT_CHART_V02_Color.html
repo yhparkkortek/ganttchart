@@ -2593,39 +2593,32 @@ window.populateInsertPosition = function() {
 };
 
 window.analyzeMailContent = function() {
-    alert("버튼이 클릭되었습니다!"); // 버튼 연결 확인용 테스트 코드
-
-    const usePersonal = document.getElementById('use-personal-key').checked;
-    const personalKey = document.getElementById('personal-gemini-key').value.trim();
-    const adminKey = localStorage.getItem('gemini_api_key');
-
-    if (usePersonal && !personalKey) { alert('개인 API 키를 입력해주세요.'); return; }
-    if (!usePersonal && !adminKey) { alert('관리자 API 키가 저장되어 있지 않습니다.'); return; }
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) { alert('먼저 AI API 키를 입력하고 저장해주세요.'); return; }
 
     const mailText = document.getElementById('mail-content-input').value.trim();
     if (!mailText) { alert('메일 내용을 입력해주세요.'); return; }
 
     document.getElementById('mail-loading').style.display = 'block';
-    
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
+    document.getElementById('mail-result-section').style.display = 'none';
+    document.getElementById('mail-error').style.display = 'none';
+    document.getElementById('mail-analyze-btn').disabled = true;
 
-    fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            userApiKey: usePersonal ? personalKey : null,
-            prompt: "이 메일을 분석해주세요: " + mailText
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        alert("서버 응답 성공!"); 
-        console.log(data);
-    })
-    .catch(err => {
-        alert("서버 연결 실패: " + err.message);
-    });
-};
+    // ✅ 프로젝트 정보 함수 내부에서 직접 수집
+    let projectAssignee = "";
+    let projectCustomer = "";
+    let projectModel = "";
+    let projectInch = "";
+    if (globalData && globalData.length > 1) {
+        for (let i = 1; i < globalData.length; i++) {
+            let r = globalData[i]; if (!r) continue;
+            if (!projectAssignee && colIdx.assignee !== -1 && r[colIdx.assignee]) projectAssignee = r[colIdx.assignee].toString().trim();
+            if (!projectCustomer && colIdx.customer !== -1 && r[colIdx.customer]) projectCustomer = r[colIdx.customer].toString().trim();
+            if (!projectModel && colIdx.model !== -1 && r[colIdx.model]) projectModel = r[colIdx.model].toString().trim();
+            if (!projectInch && colIdx.inch !== -1 && r[colIdx.inch]) projectInch = r[colIdx.inch].toString().trim();
+            if (projectAssignee && projectCustomer && projectModel && projectInch) break;
+        }
+    }
 
 const defaultPrompt = `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
 
@@ -3012,32 +3005,17 @@ window.insertMailTask = function() {
         <div class="history-body" style="padding:20px; overflow-y:auto;">
 
             <!-- API 키 입력 -->
-        <div id="mail-api-key-section" style="margin-bottom:15px;">
-            <div style="display:flex; gap:8px; align-items:center; margin-bottom: 5px;">
-                <input id="mail-gemini-key" type="password" placeholder="관리자 API Key" 
-                       style="flex:1; padding:8px 12px; border:1px solid #ced4da; border-radius:6px; font-size:13px;">
-                <button onclick="window.saveGeminiKey()" 
-                       style="padding:8px 14px; background:#0056b3; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px;">저장</button>
+            <div id="mail-api-key-section" style="margin-bottom:15px;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input id="mail-gemini-key" type="password" placeholder="API Key 입력 후 저장" 
+                        style="flex:1; padding:8px 12px; border:1px solid #ced4da; border-radius:6px; font-size:13px;">
+                    <button onclick="window.saveGeminiKey()" 
+                        style="padding:8px 14px; background:#0056b3; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap;">💾 저장</button>
+                    <button onclick="window.clearGeminiKey()" 
+                        style="padding:8px 14px; background:#dee2e6; color:#333; border:none; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap;">🗑️ 초기화</button>
+                </div>
+                <div id="mail-key-status" style="font-size:12px; color:#28a745; margin-top:5px;"></div>
             </div>
-            
-            <div style="margin: 8px 0; font-size: 13px; background: #fdfdfd; padding: 8px; border-radius: 6px; border: 1px solid #eee;">
-                <label style="cursor: pointer; font-weight: bold;">
-                    <input type="checkbox" id="use-personal-key" onchange="togglePersonalKeyInput()"> 
-                    개인 API Key 사용 (본인 할당량 사용)
-                </label>
-                <input id="personal-gemini-key" type="password" placeholder="본인의 API Key를 입력하세요" 
-                       style="display:none; width:100%; margin-top:8px; padding:8px; border:1px solid #ced4da; border-radius:6px; box-sizing: border-box;">
-            </div>
-            
-            <div id="mail-key-status" style="font-size:12px; color:#28a745; margin-top:5px;"></div>
-        </div>
-        
-        <script>
-            function togglePersonalKeyInput() {
-                const isChecked = document.getElementById('use-personal-key').checked;
-                document.getElementById('personal-gemini-key').style.display = isChecked ? 'block' : 'none';
-            }
-        </script>
 
             <!-- 메일 입력 -->
             <div style="margin-bottom:12px;">
