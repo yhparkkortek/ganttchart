@@ -1219,6 +1219,9 @@ if (window.name !== 'gantt_popup') {
             }
     
             document.getElementById('calendar-popup').style.display = 'none';
+
+            // ✅ 날짜 선택 후 삽입 위치 자동 재설정
+            window.autoSetInsertPosition(str);
             return;
         }
     
@@ -2829,44 +2832,44 @@ window.renderMailResult = function(result) {
     document.getElementById('mail-result-table').innerHTML = html;
     document.getElementById('mail-result-section').style.display = 'block';
     
-    // ✅ 분석된 시작일 기준으로 추가 위치 자동 설정
-    window.autoSetInsertPosition(result['시작일']);
+    // ✅ 최초 분석 시에는 날짜 있을 때만 alert 표시
+    const hasDate = result['시작일'] && !result['시작일'].includes('날짜확인필요');
+    window.autoSetInsertPosition(result['시작일'], hasDate);
 };
 
-    window.autoSetInsertPosition = function(startDateStr) {
-    window.populateInsertPosition(); // 드롭다운 먼저 채우기
-    
-    const select = document.getElementById('mail-insert-position');
-    if (!startDateStr || startDateStr.includes('날짜확인필요') || globalData.length <= 1) {
-        // 날짜 없으면 맨 마지막
-        select.value = '-1';
-        return;
-    }
-
-    const startTs = parseDateValue(startDateStr) ? parseDateValue(startDateStr).ts : null;
-    if (!startTs) { select.value = '-1'; return; }
-
-    // 시작일과 가장 가까운 행 찾기 (시작일 이후 첫 번째 행 앞에 삽입)
-    let bestIndex = -1;
-    for (let i = 1; i < globalData.length; i++) {
-        let row = globalData[i]; if (!row) continue;
-        let rowStartTs = row._calcStartTs;
-        if (rowStartTs && rowStartTs > startTs) {
-            bestIndex = i - 1; // 해당 행 바로 앞
-            break;
+    window.autoSetInsertPosition = function(startDateStr, showAlert) {
+        window.populateInsertPosition();
+        
+        const select = document.getElementById('mail-insert-position');
+        if (!startDateStr || startDateStr.includes('날짜확인필요') || globalData.length <= 1) {
+            select.value = '-1';
+            return;
         }
-    }
-
-    // 드롭다운에서 해당 값 선택
-    select.value = bestIndex !== -1 ? bestIndex : '-1';
-
-    // ✅ 안내 팝업
-    setTimeout(() => {
-        const selectedOption = select.options[select.selectedIndex];
-        const posText = selectedOption ? selectedOption.text : '맨 마지막';
-        alert(`📍 추가 위치가 시작일(${startDateStr}) 기준으로\n[${posText}] 으로 자동 설정되었습니다.\n\n위치를 변경하려면 드롭다운에서 직접 선택해주세요.`);
-    }, 100);
-};
+    
+        const startTs = parseDateValue(startDateStr) ? parseDateValue(startDateStr).ts : null;
+        if (!startTs) { select.value = '-1'; return; }
+    
+        let bestIndex = -1;
+        for (let i = 1; i < globalData.length; i++) {
+            let row = globalData[i]; if (!row) continue;
+            let rowStartTs = row._calcStartTs;
+            if (rowStartTs && rowStartTs > startTs) {
+                bestIndex = i - 1;
+                break;
+            }
+        }
+    
+        select.value = bestIndex !== -1 ? String(bestIndex) : '-1';
+    
+        // ✅ showAlert가 true일 때만 안내 팝업 표시
+        if (showAlert) {
+            setTimeout(() => {
+                const selectedOption = select.options[select.selectedIndex];
+                const posText = selectedOption ? selectedOption.text : '맨 마지막';
+                alert(`📍 추가 위치가 시작일(${startDateStr}) 기준으로\n[${posText}] 으로 자동 설정되었습니다.\n\n위치를 변경하려면 드롭다운에서 직접 선택해주세요.`);
+            }, 100);
+        }
+    };
 
 window.editPrompt = function() {
     let modal = document.getElementById('prompt-edit-modal');
