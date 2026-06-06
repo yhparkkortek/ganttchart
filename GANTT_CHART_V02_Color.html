@@ -1322,8 +1322,10 @@ if (window.name !== 'gantt_popup') {
         const emailPattern = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gim; safeText = safeText.replace(emailPattern, '<a href="mailto:$1" style="text-decoration: none; display: inline-block; margin-left: 2px;" title="$1">📧</a>');
         const urlPattern = /(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim; safeText = safeText.replace(urlPattern, '<a href="$1" target="_blank" style="text-decoration: none; display: inline-block; margin-left: 2px; font-size:11px;" title="$1">⬇️</a>');
         const pseudoUrlPattern = /(^|[^\/a-zA-Z0-9])(www\.[\S]+(\b|$))/gim; safeText = safeText.replace(pseudoUrlPattern, '$1<a href="http://$2" target="_blank" style="text-decoration: none; display: inline-block; margin-left: 2px; font-size:11px;" title="$2">⬇️</a>');
-        safeText = safeText.replace(/\r/g, ''); safeText = safeText.replace(/\n{2,}/g, '\n'); return safeText.replace(/\n/g, '<br>'); 
-    }
+        safeText = safeText.replace(/\r/g, ''); safeText = safeText.replace(/\n{2,}/g, '\n');
+        // ✅ [대괄호 단어] Bold 처리
+        safeText = safeText.replace(/(\[[^\]]+\])/g, '<b>$1</b>');
+        return safeText.replace(/\n/g, '<br>');
 
     function parseDateValue(value) {
         if (value === "" || value === null || value === undefined) return null;
@@ -2655,18 +2657,21 @@ const defaultPrompt = `당신은 전자제품 개발 프로젝트 관리자입�
 - 인치: ${projectInch}
 
 추출 규칙:
-- 업무명: 핵심 업무/요청사항을 20자 이내 명사형으로 요약 (예: "Horizontal PCBA SMT 보류 확인")
+- 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약 (예: "STELLAR 32인치 LED PCB 디자인 검토")
 - 시작일: 메일 본문에 날짜가 명시된 경우만 추출, 없으면 "날짜확인필요" 라고 입력
 - 완료일: 마감일이 명시된 경우만 추출, 없으면 "날짜확인필요" 라고 입력
 - 상태: 진행/대기/완료 중 하나 (답변 요청이면 "대기", 진행 중이면 "진행")
 - 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
 - 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
-  * 업무유형: [업무요청 / 업무수신 / 업무회신 / 업무발신 / 해결책회신 / 해결책발신 / 해결책제안 / 정보공유 / 일정문의 / 납기문의 / 견적문의 / 기타] 중 
-  * 발신→수신: 누가(발신자) → 누구에게(수신자)
-  * 핵심내용: 무엇을(대상/주제) 어떻게(방법/조치) 왜(목적/이유) 간결하게
-  * To do: 상대방에게 요청한 사항 또는 필요한 후속 조치
-  * 담당자: [업무담당자 :이름]
-  * 예시: "[업무유형:요청수신]\n[발신→수신]James Kwon → 박용훈\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정 안내. AD보드 FW 4종(SR유무/상하판 구분) 첨부\n[To do]Fast Touch Response 튜닝 적용 확인 및 문의사항 회신 요청\n[업무담당자 :James Kwon]"
+  * 출력 형식: [업무유형,발신→수신]발신자 → 수신자\n[핵심내용]내용\n[To do]후속조치
+  * 업무유형은 아래 중 가장 적합한 하나 선택:
+    [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청
+    [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보
+    [공유/안내] 현황공유 / 진행보고 / 결과보고 / 완료보고 / 변경안내 / 이슈알림 / 지연안내 / 회의안내 / 회의록공유 / 인증취득안내 / 단종EOL안내 / 가격변동안내
+    [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내
+    [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내
+    위 목록에 없으면: 기타
+  * 예시: "[샘플발송]James Kwon → 박용훈\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"
 - wbs레벨: 3 (일반 업무)
 
 반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
