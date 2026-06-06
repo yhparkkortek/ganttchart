@@ -1219,6 +1219,9 @@ if (window.name !== 'gantt_popup') {
             }
     
             document.getElementById('calendar-popup').style.display = 'none';
+
+            // ✅ 날짜 선택 후 삽입 위치 자동 재설정
+            window.autoSetInsertPosition(str);
             return;
         }
     
@@ -2657,11 +2660,13 @@ const defaultPrompt = `당신은 전자제품 개발 프로젝트 관리자입�
 - 완료일: 마감일이 명시된 경우만 추출, 없으면 "날짜확인필요" 라고 입력
 - 상태: 진행/대기/완료 중 하나 (답변 요청이면 "대기", 진행 중이면 "진행")
 - 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
-- 상세내용: 아래 형식으로 200자 이내 작성
-  * 메일 핵심 내용 (요청사항, 문제점, 현황, 액션 아이템) 을 먼저 작성
-  * 마지막에 반드시 [업무담당자 :이름] 형태로 추가
-  * 업무담당자는 메일을 보낸 사람 또는 실제 업무를 수행하는 담당자 이름
-  * 예시: "Horizontal PCBA SMT 보류 중. WS2811→WS2811A IC 변경 확인 완료. 저항값 변경 가능성 관련 신규 BOM 제공 요청 및 회신 대기 중. [업무담당자 :김진석]"
+- 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
+  * ① 업무유형: [요청수신 / 요청대응 / 해결제시 / 정보공유 / 확인요청 / 기타] 중 하나
+  * ② 발신→수신: 누가(발신자) → 누구에게(수신자)
+  * ③ 핵심내용: 무엇을(대상/주제) 어떻게(방법/조치) 왜(목적/이유) 간결하게
+  * ④ 요청/액션: 상대방에게 요청한 사항 또는 필요한 후속 조치
+  * ⑤ 담당자: [업무담당자 :이름]
+  * 예시: "① 요청수신\n② James Kwon → 박용훈\n③ S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정 안내. AD보드 FW 4종(SR유무/상하판 구분) 첨부\n④ Fast Touch Response 튜닝 적용 확인 및 문의사항 회신 요청\n⑤ [업무담당자 :James Kwon]"
 - wbs레벨: 3 (일반 업무)
 
 반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
@@ -2827,44 +2832,44 @@ window.renderMailResult = function(result) {
     document.getElementById('mail-result-table').innerHTML = html;
     document.getElementById('mail-result-section').style.display = 'block';
     
-    // ✅ 분석된 시작일 기준으로 추가 위치 자동 설정
-    window.autoSetInsertPosition(result['시작일']);
+    // ✅ 최초 분석 시에는 날짜 있을 때만 alert 표시
+    const hasDate = result['시작일'] && !result['시작일'].includes('날짜확인필요');
+    window.autoSetInsertPosition(result['시작일'], hasDate);
 };
 
-    window.autoSetInsertPosition = function(startDateStr) {
-    window.populateInsertPosition(); // 드롭다운 먼저 채우기
-    
-    const select = document.getElementById('mail-insert-position');
-    if (!startDateStr || startDateStr.includes('날짜확인필요') || globalData.length <= 1) {
-        // 날짜 없으면 맨 마지막
-        select.value = '-1';
-        return;
-    }
-
-    const startTs = parseDateValue(startDateStr) ? parseDateValue(startDateStr).ts : null;
-    if (!startTs) { select.value = '-1'; return; }
-
-    // 시작일과 가장 가까운 행 찾기 (시작일 이후 첫 번째 행 앞에 삽입)
-    let bestIndex = -1;
-    for (let i = 1; i < globalData.length; i++) {
-        let row = globalData[i]; if (!row) continue;
-        let rowStartTs = row._calcStartTs;
-        if (rowStartTs && rowStartTs > startTs) {
-            bestIndex = i - 1; // 해당 행 바로 앞
-            break;
+    window.autoSetInsertPosition = function(startDateStr, showAlert) {
+        window.populateInsertPosition();
+        
+        const select = document.getElementById('mail-insert-position');
+        if (!startDateStr || startDateStr.includes('날짜확인필요') || globalData.length <= 1) {
+            select.value = '-1';
+            return;
         }
-    }
-
-    // 드롭다운에서 해당 값 선택
-    select.value = bestIndex !== -1 ? bestIndex : '-1';
-
-    // ✅ 안내 팝업
-    setTimeout(() => {
-        const selectedOption = select.options[select.selectedIndex];
-        const posText = selectedOption ? selectedOption.text : '맨 마지막';
-        alert(`📍 추가 위치가 시작일(${startDateStr}) 기준으로\n[${posText}] 으로 자동 설정되었습니다.\n\n위치를 변경하려면 드롭다운에서 직접 선택해주세요.`);
-    }, 100);
-};
+    
+        const startTs = parseDateValue(startDateStr) ? parseDateValue(startDateStr).ts : null;
+        if (!startTs) { select.value = '-1'; return; }
+    
+        let bestIndex = -1;
+        for (let i = 1; i < globalData.length; i++) {
+            let row = globalData[i]; if (!row) continue;
+            let rowStartTs = row._calcStartTs;
+            if (rowStartTs && rowStartTs > startTs) {
+                bestIndex = i - 1;
+                break;
+            }
+        }
+    
+        select.value = bestIndex !== -1 ? String(bestIndex) : '-1';
+    
+        // ✅ showAlert가 true일 때만 안내 팝업 표시
+        if (showAlert) {
+            setTimeout(() => {
+                const selectedOption = select.options[select.selectedIndex];
+                const posText = selectedOption ? selectedOption.text : '맨 마지막';
+                alert(`📍 추가 위치가 시작일(${startDateStr}) 기준으로\n[${posText}] 으로 자동 설정되었습니다.\n\n위치를 변경하려면 드롭다운에서 직접 선택해주세요.`);
+            }, 100);
+        }
+    };
 
 window.editPrompt = function() {
     let modal = document.getElementById('prompt-edit-modal');
