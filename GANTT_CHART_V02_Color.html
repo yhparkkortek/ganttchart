@@ -3155,6 +3155,11 @@ window.insertMailTask = function() {
                             font-size:13px; font-weight:bold;">
                     📎 파일 첨부
                 </div>
+                <div id="mail-tab-cloud" onclick="window.switchMailTab('cloud')"
+                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                            font-size:13px; font-weight:bold; color:white;">
+                    ☁️ 클라우드(코랩) 동기화
+                </div>
             </div>
         </div>
         <div class="history-body" style="padding:20px; overflow-y:auto;">
@@ -3386,6 +3391,19 @@ window.insertMailTask = function() {
             </div>
         </div>
 
+        <div id="mail-tab-cloud-content" style="display:none; height:calc(92vh - 120px); padding:20px; background:#f8f9fa;">
+            <div style="font-size:13px; color:#333; margin-bottom:15px; line-height:1.6; background:#e8f4fd; padding:15px; border-radius:6px; border-left:4px solid #2980b9;">
+                💡 <b>구글 코랩(Python) 클라우드 연동 가이드</b><br>
+                코랩에서 메일 서버 전처리가 완료되었다면, 아래 버튼을 눌러 내 구글 드라이브에 저장된 최신 메일 전처리 데이터(<code>gantt_mail_temp.json</code>)를 즉시 불러옵니다. 외계어 깨짐 없이 업무를 등록할 수 있습니다.
+            </div>
+            <button onclick="window.loadMailFromCloud()" style="width:100%; padding:14px; background:#2980b9; color:white; border:none; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                🔄 구글 드라이브에서 전처리된 메일 가져오기
+            </button>
+            <div id="cloud-mail-loading" style="display:none; text-align:center; padding:20px; color:#2980b9; font-weight:bold; font-size:13px;">
+                ⏳ 구글 드라이브 보안 세션 연결 및 파일 로드 중...
+            </div>
+        </div>
+
     </div>
 </div>
 
@@ -3407,17 +3425,78 @@ window._mfCurrentIdx = -1;
 window._mfFiles      = [];
 window._mfResults    = [];
 
-// ─── 탭 전환 ─────────────────────────────────────────────
+// ─── 3개 탭 전환 및 클라우드 연동 ─────────────────────────────────────────
 window.switchMailTab = function(tab) {
-    const isPaste = tab === 'paste';
     const pc = document.getElementById('mail-tab-paste-content');
     const fc = document.getElementById('mail-tab-file-content');
-    if (pc) pc.style.display = isPaste ? 'block' : 'none';
-    if (fc) fc.style.display = isPaste ? 'none'  : 'flex';
+    const cc = document.getElementById('mail-tab-cloud-content');
+    
+    if (pc) pc.style.display = tab === 'paste' ? 'block' : 'none';
+    if (fc) fc.style.display = tab === 'file'  ? 'flex'  : 'none';
+    if (cc) cc.style.display = tab === 'cloud' ? 'block' : 'none';
+    
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
-    if (pt) pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (ft) ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
+    const ct = document.getElementById('mail-tab-cloud');
+    
+    if (pt) pt.style.background = tab === 'paste' ? 'rgba(0,0,0,0.2)' : 'transparent';
+    if (ft) ft.style.background = tab === 'file'  ? 'rgba(0,0,0,0.2)' : 'transparent';
+    if (ct) ct.style.background = tab === 'cloud' ? 'rgba(0,0,0,0.2)' : 'transparent';
+};
+
+window.loadMailFromCloud = async function() {
+    if (!window.isDriveConnected && !(window.gapi && gapi.client && gapi.client.drive)) {
+        alert("🔵 먼저 상단의 [구글 드라이브 연동하기] 버튼을 눌러 로그인을 완료해 주세요.");
+        return;
+    }
+    const loading = document.getElementById('cloud-mail-loading');
+    if(loading) loading.style.display = 'block';
+    
+    try {
+        let response = await gapi.client.drive.files.list({
+            q: "name='gantt_mail_temp.json' and trashed=false",
+            fields: 'files(id, name)'
+        });
+        
+        if (!response.result.files || response.result.files.length === 0) {
+            if(loading) loading.style.display = 'none';
+            alert("❌ 드라이브에서 'gantt_mail_temp.json' 파일을 찾을 수 없습니다.\n코랩 스크립트가 성공적으로 완료되었는지 확인해 주세요.");
+            return;
+        }
+        
+        let fileId = response.result.files[0].id;
+        let fileContentResp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
+        let cloudMails = fileContentResp.result;
+        
+        if (typeof cloudMails === 'string') cloudMails = JSON.parse(cloudMails);
+        if (!cloudMails || cloudMails.length === 0) {
+            if(loading) loading.style.display = 'none';
+            alert("ℹ️ 추출된 메일 리스트가 비어있습니다.");
+            return;
+        }
+        
+        const results = cloudMails.map((m, i) => {
+            const project = window.mfMatchProject ? window.mfMatchProject(m.subject, m.body) : null;
+            return {
+                idx: i, fileName: `Cloud_Mail_${i+1}.eml`,
+                subject: m.subject, sender: m.sender, project: project,
+                task: { "업무명": m.subject, "시작일": "날짜확인필요", "완료일": "날짜확인필요", "상태": "진행", "개발단계": "", "상세내용": `[ 발신자: ${m.sender} ]\n${m.body.substring(0,300)}`, "wbs레벨": 3 },
+                selected: true, registered: false, error: null
+            };
+        });
+        
+        window._mfResults = results;
+        if(loading) loading.style.display = 'none';
+        
+        window.switchMailTab('file');
+        if (window.mfRenderList) {
+            window.mfRenderList(results);
+            alert(`🎉 클라우드 전처리 메일 ${results.length}건을 성공적으로 가져왔습니다!`);
+        }
+    } catch (err) {
+        if(loading) loading.style.display = 'none';
+        alert("❌ 구글 드라이브 파일 읽기 실패: " + err.message);
+    }
 };
 
 // showMailAnalyzer 래핑
