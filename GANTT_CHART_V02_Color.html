@@ -3188,13 +3188,16 @@ window.insertMailTask = function() {
                 <span class="history-close" style="color:white;" onclick="window.closeMailAnalyzer()">✖</span>
             </div>
             <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3);">
-                <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3);">
+                <div id="mail-tab-paste" 
+                    onclick="event.stopPropagation(); window.switchMailTab('paste');"
+                    style="flex:1; text-align:center; padding:10px; cursor:pointer; 
                             background:rgba(0,0,0,0.2); font-size:13px; font-weight:bold;">
                     ✏️ 직접 입력
                 </div>
-                <div id="mail-tab-file" onclick="window.switchMailTab('file')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                <div id="mail-tab-file" 
+                    onclick="event.stopPropagation(); window.switchMailTab('file');"
+                    style="flex:1; text-align:center; padding:10px; cursor:pointer; 
                             font-size:13px; font-weight:bold;">
                     📎 파일 첨부
                 </div>
@@ -3438,18 +3441,28 @@ window.insertMailTask = function() {
 // =========================================================
 
 // ✅ switchMailTab 정의
+// 기존 함수를 아래 코드로 교체하세요
 window.switchMailTab = function(tab) {
-    const isPaste = tab === 'paste';
+    const isPaste = (tab === 'paste');
     const pc = document.getElementById('mail-tab-paste-content');
     const fc = document.getElementById('mail-tab-file-content');
+    
+    // 탭 콘텐츠 표시 전환
     if (pc) pc.style.display = isPaste ? 'block' : 'none';
-    if (fc) fc.style.display = isPaste ? 'none'  : 'flex';
+    if (fc) fc.style.display = isPaste ? 'none' : 'flex';
+    
+    // 버튼 스타일 전환
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
-    if (pt) pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (ft) ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
-    if (pt) pt.style.fontWeight = isPaste ? 'bold' : 'normal';
-    if (ft) ft.style.fontWeight = isPaste ? 'normal' : 'bold';
+    
+    if (pt) {
+        pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
+        pt.style.fontWeight = isPaste ? 'bold' : 'normal';
+    }
+    if (ft) {
+        ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
+        ft.style.fontWeight = isPaste ? 'normal' : 'bold';
+    }
 };
 
 const MF_PROJECT_KEYWORDS = {
