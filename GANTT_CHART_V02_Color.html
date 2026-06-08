@@ -2606,6 +2606,7 @@ window.showMailAnalyzer = function() {
     document.getElementById('mail-content-input').value = '';
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
+    document.querySelector('#mail-analyzer-overlay .history-body').id = 'mail-tab-paste-content';
     document.getElementById('mail-analyzer-overlay').style.display = 'flex';
 
     // ✅ history-body에 id 부여 + 탭 초기화
