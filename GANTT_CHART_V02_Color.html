@@ -1204,23 +1204,58 @@ if (window.name !== 'gantt_popup') {
         // ✅ 메일 분석 달력인 경우 분기 처리
         if (window.currentCalendarMailField) {
             const fieldKey = window.currentCalendarMailField;
+
+            // ✅ 오른쪽 패널(파일첨부) 달력 처리
+            if (fieldKey.startsWith('mf_')) {
+                const parts   = fieldKey.split('_');  // mf_시작일_0
+                const realKey = parts[1];              // 시작일 or 완료일
+                const mfIdx   = parseInt(parts[2]);   // 항목 인덱스
+
+                // 데이터 업데이트
+                if (window._mfResults[mfIdx] && window._mfResults[mfIdx].task) {
+                    window._mfResults[mfIdx].task[realKey] = str;
+                }
+
+                // 화면 스팬 업데이트
+                const spanEl = document.getElementById(`mf-right-date-${realKey}-${mfIdx}`);
+                if (spanEl) {
+                    spanEl.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${str}</span>`;
+                    // 경고 제거
+                    const td = spanEl.closest('td');
+                    if (td) {
+                        td.querySelectorAll('div[style*="e67e22"]').forEach(el => el.remove());
+                        spanEl.closest('div') && (spanEl.closest('div').style.background = '');
+                    }
+                }
+
+                // 삽입 위치 자동 설정
+                if (realKey === '시작일') {
+                    window.populateInsertPosition();
+                    const origSel = document.getElementById('mail-insert-position');
+                    const destSel = document.getElementById('mf-right-position');
+                    window.autoSetInsertPosition(str, false);
+                    if (origSel && destSel) destSel.value = origSel.value;
+                }
+
+                window.currentCalendarMailField = null;
+                document.getElementById('calendar-popup').style.display = 'none';
+                return;
+            }
+
+            // ✅ 직접입력 탭 달력 처리 (기존 로직)
             window._mailAnalyzedResult[fieldKey] = str;
             window.currentCalendarMailField = null;
-    
-            // 화면 텍스트 즉시 업데이트
+
             const spanEl = document.getElementById(`mail-date-${fieldKey}`);
             if (spanEl) spanEl.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${str}</span>`;
-    
-            // 경고 문구 제거
+
             const warnEl = spanEl ? spanEl.closest('td') : null;
             if (warnEl) {
                 const warnDiv = warnEl.querySelector('div[style*="e67e22"]');
                 if (warnDiv) warnDiv.remove();
             }
-    
-            document.getElementById('calendar-popup').style.display = 'none';
 
-            // ✅ 날짜 선택 후 삽입 위치 자동 재설정
+            document.getElementById('calendar-popup').style.display = 'none';
             window.autoSetInsertPosition(str);
             return;
         }
@@ -3402,6 +3437,84 @@ const MF_PROJECT_KEYWORDS = {
     "ODW"         : [/\bodw\b/i, /open\s*display/i],
 };
 
+// ─── 오른쪽 패널 전용 렌더링 ────────────────────────────
+window.mfRenderRightPanel = function(result, idx) {
+    const fields = [
+        { key: '업무명',   label: '📌 업무명' },
+        { key: '시작일',   label: '📅 시작일' },
+        { key: '완료일',   label: '📅 완료일' },
+        { key: '상태',     label: '🔖 상태' },
+        { key: '개발단계', label: '🏗️ 개발단계' },
+        { key: '상세내용', label: '📝 상세내용' },
+    ];
+
+    let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+    fields.forEach(f => {
+        const needsCheck = (result[f.key] || '').includes('날짜확인필요');
+        const isDateField = (f.key === '시작일' || f.key === '완료일');
+        const dateVal  = result[f.key] || '';
+        const dateParsed = isDateField ? parseDateValue(dateVal) : null;
+        const dateTsArg  = dateParsed ? dateParsed.ts : new Date().setHours(0,0,0,0);
+        const displayDate = (isDateField && dateVal && !needsCheck)
+            ? dateVal
+            : `<span style="color:#e67e22; font-weight:bold;">📅 날짜를 선택해주세요</span>`;
+
+        let inputCell;
+        if (f.key === '상세내용') {
+            inputCell = `<textarea data-mf-field="${f.key}"
+                style="width:100%; border:none; outline:none; font-size:13px;
+                       background:transparent; font-family:'Malgun Gothic',sans-serif;
+                       resize:vertical; min-height:60px; box-sizing:border-box;"
+                onchange="window.mfUpdateField(${idx},'${f.key}',this.value)"
+                >${escapeHtml(result[f.key] || '')}</textarea>`;
+        } else if (isDateField) {
+            inputCell = `
+                <div style="display:flex; align-items:center; gap:8px;
+                            ${needsCheck ? 'background:#fff3cd; padding:4px; border-radius:4px;' : ''}">
+                    <span class="date-clickable"
+                          id="mf-right-date-${f.key}-${idx}"
+                          style="cursor:pointer; font-size:13px; font-weight:bold; color:#0056b3;"
+                          onclick="window.mfRightShowCalendar(this, ${dateTsArg}, '${f.key}', ${idx})"
+                          title="클릭하여 날짜 선택">
+                        ${displayDate}
+                    </span>
+                    <span style="font-size:11px; color:#aaa;">📅 클릭하여 변경</span>
+                </div>
+                ${needsCheck ? `<div style="font-size:11px; color:#e67e22; font-weight:bold; margin-top:2px;">
+                    ⚠️ 날짜를 직접 입력해주세요</div>` : ''}`;
+        } else {
+            inputCell = `<input type="text"
+                value="${escapeHtml(result[f.key] || '')}"
+                data-mf-field="${f.key}"
+                style="width:100%; border:none; outline:none; font-size:13px;
+                       background:transparent; font-family:'Malgun Gothic',sans-serif;
+                       box-sizing:border-box;"
+                onchange="window.mfUpdateField(${idx},'${f.key}',this.value)">`;
+        }
+
+        html += `<tr>
+            <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6;
+                       font-weight:bold; width:90px; white-space:nowrap; font-size:12px;">
+                ${f.label}
+            </td>
+            <td style="padding:7px 10px; border:1px solid #dee2e6;">${inputCell}</td>
+        </tr>`;
+    });
+
+    // WBS 레벨
+    const levelOptions = [0,1,2,3,4].map(n =>
+        `<option value="${n}" ${result['wbs레벨']==n?'selected':''}>
+            Level ${n} ${['(대분류)','(소분류1)','(소분류2)','(세부업무)','(하위업무)'][n]}
+        </option>`
+    ).join('');
+    html += `<tr>
+        <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6;
+                   font-weight:bold; white-space:nowrap; font-size:12px;">📊 WBS 레벨</td>
+        <td style="padding:7px 10px; border:1px solid #dee2e6;">
+            <select style="width:100%; border:1px solid #ced4da; border-radius:4px;
+                           padding:4px; font-size:13px;"
+                    onchange="window.mfUpdateField(${idx},'wbs레벨',pa
+
 // 현재 오른쪽 패널에 표시 중인 항목 인덱스
 window._mfCurrentIdx = -1;
 window._mfFiles      = [];
@@ -3896,38 +4009,8 @@ window.mfSelectItem = function(idx) {
         <span>${escapeHtml(r.sender)}</span>
         ${r.project ? `&nbsp;|&nbsp;<span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
 
-    // renderMailResult 재사용 (직접입력과 동일)
-    window._mailAnalyzedResult = JSON.parse(JSON.stringify(r.task));
-    window.renderMailResult(r.task);
-
-    // 결과 테이블을 오른쪽 패널로 복사
-    const origTable = document.getElementById('mail-result-section');
-    const destTable = document.getElementById('mf-right-result-table');
-    if (origTable && destTable) {
-        destTable.innerHTML = origTable.innerHTML;
-        // input/select 이벤트 재연결
-        destTable.querySelectorAll('input, textarea, select').forEach(el => {
-            const field = el.dataset.field;
-            if (field) {
-                el.addEventListener('change', () => {
-                    window._mailAnalyzedResult[field] =
-                        el.type === 'select-one' ? parseInt(el.value) : el.value;
-                    window._mfResults[idx].task[field] =
-                        window._mailAnalyzedResult[field];
-                });
-            }
-        });
-        // 달력 버튼 재연결
-        destTable.querySelectorAll('.date-clickable[id]').forEach(span => {
-            const fieldKey = span.id.replace('mail-date-','');
-            span.onclick = () => {
-                const ts = window._mailAnalyzedResult[fieldKey]
-                    ? (parseDateValue(window._mailAnalyzedResult[fieldKey])||{}).ts || new Date().getTime()
-                    : new Date().getTime();
-                window.showMailCalendar(span, ts, fieldKey);
-            };
-        });
-    }
+// ✅ 오른쪽 패널 전용 렌더링 (중복 버튼 없음)
+    window.mfRenderRightPanel(r.task, idx);
 
     // 삽입 위치 드롭다운
     window.populateInsertPosition();
@@ -3945,6 +4028,19 @@ window.mfSelectItem = function(idx) {
     // 패널 전환
     document.getElementById('mf-right-empty').style.display  = 'none';
     document.getElementById('mf-right-detail').style.display = 'flex';
+
+    // ✅ 미매칭이면 프로젝트 선택 드롭다운 표시
+    const projSelDiv = document.getElementById('mf-right-project-select');
+    const projDD     = document.getElementById('mf-right-project-dropdown');
+    if (projSelDiv && projDD) {
+        if (!r.project) {
+            projSelDiv.style.display = 'block';
+            projDD.value = '';
+        } else {
+            projSelDiv.style.display = 'none';
+            projDD.value = r.project || '';
+        }
+    }
 };
 
 // ─── 오른쪽 패널 등록 버튼 ──────────────────────────────
@@ -3953,6 +4049,16 @@ window.mfRightInsert = function() {
     if (idx < 0) { alert('메일을 선택해주세요.'); return; }
     const r = window._mfResults[idx];
     if (!r || !r.task) return;
+
+    // ✅ 미매칭 항목: 프로젝트 선택 확인
+    if (!r.project) {
+        const projDD = document.getElementById('mf-right-project-dropdown');
+        if (!projDD || !projDD.value) {
+            alert('⚠️ 프로젝트를 선택해주세요.');
+            return;
+        }
+        r.project = projDD.value;
+    }
 
     // 위치 동기화
     const destSel = document.getElementById('mf-right-position');
