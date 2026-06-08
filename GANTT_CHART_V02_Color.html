@@ -2607,6 +2607,13 @@ window.showMailAnalyzer = function() {
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
     document.getElementById('mail-analyzer-overlay').style.display = 'flex';
+
+    // ✅ history-body에 id 부여 + 탭 초기화
+    setTimeout(() => {
+        const body = document.querySelector('#mail-analyzer-overlay .history-body');
+        if (body && !body.id) body.id = 'mail-tab-paste-content';
+        if (window.switchMailTab) window.switchMailTab('paste');
+    }, 50);
 };
 
 window.closeMailAnalyzer = function(e) {
