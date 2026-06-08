@@ -3429,6 +3429,40 @@ window.insertMailTask = function() {
 // 📎 메일 파일 첨부 탭 기능 (v3 - 좌우분할)
 // =========================================================
 
+// =========================================================
+// 📎 메일 파일 첨부 탭 기능 (v3 - 좌우분할)
+// =========================================================
+
+// ✅ switchMailTab 먼저 정의
+window.switchMailTab = function(tab) {
+    const isPaste = tab === 'paste';
+    const pc = document.getElementById('mail-tab-paste-content');
+    const fc = document.getElementById('mail-tab-file-content');
+    if (pc) pc.style.display = isPaste ? 'block' : 'none';
+    if (fc) fc.style.display = isPaste ? 'none'  : 'flex';
+    const pt = document.getElementById('mail-tab-paste');
+    const ft = document.getElementById('mail-tab-file');
+    if (pt) pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
+    if (ft) ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
+    if (pt) pt.style.fontWeight = isPaste ? 'bold' : 'normal';
+    if (ft) ft.style.fontWeight = isPaste ? 'normal' : 'bold';
+};
+
+// ✅ showMailAnalyzer 래핑 (switchMailTab 정의 후에 실행)
+document.addEventListener('DOMContentLoaded', function() {
+    const _orig = window.showMailAnalyzer;
+    if (_orig) {
+        window.showMailAnalyzer = function() {
+            _orig.call(this);
+            const body = document.querySelector('#mail-analyzer-overlay .history-body');
+            if (body && !document.getElementById('mail-tab-paste-content')) {
+                body.id = 'mail-tab-paste-content';
+            }
+            window.switchMailTab('paste');
+        };
+    }
+});
+
 const MF_PROJECT_KEYWORDS = {
     "STELLAR"     : [/stellar/i, /\bs32\b/i, /ktk18/i, /ktk15/i, /\bsl-?1\b/i,
                      /led\s*board/i, /s32.*proto/i, /32.*topper/i],
@@ -3535,27 +3569,24 @@ window.switchMailTab = function(tab) {
     if (ft) ft.style.fontWeight = isPaste ? 'normal' : 'bold';
 };
 
-// showMailAnalyzer 래핑
-const _origShowMailAnalyzer = window.showMailAnalyzer;
-window.showMailAnalyzer = function() {
-    _origShowMailAnalyzer();
-    
-    // history-body 에 id 부여 (최초 1회)
-    const body = document.querySelector('#mail-analyzer-overlay .history-body');
-    if (body && !document.getElementById('mail-tab-paste-content')) {
-        body.id = 'mail-tab-paste-content';
-    }
-
-    // 파일첨부 탭 콘텐츠가 history-body 안에 있으면 꺼냄
-    // (팝업 열릴 때마다 탭 상태 초기화)
-    const fc = document.getElementById('mail-tab-file-content');
-    if (fc && fc.style.display === 'flex') {
-        // 이미 파일첨부 탭이었으면 유지
-        window.switchMailTab('file');
-    } else {
-        window.switchMailTab('paste');
-    }
-};
+// showMailAnalyzer 래핑 (DOMContentLoaded 후 실행)
+document.addEventListener('DOMContentLoaded', function() {
+    const _orig = window.showMailAnalyzer;
+    if (!_orig) return;
+    window.showMailAnalyzer = function() {
+        _orig.call(this);
+        const body = document.querySelector('#mail-analyzer-overlay .history-body');
+        if (body && !document.getElementById('mail-tab-paste-content')) {
+            body.id = 'mail-tab-paste-content';
+        }
+        const fc = document.getElementById('mail-tab-file-content');
+        if (fc && fc.style.display === 'flex') {
+            window.switchMailTab('file');
+        } else {
+            window.switchMailTab('paste');
+        }
+    };
+});
 
 // ─── 파일 선택 ───────────────────────────────────────────
 window.mfHandleFiles = function(files) {
