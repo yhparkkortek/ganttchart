@@ -3322,6 +3322,28 @@ window.insertMailTask = function() {
 
                     <!-- 선택 후 상세 내용 -->
                     <div id="mf-right-detail" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+                        
+                        <!-- 프로젝트 수동 선택 -->
+                        <div id="mf-right-project-select"
+                             style="margin-bottom:8px; padding:8px 12px;
+                                    background:#fff3cd; border-radius:6px;
+                                    border:1px solid #ffc107; display:none;">
+                            <div style="font-size:11px; font-weight:bold;
+                                        color:#856404; margin-bottom:5px;">
+                                ⚠️ 프로젝트 미매칭 — 직접 선택해주세요
+                            </div>
+                            <select id="mf-right-project-dropdown"
+                                    style="width:100%; padding:5px;
+                                           border:1px solid #ced4da;
+                                           border-radius:4px; font-size:12px;"
+                                    onchange="window.mfSetProject(this.value)">
+                                <option value="">-- 프로젝트 선택 --</option>
+                                <option value="STELLAR">STELLAR</option>
+                                <option value="SHUFFLER_4.3">SHUFFLER_4.3</option>
+                                <option value="SHUFFLER_3.0">SHUFFLER_3.0</option>
+                                <option value="ODW">ODW</option>
+                            </select>
+                        </div>
 
                         <!-- 메일 정보 헤더 -->
                         <div id="mf-right-mail-info"
@@ -3373,7 +3395,8 @@ window.insertMailTask = function() {
 // =========================================================
 
 const MF_PROJECT_KEYWORDS = {
-    "STELLAR"     : [/stellar/i, /\bs32\b/i, /ktk18/i, /led\s*board/i, /s32.*proto/i],
+    "STELLAR"     : [/stellar/i, /\bs32\b/i, /ktk18/i, /ktk15/i, /\bsl-?1\b/i,
+                     /led\s*board/i, /s32.*proto/i, /32.*topper/i],
     "SHUFFLER_4.3": [/shuffler.*4\.3/i, /4\.3.*shuffler/i, /ideal.plus.*4\.3/i, /po205247/i],
     "SHUFFLER_3.0": [/shuffler.*3\.0/i, /3\.0.*shuffler/i],
     "ODW"         : [/\bodw\b/i, /open\s*display/i],
@@ -3591,7 +3614,7 @@ function mfRenderList(results) {
     const list = document.getElementById('mf-result-list');
     let html = '';
     results.forEach((r, i) => {
-        const canSel = !!(r.project && r.task);
+        const canSel = !!r.task;  // 프로젝트 미매칭이어도 task 있으면 클릭 가능
         const bg     = r.registered ? '#d4edda'
                      : canSel       ? '#fff'
                      :                '#fafafa';
@@ -3652,6 +3675,28 @@ function mfRenderList(results) {
     window.mfSyncCheckAll();
 }
 
+window.mfSetProject = function(project) {
+    const idx = window._mfCurrentIdx;
+    if (idx < 0) return;
+    window._mfResults[idx].project  = project;
+    window._mfResults[idx].selected = !!project;
+    // 왼쪽 목록 해당 항목 업데이트
+    const item = document.getElementById(`mf-list-item-${idx}`);
+    if (item && project) {
+        const badge = item.querySelector('div > div:last-child');
+        if (badge) badge.innerHTML =
+            `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px;
+                          border-radius:3px; font-size:10px; font-weight:bold;">
+                 ${project}</span>`;
+        item.style.background = '#fff';
+        // 체크박스 활성화
+        const cb = item.querySelector('input[type=checkbox]');
+        if (cb) { cb.disabled = false; cb.checked = true; }
+        window._mfResults[idx].selected = true;
+    }
+    window.mfSyncCheckAll();
+};
+
 window.mfToggleCheck = function(idx, checked) {
     if (window._mfResults && window._mfResults[idx] !== undefined) {
         window._mfResults[idx].selected = checked;
@@ -3694,6 +3739,19 @@ window.mfSelectItem = function(idx) {
     const cur = document.getElementById(`mf-list-item-${idx}`);
     if (cur) { cur.classList.add('mf-active'); cur.style.background = '#fff3e0'; }
 
+    // 프로젝트 미매칭이면 수동 선택 표시
+    const projSel = document.getElementById('mf-right-project-select');
+    const projDD  = document.getElementById('mf-right-project-dropdown');
+    if (projSel && projDD) {
+        if (!r.project) {
+            projSel.style.display = 'block';
+            projDD.value = '';
+        } else {
+            projSel.style.display = 'none';
+            projDD.value = r.project;
+        }
+    }
+    
     // 메일 정보 표시
     const info = document.getElementById('mf-right-mail-info');
     info.innerHTML = `<b>📨 ${escapeHtml(r.subject)}</b><br>
