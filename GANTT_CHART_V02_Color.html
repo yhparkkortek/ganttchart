@@ -3465,33 +3465,126 @@ function mfParseFile(file) {
             let subject = file.name.replace(/\.[^.]+$/, '');
             let sender  = '';
             let body    = '';
+
             if (ext === 'eml') {
+                // ─── EML: 표준 메일 형식 ───────────────────
                 const sm = text.match(/^Subject:\s*(.+)/mi);
                 const fm = text.match(/^From:\s*(.+)/mi);
+                if (sm) subject = mfDecodeMimeWord(sm[1].trim());
+                if (fm) sender  = mfDecodeMimeWord(fm[1].trim());
+
+                // 헤더/바디 분리
+                const sep = text.indexOf('\r\n\r\n') !== -1
+                    ? text.indexOf('\r\n\r\n') + 4
+                    : text.indexOf('\n\n') + 2;
+                let rawBody = sep > 3 ? text.substring(sep) : text;
+
+                // quoted-printable 디코딩
+                rawBody = mfDecodeQP(rawBody);
+                // base64 파트 제거
+                rawBody = rawBody.replace(/[A-Za-z0-9+/]{60,}={0,2}/g, '');
+                // HTML 태그 제거
+                rawBody = rawBody.replace(/<[^>]+>/g, ' ');
+                // 불필요한 패턴 제거
+                rawBody = rawBody
+                    .replace(/https?:\/\/\S+/g, '')          // URL 제거
+                    .replace(/=[0-9A-Fa-f]{2}/g, '')         // 잔여 QP 제거
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                body = rawBody;
+
+            } else if (ext === 'msg') {
+                // ─── MSG: Outlook 바이너리 → 텍스트 추출 ──
+                // XML/메타데이터 완전 제거 후 의미있는 텍스트만 추출
+                let cleaned = text;
+
+                // XML 선언 및 메타데이터 블록 제거
+                cleaned = cleaned.replace(/<\?xml[\s\S]*?\?>/gi, '');
+                cleaned = cleaned.replace(/<rdf:[\s\S]*?<\/rdf:RDF>/gi, '');
+                cleaned = cleaned.replace(/<x:xmpmeta[\s\S]*?<\/x:xmpmeta>/gi, '');
+                cleaned = cleaned.replace(/<[^>]+>/g, ' ');
+
+                // 바이너리 쓰레기 문자 제거 (제어문자, 특수바이트)
+                cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ');
+                cleaned = cleaned.replace(/[^\x20-\x7E\uAC00-\uD7A3\u3040-\u309F\u4E00-\u9FFF\n\r\t]/g, ' ');
+
+                // 제목 추출 시도
+                const sm = cleaned.match(/Subject[:\s]+([^\n\r]{3,80})/i);
+                const fm = cleaned.match(/From[:\s]+([^\n\r]{3,80})/i);
                 if (sm) subject = sm[1].trim();
                 if (fm) sender  = fm[1].trim();
-                const bi = Math.max(
-                    text.indexOf('\r\n\r\n') + 4,
-                    text.indexOf('\n\n') + 2
-                );
-                body = text.substring(bi > 3 ? bi : 0)
-                    .replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+
+                // 파일명에서 제목 보완 (더 신뢰할 수 있음)
+                const fnSubject = file.name
+                    .replace(/\.[^.]+$/, '')
+                    .replace(/^[\d_\-]+/, '')
+                    .trim();
+                if (!subject || subject.length < 3) subject = fnSubject;
+
+                // 의미있는 텍스트 라인만 추출
+                const lines = cleaned.split(/[\n\r]+/);
+                const meaningful = lines.filter(line => {
+                    const l = line.trim();
+                    if (l.length < 5) return false;                    // 너무 짧음
+                    if (/^[A-Za-z0-9+/]{30,}$/.test(l)) return false; // base64
+                    if ((l.match(/[^\x20-\x7E]/g)||[]).length > l.length * 0.3) return false; // 바이너리
+                    if (/stRef:|xmp\.|rdf:|xmlns/i.test(l)) return false; // XML 메타
+                    if (/^[\s\-=_*#>]+$/.test(l)) return false;       // 구분선
+                    return true;
+                });
+                body = meaningful.join(' ').replace(/\s+/g, ' ').trim();
+
             } else if (ext === 'html' || ext === 'htm') {
-                const doc = new DOMParser().parseFromString(text,'text/html');
+                // ─── HTML ──────────────────────────────────
+                const doc = new DOMParser().parseFromString(text, 'text/html');
                 const t   = doc.querySelector('title');
                 if (t) subject = t.textContent.trim();
-                body = (doc.body ? doc.body.innerText : '').replace(/\s+/g,' ').trim();
+                // script/style 제거
+                doc.querySelectorAll('script, style, head').forEach(el => el.remove());
+                body = (doc.body ? doc.body.innerText : '')
+                    .replace(/\s+/g, ' ').trim();
+
             } else {
+                // ─── TXT 등 ────────────────────────────────
                 const sm = text.match(/Subject[:\s]+(.+)/i);
                 const fm = text.match(/From[:\s]+(.+)/i);
                 if (sm) subject = sm[1].trim();
                 if (fm) sender  = fm[1].trim();
-                body = text.replace(/\s+/g,' ').trim();
+                body = text.replace(/\s+/g, ' ').trim();
             }
-            resolve({ subject, sender, body: body.substring(0,3000), fileName: file.name });
+
+            resolve({
+                subject: subject.substring(0, 100),
+                sender:  sender.substring(0, 100),
+                body:    body.substring(0, 3000),
+                fileName: file.name
+            });
         };
         reader.readAsText(file, 'utf-8');
     });
+}
+
+// MIME 인코딩 디코딩 (=?UTF-8?B?...?= 형식)
+function mfDecodeMimeWord(str) {
+    return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_, charset, enc, data) => {
+        try {
+            if (enc.toUpperCase() === 'B') {
+                return decodeURIComponent(escape(atob(data)));
+            } else {
+                return decodeURIComponent(data.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g,
+                    (_, h) => String.fromCharCode(parseInt(h, 16))));
+            }
+        } catch { return data; }
+    });
+}
+
+// Quoted-Printable 디코딩
+function mfDecodeQP(str) {
+    return str
+        .replace(/=\r?\n/g, '')  // soft line break 제거
+        .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => {
+            try { return String.fromCharCode(parseInt(h, 16)); } catch { return ''; }
+        });
 }
 
 // ─── 프로젝트 매칭 ──────────────────────────────────────
@@ -3526,6 +3619,7 @@ async function mfCallGemini(apiKey, parsed) {
             .replace('${projectInch}',     inch)
         : `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
 프로젝트 담당자:${assignee}/고객사:${customer}/모델명:${model}/인치:${inch}
+파일명 참고(제목 힌트): ${parsed.fileName}
 추출규칙:
 - 업무명: 20자 이내 명사형, 모델명/고객사명 제외
 - 시작일: 명시된 경우만, 없으면 "날짜확인필요"
