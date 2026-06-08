@@ -1204,23 +1204,58 @@ if (window.name !== 'gantt_popup') {
         // ✅ 메일 분석 달력인 경우 분기 처리
         if (window.currentCalendarMailField) {
             const fieldKey = window.currentCalendarMailField;
+
+            // ✅ 오른쪽 패널(파일첨부) 달력 처리
+            if (fieldKey.startsWith('mf_')) {
+                const parts   = fieldKey.split('_');  // mf_시작일_0
+                const realKey = parts[1];              // 시작일 or 완료일
+                const mfIdx   = parseInt(parts[2]);   // 항목 인덱스
+
+                // 데이터 업데이트
+                if (window._mfResults[mfIdx] && window._mfResults[mfIdx].task) {
+                    window._mfResults[mfIdx].task[realKey] = str;
+                }
+
+                // 화면 스팬 업데이트
+                const spanEl = document.getElementById(`mf-right-date-${realKey}-${mfIdx}`);
+                if (spanEl) {
+                    spanEl.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${str}</span>`;
+                    // 경고 제거
+                    const td = spanEl.closest('td');
+                    if (td) {
+                        td.querySelectorAll('div[style*="e67e22"]').forEach(el => el.remove());
+                        spanEl.closest('div') && (spanEl.closest('div').style.background = '');
+                    }
+                }
+
+                // 삽입 위치 자동 설정
+                if (realKey === '시작일') {
+                    window.populateInsertPosition();
+                    const origSel = document.getElementById('mail-insert-position');
+                    const destSel = document.getElementById('mf-right-position');
+                    window.autoSetInsertPosition(str, false);
+                    if (origSel && destSel) destSel.value = origSel.value;
+                }
+
+                window.currentCalendarMailField = null;
+                document.getElementById('calendar-popup').style.display = 'none';
+                return;
+            }
+
+            // ✅ 직접입력 탭 달력 처리 (기존 로직)
             window._mailAnalyzedResult[fieldKey] = str;
             window.currentCalendarMailField = null;
-    
-            // 화면 텍스트 즉시 업데이트
+
             const spanEl = document.getElementById(`mail-date-${fieldKey}`);
             if (spanEl) spanEl.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${str}</span>`;
-    
-            // 경고 문구 제거
+
             const warnEl = spanEl ? spanEl.closest('td') : null;
             if (warnEl) {
                 const warnDiv = warnEl.querySelector('div[style*="e67e22"]');
                 if (warnDiv) warnDiv.remove();
             }
-    
-            document.getElementById('calendar-popup').style.display = 'none';
 
-            // ✅ 날짜 선택 후 삽입 위치 자동 재설정
+            document.getElementById('calendar-popup').style.display = 'none';
             window.autoSetInsertPosition(str);
             return;
         }
@@ -2571,7 +2606,15 @@ window.showMailAnalyzer = function() {
     document.getElementById('mail-content-input').value = '';
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
+    document.querySelector('#mail-analyzer-overlay .history-body').id = 'mail-tab-paste-content';
     document.getElementById('mail-analyzer-overlay').style.display = 'flex';
+
+    // ✅ history-body에 id 부여 + 탭 초기화
+    setTimeout(() => {
+        const body = document.querySelector('#mail-analyzer-overlay .history-body');
+        if (body && !body.id) body.id = 'mail-tab-paste-content';
+        if (window.switchMailTab) window.switchMailTab('paste');
+    }, 50);
 };
 
 window.closeMailAnalyzer = function(e) {
@@ -3145,13 +3188,16 @@ window.insertMailTask = function() {
                 <span class="history-close" style="color:white;" onclick="window.closeMailAnalyzer()">✖</span>
             </div>
             <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3);">
-                <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3);">
+                <div id="mail-tab-paste" 
+                    onclick="event.stopPropagation(); window.switchMailTab('paste');"
+                    style="flex:1; text-align:center; padding:10px; cursor:pointer; 
                             background:rgba(0,0,0,0.2); font-size:13px; font-weight:bold;">
                     ✏️ 직접 입력
                 </div>
-                <div id="mail-tab-file" onclick="window.switchMailTab('file')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                <div id="mail-tab-file" 
+                    onclick="event.stopPropagation(); window.switchMailTab('file');"
+                    style="flex:1; text-align:center; padding:10px; cursor:pointer; 
                             font-size:13px; font-weight:bold;">
                     📎 파일 첨부
                 </div>
@@ -3394,6 +3440,31 @@ window.insertMailTask = function() {
 // 📎 메일 파일 첨부 탭 기능 (v3 - 좌우분할)
 // =========================================================
 
+// ✅ switchMailTab 정의
+// 기존 함수를 아래 코드로 교체하세요
+window.switchMailTab = function(tab) {
+    const isPaste = (tab === 'paste');
+    const pc = document.getElementById('mail-tab-paste-content');
+    const fc = document.getElementById('mail-tab-file-content');
+    
+    // 탭 콘텐츠 표시 전환
+    if (pc) pc.style.display = isPaste ? 'block' : 'none';
+    if (fc) fc.style.display = isPaste ? 'none' : 'flex';
+    
+    // 버튼 스타일 전환
+    const pt = document.getElementById('mail-tab-paste');
+    const ft = document.getElementById('mail-tab-file');
+    
+    if (pt) {
+        pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
+        pt.style.fontWeight = isPaste ? 'bold' : 'normal';
+    }
+    if (ft) {
+        ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
+        ft.style.fontWeight = isPaste ? 'normal' : 'bold';
+    }
+};
+
 const MF_PROJECT_KEYWORDS = {
     "STELLAR"     : [/stellar/i, /\bs32\b/i, /ktk18/i, /ktk15/i, /\bsl-?1\b/i,
                      /led\s*board/i, /s32.*proto/i, /32.*topper/i],
@@ -3402,34 +3473,120 @@ const MF_PROJECT_KEYWORDS = {
     "ODW"         : [/\bodw\b/i, /open\s*display/i],
 };
 
+// ─── 오른쪽 패널 전용 렌더링 ────────────────────────────
+window.mfRenderRightPanel = function(result, idx) {
+    const fields = [
+        { key: '업무명',   label: '📌 업무명' },
+        { key: '시작일',   label: '📅 시작일' },
+        { key: '완료일',   label: '📅 완료일' },
+        { key: '상태',     label: '🔖 상태' },
+        { key: '개발단계', label: '🏗️ 개발단계' },
+        { key: '상세내용', label: '📝 상세내용' },
+    ];
+
+    let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+    fields.forEach(f => {
+        const needsCheck = (result[f.key] || '').includes('날짜확인필요');
+        const isDateField = (f.key === '시작일' || f.key === '완료일');
+        const dateVal  = result[f.key] || '';
+        const dateParsed = isDateField ? parseDateValue(dateVal) : null;
+        const dateTsArg  = dateParsed ? dateParsed.ts : new Date().setHours(0,0,0,0);
+        const displayDate = (isDateField && dateVal && !needsCheck)
+            ? dateVal
+            : `<span style="color:#e67e22; font-weight:bold;">📅 날짜를 선택해주세요</span>`;
+
+        let inputCell;
+        if (f.key === '상세내용') {
+            inputCell = `<textarea data-mf-field="${f.key}"
+                style="width:100%; border:none; outline:none; font-size:13px;
+                       background:transparent; font-family:'Malgun Gothic',sans-serif;
+                       resize:vertical; min-height:60px; box-sizing:border-box;"
+                onchange="window.mfUpdateField(${idx},'${f.key}',this.value)"
+                >${escapeHtml(result[f.key] || '')}</textarea>`;
+        } else if (isDateField) {
+            inputCell = `
+                <div style="display:flex; align-items:center; gap:8px;
+                            ${needsCheck ? 'background:#fff3cd; padding:4px; border-radius:4px;' : ''}">
+                    <span class="date-clickable"
+                          id="mf-right-date-${f.key}-${idx}"
+                          style="cursor:pointer; font-size:13px; font-weight:bold; color:#0056b3;"
+                          onclick="window.mfRightShowCalendar(this, ${dateTsArg}, '${f.key}', ${idx})"
+                          title="클릭하여 날짜 선택">
+                        ${displayDate}
+                    </span>
+                    <span style="font-size:11px; color:#aaa;">📅 클릭하여 변경</span>
+                </div>
+                ${needsCheck ? `<div style="font-size:11px; color:#e67e22; font-weight:bold; margin-top:2px;">
+                    ⚠️ 날짜를 직접 입력해주세요</div>` : ''}`;
+        } else {
+            inputCell = `<input type="text"
+                value="${escapeHtml(result[f.key] || '')}"
+                data-mf-field="${f.key}"
+                style="width:100%; border:none; outline:none; font-size:13px;
+                       background:transparent; font-family:'Malgun Gothic',sans-serif;
+                       box-sizing:border-box;"
+                onchange="window.mfUpdateField(${idx},'${f.key}',this.value)">`;
+        }
+
+        html += `<tr>
+            <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6;
+                       font-weight:bold; width:90px; white-space:nowrap; font-size:12px;">
+                ${f.label}
+            </td>
+            <td style="padding:7px 10px; border:1px solid #dee2e6;">${inputCell}</td>
+        </tr>`;
+    });
+
+    // WBS 레벨
+    const levelOptions = [0,1,2,3,4].map(n =>
+        `<option value="${n}" ${result['wbs레벨']==n?'selected':''}>
+            Level ${n} ${['(대분류)','(소분류1)','(소분류2)','(세부업무)','(하위업무)'][n]}
+        </option>`
+    ).join('');
+    html += `<tr>
+        <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6;
+                   font-weight:bold; white-space:nowrap; font-size:12px;">📊 WBS 레벨</td>
+        <td style="padding:7px 10px; border:1px solid #dee2e6;">
+            <select style="width:100%; border:1px solid #ced4da; border-radius:4px;
+                           padding:4px; font-size:13px;"
+                    onchange="window.mfUpdateField(${idx},'wbs레벨',parseInt(this.value))">
+                ${levelOptions}
+            </select>
+        </td>
+    </tr>`;
+    html += '</table>';
+    document.getElementById('mf-right-result-table').innerHTML = html;
+};
+
+// 필드 값 업데이트
+window.mfUpdateField = function(idx, field, value) {
+    if (window._mfResults[idx]) {
+        window._mfResults[idx].task[field] = value;
+    }
+};
+
+// 오른쪽 패널 달력
+window.mfRightShowCalendar = function(btn, ts, fieldKey, idx) {
+    window.currentCalendarTarget    = btn;
+    window.currentCalendarTs        = Number(ts);
+    window.currentCalendarRow       = null;
+    window.currentCalendarCol       = null;
+    window.currentCalendarMailField = `mf_${fieldKey}_${idx}`;
+    window.currentViewYear  = new Date(ts).getFullYear();
+    window.currentViewMonth = new Date(ts).getMonth();
+    window.calendarFixedPos = null;
+    renderCalendar(false);
+};
+
 // 현재 오른쪽 패널에 표시 중인 항목 인덱스
+
 window._mfCurrentIdx = -1;
 window._mfFiles      = [];
 window._mfResults    = [];
 
-// ─── 탭 전환 ─────────────────────────────────────────────
-window.switchMailTab = function(tab) {
-    const isPaste = tab === 'paste';
-    const pc = document.getElementById('mail-tab-paste-content');
-    const fc = document.getElementById('mail-tab-file-content');
-    if (pc) pc.style.display = isPaste ? 'block' : 'none';
-    if (fc) fc.style.display = isPaste ? 'none'  : 'flex';
-    const pt = document.getElementById('mail-tab-paste');
-    const ft = document.getElementById('mail-tab-file');
-    if (pt) pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (ft) ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
-};
+// (switchMailTab 은 위에서 이미 정의됨)
 
-// showMailAnalyzer 래핑
-const _origShowMailAnalyzer = window.showMailAnalyzer;
-window.showMailAnalyzer = function() {
-    _origShowMailAnalyzer();
-    const body = document.querySelector('#mail-analyzer-overlay .history-body');
-    if (body && !document.getElementById('mail-tab-paste-content')) {
-        body.id = 'mail-tab-paste-content';
-    }
-    window.switchMailTab('paste');
-};
+// (DOMContentLoaded 래핑은 위에서 이미 처리됨)
 
 // ─── 파일 선택 ───────────────────────────────────────────
 window.mfHandleFiles = function(files) {
@@ -3465,33 +3622,126 @@ function mfParseFile(file) {
             let subject = file.name.replace(/\.[^.]+$/, '');
             let sender  = '';
             let body    = '';
+
             if (ext === 'eml') {
+                // ─── EML: 표준 메일 형식 ───────────────────
                 const sm = text.match(/^Subject:\s*(.+)/mi);
                 const fm = text.match(/^From:\s*(.+)/mi);
+                if (sm) subject = mfDecodeMimeWord(sm[1].trim());
+                if (fm) sender  = mfDecodeMimeWord(fm[1].trim());
+
+                // 헤더/바디 분리
+                const sep = text.indexOf('\r\n\r\n') !== -1
+                    ? text.indexOf('\r\n\r\n') + 4
+                    : text.indexOf('\n\n') + 2;
+                let rawBody = sep > 3 ? text.substring(sep) : text;
+
+                // quoted-printable 디코딩
+                rawBody = mfDecodeQP(rawBody);
+                // base64 파트 제거
+                rawBody = rawBody.replace(/[A-Za-z0-9+/]{60,}={0,2}/g, '');
+                // HTML 태그 제거
+                rawBody = rawBody.replace(/<[^>]+>/g, ' ');
+                // 불필요한 패턴 제거
+                rawBody = rawBody
+                    .replace(/https?:\/\/\S+/g, '')          // URL 제거
+                    .replace(/=[0-9A-Fa-f]{2}/g, '')         // 잔여 QP 제거
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                body = rawBody;
+
+            } else if (ext === 'msg') {
+                // ─── MSG: Outlook 바이너리 → 텍스트 추출 ──
+                // XML/메타데이터 완전 제거 후 의미있는 텍스트만 추출
+                let cleaned = text;
+
+                // XML 선언 및 메타데이터 블록 제거
+                cleaned = cleaned.replace(/<\?xml[\s\S]*?\?>/gi, '');
+                cleaned = cleaned.replace(/<rdf:[\s\S]*?<\/rdf:RDF>/gi, '');
+                cleaned = cleaned.replace(/<x:xmpmeta[\s\S]*?<\/x:xmpmeta>/gi, '');
+                cleaned = cleaned.replace(/<[^>]+>/g, ' ');
+
+                // 바이너리 쓰레기 문자 제거 (제어문자, 특수바이트)
+                cleaned = cleaned.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ');
+                cleaned = cleaned.replace(/[^\x20-\x7E\uAC00-\uD7A3\u3040-\u309F\u4E00-\u9FFF\n\r\t]/g, ' ');
+
+                // 제목 추출 시도
+                const sm = cleaned.match(/Subject[:\s]+([^\n\r]{3,80})/i);
+                const fm = cleaned.match(/From[:\s]+([^\n\r]{3,80})/i);
                 if (sm) subject = sm[1].trim();
                 if (fm) sender  = fm[1].trim();
-                const bi = Math.max(
-                    text.indexOf('\r\n\r\n') + 4,
-                    text.indexOf('\n\n') + 2
-                );
-                body = text.substring(bi > 3 ? bi : 0)
-                    .replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+
+                // 파일명에서 제목 보완 (더 신뢰할 수 있음)
+                const fnSubject = file.name
+                    .replace(/\.[^.]+$/, '')
+                    .replace(/^[\d_\-]+/, '')
+                    .trim();
+                if (!subject || subject.length < 3) subject = fnSubject;
+
+                // 의미있는 텍스트 라인만 추출
+                const lines = cleaned.split(/[\n\r]+/);
+                const meaningful = lines.filter(line => {
+                    const l = line.trim();
+                    if (l.length < 5) return false;                    // 너무 짧음
+                    if (/^[A-Za-z0-9+/]{30,}$/.test(l)) return false; // base64
+                    if ((l.match(/[^\x20-\x7E]/g)||[]).length > l.length * 0.3) return false; // 바이너리
+                    if (/stRef:|xmp\.|rdf:|xmlns/i.test(l)) return false; // XML 메타
+                    if (/^[\s\-=_*#>]+$/.test(l)) return false;       // 구분선
+                    return true;
+                });
+                body = meaningful.join(' ').replace(/\s+/g, ' ').trim();
+
             } else if (ext === 'html' || ext === 'htm') {
-                const doc = new DOMParser().parseFromString(text,'text/html');
+                // ─── HTML ──────────────────────────────────
+                const doc = new DOMParser().parseFromString(text, 'text/html');
                 const t   = doc.querySelector('title');
                 if (t) subject = t.textContent.trim();
-                body = (doc.body ? doc.body.innerText : '').replace(/\s+/g,' ').trim();
+                // script/style 제거
+                doc.querySelectorAll('script, style, head').forEach(el => el.remove());
+                body = (doc.body ? doc.body.innerText : '')
+                    .replace(/\s+/g, ' ').trim();
+
             } else {
+                // ─── TXT 등 ────────────────────────────────
                 const sm = text.match(/Subject[:\s]+(.+)/i);
                 const fm = text.match(/From[:\s]+(.+)/i);
                 if (sm) subject = sm[1].trim();
                 if (fm) sender  = fm[1].trim();
-                body = text.replace(/\s+/g,' ').trim();
+                body = text.replace(/\s+/g, ' ').trim();
             }
-            resolve({ subject, sender, body: body.substring(0,3000), fileName: file.name });
+
+            resolve({
+                subject: subject.substring(0, 100),
+                sender:  sender.substring(0, 100),
+                body:    body.substring(0, 3000),
+                fileName: file.name
+            });
         };
         reader.readAsText(file, 'utf-8');
     });
+}
+
+// MIME 인코딩 디코딩 (=?UTF-8?B?...?= 형식)
+function mfDecodeMimeWord(str) {
+    return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_, charset, enc, data) => {
+        try {
+            if (enc.toUpperCase() === 'B') {
+                return decodeURIComponent(escape(atob(data)));
+            } else {
+                return decodeURIComponent(data.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g,
+                    (_, h) => String.fromCharCode(parseInt(h, 16))));
+            }
+        } catch { return data; }
+    });
+}
+
+// Quoted-Printable 디코딩
+function mfDecodeQP(str) {
+    return str
+        .replace(/=\r?\n/g, '')  // soft line break 제거
+        .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => {
+            try { return String.fromCharCode(parseInt(h, 16)); } catch { return ''; }
+        });
 }
 
 // ─── 프로젝트 매칭 ──────────────────────────────────────
@@ -3526,6 +3776,7 @@ async function mfCallGemini(apiKey, parsed) {
             .replace('${projectInch}',     inch)
         : `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
 프로젝트 담당자:${assignee}/고객사:${customer}/모델명:${model}/인치:${inch}
+파일명 참고(제목 힌트): ${parsed.fileName}
 추출규칙:
 - 업무명: 20자 이내 명사형, 모델명/고객사명 제외
 - 시작일: 명시된 경우만, 없으면 "날짜확인필요"
@@ -3681,9 +3932,11 @@ function mfRenderList(results) {
         });
 
         // 체크박스 변경
-        const cb = row.querySelector('input[type=checkbox]');
+        // 코드 내 mfRenderList 함수 안에서 체크박스 이벤트를 바인딩하는 부분입니다.
+        const cb = row.querySelector('.mf-row-checkbox');
         if (cb) {
-            cb.addEventListener('change', function() {
+            cb.addEventListener('click', function(e) {
+                e.stopPropagation(); // 💥 이 부분이 들어가 있어야 행 클릭 이벤트와 분리됩니다!
                 window.mfToggleCheck(i, this.checked);
             });
         }
@@ -3802,38 +4055,8 @@ window.mfSelectItem = function(idx) {
         <span>${escapeHtml(r.sender)}</span>
         ${r.project ? `&nbsp;|&nbsp;<span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
 
-    // renderMailResult 재사용 (직접입력과 동일)
-    window._mailAnalyzedResult = JSON.parse(JSON.stringify(r.task));
-    window.renderMailResult(r.task);
-
-    // 결과 테이블을 오른쪽 패널로 복사
-    const origTable = document.getElementById('mail-result-section');
-    const destTable = document.getElementById('mf-right-result-table');
-    if (origTable && destTable) {
-        destTable.innerHTML = origTable.innerHTML;
-        // input/select 이벤트 재연결
-        destTable.querySelectorAll('input, textarea, select').forEach(el => {
-            const field = el.dataset.field;
-            if (field) {
-                el.addEventListener('change', () => {
-                    window._mailAnalyzedResult[field] =
-                        el.type === 'select-one' ? parseInt(el.value) : el.value;
-                    window._mfResults[idx].task[field] =
-                        window._mailAnalyzedResult[field];
-                });
-            }
-        });
-        // 달력 버튼 재연결
-        destTable.querySelectorAll('.date-clickable[id]').forEach(span => {
-            const fieldKey = span.id.replace('mail-date-','');
-            span.onclick = () => {
-                const ts = window._mailAnalyzedResult[fieldKey]
-                    ? (parseDateValue(window._mailAnalyzedResult[fieldKey])||{}).ts || new Date().getTime()
-                    : new Date().getTime();
-                window.showMailCalendar(span, ts, fieldKey);
-            };
-        });
-    }
+// ✅ 오른쪽 패널 전용 렌더링 (중복 버튼 없음)
+    window.mfRenderRightPanel(r.task, idx);
 
     // 삽입 위치 드롭다운
     window.populateInsertPosition();
@@ -3860,14 +4083,25 @@ window.mfRightInsert = function() {
     const r = window._mfResults[idx];
     if (!r || !r.task) return;
 
+    // ✅ 미매칭 항목: 프로젝트 선택 확인
+    if (!r.project) {
+        const projDD = document.getElementById('mf-right-project-dropdown');
+        if (!projDD || !projDD.value) {
+            alert('⚠️ 프로젝트를 선택해주세요.');
+            return;
+        }
+        r.project = projDD.value;
+    }
+
     // 위치 동기화
     const destSel = document.getElementById('mf-right-position');
     const origSel = document.getElementById('mail-insert-position');
     if (destSel && origSel) origSel.value = destSel.value;
 
     // 날짜 확인
-    const s = window._mailAnalyzedResult['시작일'];
-    const p = window._mailAnalyzedResult['완료일'];
+    // 날짜 확인 (파일첨부 탭은 r.task 에서 직접 읽음)
+    const s = r.task['시작일'];
+    const p = r.task['완료일'];
     if ((s||'').includes('날짜확인필요') || (p||'').includes('날짜확인필요')) {
         alert('⚠️ 시작일 또는 완료일을 먼저 선택해주세요.');
         return;
