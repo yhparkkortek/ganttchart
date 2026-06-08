@@ -3474,7 +3474,7 @@ window.loadMailFromCloud = async function() {
         alert("🔵 먼저 상단의 [구글 드라이브 연동하기] 버튼을 눌러 로그인을 완료해 주세요.");
         return;
     }
-    const loading = document.getElementById('cloud-sync-loading'); // ID를 맞췄습니다
+    const loading = document.getElementById('cloud-sync-loading');
     if(loading) loading.style.display = 'block';
     
     try {
@@ -3490,7 +3490,7 @@ window.loadMailFromCloud = async function() {
             return;
         }
         
-        // 2. 파일 읽기 시도
+        // 2. 파일 읽기
         let fileId = response.result.files[0].id;
         let fileContentResp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
         
@@ -3498,18 +3498,17 @@ window.loadMailFromCloud = async function() {
         try {
             cloudMails = typeof fileContentResp.result === 'string' ? JSON.parse(fileContentResp.result) : fileContentResp.result;
         } catch(e) {
-            alert("❌ 파일 데이터 형식이 올바르지 않습니다. 코랩 코드를 확인하세요.");
+            alert("❌ 파일 데이터 형식이 올바르지 않습니다.");
             return;
         }
         
-        // 3. 데이터가 있을 때만 진행
         if (!cloudMails || cloudMails.length === 0) {
             if(loading) loading.style.display = 'none';
-            alert("ℹ️ 파일은 존재하지만, 저장된 메일 데이터가 0건입니다.");
+            alert("ℹ️ 데이터가 0건입니다.");
             return;
         }
         
-        // 4. 데이터 매핑
+        // 3. 데이터 매핑 및 간트차트 시스템에 주입
         const results = cloudMails.map((m, i) => ({
             idx: i,
             fileName: `Cloud_Mail_${i+1}.eml`,
@@ -3531,40 +3530,27 @@ window.loadMailFromCloud = async function() {
         window._mfResults = results;
         if(loading) loading.style.display = 'none';
         
-        window.switchMailTab('file');
-        if (window.mfRenderList) {
-            window.mfRenderList(results);
-            alert(`🎉 데이터 로드 완료! ${results.length}건의 메일이 준비되었습니다.`);
-        }
-    } catch (err) {
-        if(loading) loading.style.display = 'none';
-        console.error(err);
-        alert("❌ 로드 중 에러 발생: " + err.message);
-    }
-};
-        
-        window._mfResults = results;
-        if(loading) loading.style.display = 'none';
-        
+        // 4. 화면 반영
         window.switchMailTab('file');
         if (window.mfRenderList) {
             window.mfRenderList(results);
             document.getElementById('mf-file-count').textContent = results.length;
             
-            // 불러오자마자 첫 번째 메일 상세내용 및 미리보기가 우측 패널에 뜨도록 트리거
-            if(results.length > 0 && window.mfSelectMail) {
-                window.mfSelectMail(0);
+            // 첫 번째 메일 선택 (상세내용 표시)
+            if(results.length > 0 && typeof window.mfSelectItem === 'function') {
+                window.mfSelectItem(0);
             }
             
-            alert(`🎉 클라우드 전처리 메일 ${results.length}건을 가져왔습니다.\n우측 패널에서 "분석 결과 미리보기"를 확인 및 수정한 뒤 간트차트에 등록하세요!`);
+            alert(`🎉 ${results.length}건의 메일이 로드되었습니다.`);
         }
     } catch (err) {
         if(loading) loading.style.display = 'none';
-        alert("❌ 구글 드라이브 파일 읽기 실패: " + err.message);
+        console.error(err);
+        alert("❌ 로드 중 에러: " + err.message);
     }
 };
 
-// 화면이 처음 로드될 때 날짜 입력칸에 자동으로 오늘 날짜를 채워주는 기본 편의 기능
+// 페이지 로드 시 날짜 자동 세팅
 document.addEventListener("DOMContentLoaded", function() {
     const today = new Date().toISOString().split('T')[0];
     if(document.getElementById('cloud-start-date')) document.getElementById('cloud-start-date').value = today;
