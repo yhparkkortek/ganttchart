@@ -3391,16 +3391,41 @@ window.insertMailTask = function() {
             </div>
         </div>
 
-        <div id="mail-tab-cloud-content" style="display:none; height:calc(92vh - 120px); padding:20px; background:#f8f9fa;">
+        <div id="mail-tab-cloud-content" style="display:none; height:calc(92vh - 120px); padding:20px; overflow-y:auto; background:#f8f9fa;">
             <div style="font-size:13px; color:#333; margin-bottom:15px; line-height:1.6; background:#e8f4fd; padding:15px; border-radius:6px; border-left:4px solid #2980b9;">
-                💡 <b>구글 코랩(Python) 클라우드 연동 가이드</b><br>
-                코랩에서 메일 서버 전처리가 완료되었다면, 아래 버튼을 눌러 내 구글 드라이브에 저장된 최신 메일 전처리 데이터(<code>gantt_mail_temp.json</code>)를 즉시 불러옵니다. 외계어 깨짐 없이 업무를 등록할 수 있습니다.
+                ☁️ <b>실시간 통합 메일 제어 대시보드</b><br>
+                회사 계정 정보와 수집하고자 하는 기간을 입력한 뒤 버튼을 누르면 구글 GAS 클라우드 서버가 실시간으로 메일을 정제하여 원스톱으로 화면에 뿌려줍니다.
             </div>
-            <button onclick="window.loadMailFromCloud()" style="width:100%; padding:14px; background:#2980b9; color:white; border:none; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                🔄 구글 드라이브에서 전처리된 메일 가져오기
+            
+            <div style="background:#fff; border:1px solid #dee2e6; border-radius:6px; padding:15px; margin-bottom:15px; display:flex; flex-direction:column; gap:12px;">
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1;">
+                        <label style="font-size:12px; font-weight:bold; color:#555;">👤 메일 아이디</label>
+                        <input id="cloud-mail-user" type="text" value="yhpark" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box; margin-top:4px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:12px; font-weight:bold; color:#555;">🔒 비밀번호</label>
+                        <input id="cloud-mail-pw" type="password" placeholder="비밀번호 입력" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box; margin-top:4px;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <div style="flex:1;">
+                        <label style="font-size:12px; font-weight:bold; color:#555;">📅 조회 시작일</label>
+                        <input id="cloud-start-date" type="date" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box; margin-top:4px;">
+                    </div>
+                    <div style="flex:1;">
+                        <label style="font-size:12px; font-weight:bold; color:#555;">📅 조회 종료일</label>
+                        <input id="cloud-end-date" type="date" style="width:100%; padding:8px; border:1px solid #ccc; border-radius:4px; font-size:13px; box-sizing:border-box; margin-top:4px;">
+                    </div>
+                </div>
+            </div>
+
+            <button onclick="window.executeCloudMailSync()" style="width:100%; padding:14px; background:#e67e22; color:white; border:none; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom:10px;">
+                🚀 실시간 메일 가져오기 & AI 매핑 원스톱 실행
             </button>
-            <div id="cloud-mail-loading" style="display:none; text-align:center; padding:20px; color:#2980b9; font-weight:bold; font-size:13px;">
-                ⏳ 구글 드라이브 보안 세션 연결 및 파일 로드 중...
+            
+            <div id="cloud-sync-loading" style="display:none; text-align:center; padding:20px; color:#e67e22; font-weight:bold; font-size:13px;">
+                ⏳ 구글 GAS 서버가 회사 메일을 수집하고 전처리 중입니다... (약 5~10초 소요)
             </div>
         </div>
 
@@ -3516,6 +3541,115 @@ window.loadMailFromCloud = async function() {
     } catch (err) {
         if(loading) loading.style.display = 'none';
         alert("❌ 구글 드라이브 파일 읽기 실패: " + err.message);
+    }
+};
+
+// 화면이 처음 로드될 때 날짜 입력칸에 자동으로 오늘 날짜를 채워주는 기본 편의 기능
+document.addEventListener("DOMContentLoaded", function() {
+    const today = new Date().toISOString().split('T')[0];
+    if(document.getElementById('cloud-start-date')) document.getElementById('cloud-start-date').value = today;
+    if(document.getElementById('cloud-end-date')) document.getElementById('cloud-end-date').value = today;
+});
+
+// ─── 구글 GAS 서버로 실시간 명령을 보내서 원스톱 연동하는 함수 ───────────────────
+window.executeCloudMailSync = async function() {
+    const mailUser  = document.getElementById('cloud-mail-user').value.trim();
+    const mailPw    = document.getElementById('cloud-mail-pw').value.trim();
+    const startDate = document.getElementById('cloud-start-date').value;
+    const endDate   = document.getElementById('cloud-end-date').value;
+    
+    if(!mailUser || !mailPw) {
+        alert("🔒 회사 메일 계정 아이디와 비밀번호를 모두 입력해 주세요.");
+        return;
+    }
+    if(!startDate || !endDate) {
+        alert("📅 수집하고자 하는 시작 날짜와 종료 날짜를 지정해 주세요.");
+        return;
+    }
+    
+    const loading = document.getElementById('cloud-sync-loading');
+    if(loading) loading.style.display = 'block';
+    
+    // 💡 1단계에서 배포한 본인의 실제 구글 GAS 웹앱 URL 주소로 변경해 주세요!
+    const GAS_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
+    
+    try {
+        // GAS 서버로 실시간 파싱 신호 전송
+        let response = await fetch(GAS_WEBAPP_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                action: 'fetchMail',
+                mailUser: mailUser,
+                mailPw: mailPw,
+                startDate: startDate,
+                endDate: endDate
+            })
+        });
+        
+        let resData = await response.json();
+        if (resData.status !== 'success') {
+            if(loading) loading.style.display = 'none';
+            alert("❌ 클라우드 서버 수집 에러: " + resData.message);
+            return;
+        }
+        
+        let cloudMails = resData.data;
+        if (!cloudMails || cloudMails.length === 0) {
+            if(loading) loading.style.display = 'none';
+            alert("ℹ️ 해당 기간에 수신된 새로운 업무용 메일이 없습니다.");
+            return;
+        }
+        
+        // 2번 요청사항: 추가할 위치 선택 시 목록 찌꺼기가 쌓이지 않도록 초기화 방어막 작동
+        const posSelect = document.getElementById('mf-right-position');
+        if(posSelect) posSelect.innerHTML = ''; // 💥 드롭다운 옵션 중복 누적 완벽 초기화
+        
+        // 가져온 데이터를 간트차트 시스템과 100% 동기화 매핑
+        const results = cloudMails.map((m, i) => {
+            const project = window.mfMatchProject ? window.mfMatchProject(m.subject, m.body) : null;
+            return {
+                idx: i, 
+                fileName: `Cloud_Mail_${i+1}.eml`,
+                subject: m.subject, 
+                sender: m.sender, 
+                body: m.body,
+                project: project,
+                // 시스템이 정상 등록 체크박스 활성화 상태로 인지하도록 task 구조 빌드
+                task: {
+                    "프로젝트": project || "미분류",
+                    "업무명": m.subject ? m.subject.substring(0, 25) : "새 업무",
+                    "시작일": startDate,
+                    "완료일": endDate,
+                    "상태": "진행",
+                    "개발단계": "",
+                    "상세내용": `[ 발신자: ${m.sender} ]\n${m.body.substring(0, 200)}`,
+                    "wbslevel": 3
+                },
+                selected: true, // 1번 요청사항: 체크박스 기본 활성화 및 개별 해제 보장
+                registered: false,
+                error: null
+            };
+        });
+        
+        window._mfResults = results;
+        if(loading) loading.style.display = 'none';
+        
+        // 파일 탭으로 레이아웃을 자동 전환하여 사람이 눈으로 보고 최종 수정할 수 있도록 연동
+        window.switchMailTab('file');
+        if (window.mfRenderList) {
+            window.mfRenderList(results);
+            document.getElementById('mf-file-count').textContent = results.length;
+            document.getElementById('mf-analyze-btn').style.display = 'block';
+            
+            // 첫 번째 메일 분석 결과 즉시 화면 우측 패널에 노출
+            if(results.length > 0 && window.mfSelectItem) window.mfSelectItem(0);
+            
+            alert(`🎉 지정한 기간 동안 총 ${results.length}건의 메일을 클라우드에서 완벽히 수집했습니다!\n"분석 결과 미리보기" 표를 최종 검토하여 등록하세요.`);
+        }
+    } catch (err) {
+        if(loading) loading.style.display = 'none';
+        alert("❌ 실시간 연동 네트워크 통신 오류: " + err.message);
     }
 };
 
