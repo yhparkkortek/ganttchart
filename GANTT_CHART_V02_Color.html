@@ -4046,19 +4046,6 @@ window.mfSelectItem = function(idx) {
     // 패널 전환
     document.getElementById('mf-right-empty').style.display  = 'none';
     document.getElementById('mf-right-detail').style.display = 'flex';
-
-    // ✅ 미매칭이면 프로젝트 선택 드롭다운 표시
-    const projSelDiv = document.getElementById('mf-right-project-select');
-    const projDD     = document.getElementById('mf-right-project-dropdown');
-    if (projSelDiv && projDD) {
-        if (!r.project) {
-            projSelDiv.style.display = 'block';
-            projDD.value = '';
-        } else {
-            projSelDiv.style.display = 'none';
-            projDD.value = r.project || '';
-        }
-    }
 };
 
 // ─── 오른쪽 패널 등록 버튼 ──────────────────────────────
@@ -4084,8 +4071,9 @@ window.mfRightInsert = function() {
     if (destSel && origSel) origSel.value = destSel.value;
 
     // 날짜 확인
-    const s = window._mailAnalyzedResult['시작일'];
-    const p = window._mailAnalyzedResult['완료일'];
+    // 날짜 확인 (파일첨부 탭은 r.task 에서 직접 읽음)
+    const s = r.task['시작일'];
+    const p = r.task['완료일'];
     if ((s||'').includes('날짜확인필요') || (p||'').includes('날짜확인필요')) {
         alert('⚠️ 시작일 또는 완료일을 먼저 선택해주세요.');
         return;
