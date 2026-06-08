@@ -3460,7 +3460,7 @@ window.loadMailFromCloud = async function() {
         
         if (!response.result.files || response.result.files.length === 0) {
             if(loading) loading.style.display = 'none';
-            alert("❌ 드라이브에서 'gantt_mail_temp.json' 파일을 찾을 수 없습니다.\n코랩 스크립트가 성공적으로 완료되었는지 확인해 주세요.");
+            alert("❌ 드라이브에서 'gantt_mail_temp.json' 파일을 찾을 수 없습니다.");
             return;
         }
         
@@ -3478,10 +3478,16 @@ window.loadMailFromCloud = async function() {
         const results = cloudMails.map((m, i) => {
             const project = window.mfMatchProject ? window.mfMatchProject(m.subject, m.body) : null;
             return {
-                idx: i, fileName: `Cloud_Mail_${i+1}.eml`,
-                subject: m.subject, sender: m.sender, project: project,
-                task: { "업무명": m.subject, "시작일": "날짜확인필요", "완료일": "날짜확인필요", "상태": "진행", "개발단계": "", "상세내용": `[ 발신자: ${m.sender} ]\n${m.body.substring(0,300)}`, "wbs레벨": 3 },
-                selected: true, registered: false, error: null
+                idx: i, 
+                fileName: `Cloud_Mail_${i+1}.eml`,
+                subject: m.subject, 
+                sender: m.sender, 
+                body: m.body, // 💡 중요: 메일 본문(Raw)을 유지하여 AI가 분석할 수 있도록 넘김
+                project: project,
+                task: null, // 💡 중요: 분석 상태를 비워두어 화면에 'AI 분석 버튼'이 활성화되도록 유도
+                selected: true, 
+                registered: false, 
+                error: null
             };
         });
         
@@ -3491,7 +3497,10 @@ window.loadMailFromCloud = async function() {
         window.switchMailTab('file');
         if (window.mfRenderList) {
             window.mfRenderList(results);
-            alert(`🎉 클라우드 전처리 메일 ${results.length}건을 성공적으로 가져왔습니다!`);
+            // 항목 개수 및 분석 버튼 강제 활성화 트리거
+            document.getElementById('mf-file-count').textContent = results.length;
+            document.getElementById('mf-analyze-btn').style.display = 'block';
+            alert(`🎉 클라우드 전처리 메일 ${results.length}건을 가져왔습니다.\n[🤖 AI 일괄 분석] 버튼을 눌러 미리보기를 생성하세요!`);
         }
     } catch (err) {
         if(loading) loading.style.display = 'none';
