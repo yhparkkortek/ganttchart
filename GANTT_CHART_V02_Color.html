@@ -3437,7 +3437,20 @@ window.insertMailTask = function() {
 // 📎 메일 파일 첨부 탭 기능 (v3 - 좌우분할)
 // =========================================================
 
-// (위에서 이미 정의됨)
+// ✅ switchMailTab 정의
+window.switchMailTab = function(tab) {
+    const isPaste = tab === 'paste';
+    const pc = document.getElementById('mail-tab-paste-content');
+    const fc = document.getElementById('mail-tab-file-content');
+    if (pc) pc.style.display = isPaste ? 'block' : 'none';
+    if (fc) fc.style.display = isPaste ? 'none'  : 'flex';
+    const pt = document.getElementById('mail-tab-paste');
+    const ft = document.getElementById('mail-tab-file');
+    if (pt) pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
+    if (ft) ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
+    if (pt) pt.style.fontWeight = isPaste ? 'bold' : 'normal';
+    if (ft) ft.style.fontWeight = isPaste ? 'normal' : 'bold';
+};
 
 const MF_PROJECT_KEYWORDS = {
     "STELLAR"     : [/stellar/i, /\bs32\b/i, /ktk18/i, /ktk15/i, /\bsl-?1\b/i,
