@@ -3623,18 +3623,13 @@ function mfRenderList(results) {
         <div id="mf-list-item-${i}" data-idx="${i}"
              style="display:flex; align-items:center; gap:6px;
                     padding:7px 8px; border-bottom:1px solid #f0f0f0;
-                    background:${bg}; cursor:pointer; transition:background 0.15s;"
-             onclick="window.mfSelectItem(${i})"
-             onmouseover="if(!this.classList.contains('mf-active'))this.style.background='#e7f3ff'"
-             onmouseout="if(!this.classList.contains('mf-active'))this.style.background='${bg}'">
+                    background:${bg}; cursor:pointer; transition:background 0.15s;">
 
             <!-- 체크박스 -->
             <input type="checkbox" data-idx="${i}"
                    ${canSel && r.selected ? 'checked':''}
                    ${canSel ? '' : 'disabled'}
-                   style="flex-shrink:0;"
-                   onclick="event.stopPropagation()"
-                   onchange="window.mfToggleCheck(${i}, this.checked)">
+                   style="flex-shrink:0;">
 
             <!-- 번호 -->
             <span style="font-size:10px; color:#aaa; flex-shrink:0; width:16px;">${i+1}</span>
@@ -3672,6 +3667,39 @@ function mfRenderList(results) {
     list.style.display   = 'block';
     document.getElementById('mf-batch-btn').style.display   = 'block';
     window.mfSyncCheckAll();
+
+    // ✅ innerHTML 렌더링 후 이벤트 직접 연결
+    results.forEach((r, i) => {
+        const row = document.getElementById(`mf-list-item-${i}`);
+        if (!row) return;
+
+        // 행 클릭
+        row.addEventListener('click', function(e) {
+            // 체크박스 클릭은 제외
+            if (e.target.type === 'checkbox') return;
+            window.mfSelectItem(i);
+        });
+
+        // 체크박스 변경
+        const cb = row.querySelector('input[type=checkbox]');
+        if (cb) {
+            cb.addEventListener('change', function() {
+                window.mfToggleCheck(i, this.checked);
+            });
+        }
+
+        // 호버
+        row.addEventListener('mouseover', function() {
+            if (!this.classList.contains('mf-active'))
+                this.style.background = '#e7f3ff';
+        });
+        row.addEventListener('mouseout', function() {
+            if (!this.classList.contains('mf-active')) {
+                const rr = window._mfResults[i];
+                this.style.background = rr.registered ? '#d4edda' : (rr.task ? '#fff' : '#fafafa');
+            }
+        });
+    });
 }
 
 window.mfSetProject = function(project) {
