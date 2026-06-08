@@ -3482,9 +3482,16 @@ window.loadMailFromCloud = async function() {
                 fileName: `Cloud_Mail_${i+1}.eml`,
                 subject: m.subject, 
                 sender: m.sender, 
-                body: m.body, // 💡 중요: 메일 본문(Raw)을 유지하여 AI가 분석할 수 있도록 넘김
+                body: m.body,
                 project: project,
-                task: null, // 💡 중요: 분석 상태를 비워두어 화면에 'AI 분석 버튼'이 활성화되도록 유도
+                // 💡 task 객체에 기본 구조를 채워주어 시스템이 '분석 결과 미리보기'를 즉시 띄우고 체크박스를 활성화하도록 수정
+                task: {
+                    "프로젝트": project || "미분류",
+                    "업무명": m.subject ? m.subject.substring(0, 30) : "새 업무",
+                    "시작일": new Date().toISOString().split('T')[0],
+                    "완료일": new Date().toISOString().split('T')[0],
+                    "내용": m.body ? m.body.substring(0, 100) : ""
+                }, 
                 selected: true, 
                 registered: false, 
                 error: null
@@ -3497,10 +3504,14 @@ window.loadMailFromCloud = async function() {
         window.switchMailTab('file');
         if (window.mfRenderList) {
             window.mfRenderList(results);
-            // 항목 개수 및 분석 버튼 강제 활성화 트리거
             document.getElementById('mf-file-count').textContent = results.length;
-            document.getElementById('mf-analyze-btn').style.display = 'block';
-            alert(`🎉 클라우드 전처리 메일 ${results.length}건을 가져왔습니다.\n[🤖 AI 일괄 분석] 버튼을 눌러 미리보기를 생성하세요!`);
+            
+            // 불러오자마자 첫 번째 메일 상세내용 및 미리보기가 우측 패널에 뜨도록 트리거
+            if(results.length > 0 && window.mfSelectMail) {
+                window.mfSelectMail(0);
+            }
+            
+            alert(`🎉 클라우드 전처리 메일 ${results.length}건을 가져왔습니다.\n우측 패널에서 "분석 결과 미리보기"를 확인 및 수정한 뒤 간트차트에 등록하세요!`);
         }
     } catch (err) {
         if(loading) loading.style.display = 'none';
