@@ -3474,10 +3474,11 @@ window.loadMailFromCloud = async function() {
         alert("🔵 먼저 상단의 [구글 드라이브 연동하기] 버튼을 눌러 로그인을 완료해 주세요.");
         return;
     }
-    const loading = document.getElementById('cloud-mail-loading');
+    const loading = document.getElementById('cloud-sync-loading'); // ID를 맞췄습니다
     if(loading) loading.style.display = 'block';
     
     try {
+        // 1. 드라이브에서 파일 검색
         let response = await gapi.client.drive.files.list({
             q: "name='gantt_mail_temp.json' and trashed=false",
             fields: 'files(id, name)'
@@ -3485,43 +3486,62 @@ window.loadMailFromCloud = async function() {
         
         if (!response.result.files || response.result.files.length === 0) {
             if(loading) loading.style.display = 'none';
-            alert("❌ 드라이브에서 'gantt_mail_temp.json' 파일을 찾을 수 없습니다.");
+            alert("❌ 'gantt_mail_temp.json' 파일이 없습니다. 먼저 코랩을 실행하여 데이터를 저장해주세요.");
             return;
         }
         
+        // 2. 파일 읽기 시도
         let fileId = response.result.files[0].id;
         let fileContentResp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media' });
-        let cloudMails = fileContentResp.result;
         
-        if (typeof cloudMails === 'string') cloudMails = JSON.parse(cloudMails);
-        if (!cloudMails || cloudMails.length === 0) {
-            if(loading) loading.style.display = 'none';
-            alert("ℹ️ 추출된 메일 리스트가 비어있습니다.");
+        let cloudMails;
+        try {
+            cloudMails = typeof fileContentResp.result === 'string' ? JSON.parse(fileContentResp.result) : fileContentResp.result;
+        } catch(e) {
+            alert("❌ 파일 데이터 형식이 올바르지 않습니다. 코랩 코드를 확인하세요.");
             return;
         }
         
-        const results = cloudMails.map((m, i) => {
-            const project = window.mfMatchProject ? window.mfMatchProject(m.subject, m.body) : null;
-            return {
-                idx: i, 
-                fileName: `Cloud_Mail_${i+1}.eml`,
-                subject: m.subject, 
-                sender: m.sender, 
-                body: m.body,
-                project: project,
-                // 💡 task 객체에 기본 구조를 채워주어 시스템이 '분석 결과 미리보기'를 즉시 띄우고 체크박스를 활성화하도록 수정
-                task: {
-                    "프로젝트": project || "미분류",
-                    "업무명": m.subject ? m.subject.substring(0, 30) : "새 업무",
-                    "시작일": new Date().toISOString().split('T')[0],
-                    "완료일": new Date().toISOString().split('T')[0],
-                    "내용": m.body ? m.body.substring(0, 100) : ""
-                }, 
-                selected: true, 
-                registered: false, 
-                error: null
-            };
-        });
+        // 3. 데이터가 있을 때만 진행
+        if (!cloudMails || cloudMails.length === 0) {
+            if(loading) loading.style.display = 'none';
+            alert("ℹ️ 파일은 존재하지만, 저장된 메일 데이터가 0건입니다.");
+            return;
+        }
+        
+        // 4. 데이터 매핑
+        const results = cloudMails.map((m, i) => ({
+            idx: i,
+            fileName: `Cloud_Mail_${i+1}.eml`,
+            subject: m.subject || "제목 없음",
+            sender: m.sender || "발신자 없음",
+            body: m.body || "",
+            project: window.mfMatchProject ? window.mfMatchProject(m.subject, m.body) : null,
+            task: {
+                "업무명": (m.subject || "새 업무").substring(0, 30),
+                "시작일": new Date().toISOString().split('T')[0],
+                "완료일": new Date().toISOString().split('T')[0],
+                "상태": "진행",
+                "상세내용": (m.body || "").substring(0, 300)
+            },
+            selected: true,
+            registered: false
+        }));
+        
+        window._mfResults = results;
+        if(loading) loading.style.display = 'none';
+        
+        window.switchMailTab('file');
+        if (window.mfRenderList) {
+            window.mfRenderList(results);
+            alert(`🎉 데이터 로드 완료! ${results.length}건의 메일이 준비되었습니다.`);
+        }
+    } catch (err) {
+        if(loading) loading.style.display = 'none';
+        console.error(err);
+        alert("❌ 로드 중 에러 발생: " + err.message);
+    }
+};
         
         window._mfResults = results;
         if(loading) loading.style.display = 'none';
