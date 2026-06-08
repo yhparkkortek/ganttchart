@@ -3623,11 +3623,10 @@ function mfRenderList(results) {
         <div id="mf-list-item-${i}" data-idx="${i}"
              style="display:flex; align-items:center; gap:6px;
                     padding:7px 8px; border-bottom:1px solid #f0f0f0;
-                    background:${bg}; cursor:${canSel?'pointer':'default'};
-                    transition:background 0.15s;"
-             ${canSel ? `onclick="window.mfSelectItem(${i})"
-                         onmouseover="if(!this.classList.contains('mf-active'))this.style.background='#e7f3ff'"
-                         onmouseout="if(!this.classList.contains('mf-active'))this.style.background='${bg}'"` : ''}>
+                    background:${bg}; cursor:pointer; transition:background 0.15s;"
+             onclick="window.mfSelectItem(${i})"
+             onmouseover="if(!this.classList.contains('mf-active'))this.style.background='#e7f3ff'"
+             onmouseout="if(!this.classList.contains('mf-active'))this.style.background='${bg}'">
 
             <!-- 체크박스 -->
             <input type="checkbox" data-idx="${i}"
@@ -3723,7 +3722,24 @@ window.mfSelectAll = function(select) {
 // ─── 행 클릭 → 오른쪽 패널 표시 ────────────────────────
 window.mfSelectItem = function(idx) {
     const r = window._mfResults[idx];
-    if (!r || !r.task) return;
+    if (!r) return;
+
+    // task 없으면 오른쪽에 미분석 안내만 표시
+    if (!r.task) {
+        document.getElementById('mf-right-empty').style.display  = 'none';
+        document.getElementById('mf-right-detail').style.display = 'none';
+        document.getElementById('mf-right-mail-info').innerHTML  =
+            `<b>📨 ${escapeHtml(r.subject)}</b><br>
+             <span style="color:#dc3545;">⚠️ ${r.error || 'AI 분석 실패'}</span>`;
+        document.getElementById('mf-right-empty').style.display = 'flex';
+        document.getElementById('mf-right-empty').innerHTML =
+            `<div style="font-size:32px;">⚠️</div>
+             <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">
+                 ${escapeHtml(r.error || 'AI 분석 실패')}</div>
+             <div style="font-size:11px; color:#aaa; margin-top:4px;">
+                 ${escapeHtml(r.subject)}</div>`;
+        return;
+    }
 
     // 이전 활성 항목 스타일 초기화
     if (window._mfCurrentIdx >= 0) {
