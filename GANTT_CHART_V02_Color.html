@@ -3138,7 +3138,7 @@ window.insertMailTask = function() {
 </style>
 
 <div id="mail-analyzer-overlay" class="modal-overlay" onclick="window.closeMailAnalyzer(event)">
-    <div class="history-modal" onclick="event.stopPropagation()" style="max-width:700px; height:auto; max-height:90vh;">
+    <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1100px; width:95vw; height:auto; max-height:92vh;">
         <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0;">
             <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 20px; width:100%; box-sizing:border-box;">
                 <span>📧 메일 내용으로 업무 자동 추가</span>
@@ -3219,92 +3219,149 @@ window.insertMailTask = function() {
         </div>
 
         <!-- ✅ 파일 첨부 탭 -->
-        <div id="mail-tab-file-content" style="display:none;">
+        <!-- ✅ 파일 첨부 탭 -->
+        <div id="mail-tab-file-content" style="display:none; height:calc(92vh - 120px);">
+            <div style="display:flex; height:100%; gap:0;">
 
-            <!-- 안내 -->
-            <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px;
-                        padding:10px 14px; margin-bottom:14px; font-size:12px; color:#555;">
-                📌 <b>지원:</b> .eml .msg .html .txt &nbsp;|&nbsp; <b>최대 50개</b> &nbsp;|&nbsp;
-                행 클릭 → 상세확인 후 위치 지정 등록 &nbsp;|&nbsp;
-                체크박스 선택 → 연속등록
-            </div>
+                <!-- ── 왼쪽 패널 ── -->
+                <div style="width:400px; min-width:400px; display:flex; flex-direction:column;
+                            border-right:2px solid #dee2e6; padding:14px; overflow:hidden;">
 
-            <!-- 드롭존 -->
-            <input type="file" id="mf-input" multiple accept=".eml,.msg,.html,.htm,.txt"
-                   style="display:none;" onchange="window.mfHandleFiles(this.files)">
-            <div id="mf-dropzone"
-                 style="border:2px dashed #e67e22; border-radius:8px; padding:22px;
-                        text-align:center; cursor:pointer; background:#fff8f3;
-                        transition:0.2s; margin-bottom:12px;"
-                 onclick="document.getElementById('mf-input').click()"
-                 ondragover="event.preventDefault(); this.style.background='#ffe8d6';"
-                 ondragleave="this.style.background='#fff8f3';"
-                 ondrop="event.preventDefault(); this.style.background='#fff8f3';
-                         window.mfHandleFiles(event.dataTransfer.files)">
-                <div style="font-size:28px;">📁</div>
-                <div style="font-weight:bold; color:#e67e22; margin-top:4px; font-size:13px;">
-                    클릭하거나 메일 파일을 드래그하세요
-                </div>
-                <div style="font-size:11px; color:#aaa; margin-top:3px;">
-                    .eml / .msg / .html / .txt 최대 50개
-                </div>
-            </div>
-
-            <!-- 분석 버튼 -->
-            <button id="mf-analyze-btn" onclick="window.mfAnalyze()"
-                    style="display:none; width:100%; padding:9px; background:#e67e22;
-                           color:white; border:none; border-radius:6px; font-size:13px;
-                           font-weight:bold; cursor:pointer; margin-bottom:12px;">
-                🤖 AI 일괄 분석 시작 (<span id="mf-file-count">0</span>개)
-            </button>
-
-            <!-- 진행바 -->
-            <div id="mf-progress" style="display:none; margin-bottom:12px;">
-                <div style="font-size:12px; font-weight:bold; margin-bottom:5px;">
-                    ⏳ 분석 중... <span id="mf-prog-text"></span>
-                </div>
-                <div style="background:#e9ecef; border-radius:4px; height:7px; overflow:hidden;">
-                    <div id="mf-prog-bar"
-                         style="height:100%; background:#e67e22; transition:width 0.3s; width:0%;"></div>
-                </div>
-            </div>
-
-            <!-- 결과 목록 -->
-            <div id="mf-results" style="display:none;">
-                <div style="display:flex; justify-content:space-between; align-items:center;
-                            margin-bottom:8px;">
-                    <div style="font-size:13px; font-weight:bold;">
-                        📊 분석 결과 &nbsp;
-                        <span style="font-size:11px; color:#666; font-weight:normal;">
-                            (행 클릭 → 상세확인 후 등록 / 체크 후 연속등록)
-                        </span>
+                    <!-- 드롭존 -->
+                    <input type="file" id="mf-input" multiple
+                           accept=".eml,.msg,.html,.htm,.txt"
+                           style="display:none;"
+                           onchange="window.mfHandleFiles(this.files)">
+                    <div id="mf-dropzone"
+                         style="border:2px dashed #e67e22; border-radius:8px; padding:16px;
+                                text-align:center; cursor:pointer; background:#fff8f3;
+                                transition:0.2s; margin-bottom:10px; flex-shrink:0;"
+                         onclick="document.getElementById('mf-input').click()"
+                         ondragover="event.preventDefault(); this.style.background='#ffe8d6';"
+                         ondragleave="this.style.background='#fff8f3';"
+                         ondrop="event.preventDefault(); this.style.background='#fff8f3';
+                                 window.mfHandleFiles(event.dataTransfer.files)">
+                        <div style="font-size:24px;">📁</div>
+                        <div style="font-weight:bold; color:#e67e22; font-size:12px; margin-top:3px;">
+                            클릭하거나 파일을 드래그하세요
+                        </div>
+                        <div style="font-size:10px; color:#aaa; margin-top:2px;">
+                            .eml / .msg / .html / .txt 최대 50개
+                        </div>
                     </div>
-                    <div style="display:flex; gap:5px; align-items:center;">
-                        <label style="font-size:12px; color:#555; cursor:pointer;">
-                            <input type="checkbox" id="mf-check-all"
-                                   onchange="window.mfSelectAll(this.checked)"> 전체선택
-                        </label>
+
+                    <!-- 분석 버튼 -->
+                    <button id="mf-analyze-btn" onclick="window.mfAnalyze()"
+                            style="display:none; width:100%; padding:8px;
+                                   background:#e67e22; color:white; border:none;
+                                   border-radius:6px; font-size:13px; font-weight:bold;
+                                   cursor:pointer; margin-bottom:10px; flex-shrink:0;">
+                        🤖 AI 일괄 분석 (<span id="mf-file-count">0</span>개)
+                    </button>
+
+                    <!-- 진행바 -->
+                    <div id="mf-progress" style="display:none; margin-bottom:8px; flex-shrink:0;">
+                        <div style="font-size:11px; font-weight:bold; margin-bottom:4px;">
+                            ⏳ <span id="mf-prog-text"></span>
+                        </div>
+                        <div style="background:#e9ecef; border-radius:4px; height:6px; overflow:hidden;">
+                            <div id="mf-prog-bar"
+                                 style="height:100%; background:#e67e22;
+                                        transition:width 0.3s; width:0%;"></div>
+                        </div>
+                    </div>
+
+                    <!-- 결과 목록 헤더 -->
+                    <div id="mf-list-header" style="display:none; flex-shrink:0;
+                                                     margin-bottom:6px;">
+                        <div style="display:flex; justify-content:space-between;
+                                    align-items:center;">
+                            <span style="font-size:12px; font-weight:bold;">
+                                📋 분석결과 <span id="mf-result-count">0</span>개
+                            </span>
+                            <label style="font-size:11px; color:#555; cursor:pointer;">
+                                <input type="checkbox" id="mf-check-all"
+                                       onchange="window.mfSelectAll(this.checked)">
+                                전체선택
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 결과 목록 (스크롤) -->
+                    <div id="mf-result-list"
+                         style="flex:1; overflow-y:auto; border:1px solid #dee2e6;
+                                border-radius:6px; display:none;"></div>
+
+                    <!-- 연속등록 버튼 -->
+                    <button id="mf-batch-btn" onclick="window.mfBatchInsert()"
+                            style="display:none; width:100%; margin-top:10px; padding:9px;
+                                   background:#0056b3; color:white; border:none;
+                                   border-radius:6px; font-size:12px;
+                                   font-weight:bold; cursor:pointer; flex-shrink:0;">
+                        ⚡ 선택항목 연속등록 (위치확인 없이)
+                    </button>
+                </div>
+
+                <!-- ── 오른쪽 패널 ── -->
+                <div style="flex:1; display:flex; flex-direction:column;
+                            overflow:hidden; padding:14px;">
+
+                    <!-- 선택 전 안내 -->
+                    <div id="mf-right-empty"
+                         style="flex:1; display:flex; flex-direction:column;
+                                align-items:center; justify-content:center;
+                                color:#ccc; text-align:center;">
+                        <div style="font-size:48px; margin-bottom:12px;">👈</div>
+                        <div style="font-size:14px; font-weight:bold;">
+                            왼쪽에서 메일을 선택하세요
+                        </div>
+                        <div style="font-size:12px; margin-top:6px;">
+                            분석 결과가 여기에 표시됩니다
+                        </div>
+                    </div>
+
+                    <!-- 선택 후 상세 내용 -->
+                    <div id="mf-right-detail" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+
+                        <!-- 메일 정보 헤더 -->
+                        <div id="mf-right-mail-info"
+                             style="font-size:11px; color:#888; margin-bottom:10px;
+                                    padding:8px 12px; background:#f8f9fa;
+                                    border-radius:6px; border-left:3px solid #e67e22;
+                                    flex-shrink:0;">
+                        </div>
+
+                        <!-- 분석결과 테이블 (renderMailResult 재사용) -->
+                        <div id="mf-right-result-table"
+                             style="flex:1; overflow-y:auto; margin-bottom:10px;">
+                        </div>
+
+                        <!-- 삽입 위치 -->
+                        <div style="padding:10px 12px; background:#f8f9fa;
+                                    border-radius:6px; border:1px solid #dee2e6;
+                                    margin-bottom:10px; flex-shrink:0;">
+                            <div style="font-weight:bold; font-size:12px; margin-bottom:6px;">
+                                📍 추가할 위치
+                            </div>
+                            <select id="mf-right-position"
+                                    style="width:100%; padding:6px;
+                                           border:1px solid #ced4da; border-radius:4px;
+                                           font-size:12px;">
+                            </select>
+                        </div>
+
+                        <!-- 등록 버튼 -->
+                        <button onclick="window.mfRightInsert()"
+                                style="width:100%; padding:10px; background:#28a745;
+                                       color:white; border:none; border-radius:6px;
+                                       font-size:13px; font-weight:bold;
+                                       cursor:pointer; flex-shrink:0;">
+                            ✅ 이 항목 등록
+                        </button>
                     </div>
                 </div>
 
-                <!-- 결과 테이블 -->
-                <div id="mf-result-table"
-                     style="max-height:320px; overflow-y:auto;
-                            border:1px solid #dee2e6; border-radius:6px;"></div>
-
-                <!-- 연속등록 버튼 -->
-                <button onclick="window.mfBatchInsert()"
-                        style="width:100%; margin-top:10px; padding:10px;
-                               background:#0056b3; color:white; border:none;
-                               border-radius:6px; font-size:13px;
-                               font-weight:bold; cursor:pointer;">
-                    ⚡ 선택 항목 연속등록 (위치확인 없이)
-                </button>
             </div>
-
-            <div id="mf-error"
-                 style="display:none; color:#dc3545; font-size:13px; padding:10px;
-                        background:#fff5f5; border-radius:6px; margin-top:8px;"></div>
         </div>
 
     </div>
@@ -3312,7 +3369,7 @@ window.insertMailTask = function() {
 
 <script>
 // =========================================================
-// 📎 메일 파일 첨부 탭 기능 (v2)
+// 📎 메일 파일 첨부 탭 기능 (v3 - 좌우분할)
 // =========================================================
 
 const MF_PROJECT_KEYWORDS = {
@@ -3322,20 +3379,25 @@ const MF_PROJECT_KEYWORDS = {
     "ODW"         : [/\bodw\b/i, /open\s*display/i],
 };
 
+// 현재 오른쪽 패널에 표시 중인 항목 인덱스
+window._mfCurrentIdx = -1;
+window._mfFiles      = [];
+window._mfResults    = [];
+
 // ─── 탭 전환 ─────────────────────────────────────────────
 window.switchMailTab = function(tab) {
     const isPaste = tab === 'paste';
     const pc = document.getElementById('mail-tab-paste-content');
     const fc = document.getElementById('mail-tab-file-content');
     if (pc) pc.style.display = isPaste ? 'block' : 'none';
-    if (fc) fc.style.display = isPaste ? 'none'  : 'block';
+    if (fc) fc.style.display = isPaste ? 'none'  : 'flex';
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
     if (pt) pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
     if (ft) ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
 };
 
-// showMailAnalyzer 래핑 (탭 초기화)
+// showMailAnalyzer 래핑
 const _origShowMailAnalyzer = window.showMailAnalyzer;
 window.showMailAnalyzer = function() {
     _origShowMailAnalyzer();
@@ -3347,24 +3409,27 @@ window.showMailAnalyzer = function() {
 };
 
 // ─── 파일 선택 ───────────────────────────────────────────
-window._mfFiles   = [];
-window._mfResults = [];
-
 window.mfHandleFiles = function(files) {
     const arr = Array.from(files).slice(0, 50);
     window._mfFiles = arr;
     document.getElementById('mf-file-count').textContent = arr.length;
     document.getElementById('mf-analyze-btn').style.display = arr.length ? 'block' : 'none';
-    document.getElementById('mf-results').style.display = 'none';
-    document.getElementById('mf-error').style.display   = 'none';
-    document.getElementById('mf-dropzone').innerHTML =
-        `<div style="font-size:22px;">📁</div>
-         <div style="font-weight:bold; color:#e67e22; font-size:13px; margin-top:4px;">
-             ${arr.length}개 파일 선택됨 (클릭하여 변경)
-         </div>
-         <div style="font-size:11px; color:#aaa; margin-top:2px;">
-             ${arr.map(f=>f.name).slice(0,3).join(', ')}${arr.length>3?` 외 ${arr.length-3}개`:''}
-         </div>`;
+    document.getElementById('mf-result-list').style.display  = 'none';
+    document.getElementById('mf-list-header').style.display  = 'none';
+    document.getElementById('mf-batch-btn').style.display    = 'none';
+    document.getElementById('mf-right-empty').style.display  = 'flex';
+    document.getElementById('mf-right-detail').style.display = 'none';
+    window._mfCurrentIdx = -1;
+
+    const dz = document.getElementById('mf-dropzone');
+    dz.innerHTML = `
+        <div style="font-size:20px;">📁</div>
+        <div style="font-weight:bold; color:#e67e22; font-size:12px; margin-top:3px;">
+            ${arr.length}개 선택됨 (클릭하여 변경)
+        </div>
+        <div style="font-size:10px; color:#aaa; margin-top:2px;">
+            ${arr.map(f=>f.name).slice(0,2).join(', ')}${arr.length>2?` 외 ${arr.length-2}개`:''}
+        </div>`;
 };
 
 // ─── 파일 파싱 ───────────────────────────────────────────
@@ -3382,12 +3447,14 @@ function mfParseFile(file) {
                 const fm = text.match(/^From:\s*(.+)/mi);
                 if (sm) subject = sm[1].trim();
                 if (fm) sender  = fm[1].trim();
-                const bi = text.indexOf('\r\n\r\n') !== -1
-                    ? text.indexOf('\r\n\r\n') + 4
-                    : text.indexOf('\n\n') + 2;
-                body = text.substring(bi).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+                const bi = Math.max(
+                    text.indexOf('\r\n\r\n') + 4,
+                    text.indexOf('\n\n') + 2
+                );
+                body = text.substring(bi > 3 ? bi : 0)
+                    .replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
             } else if (ext === 'html' || ext === 'htm') {
-                const doc = new DOMParser().parseFromString(text, 'text/html');
+                const doc = new DOMParser().parseFromString(text,'text/html');
                 const t   = doc.querySelector('title');
                 if (t) subject = t.textContent.trim();
                 body = (doc.body ? doc.body.innerText : '').replace(/\s+/g,' ').trim();
@@ -3398,7 +3465,7 @@ function mfParseFile(file) {
                 if (fm) sender  = fm[1].trim();
                 body = text.replace(/\s+/g,' ').trim();
             }
-            resolve({ subject, sender, body: body.substring(0, 3000), fileName: file.name });
+            resolve({ subject, sender, body: body.substring(0,3000), fileName: file.name });
         };
         reader.readAsText(file, 'utf-8');
     });
@@ -3417,49 +3484,46 @@ function mfMatchProject(subject, body) {
 async function mfCallGemini(apiKey, parsed) {
     let assignee='', customer='', model='', inch='';
     if (globalData && globalData.length > 1) {
-        for (let i = 1; i < globalData.length; i++) {
+        for (let i=1; i<globalData.length; i++) {
             const r = globalData[i]; if (!r) continue;
-            if (!assignee && colIdx.assignee !== -1) assignee = r[colIdx.assignee] || '';
-            if (!customer && colIdx.customer !== -1) customer = r[colIdx.customer] || '';
-            if (!model    && colIdx.model    !== -1) model    = r[colIdx.model]    || '';
-            if (!inch     && colIdx.inch     !== -1) inch     = r[colIdx.inch]     || '';
+            if (!assignee && colIdx.assignee!==-1) assignee = r[colIdx.assignee]||'';
+            if (!customer && colIdx.customer!==-1) customer = r[colIdx.customer]||'';
+            if (!model    && colIdx.model   !==-1) model    = r[colIdx.model]   ||'';
+            if (!inch     && colIdx.inch    !==-1) inch     = r[colIdx.inch]    ||'';
             if (assignee && customer && model) break;
         }
     }
     const savedPrompt = localStorage.getItem('gantt_mail_prompt');
-    let prompt;
-    if (savedPrompt) {
-        prompt = savedPrompt
-            .replace('${mailText}',        parsed.subject + '\n' + parsed.body)
+    const prompt = savedPrompt
+        ? savedPrompt
+            .replace('${mailText}',        parsed.subject+'\n'+parsed.body)
             .replace('${projectAssignee}', assignee)
             .replace('${projectCustomer}', customer)
             .replace('${projectModel}',    model)
-            .replace('${projectInch}',     inch);
-    } else {
-        prompt = `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
-프로젝트 담당자: ${assignee} / 고객사: ${customer} / 모델명: ${model} / 인치: ${inch}
-추출 규칙:
-- 업무명: 핵심내용에서 20자 이내 명사형, 모델명/고객사명 제외
-- 시작일: 날짜 명시 시만, 없으면 "날짜확인필요"
+            .replace('${projectInch}',     inch)
+        : `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
+프로젝트 담당자:${assignee}/고객사:${customer}/모델명:${model}/인치:${inch}
+추출규칙:
+- 업무명: 20자 이내 명사형, 모델명/고객사명 제외
+- 시작일: 명시된 경우만, 없으면 "날짜확인필요"
 - 완료일: 마감일 명시 시만, 없으면 "날짜확인필요"
 - 상태: 진행/대기/완료
 - 개발단계: RFQ/설계/시제품/양산 (불명확하면 빈값)
-- 상세내용: [업무유형,발신→수신]발신자→수신자\\n[핵심내용]내용\\n[To do]후속조치 (300자 이내)
+- 상세내용: [업무유형,발신→수신]발신자→수신자\\n[핵심내용]내용\\n[To do]후속조치 300자이내
 - wbs레벨: 3
 JSON만 응답:
 {"업무명":"","시작일":"","완료일":"","상태":"","개발단계":"","상세내용":"","wbs레벨":3}
-이메일 제목: ${parsed.subject}
-발신자: ${parsed.sender}
-본문: ${parsed.body.substring(0, 2000)}`;
-    }
+이메일 제목:${parsed.subject}
+발신자:${parsed.sender}
+본문:${parsed.body.substring(0,2000)}`;
+
     const resp = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
         { method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
               contents:[{parts:[{text:prompt}]}],
               generationConfig:{temperature:0.1, maxOutputTokens:1024}
-          })
-        }
+          }) }
     );
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message);
@@ -3473,143 +3537,137 @@ JSON만 응답:
 // ─── 일괄 분석 ───────────────────────────────────────────
 window.mfAnalyze = async function() {
     const apiKey = localStorage.getItem('gemini_api_key');
-    if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
+    if (!apiKey)  { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
     if (!window._mfFiles.length) { alert('파일을 선택해주세요.'); return; }
 
-    document.getElementById('mf-analyze-btn').disabled = true;
+    document.getElementById('mf-analyze-btn').disabled  = true;
     document.getElementById('mf-progress').style.display = 'block';
-    document.getElementById('mf-results').style.display  = 'none';
-    document.getElementById('mf-error').style.display    = 'none';
+    document.getElementById('mf-result-list').style.display = 'none';
+    document.getElementById('mf-list-header').style.display = 'none';
+    document.getElementById('mf-batch-btn').style.display   = 'none';
+    document.getElementById('mf-right-empty').style.display  = 'flex';
+    document.getElementById('mf-right-detail').style.display = 'none';
+    window._mfCurrentIdx = -1;
 
     const progBar  = document.getElementById('mf-prog-bar');
     const progText = document.getElementById('mf-prog-text');
     const results  = [];
 
-    for (let i = 0; i < window._mfFiles.length; i++) {
+    for (let i=0; i<window._mfFiles.length; i++) {
         const f = window._mfFiles[i];
-        progText.textContent = `${i+1} / ${window._mfFiles.length} — ${f.name}`;
+        progText.textContent = `${i+1}/${window._mfFiles.length} — ${f.name}`;
         progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
         try {
             const parsed  = await mfParseFile(f);
             const project = mfMatchProject(parsed.subject, parsed.body);
             const task    = project ? await mfCallGemini(apiKey, parsed) : null;
-            results.push({ idx:i, fileName:f.name, subject:parsed.subject,
-                           sender:parsed.sender, project, task,
-                           selected: !!(project && task),
-                           error: (!project) ? '프로젝트 미매칭' : (!task ? 'AI분석실패' : null) });
+            results.push({
+                idx: i, fileName: f.name,
+                subject: parsed.subject, sender: parsed.sender,
+                project, task,
+                selected: !!(project && task),
+                registered: false,
+                error: !project ? '프로젝트 미매칭' : (!task ? 'AI분석실패' : null)
+            });
         } catch(e) {
-            results.push({ idx:i, fileName:f.name, subject:f.name,
-                           project:null, task:null, selected:false, error:e.message });
+            results.push({
+                idx:i, fileName:f.name, subject:f.name, sender:'',
+                project:null, task:null, selected:false, registered:false, error:e.message
+            });
         }
-        if (i < window._mfFiles.length - 1)
-            await new Promise(r => setTimeout(r, 400));
+        if (i < window._mfFiles.length-1)
+            await new Promise(r=>setTimeout(r,400));
     }
 
     window._mfResults = results;
-    document.getElementById('mf-analyze-btn').disabled = false;
-    document.getElementById('mf-progress').style.display = 'none';
-    mfRenderResults(results);
+    document.getElementById('mf-analyze-btn').disabled   = false;
+    document.getElementById('mf-progress').style.display  = 'none';
+    document.getElementById('mf-result-count').textContent = results.length;
+    mfRenderList(results);
 };
 
-// ─── 결과 테이블 렌더링 ──────────────────────────────────
-function mfRenderResults(results) {
-    const table = document.getElementById('mf-result-table');
-    let html = `
-    <table style="width:100%; border-collapse:collapse; font-size:12px;">
-        <thead>
-            <tr style="background:#f4f6f8; position:sticky; top:0; z-index:1;">
-                <th style="padding:7px 6px; border:1px solid #dee2e6; width:28px; text-align:center;">✓</th>
-                <th style="padding:7px 6px; border:1px solid #dee2e6; width:22px; text-align:center;">#</th>
-                <th style="padding:7px 6px; border:1px solid #dee2e6;">업무명</th>
-                <th style="padding:7px 6px; border:1px solid #dee2e6; width:90px;">프로젝트</th>
-                <th style="padding:7px 6px; border:1px solid #dee2e6; width:75px;">시작일</th>
-                <th style="padding:7px 6px; border:1px solid #dee2e6; width:55px;">상태</th>
-                <th style="padding:7px 6px; border:1px solid #dee2e6; width:55px; text-align:center;">등록</th>
-            </tr>
-        </thead>
-        <tbody>`;
-
+// ─── 왼쪽 목록 렌더링 ───────────────────────────────────
+function mfRenderList(results) {
+    const list = document.getElementById('mf-result-list');
+    let html = '';
     results.forEach((r, i) => {
-        const canSel  = !!(r.project && r.task);
-        const hasErr  = !!r.error;
-        const bg      = hasErr ? (r.project ? '#fff' : '#fafafa') : '#f7fff7';
-        const taskName = r.task ? (r.task['업무명']||'새 업무') + ' 📧' : '-';
-        const startDay = r.task ? (r.task['시작일']||'-') : '-';
-        const status   = r.task ? (r.task['상태']||'-') : '-';
-        const needDate = startDay.includes('날짜확인필요');
-
+        const canSel = !!(r.project && r.task);
+        const bg     = r.registered ? '#d4edda'
+                     : canSel       ? '#fff'
+                     :                '#fafafa';
+        const taskName = r.task ? (r.task['업무명']||'새업무') : null;
         html += `
-        <tr id="mf-row-${i}" data-idx="${i}"
-            style="background:${bg}; cursor:${canSel?'pointer':'default'};
-                   transition:background 0.15s;"
-            ${canSel ? `onmouseover="this.style.background='#e7f3ff'"
-                        onmouseout="this.style.background='${bg}'"
-                        onclick="window.mfRowClick(${i}, event)"` : ''}>
-            <td style="padding:6px; border:1px solid #dee2e6; text-align:center;"
-                onclick="event.stopPropagation()">
-                <input type="checkbox" data-idx="${i}"
-                       ${canSel && r.selected ? 'checked' : ''}
-                       ${canSel ? '' : 'disabled'}
-                       onchange="window._mfResults[${i}].selected=this.checked;
-                                 window.mfSyncCheckAll()">
-            </td>
-            <td style="padding:6px; border:1px solid #dee2e6; text-align:center;
-                       color:#aaa; font-size:11px;">${i+1}</td>
-            <td style="padding:6px; border:1px solid #dee2e6;">
-                ${canSel
-                    ? `<span style="font-weight:bold;">${escapeHtml(taskName)}</span>
-                       <div style="font-size:10px; color:#888; margin-top:1px;">
-                           ${escapeHtml(r.subject.substring(0,45))}
-                       </div>`
-                    : `<span style="color:#aaa;">${escapeHtml(r.subject.substring(0,45))}</span>
-                       <span style="color:#dc3545; font-size:10px; margin-left:4px;">${r.error||''}</span>`
-                }
-            </td>
-            <td style="padding:6px; border:1px solid #dee2e6; text-align:center;">
-                ${r.project
-                    ? `<span style="background:#e7f3ff; color:#0056b3; padding:2px 5px;
-                               border-radius:4px; font-weight:bold; font-size:11px;">
-                           ${r.project}
-                       </span>`
-                    : `<span style="color:#ccc; font-size:11px;">-</span>`}
-            </td>
-            <td style="padding:6px; border:1px solid #dee2e6; text-align:center;
-                       ${needDate ? 'color:#e67e22; font-weight:bold;' : ''}
-                       font-size:11px; white-space:nowrap;">
-                ${needDate ? '⚠️날짜필요' : escapeHtml(startDay)}
-            </td>
-            <td style="padding:6px; border:1px solid #dee2e6; text-align:center; font-size:11px;">
-                ${escapeHtml(status)}
-            </td>
-            <td style="padding:6px; border:1px solid #dee2e6; text-align:center;"
-                onclick="event.stopPropagation()">
-                ${canSel
-                    ? `<button onclick="window.mfRowClick(${i}, event)"
-                               style="padding:3px 8px; background:#e67e22; color:white;
-                                      border:none; border-radius:4px; font-size:11px;
-                                      cursor:pointer; font-weight:bold;">
-                           등록
-                       </button>`
-                    : `<span style="color:#ddd; font-size:11px;">-</span>`}
-            </td>
-        </tr>`;
+        <div id="mf-list-item-${i}" data-idx="${i}"
+             style="display:flex; align-items:center; gap:6px;
+                    padding:7px 8px; border-bottom:1px solid #f0f0f0;
+                    background:${bg}; cursor:${canSel?'pointer':'default'};
+                    transition:background 0.15s;"
+             ${canSel ? `onclick="window.mfSelectItem(${i})"
+                         onmouseover="if(!this.classList.contains('mf-active'))this.style.background='#e7f3ff'"
+                         onmouseout="if(!this.classList.contains('mf-active'))this.style.background='${bg}'"` : ''}>
+
+            <!-- 체크박스 -->
+            <input type="checkbox" data-idx="${i}"
+                   ${canSel && r.selected ? 'checked':''}
+                   ${canSel ? '' : 'disabled'}
+                   style="flex-shrink:0;"
+                   onclick="event.stopPropagation()"
+                   onchange="window.mfToggleCheck(${i}, this.checked)">
+
+            <!-- 번호 -->
+            <span style="font-size:10px; color:#aaa; flex-shrink:0; width:16px;">${i+1}</span>
+
+            <!-- 내용 -->
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:12px; font-weight:${canSel?'bold':'normal'};
+                            color:${canSel?'#333':'#aaa'};
+                            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${canSel
+                        ? escapeHtml(taskName) + ' 📧'
+                        : escapeHtml(r.subject.substring(0,35))}
+                </div>
+                <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap;">
+                    ${r.project
+                        ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px;
+                                        border-radius:3px; font-size:10px; font-weight:bold;">
+                               ${r.project}</span>`
+                        : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
+                    ${r.task && r.task['시작일']
+                        ? `<span style="font-size:10px; color:#888;">
+                               ${r.task['시작일'].includes('날짜확인필요')
+                                   ? '⚠️날짜필요' : r.task['시작일']}</span>`
+                        : ''}
+                    ${r.registered
+                        ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>`
+                        : ''}
+                </div>
+            </div>
+        </div>`;
     });
 
-    html += '</tbody></table>';
-    table.innerHTML = html;
-    document.getElementById('mf-results').style.display = 'block';
+    list.innerHTML = html || '<div style="padding:20px; text-align:center; color:#aaa;">결과 없음</div>';
+    document.getElementById('mf-list-header').style.display = 'flex';
+    list.style.display   = 'block';
+    document.getElementById('mf-batch-btn').style.display   = 'block';
     window.mfSyncCheckAll();
 }
 
+window.mfToggleCheck = function(idx, checked) {
+    if (window._mfResults && window._mfResults[idx] !== undefined) {
+        window._mfResults[idx].selected = checked;
+    }
+    window.mfSyncCheckAll();
+};
+
 window.mfSyncCheckAll = function() {
-    const all  = document.querySelectorAll('#mf-result-table input[type=checkbox]:not(:disabled)');
-    const chk  = document.querySelectorAll('#mf-result-table input[type=checkbox]:not(:disabled):checked');
-    const ca   = document.getElementById('mf-check-all');
+    const all = document.querySelectorAll('#mf-result-list input[type=checkbox]:not(:disabled)');
+    const chk = document.querySelectorAll('#mf-result-list input[type=checkbox]:not(:disabled):checked');
+    const ca  = document.getElementById('mf-check-all');
     if (ca) ca.checked = all.length > 0 && all.length === chk.length;
 };
 
 window.mfSelectAll = function(select) {
-    document.querySelectorAll('#mf-result-table input[type=checkbox]:not(:disabled)')
+    document.querySelectorAll('#mf-result-list input[type=checkbox]:not(:disabled)')
         .forEach(cb => {
             cb.checked = select;
             const idx = parseInt(cb.dataset.idx);
@@ -3617,162 +3675,119 @@ window.mfSelectAll = function(select) {
         });
 };
 
-// ─── 행 클릭 → 상세 팝업 ────────────────────────────────
-window.mfRowClick = function(idx, e) {
-    if (e) e.stopPropagation();
+// ─── 행 클릭 → 오른쪽 패널 표시 ────────────────────────
+window.mfSelectItem = function(idx) {
     const r = window._mfResults[idx];
     if (!r || !r.task) return;
 
-    // 기존 직접입력과 동일한 결과 화면으로 표시
-    window._mailAnalyzedResult = JSON.parse(JSON.stringify(r.task));
-
-    // 상세 팝업 오버레이 생성
-    let overlay = document.getElementById('mf-detail-overlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'mf-detail-overlay';
-        overlay.style.cssText = `position:fixed; inset:0; z-index:99999;
-            background:rgba(0,0,0,0.55); display:flex;
-            align-items:center; justify-content:center;`;
-        overlay.onclick = e => { if(e.target===overlay) overlay.style.display='none'; };
-        document.body.appendChild(overlay);
+    // 이전 활성 항목 스타일 초기화
+    if (window._mfCurrentIdx >= 0) {
+        const prev = document.getElementById(`mf-list-item-${window._mfCurrentIdx}`);
+        if (prev) {
+            prev.classList.remove('mf-active');
+            const pr = window._mfResults[window._mfCurrentIdx];
+            prev.style.background = pr.registered ? '#d4edda' : '#fff';
+        }
     }
+    // 현재 항목 활성화
+    window._mfCurrentIdx = idx;
+    const cur = document.getElementById(`mf-list-item-${idx}`);
+    if (cur) { cur.classList.add('mf-active'); cur.style.background = '#fff3e0'; }
 
-    overlay.innerHTML = `
-    <div style="background:#fff; border-radius:10px; width:92%; max-width:680px;
-                max-height:90vh; display:flex; flex-direction:column;
-                box-shadow:0 10px 40px rgba(0,0,0,0.25);">
-        <div style="padding:14px 20px; background:#e67e22; color:white;
-                    border-radius:10px 10px 0 0; display:flex;
-                    justify-content:space-between; align-items:center;">
-            <span style="font-weight:bold; font-size:14px;">
-                📧 메일 분석 결과 확인 (${idx+1}/${window._mfResults.length})
-            </span>
-            <div style="display:flex; gap:8px; align-items:center;">
-                <button onclick="window.mfDetailNav(${idx},-1)"
-                        ${idx===0?'disabled':''}
-                        style="padding:4px 10px; background:rgba(255,255,255,0.2);
-                               color:white; border:1px solid rgba(255,255,255,0.4);
-                               border-radius:4px; cursor:pointer; font-size:12px;">◀ 이전</button>
-                <button onclick="window.mfDetailNav(${idx},1)"
-                        ${idx===window._mfResults.length-1?'disabled':''}
-                        style="padding:4px 10px; background:rgba(255,255,255,0.2);
-                               color:white; border:1px solid rgba(255,255,255,0.4);
-                               border-radius:4px; cursor:pointer; font-size:12px;">다음 ▶</button>
-                <span onclick="document.getElementById('mf-detail-overlay').style.display='none'"
-                      style="cursor:pointer; font-size:18px; padding:0 4px;">✖</span>
-            </div>
-        </div>
+    // 메일 정보 표시
+    const info = document.getElementById('mf-right-mail-info');
+    info.innerHTML = `<b>📨 ${escapeHtml(r.subject)}</b><br>
+        <span>${escapeHtml(r.sender)}</span>
+        ${r.project ? `&nbsp;|&nbsp;<span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
 
-        <div style="padding:16px 20px; overflow-y:auto; flex:1;">
-            <!-- 메일 제목 -->
-            <div style="font-size:11px; color:#888; margin-bottom:12px;
-                        padding:8px 12px; background:#f8f9fa; border-radius:6px;
-                        border-left:3px solid #e67e22;">
-                <b>📨 ${escapeHtml(r.subject)}</b><br>
-                <span>${escapeHtml(r.sender)}</span>
-                ${r.project ? `&nbsp;|&nbsp; <span style="color:#0056b3; font-weight:bold;">
-                    ${r.project}</span>` : ''}
-            </div>
-
-            <!-- 분석 결과 (직접입력과 동일 구조) -->
-            <div id="mf-detail-result-table"></div>
-
-            <!-- 삽입 위치 선택 -->
-            <div style="margin-top:14px; padding:12px; background:#f8f9fa;
-                        border-radius:6px; border:1px solid #dee2e6;">
-                <div style="font-weight:bold; font-size:13px; margin-bottom:8px;">
-                    📍 추가할 위치 선택
-                </div>
-                <select id="mf-detail-position"
-                        style="width:100%; padding:7px; border:1px solid #ced4da;
-                               border-radius:6px; font-size:13px;">
-                </select>
-            </div>
-        </div>
-
-        <div style="padding:14px 20px; border-top:1px solid #dee2e6;
-                    display:flex; gap:10px;">
-            <button onclick="window.mfDetailInsert(${idx})"
-                    style="flex:2; padding:10px; background:#28a745; color:white;
-                           border:none; border-radius:6px; font-size:13px;
-                           font-weight:bold; cursor:pointer;">
-                ✅ 이 항목 등록
-            </button>
-            <button onclick="document.getElementById('mf-detail-overlay').style.display='none'"
-                    style="flex:1; padding:10px; background:#dee2e6; color:#333;
-                           border:none; border-radius:6px; font-size:13px; cursor:pointer;">
-                취소
-            </button>
-        </div>
-    </div>`;
-
-    // 분석 결과 테이블 (renderMailResult 재사용)
+    // renderMailResult 재사용 (직접입력과 동일)
+    window._mailAnalyzedResult = JSON.parse(JSON.stringify(r.task));
     window.renderMailResult(r.task);
-    // 결과 테이블을 팝업으로 이동
-    const origTable = document.getElementById('mail-result-table');
-    const destTable = document.getElementById('mf-detail-result-table');
-    if (origTable && destTable) destTable.innerHTML = origTable.innerHTML;
+
+    // 결과 테이블을 오른쪽 패널로 복사
+    const origTable = document.getElementById('mail-result-section');
+    const destTable = document.getElementById('mf-right-result-table');
+    if (origTable && destTable) {
+        destTable.innerHTML = origTable.innerHTML;
+        // input/select 이벤트 재연결
+        destTable.querySelectorAll('input, textarea, select').forEach(el => {
+            const field = el.dataset.field;
+            if (field) {
+                el.addEventListener('change', () => {
+                    window._mailAnalyzedResult[field] =
+                        el.type === 'select-one' ? parseInt(el.value) : el.value;
+                    window._mfResults[idx].task[field] =
+                        window._mailAnalyzedResult[field];
+                });
+            }
+        });
+        // 달력 버튼 재연결
+        destTable.querySelectorAll('.date-clickable[id]').forEach(span => {
+            const fieldKey = span.id.replace('mail-date-','');
+            span.onclick = () => {
+                const ts = window._mailAnalyzedResult[fieldKey]
+                    ? (parseDateValue(window._mailAnalyzedResult[fieldKey])||{}).ts || new Date().getTime()
+                    : new Date().getTime();
+                window.showMailCalendar(span, ts, fieldKey);
+            };
+        });
+    }
 
     // 삽입 위치 드롭다운
     window.populateInsertPosition();
     const origSel = document.getElementById('mail-insert-position');
-    const destSel = document.getElementById('mf-detail-position');
-    if (origSel && destSel) destSel.innerHTML = origSel.innerHTML;
-
-    // 날짜 있으면 자동 위치 설정
-    const hasDate = r.task['시작일'] && !r.task['시작일'].includes('날짜확인필요');
-    if (hasDate) window.autoSetInsertPosition(r.task['시작일'], false);
-
-    overlay.style.display = 'flex';
-};
-
-// 이전/다음 이동
-window.mfDetailNav = function(currentIdx, dir) {
-    let nextIdx = currentIdx + dir;
-    // 등록 가능한 항목만 이동
-    while (nextIdx >= 0 && nextIdx < window._mfResults.length) {
-        const r = window._mfResults[nextIdx];
-        if (r.project && r.task) { window.mfRowClick(nextIdx, null); return; }
-        nextIdx += dir;
+    const destSel = document.getElementById('mf-right-position');
+    if (origSel && destSel) {
+        destSel.innerHTML = origSel.innerHTML;
+        const hasDate = r.task['시작일'] && !r.task['시작일'].includes('날짜확인필요');
+        if (hasDate) {
+            window.autoSetInsertPosition(r.task['시작일'], false);
+            destSel.value = origSel.value;
+        }
     }
+
+    // 패널 전환
+    document.getElementById('mf-right-empty').style.display  = 'none';
+    document.getElementById('mf-right-detail').style.display = 'flex';
 };
 
-// 개별 등록
-window.mfDetailInsert = function(idx) {
+// ─── 오른쪽 패널 등록 버튼 ──────────────────────────────
+window.mfRightInsert = function() {
+    const idx = window._mfCurrentIdx;
+    if (idx < 0) { alert('메일을 선택해주세요.'); return; }
     const r = window._mfResults[idx];
     if (!r || !r.task) return;
 
-    // 팝업의 위치 선택값 동기화
-    const detailSel = document.getElementById('mf-detail-position');
-    const origSel   = document.getElementById('mail-insert-position');
-    if (detailSel && origSel) origSel.value = detailSel.value;
+    // 위치 동기화
+    const destSel = document.getElementById('mf-right-position');
+    const origSel = document.getElementById('mail-insert-position');
+    if (destSel && origSel) origSel.value = destSel.value;
 
     // 날짜 확인
-    const s = r.task['시작일']; const p = r.task['완료일'];
+    const s = window._mailAnalyzedResult['시작일'];
+    const p = window._mailAnalyzedResult['완료일'];
     if ((s||'').includes('날짜확인필요') || (p||'').includes('날짜확인필요')) {
-        alert('⚠️ 시작일 또는 완료일을 먼저 입력해주세요.');
+        alert('⚠️ 시작일 또는 완료일을 먼저 선택해주세요.');
         return;
     }
 
+    // task 최신화 후 등록
     window._mailAnalyzedResult = r.task;
     window.insertMailTask();
 
     // 등록 완료 표시
     r.registered = true;
-    const row = document.getElementById(`mf-row-${idx}`);
-    if (row) {
-        row.style.background = '#d4edda';
-        row.style.opacity    = '0.7';
-        const cells = row.querySelectorAll('td');
-        if (cells.length > 0) {
-            const last = cells[cells.length-1];
-            last.innerHTML = '<span style="color:#28a745; font-weight:bold;">✅완료</span>';
-        }
+    const item = document.getElementById(`mf-list-item-${idx}`);
+    if (item) {
+        item.style.background = '#d4edda';
+        const badge = item.querySelector('div > div:last-child');
+        if (badge) badge.innerHTML += `<span style="color:#28a745;font-size:10px;font-weight:bold;">✅등록완료</span>`;
     }
 
-    document.getElementById('mf-detail-overlay').style.display = 'none';
-    alert(`✅ "${(r.task['업무명']||'새 업무')} 📧" 등록 완료!`);
+    // 오른쪽 패널 초기화
+    window._mfCurrentIdx = -1;
+    document.getElementById('mf-right-empty').style.display  = 'flex';
+    document.getElementById('mf-right-detail').style.display = 'none';
 };
 
 // ─── 연속등록 ────────────────────────────────────────────
@@ -3782,68 +3797,51 @@ window.mfBatchInsert = async function() {
     );
     if (!targets.length) { alert('등록할 항목을 체크해주세요.'); return; }
 
-    // 날짜 없는 항목 확인
     const needDate = targets.filter(r =>
         (r.task['시작일']||'').includes('날짜확인필요') ||
         (r.task['완료일']||'').includes('날짜확인필요')
     );
-    if (needDate.length) {
-        const names = needDate.map(r => r.task['업무명']||r.fileName).join('\n');
-        if (!confirm(`⚠️ 아래 항목은 날짜가 없습니다.\n날짜 없이 등록하시겠습니까?\n\n${names}`))
-            return;
-    }
-
-    if (!confirm(`✅ ${targets.length}개 항목을 연속등록합니다.\n(삽입 위치: 맨 마지막)\n\n계속하시겠습니까?`))
-        return;
+    let msg = `✅ ${targets.length}개 항목을 연속등록합니다.\n(삽입위치: 맨 마지막)\n`;
+    if (needDate.length) msg += `\n⚠️ ${needDate.length}개 항목은 날짜 없이 등록됩니다.`;
+    if (!confirm(msg + '\n\n계속하시겠습니까?')) return;
 
     let ok = 0;
     for (const r of targets) {
         try {
-            window._mailAnalyzedResult = r.task;
-            // 삽입 위치: 맨 마지막
-            const origSel = document.getElementById('mail-insert-position');
-            if (origSel) origSel.value = '-1';
-
-            // insertMailTask의 날짜 체크 우회 (날짜 없어도 등록)
             mfDirectInsert(r.task);
             r.registered = true;
             ok++;
-
-            // 행 완료 표시
-            const row = document.getElementById(`mf-row-${r.idx}`);
-            if (row) {
-                row.style.background = '#d4edda';
-                row.style.opacity    = '0.7';
-                const cells = row.querySelectorAll('td');
-                if (cells.length > 0) {
-                    cells[cells.length-1].innerHTML =
-                        '<span style="color:#28a745; font-weight:bold;">✅완료</span>';
-                }
+            // 목록 항목 업데이트
+            const item = document.getElementById(`mf-list-item-${r.idx}`);
+            if (item) {
+                item.style.background = '#d4edda';
+                const badge = item.querySelector('div > div:last-child');
+                if (badge) badge.innerHTML += `<span style="color:#28a745;font-size:10px;font-weight:bold;">✅등록완료</span>`;
             }
         } catch(e) { console.error(e); }
     }
 
     window.recalculateSchedules();
-    alert(`✅ ${ok}개 항목이 연속등록 되었습니다!\n맨 마지막 위치에 추가되었습니다.`);
+    alert(`✅ ${ok}개 항목이 연속등록 되었습니다!`);
 };
 
-// 날짜 체크 없이 직접 삽입
+// 날짜체크 없이 직접 삽입
 function mfDirectInsert(task) {
     if (!globalData || globalData.length <= 1) return;
-    const wbsLevel = parseInt(task['wbs레벨'] ?? 3);
-    let newRow = new Array(globalData[0].length).fill('');
-    newRow._level  = wbsLevel;
+    const level   = parseInt(task['wbs레벨'] ?? 3);
+    let newRow    = new Array(globalData[0].length).fill('');
+    newRow._level = level;
     newRow._origDev=''; newRow._origT1=''; newRow._origT2='';
     newRow._origT3='';  newRow._origT4='';
-    const taskName = (task['업무명'] || '새 업무') + ' 📧';
-    if      (wbsLevel===0) newRow._origDev=taskName;
-    else if (wbsLevel===1) newRow._origT1 =taskName;
-    else if (wbsLevel===2) newRow._origT2 =taskName;
-    else if (wbsLevel===3) newRow._origT3 =taskName;
-    else                   newRow._origT4 =taskName;
+    const taskName = (task['업무명']||'새 업무') + ' 📧';
+    if      (level===0) newRow._origDev=taskName;
+    else if (level===1) newRow._origT1 =taskName;
+    else if (level===2) newRow._origT2 =taskName;
+    else if (level===3) newRow._origT3 =taskName;
+    else                newRow._origT4 =taskName;
 
     let ref=null;
-    for (let i=1;i<globalData.length;i++) { if(globalData[i]){ref=globalData[i];break;} }
+    for (let i=1;i<globalData.length;i++){if(globalData[i]){ref=globalData[i];break;}}
     ['assignee','customer','model','inch'].forEach(k=>{
         const ki=colIdx[k]; if(ki>=0) newRow[ki]=ref?(ref[ki]||''):'';
     });
@@ -3855,13 +3853,12 @@ function mfDirectInsert(task) {
         return d;
     };
     const s=_fy(task['시작일']); const p=_fy(task['완료일']);
-    if(s&&colIdx.start>=0)  { newRow[colIdx.start]=s; newRow._startForced=true; }
-    if(p&&colIdx.plan>=0)   { newRow[colIdx.plan]=p;  newRow._planForced=true;  }
-    if(colIdx.status>=0)    newRow[colIdx.status]=task['상태']||'진행';
-    if(colIdx.content>=0)   newRow[colIdx.content]=(task['상세내용']||'').replace(/\\n/g,'\n');
+    if(s&&colIdx.start>=0){newRow[colIdx.start]=s; newRow._startForced=true;}
+    if(p&&colIdx.plan >=0){newRow[colIdx.plan] =p; newRow._planForced =true;}
+    if(colIdx.status >=0) newRow[colIdx.status] =task['상태']||'진행';
+    if(colIdx.content>=0) newRow[colIdx.content]=(task['상세내용']||'').replace(/\\n/g,'\n');
     const dm={1:'dur1',2:'dur2',3:'dur3',4:'dur4'};
-    const di=colIdx[dm[wbsLevel]||'dur3']; if(di>=0) newRow[di]='1';
-
+    const di=colIdx[dm[level]||'dur3']; if(di>=0) newRow[di]='1';
     globalData.push(newRow);
     logChange(globalData.length-1,-1,'없음',`메일파일 연속등록: ${taskName}`);
 }
