@@ -3932,11 +3932,9 @@ function mfRenderList(results) {
         });
 
         // 체크박스 변경
-        // 코드 내 mfRenderList 함수 안에서 체크박스 이벤트를 바인딩하는 부분입니다.
-        const cb = row.querySelector('.mf-row-checkbox');
+        const cb = row.querySelector('input[type=checkbox]');
         if (cb) {
-            cb.addEventListener('click', function(e) {
-                e.stopPropagation(); // 💥 이 부분이 들어가 있어야 행 클릭 이벤트와 분리됩니다!
+            cb.addEventListener('change', function() {
                 window.mfToggleCheck(i, this.checked);
             });
         }
