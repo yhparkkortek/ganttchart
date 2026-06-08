@@ -3420,8 +3420,12 @@ window.insertMailTask = function() {
                 </div>
             </div>
 
-            <button onclick="window.executeCloudMailSync()" style="width:100%; padding:14px; background:#e67e22; color:white; border:none; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1); margin-bottom:10px;">
-                🚀 실시간 메일 가져오기 & AI 매핑 원스톱 실행
+            <button onclick="window.executeCloudMailSync()" style="width:100%; padding:14px; background:#e67e22; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">
+                🚀 1단계: 실시간 메일 가져오기 및 JSON 갱신
+            </button>
+
+            <button onclick="window.loadMailFromCloud()" style="width:100%; padding:14px; background:#27ae60; color:white; border:none; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:10px;">
+                📂 2단계: 최신 데이터 로드하여 차트에 표시
             </button>
             
             <div id="cloud-sync-loading" style="display:none; text-align:center; padding:20px; color:#e67e22; font-weight:bold; font-size:13px;">
@@ -3550,6 +3554,55 @@ document.addEventListener("DOMContentLoaded", function() {
     if(document.getElementById('cloud-start-date')) document.getElementById('cloud-start-date').value = today;
     if(document.getElementById('cloud-end-date')) document.getElementById('cloud-end-date').value = today;
 });
+
+// [삭제 기능] 데이터 파일 강제 삭제
+window.deleteCloudData = async function() {
+    if (!confirm("⚠️ 정말로 클라우드의 'gantt_mail_temp.json' 파일을 삭제하시겠습니까?")) return;
+    
+    document.getElementById('cloud-sync-loading').style.display = 'block';
+    
+    try {
+        let response = await gapi.client.drive.files.list({
+            q: "name='gantt_mail_temp.json' and trashed=false",
+            fields: 'files(id)'
+        });
+        
+        if (response.result.files && response.result.files.length > 0) {
+            let fileId = response.result.files[0].id;
+            await gapi.client.drive.files.delete({ fileId: fileId });
+            alert("✅ 파일이 삭제되었습니다.");
+        } else {
+            alert("ℹ️ 삭제할 파일이 존재하지 않습니다.");
+        }
+    } catch (err) {
+        alert("❌ 삭제 중 오류 발생: " + err.message);
+    } finally {
+        document.getElementById('cloud-sync-loading').style.display = 'none';
+    }
+};
+
+// [불러오기 기능] - 파일 유무를 명확히 체크
+window.loadMailFromCloud = async function() {
+    const loading = document.getElementById('cloud-sync-loading');
+    if(loading) loading.style.display = 'block';
+    
+    try {
+        let response = await gapi.client.drive.files.list({
+            q: "name='gantt_mail_temp.json' and trashed=false",
+            fields: 'files(id)'
+        });
+        
+        if (!response.result.files || response.result.files.length === 0) {
+            alert("❌ 데이터 파일이 없습니다. [1단계]를 먼저 실행해주세요.");
+            return;
+        }
+        // ... (이후 성공 시 처리 로직 유지)
+    } catch(err) {
+        alert("❌ 로드 중 오류: " + err.message);
+    } finally {
+        if(loading) loading.style.display = 'none';
+    }
+};
 
 // ─── 구글 GAS 서버로 실시간 명령을 보내서 원스톱 연동하는 함수 ───────────────────
 window.executeCloudMailSync = async function() {
