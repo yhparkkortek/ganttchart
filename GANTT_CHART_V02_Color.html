@@ -3139,9 +3139,23 @@ window.insertMailTask = function() {
 
 <div id="mail-analyzer-overlay" class="modal-overlay" onclick="window.closeMailAnalyzer(event)">
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:700px; height:auto; max-height:90vh;">
-        <div class="history-header" style="background:#e67e22; color:white;">
-            <span>📧 메일 내용으로 업무 자동 추가</span>
-            <span class="history-close" style="color:white;" onclick="window.closeMailAnalyzer()">✖</span>
+        <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0;">
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:12px 20px; width:100%; box-sizing:border-box;">
+                <span>📧 메일 내용으로 업무 자동 추가</span>
+                <span class="history-close" style="color:white;" onclick="window.closeMailAnalyzer()">✖</span>
+            </div>
+            <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3);">
+                <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
+                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                            background:rgba(0,0,0,0.2); font-size:13px; font-weight:bold;">
+                    ✏️ 직접 입력
+                </div>
+                <div id="mail-tab-file" onclick="window.switchMailTab('file')"
+                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                            font-size:13px; font-weight:bold;">
+                    📎 파일 첨부
+                </div>
+            </div>
         </div>
         <div class="history-body" style="padding:20px; overflow-y:auto;">
 
@@ -3203,8 +3217,502 @@ window.insertMailTask = function() {
             </div>
             <div id="mail-error" style="display:none; color:#dc3545; font-size:13px; padding:10px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb;"></div>
         </div>
+
+        <!-- ✅ 파일 첨부 탭 -->
+        <div id="mail-tab-file-content" style="display:none;">
+
+            <!-- 안내 -->
+            <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px;
+                        padding:10px 14px; margin-bottom:14px; font-size:12px; color:#555;">
+                📌 <b>지원 형식:</b> .eml, .msg, .html, .txt &nbsp;|&nbsp;
+                <b>최대 50개</b> 동시 처리 &nbsp;|&nbsp;
+                프로젝트 자동 매칭 후 Drive JSON에 직접 저장
+            </div>
+
+            <!-- 드롭존 -->
+            <input type="file" id="mf-input" multiple accept=".eml,.msg,.html,.htm,.txt"
+                   style="display:none;" onchange="window.mfHandleFiles(this.files)">
+            <div id="mf-dropzone"
+                 style="border:2px dashed #e67e22; border-radius:8px; padding:28px;
+                        text-align:center; cursor:pointer; background:#fff8f3;
+                        transition:0.2s; margin-bottom:14px;"
+                 onclick="document.getElementById('mf-input').click()"
+                 ondragover="event.preventDefault(); this.style.background='#ffe8d6';"
+                 ondragleave="this.style.background='#fff8f3';"
+                 ondrop="event.preventDefault(); this.style.background='#fff8f3';
+                         window.mfHandleFiles(event.dataTransfer.files)">
+                <div style="font-size:32px;">📁</div>
+                <div style="font-weight:bold; color:#e67e22; margin-top:6px;">
+                    클릭하거나 메일 파일을 드래그하세요
+                </div>
+                <div style="font-size:12px; color:#aaa; margin-top:4px;">
+                    .eml / .msg / .html / .txt 최대 50개
+                </div>
+            </div>
+
+            <!-- 파일 목록 -->
+            <div id="mf-list" style="display:none; margin-bottom:12px;">
+                <div style="font-size:13px; font-weight:bold; margin-bottom:6px;">
+                    📋 선택된 파일: <span id="mf-count">0</span>개
+                </div>
+                <div id="mf-items"
+                     style="max-height:120px; overflow-y:auto; border:1px solid #dee2e6;
+                            border-radius:6px; padding:8px; font-size:12px; background:#fff;">
+                </div>
+            </div>
+
+            <!-- 분석 버튼 -->
+            <button id="mf-analyze-btn" onclick="window.mfAnalyze()"
+                    style="display:none; width:100%; padding:10px; background:#e67e22;
+                           color:white; border:none; border-radius:6px; font-size:14px;
+                           font-weight:bold; cursor:pointer; margin-bottom:12px;">
+                🤖 AI 일괄 분석 시작
+            </button>
+
+            <!-- 진행바 -->
+            <div id="mf-progress" style="display:none; margin-bottom:12px;">
+                <div style="font-size:13px; font-weight:bold; margin-bottom:6px;">
+                    ⏳ 분석 중... <span id="mf-prog-text"></span>
+                </div>
+                <div style="background:#e9ecef; border-radius:4px; height:8px; overflow:hidden;">
+                    <div id="mf-prog-bar"
+                         style="height:100%; background:#e67e22; transition:width 0.3s; width:0%;"></div>
+                </div>
+            </div>
+
+            <!-- 결과 -->
+            <div id="mf-results" style="display:none;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                    <div style="font-weight:bold; font-size:13px;">
+                        📊 분석 결과 (<span id="mf-result-count">0</span>개)
+                    </div>
+                    <div style="display:flex; gap:6px;">
+                        <button onclick="window.mfSelectAll(true)"
+                                style="padding:3px 10px; font-size:12px; cursor:pointer;
+                                       border:1px solid #e67e22; color:#e67e22;
+                                       background:#fff; border-radius:4px;">전체선택</button>
+                        <button onclick="window.mfSelectAll(false)"
+                                style="padding:3px 10px; font-size:12px; cursor:pointer;
+                                       border:1px solid #aaa; color:#666;
+                                       background:#fff; border-radius:4px;">전체해제</button>
+                    </div>
+                </div>
+                <div id="mf-result-table"
+                     style="max-height:260px; overflow-y:auto; border:1px solid #dee2e6;
+                            border-radius:6px; font-size:12px; margin-bottom:10px;"></div>
+                <button onclick="window.mfUpload()"
+                        style="width:100%; padding:10px; background:#28a745; color:white;
+                               border:none; border-radius:6px; font-size:14px;
+                               font-weight:bold; cursor:pointer;">
+                    ☁️ 선택 항목 Drive JSON에 업로드
+                </button>
+            </div>
+
+            <div id="mf-error"
+                 style="display:none; color:#dc3545; font-size:13px; padding:10px;
+                        background:#fff5f5; border-radius:6px; margin-top:8px;"></div>
+        </div>
+
     </div>
 </div>
-    
+
+<script>
+// =========================================================
+// 📎 메일 파일 첨부 탭 기능
+// =========================================================
+
+// 프로젝트 키워드 매핑
+const MF_PROJECT_KEYWORDS = {
+    "STELLAR"     : [/stellar/i, /\bs32\b/i, /ktk18/i, /led\s*board/i, /s32.*proto/i],
+    "SHUFFLER_4.3": [/shuffler.*4\.3/i, /4\.3.*shuffler/i, /ideal.plus.*4\.3/i, /po205247/i],
+    "SHUFFLER_3.0": [/shuffler.*3\.0/i, /3\.0.*shuffler/i],
+    "ODW"         : [/\bodw\b/i, /open\s*display/i],
+};
+
+// 탭 전환
+window.switchMailTab = function(tab) {
+    const isPaste = tab === 'paste';
+    document.getElementById('mail-tab-paste-content').style.display = isPaste ? 'block' : 'none';
+    document.getElementById('mail-tab-file-content').style.display  = isPaste ? 'none'  : 'block';
+    document.getElementById('mail-tab-paste').style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
+    document.getElementById('mail-tab-file').style.background  = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
+};
+
+// showMailAnalyzer 덮어쓰기 (탭 초기화 추가)
+const _origShowMailAnalyzer = window.showMailAnalyzer;
+window.showMailAnalyzer = function() {
+    _origShowMailAnalyzer();
+    // 직접입력 탭 body를 id로 감쌈
+    const body = document.querySelector('#mail-analyzer-overlay .history-body');
+    if (body && !document.getElementById('mail-tab-paste-content')) {
+        body.id = 'mail-tab-paste-content';
+    }
+    window.switchMailTab('paste');
+};
+
+// ─── 파일 선택 ───────────────────────────────────────────
+window._mfFiles = [];
+window._mfResults = [];
+
+window.mfHandleFiles = function(files) {
+    const arr = Array.from(files).slice(0, 50);
+    window._mfFiles = arr;
+    document.getElementById('mf-count').textContent = arr.length;
+    document.getElementById('mf-items').innerHTML = arr.map((f, i) =>
+        `<div style="padding:2px 0; border-bottom:1px solid #f0f0f0;">
+            <b style="color:#e67e22;">${i+1}.</b>
+            ${escapeHtml(f.name)}
+            <span style="color:#aaa;">(${(f.size/1024).toFixed(1)}KB)</span>
+         </div>`
+    ).join('');
+    document.getElementById('mf-list').style.display = 'block';
+    document.getElementById('mf-analyze-btn').style.display = 'block';
+    document.getElementById('mf-results').style.display = 'none';
+    document.getElementById('mf-error').style.display = 'none';
+};
+
+// ─── 파일 파싱 ───────────────────────────────────────────
+function mfParseFile(file) {
+    return new Promise(resolve => {
+        const reader = new FileReader();
+        reader.onload = e => {
+            const text = e.target.result;
+            const ext  = file.name.split('.').pop().toLowerCase();
+            let subject = file.name.replace(/\.[^.]+$/, '');
+            let sender  = '';
+            let body    = '';
+
+            if (ext === 'eml') {
+                const sm = text.match(/^Subject:\s*(.+)/mi);
+                const fm = text.match(/^From:\s*(.+)/mi);
+                if (sm) subject = sm[1].trim();
+                if (fm) sender  = fm[1].trim();
+                const bi = text.indexOf('\r\n\r\n') !== -1
+                    ? text.indexOf('\r\n\r\n') + 4
+                    : text.indexOf('\n\n') + 2;
+                body = text.substring(bi).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+            } else if (ext === 'html' || ext === 'htm') {
+                const doc = new DOMParser().parseFromString(text, 'text/html');
+                const t   = doc.querySelector('title');
+                if (t) subject = t.textContent.trim();
+                body = (doc.body ? doc.body.innerText : '').replace(/\s+/g,' ').trim();
+            } else {
+                const sm = text.match(/Subject[:\s]+(.+)/i);
+                const fm = text.match(/From[:\s]+(.+)/i);
+                if (sm) subject = sm[1].trim();
+                if (fm) sender  = fm[1].trim();
+                body = text.replace(/\s+/g,' ').trim();
+            }
+            resolve({ subject, sender, body: body.substring(0, 3000), fileName: file.name });
+        };
+        reader.readAsText(file, 'utf-8');
+    });
+}
+
+// ─── 프로젝트 매칭 ──────────────────────────────────────
+function mfMatchProject(subject, body) {
+    const text = subject + ' ' + body.substring(0, 500);
+    for (const [proj, patterns] of Object.entries(MF_PROJECT_KEYWORDS)) {
+        if (patterns.some(p => p.test(text))) return proj;
+    }
+    return null;
+}
+
+// ─── Gemini 분석 ─────────────────────────────────────────
+async function mfCallGemini(apiKey, parsed) {
+    let assignee='', customer='', model='', inch='';
+    if (globalData && globalData.length > 1) {
+        for (let i = 1; i < globalData.length; i++) {
+            const r = globalData[i]; if (!r) continue;
+            if (!assignee && colIdx.assignee !== -1) assignee = r[colIdx.assignee] || '';
+            if (!customer && colIdx.customer !== -1) customer = r[colIdx.customer] || '';
+            if (!model    && colIdx.model    !== -1) model    = r[colIdx.model]    || '';
+            if (!inch     && colIdx.inch     !== -1) inch     = r[colIdx.inch]     || '';
+            if (assignee && customer && model) break;
+        }
+    }
+
+    const savedPrompt = localStorage.getItem('gantt_mail_prompt');
+    let prompt;
+    if (savedPrompt) {
+        prompt = savedPrompt
+            .replace('${mailText}',         parsed.subject + '\n' + parsed.body)
+            .replace('${projectAssignee}',  assignee)
+            .replace('${projectCustomer}',  customer)
+            .replace('${projectModel}',     model)
+            .replace('${projectInch}',      inch);
+    } else {
+        prompt = `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
+프로젝트 담당자: ${assignee} / 고객사: ${customer} / 모델명: ${model} / 인치: ${inch}
+추출 규칙:
+- 업무명: 핵심내용에서 20자 이내 명사형, 모델명/고객사명 제외
+- 시작일: 날짜 명시 시만, 없으면 "날짜확인필요"
+- 완료일: 마감일 명시 시만, 없으면 "날짜확인필요"
+- 상태: 진행/대기/완료
+- 개발단계: RFQ/설계/시제품/양산 (불명확하면 빈값)
+- 상세내용: [업무유형,발신→수신]발신자→수신자\\n[핵심내용]내용\\n[To do]후속조치 (300자 이내)
+- wbs레벨: 3
+JSON만 응답:
+{"업무명":"","시작일":"","완료일":"","상태":"","개발단계":"","상세내용":"","wbs레벨":3}
+이메일 제목: ${parsed.subject}
+발신자: ${parsed.sender}
+본문: ${parsed.body.substring(0, 2000)}`;
+    }
+
+    const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
+        {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { temperature: 0.1, maxOutputTokens: 1024 }
+            })
+        }
+    );
+    const data = await resp.json();
+    if (data.error) throw new Error(data.error.message);
+    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    text = text.replace(/```json|```/g,'').trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try { return JSON.parse(m[0]); } catch { return null; }
+}
+
+// ─── 일괄 분석 실행 ──────────────────────────────────────
+window.mfAnalyze = async function() {
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
+    if (!window._mfFiles.length) { alert('파일을 선택해주세요.'); return; }
+
+    document.getElementById('mf-analyze-btn').disabled = true;
+    document.getElementById('mf-progress').style.display = 'block';
+    document.getElementById('mf-results').style.display  = 'none';
+    document.getElementById('mf-error').style.display    = 'none';
+
+    const progBar  = document.getElementById('mf-prog-bar');
+    const progText = document.getElementById('mf-prog-text');
+    const results  = [];
+
+    for (let i = 0; i < window._mfFiles.length; i++) {
+        const f = window._mfFiles[i];
+        progText.textContent = `${i+1} / ${window._mfFiles.length} — ${f.name}`;
+        progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
+
+        try {
+            const parsed  = await mfParseFile(f);
+            const project = mfMatchProject(parsed.subject, parsed.body);
+            const task    = await mfCallGemini(apiKey, parsed);
+            results.push({
+                fileName: f.name, subject: parsed.subject,
+                project, task,
+                selected: !!(project && task),
+                error: task ? null : 'AI 분석 실패',
+            });
+        } catch(e) {
+            results.push({
+                fileName: f.name, subject: f.name,
+                project: null, task: null, selected: false, error: e.message
+            });
+        }
+        if (i < window._mfFiles.length - 1)
+            await new Promise(r => setTimeout(r, 400));
+    }
+
+    window._mfResults = results;
+    document.getElementById('mf-analyze-btn').disabled = false;
+    document.getElementById('mf-progress').style.display = 'none';
+    mfRenderResults(results);
+};
+
+// ─── 결과 렌더링 ─────────────────────────────────────────
+function mfRenderResults(results) {
+    document.getElementById('mf-result-count').textContent = results.length;
+    let html = `<table style="width:100%; border-collapse:collapse;">
+        <thead><tr style="background:#f4f6f8; position:sticky; top:0;">
+            <th style="padding:7px; border:1px solid #dee2e6; width:28px;">✓</th>
+            <th style="padding:7px; border:1px solid #dee2e6;">파일명</th>
+            <th style="padding:7px; border:1px solid #dee2e6;">프로젝트</th>
+            <th style="padding:7px; border:1px solid #dee2e6;">업무명</th>
+            <th style="padding:7px; border:1px solid #dee2e6;">시작일</th>
+            <th style="padding:7px; border:1px solid #dee2e6;">비고</th>
+        </tr></thead><tbody>`;
+
+    results.forEach((r, idx) => {
+        const canSel = !!(r.project && r.task);
+        const bg     = r.error ? '#fff5f5' : (r.project ? '#f7fff7' : '#fffde7');
+        html += `<tr style="background:${bg};">
+            <td style="padding:5px; border:1px solid #dee2e6; text-align:center;">
+                <input type="checkbox" data-idx="${idx}"
+                       ${canSel && r.selected ? 'checked' : ''}
+                       ${canSel ? '' : 'disabled'}
+                       onchange="window._mfResults[${idx}].selected=this.checked">
+            </td>
+            <td style="padding:5px; border:1px solid #dee2e6; font-size:11px; word-break:break-all;">
+                ${escapeHtml(r.fileName)}</td>
+            <td style="padding:5px; border:1px solid #dee2e6; white-space:nowrap;">
+                ${r.project
+                    ? `<span style="background:#e7f3ff;color:#0056b3;padding:2px 6px;border-radius:4px;font-weight:bold;font-size:11px;">${r.project}</span>`
+                    : '<span style="color:#aaa;font-size:11px;">미매칭</span>'}</td>
+            <td style="padding:5px; border:1px solid #dee2e6; font-size:11px;">
+                ${r.task ? escapeHtml(r.task['업무명']||'-')+' 📧' : '-'}</td>
+            <td style="padding:5px; border:1px solid #dee2e6; font-size:11px; white-space:nowrap;">
+                ${r.task ? (r.task['시작일']||'-') : '-'}</td>
+            <td style="padding:5px; border:1px solid #dee2e6; font-size:11px; color:#dc3545;">
+                ${r.error||''}</td>
+        </tr>`;
+    });
+    html += '</tbody></table>';
+    document.getElementById('mf-result-table').innerHTML = html;
+    document.getElementById('mf-results').style.display = 'block';
+}
+
+window.mfSelectAll = function(select) {
+    document.querySelectorAll('#mf-result-table input[type=checkbox]:not(:disabled)')
+        .forEach(cb => {
+            cb.checked = select;
+            const idx = parseInt(cb.dataset.idx);
+            if (!isNaN(idx)) window._mfResults[idx].selected = select;
+        });
+};
+
+// ─── Drive 업로드 ────────────────────────────────────────
+window.mfUpload = async function() {
+    const selected = window._mfResults.filter(r => r.selected && r.task && r.project);
+    if (!selected.length) { alert('업로드할 항목을 선택해주세요.'); return; }
+    if (document.getElementById('drive_save_btn').disabled) {
+        alert('먼저 구글 드라이브 연동을 해주세요.'); return;
+    }
+    if (!confirm(`✅ ${selected.length}개 항목을 Drive JSON에 업로드하시겠습니까?`)) return;
+
+    let ok = 0;
+    for (const r of selected) {
+        try {
+            // 현재 열린 파일 확인
+            const curFile = (window.driveSaveFilenameStr || '').toUpperCase();
+            const projKey = r.project.replace(/[_.]/g,'').toUpperCase();
+
+            if (curFile.includes(projKey) && globalData.length > 1) {
+                // 현재 열린 간트차트에 직접 추가
+                window._mailAnalyzedResult = r.task;
+                await mfAddToCurrentGantt(r.task);
+                ok++;
+            } else {
+                // Drive에서 해당 프로젝트 파일 찾아 업데이트
+                const success = await mfAddToDriveFile(r.project, r.task);
+                if (success) ok++;
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    alert(`✅ ${ok}개 업무가 추가되었습니다!\n\n[📂 드라이브에서 불러오기]로 확인하세요.`);
+    document.getElementById('mail-analyzer-overlay').style.display = 'none';
+    if (ok > 0) window.recalculateSchedules();
+};
+
+function mfAddToCurrentGantt(task) {
+    const level    = parseInt(task['wbs레벨'] ?? 3);
+    let newRow     = new Array(globalData[0].length).fill('');
+    newRow._level  = level;
+    newRow._origDev= ''; newRow._origT1=''; newRow._origT2='';
+    newRow._origT3 = ''; newRow._origT4='';
+    const taskName = (task['업무명'] || '새 업무') + ' 📧';
+    if (level===0) newRow._origDev=taskName; else if (level===1) newRow._origT1=taskName;
+    else if (level===2) newRow._origT2=taskName; else if (level===3) newRow._origT3=taskName;
+    else newRow._origT4=taskName;
+
+    let ref=null;
+    for (let i=1;i<globalData.length;i++) { if(globalData[i]){ref=globalData[i];break;} }
+    ['assignee','customer','model','inch'].forEach(k=>{
+        const ki=colIdx[k]; if(ki>=0) newRow[ki]=ref?(ref[ki]||''):'';
+    });
+    const _fy = d => {
+        if(!d) return d;
+        const m=d.match(/^(\d{4})([-\/]\d{1,2}[-\/]\d{1,2})$/);
+        if(m && parseInt(m[1])<new Date().getFullYear()-1)
+            return new Date().getFullYear()+m[2];
+        return d;
+    };
+    const s=_fy(task['시작일']); const p=_fy(task['완료일']);
+    if(s&&!s.includes('날짜확인필요')&&colIdx.start>=0) newRow[colIdx.start]=s;
+    if(p&&!p.includes('날짜확인필요')&&colIdx.plan>=0)  newRow[colIdx.plan]=p;
+    if(colIdx.status>=0)  newRow[colIdx.status]=task['상태']||'진행';
+    if(colIdx.content>=0) newRow[colIdx.content]=(task['상세내용']||'').replace(/\\n/g,'\n');
+    const dm={1:'dur1',2:'dur2',3:'dur3',4:'dur4'};
+    const di=colIdx[dm[level]||'dur3']; if(di>=0) newRow[di]='1';
+    globalData.push(newRow);
+    logChange(globalData.length-1,-1,'없음',`메일파일 분석 추가: ${taskName}`);
+}
+
+async function mfAddToDriveFile(projectKey, task) {
+    try {
+        const search = projectKey.split('_')[0];
+        const q = `mimeType='application/json' and name contains 'Gantt' and name contains '${search}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const listResp = await gapi.client.drive.files.list({
+            q, fields:'files(id,name)', corpora:'allDrives',
+            includeItemsFromAllDrives:true, supportsAllDrives:true
+        });
+        const files = listResp.result.files || [];
+        if (!files.length) return false;
+
+        const pk = projectKey.replace(/[_.]/g,'').toUpperCase();
+        const tf = files.find(f=>f.name.replace(/[_.]/g,'').toUpperCase().includes(pk)) || files[0];
+
+        const getResp = await gapi.client.drive.files.get({
+            fileId:tf.id, alt:'media', supportsAllDrives:true });
+        const ganttData = getResp.result;
+        const rows = ganttData.globalData || [];
+        const ci   = ganttData.colIdx || {};
+        const ref  = (rows[1]||{}).data || [];
+        const nc   = ref.length || 20;
+        const lv   = parseInt(task['wbs레벨']??3);
+        const nd   = new Array(nc).fill('');
+        const tn   = (task['업무명']||'새 업무') + ' 📧';
+        const cm   = {0:'devStage',1:'taskType1',2:'taskType2',3:'taskType3',4:'taskType4'};
+        const ci2  = ci[cm[lv]||'taskType3'];
+        if (ci2>=0) nd[ci2]=tn;
+        ['assignee','customer','model','inch'].forEach(k=>{
+            const ki=ci[k]; if(ki>=0&&ki<ref.length) nd[ki]=ref[ki]||'';
+        });
+        const s=task['시작일']; const p=task['완료일'];
+        if(s&&!s.includes('날짜확인필요')&&ci.start>=0) nd[ci.start]=s;
+        if(p&&!p.includes('날짜확인필요')&&ci.plan>=0)  nd[ci.plan]=p;
+        if(ci.status>=0)  nd[ci.status]=task['상태']||'진행';
+        if(ci.content>=0) nd[ci.content]=(task['상세내용']||'').replace(/\\n/g,'\n');
+        const dm={1:'dur1',2:'dur2',3:'dur3',4:'dur4'};
+        const di=ci[dm[lv]||'dur3']; if(di>=0) nd[di]='1';
+
+        rows.push({
+            data:nd, _level:lv,
+            _origDev:lv===0?tn:'', _origT1:lv===1?tn:'',
+            _origT2:lv===2?tn:'',  _origT3:lv===3?tn:'', _origT4:lv===4?tn:'',
+            _startForced:!!(s&&!s.includes('날짜확인필요')),
+            _planForced :!!(p&&!p.includes('날짜확인필요')),
+        });
+        const logs = ganttData.changeLogs||[];
+        logs.push({
+            time:new Date().toLocaleString('ko-KR'),
+            userName:window.currentUserName||'메일파일업로드',
+            rowName:String(rows.length-1), colName:'행 조작',
+            oldVal:'없음', newVal:`메일파일 분석 추가: ${tn}`
+        });
+        ganttData.changeLogs=logs;
+
+        const body2   = JSON.stringify(ganttData);
+        const boundary= 'mf_boundary';
+        const meta    = {name:tf.name, mimeType:'application/json'};
+        const reqBody = `\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify(meta)}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n${body2}\r\n--${boundary}--`;
+        return await new Promise(res => {
+            gapi.client.request({
+                path:`/upload/drive/v3/files/${tf.id}`, method:'PATCH',
+                params:{uploadType:'multipart', supportsAllDrives:true},
+                headers:{'Content-Type':`multipart/related; boundary="${boundary}"`},
+                body:reqBody
+            }).execute(f => res(!!f.id));
+        });
+    } catch(e) { console.error(e); return false; }
+}
+</script>
+
 </body>
 </html>
