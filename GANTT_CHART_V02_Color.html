@@ -3394,13 +3394,37 @@ window.insertMailTask = function() {
 // 📎 메일 파일 첨부 탭 기능 (v3 - 좌우분할)
 // =========================================================
 
-const MF_PROJECT_KEYWORDS = {
-    "STELLAR"     : [/stellar/i, /\bs32\b/i, /ktk18/i, /ktk15/i, /\bsl-?1\b/i,
-                     /led\s*board/i, /s32.*proto/i, /32.*topper/i],
-    "SHUFFLER_4.3": [/shuffler.*4\.3/i, /4\.3.*shuffler/i, /ideal.plus.*4\.3/i, /po205247/i],
-    "SHUFFLER_3.0": [/shuffler.*3\.0/i, /3\.0.*shuffler/i],
-    "ODW"         : [/\bodw\b/i, /open\s*display/i],
-};
+// 프로젝트 키워드를 globalData에서 동적으로 생성
+function mfBuildProjectKeywords() {
+    const map = {};
+    if (!globalData || globalData.length <= 1) return map;
+
+    const header = globalData[0];
+    // L0(개발단계) 컬럼과 모델명 컬럼 인덱스 찾기
+    const l0Idx    = header.findIndex(h => /^l0$|개발단계/i.test(h));
+    const modelIdx = colIdx.model ?? header.findIndex(h => /모델|model/i.test(h));
+
+    const seen = new Set();
+    for (let i = 1; i < globalData.length; i++) {
+        const row = globalData[i];
+        if (!row) continue;
+
+        // L0(개발단계) 값을 프로젝트 키로 사용
+        const key = (l0Idx >= 0 ? row[l0Idx] : '') ||
+                    (modelIdx >= 0 ? row[modelIdx] : '');
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+
+        // 프로젝트명에서 토큰 분리 → RegExp 패턴 자동 생성
+        const tokens = key.split(/[\s_\-\.]+/).filter(t => t.length >= 2);
+        const patterns = [new RegExp(key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')];
+        tokens.forEach(t => {
+            patterns.push(new RegExp('\\b' + t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i'));
+        });
+        map[key] = patterns;
+    }
+    return map;
+}
 
 // 현재 오른쪽 패널에 표시 중인 항목 인덱스
 window._mfCurrentIdx = -1;
@@ -3497,7 +3521,8 @@ function mfParseFile(file) {
 // ─── 프로젝트 매칭 ──────────────────────────────────────
 function mfMatchProject(subject, body) {
     const text = subject + ' ' + body.substring(0, 500);
-    for (const [proj, patterns] of Object.entries(MF_PROJECT_KEYWORDS)) {
+    const keywords = mfBuildProjectKeywords();
+    for (const [proj, patterns] of Object.entries(keywords)) {
         if (patterns.some(p => p.test(text))) return proj;
     }
     return null;
@@ -3540,17 +3565,25 @@ JSON만 응답:
 발신자:${parsed.sender}
 본문:${parsed.body.substring(0,2000)}`;
 
-    const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${apiKey}`,
-        { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-              contents:[{parts:[{text:prompt}]}],
-              generationConfig:{temperature:0.1, maxOutputTokens:1024}
-          }) }
-    );
+    // GAS 서버 경유 (CORS 방지)
+    const gasUrl = localStorage.getItem('gas_server_url');
+    if (!gasUrl) throw new Error('GAS 서버 URL이 설정되지 않았습니다. 설정에서 저장해주세요.');
+
+    const resp = await fetch(gasUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            action: 'callGemini',
+            apiKey,
+            prompt,
+            model: 'gemini-2.5-flash-lite',
+            temperature: 0.1,
+            maxOutputTokens: 1024
+        })
+    });
     const data = await resp.json();
-    if (data.error) throw new Error(data.error.message);
-    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (data.error) throw new Error(data.error);
+    let text = data.result || '';
     text = text.replace(/```json|```/g,'').trim();
     const m = text.match(/\{[\s\S]*\}/);
     if (!m) return null;
@@ -3782,6 +3815,15 @@ window.mfSelectItem = function(idx) {
     window._mfCurrentIdx = idx;
     const cur = document.getElementById(`mf-list-item-${idx}`);
     if (cur) { cur.classList.add('mf-active'); cur.style.background = '#fff3e0'; }
+
+    // 프로젝트 드롭다운 목록을 globalData 기반으로 동적 생성
+    if (projDD) {
+        const keywords = mfBuildProjectKeywords();
+        projDD.innerHTML = '<option value="">-- 프로젝트 선택 --</option>' +
+            Object.keys(keywords)
+                .map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`)
+                .join('');
+    }
 
     // 프로젝트 미매칭이면 수동 선택 표시
     const projSel = document.getElementById('mf-right-project-select');
