@@ -2701,17 +2701,6 @@ const prompt = savedPrompt
                  .replace('${projectInch}', projectInch)
     : defaultPrompt;
 
-    // ✅ 개인 키 옵션 확인
-    const usePersonal = document.getElementById('use-personal-key') ? document.getElementById('use-personal-key').checked : false;
-    const personalKey = document.getElementById('personal-gemini-key') ? document.getElementById('personal-gemini-key').value.trim() : "";
-
-    if (usePersonal && !personalKey) {
-        alert('개인 API 키를 입력해주세요.');
-        document.getElementById('mail-loading').style.display = 'none';
-        document.getElementById('mail-analyze-btn').disabled = false;
-        return;
-    }
-
     // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
 
