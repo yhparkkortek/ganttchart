@@ -3144,20 +3144,27 @@ window.insertMailTask = function() {
                 <span>📧 메일 내용으로 업무 자동 추가</span>
                 <span class="history-close" style="color:white;" onclick="window.closeMailAnalyzer()">✖</span>
             </div>
-            <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3);">
+            <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3); gap:4px; padding:6px 10px; background:rgba(0,0,0,0.15);">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
-                            background:rgba(0,0,0,0.2); font-size:13px; font-weight:bold;">
+                     style="flex:1; text-align:center; padding:9px 6px; cursor:pointer;
+                            background:white; color:#e67e22;
+                            border-radius:6px; font-size:13px; font-weight:bold;
+                            box-shadow:0 2px 4px rgba(0,0,0,0.2);
+                            transition:all 0.2s;">
                     ✏️ 직접 입력
                 </div>
                 <div id="mail-tab-file" onclick="window.switchMailTab('file')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
-                            font-size:13px; font-weight:bold;">
+                     style="flex:1; text-align:center; padding:9px 6px; cursor:pointer;
+                            background:rgba(255,255,255,0.25); color:white;
+                            border-radius:6px; font-size:13px; font-weight:bold;
+                            transition:all 0.2s;">
                     📎 파일 첨부
                 </div>
                 <div id="mail-tab-server" onclick="window.switchMailTab('server')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
-                            font-size:13px; font-weight:bold;">
+                     style="flex:1; text-align:center; padding:9px 6px; cursor:pointer;
+                            background:rgba(255,255,255,0.25); color:white;
+                            border-radius:6px; font-size:13px; font-weight:bold;
+                            transition:all 0.2s;">
                     🌐 메일 서버
                 </div>
             </div>
