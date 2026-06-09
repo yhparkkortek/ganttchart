@@ -4206,7 +4206,7 @@ window.msFetchMail = async function() {
 
             try {
                 const project = mfMatchProject(mail.subject, mail.body);
-                const task    = await mfCallGemini(apiKey, {
+                const task    = await msCallGemini(apiKey, {
                     subject: mail.subject,
                     sender:  mail.sender,
                     body:    mail.body,
@@ -4448,6 +4448,72 @@ window.msSelectAll = function(select) {
             if (!isNaN(idx)) window._msResults[idx].selected = select;
         });
 };
+
+async function msCallGemini(apiKey, parsed) {
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
+    
+    let assignee='', customer='', model='', inch='';
+    if (globalData && globalData.length > 1) {
+        for (let i=1; i<globalData.length; i++) {
+            const r = globalData[i]; if (!r) continue;
+            if (!assignee && colIdx.assignee!==-1) assignee = r[colIdx.assignee]||'';
+            if (!customer && colIdx.customer!==-1) customer = r[colIdx.customer]||'';
+            if (!model    && colIdx.model   !==-1) model    = r[colIdx.model]   ||'';
+            if (!inch     && colIdx.inch    !==-1) inch     = r[colIdx.inch]    ||'';
+            if (assignee && customer && model) break;
+        }
+    }
+
+    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + parsed.body.substring(0, 2000);
+    const savedPrompt = localStorage.getItem('gantt_mail_prompt');
+    const prompt = savedPrompt
+        ? savedPrompt
+            .replace('${mailText}',        mailText)
+            .replace('${projectAssignee}', assignee)
+            .replace('${projectCustomer}', customer)
+            .replace('${projectModel}',    model)
+            .replace('${projectInch}',     inch)
+        : `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
+
+프로젝트 정보:
+- 프로젝트 담당자: ${assignee}
+- 고객사: ${customer}
+- 모델명: ${model}
+- 인치: ${inch}
+
+추출 규칙:
+- 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약
+- 시작일: 메일 본문에 날짜가 명시된 경우만 추출, 없으면 "날짜확인필요"
+- 완료일: 마감일이 명시된 경우만 추출, 없으면 "날짜확인필요"
+- 상태: 진행/대기/완료 중 하나
+- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
+- 상세내용: 300자 이내, [업무유형,발신→수신]발신자→수신자\\n[핵심내용]내용\\n[To do]후속조치
+- wbs레벨: 3
+
+반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
+{"업무명":"","시작일":"","완료일":"","상태":"","개발단계":"","상세내용":"","wbs레벨":3}
+
+이메일:
+${mailText}`;
+
+    const resp = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'text/plain'},
+        body: JSON.stringify({
+            userApiKey: apiKey,
+            prompt: prompt
+        })
+    });
+    const data = await resp.json();
+    if (data.status !== 'success') throw new Error(data.message);
+    
+    let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    text = text.replace(/```json|```/g,'').trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try { return JSON.parse(m[0]); } catch { return null; }
+}
+
 </script>
 
 </body>
