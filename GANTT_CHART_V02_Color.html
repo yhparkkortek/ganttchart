@@ -2718,6 +2718,7 @@ const prompt = savedPrompt
     fetch(GAS_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain' }, // CORS 에러 방지
+        console.log('전송할 API키:', localStorage.getItem('gemini_api_key'));
         body: JSON.stringify({
             userApiKey: localStorage.getItem('gemini_api_key'),
             prompt: prompt,
