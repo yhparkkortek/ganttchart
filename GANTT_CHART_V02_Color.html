@@ -3144,7 +3144,7 @@ window.insertMailTask = function() {
                 <span>📧 메일 내용으로 업무 자동 추가</span>
                 <span class="history-close" style="color:white;" onclick="window.closeMailAnalyzer()">✖</span>
             </div>
-            <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3); gap:4px; padding:6px 10px; background:rgba(0,0,0,0.15);">
+            <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3); gap:4px; padding:6px 10px; background:rgba(0,0,0,0.25);">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                      style="flex:1; text-align:center; padding:9px 6px; cursor:pointer;
                             background:white; color:#e67e22;
@@ -3617,9 +3617,13 @@ window.switchMailTab = function(tab) {
         { el: st, active: tab === 'server' }
     ].forEach(({ el, active }) => {
         if (!el) return;
-        el.style.background = active ? 'white' : 'rgba(255,255,255,0.25)';
-        el.style.color      = active ? '#e67e22' : 'white';
-        el.style.boxShadow  = active ? '0 2px 4px rgba(0,0,0,0.2)' : 'none';
+        el.style.background  = active ? 'white' : 'transparent';
+        el.style.color       = active ? '#e67e22' : 'rgba(255,255,255,0.6)';
+        el.style.boxShadow   = active ? '0 2px 6px rgba(0,0,0,0.3)' : 'none';
+        el.style.borderBottom = active ? '3px solid #e67e22' : '3px solid transparent';
+        el.style.borderRadius = active ? '6px 6px 0 0' : '6px';
+        el.style.fontWeight  = active ? 'bold' : 'normal';
+        el.style.fontSize    = active ? '13px' : '12px';
     });
 };
 
