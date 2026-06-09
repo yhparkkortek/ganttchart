@@ -3155,6 +3155,11 @@ window.insertMailTask = function() {
                             font-size:13px; font-weight:bold;">
                     📎 파일 첨부
                 </div>
+                <div id="mail-tab-server" onclick="window.switchMailTab('server')"
+                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
+                            font-size:13px; font-weight:bold;">
+                    🌐 메일 서버
+                </div>
             </div>
         </div>
         <div class="history-body" style="padding:20px; overflow-y:auto;">
@@ -3218,7 +3223,6 @@ window.insertMailTask = function() {
             <div id="mail-error" style="display:none; color:#dc3545; font-size:13px; padding:10px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb;"></div>
         </div>
 
-        <!-- ✅ 파일 첨부 탭 -->
         <!-- ✅ 파일 첨부 탭 -->
         <div id="mail-tab-file-content" style="display:none; height:calc(92vh - 120px);">
             <div style="display:flex; height:100%; gap:0;">
@@ -3385,11 +3389,125 @@ window.insertMailTask = function() {
 
             </div>
         </div>
+</div>
+
+        <!-- ✅ 메일 서버 탭 -->
+        <div id="mail-tab-server-content" style="display:none; height:calc(92vh - 120px); padding:20px; overflow-y:auto; box-sizing:border-box;">
+
+            <!-- 서버 접속 정보 -->
+            <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:16px; margin-bottom:16px;">
+                <div style="font-weight:bold; font-size:13px; color:#333; margin-bottom:12px;">🔐 메일 서버 접속 정보</div>
+                <div style="display:flex; gap:8px; margin-bottom:8px;">
+                    <div style="flex:1;">
+                        <div style="font-size:11px; color:#666; margin-bottom:3px;">메일 아이디</div>
+                        <input id="ms-userid" type="text" placeholder="yhpark@kortek.co.kr"
+                               style="width:100%; padding:7px 10px; border:1px solid #ced4da; border-radius:5px; font-size:13px; box-sizing:border-box;">
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-size:11px; color:#666; margin-bottom:3px;">비밀번호</div>
+                        <input id="ms-password" type="password" placeholder="비밀번호"
+                               style="width:100%; padding:7px 10px; border:1px solid #ced4da; border-radius:5px; font-size:13px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                    <div style="flex:1;">
+                        <div style="font-size:11px; color:#666; margin-bottom:3px;">시작일</div>
+                        <input id="ms-start-date" type="date"
+                               style="width:100%; padding:7px 10px; border:1px solid #ced4da; border-radius:5px; font-size:13px; box-sizing:border-box;">
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-size:11px; color:#666; margin-bottom:3px;">종료일</div>
+                        <input id="ms-end-date" type="date"
+                               style="width:100%; padding:7px 10px; border:1px solid #ced4da; border-radius:5px; font-size:13px; box-sizing:border-box;">
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:#555; cursor:pointer;">
+                        <input type="checkbox" id="ms-save-id"> 아이디 저장
+                    </label>
+                    <button onclick="window.msFetchMail()"
+                            style="flex:1; padding:9px; background:#e67e22; color:white;
+                                   border:none; border-radius:6px; font-size:13px;
+                                   font-weight:bold; cursor:pointer;">
+                        📥 메일 가져오기
+                    </button>
+                </div>
+                <div id="ms-status" style="font-size:12px; margin-top:8px; color:#666;"></div>
+            </div>
+
+            <!-- 진행바 -->
+            <div id="ms-progress" style="display:none; margin-bottom:12px;">
+                <div style="font-size:12px; font-weight:bold; margin-bottom:4px; color:#e67e22;">
+                    ⏳ <span id="ms-prog-text">메일 가져오는 중...</span>
+                </div>
+                <div style="background:#e9ecef; border-radius:4px; height:6px; overflow:hidden;">
+                    <div id="ms-prog-bar" style="height:100%; background:#e67e22; width:0%; transition:width 0.3s;"></div>
+                </div>
+            </div>
+
+            <!-- 결과 영역 (파일첨부 탭과 동일한 좌우분할 구조) -->
+            <div id="ms-result-area" style="display:none; height:calc(92vh - 320px);">
+                <div style="display:flex; height:100%; gap:12px;">
+
+                    <!-- 왼쪽 목록 -->
+                    <div style="width:380px; min-width:380px; display:flex; flex-direction:column; border:1px solid #dee2e6; border-radius:8px; overflow:hidden;">
+                        <div style="padding:8px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; display:flex; justify-content:space-between; align-items:center; flex-shrink:0;">
+                            <span style="font-size:12px; font-weight:bold;">
+                                📋 수집결과 <span id="ms-result-count">0</span>개
+                                / AI분석 <span id="ms-analyzed-count">0</span>개
+                            </span>
+                            <label style="font-size:11px; color:#555; cursor:pointer;">
+                                <input type="checkbox" id="ms-check-all"
+                                       onchange="window.msSelectAll(this.checked)"> 전체선택
+                            </label>
+                        </div>
+                        <div id="ms-result-list" style="flex:1; overflow-y:auto;"></div>
+                        <button id="ms-batch-btn" onclick="window.msBatchInsert()"
+                                style="display:none; width:100%; padding:9px;
+                                       background:#0056b3; color:white; border:none;
+                                       font-size:12px; font-weight:bold; cursor:pointer;">
+                            ⚡ 선택항목 연속등록
+                        </button>
+                    </div>
+
+                    <!-- 오른쪽 상세 -->
+                    <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
+                        <div id="ms-right-empty"
+                             style="flex:1; display:flex; flex-direction:column;
+                                    align-items:center; justify-content:center; color:#ccc; text-align:center;">
+                            <div style="font-size:48px; margin-bottom:12px;">👈</div>
+                            <div style="font-size:14px; font-weight:bold;">왼쪽에서 메일을 선택하세요</div>
+                        </div>
+                        <div id="ms-right-detail" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+                            <div id="ms-right-mail-info"
+                                 style="font-size:11px; color:#888; margin-bottom:10px;
+                                        padding:8px 12px; background:#f8f9fa;
+                                        border-radius:6px; border-left:3px solid #e67e22; flex-shrink:0;">
+                            </div>
+                            <div id="ms-right-result-table" style="flex:1; overflow-y:auto; margin-bottom:10px;"></div>
+                            <div style="padding:10px 12px; background:#f8f9fa; border-radius:6px; border:1px solid #dee2e6; margin-bottom:10px; flex-shrink:0;">
+                                <div style="font-weight:bold; font-size:12px; margin-bottom:6px;">📍 추가할 위치</div>
+                                <select id="ms-right-position"
+                                        style="width:100%; padding:6px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                                </select>
+                            </div>
+                            <button onclick="window.msRightInsert()"
+                                    style="width:100%; padding:10px; background:#28a745;
+                                           color:white; border:none; border-radius:6px;
+                                           font-size:13px; font-weight:bold; cursor:pointer; flex-shrink:0;">
+                                ✅ 이 항목 등록
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
 
     </div>
 </div>
 
 <script>
+
 // =========================================================
 // 📎 메일 파일 첨부 탭 기능 (v3 - 좌우분할)
 // =========================================================
@@ -3433,15 +3551,21 @@ window._mfResults    = [];
 
 // ─── 탭 전환 ─────────────────────────────────────────────
 window.switchMailTab = function(tab) {
-    const isPaste = tab === 'paste';
+    // 콘텐츠 영역
     const pc = document.getElementById('mail-tab-paste-content');
     const fc = document.getElementById('mail-tab-file-content');
-    if (pc) pc.style.display = isPaste ? 'block' : 'none';
-    if (fc) fc.style.display = isPaste ? 'none'  : 'flex';
+    const sc = document.getElementById('mail-tab-server-content');
+    if (pc) pc.style.display = tab === 'paste'  ? 'block' : 'none';
+    if (fc) fc.style.display = tab === 'file'   ? 'flex'  : 'none';
+    if (sc) sc.style.display = tab === 'server' ? 'block' : 'none';
+
+    // 탭 버튼 활성화
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
-    if (pt) pt.style.background = isPaste ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (ft) ft.style.background = isPaste ? 'transparent' : 'rgba(0,0,0,0.2)';
+    const st = document.getElementById('mail-tab-server');
+    if (pt) pt.style.background = tab === 'paste'  ? 'rgba(0,0,0,0.2)' : 'transparent';
+    if (ft) ft.style.background = tab === 'file'   ? 'rgba(0,0,0,0.2)' : 'transparent';
+    if (st) st.style.background = tab === 'server' ? 'rgba(0,0,0,0.2)' : 'transparent';
 };
 
 // showMailAnalyzer 래핑
@@ -4006,6 +4130,329 @@ function mfDirectInsert(task) {
     globalData.push(newRow);
     logChange(globalData.length-1,-1,'없음',`메일파일 연속등록: ${taskName}`);
 }
+    // =========================================================
+// 🌐 메일 서버 탭 기능
+// =========================================================
+
+const MS_SERVER_URL = 'https://railway-mail-server-production.up.railway.app';
+window._msResults   = [];
+window._msCurrentIdx = -1;
+
+// ─── 아이디 저장/불러오기 ────────────────────────────────
+(function() {
+    const saved = localStorage.getItem('ms_saved_userid');
+    if (saved) {
+        const el = document.getElementById('ms-userid');
+        const cb = document.getElementById('ms-save-id');
+        if (el) el.value = saved;
+        if (cb) cb.checked = true;
+    }
+    // 날짜 기본값: 오늘 기준 -7일 ~ 오늘
+    const today = new Date();
+    const week  = new Date(today); week.setDate(week.getDate() - 7);
+    const fmt   = d => d.toISOString().split('T')[0];
+    const sd = document.getElementById('ms-start-date');
+    const ed = document.getElementById('ms-end-date');
+    if (sd) sd.value = fmt(week);
+    if (ed) ed.value = fmt(today);
+})();
+
+// ─── 메일 가져오기 ───────────────────────────────────────
+window.msFetchMail = async function() {
+    const userid   = document.getElementById('ms-userid').value.trim();
+    const password = document.getElementById('ms-password').value;
+    const startDate = document.getElementById('ms-start-date').value;
+    const endDate   = document.getElementById('ms-end-date').value;
+
+    if (!userid || !password) { alert('아이디와 비밀번호를 입력해주세요.'); return; }
+    if (!startDate || !endDate) { alert('날짜를 선택해주세요.'); return; }
+
+    // 아이디 저장
+    if (document.getElementById('ms-save-id').checked) {
+        localStorage.setItem('ms_saved_userid', userid);
+    } else {
+        localStorage.removeItem('ms_saved_userid');
+    }
+
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
+
+    // UI 초기화
+    document.getElementById('ms-status').textContent   = '📡 서버에 연결 중...';
+    document.getElementById('ms-progress').style.display = 'block';
+    document.getElementById('ms-result-area').style.display = 'none';
+    document.getElementById('ms-prog-bar').style.width = '10%';
+    document.getElementById('ms-prog-text').textContent = '메일 가져오는 중...';
+
+    try {
+        // 1단계: 메일 수집
+        const res = await fetch(`${MS_SERVER_URL}/fetch-mail`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mailUser: userid, mailPw: password, startDate, endDate })
+        });
+        const data = await res.json();
+
+        if (data.status !== 'success') throw new Error(data.message);
+
+        document.getElementById('ms-prog-bar').style.width  = '30%';
+        document.getElementById('ms-prog-text').textContent = `${data.count}개 수집 완료 — AI 분석 중...`;
+        document.getElementById('ms-status').textContent    = `✅ ${data.count}개 메일 수집 완료`;
+        document.getElementById('ms-result-count').textContent = data.count;
+
+        // 2단계: 각 메일 AI 분석 (파일첨부 탭과 동일 로직)
+        const results = [];
+        for (let i = 0; i < data.data.length; i++) {
+            const mail = data.data[i];
+            document.getElementById('ms-prog-bar').style.width =
+                `${30 + Math.round((i / data.data.length) * 65)}%`;
+            document.getElementById('ms-prog-text').textContent =
+                `AI 분석 중... ${i+1}/${data.data.length} — ${mail.subject.substring(0,20)}`;
+
+            try {
+                const project = mfMatchProject(mail.subject, mail.body);
+                const task    = project ? await mfCallGemini(apiKey, {
+                    subject: mail.subject,
+                    sender:  mail.sender,
+                    body:    mail.body,
+                    fileName: mail.fileName
+                }) : null;
+
+                results.push({
+                    idx: i, fileName: mail.fileName,
+                    subject: mail.subject, sender: mail.sender, date: mail.date,
+                    project, task,
+                    selected: !!(project && task),
+                    registered: false,
+                    error: !project ? '프로젝트 미매칭' : (!task ? 'AI분석실패' : null)
+                });
+            } catch(e) {
+                results.push({
+                    idx: i, fileName: mail.fileName,
+                    subject: mail.subject, sender: mail.sender, date: mail.date,
+                    project: null, task: null,
+                    selected: false, registered: false, error: e.message
+                });
+            }
+            if (i < data.data.length - 1) await new Promise(r => setTimeout(r, 400));
+        }
+
+        window._msResults = results;
+        const analyzedCount = results.filter(r => r.task).length;
+        document.getElementById('ms-analyzed-count').textContent = analyzedCount;
+        document.getElementById('ms-prog-bar').style.width  = '100%';
+        document.getElementById('ms-prog-text').textContent = '분석 완료!';
+        document.getElementById('ms-progress').style.display = 'none';
+        document.getElementById('ms-result-area').style.display = 'block';
+        document.getElementById('ms-batch-btn').style.display   = 'block';
+
+        msRenderList(results);
+
+    } catch(e) {
+        document.getElementById('ms-status').textContent = `❌ 오류: ${e.message}`;
+        document.getElementById('ms-progress').style.display = 'none';
+    }
+};
+
+// ─── 목록 렌더링 (파일첨부 탭과 동일 구조) ──────────────
+function msRenderList(results) {
+    const list = document.getElementById('ms-result-list');
+    let html = '';
+    results.forEach((r, i) => {
+        const canSel = !!r.task;
+        const bg     = r.registered ? '#d4edda' : canSel ? '#fff' : '#fafafa';
+        const taskName = r.task ? (r.task['업무명'] || '새업무') : null;
+        html += `
+        <div id="ms-list-item-${i}" data-idx="${i}"
+             style="display:flex; align-items:center; gap:6px;
+                    padding:7px 8px; border-bottom:1px solid #f0f0f0;
+                    background:${bg}; cursor:pointer;">
+            <input type="checkbox" data-idx="${i}"
+                   ${canSel && r.selected ? 'checked' : ''}
+                   ${canSel ? '' : 'disabled'} style="flex-shrink:0;">
+            <span style="font-size:10px; color:#aaa; flex-shrink:0; width:16px;">${i+1}</span>
+            <div style="flex:1; min-width:0;">
+                <div style="font-size:12px; font-weight:${canSel?'bold':'normal'};
+                            color:${canSel?'#333':'#aaa'};
+                            white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    ${canSel ? escapeHtml(taskName) + ' 📧' : escapeHtml(r.subject.substring(0,35))}
+                </div>
+                <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap;">
+                    <span style="font-size:10px; color:#aaa;">${r.date||''}</span>
+                    ${r.project
+                        ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r.project}</span>`
+                        : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
+                    ${r.registered ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>` : ''}
+                </div>
+            </div>
+        </div>`;
+    });
+
+    list.innerHTML = html || '<div style="padding:20px; text-align:center; color:#aaa;">결과 없음</div>';
+
+    results.forEach((r, i) => {
+        const row = document.getElementById(`ms-list-item-${i}`);
+        if (!row) return;
+        row.addEventListener('click', function(e) {
+            if (e.target.type === 'checkbox') return;
+            window.msSelectItem(i);
+        });
+        const cb = row.querySelector('input[type=checkbox]');
+        if (cb) cb.addEventListener('change', function() {
+            window._msResults[i].selected = this.checked;
+            window.msSyncCheckAll();
+        });
+        row.addEventListener('mouseover', function() {
+            if (!this.classList.contains('ms-active')) this.style.background = '#e7f3ff';
+        });
+        row.addEventListener('mouseout', function() {
+            if (!this.classList.contains('ms-active')) {
+                this.style.background = window._msResults[i].registered ? '#d4edda' : (window._msResults[i].task ? '#fff' : '#fafafa');
+            }
+        });
+    });
+}
+
+// ─── 항목 선택 → 오른쪽 패널 ────────────────────────────
+window.msSelectItem = function(idx) {
+    const r = window._msResults[idx];
+    if (!r || !r.task) return;
+
+    if (window._msCurrentIdx >= 0) {
+        const prev = document.getElementById(`ms-list-item-${window._msCurrentIdx}`);
+        if (prev) {
+            prev.classList.remove('ms-active');
+            const pr = window._msResults[window._msCurrentIdx];
+            prev.style.background = pr.registered ? '#d4edda' : '#fff';
+        }
+    }
+    window._msCurrentIdx = idx;
+    const cur = document.getElementById(`ms-list-item-${idx}`);
+    if (cur) { cur.classList.add('ms-active'); cur.style.background = '#fff3e0'; }
+
+    // 메일 정보
+    document.getElementById('ms-right-mail-info').innerHTML =
+        `<b>📨 ${escapeHtml(r.subject)}</b><br>
+         <span>${escapeHtml(r.sender)}</span> | <span style="color:#666;">${r.date||''}</span>
+         ${r.project ? ` | <span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
+
+    // 분석결과 표시 (파일첨부 탭과 동일)
+    window._mailAnalyzedResult = JSON.parse(JSON.stringify(r.task));
+    window.renderMailResult(r.task);
+
+    const origTable = document.getElementById('mail-result-section');
+    const destTable = document.getElementById('ms-right-result-table');
+    if (origTable && destTable) {
+        destTable.innerHTML = origTable.innerHTML;
+        destTable.querySelectorAll('input, textarea, select').forEach(el => {
+            const field = el.dataset.field;
+            if (field) {
+                el.addEventListener('change', () => {
+                    window._mailAnalyzedResult[field] = el.type === 'select-one' ? parseInt(el.value) : el.value;
+                    window._msResults[idx].task[field] = window._mailAnalyzedResult[field];
+                });
+            }
+        });
+    }
+
+    // 삽입 위치
+    window.populateInsertPosition();
+    const origSel = document.getElementById('mail-insert-position');
+    const destSel = document.getElementById('ms-right-position');
+    if (origSel && destSel) {
+        destSel.innerHTML = origSel.innerHTML;
+        const hasDate = r.task['시작일'] && !r.task['시작일'].includes('날짜확인필요');
+        if (hasDate) {
+            window.autoSetInsertPosition(r.task['시작일'], false);
+            destSel.value = origSel.value;
+        }
+    }
+
+    document.getElementById('ms-right-empty').style.display  = 'none';
+    document.getElementById('ms-right-detail').style.display = 'flex';
+};
+
+// ─── 오른쪽 등록 버튼 ───────────────────────────────────
+window.msRightInsert = function() {
+    const idx = window._msCurrentIdx;
+    if (idx < 0) { alert('메일을 선택해주세요.'); return; }
+    const r = window._msResults[idx];
+    if (!r || !r.task) return;
+
+    const destSel = document.getElementById('ms-right-position');
+    const origSel = document.getElementById('mail-insert-position');
+    if (destSel && origSel) origSel.value = destSel.value;
+
+    const s = window._mailAnalyzedResult['시작일'];
+    const p = window._mailAnalyzedResult['완료일'];
+    if ((s||'').includes('날짜확인필요') || (p||'').includes('날짜확인필요')) {
+        alert('⚠️ 시작일 또는 완료일을 먼저 선택해주세요.');
+        return;
+    }
+
+    window._mailAnalyzedResult = r.task;
+    window.insertMailTask();
+
+    r.registered = true;
+    const item = document.getElementById(`ms-list-item-${idx}`);
+    if (item) {
+        item.style.background = '#d4edda';
+        const badge = item.querySelector('div > div:last-child');
+        if (badge) badge.innerHTML += `<span style="color:#28a745;font-size:10px;font-weight:bold;">✅등록완료</span>`;
+    }
+    window._msCurrentIdx = -1;
+    document.getElementById('ms-right-empty').style.display  = 'flex';
+    document.getElementById('ms-right-detail').style.display = 'none';
+};
+
+// ─── 연속등록 ────────────────────────────────────────────
+window.msBatchInsert = async function() {
+    const targets = window._msResults.filter(r =>
+        r.selected && r.project && r.task && !r.registered
+    );
+    if (!targets.length) { alert('등록할 항목을 체크해주세요.'); return; }
+
+    const needDate = targets.filter(r =>
+        (r.task['시작일']||'').includes('날짜확인필요') ||
+        (r.task['완료일']||'').includes('날짜확인필요')
+    );
+    let msg = `✅ ${targets.length}개 항목을 연속등록합니다.\n`;
+    if (needDate.length) msg += `\n⚠️ ${needDate.length}개 항목은 날짜 없이 등록됩니다.`;
+    if (!confirm(msg + '\n\n계속하시겠습니까?')) return;
+
+    let ok = 0;
+    for (const r of targets) {
+        try {
+            mfDirectInsert(r.task);  // 파일첨부 탭의 함수 재사용
+            r.registered = true;
+            ok++;
+            const item = document.getElementById(`ms-list-item-${r.idx}`);
+            if (item) {
+                item.style.background = '#d4edda';
+                const badge = item.querySelector('div > div:last-child');
+                if (badge) badge.innerHTML += `<span style="color:#28a745;font-size:10px;font-weight:bold;">✅등록완료</span>`;
+            }
+        } catch(e) { console.error(e); }
+    }
+    window.recalculateSchedules();
+    alert(`✅ ${ok}개 항목이 연속등록 되었습니다!`);
+};
+
+window.msSyncCheckAll = function() {
+    const all = document.querySelectorAll('#ms-result-list input[type=checkbox]:not(:disabled)');
+    const chk = document.querySelectorAll('#ms-result-list input[type=checkbox]:not(:disabled):checked');
+    const ca  = document.getElementById('ms-check-all');
+    if (ca) ca.checked = all.length > 0 && all.length === chk.length;
+};
+
+window.msSelectAll = function(select) {
+    document.querySelectorAll('#ms-result-list input[type=checkbox]:not(:disabled)')
+        .forEach(cb => {
+            cb.checked = select;
+            const idx = parseInt(cb.dataset.idx);
+            if (!isNaN(idx)) window._msResults[idx].selected = select;
+        });
+};
 </script>
 
 </body>
