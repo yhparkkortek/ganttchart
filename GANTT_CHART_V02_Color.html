@@ -2788,7 +2788,15 @@ const prompt = savedPrompt
 
 window.renderMailResult = function(result) {
     const fields = [
-        { key: '업무명', label: '📌 업무명' },
+        { key: '업무명',   label: '📌 업무명' },
+        { key: '시작일',   label: '📅 시작일' },
+        { key: '완료일',   label: '📅 완료일' },
+        { key: '상태',     label: '🔖 상태',     type: 'select',
+          options: ['진행','대기','완료','보류'] },
+        { key: '개발단계', label: '🏗️ 개발단계', type: 'select',
+          options: ['','RFQ','설계','시제품','양산','EOL'] },
+        { key: '상세내용', label: '📝 상세내용' },
+    ];
         { key: '시작일', label: '📅 시작일' },
         { key: '완료일', label: '📅 완료일' },
         { key: '상태', label: '🔖 상태' },
@@ -2812,7 +2820,16 @@ window.renderMailResult = function(result) {
             ? dateVal
             : `<span style="color:#e67e22; font-weight:bold;">📅 날짜를 선택해주세요</span>`;
         
-        let inputType = f.key === '상세내용' ?
+        let inputType = f.type === 'select'
+            ? `<select data-field="${f.key}"
+                    style="width:100%; border:1px solid #ced4da; border-radius:4px;
+                            padding:5px; font-size:13px; background:white;"
+                    onchange="window._mailAnalyzedResult['${f.key}'] = this.value">
+                ${f.options.map(o =>
+                    `<option value="${o}" ${result[f.key]===o?'selected':''}>${o||'(미지정)'}</option>`
+                ).join('')}
+            </select>`
+            : f.key === '상세내용' ?
             `<textarea data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif; resize:vertical; min-height:60px;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
             : isDateField ?
             `<div style="display:flex; align-items:center; gap:8px; ${warnStyle} padding:2px 4px; border-radius:4px;">
@@ -3537,24 +3554,52 @@ window.insertMailTask = function() {
                             <div style="font-size:14px; font-weight:bold;">왼쪽에서 메일을 선택하세요</div>
                         </div>
                         <div id="ms-right-detail" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+
+                            <!-- 4번: 회색 메일정보 박스 → 깔끔하게 개선 -->
                             <div id="ms-right-mail-info"
-                                 style="font-size:11px; color:#888; margin-bottom:10px;
-                                        padding:8px 12px; background:#f8f9fa;
-                                        border-radius:6px; border-left:3px solid #e67e22; flex-shrink:0;">
+                                style="font-size:11px; color:#555; margin-bottom:6px; padding:6px 10px;
+                                        background:#fff3e0; border-radius:6px; border-left:3px solid #e67e22;
+                                        flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             </div>
-                            <div id="ms-right-result-table" style="flex:1; overflow-y:auto; margin-bottom:10px;"></div>
-                            <div style="padding:10px 12px; background:#f8f9fa; border-radius:6px; border:1px solid #dee2e6; margin-bottom:10px; flex-shrink:0;">
-                                <div style="font-weight:bold; font-size:12px; margin-bottom:6px;">📍 추가할 위치</div>
+
+                            <!-- 1번: 원본 메일 접이식 패널 -->
+                            <div style="flex-shrink:0; margin-bottom:6px;">
+                                <div onclick="
+                                    const b = document.getElementById('ms-original-body');
+                                    const a = document.getElementById('ms-original-arrow');
+                                    const open = b.style.display !== 'none';
+                                    b.style.display = open ? 'none' : 'block';
+                                    a.textContent = open ? '▼' : '▲';"
+                                    style="display:flex; justify-content:space-between; align-items:center;
+                                            padding:6px 10px; background:#e9ecef; border-radius:6px;
+                                            cursor:pointer; font-size:12px; font-weight:bold; color:#555;">
+                                    <span>📨 원본 메일 보기</span>
+                                    <span id="ms-original-arrow">▼</span>
+                                </div>
+                                <div id="ms-original-body"
+                                    style="display:none; padding:10px; background:#f8f9fa;
+                                            border:1px solid #dee2e6; border-radius:0 0 6px 6px;
+                                            font-size:11px; color:#555; max-height:150px;
+                                            overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
+                                </div>
+                            </div>
+
+                            <!-- 분석결과 테이블 (5번: 상세내용 폭 확대를 위해 flex:1 유지) -->
+                            <div id="ms-right-result-table" style="flex:1; overflow-y:auto; margin-bottom:8px;"></div>
+
+                            <!-- 3번: 추가할 위치 + 등록 버튼 한 줄로 -->
+                            <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
                                 <select id="ms-right-position"
-                                        style="width:100%; padding:6px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                                        style="flex:1; padding:6px; border:1px solid #ced4da;
+                                            border-radius:4px; font-size:12px;">
                                 </select>
+                                <button onclick="window.msRightInsert()"
+                                        style="padding:10px 16px; background:#28a745; color:white;
+                                            border:none; border-radius:6px; font-size:13px;
+                                            font-weight:bold; cursor:pointer; white-space:nowrap;">
+                                    ✅ 등록
+                                </button>
                             </div>
-                            <button onclick="window.msRightInsert()"
-                                    style="width:100%; padding:10px; background:#28a745;
-                                           color:white; border:none; border-radius:6px;
-                                           font-size:13px; font-weight:bold; cursor:pointer; flex-shrink:0;">
-                                ✅ 이 항목 등록
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -4414,6 +4459,13 @@ window.msSelectItem = function(idx) {
 
     // 메일 정보
     document.getElementById('ms-right-mail-info').innerHTML =
+    // 원본 메일 내용 세팅
+    const origBody = document.getElementById('ms-original-body');
+    if (origBody) {
+        origBody.textContent = `제목: ${r.subject}\n발신: ${r.sender}\n날짜: ${r.date||''}\n\n${r.body||''}`;
+        origBody.style.display = 'none';
+        document.getElementById('ms-original-arrow').textContent = '▼';
+    }
         `<b>📨 ${escapeHtml(r.subject)}</b><br>
          <span>${escapeHtml(r.sender)}</span> | <span style="color:#666;">${r.date||''}</span>
          ${r.project ? ` | <span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
