@@ -3389,7 +3389,6 @@ window.insertMailTask = function() {
 
             </div>
         </div>
-</div>
 
         <!-- ✅ 메일 서버 탭 -->
         <div id="mail-tab-server-content" style="display:none; height:calc(92vh - 120px); padding:20px; overflow-y:auto; box-sizing:border-box;">
@@ -4207,7 +4206,7 @@ window.msFetchMail = async function() {
 
             try {
                 const project = mfMatchProject(mail.subject, mail.body);
-                const task    = project ? await mfCallGemini(apiKey, {
+                const task    = await mfCallGemini(apiKey, {
                     subject: mail.subject,
                     sender:  mail.sender,
                     body:    mail.body,
@@ -4220,7 +4219,7 @@ window.msFetchMail = async function() {
                     project, task,
                     selected: !!(project && task),
                     registered: false,
-                    error: !project ? '프로젝트 미매칭' : (!task ? 'AI분석실패' : null)
+                    error: !task ? 'AI분석실패' : null
                 });
             } catch(e) {
                 results.push({
