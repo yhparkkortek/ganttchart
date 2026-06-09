@@ -3191,14 +3191,18 @@ window.insertMailTask = function() {
                     style="width:100%; height:160px; margin-top:6px; padding:10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; resize:vertical; box-sizing:border-box; font-family:'Malgun Gothic',sans-serif;"></textarea>
             </div>
 
-            <button onclick="window.editPrompt()"
-                style="width:100%; padding:10px; background:#6c757d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; margin-bottom:8px;">
-                ✏️ AI 분석 프롬프트 편집
-            </button>
-            <button onclick="window.analyzeMailContent()" id="mail-analyze-btn"
-                style="width:100%; padding:10px; background:#e67e22; color:white; border:none; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; margin-bottom:15px;">
-                🤖 AI로 분석하기
-            </button>
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <button onclick="window.editPrompt()"
+                    style="flex:1; padding:8px; background:#6c757d; color:white; border:none;
+                           border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                    ✏️ 프롬프트 편집
+                </button>
+                <button onclick="window.analyzeMailContent()" id="mail-analyze-btn"
+                    style="flex:2; padding:8px; background:#e67e22; color:white; border:none;
+                           border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">
+                    🤖 AI로 분석하기
+                </button>
+            </div>
 
             <!-- 분석 결과 미리보기 -->
             <div id="mail-result-section" style="display:none;">
@@ -3607,16 +3611,26 @@ window.switchMailTab = function(tab) {
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
     const st = document.getElementById('mail-tab-server');
-    if (pt) pt.style.background = tab === 'paste'  ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (ft) ft.style.background = tab === 'file'   ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (st) st.style.background = tab === 'server' ? 'rgba(0,0,0,0.2)' : 'transparent';
+    [
+        { el: pt, active: tab === 'paste'  },
+        { el: ft, active: tab === 'file'   },
+        { el: st, active: tab === 'server' }
+    ].forEach(({ el, active }) => {
+        if (!el) return;
+        el.style.background = active ? 'white' : 'rgba(255,255,255,0.25)';
+        el.style.color      = active ? '#e67e22' : 'white';
+        el.style.boxShadow  = active ? '0 2px 4px rgba(0,0,0,0.2)' : 'none';
+    });
 };
 
 // showMailAnalyzer 래핑
 const _origShowMailAnalyzer = window.showMailAnalyzer;
 window.showMailAnalyzer = function() {
     _origShowMailAnalyzer();
-    window.switchMailTab('paste');
+    // 탭 초기 스타일 강제 설정
+    setTimeout(() => {
+        window.switchMailTab('paste');
+    }, 50);
 };
 
 // ─── 파일 선택 ───────────────────────────────────────────
