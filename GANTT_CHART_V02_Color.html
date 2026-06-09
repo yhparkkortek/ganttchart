@@ -2575,7 +2575,7 @@ window.showMailAnalyzer = function() {
 };
 
 window.closeMailAnalyzer = function(e) {
-    if (e && e.target !== document.getElementById('mail-analyzer-overlay')) return;
+    if (e) return; // 배경 클릭 무시, X 버튼으로만 닫기
     document.getElementById('mail-analyzer-overlay').style.display = 'none';
 };
 
