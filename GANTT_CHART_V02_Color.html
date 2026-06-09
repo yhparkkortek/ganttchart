@@ -3162,7 +3162,7 @@ window.insertMailTask = function() {
                 </div>
             </div>
         </div>
-        <div class="history-body" style="padding:20px; overflow-y:auto;">
+        <div id="mail-tab-paste-content" class="history-body" style="padding:20px; overflow-y:auto;">
 
             <!-- API 키 입력 -->
             <div id="mail-api-key-section" style="margin-bottom:15px;">
@@ -3572,10 +3572,6 @@ window.switchMailTab = function(tab) {
 const _origShowMailAnalyzer = window.showMailAnalyzer;
 window.showMailAnalyzer = function() {
     _origShowMailAnalyzer();
-    const body = document.querySelector('#mail-analyzer-overlay .history-body');
-    if (body && !document.getElementById('mail-tab-paste-content')) {
-        body.id = 'mail-tab-paste-content';
-    }
     window.switchMailTab('paste');
 };
 
