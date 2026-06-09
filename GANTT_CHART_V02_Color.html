@@ -4194,13 +4194,13 @@ window._msCurrentIdx = -1;
         keyStatus.textContent = '⚠️ API 키를 입력해주세요';
         keyStatus.style.color = '#e67e22';
     }
-    // 날짜 기본값: 오늘 기준 -7일 ~ 오늘
+    // 날짜 기본값: 오늘 기준
     const today = new Date();
-    const week  = new Date(today); week.setDate(week.getDate() - 7);
+    const week  = new Date(today);
     const fmt   = d => d.toISOString().split('T')[0];
     const sd = document.getElementById('ms-start-date');
     const ed = document.getElementById('ms-end-date');
-    if (sd) sd.value = fmt(week);
+    if (sd) sd.value = fmt(today);
     if (ed) ed.value = fmt(today);
 })();
 
