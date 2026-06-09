@@ -3740,7 +3740,7 @@ window.mfAnalyze = async function() {
                 idx: i, fileName: f.name,
                 subject: parsed.subject, sender: parsed.sender,
                 project, task,
-                selected: !!(project && task),
+                selected: !!task,
                 registered: false,
                 error: !project ? '프로젝트 미매칭' : (!task ? 'AI분석실패' : null)
             });
@@ -4217,7 +4217,7 @@ window.msFetchMail = async function() {
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     project, task,
-                    selected: !!(project && task),
+                    selected: !!task,
                     registered: false,
                     error: !task ? 'AI분석실패' : null
                 });
