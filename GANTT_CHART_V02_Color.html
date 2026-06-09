@@ -2717,8 +2717,7 @@ const prompt = savedPrompt
 
     fetch(GAS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' }, // CORS 에러 방지
-        console.log('전송할 API키:', localStorage.getItem('gemini_api_key'));
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
             userApiKey: localStorage.getItem('gemini_api_key'),
             prompt: prompt,
@@ -2795,12 +2794,6 @@ window.renderMailResult = function(result) {
           options: ['진행','대기','완료','보류'] },
         { key: '개발단계', label: '🏗️ 개발단계', type: 'select',
           options: ['','RFQ','설계','시제품','양산','EOL'] },
-        { key: '상세내용', label: '📝 상세내용' },
-    ];
-        { key: '시작일', label: '📅 시작일' },
-        { key: '완료일', label: '📅 완료일' },
-        { key: '상태', label: '🔖 상태' },
-        { key: '개발단계', label: '🏗️ 개발단계' },
         { key: '상세내용', label: '📝 상세내용' },
     ];
 
@@ -4459,6 +4452,10 @@ window.msSelectItem = function(idx) {
 
     // 메일 정보
     document.getElementById('ms-right-mail-info').innerHTML =
+        `<b>📨 ${escapeHtml(r.subject)}</b><br>
+         <span>${escapeHtml(r.sender)}</span> | <span style="color:#666;">${r.date||''}</span>
+         ${r.project ? ` | <span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
+
     // 원본 메일 내용 세팅
     const origBody = document.getElementById('ms-original-body');
     if (origBody) {
@@ -4466,9 +4463,6 @@ window.msSelectItem = function(idx) {
         origBody.style.display = 'none';
         document.getElementById('ms-original-arrow').textContent = '▼';
     }
-        `<b>📨 ${escapeHtml(r.subject)}</b><br>
-         <span>${escapeHtml(r.sender)}</span> | <span style="color:#666;">${r.date||''}</span>
-         ${r.project ? ` | <span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
 
     // 분석결과 표시 (파일첨부 탭과 동일)
     window._mailAnalyzedResult = JSON.parse(JSON.stringify(r.task));
