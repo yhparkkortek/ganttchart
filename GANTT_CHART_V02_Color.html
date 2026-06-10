@@ -3873,23 +3873,36 @@ async function mfCallGemini(apiKey, parsed) {
     const GAS_URL = localStorage.getItem('gas_server_url') || 
             "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
 
-        const resp = await fetch(GAS_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-            body: JSON.stringify({
-                userApiKey: apiKey,
-                prompt: prompt,
-                model: 'gemini-2.5-flash-lite'
-            })
-        });
-        const data = await resp.json();
-        if (data.status !== 'success') throw new Error(data.message);
-        let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        text = text.replace(/```json|```/g,'').trim();
-        const m = text.match(/\{[\s\S]*\}/);
-        if (!m) return null;
-        try { return JSON.parse(m[0]); } catch { return null; }
+    const MAX_RETRY = 3;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+            const resp = await fetch(GAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                body: JSON.stringify({
+                    userApiKey: apiKey,
+                    prompt: prompt,
+                    model: 'gemini-2.5-flash-lite'
+                })
+            });
+            const data = await resp.json();
+            if (data.status !== 'success') throw new Error(data.message);
+            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            text = text.replace(/```json|```/g,'').trim();
+            const m = text.match(/\{[\s\S]*\}/);
+            if (!m) return null;
+            try { return JSON.parse(m[0]); } catch { return null; }
+        } catch (err) {
+            if (attempt < MAX_RETRY) {
+                console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
+                await new Promise(r => setTimeout(r, 3000));
+            } else {
+                console.error(`Gemini 분석 최종 실패 (${MAX_RETRY}회 시도)`, err.message);
+                return null;
+            }
+        }
     }
+}
 
 // ─── 일괄 분석 ───────────────────────────────────────────
 window.mfAnalyze = async function() {
@@ -3916,7 +3929,7 @@ window.mfAnalyze = async function() {
         progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
         try {
             const parsed  = await mfParseFile(f);
-            if (i > 0) await new Promise(r => setTimeout(r, 1500)); // 1.5초 딜레이
+            if (i > 0) await new Promise(r => setTimeout(r, 2000)); // 1.5초 딜레이
             const task = await mfCallGemini(apiKey, parsed);
             results.push({
                 idx: i, fileName: f.name,
