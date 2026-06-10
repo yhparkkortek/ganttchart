@@ -3648,30 +3648,118 @@ function mfParseFile(file) {
             let subject = file.name.replace(/\.[^.]+$/, '');
             let sender  = '';
             let body    = '';
+
+            // ── MIME 헤더 디코딩 ──────────────────────
+            function decodeMimeHeader(str) {
+                if (!str) return '';
+                return str.replace(/=\?([^?]+)\?([BbQq])\?([^?]*)\?=/g, (_, charset, enc, data) => {
+                    try {
+                        if (enc.toUpperCase() === 'B') {
+                            const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+                            return new TextDecoder(charset).decode(bytes);
+                        } else {
+                            return decodeURIComponent(data.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g, '%$1'));
+                        }
+                    } catch { return data; }
+                });
+            }
+
+            // ── Base64 본문 디코딩 ────────────────────
+            function decodeBase64Body(raw) {
+                try {
+                    const bytes = Uint8Array.from(atob(raw.replace(/\s/g, '')), c => c.charCodeAt(0));
+                    // UTF-8 시도
+                    try { return new TextDecoder('utf-8', {fatal:true}).decode(bytes); } catch {}
+                    // EUC-KR 시도
+                    try { return new TextDecoder('euc-kr').decode(bytes); } catch {}
+                    return new TextDecoder('utf-8', {fatal:false}).decode(bytes);
+                } catch { return raw; }
+            }
+
+            // ── Quoted-Printable 디코딩 ───────────────
+            function decodeQP(str) {
+                return str
+                    .replace(/=\r?\n/g, '')
+                    .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+            }
+
             if (ext === 'eml') {
-                const sm = text.match(/^Subject:\s*(.+)/mi);
-                const fm = text.match(/^From:\s*(.+)/mi);
-                if (sm) subject = sm[1].trim();
-                if (fm) sender  = fm[1].trim();
-                const bi = Math.max(
-                    text.indexOf('\r\n\r\n') + 4,
-                    text.indexOf('\n\n') + 2
-                );
-                body = text.substring(bi > 3 ? bi : 0)
-                    .replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+                // 헤더/본문 분리
+                const headerEnd = text.search(/\r?\n\r?\n/);
+                const headerPart = headerEnd > 0 ? text.substring(0, headerEnd) : text;
+                const bodyPart   = headerEnd > 0 ? text.substring(headerEnd + 2) : '';
+
+                // 헤더 파싱
+                const headers = {};
+                headerPart.replace(/\r\n/g, '\n').split('\n').forEach(line => {
+                    if (/^\s/.test(line)) {
+                        const lastKey = Object.keys(headers).pop();
+                        if (lastKey) headers[lastKey] += ' ' + line.trim();
+                    } else {
+                        const m = line.match(/^([^:]+):\s*(.*)/);
+                        if (m) headers[m[1].toLowerCase()] = m[2];
+                    }
+                });
+
+                subject = decodeMimeHeader(headers['subject'] || subject);
+                sender  = decodeMimeHeader(headers['from']    || '');
+
+                // Content-Type 파악
+                const ct = headers['content-type'] || '';
+                const te = (headers['content-transfer-encoding'] || '').trim().toLowerCase();
+
+                if (ct.includes('multipart')) {
+                    // boundary 추출
+                    const bm = ct.match(/boundary="?([^";\r\n]+)"?/i);
+                    if (bm) {
+                        const boundary = bm[1].trim();
+                        const parts = bodyPart.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+                        for (const part of parts) {
+                            if (!part || part.startsWith('--')) continue;
+                            const pEnd = part.search(/\r?\n\r?\n/);
+                            if (pEnd < 0) continue;
+                            const pHeader = part.substring(0, pEnd).toLowerCase();
+                            const pBody   = part.substring(pEnd + 2);
+                            if (!pHeader.includes('text/plain')) continue;
+                            const pte = (pHeader.match(/content-transfer-encoding:\s*(\S+)/)||[])[1]||'';
+                            const pcs = (pHeader.match(/charset="?([^";\s]+)"?/i)||[])[1]||'utf-8';
+                            if (pte.includes('base64')) {
+                                body = decodeBase64Body(pBody.trim());
+                            } else if (pte.includes('quoted-printable')) {
+                                const raw = decodeQP(pBody);
+                                try { body = new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
+                                catch { body = raw; }
+                            } else {
+                                body = pBody;
+                            }
+                            break;
+                        }
+                    }
+                } else if (te === 'base64') {
+                    body = decodeBase64Body(bodyPart.trim());
+                } else if (te === 'quoted-printable') {
+                    body = decodeQP(bodyPart);
+                } else {
+                    body = bodyPart;
+                }
+
+                // HTML 태그 제거
+                body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
             } else if (ext === 'html' || ext === 'htm') {
-                const doc = new DOMParser().parseFromString(text,'text/html');
+                const doc = new DOMParser().parseFromString(text, 'text/html');
                 const t   = doc.querySelector('title');
                 if (t) subject = t.textContent.trim();
-                body = (doc.body ? doc.body.innerText : '').replace(/\s+/g,' ').trim();
+                body = (doc.body ? doc.body.innerText : '').replace(/\s+/g, ' ').trim();
             } else {
                 const sm = text.match(/Subject[:\s]+(.+)/i);
                 const fm = text.match(/From[:\s]+(.+)/i);
                 if (sm) subject = sm[1].trim();
                 if (fm) sender  = fm[1].trim();
-                body = text.replace(/\s+/g,' ').trim();
+                body = text.replace(/\s+/g, ' ').trim();
             }
-            resolve({ subject, sender, body: body.substring(0,3000), fileName: file.name });
+
+            resolve({ subject, sender, body: body.substring(0, 3000), fileName: file.name });
         };
         reader.readAsText(file, 'utf-8');
     });
