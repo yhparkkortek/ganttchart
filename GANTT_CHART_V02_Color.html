@@ -743,6 +743,9 @@ ${mailText}`;
 
             renderTable(globalData); applyFilters();
             
+            // 차트 확장 상태 재적용 (renderTable 후 초기화되므로)
+            if (window._chartExpanded) window.applyChartExpand();
+
             if (statusEl) { statusEl.textContent = "✅ 일정이 업데이트 되었습니다."; }
         }, 10);
     };
@@ -1638,26 +1641,6 @@ ${mailText}`;
         }
         
         tbody.innerHTML = bodyHtml; initColumnResizers();
-
-        // 차트 확장 상태 복원
-        if (window._chartExpanded) {
-            const tbl = document.getElementById('myTable');
-            const headers = tbl.querySelectorAll('thead th');
-            headers.forEach((th, i) => {
-                const txt = th.textContent.trim();
-                if (txt.includes('상세') || txt.includes('내용') || txt.includes('답변') || txt.includes('대응')) {
-                    tbl.querySelectorAll(`thead th:nth-child(${i+1}), tbody td:nth-child(${i+1})`).forEach(el => {
-                        el.style.display = 'none';
-                    });
-                }
-                if (txt.includes('현황')) {
-                    tbl.querySelectorAll(`thead th:nth-child(${i+1}), tbody td:nth-child(${i+1})`).forEach(el => {
-                        el.style.setProperty('width', '800px', 'important');
-                        el.style.setProperty('min-width', '800px', 'important');
-                    });
-                }
-            });
-        }
     }
 
     function toggleTranslation(btn, encodedText, transMode) {
@@ -2054,8 +2037,29 @@ window.handleAuthClick = function() {
 
     // ── 차트 확장 토글 ─────────────────────────────────────
     window._chartExpanded = false;
+
+    window.applyChartExpand = function() {
+        const table = document.getElementById('myTable');
+        if (!table) return;
+        const headers = table.querySelectorAll('thead th');
+        headers.forEach((th, i) => {
+            const txt = th.textContent.trim();
+            if (txt.includes('상세') || txt.includes('내용') || txt.includes('답변') || txt.includes('대응')) {
+                table.querySelectorAll(`thead th:nth-child(${i+1}), tbody td:nth-child(${i+1})`).forEach(el => {
+                    el.style.display = 'none';
+                });
+            }
+            if (txt.includes('현황')) {
+                table.querySelectorAll(`thead th:nth-child(${i+1}), tbody td:nth-child(${i+1})`).forEach(el => {
+                    el.style.setProperty('width', '800px', 'important');
+                    el.style.setProperty('min-width', '800px', 'important');
+                });
+            }
+        });
+    };
+
     window.toggleChartExpand = function() {
-        _chartExpanded = !_chartExpanded;
+        window._chartExpanded = !window._chartExpanded;
         const btn = document.getElementById('chart-expand-btn');
         const table = document.getElementById('myTable');
         if (!table) return;
