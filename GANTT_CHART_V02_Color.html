@@ -51,6 +51,17 @@
         --c-l4-text: #495057;
     }
 
+    /* 차트 확장 모드 */
+    #myTable.chart-expanded th.chart-th,
+    #myTable.chart-expanded td.chart-td {
+        width: 800px !important;
+        min-width: 800px !important;
+    }
+    #myTable.chart-expanded th.detail-th,
+    #myTable.chart-expanded td.detail-td {
+        display: none !important;
+    }
+
     @media print {
         :root {
             --w-no: 3%;          
@@ -743,9 +754,6 @@ ${mailText}`;
 
             renderTable(globalData); applyFilters();
             
-            // 차트 확장 상태 재적용 (renderTable 후 초기화되므로)
-            if (window._chartExpanded) window.applyChartExpand();
-
             if (statusEl) { statusEl.textContent = "✅ 일정이 업데이트 되었습니다."; }
         }, 10);
     };
@@ -1526,7 +1534,7 @@ ${mailText}`;
             let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
             
             if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; } 
-            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;"; } 
+            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th";}
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; } 
             else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; } 
             else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; } 
@@ -1570,8 +1578,9 @@ ${mailText}`;
                         <div style="display:flex; flex-direction:column; align-items:center;">
                             <span class="row-num-span"></span>
                         </div>`;
-                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
+               } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
+                    if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) tdAttrs += ` class="detail-td"`;
                 } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
                     tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
                 } else {
@@ -2036,98 +2045,37 @@ window.handleAuthClick = function() {
     }
 
     // ── 차트 확장 토글 ─────────────────────────────────────
-    window._chartExpanded = false;
-
-    window.applyChartExpand = function() {
-        const table = document.getElementById('myTable');
-        if (!table) return;
-        const headers = table.querySelectorAll('thead th');
-        headers.forEach((th, i) => {
-            const txt = th.textContent.trim();
-            if (txt.includes('상세') || txt.includes('내용') || txt.includes('답변') || txt.includes('대응')) {
-                table.querySelectorAll(`thead th:nth-child(${i+1}), tbody td:nth-child(${i+1})`).forEach(el => {
-                    el.style.display = 'none';
-                });
-            }
-            if (txt.includes('현황')) {
-                table.querySelectorAll(`thead th:nth-child(${i+1}), tbody td:nth-child(${i+1})`).forEach(el => {
-                    el.style.setProperty('width', '800px', 'important');
-                    el.style.setProperty('min-width', '800px', 'important');
-                });
-            }
-        });
-    };
-
+  window._chartExpanded = false;
     window.toggleChartExpand = function() {
         window._chartExpanded = !window._chartExpanded;
         const btn = document.getElementById('chart-expand-btn');
         const table = document.getElementById('myTable');
         if (!table) return;
 
-        const headers = table.querySelectorAll('thead th');
-        const hiddenIdxSet = new Set();
-        const chartIdxSet  = new Set();
-        headers.forEach((th, i) => {
-            const txt = th.textContent.trim();
-            if (txt.includes('상세') || txt.includes('내용') || txt.includes('답변') || txt.includes('대응')) {
-                hiddenIdxSet.add(i + 1); // nth-child는 1부터
-            }
-            if (txt.includes('현황')) {
-                chartIdxSet.add(i + 1);
-            }
-        });
+        document.documentElement.style.setProperty('--chart-month-detail', window._chartExpanded ? '1' : '0');
 
-        // 1. 먼저 월단위 CSS 변수 설정
-        document.documentElement.style.setProperty('--chart-month-detail', _chartExpanded ? '1' : '0');
+        if (window._chartExpanded) {
+            table.classList.add('chart-expanded');
+            btn.style.background = '#0056b3';
+            btn.style.color = '#fff';
+            btn.style.borderColor = '#0056b3';
+            btn.textContent = '📋 기본 보기';
+        } else {
+            table.classList.remove('chart-expanded');
+            btn.style.background = '#f8f9fa';
+            btn.style.color = '#495057';
+            btn.style.borderColor = '#ced4da';
+            btn.textContent = '📊 차트 확장';
+        }
 
-        // 2. 차트 내용 재렌더링 (innerHTML 교체 — 스타일 적용 전에)
+        // 차트 재렌더링
         document.querySelectorAll('.chart-td').forEach(td => {
             const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
             if (!rowIdx) return;
             const row = globalData[rowIdx];
             if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
         });
-
-        // 3. 재렌더링 후 스타일 적용
-        if (_chartExpanded) {
-            // 상세내용 숨김
-            hiddenIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.display = 'none';
-                });
-            });
-            // 현황 열만 고정 px로 확장
-            chartIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.setProperty('width', '800px', 'important');
-                    el.style.setProperty('min-width', '800px', 'important');
-                });
-            });
-            btn.style.background = '#0056b3';
-            btn.style.color = '#fff';
-            btn.style.borderColor = '#0056b3';
-            btn.textContent = '📋 기본 보기';
-        } else {
-            // 상세내용 복원
-            hiddenIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.display = '';
-                });
-            });
-            // 현황 열 인라인 스타일 제거 (CSS 변수 자동 적용)
-            chartIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.removeProperty('width');
-                    el.style.removeProperty('min-width');
-                });
-            });
-            btn.style.background = '#f8f9fa';
-            btn.style.color = '#495057';
-            btn.style.borderColor = '#ced4da';
-            btn.textContent = '📊 차트 확장';
-        }
     };
-
     // 테마 색상 동적 덮어쓰기
     window.updateThemeColor = function(baseHex) {
         let hsl = hexToHSL(baseHex);
