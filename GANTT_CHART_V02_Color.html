@@ -2060,8 +2060,14 @@ window.handleAuthClick = function() {
                     el.style.display = 'none';
                 });
             });
-            // 현황 확장: CSS 변수로 제어
-            document.documentElement.style.setProperty('--w-chart', '70%');
+            
+            // 현황 열만 직접 너비 지정
+            chartIdxSet.forEach(i => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
+                    el.style.setProperty('width', '70%', 'important');
+                    el.style.setProperty('min-width', '70%', 'important');
+                });
+            });
             document.documentElement.style.setProperty('--chart-month-detail', '1');
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
@@ -2074,8 +2080,13 @@ window.handleAuthClick = function() {
                     el.style.display = '';
                 });
             });
-            // 현황 너비 원래대로: CSS 변수 복원
-            document.documentElement.style.setProperty('--w-chart', '12%');
+            // 현황 열 인라인 스타일만 제거 (CSS 변수 --w-chart 자동 적용)
+            chartIdxSet.forEach(i => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
+                    el.style.removeProperty('width');
+                    el.style.removeProperty('min-width');
+                });
+            });
             document.documentElement.style.setProperty('--chart-month-detail', '0');
             btn.style.background = '#f8f9fa';
             btn.style.color = '#495057';
