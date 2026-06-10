@@ -2099,13 +2099,11 @@ window.handleAuthClick = function() {
             if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
         });
 
-        // 기본 보기 복원 시 차트/상세 컬럼 너비 완전 초기화
+        // 기본 보기 복원 시 테이블 완전 재렌더링
         if (!_chartExpanded) {
-            document.querySelectorAll('#myTable .chart-th, #myTable .chart-td').forEach(el => {
-                el.style.width = '';
-                el.style.minWidth = '';
-                el.style.maxWidth = '';
-            });
+            if (typeof renderTable === 'function' && globalData) {
+                renderTable(globalData);
+            }
         }
     };
 
@@ -2217,7 +2215,11 @@ window.handleAuthClick = function() {
                 let yr  = cur.getFullYear().toString().slice(2);
                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                 let lbl = `${months[cur.getMonth()]} '${yr}`;
-                let alignStyle = pct < 5 ? `left:0;` : (pct > 95 ? `right:0; transform:translateX(0);` : `left:${pct}%; transform:translateX(-50%);`);
+                let alignStyle = pct < 5 ? `left:0;` : 
+                                 pct < 10 ? `left:${pct}%; transform:translateX(0);` :
+                                 pct > 95 ? `right:0;` :
+                                 pct > 88 ? `left:${pct}%; transform:translateX(-100%);` :
+                                 `left:${pct}%; transform:translateX(-50%);`;
                 labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
             }
             // 다음 달로
