@@ -2033,53 +2033,47 @@ window.handleAuthClick = function() {
     window.toggleChartExpand = function() {
         _chartExpanded = !_chartExpanded;
         const btn = document.getElementById('chart-expand-btn');
-
-        // 상세내용/답변 컬럼 숨기기/보이기
         const table = document.getElementById('myTable');
         if (!table) return;
 
-        // 헤더에서 상세내용/현황 컬럼 인덱스 찾기
         const headers = table.querySelectorAll('thead th');
         const hiddenIdxSet = new Set();
         const chartIdxSet  = new Set();
         headers.forEach((th, i) => {
             const txt = th.textContent.trim();
             if (txt.includes('상세') || txt.includes('내용') || txt.includes('답변') || txt.includes('대응')) {
-                hiddenIdxSet.add(i);
+                hiddenIdxSet.add(i + 1); // nth-child는 1부터
             }
             if (txt.includes('현황')) {
-                chartIdxSet.add(i);
+                chartIdxSet.add(i + 1);
             }
         });
 
         if (_chartExpanded) {
-            // 확장 모드: 상세내용 숨김 + 현황 넓게
             hiddenIdxSet.forEach(i => {
-                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
                     el.style.display = 'none';
                 });
             });
             chartIdxSet.forEach(i => {
-                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
                     el.style.width = '700px';
                     el.style.minWidth = '700px';
                 });
             });
-            // 현황 차트 월단위 상세 날짜 표시
             document.documentElement.style.setProperty('--chart-month-detail', '1');
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
             btn.style.borderColor = '#0056b3';
             btn.textContent = '📋 기본 보기';
         } else {
-            // 기본 모드 복원
             hiddenIdxSet.forEach(i => {
-                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
                     el.style.display = '';
                 });
             });
             chartIdxSet.forEach(i => {
-                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
                     el.style.width = '';
                     el.style.minWidth = '';
                 });
@@ -2091,9 +2085,7 @@ window.handleAuthClick = function() {
             btn.textContent = '📊 차트 확장';
         }
 
-        // 차트 재렌더링 (월단위 표시 반영)
-        if (typeof window.renderAllCharts === 'function') window.renderAllCharts();
-        else if (typeof renderTable === 'function' && globalData) renderTable(globalData);
+        if (typeof renderTable === 'function' && globalData) renderTable(globalData);
     };
 
     // 테마 색상 동적 덮어쓰기
@@ -3289,10 +3281,13 @@ window.insertMailTask = function() {
         <!-- 헤더 -->
         <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0;">
             <!-- 타이틀 + X 버튼 -->
+            <!-- 타이틀 + X 버튼 -->
             <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px;">
                 <span style="font-size:15px; font-weight:bold;">📧 메일 내용으로 업무 자동 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
-                    style="background:none; border:none; color:white; font-size:20px; cursor:pointer; line-height:1;"
+                    style="background:rgba(0,0,0,0.2); border:none; color:white; font-size:16px;
+                           cursor:pointer; line-height:1; width:28px; height:28px; border-radius:50%;
+                           display:flex; align-items:center; justify-content:center;"
                     title="닫기">✕</button>
             </div>
             <!-- 탭 버튼 -->
