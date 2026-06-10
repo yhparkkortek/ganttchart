@@ -2089,9 +2089,7 @@ window.handleAuthClick = function() {
             btn.textContent = '📊 차트 확장';
         }
 
-        // renderTable 호출 제거 - 재렌더링하면 style이 초기화됨
-                // 차트만 재렌더링 (월단위 표시 반영)
-        // 차트만 재렌더링 (월단위 표시 반영)
+        // 차트 재렌더링 (월단위 표시 반영)
         document.querySelectorAll('.chart-td').forEach(td => {
             const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
             if (!rowIdx) return;
@@ -2099,11 +2097,14 @@ window.handleAuthClick = function() {
             if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
         });
 
-        // 기본 보기 복원 시 테이블 완전 재렌더링
+        // 기본 보기 복원 시 인라인 스타일만 제거 (CSS 변수가 자동 적용됨)
         if (!_chartExpanded) {
-            if (typeof renderTable === 'function' && globalData) {
-                renderTable(globalData);
-            }
+            table.querySelectorAll('thead th, tbody td').forEach(el => {
+                el.style.width = '';
+                el.style.minWidth = '';
+                el.style.maxWidth = '';
+                el.style.display = '';
+            });
         }
     };
 
