@@ -2853,7 +2853,7 @@ window.renderMailResult = function(result) {
                 ).join('')}
             </select>`
             : f.key === '상세내용' ?
-            `<textarea data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif; resize:vertical; min-height:60px;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
+            `<textarea data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif; resize:vertical; min-height:160px;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
             : isDateField ?
             `<div style="display:flex; align-items:center; gap:8px; ${warnStyle} padding:2px 4px; border-radius:4px;">
                 <span class="date-clickable" 
@@ -3428,7 +3428,7 @@ window.insertMailTask = function() {
                         <div id="mail-original-body"
                              style="display:none; padding:8px 10px; background:#f8f9fa;
                                     border:1px solid #dee2e6; border-radius:0 0 6px 6px;
-                                    font-size:11px; color:#555; max-height:120px;
+                                    font-size:11px; color:#555; max-height:300px;
                                     overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
                         </div>
                     </div>
@@ -3566,11 +3566,13 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
     // 원본 메일
     const origBody = document.getElementById('mail-original-body');
     if (origBody) {
-        origBody.textContent = `제목: ${subject}
-발신: ${sender||''}
-날짜: ${date||''}
-
-${body||''}`;
+        const bodyFormatted = (body||'')
+            .substring(0, 2000)
+            .replace(/\. /g, '.\n')
+            .replace(/([^\n])\[/g, '$1\n[')
+            .trim();
+        origBody.textContent = `제목: ${subject}\n발신: ${sender||''}\n날짜: ${date||''}\n\n${bodyFormatted}`;
+        origBody.style.maxHeight = '300px';
         origBody.style.display = 'none';
         const arrow = document.getElementById('mail-original-arrow');
         if (arrow) arrow.textContent = '▼';
