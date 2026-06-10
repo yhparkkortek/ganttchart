@@ -269,6 +269,64 @@ if (window.name !== 'gantt_popup') {
     }
 }
 
+// 🌟 프롬프트를 통합 관리하는 전용 함수
+window.getSystemPrompt = function(assignee, customer, model, inch, mailText) {
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // 저장된 프롬프트가 있으면 변수만 갈아끼워서 반환
+    const savedPrompt = localStorage.getItem('gantt_mail_prompt');
+    if (savedPrompt) {
+        return savedPrompt
+            .replace('${projectAssignee}', assignee || "")
+            .replace('${projectCustomer}', customer || "")
+            .replace('${projectModel}', model || "")
+            .replace('${projectInch}', inch || "")
+            .replace('${todayStr}', todayStr)
+            .replace('${mailText}', mailText || "");
+    }
+
+    // 저장된 게 없으면 기본 프롬프트 반환
+    return `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
+
+프로젝트 정보:
+- 프로젝트 담당자: ${assignee || ""}
+- 고객사: ${customer || ""}
+- 모델명: ${model || ""}
+- 인치: ${inch || ""}
+- 오늘 날짜(기준일): ${todayStr}
+
+추출 규칙:
+- 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약
+- 시작일: 영문(Jun 10, Friday 등) 및 상대표기(내일, ASAP 등)는 '오늘 날짜' 기준으로 계산해 반드시 "YYYY-MM-DD" 형식으로 출력. 알 수 없으면 "날짜확인필요"
+- 완료일: 마감일이 명시된 경우만 추출 (규칙은 시작일과 동일), 없으면 "날짜확인필요"
+- 상태: 진행/대기/완료 중 하나
+- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
+- 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
+  * 출력 형식: [업무유형,발신→수신]발신자 → 수신자\n[핵심내용]내용\n[To do]후속조치
+  * 업무유형은 아래 중 가장 적합한 하나 선택:
+    [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청
+    [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보
+    [공유/안내] 현황공유 / 진행보고 / 결과보고 / 완료보고 / 변경안내 / 이슈알림 / 지연안내 / 회의안내 / 회의록공유 / 인증취득안내 / 단종EOL안내 / 가격변동안내
+    [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내
+    [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내
+    위 목록에 없으면: 기타
+- wbs레벨: 3 (일반 업무)
+
+반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
+{
+  "업무명": "",
+  "시작일": "",
+  "완료일": "",
+  "상태": "",
+  "개발단계": "",
+  "상세내용": "",
+  "wbs레벨": 3
+}
+
+이메일:
+${mailText}`;
+};
+
     var globalData = []; 
     var filterColumns = []; 
     var currentFilters = {}; 
@@ -2562,8 +2620,8 @@ window.showMailAnalyzer = function() {
     // 위치 선택 드롭다운 채우기
         window.populateInsertPosition();
     // ✅ 기본 프롬프트 미리 설정
-    if (!window._defaultPromptTemplate) {
-        window._defaultPromptTemplate = `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.\n\n프로젝트 정보:\n- 프로젝트 담당자: \${projectAssignee}\n- 고객사: \${projectCustomer}\n- 모델명: \${projectModel}\n- 인치: \${projectInch}\n\n추출 규칙:\n- 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약 (예: "LED PCB 디자인 검토")\n- 시작일: 메일 본문에 날짜가 명시된 경우만 추출, 없으면 "날짜확인필요"\n- 완료일: 마감일이 명시된 경우만 추출, 없으면 "날짜확인필요"\n- 상태: 진행/대기/완료 중 하나 (답변 요청이면 "대기", 진행 중이면 "진행")\n- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)\n- 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\\n)으로 구분\n  * 출력 형식: [업무유형,발신→수신]발신자 → 수신자\\n[핵심내용]내용\\n[To do]후속조치\n  * 업무유형은 아래 중 가장 적합한 하나 선택:\n    [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청\n    [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보\n    [공유/안내] 현황공유 / 진행보고 / 결과보고 / 완료보고 / 변경안내 / 이슈알림 / 지연안내 / 회의안내 / 회의록공유 / 인증취득안내 / 단종EOL안내 / 가격변동안내\n    [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내\n    [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내\n    위 목록에 없으면: 기타\n  * 예시: "[샘플발송]James Kwon → 박용훈\\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"\n- wbs레벨: 3 (일반 업무)\n\n반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:\n{\n  "업무명": "",\n  "시작일": "",\n  "완료일": "",\n  "상태": "",\n  "개발단계": "",\n  "상세내용": "",\n  "wbs레벨": 3\n}\n\n이메일:\n\${mailText}`;
+        if (!window._defaultPromptTemplate) {
+        window._defaultPromptTemplate = window.getSystemPrompt('${projectAssignee}', '${projectCustomer}', '${projectModel}', '${projectInch}', '${mailText}').replace(new Date().toISOString().split('T')[0], '${todayStr}');
     }
 
     // 초기화
@@ -2648,57 +2706,7 @@ window.analyzeMailContent = function() {
         }
     }
 
-const defaultPrompt = `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
-
-프로젝트 정보:
-- 프로젝트 담당자: ${projectAssignee}
-- 고객사: ${projectCustomer}
-- 모델명: ${projectModel}
-- 인치: ${projectInch}
-
-추출 규칙:
-- 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약 (예: "LED PCB 디자인 검토")
-- 시작일: 메일 본문에 날짜가 명시된 경우만 추출, 없으면 "날짜확인필요" 라고 입력
-- 완료일: 마감일이 명시된 경우만 추출, 없으면 "날짜확인필요" 라고 입력
-- 상태: 진행/대기/완료 중 하나 (답변 요청이면 "대기", 진행 중이면 "진행")
-- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
-- 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
-  * 출력 형식: [업무유형,발신→수신]발신자 → 수신자\n[핵심내용]내용\n[To do]후속조치
-  * 업무유형은 아래 중 가장 적합한 하나 선택:
-    [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청
-    [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보
-    [공유/안내] 현황공유 / 진행보고 / 결과보고 / 완료보고 / 변경안내 / 이슈알림 / 지연안내 / 회의안내 / 회의록공유 / 인증취득안내 / 단종EOL안내 / 가격변동안내
-    [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내
-    [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내
-    위 목록에 없으면: 기타
-  * 예시: "[샘플발송]James Kwon → 박용훈\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"
-- wbs레벨: 3 (일반 업무)
-
-반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
-{
-  "업무명": "",
-  "시작일": "",
-  "완료일": "",
-  "상태": "",
-  "개발단계": "",
-  "상세내용": "",
-  "wbs레벨": 3
-}
-
-이메일:
-${mailText}`;
-
-// ✅ 저장된 커스텀 프롬프트가 있으면 사용
-// 편집창용 템플릿은 mailText 치환 전 원본으로 저장
-window._defaultPromptTemplate = defaultPrompt.replace(mailText, '${mailText}');
-const savedPrompt = localStorage.getItem('gantt_mail_prompt');
-const prompt = savedPrompt 
-    ? savedPrompt.replace('${mailText}', mailText)
-                 .replace('${projectAssignee}', projectAssignee)
-                 .replace('${projectCustomer}', projectCustomer)
-                 .replace('${projectModel}', projectModel)
-                 .replace('${projectInch}', projectInch)
-    : defaultPrompt;
+const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailText);
 
     // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
@@ -4447,36 +4455,7 @@ async function msCallGemini(apiKey, parsed) {
     }
 
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + parsed.body.substring(0, 2000);
-    const savedPrompt = localStorage.getItem('gantt_mail_prompt');
-    const prompt = savedPrompt
-        ? savedPrompt
-            .replace('${mailText}',        mailText)
-            .replace('${projectAssignee}', assignee)
-            .replace('${projectCustomer}', customer)
-            .replace('${projectModel}',    model)
-            .replace('${projectInch}',     inch)
-        : `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
-
-프로젝트 정보:
-- 프로젝트 담당자: ${assignee}
-- 고객사: ${customer}
-- 모델명: ${model}
-- 인치: ${inch}
-
-추출 규칙:
-- 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약
-- 시작일: 메일 본문에 날짜가 명시된 경우만 추출, 없으면 "날짜확인필요"
-- 완료일: 마감일이 명시된 경우만 추출, 없으면 "날짜확인필요"
-- 상태: 진행/대기/완료 중 하나
-- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
-- 상세내용: 300자 이내, [업무유형,발신→수신]발신자→수신자\\n[핵심내용]내용\\n[To do]후속조치
-- wbs레벨: 3
-
-반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
-{"업무명":"","시작일":"","완료일":"","상태":"","개발단계":"","상세내용":"","wbs레벨":3}
-
-이메일:
-${mailText}`;
+    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
 
     const resp = await fetch(GAS_URL, {
         method: 'POST',
