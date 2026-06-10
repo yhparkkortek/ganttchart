@@ -2053,6 +2053,18 @@ window.handleAuthClick = function() {
             }
         });
 
+        // 1. 먼저 월단위 CSS 변수 설정
+        document.documentElement.style.setProperty('--chart-month-detail', _chartExpanded ? '1' : '0');
+
+        // 2. 차트 내용 재렌더링 (innerHTML 교체 — 스타일 적용 전에)
+        document.querySelectorAll('.chart-td').forEach(td => {
+            const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
+            if (!rowIdx) return;
+            const row = globalData[rowIdx];
+            if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
+        });
+
+        // 3. 재렌더링 후 스타일 적용
         if (_chartExpanded) {
             // 상세내용 숨김
             hiddenIdxSet.forEach(i => {
@@ -2060,15 +2072,8 @@ window.handleAuthClick = function() {
                     el.style.display = 'none';
                 });
             });
-            
-            // 현황 열만 직접 너비 지정
-            chartIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.setProperty('width', '70%', 'important');
-                    el.style.setProperty('min-width', '70%', 'important');
-                });
-            });
-            document.documentElement.style.setProperty('--chart-month-detail', '1');
+            // 현황 열 확장
+            document.documentElement.style.setProperty('--w-chart', '70%');
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
             btn.style.borderColor = '#0056b3';
@@ -2080,27 +2085,13 @@ window.handleAuthClick = function() {
                     el.style.display = '';
                 });
             });
-            // 현황 열 인라인 스타일만 제거 (CSS 변수 --w-chart 자동 적용)
-            chartIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.removeProperty('width');
-                    el.style.removeProperty('min-width');
-                });
-            });
-            document.documentElement.style.setProperty('--chart-month-detail', '0');
+            // 현황 열 복원
+            document.documentElement.style.setProperty('--w-chart', '12%');
             btn.style.background = '#f8f9fa';
             btn.style.color = '#495057';
             btn.style.borderColor = '#ced4da';
             btn.textContent = '📊 차트 확장';
         }
-
-        // 차트 재렌더링 (월단위 표시 반영)
-        document.querySelectorAll('.chart-td').forEach(td => {
-            const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
-            if (!rowIdx) return;
-            const row = globalData[rowIdx];
-            if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
-        });
     };
 
     // 테마 색상 동적 덮어쓰기
