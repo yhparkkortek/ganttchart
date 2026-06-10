@@ -3774,15 +3774,14 @@ window.mfAnalyze = async function() {
         progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
         try {
             const parsed  = await mfParseFile(f);
-            const project = mfMatchProject(parsed.subject, parsed.body);
-            const task    = project ? await mfCallGemini(apiKey, parsed) : null;
+            const task = await mfCallGemini(apiKey, parsed);
             results.push({
                 idx: i, fileName: f.name,
                 subject: parsed.subject, sender: parsed.sender,
-                project, task,
+                project: null, task,
                 selected: !!task,
                 registered: false,
-                error: !project ? '프로젝트 미매칭' : (!task ? 'AI분석실패' : null)
+                error: !task ? 'AI분석실패' : null
             });
         } catch(e) {
             results.push({
@@ -4156,7 +4155,7 @@ window.msFetchMail = async function() {
                 `AI 분석 중... ${i+1}/${data.data.length} — ${mail.subject.substring(0,20)}`;
 
             try {
-                const project = mfMatchProject(mail.subject, mail.body);
+                const project = null;
                 const task    = await msCallGemini(apiKey, {
                     subject: mail.subject,
                     sender:  mail.sender,
