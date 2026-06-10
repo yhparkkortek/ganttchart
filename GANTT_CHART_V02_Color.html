@@ -3757,8 +3757,16 @@ function mfParseFile(file) {
                     body = bodyPart;
                 }
 
-                // HTML 태그 제거
-                body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                // HTML 태그 및 숨은 CSS/JS 코드 찌꺼기 완벽 청소
+                try {
+                    let cleaner = new DOMParser().parseFromString(body, 'text/html');
+                    // 글자가 아닌 스타일 태그와 스크립트 코드를 통째로 삭제
+                    cleaner.querySelectorAll('script, style').forEach(el => el.remove());
+                    body = (cleaner.body ? cleaner.body.innerText : '').replace(/\s+/g, ' ').trim();
+                } catch(e) {
+                    // 오류 발생 시 차선책으로 기존 태그 제거 실행
+                    body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                }
 
             } else if (ext === 'html' || ext === 'htm') {
                 const doc = new DOMParser().parseFromString(text, 'text/html');
