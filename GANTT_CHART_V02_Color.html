@@ -3914,6 +3914,7 @@ window.mfAnalyze = async function() {
         progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
         try {
             const parsed  = await mfParseFile(f);
+            if (i > 0) await new Promise(r => setTimeout(r, 1500)); // 1.5초 딜레이
             const task = await mfCallGemini(apiKey, parsed);
             results.push({
                 idx: i, fileName: f.name,
