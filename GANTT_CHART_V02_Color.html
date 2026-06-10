@@ -3302,6 +3302,13 @@ window.insertMailTask = function() {
                                    style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:6px;">
+                            <div style="display:flex; gap:6px; margin-bottom:6px;">
+                            <div style="flex:1;">
+                                <div style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
+                                <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler (비우면 전체)"
+                                       style="width:100%; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                            </div>
+                        </div>
                             <input id="ms-start-date" type="date"
                                    style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                             <input id="ms-end-date" type="date"
@@ -4121,7 +4128,14 @@ window.msFetchMail = async function() {
         const res = await fetch(`${MS_SERVER_URL}/fetch-mail`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mailUser: userid, mailPw: password, startDate, endDate })
+            body: JSON.stringify({
+            mailUser:  userid,
+            mailPw:    password,
+            startDate,
+            endDate,
+            keyword:   document.getElementById('ms-keyword')?.value?.trim() || '',
+            maxCount:  200
+            })
         });
         const data = await res.json();
 
@@ -4166,7 +4180,7 @@ window.msFetchMail = async function() {
                     selected: false, registered: false, error: e.message
                 });
             }
-            if (i < data.data.length - 1) await new Promise(r => setTimeout(r, 400));
+            if (i < data.data.length - 1) await new Promise(r => setTimeout(r, 4000));
         }
 
         window._msResults = results;
