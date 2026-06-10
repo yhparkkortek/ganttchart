@@ -3159,19 +3159,22 @@ window.insertMailTask = function() {
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                      style="flex:1; text-align:center; padding:8px 6px; cursor:pointer;
                             background:white; color:#e67e22; border-radius:6px;
-                            font-size:13px; font-weight:bold; box-shadow:0 2px 4px rgba(0,0,0,0.2); transition:all 0.2s;">
+                            font-size:13px; font-weight:bold; white-space:nowrap;
+                            box-shadow:0 2px 4px rgba(0,0,0,0.2); transition:all 0.2s;">
                     ✏️ 직접 입력
                 </div>
                 <div id="mail-tab-file" onclick="window.switchMailTab('file')"
                      style="flex:1; text-align:center; padding:8px 6px; cursor:pointer;
                             background:rgba(255,255,255,0.2); color:rgba(255,255,255,0.7);
-                            border-radius:6px; font-size:13px; font-weight:bold; transition:all 0.2s;">
+                            border-radius:6px; font-size:13px; font-weight:normal;
+                            white-space:nowrap; transition:all 0.2s;">
                     📎 파일 첨부
                 </div>
                 <div id="mail-tab-server" onclick="window.switchMailTab('server')"
                      style="flex:1; text-align:center; padding:8px 6px; cursor:pointer;
                             background:rgba(255,255,255,0.2); color:rgba(255,255,255,0.7);
-                            border-radius:6px; font-size:13px; font-weight:bold; transition:all 0.2s;">
+                            border-radius:6px; font-size:13px; font-weight:normal;
+                            white-space:nowrap; transition:all 0.2s;">
                     🌐 메일 서버
                 </div>
             </div>
@@ -3489,7 +3492,7 @@ window.switchMailTab = function(tab) {
         el.style.borderBottom = active ? '3px solid #e67e22' : '3px solid transparent';
         el.style.borderRadius = active ? '6px 6px 0 0' : '6px';
         el.style.fontWeight  = active ? 'bold' : 'normal';
-        el.style.fontSize    = active ? '13px' : '12px';
+        el.style.fontSize    = '13px';
     });
 };
 
