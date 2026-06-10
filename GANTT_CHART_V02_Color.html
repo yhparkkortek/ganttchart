@@ -2043,7 +2043,7 @@ window.handleAuthClick = function() {
         const hiddenIdxSet = new Set();
         const chartIdxSet  = new Set();
         headers.forEach((th, i) => {
-            const txt = th.textContent.trim().replace(/\s+/g, '');
+            const txt = th.textContent.trim();
             if (txt.includes('상세') || txt.includes('내용') || txt.includes('답변') || txt.includes('대응')) {
                 hiddenIdxSet.add(i);
             }
