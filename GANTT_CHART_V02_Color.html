@@ -273,7 +273,6 @@ if (window.name !== 'gantt_popup') {
 window.getSystemPrompt = function(assignee, customer, model, inch, mailText) {
     const todayStr = new Date().toISOString().split('T')[0];
     
-    // 저장된 프롬프트가 있으면 변수만 갈아끼워서 반환
     const savedPrompt = localStorage.getItem('gantt_mail_prompt');
     if (savedPrompt) {
         return savedPrompt
@@ -285,7 +284,6 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText) {
             .replace('${mailText}', mailText || "");
     }
 
-    // 저장된 게 없으면 기본 프롬프트 반환
     return `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
 
 프로젝트 정보:
