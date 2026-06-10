@@ -2021,6 +2021,74 @@ window.handleAuthClick = function() {
         return { h, s, l };
     }
 
+    // ── 차트 확장 토글 ─────────────────────────────────────
+    let _chartExpanded = false;
+    window.toggleChartExpand = function() {
+        _chartExpanded = !_chartExpanded;
+        const btn = document.getElementById('chart-expand-btn');
+
+        // 상세내용/답변 컬럼 숨기기/보이기
+        const table = document.getElementById('myTable');
+        if (!table) return;
+
+        // 헤더에서 상세내용/현황 컬럼 인덱스 찾기
+        const headers = table.querySelectorAll('thead th');
+        const hiddenIdxSet = new Set();
+        const chartIdxSet  = new Set();
+        headers.forEach((th, i) => {
+            const txt = th.textContent.trim().replace(/\s+/g, '');
+            if (txt.includes('상세') || txt.includes('내용') || txt.includes('답변') || txt.includes('대응')) {
+                hiddenIdxSet.add(i);
+            }
+            if (txt.includes('현황')) {
+                chartIdxSet.add(i);
+            }
+        });
+
+        if (_chartExpanded) {
+            // 확장 모드: 상세내용 숨김 + 현황 넓게
+            hiddenIdxSet.forEach(i => {
+                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                    el.style.display = 'none';
+                });
+            });
+            chartIdxSet.forEach(i => {
+                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                    el.style.width = '700px';
+                    el.style.minWidth = '700px';
+                });
+            });
+            // 현황 차트 월단위 상세 날짜 표시
+            document.documentElement.style.setProperty('--chart-month-detail', '1');
+            btn.style.background = '#0056b3';
+            btn.style.color = '#fff';
+            btn.style.borderColor = '#0056b3';
+            btn.textContent = '📋 기본 보기';
+        } else {
+            // 기본 모드 복원
+            hiddenIdxSet.forEach(i => {
+                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                    el.style.display = '';
+                });
+            });
+            chartIdxSet.forEach(i => {
+                table.querySelectorAll(`tr td:nth-child(${i+1}), tr th:nth-child(${i+1})`).forEach(el => {
+                    el.style.width = '';
+                    el.style.minWidth = '';
+                });
+            });
+            document.documentElement.style.setProperty('--chart-month-detail', '0');
+            btn.style.background = '#f8f9fa';
+            btn.style.color = '#495057';
+            btn.style.borderColor = '#ced4da';
+            btn.textContent = '📊 차트 확장';
+        }
+
+        // 차트 재렌더링 (월단위 표시 반영)
+        if (typeof window.renderAllCharts === 'function') window.renderAllCharts();
+        else if (typeof renderTable === 'function' && globalData) renderTable(globalData);
+    };
+
     // 테마 색상 동적 덮어쓰기
     window.updateThemeColor = function(baseHex) {
         let hsl = hexToHSL(baseHex);
@@ -2104,24 +2172,54 @@ window.handleAuthClick = function() {
     if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
 
     let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
-    let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
-    let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
-
-    // 라벨 HTML 생성
     let isMobile = window.matchMedia("(max-width: 768px)").matches;
     let labelFontSize = isMobile ? "7px" : "9px";
     let labelWeight = isMobile ? "normal" : "bold";
-    
-    // 교체 - 1,3,5번만 (양끝 + 중간)
-    const labelPositions = [0, 25, 50, 75, 100];
-    const labelTs = labelPositions.map(pct => viewStartTs + (viewDuration * pct / 100));
+    let isExpanded = document.documentElement.style.getPropertyValue('--chart-month-detail') === '1';
 
+    let gridLines = '';
     let labelHTML = '';
-    for (let i = 0; i < 5; i++) {
-        let pct = labelPositions[i];
-        let ts = labelTs[i];
-        let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`);
-        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: ${labelFontSize}; font-weight: ${labelWeight};">${formatChartLabel(ts)}</span>`;
+
+    if (isExpanded) {
+        // ── 확장 모드: 월단위 눈금 + 라벨 ──────────────────
+        const viewStart = new Date(viewStartTs);
+        const viewEnd   = new Date(viewStartTs + viewDuration);
+
+        // 월 시작점 순회
+        let cur = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
+        while (cur <= viewEnd) {
+            let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
+            if (pct >= 0 && pct <= 100) {
+                // 눈금선
+                gridLines += `<div style="position:absolute; top:0; bottom:0; left:${pct}%; border-left:1px solid #adb5bd; z-index:1;"></div>`;
+                // 월 라벨
+                let mon = cur.getMonth() + 1;
+                let yr  = cur.getFullYear().toString().slice(2);
+                let lbl = pct < 3 ? '' : `${yr}/${String(mon).padStart(2,'0')}`;
+                let alignStyle = pct > 97 ? `right:0;` : `left:${pct}%; transform:translateX(2px);`;
+                labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
+            }
+            // 다음 달로
+            cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+        }
+    } else {
+        // ── 기본 모드: 4분할 눈금 ───────────────────────────
+        for (let i = 1; i < 4; i++) {
+            let leftPct = (i / 4) * 100;
+            gridLines += `<div style="position:absolute; top:0; bottom:0; left:${leftPct}%; border-left:1px dashed #dee2e6; z-index:1;"></div>`;
+        }
+        const labelPositions = [0, 25, 50, 75, 100];
+        for (let i = 0; i < 5; i++) {
+            let pct = labelPositions[i];
+            let ts  = viewStartTs + (viewDuration * pct / 100);
+            let alignStyle = i === 0 ? "left:0;" : (i === 4 ? "right:0;" : `left:${pct}%; transform:translateX(-50%);`);
+            labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight};">${formatChartLabel(ts)}</span>`;
+        }
+    }
+
+    let todayLine = "";
+    if (todayPct >= -5 && todayPct <= 105) {
+        todayLine = `<div style="position:absolute; top:-1px; bottom:-1px; left:calc(${todayPct}% - 1px); width:2px; background-color:var(--today-line) !important; z-index:10;" title="Today"></div>`;
     }
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
@@ -3183,10 +3281,17 @@ window.insertMailTask = function() {
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
         <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 20px; width:100%; box-sizing:border-box;">
-                <span style="font-weight:bold; font-size:14px;">📧 메일 내용으로 업무 자동 추가</span>
-                <span class="history-close" style="color:white; cursor:pointer; font-size:18px;" onclick="window.closeMailAnalyzer()">✖</span>
-            </div>
+            <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
+            <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
+                style="padding: 5px 10px; font-size: 12px; font-weight: bold; cursor: pointer;
+                       background: #f8f9fa; border: 1px solid #ced4da; border-radius: 6px;
+                       color: #495057; white-space: nowrap;"
+                title="업무 상세내용 숨기고 현황 그래프 확장">
+                📊 차트 확장
+            </button>
+            <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
+            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+        </div>
             <!-- 탭 버튼 -->
             <div style="display:flex; gap:6px; padding:8px 12px; background:#e67e22; border-bottom:1px solid rgba(0,0,0,0.05); flex-shrink:0;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
@@ -3891,9 +3996,16 @@ async function mfCallGemini(apiKey, parsed) {
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             console.log('Gemini텍스트:', text.substring(0, 200));
             text = text.replace(/```json|```/g,'').trim();
-            const m = text.match(/\{[\s\S]*\}/);
+            // 배열 형태 먼저 시도
+            const arrMatch = text.match(/\[[\s\S]*\]/);
+            const objMatch = text.match(/\{[\s\S]*\}/);
+            const m = arrMatch && (!objMatch || arrMatch.index < objMatch.index) ? arrMatch : objMatch;
             if (!m) { console.warn('JSON패턴없음 전체텍스트:', text.substring(0, 500)); return null; }
-            try { return JSON.parse(m[0]); } catch(e) { console.error('JSON파싱실패:', e.message, m[0].substring(0,200)); return null; }
+            try {
+                const parsed = JSON.parse(m[0]);
+                // 배열이면 첫 번째 항목 반환
+                return Array.isArray(parsed) ? parsed[0] : parsed;
+            } catch(e) { console.error('JSON파싱실패:', e.message, m[0].substring(0,200)); return null; }
         } catch (err) {
             if (attempt < MAX_RETRY) {
                 console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
