@@ -3903,6 +3903,7 @@ window.mfAnalyze = async function() {
             results.push({
                 idx: i, fileName: f.name,
                 subject: parsed.subject, sender: parsed.sender,
+                body: parsed.body,   // ← 추가
                 project: null, task,
                 selected: !!task,
                 registered: false,
