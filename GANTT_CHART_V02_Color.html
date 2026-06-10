@@ -3716,10 +3716,46 @@ function mfParseFile(file) {
             }
 
             // ── Quoted-Printable 디코딩 ───────────────
+            // ── Quoted-Printable 디코딩 ───────────────
             function decodeQP(str) {
                 return str
                     .replace(/=\r?\n/g, '')
                     .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+            }
+
+            // ── 중첩 multipart에서 text/plain 재귀 추출 ──
+            function extractPlainText(content, boundary) {
+                const parts = content.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+                for (const part of parts) {
+                    if (!part || part.trim() === '--') continue;
+                    const pEnd = part.search(/\r?\n\r?\n/);
+                    if (pEnd < 0) continue;
+                    const pHeader  = part.substring(0, pEnd);
+                    const pBody    = part.substring(pEnd + 2);
+                    const pHeaderL = pHeader.toLowerCase();
+                    if (pHeaderL.includes('multipart')) {
+                        const innerCt = pHeader.match(/Content-Type:[^\r\n]+(\r?\n\s+[^\r\n]+)*/i)?.[0] || '';
+                        const innerBm = innerCt.match(/boundary="?([^";\r\n]+)"?/i);
+                        if (innerBm) {
+                            const result = extractPlainText(pBody, innerBm[1].trim());
+                            if (result) return result;
+                        }
+                        continue;
+                    }
+                    if (!pHeaderL.includes('text/plain')) continue;
+                    const pte = (pHeaderL.match(/content-transfer-encoding:\s*(\S+)/)||[])[1]||'';
+                    const pcs = (pHeader.match(/charset="?([^";\s]+)"?/i)||[])[1]||'utf-8';
+                    if (pte.includes('base64')) {
+                        return decodeBase64Body(pBody.trim());
+                    } else if (pte.includes('quoted-printable')) {
+                        const raw = decodeQP(pBody);
+                        try { return new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
+                        catch { return raw; }
+                    } else {
+                        return pBody;
+                    }
+                }
+                return '';
             }
 
             if (ext === 'eml') {
@@ -3747,28 +3783,7 @@ function mfParseFile(file) {
                 if (ct.includes('multipart')) {
                     const bm = ct.match(/boundary="?([^";\r\n]+)"?/i);
                     if (bm) {
-                        const boundary = bm[1].trim();
-                        const parts = bodyPart.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-                        for (const part of parts) {
-                            if (!part || part.startsWith('--')) continue;
-                            const pEnd = part.search(/\r?\n\r?\n/);
-                            if (pEnd < 0) continue;
-                            const pHeader = part.substring(0, pEnd).toLowerCase();
-                            const pBody   = part.substring(pEnd + 2);
-                            if (!pHeader.includes('text/plain')) continue;
-                            const pte = (pHeader.match(/content-transfer-encoding:\s*(\S+)/)||[])[1]||'';
-                            const pcs = (pHeader.match(/charset="?([^";\s]+)"?/i)||[])[1]||'utf-8';
-                            if (pte.includes('base64')) {
-                                body = decodeBase64Body(pBody.trim());
-                            } else if (pte.includes('quoted-printable')) {
-                                const raw = decodeQP(pBody);
-                                try { body = new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
-                                catch { body = raw; }
-                            } else {
-                                body = pBody;
-                            }
-                            break;
-                        }
+                        body = extractPlainText(bodyPart, bm[1].trim());
                     }
                 } else if (te === 'base64') {
                     body = decodeBase64Body(bodyPart.trim());
