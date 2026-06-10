@@ -3724,30 +3724,26 @@ JSON만 응답:
 발신자:${parsed.sender}
 본문:${parsed.body.substring(0,2000)}`;
 
-    // GAS 서버 경유 (CORS 방지)
-    const gasUrl = localStorage.getItem('gas_server_url');
-    if (!gasUrl) throw new Error('GAS 서버 URL이 설정되지 않았습니다. 설정에서 저장해주세요.');
+    const GAS_URL = localStorage.getItem('gas_server_url') || 
+            "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
 
-    const resp = await fetch(gasUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            action: 'callGemini',
-            apiKey,
-            prompt,
-            model: 'gemini-2.5-flash-lite',
-            temperature: 0.1,
-            maxOutputTokens: 1024
-        })
-    });
-    const data = await resp.json();
-    if (data.error) throw new Error(data.error);
-    let text = data.result || '';
-    text = text.replace(/```json|```/g,'').trim();
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try { return JSON.parse(m[0]); } catch { return null; }
-}
+        const resp = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+            body: JSON.stringify({
+                userApiKey: apiKey,
+                prompt: prompt,
+                model: 'gemini-2.5-flash-lite'
+            })
+        });
+        const data = await resp.json();
+        if (data.status !== 'success') throw new Error(data.message);
+        let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        text = text.replace(/```json|```/g,'').trim();
+        const m = text.match(/\{[\s\S]*\}/);
+        if (!m) return null;
+        try { return JSON.parse(m[0]); } catch { return null; }
+    }
 
 // ─── 일괄 분석 ───────────────────────────────────────────
 window.mfAnalyze = async function() {
