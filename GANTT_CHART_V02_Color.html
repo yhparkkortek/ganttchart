@@ -209,6 +209,13 @@
         <span id="table-info-text">📊 Gantt Chart</span>
         
         <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
+            <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
+                style="padding:5px 10px; font-size:12px; font-weight:bold; cursor:pointer;
+                       background:#f8f9fa; border:1px solid #ced4da; border-radius:6px;
+                       color:#495057; white-space:nowrap;"
+                title="업무 상세내용 숨기고 현황 그래프 확장">
+                📊 차트 확장
+            </button>
             <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
             <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
         </div>
@@ -3281,17 +3288,13 @@ window.insertMailTask = function() {
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
         <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0;">
-            <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
-            <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
-                style="padding: 5px 10px; font-size: 12px; font-weight: bold; cursor: pointer;
-                       background: #f8f9fa; border: 1px solid #ced4da; border-radius: 6px;
-                       color: #495057; white-space: nowrap;"
-                title="업무 상세내용 숨기고 현황 그래프 확장">
-                📊 차트 확장
-            </button>
-            <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
-            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
-        </div>
+            <!-- 타이틀 + X 버튼 -->
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px;">
+                <span style="font-size:15px; font-weight:bold;">📧 메일 내용으로 업무 자동 추가</span>
+                <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
+                    style="background:none; border:none; color:white; font-size:20px; cursor:pointer; line-height:1;"
+                    title="닫기">✕</button>
+            </div>
             <!-- 탭 버튼 -->
             <div style="display:flex; gap:6px; padding:8px 12px; background:#e67e22; border-bottom:1px solid rgba(0,0,0,0.05); flex-shrink:0;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
