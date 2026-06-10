@@ -1893,7 +1893,11 @@ ${mailText}`;
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
     }
 
-    function formatChartLabel(ts) { let d = new Date(ts); return String(d.getFullYear()).slice(-2) + "." + String(d.getMonth() + 1).padStart(2, '0') + "." + String(d.getDate()).padStart(2, '0'); }
+    function formatChartLabel(ts) {
+    const d = new Date(ts);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + " '" + String(d.getFullYear()).slice(-2);
+}
 
 </script>
 
@@ -2086,9 +2090,11 @@ window.handleAuthClick = function() {
         }
 
         // renderTable 호출 제거 - 재렌더링하면 style이 초기화됨
-        // 차트만 재렌더링
+                // 차트만 재렌더링 (월단위 표시 반영)
         document.querySelectorAll('.chart-td').forEach(td => {
-            const row = globalData[parseInt(td.closest('tr').dataset.rowIndex)];
+            const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
+            if (!rowIdx) return;
+            const row = globalData[rowIdx];
             if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
         });
     };
@@ -2147,7 +2153,7 @@ window.handleAuthClick = function() {
         // 단색을 원하시면 linear-gradient를 없애고 그냥 색상 코드(예: #000000)만 넣으시면 됩니다.
         // 레벨별로 완전한 검은색으로 고정해 두었습니다.
         
-        root.style.setProperty('--chart-l0', `#000000`); // 0레벨 막대 색상
+        root.style.setProperty('--chart-l0', `#e67e22`); // 0레벨 막대 색상(주황색)
         root.style.setProperty('--chart-l1', `#000000`); // 1레벨 막대 색상
         root.style.setProperty('--chart-l2', `#000000`); // 2레벨 막대 색상
         root.style.setProperty('--chart-l3', `#000000`); // 3레벨 막대 색상
@@ -2199,8 +2205,9 @@ window.handleAuthClick = function() {
                 // 월 라벨
                 let mon = cur.getMonth() + 1;
                 let yr  = cur.getFullYear().toString().slice(2);
-                let lbl = pct < 3 ? '' : `${yr}/${String(mon).padStart(2,'0')}`;
-                let alignStyle = pct > 97 ? `right:0;` : `left:${pct}%; transform:translateX(2px);`;
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                let lbl = pct < 3 ? '' : `${months[cur.getMonth()]} '${yr}`;
+                let alignStyle = pct < 3 ? `left:0;` : (pct > 94 ? `right:0;` : `left:${pct}%; transform:translateX(-50%);`);
                 labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
             }
             // 다음 달로
@@ -3287,13 +3294,12 @@ window.insertMailTask = function() {
         <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0;">
             <!-- 타이틀 + X 버튼 -->
             <!-- 타이틀 + X 버튼 -->
-            <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 14px;">
                 <span style="font-size:15px; font-weight:bold;">📧 메일 내용으로 업무 자동 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
-                    style="background:rgba(0,0,0,0.2); border:none; color:white; font-size:16px;
-                           cursor:pointer; line-height:1; width:28px; height:28px; border-radius:50%;
-                           display:flex; align-items:center; justify-content:center;"
-                    title="닫기">✕</button>
+                    style="background:none; border:none; color:white; font-size:22px; font-weight:300;
+                           cursor:pointer; line-height:1; padding:0 4px;"
+                    title="닫기">×</button>
             </div>
             <!-- 탭 버튼 -->
             <div style="display:flex; gap:6px; padding:8px 12px; background:#e67e22; border-bottom:1px solid rgba(0,0,0,0.05); flex-shrink:0;">
