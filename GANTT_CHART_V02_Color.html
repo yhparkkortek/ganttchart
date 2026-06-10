@@ -300,7 +300,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText) {
 - 상태: 진행/대기/완료 중 하나
 - 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
 - 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
-  * 출력 형식: [업무유형,발신→수신]발신자 → 수신자\n[핵심내용]내용\n[To do]후속조치
+  * 출력 형식: [업무유형][발신→수신]발신자 → 수신자\n[핵심내용]내용\n[To do]후속조치
   * 업무유형은 아래 중 가장 적합한 하나 선택:
     [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청
     [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보
@@ -3845,29 +3845,9 @@ async function mfCallGemini(apiKey, parsed) {
             if (assignee && customer && model) break;
         }
     }
-    const savedPrompt = localStorage.getItem('gantt_mail_prompt');
-    const prompt = savedPrompt
-        ? savedPrompt
-            .replace('${mailText}',        parsed.subject+'\n'+parsed.body)
-            .replace('${projectAssignee}', assignee)
-            .replace('${projectCustomer}', customer)
-            .replace('${projectModel}',    model)
-            .replace('${projectInch}',     inch)
-        : `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
-프로젝트 담당자:${assignee}/고객사:${customer}/모델명:${model}/인치:${inch}
-추출규칙:
-- 업무명: 20자 이내 명사형, 모델명/고객사명 제외
-- 시작일: 명시된 경우만, 없으면 "날짜확인필요"
-- 완료일: 마감일 명시 시만, 없으면 "날짜확인필요"
-- 상태: 진행/대기/완료
-- 개발단계: RFQ/설계/시제품/양산 (불명확하면 빈값)
-- 상세내용: [업무유형,발신→수신]발신자→수신자\\n[핵심내용]내용\\n[To do]후속조치 300자이내
-- wbs레벨: 3
-JSON만 응답:
-{"업무명":"","시작일":"","완료일":"","상태":"","개발단계":"","상세내용":"","wbs레벨":3}
-이메일 제목:${parsed.subject}
-발신자:${parsed.sender}
-본문:${parsed.body.substring(0,2000)}`;
+    // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
+    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + parsed.body;
+    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
 
     const GAS_URL = localStorage.getItem('gas_server_url') || 
             "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
