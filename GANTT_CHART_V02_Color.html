@@ -3886,12 +3886,14 @@ async function mfCallGemini(apiKey, parsed) {
                 })
             });
             const data = await resp.json();
+            console.log('GAS응답status:', data.status, '메시지:', data.message);
             if (data.status !== 'success') throw new Error(data.message);
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('Gemini텍스트:', text.substring(0, 200));
             text = text.replace(/```json|```/g,'').trim();
             const m = text.match(/\{[\s\S]*\}/);
-            if (!m) return null;
-            try { return JSON.parse(m[0]); } catch { return null; }
+            if (!m) { console.warn('JSON패턴없음 전체텍스트:', text.substring(0, 500)); return null; }
+            try { return JSON.parse(m[0]); } catch(e) { console.error('JSON파싱실패:', e.message, m[0].substring(0,200)); return null; }
         } catch (err) {
             if (attempt < MAX_RETRY) {
                 console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
