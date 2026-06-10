@@ -2085,7 +2085,12 @@ window.handleAuthClick = function() {
             btn.textContent = '📊 차트 확장';
         }
 
-        if (typeof renderTable === 'function' && globalData) renderTable(globalData);
+        // renderTable 호출 제거 - 재렌더링하면 style이 초기화됨
+        // 차트만 재렌더링
+        document.querySelectorAll('.chart-td').forEach(td => {
+            const row = globalData[parseInt(td.closest('tr').dataset.rowIndex)];
+            if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
+        });
     };
 
     // 테마 색상 동적 덮어쓰기
