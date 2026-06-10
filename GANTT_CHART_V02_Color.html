@@ -4514,26 +4514,39 @@ async function msCallGemini(apiKey, parsed) {
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + parsed.body.substring(0, 2000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
 
-    const resp = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: {'Content-Type': 'text/plain'},
-        body: JSON.stringify({
-            userApiKey: apiKey,
-            prompt: prompt,
-            model: 'gemini-2.5-flash-lite'
-        })
-    });
-    const data = await resp.json();
-    if (data.status !== 'success') throw new Error(data.message);
-    
-    let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        console.log('Gemini 원본 응답:', JSON.stringify(data).substring(0, 500));
-        console.log('추출 텍스트:', text.substring(0, 300));
-        text = text.replace(/```json|```/g,'').trim();
-        const m = text.match(/\{[\s\S]*\}/);
-        if (!m) { console.warn('JSON 패턴 없음'); return null; }
-        try { return JSON.parse(m[0]); } catch(e) { console.error('JSON 파싱 실패:', e.message); return null; }
+    const MAX_RETRY = 3;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+            const resp = await fetch(GAS_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'text/plain'},
+                body: JSON.stringify({
+                    userApiKey: apiKey,
+                    prompt: prompt,
+                    model: 'gemini-2.5-flash-lite'
+                })
+            });
+            const data = await resp.json();
+            if (data.status !== 'success') throw new Error(data.message);
 
+            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('Gemini 원본 응답:', JSON.stringify(data).substring(0, 500));
+            console.log('추출 텍스트:', text.substring(0, 300));
+            text = text.replace(/```json|```/g,'').trim();
+            const m = text.match(/\{[\s\S]*\}/);
+            if (!m) { console.warn('JSON 패턴 없음'); return null; }
+            try { return JSON.parse(m[0]); } catch(e) { console.error('JSON 파싱 실패:', e.message); return null; }
+        } catch(err) {
+            if (attempt < MAX_RETRY) {
+                console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
+                await new Promise(r => setTimeout(r, 3000));
+            } else {
+                console.error(`Gemini 분석 최종 실패 (${MAX_RETRY}회 시도)`, err.message);
+                return null;
+            }
+        }
+    }
+}
 </script>
 
 </body>
