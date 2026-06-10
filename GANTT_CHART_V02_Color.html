@@ -2091,12 +2091,22 @@ window.handleAuthClick = function() {
 
         // renderTable 호출 제거 - 재렌더링하면 style이 초기화됨
                 // 차트만 재렌더링 (월단위 표시 반영)
+        // 차트만 재렌더링 (월단위 표시 반영)
         document.querySelectorAll('.chart-td').forEach(td => {
             const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
             if (!rowIdx) return;
             const row = globalData[rowIdx];
             if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
         });
+
+        // 기본 보기 복원 시 차트/상세 컬럼 너비 완전 초기화
+        if (!_chartExpanded) {
+            document.querySelectorAll('#myTable .chart-th, #myTable .chart-td').forEach(el => {
+                el.style.width = '';
+                el.style.minWidth = '';
+                el.style.maxWidth = '';
+            });
+        }
     };
 
     // 테마 색상 동적 덮어쓰기
@@ -2199,15 +2209,15 @@ window.handleAuthClick = function() {
         let cur = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
         while (cur <= viewEnd) {
             let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
-            if (pct >= 0 && pct <= 100) {
+            if (pct >= 0 && pct <= 101) {
                 // 눈금선
                 gridLines += `<div style="position:absolute; top:0; bottom:0; left:${pct}%; border-left:1px solid #adb5bd; z-index:1;"></div>`;
                 // 월 라벨
                 let mon = cur.getMonth() + 1;
                 let yr  = cur.getFullYear().toString().slice(2);
                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                let lbl = pct < 3 ? '' : `${months[cur.getMonth()]} '${yr}`;
-                let alignStyle = pct < 3 ? `left:0;` : (pct > 94 ? `right:0;` : `left:${pct}%; transform:translateX(-50%);`);
+                let lbl = `${months[cur.getMonth()]} '${yr}`;
+                let alignStyle = pct < 5 ? `left:0;` : (pct > 95 ? `right:0; transform:translateX(0);` : `left:${pct}%; transform:translateX(-50%);`);
                 labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
             }
             // 다음 달로
