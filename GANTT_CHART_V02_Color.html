@@ -3155,26 +3155,26 @@ window.insertMailTask = function() {
                 <span class="history-close" style="color:white; cursor:pointer; font-size:18px;" onclick="window.closeMailAnalyzer()">✖</span>
             </div>
             <!-- 탭 버튼 -->
-            <div style="display:flex; gap:4px; padding:6px 10px; background:#e67e22;">
+            <div style="display:flex; gap:6px; padding:8px 12px; background:#e67e22; border-bottom:1px solid rgba(0,0,0,0.05); flex-shrink:0;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
-                     style="flex:1; text-align:center; padding:8px 6px; cursor:pointer;
-                            background:white; color:#e67e22; border-radius:6px;
+                    style="flex:1; text-align:center; padding:10px 8px; cursor:pointer;
+                            background:#ffffff; color:#e67e22; border-radius:6px;
                             font-size:13px; font-weight:bold; white-space:nowrap;
-                            box-shadow:0 2px 4px rgba(0,0,0,0.2); transition:all 0.2s;">
+                            box-shadow:0 2px 5px rgba(0,0,0,0.15); transition:all 0.25s;">
                     ✏️ 직접 입력
                 </div>
                 <div id="mail-tab-file" onclick="window.switchMailTab('file')"
-                     style="flex:1; text-align:center; padding:8px 6px; cursor:pointer;
-                            background:rgba(255,255,255,0.2); color:rgba(255,255,255,0.7);
+                    style="flex:1; text-align:center; padding:10px 8px; cursor:pointer;
+                            background:rgba(0, 0, 0, 0.12); color:rgba(255,255,255,0.85);
                             border-radius:6px; font-size:13px; font-weight:normal;
-                            white-space:nowrap; transition:all 0.2s;">
+                            white-space:nowrap; transition:all 0.25s;">
                     📎 파일 첨부
                 </div>
                 <div id="mail-tab-server" onclick="window.switchMailTab('server')"
-                     style="flex:1; text-align:center; padding:8px 6px; cursor:pointer;
-                            background:rgba(255,255,255,0.2); color:rgba(255,255,255,0.7);
+                    style="flex:1; text-align:center; padding:10px 8px; cursor:pointer;
+                            background:rgba(0, 0, 0, 0.12); color:rgba(255,255,255,0.85);
                             border-radius:6px; font-size:13px; font-weight:normal;
-                            white-space:nowrap; transition:all 0.2s;">
+                            white-space:nowrap; transition:all 0.25s;">
                     🌐 메일 서버
                 </div>
             </div>
@@ -3473,9 +3473,9 @@ window._mfCurrentIdx = -1;
 window._mfFiles      = [];
 window._mfResults    = [];
 
-// ─── 탭 전환 ─────────────────────────────────────────────
+// ─── 3개 탭 전환 및 디자인 스타일 동적 변경 함수 ─────────────────────────────────────────
 window.switchMailTab = function(tab) {
-    // 콘텐츠 영역
+    // 1. 콘텐츠 화면 제어
     const pc = document.getElementById('mail-tab-paste-content');
     const fc = document.getElementById('mail-tab-file-content');
     const sc = document.getElementById('mail-tab-server-content');
@@ -3483,23 +3483,31 @@ window.switchMailTab = function(tab) {
     if (fc) fc.style.display = tab === 'file'   ? 'flex' : 'none';
     if (sc) sc.style.display = tab === 'server' ? 'flex' : 'none';
 
-    // 탭 버튼 활성화
+    // 2. 탭 버튼 오브젝트 수집
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
     const st = document.getElementById('mail-tab-server');
+    
+    // 3. 음각 캡슐 디자인 규칙 일괄 주입
     [
         { el: pt, active: tab === 'paste'  },
         { el: ft, active: tab === 'file'   },
         { el: st, active: tab === 'server' }
     ].forEach(({ el, active }) => {
         if (!el) return;
-        el.style.background  = active ? 'white' : 'transparent';
-        el.style.color       = active ? '#e67e22' : 'rgba(255,255,255,0.6)';
-        el.style.boxShadow   = active ? '0 2px 6px rgba(0,0,0,0.3)' : 'none';
-        el.style.borderBottom = active ? '3px solid #e67e22' : '3px solid transparent';
-        el.style.borderRadius = active ? '6px 6px 0 0' : '6px';
-        el.style.fontWeight  = active ? 'bold' : 'normal';
-        el.style.fontSize    = '13px';
+        if (active) {
+            // 선택된 탭 스타일
+            el.style.background  = '#ffffff';
+            el.style.color       = '#e67e22';
+            el.style.fontWeight  = 'bold';
+            el.style.boxShadow   = '0 2px 5px rgba(0,0,0,0.15)';
+        } else {
+            // 선택되지 않은 대기 탭 스타일
+            el.style.background  = 'rgba(0, 0, 0, 0.12)';
+            el.style.color       = 'rgba(255,255,255,0.85)';
+            el.style.fontWeight  = 'normal';
+            el.style.boxShadow   = 'none';
+        }
     });
 };
 
