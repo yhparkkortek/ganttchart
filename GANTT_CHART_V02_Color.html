@@ -4527,11 +4527,12 @@ async function msCallGemini(apiKey, parsed) {
     if (data.status !== 'success') throw new Error(data.message);
     
     let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    text = text.replace(/```json|```/g,'').trim();
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try { return JSON.parse(m[0]); } catch { return null; }
-}
+        console.log('Gemini 원본 응답:', JSON.stringify(data).substring(0, 500));
+        console.log('추출 텍스트:', text.substring(0, 300));
+        text = text.replace(/```json|```/g,'').trim();
+        const m = text.match(/\{[\s\S]*\}/);
+        if (!m) { console.warn('JSON 패턴 없음'); return null; }
+        try { return JSON.parse(m[0]); } catch(e) { console.error('JSON 파싱 실패:', e.message); return null; }
 
 </script>
 
