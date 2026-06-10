@@ -2072,8 +2072,13 @@ window.handleAuthClick = function() {
                     el.style.display = 'none';
                 });
             });
-            // 현황 열 확장
-            document.documentElement.style.setProperty('--w-chart', '70%');
+            // 현황 열만 고정 px로 확장
+            chartIdxSet.forEach(i => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
+                    el.style.setProperty('width', '800px', 'important');
+                    el.style.setProperty('min-width', '800px', 'important');
+                });
+            });
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
             btn.style.borderColor = '#0056b3';
@@ -2085,8 +2090,13 @@ window.handleAuthClick = function() {
                     el.style.display = '';
                 });
             });
-            // 현황 열 복원
-            document.documentElement.style.setProperty('--w-chart', '12%');
+            // 현황 열 인라인 스타일 제거 (CSS 변수 자동 적용)
+            chartIdxSet.forEach(i => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
+                    el.style.removeProperty('width');
+                    el.style.removeProperty('min-width');
+                });
+            });
             btn.style.background = '#f8f9fa';
             btn.style.color = '#495057';
             btn.style.borderColor = '#ced4da';
