@@ -308,7 +308,8 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText) {
     [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내
     [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내
     위 목록에 없으면: 기타
-- wbs레벨: 3 (일반 업무)
+  * 예시: "[샘플발송] [James Kwon → 박용훈]\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"
+    - wbs레벨: 3 (일반 업무)
 
 반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
 {
@@ -3708,9 +3709,7 @@ function mfParseFile(file) {
             function decodeBase64Body(raw) {
                 try {
                     const bytes = Uint8Array.from(atob(raw.replace(/\s/g, '')), c => c.charCodeAt(0));
-                    // UTF-8 시도
                     try { return new TextDecoder('utf-8', {fatal:true}).decode(bytes); } catch {}
-                    // EUC-KR 시도
                     try { return new TextDecoder('euc-kr').decode(bytes); } catch {}
                     return new TextDecoder('utf-8', {fatal:false}).decode(bytes);
                 } catch { return raw; }
@@ -3724,12 +3723,10 @@ function mfParseFile(file) {
             }
 
             if (ext === 'eml') {
-                // 헤더/본문 분리
-                const headerEnd = text.search(/\r?\n\r?\n/);
+                const headerEnd  = text.search(/\r?\n\r?\n/);
                 const headerPart = headerEnd > 0 ? text.substring(0, headerEnd) : text;
                 const bodyPart   = headerEnd > 0 ? text.substring(headerEnd + 2) : '';
 
-                // 헤더 파싱
                 const headers = {};
                 headerPart.replace(/\r\n/g, '\n').split('\n').forEach(line => {
                     if (/^\s/.test(line)) {
@@ -3744,12 +3741,10 @@ function mfParseFile(file) {
                 subject = decodeMimeHeader(headers['subject'] || subject);
                 sender  = decodeMimeHeader(headers['from']    || '');
 
-                // Content-Type 파악
                 const ct = headers['content-type'] || '';
                 const te = (headers['content-transfer-encoding'] || '').trim().toLowerCase();
 
                 if (ct.includes('multipart')) {
-                    // boundary 추출
                     const bm = ct.match(/boundary="?([^";\r\n]+)"?/i);
                     if (bm) {
                         const boundary = bm[1].trim();
@@ -3786,19 +3781,28 @@ function mfParseFile(file) {
                 // HTML 태그 및 숨은 CSS/JS 코드 찌꺼기 완벽 청소
                 try {
                     let cleaner = new DOMParser().parseFromString(body, 'text/html');
-                    // 글자가 아닌 스타일 태그와 스크립트 코드를 통째로 삭제
                     cleaner.querySelectorAll('script, style').forEach(el => el.remove());
                     body = (cleaner.body ? cleaner.body.innerText : '').replace(/\s+/g, ' ').trim();
                 } catch(e) {
-                    // 오류 발생 시 차선책으로 기존 태그 제거 실행
-                    // HTML 태그 및 숨은 CSS/JS 코드 찌꺼기 완벽 청소
+                    // 1. 정규식으로 스타일/스크립트/XML/주석 제거 (RegExp 생성자 방식으로 HTML 파서 충돌 방지)
+                    const reStyle   = new RegExp('<style[^>]*>[\\s\\S]*?<\\/style>', 'gi');
+                    const reScript  = new RegExp('<script[^>]*>[\\s\\S]*?<\\/script>', 'gi');
+                    const reXml     = new RegExp('<xml[^>]*>[\\s\\S]*?<\\/xml>', 'gi');
+                    const reXmp     = new RegExp('<x:xmpmeta[^>]*>[\\s\\S]*?<\\/x:xmpmeta>', 'gi');
+                    const reComment = new RegExp('<!--[\\s\\S]*?-->', 'g');
+                    const rePI      = new RegExp('<\\?[^>]+\\?>', 'g');
+                    body = body.replace(reStyle, ' ')
+                               .replace(reScript, ' ')
+                               .replace(reXml, ' ')
+                               .replace(reXmp, ' ')
+                               .replace(reComment, ' ')
+                               .replace(rePI, ' ');
+                    // 2. 정규식 제거 후 DOMParser 재시도
                     try {
-                        let cleaner = new DOMParser().parseFromString(body, 'text/html');
-                        // 글자가 아닌 스타일 태그와 스크립트 코드를 통째로 삭제
-                        cleaner.querySelectorAll('script, style').forEach(el => el.remove());
-                        body = (cleaner.body ? cleaner.body.innerText : '').replace(/\s+/g, ' ').trim();
-                    } catch(e) {
-                        // 오류 발생 시 차선책으로 기존 태그 제거 실행
+                        let cleaner2 = new DOMParser().parseFromString(body, 'text/html');
+                        body = (cleaner2.body ? cleaner2.body.innerText : '').replace(/\s+/g, ' ').trim();
+                    } catch(e2) {
+                        // 3. 최후 수단: 모든 태그 제거
                         body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
                     }
                 }
