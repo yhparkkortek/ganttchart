@@ -2564,7 +2564,7 @@ window.showMailAnalyzer = function() {
         window.populateInsertPosition();
     // ✅ 기본 프롬프트 미리 설정
     if (!window._defaultPromptTemplate) {
-        window._defaultPromptTemplate = `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.\n\n프로젝트 정보:\n- 프로젝트 담당자: \${projectAssignee}\n- 고객사: \${projectCustomer}\n- 모델명: \${projectModel}\n- 인치: \${projectInch}\n\n추출 규칙:\n- 업무명: 핵심 업무/요청사항을 20자 이내 명사형으로 요약\n- 시작일: 메일 발송일 또는 언급된 시작일 (YYYY-MM-DD)\n- 완료일: 마감일 언급 없으면 시작일+7일 (YYYY-MM-DD)\n- 상태: 진행/대기/완료 중 하나\n- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)\n- 상세내용: 200자 이내, 마지막에 [업무담당자 :이름] 추가\n- wbs레벨: 3\n\n반드시 아래 JSON 형식으로만 응답:\n{\n  "업무명": "",\n  "시작일": "",\n  "완료일": "",\n  "상태": "",\n  "개발단계": "",\n  "상세내용": "",\n  "wbs레벨": 3\n}\n\n이메일:\n\${mailText}`;
+        window._defaultPromptTemplate = `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.\n\n프로젝트 정보:\n- 프로젝트 담당자: \${projectAssignee}\n- 고객사: \${projectCustomer}\n- 모델명: \${projectModel}\n- 인치: \${projectInch}\n\n추출 규칙:\n- 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약 (예: "LED PCB 디자인 검토")\n- 시작일: 메일 본문에 날짜가 명시된 경우만 추출, 없으면 "날짜확인필요"\n- 완료일: 마감일이 명시된 경우만 추출, 없으면 "날짜확인필요"\n- 상태: 진행/대기/완료 중 하나 (답변 요청이면 "대기", 진행 중이면 "진행")\n- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)\n- 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\\n)으로 구분\n  * 출력 형식: [업무유형,발신→수신]발신자 → 수신자\\n[핵심내용]내용\\n[To do]후속조치\n  * 업무유형은 아래 중 가장 적합한 하나 선택:\n    [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청\n    [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보\n    [공유/안내] 현황공유 / 진행보고 / 결과보고 / 완료보고 / 변경안내 / 이슈알림 / 지연안내 / 회의안내 / 회의록공유 / 인증취득안내 / 단종EOL안내 / 가격변동안내\n    [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내\n    [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내\n    위 목록에 없으면: 기타\n  * 예시: "[샘플발송]James Kwon → 박용훈\\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"\n- wbs레벨: 3 (일반 업무)\n\n반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:\n{\n  "업무명": "",\n  "시작일": "",\n  "완료일": "",\n  "상태": "",\n  "개발단계": "",\n  "상세내용": "",\n  "wbs레벨": 3\n}\n\n이메일:\n\${mailText}`;
     }
 
     // 초기화
@@ -2701,26 +2701,16 @@ const prompt = savedPrompt
                  .replace('${projectInch}', projectInch)
     : defaultPrompt;
 
-    // ✅ 개인 키 옵션 확인
-    const usePersonal = document.getElementById('use-personal-key') ? document.getElementById('use-personal-key').checked : false;
-    const personalKey = document.getElementById('personal-gemini-key') ? document.getElementById('personal-gemini-key').value.trim() : "";
-
-    if (usePersonal && !personalKey) {
-        alert('개인 API 키를 입력해주세요.');
-        document.getElementById('mail-loading').style.display = 'none';
-        document.getElementById('mail-analyze-btn').disabled = false;
-        return;
-    }
-
     // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
 
     fetch(GAS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain' }, // CORS 에러 방지
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify({
-            userApiKey: usePersonal ? personalKey : null, // 체크하면 개인키, 아니면 null(서버 관리자키)
-            prompt: prompt // 선생님이 공들여 만드신 그 프롬프트 그대로 전송!
+            userApiKey: localStorage.getItem('gemini_api_key'),
+            prompt: prompt,
+            model: 'gemini-2.5-flash-lite'
         })
     })
     .then(res => res.json())
@@ -2786,11 +2776,13 @@ const prompt = savedPrompt
 
 window.renderMailResult = function(result) {
     const fields = [
-        { key: '업무명', label: '📌 업무명' },
-        { key: '시작일', label: '📅 시작일' },
-        { key: '완료일', label: '📅 완료일' },
-        { key: '상태', label: '🔖 상태' },
-        { key: '개발단계', label: '🏗️ 개발단계' },
+        { key: '업무명',   label: '📌 업무명' },
+        { key: '시작일',   label: '📅 시작일' },
+        { key: '완료일',   label: '📅 완료일' },
+        { key: '상태',     label: '🔖 상태',     type: 'select',
+          options: ['진행','대기','완료','보류'] },
+        { key: '개발단계', label: '🏗️ 개발단계', type: 'select',
+          options: ['','RFQ','설계','시제품','양산','EOL'] },
         { key: '상세내용', label: '📝 상세내용' },
     ];
 
@@ -2810,7 +2802,16 @@ window.renderMailResult = function(result) {
             ? dateVal
             : `<span style="color:#e67e22; font-weight:bold;">📅 날짜를 선택해주세요</span>`;
         
-        let inputType = f.key === '상세내용' ?
+        let inputType = f.type === 'select'
+            ? `<select data-field="${f.key}"
+                    style="width:100%; border:1px solid #ced4da; border-radius:4px;
+                            padding:5px; font-size:13px; background:white;"
+                    onchange="window._mailAnalyzedResult['${f.key}'] = this.value">
+                ${f.options.map(o =>
+                    `<option value="${o}" ${result[f.key]===o?'selected':''}>${o||'(미지정)'}</option>`
+                ).join('')}
+            </select>`
+            : f.key === '상세내용' ?
             `<textarea data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif; resize:vertical; min-height:60px;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
             : isDateField ?
             `<div style="display:flex; align-items:center; gap:8px; ${warnStyle} padding:2px 4px; border-radius:4px;">
@@ -3144,20 +3145,27 @@ window.insertMailTask = function() {
                 <span>📧 메일 내용으로 업무 자동 추가</span>
                 <span class="history-close" style="color:white;" onclick="window.closeMailAnalyzer()">✖</span>
             </div>
-            <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3);">
+            <div style="display:flex; border-top:1px solid rgba(255,255,255,0.3); gap:4px; padding:6px 10px; background:#e67e22;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
-                            background:rgba(0,0,0,0.2); font-size:13px; font-weight:bold;">
+                     style="flex:1; text-align:center; padding:9px 6px; cursor:pointer;
+                            background:white; color:#e67e22;
+                            border-radius:6px; font-size:13px; font-weight:bold;
+                            box-shadow:0 2px 4px rgba(0,0,0,0.2);
+                            transition:all 0.2s;">
                     ✏️ 직접 입력
                 </div>
                 <div id="mail-tab-file" onclick="window.switchMailTab('file')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
-                            font-size:13px; font-weight:bold;">
+                     style="flex:1; text-align:center; padding:9px 6px; cursor:pointer;
+                            background:rgba(255,255,255,0.25); color:white;
+                            border-radius:6px; font-size:13px; font-weight:bold;
+                            transition:all 0.2s;">
                     📎 파일 첨부
                 </div>
                 <div id="mail-tab-server" onclick="window.switchMailTab('server')"
-                     style="flex:1; text-align:center; padding:10px; cursor:pointer;
-                            font-size:13px; font-weight:bold;">
+                     style="flex:1; text-align:center; padding:9px 6px; cursor:pointer;
+                            background:rgba(255,255,255,0.25); color:white;
+                            border-radius:6px; font-size:13px; font-weight:bold;
+                            transition:all 0.2s;">
                     🌐 메일 서버
                 </div>
             </div>
@@ -3165,16 +3173,24 @@ window.insertMailTask = function() {
         <div id="mail-tab-paste-content" class="history-body" style="padding:20px; overflow-y:auto;">
 
             <!-- API 키 입력 -->
-            <div id="mail-api-key-section" style="margin-bottom:15px;">
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <input id="mail-gemini-key" type="password" placeholder="API Key 입력 후 저장" 
-                        style="flex:1; padding:8px 12px; border:1px solid #ced4da; border-radius:6px; font-size:13px;">
-                    <button onclick="window.saveGeminiKey()" 
-                        style="padding:8px 14px; background:#0056b3; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap;">💾 저장</button>
-                    <button onclick="window.clearGeminiKey()" 
-                        style="padding:8px 14px; background:#dee2e6; color:#333; border:none; border-radius:6px; cursor:pointer; font-size:13px; white-space:nowrap;">🗑️ 초기화</button>
+            <div id="mail-api-key-section" style="margin-bottom:15px; padding:10px; background:#e7f3ff; border-radius:6px; border:1px solid #b3d7ff;">
+                <div style="font-size:11px; color:#0056b3; font-weight:bold; margin-bottom:5px;">
+                    🔑 Gemini API 키
+                    <span style="font-weight:normal; color:#666;">&nbsp;(팀원 각자 본인 키 입력)</span>
                 </div>
-                <div id="mail-key-status" style="font-size:12px; color:#28a745; margin-top:5px;"></div>
+                <div style="display:flex; gap:6px; align-items:center;">
+                    <input id="mail-gemini-key" type="password" placeholder="AIza... 형태의 Gemini API 키"
+                        style="flex:1; padding:7px 10px; border:1px solid #b3d7ff; border-radius:5px; font-size:12px; box-sizing:border-box;">
+                    <button onclick="window.saveGeminiKey()"
+                        style="padding:7px 12px; background:#0056b3; color:white; border:none; border-radius:5px; font-size:12px; cursor:pointer; white-space:nowrap;">
+                        💾 저장
+                    </button>
+                    <button onclick="window.clearGeminiKey()"
+                        style="padding:7px 10px; background:#dee2e6; color:#333; border:none; border-radius:5px; font-size:12px; cursor:pointer; white-space:nowrap;">
+                        🗑️
+                    </button>
+                </div>
+                <div id="mail-key-status" style="font-size:11px; margin-top:4px; color:#28a745;"></div>
             </div>
 
             <!-- 메일 입력 -->
@@ -3184,14 +3200,18 @@ window.insertMailTask = function() {
                     style="width:100%; height:160px; margin-top:6px; padding:10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; resize:vertical; box-sizing:border-box; font-family:'Malgun Gothic',sans-serif;"></textarea>
             </div>
 
-            <button onclick="window.editPrompt()"
-                style="width:100%; padding:10px; background:#6c757d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; margin-bottom:8px;">
-                ✏️ AI 분석 프롬프트 편집
-            </button>
-            <button onclick="window.analyzeMailContent()" id="mail-analyze-btn"
-                style="width:100%; padding:10px; background:#e67e22; color:white; border:none; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; margin-bottom:15px;">
-                🤖 AI로 분석하기
-            </button>
+            <div style="display:flex; gap:8px; margin-bottom:15px;">
+                <button onclick="window.editPrompt()"
+                    style="flex:1; padding:8px; background:#6c757d; color:white; border:none;
+                           border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                    ✏️ 프롬프트 편집
+                </button>
+                <button onclick="window.analyzeMailContent()" id="mail-analyze-btn"
+                    style="flex:2; padding:8px; background:#e67e22; color:white; border:none;
+                           border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">
+                    🤖 AI로 분석하기
+                </button>
+            </div>
 
             <!-- 분석 결과 미리보기 -->
             <div id="mail-result-section" style="display:none;">
@@ -3362,28 +3382,20 @@ window.insertMailTask = function() {
                              style="flex:1; overflow-y:auto; margin-bottom:10px;">
                         </div>
 
-                        <!-- 삽입 위치 -->
-                        <div style="padding:10px 12px; background:#f8f9fa;
-                                    border-radius:6px; border:1px solid #dee2e6;
-                                    margin-bottom:10px; flex-shrink:0;">
-                            <div style="font-weight:bold; font-size:12px; margin-bottom:6px;">
-                                📍 추가할 위치
-                            </div>
+                        <!-- 삽입 위치 + 등록 버튼 한 줄 -->
+                        <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
                             <select id="mf-right-position"
-                                    style="width:100%; padding:6px;
-                                           border:1px solid #ced4da; border-radius:4px;
-                                           font-size:12px;">
+                                    style="flex:1; padding:6px; border:1px solid #ced4da;
+                                           border-radius:4px; font-size:12px;">
                             </select>
+                            <button onclick="window.mfRightInsert()"
+                                    style="padding:10px 16px; background:#28a745;
+                                           color:white; border:none; border-radius:6px;
+                                           font-size:13px; font-weight:bold;
+                                           cursor:pointer; white-space:nowrap;">
+                                ✅ 등록
+                            </button>
                         </div>
-
-                        <!-- 등록 버튼 -->
-                        <button onclick="window.mfRightInsert()"
-                                style="width:100%; padding:10px; background:#28a745;
-                                       color:white; border:none; border-radius:6px;
-                                       font-size:13px; font-weight:bold;
-                                       cursor:pointer; flex-shrink:0;">
-                            ✅ 이 항목 등록
-                        </button>
                     </div>
                 </div>
 
@@ -3394,11 +3406,47 @@ window.insertMailTask = function() {
         <div id="mail-tab-server-content" style="display:none; height:calc(92vh - 120px); padding:20px; overflow-y:auto; box-sizing:border-box;">
 
             <!-- 서버 접속 정보 -->
-            <div style="background:#f8f9fa; border:1px solid #dee2e6; border-radius:8px; padding:16px; margin-bottom:16px;">
-                <div style="font-weight:bold; font-size:13px; color:#333; margin-bottom:12px;">🔐 메일 서버 접속 정보</div>
-                <div style="display:flex; gap:8px; margin-bottom:8px;">
-                    <div style="flex:1;">
-                        <div style="font-size:11px; color:#666; margin-bottom:3px;">메일 아이디</div>
+            <div style="font-weight:bold; font-size:13px; color:#333; margin-bottom:12px;">🔐 메일 서버 접속 정보</div>
+
+<!-- 개인 Gemini API 키 -->
+<div style="margin-bottom:10px; padding:10px; background:#e7f3ff; border-radius:6px; border:1px solid #b3d7ff;">
+    <div style="font-size:11px; color:#0056b3; font-weight:bold; margin-bottom:5px;">
+        🔑 Gemini API 키
+        <span style="font-weight:normal; color:#666;">&nbsp;(팀원 각자 본인 키 입력)</span>
+    </div>
+    <div style="display:flex; gap:6px; align-items:center;">
+        <input id="ms-personal-apikey" type="password"
+               placeholder="AIza... 형태의 Gemini API 키"
+               style="flex:1; padding:7px 10px; border:1px solid #b3d7ff;
+                      border-radius:5px; font-size:12px; box-sizing:border-box;">
+        <button onclick="
+            const k = document.getElementById('ms-personal-apikey').value.trim();
+            if(k){ localStorage.setItem('gemini_api_key', k);
+                   document.getElementById('ms-key-status').textContent = '✅ 저장됨';
+                   document.getElementById('ms-key-status').style.color = '#28a745'; }
+            else { alert('API 키를 입력해주세요.'); }"
+                style="padding:7px 12px; background:#0056b3; color:white;
+                       border:none; border-radius:5px; font-size:12px;
+                       cursor:pointer; white-space:nowrap;">
+            💾 저장
+        </button>
+        <button onclick="
+            localStorage.removeItem('gemini_api_key');
+            document.getElementById('ms-personal-apikey').value = '';
+            document.getElementById('ms-key-status').textContent = '🗑️ 삭제됨';
+            document.getElementById('ms-key-status').style.color = '#dc3545';"
+                style="padding:7px 10px; background:#dee2e6; color:#333;
+                       border:none; border-radius:5px; font-size:12px;
+                       cursor:pointer; white-space:nowrap;">
+            🗑️
+        </button>
+    </div>
+    <div id="ms-key-status" style="font-size:11px; margin-top:4px; color:#28a745;"></div>
+</div>
+
+<div style="display:flex; gap:8px; margin-bottom:8px;">
+    <div style="flex:1;">
+        <div style="font-size:11px; color:#666; margin-bottom:3px;">메일 아이디</div>
                         <input id="ms-userid" type="text" placeholder="yhpark@kortek.co.kr"
                                style="width:100%; padding:7px 10px; border:1px solid #ced4da; border-radius:5px; font-size:13px; box-sizing:border-box;">
                     </div>
@@ -3420,16 +3468,7 @@ window.insertMailTask = function() {
                                style="width:100%; padding:7px 10px; border:1px solid #ced4da; border-radius:5px; font-size:13px; box-sizing:border-box;">
                     </div>
                 </div>
-                <!-- AI 모델 선택 -->
-                <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
-                    <div style="font-size:11px; color:#666; white-space:nowrap;">🤖 AI 모델:</div>
-                    <select id="ms-gemini-model"
-                            style="flex:1; padding:6px 10px; border:1px solid #ced4da;
-                                   border-radius:5px; font-size:12px; cursor:pointer;">
-                        <option value="gemini-2.5-flash-lite">⚡ gemini-2.5-flash-lite (무료 1,000회/일)</option>
-                        <option value="gemini-2.5-flash">🚀 gemini-2.5-flash (유료, 고성능)</option>
-                    </select>
-                </div>
+                
 
                 <div style="display:flex; gap:8px; align-items:center;">
                     <label style="display:flex; align-items:center; gap:5px; font-size:12px; color:#555; cursor:pointer;">
@@ -3489,24 +3528,52 @@ window.insertMailTask = function() {
                             <div style="font-size:14px; font-weight:bold;">왼쪽에서 메일을 선택하세요</div>
                         </div>
                         <div id="ms-right-detail" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+
+                            <!-- 4번: 회색 메일정보 박스 → 깔끔하게 개선 -->
                             <div id="ms-right-mail-info"
-                                 style="font-size:11px; color:#888; margin-bottom:10px;
-                                        padding:8px 12px; background:#f8f9fa;
-                                        border-radius:6px; border-left:3px solid #e67e22; flex-shrink:0;">
+                                style="font-size:11px; color:#555; margin-bottom:6px; padding:6px 10px;
+                                        background:#fff3e0; border-radius:6px; border-left:3px solid #e67e22;
+                                        flex-shrink:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                             </div>
-                            <div id="ms-right-result-table" style="flex:1; overflow-y:auto; margin-bottom:10px;"></div>
-                            <div style="padding:10px 12px; background:#f8f9fa; border-radius:6px; border:1px solid #dee2e6; margin-bottom:10px; flex-shrink:0;">
-                                <div style="font-weight:bold; font-size:12px; margin-bottom:6px;">📍 추가할 위치</div>
+
+                            <!-- 1번: 원본 메일 접이식 패널 -->
+                            <div style="flex-shrink:0; margin-bottom:6px;">
+                                <div onclick="
+                                    const b = document.getElementById('ms-original-body');
+                                    const a = document.getElementById('ms-original-arrow');
+                                    const open = b.style.display !== 'none';
+                                    b.style.display = open ? 'none' : 'block';
+                                    a.textContent = open ? '▼' : '▲';"
+                                    style="display:flex; justify-content:space-between; align-items:center;
+                                            padding:6px 10px; background:#e9ecef; border-radius:6px;
+                                            cursor:pointer; font-size:12px; font-weight:bold; color:#555;">
+                                    <span>📨 원본 메일 보기</span>
+                                    <span id="ms-original-arrow">▼</span>
+                                </div>
+                                <div id="ms-original-body"
+                                    style="display:none; padding:10px; background:#f8f9fa;
+                                            border:1px solid #dee2e6; border-radius:0 0 6px 6px;
+                                            font-size:11px; color:#555; max-height:150px;
+                                            overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
+                                </div>
+                            </div>
+
+                            <!-- 분석결과 테이블 (5번: 상세내용 폭 확대를 위해 flex:1 유지) -->
+                            <div id="ms-right-result-table" style="flex:1; overflow-y:auto; margin-bottom:8px;"></div>
+
+                            <!-- 3번: 추가할 위치 + 등록 버튼 한 줄로 -->
+                            <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
                                 <select id="ms-right-position"
-                                        style="width:100%; padding:6px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                                        style="flex:1; padding:6px; border:1px solid #ced4da;
+                                            border-radius:4px; font-size:12px;">
                                 </select>
+                                <button onclick="window.msRightInsert()"
+                                        style="padding:10px 16px; background:#28a745; color:white;
+                                            border:none; border-radius:6px; font-size:13px;
+                                            font-weight:bold; cursor:pointer; white-space:nowrap;">
+                                    ✅ 등록
+                                </button>
                             </div>
-                            <button onclick="window.msRightInsert()"
-                                    style="width:100%; padding:10px; background:#28a745;
-                                           color:white; border:none; border-radius:6px;
-                                           font-size:13px; font-weight:bold; cursor:pointer; flex-shrink:0;">
-                                ✅ 이 항목 등록
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -3573,16 +3640,30 @@ window.switchMailTab = function(tab) {
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
     const st = document.getElementById('mail-tab-server');
-    if (pt) pt.style.background = tab === 'paste'  ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (ft) ft.style.background = tab === 'file'   ? 'rgba(0,0,0,0.2)' : 'transparent';
-    if (st) st.style.background = tab === 'server' ? 'rgba(0,0,0,0.2)' : 'transparent';
+    [
+        { el: pt, active: tab === 'paste'  },
+        { el: ft, active: tab === 'file'   },
+        { el: st, active: tab === 'server' }
+    ].forEach(({ el, active }) => {
+        if (!el) return;
+        el.style.background  = active ? 'white' : 'transparent';
+        el.style.color       = active ? '#e67e22' : 'rgba(255,255,255,0.6)';
+        el.style.boxShadow   = active ? '0 2px 6px rgba(0,0,0,0.3)' : 'none';
+        el.style.borderBottom = active ? '3px solid #e67e22' : '3px solid transparent';
+        el.style.borderRadius = active ? '6px 6px 0 0' : '6px';
+        el.style.fontWeight  = active ? 'bold' : 'normal';
+        el.style.fontSize    = active ? '13px' : '12px';
+    });
 };
 
 // showMailAnalyzer 래핑
 const _origShowMailAnalyzer = window.showMailAnalyzer;
 window.showMailAnalyzer = function() {
     _origShowMailAnalyzer();
-    window.switchMailTab('paste');
+    // 탭 초기 스타일 강제 설정
+    setTimeout(() => {
+        window.switchMailTab('paste');
+    }, 50);
 };
 
 // ─── 파일 선택 ───────────────────────────────────────────
@@ -4145,7 +4226,7 @@ window._msResults   = [];
 window._msCurrentIdx = -1;
 
 // ─── 아이디 저장/불러오기 ────────────────────────────────
-(function() {
+    (function() {
     const saved = localStorage.getItem('ms_saved_userid');
     if (saved) {
         const el = document.getElementById('ms-userid');
@@ -4153,13 +4234,27 @@ window._msCurrentIdx = -1;
         if (el) el.value = saved;
         if (cb) cb.checked = true;
     }
-    // 날짜 기본값: 오늘 기준 -7일 ~ 오늘
+    // 저장된 API 키 상태 표시
+    const savedKey = localStorage.getItem('gemini_api_key');
+    const keyInput  = document.getElementById('ms-personal-apikey');
+    const keyStatus = document.getElementById('ms-key-status');
+    if (savedKey && keyInput) {
+        keyInput.value = savedKey;
+        if (keyStatus) {
+            keyStatus.textContent = '✅ 저장된 키 있음';
+            keyStatus.style.color = '#28a745';
+        }
+    } else if (keyStatus) {
+        keyStatus.textContent = '⚠️ API 키를 입력해주세요';
+        keyStatus.style.color = '#e67e22';
+    }
+    // 날짜 기본값: 오늘 기준
     const today = new Date();
-    const week  = new Date(today); week.setDate(week.getDate() - 7);
+    const week  = new Date(today);
     const fmt   = d => d.toISOString().split('T')[0];
     const sd = document.getElementById('ms-start-date');
     const ed = document.getElementById('ms-end-date');
-    if (sd) sd.value = fmt(week);
+    if (sd) sd.value = fmt(today);
     if (ed) ed.value = fmt(today);
 })();
 
@@ -4342,6 +4437,14 @@ window.msSelectItem = function(idx) {
          <span>${escapeHtml(r.sender)}</span> | <span style="color:#666;">${r.date||''}</span>
          ${r.project ? ` | <span style="color:#0056b3;font-weight:bold;">${r.project}</span>` : ''}`;
 
+    // 원본 메일 내용 세팅
+    const origBody = document.getElementById('ms-original-body');
+    if (origBody) {
+        origBody.textContent = `제목: ${r.subject}\n발신: ${r.sender}\n날짜: ${r.date||''}\n\n${r.body||''}`;
+        origBody.style.display = 'none';
+        document.getElementById('ms-original-arrow').textContent = '▼';
+    }
+
     // 분석결과 표시 (파일첨부 탭과 동일)
     window._mailAnalyzedResult = JSON.parse(JSON.stringify(r.task));
     window.renderMailResult(r.task);
@@ -4512,7 +4615,8 @@ ${mailText}`;
         headers: {'Content-Type': 'text/plain'},
         body: JSON.stringify({
             userApiKey: apiKey,
-            prompt: prompt
+            prompt: prompt,
+            model: 'gemini-2.5-flash-lite'
         })
     });
     const data = await resp.json();
