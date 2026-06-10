@@ -442,12 +442,38 @@ ${mailText}`;
             });
 
             request.execute(function(file) {
-                if (file.id) {
+                if (file && file.id) {
                     window.currentDriveFileId = file.id; 
                     window.lastSavedLogCount = window.changeLogs.length; 
                     alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
                     document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
-                } else { alert("저장에 실패했습니다. 공유 폴더 '편집자' 권한 및 구글 동의 화면을 확인해 주세요."); }
+                } else {
+                    console.error("구글 저장 실패 상세 정보:", file);
+                    let errorMsg = "공유 폴더의 '편집자' 권한이 없거나 업로드 중 오류가 발생했습니다.";
+                    
+                    // 구글 서버 에러 객체가 정상적으로 넘어온 경우 사유 세분화
+                    if (file && file.error) {
+                        const status = file.error.code;
+                        if (status === 401) {
+                            errorMsg = "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 저장해 주세요.";
+                            // 버튼 상태 원복하여 재인증 유도
+                            const authBtn = document.getElementById('auth_button');
+                            if (authBtn) {
+                                authBtn.disabled = false;
+                                authBtn.innerText = "🔄 재연동 필요 (클릭)";
+                                authBtn.style.borderColor = '#e67e22';
+                                authBtn.style.color = '#e67e22';
+                            }
+                        } else if (status === 403) {
+                            errorMsg = "🚫 공유 폴더 접근 권한이 거부되었습니다.\n\n공유 폴더('1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS')에 본인 계정이 '편집자'로 등록되어 있는지 관리자에게 확인해 주세요.";
+                        } else {
+                            errorMsg = `구글 드라이브 에러 (${status}): ${file.error.message}`;
+                        }
+                    }
+                    
+                    alert(`❌ 저장 실패\n\n${errorMsg}`);
+                    document.getElementById('file-status').textContent = "❌ 클라우드 백업 실패 (로그 확인 필요)";
+                }
             });
         } catch (err) { alert("구글 드라이브 에러: " + err.message); }
     }
@@ -3765,7 +3791,16 @@ function mfParseFile(file) {
                     body = (cleaner.body ? cleaner.body.innerText : '').replace(/\s+/g, ' ').trim();
                 } catch(e) {
                     // 오류 발생 시 차선책으로 기존 태그 제거 실행
-                    body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    // HTML 태그 및 숨은 CSS/JS 코드 찌꺼기 완벽 청소
+                    try {
+                        let cleaner = new DOMParser().parseFromString(body, 'text/html');
+                        // 글자가 아닌 스타일 태그와 스크립트 코드를 통째로 삭제
+                        cleaner.querySelectorAll('script, style').forEach(el => el.remove());
+                        body = (cleaner.body ? cleaner.body.innerText : '').replace(/\s+/g, ' ').trim();
+                    } catch(e) {
+                        // 오류 발생 시 차선책으로 기존 태그 제거 실행
+                        body = body.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+                    }
                 }
 
             } else if (ext === 'html' || ext === 'htm') {
