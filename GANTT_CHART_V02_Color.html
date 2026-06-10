@@ -2320,7 +2320,7 @@ window.handleAuthClick = function() {
         window.currentUserName = tempUser; 
     };
 
-    // 1분 자동 저장 (마지막 저장 기록 대비 수정이 있을 때만 작동)
+  // 3분 자동 저장 (마지막 저장 기록 대비 수정이 있을 때만 작동)
     let inactivityTimer = null;
     function resetInactivityTimer() {
         clearTimeout(inactivityTimer);
@@ -2328,10 +2328,10 @@ window.handleAuthClick = function() {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
             if (window.currentDriveFileId && currentLogs > savedLogs) {
-                document.getElementById('file-status').textContent = "⏳ 1분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
+                document.getElementById('file-status').textContent = "⏳ 3분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
                 saveToGoogleDrive(); 
             }
-        }, 60000); 
+        }, 180000); 
     }
     ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
     resetInactivityTimer();
