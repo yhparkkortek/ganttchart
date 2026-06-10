@@ -2098,12 +2098,19 @@ window.handleAuthClick = function() {
         });
 
         // 기본 보기 복원 시 인라인 스타일만 제거 (CSS 변수가 자동 적용됨)
+        // 기본 보기 복원 시 너비만 초기화 (display는 건드리지 않음)
         if (!_chartExpanded) {
-            table.querySelectorAll('thead th, tbody td').forEach(el => {
-                el.style.width = '';
-                el.style.minWidth = '';
-                el.style.maxWidth = '';
-                el.style.display = '';
+            chartIdxSet.forEach(i => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
+                    el.style.width = '';
+                    el.style.minWidth = '';
+                    el.style.maxWidth = '';
+                });
+            });
+            hiddenIdxSet.forEach(i => {
+                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
+                    el.style.display = '';
+                });
             });
         }
     };
