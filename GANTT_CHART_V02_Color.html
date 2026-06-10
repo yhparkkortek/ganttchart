@@ -2054,34 +2054,28 @@ window.handleAuthClick = function() {
         });
 
         if (_chartExpanded) {
+            // 상세내용 숨김
             hiddenIdxSet.forEach(i => {
                 table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
                     el.style.display = 'none';
                 });
             });
-            chartIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.width = '700px';
-                    el.style.minWidth = '700px';
-                });
-            });
+            // 현황 확장: CSS 변수로 제어
+            document.documentElement.style.setProperty('--w-chart', '70%');
             document.documentElement.style.setProperty('--chart-month-detail', '1');
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
             btn.style.borderColor = '#0056b3';
             btn.textContent = '📋 기본 보기';
         } else {
+            // 상세내용 복원
             hiddenIdxSet.forEach(i => {
                 table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
                     el.style.display = '';
                 });
             });
-            chartIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.width = '';
-                    el.style.minWidth = '';
-                });
-            });
+            // 현황 너비 원래대로: CSS 변수 복원
+            document.documentElement.style.setProperty('--w-chart', '12%');
             document.documentElement.style.setProperty('--chart-month-detail', '0');
             btn.style.background = '#f8f9fa';
             btn.style.color = '#495057';
@@ -2096,23 +2090,6 @@ window.handleAuthClick = function() {
             const row = globalData[rowIdx];
             if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
         });
-
-        // 기본 보기 복원 시 인라인 스타일만 제거 (CSS 변수가 자동 적용됨)
-        // 기본 보기 복원 시 너비만 초기화 (display는 건드리지 않음)
-        if (!_chartExpanded) {
-            chartIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.width = '';
-                    el.style.minWidth = '';
-                    el.style.maxWidth = '';
-                });
-            });
-            hiddenIdxSet.forEach(i => {
-                table.querySelectorAll(`thead th:nth-child(${i}), tbody td:nth-child(${i})`).forEach(el => {
-                    el.style.display = '';
-                });
-            });
-        }
     };
 
     // 테마 색상 동적 덮어쓰기
