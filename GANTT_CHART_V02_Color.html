@@ -219,23 +219,21 @@
     <div id="table-info">
         <span id="table-info-text">📊 Gantt Chart</span>
         
-        <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
+        <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
             <button id="lang-toggle-btn" onclick="window.toggleLang()"
-                style="padding:5px 10px; font-size:12px; font-weight:bold; cursor:pointer;
-                       background:#f8f9fa; border:1px solid #ced4da; border-radius:6px;
-                       color:#495057; white-space:nowrap;"
-                title="한글/영어 전환">
+                class="action-btn" title="한글/영어 전환">
                 🌐 ENG
             </button>
             <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
-                style="padding:5px 10px; font-size:12px; font-weight:bold; cursor:pointer;
-                       background:#f8f9fa; border:1px solid #ced4da; border-radius:6px;
-                       color:#495057; white-space:nowrap;"
-                title="업무 상세내용 숨기고 현황 그래프 확장">
+                class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">
                 📊 차트 확장
             </button>
-            <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
-            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+            <label for="themePicker" class="action-btn" style="cursor:pointer; gap:6px;">
+                🎨 테마
+                <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)"
+                    style="cursor:pointer; width:24px; height:24px; border:none; padding:0; background:none; border-radius:3px; outline:none;"
+                    title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+            </label>
         </div>
 
         <div class="btn-group">
@@ -1580,9 +1578,9 @@ ${mailText}`;
         window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
         const btn = document.getElementById('lang-toggle-btn');
         btn.textContent = LANG[window._currentLang].btnText;
-        btn.style.background = window._currentLang === 'en' ? '#0056b3' : '#f8f9fa';
-        btn.style.color = window._currentLang === 'en' ? '#fff' : '#495057';
-        btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '#ced4da';
+        btn.style.background = window._currentLang === 'en' ? '#0056b3' : '';
+        btn.style.color = window._currentLang === 'en' ? '#fff' : '';
+        btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '';
         if (globalData) { renderTable(globalData); applyFilters(); }
     };
 
@@ -2147,15 +2145,17 @@ window.handleAuthClick = function() {
 
         if (window._chartExpanded) {
             table.classList.add('chart-expanded');
+            // 확장 모드 ON
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
-            btn.style.borderColor = '#0056b3';
+            btn.style.border = '2px solid #0056b3';
             btn.textContent = '📋 기본 보기';
         } else {
             table.classList.remove('chart-expanded');
-            btn.style.background = '#f8f9fa';
-            btn.style.color = '#495057';
-            btn.style.borderColor = '#ced4da';
+            // 확장 모드 OFF
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.border = '';
             btn.textContent = '📊 차트 확장';
         }
 
@@ -2221,11 +2221,11 @@ window.handleAuthClick = function() {
         // 단색을 원하시면 linear-gradient를 없애고 그냥 색상 코드(예: #000000)만 넣으시면 됩니다.
         // 레벨별로 완전한 검은색으로 고정해 두었습니다.
         
-        root.style.setProperty('--chart-l0', `#e67e22`); // 0레벨 막대 색상(주황색)
-        root.style.setProperty('--chart-l1', `#000000`); // 1레벨 막대 색상
-        root.style.setProperty('--chart-l2', `#646464`); // 2레벨 막대 색상
-        root.style.setProperty('--chart-l3', `#969696`); // 3레벨 막대 색상
-        root.style.setProperty('--chart-l4', `#C8C8C8`); // 4레벨 막대 색상
+        root.style.setProperty('--chart-l0', `#e67e22`); // 0레벨 막대 색상(주황색 고정)
+        root.style.setProperty('--chart-l1', `hsl(${h}, ${s}%, ${Math.max(10, l - 20)}%)`); // 1레벨 테마 연동
+        root.style.setProperty('--chart-l2', `hsl(${h}, ${Math.max(20, s - 10)}%, ${Math.min(60, l + 10)}%)`); // 2레벨 테마 연동
+        root.style.setProperty('--chart-l3', `hsl(${h}, ${Math.max(10, s - 20)}%, ${Math.min(70, l + 20)}%)`); // 3레벨 테마 연동
+        root.style.setProperty('--chart-l4', `hsl(${h}, ${Math.max(5, s - 30)}%, ${Math.min(80, l + 30)}%)`);  // 4레벨 테마 연동
     };
 
     // 차트 생성 로직
