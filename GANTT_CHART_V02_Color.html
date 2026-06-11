@@ -54,17 +54,16 @@
         display: none !important;
     }
 
-    @media print {
-        :root {
-            --w-no: 3%;          
-            --w-date: 3%;        
-            --w-period: 3%;      
-            --w-wbs: 20%;        
-            --w-detail: 28%;     
-            --w-chart: 15%;      
-            --w-default: 3%;     
-        }
+   @media print {
         .trans-btn-hide-print, #auth_button, #drive_save_btn, #drive_load_btn { display: none !important; }
+        #myTable { table-layout: fixed; width: 100%; }
+        #myTable col.col-no      { width: 3% !important; }
+        #myTable col.col-date    { width: 3% !important; }
+        #myTable col.col-period  { width: 3% !important; }
+        #myTable col.col-wbs     { width: 20% !important; }
+        #myTable col.col-detail  { width: 28% !important; }
+        #myTable col.col-chart   { width: 15% !important; }
+        #myTable col.col-default { width: 3% !important; }
     }
 
     body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
@@ -1530,12 +1529,13 @@ ${mailText}`;
             if (hiddenCols.includes(idx)) return;
             let colName = cell ? cell.toString().replace(/\s+/g, '').toLowerCase() : '';
             let w = colWidths.default;
-            if (colName.includes('현황')) w = colWidths.chart;
-            else if (colName.includes('상세') || colName.includes('내용') || colName.includes('답변') || colName.includes('대응')) w = colWidths.detail;
-            else if (['no','view','보고'].includes(colName)) w = colWidths.no;
-            else if (colName.includes('시작') || colName.includes('완료') || colName.includes('상태')) w = colWidths.date;
-            else if (colName.includes('기간')) w = colWidths.period;
-            colgroupHtml += `<col style="width:${w};">`;
+            let colClass = 'col-default';
+            if (colName.includes('현황')) { w = colWidths.chart; colClass = 'col-chart'; }
+            else if (colName.includes('상세') || colName.includes('내용') || colName.includes('답변') || colName.includes('대응')) { w = colWidths.detail; colClass = 'col-detail'; }
+            else if (['no','view','보고'].includes(colName)) { w = colWidths.no; colClass = 'col-no'; }
+            else if (colName.includes('시작') || colName.includes('완료') || colName.includes('상태')) { w = colWidths.date; colClass = 'col-date'; }
+            else if (colName.includes('기간')) { w = colWidths.period; colClass = 'col-period'; }
+            colgroupHtml += `<col class="${colClass}" style="width:${w};">`;
             if (idx === colIdx.plan) {
                 if (!hasPeriodCol) colgroupHtml += `<col style="width:${colWidths.period};">`;
                 colgroupHtml += `<col style="width:${colWidths.wbs};">`;
