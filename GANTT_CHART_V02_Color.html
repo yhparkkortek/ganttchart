@@ -1527,23 +1527,34 @@ ${mailText}`;
     window.updateStatus = function(select, rowIndex, colIndex) {
         const newVal = select.value;
         const oldVal = decodeURIComponent(select.closest('td').getAttribute('data-raw') || '');
-        const statusColors = {
-            '진행': '#0056b3', '완료': '#28a745', '대기': '#6c757d', '보류': '#dc3545'
-        };
-        select.style.color = statusColors[newVal] || '#333';
         if (newVal !== oldVal) {
-            logChange(rowIndex, colIndex, oldVal, newVal);
-            globalData[rowIndex][colIndex] = newVal;
-            select.closest('td').setAttribute('data-raw', encodeURIComponent(newVal));
+            // 하위 행도 함께 변경
+            window.applyStatusToChildren(rowIndex, colIndex, newVal);
             renderTable(globalData); applyFilters();
+        }
+    };
+
+    window.applyStatusToChildren = function(rowIndex, colIndex, newVal) {
+        const row = globalData[rowIndex];
+        const oldVal = globalData[rowIndex][colIndex];
+        logChange(rowIndex, colIndex, oldVal, newVal);
+        globalData[rowIndex][colIndex] = newVal;
+        // 하위 행 순회 (현재 행보다 레벨이 높은 연속된 행들)
+        const parentLevel = row._level || 0;
+        for (let i = rowIndex + 1; i < globalData.length; i++) {
+            const childRow = globalData[i];
+            if (!childRow) continue;
+            if ((childRow._level || 0) <= parentLevel) break; // 같은 레벨이나 상위면 중단
+            const childOld = childRow[colIndex];
+            logChange(i, colIndex, childOld, newVal);
+            globalData[i][colIndex] = newVal;
         }
     };
 
     window.setStatusDone = function(select, rowIndex, colIndex) {
         const oldVal = globalData[rowIndex][colIndex];
         if (oldVal === '완료') return;
-        logChange(rowIndex, colIndex, oldVal, '완료');
-        globalData[rowIndex][colIndex] = '완료';
+        window.applyStatusToChildren(rowIndex, colIndex, '완료');
         renderTable(globalData); applyFilters();
     };
 
@@ -1557,9 +1568,9 @@ ${mailText}`;
         },
         en: {
             header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Workdays', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
-            status: ['In Progress','Done','Pending','On Hold'],
-            statusMap: { '진행':'In Progress','완료':'Done','대기':'Pending','보류':'On Hold',
-                         'In Progress':'In Progress','Done':'Done','Pending':'Pending','On Hold':'On Hold' },
+            status: ['Progress','Done','Pending','On Hold'],
+            statusMap: { '진행':'Progress','완료':'Done','대기':'Pending','보류':'On Hold',
+                         'Progress':'Progress','Done':'Done','Pending':'Pending','On Hold':'On Hold' },
             btnText: '🌐 한글'
         }
     };
@@ -1648,18 +1659,13 @@ ${mailText}`;
                     if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) tdAttrs += ` class="detail-td"`;
                } else if (colStr.includes("상태")) {
                     const statusVal = cell.toString().trim();
-                    const statusColors = {
-                        '진행': '#0056b3', '완료': '#28a745', '대기': '#6c757d', '보류': '#dc3545',
-                        'In Progress': '#0056b3', 'Done': '#28a745', 'Pending': '#6c757d', 'On Hold': '#dc3545'
-                    };
-                    const color = statusColors[statusVal] || '#333';
                     tdHtml = `<select onchange="window.updateStatus(this, ${i}, ${cellIndex})"
                         ondblclick="window.setStatusDone(this, ${i}, ${cellIndex})"
                         style="border:none; background:transparent; font-size:12px; font-weight:bold;
-                               color:${color}; cursor:pointer; width:100%; text-align:center;">
+                               color:#333; cursor:pointer; width:100%; text-align:center;
+                               -webkit-appearance:none; -moz-appearance:none; appearance:none;">
                         ${(LANG[window._currentLang||'ko'].status).map(s =>
-                            `<option value="${s}" ${statusVal===s?'selected':''}
-                             style="color:${statusColors[s]||'#333'}">${s}</option>`
+                            `<option value="${s}" ${statusVal===s?'selected':''}>${s}</option>`
                         ).join('')}
                     </select>`;
                     tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
