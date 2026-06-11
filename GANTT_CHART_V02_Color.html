@@ -2046,7 +2046,7 @@ window.handleAuthClick = function() {
     }
 
     // ── 차트 확장 토글 ─────────────────────────────────────
-  window._chartExpanded = false;
+ window._chartExpanded = false;
     window.toggleChartExpand = function() {
         window._chartExpanded = !window._chartExpanded;
         const btn = document.getElementById('chart-expand-btn');
@@ -2057,28 +2057,12 @@ window.handleAuthClick = function() {
 
         if (window._chartExpanded) {
             table.classList.add('chart-expanded');
-            // colgroup 현황 열 너비 확장
-            const cols = document.querySelectorAll('#table-colgroup col');
-            const headers = table.querySelectorAll('thead th');
-            headers.forEach((th, i) => {
-                if (th.textContent.trim().includes('현황') && cols[i]) {
-                    cols[i].style.width = '800px';
-                }
-            });
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
             btn.style.borderColor = '#0056b3';
             btn.textContent = '📋 기본 보기';
         } else {
             table.classList.remove('chart-expanded');
-            // colgroup 현황 열 너비 복원
-            const cols = document.querySelectorAll('#table-colgroup col');
-            const headers = table.querySelectorAll('thead th');
-            headers.forEach((th, i) => {
-                if (th.textContent.trim().includes('현황') && cols[i]) {
-                    cols[i].style.width = '200px';
-                }
-            });
             btn.style.background = '#f8f9fa';
             btn.style.color = '#495057';
             btn.style.borderColor = '#ced4da';
