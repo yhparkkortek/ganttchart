@@ -1532,17 +1532,13 @@ ${mailText}`;
             let colName = cell ? cell.toString().replace(/\s+/g, '') : ""; let thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;"; 
             let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
             
-            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; } 
-            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th";}
-            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; } 
-            else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; } 
-            else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; } 
-            else { widthClass = "width: var(--w-default); min-width: 30px;"; }
+            if (colStr.includes("현황")) { thClass = "chart-th"; } 
+            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { thClass = "detail-th"; }
 
-            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${escapeHtml(cell)}</div></th>`;
-            if (idx === colIdx.plan) {
-                 if (!hasPeriodCol) headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px;">기간</th>`;
-                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">개발업무 (WBS)</th>`;
+            headHtml += `<th class="${thClass}" style="${thStyle}">...`;
+           if (idx === colIdx.plan) {
+                if (!hasPeriodCol) colgroupHtml += `<col class="col-period" style="width:${colWidths.period};">`;
+                colgroupHtml += `<col class="col-wbs" style="width:${colWidths.wbs};">`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
