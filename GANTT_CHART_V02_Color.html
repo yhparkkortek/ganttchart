@@ -21,14 +21,6 @@
         --today-line: rgba(224, 49, 49, 0.9); 
         --trans-text: #0056b3; 
 
-        --w-no: 2%;        
-        --w-date: 2.5%;      
-        --w-period: 2.5%;    
-        --w-wbs: 14%;        
-        --w-detail: 38%;     
-        --w-chart: 12%;      
-        --w-default: 2.5%;   
-
         --c-l0-bg: #1a237e;
         --c-l0-border: #0d47a1;
         --c-l0-text: #ffffff;
@@ -241,7 +233,8 @@
     <div id="print-header"><h2 id="print-title"></h2><div id="print-date"></div></div>
 
     <div class="container" id="table-container">
-        <table id="myTable">
+        <table id="myTable" style="table-layout:fixed; width:100%;">
+            <colgroup id="table-colgroup"></colgroup>
             <thead id="table-head"></thead>
             <tbody id="table-body">
                 <tr><td colspan="20" style="text-align:center; padding: 50px; color: #777;">위에서 파일을 선택하시거나 드라이브에서 불러오시면 데이터가 표시됩니다.</td></tr>
@@ -1527,6 +1520,29 @@ ${mailText}`;
         let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
         let hasPeriodCol = colIdx.period !== -1;
 
+        // colgroup 생성 - 열 너비 한 곳에서 관리
+        const colWidths = {
+            no: '40px', date: '52px', period: '42px',
+            wbs: '180px', detail: '320px', chart: '200px', default: '42px'
+        };
+        let colgroupHtml = '';
+        data[0].forEach((cell, idx) => {
+            if (hiddenCols.includes(idx)) return;
+            let colName = cell ? cell.toString().replace(/\s+/g, '').toLowerCase() : '';
+            let w = colWidths.default;
+            if (colName.includes('현황')) w = colWidths.chart;
+            else if (colName.includes('상세') || colName.includes('내용') || colName.includes('답변') || colName.includes('대응')) w = colWidths.detail;
+            else if (['no','view','보고'].includes(colName)) w = colWidths.no;
+            else if (colName.includes('시작') || colName.includes('완료') || colName.includes('상태')) w = colWidths.date;
+            else if (colName.includes('기간')) w = colWidths.period;
+            colgroupHtml += `<col style="width:${w};">`;
+            if (idx === colIdx.plan) {
+                if (!hasPeriodCol) colgroupHtml += `<col style="width:${colWidths.period};">`;
+                colgroupHtml += `<col style="width:${colWidths.wbs};">`;
+            }
+        });
+        document.getElementById('table-colgroup').innerHTML = colgroupHtml;
+
         let headHtml = '<tr>';
         data[0].forEach((cell, idx) => {
             if (hiddenCols.includes(idx)) return; 
@@ -2056,12 +2072,28 @@ window.handleAuthClick = function() {
 
         if (window._chartExpanded) {
             table.classList.add('chart-expanded');
+            // colgroup 현황 열 너비 확장
+            const cols = document.querySelectorAll('#table-colgroup col');
+            const headers = table.querySelectorAll('thead th');
+            headers.forEach((th, i) => {
+                if (th.textContent.trim().includes('현황') && cols[i]) {
+                    cols[i].style.width = '800px';
+                }
+            });
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
             btn.style.borderColor = '#0056b3';
             btn.textContent = '📋 기본 보기';
         } else {
             table.classList.remove('chart-expanded');
+            // colgroup 현황 열 너비 복원
+            const cols = document.querySelectorAll('#table-colgroup col');
+            const headers = table.querySelectorAll('thead th');
+            headers.forEach((th, i) => {
+                if (th.textContent.trim().includes('현황') && cols[i]) {
+                    cols[i].style.width = '200px';
+                }
+            });
             btn.style.background = '#f8f9fa';
             btn.style.color = '#495057';
             btn.style.borderColor = '#ced4da';
