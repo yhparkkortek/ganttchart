@@ -220,6 +220,13 @@
         <span id="table-info-text">📊 Gantt Chart</span>
         
         <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
+            <button id="lang-toggle-btn" onclick="window.toggleLang()"
+                style="padding:5px 10px; font-size:12px; font-weight:bold; cursor:pointer;
+                       background:#f8f9fa; border:1px solid #ced4da; border-radius:6px;
+                       color:#495057; white-space:nowrap;"
+                title="한글/영어 전환">
+                🌐 ENG
+            </button>
             <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
                 style="padding:5px 10px; font-size:12px; font-weight:bold; cursor:pointer;
                        background:#f8f9fa; border:1px solid #ced4da; border-radius:6px;
@@ -1515,7 +1522,59 @@ ${mailText}`;
                 window.recalculateSchedules();
             } else { renderTable(globalData); applyFilters(); }
         } else { td.innerHTML = td.dataset.displayHtml || oldText; }
+   };  // ← blurCell 끝
+
+    window.updateStatus = function(select, rowIndex, colIndex) {
+        const newVal = select.value;
+        const oldVal = decodeURIComponent(select.closest('td').getAttribute('data-raw') || '');
+        const statusColors = {
+            '진행': '#0056b3', '완료': '#28a745', '대기': '#6c757d', '보류': '#dc3545'
+        };
+        select.style.color = statusColors[newVal] || '#333';
+        if (newVal !== oldVal) {
+            logChange(rowIndex, colIndex, oldVal, newVal);
+            globalData[rowIndex][colIndex] = newVal;
+            select.closest('td').setAttribute('data-raw', encodeURIComponent(newVal));
+            renderTable(globalData); applyFilters();
+        }
     };
+
+    window.setStatusDone = function(select, rowIndex, colIndex) {
+        const oldVal = globalData[rowIndex][colIndex];
+        if (oldVal === '완료') return;
+        logChange(rowIndex, colIndex, oldVal, '완료');
+        globalData[rowIndex][colIndex] = '완료';
+        renderTable(globalData); applyFilters();
+    };
+
+    const LANG = {
+        ko: {
+            header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
+            status: ['진행','완료','대기','보류'],
+            statusMap: { '진행':'진행','완료':'완료','대기':'대기','보류':'보류',
+                         'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'보류' },
+            btnText: '🌐 ENG'
+        },
+        en: {
+            header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Workdays', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
+            status: ['In Progress','Done','Pending','On Hold'],
+            statusMap: { '진행':'In Progress','완료':'Done','대기':'Pending','보류':'On Hold',
+                         'In Progress':'In Progress','Done':'Done','Pending':'Pending','On Hold':'On Hold' },
+            btnText: '🌐 한글'
+        }
+    };
+    window._currentLang = 'ko';
+
+    window.toggleLang = function() {
+        window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
+        const btn = document.getElementById('lang-toggle-btn');
+        btn.textContent = LANG[window._currentLang].btnText;
+        btn.style.background = window._currentLang === 'en' ? '#0056b3' : '#f8f9fa';
+        btn.style.color = window._currentLang === 'en' ? '#fff' : '#495057';
+        btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '#ced4da';
+        if (globalData) { renderTable(globalData); applyFilters(); }
+    };
+
 
     function renderTable(data) {
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
@@ -1541,10 +1600,15 @@ ${mailText}`;
             else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; }
             else { widthClass = "width: var(--w-default); min-width: 30px;"; }
 
-            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${escapeHtml(cell)}</div></th>`;
+            const lang = LANG[window._currentLang || 'ko'];
+            const cellKey = (cell||'').toString().replace(/\s+/g,'').toLowerCase();
+            const displayCell = lang.header[cellKey] || escapeHtml(cell);
+            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             if (idx === colIdx.plan) {
-                if (!hasPeriodCol) headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px;">기간</th>`;
-                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">개발업무 (WBS)</th>`;
+                const periodLabel = lang.header['기간'] || '기간';
+                const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
+                if (!hasPeriodCol) headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px;">${periodLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">${wbsLabel}</th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
@@ -1582,7 +1646,27 @@ ${mailText}`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                     if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) tdAttrs += ` class="detail-td"`;
-                } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
+               } else if (colStr.includes("상태")) {
+                    const statusVal = cell.toString().trim();
+                    const statusColors = {
+                        '진행': '#0056b3', '완료': '#28a745', '대기': '#6c757d', '보류': '#dc3545',
+                        'In Progress': '#0056b3', 'Done': '#28a745', 'Pending': '#6c757d', 'On Hold': '#dc3545'
+                    };
+                    const color = statusColors[statusVal] || '#333';
+                    tdHtml = `<select onchange="window.updateStatus(this, ${i}, ${cellIndex})"
+                        ondblclick="window.setStatusDone(this, ${i}, ${cellIndex})"
+                        style="border:none; background:transparent; font-size:12px; font-weight:bold;
+                               color:${color}; cursor:pointer; width:100%; text-align:center;">
+                        ${(LANG[window._currentLang||'ko'].status).map(s =>
+                            `<option value="${s}" ${statusVal===s?'selected':''}
+                             style="color:${statusColors[s]||'#333'}">${s}</option>`
+                        ).join('')}
+                    </select>`;
+                    tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
+                    tdAttrs = ` data-raw="${encodeURIComponent(statusVal)}"`;
+                    bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
+                    continue;
+                } else if (["시작", "완료", "기간", "view", "보고"].some(k => colStr.includes(k))) {
                     tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
                 } else {
                     tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
