@@ -1659,7 +1659,7 @@ ${mailText}`;
                     const statusVal = cell.toString().trim();
                     tdHtml = `<select onchange="window.updateStatus(this, ${i}, ${cellIndex})"
                         ondblclick="window.setStatusDone(this, ${i}, ${cellIndex})"
-                        style="border:none; background:transparent; font-size:12px; font-weight:bold;
+                        style="border:none; background:transparent; font-size:12px; font-weight:${row._level === 0 ? 'bold' : 'normal'};
                                color:#333; cursor:pointer; width:100%; text-align:center;
                                -webkit-appearance:none; -moz-appearance:none; appearance:none;">
                         ${(LANG[window._currentLang||'ko'].status).map(s =>
@@ -3360,9 +3360,9 @@ window.insertMailTask = function() {
 <div id="mail-analyzer-overlay" class="modal-overlay" onclick="window.closeMailAnalyzer(event)">
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
-        <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0;">
-            <!-- 타이틀 + X 버튼 -->
-            <div style="display:flex; align-items:center; justify-content:flex-end; padding:4px 8px;">
+       <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative;">
+                        <!-- X 버튼 -->
+            <div style="position:absolute; top:6px; right:10px; z-index:10;">
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                     style="background:none; border:none; color:white; font-size:22px; font-weight:300;
                            cursor:pointer; line-height:1; padding:0 4px;"
