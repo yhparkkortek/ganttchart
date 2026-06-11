@@ -24,13 +24,14 @@
         --today-line: rgba(224, 49, 49, 0.9); 
         --trans-text: #0056b3; 
 
-        --w-no: 2%;        
-        --w-date: 2.5%;      
-        --w-period: 2.5%;    
-        --w-wbs: 14%;        
-        --w-detail: 38%;     
-        --w-chart: 12%;      
-        --w-default: 2.5%;
+        /* 수정 */
+        --w-no: 65px;
+        --w-date: 82px;
+        --w-period: 82px;
+        --w-wbs: 458px;
+        --w-detail: 1244px;
+        --w-chart: 393px;
+        --w-default: 82px;
 
         --c-l0-bg: #1a237e;
         --c-l0-border: #0d47a1;
@@ -55,14 +56,21 @@
     }
 
     /* 차트 확장 모드 */
-    #myTable.chart-expanded th.chart-th,
-    #myTable.chart-expanded td.chart-td {
-        width: 800px !important;
-        min-width: 800px !important;
-    }
     #myTable.chart-expanded th.detail-th,
     #myTable.chart-expanded td.detail-td {
-        display: none !important;
+        width: 0 !important;
+        min-width: 0 !important;
+        max-width: 0 !important;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+        border-left: none !important;
+        border-right: none !important;
+        overflow: hidden !important;
+    }
+    #myTable.chart-expanded th.chart-th,
+    #myTable.chart-expanded td.chart-td {
+        width: 1637px !important;
+        min-width: 1637px !important;
     }
 
     @media print {
