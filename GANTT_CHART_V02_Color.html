@@ -2238,16 +2238,19 @@ window.handleAuthClick = function() {
 
 
         // =========================================================================
-        // 🛠️ [여기를 수정하세요 2] 차트 막대(스케줄 바) 색상 고정
+        // 🛠️ [여기를 수정하세요 2] 차트 막대(스케줄 바) 색상 고정 및 연동 (격차 확대 버전)
         // =========================================================================
-        // 단색을 원하시면 linear-gradient를 없애고 그냥 색상 코드(예: #FF0000)만 넣으시면 됩니다.
-        // 레벨별로 완전한 검은색으로 고정해 두었습니다.
-        
-        root.style.setProperty('--chart-l0', `#FF0000`); // 0레벨 막대 색상( 고정)
-        root.style.setProperty('--chart-l1', `hsl(${h}, ${s}%, ${l}%)`); // 1레벨 테마 연동
-        root.style.setProperty('--chart-l2', `hsl(${h}, ${Math.max(20, s - 10)}%, ${Math.min(60, l + 10)}%)`); // 2레벨 테마 연동
-        root.style.setProperty('--chart-l3', `hsl(${h}, ${Math.max(10, s - 20)}%, ${Math.min(70, l + 20)}%)`); // 3레벨 테마 연동
-        root.style.setProperty('--chart-l4', `hsl(${h}, ${Math.max(5, s - 30)}%, ${Math.min(80, l + 30)}%)`);  // 4레벨 테마 연동
+        // 1레벨과 2레벨 사이의 시각적 차이를 확실하게 벌렸습니다.
+
+        root.style.setProperty('--chart-l0', `#FF0000`); // 0레벨: 무조건 빨간색 고정
+        root.style.setProperty('--chart-l1', `hsl(${h}, ${s}%, ${l}%)`); // 1레벨: 테마 색상 원본 (기준점)
+
+        // 2레벨: 밝기를 20 더 높여서(l + 20) 1레벨과 확실히 대비되게 만듦
+        root.style.setProperty('--chart-l2', `hsl(${h}, ${Math.max(20, s - 15)}%, ${Math.min(70, l + 20)}%)`); 
+
+        // 3, 4레벨: 2레벨이 연해진 만큼 밸런스를 맞추기 위해 간격을 20씩 띄워줌
+        root.style.setProperty('--chart-l3', `hsl(${h}, ${Math.max(10, s - 30)}%, ${Math.min(85, l + 40)}%)`); 
+        root.style.setProperty('--chart-l4', `hsl(${h}, ${Math.max(5, s - 45)}%, ${Math.min(95, l + 60)}%)`);
     };
 
     // 차트 생성 로직
