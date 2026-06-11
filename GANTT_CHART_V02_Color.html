@@ -1002,7 +1002,6 @@ ${mailText}`;
         window.changeLogs.push({ 
             time: new Date().toLocaleString('ko-KR'), userName: window.currentUserName || "비로그인 (로컬)", rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal 
         });
-    }
 
     window.showHistoryModal = function() {
         let content = document.getElementById('history-content');
@@ -2300,8 +2299,8 @@ window.handleAuthClick = function() {
                 let yr  = cur.getFullYear().toString().slice(2);
                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                 let lbl = `${months[cur.getMonth()]} '${yr}`;
-                let alignStyle = pct <= 0 ? `left:0; transform:translateX(0);` 
-                               : pct >= 100 ? `right:0; transform:translateX(0);` 
+                let alignStyle = pct <= 0 ? `left:0; transform:translateX(0); padding-left:2px;` 
+                               : pct >= 100 ? `right:0; transform:translateX(0); padding-right:2px;` 
                                : `left:${pct}%; transform:translateX(-50%);`;
                 labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
             }
@@ -2318,8 +2317,8 @@ window.handleAuthClick = function() {
         for (let i = 0; i < 5; i++) {
             let pct = labelPositions[i];
             let ts  = viewStartTs + (viewDuration * pct / 100);
-            let alignStyle = i === 0 ? "left:0; transform:translateX(0);" 
-                           : i === 4 ? "right:0; transform:translateX(0);" 
+            let alignStyle = i === 0 ? "left:0; transform:translateX(0); padding-left:2px;" 
+                           : i === 4 ? "right:0; transform:translateX(0); padding-right:2px;" 
                            : `left:${pct}%; transform:translateX(-50%);`;
             labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; overflow:hidden;">${formatChartLabel(ts)}</span>`;
         }
@@ -2332,8 +2331,8 @@ window.handleAuthClick = function() {
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
         
-    return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 18px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
-                <div class="chart-axis-wrapper" style="position:relative; height:12px; overflow:hidden;">${labelHTML}</div>
+    return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px;" title="소요일수: ${durationDays}일">
+                <div class="chart-axis-wrapper" style="position:relative; height:12px; overflow:visible;">${labelHTML}</div>
                 <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
                     <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
