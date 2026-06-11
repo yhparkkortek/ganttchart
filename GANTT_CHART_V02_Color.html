@@ -968,6 +968,21 @@ ${mailText}`;
         if (!doc.fullscreenElement) requestFullScreen.call(docEl); else cancelFullScreen.call(doc);
     }
 
+    window.smartPrint = function() {
+        const isFullScreen = !!document.fullscreenElement;
+        if (!isFullScreen) {
+            if (confirm('전체화면 모드에서 인쇄하면 더 깔끔하게 출력됩니다.\n전체화면으로 전환 후 인쇄할까요?')) {
+                document.documentElement.requestFullscreen().then(() => {
+                    setTimeout(() => window.print(), 500);
+                });
+            } else {
+                window.print();
+            }
+        } else {
+            window.print();
+        }
+    };
+
     function logChange(rowIndex, colIndex, oldVal, newVal) {
         if (!globalData || globalData.length === 0) return;
         let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
