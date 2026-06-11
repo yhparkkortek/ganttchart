@@ -62,18 +62,24 @@
         display: none !important;
     }
 
-   @media print {
-        :root {
-            --w-no: 3%;          
-            --w-date: 3%;        
-            --w-period: 3%;      
-            --w-wbs: 20%;        
-            --w-detail: 28%;     
-            --w-chart: 15%;      
-            --w-default: 3%;     
+    @media print {
+            :root {
+                --w-no: 3%;          
+                --w-date: 3%;        
+                --w-period: 3%;      
+                --w-wbs: 20%;        
+                --w-detail: 28%;     
+                --w-chart: 15%;      
+                --w-default: 3%;     
+            }
+            .trans-btn-hide-print, #auth_button, #drive_save_btn, #drive_load_btn { display: none !important; }
+            .controls, hr, #table-info .btn-group { display: none !important; }
+            #table-info { position: static !important; border-radius: 0 !important; }
+            .container { height: auto !important; overflow: visible !important; border: none !important; }
+            body { margin: 0 !important; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; }
         }
-        .trans-btn-hide-print, #auth_button, #drive_save_btn, #drive_load_btn { display: none !important; }
-    }
 
     body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
     
@@ -239,7 +245,7 @@
         <div class="btn-group">
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button class="action-btn" onclick="exportToExcel()">💾 엑셀 저장</button>
-            <button class="action-btn" onclick="window.print()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" onclick="window.smartPrint()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
 
@@ -954,6 +960,7 @@ ${mailText}`;
         }
     }
 
+    
     function toggleFullScreen() {
         const doc = window.document; const docEl = doc.documentElement;
         const requestFullScreen = docEl.requestFullscreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
@@ -962,6 +969,23 @@ ${mailText}`;
     }
 
     function logChange(rowIndex, colIndex, oldVal, newVal) {
+        if (!globalData || globalData.length === 0) return;
+        let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
+        let rowName = rowIndex; 
+        let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (tr) {
+            let noTd = tr.querySelector('.no-td');
+            if (noTd) {
+                let span = noTd.querySelector('.row-num-span');
+                if (span && span.textContent) rowName = span.textContent.trim();
+                else if (noTd.textContent) rowName = noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim() || rowIndex;
+            }
+        } else if (globalData[rowIndex]) { rowName = globalData[rowIndex][colIdx.no] || rowIndex; }
+        
+        window.changeLogs.push({ 
+            time: new Date().toLocaleString('ko-KR'), userName: window.currentUserName || "비로그인 (로컬)", rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal 
+        });
+    }
         if (!globalData || globalData.length === 0) return;
         let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
         let rowName = rowIndex; 
@@ -3374,8 +3398,10 @@ window.insertMailTask = function() {
             <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 14px; min-height:36px;">
                 <span style="font-size:14px; font-weight:bold; color:white;">📧 메일 내용으로 업무 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
-                    style="background:none; border:none; color:white; font-size:22px; font-weight:300;
-                           cursor:pointer; line-height:1; padding:0 4px; flex-shrink:0;"
+                    style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5);
+                           color:white; font-size:16px; font-weight:bold; cursor:pointer;
+                           width:28px; height:28px; border-radius:4px; line-height:1;
+                           display:flex; align-items:center; justify-content:center; flex-shrink:0;"
                     title="닫기">×</button>
             </div>
             <!-- 탭 버튼 -->
