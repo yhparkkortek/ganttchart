@@ -2316,8 +2316,13 @@ window.handleAuthClick = function() {
     setTimeout(() => {
         const picker = document.getElementById('themePicker');
         if (picker) {
-            picker.oninput = function() { window.updateThemeColor(this.value); };
-            window.updateThemeColor(picker.value); 
+            const savedColor = localStorage.getItem('gantt_theme_color') || '#c8c8c8';
+            picker.value = savedColor;
+            picker.oninput = function() {
+                window.updateThemeColor(this.value);
+                localStorage.setItem('gantt_theme_color', this.value);
+            };
+            window.updateThemeColor(savedColor);
         }
     }, 100);
 </script>
