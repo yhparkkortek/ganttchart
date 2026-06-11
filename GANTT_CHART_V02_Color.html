@@ -2308,7 +2308,7 @@ window.handleAuthClick = function() {
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
         
-    return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px;" title="소요일수: ${durationDays}일">
+    return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 18px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
                 <div class="chart-axis-wrapper" style="position:relative; height:12px; overflow:hidden;">${labelHTML}</div>
                 <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
@@ -3370,11 +3370,12 @@ window.insertMailTask = function() {
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
        <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative;">
-                        <!-- X 버튼 -->
-            <div style="position:absolute; top:6px; right:10px; z-index:10;">
+            <!-- 타이틀 + X 버튼 -->
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 14px; min-height:36px;">
+                <span style="font-size:14px; font-weight:bold; color:white;">📧 메일 내용으로 업무 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                     style="background:none; border:none; color:white; font-size:22px; font-weight:300;
-                           cursor:pointer; line-height:1; padding:0 4px;"
+                           cursor:pointer; line-height:1; padding:0 4px; flex-shrink:0;"
                     title="닫기">×</button>
             </div>
             <!-- 탭 버튼 -->
