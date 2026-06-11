@@ -986,22 +986,6 @@ ${mailText}`;
             time: new Date().toLocaleString('ko-KR'), userName: window.currentUserName || "비로그인 (로컬)", rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal 
         });
     }
-        if (!globalData || globalData.length === 0) return;
-        let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
-        let rowName = rowIndex; 
-        let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
-        if (tr) {
-            let noTd = tr.querySelector('.no-td');
-            if (noTd) {
-                let span = noTd.querySelector('.row-num-span');
-                if (span && span.textContent) rowName = span.textContent.trim();
-                else if (noTd.textContent) rowName = noTd.textContent.replace(/➕|➖|◀|▶/g, '').trim() || rowIndex;
-            }
-        } else if (globalData[rowIndex]) { rowName = globalData[rowIndex][colIdx.no] || rowIndex; }
-        
-        window.changeLogs.push({ 
-            time: new Date().toLocaleString('ko-KR'), userName: window.currentUserName || "비로그인 (로컬)", rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal 
-        });
 
     window.showHistoryModal = function() {
         let content = document.getElementById('history-content');
