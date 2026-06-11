@@ -51,6 +51,17 @@
         --c-l4-text: #495057;
     }
 
+    /* 차트 확장 모드 */
+    #myTable.chart-expanded th.chart-th,
+    #myTable.chart-expanded td.chart-td {
+        width: 800px !important;
+        min-width: 800px !important;
+    }
+    #myTable.chart-expanded th.detail-th,
+    #myTable.chart-expanded td.detail-td {
+        display: none !important;
+    }
+
     @media print {
         :root {
             --w-no: 3%;          
@@ -209,6 +220,13 @@
         <span id="table-info-text">📊 Gantt Chart</span>
         
         <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
+            <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
+                style="padding:5px 10px; font-size:12px; font-weight:bold; cursor:pointer;
+                       background:#f8f9fa; border:1px solid #ced4da; border-radius:6px;
+                       color:#495057; white-space:nowrap;"
+                title="업무 상세내용 숨기고 현황 그래프 확장">
+                📊 차트 확장
+            </button>
             <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
             <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
         </div>
@@ -1516,7 +1534,7 @@ ${mailText}`;
             let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
             
             if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; } 
-            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;"; } 
+            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th";}
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; } 
             else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; } 
             else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; } 
@@ -1560,8 +1578,9 @@ ${mailText}`;
                         <div style="display:flex; flex-direction:column; align-items:center;">
                             <span class="row-num-span"></span>
                         </div>`;
-                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
+               } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
+                    if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) tdAttrs += ` class="detail-td"`;
                 } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
                     tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
                 } else {
@@ -1886,7 +1905,11 @@ ${mailText}`;
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
     }
 
-    function formatChartLabel(ts) { let d = new Date(ts); return String(d.getFullYear()).slice(-2) + "." + String(d.getMonth() + 1).padStart(2, '0') + "." + String(d.getDate()).padStart(2, '0'); }
+    function formatChartLabel(ts) {
+    const d = new Date(ts);
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + " '" + String(d.getFullYear()).slice(-2);
+}
 
 </script>
 
@@ -2021,6 +2044,38 @@ window.handleAuthClick = function() {
         return { h, s, l };
     }
 
+    // ── 차트 확장 토글 ─────────────────────────────────────
+  window._chartExpanded = false;
+    window.toggleChartExpand = function() {
+        window._chartExpanded = !window._chartExpanded;
+        const btn = document.getElementById('chart-expand-btn');
+        const table = document.getElementById('myTable');
+        if (!table) return;
+
+        document.documentElement.style.setProperty('--chart-month-detail', window._chartExpanded ? '1' : '0');
+
+        if (window._chartExpanded) {
+            table.classList.add('chart-expanded');
+            btn.style.background = '#0056b3';
+            btn.style.color = '#fff';
+            btn.style.borderColor = '#0056b3';
+            btn.textContent = '📋 기본 보기';
+        } else {
+            table.classList.remove('chart-expanded');
+            btn.style.background = '#f8f9fa';
+            btn.style.color = '#495057';
+            btn.style.borderColor = '#ced4da';
+            btn.textContent = '📊 차트 확장';
+        }
+
+        // 차트 재렌더링
+        document.querySelectorAll('.chart-td').forEach(td => {
+            const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
+            if (!rowIdx) return;
+            const row = globalData[rowIdx];
+            if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
+        });
+    };
     // 테마 색상 동적 덮어쓰기
     window.updateThemeColor = function(baseHex) {
         let hsl = hexToHSL(baseHex);
@@ -2075,7 +2130,7 @@ window.handleAuthClick = function() {
         // 단색을 원하시면 linear-gradient를 없애고 그냥 색상 코드(예: #000000)만 넣으시면 됩니다.
         // 레벨별로 완전한 검은색으로 고정해 두었습니다.
         
-        root.style.setProperty('--chart-l0', `#000000`); // 0레벨 막대 색상
+        root.style.setProperty('--chart-l0', `#e67e22`); // 0레벨 막대 색상(주황색)
         root.style.setProperty('--chart-l1', `#000000`); // 1레벨 막대 색상
         root.style.setProperty('--chart-l2', `#000000`); // 2레벨 막대 색상
         root.style.setProperty('--chart-l3', `#000000`); // 3레벨 막대 색상
@@ -2104,24 +2159,55 @@ window.handleAuthClick = function() {
     if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
 
     let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
-    let gridLines = ''; for (let i = 1; i < 4; i++) { let leftPct = (i / 4) * 100; gridLines += `<div style="position: absolute; top: 0; bottom: 0; left: ${leftPct}%; border-left: 1px dashed #dee2e6; z-index: 1;"></div>`; }
-    let todayLine = ""; if (todayPct >= -5 && todayPct <= 105) { todayLine = `<div style="position: absolute; top: -1px; bottom: -1px; left: calc(${todayPct}% - 1px); width: 2px; background-color: var(--today-line) !important; z-index: 10;" title="Today"></div>`; }
-
-    // 라벨 HTML 생성
     let isMobile = window.matchMedia("(max-width: 768px)").matches;
     let labelFontSize = isMobile ? "7px" : "9px";
     let labelWeight = isMobile ? "normal" : "bold";
-    
-    // 교체 - 1,3,5번만 (양끝 + 중간)
-    const labelPositions = [0, 25, 50, 75, 100];
-    const labelTs = labelPositions.map(pct => viewStartTs + (viewDuration * pct / 100));
+    let isExpanded = document.documentElement.style.getPropertyValue('--chart-month-detail') === '1';
 
+    let gridLines = '';
     let labelHTML = '';
-    for (let i = 0; i < 5; i++) {
-        let pct = labelPositions[i];
-        let ts = labelTs[i];
-        let alignStyle = i === 0 ? "left: 0;" : (i === 4 ? "right: 0;" : `left: ${pct}%; transform: translateX(-50%);`);
-        labelHTML += `<span class="chart-label" style="position: absolute; ${alignStyle} white-space: nowrap; z-index: 5; font-size: ${labelFontSize}; font-weight: ${labelWeight};">${formatChartLabel(ts)}</span>`;
+
+    if (isExpanded) {
+        // ── 확장 모드: 월단위 눈금 + 라벨 ──────────────────
+        const viewStart = new Date(viewStartTs);
+        const viewEnd   = new Date(viewStartTs + viewDuration);
+
+        // 월 시작점 순회
+        let cur = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
+        while (cur <= viewEnd) {
+            let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
+            if (pct >= 0 && pct <= 101) {
+                // 눈금선
+                gridLines += `<div style="position:absolute; top:0; bottom:0; left:${pct}%; border-left:1px solid #adb5bd; z-index:1;"></div>`;
+                // 월 라벨
+                let mon = cur.getMonth() + 1;
+                let yr  = cur.getFullYear().toString().slice(2);
+                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+                let lbl = `${months[cur.getMonth()]} '${yr}`;
+                let alignStyle = `left:${pct}%; transform:translateX(-50%);`;
+                labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
+            }
+            // 다음 달로
+            cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+        }
+    } else {
+        // ── 기본 모드: 4분할 눈금 ───────────────────────────
+        for (let i = 1; i < 4; i++) {
+            let leftPct = (i / 4) * 100;
+            gridLines += `<div style="position:absolute; top:0; bottom:0; left:${leftPct}%; border-left:1px dashed #dee2e6; z-index:1;"></div>`;
+        }
+        const labelPositions = [0, 25, 50, 75, 100];
+        for (let i = 0; i < 5; i++) {
+            let pct = labelPositions[i];
+            let ts  = viewStartTs + (viewDuration * pct / 100);
+            let alignStyle = i === 0 ? "left:0;" : (i === 4 ? "right:0;" : `left:${pct}%; transform:translateX(-50%);`);
+            labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight};">${formatChartLabel(ts)}</span>`;
+        }
+    }
+
+    let todayLine = "";
+    if (todayPct >= -5 && todayPct <= 105) {
+        todayLine = `<div style="position:absolute; top:-1px; bottom:-1px; left:calc(${todayPct}% - 1px); width:2px; background-color:var(--today-line) !important; z-index:10;" title="Today"></div>`;
     }
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
@@ -2320,7 +2406,7 @@ window.handleAuthClick = function() {
         window.currentUserName = tempUser; 
     };
 
-    // 1분 자동 저장 (마지막 저장 기록 대비 수정이 있을 때만 작동)
+  // 3분 자동 저장 (마지막 저장 기록 대비 수정이 있을 때만 작동)
     let inactivityTimer = null;
     function resetInactivityTimer() {
         clearTimeout(inactivityTimer);
@@ -2328,10 +2414,10 @@ window.handleAuthClick = function() {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
             if (window.currentDriveFileId && currentLogs > savedLogs) {
-                document.getElementById('file-status').textContent = "⏳ 1분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
+                document.getElementById('file-status').textContent = "⏳ 3분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
                 saveToGoogleDrive(); 
             }
-        }, 60000); 
+        }, 180000); 
     }
     ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
     resetInactivityTimer();
@@ -2853,7 +2939,7 @@ window.renderMailResult = function(result) {
                 ).join('')}
             </select>`
             : f.key === '상세내용' ?
-            `<textarea data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif; resize:vertical; min-height:60px;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
+            `<textarea data-field="${f.key}" style="width:100%; border:none; outline:none; font-size:13px; background:transparent; font-family:'Malgun Gothic',sans-serif; resize:vertical; min-height:160px;" onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
             : isDateField ?
             `<div style="display:flex; align-items:center; gap:8px; ${warnStyle} padding:2px 4px; border-radius:4px;">
                 <span class="date-clickable" 
@@ -3183,9 +3269,12 @@ window.insertMailTask = function() {
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
         <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0;">
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:10px 20px; width:100%; box-sizing:border-box;">
-                <span style="font-weight:bold; font-size:14px;">📧 메일 내용으로 업무 자동 추가</span>
-                <span class="history-close" style="color:white; cursor:pointer; font-size:18px;" onclick="window.closeMailAnalyzer()">✖</span>
+            <!-- 타이틀 + X 버튼 -->
+            <div style="display:flex; align-items:center; justify-content:flex-end; padding:4px 8px;">
+                <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
+                    style="background:none; border:none; color:white; font-size:22px; font-weight:300;
+                           cursor:pointer; line-height:1; padding:0 4px;"
+                    title="닫기">×</button>
             </div>
             <!-- 탭 버튼 -->
             <div style="display:flex; gap:6px; padding:8px 12px; background:#e67e22; border-bottom:1px solid rgba(0,0,0,0.05); flex-shrink:0;">
@@ -3402,7 +3491,7 @@ window.insertMailTask = function() {
                 </div>
 
                 <!-- 분석 결과 상세 -->
-                <div id="mail-right-detail" style="display:none; flex-direction:column; flex:1; overflow:hidden; padding:12px;">
+                <div id="mail-right-detail" style="display:none; flex-direction:column; flex:1; overflow:hidden; padding:12px; min-height:0; height:100%;">
 
                     <!-- 메일 정보 헤더 -->
                     <div id="mail-right-info"
@@ -3428,18 +3517,18 @@ window.insertMailTask = function() {
                         <div id="mail-original-body"
                              style="display:none; padding:8px 10px; background:#f8f9fa;
                                     border:1px solid #dee2e6; border-radius:0 0 6px 6px;
-                                    font-size:11px; color:#555; max-height:120px;
+                                    font-size:11px; color:#555; max-height:160px;
                                     overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
                         </div>
                     </div>
 
                     <!-- 분석 결과 테이블 -->
-                    <div id="mail-result-section" style="flex:1; overflow-y:auto; margin-bottom:8px;">
+                    <div id="mail-result-section" style="flex:1; overflow-y:auto; margin-bottom:8px; min-height:0;">
                         <div id="mail-result-table"></div>
                     </div>
 
                     <!-- 위치선택 + 등록 버튼 -->
-                    <div style="display:flex; gap:8px; align-items:center; flex-shrink:0;">
+                    <div style="display:flex; gap:8px; align-items:center; flex-shrink:0; margin-top:4px;">
                         <select id="mail-insert-position"
                                 style="flex:1; padding:6px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </select>
@@ -3450,7 +3539,7 @@ window.insertMailTask = function() {
                             ✅ 등록
                         </button>
                     </div>
-                    <div style="font-size:11px; color:#6c757d; margin-top:4px;">
+                    <div style="font-size:11px; color:#6c757d; margin-top:4px; flex-shrink:0;">
                         💡 등록 시 업무명에 📧 표시가 붙습니다. 확인 후 더블클릭으로 제거하세요.
                     </div>
                 </div>
@@ -3566,11 +3655,13 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
     // 원본 메일
     const origBody = document.getElementById('mail-original-body');
     if (origBody) {
-        origBody.textContent = `제목: ${subject}
-발신: ${sender||''}
-날짜: ${date||''}
-
-${body||''}`;
+        const bodyFormatted = (body||'')
+            .substring(0, 2000)
+            .replace(/\. /g, '.\n')
+            .replace(/([^\n])\[/g, '$1\n[')
+            .trim();
+        origBody.textContent = `제목: ${subject}\n발신: ${sender||''}\n날짜: ${date||''}\n\n${bodyFormatted}`;
+        origBody.style.maxHeight = '300px';
         origBody.style.display = 'none';
         const arrow = document.getElementById('mail-original-arrow');
         if (arrow) arrow.textContent = '▼';
@@ -3716,10 +3807,46 @@ function mfParseFile(file) {
             }
 
             // ── Quoted-Printable 디코딩 ───────────────
+            // ── Quoted-Printable 디코딩 ───────────────
             function decodeQP(str) {
                 return str
                     .replace(/=\r?\n/g, '')
                     .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+            }
+
+            // ── 중첩 multipart에서 text/plain 재귀 추출 ──
+            function extractPlainText(content, boundary) {
+                const parts = content.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+                for (const part of parts) {
+                    if (!part || part.trim() === '--') continue;
+                    const pEnd = part.search(/\r?\n\r?\n/);
+                    if (pEnd < 0) continue;
+                    const pHeader  = part.substring(0, pEnd);
+                    const pBody    = part.substring(pEnd + 2);
+                    const pHeaderL = pHeader.toLowerCase();
+                    if (pHeaderL.includes('multipart')) {
+                        const innerCt = pHeader.match(/Content-Type:[^\r\n]+(\r?\n\s+[^\r\n]+)*/i)?.[0] || '';
+                        const innerBm = innerCt.match(/boundary="?([^";\r\n]+)"?/i);
+                        if (innerBm) {
+                            const result = extractPlainText(pBody, innerBm[1].trim());
+                            if (result) return result;
+                        }
+                        continue;
+                    }
+                    if (!pHeaderL.includes('text/plain')) continue;
+                    const pte = (pHeaderL.match(/content-transfer-encoding:\s*(\S+)/)||[])[1]||'';
+                    const pcs = (pHeader.match(/charset="?([^";\s]+)"?/i)||[])[1]||'utf-8';
+                    if (pte.includes('base64')) {
+                        return decodeBase64Body(pBody.trim());
+                    } else if (pte.includes('quoted-printable')) {
+                        const raw = decodeQP(pBody);
+                        try { return new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
+                        catch { return raw; }
+                    } else {
+                        return pBody;
+                    }
+                }
+                return '';
             }
 
             if (ext === 'eml') {
@@ -3747,28 +3874,7 @@ function mfParseFile(file) {
                 if (ct.includes('multipart')) {
                     const bm = ct.match(/boundary="?([^";\r\n]+)"?/i);
                     if (bm) {
-                        const boundary = bm[1].trim();
-                        const parts = bodyPart.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-                        for (const part of parts) {
-                            if (!part || part.startsWith('--')) continue;
-                            const pEnd = part.search(/\r?\n\r?\n/);
-                            if (pEnd < 0) continue;
-                            const pHeader = part.substring(0, pEnd).toLowerCase();
-                            const pBody   = part.substring(pEnd + 2);
-                            if (!pHeader.includes('text/plain')) continue;
-                            const pte = (pHeader.match(/content-transfer-encoding:\s*(\S+)/)||[])[1]||'';
-                            const pcs = (pHeader.match(/charset="?([^";\s]+)"?/i)||[])[1]||'utf-8';
-                            if (pte.includes('base64')) {
-                                body = decodeBase64Body(pBody.trim());
-                            } else if (pte.includes('quoted-printable')) {
-                                const raw = decodeQP(pBody);
-                                try { body = new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
-                                catch { body = raw; }
-                            } else {
-                                body = pBody;
-                            }
-                            break;
-                        }
+                        body = extractPlainText(bodyPart, bm[1].trim());
                     }
                 } else if (te === 'base64') {
                     body = decodeBase64Body(bodyPart.trim());
@@ -3856,23 +3962,45 @@ async function mfCallGemini(apiKey, parsed) {
     const GAS_URL = localStorage.getItem('gas_server_url') || 
             "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
 
-        const resp = await fetch(GAS_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-            body: JSON.stringify({
-                userApiKey: apiKey,
-                prompt: prompt,
-                model: 'gemini-2.5-flash-lite'
-            })
-        });
-        const data = await resp.json();
-        if (data.status !== 'success') throw new Error(data.message);
-        let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        text = text.replace(/```json|```/g,'').trim();
-        const m = text.match(/\{[\s\S]*\}/);
-        if (!m) return null;
-        try { return JSON.parse(m[0]); } catch { return null; }
+    const MAX_RETRY = 3;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+            const resp = await fetch(GAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+                body: JSON.stringify({
+                    userApiKey: apiKey,
+                    prompt: prompt,
+                    model: 'gemini-2.5-flash-lite'
+                })
+            });
+            const data = await resp.json();
+            console.log('GAS응답status:', data.status, '메시지:', data.message);
+            if (data.status !== 'success') throw new Error(data.message);
+            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('Gemini텍스트:', text.substring(0, 200));
+            text = text.replace(/```json|```/g,'').trim();
+            // 배열 형태 먼저 시도
+            const arrMatch = text.match(/\[[\s\S]*\]/);
+            const objMatch = text.match(/\{[\s\S]*\}/);
+            const m = arrMatch && (!objMatch || arrMatch.index < objMatch.index) ? arrMatch : objMatch;
+            if (!m) { console.warn('JSON패턴없음 전체텍스트:', text.substring(0, 500)); return null; }
+            try {
+                const parsed = JSON.parse(m[0]);
+                // 배열이면 첫 번째 항목 반환
+                return Array.isArray(parsed) ? parsed[0] : parsed;
+            } catch(e) { console.error('JSON파싱실패:', e.message, m[0].substring(0,200)); return null; }
+        } catch (err) {
+            if (attempt < MAX_RETRY) {
+                console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
+                await new Promise(r => setTimeout(r, 3000));
+            } else {
+                console.error(`Gemini 분석 최종 실패 (${MAX_RETRY}회 시도)`, err.message);
+                return null;
+            }
+        }
     }
+}
 
 // ─── 일괄 분석 ───────────────────────────────────────────
 window.mfAnalyze = async function() {
@@ -3899,6 +4027,7 @@ window.mfAnalyze = async function() {
         progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
         try {
             const parsed  = await mfParseFile(f);
+            if (i > 0) await new Promise(r => setTimeout(r, 2000)); // 1.5초 딜레이
             const task = await mfCallGemini(apiKey, parsed);
             results.push({
                 idx: i, fileName: f.name,
@@ -4483,25 +4612,39 @@ async function msCallGemini(apiKey, parsed) {
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + parsed.body.substring(0, 2000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
 
-    const resp = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: {'Content-Type': 'text/plain'},
-        body: JSON.stringify({
-            userApiKey: apiKey,
-            prompt: prompt,
-            model: 'gemini-2.5-flash-lite'
-        })
-    });
-    const data = await resp.json();
-    if (data.status !== 'success') throw new Error(data.message);
-    
-    let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    text = text.replace(/```json|```/g,'').trim();
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return null;
-    try { return JSON.parse(m[0]); } catch { return null; }
-}
+    const MAX_RETRY = 3;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        try {
+            const resp = await fetch(GAS_URL, {
+                method: 'POST',
+                headers: {'Content-Type': 'text/plain'},
+                body: JSON.stringify({
+                    userApiKey: apiKey,
+                    prompt: prompt,
+                    model: 'gemini-2.5-flash-lite'
+                })
+            });
+            const data = await resp.json();
+            if (data.status !== 'success') throw new Error(data.message);
 
+            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            console.log('Gemini 원본 응답:', JSON.stringify(data).substring(0, 500));
+            console.log('추출 텍스트:', text.substring(0, 300));
+            text = text.replace(/```json|```/g,'').trim();
+            const m = text.match(/\{[\s\S]*\}/);
+            if (!m) { console.warn('JSON 패턴 없음'); return null; }
+            try { return JSON.parse(m[0]); } catch(e) { console.error('JSON 파싱 실패:', e.message); return null; }
+        } catch(err) {
+            if (attempt < MAX_RETRY) {
+                console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
+                await new Promise(r => setTimeout(r, 3000));
+            } else {
+                console.error(`Gemini 분석 최종 실패 (${MAX_RETRY}회 시도)`, err.message);
+                return null;
+            }
+        }
+    }
+}
 </script>
 
 </body>
