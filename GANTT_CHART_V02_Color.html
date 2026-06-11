@@ -2225,6 +2225,7 @@ window.handleAuthClick = function() {
         root.style.setProperty('--chart-l1', `#000000`); // 1레벨 막대 색상
         root.style.setProperty('--chart-l2', `#646464`); // 2레벨 막대 색상
         root.style.setProperty('--chart-l3', `#181818`); // 3레벨 막대 색상
+        root.style.setProperty('--chart-l4', `#181818`); // 4레벨 막대 색상
     };
 
     // 차트 생성 로직
@@ -2245,7 +2246,7 @@ window.handleAuthClick = function() {
     let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
     let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
     
-    let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : 'var(--chart-l3)'));
+    let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : (level === 3 ? 'var(--chart-l3)' : 'var(--chart-l4)')));
     let gradientStyle = `background: ${gradVar};`;
     if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
 
