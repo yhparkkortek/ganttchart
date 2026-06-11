@@ -27,7 +27,7 @@
         --w-wbs: 14%;        
         --w-detail: 38%;     
         --w-chart: 12%;      
-        --w-default: 2.5%;   
+        --w-default: 2.5%;
 
         --c-l0-bg: #1a237e;
         --c-l0-border: #0d47a1;
@@ -63,17 +63,23 @@
     }
 
     @media print {
-        :root {
-            --w-no: 3%;          
-            --w-date: 3%;        
-            --w-period: 3%;      
-            --w-wbs: 20%;        
-            --w-detail: 28%;     
-            --w-chart: 15%;      
-            --w-default: 3%;     
+            :root {
+                --w-no: 3%;          
+                --w-date: 3%;        
+                --w-period: 3%;      
+                --w-wbs: 20%;        
+                --w-detail: 28%;     
+                --w-chart: 15%;      
+                --w-default: 3%;     
+            }
+            .trans-btn-hide-print, #auth_button, #drive_save_btn, #drive_load_btn { display: none !important; }
+            .controls, hr, #table-info .btn-group { display: none !important; }
+            #table-info { position: static !important; border-radius: 0 !important; }
+            .container { height: auto !important; overflow: visible !important; border: none !important; }
+            body { margin: 0 !important; }
+            table { page-break-inside: auto; }
+            tr { page-break-inside: avoid; }
         }
-        .trans-btn-hide-print, #auth_button, #drive_save_btn, #drive_load_btn { display: none !important; }
-    }
 
     body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
     
@@ -219,22 +225,27 @@
     <div id="table-info">
         <span id="table-info-text">📊 Gantt Chart</span>
         
-        <div style="display:flex; align-items:center; margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px; gap: 8px;">
+        <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
+            <button id="lang-toggle-btn" onclick="window.toggleLang()"
+                class="action-btn" title="한글/영어 전환">
+                🌐 ENG
+            </button>
             <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
-                style="padding:5px 10px; font-size:12px; font-weight:bold; cursor:pointer;
-                       background:#f8f9fa; border:1px solid #ced4da; border-radius:6px;
-                       color:#495057; white-space:nowrap;"
-                title="업무 상세내용 숨기고 현황 그래프 확장">
+                class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">
                 📊 차트 확장
             </button>
-            <label for="themePicker" style="font-size: 13px; color: #555; cursor:pointer;">🎨 <b>테마 색상 :</b></label>
-            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)" style="cursor: pointer; width: 32px; height: 32px; border: none; padding: 0; background: none; border-radius: 4px; outline: none;" title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+            <label for="themePicker" class="action-btn" style="cursor:pointer; gap:6px;">
+                🎨 테마
+                <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)"
+                    style="cursor:pointer; width:24px; height:24px; border:none; padding:0; background:none; border-radius:3px; outline:none;"
+                    title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
+            </label>
         </div>
 
         <div class="btn-group">
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button class="action-btn" onclick="exportToExcel()">💾 엑셀 저장</button>
-            <button class="action-btn" onclick="window.print()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" onclick="window.smartPrint()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
 
@@ -949,12 +960,28 @@ ${mailText}`;
         }
     }
 
+    
     function toggleFullScreen() {
         const doc = window.document; const docEl = doc.documentElement;
         const requestFullScreen = docEl.requestFullscreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
         const cancelFullScreen = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
         if (!doc.fullscreenElement) requestFullScreen.call(docEl); else cancelFullScreen.call(doc);
     }
+
+    window.smartPrint = function() {
+        const isFullScreen = !!document.fullscreenElement;
+        if (!isFullScreen) {
+            if (confirm('전체화면 모드에서 인쇄하면 더 깔끔하게 출력됩니다.\n전체화면으로 전환 후 인쇄할까요?')) {
+                document.documentElement.requestFullscreen().then(() => {
+                    setTimeout(() => window.print(), 500);
+                });
+            } else {
+                window.print();
+            }
+        } else {
+            window.print();
+        }
+    };
 
     function logChange(rowIndex, colIndex, oldVal, newVal) {
         if (!globalData || globalData.length === 0) return;
@@ -1515,7 +1542,70 @@ ${mailText}`;
                 window.recalculateSchedules();
             } else { renderTable(globalData); applyFilters(); }
         } else { td.innerHTML = td.dataset.displayHtml || oldText; }
+   };  // ← blurCell 끝
+
+    window.updateStatus = function(select, rowIndex, colIndex) {
+        const newVal = select.value;
+        const oldVal = decodeURIComponent(select.closest('td').getAttribute('data-raw') || '');
+        if (newVal !== oldVal) {
+            // 하위 행도 함께 변경
+            window.applyStatusToChildren(rowIndex, colIndex, newVal);
+            renderTable(globalData); applyFilters();
+        }
     };
+
+    window.applyStatusToChildren = function(rowIndex, colIndex, newVal) {
+        const row = globalData[rowIndex];
+        const oldVal = globalData[rowIndex][colIndex];
+        logChange(rowIndex, colIndex, oldVal, newVal);
+        globalData[rowIndex][colIndex] = newVal;
+        // 하위 행 순회 (현재 행보다 레벨이 높은 연속된 행들)
+        const parentLevel = row._level || 0;
+        for (let i = rowIndex + 1; i < globalData.length; i++) {
+            const childRow = globalData[i];
+            if (!childRow) continue;
+            if ((childRow._level || 0) <= parentLevel) break; // 같은 레벨이나 상위면 중단
+            const childOld = childRow[colIndex];
+            logChange(i, colIndex, childOld, newVal);
+            globalData[i][colIndex] = newVal;
+        }
+    };
+
+    window.setStatusDone = function(select, rowIndex, colIndex) {
+        const oldVal = globalData[rowIndex][colIndex];
+        if (oldVal === '완료') return;
+        window.applyStatusToChildren(rowIndex, colIndex, '완료');
+        renderTable(globalData); applyFilters();
+    };
+
+    const LANG = {
+        ko: {
+            header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
+            status: ['진행','완료','대기','보류'],
+            statusMap: { '진행':'진행','완료':'완료','대기':'대기','보류':'보류',
+                         'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'보류' },
+            btnText: '🌐 ENG'
+        },
+        en: {
+            header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Workdays', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
+            status: ['Progress','Done','Pending','On Hold'],
+            statusMap: { '진행':'Progress','완료':'Done','대기':'Pending','보류':'On Hold',
+                         'Progress':'Progress','Done':'Done','Pending':'Pending','On Hold':'On Hold' },
+            btnText: '🌐 한글'
+        }
+    };
+    window._currentLang = 'ko';
+
+    window.toggleLang = function() {
+        window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
+        const btn = document.getElementById('lang-toggle-btn');
+        btn.textContent = LANG[window._currentLang].btnText;
+        btn.style.background = window._currentLang === 'en' ? '#0056b3' : '';
+        btn.style.color = window._currentLang === 'en' ? '#fff' : '';
+        btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '';
+        if (globalData) { renderTable(globalData); applyFilters(); }
+    };
+
 
     function renderTable(data) {
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
@@ -1529,21 +1619,27 @@ ${mailText}`;
 
         let headHtml = '<tr>';
         data[0].forEach((cell, idx) => {
-            if (hiddenCols.includes(idx)) return; 
-            let colName = cell ? cell.toString().replace(/\s+/g, '') : ""; let thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;"; 
+            if (hiddenCols.includes(idx)) return;
+            let colName = cell ? cell.toString().replace(/\s+/g, '') : '';
+            let thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;";
             let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
-            
-            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; } 
-            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th";}
-            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; } 
-            else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; } 
-            else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; } 
+
+            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; }
+            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
+            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
+            else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
+            else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; }
             else { widthClass = "width: var(--w-default); min-width: 30px;"; }
 
-            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${escapeHtml(cell)}</div></th>`;
+            const lang = LANG[window._currentLang || 'ko'];
+            const cellKey = (cell||'').toString().replace(/\s+/g,'').toLowerCase();
+            const displayCell = lang.header[cellKey] || escapeHtml(cell);
+            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             if (idx === colIdx.plan) {
-                 if (!hasPeriodCol) headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px;">기간</th>`;
-                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">개발업무 (WBS)</th>`;
+                const periodLabel = lang.header['기간'] || '기간';
+                const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
+                if (!hasPeriodCol) headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px;">${periodLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">${wbsLabel}</th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
@@ -1581,7 +1677,22 @@ ${mailText}`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                     if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) tdAttrs += ` class="detail-td"`;
-                } else if (["시작", "완료", "기간", "view", "보고", "상태"].some(k => colStr.includes(k))) {
+               } else if (colStr.includes("상태")) {
+                    const statusVal = cell.toString().trim();
+                    tdHtml = `<select onchange="window.updateStatus(this, ${i}, ${cellIndex})"
+                        ondblclick="window.setStatusDone(this, ${i}, ${cellIndex})"
+                        style="border:none; background:transparent; font-size:12px; font-weight:${row._level === 0 ? 'bold' : 'normal'};
+                               color:#333; cursor:pointer; width:100%; text-align:center;
+                               -webkit-appearance:none; -moz-appearance:none; appearance:none;">
+                        ${(LANG[window._currentLang||'ko'].status).map(s =>
+                            `<option value="${s}" ${statusVal===s?'selected':''}>${s}</option>`
+                        ).join('')}
+                    </select>`;
+                    tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
+                    tdAttrs = ` data-raw="${encodeURIComponent(statusVal)}"`;
+                    bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
+                    continue;
+                } else if (["시작", "완료", "기간", "view", "보고"].some(k => colStr.includes(k))) {
                     tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
                 } else {
                     tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
@@ -2045,7 +2156,7 @@ window.handleAuthClick = function() {
     }
 
     // ── 차트 확장 토글 ─────────────────────────────────────
-  window._chartExpanded = false;
+ window._chartExpanded = false;
     window.toggleChartExpand = function() {
         window._chartExpanded = !window._chartExpanded;
         const btn = document.getElementById('chart-expand-btn');
@@ -2056,15 +2167,17 @@ window.handleAuthClick = function() {
 
         if (window._chartExpanded) {
             table.classList.add('chart-expanded');
+            // 확장 모드 ON
             btn.style.background = '#0056b3';
             btn.style.color = '#fff';
-            btn.style.borderColor = '#0056b3';
+            btn.style.border = '2px solid #0056b3';
             btn.textContent = '📋 기본 보기';
         } else {
             table.classList.remove('chart-expanded');
-            btn.style.background = '#f8f9fa';
-            btn.style.color = '#495057';
-            btn.style.borderColor = '#ced4da';
+            // 확장 모드 OFF
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.border = '';
             btn.textContent = '📊 차트 확장';
         }
 
@@ -2125,15 +2238,19 @@ window.handleAuthClick = function() {
 
 
         // =========================================================================
-        // 🛠️ [여기를 수정하세요 2] 차트 막대(스케줄 바) 색상 고정
+        // 🛠️ [여기를 수정하세요 2] 차트 막대(스케줄 바) 색상 고정 및 연동 (격차 확대 버전)
         // =========================================================================
-        // 단색을 원하시면 linear-gradient를 없애고 그냥 색상 코드(예: #000000)만 넣으시면 됩니다.
-        // 레벨별로 완전한 검은색으로 고정해 두었습니다.
-        
-        root.style.setProperty('--chart-l0', `#e67e22`); // 0레벨 막대 색상(주황색)
-        root.style.setProperty('--chart-l1', `#000000`); // 1레벨 막대 색상
-        root.style.setProperty('--chart-l2', `#000000`); // 2레벨 막대 색상
-        root.style.setProperty('--chart-l3', `#000000`); // 3레벨 막대 색상
+        // 1레벨과 2레벨 사이의 시각적 차이를 확실하게 벌렸습니다.
+
+        root.style.setProperty('--chart-l0', `#FF0000`); // 0레벨: 무조건 빨간색 고정
+        root.style.setProperty('--chart-l1', `hsl(${h}, ${s}%, ${l}%)`); // 1레벨: 테마 색상 원본 (기준점)
+
+        // 2레벨: 밝기를 20 더 높여서(l + 20) 1레벨과 확실히 대비되게 만듦
+        root.style.setProperty('--chart-l2', `hsl(${h}, ${Math.max(20, s - 15)}%, ${Math.min(70, l + 20)}%)`); 
+
+        // 3, 4레벨: 2레벨이 연해진 만큼 밸런스를 맞추기 위해 간격을 20씩 띄워줌
+        root.style.setProperty('--chart-l3', `hsl(${h}, ${Math.max(10, s - 30)}%, ${Math.min(85, l + 40)}%)`); 
+        root.style.setProperty('--chart-l4', `hsl(${h}, ${Math.max(5, s - 45)}%, ${Math.min(95, l + 60)}%)`);
     };
 
     // 차트 생성 로직
@@ -2154,7 +2271,7 @@ window.handleAuthClick = function() {
     let endPct = Math.max(0, Math.min(100, ((tsEnd - viewStartTs) / viewDuration) * 100));
     let widthPct = endPct - startPct; if (widthPct <= 0 && endPct > 0) widthPct = 0.5; 
     
-    let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : 'var(--chart-l3)'));
+    let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : (level === 3 ? 'var(--chart-l3)' : 'var(--chart-l4)')));
     let gradientStyle = `background: ${gradVar};`;
     if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
 
@@ -2184,7 +2301,9 @@ window.handleAuthClick = function() {
                 let yr  = cur.getFullYear().toString().slice(2);
                 const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
                 let lbl = `${months[cur.getMonth()]} '${yr}`;
-                let alignStyle = `left:${pct}%; transform:translateX(-50%);`;
+                let alignStyle = pct <= 0 ? `left:0; transform:translateX(0); padding-left:2px;` 
+                               : pct >= 100 ? `right:0; transform:translateX(0); padding-right:2px;` 
+                               : `left:${pct}%; transform:translateX(-50%);`;
                 labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
             }
             // 다음 달로
@@ -2200,8 +2319,10 @@ window.handleAuthClick = function() {
         for (let i = 0; i < 5; i++) {
             let pct = labelPositions[i];
             let ts  = viewStartTs + (viewDuration * pct / 100);
-            let alignStyle = i === 0 ? "left:0;" : (i === 4 ? "right:0;" : `left:${pct}%; transform:translateX(-50%);`);
-            labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight};">${formatChartLabel(ts)}</span>`;
+            let alignStyle = i === 0 ? "left:0; transform:translateX(0); padding-left:2px;" 
+                           : i === 4 ? "right:0; transform:translateX(0); padding-right:2px;" 
+                           : `left:${pct}%; transform:translateX(-50%);`;
+            labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; overflow:hidden;">${formatChartLabel(ts)}</span>`;
         }
     }
 
@@ -2212,11 +2333,11 @@ window.handleAuthClick = function() {
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
         
-    return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px;" title="소요일수: ${durationDays}일">
-                <div class="chart-axis-wrapper" style="position:relative; height:12px;">${labelHTML}</div>
+    return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
+                <div class="chart-axis-wrapper" style="position:relative; height:12px; overflow:visible;">${labelHTML}</div>
                 <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
-                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:1px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
                 </div>
             </div>`;
     };
@@ -2224,8 +2345,13 @@ window.handleAuthClick = function() {
     setTimeout(() => {
         const picker = document.getElementById('themePicker');
         if (picker) {
-            picker.oninput = function() { window.updateThemeColor(this.value); };
-            window.updateThemeColor(picker.value); 
+            const savedColor = localStorage.getItem('gantt_theme_color') || '#c8c8c8';
+            picker.value = savedColor;
+            picker.oninput = function() {
+                window.updateThemeColor(this.value);
+                localStorage.setItem('gantt_theme_color', this.value);
+            };
+            window.updateThemeColor(savedColor);
         }
     }, 100);
 </script>
@@ -3268,12 +3394,15 @@ window.insertMailTask = function() {
 <div id="mail-analyzer-overlay" class="modal-overlay" onclick="window.closeMailAnalyzer(event)">
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
-        <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0;">
+       <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative;">
             <!-- 타이틀 + X 버튼 -->
-            <div style="display:flex; align-items:center; justify-content:flex-end; padding:4px 8px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:8px 14px; min-height:36px;">
+                <span style="font-size:20px; font-weight:bold; color:white;">📧 메일 내용으로 업무 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
-                    style="background:none; border:none; color:white; font-size:22px; font-weight:300;
-                           cursor:pointer; line-height:1; padding:0 4px;"
+                    style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5);
+                           color:white; font-size:20px; font-weight:bold; cursor:pointer;
+                           width:36px; height:36px; border-radius:4px; line-height:1;
+                           display:flex; align-items:center; justify-content:center; flex-shrink:0;"
                     title="닫기">×</button>
             </div>
             <!-- 탭 버튼 -->
