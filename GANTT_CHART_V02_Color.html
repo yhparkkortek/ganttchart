@@ -56,12 +56,8 @@
     /* 차트 확장 모드 */
     #myTable.chart-expanded th.chart-th,
     #myTable.chart-expanded td.chart-td {
-        width: 800px !important;
-        min-width: 800px !important;
-    }
-    #myTable.chart-expanded th.detail-th,
-    #myTable.chart-expanded td.detail-td {
-        display: none !important;
+        width: 1637px !important;
+        min-width: 1637px !important;
     }
 
     @media print {
@@ -2161,26 +2157,46 @@ window.handleAuthClick = function() {
  window._chartExpanded = false;
     window.toggleChartExpand = function() {
         window._chartExpanded = !window._chartExpanded;
-        const btn = document.getElementById('chart-expand-btn');
+        const btn   = document.getElementById('chart-expand-btn');
         const table = document.getElementById('myTable');
         if (!table) return;
 
         document.documentElement.style.setProperty('--chart-month-detail', window._chartExpanded ? '1' : '0');
 
         if (window._chartExpanded) {
+            // 확장 모드 ON: 상세내용 열을 현황 열 뒤로 이동
+            const headRow = table.querySelector('thead tr');
+            const bodyRows = table.querySelectorAll('tbody tr');
+            const detailTh = headRow ? headRow.querySelector('th.detail-th') : null;
+            if (detailTh) headRow.appendChild(detailTh);
+            bodyRows.forEach(tr => {
+                const detailTd = tr.querySelector('td.detail-td');
+                if (detailTd) tr.appendChild(detailTd);
+            });
             table.classList.add('chart-expanded');
-            // 확장 모드 ON
             btn.style.background = '#0056b3';
-            btn.style.color = '#fff';
-            btn.style.border = '2px solid #0056b3';
-            btn.textContent = '📋 기본 보기';
+            btn.style.color      = '#fff';
+            btn.style.border     = '2px solid #0056b3';
+            btn.textContent      = '📋 기본 보기';
         } else {
+            // 확장 모드 OFF: 상세내용 열을 현황 열 앞으로 복원
+            const headRow = table.querySelector('thead tr');
+            const bodyRows = table.querySelectorAll('tbody tr');
+            const chartTh = headRow ? headRow.querySelector('th.chart-th') : null;
+            if (chartTh) {
+                const detailTh = headRow.querySelector('th.detail-th');
+                if (detailTh) headRow.insertBefore(detailTh, chartTh);
+            }
+            bodyRows.forEach(tr => {
+                const chartTd = tr.querySelector('td.chart-td');
+                const detailTd = tr.querySelector('td.detail-td');
+                if (chartTd && detailTd) tr.insertBefore(detailTd, chartTd);
+            });
             table.classList.remove('chart-expanded');
-            // 확장 모드 OFF
             btn.style.background = '';
-            btn.style.color = '';
-            btn.style.border = '';
-            btn.textContent = '📊 차트 확장';
+            btn.style.color      = '';
+            btn.style.border     = '';
+            btn.textContent      = '📊 차트 확장';
         }
 
         // 차트 재렌더링
