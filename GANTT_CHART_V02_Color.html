@@ -1646,7 +1646,7 @@ ${mailText}`;
             const lang = LANG[window._currentLang || 'ko'];
             const cellKey = (cell||'').toString().replace(/\s+/g,'').toLowerCase();
             const displayCell = lang.header[cellKey] || escapeHtml(cell);
-            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
+            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${escapeHtml(cell).replace('Workdays', 'Work<br>days')}</div></th>`;
             if (idx === colIdx.plan) {
                 const periodLabel = lang.header['기간'] || '기간';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
