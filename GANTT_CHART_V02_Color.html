@@ -1609,14 +1609,22 @@ ${mailText}`;
     window._currentLang = 'ko';
 
     window.toggleLang = function() {
-        window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
-        const btn = document.getElementById('lang-toggle-btn');
-        btn.textContent = LANG[window._currentLang].btnText;
-        btn.style.background = window._currentLang === 'en' ? '#0056b3' : '';
-        btn.style.color = window._currentLang === 'en' ? '#fff' : '';
-        btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '';
-        if (globalData) { renderTable(globalData); applyFilters(); }
-    };
+    window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
+    const btn = document.getElementById('lang-toggle-btn');
+    btn.textContent = LANG[window._currentLang].btnText;
+    btn.style.background = window._currentLang === 'en' ? '#0056b3' : '';
+    btn.style.color = window._currentLang === 'en' ? '#fff' : '';
+    btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '';
+    // 헤더 교체
+    if (globalData && globalData[0]) {
+        const headerMap = LANG[window._currentLang].header;
+        globalData[0] = globalData[0].map(h => {
+            const key = h ? h.toString().toLowerCase().replace(/\s+/g, '') : '';
+            return headerMap[key] || h;
+        });
+    }
+    if (globalData) { renderTable(globalData); applyFilters(); }
+};
 
 
     function renderTable(data) {
