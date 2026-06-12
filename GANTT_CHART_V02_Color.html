@@ -15,7 +15,6 @@
         --table-cell-padding: 4px 5px;
         --table-line-height: 1.3;
         --chart-label-size:  clamp(7px, 0.75vw,  9px);
-        --chart-label-size-exp: clamp(6px, 0.6vw, 8px);  /* 확장모드: 더 작게 */
         --date-font-size:    clamp(9px, 1.05vw, 13px);
         --detail-font-size:  clamp(9px, 0.95vw, 11px);     
         --badge-bg: #e1f5fe;
@@ -24,14 +23,13 @@
         --today-line: rgba(224, 49, 49, 0.9); 
         --trans-text: #0056b3; 
 
-        /* 수정 */
-        --w-no: 65px;
-        --w-date: 82px;
-        --w-period: 82px;
-        --w-wbs: 458px;
-        --w-detail: 1244px;
-        --w-chart: 393px;
-        --w-default: 82px;
+        --w-no: 2%;        
+        --w-date: 2.5%;      
+        --w-period: 2.5%;    
+        --w-wbs: 14%;        
+        --w-detail: 38%;     
+        --w-chart: 12%;      
+        --w-default: 2.5%;
 
         --c-l0-bg: #1a237e;
         --c-l0-border: #0d47a1;
@@ -56,21 +54,14 @@
     }
 
     /* 차트 확장 모드 */
-    #myTable.chart-expanded th.detail-th,
-    #myTable.chart-expanded td.detail-td {
-        width: 0 !important;
-        min-width: 0 !important;
-        max-width: 0 !important;
-        padding-left: 0 !important;
-        padding-right: 0 !important;
-        border-left: none !important;
-        border-right: none !important;
-        overflow: hidden !important;
-    }
     #myTable.chart-expanded th.chart-th,
     #myTable.chart-expanded td.chart-td {
-        width: 1637px !important;
-        min-width: 1637px !important;
+        width: 800px !important;
+        min-width: 800px !important;
+    }
+    #myTable.chart-expanded th.detail-th,
+    #myTable.chart-expanded td.detail-td {
+        display: none !important;
     }
 
     @media print {
@@ -2287,9 +2278,9 @@ window.handleAuthClick = function() {
     if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
 
     let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
-    let isExpanded    = document.documentElement.style.getPropertyValue('--chart-month-detail') === '1';
-    let labelFontSize = isExpanded ? "var(--chart-label-size-exp)" : "var(--chart-label-size)";
+    let labelFontSize = "var(--chart-label-size)";
     let labelWeight   = "bold";
+    let isExpanded = document.documentElement.style.getPropertyValue('--chart-month-detail') === '1';
 
     let gridLines = '';
     let labelHTML = '';
