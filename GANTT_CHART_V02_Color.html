@@ -1609,24 +1609,14 @@ ${mailText}`;
     window._currentLang = 'ko';
 
     window.toggleLang = function() {
-    window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
-    const btn = document.getElementById('lang-toggle-btn');
-    btn.textContent = LANG[window._currentLang].btnText;
-    btn.style.background = window._currentLang === 'en' ? '#0056b3' : '';
-    btn.style.color = window._currentLang === 'en' ? '#fff' : '';
-    btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '';
-    // 헤더 교체
-    // 헤더 교체 (원본 보존)
-    if (globalData && globalData[0]) {
-        if (!window._originalHeader) window._originalHeader = [...globalData[0]];
-        const headerMap = LANG[window._currentLang].header;
-        globalData[0] = window._originalHeader.map(h => {
-            const key = h ? h.toString().toLowerCase().replace(/\s+/g, '') : '';
-            return headerMap[key] || h;
-        });
-    }
-    if (globalData) { renderTable(globalData); applyFilters(); }
-};
+        window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
+        const btn = document.getElementById('lang-toggle-btn');
+        btn.textContent = LANG[window._currentLang].btnText;
+        btn.style.background = window._currentLang === 'en' ? '#0056b3' : '';
+        btn.style.color = window._currentLang === 'en' ? '#fff' : '';
+        btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '';
+        if (globalData) { renderTable(globalData); applyFilters(); }
+    };
 
 
     function renderTable(data) {
@@ -1646,17 +1636,17 @@ ${mailText}`;
             let thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;";
             let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
 
-            if (colStr.includes("현황") || colStr === "chart") { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; }
-            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세") || colStr === "details") { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
+            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; }
+            else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
-            else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태") || colStr === "start" || colStr === "end" || colStr === "status") { widthClass = "width: var(--w-date); min-width: 45px;"; }
-            else if (colStr.includes("기간") || colStr === "workdays") { widthClass = "width: var(--w-period); min-width: 30px;"; }
+            else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
+            else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; }
             else { widthClass = "width: var(--w-default); min-width: 30px;"; }
 
             const lang = LANG[window._currentLang || 'ko'];
             const cellKey = (cell||'').toString().replace(/\s+/g,'').toLowerCase();
             const displayCell = lang.header[cellKey] || escapeHtml(cell);
-            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle; white-space:pre-line; line-height:1.1; font-size:11px;">${escapeHtml(cell).replace('Workdays','Work\ndays')}</div></th>`;
+            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             if (idx === colIdx.plan) {
                 const periodLabel = lang.header['기간'] || '기간';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
