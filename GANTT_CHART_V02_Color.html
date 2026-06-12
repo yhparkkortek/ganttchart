@@ -23,10 +23,10 @@
         --today-line: rgba(224, 49, 49, 0.9); 
         --trans-text: #0056b3; 
 
-        --w-no: 65px;
-        --w-date: 81px;
-        --w-period: 81px;
-        --w-wbs: 456px;
+        --w-no: 45px;
+        --w-date: 54px;
+        --w-period: 54px;
+        --w-wbs: 304px;
         --w-detail: 1238px;
         --w-chart: 391px;
         --w-default: 81px;
@@ -154,7 +154,7 @@
     .sub-parent-row-3 td { background: var(--c-l3-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l3-border); color: var(--c-l3-text); }
     .sub-parent-row-4 td { background: var(--c-l4-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l4-border); color: var(--c-l4-text); }
 
-    .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: auto; border: 1px solid #ccc; border-radius: 0 0 8px 8px; position: relative; }
+    .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: scroll; border: 1px solid #ccc; border-radius: 0 0 8px 8px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
     #file-status { margin-top: 5px; font-weight: bold; color: #28a745; font-size: 14px; }
     #print-header { display: none; }
@@ -1599,7 +1599,7 @@ ${mailText}`;
             btnText: '🌐 ENG'
         },
         en: {
-            header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Workdays', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
+            header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Dur.', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
             status: ['Progress','Done','Pending','On Hold'],
             statusMap: { '진행':'Progress','완료':'Done','대기':'Pending','보류':'On Hold',
                          'Progress':'Progress','Done':'Done','Pending':'Pending','On Hold':'On Hold' },
