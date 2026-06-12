@@ -25,7 +25,7 @@
 
         --w-no: 45px;
         --w-date: 54px;
-        --w-period: 54px;
+        --w-period: 30px;
         --w-wbs: 304px;
         --w-detail: 1238px;
         --w-chart: 391px;
@@ -338,8 +338,8 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText) {
 - 업무명: 핵심내용에서 추출하여 20자 이내 명사형으로 요약
 - 시작일: 영문(Jun 10, Friday 등) 및 상대표기(내일, ASAP 등)는 '오늘 날짜' 기준으로 계산해 반드시 "YYYY-MM-DD" 형식으로 출력. 알 수 없으면 "날짜확인필요"
 - 완료일: 마감일이 명시된 경우만 추출 (규칙은 시작일과 동일), 없으면 "날짜확인필요"
-- 상태: 진행/대기/완료 중 하나
-- 개발단계: RFQ/설계/시제품/양산 중 해당하는 단계 (불명확하면 빈값)
+- 상태: 진행/대기/완료/보류 중 하나
+- 개발단계: RFI/RFQ/NRE/AWARD/Kick-off/DESIGN/SAMPLE/EVT/ES/DVT/PVT/FAI/PP/SOP/MP/EC/RMA/EOL 중 해당하는 단계 (불명확하면 빈값)
 - 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
   * 출력 형식: [업무유형][발신→수신]발신자 → 수신자\n[핵심내용]내용\n[To do]후속조치
   * 업무유형은 아래 중 가장 적합한 하나 선택:
@@ -3066,7 +3066,7 @@ window.renderMailResult = function(result) {
         { key: '상태',     label: '🔖 상태',     type: 'select',
           options: ['진행','대기','완료','보류'] },
         { key: '개발단계', label: '🏗️ 개발단계', type: 'select',
-          options: ['','RFQ','설계','시제품','양산','EOL'] },
+          options: ['','RFI','RFQ','NRE','AWARD','Kick-off','DESIGN','SAMPLE','EVT','ES','DVT','PVT','FAI','PP','SOP','MP','EC','RMA','EOL'] },
         { key: '상세내용', label: '📝 상세내용' },
     ];
 
@@ -3435,11 +3435,11 @@ window.insertMailTask = function() {
        <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative;">
             <!-- 타이틀 + X 버튼 -->
             <div style="display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:8px 14px; min-height:36px;">
-                <span style="font-size:20px; font-weight:bold; color:white;">📧 메일 내용으로 업무 추가</span>
+                <span style="font-size:18px; font-weight:bold; color:white;">메일 내용으로 업무 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                     style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5);
                            color:white; font-size:20px; font-weight:bold; cursor:pointer;
-                           width:36px; height:36px; border-radius:4px; line-height:1;
+                           width:25px; height:25px; border-radius:4px; line-height:1;
                            display:flex; align-items:center; justify-content:center; flex-shrink:0;"
                     title="닫기">×</button>
             </div>
@@ -3457,7 +3457,7 @@ window.insertMailTask = function() {
                             background:rgba(0, 0, 0, 0.12); color:rgba(255,255,255,0.85);
                             border-radius:6px; font-size:13px; font-weight:normal;
                             white-space:nowrap; transition:all 0.25s;">
-                    📎 파일 첨부
+                    📂 파일 첨부
                 </div>
                 <div id="mail-tab-server" onclick="window.switchMailTab('server')"
                     style="flex:1; text-align:center; padding:10px 8px; cursor:pointer;
@@ -3652,7 +3652,7 @@ window.insertMailTask = function() {
                 <div id="mail-right-empty"
                      style="flex:1; display:flex; flex-direction:column;
                             align-items:center; justify-content:center; color:#ccc; text-align:center;">
-                    <div style="font-size:48px; margin-bottom:12px;">📧</div>
+                    <div style="font-size:100px; margin-bottom:12px;">📧</div>
                     <div style="font-size:14px; font-weight:bold; color:#aaa;">메일을 분석하면 여기에 결과가 표시됩니다</div>
                     <div style="font-size:12px; margin-top:6px; color:#ccc;">직접 입력하거나 파일/서버에서 메일을 가져오세요</div>
                 </div>
