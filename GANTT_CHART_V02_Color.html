@@ -30,6 +30,7 @@
         --w-detail: 1238px;
         --w-chart: 391px;
         --w-default: 81px;
+        --w-status: 60px;
 
         --c-l0-bg: #1a237e;
         --c-l0-border: #0d47a1;
@@ -58,6 +59,12 @@
     #myTable.chart-expanded td.chart-td {
         width: 1637px !important;
         min-width: 1637px !important;
+    }
+
+    th.chart-th, td.chart-td {
+        overflow-x: auto;
+        max-width: var(--w-chart);
+        white-space: nowrap;
     }
     /* 확장모드에서 뒤로 이동된 상세내용 열 숨김 */
     #myTable.chart-expanded th.detail-th,
@@ -95,8 +102,8 @@
 
     body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
     
-    .btn-group { display: flex; gap: 5px; align-items: center; }
-    .action-btn { padding: 6px 12px; font-size: 13px; font-weight: bold; cursor: pointer; border: 2px solid #0056b3; background-color: #fff; color: #0056b3; border-radius: 6px; transition: 0.2s; height: 32px; box-sizing: border-box; display: flex; align-items: center; min-width: 120px; justify-content: center; }
+    .btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+    .action-btn { padding: 6px 12px; font-size: clamp(10px, 1vw, 13px); font-weight: bold; cursor: pointer; border: 2px solid #0056b3; background-color: #fff; color: #0056b3; border-radius: 6px; transition: 0.2s; height: clamp(24px, 2.5vw, 32px); box-sizing: border-box; display: flex; align-items: center; min-width: 120px; justify-content: center; }
     .action-btn:hover { background-color: #0056b3; color: #fff; }
     #mail-btn:hover { background-color: #e67e22 !important; color: #fff !important; border-color: #e67e22 !important; }
     #excel-btn:hover { background-color: #28a745 !important; color: #fff !important; border-color: #28a745 !important; }
@@ -138,7 +145,8 @@
         border-bottom: none;
         border-radius: 8px 8px 0 0;
         box-sizing: border-box;
-        height: 50px;
+        min-height: 50px;
+        height: auto;
         position: sticky;
         top: 0;
         z-index: 100;
@@ -146,7 +154,7 @@
 
     table { border-collapse: collapse; width: auto; min-width: 100%; font-size: var(--table-font-size); table-layout: fixed; }
     th, td { padding: var(--table-cell-padding); text-align: left; vertical-align: middle; line-height: var(--table-line-height); box-sizing: border-box; border: 1px solid #ddd; }
-    th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 15px !important; padding-bottom: 15px !important; }
+    th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 10px !important; padding-bottom: 10px !important; }
     
     .parent-row td { background: var(--c-l0-bg) !important; font-weight: bold; border-top: 3px solid var(--c-l0-border); color: var(--c-l0-text) !important; border-right: 1px solid #ffffff33; }
     .parent-row .no-td, .parent-row .no-td .row-num-span { color: var(--c-l0-text) !important; }
@@ -229,6 +237,9 @@
             <button id="auth_button" class="action-btn" onclick="handleAuthClick()" style="border-color: #4285F4; color: #4285F4; height: 32px;" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 구글 드라이브 연동하기</button>
             <button id="drive_save_btn" class="action-btn drive-save-style" onclick="saveToGoogleDrive()" style="height: 32px;" disabled>💾 드라이브에 저장</button>
             <button id="drive_load_btn" class="action-btn drive-load-style" onclick="loadFromGoogleDrive()" style="height: 32px;" disabled>📂 드라이브에서 불러오기</button>
+            <div style="width:2px; height:32px; background:#ddd; margin: 0 10px;"></div>
+            <button id="history-btn" class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
+            <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
         </div>
         <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
         <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
@@ -238,9 +249,6 @@
     <div id="table-info">
         <span id="table-info-text">📊 Gantt Chart</span>
         <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
-            <button id="history-btn" class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
-            <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
-            <div style="width:2px; height:32px; background:#ddd; margin: 0 10px;"></div>
             <button id="lang-toggle-btn" onclick="window.toggleLang()"
                 class="action-btn" title="한글/영어 전환">
                 🌐 ENG
@@ -1728,7 +1736,8 @@ ${mailText}`;
             if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; }
             else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
-            else if (colStr.includes("시작") || colStr.includes("완료") || colStr.includes("상태")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
+            else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
+else if (colStr.includes("상태")) { widthClass = "width: var(--w-status); min-width: 30px;"; }
             else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; }
             else { widthClass = "width: var(--w-default); min-width: 30px;"; }
 
@@ -1782,8 +1791,7 @@ ${mailText}`;
                     const statusVal = cell.toString().trim();
                     tdHtml = `<select onchange="window.updateStatus(this, ${i}, ${cellIndex})"
                         ondblclick="window.setStatusDone(this, ${i}, ${cellIndex})"
-                        style="border:none; background:transparent; font-size:12px; font-weight:${row._level === 0 ? 'bold' : 'normal'};
-                               color:#333; cursor:pointer; width:100%; text-align:center;
+                        style="border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'};
                                -webkit-appearance:none; -moz-appearance:none; appearance:none;">
                         ${(LANG[window._currentLang||'ko'].status).map(s =>
                             `<option value="${s}" ${statusVal===s?'selected':''}>${s}</option>`
