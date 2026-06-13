@@ -98,6 +98,9 @@
     .btn-group { display: flex; gap: 5px; align-items: center; }
     .action-btn { padding: 6px 12px; font-size: 13px; font-weight: bold; cursor: pointer; border: 2px solid #0056b3; background-color: #fff; color: #0056b3; border-radius: 6px; transition: 0.2s; height: 32px; box-sizing: border-box; display: flex; align-items: center; min-width: 120px; justify-content: center; }
     .action-btn:hover { background-color: #0056b3; color: #fff; }
+    #mail-btn:hover { background-color: #e67e22 !important; color: #fff !important; border-color: #e67e22 !important; }
+    #excel-btn:hover { background-color: #28a745 !important; color: #fff !important; border-color: #28a745 !important; }
+    #print-btn:hover { background-color: #0056b3 !important; color: #fff !important; border-color: #0056b3 !important; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .history-btn { border-color: #6f42c1; color: #6f42c1; }
     .history-btn:hover { background-color: #6f42c1; color: #fff; }
@@ -256,8 +259,8 @@
 
         <div class="btn-group">
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
-            <button id="excel-btn" class="action-btn" onclick="exportToExcel()">💾 엑셀 저장</button>
-            <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#28a745; color:#28a745;">🖨️ 인쇄 (PDF)</button>
+            <button id="excel-btn" class="action-btn" onclick="exportToExcel()" style="border-color:#28a745; color:#28a745;">💾 엑셀 저장</button>
+<button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#0056b3; color:#0056b3;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
 
@@ -1612,6 +1615,8 @@ ${mailText}`;
                 'fs-btn':         '🖥️ 전체화면',
                 'excel-btn':      '💾 엑셀 저장',
                 'print-btn':      '🖨️ 인쇄 (PDF)',
+                'file-status-default': '파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)',
+                'file-status-updated': '✅ 일정이 업데이트 되었습니다.',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -1640,6 +1645,8 @@ ${mailText}`;
                 'fs-btn':         '🖥️ Fullscreen',
                 'excel-btn':      '💾 Save Excel',
                 'print-btn':      '🖨️ Print (PDF)',
+                'file-status-default': 'Select a file or drag & drop an Excel file here. (Double-click any item to edit)',
+                'file-status-updated': '✅ Schedule has been updated.',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -1676,10 +1683,21 @@ ${mailText}`;
             el.textContent = LANG[window._currentLang].filterAll;
         });
 
+        // file-status 텍스트 갱신
+        const fileStatus = document.getElementById('file-status');
+        if (fileStatus) {
+            const cur = fileStatus.textContent.trim();
+            const isUpdated = cur === LANG[window._currentLang === 'ko' ? 'en' : 'ko'].ui['file-status-updated'];
+            fileStatus.textContent = isUpdated 
+                ? LANG[window._currentLang].ui['file-status-updated']
+                : LANG[window._currentLang].ui['file-status-default'];
+        }
+
         if (globalData) { 
-            renderTable(globalData); applyFilters();
-            // 재렌더링 후 필터 라벨 재갱신
-            document.querySelectorAll('.filter-label').forEach(el => {
+            renderTable(globalData);
+            generateFilters(globalData);
+            applyFilters();
+                    document.querySelectorAll('.filter-label').forEach(el => {
                 const colName = el.dataset.colName;
                 if (colName) el.textContent = LANG[window._currentLang].filterLabel[colName] || colName;
             });
@@ -1925,7 +1943,12 @@ ${mailText}`;
 
     function generateFilters(data) {
         let savedFilters = {};
-        for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
+        const prevStatusMap = LANG[window._currentLang].statusMap;
+        for (let k in currentFilters) {
+            savedFilters[k] = new Set(
+                Array.from(currentFilters[k]).map(v => prevStatusMap[v] || v)
+            );
+        }
 
         const filterContainer = document.getElementById('dynamic-filters'); filterContainer.innerHTML = ''; currentFilters = {}; 
         existingDevStages = []; let assigneeModelsAll = {}; let assigneeModelsActive = {};
@@ -1974,7 +1997,10 @@ ${mailText}`;
                 if (col.name === '담당자') {
                     let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
                     btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
-                } else { btn.textContent = val; }
+                } else { 
+                    const statusMap = LANG[window._currentLang].statusMap;
+                    btn.textContent = statusMap[val] || val; 
+                }
                 btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
             });
             filterContainer.appendChild(groupDiv);
@@ -2556,7 +2582,7 @@ window.handleAuthClick = function() {
             // 💡 라벨 생성 (이 라벨이 '전체' 버튼의 역할을 수행합니다)
             let label = document.createElement('div'); 
             label.className = 'filter-label'; 
-            label.textContent = col.name; 
+            label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
             if (currentFilters[col.index].has('All')) label.classList.add('active'); 
             label.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); 
             groupDiv.appendChild(label);
@@ -2567,7 +2593,10 @@ window.handleAuthClick = function() {
                 if (col.name === '담당자') {
                     let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
                     btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
-                } else { btn.textContent = val; }
+                } else { 
+                    const statusMap = LANG[window._currentLang].statusMap;
+                    btn.textContent = statusMap[val] || val; 
+                }
                 btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
             });
             filterContainer.appendChild(groupDiv);
@@ -2743,7 +2772,7 @@ window.handleAuthClick = function() {
             
             let label = document.createElement('div'); 
             label.className = 'filter-label'; 
-            label.textContent = col.name; 
+            label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
             if (currentFilters[col.index].has('All')) label.classList.add('active'); 
             label.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); 
             groupDiv.appendChild(label);
@@ -2761,7 +2790,8 @@ window.handleAuthClick = function() {
                     let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
                     btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
                 } else { 
-                    btn.textContent = val; 
+                    const statusMap = LANG[window._currentLang].statusMap;
+                    btn.textContent = statusMap[val] || val; 
                 }
 
                 btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
@@ -3506,7 +3536,7 @@ window.insertMailTask = function() {
        <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative;">
             <!-- 타이틀 + X 버튼 -->
             <div style="display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:8px 14px; min-height:36px;">
-                <span style="font-size:18px; font-weight:bold; color:white;">메일 내용으로 업무 추가</span>
+                <span style="font-size:14px; font-weight:bold; color:white;">메일 내용으로 업무 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                     style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5);
                            color:white; font-size:20px; font-weight:bold; cursor:pointer;
