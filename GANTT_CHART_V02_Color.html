@@ -1081,10 +1081,12 @@ ${mailText}`;
 
         // 외부 클릭 시 닫기
         document.addEventListener('click', function(e) {
-            if (!popup.contains(e.target) && !e.target.closest('.no-td')) {
-                popup.style.display = 'none';
-            }
-        });
+        if (!popup.contains(e.target) && !e.target.closest('.no-td')
+            && !e.target.closest('#confirm-delete-modal')
+            && !e.target.closest('#confirm-level0-modal')) {
+            popup.style.display = 'none';
+        }
+    });
     }
 
     // 현재 팝업이 같은 행이면 닫기
@@ -1097,12 +1099,12 @@ ${mailText}`;
 
     // 버튼 이벤트 재등록
     let actions = {
-        'rap-up':    () => { popup.style.display='none'; window.moveRow(rowIndex, -1); },
-        'rap-dn':    () => { popup.style.display='none'; window.moveRow(rowIndex, +1); },
-        'rap-left':  () => { popup.style.display='none'; window.changeRowLevel(rowIndex, -1); },
-        'rap-right': () => { popup.style.display='none'; window.changeRowLevel(rowIndex, +1); },
-        'rap-add':   () => { popup.style.display='none'; window.addRow(rowIndex); },
-        'rap-del':   () => { popup.style.display='none'; window.deleteRow(rowIndex); },
+        'rap-up':    () => { window.moveRow(rowIndex, -1);         rowIndex--; popup.dataset.rowIndex = rowIndex; },
+        'rap-dn':    () => { window.moveRow(rowIndex, +1);         rowIndex++; popup.dataset.rowIndex = rowIndex; },
+        'rap-left':  () => { window.changeRowLevel(rowIndex, -1);              popup.dataset.rowIndex = rowIndex; },
+        'rap-right': () => { window.changeRowLevel(rowIndex, +1);              popup.dataset.rowIndex = rowIndex; },
+        'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; },
+        'rap-del':   () => { window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; } else { popup.style.display='none'; } }, 20); },
     };
     Object.entries(actions).forEach(([id, fn]) => {
         let btn = document.getElementById(id);
