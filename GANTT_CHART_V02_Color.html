@@ -224,9 +224,6 @@
             <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="display:none;" />
             <!-- 연동 버튼에 말풍선(title) 추가 -->
             <button id="auth_button" class="action-btn" onclick="handleAuthClick()" style="border-color: #4285F4; color: #4285F4; height: 32px;" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 구글 드라이브 연동하기</button>
-            <!-- 수정이력 확인 버튼 위치 이동 -->
-            <button id="history-btn" class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
-            <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
             <button id="drive_save_btn" class="action-btn drive-save-style" onclick="saveToGoogleDrive()" style="height: 32px;" disabled>💾 드라이브에 저장</button>
             <button id="drive_load_btn" class="action-btn drive-load-style" onclick="loadFromGoogleDrive()" style="height: 32px;" disabled>📂 드라이브에서 불러오기</button>
         </div>
@@ -237,8 +234,10 @@
 
     <div id="table-info">
         <span id="table-info-text">📊 Gantt Chart</span>
-        
         <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
+            <button id="history-btn" class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
+            <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
+            <div style="width:2px; height:32px; background:#ddd; margin: 0 10px;"></div>
             <button id="lang-toggle-btn" onclick="window.toggleLang()"
                 class="action-btn" title="한글/영어 전환">
                 🌐 ENG
