@@ -1412,31 +1412,28 @@ ${mailText}`;
         // ✅ 메일 분석 팝업창용 달력인 경우 (중요 수정)
         if (window.currentCalendarMailField) {
             const fieldKey = window.currentCalendarMailField;
-            
-            // 1. 데이터를 전역 객체에 즉시 저장
             window._mailAnalyzedResult[fieldKey] = str;
-            
-            // 2. 화면 텍스트 즉시 업데이트
-            const spanEl = document.getElementById(`mail-date-${fieldKey}`);
-            if (spanEl) {
-                spanEl.textContent = str;
-                spanEl.style.color = "#0056b3";
-                spanEl.style.fontWeight = "bold";
-            }
-    
-            // 3. 경고 문구 제거
-            const parentTd = spanEl ? spanEl.closest('td') : null;
-            if (parentTd) {
-                const warnDiv = parentTd.querySelector('div[style*="e67e22"]');
-                if (warnDiv) warnDiv.remove();
-                parentTd.style.background = '';
-                parentTd.style.border = '';
-            }
-    
-            document.getElementById('calendar-popup').style.display = 'none';
             window.currentCalendarMailField = null;
 
-            // 4. 날짜 선택 후 삽입 위치 자동 재설정
+            const spanEl = document.getElementById(`mail-date-${fieldKey}`);
+            if (spanEl) spanEl.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${str}</span>`;
+
+            const warnEl = spanEl ? spanEl.closest('td') : null;
+            if (warnEl) {
+                const warnDiv = warnEl.querySelector('div[style*="e67e22"]');
+                if (warnDiv) warnDiv.remove();
+            }
+
+            // 시작일 선택 시 완료일 자동 설정 (시작일 + 3일)
+            if (fieldKey === '시작일') {
+                const planDate = new Date(new Date(str).getTime() + 3 * 24 * 60 * 60 * 1000);
+                const planStr = planDate.getFullYear() + '-' + String(planDate.getMonth()+1).padStart(2,'0') + '-' + String(planDate.getDate()).padStart(2,'0');
+                window._mailAnalyzedResult['완료일'] = planStr;
+                const planSpan = document.getElementById('mail-date-완료일');
+                if (planSpan) planSpan.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${planStr}</span>`;
+            }
+
+            document.getElementById('calendar-popup').style.display = 'none';
             window.autoSetInsertPosition(str);
             return;
         }
