@@ -3252,8 +3252,17 @@ window.renderMailResult = function(result) {
     
     // ✅ 최초 분석 시에는 날짜 있을 때만 alert 표시
     const hasDate = result['시작일'] && !result['시작일'].includes('날짜확인필요');
+
+    // 완료일이 없거나 날짜확인필요인 경우 시작일 + 3일 자동 설정
+    if (hasDate && (!result['완료일'] || result['완료일'].includes('날짜확인필요'))) {
+        const planDate = new Date(new Date(result['시작일']).getTime() + 3 * 24 * 60 * 60 * 1000);
+        const planStr = planDate.getFullYear() + '-' + String(planDate.getMonth()+1).padStart(2,'0') + '-' + String(planDate.getDate()).padStart(2,'0');
+        result['완료일'] = planStr;
+        window._mailAnalyzedResult['완료일'] = planStr;
+    }
+
     window.autoSetInsertPosition(result['시작일'], hasDate);
-};
+    };
 
     window.autoSetInsertPosition = function(startDateStr, showAlert) {
         window.populateInsertPosition();
