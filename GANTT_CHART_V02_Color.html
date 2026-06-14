@@ -3248,18 +3248,20 @@ window.renderMailResult = function(result) {
     html += '</table>';
 
     document.getElementById('mail-result-table').innerHTML = html;
-    document.getElementById('mail-result-section').style.display = 'block';
-    
-    // ✅ 최초 분석 시에는 날짜 있을 때만 alert 표시
-    const hasDate = result['시작일'] && !result['시작일'].includes('날짜확인필요');
+document.getElementById('mail-result-section').style.display = 'block';
 
-    // 완료일이 없거나 날짜확인필요인 경우 시작일 + 3일 자동 설정
+// 완료일 자동 설정 (시작일 + 3일)
     if (hasDate && (!result['완료일'] || result['완료일'].includes('날짜확인필요'))) {
         const planDate = new Date(new Date(result['시작일']).getTime() + 3 * 24 * 60 * 60 * 1000);
         const planStr = planDate.getFullYear() + '-' + String(planDate.getMonth()+1).padStart(2,'0') + '-' + String(planDate.getDate()).padStart(2,'0');
         result['완료일'] = planStr;
         window._mailAnalyzedResult['완료일'] = planStr;
+        const planSpan = document.getElementById('mail-date-완료일');
+        if (planSpan) planSpan.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${planStr}</span>`;
     }
+
+    const hasDate = result['시작일'] && !result['시작일'].includes('날짜확인필요');
+    window.autoSetInsertPosition(result['시작일'], hasDate);
 
     window.autoSetInsertPosition(result['시작일'], hasDate);
     };
