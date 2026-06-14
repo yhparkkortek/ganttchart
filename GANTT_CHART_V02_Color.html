@@ -668,7 +668,7 @@ ${mailText}`;
                 row._origT2 = curT2; if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = curT2;
                 row._origT3 = curT3; if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = curT3;
                 row._origT4 = curT4; if (colIdx.taskType4 !== -1) row[colIdx.taskType4] = curT4;
-                if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level + 1; 
+                if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level; 
             }
 
             generateFilters(globalData);
@@ -2114,7 +2114,7 @@ ${mailText}`;
                 let cellVal = row[c] !== undefined && row[c] !== null ? row[c] : "";
                 if (c === colIdx.chart) { cellVal = ""; } 
                 else if (c === colIdx.no) { cellVal = rowNumCounter; } 
-                else if (c === colIdx.bogo) { cellVal = row._level !== undefined ? row._level + 1 : ""; } 
+                else if (c === colIdx.bogo) { cellVal = row._level !== undefined ? row._level : ""; } 
                 else if (c === colIdx.devStage)  { cellVal = (row._level === 0) ? (row._origDev !== undefined ? row._origDev : "") : ""; }
                 else if (c === colIdx.taskType1) { cellVal = (row._level === 1) ? prefix + (row._origT1 !== undefined ? row._origT1 : "") : ""; }
                 else if (c === colIdx.taskType2) { cellVal = (row._level === 2) ? prefix + (row._origT2 !== undefined ? row._origT2 : "") : ""; }
