@@ -4498,17 +4498,22 @@ window.mfSelectItem = function(idx) {
     // 공통 오른쪽 패널 표시
     mailShowRightDetail(r.subject, r.sender, r.date||'', r.body||'', r.project, r.task, () => {
         r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
-        mfDirectInsert(r.task);
+        if (!mfDirectInsert(r.task)) return;
         r.registered = true;
         const item = document.getElementById(`mf-list-item-${idx}`);
         if (item) {
             item.style.background = '#d4edda';
             const badge = item.querySelector('div > div:last-child');
-            if (badge) badge.innerHTML += `<span style="color:#28a745;font-size:10px;font-weight:bold;">✅등록완료</span>`;
+            if (badge) {
+                const existing = badge.querySelector('.reg-badge');
+                if (!existing) badge.innerHTML += `<span class="reg-badge" style="color:#dc3545;font-size:10px;font-weight:bold;">🔴 개별등록완료</span>`;
+            }
+            const cb = item.querySelector('input[type=checkbox]');
+            if (cb) cb.checked = false;
         }
         window._mfCurrentIdx = -1;
         window.recalculateSchedules();
-    });
+    }); 
 };
 
 // mfRightInsert → mailRightInsert 으로 통합
@@ -4516,7 +4521,7 @@ window.mfSelectItem = function(idx) {
 // ─── 연속등록 ────────────────────────────────────────────
 window.mfBatchInsert = async function() {
     const targets = window._mfResults.filter(r =>
-        r.selected && r.project && r.task && !r.registered
+        r.selected && r.task && !r.registered
     );
     if (!targets.length) { alert('등록할 항목을 체크해주세요.'); return; }
 
@@ -4524,23 +4529,28 @@ window.mfBatchInsert = async function() {
         (r.task['시작일']||'').includes('날짜확인필요') ||
         (r.task['완료일']||'').includes('날짜확인필요')
     );
-    let msg = `✅ ${targets.length}개 항목을 연속등록합니다.\n(삽입위치: 맨 마지막)\n`;
+    let msg = `✅ ${targets.length}개 항목을 연속등록합니다.\n`;
     if (needDate.length) msg += `\n⚠️ ${needDate.length}개 항목은 날짜 없이 등록됩니다.`;
     if (!confirm(msg + '\n\n계속하시겠습니까?')) return;
 
     let ok = 0;
     for (const r of targets) {
         try {
-            mfDirectInsert(r.task);
+            if (!mfDirectInsert(r.task)) return;
             r.registered = true;
             ok++;
-            // 목록 항목 업데이트
             const item = document.getElementById(`mf-list-item-${r.idx}`);
             if (item) {
                 item.style.background = '#d4edda';
                 const badge = item.querySelector('div > div:last-child');
-                if (badge) badge.innerHTML += `<span style="color:#28a745;font-size:10px;font-weight:bold;">✅등록완료</span>`;
+                if (badge) {
+                    const existing = badge.querySelector('.reg-badge');
+                    if (!existing) badge.innerHTML += `<span class="reg-badge" style="color:#28a745;font-size:10px;font-weight:bold;">✅ 연속등록완료</span>`;
+                }
+                const cb = item.querySelector('input[type=checkbox]');
+                if (cb) cb.checked = false;
             }
+            r.selected = false;
         } catch(e) { console.error(e); }
     }
 
@@ -4550,7 +4560,7 @@ window.mfBatchInsert = async function() {
 
 // 날짜체크 없이 직접 삽입
 function mfDirectInsert(task) {
-    if (!globalData || globalData.length <= 1) return;
+    if (!globalData || globalData.length <= 1) { alert('먼저 Gantt Chart 파일을 불러와주세요.'); return false; }
     const level   = parseInt(task['wbs레벨'] ?? 3);
     let newRow    = new Array(globalData[0].length).fill('');
     newRow._level = level;
@@ -4582,8 +4592,16 @@ function mfDirectInsert(task) {
     if(colIdx.content>=0) newRow[colIdx.content]=(task['상세내용']||'').replace(/\\n/g,'\n');
     const dm={1:'dur1',2:'dur2',3:'dur3',4:'dur4'};
     const di=colIdx[dm[level]||'dur3']; if(di>=0) newRow[di]='1';
-    globalData.push(newRow);
-    logChange(globalData.length-1,-1,'없음',`메일파일 연속등록: ${taskName}`);
+    const todayTs = new Date().setHours(0,0,0,0);
+    let insertIdx = globalData.length;
+    for (let i = 1; i < globalData.length; i++) {
+        if (!globalData[i]) continue;
+        const ts = globalData[i]._calcStartTs;
+        if (ts && ts >= todayTs) { insertIdx = i; break; }
+    }
+    globalData.splice(insertIdx, 0, newRow);
+    logChange(insertIdx,-1,'없음',`메일파일 연속등록: ${taskName}`);
+    return true;
 }
     // =========================================================
 // 🌐 메일 서버 탭 기능
@@ -4806,13 +4824,20 @@ window.msSelectItem = function(idx) {
     // 공통 오른쪽 패널 표시
     mailShowRightDetail(r.subject, r.sender, r.date||'', r.body||'', r.project, r.task, () => {
         r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
+        if (!mfDirectInsert(r.task)) return;
         r.registered = true;
-        const item = document.getElementById(`ms-list-item-${idx}`);
+        const item = document.getElementById(`mf-list-item-${idx}`);
         if (item) {
             item.style.background = '#d4edda';
             const badge = item.querySelector('div > div:last-child');
-            if (badge) badge.innerHTML += `<span style="color:#28a745;font-size:10px;font-weight:bold;">✅등록완료</span>`;
+            if (badge) {
+                const existing = badge.querySelector('.reg-badge');
+                if (!existing) badge.innerHTML += `<span class="reg-badge" style="color:#dc3545;font-size:10px;font-weight:bold;">🔴 개별등록완료</span>`;
+            }
+            const cb = item.querySelector('input[type=checkbox]');
+            if (cb) cb.checked = false;
         }
+        window._mfResults[idx].selected = false;
         window._msCurrentIdx = -1;
         mfDirectInsert(r.task);
         window.recalculateSchedules();
@@ -4823,8 +4848,8 @@ window.msSelectItem = function(idx) {
 
 // ─── 연속등록 ────────────────────────────────────────────
 window.msBatchInsert = async function() {
-    const targets = window._msResults.filter(r =>
-        r.selected && r.project && r.task && !r.registered
+    const targets = window._mfResults.filter(r =>
+        r.selected && r.task && !r.registered
     );
     if (!targets.length) { alert('등록할 항목을 체크해주세요.'); return; }
 
