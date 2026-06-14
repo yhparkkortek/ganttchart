@@ -397,7 +397,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
   "상태": "",
   "개발단계": "",
   "상세내용": "",
-  "wbs레벨": 3
+  "wbs레벨": 4
 }
 
 이메일:
@@ -3147,7 +3147,7 @@ window.analyzeMailContent = function() {
                 상태: (text.match(/"상태"\s*:\s*"([^"]*)"/) || [])[1] || "진행",
                 개발단계: (text.match(/"개발단계"\s*:\s*"([^"]*)"/) || [])[1] || "",
                 상세내용: (text.match(/"상세내용"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*\})/) || [])[1] || "",
-                wbs레벨: parseInt((text.match(/"wbs레벨"\s*:\s*(\d)/) || [])[1] || "3"),
+                wbs레벨: parseInt((text.match(/"wbs레벨"\s*:\s*(\d)/) || [])[1] || "4"),
             };
         }
         window._mailAnalyzedResult = parsed;
@@ -4590,7 +4590,7 @@ function mfDirectInsert(task) {function mfDirectInsert(task) {
         return false; 
     }
 
-    const level = parseInt(task['wbs레벨'] ?? 3);
+    const level = parseInt(task['wbs레벨'] ?? 4);
     // ✅ 엑셀의 전체 열 개수만큼 빈 배열 생성 (공간 부족 방지)
     let newRow = new Array(globalData[0].length).fill("");
     newRow._level = level;
