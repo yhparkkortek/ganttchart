@@ -3287,12 +3287,13 @@ window.renderMailResult = function(result) {
     window.autoSetInsertPosition = function(startDateStr, showAlert) {
         window.populateInsertPosition();
         
-        const todayStr = new Date().toISOString().split('T')[0];
-        const effectiveDateStr = (!startDateStr || startDateStr.includes('날짜확인필요')) ? todayStr : startDateStr;
-
-        if (globalData.length <= 1) { select.value = '-1'; return; }
+        const select = document.getElementById('mail-insert-position');
+        if (!startDateStr || startDateStr.includes('날짜확인필요') || globalData.length <= 1) {
+            select.value = '-1';
+            return;
+        }
     
-        const startTs = parseDateValue(effectiveDateStr) ? parseDateValue(effectiveDateStr).ts : null;
+        const startTs = parseDateValue(startDateStr) ? parseDateValue(startDateStr).ts : null;
         if (!startTs) { select.value = '-1'; return; }
     
         let bestIndex = -1;
@@ -3563,13 +3564,13 @@ window.insertMailTask = function() {
     }
 </style>
 
-<div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
-    <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
+<div id="mail-analyzer-overlay" class="modal-overlay" onclick="window.closeMailAnalyzer(event)">
+    <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
-       <div id="mail-drag-handle" class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative; cursor:move;">
+       <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative;">
             <!-- 타이틀 + X 버튼 -->
-            <div id="mail-drag-handle" style="display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:8px 14px; min-height:36px; cursor:move;">
-    <span style="font-size:14px; font-weight:bold; color:white;">⠿ 메일 내용으로 업무 추가</span>
+            <div style="display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:8px 14px; min-height:36px;">
+                <span style="font-size:14px; font-weight:bold; color:white;">메일 내용으로 업무 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                     style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5);
                            color:white; font-size:20px; font-weight:bold; cursor:pointer;
@@ -4988,42 +4989,6 @@ async function msCallGemini(apiKey, parsed) {
             }
         }
     }
-
-    // 메일 팝업 드래그 이동
-    (function() {
-        let isDragging = false, startX, startY, origLeft, origTop;
-
-        document.addEventListener('mousedown', function(e) {
-            const handle = document.getElementById('mail-drag-handle');
-            if (!handle || !handle.contains(e.target)) return;
-            const modal = handle.closest('.history-modal');
-            if (!modal) return;
-            isDragging = true;
-            startX = e.clientX; startY = e.clientY;
-            const rect = modal.getBoundingClientRect();
-            origLeft = rect.left; origTop = rect.top;
-            modal.style.position = 'fixed';
-            modal.style.margin = '0';
-            modal.style.left = origLeft + 'px';
-            modal.style.top = origTop + 'px';
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', function(e) {
-            if (!isDragging) return;
-            const handle = document.getElementById('mail-drag-handle');
-            if (!handle) return;
-            const modal = handle.closest('.history-modal');
-            if (!modal) return;
-            const dx = e.clientX - startX;
-            const dy = e.clientY - startY;
-            modal.style.left = (origLeft + dx) + 'px';
-            modal.style.top  = (origTop  + dy) + 'px';
-        });
-
-        document.addEventListener('mouseup', function() { isDragging = false; });
-    })();
-
 </script>
 
 <style>
@@ -5165,34 +5130,6 @@ async function msCallGemini(apiKey, parsed) {
             setTimeout(window.updateStickyPositions, 50);
         };
     }
-</script>
-
-<script>
-    (function() {
-        let isDragging = false, startX, startY, origLeft, origTop;
-        document.addEventListener('mousedown', function(e) {
-            const handle = document.getElementById('mail-drag-handle');
-            if (!handle || !handle.contains(e.target)) return;
-            const modal = document.getElementById('mail-analyzer-modal');
-            if (!modal) return;
-            isDragging = true;
-            const rect = modal.getBoundingClientRect();
-            origLeft = rect.left; origTop = rect.top;
-            startX = e.clientX; startY = e.clientY;
-            modal.style.transform = 'none';
-            modal.style.left = origLeft + 'px';
-            modal.style.top  = origTop  + 'px';
-            e.preventDefault();
-        });
-        document.addEventListener('mousemove', function(e) {
-            if (!isDragging) return;
-            const modal = document.getElementById('mail-analyzer-modal');
-            if (!modal) return;
-            modal.style.left = (origLeft + e.clientX - startX) + 'px';
-            modal.style.top  = (origTop  + e.clientY - startY) + 'px';
-        });
-        document.addEventListener('mouseup', function() { isDragging = false; });
-    })();
 </script>
 
 </body>
