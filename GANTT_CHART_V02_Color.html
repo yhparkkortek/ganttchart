@@ -4635,9 +4635,12 @@ function mfDirectInsert(task) {
     const di=colIdx[dm[level]||'dur3']; 
     if(di >= 0 && di < newRow.length) newRow[di] = '1';
 
-    // 엑셀 데이터 배열에 행 추가
-    globalData.push(newRow);
-    logChange(globalData.length-1,-1,'없음',`메일파일 연속등록: ${taskName}`);
+    // 삽입 위치 결정 (mail-insert-position select 값 참조)
+    const insertSelect = document.getElementById('mail-insert-position');
+    const insertAfter = insertSelect ? parseInt(insertSelect.value) : -1;
+    const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
+    globalData.splice(pos, 0, newRow);
+    logChange(pos,-1,'없음',`메일파일 등록: ${taskName}`);
     return true;
 }
 // =========================================================
