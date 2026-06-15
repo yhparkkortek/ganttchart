@@ -447,42 +447,75 @@ ${mailText}`;
     let tokenClient;
     let gapiInited = false;
     let gisInited = false;
-
+// =========================================================
+    // 🛠️ 구글 드라이브 연동 로직 (인증 토큰 배달 사고 및 먹통 해결 버전)
     // =========================================================
-    // 🛠️ 구글 드라이브 연동 로직
-    // =========================================================
-    function gapiLoaded() { gapi.load('client', intializeGapiClient); }
-    async function intializeGapiClient() {
+    window.gapiLoaded = function() { gapi.load('client', window.intializeGapiClient); }
+    
+    window.intializeGapiClient = async function() {
         await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
         gapiInited = true;
     }
-    function gisLoaded() {
+    
+    window.gisLoaded = function() {
         tokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '' });
         gisInited = true;
     }
 
-    function handleAuthClick() {
+    window.handleAuthClick = function() {
+        if (!tokenClient) {
+            alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
+            return;
+        }
+
+        const authBtn = document.getElementById('auth_button');
+        if (authBtn) {
+            authBtn.innerText = "🔄 연동 진행 중...";
+            authBtn.disabled = true;
+        }
+
         tokenClient.callback = async (resp) => {
-            if (resp.error !== undefined) { throw (resp); }
+            if (resp.error !== undefined) { 
+                console.error("구글 인증 실패:", resp.error);
+                if (authBtn) {
+                    authBtn.innerText = "🔵 구글 드라이브 연동하기";
+                    authBtn.disabled = false;
+                }
+                return; 
+            }
+            
+            // 💡 [🔑 핵심 해결] 획득한 토큰을 GAPI 엔진과 브라우저 전역 공간에 확실하게 주입합니다!
+            gapi.client.setToken(resp);
+            window.googleAccessToken = resp.access_token;
+            window.isDriveConnected = true;
+
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
-                alert(`구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
-                document.getElementById('auth_button').innerText = `🟢 ${window.currentUserName}`;
+                alert(`🎉 구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
+                if (authBtn) authBtn.innerText = `🟢 ${window.currentUserName}`;
             } catch(e) {
-                console.error("사용자 정보 가져오기 실패", e);
+                console.error("사용자 정보 추출 실패, 공용 모드로 진입:", e);
                 window.currentUserName = "익명 사용자";
                 alert('구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
-                document.getElementById('auth_button').innerText = "🟢 공용 드라이브 연동됨";
+                if (authBtn) authBtn.innerText = "🟢 공용 드라이브 연동됨";
             }
-            document.getElementById('auth_button').disabled = true;
+            
+            if (authBtn) authBtn.disabled = true;
             document.getElementById('drive_save_btn').disabled = false;
             document.getElementById('drive_load_btn').disabled = false;
+            
+            // 연동 성공 직후 프로젝트 리스트 팝업 자동 동기화
+            setTimeout(() => {
+                if (typeof window.loadFromGoogleDrive === 'function') {
+                    window.loadFromGoogleDrive();
+                }
+            }, 600);
         };
         tokenClient.requestAccessToken({prompt: 'consent'}); 
     }
 
-    async function findSaveFile(dynamicFileName) {
+    window.findSaveFile = async function(dynamicFileName) {
         try {
             let response = await gapi.client.drive.files.list({
                 q: `name='${dynamicFileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
@@ -492,7 +525,7 @@ ${mailText}`;
         } catch (err) { console.error("클라우드 파일 검색 실패:", err); return null; }
     }
 
-    async function loadFromGoogleDrive() {
+    window.loadFromGoogleDrive = async function() {
         document.getElementById('file-status').textContent = "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
         try {
             let response = await gapi.client.drive.files.list({
@@ -511,11 +544,10 @@ ${mailText}`;
         } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
-    async function saveToGoogleDrive() {
-        // 💡 [안전장치] 함수 전체를 대형 try-catch로 묶어 어떤 미세한 오류든 무조건 경고창을 띄우도록 개선합니다.
+    window.saveToGoogleDrive = async function() {
         try {
             if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
-            updatePrintTitle(); // ✅ 저장 전 파일명 강제 갱신
+            if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
             document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
             
             let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
@@ -528,8 +560,7 @@ ${mailText}`;
 
             let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns };
             
-            // ✅ 매번 파일명으로 프로젝트 클라우드 공간 검색
-            window.currentDriveFileId = await findSaveFile(dynamicFileName);
+            window.currentDriveFileId = await window.findSaveFile(dynamicFileName);
             let fileId = window.currentDriveFileId; 
             let boundary = 'foo_bar_baz';
             let metadata = { name: dynamicFileName, mimeType: 'application/json' };
@@ -537,18 +568,18 @@ ${mailText}`;
 
             let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
 
-            // 💡 [핵심 해결] 먹통 현상을 유발하던 기존 구글 라이브러리 대신 표준 fetch 엔진을 주입합니다.
+            // 💡 [이중 방어선 구축] 토큰 추출 실패를 원천 봉쇄합니다.
             const tokenObj = gapi.client.getToken();
-            const token = tokenObj ? tokenObj.access_token : null;
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            
             if (!token) {
-                alert("🔒 구글 인증 세션이 만료되었거나 정상적으로 연동되지 않았습니다.\n상단의 연동 버튼을 다시 클릭하여 로그인을 완료해 주세요.");
-                document.getElementById('file-status').textContent = "❌ 저장 실패: 인증 토큰 없음";
+                alert("🔒 구글 인증 토큰을 확보하지 못했습니다.\n상단의 연동 버튼을 다시 클릭하여 로그인을 완료해 주세요.");
+                document.getElementById('file-status').textContent = "❌ 저장 실패: 인증 토큰 유실";
                 return;
             }
 
             let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true';
             
-            // 동기식 표준 전송 시작
             let response = await fetch(url, {
                 method: fileId ? 'PATCH' : 'POST',
                 headers: {
@@ -586,7 +617,7 @@ ${mailText}`;
                 }
                 
                 alert(`❌ 저장 실패\n\n${errorMsg}`);
-                document.getElementById('file-status').textContent = "❌ 클라우드 백업 실패 (로그 확인 필요)";
+                document.getElementById('file-status').textContent = "❌ 클라우드 백업 실패";
             }
         } catch (err) { 
             alert("구글 드라이브 전송 시스템 에러: " + err.message); 
@@ -620,6 +651,7 @@ ${mailText}`;
 
     window.showDriveFileModal = function(files) {
         let listContainer = document.getElementById('drive-file-list');
+        if(!listContainer) return;
         listContainer.innerHTML = '';
         files.forEach(file => {
             let d = new Date(file.modifiedTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
@@ -638,7 +670,7 @@ ${mailText}`;
         if (e && e.target !== document.getElementById('drive-file-modal-overlay')) return;
         document.getElementById('drive-file-modal-overlay').style.display = 'none';
     }
-
+    
     // =========================================================
     // 🛠️ 날짜 및 일정(Gantt) 코어 로직
     // =========================================================
