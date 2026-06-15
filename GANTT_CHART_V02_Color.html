@@ -560,8 +560,11 @@ ${mailText}`;
 
             let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns };
             
-            window.currentDriveFileId = await window.findSaveFile(dynamicFileName);
-            let fileId = window.currentDriveFileId; 
+            // 💡 [수정] 현재 불러와서 작업 중인 고유 파일 ID가 있다면 그것을 끝까지 유지하고, 없을 때만 이름으로 새로 검색합니다.
+            if (!window.currentDriveFileId) {
+                window.currentDriveFileId = await window.findSaveFile(dynamicFileName);
+            }
+            let fileId = window.currentDriveFileId;
             let boundary = 'foo_bar_baz';
             let metadata = { name: dynamicFileName, mimeType: 'application/json' };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
@@ -670,7 +673,7 @@ ${mailText}`;
         if (e && e.target !== document.getElementById('drive-file-modal-overlay')) return;
         document.getElementById('drive-file-modal-overlay').style.display = 'none';
     }
-    
+
     // =========================================================
     // 🛠️ 날짜 및 일정(Gantt) 코어 로직
     // =========================================================
@@ -2024,6 +2027,74 @@ ${mailText}`;
         });
     }
 
+    // =========================================================
+    // 🎛️ 필터 적용 및 파일명 동적 조립 함수 (누락 복원 및 버그 완벽 수정)
+    // =========================================================
+    window.updatePrintTitle = function() {
+        try {
+            let getFilterText = (idx) => { 
+                if (idx === -1 || !currentFilters || !currentFilters[idx] || currentFilters[idx].has('All')) return "All"; 
+                return Array.from(currentFilters[idx]).join(', '); 
+            };
+            
+            let customer = getFilterText(colIdx.customer); 
+            let model = getFilterText(colIdx.model); 
+            let inch = getFilterText(colIdx.inch); 
+            let assignee = getFilterText(colIdx.assignee);
+            
+            // 필터가 All일 경우 데이터의 첫 번째 행에서 실제 텍스트를 파싱하는 안전장치
+            if (customer === "All" && globalData && globalData.length > 1) { 
+                for(let i=1; i<globalData.length; i++) { 
+                    if(globalData[i] && globalData[i][colIdx.customer]) { customer = globalData[i][colIdx.customer].toString().trim(); break; } 
+                } 
+            }
+            if (model === "All" && globalData && globalData.length > 1) { 
+                for(let i=1; i<globalData.length; i++) { 
+                    if(globalData[i] && globalData[i][colIdx.model]) { model = globalData[i][colIdx.model].toString().trim(); break; } 
+                } 
+            }
+            if ((inch === "All" || colIdx.inch === -1) && globalData && globalData.length > 1) { 
+                inch = ""; 
+                for(let i=1; i<globalData.length; i++) { 
+                    if(globalData[i] && colIdx.inch !== -1 && globalData[i][colIdx.inch]) { inch = globalData[i][colIdx.inch].toString().trim(); break; } 
+                } 
+            }
+            if (inch && inch !== "All") { let inchNum = parseFloat(inch); if (!isNaN(inchNum)) inch = inchNum.toFixed(1); }
+            if (assignee === "All" && globalData && globalData.length > 1) { 
+                for(let i=1; i<globalData.length; i++) { 
+                    if(globalData[i] && globalData[i][colIdx.assignee]) { assignee = globalData[i][colIdx.assignee].toString().trim(); break; } 
+                } 
+            }
+
+            customer = customer || "All";
+            model = model || "All";
+            assignee = assignee || "All";
+
+            const infoStr = inch ? `${customer}_${model}_${inch}_${assignee}` : `${customer}_${model}_${assignee}`; 
+            const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_').replace(/[\x00-\x1F\x7F"*/:<>?\\|]/g, ''); 
+            
+            const tableInfoTextElem = document.getElementById('table-info-text'); 
+            if (tableInfoTextElem) { tableInfoTextElem.textContent = `📑 [Gantt Chart] ` + infoStr.replace(/_/g, " > "); }
+            
+            const today = new Date(); 
+            const yy = String(today.getFullYear()).slice(-2); 
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); 
+            const dd = String(today.getDate()).padStart(2, '0'); 
+            const dateStringYYMMDD = `${yy}${mm}${dd}`; 
+            const dateStringFull = today.getFullYear() + "-" + mm + "-" + dd;
+            
+            const printDateEl = document.getElementById('print-date');
+            if (printDateEl) printDateEl.textContent = "인쇄일자: " + dateStringFull;
+            
+            const exportName = `${dateStringYYMMDD}_[Gantt Chart] ${safeInfoStr}`; 
+            document.title = exportName; 
+            window.exportFilenameStr = exportName;
+            window.driveSaveFilenameStr = `[Gantt Chart] ${safeInfoStr}`;  // 날짜 없는 드라이브 전용 파일명
+        } catch (err) {
+            console.error("파일명 자동 조립 엔진 오류:", err);
+        }
+    };
+
     function applyFilters() {
         try {
             const tbody = document.getElementById('table-body'); const trs = tbody.getElementsByTagName("tr"); let visibleCount = 1; 
@@ -2036,7 +2107,6 @@ ${mailText}`;
                     for (let colIndexStr in currentFilters) {
                         let colIndex = parseInt(colIndexStr, 10); let filterSet = currentFilters[colIndex];
                         if (!filterSet.has('All')) {
-                            // 💡 [핵심 수정] 숫자 0이 Falsy로 씹히지 않도록 null/undefined 여부로 정밀하게 체크합니다.
                             let cellValue = (rowData[colIndex] !== undefined && rowData[colIndex] !== null) ? rowData[colIndex].toString().trim() : '';
                             if (!filterSet.has(cellValue)) { showRow = false; break; }
                         }
@@ -2053,7 +2123,9 @@ ${mailText}`;
                     let chartTd = tr.querySelector('.chart-td'); if (chartTd) { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level); }
                 } else { tr.style.display = "none"; }
             }
-            updatePrintTitle(); updateFilterVisibility();
+            // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
+            if (typeof window.updatePrintTitle === 'function') window.updatePrintTitle(); 
+            updateFilterVisibility();
         } catch(e) { console.error("Filter Apply Error: ", e); }
     }
 
@@ -2067,7 +2139,6 @@ ${mailText}`;
                     let otherColIndex = parseInt(otherColIndexStr, 10); if (otherColIndex === col.index) continue; 
                     let filterSet = currentFilters[otherColIndex];
                     if (!filterSet.has('All')) {
-                        // 💡 [핵심 수정] 여기도 동일하게 숫자 0 안전 처리를 반영합니다.
                         let cellValue = (rowData[otherColIndex] !== undefined && rowData[otherColIndex] !== null) ? rowData[otherColIndex].toString().trim() : '';
                         if (!filterSet.has(cellValue)) { isRowValidForThisCol = false; break; }
                     }
