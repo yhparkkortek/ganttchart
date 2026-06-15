@@ -1438,9 +1438,31 @@ ${mailText}`;
             return;
         }
     
-        // (기존의 Gantt Chart 메인 테이블용 로직은 그대로 유지)
-        if (window.currentCalendarRow !== undefined && window.currentCalendarCol !== undefined) {
-            // ... (기존 로직 동일) ...
+        if (window.currentCalendarRow !== undefined && window.currentCalendarCol !== undefined && window.currentCalendarRow !== null) {
+            let r = window.currentCalendarRow; let c = window.currentCalendarCol;
+            let selectedTs = new Date(y, m, d).setHours(0,0,0,0);
+
+            if (c === colIdx.plan && colIdx.start !== -1) {
+                let startTs = globalData[r]._calcStartTs;
+                if (startTs && selectedTs < startTs) {
+                    alert(`⚠️ 완료일(${str})이 시작일(${formatTableDate(startTs)})보다 빠를 수 없습니다.`);
+                    return;
+                }
+            }
+            if (c === colIdx.start && colIdx.plan !== -1) {
+                let planTs = globalData[r]._calcPlanTs;
+                if (planTs && selectedTs > planTs) {
+                    alert(`⚠️ 시작일(${str})이 완료일(${formatTableDate(planTs)})보다 늦을 수 없습니다.`);
+                    return;
+                }
+            }
+
+            let oldVal = globalData[r][c] || "";
+            logChange(r, c, oldVal, str);
+            globalData[r][c] = str;
+            if (c === colIdx.start) { globalData[r]._startForced = true; globalData[r]._planForced = false; if (colIdx.plan !== -1) globalData[r][colIdx.plan] = ""; }
+            if (c === colIdx.plan)  { globalData[r]._planForced = true; globalData[r]._startForced = false; if (colIdx.dur1 !== -1) globalData[r][colIdx.dur1] = ""; if (colIdx.dur2 !== -1) globalData[r][colIdx.dur2] = ""; if (colIdx.dur3 !== -1) globalData[r][colIdx.dur3] = ""; if (colIdx.dur4 !== -1) globalData[r][colIdx.dur4] = ""; if (colIdx.period !== -1) globalData[r][colIdx.period] = ""; }
+
             document.getElementById('calendar-popup').style.display = 'none';
             window.recalculateSchedules();
         }
