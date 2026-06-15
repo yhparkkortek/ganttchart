@@ -905,9 +905,7 @@ ${mailText}`;
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
         let headerRow = []; let filesProcessed = 0; let totalFiles = files.length;
         // 드라이브 연동 유지 시 기존 로그 보존
-        if (!window.currentDriveFileId && !window.isDriveConnected) {
-            window.changeLogs = []; window.lastSavedLogCount = 0;
-        } 
+        window.changeLogs = []; window.lastSavedLogCount = 0;
         
         document.getElementById('file-status').textContent = "데이터를 분석하고 일정을 연산하는 중입니다...";
 
