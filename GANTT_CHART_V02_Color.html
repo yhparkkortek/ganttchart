@@ -3287,13 +3287,12 @@ window.renderMailResult = function(result) {
     window.autoSetInsertPosition = function(startDateStr, showAlert) {
         window.populateInsertPosition();
         
-        const select = document.getElementById('mail-insert-position');
-        if (!startDateStr || startDateStr.includes('날짜확인필요') || globalData.length <= 1) {
-            select.value = '-1';
-            return;
-        }
+        const todayStr = new Date().toISOString().split('T')[0];
+        const effectiveDateStr = (!startDateStr || startDateStr.includes('날짜확인필요')) ? todayStr : startDateStr;
+
+        if (globalData.length <= 1) { select.value = '-1'; return; }
     
-        const startTs = parseDateValue(startDateStr) ? parseDateValue(startDateStr).ts : null;
+        const startTs = parseDateValue(effectiveDateStr) ? parseDateValue(effectiveDateStr).ts : null;
         if (!startTs) { select.value = '-1'; return; }
     
         let bestIndex = -1;
