@@ -1988,7 +1988,8 @@ ${mailText}`;
                     for (let colIndexStr in currentFilters) {
                         let colIndex = parseInt(colIndexStr, 10); let filterSet = currentFilters[colIndex];
                         if (!filterSet.has('All')) {
-                            let cellValue = rowData[colIndex] ? rowData[colIndex].toString().trim() : '';
+                            // 💡 [핵심 수정] 숫자 0이 Falsy로 씹히지 않도록 null/undefined 여부로 정밀하게 체크합니다.
+                            let cellValue = (rowData[colIndex] !== undefined && rowData[colIndex] !== null) ? rowData[colIndex].toString().trim() : '';
                             if (!filterSet.has(cellValue)) { showRow = false; break; }
                         }
                     }
@@ -2008,94 +2009,6 @@ ${mailText}`;
         } catch(e) { console.error("Filter Apply Error: ", e); }
     }
 
-    function generateFilters(data) {
-        let savedFilters = {};
-        const prevStatusMap = LANG[window._currentLang].statusMap;
-        for (let k in currentFilters) {
-            savedFilters[k] = new Set(
-                Array.from(currentFilters[k]).map(v => prevStatusMap[v] || v)
-            );
-        }
-
-        const filterContainer = document.getElementById('dynamic-filters'); filterContainer.innerHTML = ''; currentFilters = {}; 
-        existingDevStages = []; let assigneeModelsAll = {}; let assigneeModelsActive = {};
-
-        for(let i = 1; i < data.length; i++) {
-            if (!data[i] || data[i].join('').trim() === '') continue;
-            let assignee = colIdx.assignee !== -1 ? data[i][colIdx.assignee] : "";
-            let status = colIdx.status !== -1 && data[i][colIdx.status] ? data[i][colIdx.status].toString().toLowerCase() : "";
-            let model = colIdx.model !== -1 ? data[i][colIdx.model] : "";
-            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : "";
-            
-            if (devStage !== undefined && devStage !== null) {
-                let s = devStage.toString().trim(); if (s !== '' && !existingDevStages.includes(s)) existingDevStages.push(s);
-            }
-            if (assignee !== undefined && assignee !== null && assignee.toString().trim() !== '') {
-                let strAssignee = assignee.toString().trim();
-                if (!assigneeModelsAll[strAssignee]) assigneeModelsAll[strAssignee] = new Set();
-                if (!assigneeModelsActive[strAssignee]) assigneeModelsActive[strAssignee] = new Set();
-                if (model !== undefined && model !== null && model.toString().trim() !== '') {
-                    let strModel = model.toString().trim(); assigneeModelsAll[strAssignee].add(strModel);
-                    let isDone = status.includes('complete') || status.includes('완료') || status.includes('cancel') || status.includes('취소') || status.includes('drop') || status.includes('드랍');
-                    if (!isDone) { assigneeModelsActive[strAssignee].add(strModel); }
-                }
-            }
-        }
-
-        filterColumns.forEach(col => {
-            let uniqueValues = new Set();
-            for(let i = 1; i < data.length; i++) {
-                if (!data[i] || data[i].join('').trim() === '') continue; 
-                let val = data[i][col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { uniqueValues.add(val.toString().trim()); }
-            }
-            let valuesArray = Array.from(uniqueValues);
-            if (col.name === '개발단계') { valuesArray = existingDevStages; } else { valuesArray.sort(); }
-
-            currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
-            let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
-            let label = document.createElement('div'); label.className = 'filter-label'; label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name; groupDiv.appendChild(label);
-            let allBtn = document.createElement('button'); allBtn.className = 'btn btn-all'; 
-            if (currentFilters[col.index].has('All')) allBtn.classList.add('active');
-            allBtn.textContent = LANG[window._currentLang].filterAll; allBtn.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); groupDiv.appendChild(allBtn);
-
-            valuesArray.forEach(val => {
-                let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
-                if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
-                if (col.name === '담당자') {
-                    let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
-                    btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
-                } else { 
-                    const statusMap = LANG[window._currentLang].statusMap;
-                    btn.textContent = statusMap[val] || val; 
-                }
-                btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
-            });
-            filterContainer.appendChild(groupDiv);
-        });
-    }
-
-    function updatePrintTitle() {
-        let getFilterText = (idx) => { if (idx === -1 || !currentFilters[idx] || currentFilters[idx].has('All')) return "All"; return Array.from(currentFilters[idx]).join(', '); };
-        let customer = getFilterText(colIdx.customer); let model = getFilterText(colIdx.model); let inch = getFilterText(colIdx.inch); let assignee = getFilterText(colIdx.assignee);
-        if (customer === "All") { for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && globalData[i][colIdx.customer]) { customer = globalData[i][colIdx.customer]; break; } } }
-        if (model === "All") { for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && globalData[i][colIdx.model]) { model = globalData[i][colIdx.model]; break; } } }
-        if (inch === "All" || colIdx.inch === -1) { inch = ""; for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && colIdx.inch !== -1 && globalData[i][colIdx.inch]) { inch = globalData[i][colIdx.inch]; break; } } }
-        if (inch !== "") { const inchNum = parseFloat(inch); if (!isNaN(inchNum)) inch = inchNum.toFixed(1); }
-        if (assignee === "All") { for(let i=1; i<globalData.length; i++) { if(!globalData[i]) continue; if(globalData[i].join('').trim() !== '' && globalData[i][colIdx.assignee]) { assignee = globalData[i][colIdx.assignee]; break; } } }
-
-        const infoStr = inch ? `${customer}_${model}_${inch}_${assignee}` : `${customer}_${model}_${assignee}`; const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_');
-        const tableInfoTextElem = document.getElementById('table-info-text'); 
-        if (tableInfoTextElem) { tableInfoTextElem.textContent = `📑 [Gantt Chart] ` + infoStr.replace(/_/g, " > "); }
-        
-        const today = new Date(); const yy = String(today.getFullYear()).slice(-2); const mm = String(today.getMonth() + 1).padStart(2, '0'); const dd = String(today.getDate()).padStart(2, '0');
-        const dateStringYYMMDD = `${yy}${mm}${dd}`; const dateStringFull = today.getFullYear() + "-" + mm + "-" + dd;
-        
-        document.getElementById('print-date').textContent = "인쇄일자: " + dateStringFull;
-        const exportName = `${dateStringYYMMDD}_[Gantt Chart] ${safeInfoStr}`; 
-        document.title = exportName; window.exportFilenameStr = exportName;
-        window.driveSaveFilenameStr = `[Gantt Chart] ${safeInfoStr}`;  // 날짜 없는 드라이브 전용 파일명
-    }
-
     function updateFilterVisibility() {
         filterColumns.forEach(col => {
             let validValues = new Set();
@@ -2105,7 +2018,11 @@ ${mailText}`;
                 for (let otherColIndexStr in currentFilters) {
                     let otherColIndex = parseInt(otherColIndexStr, 10); if (otherColIndex === col.index) continue; 
                     let filterSet = currentFilters[otherColIndex];
-                    if (!filterSet.has('All')) { let cellValue = rowData[otherColIndex] ? rowData[otherColIndex].toString().trim() : ''; if (!filterSet.has(cellValue)) { isRowValidForThisCol = false; break; } }
+                    if (!filterSet.has('All')) {
+                        // 💡 [핵심 수정] 여기도 동일하게 숫자 0 안전 처리를 반영합니다.
+                        let cellValue = (rowData[otherColIndex] !== undefined && rowData[otherColIndex] !== null) ? rowData[otherColIndex].toString().trim() : '';
+                        if (!filterSet.has(cellValue)) { isRowValidForThisCol = false; break; }
+                    }
                 }
                 if (isRowValidForThisCol) { let val = rowData[col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { validValues.add(val.toString().trim()); } }
             }
@@ -2587,6 +2504,7 @@ window.handleAuthClick = function() {
     // =========================================================
     
     // 기존 generateFilters 덮어쓰기
+    // 2. 필터 생성 로직 덮어쓰기 (WBS 레벨 한글 명칭 매핑 버전)
     window.generateFilters = function(data) {
         let savedFilters = {};
         for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
@@ -2616,6 +2534,9 @@ window.handleAuthClick = function() {
             }
         }
 
+        const orderMap = { 'LEVEL(WBS)': 1, '업무상태': 2, '개발단계': 3 };
+        filterColumns.sort((a, b) => (orderMap[a.name] || 99) - (orderMap[b.name] || 99));
+
         filterColumns.forEach(col => {
             let uniqueValues = new Set();
             for(let i = 1; i < data.length; i++) {
@@ -2628,7 +2549,11 @@ window.handleAuthClick = function() {
             currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
             let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
             
-            // 💡 라벨 생성 (이 라벨이 '전체' 버튼의 역할을 수행합니다)
+            if (col.name === '개발단계') {
+                groupDiv.style.width = '100%';
+                groupDiv.style.marginTop = '6px';
+            }
+            
             let label = document.createElement('div'); 
             label.className = 'filter-label'; 
             label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
@@ -2636,16 +2561,34 @@ window.handleAuthClick = function() {
             label.onclick = (e) => updateFilter(e, col.index, 'All', groupDiv); 
             groupDiv.appendChild(label);
 
+            // 💡 WBS 레벨 숫자를 사용자 친화적인 한글 레이블로 매핑합니다.
+            const wbsLabels = {
+                '0': '0 (대분류)',
+                '1': '1 (소분류1)',
+                '2': '2 (소분류2)',
+                '3': '3 (세부업무)',
+                '4': '4 (하위업무)'
+            };
+
             valuesArray.forEach(val => {
                 let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
                 if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
-                if (col.name === '담당자') {
+                
+                if (col.name === 'LEVEL(WBS)') {
+                    // 💡 숫자가 아닌 든든한 명칭으로 버튼 텍스트를 출력합니다.
+                    btn.textContent = wbsLabels[val] || `Level ${val}`;
+                } else if (col.name === '개발단계') {
+                    btn.title = val;
+                    let displayVal = val.length > 10 ? val.substring(0, 10) + "~" : val;
+                    btn.textContent = displayVal;
+                } else if (col.name === '담당자') {
                     let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
                     btn.innerHTML = `${val} <span class="badge" title="진행 모델 수 / 전체 모델 수">${countActive}/${countAll}</span>`;
                 } else { 
                     const statusMap = LANG[window._currentLang].statusMap;
                     btn.textContent = statusMap[val] || val; 
                 }
+
                 btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
             });
             filterContainer.appendChild(groupDiv);
