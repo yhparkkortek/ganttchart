@@ -3288,12 +3288,14 @@ window.renderMailResult = function(result) {
         window.populateInsertPosition();
         
         const select = document.getElementById('mail-insert-position');
-        if (!startDateStr || startDateStr.includes('날짜확인필요') || globalData.length <= 1) {
-            select.value = '-1';
-            return;
-        }
-    
-        const startTs = parseDateValue(startDateStr) ? parseDateValue(startDateStr).ts : null;
+        if (globalData.length <= 1) { select.value = '-1'; return; }
+
+        // 1순위: 분석된 시작일 / 2순위: 오늘 날짜
+        const todayStr = new Date().toISOString().split('T')[0];
+        const effectiveStr = (startDateStr && !startDateStr.includes('날짜확인필요'))
+            ? startDateStr : todayStr;
+
+        const startTs = parseDateValue(effectiveStr) ? parseDateValue(effectiveStr).ts : null;
         if (!startTs) { select.value = '-1'; return; }
     
         let bestIndex = -1;
@@ -3307,8 +3309,6 @@ window.renderMailResult = function(result) {
         }
     
         select.value = bestIndex !== -1 ? String(bestIndex) : '-1';
-    
-        // 💡 팝업 알림 무음 처리 (사용자 요청에 따라 알림창을 띄우지 않고 배경에서 위치만 자동 설정함)
     };
 
 window.editPrompt = function() {
@@ -3469,7 +3469,7 @@ window.insertMailTask = function() {
 
     const r = window._mailAnalyzedResult;
     const insertAfter = parseInt(document.getElementById('mail-insert-position').value);
-    const wbsLevel = parseInt(r['wbs레벨'] ?? 3);
+    const wbsLevel = parseInt(r['wbs레벨'] ?? 4);
 
     let newRow = new Array(globalData[0].length).fill("");
     newRow._level = wbsLevel;
@@ -3564,13 +3564,13 @@ window.insertMailTask = function() {
     }
 </style>
 
-<div id="mail-analyzer-overlay" class="modal-overlay" onclick="window.closeMailAnalyzer(event)">
-    <div class="history-modal" onclick="event.stopPropagation()" style="max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
+<div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
+    <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
-       <div class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative;">
+       <div id="mail-drag-handle" class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative; cursor:move;">
             <!-- 타이틀 + X 버튼 -->
             <div style="display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:8px 14px; min-height:36px;">
-                <span style="font-size:14px; font-weight:bold; color:white;">메일 내용으로 업무 추가</span>
+                <span style="font-size:14px; font-weight:bold; color:white;">⠿ 메일 내용으로 업무 추가</span>
                 <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                     style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5);
                            color:white; font-size:20px; font-weight:bold; cursor:pointer;
@@ -4635,12 +4635,9 @@ function mfDirectInsert(task) {
     const di=colIdx[dm[level]||'dur3']; 
     if(di >= 0 && di < newRow.length) newRow[di] = '1';
 
-    // 삽입 위치 결정 (mail-insert-position select 값 참조)
-    const insertSelect = document.getElementById('mail-insert-position');
-    const insertAfter = insertSelect ? parseInt(insertSelect.value) : -1;
-    const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
-    globalData.splice(pos, 0, newRow);
-    logChange(pos,-1,'없음',`메일파일 등록: ${taskName}`);
+    // 엑셀 데이터 배열에 행 추가
+    globalData.push(newRow);
+    logChange(globalData.length-1,-1,'없음',`메일파일 연속등록: ${taskName}`);
     return true;
 }
 // =========================================================
@@ -5135,5 +5132,32 @@ async function msCallGemini(apiKey, parsed) {
     }
 </script>
 
+<script>
+(function() {
+    let isDragging = false, startX, startY, origLeft, origTop;
+    document.addEventListener('mousedown', function(e) {
+        const handle = document.getElementById('mail-drag-handle');
+        if (!handle || !handle.contains(e.target)) return;
+        const modal = document.getElementById('mail-analyzer-modal');
+        if (!modal) return;
+        isDragging = true;
+        const rect = modal.getBoundingClientRect();
+        origLeft = rect.left; origTop = rect.top;
+        startX = e.clientX; startY = e.clientY;
+        modal.style.transform = 'none';
+        modal.style.left = origLeft + 'px';
+        modal.style.top  = origTop  + 'px';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const modal = document.getElementById('mail-analyzer-modal');
+        if (!modal) return;
+        modal.style.left = (origLeft + e.clientX - startX) + 'px';
+        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', function() { isDragging = false; });
+})();
+</script>
 </body>
 </html>
