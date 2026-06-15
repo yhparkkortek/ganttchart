@@ -512,70 +512,86 @@ ${mailText}`;
     }
 
     async function saveToGoogleDrive() {
-        if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
-        updatePrintTitle(); // ✅ 저장 전 파일명 강제 갱신
-        document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
-        let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
-        let serializedGlobalData = globalData.map(row => {
-            let obj = { data: Array.from(row) };
-            for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
-            return obj;
-        });
-
-        let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns };
-        
+        // 💡 [안전장치] 함수 전체를 대형 try-catch로 묶어 어떤 미세한 오류든 무조건 경고창을 띄우도록 개선합니다.
         try {
-            // ✅ 매번 파일명으로 재검색 (인치 다른 파일 혼용 방지)
+            if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
+            updatePrintTitle(); // ✅ 저장 전 파일명 강제 갱신
+            document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
+            
+            let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
+            
+            let serializedGlobalData = globalData.map(row => {
+                let obj = { data: Array.from(row) };
+                for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
+                return obj;
+            });
+
+            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns };
+            
+            // ✅ 매번 파일명으로 프로젝트 클라우드 공간 검색
             window.currentDriveFileId = await findSaveFile(dynamicFileName);
-            let fileId = window.currentDriveFileId; let boundary = 'foo_bar_baz';
+            let fileId = window.currentDriveFileId; 
+            let boundary = 'foo_bar_baz';
             let metadata = { name: dynamicFileName, mimeType: 'application/json' };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
 
             let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
 
-            let request = gapi.client.request({
-                'path': '/upload/drive/v3/files' + (fileId ? '/' + fileId : ''),
-                'method': fileId ? 'PATCH' : 'POST',
-                'params': { 'uploadType': 'multipart', 'supportsAllDrives': true },
-                'headers': {'Content-Type': 'multipart/related; boundary="' + boundary + '"'},
-                'body': multipartRequestBody
+            // 💡 [핵심 해결] 먹통 현상을 유발하던 기존 구글 라이브러리 대신 표준 fetch 엔진을 주입합니다.
+            const tokenObj = gapi.client.getToken();
+            const token = tokenObj ? tokenObj.access_token : null;
+            if (!token) {
+                alert("🔒 구글 인증 세션이 만료되었거나 정상적으로 연동되지 않았습니다.\n상단의 연동 버튼을 다시 클릭하여 로그인을 완료해 주세요.");
+                document.getElementById('file-status').textContent = "❌ 저장 실패: 인증 토큰 없음";
+                return;
+            }
+
+            let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true';
+            
+            // 동기식 표준 전송 시작
+            let response = await fetch(url, {
+                method: fileId ? 'PATCH' : 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': `multipart/related; boundary="${boundary}"`
+                },
+                body: multipartRequestBody
             });
 
-            request.execute(function(file) {
-                if (file && file.id) {
-                    window.currentDriveFileId = file.id; 
-                    window.lastSavedLogCount = window.changeLogs.length; 
-                    alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
-                    document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
-                } else {
-                    console.error("구글 저장 실패 상세 정보:", file);
-                    let errorMsg = "공유 폴더의 '편집자' 권한이 없거나 업로드 중 오류가 발생했습니다.";
-                    
-                    // 구글 서버 에러 객체가 정상적으로 넘어온 경우 사유 세분화
-                    if (file && file.error) {
-                        const status = file.error.code;
-                        if (status === 401) {
-                            errorMsg = "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 저장해 주세요.";
-                            // 버튼 상태 원복하여 재인증 유도
-                            const authBtn = document.getElementById('auth_button');
-                            if (authBtn) {
-                                authBtn.disabled = false;
-                                authBtn.innerText = "🔄 재연동 필요 (클릭)";
-                                authBtn.style.borderColor = '#e67e22';
-                                authBtn.style.color = '#e67e22';
-                            }
-                        } else if (status === 403) {
-                            errorMsg = "🚫 공유 폴더 접근 권한이 거부되었습니다.\n\n공유 폴더('1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS')에 본인 계정이 '편집자'로 등록되어 있는지 관리자에게 확인해 주세요.";
-                        } else {
-                            errorMsg = `구글 드라이브 에러 (${status}): ${file.error.message}`;
-                        }
+            let file = await response.json();
+
+            if (response.ok && file && file.id) {
+                window.currentDriveFileId = file.id; 
+                window.lastSavedLogCount = window.changeLogs.length; 
+                alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
+                document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
+            } else {
+                console.error("구글 저장 실패 상세 정보:", file);
+                let errorMsg = "공유 폴더의 '편집자' 권한이 없거나 업로드 중 오류가 발생했습니다.";
+                
+                const status = response.status || (file && file.error ? file.error.code : 0);
+                if (status === 401) {
+                    errorMsg = "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 저장해 주세요.";
+                    const authBtn = document.getElementById('auth_button');
+                    if (authBtn) {
+                        authBtn.disabled = false;
+                        authBtn.innerText = "🔄 재연동 필요 (클릭)";
+                        authBtn.style.borderColor = '#e67e22';
+                        authBtn.style.color = '#e67e22';
                     }
-                    
-                    alert(`❌ 저장 실패\n\n${errorMsg}`);
-                    document.getElementById('file-status').textContent = "❌ 클라우드 백업 실패 (로그 확인 필요)";
+                } else if (status === 403) {
+                    errorMsg = "🚫 공유 폴더 접근 권한이 거부되었습니다.\n\n공유 폴더('1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS')에 본인 계정이 '편집자'로 등록되어 있는지 관리자에게 확인해 주세요.";
+                } else if (file && file.error) {
+                    errorMsg = `구글 드라이브 에러 (${status}): ${file.error.message}`;
                 }
-            });
-        } catch (err) { alert("구글 드라이브 에러: " + err.message); }
+                
+                alert(`❌ 저장 실패\n\n${errorMsg}`);
+                document.getElementById('file-status').textContent = "❌ 클라우드 백업 실패 (로그 확인 필요)";
+            }
+        } catch (err) { 
+            alert("구글 드라이브 전송 시스템 에러: " + err.message); 
+            document.getElementById('file-status').textContent = "❌ 시스템 오류 발생";
+        }
     }
 
     window.executeLoadFile = async function(fileId, fileName) {
