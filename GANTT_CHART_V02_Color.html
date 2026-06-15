@@ -251,6 +251,27 @@
     tr.highlighted-row td:last-child::after {
         border-right: 2px solid #e67e22 !important;
     }
+
+    /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
+    #myTable tbody td input[type="text"],
+    #myTable tbody td input[type="date"],
+    #myTable tbody td input[type="number"],
+    #myTable tbody td textarea { /* 💡 여기에 상세내용 입력창(textarea)을 추가했습니다! */
+        background-color: #ffffff !important; /* 배경을 강제로 하얗게 */
+        border: 2px solid #4285F4 !important; /* 선명한 파란색 테두리 */
+        box-shadow: 0 0 6px rgba(66, 133, 244, 0.5) !important; /* 파란색 네온 효과 */
+        color: #000000 !important; /* 글자는 선명한 검은색 */
+        padding: 6px !important;
+        border-radius: 4px !important;
+        width: 95% !important;
+        min-height: 80px !important; /* 💡 입력 창이 너무 좁아지지 않게 최소 높이 지정 */
+        outline: none !important;
+        position: relative !important;
+        z-index: 100 !important;
+        font-family: inherit !important;
+        font-size: 12px !important;
+    }
+
 </style>
 </head>
 <body>
@@ -378,7 +399,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
 - 상태: 진행/대기/완료/보류 중 하나
 - 개발단계: RFI/RFQ/NRE/AWARD/KICK-OFF/DESIGN/SAMPLE/EVT/ES/DVT/PVT/FAI/PP/SOP/MP/EC/RMA/EOL 중 해당하는 단계 (불명확하면 빈값)
 - 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
-  * 출력 형식: [업무유형][발신→수신]발신자 → 수신자\n[핵심내용]내용\n[To do]후속조치
+  * 출력 형식: [업무유형][발신자→수신자] YYYY-MM-DD\n[핵심내용]내용\n[To do]후속조치
   * 업무유형은 아래 중 가장 적합한 하나 선택:
     [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청
     [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보
@@ -386,7 +407,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
     [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내
     [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내
     위 목록에 없으면: 기타
-  * 예시: "[샘플발송] [James Kwon → 박용훈]\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"
+  * 예시: "[샘플발송] [James Kwon → 박용훈] 2025-05-01\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"
     - wbs레벨: 3 (일반 업무)
 
 반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
@@ -3201,6 +3222,14 @@ window.analyzeMailContent = function() {
 };
 
 window.renderMailResult = function(result) {
+    // 💡 [핵심 수정] 데이터가 들어오는 즉시 WBS 레벨을 강제로 4로 세팅합니다.
+    if (result) {
+        result['wbs레벨'] = 4;
+    }
+    if (window._mailAnalyzedResult) {
+        window._mailAnalyzedResult['wbs레벨'] = 4;
+    }
+
     const fields = [
         { key: '업무명',   label: '📌 업무명' },
         { key: '시작일',   label: '📅 시작일' },
@@ -3252,10 +3281,17 @@ window.renderMailResult = function(result) {
         </tr>`;
     });
 
-    // ✅ WBS 레벨 선택
+    // ✅ WBS 레벨 선택 (기본값을 4로 강제 설정)
+    let currentLevel = result['wbs레벨'];
+    if (currentLevel === undefined || currentLevel === null || currentLevel === '') {
+        currentLevel = 4; // 💡 값이 없으면 무조건 4(하위업무)로 고정
+        window._mailAnalyzedResult['wbs레벨'] = 4; // 데이터에도 즉시 반영
+    }
+
     let levelOptions = [0,1,2,3,4].map(n => 
-        `<option value="${n}" ${result['wbs레벨'] == n ? 'selected' : ''}>Level ${n} ${['(대분류)','(소분류1)','(소분류2)','(세부업무)','(하위업무)'][n]}</option>`
+        `<option value="${n}" ${currentLevel == n ? 'selected' : ''}>Level ${n} ${['(대분류)','(소분류1)','(소분류2)','(세부업무)','(하위업무)'][n]}</option>`
     ).join('');
+    
     html += `<tr>
         <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; white-space:nowrap;">📊 WBS 레벨</td>
         <td style="padding:7px 10px; border:1px solid #dee2e6;">
@@ -3687,12 +3723,16 @@ window.insertMailTask = function() {
                         <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
                         <div style="font-size:10px; color:#aaa;">.eml / .msg / .html / .txt 최대 50개</div>
                     </div>
-                    <button id="mf-analyze-btn" onclick="window.mfAnalyze()"
-                            style="display:none; width:100%; padding:8px; background:#e67e22; color:white;
-                                   border:none; border-radius:6px; font-size:12px; font-weight:bold;
-                                   cursor:pointer; margin-bottom:8px; flex-shrink:0;">
-                        🤖 AI 일괄 분석 (<span id="mf-file-count">0</span>개)
-                    </button>
+                    <div id="mf-analyze-group" style="display:none; gap:6px; margin-bottom:8px; flex-shrink:0;">
+                        <button onclick="window.mfClearFiles()"
+                                style="flex:1; padding:8px; background:#6c757d; color:white; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            🗑️ 전체 비우기
+                        </button>
+                        <button id="mf-analyze-btn" onclick="window.mfAnalyze()"
+                                style="flex:2; padding:8px; background:#e67e22; color:white; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            🤖 AI 일괄 분석 (<span id="mf-file-count">0</span>개)
+                        </button>
+                    </div>
                     <div id="mf-progress" style="display:none; margin-bottom:8px; flex-shrink:0;">
                         <div style="font-size:11px; font-weight:bold; margin-bottom:3px;">⏳ <span id="mf-prog-text"></span></div>
                         <div style="background:#e9ecef; border-radius:4px; height:5px; overflow:hidden;">
@@ -4052,10 +4092,18 @@ function pasteAddResult(task, mailText) {
 
 // ─── 파일 선택 ───────────────────────────────────────────
 window.mfHandleFiles = function(files) {
-    const arr = Array.from(files).slice(0, 50);
-    window._mfFiles = arr;
+    if (!files || files.length === 0) return;
+    
+    const newFiles = Array.from(files).slice(0, 50);
+    window._mfFiles = (window._mfFiles || []).concat(newFiles).slice(0, 50); 
+    const arr = window._mfFiles;
+
     document.getElementById('mf-file-count').textContent = arr.length;
-    document.getElementById('mf-analyze-btn').style.display = arr.length ? 'block' : 'none';
+    
+    // 💡 변경된 부분: 버튼 하나가 아니라 '버튼 그룹' 전체를 화면에 띄웁니다 (flex 사용)
+    const btnGroup = document.getElementById('mf-analyze-group');
+    if (btnGroup) btnGroup.style.display = arr.length ? 'flex' : 'none';
+
     document.getElementById('mf-result-list').style.display  = 'none';
     document.getElementById('mf-list-header').style.display  = 'none';
     document.getElementById('mf-batch-btn').style.display    = 'none';
@@ -4064,14 +4112,47 @@ window.mfHandleFiles = function(files) {
     window._mfCurrentIdx = -1;
 
     const dz = document.getElementById('mf-dropzone');
-    dz.innerHTML = `
-        <div style="font-size:20px;">📁</div>
-        <div style="font-weight:bold; color:#e67e22; font-size:12px; margin-top:3px;">
-            ${arr.length}개 선택됨 (클릭하여 변경)
-        </div>
-        <div style="font-size:10px; color:#aaa; margin-top:2px;">
-            ${arr.map(f=>f.name).slice(0,2).join(', ')}${arr.length>2?` 외 ${arr.length-2}개`:''}
-        </div>`;
+    if (dz) {
+        dz.innerHTML = `
+            <div style="font-size:20px;">📁</div>
+            <div style="font-weight:bold; color:#e67e22; font-size:12px; margin-top:3px;">
+                ${arr.length}개 선택됨 (클릭하여 추가 변경)
+            </div>
+            <div style="font-size:10px; color:#aaa; margin-top:2px;">
+                ${arr.map(f=>f.name).slice(0,2).join(', ')}${arr.length>2?` 외 ${arr.length-2}개`:''}
+            </div>`;
+    }
+    document.getElementById('mf-input').value = '';
+};
+
+// ─── 파일 목록 전체 비우기 (새로 추가된 기능) ─────────────────
+window.mfClearFiles = function() {
+    if (window._mfFiles && window._mfFiles.length > 0) {
+        if (!confirm('추가된 파일을 모두 비우시겠습니까?')) return;
+    }
+    
+    // 1. 메모리에서 파일 목록 삭제
+    window._mfFiles = []; 
+    
+    // 2. 드롭존 화면 원래대로 복구
+    const dz = document.getElementById('mf-dropzone');
+    if (dz) {
+        dz.innerHTML = `
+            <div style="font-size:20px;">📁</div>
+            <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
+            <div style="font-size:10px; color:#aaa;">.eml / .msg / .html / .txt 최대 50개</div>`;
+    }
+        
+    // 3. 버튼 및 결과창 숨기기
+    const btnGroup = document.getElementById('mf-analyze-group');
+    if (btnGroup) btnGroup.style.display = 'none';
+    
+    document.getElementById('mf-result-list').style.display = 'none';
+    document.getElementById('mf-list-header').style.display = 'none';
+    document.getElementById('mf-batch-btn').style.display = 'none';
+    document.getElementById('mail-right-empty').style.display = 'flex';
+    document.getElementById('mail-right-detail').style.display = 'none';
+    document.getElementById('mf-input').value = '';
 };
 
 // ─── 파일 파싱 ───────────────────────────────────────────
@@ -4589,9 +4670,13 @@ window.mfBatchInsert = async function() {
 
 // 날짜체크 없이 직접 삽입
 function mfDirectInsert(task) {
-    if (!globalData || globalData.length <= 1) { alert('먼저 Gantt Chart 파일을 불러와주세요.'); return false; }
+    if (!globalData || globalData.length <= 1) { 
+        alert('먼저 Gantt Chart 파일을 불러와주세요.'); 
+        return false; 
+    }
 
-    const level = parseInt(task['wbs레벨'] ?? 4);
+    // 💡 3을 4로 바꾸고, 'WBS 레벨'이라는 대문자 키값도 인식할 수 있게 안전장치 추가
+    const level = parseInt(task['WBS 레벨'] ?? task['wbs레벨'] ?? 4);
     // ✅ 엑셀의 전체 열 개수만큼 빈 배열 생성 (공간 부족 방지)
     let newRow = new Array(globalData[0].length).fill("");
     newRow._level = level;
@@ -5038,7 +5123,7 @@ async function msCallGemini(apiKey, parsed) {
         let leftOffsets = [];
         let currentLeft = 0;
 
-        // 헤더 렌더링 (소수점 픽셀까지 정밀하게 계산)
+        // 헤더 렌더링
         ths.forEach((th, idx) => {
             leftOffsets.push(currentLeft);
             if (idx < chartIdx) {
@@ -5086,20 +5171,29 @@ async function msCallGemini(apiKey, parsed) {
                     if (idx === chartIdx - 1) td.classList.add('sticky-last');
                     else td.classList.remove('sticky-last');
                     
+                    // 💡 [핵심 변환] 현재 칸이 더블클릭되어 수정 모드 상태(contenteditable)인지 감지
+                    const isEditing = td.getAttribute('contenteditable') === 'true' || document.activeElement === td;
+                    
+                    // 💡 수정 중일 때는 노란색(#fff9c4), 평소에는 테마 배경색을 지정합니다.
+                    const bg = isEditing ? '#fff9c4' : solidColor;
+                    const zIdx = isEditing ? '70' : '50';
+
                     td.style.setProperty('position', 'sticky', 'important');
                     td.style.setProperty('left', leftOffsets[idx] + 'px', 'important');
-                    td.style.setProperty('background-color', solidColor, 'important');
+                    td.style.setProperty('background-color', bg, 'important');
                     td.style.setProperty('background-image', 'none', 'important');
-                    td.style.setProperty('z-index', '50', 'important');
+                    td.style.setProperty('z-index', zIdx, 'important');
                     
-                    // 🔥 핵심 해결: 세로선 완전 삭제 및 box-shadow로 빈틈 메우기
                     td.style.setProperty('border-right', 'none', 'important');
                     td.style.setProperty('border-left', 'none', 'important');
                     
-                    if (idx === chartIdx - 1) {
-                        td.style.setProperty('box-shadow', `4px 0 6px -1px rgba(0,0,0,0.2), 0 0 0 1.5px ${solidColor}`, 'important');
+                    if (isEditing) {
+                        // 💡 수정 상태일 때는 지정하신 파란색 안쪽 테두리를 강제로 입힙니다.
+                        td.style.setProperty('box-shadow', 'inset 0 0 0 2px #0056b3', 'important');
+                    } else if (idx === chartIdx - 1) {
+                        td.style.setProperty('box-shadow', `4px 0 6px -1px rgba(0,0,0,0.2), 0 0 0 1.5px ${bg}`, 'important');
                     } else {
-                        td.style.setProperty('box-shadow', `0 0 0 1.5px ${solidColor}`, 'important');
+                        td.style.setProperty('box-shadow', `0 0 0 1.5px ${bg}`, 'important');
                     }
                 } else {
                     td.classList.remove('sticky-col', 'sticky-last');
@@ -5111,19 +5205,26 @@ async function msCallGemini(apiKey, parsed) {
         });
     };
 
+    // 💡 [버벅임 해결] 무한루프의 주범이었던 style 감지를 완벽하게 차단하고 오직 행이 바뀔 때만 작동하게 만듭니다.
     if (!window._stickyObserver) {
         window._stickyObserver = new MutationObserver((mutations) => {
             let needsUpdate = false;
             for (let m of mutations) {
-                if (m.type === 'childList' || (m.type === 'attributes' && m.attributeName === 'style')) { needsUpdate = true; break; }
+                if (m.type === 'childList') { needsUpdate = true; break; }
             }
             if (needsUpdate) { clearTimeout(window._stickyTimer); window._stickyTimer = setTimeout(window.updateStickyPositions, 30); }
         });
         setTimeout(() => {
             const tableEl = document.getElementById('myTable');
-            if(tableEl) { window._stickyObserver.observe(tableEl, { childList: true, subtree: true, attributes: true, attributeFilter: ['style'] }); window.updateStickyPositions(); }
+            // 💡 중요: 오직 childList만 감시하도록 경량화하여 무한루프 소지를 원천 봉쇄합니다.
+            if(tableEl) { window._stickyObserver.observe(tableEl, { childList: true, subtree: true }); window.updateStickyPositions(); }
         }, 500);
     }
+
+    // 💡 사용자가 칸에 커서를 올리거나 수정을 종료할 때 즉시 색상을 동기화시키는 장치
+    document.addEventListener('focusin', (e) => { if (e.target.tagName === 'TD') window.updateStickyPositions(); });
+    document.addEventListener('focusout', (e) => { if (e.target.tagName === 'TD') window.updateStickyPositions(); });
+    window.addEventListener('resize', () => { clearTimeout(window._stickyTimer); window._stickyTimer = setTimeout(window.updateStickyPositions, 50); });
 
     if (typeof window.updateThemeColor === 'function' && !window._themeHooked) {
         window._themeHooked = true;
@@ -5136,6 +5237,7 @@ async function msCallGemini(apiKey, parsed) {
 </script>
 
 <script>
+// ─── 기존 제공해주신 메일 분석기 모달 드래그 기능 (그대로 유지) ───
 (function() {
     let isDragging = false, startX, startY, origLeft, origTop;
     document.addEventListener('mousedown', function(e) {
