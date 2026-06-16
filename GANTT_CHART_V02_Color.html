@@ -3845,7 +3845,7 @@ window.insertMailTask = function() {
                          ondrop="event.preventDefault(); this.style.background='#fff8f3'; window.mfHandleFiles(event.dataTransfer.files)">
                         <div style="font-size:20px;">📁</div>
                         <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-                        <div style="font-size:10px; color:#aaa;">.eml / .msg / .html / .txt 최대 50개</div>
+                        <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 50개</div>
                     </div>
                     <div id="mf-analyze-group" style="display:none; gap:6px; margin-bottom:8px; flex-shrink:0;">
                         <button onclick="window.mfClearFiles()"
@@ -4217,8 +4217,19 @@ function pasteAddResult(task, mailText) {
 // ─── 파일 선택 ───────────────────────────────────────────
 window.mfHandleFiles = function(files) {
     if (!files || files.length === 0) return;
-    
-    const newFiles = Array.from(files).slice(0, 50);
+
+    // 💡 추가: MSG 파일 걸러내기 (경고 알림 후 해당 파일만 목록에서 제외)
+    const validFiles = Array.from(files).filter(f => {
+        if (f.name.toLowerCase().endsWith('.msg')) {
+            alert(`⚠️ '${f.name}'은 MSG 파일입니다.\nMSG 파일은 '메일 서버 탭'을 이용해 주세요.`);
+            return false; // 목록에서 제외
+        }
+        return true;
+    });
+
+    if (validFiles.length === 0) return; // 유효한 파일이 없으면 종료
+
+    const newFiles = validFiles.slice(0, 50);
     window._mfFiles = (window._mfFiles || []).concat(newFiles).slice(0, 50); 
     const arr = window._mfFiles;
 
@@ -4264,7 +4275,7 @@ window.mfClearFiles = function() {
         dz.innerHTML = `
             <div style="font-size:20px;">📁</div>
             <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-            <div style="font-size:10px; color:#aaa;">.eml / .msg / .html / .txt 최대 50개</div>`;
+            <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 50개</div>`;
     }
         
     // 3. 버튼 및 결과창 숨기기
