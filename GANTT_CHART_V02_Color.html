@@ -5236,6 +5236,39 @@ async function msCallGemini(apiKey, parsed) {
     }
 </style>
 
+<style>
+/* 1. 모든 버튼을 동일한 규칙으로 고정 */
+.action-btn {
+    font-size: 15px !important;            /* 폰트 크기 통일 */
+    height: 35px !important;               /* 높이 통일 */
+    padding: 0 10px !important;            /* 좌우 여백 통일 */
+    min-width: 100px !important;           /* 너비 통일 */
+    flex: 0 0 auto !important;             /* 늘어나지 않게 고정 */
+    white-space: nowrap !important;        /* 글자 줄바꿈 방지 */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    margin: 4px !important;                /* 버튼 간격 균일화 */
+
+}
+</style>
+
+<style>
+    /* 1. 상세내역 텍스트가 들어가는 모든 셀의 색상을 검정색으로 고정 */
+    td.detail-td, 
+    .content-cell-trans,
+    .content-cell-trans * {
+        color: #000000 !important;
+    }
+
+    /* 2. 상세내역 입력 모드(수정 중)일 때의 글자색도 검정색으로 고정 */
+    #myTable tbody td textarea,
+    #myTable tbody td input[type="text"] {
+        color: #000000 !important;
+    }
+</style>
+
 <script>
     function getSolidHsl(baseHex) {
         let h=0, s=0, l=80;
