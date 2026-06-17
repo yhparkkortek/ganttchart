@@ -1190,17 +1190,16 @@ ${mailText}`;
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-            <div style="display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center;">
-                
-                <span id="rap-up" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:4px;background:#fff;color:#0056b3;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="위로 이동">▲</span>
-                <span id="rap-left" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:4px;background:#fff;color:#555;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 올리기">◀</span>
-                <span id="rap-right" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:4px;background:#fff;color:#555;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 내리기">▶</span>
-        
-                <span id="rap-dn" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:4px;background:#fff;color:#0056b3;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="아래로 이동">▼</span>
-                <span id="rap-add" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #28a745;border-radius:4px;background:#fff;color:#28a745;font-size:19px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 추가">+</span>
-                <span id="rap-del" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #e03131;border-radius:4px;background:#fff;color:#e03131;font-size:19px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 삭제">-</span>
-        
-            </div>`;
+           <div style="display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center;">
+    
+            <span id="rap-up"    style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#0056b3;font-size:34px;" title="위로 이동">🔼</span>
+            <span id="rap-left"  style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;font-size:34px;" title="WBS 레벨 올리기">◀️</span>
+            <span id="rap-right" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;font-size:34px;" title="WBS 레벨 내리기">▶️</span>
+            <span id="rap-dn"    style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#0056b3;font-size:34px;" title="아래로 이동">🔽</span>
+            <span id="rap-add"   style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding-top:1px;border:2px solid #28a745;border-radius:4px;background:#e8f5e9;color:#28a745;font-size:20px;font-weight:bold;margin-top:3px;" title="행 추가">➕</span>
+            <span id="rap-del"   style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding-top:1px;border:2px solid #e03131;border-radius:4px;background:#fff5f5;color:#e03131;font-size:20px;font-weight:bold;margin-top:3px;" title="행 삭제">➖</span>
+
+        </div>`;
         document.body.appendChild(popup);
 
         // 외부 클릭 시 닫기
