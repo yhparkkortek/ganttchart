@@ -252,9 +252,9 @@
         border-right: 2px solid #e67e22 !important;
     }
 
-    /* 다중 선택된 행 표시 (셀 배경만 하늘색, 글자는 위에 또렷하게) */
-    tr.multi-selected td {
-        box-shadow: inset 0 0 0 9999px rgba(33, 150, 243, 0.16);
+    /* 다중 선택된 행 표시 (전체 열 옅은 빨강, 글자는 위에 또렷하게) */
+    #myTable tr.multi-selected td {
+        background-color: #ffcccc !important;
     }
 
     /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
@@ -947,6 +947,7 @@ ${mailText}`;
     }
 
     window.onRowNoClick = function(td, i, ev) {
+        if (window.getSelection) window.getSelection().removeAllRanges();   // shift 클릭 시 글자 파랗게 선택되는 것 방지
         if (!window._selectedRows) window._selectedRows = new Set();
         const sel = window._selectedRows;
 
@@ -1048,6 +1049,40 @@ ${mailText}`;
         window.recalculateSchedules();
         return true;
     };
+
+// 선택된 여러 행의 WBS 레벨을 한 번에 변경
+    window.changeSelectedRowsLevel = function(direction) {
+        const rows = globalData;
+        const sel = window._selectedRows;
+        if (!sel || sel.size < 2) return false;
+        const idxs = [...sel].sort((a, b) => a - b);
+        let changed = 0;
+        idxs.forEach(index => {
+            const row = rows[index];
+            if (!row) return;
+            const oldLevel = (typeof row._level === 'number') ? row._level : 4;
+            const newLevel = Math.max(0, Math.min(4, oldLevel + direction));
+            if (newLevel === oldLevel) return;
+            let taskTxt = "";
+            if (oldLevel === 0) taskTxt = row._origDev; else if (oldLevel === 1) taskTxt = row._origT1; else if (oldLevel === 2) taskTxt = row._origT2; else if (oldLevel === 3) taskTxt = row._origT3; else if (oldLevel === 4) taskTxt = row._origT4;
+            taskTxt = (taskTxt || "").toString().trim() || "새로운 업무";
+            row._level = newLevel;
+            row._origDev = ""; row._origT1 = ""; row._origT2 = ""; row._origT3 = ""; row._origT4 = "";
+            if (newLevel === 0) row._origDev = taskTxt; else if (newLevel === 1) row._origT1 = taskTxt; else if (newLevel === 2) row._origT2 = taskTxt; else if (newLevel === 3) row._origT3 = taskTxt; else if (newLevel === 4) row._origT4 = taskTxt;
+            const currentDur = row._finalDuration || 1;
+            if (colIdx.dur1 !== -1) row[colIdx.dur1] = (newLevel === 1) ? currentDur.toString() : "";
+            if (colIdx.dur2 !== -1) row[colIdx.dur2] = (newLevel === 2) ? currentDur.toString() : "";
+            if (colIdx.dur3 !== -1) row[colIdx.dur3] = (newLevel === 3) ? currentDur.toString() : "";
+            if (colIdx.dur4 !== -1) row[colIdx.dur4] = (newLevel === 4) ? currentDur.toString() : "";
+            changed++;
+        });
+        if (changed === 0) return false;
+        logChange(idxs[0], -1, '계층 변경', `선택 ${changed}개 ${direction > 0 ? '레벨 내림' : '레벨 올림'}`);
+        window.recalculateSchedules();
+        window.paintRowSelection();
+        return true;
+    };
+
 
     // =========================================================
     // 🛠️ 파일 업로드 및 유틸리티 로직
@@ -1371,8 +1406,16 @@ ${mailText}`;
             window._selectedRows = new Set();
             window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
         },
-        'rap-left':  () => { window.changeRowLevel(rowIndex, -1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-right': () => { window.changeRowLevel(rowIndex, +1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        'rap-left':  () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { window.changeSelectedRowsLevel(-1); }
+            else { window.changeRowLevel(rowIndex, -1); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
+        'rap-right': () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { window.changeSelectedRowsLevel(+1); }
+            else { window.changeRowLevel(rowIndex, +1); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-del':   () => {
             if (window._selectedRows && window._selectedRows.size > 1) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
