@@ -294,6 +294,9 @@
     </div>
 
     <div id="table-info">
+        <div class="btn-group" style="margin-right:12px;">
+            <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
+        </div>
         <span id="table-info-text">📊 Gantt Chart</span>
         <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
             <button id="lang-toggle-btn" onclick="window.toggleLang()"
@@ -316,7 +319,6 @@
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button id="excel-btn" class="action-btn" onclick="exportToExcel()" style="border-color:#28a745; color:#28a745;">💾 엑셀 저장</button>
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#0056b3; color:#0056b3;">🖨️ 인쇄 (PDF)</button>
-<button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
         </div>
     </div>
 
