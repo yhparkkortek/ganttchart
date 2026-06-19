@@ -4024,6 +4024,41 @@ window.insertMailTask = function() {
 // =========================================================
 
 // 프로젝트 키워드를 globalData에서 동적으로 생성
+
+window.parseGeminiTask = function(rawText) {
+    if (!rawText) return null;
+    let text = rawText.replace(/```json|```/g, '').trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    let jsonStr = m[0];
+
+    // 1차: 그대로 시도
+    try { let p = JSON.parse(jsonStr); return Array.isArray(p) ? p[0] : p; } catch(e) {}
+
+    // 2차: 제어문자 제거 + 개행 이스케이프 후 시도
+    try {
+        let c = jsonStr
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+            .replace(/\r/g, '')
+            .replace(/\n/g, '\\n')
+            .replace(/\\\\n/g, '\\n');
+        let p = JSON.parse(c); return Array.isArray(p) ? p[0] : p;
+    } catch(e) {}
+
+    // 3차: 필드별 정규식 직접 추출 (최후 안전장치)
+    const g = (re) => (jsonStr.match(re) || [])[1] || '';
+    const task = {
+        '업무명':   g(/"업무명"\s*:\s*"([^"]*)"/),
+        '시작일':   g(/"시작일"\s*:\s*"([^"]*)"/),
+        '완료일':   g(/"완료일"\s*:\s*"([^"]*)"/),
+        '상태':     g(/"상태"\s*:\s*"([^"]*)"/) || '진행',
+        '개발단계': g(/"개발단계"\s*:\s*"([^"]*)"/),
+        '상세내용': g(/"상세내용"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/).replace(/\\n/g, '\n'),
+        'wbs레벨':  parseInt(g(/"wbs레벨"\s*:\s*(\d)/) || '4'),
+    };
+    return task['업무명'] ? task : null;
+};
+
 function mfBuildProjectKeywords() {
     const map = {};
     if (!globalData || globalData.length <= 1) return map;
@@ -4499,18 +4534,7 @@ async function mfCallGemini(apiKey, parsed) {
             console.log('GAS응답status:', data.status, '메시지:', data.message);
             if (data.status !== 'success') throw new Error(data.message);
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            console.log('Gemini텍스트:', text.substring(0, 200));
-            text = text.replace(/```json|```/g,'').trim();
-            // 배열 형태 먼저 시도
-            const arrMatch = text.match(/\[[\s\S]*\]/);
-            const objMatch = text.match(/\{[\s\S]*\}/);
-            const m = arrMatch && (!objMatch || arrMatch.index < objMatch.index) ? arrMatch : objMatch;
-            if (!m) { console.warn('JSON패턴없음 전체텍스트:', text.substring(0, 500)); return null; }
-            try {
-                const parsed = JSON.parse(m[0]);
-                // 배열이면 첫 번째 항목 반환
-                return Array.isArray(parsed) ? parsed[0] : parsed;
-            } catch(e) { console.error('JSON파싱실패:', e.message, m[0].substring(0,200)); return null; }
+            return window.parseGeminiTask(text);
         } catch (err) {
             if (attempt < MAX_RETRY) {
                 console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
@@ -5192,15 +5216,9 @@ async function msCallGemini(apiKey, parsed) {
             });
             const data = await resp.json();
             if (data.status !== 'success') throw new Error(data.message);
-
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            console.log('Gemini 원본 응답:', JSON.stringify(data).substring(0, 500));
-            console.log('추출 텍스트:', text.substring(0, 300));
-            text = text.replace(/```json|```/g,'').trim();
-            const m = text.match(/\{[\s\S]*\}/);
-            if (!m) { console.warn('JSON 패턴 없음'); return null; }
-            try { return JSON.parse(m[0]); } catch(e) { console.error('JSON 파싱 실패:', e.message); return null; }
-        } catch(err) {
+            return window.parseGeminiTask(text);
+                } catch(err) {
                 if (attempt < MAX_RETRY) {
                     console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
                     await new Promise(r => setTimeout(r, 3000));
