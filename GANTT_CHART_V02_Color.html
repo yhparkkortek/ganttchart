@@ -3885,7 +3885,7 @@ window.insertMailTask = function() {
                          ondrop="event.preventDefault(); this.style.background='#fff8f3'; window.mfHandleFiles(event.dataTransfer.files)">
                         <div style="font-size:20px;">📁</div>
                         <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-                        <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 50개</div>
+                        <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
                     </div>
                     <div id="mf-analyze-group" style="display:none; gap:6px; margin-bottom:8px; flex-shrink:0;">
                         <button onclick="window.mfClearFiles()"
@@ -4350,7 +4350,7 @@ window.mfClearFiles = function() {
         dz.innerHTML = `
             <div style="font-size:20px;">📁</div>
             <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-            <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 50개</div>`;
+            <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>`;
     }
         
     // 3. 버튼 및 결과창 숨기기
