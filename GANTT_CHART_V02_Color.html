@@ -4523,10 +4523,48 @@ function mfParseFile(file) {
                 body = text.replace(/\s+/g, ' ').trim();
             }
 
-            resolve({ subject, sender, date, body: body.substring(0, 3000), fileName: file.name });
+            resolve({ subject, sender, date, body: body.substring(0, 6000), fileName: file.name });
         };
         reader.readAsText(file, 'utf-8');
     });
+}
+
+// ─── 메일 본문 정제 (AI 입력 토큰 절약 + 품질 향상) ──────────
+function cleanMailBody(raw) {
+    if (!raw) return '';
+    let s = String(raw);
+
+    // 1) 과거 메일 이력(인용/포워딩) 시작 지점 찾기 — 새 요청은 보통 상단
+    const markers = [
+        /-{3,}\s*Original Message\s*-{3,}/i,
+        /-{3,}\s*Forwarded message\s*-{3,}/i,
+        /_{10,}/,
+        /\n\s*보낸\s*사람\s*:/,
+        /\n\s*From:\s.+\n\s*(Sent|To|보낸\s*날짜)\s*:/i,
+        /\n[^\n]{0,80}\d{4}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}[^\n]{0,40}(작성|wrote)\s*:/i,
+        /\nOn\s.+\swrote:/i
+    ];
+    let cutIdx = s.length;
+    for (const re of markers) {
+        const m = s.match(re);
+        if (m && m.index < cutIdx) cutIdx = m.index;
+    }
+    let head = s.slice(0, cutIdx);
+    if (head.trim().length < 40) head = s;   // 윗부분이 거의 비면 전체 사용(순수 포워딩 대비)
+    s = head;
+
+    // 2) 인용 라인(> ...) 제거
+    s = s.split('\n').filter(l => !/^\s*>/.test(l)).join('\n');
+
+    // 3) base64 덩어리·초장문 URL·data URI 노이즈 제거
+    s = s.replace(/\bdata:[^\s]+/g, ' ')
+         .replace(/[A-Za-z0-9+/]{200,}={0,2}/g, ' ')
+         .replace(/https?:\/\/\S{80,}/g, ' ');
+
+    // 4) 공백 정리
+    s = s.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
+    return s;
 }
 
 // ─── 프로젝트 매칭 ──────────────────────────────────────
@@ -4553,7 +4591,7 @@ async function mfCallGemini(apiKey, parsed) {
         }
     }
     // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
-    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + parsed.body;
+    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date);
 
     const GAS_URL = localStorage.getItem('gas_server_url') || 
@@ -5240,7 +5278,7 @@ async function msCallGemini(apiKey, parsed) {
         }
     }
 
-    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + parsed.body.substring(0, 2000);
+    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
 
     const MAX_RETRY = 3;
