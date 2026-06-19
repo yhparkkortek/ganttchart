@@ -252,13 +252,9 @@
         border-right: 2px solid #e67e22 !important;
     }
 
-    /* 다중 선택된 행 표시 (파란 톤, 하이라이트보다 아래 레이어) */
-    tr.multi-selected td { position: relative !important; }
-    tr.multi-selected td::before {
-        content: '';
-        position: absolute; top:0; left:0; right:0; bottom:0;
-        background-color: rgba(33, 150, 243, 0.18) !important;
-        pointer-events: none; z-index: 4;
+    /* 다중 선택된 행 표시 (셀 배경만 하늘색, 글자는 위에 또렷하게) */
+    tr.multi-selected td {
+        box-shadow: inset 0 0 0 9999px rgba(33, 150, 243, 0.16);
     }
 
     /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
@@ -1037,6 +1033,33 @@ ${mailText}`;
         return insertAt;
     };
 
+    // 선택된 여러 행(+하위)을 한 번에 삭제
+    window.deleteSelectedRows = function() {
+        const rows = globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const sel = window._selectedRows;
+        if (!sel || sel.size === 0) return false;
+
+        // 자손까지 확장
+        const expanded = new Set();
+        for (const idx of sel) {
+            const L = lvOf(rows[idx]);
+            expanded.add(idx);
+            for (let j = idx + 1; j < rows.length; j++) { if (lvOf(rows[j]) > L) expanded.add(j); else break; }
+        }
+        const delIdx = [...expanded].sort((a, b) => a - b);
+        if (delIdx.length === 0) return false;
+        if (!confirm(`선택한 ${sel.size}개 행(하위 포함 총 ${delIdx.length}개)을 삭제할까요?`)) return false;
+
+        for (let k = delIdx.length - 1; k >= 0; k--) rows.splice(delIdx[k], 1);  // 뒤에서부터 제거
+
+        window._selectedRows = new Set();
+        window._selAnchor = null;
+        logChange(delIdx[0], -1, '행 삭제', `선택 ${sel.size}개(하위 포함 ${delIdx.length}개) 삭제`);
+        window.recalculateSchedules();
+        return true;
+    };
+
     // =========================================================
     // 🛠️ 파일 업로드 및 유틸리티 로직
     // =========================================================
@@ -1357,7 +1380,10 @@ ${mailText}`;
         'rap-left':  () => { window.changeRowLevel(rowIndex, -1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-right': () => { window.changeRowLevel(rowIndex, +1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-del':   () => { window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20); },
+        'rap-del':   () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
+            window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
+        },
     };
     Object.entries(actions).forEach(([id, fn]) => {
         let btn = document.getElementById(id);
@@ -1931,6 +1957,7 @@ ${mailText}`;
                 'fs-btn':         '🖥️ 전체화면',
                 'excel-btn':      '💾 엑셀 저장',
                 'print-btn':      '🖨️ 인쇄 (PDF)',
+                'date-sort-btn':  '📅 날짜순 정렬',
                 'file-status-default': '파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)',
                 'file-status-updated': '✅ 일정이 업데이트 되었습니다.',
             },
@@ -1961,6 +1988,7 @@ ${mailText}`;
                 'fs-btn':         '🖥️ Fullscreen',
                 'excel-btn':      '💾 Save Excel',
                 'print-btn':      '🖨️ Print (PDF)',
+                'date-sort-btn':  '📅 Sort by Date',
                 'file-status-default': 'Select a file or drag & drop an Excel file here. (Double-click any item to edit)',
                 'file-status-updated': '✅ Schedule has been updated.',
             },
@@ -2178,7 +2206,7 @@ ${mailText}`;
             bodyHtml += `</tr>`;
         }
         
-        tbody.innerHTML = bodyHtml; initColumnResizers();
+        tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
     }
 
     function toggleTranslation(btn, encodedText, transMode) {
