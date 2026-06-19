@@ -1190,7 +1190,7 @@ ${mailText}`;
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-           <div style="display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center;">
+           <div style="display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
     
             <span id="rap-up"    style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#0056b3;font-size:34px;" title="위로 이동">🔼</span>
             <span id="rap-left"  style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;font-size:34px;" title="WBS 레벨 올리기">◀️</span>
@@ -1380,6 +1380,7 @@ ${mailText}`;
     };
 
     window.moveRow = function(index, direction) {
+        window.getSelection().removeAllRanges();   // 연타로 생긴 텍스트 선택 해제
         if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
         
         let targetIndex = index + direction;
@@ -4263,8 +4264,8 @@ window.mfHandleFiles = function(files) {
 
     if (validFiles.length === 0) return; // 유효한 파일이 없으면 종료
 
-    const newFiles = validFiles.slice(0, 50);
-    window._mfFiles = (window._mfFiles || []).concat(newFiles).slice(0, 50); 
+    const newFiles = validFiles.slice(0, 500);
+    window._mfFiles = (window._mfFiles || []).concat(newFiles).slice(0, 500); 
     const arr = window._mfFiles;
 
     document.getElementById('mf-file-count').textContent = arr.length;
@@ -4833,8 +4834,8 @@ function mfDirectInsert(task) {
         return false; 
     }
 
-    // 💡 3을 4로 바꾸고, 'WBS 레벨'이라는 대문자 키값도 인식할 수 있게 안전장치 추가
-    const level = parseInt(task['WBS 레벨'] ?? task['wbs레벨'] ?? 4);
+    // 💡 AI 분석값(3 등)과 무관하게 항상 가장 낮은 레벨(4)로 등록
+    const level = 4;
     // ✅ 엑셀의 전체 열 개수만큼 빈 배열 생성 (공간 부족 방지)
     let newRow = new Array(globalData[0].length).fill("");
     newRow._level = level;
@@ -4965,7 +4966,7 @@ window.msFetchMail = async function() {
             startDate,
             endDate,
             keyword:   document.getElementById('ms-keyword')?.value?.trim() || '',
-            maxCount:  200
+            maxCount:  500
             })
         });
         const data = await res.json();
