@@ -315,7 +315,8 @@
         <div class="btn-group">
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button id="excel-btn" class="action-btn" onclick="exportToExcel()" style="border-color:#28a745; color:#28a745;">💾 엑셀 저장</button>
-<button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#0056b3; color:#0056b3;">🖨️ 인쇄 (PDF)</button>
+            <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#0056b3; color:#0056b3;">🖨️ 인쇄 (PDF)</button>
+<button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
         </div>
     </div>
 
@@ -1394,6 +1395,45 @@ ${mailText}`;
         globalData[targetIndex] = temp;
         
         logChange(index, -1, `행 이동`, `${direction > 0 ? '아래' : '위'}로 이동`);
+        window.recalculateSchedules();
+    };
+
+    // ─── 시작일 기준 정렬 (WBS 계층 유지) ──────────────────────────
+    window.sortRowsByStartDate = function() {
+        if (!globalData || globalData.length <= 2) { alert('정렬할 데이터가 없습니다.'); return; }
+
+        const header = globalData[0];
+        const rows   = globalData.slice(1);
+
+        // 정렬 키: 계산된 시작일(_calcStartTs). 날짜 없는 행은 맨 뒤로.
+        const startTs = (row) => (row && typeof row._calcStartTs === 'number') ? row._calcStartTs : Infinity;
+
+        // 1) _level 기반 트리 구성 (부모 = 바로 위의 더 낮은 레벨 행)
+        const roots = [];
+        const stack = [];
+        for (const row of rows) {
+            const node = { row, children: [] };
+            const lv = (typeof row._level === 'number') ? row._level : 4;
+            while (stack.length && stack[stack.length - 1].level >= lv) stack.pop();
+            if (stack.length === 0) roots.push(node);
+            else stack[stack.length - 1].node.children.push(node);
+            stack.push({ node, level: lv });
+        }
+
+        // 2) 형제끼리 시작일 오름차순 정렬 (재귀)
+        const sortNodes = (nodes) => {
+            nodes.sort((a, b) => startTs(a.row) - startTs(b.row));
+            for (const n of nodes) sortNodes(n.children);
+        };
+        sortNodes(roots);
+
+        // 3) 평탄화하여 globalData 재구성
+        const out = [];
+        const flatten = (nodes) => { for (const n of nodes) { out.push(n.row); flatten(n.children); } };
+        flatten(roots);
+
+        globalData = [header, ...out];
+        logChange(0, -1, '날짜 정렬', '시작일 기준 정렬');
         window.recalculateSchedules();
     };
 
