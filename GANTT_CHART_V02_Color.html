@@ -252,6 +252,15 @@
         border-right: 2px solid #e67e22 !important;
     }
 
+    /* 다중 선택된 행 표시 (파란 톤, 하이라이트보다 아래 레이어) */
+    tr.multi-selected td { position: relative !important; }
+    tr.multi-selected td::before {
+        content: '';
+        position: absolute; top:0; left:0; right:0; bottom:0;
+        background-color: rgba(33, 150, 243, 0.18) !important;
+        pointer-events: none; z-index: 4;
+    }
+
     /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
     #myTable tbody td input[type="text"],
     #myTable tbody td input[type="date"],
@@ -921,6 +930,113 @@ ${mailText}`;
         }
     };
 
+    // ─── 행 다중 선택 (No. 칸 Ctrl/Shift 클릭) ───────────────────
+    window._selectedRows = new Set();
+    window._selAnchor = null;
+
+    window.paintRowSelection = function() {
+        document.querySelectorAll('tr.multi-selected').forEach(tr => tr.classList.remove('multi-selected'));
+        if (!window._selectedRows) return;
+        window._selectedRows.forEach(i => {
+            const tr = document.querySelector(`tr[data-row-index="${i}"]`);
+            if (tr) tr.classList.add('multi-selected');
+        });
+    };
+
+    // 토글이 아니라 무조건 '열기'로 동작
+    function forceOpenRowActions(td, i) {
+        const p = document.getElementById('row-action-popup');
+        if (p) p.dataset.rowIndex = '__force__';
+        window.toggleRowActions(td, i);
+    }
+
+    window.onRowNoClick = function(td, i, ev) {
+        if (!window._selectedRows) window._selectedRows = new Set();
+        const sel = window._selectedRows;
+
+        if (ev && ev.shiftKey && window._selAnchor != null) {           // 범위 선택
+            sel.clear();
+            const a = Math.min(window._selAnchor, i), b = Math.max(window._selAnchor, i);
+            for (let k = a; k <= b; k++) sel.add(k);
+            forceOpenRowActions(td, i);
+            window.paintRowSelection();
+            return;
+        }
+        if (ev && (ev.ctrlKey || ev.metaKey)) {                          // 개별 토글
+            if (sel.has(i)) sel.delete(i); else sel.add(i);
+            window._selAnchor = i;
+            if (sel.size > 0) forceOpenRowActions(td, i);
+            else { const p = document.getElementById('row-action-popup'); if (p) p.style.display = 'none'; window.clearRowHighlight(); }
+            window.paintRowSelection();
+            return;
+        }
+        // 일반 클릭: 단일 선택(기존 토글 동작 유지)
+        sel.clear(); sel.add(i); window._selAnchor = i;
+        window.toggleRowActions(td, i);
+        window.paintRowSelection();
+    };
+
+    // 선택된 여러 행(+하위)을 한 덩어리로 위/아래 이동
+    window.moveSelectedRows = function(direction) {
+        const rows = globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const sel = window._selectedRows;
+        if (!sel || sel.size === 0) return null;
+
+        if (sel.size === 1) {                       // 단일이면 기존 단일 이동
+            const only = [...sel][0];
+            const ns = window.moveRow(only, direction);
+            const fin = (ns != null) ? ns : only;
+            window._selectedRows = new Set([fin]);
+            return fin;
+        }
+
+        // 자손까지 확장
+        const expanded = new Set();
+        for (const idx of sel) {
+            const L = lvOf(rows[idx]);
+            expanded.add(idx);
+            for (let j = idx + 1; j < rows.length; j++) { if (lvOf(rows[j]) > L) expanded.add(j); else break; }
+        }
+        const selIdx = [...expanded].sort((a, b) => a - b);
+        const top = selIdx[0], bottom = selIdx[selIdx.length - 1];
+        const G = lvOf(rows[top]);                  // 그룹 기준 레벨(최상단 선택 행)
+
+        let insertAt;
+        if (direction < 0) {                        // 위로: 이전 형제 head 앞
+            let ps = -1;
+            for (let j = top - 1; j >= 1; j--) {
+                const lv = lvOf(rows[j]);
+                if (lv > G) continue;
+                if (lv === G) ps = j;
+                break;
+            }
+            if (ps === -1) return null;
+            insertAt = ps;
+        } else {                                    // 아래로: 다음 형제 블록 뒤
+            const after = bottom + 1;
+            if (after >= rows.length) return null;
+            if (lvOf(rows[after]) < G) return null;
+            let ne = after;
+            for (let j = after + 1; j < rows.length; j++) { if (lvOf(rows[j]) > G) ne = j; else break; }
+            insertAt = ne + 1;
+        }
+
+        const picked = selIdx.map(i => rows[i]);
+        for (let k = selIdx.length - 1; k >= 0; k--) rows.splice(selIdx[k], 1);
+        insertAt -= selIdx.filter(i => i < insertAt).length;
+        rows.splice(insertAt, 0, ...picked);
+
+        const newSel = new Set();
+        for (let k = 0; k < picked.length; k++) newSel.add(insertAt + k);
+        window._selectedRows = newSel;
+
+        logChange(top, -1, '행 이동', `선택 ${selIdx.length}개 ${direction > 0 ? '아래' : '위'}로 이동(하위 포함)`);
+        window.recalculateSchedules();
+        window.paintRowSelection();
+        return insertAt;
+    };
+
     // =========================================================
     // 🛠️ 파일 업로드 및 유틸리티 로직
     // =========================================================
@@ -1228,8 +1344,16 @@ ${mailText}`;
 
     // 버튼 이벤트 재등록
     let actions = {
-        'rap-up':    () => { const ni = window.moveRow(rowIndex, -1); if (ni != null) rowIndex = ni; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-dn':    () => { const ni = window.moveRow(rowIndex, +1); if (ni != null) rowIndex = ni; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        'rap-up':    () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { const ni = window.moveSelectedRows(-1); if (ni != null) rowIndex = ni; }
+            else { const ni = window.moveRow(rowIndex, -1); if (ni != null) rowIndex = ni; window._selectedRows = new Set([rowIndex]); }
+            popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex);
+        },
+        'rap-dn':    () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { const ni = window.moveSelectedRows(+1); if (ni != null) rowIndex = ni; }
+            else { const ni = window.moveRow(rowIndex, +1); if (ni != null) rowIndex = ni; window._selectedRows = new Set([rowIndex]); }
+            popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex);
+        },
         'rap-left':  () => { window.changeRowLevel(rowIndex, -1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-right': () => { window.changeRowLevel(rowIndex, +1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
@@ -1963,7 +2087,7 @@ ${mailText}`;
                 let tdStyle = ""; let tdHtml = '';
                 
                 if (cellIndex === colIdx.no) { 
-                    tdAttrs += ` class="no-td" onclick="toggleRowActions(this, ${i}); event.stopPropagation();" title="클릭하여 메뉴 열기"`;
+                    tdAttrs += ` class="no-td" onclick="window.onRowNoClick(this, ${i}, event); event.stopPropagation();" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택"`;
                     tdHtml = `
                         <div style="display:flex; flex-direction:column; align-items:center;">
                             <span class="row-num-span"></span>
