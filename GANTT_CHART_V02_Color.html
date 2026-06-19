@@ -966,28 +966,25 @@ ${mailText}`;
             window.paintRowSelection();
             return;
         }
-        // 일반 클릭: 단일 선택(기존 토글 동작 유지)
-        sel.clear(); sel.add(i); window._selAnchor = i;
+        // 일반 클릭: 묶음 선택 해제, 단일 메뉴
+        sel.clear(); window._selAnchor = i;
         window.toggleRowActions(td, i);
         window.paintRowSelection();
     };
 
     // 선택된 여러 행(+하위)을 한 덩어리로 위/아래 이동
-    window.moveSelectedRows = function(direction) {
+   window.moveSelectedRows = function(direction) {
         const rows = globalData;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
         const sel = window._selectedRows;
         if (!sel || sel.size === 0) return null;
-
-        if (sel.size === 1) {                       // 단일이면 기존 단일 이동
+        if (sel.size === 1) {
             const only = [...sel][0];
             const ns = window.moveRow(only, direction);
             const fin = (ns != null) ? ns : only;
             window._selectedRows = new Set([fin]);
             return fin;
         }
-
-        // 자손까지 확장
         const expanded = new Set();
         for (const idx of sel) {
             const L = lvOf(rows[idx]);
@@ -996,37 +993,29 @@ ${mailText}`;
         }
         const selIdx = [...expanded].sort((a, b) => a - b);
         const top = selIdx[0], bottom = selIdx[selIdx.length - 1];
-        const G = lvOf(rows[top]);                  // 그룹 기준 레벨(최상단 선택 행)
-
+        const G = lvOf(rows[top]);
         let insertAt;
-        if (direction < 0) {                        // 위로: 이전 형제 head 앞
+        if (direction < 0) {
+            if (top <= 1) return null;
             let ps = -1;
-            for (let j = top - 1; j >= 1; j--) {
-                const lv = lvOf(rows[j]);
-                if (lv > G) continue;
-                if (lv === G) ps = j;
-                break;
-            }
-            if (ps === -1) return null;
+            for (let j = top - 1; j >= 1; j--) { const lv = lvOf(rows[j]); if (lv > G) continue; ps = j; break; }
+            if (ps === -1) ps = 1;
             insertAt = ps;
-        } else {                                    // 아래로: 다음 형제 블록 뒤
+        } else {
             const after = bottom + 1;
             if (after >= rows.length) return null;
-            if (lvOf(rows[after]) < G) return null;
+            const nl = lvOf(rows[after]);
             let ne = after;
-            for (let j = after + 1; j < rows.length; j++) { if (lvOf(rows[j]) > G) ne = j; else break; }
+            for (let j = after + 1; j < rows.length; j++) { if (lvOf(rows[j]) > nl) ne = j; else break; }
             insertAt = ne + 1;
         }
-
         const picked = selIdx.map(i => rows[i]);
         for (let k = selIdx.length - 1; k >= 0; k--) rows.splice(selIdx[k], 1);
         insertAt -= selIdx.filter(i => i < insertAt).length;
         rows.splice(insertAt, 0, ...picked);
-
         const newSel = new Set();
         for (let k = 0; k < picked.length; k++) newSel.add(insertAt + k);
         window._selectedRows = newSel;
-
         logChange(top, -1, '행 이동', `선택 ${selIdx.length}개 ${direction > 0 ? '아래' : '위'}로 이동(하위 포함)`);
         window.recalculateSchedules();
         window.paintRowSelection();
@@ -1368,14 +1357,19 @@ ${mailText}`;
     // 버튼 이벤트 재등록
     let actions = {
         'rap-up':    () => {
-            if (window._selectedRows && window._selectedRows.size > 1) { const ni = window.moveSelectedRows(-1); if (ni != null) rowIndex = ni; }
-            else { const ni = window.moveRow(rowIndex, -1); if (ni != null) rowIndex = ni; window._selectedRows = new Set([rowIndex]); }
-            popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex);
+            if (window._selectedRows && window._selectedRows.size >= 2) { const ni = window.moveSelectedRows(-1); if (ni != null) rowIndex = ni; }
+            else { const ni = window.moveRow(rowIndex, -1); if (ni != null) rowIndex = ni; window._selectedRows = new Set(); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
         },
         'rap-dn':    () => {
-            if (window._selectedRows && window._selectedRows.size > 1) { const ni = window.moveSelectedRows(+1); if (ni != null) rowIndex = ni; }
-            else { const ni = window.moveRow(rowIndex, +1); if (ni != null) rowIndex = ni; window._selectedRows = new Set([rowIndex]); }
-            popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex);
+            if (window._selectedRows && window._selectedRows.size >= 2) { const ni = window.moveSelectedRows(+1); if (ni != null) rowIndex = ni; }
+            else { const ni = window.moveRow(rowIndex, +1); if (ni != null) rowIndex = ni; window._selectedRows = new Set(); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
+        'rap-del':   () => {
+            if (window._selectedRows && window._selectedRows.size >= 2) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
+            window._selectedRows = new Set();
+            window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
         },
         'rap-left':  () => { window.changeRowLevel(rowIndex, -1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-right': () => { window.changeRowLevel(rowIndex, +1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
@@ -1532,55 +1526,39 @@ ${mailText}`;
         document.getElementById('confirm-delete-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
     };
 
-    window.moveRow = function(index, direction) {
+   window.moveRow = function(index, direction) {
         if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
-        window.getSelection().removeAllRanges();   // 연타로 생긴 텍스트 선택 해제
-
-        const rows = globalData;                    // [0]=헤더
+        window.getSelection().removeAllRanges();
+        const rows = globalData;
         const cur = rows[index];
         if (!cur) return;
         const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
         const L = lvOf(cur);
-
-        // 현재 행 + 하위(자손) 블록의 끝 인덱스
         let e = index;
-        for (let j = index + 1; j < rows.length; j++) {
-            if (lvOf(rows[j]) > L) e = j; else break;
-        }
-        const cutBlock = () => rows.splice(index, e - index + 1);
-
+        for (let j = index + 1; j < rows.length; j++) { if (lvOf(rows[j]) > L) e = j; else break; }
         let newStart;
         if (direction < 0) {
-            // 위로: 같은 그룹 내 '이전 형제'의 head 찾기
-            let ps = -1;
-            for (let j = index - 1; j >= 1; j--) {
-                const lv = lvOf(rows[j]);
-                if (lv > L) continue;            // 이전 형제의 자손은 건너뜀
-                if (lv === L) ps = j;            // 이전 형제 head
-                break;                            // 레벨이 L 이하인 첫 행에서 정지
-            }
-            if (ps === -1) return;               // 이미 그룹 내 첫 형제 → 못 올림
-            const b = cutBlock();
-            rows.splice(ps, 0, ...b);
-            newStart = ps;
+            if (index <= 1) return;
+            let h = -1;
+            for (let j = index - 1; j >= 1; j--) { const lv = lvOf(rows[j]); if (lv > L) continue; h = j; break; }
+            if (h === -1) h = 1;
+            const b = rows.splice(index, e - index + 1);
+            rows.splice(h, 0, ...b);
+            newStart = h;
         } else {
-            // 아래로: 바로 다음 형제 블록과 통째로 교체
+            if (e >= rows.length - 1) return;
             const nextStart = e + 1;
-            if (nextStart >= rows.length) return;        // 맨 아래
-            if (lvOf(rows[nextStart]) < L) return;       // 그룹의 마지막 형제 → 부모 밖으로 안 내보냄
+            const nl = lvOf(rows[nextStart]);
             let ne = nextStart;
-            for (let j = nextStart + 1; j < rows.length; j++) {
-                if (lvOf(rows[j]) > L) ne = j; else break;
-            }
+            for (let j = nextStart + 1; j < rows.length; j++) { if (lvOf(rows[j]) > nl) ne = j; else break; }
             const nextLen = ne - nextStart + 1;
-            const b = cutBlock();
+            const b = rows.splice(index, e - index + 1);
             rows.splice(index + nextLen, 0, ...b);
             newStart = index + nextLen;
         }
-
         logChange(index, -1, '행 이동', `${direction > 0 ? '아래' : '위'}로 이동 (하위 포함)`);
         window.recalculateSchedules();
-        return newStart;   // 이동 후 새 시작 인덱스 반환
+        return newStart;
     };
 
     // ─── 시작일 기준 정렬 (WBS 계층 유지) ──────────────────────────
