@@ -932,11 +932,13 @@ ${mailText}`;
 
     window.paintRowSelection = function() {
         document.querySelectorAll('tr.multi-selected').forEach(tr => tr.classList.remove('multi-selected'));
-        if (!window._selectedRows) return;
-        window._selectedRows.forEach(i => {
-            const tr = document.querySelector(`tr[data-row-index="${i}"]`);
-            if (tr) tr.classList.add('multi-selected');
-        });
+        if (window._selectedRows) {
+            window._selectedRows.forEach(i => {
+                const tr = document.querySelector(`tr[data-row-index="${i}"]`);
+                if (tr) tr.classList.add('multi-selected');
+            });
+        }
+        if (window.updateStickyPositions) window.updateStickyPositions();   // 고정열 배경도 즉시 갱신
     };
 
     // 토글이 아니라 무조건 '열기'로 동작
@@ -5646,8 +5648,9 @@ async function msCallGemini(apiKey, parsed) {
                     // 💡 [핵심 변환] 현재 칸이 더블클릭되어 수정 모드 상태(contenteditable)인지 감지
                     const isEditing = td.getAttribute('contenteditable') === 'true' || document.activeElement === td;
                     
-                    // 💡 수정 중일 때는 노란색(#fff9c4), 평소에는 테마 배경색을 지정합니다.
-                    const bg = isEditing ? '#fff9c4' : solidColor;
+                    // 💡 수정 중=노란색, 다중선택=옅은 빨강, 평소=테마 배경색
+                    const isSelected = td.parentElement && td.parentElement.classList.contains('multi-selected');
+                    const bg = isEditing ? '#fff9c4' : (isSelected ? '#ffcccc' : solidColor);
                     const zIdx = isEditing ? '70' : '50';
 
                     td.style.setProperty('position', 'sticky', 'important');
