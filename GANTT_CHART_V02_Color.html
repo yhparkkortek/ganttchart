@@ -3980,10 +3980,10 @@ window.insertMailTask = function() {
                                     padding:5px 10px; background:#e9ecef; border-radius:6px;
                                     cursor:pointer; font-size:11px; font-weight:bold; color:#555;">
                             <span>📨 원본 메일 보기</span>
-                            <span id="mail-original-arrow">▼</span>
+                            <span id="mail-original-arrow">▲</span>
                         </div>
                         <div id="mail-original-body"
-                             style="display:none; padding:10px; background:#f8f9fa;
+                             style="display:block; padding:10px; background:#f8f9fa;
                                     border:1px solid #dee2e6; border-radius:0 0 6px 6px;
                                     font-size:12px; color:#333; max-height:320px;
                                     overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
@@ -4163,9 +4163,9 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
             .trim();
         origBody.textContent = `제목: ${subject}\n발신: ${sender||''}\n날짜: ${date||''}\n\n${bodyFormatted}`;
         origBody.style.maxHeight = '600px';
-        origBody.style.display = 'none';
+        origBody.style.display = 'block';
         const arrow = document.getElementById('mail-original-arrow');
-        if (arrow) arrow.textContent = '▼';
+        if (arrow) arrow.textContent = '▲';
     }
     // 분석결과 렌더링
     window._mailAnalyzedResult = JSON.parse(JSON.stringify(task));
