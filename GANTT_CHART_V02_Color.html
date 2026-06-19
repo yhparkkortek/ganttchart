@@ -1228,8 +1228,8 @@ ${mailText}`;
 
     // 버튼 이벤트 재등록
     let actions = {
-        'rap-up':    () => { window.moveRow(rowIndex, -1);         rowIndex--; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-dn':    () => { window.moveRow(rowIndex, +1);         rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        'rap-up':    () => { const ni = window.moveRow(rowIndex, -1); if (ni != null) rowIndex = ni; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        'rap-dn':    () => { const ni = window.moveRow(rowIndex, +1); if (ni != null) rowIndex = ni; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-left':  () => { window.changeRowLevel(rowIndex, -1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-right': () => { window.changeRowLevel(rowIndex, +1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
@@ -1383,21 +1383,54 @@ ${mailText}`;
     };
 
     window.moveRow = function(index, direction) {
-        window.getSelection().removeAllRanges();   // 연타로 생긴 텍스트 선택 해제
         if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
-        
-        let targetIndex = index + direction;
-        
-        // 범위 체크 (1번 이상, 마지막 이하)
-        if (targetIndex < 1 || targetIndex >= globalData.length) return;
-        
-        // 두 행 교체
-        let temp = globalData[index];
-        globalData[index] = globalData[targetIndex];
-        globalData[targetIndex] = temp;
-        
-        logChange(index, -1, `행 이동`, `${direction > 0 ? '아래' : '위'}로 이동`);
+        window.getSelection().removeAllRanges();   // 연타로 생긴 텍스트 선택 해제
+
+        const rows = globalData;                    // [0]=헤더
+        const cur = rows[index];
+        if (!cur) return;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const L = lvOf(cur);
+
+        // 현재 행 + 하위(자손) 블록의 끝 인덱스
+        let e = index;
+        for (let j = index + 1; j < rows.length; j++) {
+            if (lvOf(rows[j]) > L) e = j; else break;
+        }
+        const cutBlock = () => rows.splice(index, e - index + 1);
+
+        let newStart;
+        if (direction < 0) {
+            // 위로: 같은 그룹 내 '이전 형제'의 head 찾기
+            let ps = -1;
+            for (let j = index - 1; j >= 1; j--) {
+                const lv = lvOf(rows[j]);
+                if (lv > L) continue;            // 이전 형제의 자손은 건너뜀
+                if (lv === L) ps = j;            // 이전 형제 head
+                break;                            // 레벨이 L 이하인 첫 행에서 정지
+            }
+            if (ps === -1) return;               // 이미 그룹 내 첫 형제 → 못 올림
+            const b = cutBlock();
+            rows.splice(ps, 0, ...b);
+            newStart = ps;
+        } else {
+            // 아래로: 바로 다음 형제 블록과 통째로 교체
+            const nextStart = e + 1;
+            if (nextStart >= rows.length) return;        // 맨 아래
+            if (lvOf(rows[nextStart]) < L) return;       // 그룹의 마지막 형제 → 부모 밖으로 안 내보냄
+            let ne = nextStart;
+            for (let j = nextStart + 1; j < rows.length; j++) {
+                if (lvOf(rows[j]) > L) ne = j; else break;
+            }
+            const nextLen = ne - nextStart + 1;
+            const b = cutBlock();
+            rows.splice(index + nextLen, 0, ...b);
+            newStart = index + nextLen;
+        }
+
+        logChange(index, -1, '행 이동', `${direction > 0 ? '아래' : '위'}로 이동 (하위 포함)`);
         window.recalculateSchedules();
+        return newStart;   // 이동 후 새 시작 인덱스 반환
     };
 
     // ─── 시작일 기준 정렬 (WBS 계층 유지) ──────────────────────────
