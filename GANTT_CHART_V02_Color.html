@@ -8,6 +8,7 @@
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 
 <style>
     :root {
@@ -418,6 +419,10 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
     위 목록에 없으면: 기타
   * 예시: "[샘플발송] [James Kwon → 박용훈] 2025-05-01\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"
     - wbs레벨: 3 (일반 업무)
+
+- 상세내용 추가 규칙: 메일 본문에 실제 문제 상황(이슈/장애/지연/불량/부족 등)과 그에 대한 해결책/조치 방향이 "둘 다 명확히" 언급된 경우에만, 상세내용 맨 끝에 아래 두 줄을 이어서 추가하세요(무리하게 추정하지 말 것. 둘 중 하나라도 불명확하면 추가하지 마세요):
+  \n[문제점]문제 상황 1줄 요약\n[대책]해결책/조치 방향 1줄 요약
+  예시: "...[To do]후속조치\n[문제점]Die-Casting 자재 부족으로 출하 일정 지연\n[대책]자재 추가 입고 일정 파악 후 재작업 진행"
 
 반드시 아래 JSON 형식으로만 응답. 다른 텍스트 없이 JSON만:
 {
@@ -3446,7 +3451,7 @@ window.analyzeMailContent = function() {
         }
     }
 
-    const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailText, mailDate);
+    const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailText, null);
 
     // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
@@ -5782,6 +5787,76 @@ async function msCallGemini(apiKey, parsed) {
         if (row._level === 4) return row._origT4 || "";
         return "";
     }
+
+    // 베이스 색상 1개 → 진하게/연하게 자동 파생 (hex 입력, hex 출력)
+    function wrDeriveColors(baseHex) {
+        baseHex = (baseHex || '19C3D6').replace('#', '');
+        const r = parseInt(baseHex.substr(0,2),16), g = parseInt(baseHex.substr(2,2),16), b = parseInt(baseHex.substr(4,2),16);
+        const max = Math.max(r,g,b)/255, min = Math.min(r,g,b)/255;
+        let h, s, l = (max+min)/2;
+        const d = max-min;
+        if (d === 0) { h = 0; s = 0; }
+        else {
+            s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+            if (max === r/255) h = ((g/255-b/255)/d + (g<b?6:0));
+            else if (max === g/255) h = ((b/255-r/255)/d + 2);
+            else h = ((r/255-g/255)/d + 4);
+            h *= 60;
+        }
+        function hslToHex(h, s, l) {
+            l = Math.max(0, Math.min(1, l));
+            const c = (1 - Math.abs(2*l-1)) * s;
+            const x = c * (1 - Math.abs((h/60) % 2 - 1));
+            const m = l - c/2;
+            let rr,gg,bb;
+            if (h < 60) [rr,gg,bb]=[c,x,0]; else if (h<120) [rr,gg,bb]=[x,c,0];
+            else if (h<180) [rr,gg,bb]=[0,c,x]; else if (h<240) [rr,gg,bb]=[0,x,c];
+            else if (h<300) [rr,gg,bb]=[x,0,c]; else [rr,gg,bb]=[c,0,x];
+            const toHex = v => Math.round((v+m)*255).toString(16).padStart(2,'0');
+            return (toHex(rr)+toHex(gg)+toHex(bb)).toUpperCase();
+        }
+        return {
+            base:  hslToHex(h, s, l),
+            dark:  hslToHex(h, Math.min(1, s+0.05), Math.max(0, l-0.22)),   // 진하게
+            light: hslToHex(h, Math.max(0.15, s-0.3), Math.min(0.97, l+0.42)), // 연하게(배경)
+            tint:  hslToHex(h, Math.max(0.1, s-0.35), Math.min(0.98, l+0.46))  // 더 연하게(표 헤더)
+        };
+    }
+
+    window.wrPptBaseColor = window.wrPptBaseColor || '19C3D6';
+
+    // ↓↓↓ 여기에 새로 추가 ↓↓↓
+    function wrExtractAssignee(contentStr) {
+        if (!contentStr) return "";
+        // 대괄호 안/밖 모두에서 "A → B" 형태를 찾되, 화살표 좌우가 '발신'/'수신' 라벨 그 자체인 경우만 제외
+        const matches = [...contentStr.matchAll(/([^\n\[\]→]{2,40}?)\s*(?:→|->)\s*([^\n\[\]→]{2,40}?)(?=[\]\n]|$)/g)];
+        for (const m of matches) {
+            const from = m[1].trim(), to = m[2].trim();
+            if (!from || !to) continue;
+            if (from === '발신' && to === '수신') continue;   // [발신→수신] 라벨만 제외
+            return `${from}→${to}`;
+        }
+        return "";
+    }
+
+    function wrExtractIssue(contentStr) {
+        if (!contentStr) return { issue: "", fix: "" };
+        const issueM = contentStr.match(/\[문제점\]([^\n\[]*)/);
+        const fixM   = contentStr.match(/\[대책\]([^\n\[]*)/);
+        return { issue: issueM ? issueM[1].trim() : "", fix: fixM ? fixM[1].trim() : "" };
+    }
+    
+    // 상세내용 표시용: [문제점]/[대책] 줄은 하단 표에서 이미 보여주므로 본문에서는 제거
+    function wrStripIssueLines(contentStr) {
+        if (!contentStr) return "";
+        return contentStr
+            .split('\n')
+            .filter(line => !/^\[문제점\]/.test(line.trim()) && !/^\[대책\]/.test(line.trim()))
+            .join('\n')
+            .trim();
+    }
+    // ↑↑↑ 여기까지 추가 ↑↑↑
+
     function wrOverlaps(rowStart, rowEnd, rangeStart, rangeEnd) {
         if (!rowStart && !rowEnd) return false;
         const s = rowStart || rowEnd;
@@ -5800,7 +5875,13 @@ async function msCallGemini(apiKey, parsed) {
 
         for (let i = 1; i < globalData.length; i++) {
             const row = globalData[i];
-            if (!row || row._level !== 4) continue; // 최하위 실무 태스크만 집계 (필요시 조정)
+            if (!row) continue;
+            // 리프 노드만: 다음 행이 없거나, 다음 행의 레벨이 현재보다 깊지 않으면(=자식 없음) 채택
+            const myLevel = (typeof row._level === 'number') ? row._level : 4;
+            const nextRow = globalData[i + 1];
+            const nextLevel = (nextRow && typeof nextRow._level === 'number') ? nextRow._level : -1;
+            const isLeaf = !(nextRow && nextLevel > myLevel);
+            if (!isLeaf) continue;
             const s = row._calcStartTs, e = row._calcPlanTs;
             const name = wrTaskName(row);
             if (!name) continue;
@@ -5815,6 +5896,127 @@ async function msCallGemini(apiKey, parsed) {
         return { thisWeek, nextWeek, thisList, nextList, thisWeekNo: wrGetWeekNumber(thisWeek.start), nextWeekNo: wrGetWeekNumber(nextWeek.start) };
     };
 
+        // ↓↓↓ 여기에 새로 추가 ↓↓↓
+    const WR_MILESTONE_KEYWORDS = ['RFQ','NPI','KICK OFF','PROTO A','PROTO B','PROTO DR','RELIABILITY','신뢰성','TOOLING','CERTIFICATION','인증','ES','E3','PP','DVR','P0','MP'];
+    function wrIsMilestone(name) {
+        if (!name) return false;
+        const upper = name.toUpperCase();
+        // 단어 경계 기준 매칭: 키워드가 알파벳/숫자에 붙어 있지 않고 독립된 토큰일 때만 인정
+        // (한글 키워드는 단어경계가 없어 그냥 포함 여부로 검사)
+        return WR_MILESTONE_KEYWORDS.some(kw => {
+            const kwUpper = kw.toUpperCase();
+            if (/^[가-힣]+$/.test(kw)) return upper.includes(kwUpper);
+            const re = new RegExp(`(?<![A-Z0-9])${kwUpper.replace(/[().]/g, '\\$&')}(?![A-Z0-9])`);
+            return re.test(upper);
+        });
+    }
+    // ↑↑↑ 여기까지 추가 ↑↑↑
+        
+    // ── 0레벨 진척 타임라인 데이터 ───────────────────────
+    window.wrGetLevel0Timeline = function() {
+        const items = [];
+        let minTs = Infinity, maxTs = -Infinity;
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i];
+            if (!row || row._level !== 0) continue;
+            const s = row._calcStartTs, e = row._calcPlanTs;
+            if (!s && !e) continue;
+            const name = wrTaskName(row) || `(이름없음 #${i})`;
+            items.push({ idx: i, name, start: s || e, end: e || s });
+            if (s) minTs = Math.min(minTs, s);
+            if (e) maxTs = Math.max(maxTs, e);
+        }
+        if (items.length === 0 || minTs === Infinity) return { items: [], minTs: null, maxTs: null };
+        return { items, minTs, maxTs };
+    };
+
+    function wrRenderTimeline() {
+        const tl = window.wrGetLevel0Timeline();
+        if (tl.items.length === 0) return '<div style="color:#999; padding:10px 0;">0레벨 항목에 날짜가 없어 타임라인을 표시할 수 없습니다.</div>';
+        const span = Math.max(1, tl.maxTs - tl.minTs);
+
+        const milestones = tl.items.filter(it => wrIsMilestone(it.name));
+
+        const dots = milestones.map(it => {
+            const pct = ((it.start - tl.minTs) / span) * 100;
+            const label = `${escapeHtml(it.name)} (${wrFormatMD(it.start)}~${wrFormatMD(it.end)})`;
+            return `
+                <div class="wr-milestone-dot" style="position:absolute; top:50%; left:${pct}%; transform:translate(-50%,-50%); width:12px; height:12px; background:#6f42c1; border:2px solid #fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.3); cursor:pointer; z-index:2;" title="${label}"></div>`;
+        }).join('');
+
+        return `
+            <div style="position:relative; height:24px; background:#f1f3f5; border-radius:4px; margin:10px 0 6px;">
+                <div style="position:absolute; top:50%; left:0; right:0; height:3px; background:#d8d0e8; transform:translateY(-50%);"></div>
+                ${dots}
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:4px;">
+                <span>${wrFormatMD(tl.minTs)}</span><span>${wrFormatMD(tl.maxTs)}</span>
+            </div>
+            <div style="font-size:11px; color:#999;">💡 점에 마우스를 올리면 마일스톤명이 표시됩니다 (PPT 출력 시 말풍선으로 표기)</div>`;
+    }
+
+    // ── 신규 컬럼 입력 UI 포함 리스트 렌더 ───────────────
+    function wrRenderEditableList(list) {
+        if (list.length === 0) return '<div style="color:#999;">해당 항목 없음</div>';
+        return list.map((t) => {
+            const rawContent = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
+            const assignee = wrExtractAssignee(rawContent);
+            const contentStr = wrStripIssueLines(rawContent);
+            return `
+                <div style="border:1px solid #eee; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
+                    <div style="font-weight:bold; margin-bottom:4px;">${escapeHtml(t.text)}${assignee ? ` <span style="color:#6f42c1; font-weight:normal; font-size:12px;">[${escapeHtml(assignee)}]</span>` : ''}</div>
+                    <div style="font-size:12px; color:#444; white-space:pre-line; line-height:1.5;">${escapeHtml(contentStr)}</div>
+                </div>`;
+        }).join('');
+    }
+
+    // 문제점/대책 표: 상세내용에 [문제점]이 있는 행만 모음
+    function wrRenderIssueTable(allList) {
+        const rows = [];
+        const seenTaskIdx = new Set();
+        allList.forEach(t => {
+            if (seenTaskIdx.has(t.idx)) return;   // 같은 행(태스크)이 두 번 집계되는 경우만 제외
+            seenTaskIdx.add(t.idx);
+            const contentStr = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
+            const { issue, fix } = wrExtractIssue(contentStr);
+            if (!issue) return;
+            const assignee = wrExtractAssignee(contentStr);
+            rows.push({ task: t.text, issue, fix, assignee, dateLabel: `${wrFormatMD(t.row._calcStartTs)}~${wrFormatMD(t.row._calcPlanTs)}` });
+        });
+        if (rows.length === 0) return '<div style="color:#999;">이번 주 문제점/이슈 없음</div>';
+        const body = rows.map(r => `
+            <tr>
+                <td style="padding:8px; border:1px solid #e0e0e0;"><div style="font-weight:bold; font-size:11px; color:#555; margin-bottom:3px;">${escapeHtml(r.task)}</div>${escapeHtml(r.issue)}</td>
+                <td style="padding:8px; border:1px solid #e0e0e0;">${escapeHtml(r.fix || '-')}</td>
+                <td style="padding:8px; border:1px solid #e0e0e0; white-space:nowrap;">${r.dateLabel}</td>
+                <td style="padding:8px; border:1px solid #e0e0e0; white-space:nowrap;">${escapeHtml(r.assignee || '-')}</td>
+            </tr>`).join('');
+        return `
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                <thead><tr style="background:#f4f6f8;">
+                    <th style="padding:8px; border:1px solid #e0e0e0;">문제점 및 Issue</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0;">대책</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0;">추진일정</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0;">담당자</th>
+                </tr></thead>
+                <tbody>${body}</tbody>
+            </table>`;
+    }
+
+    // 입력칸 변경 시 globalData에 즉시 반영 (저장은 기존 '드라이브에 저장' 버튼이 처리)
+    window.wrBindInputs = function() {
+        document.querySelectorAll('#weekly-report-modal input[data-row-idx]').forEach(inp => {
+            inp.addEventListener('change', function() {
+                const idx = parseInt(this.dataset.rowIdx, 10);
+                const field = this.dataset.field;
+                if (globalData[idx]) {
+                    globalData[idx][field] = this.value;
+                    logChange(idx, -1, `주간보고 ${field}`, this.value);
+                }
+            });
+        });
+    };
+
     // ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
         const data = window.wrClassifyTasks();
@@ -5826,25 +6028,223 @@ async function msCallGemini(apiKey, parsed) {
         modal.id = 'weekly-report-modal';
         modal.style.cssText = 'position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center;';
 
-        const renderList = (list) => list.length
-            ? list.map(t => `<li style="margin-bottom:6px;">${escapeHtml(t.text)}</li>`).join('')
-            : '<li style="color:#999;">해당 항목 없음</li>';
-
         modal.innerHTML = `
-            <div style="background:#fff; border-radius:10px; width:720px; max-height:80vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+            <div style="background:#fff; border-radius:10px; width:780px; max-height:85vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
                 <div style="padding:16px 22px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-size:18px; font-weight:bold; color:#6f42c1;">📅 주간 업무 보고 (2단계: 미리보기)</div>
-                    <button onclick="document.getElementById('weekly-report-modal').remove()" style="border:none; background:none; font-size:20px; cursor:pointer; color:#999;">✕</button>
+                    <div style="font-size:18px; font-weight:bold; color:#19C3D6;">📅 주간 업무 보고</div>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:4px;">
+                            PPT 색상
+                            <input type="color" id="wr-ppt-color" value="${window.wrPptBaseColor || '#19C3D6'}" style="width:28px; height:24px; border:none; padding:0; cursor:pointer;">
+                        </label>
+                        <button onclick="window.exportWeeklyReportPPT()" style="padding:7px 16px; background:#19C3D6; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">📥 PPT 출력</button>
+                        <button onclick="document.getElementById('weekly-report-modal').remove()" style="border:none; background:none; font-size:20px; cursor:pointer; color:#999;">✕</button>
+                    </div>
                 </div>
                 <div style="padding:20px 22px;">
+                    <h4 style="margin:0 0 10px;">개발 진척 현황 (0레벨)</h4>
+                    <div style="margin-bottom:20px; padding:12px; background:#fafafa; border-radius:6px;">${wrRenderTimeline()}</div>
+
                     <h4 style="margin:0 0 8px;">주요 실적 (${data.thisWeekNo}W) — ${wrFormatMD(data.thisWeek.start)}~${wrFormatMD(data.thisWeek.end)}</h4>
-                    <ul style="margin:0 0 18px; padding-left:20px;">${renderList(data.thisList)}</ul>
+                    <div style="margin-bottom:18px;">${wrRenderEditableList(data.thisList)}</div>
+
                     <h4 style="margin:0 0 8px;">추진 계획 (${data.nextWeekNo}W) — ${wrFormatMD(data.nextWeek.start)}~${wrFormatMD(data.nextWeek.end)}</h4>
-                    <ul style="margin:0; padding-left:20px;">${renderList(data.nextList)}</ul>
+                    <div style="margin-bottom:18px;">${wrRenderEditableList(data.nextList)}</div>
+
+                    <h4 style="margin:0 0 8px;">문제점 및 Issue</h4>
+                    <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                 </div>
             </div>`;
         document.body.appendChild(modal);
         modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+        const colorInput = document.getElementById('wr-ppt-color');
+        if (colorInput) colorInput.addEventListener('input', function() { window.wrPptBaseColor = this.value.replace('#',''); });
+    };
+
+   window.exportWeeklyReportPPT = function() {
+        if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+
+        const data = window.wrClassifyTasks();
+        const tl = window.wrGetLevel0Timeline();
+        const allList = [...data.thisList, ...data.nextList];
+
+        const issueRows = [];
+        const seenTaskIdx = new Set();
+        allList.forEach(t => {
+            if (seenTaskIdx.has(t.idx)) return;   // 같은 행(태스크)이 두 번 집계되는 경우만 제외
+            seenTaskIdx.add(t.idx);
+            const contentStr = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
+            const { issue, fix } = wrExtractIssue(contentStr);
+            if (!issue) return;
+            const assignee = wrExtractAssignee(contentStr);
+            const issueWithTask = `[${t.text}]\n${issue}`;
+            issueRows.push([issueWithTask, fix || '-', `${wrFormatMD(t.row._calcStartTs)}~${wrFormatMD(t.row._calcPlanTs)}`, assignee || '-']);
+        });
+
+        const pptx = new PptxGenJS();
+        pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
+        pptx.layout = 'WIDE';
+        const slide = pptx.addSlide();
+        slide.background = { color: 'FFFFFF' };
+
+        // ── 코텍 사이트 톤 컬러 ──────────────────────────
+        const C = wrDeriveColors(window.wrPptBaseColor || '0099A8');
+        const SKY      = C.base;
+        const SKY_DARK  = C.dark;
+        const SKY_LIGHT = C.light;
+        const NAVY     = '000000';   // 제목 외 폰트는 검정
+        const GRAY_TXT  = '000000';  // 본문 텍스트도 검정으로 통일
+
+        // ── 헤더: "01. 정규 - LNW" 스타일 제목줄 ───────────
+        let metaCustomer = "", metaModel = "", metaInch = "";
+        for (let i = 1; i < globalData.length; i++) {
+            const r = globalData[i]; if (!r) continue;
+            if (!metaCustomer && colIdx.customer !== -1 && r[colIdx.customer]) metaCustomer = r[colIdx.customer].toString().trim();
+            if (!metaModel && colIdx.model !== -1 && r[colIdx.model]) metaModel = r[colIdx.model].toString().trim();
+            if (!metaInch && colIdx.inch !== -1 && r[colIdx.inch]) metaInch = r[colIdx.inch].toString().trim();
+            if (metaCustomer && metaModel && metaInch) break;
+        }
+        const projTitle = [metaCustomer, metaModel, metaInch].filter(Boolean).join(' > ') || '주간 업무 보고';
+        slide.addText(projTitle, { x: 0.4, y: 0.2, w: 7.5, h: 0.5, fontSize: 26, bold: true, color: SKY_DARK, fontFace: 'Malgun Gothic' });
+
+        // ── 우측 상단 담당자 표 (원본처럼 3칸: H/W·기구·F/W 대신 추출된 담당자 나열) ──
+        const allAssignees = [...new Set(allList.map(t => {
+            const c = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
+            const a = wrExtractAssignee(c);
+            return a ? a.split('→').pop().trim() : null;
+        }).filter(Boolean))].slice(0, 3);
+        while (allAssignees.length < 3) allAssignees.push('-');
+
+        slide.addTable(
+            [[{ text: 'H/W(통합PL)', options: { bold: true, fill: { color: SKY_LIGHT }, color: SKY_DARK } },
+              { text: '기구', options: { bold: true, fill: { color: SKY_LIGHT }, color: SKY_DARK } },
+              { text: 'F/W', options: { bold: true, fill: { color: SKY_LIGHT }, color: SKY_DARK } }],
+             [{ text: allAssignees[0] }, { text: allAssignees[1] }, { text: allAssignees[2] }]],
+            { x: 8.6, y: 0.15, w: 4.3, h: 0.6, fontSize: 9, align: 'center', valign: 'middle', border: { type: 'solid', color: 'CFEAF8', pt: 1 }, colW: [1.43, 1.43, 1.44] }
+        );
+
+        slide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 0.85, w: 12.5, h: 0.03, fill: { color: SKY } });
+
+        // ── 모델 정보 줄: 프로젝트코드 / 프로젝트명 / 고객>모델명>인치 ──
+        slide.addTable(
+            [[{ text: '프로젝트코드', options: { fontSize: 9, fill: { color: C.tint }, color: '000000', bold: true } },
+              { text: '', options: { fontSize: 9, color: '000000' } },
+              { text: '프로젝트명', options: { fontSize: 9, fill: { color: C.tint }, color: '000000', bold: true } },
+              { text: '', options: { fontSize: 9, color: '000000' } },
+              { text: projTitle, options: { fontSize: 10, color: '000000' } }]],
+            { x: 0.4, y: 0.98, w: 12.5, h: 0.35, border: { type: 'solid', color: C.tint, pt: 1 }, colW: [1.4, 2.6, 1.4, 2.6, 4.5], valign: 'middle' }
+        );
+
+        // ── 좌: 개발목표(빈 틀) / 우: 개발 진척 현황(타임라인) ──
+        const boardY = 1.5, boardH = 1.85;
+        const goalX = 0.4, goalW = 4.3 * 0.9;
+        const tlX = goalX + goalW + 0.1, tlW = 12.5 - goalW - 0.1;
+
+        // 개발목표 표 (원본 구성: 구분/Start/Proto DR/DVR/PVR × 목표(일정,품질)/실적(일정,MC))
+        slide.addShape(pptx.ShapeType.rect, { x: goalX, y: boardY, w: goalW, h: 0.32, fill: { color: SKY_LIGHT } });
+        slide.addText('개발 목표', { x: goalX, y: boardY, w: goalW, h: 0.32, fontSize: 11, bold: true, color: SKY_DARK, align: 'center', valign: 'middle' });
+        const goalHead = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: 7.5 };
+        const goalColW = [0.42, 0.78, (goalW-1.2)/4, (goalW-1.2)/4, (goalW-1.2)/4, (goalW-1.2)/4];
+        slide.addTable(
+            [
+                [{ text: '', options: goalHead }, { text: '구분', options: goalHead }, { text: 'Start', options: goalHead }, { text: 'Proto DR', options: goalHead }, { text: 'DVR', options: goalHead }, { text: 'PVR', options: goalHead }],
+                [{ text: '목표', options: { ...goalHead, rowspan: 2 } }, { text: '일정(MC)', options: { ...goalHead, fontSize: 6.5 } }, { text: '' }, { text: '' }, { text: '' }, { text: '' }],
+                [{ text: '', options: { fill: { color: C.tint } } }, { text: '품질(PPM)', options: { ...goalHead, fontSize: 6.5 } }, { text: '', options: { colspan: 4 } }],
+                [{ text: '실적', options: { ...goalHead, rowspan: 2 } }, { text: '일정', options: { ...goalHead, fontSize: 6.5 } }, { text: '' }, { text: '' }, { text: '' }, { text: '' }],
+                [{ text: '', options: { fill: { color: C.tint } } }, { text: 'MC', options: { ...goalHead, fontSize: 6.5 } }, { text: '' }, { text: '' }, { text: '' }, { text: '' }],
+            ],
+            { x: goalX, y: boardY + 0.32, w: goalW, h: boardH - 0.32, fontSize: 7, align: 'center', valign: 'middle', border: { type: 'solid', color: C.tint, pt: 1 }, colW: goalColW }
+        );
+
+        // 개발 진척 현황 (마일스톤 타임라인) - 전체를 감싸는 외곽 테두리
+        slide.addShape(pptx.ShapeType.rect, { x: tlX, y: boardY, w: tlW, h: boardH, fill: { color: 'FFFFFF' }, line: { color: C.tint, width: 1 } });
+        slide.addShape(pptx.ShapeType.rect, { x: tlX, y: boardY, w: tlW, h: 0.32, fill: { color: SKY_LIGHT } });
+        slide.addText('개발 진척 현황', { x: tlX, y: boardY, w: tlW, h: 0.32, fontSize: 11, bold: true, color: '000000', align: 'center', valign: 'middle' });
+
+        if (tl.items.length > 0) {
+            const span = Math.max(1, tl.maxTs - tl.minTs);
+            const lineX = tlX + 0.15, lineW = tlW - 0.3, lineY = boardY + 1.0;
+
+            // 계획 바 (전체 기준선) - 연회색 베이스로 막대 자체 시인성 확보
+            slide.addShape(pptx.ShapeType.rect, { x: lineX, y: lineY, w: lineW, h: 0.22, fill: { color: 'EFEFEF' }, line: { color: 'CCCCCC', width: 1 } });
+
+            const milestones = tl.items.filter(it => wrIsMilestone(it.name));
+            const todayTs = Date.now();
+            const todayPct = Math.max(0, Math.min(1, (todayTs - tl.minTs) / span));
+
+            // 실적 라인 (시작점 ~ 오늘)
+            slide.addShape(pptx.ShapeType.rect, { x: lineX, y: lineY + 0.07, w: Math.max(0.05, lineW * todayPct), h: 0.08, fill: { color: SKY_DARK } });
+
+            milestones.forEach((it, mi) => {
+                const pct = (it.start - tl.minTs) / span;
+                const dotX = lineX + lineW * pct;
+                const isMajor = /RFQ|PROTO DR|DVR|MP/i.test(it.name);
+
+                // 마커: 주요 항목=역삼각형, 나머지=다이아몬드
+                if (isMajor) {
+                    slide.addShape(pptx.ShapeType.triangle, { x: dotX - 0.1, y: lineY - 0.2, w: 0.2, h: 0.18, fill: { color: '1A6B5C' }, line: { color: 'FFFFFF', width: 1.5 }, rotate: 180 });
+                } else {
+                    slide.addShape(pptx.ShapeType.diamond, { x: dotX - 0.07, y: lineY + 0.04, w: 0.14, h: 0.14, fill: { color: SKY_DARK }, line: { color: 'FFFFFF', width: 1.5 } });
+                }
+
+                // 라벨 (위/아래 번갈아)
+                const labelW = 1.0, labelH = 0.4;
+                const isUp = (mi % 2 === 0);
+                const labelY = isUp ? lineY - 0.55 : lineY + 0.32;
+                let labelX = dotX - labelW / 2;
+                if (labelX < lineX) labelX = lineX;
+                if (labelX + labelW > lineX + lineW) labelX = lineX + lineW - labelW;
+
+                slide.addText(`${it.name}\n${wrFormatMD(it.start)}`, {
+                    x: labelX, y: labelY, w: labelW, h: labelH,
+                    fontSize: 8, bold: isMajor, align: 'center', valign: isUp ? 'bottom' : 'top', color: SKY_DARK
+                });
+            });
+        } else {
+            slide.addText('0레벨 항목 없음', { x: 0.7, y: 2.5, w: 6, h: 0.3, fontSize: 10, color: '999999' });
+        }
+
+        // ── 주요 실적 / 추진 계획 ─────────────────────────
+        const listToText = (list) => {
+            if (!list.length) return '해당 항목 없음';
+            return list.map(t => {
+                const rawContent = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
+                const assignee = wrExtractAssignee(rawContent);
+                const contentStr = wrStripIssueLines(rawContent);
+                const header = `▶ ${t.text}${assignee ? `  [${assignee}]` : ''}`;
+                return contentStr ? `${header}\n${contentStr}\n` : header;
+            }).join('\n');
+        };
+
+        const sectionY = boardY + boardH + 0.15, sectionH = 0.35, bodyH = 1.95;
+        slide.addShape(pptx.ShapeType.rect, { x: 0.4, y: sectionY, w: 6.15, h: sectionH, fill: { color: SKY_LIGHT } });
+        slide.addText(`주요 실적 (${data.thisWeekNo}W)`, { x: 0.4, y: sectionY, w: 6.15, h: sectionH, fontSize: 12, bold: true, color: GRAY_TXT, align: 'center', valign: 'middle' });
+        slide.addText(listToText(data.thisList), { x: 0.4, y: sectionY + sectionH + 0.05, w: 6.15, h: bodyH, fontSize: 8, valign: 'top', color: GRAY_TXT, line: { color: 'CFEAF8', width: 1 } });
+
+        slide.addShape(pptx.ShapeType.rect, { x: 6.75, y: sectionY, w: 6.15, h: sectionH, fill: { color: SKY_LIGHT } });
+        slide.addText(`추진 계획 (${data.nextWeekNo}W)`, { x: 6.75, y: sectionY, w: 6.15, h: sectionH, fontSize: 12, bold: true, color: GRAY_TXT, align: 'center', valign: 'middle' });
+        slide.addText(listToText(data.nextList), { x: 6.75, y: sectionY + sectionH + 0.05, w: 6.15, h: bodyH, fontSize: 8, valign: 'top', color: GRAY_TXT, line: { color: 'CFEAF8', width: 1 } });
+
+        // ── 문제점 및 Issue 표 ────────────────────────────
+        const issueY = sectionY + sectionH + bodyH + 0.15;
+
+        const issueHeaderRow = [
+            { text: '문제점 및 Issue', options: { bold: true, fill: { color: C.tint }, color: '000000' } },
+            { text: '대책', options: { bold: true, fill: { color: C.tint }, color: '000000' } },
+            { text: '추진일정', options: { bold: true, fill: { color: C.tint }, color: '000000' } },
+            { text: '담당자', options: { bold: true, fill: { color: C.tint }, color: '000000' } }
+        ];
+        const tableRows = issueRows.length > 0
+            ? [issueHeaderRow, ...issueRows]
+            : [issueHeaderRow, ['이번 주 문제점/이슈 없음', '-', '-', '-']];
+
+        const issueTableH = Math.min(2.2, 0.3 * tableRows.length);
+        // 추진일정 1/3 축소(1.8→1.2), 담당자 4/3 확대(1.3→3.03) — 합계를 12.5로 재조정
+        const issueColW = [4.0, 4.27, 1.2, 3.03];
+        slide.addTable(tableRows, { x: 0.4, y: issueY, w: 12.5, h: issueTableH, fontSize: 9, colW: issueColW, border: { type: 'solid', color: C.tint, pt: 1 } });
+
+        const fileBase = (window.exportFilenameStr || 'GanttChart') + '_주간보고';
+        pptx.writeFile({ fileName: `${fileBase}.pptx` });
     };
 
     // 신규 컬럼 헬퍼: 행에 _담당자/_이슈/_대책이 없으면 빈 문자열로 초기화
