@@ -252,6 +252,11 @@
         border-right: 2px solid #e67e22 !important;
     }
 
+    /* 다중 선택된 행 표시 (전체 열 옅은 빨강, 글자는 위에 또렷하게) */
+    #myTable tr.multi-selected td {
+        background-color: #ffcccc !important;
+    }
+
     /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
     #myTable tbody td input[type="text"],
     #myTable tbody td input[type="date"],
@@ -294,6 +299,9 @@
     </div>
 
     <div id="table-info">
+        <div class="btn-group" style="margin-right:12px;">
+            <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
+        </div>
         <span id="table-info-text">📊 Gantt Chart</span>
         <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
             <button id="lang-toggle-btn" onclick="window.toggleLang()"
@@ -315,7 +323,7 @@
         <div class="btn-group">
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button id="excel-btn" class="action-btn" onclick="exportToExcel()" style="border-color:#28a745; color:#28a745;">💾 엑셀 저장</button>
-<button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#0056b3; color:#0056b3;">🖨️ 인쇄 (PDF)</button>
+            <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#0056b3; color:#0056b3;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
 
@@ -918,6 +926,166 @@ ${mailText}`;
         }
     };
 
+    // ─── 행 다중 선택 (No. 칸 Ctrl/Shift 클릭) ───────────────────
+    window._selectedRows = new Set();
+    window._selAnchor = null;
+
+    window.paintRowSelection = function() {
+        document.querySelectorAll('tr.multi-selected').forEach(tr => tr.classList.remove('multi-selected'));
+        if (window._selectedRows) {
+            window._selectedRows.forEach(i => {
+                const tr = document.querySelector(`tr[data-row-index="${i}"]`);
+                if (tr) tr.classList.add('multi-selected');
+            });
+        }
+        if (window.updateStickyPositions) window.updateStickyPositions();   // 고정열 배경도 즉시 갱신
+    };
+
+    // 토글이 아니라 무조건 '열기'로 동작
+    function forceOpenRowActions(td, i) {
+        const p = document.getElementById('row-action-popup');
+        if (p) p.dataset.rowIndex = '__force__';
+        window.toggleRowActions(td, i);
+    }
+
+    window.onRowNoClick = function(td, i, ev) {
+        if (window.getSelection) window.getSelection().removeAllRanges();   // shift 클릭 시 글자 파랗게 선택되는 것 방지
+        if (!window._selectedRows) window._selectedRows = new Set();
+        const sel = window._selectedRows;
+
+        if (ev && ev.shiftKey && window._selAnchor != null) {           // 범위 선택
+            sel.clear();
+            const a = Math.min(window._selAnchor, i), b = Math.max(window._selAnchor, i);
+            for (let k = a; k <= b; k++) sel.add(k);
+            forceOpenRowActions(td, i);
+            window.paintRowSelection();
+            return;
+        }
+        if (ev && (ev.ctrlKey || ev.metaKey)) {                          // 개별 토글
+            if (sel.has(i)) sel.delete(i); else sel.add(i);
+            window._selAnchor = i;
+            if (sel.size > 0) forceOpenRowActions(td, i);
+            else { const p = document.getElementById('row-action-popup'); if (p) p.style.display = 'none'; window.clearRowHighlight(); }
+            window.paintRowSelection();
+            return;
+        }
+        // 일반 클릭: 묶음 선택 해제, 단일 메뉴
+        sel.clear(); window._selAnchor = i;
+        window.toggleRowActions(td, i);
+        window.paintRowSelection();
+    };
+
+    // 선택된 여러 행(+하위)을 한 덩어리로 위/아래 이동
+   window.moveSelectedRows = function(direction) {
+        const rows = globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const sel = window._selectedRows;
+        if (!sel || sel.size === 0) return null;
+        if (sel.size === 1) {
+            const only = [...sel][0];
+            const ns = window.moveRow(only, direction);
+            const fin = (ns != null) ? ns : only;
+            window._selectedRows = new Set([fin]);
+            return fin;
+        }
+        const expanded = new Set();
+        for (const idx of sel) {
+            const L = lvOf(rows[idx]);
+            expanded.add(idx);
+            for (let j = idx + 1; j < rows.length; j++) { if (lvOf(rows[j]) > L) expanded.add(j); else break; }
+        }
+        const selIdx = [...expanded].sort((a, b) => a - b);
+        const top = selIdx[0], bottom = selIdx[selIdx.length - 1];
+        const G = lvOf(rows[top]);
+        let insertAt;
+        if (direction < 0) {
+            if (top <= 1) return null;
+            let ps = -1;
+            for (let j = top - 1; j >= 1; j--) { const lv = lvOf(rows[j]); if (lv > G) continue; ps = j; break; }
+            if (ps === -1) ps = 1;
+            insertAt = ps;
+        } else {
+            const after = bottom + 1;
+            if (after >= rows.length) return null;
+            const nl = lvOf(rows[after]);
+            let ne = after;
+            for (let j = after + 1; j < rows.length; j++) { if (lvOf(rows[j]) > nl) ne = j; else break; }
+            insertAt = ne + 1;
+        }
+        const picked = selIdx.map(i => rows[i]);
+        for (let k = selIdx.length - 1; k >= 0; k--) rows.splice(selIdx[k], 1);
+        insertAt -= selIdx.filter(i => i < insertAt).length;
+        rows.splice(insertAt, 0, ...picked);
+        const newSel = new Set();
+        for (let k = 0; k < picked.length; k++) newSel.add(insertAt + k);
+        window._selectedRows = newSel;
+        logChange(top, -1, '행 이동', `선택 ${selIdx.length}개 ${direction > 0 ? '아래' : '위'}로 이동(하위 포함)`);
+        window.recalculateSchedules();
+        window.paintRowSelection();
+        return insertAt;
+    };
+
+    // 선택된 여러 행(+하위)을 한 번에 삭제
+    window.deleteSelectedRows = function() {
+        const rows = globalData;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const sel = window._selectedRows;
+        if (!sel || sel.size === 0) return false;
+
+        // 자손까지 확장
+        const expanded = new Set();
+        for (const idx of sel) {
+            const L = lvOf(rows[idx]);
+            expanded.add(idx);
+            for (let j = idx + 1; j < rows.length; j++) { if (lvOf(rows[j]) > L) expanded.add(j); else break; }
+        }
+        const delIdx = [...expanded].sort((a, b) => a - b);
+        if (delIdx.length === 0) return false;
+        if (!confirm(`선택한 ${sel.size}개 행(하위 포함 총 ${delIdx.length}개)을 삭제할까요?`)) return false;
+
+        for (let k = delIdx.length - 1; k >= 0; k--) rows.splice(delIdx[k], 1);  // 뒤에서부터 제거
+
+        window._selectedRows = new Set();
+        window._selAnchor = null;
+        logChange(delIdx[0], -1, '행 삭제', `선택 ${sel.size}개(하위 포함 ${delIdx.length}개) 삭제`);
+        window.recalculateSchedules();
+        return true;
+    };
+
+// 선택된 여러 행의 WBS 레벨을 한 번에 변경
+    window.changeSelectedRowsLevel = function(direction) {
+        const rows = globalData;
+        const sel = window._selectedRows;
+        if (!sel || sel.size < 2) return false;
+        const idxs = [...sel].sort((a, b) => a - b);
+        let changed = 0;
+        idxs.forEach(index => {
+            const row = rows[index];
+            if (!row) return;
+            const oldLevel = (typeof row._level === 'number') ? row._level : 4;
+            const newLevel = Math.max(0, Math.min(4, oldLevel + direction));
+            if (newLevel === oldLevel) return;
+            let taskTxt = "";
+            if (oldLevel === 0) taskTxt = row._origDev; else if (oldLevel === 1) taskTxt = row._origT1; else if (oldLevel === 2) taskTxt = row._origT2; else if (oldLevel === 3) taskTxt = row._origT3; else if (oldLevel === 4) taskTxt = row._origT4;
+            taskTxt = (taskTxt || "").toString().trim() || "새로운 업무";
+            row._level = newLevel;
+            row._origDev = ""; row._origT1 = ""; row._origT2 = ""; row._origT3 = ""; row._origT4 = "";
+            if (newLevel === 0) row._origDev = taskTxt; else if (newLevel === 1) row._origT1 = taskTxt; else if (newLevel === 2) row._origT2 = taskTxt; else if (newLevel === 3) row._origT3 = taskTxt; else if (newLevel === 4) row._origT4 = taskTxt;
+            const currentDur = row._finalDuration || 1;
+            if (colIdx.dur1 !== -1) row[colIdx.dur1] = (newLevel === 1) ? currentDur.toString() : "";
+            if (colIdx.dur2 !== -1) row[colIdx.dur2] = (newLevel === 2) ? currentDur.toString() : "";
+            if (colIdx.dur3 !== -1) row[colIdx.dur3] = (newLevel === 3) ? currentDur.toString() : "";
+            if (colIdx.dur4 !== -1) row[colIdx.dur4] = (newLevel === 4) ? currentDur.toString() : "";
+            changed++;
+        });
+        if (changed === 0) return false;
+        logChange(idxs[0], -1, '계층 변경', `선택 ${changed}개 ${direction > 0 ? '레벨 내림' : '레벨 올림'}`);
+        window.recalculateSchedules();
+        window.paintRowSelection();
+        return true;
+    };
+
+
     // =========================================================
     // 🛠️ 파일 업로드 및 유틸리티 로직
     // =========================================================
@@ -1190,17 +1358,16 @@ ${mailText}`;
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-            <div style="display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center;">
-                
-                <span id="rap-up" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:4px;background:#fff;color:#0056b3;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="위로 이동">▲</span>
-                <span id="rap-left" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:4px;background:#fff;color:#555;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 올리기">◀</span>
-                <span id="rap-right" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #555;border-radius:4px;background:#fff;color:#555;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="WBS 레벨 내리기">▶</span>
-        
-                <span id="rap-dn" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #0056b3;border-radius:4px;background:#fff;color:#0056b3;font-size:15px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="아래로 이동">▼</span>
-                <span id="rap-add" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #28a745;border-radius:4px;background:#fff;color:#28a745;font-size:19px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 추가">+</span>
-                <span id="rap-del" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;border:2px solid #e03131;border-radius:4px;background:#fff;color:#e03131;font-size:19px;font-weight:bold;box-shadow:0 1px 3px rgba(0,0,0,0.15);" title="행 삭제">-</span>
-        
-            </div>`;
+           <div style="display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
+    
+            <span id="rap-up"    style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#0056b3;font-size:34px;" title="위로 이동">🔼</span>
+            <span id="rap-left"  style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;font-size:34px;" title="WBS 레벨 올리기">◀️</span>
+            <span id="rap-right" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;font-size:34px;" title="WBS 레벨 내리기">▶️</span>
+            <span id="rap-dn"    style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#0056b3;font-size:34px;" title="아래로 이동">🔽</span>
+            <span id="rap-add"   style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding-top:1px;border:2px solid #28a745;border-radius:4px;background:#e8f5e9;color:#28a745;font-size:20px;font-weight:bold;margin-top:3px;" title="행 추가">➕</span>
+            <span id="rap-del"   style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding-top:1px;border:2px solid #e03131;border-radius:4px;background:#fff5f5;color:#e03131;font-size:20px;font-weight:bold;margin-top:3px;" title="행 삭제">➖</span>
+
+        </div>`;
         document.body.appendChild(popup);
 
         // 외부 클릭 시 닫기
@@ -1226,12 +1393,36 @@ ${mailText}`;
 
     // 버튼 이벤트 재등록
     let actions = {
-        'rap-up':    () => { window.moveRow(rowIndex, -1);         rowIndex--; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-dn':    () => { window.moveRow(rowIndex, +1);         rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-left':  () => { window.changeRowLevel(rowIndex, -1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-right': () => { window.changeRowLevel(rowIndex, +1);              popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        'rap-up':    () => {
+            if (window._selectedRows && window._selectedRows.size >= 2) { const ni = window.moveSelectedRows(-1); if (ni != null) rowIndex = ni; }
+            else { const ni = window.moveRow(rowIndex, -1); if (ni != null) rowIndex = ni; window._selectedRows = new Set(); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
+        'rap-dn':    () => {
+            if (window._selectedRows && window._selectedRows.size >= 2) { const ni = window.moveSelectedRows(+1); if (ni != null) rowIndex = ni; }
+            else { const ni = window.moveRow(rowIndex, +1); if (ni != null) rowIndex = ni; window._selectedRows = new Set(); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
+        'rap-del':   () => {
+            if (window._selectedRows && window._selectedRows.size >= 2) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
+            window._selectedRows = new Set();
+            window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
+        },
+        'rap-left':  () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { window.changeSelectedRowsLevel(-1); }
+            else { window.changeRowLevel(rowIndex, -1); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
+        'rap-right': () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { window.changeSelectedRowsLevel(+1); }
+            else { window.changeRowLevel(rowIndex, +1); }
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-del':   () => { window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20); },
+        'rap-del':   () => {
+            if (window._selectedRows && window._selectedRows.size > 1) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
+            window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
+        },
     };
     Object.entries(actions).forEach(([id, fn]) => {
         let btn = document.getElementById(id);
@@ -1380,20 +1571,77 @@ ${mailText}`;
         document.getElementById('confirm-delete-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
     };
 
-    window.moveRow = function(index, direction) {
+   window.moveRow = function(index, direction) {
         if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
-        
-        let targetIndex = index + direction;
-        
-        // 범위 체크 (1번 이상, 마지막 이하)
-        if (targetIndex < 1 || targetIndex >= globalData.length) return;
-        
-        // 두 행 교체
-        let temp = globalData[index];
-        globalData[index] = globalData[targetIndex];
-        globalData[targetIndex] = temp;
-        
-        logChange(index, -1, `행 이동`, `${direction > 0 ? '아래' : '위'}로 이동`);
+        window.getSelection().removeAllRanges();
+        const rows = globalData;
+        const cur = rows[index];
+        if (!cur) return;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const L = lvOf(cur);
+        let e = index;
+        for (let j = index + 1; j < rows.length; j++) { if (lvOf(rows[j]) > L) e = j; else break; }
+        let newStart;
+        if (direction < 0) {
+            if (index <= 1) return;
+            let h = -1;
+            for (let j = index - 1; j >= 1; j--) { const lv = lvOf(rows[j]); if (lv > L) continue; h = j; break; }
+            if (h === -1) h = 1;
+            const b = rows.splice(index, e - index + 1);
+            rows.splice(h, 0, ...b);
+            newStart = h;
+        } else {
+            if (e >= rows.length - 1) return;
+            const nextStart = e + 1;
+            const nl = lvOf(rows[nextStart]);
+            let ne = nextStart;
+            for (let j = nextStart + 1; j < rows.length; j++) { if (lvOf(rows[j]) > nl) ne = j; else break; }
+            const nextLen = ne - nextStart + 1;
+            const b = rows.splice(index, e - index + 1);
+            rows.splice(index + nextLen, 0, ...b);
+            newStart = index + nextLen;
+        }
+        logChange(index, -1, '행 이동', `${direction > 0 ? '아래' : '위'}로 이동 (하위 포함)`);
+        window.recalculateSchedules();
+        return newStart;
+    };
+
+    // ─── 시작일 기준 정렬 (WBS 계층 유지) ──────────────────────────
+    window.sortRowsByStartDate = function() {
+        if (!globalData || globalData.length <= 2) { alert('정렬할 데이터가 없습니다.'); return; }
+
+        const header = globalData[0];
+        const rows   = globalData.slice(1);
+
+        // 정렬 키: 계산된 시작일(_calcStartTs). 날짜 없는 행은 맨 뒤로.
+        const startTs = (row) => (row && typeof row._calcStartTs === 'number') ? row._calcStartTs : Infinity;
+
+        // 1) _level 기반 트리 구성 (부모 = 바로 위의 더 낮은 레벨 행)
+        const roots = [];
+        const stack = [];
+        for (const row of rows) {
+            const node = { row, children: [] };
+            const lv = (typeof row._level === 'number') ? row._level : 4;
+            while (stack.length && stack[stack.length - 1].level >= lv) stack.pop();
+            if (stack.length === 0) roots.push(node);
+            else stack[stack.length - 1].node.children.push(node);
+            stack.push({ node, level: lv });
+        }
+
+        // 2) 형제끼리 시작일 오름차순 정렬 (재귀)
+        const sortNodes = (nodes) => {
+            nodes.sort((a, b) => startTs(a.row) - startTs(b.row));
+            for (const n of nodes) sortNodes(n.children);
+        };
+        sortNodes(roots);
+
+        // 3) 평탄화하여 globalData 재구성
+        const out = [];
+        const flatten = (nodes) => { for (const n of nodes) { out.push(n.row); flatten(n.children); } };
+        flatten(roots);
+
+        globalData = [header, ...out];
+        logChange(0, -1, '날짜 정렬', '시작일 기준 정렬');
         window.recalculateSchedules();
     };
 
@@ -1732,6 +1980,7 @@ ${mailText}`;
                 'fs-btn':         '🖥️ 전체화면',
                 'excel-btn':      '💾 엑셀 저장',
                 'print-btn':      '🖨️ 인쇄 (PDF)',
+                'date-sort-btn':  '📅 날짜순 정렬',
                 'file-status-default': '파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)',
                 'file-status-updated': '✅ 일정이 업데이트 되었습니다.',
             },
@@ -1762,6 +2011,7 @@ ${mailText}`;
                 'fs-btn':         '🖥️ Fullscreen',
                 'excel-btn':      '💾 Save Excel',
                 'print-btn':      '🖨️ Print (PDF)',
+                'date-sort-btn':  '📅 Sort by Date',
                 'file-status-default': 'Select a file or drag & drop an Excel file here. (Double-click any item to edit)',
                 'file-status-updated': '✅ Schedule has been updated.',
             },
@@ -1888,7 +2138,7 @@ ${mailText}`;
                 let tdStyle = ""; let tdHtml = '';
                 
                 if (cellIndex === colIdx.no) { 
-                    tdAttrs += ` class="no-td" onclick="toggleRowActions(this, ${i}); event.stopPropagation();" title="클릭하여 메뉴 열기"`;
+                    tdAttrs += ` class="no-td" onclick="window.onRowNoClick(this, ${i}, event); event.stopPropagation();" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택"`;
                     tdHtml = `
                         <div style="display:flex; flex-direction:column; align-items:center;">
                             <span class="row-num-span"></span>
@@ -1979,7 +2229,7 @@ ${mailText}`;
             bodyHtml += `</tr>`;
         }
         
-        tbody.innerHTML = bodyHtml; initColumnResizers();
+        tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
     }
 
     function toggleTranslation(btn, encodedText, transMode) {
@@ -3845,7 +4095,7 @@ window.insertMailTask = function() {
                          ondrop="event.preventDefault(); this.style.background='#fff8f3'; window.mfHandleFiles(event.dataTransfer.files)">
                         <div style="font-size:20px;">📁</div>
                         <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-                        <div style="font-size:10px; color:#aaa;">.eml / .msg / .html / .txt 최대 50개</div>
+                        <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
                     </div>
                     <div id="mf-analyze-group" style="display:none; gap:6px; margin-bottom:8px; flex-shrink:0;">
                         <button onclick="window.mfClearFiles()"
@@ -3980,10 +4230,10 @@ window.insertMailTask = function() {
                                     padding:5px 10px; background:#e9ecef; border-radius:6px;
                                     cursor:pointer; font-size:11px; font-weight:bold; color:#555;">
                             <span>📨 원본 메일 보기</span>
-                            <span id="mail-original-arrow">▼</span>
+                            <span id="mail-original-arrow">▲</span>
                         </div>
                         <div id="mail-original-body"
-                             style="display:none; padding:10px; background:#f8f9fa;
+                             style="display:block; padding:10px; background:#f8f9fa;
                                     border:1px solid #dee2e6; border-radius:0 0 6px 6px;
                                     font-size:12px; color:#333; max-height:320px;
                                     overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
@@ -4025,6 +4275,41 @@ window.insertMailTask = function() {
 // =========================================================
 
 // 프로젝트 키워드를 globalData에서 동적으로 생성
+
+window.parseGeminiTask = function(rawText) {
+    if (!rawText) return null;
+    let text = rawText.replace(/```json|```/g, '').trim();
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    let jsonStr = m[0];
+
+    // 1차: 그대로 시도
+    try { let p = JSON.parse(jsonStr); return Array.isArray(p) ? p[0] : p; } catch(e) {}
+
+    // 2차: 제어문자 제거 + 개행 이스케이프 후 시도
+    try {
+        let c = jsonStr
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+            .replace(/\r/g, '')
+            .replace(/\n/g, '\\n')
+            .replace(/\\\\n/g, '\\n');
+        let p = JSON.parse(c); return Array.isArray(p) ? p[0] : p;
+    } catch(e) {}
+
+    // 3차: 필드별 정규식 직접 추출 (최후 안전장치)
+    const g = (re) => (jsonStr.match(re) || [])[1] || '';
+    const task = {
+        '업무명':   g(/"업무명"\s*:\s*"([^"]*)"/),
+        '시작일':   g(/"시작일"\s*:\s*"([^"]*)"/),
+        '완료일':   g(/"완료일"\s*:\s*"([^"]*)"/),
+        '상태':     g(/"상태"\s*:\s*"([^"]*)"/) || '진행',
+        '개발단계': g(/"개발단계"\s*:\s*"([^"]*)"/),
+        '상세내용': g(/"상세내용"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/).replace(/\\n/g, '\n'),
+        'wbs레벨':  parseInt(g(/"wbs레벨"\s*:\s*(\d)/) || '4'),
+    };
+    return task['업무명'] ? task : null;
+};
+
 function mfBuildProjectKeywords() {
     const map = {};
     if (!globalData || globalData.length <= 1) return map;
@@ -4128,9 +4413,9 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
             .trim();
         origBody.textContent = `제목: ${subject}\n발신: ${sender||''}\n날짜: ${date||''}\n\n${bodyFormatted}`;
         origBody.style.maxHeight = '600px';
-        origBody.style.display = 'none';
+        origBody.style.display = 'block';
         const arrow = document.getElementById('mail-original-arrow');
-        if (arrow) arrow.textContent = '▼';
+        if (arrow) arrow.textContent = '▲';
     }
     // 분석결과 렌더링
     window._mailAnalyzedResult = JSON.parse(JSON.stringify(task));
@@ -4217,9 +4502,20 @@ function pasteAddResult(task, mailText) {
 // ─── 파일 선택 ───────────────────────────────────────────
 window.mfHandleFiles = function(files) {
     if (!files || files.length === 0) return;
-    
-    const newFiles = Array.from(files).slice(0, 50);
-    window._mfFiles = (window._mfFiles || []).concat(newFiles).slice(0, 50); 
+
+    // 💡 추가: MSG 파일 걸러내기 (경고 알림 후 해당 파일만 목록에서 제외)
+    const validFiles = Array.from(files).filter(f => {
+        if (f.name.toLowerCase().endsWith('.msg')) {
+            alert(`⚠️ '${f.name}'은 MSG 파일입니다.\nMSG 파일은 '메일 서버 탭'을 이용해 주세요.`);
+            return false; // 목록에서 제외
+        }
+        return true;
+    });
+
+    if (validFiles.length === 0) return; // 유효한 파일이 없으면 종료
+
+    const newFiles = validFiles.slice(0, 500);
+    window._mfFiles = (window._mfFiles || []).concat(newFiles).slice(0, 500); 
     const arr = window._mfFiles;
 
     document.getElementById('mf-file-count').textContent = arr.length;
@@ -4264,7 +4560,7 @@ window.mfClearFiles = function() {
         dz.innerHTML = `
             <div style="font-size:20px;">📁</div>
             <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-            <div style="font-size:10px; color:#aaa;">.eml / .msg / .html / .txt 최대 50개</div>`;
+            <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>`;
     }
         
     // 3. 버튼 및 결과창 숨기기
@@ -4437,10 +4733,48 @@ function mfParseFile(file) {
                 body = text.replace(/\s+/g, ' ').trim();
             }
 
-            resolve({ subject, sender, date, body: body.substring(0, 3000), fileName: file.name });
+            resolve({ subject, sender, date, body: body.substring(0, 6000), fileName: file.name });
         };
         reader.readAsText(file, 'utf-8');
     });
+}
+
+// ─── 메일 본문 정제 (AI 입력 토큰 절약 + 품질 향상) ──────────
+function cleanMailBody(raw) {
+    if (!raw) return '';
+    let s = String(raw);
+
+    // 1) 과거 메일 이력(인용/포워딩) 시작 지점 찾기 — 새 요청은 보통 상단
+    const markers = [
+        /-{3,}\s*Original Message\s*-{3,}/i,
+        /-{3,}\s*Forwarded message\s*-{3,}/i,
+        /_{10,}/,
+        /\n\s*보낸\s*사람\s*:/,
+        /\n\s*From:\s.+\n\s*(Sent|To|보낸\s*날짜)\s*:/i,
+        /\n[^\n]{0,80}\d{4}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}[^\n]{0,40}(작성|wrote)\s*:/i,
+        /\nOn\s.+\swrote:/i
+    ];
+    let cutIdx = s.length;
+    for (const re of markers) {
+        const m = s.match(re);
+        if (m && m.index < cutIdx) cutIdx = m.index;
+    }
+    let head = s.slice(0, cutIdx);
+    if (head.trim().length < 40) head = s;   // 윗부분이 거의 비면 전체 사용(순수 포워딩 대비)
+    s = head;
+
+    // 2) 인용 라인(> ...) 제거
+    s = s.split('\n').filter(l => !/^\s*>/.test(l)).join('\n');
+
+    // 3) base64 덩어리·초장문 URL·data URI 노이즈 제거
+    s = s.replace(/\bdata:[^\s]+/g, ' ')
+         .replace(/[A-Za-z0-9+/]{200,}={0,2}/g, ' ')
+         .replace(/https?:\/\/\S{80,}/g, ' ');
+
+    // 4) 공백 정리
+    s = s.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
+
+    return s;
 }
 
 // ─── 프로젝트 매칭 ──────────────────────────────────────
@@ -4467,7 +4801,7 @@ async function mfCallGemini(apiKey, parsed) {
         }
     }
     // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
-    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + parsed.body;
+    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date);
 
     const GAS_URL = localStorage.getItem('gas_server_url') || 
@@ -4489,18 +4823,7 @@ async function mfCallGemini(apiKey, parsed) {
             console.log('GAS응답status:', data.status, '메시지:', data.message);
             if (data.status !== 'success') throw new Error(data.message);
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            console.log('Gemini텍스트:', text.substring(0, 200));
-            text = text.replace(/```json|```/g,'').trim();
-            // 배열 형태 먼저 시도
-            const arrMatch = text.match(/\[[\s\S]*\]/);
-            const objMatch = text.match(/\{[\s\S]*\}/);
-            const m = arrMatch && (!objMatch || arrMatch.index < objMatch.index) ? arrMatch : objMatch;
-            if (!m) { console.warn('JSON패턴없음 전체텍스트:', text.substring(0, 500)); return null; }
-            try {
-                const parsed = JSON.parse(m[0]);
-                // 배열이면 첫 번째 항목 반환
-                return Array.isArray(parsed) ? parsed[0] : parsed;
-            } catch(e) { console.error('JSON파싱실패:', e.message, m[0].substring(0,200)); return null; }
+            return window.parseGeminiTask(text);
         } catch (err) {
             if (attempt < MAX_RETRY) {
                 console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
@@ -4799,8 +5122,8 @@ function mfDirectInsert(task) {
         return false; 
     }
 
-    // 💡 3을 4로 바꾸고, 'WBS 레벨'이라는 대문자 키값도 인식할 수 있게 안전장치 추가
-    const level = parseInt(task['WBS 레벨'] ?? task['wbs레벨'] ?? 4);
+    // 💡 AI 분석값(3 등)과 무관하게 항상 가장 낮은 레벨(4)로 등록
+    const level = 4;
     // ✅ 엑셀의 전체 열 개수만큼 빈 배열 생성 (공간 부족 방지)
     let newRow = new Array(globalData[0].length).fill("");
     newRow._level = level;
@@ -4931,7 +5254,7 @@ window.msFetchMail = async function() {
             startDate,
             endDate,
             keyword:   document.getElementById('ms-keyword')?.value?.trim() || '',
-            maxCount:  200
+            maxCount:  500
             })
         });
         const data = await res.json();
@@ -5165,7 +5488,7 @@ async function msCallGemini(apiKey, parsed) {
         }
     }
 
-    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + parsed.body.substring(0, 2000);
+    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
 
     const MAX_RETRY = 3;
@@ -5182,15 +5505,9 @@ async function msCallGemini(apiKey, parsed) {
             });
             const data = await resp.json();
             if (data.status !== 'success') throw new Error(data.message);
-
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            console.log('Gemini 원본 응답:', JSON.stringify(data).substring(0, 500));
-            console.log('추출 텍스트:', text.substring(0, 300));
-            text = text.replace(/```json|```/g,'').trim();
-            const m = text.match(/\{[\s\S]*\}/);
-            if (!m) { console.warn('JSON 패턴 없음'); return null; }
-            try { return JSON.parse(m[0]); } catch(e) { console.error('JSON 파싱 실패:', e.message); return null; }
-        } catch(err) {
+            return window.parseGeminiTask(text);
+                } catch(err) {
                 if (attempt < MAX_RETRY) {
                     console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
                     await new Promise(r => setTimeout(r, 3000));
@@ -5223,6 +5540,39 @@ async function msCallGemini(apiKey, parsed) {
     th.sticky-col.sticky-last {
         /* 마지막 열은 구분감을 위해 그림자 추가 */
         box-shadow: 4px 0 6px -1px rgba(0,0,0,0.2), 0 0 0 1.5px #f4f6f8 !important;
+    }
+</style>
+
+<style>
+/* 1. 모든 버튼을 동일한 규칙으로 고정 */
+.action-btn {
+    font-size: 15px !important;            /* 폰트 크기 통일 */
+    height: 35px !important;               /* 높이 통일 */
+    padding: 0 10px !important;            /* 좌우 여백 통일 */
+    min-width: 100px !important;           /* 너비 통일 */
+    flex: 0 0 auto !important;             /* 늘어나지 않게 고정 */
+    white-space: nowrap !important;        /* 글자 줄바꿈 방지 */
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-sizing: border-box !important;
+    margin: 4px !important;                /* 버튼 간격 균일화 */
+
+}
+</style>
+
+<style>
+    /* 1. 상세내역 텍스트가 들어가는 모든 셀의 색상을 검정색으로 고정 */
+    td.detail-td, 
+    .content-cell-trans,
+    .content-cell-trans * {
+        color: #000000 !important;
+    }
+
+    /* 2. 상세내역 입력 모드(수정 중)일 때의 글자색도 검정색으로 고정 */
+    #myTable tbody td textarea,
+    #myTable tbody td input[type="text"] {
+        color: #000000 !important;
     }
 </style>
 
@@ -5298,8 +5648,9 @@ async function msCallGemini(apiKey, parsed) {
                     // 💡 [핵심 변환] 현재 칸이 더블클릭되어 수정 모드 상태(contenteditable)인지 감지
                     const isEditing = td.getAttribute('contenteditable') === 'true' || document.activeElement === td;
                     
-                    // 💡 수정 중일 때는 노란색(#fff9c4), 평소에는 테마 배경색을 지정합니다.
-                    const bg = isEditing ? '#fff9c4' : solidColor;
+                    // 💡 수정 중=노란색, 다중선택=옅은 빨강, 평소=테마 배경색
+                    const isSelected = td.parentElement && td.parentElement.classList.contains('multi-selected');
+                    const bg = isEditing ? '#fff9c4' : (isSelected ? '#ffcccc' : solidColor);
                     const zIdx = isEditing ? '70' : '50';
 
                     td.style.setProperty('position', 'sticky', 'important');
