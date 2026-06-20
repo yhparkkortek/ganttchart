@@ -291,6 +291,7 @@
             <button id="drive_load_btn" class="action-btn drive-load-style" onclick="loadFromGoogleDrive()" style="height: 32px;" disabled>📂 드라이브에서 불러오기</button>
             <div style="width:2px; height:32px; background:#ddd; margin: 0 10px;"></div>
             <button id="history-btn" class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
+            <button id="weekly-report-btn" class="action-btn" onclick="window.showWeeklyReport()" style="border-color:#6f42c1; color:#6f42c1; height:32px;">📅 주간 업무</button>
             <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
         </div>
         <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
@@ -1972,6 +1973,7 @@ ${mailText}`;
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
                 'mail-btn':       '📧 메일로 업무 추가',
+                'weekly-report-btn': '📅 주간 업무',
                 'drive_save_btn': '💾 드라이브에 저장',
                 'drive_load_btn': '📂 드라이브에서 불러오기',
                 'chart-expand-btn':    '📊 차트 확장',
@@ -2003,6 +2005,7 @@ ${mailText}`;
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
                 'mail-btn':       '📧 Add Task via Mail',
+                'weekly-report-btn': '📅 Weekly Report',
                 'drive_save_btn': '💾 Save to Drive',
                 'drive_load_btn': '📂 Load from Drive',
                 'chart-expand-btn':    '📊 Chart View',
@@ -5742,5 +5745,118 @@ async function msCallGemini(apiKey, parsed) {
     document.addEventListener('mouseup', function() { isDragging = false; });
 })();
 </script>
+
+<script>
+    // ====================================================
+    // 📅 주간 업무 보고 (신규 기능 — 기존 코드와 분리된 블록)
+    // ====================================================
+    // ── 날짜 유틸 ─────────────────────────────────────────
+    function wrGetWeekRange(baseDate) {
+        // 월요일 00:00 ~ 금요일 23:59:59 기준 주간 범위
+        const d = new Date(baseDate);
+        const day = d.getDay(); // 0=일 ... 6=토
+        const diffToMon = (day === 0) ? -6 : (1 - day);
+        const mon = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diffToMon);
+        mon.setHours(0,0,0,0);
+        const fri = new Date(mon.getFullYear(), mon.getMonth(), mon.getDate() + 4);
+        fri.setHours(23,59,59,999);
+        return { start: mon.getTime(), end: fri.getTime() };
+    }
+    function wrFormatMD(ts) {
+        if (!ts) return "";
+        const d = new Date(ts);
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    }
+    function wrGetWeekNumber(ts) {
+        const d = new Date(ts);
+        const start = new Date(d.getFullYear(), 0, 1);
+        const days = Math.floor((d - start) / 86400000);
+        return Math.ceil((days + start.getDay() + 1) / 7);
+    }
+    function wrTaskName(row) {
+        if (!row) return "";
+        if (row._level === 0) return row._origDev || "";
+        if (row._level === 1) return row._origT1 || "";
+        if (row._level === 2) return row._origT2 || "";
+        if (row._level === 3) return row._origT3 || "";
+        if (row._level === 4) return row._origT4 || "";
+        return "";
+    }
+    function wrOverlaps(rowStart, rowEnd, rangeStart, rangeEnd) {
+        if (!rowStart && !rowEnd) return false;
+        const s = rowStart || rowEnd;
+        const e = rowEnd || rowStart;
+        return s <= rangeEnd && e >= rangeStart;
+    }
+
+    // ── 이번주/다음주 분류 ────────────────────────────────
+    window.wrClassifyTasks = function() {
+        const thisWeek = wrGetWeekRange(new Date());
+        const nextWeekBase = new Date(); nextWeekBase.setDate(nextWeekBase.getDate() + 7);
+        const nextWeek = wrGetWeekRange(nextWeekBase);
+
+        const thisList = [];
+        const nextList = [];
+
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i];
+            if (!row || row._level !== 4) continue; // 최하위 실무 태스크만 집계 (필요시 조정)
+            const s = row._calcStartTs, e = row._calcPlanTs;
+            const name = wrTaskName(row);
+            if (!name) continue;
+            const dateLabel = `(${wrFormatMD(s)}~${wrFormatMD(e)})`;
+
+            if (wrOverlaps(s, e, thisWeek.start, thisWeek.end)) {
+                thisList.push({ idx: i, row, text: `${name} ${dateLabel}` });
+            } else if (wrOverlaps(s, e, nextWeek.start, nextWeek.end)) {
+                nextList.push({ idx: i, row, text: `${name} ${dateLabel}` });
+            }
+        }
+        return { thisWeek, nextWeek, thisList, nextList, thisWeekNo: wrGetWeekNumber(thisWeek.start), nextWeekNo: wrGetWeekNumber(nextWeek.start) };
+    };
+
+    // ── 팝업 표시 ─────────────────────────────────────────
+    window.showWeeklyReport = function() {
+        const data = window.wrClassifyTasks();
+
+        let modal = document.getElementById('weekly-report-modal');
+        if (modal) modal.remove();
+
+        modal = document.createElement('div');
+        modal.id = 'weekly-report-modal';
+        modal.style.cssText = 'position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center;';
+
+        const renderList = (list) => list.length
+            ? list.map(t => `<li style="margin-bottom:6px;">${escapeHtml(t.text)}</li>`).join('')
+            : '<li style="color:#999;">해당 항목 없음</li>';
+
+        modal.innerHTML = `
+            <div style="background:#fff; border-radius:10px; width:720px; max-height:80vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+                <div style="padding:16px 22px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                    <div style="font-size:18px; font-weight:bold; color:#6f42c1;">📅 주간 업무 보고 (2단계: 미리보기)</div>
+                    <button onclick="document.getElementById('weekly-report-modal').remove()" style="border:none; background:none; font-size:20px; cursor:pointer; color:#999;">✕</button>
+                </div>
+                <div style="padding:20px 22px;">
+                    <h4 style="margin:0 0 8px;">주요 실적 (${data.thisWeekNo}W) — ${wrFormatMD(data.thisWeek.start)}~${wrFormatMD(data.thisWeek.end)}</h4>
+                    <ul style="margin:0 0 18px; padding-left:20px;">${renderList(data.thisList)}</ul>
+                    <h4 style="margin:0 0 8px;">추진 계획 (${data.nextWeekNo}W) — ${wrFormatMD(data.nextWeek.start)}~${wrFormatMD(data.nextWeek.end)}</h4>
+                    <ul style="margin:0; padding-left:20px;">${renderList(data.nextList)}</ul>
+                </div>
+            </div>`;
+        document.body.appendChild(modal);
+        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+    };
+
+    // 신규 컬럼 헬퍼: 행에 _담당자/_이슈/_대책이 없으면 빈 문자열로 초기화
+    // (저장/불러오기는 기존 로직이 '_'로 시작하는 속성을 자동 보존하므로 별도 수정 불필요)
+    window.ensureWeeklyReportFields = function(row) {
+        if (!row) return row;
+        if (row._담당자 === undefined) row._담당자 = "";
+        if (row._이슈   === undefined) row._이슈   = "";
+        if (row._대책   === undefined) row._대책   = "";
+        return row;
+    };
+</script>
+
 </body>
 </html>
