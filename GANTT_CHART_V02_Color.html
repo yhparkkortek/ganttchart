@@ -2264,8 +2264,8 @@ ${mailText}`;
             let startX, startWidth, startTableWidth;
             resizer.addEventListener('mousedown', function(e) {
                 e.preventDefault(); startX = e.clientX; startWidth = th.offsetWidth; startTableWidth = table.offsetWidth;
-                let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
-                thElements.forEach((t, idx) => { if(!hiddenCols.includes(idx)) t.style.width = t.offsetWidth + 'px'; });
+                // 💡 thElements는 이미 숨김 컬럼이 빠진 채로 수집되므로, 원본 인덱스(hiddenCols)와 비교하면 안 됨 → 전부 고정
+                thElements.forEach((t) => { t.style.width = t.offsetWidth + 'px'; });
                 table.style.width = startTableWidth + 'px'; resizer.classList.add('resizing');
                 const mouseMoveHandler = function(e) {
                     const diff = e.clientX - startX; const newWidth = startWidth + diff;
@@ -2670,6 +2670,9 @@ window.handleAuthClick = function() {
             const row = globalData[rowIdx];
             if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level);
         });
+
+        // 💡 컬럼 순서가 바뀌었으므로 sticky 왼쪽열 위치/배경을 즉시 재계산 (안 하면 스크롤 시 뒤가 투과되어 보임)
+        if (window.updateStickyPositions) window.updateStickyPositions();
     };
     // 테마 색상 동적 덮어쓰기
     window.updateThemeColor = function(baseHex) {
