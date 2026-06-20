@@ -2566,9 +2566,9 @@ window.handleAuthClick = function() {
         
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
                 <div class="chart-axis-wrapper" style="position:relative; height:12px; overflow:visible;">${labelHTML}</div>
-                <div style="position:relative; height:10px; background-color:#f8f9fa; border:1px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
+                <div style="position:relative; height:10px; background-color:#f8f9fa; border:2px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
-                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:1px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
                 </div>
             </div>`;
     };
