@@ -6129,7 +6129,9 @@ async function msCallGemini(apiKey, parsed) {
         const BORDER_W = 0.75;
         const HEAD_FS = 14;
         const GAP = 0.1;
-        const col2X = 0.4 + 6.15 + GAP;   // 주요실적-추진계획 사이 좌우 간격을 GAP으로 통일
+        // col2X 정의 부분을 이렇게 교체
+        const sectW  = (12.5 - GAP) / 2;     // = 6.2  (두 표 + 가운데 GAP = 12.5)
+        const col2X  = 0.4 + sectW + GAP;    // = 6.7
 
         // ── 헤더: 고객>모델명>인치 ───────────────────────
         let metaCustomer = "", metaModel = "", metaInch = "";
@@ -6163,7 +6165,7 @@ async function msCallGemini(apiKey, parsed) {
 
         // ── 모델 정보 줄 ─────────────────────────────────
         slide.addTable(
-            [[{ text: '프로젝트코드', options: { fontSize: 10, color: '000000', bold: true, fill: { color: C.tint } } },
+            [[{ text: '프로젝트코드', options: { fontSize: 10, color: '000000', bold: true, fill: { color: 'FFF7F1' } } },
               { text: '프로젝트명', options: { fontSize: 10, color: '000000', bold: true } },
               { text: projTitle, options: { fontSize: 10, color: '000000' } }]],
             { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [2.0, 2.0, 8.5], valign: 'middle' }
@@ -6180,11 +6182,12 @@ async function msCallGemini(apiKey, parsed) {
 
         const titleOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
         const ghOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 8, align: 'center', valign: 'middle' };
-        const glOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 8, align: 'center', valign: 'middle' };
+        const glOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 6.5, align: 'center', valign: 'middle' };
 
         const titleRowH = 0.32, headRowH = 0.28;
-        const dataRowH = (boardH - titleRowH - headRowH) / 4;
+        const dataRowH = (boardH - titleRowH - headRowH) / 5;
         const goalRowH = [titleRowH, headRowH, dataRowH, dataRowH, dataRowH, dataRowH];
+        const goalBoardH = goalRowH.reduce((a, b) => a + b, 0);   // ← 추가
 
         slide.addTable(
             [
@@ -6221,12 +6224,12 @@ async function msCallGemini(apiKey, parsed) {
 
        // ── 우: 개발 진척 현황 (역삼각형 줄 분리 + 크기 비례 간격) ──
         slide.addTable(
-            [[{ text: '개발 진척 현황', options: titleOpt }]],
-            { x: tlX, y: boardY, w: tlW, h: 0.32, colW: [tlW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
+        [[{ text: '개발 진척 현황', options: titleOpt }]],
+        { x: tlX, y: boardY, w: tlW, h: 0.32, colW: [tlW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
-        const goalTableY = boardY + 0.32;
-        const goalTableH = boardH - 0.32;
-        slide.addShape(pptx.ShapeType.rect, { x: tlX, y: goalTableY, w: tlW, h: goalTableH, fill: { color: 'FFFFFF' }, line: { color: BORDER, width: BORDER_W } });
+            const goalTableY = boardY + 0.32;
+            const goalTableH = goalBoardH - 0.32;   // ← boardH 를 goalBoardH 로
+            slide.addShape(pptx.ShapeType.rect, { x: tlX, y: goalTableY, w: tlW, h: goalTableH, fill: { color: 'FFFFFF' }, line: { color: BORDER, width: BORDER_W } });
 
         if (tl.items.length > 0) {
             const span = Math.max(1, tl.maxTs - tl.minTs);
@@ -6246,9 +6249,15 @@ async function msCallGemini(apiKey, parsed) {
             // 역삼각형(major) 전용 줄을 위쪽에 분리, 트랙+다이아몬드(minor)는 그 아래 줄
             const triH = 0.26, triW = 0.28;
             const majorLabelH = 0.34;
-            const triLabelGap = triH * 0.25;   // 라벨-삼각형 간격을 삼각형 크기에 비례해서 계산
-            const majorRowY = innerTop + majorLabelH + triLabelGap + triH + 0.04;
-            const trackRowY = majorRowY + 0.5;
+            const triLabelGap = triH * 0.25;   // 라벨-삼각형 간격을 삼각형 크기에 비례해서 계산          
+            const diaR = 0.05, diaLabelGap = diaR * 0.6, minorLabelH = 0.34;   // ← minor 상수 위로 올림
+
+            // 콘텐츠 블록 높이 = (트랙 위: major 라벨+삼각형) + (트랙 아래: minor 라벨)
+            const aboveH = majorLabelH + triLabelGap + triH;
+            const belowH = 0.08 + diaR + diaLabelGap + minorLabelH;
+            const blockH = aboveH + belowH;
+            // 박스 안 수직 중앙 정렬 (박스 높이 바뀌어도 자동으로 가운데)
+            const trackRowY = goalTableY + Math.max(0.08, (goalTableH - blockH) / 2) + aboveH;
 
             slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: trackRowY, w: lineW, h: 0.16, rectRadius: 0.03, fill: { color: 'EFEFEF' }, line: { color: 'D9D9D9', width: 0.75 } });
             const todayTs = Date.now();
@@ -6257,14 +6266,14 @@ async function msCallGemini(apiKey, parsed) {
 
             // major: 등간격 배치, 위쪽 줄에서만 그려짐
             majorItems.forEach((it) => {
-                const pct = majorPctMap.get(it);
-                const dotX = lineX + lineW * pct;
-                slide.addShape(pptx.ShapeType.triangle, {
-                    x: dotX - triW / 2, y: majorRowY - triH, w: triW, h: triH,
-                    fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
-                });
-                const labelW = 0.95, labelH = 0.34;
-                const labelY = majorRowY - triH - triLabelGap - labelH;
+            const pct = majorPctMap.get(it);
+            const dotX = lineX + lineW * pct;
+            slide.addShape(pptx.ShapeType.triangle, {
+                x: dotX - triW / 2, y: trackRowY - triH, w: triW, h: triH,   // ← 여기 majorRowY를 trackRowY로
+                fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
+            });
+            const labelW = 0.95, labelH = 0.34;
+            const labelY = trackRowY - triH - triLabelGap - labelH;
                 let labelX = dotX - labelW / 2;
                 if (labelX < tlX + 0.08) labelX = tlX + 0.08;
                 if (labelX + labelW > tlX + tlW - 0.08) labelX = tlX + tlW - 0.08 - labelW;
@@ -6275,8 +6284,6 @@ async function msCallGemini(apiKey, parsed) {
             });
 
             // minor: 트랙 위 다이아몬드, 위/아래 번갈아, 간격은 다이아몬드 크기에 비례
-            const diaR = 0.05;
-            const diaLabelGap = diaR * 0.6;
             minorItems.forEach((it, mi) => {
                 const pct = (it.start - tl.minTs) / span;
                 const dotX = lineX + lineW * pct;
@@ -6328,7 +6335,7 @@ async function msCallGemini(apiKey, parsed) {
                 [{ text: `주요 실적 (${data.thisWeekNo}W)`, options: sectTitleOpt }],
                 [{ text: listToText(data.thisList), options: sectBodyOpt }],
             ],
-            { x: 0.4, y: sectionY, w: 6.15, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [6.15], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
+            { x: 0.4, y: sectionY, w: sectW, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [sectW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
 
       slide.addTable(
@@ -6336,7 +6343,7 @@ async function msCallGemini(apiKey, parsed) {
                 [{ text: `추진 계획 (${data.nextWeekNo}W)`, options: sectTitleOpt }],
                 [{ text: listToText(data.nextList), options: sectBodyOpt }],
             ],
-            { x: col2X, y: sectionY, w: 6.15, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [6.15], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
+            { x: col2X, y: sectionY, w: sectW, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [sectW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
 
         // ── 문제점 및 Issue 표 (이미 단일 표 — 행 높이만 보정) ──
