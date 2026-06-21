@@ -292,7 +292,7 @@
             <button id="drive_load_btn" class="action-btn drive-load-style" onclick="loadFromGoogleDrive()" style="height: 32px;" disabled>📂 드라이브에서 불러오기</button>
             <div style="width:2px; height:32px; background:#ddd; margin: 0 10px;"></div>
             <button id="history-btn" class="action-btn history-btn" onclick="showHistoryModal()" style="height: 32px;">🕒 수정 이력 확인</button>
-            <button id="weekly-report-btn" class="action-btn" onclick="window.showWeeklyReport()" style="border-color:#6f42c1; color:#6f42c1; height:32px;">📅 주간 업무</button>
+            <button id="weekly-report-btn" class="action-btn" onclick="window.showWeeklyReport()" style="border-color:#6f42c1; color:#6f42c1; height:32px;">📅 주간 업무 보고</button>
             <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
         </div>
         <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
@@ -572,7 +572,7 @@ ${mailText}`;
                 return obj;
             });
 
-            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns };
+            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {} };
             
             // 💡 [수정] 현재 불러와서 작업 중인 고유 파일 ID가 있다면 그것을 끝까지 유지하고, 없을 때만 이름으로 새로 검색합니다.
             if (!window.currentDriveFileId) {
@@ -658,6 +658,7 @@ ${mailText}`;
                 window.lastSavedLogCount = window.changeLogs.length; 
                 colIdx = saveData.colIdx || colIdx;
                 filterColumns = saveData.filterColumns || filterColumns;
+                window.projectMeta = saveData.projectMeta || window.projectMeta || {};
                 window.currentDriveFileId = fileId;
                 window.recalculateSchedules();
                 alert(`🎉 [${fileName}] 공용 프로젝트 동기화 완료!`);
@@ -1978,7 +1979,7 @@ ${mailText}`;
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
                 'mail-btn':       '📧 메일로 업무 추가',
-                'weekly-report-btn': '📅 주간 업무',
+                'weekly-report-btn': '📅 주간 업무 보고',
                 'drive_save_btn': '💾 드라이브에 저장',
                 'drive_load_btn': '📂 드라이브에서 불러오기',
                 'chart-expand-btn':    '📊 차트 확장',
@@ -2468,7 +2469,29 @@ ${mailText}`;
             else ws[key].s.alignment = { vertical: "center" };
         }
 
-        const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
+        const wb = XLSX.utils.book_new();
+
+        // ── 프로젝트 시트 (projectMeta, 세로 키-값 형태) ──
+        const meta = window.projectMeta || {};
+        const metaData = [
+            ['항목', '값'],
+            ['프로젝트코드', meta.프로젝트코드 || ''],
+            ['프로젝트명', meta.프로젝트명 || ''],
+            ['PN_모델명', meta.PN_모델명 || ''],
+            ['기구 담당자', meta.기구담당자 || ''],
+            ['F/W 담당자', meta.FW담당자 || ''],
+        ];
+        const wsMeta = XLSX.utils.aoa_to_sheet(metaData);
+        for (let key in wsMeta) {
+            if (key[0] === '!') continue;
+            if (!wsMeta[key].s) wsMeta[key].s = {};
+            wsMeta[key].s.font = { sz: 10, name: "맑은 고딕" };
+            wsMeta[key].s.alignment = { vertical: "center" };
+        }
+        wsMeta['!cols'] = [{wch: 16}, {wch: 35}];
+        XLSX.utils.book_append_sheet(wb, wsMeta, "프로젝트");
+
+        XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
 
         if (window.changeLogs && window.changeLogs.length > 0) {
             let logData = [['변경 일시', '수정자', 'No (행)', '변경 항목', '변경 전 (Old)', '변경 후 (New)']];
@@ -5723,6 +5746,35 @@ async function msCallGemini(apiKey, parsed) {
 </script>
 
 <script>
+// ─── 주간 업무 보고 모달 드래그 기능 (메일 분석기와 동일한 패턴) ───
+(function() {
+    let isDragging = false, startX, startY, origLeft, origTop;
+    document.addEventListener('mousedown', function(e) {
+        const handle = document.getElementById('wr-drag-handle');
+        if (!handle || !handle.contains(e.target)) return;
+        const modal = document.getElementById('weekly-report-modal');
+        if (!modal) return;
+        isDragging = true;
+        const rect = modal.getBoundingClientRect();
+        origLeft = rect.left; origTop = rect.top;
+        startX = e.clientX; startY = e.clientY;
+        modal.style.transform = 'none';
+        modal.style.left = origLeft + 'px';
+        modal.style.top  = origTop  + 'px';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const modal = document.getElementById('weekly-report-modal');
+        if (!modal) return;
+        modal.style.left = (origLeft + e.clientX - startX) + 'px';
+        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', function() { isDragging = false; });
+})();
+</script>
+
+<script>
 // ─── 기존 제공해주신 메일 분석기 모달 드래그 기능 (그대로 유지) ───
 (function() {
     let isDragging = false, startX, startY, origLeft, origTop;
@@ -5824,6 +5876,14 @@ async function msCallGemini(apiKey, parsed) {
     }
 
     window.wrPptBaseColor = window.wrPptBaseColor || '19C3D6';
+
+    window.projectMeta = window.projectMeta || {
+        프로젝트코드: "",
+        프로젝트명: "",
+        PN_모델명: "",
+        기구담당자: "",
+        FW담당자: ""
+    };
 
     // ↓↓↓ 여기에 새로 추가 ↓↓↓
     function wrExtractAssignee(contentStr) {
@@ -5946,15 +6006,26 @@ async function msCallGemini(apiKey, parsed) {
                 <div class="wr-milestone-dot" style="position:absolute; top:50%; left:${pct}%; transform:translate(-50%,-50%); width:12px; height:12px; background:#6f42c1; border:2px solid #fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.3); cursor:pointer; z-index:2;" title="${label}"></div>`;
         }).join('');
 
+        // 선택된 주(기준주)의 시작~끝 구간을 같은 디자인의 빨간 원으로 표시
+        const selWeek = wrGetWeekRange(window.wrBaseDate);
+        let selMarker = '';
+        if (selWeek.start >= tl.minTs && selWeek.start <= tl.maxTs) {
+            const selPct = ((selWeek.start - tl.minTs) / span) * 100;
+            const selLabel = `선택된 주 (${wrFormatMD(selWeek.start)}~${wrFormatMD(selWeek.end)})`;
+            selMarker = `
+                <div class="wr-selected-week-dot" style="position:absolute; top:50%; left:${selPct}%; transform:translate(-50%,-50%); width:12px; height:12px; background:#e63946; border:2px solid #fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.3); cursor:pointer; z-index:3;" title="${selLabel}"></div>`;
+        }
+
         return `
             <div style="position:relative; height:24px; background:#f1f3f5; border-radius:4px; margin:10px 0 6px;">
                 <div style="position:absolute; top:50%; left:0; right:0; height:3px; background:#d8d0e8; transform:translateY(-50%);"></div>
                 ${dots}
+                ${selMarker}
             </div>
             <div style="display:flex; justify-content:space-between; font-size:11px; color:#888; margin-bottom:4px;">
                 <span>${wrFormatMD(tl.minTs)}</span><span>${wrFormatMD(tl.maxTs)}</span>
             </div>
-            <div style="font-size:11px; color:#999;">💡 점에 마우스를 올리면 마일스톤명이 표시됩니다 (PPT 출력 시 말풍선으로 표기)</div>`;
+            <div style="font-size:11px; color:#999;">💡 점에 마우스를 올리면 마일스톤명이 표시됩니다 · <span style="color:#e63946;">🔴 빨간 점 = 현재 선택된 주</span></div>`;
     }
 
     // ── 신규 컬럼 입력 UI 포함 리스트 렌더 ───────────────
@@ -6030,6 +6101,26 @@ async function msCallGemini(apiKey, parsed) {
         window.showWeeklyReport();   // 팝업을 같은 기준으로 다시 그림
     };
 
+    window.wrToggleMetaPanel = function() {
+        const panel = document.getElementById('wr-meta-panel');
+        const icon = document.getElementById('wr-meta-toggle-icon');
+        if (!panel) return;
+        const isHidden = panel.style.display === 'none';
+        panel.style.display = isHidden ? 'grid' : 'none';
+        if (icon) icon.textContent = isHidden ? '▼' : '▶';
+    };
+
+    window.wrSaveMetaFromInputs = function() {
+        const get = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
+        window.projectMeta = {
+            프로젝트코드: get('wr-meta-code'),
+            프로젝트명: get('wr-meta-name'),
+            PN_모델명: get('wr-meta-pn'),
+            기구담당자: get('wr-meta-mech'),
+            FW담당자: get('wr-meta-fw')
+        };
+    };
+
     // ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
         const data = window.wrClassifyTasks();
@@ -6037,42 +6128,74 @@ async function msCallGemini(apiKey, parsed) {
         let modal = document.getElementById('weekly-report-modal');
         if (modal) modal.remove();
 
+        let overlay = document.getElementById('weekly-report-overlay');
+        if (overlay) overlay.remove();
+
+        overlay = document.createElement('div');
+        overlay.id = 'weekly-report-overlay';
+        overlay.style.cssText = 'position:fixed; inset:0; z-index:99998; pointer-events:none; background:none;';
+
         modal = document.createElement('div');
         modal.id = 'weekly-report-modal';
-        modal.style.cssText = 'position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center;';
+        modal.onclick = (e) => e.stopPropagation();
+        modal.style.cssText = 'pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); max-width:1000px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.25); overflow:hidden;';
 
         const SKY_C = '#19C3D6', SKY_TINT = '#D8F5F9', BORDER_C = '#999';
 
         modal.innerHTML = `
-            <div style="background:#fff; border-radius:10px; width:920px; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
-                <div style="padding:16px 22px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-size:18px; font-weight:bold; color:${SKY_C};">📅 주간 업무</div>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:4px;">
-                            PPT 색상
-                            <input type="color" id="wr-ppt-color" value="#${(window.wrPptBaseColor || '19C3D6').replace('#','')}" style="width:28px; height:24px; border:none; padding:0; cursor:pointer;">
-                        </label>
-                        <button onclick="window.exportWeeklyReportPPT()" style="padding:7px 16px; background:${SKY_C}; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">📥 PPT 출력</button>
-                        <button onclick="document.getElementById('weekly-report-modal').remove()" style="border:none; background:none; font-size:20px; cursor:pointer; color:#999;">✕</button>
+                <div id="wr-drag-handle" style="background:${SKY_C}; color:white; flex-shrink:0; cursor:move;">
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 16px;">
+                        <span style="font-size:16px; font-weight:bold;">⠿ 📅 주간 업무 보고</span>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <label style="font-size:12px; color:#fff; display:flex; align-items:center; gap:4px;" onclick="event.stopPropagation()">
+                                PPT 색상
+                                <input type="color" id="wr-ppt-color" value="#${(window.wrPptBaseColor || '19C3D6').replace('#','')}" style="width:26px; height:22px; border:none; padding:0; cursor:pointer;">
+                            </label>
+                            <button onclick="event.stopPropagation(); window.exportWeeklyReportPPT()" style="padding:6px 14px; background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.5); border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">📥 PPT 출력</button>
+                            <button onclick="event.stopPropagation(); document.getElementById('weekly-report-overlay').remove();"
+                                style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5); color:white; font-size:18px; font-weight:bold; cursor:pointer; width:25px; height:25px; border-radius:4px; line-height:1; display:flex; align-items:center; justify-content:center; flex-shrink:0;"
+                                title="닫기">×</button>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 주차 선택 -->
-                <div style="padding:10px 22px; border-bottom:1px solid #eee; display:flex; justify-content:center; align-items:center; gap:14px; background:#fafafa;">
+                <div style="padding:10px 22px; border-bottom:1px solid #eee; display:flex; justify-content:center; align-items:center; gap:14px; background:#fafafa; flex-shrink:0;">
                     <button onclick="window.wrShiftWeek(-1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">◀ 이전주</button>
                     <div style="font-size:13px; font-weight:bold; color:#333;">기준주: ${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)</div>
                     <button onclick="window.wrShiftWeek(1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">다음주 ▶</button>
                     <button onclick="window.wrShiftWeek(0)" style="padding:5px 12px; border:1px solid #19C3D6; color:#19C3D6; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">오늘</button>
                 </div>
 
-                <div style="padding:20px 22px;">
-                    <!-- 개발 진척 현황 (전체 폭) -->
+                <!-- 프로젝트 정보 패널 -->
+                <div style="padding:10px 22px; border-bottom:1px solid #eee; background:#fff;">
+                    <div onclick="window.wrToggleMetaPanel()" style="cursor:pointer; font-size:12px; color:#19C3D6; font-weight:bold; display:flex; align-items:center; gap:4px;">
+                        <span id="wr-meta-toggle-icon">▶</span> 프로젝트 정보
+                    </div>
+                    <div id="wr-meta-panel" style="display:none; margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+                        <label style="font-size:12px; color:#555;">프로젝트코드
+                            <input type="text" id="wr-meta-code" value="${escapeHtml(window.projectMeta.프로젝트코드 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
+                        </label>
+                        <label style="font-size:12px; color:#555;">프로젝트명
+                            <input type="text" id="wr-meta-name" value="${escapeHtml(window.projectMeta.프로젝트명 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
+                        </label>
+                        <label style="font-size:12px; color:#555;">PN_모델명
+                            <input type="text" id="wr-meta-pn" value="${escapeHtml(window.projectMeta.PN_모델명 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
+                        </label>
+                        <label style="font-size:12px; color:#555;">기구 담당자
+                            <input type="text" id="wr-meta-mech" value="${escapeHtml(window.projectMeta.기구담당자 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
+                        </label>
+                        <label style="font-size:12px; color:#555;">F/W 담당자
+                            <input type="text" id="wr-meta-fw" value="${escapeHtml(window.projectMeta.FW담당자 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
+                        </label>
+                    </div>
+                </div>
+
+                <div style="padding:20px 22px; overflow-y:auto; flex:1;">
                     <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">개발 진척 현황</div>
                         <div style="padding:12px;">${wrRenderTimeline()}</div>
                     </div>
 
-                    <!-- 주요 실적 / 추진 계획 (좌우 분할) -->
                     <div style="display:flex; gap:10px; margin-bottom:14px;">
                         <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                             <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">주요 실적 (${data.thisWeekNo}W)</div>
@@ -6084,19 +6207,23 @@ async function msCallGemini(apiKey, parsed) {
                         </div>
                     </div>
 
-                    <!-- 문제점 및 Issue (전체 폭) -->
                     <div style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">문제점 및 Issue</div>
                         <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                     </div>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-        modal.addEventListener('click', (e) => { if (e.target === modal) modal.remove(); });
+                </div>`;
+
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+
         const colorInput = document.getElementById('wr-ppt-color');
         if (colorInput) colorInput.addEventListener('input', function() { window.wrPptBaseColor = this.value.replace('#',''); });
-    };
 
+        ['wr-meta-code','wr-meta-name','wr-meta-pn','wr-meta-mech','wr-meta-fw'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.addEventListener('change', window.wrSaveMetaFromInputs);
+        });
+    };
   window.exportWeeklyReportPPT = function() {
         if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.'); return; }
 
@@ -6247,7 +6374,7 @@ async function msCallGemini(apiKey, parsed) {
             });
 
             // 역삼각형(major) 전용 줄을 위쪽에 분리, 트랙+다이아몬드(minor)는 그 아래 줄
-            const triH = 0.26, triW = 0.28;
+            const triH = 0.195, triW = 0.21;
             const majorLabelH = 0.34;
             const triLabelGap = triH * 0.25;   // 라벨-삼각형 간격을 삼각형 크기에 비례해서 계산          
             const diaR = 0.05, diaLabelGap = diaR * 0.6, minorLabelH = 0.34;   // ← minor 상수 위로 올림
@@ -6308,12 +6435,22 @@ async function msCallGemini(apiKey, parsed) {
         }
         
 // ── 주요 실적 / 추진 계획 (제목+본문이 하나의 표) ──
+        // 담당자(발신→수신)·요청/문의 줄은 헤더에 이미 표시되므로 본문에서 제외
+        const isAssigneeLine = (line) => {
+            const l = line.trim();
+            if (!l) return false;
+            if (/^\[\s*(요청\s*\/\s*문의|견적요청|문의|요청|발신\s*→\s*수신|발신자\s*→\s*수신자)/.test(l)) return true;
+            if (/→/.test(l) && !/^\[\s*(핵심내용|To\s*do|문제점|대책|비고|특이사항|진행|결과|일정)/i.test(l)) return true;
+            return false;
+        };
+
         const listToText = (list) => {
             if (!list.length) return '해당 항목 없음';
             return list.map(t => {
                 const rawContent = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
                 const assignee = wrExtractAssignee(rawContent);
-                const contentStr = wrStripIssueLines(rawContent);
+                const contentStr = wrStripIssueLines(rawContent)
+                    .split('\n').filter(line => !isAssigneeLine(line)).join('\n').trim();   // ← 추가: 담당자 줄 제외
                 const header = `▶ ${t.text}${assignee ? `  [${assignee}]` : ''}`;
                 return contentStr ? `${header}\n${contentStr}\n` : header;
             }).join('\n');
