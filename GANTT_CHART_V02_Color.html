@@ -2565,6 +2565,40 @@ ${mailText}`;
             wsLog['!cols'] = [{wch: 22}, {wch: 15}, {wch: 12}, {wch: 15}, {wch: 35}, {wch: 35}]; 
             XLSX.utils.book_append_sheet(wb, wsLog, "수정이력");
         }
+
+        // ── 알림메일 시트: _알림 체크된 행만 모아 정리 (발송 로직은 별도 단계) ──
+        const alarmRows = globalData.slice(1).filter(row => row && row._알림);
+        if (alarmRows.length > 0) {
+            const taskName = (row) => {
+                if (row._level === 0) return row._origDev || "";
+                if (row._level === 1) return row._origT1 || "";
+                if (row._level === 2) return row._origT2 || "";
+                if (row._level === 3) return row._origT3 || "";
+                if (row._level === 4) return row._origT4 || "";
+                return "";
+            };
+            let alarmData = [['업무명', '시작일', '완료일', '상태', '상세내용']];
+            alarmRows.forEach(row => {
+                alarmData.push([
+                    taskName(row),
+                    row._calcStartTs ? formatTsToYMD(row._calcStartTs) : "",
+                    row._calcPlanTs ? formatTsToYMD(row._calcPlanTs) : "",
+                    colIdx.status !== -1 ? (row[colIdx.status] || "") : "",
+                    colIdx.content !== -1 ? (row[colIdx.content] || "") : ""
+                ]);
+            });
+            const wsAlarm = XLSX.utils.aoa_to_sheet(alarmData);
+            for (let key in wsAlarm) {
+                if (key[0] === '!') continue;
+                if (!wsAlarm[key].s) wsAlarm[key].s = {};
+                wsAlarm[key].s.font = { sz: 10, name: "맑은 고딕" };
+                if (typeof wsAlarm[key].v === 'string' && wsAlarm[key].v.includes('\n')) wsAlarm[key].s.alignment = { wrapText: true, vertical: "top" };
+                else wsAlarm[key].s.alignment = { vertical: "center" };
+            }
+            wsAlarm['!cols'] = [{wch: 28}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 45}];
+            XLSX.utils.book_append_sheet(wb, wsAlarm, "알림메일");
+        }
+
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
     }
 
