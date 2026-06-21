@@ -6046,7 +6046,7 @@ async function msCallGemini(apiKey, parsed) {
         modal.innerHTML = `
             <div style="background:#fff; border-radius:10px; width:920px; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
                 <div style="padding:16px 22px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-size:18px; font-weight:bold; color:${SKY_C};">📅 주간 업무 보고</div>
+                    <div style="font-size:18px; font-weight:bold; color:${SKY_C};">📅 주간 업무</div>
                     <div style="display:flex; gap:10px; align-items:center;">
                         <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:4px;">
                             PPT 색상
@@ -6163,7 +6163,7 @@ async function msCallGemini(apiKey, parsed) {
 
         // ── 모델 정보 줄 ─────────────────────────────────
         slide.addTable(
-            [[{ text: '프로젝트코드', options: { fontSize: 10, color: '000000', bold: true, fill: { color: C.tint } } },,
+            [[{ text: '프로젝트코드', options: { fontSize: 10, color: '000000', bold: true, fill: { color: C.tint } } },
               { text: '프로젝트명', options: { fontSize: 10, color: '000000', bold: true } },
               { text: projTitle, options: { fontSize: 10, color: '000000' } }]],
             { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [2.0, 2.0, 8.5], valign: 'middle' }
@@ -6219,7 +6219,7 @@ async function msCallGemini(apiKey, parsed) {
             { x: goalX, y: boardY, w: goalW, h: boardH, rowH: goalRowH, fontSize: 8, align: 'center', valign: 'middle', border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: goalColW }
         );
 
-       // ── 우: 개발 진척 현황 (그래프 살짝 축소 + 좌우 끝단 라벨 클램프 + 디자인 다듬기) ──
+       // ── 우: 개발 진척 현황 (역삼각형 줄 분리 + 크기 비례 간격) ──
         slide.addTable(
             [[{ text: '개발 진척 현황', options: titleOpt }]],
             { x: tlX, y: boardY, w: tlW, h: 0.32, colW: [tlW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
@@ -6233,12 +6233,6 @@ async function msCallGemini(apiKey, parsed) {
             const padX = 0.5;
             const lineX = tlX + padX, lineW = tlW - padX * 2;
             const innerTop = goalTableY + 0.08, innerBottom = goalTableY + goalTableH - 0.08;
-            const lineY = innerTop + (innerBottom - innerTop) * 0.5;   // 상하 중앙
-
-            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: lineY, w: lineW, h: 0.16, rectRadius: 0.03, fill: { color: 'EFEFEF' }, line: { color: 'D9D9D9', width: 0.75 } });
-            const todayTs = Date.now();
-            const todayPct = Math.max(0, Math.min(1, (todayTs - tl.minTs) / span));
-            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: lineY + 0.04, w: Math.max(0.05, lineW * todayPct), h: 0.08, rectRadius: 0.04, fill: { color: SKY_DARK } });
 
             const milestones = tl.items.filter(it => wrIsMilestone(it.name));
             const majorItems = milestones.filter(it => /RFQ|PROTO DR|DVR|MP/i.test(it.name)).sort((a, b) => a.start - b.start);
@@ -6246,47 +6240,62 @@ async function msCallGemini(apiKey, parsed) {
 
             const majorPctMap = new Map();
             majorItems.forEach((it, i) => {
-                const evenPct = majorItems.length > 1 ? i / (majorItems.length - 1) : 0;
-                majorPctMap.set(it, evenPct);
+                majorPctMap.set(it, majorItems.length > 1 ? i / (majorItems.length - 1) : 0);
             });
 
-            function drawMarker(it, isUp, overridePct) {
-                const pct = overridePct !== undefined ? overridePct : (it.start - tl.minTs) / span;
+            // 역삼각형(major) 전용 줄을 위쪽에 분리, 트랙+다이아몬드(minor)는 그 아래 줄
+            const triH = 0.26, triW = 0.28;
+            const majorLabelH = 0.34;
+            const triLabelGap = triH * 0.25;   // 라벨-삼각형 간격을 삼각형 크기에 비례해서 계산
+            const majorRowY = innerTop + majorLabelH + triLabelGap + triH + 0.04;
+            const trackRowY = majorRowY + 0.5;
+
+            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: trackRowY, w: lineW, h: 0.16, rectRadius: 0.03, fill: { color: 'EFEFEF' }, line: { color: 'D9D9D9', width: 0.75 } });
+            const todayTs = Date.now();
+            const todayPct = Math.max(0, Math.min(1, (todayTs - tl.minTs) / span));
+            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: trackRowY + 0.04, w: Math.max(0.05, lineW * todayPct), h: 0.08, rectRadius: 0.04, fill: { color: SKY_DARK } });
+
+            // major: 등간격 배치, 위쪽 줄에서만 그려짐
+            majorItems.forEach((it) => {
+                const pct = majorPctMap.get(it);
                 const dotX = lineX + lineW * pct;
-                const isMajor = /RFQ|PROTO DR|DVR|MP/i.test(it.name);
-                const triH = 0.195, triW = 0.21;   // 역삼각형 2배 확대
-                const diaR = 0.05;
-
-                if (isMajor) {
-                    slide.addShape(pptx.ShapeType.triangle, {
-                        x: dotX - triW / 2, y: lineY - triH - 0.02, w: triW, h: triH,
-                        fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
-                    });
-                } else {
-                    slide.addShape(pptx.ShapeType.diamond, {
-                        x: dotX - diaR, y: lineY + 0.08 - diaR, w: diaR * 2, h: diaR * 2,
-                        fill: { color: SKY }, line: { color: 'FFFFFF', width: 1 }
-                    });
-                }
-
-                const gap = 0.02;   // 2px 상당, 그래프/마커 표면에서 고정 간격
+                slide.addShape(pptx.ShapeType.triangle, {
+                    x: dotX - triW / 2, y: majorRowY - triH, w: triW, h: triH,
+                    fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
+                });
                 const labelW = 0.95, labelH = 0.34;
-                let labelY = isUp ? (lineY - gap - labelH) : (lineY + 0.16 + gap);
-                labelY = Math.max(innerTop, Math.min(innerBottom - labelH, labelY));
-
-                const edgePad = 0.08;
+                const labelY = majorRowY - triH - triLabelGap - labelH;
                 let labelX = dotX - labelW / 2;
-                if (labelX < tlX + edgePad) labelX = tlX + edgePad;
-                if (labelX + labelW > tlX + tlW - edgePad) labelX = tlX + tlW - edgePad - labelW;
-
+                if (labelX < tlX + 0.08) labelX = tlX + 0.08;
+                if (labelX + labelW > tlX + tlW - 0.08) labelX = tlX + tlW - 0.08 - labelW;
                 slide.addText(`${it.name}\n${wrFormatMD(it.start)}`, {
                     x: labelX, y: labelY, w: labelW, h: labelH,
-                    fontSize: 7.5, bold: isMajor, align: 'center', valign: isUp ? 'bottom' : 'top', color: SKY_DARK
+                    fontSize: 7.5, bold: true, align: 'center', valign: 'bottom', color: SKY_DARK
                 });
-            }
+            });
 
-            majorItems.forEach((it) => drawMarker(it, true, majorPctMap.get(it)));   // major는 항상 위
-            minorItems.forEach((it, mi) => drawMarker(it, mi % 2 === 0));
+            // minor: 트랙 위 다이아몬드, 위/아래 번갈아, 간격은 다이아몬드 크기에 비례
+            const diaR = 0.05;
+            const diaLabelGap = diaR * 0.6;
+            minorItems.forEach((it, mi) => {
+                const pct = (it.start - tl.minTs) / span;
+                const dotX = lineX + lineW * pct;
+                slide.addShape(pptx.ShapeType.diamond, {
+                    x: dotX - diaR, y: trackRowY + 0.08 - diaR, w: diaR * 2, h: diaR * 2,
+                    fill: { color: SKY }, line: { color: 'FFFFFF', width: 1 }
+                });
+                const isUp = mi % 2 === 0;
+                const labelW = 0.95, labelH = 0.34;
+                let labelY = isUp ? (trackRowY + 0.08 - diaR - diaLabelGap - labelH) : (trackRowY + 0.08 + diaR + diaLabelGap);
+                labelY = Math.max(innerTop, Math.min(innerBottom - labelH, labelY));
+                let labelX = dotX - labelW / 2;
+                if (labelX < tlX + 0.08) labelX = tlX + 0.08;
+                if (labelX + labelW > tlX + tlW - 0.08) labelX = tlX + tlW - 0.08 - labelW;
+                slide.addText(`${it.name}\n${wrFormatMD(it.start)}`, {
+                    x: labelX, y: labelY, w: labelW, h: labelH,
+                    fontSize: 7.5, bold: false, align: 'center', valign: isUp ? 'bottom' : 'top', color: SKY_DARK
+                });
+            });
         } else {
             slide.addText('진척 항목 없음', { x: tlX + 0.2, y: goalTableY + 0.5, w: tlW - 0.4, h: 0.3, fontSize: 10, color: '999999' });
         }
@@ -6303,7 +6312,14 @@ async function msCallGemini(apiKey, parsed) {
             }).join('\n');
         };
 
-        const sectionY = goalTableY + goalTableH + GAP, sectionH = 0.3, bodyH = 1.75;
+        // 텍스트 줄 수를 추정해서 필요한 높이를 동적으로 계산 (고정 1.75 대신)
+        const estimateLines = (text) => text.split('\n').length;
+        const thisLines = estimateLines(listToText(data.thisList));
+        const nextLines = estimateLines(listToText(data.nextList));
+        const maxLines = Math.max(thisLines, nextLines, 4);   // 최소 4줄 보장
+        const lineHeightIn = 0.165;   // 10pt 폰트 기준 줄당 높이(인치) 근사값
+        const sectionY = goalTableY + goalTableH + GAP, sectionH = 0.3;
+        const bodyH = Math.max(1.75, maxLines * lineHeightIn + 0.16);   // 여유 패딩 포함, 최소 1.75 유지
         const sectTitleOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
         const sectBodyOpt = { fontSize: 10, valign: 'top', color: '000000', align: 'left' };
 
