@@ -258,6 +258,14 @@
         background-color: #ffcccc !important;
     }
 
+    /* 알림 켜진 행 표시 (전체 행에 옅은 주황 배경 + 좌측 강조선) */
+    #myTable tr.alarm-on td {
+        background-color: #fff7e6 !important;
+    }
+    #myTable tr.alarm-on td:first-child {
+        box-shadow: inset 3px 0 0 0 #f5a623;
+    }
+
     /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
     #myTable tbody td input[type="text"],
     #myTable tbody td input[type="date"],
@@ -988,6 +996,17 @@ ${mailText}`;
         if (p) p.dataset.rowIndex = '__force__';
         window.toggleRowActions(td, i);
     }
+
+    // 행별 알림 필요 여부 토글 (추후 자동 메일 발송 트리거용 데이터만 저장 — 발송 로직은 별도)
+    window.wrToggleAlarm = function(rowIndex, ev) {
+        if (ev) ev.stopPropagation();
+        const row = globalData[rowIndex];
+        if (!row) return;
+        row._알림 = !row._알림;
+        logChange(rowIndex, -1, '알림 설정', row._알림 ? '알림 켜짐' : '알림 꺼짐');
+        renderTable(globalData);
+        applyFilters();
+    };
 
     window.onRowNoClick = function(td, i, ev) {
         if (window.getSelection) window.getSelection().removeAllRanges();   // shift 클릭 시 글자 파랗게 선택되는 것 방지
@@ -2160,6 +2179,7 @@ ${mailText}`;
         for(let i = 1; i < data.length; i++) {
             if (!data[i]) continue; let row = data[i];
             let trClass = row._level === 0 ? 'class="parent-row"' : (row._level === 1 ? 'class="sub-parent-row"' : (row._level === 2 ? 'class="sub-parent-row-2"' : (row._level === 3 ? 'class="sub-parent-row-3"' : 'class="sub-parent-row-4"')));
+            if (row._알림) trClass = trClass.replace('class="', 'class="alarm-on ');
             bodyHtml += `<tr data-row-index="${i}" ${trClass}>`;
             
             for(let cellIndex = 0; cellIndex < data[0].length; cellIndex++) {
@@ -2184,9 +2204,12 @@ ${mailText}`;
                 
                 if (cellIndex === colIdx.no) { 
                     tdAttrs += ` class="no-td" onclick="window.onRowNoClick(this, ${i}, event); event.stopPropagation();" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택"`;
+                    const alarmOn = !!row._알림;
                     tdHtml = `
-                        <div style="display:flex; flex-direction:column; align-items:center;">
+                        <div style="display:flex; flex-direction:column; align-items:center; position:relative;">
                             <span class="row-num-span"></span>
+                            <span onclick="window.wrToggleAlarm(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기)' : '알림 꺼짐 (클릭하여 켜기)'}"
+                                style="position:absolute; top:-4px; right:-6px; font-size:10px; cursor:pointer; opacity:${alarmOn ? '1' : '0.25'};">🔔</span>
                         </div>`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
@@ -5718,9 +5741,10 @@ async function msCallGemini(apiKey, parsed) {
                     // 💡 [핵심 변환] 현재 칸이 더블클릭되어 수정 모드 상태(contenteditable)인지 감지
                     const isEditing = td.getAttribute('contenteditable') === 'true' || document.activeElement === td;
                     
-                    // 💡 수정 중=노란색, 다중선택=옅은 빨강, 평소=테마 배경색
+                    // 💡 수정 중=노란색, 다중선택=옅은 빨강, 알림켜짐=옅은 주황, 평소=테마 배경색
                     const isSelected = td.parentElement && td.parentElement.classList.contains('multi-selected');
-                    const bg = isEditing ? '#fff9c4' : (isSelected ? '#ffcccc' : solidColor);
+                    const isAlarmOn = td.parentElement && td.parentElement.classList.contains('alarm-on');
+                    const bg = isEditing ? '#fff9c4' : (isSelected ? '#ffcccc' : (isAlarmOn ? '#fff7e6' : solidColor));
                     const zIdx = isEditing ? '70' : '50';
 
                     td.style.setProperty('position', 'sticky', 'important');
