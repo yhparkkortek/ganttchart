@@ -5865,9 +5865,11 @@ async function msCallGemini(apiKey, parsed) {
     }
 
     // ── 이번주/다음주 분류 ────────────────────────────────
+    window.wrBaseDate = window.wrBaseDate || new Date();   // 주차 이동의 기준 날짜 (기본값: 오늘)
+
     window.wrClassifyTasks = function() {
-        const thisWeek = wrGetWeekRange(new Date());
-        const nextWeekBase = new Date(); nextWeekBase.setDate(nextWeekBase.getDate() + 7);
+        const thisWeek = wrGetWeekRange(window.wrBaseDate);
+        const nextWeekBase = new Date(window.wrBaseDate); nextWeekBase.setDate(nextWeekBase.getDate() + 7);
         const nextWeek = wrGetWeekRange(nextWeekBase);
 
         const thisList = [];
@@ -6017,6 +6019,17 @@ async function msCallGemini(apiKey, parsed) {
         });
     };
 
+    window.wrShiftWeek = function(direction) {
+        if (direction === 0) {
+            window.wrBaseDate = new Date();
+        } else {
+            const d = new Date(window.wrBaseDate);
+            d.setDate(d.getDate() + direction * 7);
+            window.wrBaseDate = d;
+        }
+        window.showWeeklyReport();   // 팝업을 같은 기준으로 다시 그림
+    };
+
     // ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
         const data = window.wrClassifyTasks();
@@ -6028,31 +6041,54 @@ async function msCallGemini(apiKey, parsed) {
         modal.id = 'weekly-report-modal';
         modal.style.cssText = 'position:fixed; inset:0; z-index:99998; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center;';
 
+        const SKY_C = '#19C3D6', SKY_TINT = '#D8F5F9', BORDER_C = '#999';
+
         modal.innerHTML = `
-            <div style="background:#fff; border-radius:10px; width:780px; max-height:85vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
+            <div style="background:#fff; border-radius:10px; width:920px; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.25);">
                 <div style="padding:16px 22px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                    <div style="font-size:18px; font-weight:bold; color:#19C3D6;">📅 주간 업무 보고</div>
+                    <div style="font-size:18px; font-weight:bold; color:${SKY_C};">📅 주간 업무 보고</div>
                     <div style="display:flex; gap:10px; align-items:center;">
                         <label style="font-size:12px; color:#666; display:flex; align-items:center; gap:4px;">
                             PPT 색상
                             <input type="color" id="wr-ppt-color" value="#${(window.wrPptBaseColor || '19C3D6').replace('#','')}" style="width:28px; height:24px; border:none; padding:0; cursor:pointer;">
                         </label>
-                        <button onclick="window.exportWeeklyReportPPT()" style="padding:7px 16px; background:#19C3D6; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">📥 PPT 출력</button>
+                        <button onclick="window.exportWeeklyReportPPT()" style="padding:7px 16px; background:${SKY_C}; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">📥 PPT 출력</button>
                         <button onclick="document.getElementById('weekly-report-modal').remove()" style="border:none; background:none; font-size:20px; cursor:pointer; color:#999;">✕</button>
                     </div>
                 </div>
+
+                <!-- 주차 선택 -->
+                <div style="padding:10px 22px; border-bottom:1px solid #eee; display:flex; justify-content:center; align-items:center; gap:14px; background:#fafafa;">
+                    <button onclick="window.wrShiftWeek(-1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">◀ 이전주</button>
+                    <div style="font-size:13px; font-weight:bold; color:#333;">기준주: ${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)</div>
+                    <button onclick="window.wrShiftWeek(1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">다음주 ▶</button>
+                    <button onclick="window.wrShiftWeek(0)" style="padding:5px 12px; border:1px solid #19C3D6; color:#19C3D6; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">오늘</button>
+                </div>
+
                 <div style="padding:20px 22px;">
-                    <h4 style="margin:0 0 10px;">개발 진척 현황 (0레벨)</h4>
-                    <div style="margin-bottom:20px; padding:12px; background:#fafafa; border-radius:6px;">${wrRenderTimeline()}</div>
+                    <!-- 개발 진척 현황 (전체 폭) -->
+                    <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">개발 진척 현황</div>
+                        <div style="padding:12px;">${wrRenderTimeline()}</div>
+                    </div>
 
-                    <h4 style="margin:0 0 8px;">주요 실적 (${data.thisWeekNo}W) — ${wrFormatMD(data.thisWeek.start)}~${wrFormatMD(data.thisWeek.end)}</h4>
-                    <div style="margin-bottom:18px;">${wrRenderEditableList(data.thisList)}</div>
+                    <!-- 주요 실적 / 추진 계획 (좌우 분할) -->
+                    <div style="display:flex; gap:10px; margin-bottom:14px;">
+                        <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">주요 실적 (${data.thisWeekNo}W)</div>
+                            <div style="padding:12px;">${wrRenderEditableList(data.thisList)}</div>
+                        </div>
+                        <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">추진 계획 (${data.nextWeekNo}W)</div>
+                            <div style="padding:12px;">${wrRenderEditableList(data.nextList)}</div>
+                        </div>
+                    </div>
 
-                    <h4 style="margin:0 0 8px;">추진 계획 (${data.nextWeekNo}W) — ${wrFormatMD(data.nextWeek.start)}~${wrFormatMD(data.nextWeek.end)}</h4>
-                    <div style="margin-bottom:18px;">${wrRenderEditableList(data.nextList)}</div>
-
-                    <h4 style="margin:0 0 8px;">문제점 및 Issue</h4>
-                    <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
+                    <!-- 문제점 및 Issue (전체 폭) -->
+                    <div style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">문제점 및 Issue</div>
+                        <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
+                    </div>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -6091,8 +6127,9 @@ async function msCallGemini(apiKey, parsed) {
         const SKY = C.base, SKY_DARK = C.dark;
         const BORDER = 'A6A6A6';
         const BORDER_W = 0.75;
-        const HEAD_FS = 13;
+        const HEAD_FS = 14;
         const GAP = 0.1;
+        const col2X = 0.4 + 6.15 + GAP;   // 주요실적-추진계획 사이 좌우 간격을 GAP으로 통일
 
         // ── 헤더: 고객>모델명>인치 ───────────────────────
         let metaCustomer = "", metaModel = "", metaInch = "";
@@ -6133,17 +6170,21 @@ async function msCallGemini(apiKey, parsed) {
         );
 
         // ── 좌: 개발목표 (제목+표 전체가 하나의 addTable) ──
-        const boardY = 1.5, boardH = 1.8 + 0.32;
+        const boardY = 1.0 + 0.4 + GAP, boardH = 1.8 + 0.32;   // 모델정보줄(y:1.0, h:0.4) 끝에서 GAP만큼 띔
         const goalX = 0.4, goalW = 4.0;
-        const tlX = goalX + goalW + 0.15, tlW = 12.5 - goalW - 0.15;
+        const tlX = goalX + goalW + GAP, tlW = 12.5 - goalW - GAP;
 
-        const labelColW = 0.45, smallColW = 0.85;
+        const labelColW = 0.45, smallColW = 0.45;
         const dataColW = (goalW - labelColW - smallColW) / 4;
         const goalColW = [labelColW, smallColW, dataColW, dataColW, dataColW, dataColW];
 
         const titleOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
-        const ghOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 9, align: 'center', valign: 'middle' };
-        const glOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 7.5, align: 'center', valign: 'middle' };
+        const ghOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 8, align: 'center', valign: 'middle' };
+        const glOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 8, align: 'center', valign: 'middle' };
+
+        const titleRowH = 0.32, headRowH = 0.28;
+        const dataRowH = (boardH - titleRowH - headRowH) / 4;
+        const goalRowH = [titleRowH, headRowH, dataRowH, dataRowH, dataRowH, dataRowH];
 
         slide.addTable(
             [
@@ -6162,7 +6203,7 @@ async function msCallGemini(apiKey, parsed) {
                     { text: '' }, { text: '' }, { text: '' }, { text: '' },
                 ],
                 [
-                    { text: '품질\n(PPM)', options: glOpt },
+                    { text: '품질', options: glOpt },
                     { text: '', options: { colspan: 4 } },
                 ],
                 [
@@ -6175,10 +6216,10 @@ async function msCallGemini(apiKey, parsed) {
                     { text: '', options: { colspan: 4 } },
                 ],
             ],
-            { x: goalX, y: boardY, w: goalW, h: boardH, fontSize: 8, align: 'center', valign: 'middle', border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: goalColW }
+            { x: goalX, y: boardY, w: goalW, h: boardH, rowH: goalRowH, fontSize: 8, align: 'center', valign: 'middle', border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: goalColW }
         );
 
-        // ── 우: 개발 진척 현황 (마커-라벨 연결선 디자인) ──
+       // ── 우: 개발 진척 현황 (그래프 살짝 축소 + 좌우 끝단 라벨 클램프 + 디자인 다듬기) ──
         slide.addTable(
             [[{ text: '개발 진척 현황', options: titleOpt }]],
             { x: tlX, y: boardY, w: tlW, h: 0.32, colW: [tlW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
@@ -6189,53 +6230,63 @@ async function msCallGemini(apiKey, parsed) {
 
         if (tl.items.length > 0) {
             const span = Math.max(1, tl.maxTs - tl.minTs);
-            const lineX = tlX + 0.3, lineW = tlW - 0.6;
-            const lineY = goalTableY + goalTableH * 0.5;
+            const padX = 0.5;
+            const lineX = tlX + padX, lineW = tlW - padX * 2;
+            const innerTop = goalTableY + 0.08, innerBottom = goalTableY + goalTableH - 0.08;
+            const lineY = innerTop + (innerBottom - innerTop) * 0.5;   // 상하 중앙
 
-            // 진행률 트랙 (둥근 캡슐)
-            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: lineY - 0.06, w: lineW, h: 0.12, rectRadius: 0.06, fill: { color: 'EDEFF1' } });
+            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: lineY, w: lineW, h: 0.16, rectRadius: 0.03, fill: { color: 'EFEFEF' }, line: { color: 'D9D9D9', width: 0.75 } });
             const todayTs = Date.now();
             const todayPct = Math.max(0, Math.min(1, (todayTs - tl.minTs) / span));
-            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: lineY - 0.06, w: Math.max(0.1, lineW * todayPct), h: 0.12, rectRadius: 0.06, fill: { color: SKY_DARK } });
-
-            // "오늘" 표시 (작은 삼각 인디케이터, 트랙 아래쪽)
-            const todayX = lineX + lineW * todayPct;
-            slide.addShape(pptx.ShapeType.triangle, { x: todayX - 0.045, y: lineY + 0.08, w: 0.09, h: 0.07, fill: { color: SKY_DARK } });
+            slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: lineY + 0.04, w: Math.max(0.05, lineW * todayPct), h: 0.08, rectRadius: 0.04, fill: { color: SKY_DARK } });
 
             const milestones = tl.items.filter(it => wrIsMilestone(it.name));
+            const majorItems = milestones.filter(it => /RFQ|PROTO DR|DVR|MP/i.test(it.name)).sort((a, b) => a.start - b.start);
+            const minorItems = milestones.filter(it => !/RFQ|PROTO DR|DVR|MP/i.test(it.name));
 
-            function drawMarker(m, isUp, isMajor) {
-                const dotX = lineX + lineW * m.pct;
-                const dotY = lineY;
-                const r = isMajor ? 0.065 : 0.045;
+            const majorPctMap = new Map();
+            majorItems.forEach((it, i) => {
+                const evenPct = majorItems.length > 1 ? i / (majorItems.length - 1) : 0;
+                majorPctMap.set(it, evenPct);
+            });
 
-                slide.addShape(pptx.ShapeType.ellipse, { x: dotX - r, y: dotY - r, w: r * 2, h: r * 2, fill: { color: isMajor ? SKY_DARK : SKY }, line: { color: 'FFFFFF', width: 1.25 } });
+            function drawMarker(it, isUp, overridePct) {
+                const pct = overridePct !== undefined ? overridePct : (it.start - tl.minTs) / span;
+                const dotX = lineX + lineW * pct;
+                const isMajor = /RFQ|PROTO DR|DVR|MP/i.test(it.name);
+                const triH = 0.195, triW = 0.21;   // 역삼각형 2배 확대
+                const diaR = 0.05;
 
-                const labelW = 1.0, labelH = 0.34;
+                if (isMajor) {
+                    slide.addShape(pptx.ShapeType.triangle, {
+                        x: dotX - triW / 2, y: lineY - triH - 0.02, w: triW, h: triH,
+                        fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
+                    });
+                } else {
+                    slide.addShape(pptx.ShapeType.diamond, {
+                        x: dotX - diaR, y: lineY + 0.08 - diaR, w: diaR * 2, h: diaR * 2,
+                        fill: { color: SKY }, line: { color: 'FFFFFF', width: 1 }
+                    });
+                }
+
+                const gap = 0.02;   // 2px 상당, 그래프/마커 표면에서 고정 간격
+                const labelW = 0.95, labelH = 0.34;
+                let labelY = isUp ? (lineY - gap - labelH) : (lineY + 0.16 + gap);
+                labelY = Math.max(innerTop, Math.min(innerBottom - labelH, labelY));
+
+                const edgePad = 0.08;
                 let labelX = dotX - labelW / 2;
-                if (labelX < lineX) labelX = lineX;
-                if (labelX + labelW > lineX + lineW) labelX = lineX + lineW - labelW;
+                if (labelX < tlX + edgePad) labelX = tlX + edgePad;
+                if (labelX + labelW > tlX + tlW - edgePad) labelX = tlX + tlW - edgePad - labelW;
 
-                const connLen = 0.28;
-                const lineTopY = isUp ? dotY - r - connLen : dotY + r;
-                const lineBotY = isUp ? dotY - r : dotY + r + connLen;
-                slide.addShape(pptx.ShapeType.line, {
-                    x: dotX, y: Math.min(lineTopY, lineBotY), w: 0, h: Math.abs(lineBotY - lineTopY),
-                    line: { color: 'BBBBBB', width: 0.75, dashType: 'dash' }
-                });
-
-                const labelY = isUp ? (dotY - r - connLen - labelH) : (dotY + r + connLen);
-                slide.addText(`${m.name}\n${wrFormatMD(m.start)}`, {
+                slide.addText(`${it.name}\n${wrFormatMD(it.start)}`, {
                     x: labelX, y: labelY, w: labelW, h: labelH,
                     fontSize: 7.5, bold: isMajor, align: 'center', valign: isUp ? 'bottom' : 'top', color: SKY_DARK
                 });
             }
 
-            milestones.forEach((it, mi) => {
-                const pct = (it.start - tl.minTs) / span;
-                const isMajor = /RFQ|PROTO DR|DVR|MP/i.test(it.name);
-                drawMarker({ ...it, pct }, true, isMajor);
-            });
+            majorItems.forEach((it) => drawMarker(it, true, majorPctMap.get(it)));   // major는 항상 위
+            minorItems.forEach((it, mi) => drawMarker(it, mi % 2 === 0));
         } else {
             slide.addText('진척 항목 없음', { x: tlX + 0.2, y: goalTableY + 0.5, w: tlW - 0.4, h: 0.3, fontSize: 10, color: '999999' });
         }
@@ -6254,7 +6305,7 @@ async function msCallGemini(apiKey, parsed) {
 
         const sectionY = goalTableY + goalTableH + GAP, sectionH = 0.3, bodyH = 1.75;
         const sectTitleOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
-        const sectBodyOpt = { fontSize: 8.5, valign: 'top', color: '000000', align: 'left' };
+        const sectBodyOpt = { fontSize: 10, valign: 'top', color: '000000', align: 'left' };
 
         slide.addTable(
             [
@@ -6264,18 +6315,18 @@ async function msCallGemini(apiKey, parsed) {
             { x: 0.4, y: sectionY, w: 6.15, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [6.15], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
 
-        slide.addTable(
+      slide.addTable(
             [
                 [{ text: `추진 계획 (${data.nextWeekNo}W)`, options: sectTitleOpt }],
                 [{ text: listToText(data.nextList), options: sectBodyOpt }],
             ],
-            { x: 6.75, y: sectionY, w: 6.15, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [6.15], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
+            { x: col2X, y: sectionY, w: 6.15, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [6.15], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
 
         // ── 문제점 및 Issue 표 (이미 단일 표 — 행 높이만 보정) ──
         const issueY = sectionY + sectionH + bodyH + GAP;
         const issueHeadOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
-        const issueBodyOpt = { fontSize: 8.5, valign: 'middle', color: '000000' };
+        const issueBodyOpt = { fontSize: 10, valign: 'middle', color: '000000' };
 
         const tableRows = [
             [
