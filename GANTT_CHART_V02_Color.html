@@ -731,6 +731,22 @@ ${mailText}`;
         return count;
     }
 
+    // ════════════════════════════════════════════════════════════
+    // 📌 일정 계산 규칙 (MS Project 방식: Auto ↔ Manual 자동 전환)
+    //
+    //  · 시작일/완료일 셀이 "비어 있으면" → 자동계산(Auto) 대상.
+    //    앞 형제가 끝난 다음날부터, 또는 부모 시작일부터 워터폴로 계산됨.
+    //    → 다른 행이 추가/삭제/정렬되면 날짜가 같이 움직일 수 있음.
+    //
+    //  · 시작일/완료일 셀에 "날짜가 직접 입력되어 있으면" → 확정(Manual) 상태.
+    //    이후 어떤 변경이 생겨도 이 날짜는 절대 자동으로 바뀌지 않음.
+    //
+    //  · 날짜를 지우면 → 다시 Auto로 전환되어 자동계산을 따라감.
+    //  · 날짜를 입력하면 → 그 즉시 Manual로 고정됨.
+    //
+    //  즉 "날짜를 삭제하면 자동계산되고, 날짜가 채워져 있으면(고정되면)
+    //  다른 행이 바뀌어도 자동계산되지 않는다."
+    // ════════════════════════════════════════════════════════════
     window.recalculateSchedules = function() {
         if (globalData.length <= 1) return;
         let statusEl = document.getElementById('file-status');
@@ -2141,7 +2157,9 @@ ${mailText}`;
                 
                 let nonEditableCols = [colIdx.no, colIdx.chart];
                 if (!nonEditableCols.includes(cellIndex) && !hiddenCols.includes(cellIndex)) {
-                    tdAttrs += ` ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능"`;
+                    const isDateCol = (cellIndex === colIdx.start || cellIndex === colIdx.plan);
+                    const dateHint = isDateCol ? " · 날짜를 지우면 자동계산, 입력하면 고정되어 다른 행이 바뀌어도 안 움직임" : "";
+                    tdAttrs += ` ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능${dateHint}"`;
                 }
 
                 let tdStyle = ""; let tdHtml = '';
