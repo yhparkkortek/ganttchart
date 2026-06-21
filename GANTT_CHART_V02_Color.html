@@ -901,7 +901,25 @@ ${mailText}`;
                 currentL0Start = addWorkingDays(maxL0End, 1);
             }
 
-            function applyDatesToRow(node) { node.row._calcStartTs = node.startTs; node.row._calcPlanTs = node.endTs; for (let child of node.children) applyDatesToRow(child); }
+            function applyDatesToRow(node) {
+                node.row._calcStartTs = node.startTs;
+                node.row._calcPlanTs = node.endTs;
+
+                // 📌 리프(자식 없는) 행이고, 셀이 비어있어 Auto 상태였다면 → 계산 결과를 셀에 써넣어 Manual로 전환(굳히기)
+                // 부모/중간 레벨(자식이 있는 행)은 자식의 변화를 계속 반영해야 하므로 굳히지 않음.
+                if (node.children.length === 0 && !node.row._isExplicitZero) {
+                    const startEmpty = colIdx.start !== -1 && (!node.row[colIdx.start] || node.row[colIdx.start].toString().trim() === "");
+                    const planEmpty  = colIdx.plan  !== -1 && (!node.row[colIdx.plan]  || node.row[colIdx.plan].toString().trim()  === "");
+                    if (startEmpty && node.startTs) {
+                        node.row[colIdx.start] = formatTsToYMD(node.startTs);
+                    }
+                    if (planEmpty && node.endTs) {
+                        node.row[colIdx.plan] = formatTsToYMD(node.endTs);
+                    }
+                }
+
+                for (let child of node.children) applyDatesToRow(child);
+            }
             for (let l0Node of tree) applyDatesToRow(l0Node);
 
             let chartMinTs = null; let chartMaxTs = null;
