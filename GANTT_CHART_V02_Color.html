@@ -336,7 +336,7 @@
     flex-shrink: 0; font-size: 20px; line-height: 1;
 }
 #app-sidebar .sb-toggle-btn:hover { background: rgba(255,255,255,0.15); }
-#app-sidebar .sb-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
+#app-sidebar .sb-nav { flex: 1; overflow-y: auto; padding: 8px 0; margin-top: -10px; }
 #app-sidebar.collapsed .sb-header { justify-content: center !important; }
 #app-sidebar .sb-item {
     display: flex; align-items: center; gap: 10px;
@@ -393,6 +393,8 @@
     #app-main { margin-left: 0 !important; margin-top: 0 !important; }
 }
 
+#drop-zone:has(#dynamic-filters:empty) { display: none; }
+
 </style>
 </head>
 <body>
@@ -435,16 +437,11 @@
     </div>
 
     <div id="table-info">
-        <div class="btn-group" style="margin-right:12px;">
-            <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
-        </div>
-        <span id="table-info-text">📊 Gantt Chart</span>
-        <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
-            <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
-            <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
-                class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">
-                📊 차트 확장
-            </button>
+    <span id="table-info-text">📊 Gantt Chart</span>
+    <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
+        <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
+        <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
+        <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
             <label for="themePicker" class="action-btn" style="cursor:pointer; gap:6px;">
             <span id="theme-label-text">🎨 테마</span>
             <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)"
@@ -2749,9 +2746,10 @@ ${mailText}`;
         if (window.collectTabData) window.collectTabData();
         const tabData = window.tabData || {};
 
-        // ── 프로젝트 시트 (projectMeta, 세로 키-값 형태) ──
+        // ── Summary 시트 (프로젝트 정보 + 프로젝트 개요 + 마일스톤, 통합) ──
         const meta = window.projectMeta || {};
-        const metaData = [
+        const sd = tabData.summary || {};
+        const summaryData = [
             ['항목', '값'],
             ['프로젝트코드', meta.프로젝트코드 || ''],
             ['프로젝트명', meta.프로젝트명 || ''],
@@ -2761,25 +2759,6 @@ ${mailText}`;
             ['PN_모델명', meta.PN_모델명 || ''],
             ['기구 담당자', meta.기구담당자 || ''],
             ['F/W 담당자', meta.FW담당자 || ''],
-        ];
-        const wsMeta = XLSX.utils.aoa_to_sheet(metaData);
-        for (let key in wsMeta) {
-            if (key[0] === '!') continue;
-            if (!wsMeta[key].s) wsMeta[key].s = {};
-            wsMeta[key].s.font = { sz: 10, name: "맑은 고딕" };
-            wsMeta[key].s.alignment = { vertical: "center" };
-        }
-        wsMeta['!cols'] = [{wch: 16}, {wch: 35}];
-        XLSX.utils.book_append_sheet(wb, wsMeta, "프로젝트");
-
-        // ── Summary 시트 (컨셉 단계: 프로젝트 개요 + 마일스톤) ──
-        const sd = tabData.summary || {};
-        const summaryData = [
-            ['항목', '값'],
-            ['프로젝트명', meta.프로젝트명 || ''],
-            ['고객사', meta.고객사 || ''],
-            ['모델명', meta.모델명 || ''],
-            ['인치', meta.인치 || ''],
             ['적용 목적', sd.purpose || ''],
             ['연간 수요량', sd.volume || ''],
             ['목표 양산 일정', sd.mpDate || ''],
