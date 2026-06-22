@@ -168,7 +168,7 @@
 
     .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: scroll; border: 1px solid #ccc; border-radius: 0 0 8px 8px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
-    #file-status { margin-top: 5px; font-weight: bold; color: #28a745; font-size: 14px; }
+    #file-status { font-weight: bold; color: #fff; font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 16px; }
     #print-header { display: none; }
 
     .chart-label { color: #000; font-weight: bold; font-size: var(--chart-label-size); }
@@ -407,6 +407,7 @@
         <div class="tb-sep"></div>
         <button id="history-btn" class="topbar-btn" onclick="showHistoryModal()">🕒 수정이력 확인</button>
     </div>
+    <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
 </div>
 
@@ -427,7 +428,6 @@
 <div id="app-main">
 <div id="tab-gantt" class="tab-panel active">
 <div class="controls" id="drop-zone">
-        <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
         <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
         <div id="dynamic-filters"></div>
     </div>
