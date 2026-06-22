@@ -124,7 +124,7 @@
     .filter-group { margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; transition: 0.3s; }
     .filter-label { font-weight: bold; width: 80px; margin-right: 10px; background: #e9ecef; padding: 5px; text-align: center; border-radius: 4px; font-size: 13px; }
     
-    .btn { padding: 6px 12px; margin: 3px; cursor: pointer; border: 1px solid #ccc; background-color: #fff; color: #333; border-radius: 20px; font-size: 13px; transition: 0.2s; }
+    .btn { padding: 3px 6px; margin: 2px; cursor: pointer; border: 1px solid #ccc; background-color: #fff; color: #333; border-radius: 12px; font-size: 11px; transition: 0.2s; }
     .btn:hover { background-color: #e2e6ea; }
     .btn.active { background-color: #007bff; color: white; border-color: #007bff; font-weight: bold; box-shadow: 0 0 5px rgba(0,123,255,0.4); }
     .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
@@ -427,10 +427,6 @@
 <div id="app-main">
 <div id="tab-gantt" class="tab-panel active">
 <div class="controls" id="drop-zone">
-        <div style="display: flex; gap: 10px; margin-bottom: 10px; align-items: center; flex-wrap: wrap;">
-            <button id="weekly-report-btn" class="action-btn" onclick="window.switchTab('weekly')" style="border-color:#6f42c1; color:#6f42c1; height:32px;">📅 주간 업무 보고</button>
-            <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
-        </div>
         <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
         <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
         <div id="dynamic-filters"></div>
@@ -442,6 +438,7 @@
         </div>
         <span id="table-info-text">📊 Gantt Chart</span>
         <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
+            <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
             <button id="chart-expand-btn" onclick="window.toggleChartExpand()"
                 class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">
                 📊 차트 확장
