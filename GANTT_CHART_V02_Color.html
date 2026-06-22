@@ -333,7 +333,7 @@
 #app-sidebar .sb-toggle-btn {
     background: none; border: none; color: #fff;
     width: 26px; height: 26px; border-radius: 4px; cursor: pointer;
-    flex-shrink: 0; font-size: 13px; line-height: 1;
+    flex-shrink: 0; font-size: 20px; line-height: 1;
 }
 #app-sidebar .sb-toggle-btn:hover { background: rgba(255,255,255,0.15); }
 #app-sidebar .sb-nav { flex: 1; overflow-y: auto; padding: 8px 0; }
@@ -412,7 +412,7 @@
 
 <div id="app-sidebar">
     <div class="sb-header" style="justify-content:flex-start;">
-        <button class="sb-toggle-btn" id="sb-toggle-btn" onclick="window.toggleSidebar()" title="메뉴 접기/펴기">◀</button>
+        <button class="sb-toggle-btn" id="sb-toggle-btn" onclick="window.toggleSidebar()" title="메뉴 접기/펴기">☰</button>
     </div>
     <div class="sb-nav" id="sb-nav">
         <div class="sb-item" data-tab="summary" onclick="window.switchTab('summary')"><span class="sb-ico">📋</span><span class="sb-label">Summary</span></div>
@@ -7026,7 +7026,7 @@ document.addEventListener('DOMContentLoaded', function() { if (window.populateTa
         if (!sidebar || !main) return;
         sidebar.classList.toggle('collapsed', collapsed);
         main.classList.toggle('sb-collapsed', collapsed);
-        if (btn) btn.textContent = collapsed ? '▶' : '◀';
+        if (btn) btn.textContent = collapsed ? '☰' : '☰';
     }
 
     window.toggleSidebar = function() {
