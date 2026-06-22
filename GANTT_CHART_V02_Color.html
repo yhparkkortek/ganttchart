@@ -472,10 +472,15 @@
         <div class="concept-section">
             <h3>프로젝트 개요</h3>
             <div class="concept-grid">
-                <label>프로젝트명</label><input type="text" id="sum-project-name" placeholder="예: LNW&gt;S32&gt;LOWER">
+                <div class="concept-grid">
                 <label>고객사</label><input type="text" id="sum-customer" placeholder="예: LNW">
+                <label>프로젝트코드</label><input type="text" id="sum-project-code" placeholder="예: P-2026-001">
+                <label>프로젝트명</label><input type="text" id="sum-project-name" placeholder="예: LNW&gt;S32&gt;LOWER">
+                <label>PN_모델명</label><input type="text" id="sum-pn" placeholder="예: PN12345">
                 <label>모델명</label><input type="text" id="sum-model" placeholder="예: S32 LOWER">
                 <label>인치</label><input type="text" id="sum-inch" placeholder="예: 32">
+                <label>기구 담당자</label><input type="text" id="sum-mech" placeholder="예: 홍길동">
+                <label>F/W 담당자</label><input type="text" id="sum-fw" placeholder="예: 김철수">
                 <label>적용 목적</label><input type="text" id="sum-purpose" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발">
                 <label>연간 수요량</label><input type="text" id="sum-volume" placeholder="예: 약 20,000대/년">
                 <label>목표 양산 일정</label><input type="text" id="sum-mp-date" placeholder="예: 2027년 5월 납품 예정">
@@ -6906,10 +6911,18 @@ window.collectTabData = function() {
     const cu = document.getElementById('sum-customer');
     const mo = document.getElementById('sum-model');
     const inch = document.getElementById('sum-inch');
+    const pcode = document.getElementById('sum-project-code');
+    const ppn = document.getElementById('sum-pn');
+    const pmech = document.getElementById('sum-mech');
+    const pfw = document.getElementById('sum-fw');
     if (pn) window.projectMeta.프로젝트명 = pn.value;
     if (cu) window.projectMeta.고객사 = cu.value;
     if (mo) window.projectMeta.모델명 = mo.value;
     if (inch) window.projectMeta.인치 = inch.value;
+    if (pcode) window.projectMeta.프로젝트코드 = pcode.value;
+    if (ppn) window.projectMeta.PN_모델명 = ppn.value;
+    if (pmech) window.projectMeta.기구담당자 = pmech.value;
+    if (pfw) window.projectMeta.FW담당자 = pfw.value;
 
     // Brief SPEC / M.C Table
     window.tabData.briefSpec = _readRowsFromTbody('briefspec-body');
