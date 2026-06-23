@@ -421,6 +421,70 @@
 #drop-zone:has(#dynamic-filters:empty) { display: none; }
 #dynamic-filters:empty { display: none !important; padding: 0 !important; border: none !important; margin: 0 !important; }
 
+/* =========================================
+   요청하신 디자인 업그레이드 스타일 시작
+   ========================================= */
+
+/* 1. 마일스톤 입력창 텍스트 중앙 맞춤 (개발기간은 제외됨) */
+#sum-milestone-body .u-input { text-align: center !important; }
+
+/* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
+.sum-tl-bubble.above::after, .sum-tl-bubble.below::after { border-color: transparent !important; border-width: 0 !important; }
+.sum-tl-bubble {
+    border: 1px solid #aaa !important;
+    border-radius: 8px !important;
+    padding: 6px 10px !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1) !important;
+    transition: all 0.2s ease;
+}
+.sum-tl-bubble::before, .sum-tl-bubble::after {
+    content: ''; position: absolute; left: 50%; transform: translateX(-50%);
+    border-style: solid; border-color: transparent; z-index: 10;
+}
+/* 위쪽 말주머니 꼬리 */
+.sum-tl-bubble.above::before { border-width: 7px 6px; bottom: -14px; border-top-color: #aaa; }
+.sum-tl-bubble.above::after  { border-width: 6px 5px; bottom: -12px; border-top-color: #fff; }
+/* 아래쪽 말주머니 꼬리 */
+.sum-tl-bubble.below::before { border-width: 7px 6px; top: -14px; border-bottom-color: #aaa; }
+.sum-tl-bubble.below::after  { border-width: 6px 5px; top: -12px; border-bottom-color: #fff; }
+
+/* 3. 클릭되어 맨 앞으로 온 말주머니의 색상/하이라이트 변경 */
+.sum-tl-bubble.active {
+    background-color: #e3f2fd !important;
+    border-color: #1976d2 !important;
+    color: #0d47a1 !important;
+    box-shadow: 0 4px 8px rgba(25, 118, 210, 0.3) !important;
+}
+.sum-tl-bubble.active.above::before { border-top-color: #1976d2; }
+.sum-tl-bubble.active.above::after  { border-top-color: #e3f2fd; }
+.sum-tl-bubble.active.below::before { border-bottom-color: #1976d2; }
+.sum-tl-bubble.active.below::after  { border-bottom-color: #e3f2fd; }
+
+/* 4. 오늘 날짜를 표시하는 붉은 점 및 텍스트 */
+.sum-tl-today-dot {
+    position: absolute; top: 0; width: 12px; height: 12px;
+    background: #e74c3c; border: 2px solid #fff; border-radius: 50%;
+    box-shadow: 0 1px 4px rgba(231,76,60,0.6);
+    transform: translate(-50%, -50%); z-index: 3;
+}
+.sum-tl-today-label {
+    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: #e74c3c; font-weight: bold; white-space: nowrap;
+}
+
+/* 5. 페이지 내부 박스 여백 축소 및 넓이 확장 (Gantt 차트와 유사하게) */
+.concept-tab-wrap { padding: 0 !important; max-width: 100% !important; box-sizing: border-box; }
+.concept-section { padding: 12px 18px !important; margin-bottom: 12px !important; border-radius: 6px !important; }
+
+/* 6. 타이틀 박스화 (Gantt의 헤더 디자인과 통일) */
+.concept-header-box {
+    display: flex; align-items: center; font-size: 14px; font-weight: bold;
+    margin: 0 0 12px 0; padding: 0 15px; color: #2c5f8a; background-color: #fff;
+    border: 1px solid #e3e6ea; border-radius: 6px; box-sizing: border-box; min-height: 50px;
+}
+.concept-header-box h2 { margin: 0; font-size: 15px; display: flex; align-items: center; color: #2c5f8a; }
+.concept-header-box .btn-group { margin-left: auto; display: flex; gap: 6px; }
+/* ========================================= */
 
 </style>
 </head>
@@ -495,7 +559,10 @@
 
 <div id="tab-summary" class="tab-panel">
     <div class="concept-tab-wrap">
-        <h2>📋 Summary<span class="concept-badge">컨셉 단계</span></h2>
+        <div class="concept-header-box">
+            <h2>📋 Summary<span class="concept-badge">컨셉 단계</span></h2>
+            <div class="btn-group"></div>
+        </div>
         <div class="concept-section">
             <h3>마일스톤 (참고용 — Gantt chart Level 0 데이터와 추후 연동 예정)</h3>
             <table class="concept-table">
@@ -570,7 +637,10 @@
 
 <div id="tab-briefspec" class="tab-panel">
     <div class="concept-tab-wrap">
-        <h2>📐 Brief SPEC<span class="concept-badge">컨셉 단계</span></h2>
+        <div class="concept-header-box">
+            <h2>📐 Brief SPEC<span class="concept-badge">컨셉 단계</span></h2>
+            <div class="btn-group"></div>
+        </div>
         <div class="concept-section">
             <table class="concept-table">
                 <thead><tr><th style="width:40px;">NO</th><th style="width:160px;">TYPE</th><th style="width:120px;">구분</th><th>Description</th><th style="width:220px;">Note</th></tr></thead>
@@ -588,7 +658,10 @@
 
 <div id="tab-mctable" class="tab-panel">
     <div class="concept-tab-wrap" style="max-width:1500px;">
-        <h2>💰 M.C Table (견적)<span class="concept-badge">컨셉 단계</span></h2>
+        <div class="concept-header-box">
+            <h2>💰 M.C Table (견적)<span class="concept-badge">컨셉 단계</span></h2>
+            <div class="btn-group"></div>
+        </div>
         <div class="concept-section">
             <div style="overflow-x:auto;">
             <style>
@@ -630,15 +703,20 @@
 
 <div id="tab-calendar" class="tab-panel">
     <div class="concept-tab-wrap">
-        <h2>📅 Calendar<span class="concept-badge">컨셉 단계</span></h2>
+        <!-- 수정코드 -->
+<div class="concept-title-bar">
+    <span class="concept-title-icon">📅</span><span>Calendar</span><span class="concept-badge">컨셉 단계</span>
+    <div class="concept-title-actions"></div>
+</div>
         <div class="concept-section">
             <p style="font-size:13px; color:#666;">Gantt chart의 Level 0/1 마일스톤을 월간 캘린더 형태로 보여주는 화면입니다. 세부 구현은 추후 작업에서 진행합니다.</p>
         </div>
     </div>
 </div>
 
+<!-- 수정코드 -->
 <div id="tab-weekly" class="tab-panel">
-    <div style="padding: 22px 26px; max-width: 1100px;">
+    <div class="concept-tab-wrap">
         <div id="weekly-report-page"></div>
     </div>
 </div>
@@ -7153,26 +7231,60 @@ window.renderSummaryTimeline = function() {
         const pct = ((it.start - tl.minTs) / span) * 100;
         const isAbove = i % 2 === 0;
         const cls = isAbove ? 'above' : 'below';
-        return '<div class="sum-tl-dot" style="left:' + pct + '%;"></div>'
+        
+        // 💡 수정됨: 점(.sum-tl-dot)에 cursor:pointer 와 onclick 이벤트를 추가하여 바로 뒤의 말주머니를 호출하도록 연결
+        return '<div class="sum-tl-dot" style="left:' + pct + '%; cursor:pointer;" onclick="window.sumTlBringToFront(this.nextElementSibling)"></div>'
             + '<div class="sum-tl-bubble ' + cls + '" style="left:' + pct + '%;" onclick="window.sumTlBringToFront(this)">'
             + _sumTlEscHtml(it.name) + '<br><span class="sum-tl-date">' + _sumTlFormatDate(it.start) + '</span></div>';
     }).join('');
+
+    // 오늘 날짜 확인 및 붉은 점 생성 로직
+    let todayPart = '';
+    const nowTs = new Date().getTime(); 
+    if (nowTs >= tl.minTs && nowTs <= tl.maxTs) {
+        const todayPct = ((nowTs - tl.minTs) / span) * 100;
+        todayPart = '<div class="sum-tl-today-dot" style="left:' + todayPct + '%;">'
+                  + '<div class="sum-tl-today-label">오늘</div></div>';
+    }
+
     container.innerHTML =
         '<div class="sum-tl-wrap">'
         + '<div class="sum-tl-inner">'
         + '<div class="sum-tl-line-track"></div>'
         + parts
+        + todayPart
         + '</div>'
         + '</div>'
         + '<div class="sum-tl-range"><span>' + _sumTlFormatDate(tl.minTs) + '</span><span>' + _sumTlFormatDate(tl.maxTs) + '</span></div>';
 };
 
-// 💡 말풍선이 겹쳐서 텍스트가 가려질 때, 클릭하면 해당 말풍선을 맨 앞으로 가져옴
+window.sumTlBringToFront = function(el) {
+    if (!el) return; // 예외 처리 안전장치
+    const wrap = el.closest('.sum-tl-wrap');
+    if (!wrap) return;
+    
+    // 모든 말주머니를 뒤로 보내고 활성화 색상(active) 제거
+    wrap.querySelectorAll('.sum-tl-bubble').forEach(function(b) { 
+        b.style.zIndex = '2'; 
+        b.classList.remove('active');
+    });
+    
+    // 클릭된 말주머니를 맨 앞으로 가져오고 파란색 하이라이트(active) 적용
+    el.style.zIndex = '50';
+    el.classList.add('active');
+};
+
 window.sumTlBringToFront = function(el) {
     const wrap = el.closest('.sum-tl-wrap');
     if (!wrap) return;
-    wrap.querySelectorAll('.sum-tl-bubble').forEach(function(b) { b.style.zIndex = '2'; });
+    // 💡 모든 말주머니를 뒤로 보내고 활성화 색상(active) 제거
+    wrap.querySelectorAll('.sum-tl-bubble').forEach(function(b) { 
+        b.style.zIndex = '2'; 
+        b.classList.remove('active');
+    });
+    // 💡 클릭된 말주머니를 맨 앞으로 가져오고 파란색 하이라이트(active) 적용
     el.style.zIndex = '50';
+    el.classList.add('active');
 };
 document.addEventListener('DOMContentLoaded', function() { if (window.renderSummaryTimeline) window.renderSummaryTimeline(); });
 
