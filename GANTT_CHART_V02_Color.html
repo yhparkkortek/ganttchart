@@ -307,9 +307,20 @@
 #app-topbar .tb-sep { width:1px; height:22px; background:rgba(255,255,255,0.4); margin:0 4px; }
 #app-topbar .tb-lang { margin-left:auto; flex-shrink:0; }
 .topbar-btn {
-    display: inline-block;
-    background: transparent; border: 2px solid rgba(255,255,255,0.7); color:#fff;
-    padding: 6px 12px; border-radius:6px; font-size:13px; cursor:pointer; white-space:nowrap;
+    display: inline-flex;       /* 수직/수평 중앙 정렬을 위해 변경 */
+    align-items: center;        /* 텍스트를 위아래 중앙으로 맞춤 */
+    justify-content: center;
+    height: 30px;               /* 🎯 높이 30px 강제 지정 */
+    box-sizing: border-box;     /* 테두리 두께를 30px 안에 포함시킴 */
+    padding: 0 12px;            /* 🎯 상하 패딩을 0으로 지우고 좌우 여백만 유지 */
+    font-size: 13px;            /* 🎯 글자 크기 13px */
+    
+    background: transparent; 
+    border: 2px solid rgba(255,255,255,0.7); 
+    color: #fff;
+    border-radius: 6px; 
+    cursor: pointer; 
+    white-space: nowrap;
 }
 .topbar-btn:hover { background: rgba(255,255,255,0.18); }
 .topbar-btn:disabled { opacity:0.5; cursor:default; }
@@ -6201,8 +6212,8 @@ async function msCallGemini(apiKey, parsed) {
 <style>
 /* 1. 모든 버튼을 동일한 규칙으로 고정 */
 .action-btn {
-    font-size: 15px !important;            /* 폰트 크기 통일 */
-    height: 35px !important;               /* 높이 통일 */
+    font-size: 13px !important;            /* 폰트 크기 통일 */
+    height: 30px !important;               /* 높이 통일 */
     padding: 0 10px !important;            /* 좌우 여백 통일 */
     min-width: 100px !important;           /* 너비 통일 */
     flex: 0 0 auto !important;             /* 늘어나지 않게 고정 */
