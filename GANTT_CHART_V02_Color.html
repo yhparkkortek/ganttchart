@@ -6830,11 +6830,10 @@ async function msCallGemini(apiKey, parsed) {
         const BORDER_W = 0.75;
         const HEAD_FS = 14;
         const GAP = 0.1;
-        // col2X 정의 부분을 이렇게 교체
-        const sectW  = (12.5 - GAP) / 2;     // = 6.2  (두 표 + 가운데 GAP = 12.5)
-        const col2X  = 0.4 + sectW + GAP;    // = 6.7
+        const sectW  = (12.5 - GAP) / 2;
+        const col2X  = 0.4 + sectW + GAP;
 
-        // ── 헤더: 고객>모델명>인치 ───────────────────────
+        // ── 헤더: 프로젝트 타이틀 구성 ───────────────────────
         let metaCustomer = "", metaModel = "", metaInch = "";
         for (let i = 1; i < globalData.length; i++) {
             const r = globalData[i]; if (!r) continue;
@@ -6846,34 +6845,58 @@ async function msCallGemini(apiKey, parsed) {
         const projTitle = [metaCustomer, metaModel, metaInch].filter(Boolean).join(' > ') || '주간 업무 보고';
         slide.addText(projTitle, { x: 0.4, y: 0.2, w: 7.5, h: 0.55, fontSize: 30, bold: true, color: SKY_DARK, fontFace: 'Malgun Gothic' });
 
-        // ── 우측 상단 H/W·기구·F/W 표 ────────────────────
-        const allAssignees = [...new Set(allList.map(t => {
-            const c = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
-            const a = wrExtractAssignee(c);
-            return a ? a.split('→').pop().trim() : null;
-        }).filter(Boolean))].slice(0, 3);
-        while (allAssignees.length < 3) allAssignees.push('-');
+        // ── 💡 우측 상단 H/W, 기구, F/W 담당자 표 (Summary 연동) ──
+        const pm = window.projectMeta || {};
+        const metaHw = pm.HW담당자 || '-';
+        const metaMech = pm.기구담당자 || '-';
+        const metaFw = pm.FW담당자 || '-';
 
         slide.addTable(
             [[{ text: 'H/W(통합 PL)', options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } },
               { text: '기구', options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } },
               { text: 'F/W', options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } }],
-             [{ text: allAssignees[0] }, { text: allAssignees[1] }, { text: allAssignees[2] }]],
+             [{ text: metaHw }, { text: metaMech }, { text: metaFw }]],
             { x: 9.0, y: 0.15, w: 3.9, h: 0.6, fontSize: 10, align: 'center', valign: 'middle', border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.3, 1.3, 1.3] }
         );
 
         slide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 0.85, w: 12.5, h: 0.04, fill: { color: SKY } });
 
-        // ── 모델 정보 줄 ─────────────────────────────────
+        // ── 💡 모델 정보 줄 (프로젝트 코드, 프로젝트명 추가) ────────
+        const pCode = pm.프로젝트코드 || '-';
+        const pName = pm.프로젝트명 || projTitle;
+
         slide.addTable(
-            [[{ text: '프로젝트코드', options: { fontSize: 10, color: '000000', bold: true, fill: { color: 'FFF7F1' } } },
-              { text: '프로젝트명', options: { fontSize: 10, color: '000000', bold: true } },
-              { text: projTitle, options: { fontSize: 10, color: '000000' } }]],
-            { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [2.0, 2.0, 8.5], valign: 'middle' }
+            [[{ text: '프로젝트코드', options: { fontSize: 10, color: '000000', bold: true, fill: { color: C.tint }, align: 'center' } },
+              { text: pCode, options: { fontSize: 10, color: '000000', align: 'center' } },
+              { text: '프로젝트명(칭)', options: { fontSize: 10, color: '000000', bold: true, fill: { color: C.tint }, align: 'center' } },
+              { text: pName, options: { fontSize: 10, color: '000000', align: 'center' } }]],
+            { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.5, 2.5, 1.5, 7.0], valign: 'middle' }
         );
 
-        // ── 좌: 개발목표 (제목+표 전체가 하나의 addTable) ──
-        const boardY = 1.0 + 0.4 + GAP, boardH = 1.8 + 0.32;   // 모델정보줄(y:1.0, h:0.4) 끝에서 GAP만큼 띔
+        // ── 💡 좌: 개발목표 일정 및 MC (Summary/MC 탭 연동) ──────
+        const getMsDate = (stage) => {
+            // HTML 화면 상의 마일스톤 입력칸에서 값을 읽어옵니다. (예: 2026-05-29 -> 26.05.29)
+            const el = document.querySelector(`#sum-milestone-body input[data-stage="${stage}"]`);
+            return el && el.value ? el.value.substring(2).replace(/-/g, '.') : '-'; 
+        };
+        const startDt = getMsDate('기획Start');
+        const protoDrDt = getMsDate('ProtoDR');
+        const dvrDt = getMsDate('DVR');
+        const pvrDt = getMsDate('PRA');
+
+        // M.C Table에서 MP Cost 총합 자동 계산
+        let totalMpCost = 0;
+        if (window.tabData && window.tabData.mcTable) {
+            window.tabData.mcTable.forEach(r => {
+                const t = String(r.type || '').toUpperCase().replace(/\s/g, '');
+                if (!r.type || t === 'SUBTOTAL' || t === 'TOTAL') return;
+                const val = parseFloat(String(r.mpCost).replace(/[^0-9.-]+/g, ''));
+                if (!isNaN(val)) totalMpCost += val;
+            });
+        }
+        const targetMc = totalMpCost > 0 ? '$' + totalMpCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
+
+        const boardY = 1.0 + 0.4 + GAP, boardH = 1.8 + 0.32;
         const goalX = 0.4, goalW = 4.0;
         const tlX = goalX + goalW + GAP, tlW = 12.5 - goalW - GAP;
 
@@ -6886,9 +6909,9 @@ async function msCallGemini(apiKey, parsed) {
         const glOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 6.5, align: 'center', valign: 'middle' };
 
         const titleRowH = 0.32, headRowH = 0.28;
-        const dataRowH = (boardH - titleRowH - headRowH) / 5;
+        const dataRowH = (boardH - titleRowH - headRowH) / 4; 
         const goalRowH = [titleRowH, headRowH, dataRowH, dataRowH, dataRowH, dataRowH];
-        const goalBoardH = goalRowH.reduce((a, b) => a + b, 0);   // ← 추가
+        const goalBoardH = goalRowH.reduce((a, b) => a + b, 0);
 
         slide.addTable(
             [
@@ -6899,25 +6922,31 @@ async function msCallGemini(apiKey, parsed) {
                     { text: 'Start', options: ghOpt },
                     { text: 'Proto DR', options: ghOpt },
                     { text: 'DVR', options: ghOpt },
-                    { text: 'PVR', options: ghOpt },
+                    { text: 'PRA(PVR)', options: ghOpt },
                 ],
                 [
                     { text: '목표', options: { ...ghOpt, rowspan: 2 } },
-                    { text: '일정\n(MC)', options: glOpt },
-                    { text: '' }, { text: '' }, { text: '' }, { text: '' },
+                    { text: '일정', options: glOpt },
+                    { text: startDt, options: glOpt }, 
+                    { text: protoDrDt, options: glOpt }, 
+                    { text: dvrDt, options: glOpt }, 
+                    { text: pvrDt, options: glOpt },
                 ],
                 [
-                    { text: '품질', options: glOpt },
-                    { text: '', options: { colspan: 4 } },
+                    { text: 'MC', options: glOpt },
+                    // M.C 테이블에서 합산한 값을 넣습니다
+                    { text: targetMc, options: { ...glOpt, colspan: 4 } },
                 ],
                 [
                     { text: '실적', options: { ...ghOpt, rowspan: 2 } },
                     { text: '일정', options: glOpt },
-                    { text: '' }, { text: '' }, { text: '' }, { text: '' },
+                    // 요청에 따라 실적은 빈칸으로 남겨둡니다
+                    { text: '', options: glOpt }, { text: '', options: glOpt }, { text: '', options: glOpt }, { text: '', options: glOpt },
                 ],
                 [
                     { text: 'MC', options: glOpt },
-                    { text: '', options: { colspan: 4 } },
+                    // 실적 MC 빈칸
+                    { text: '', options: { ...glOpt, colspan: 4 } },
                 ],
             ],
             { x: goalX, y: boardY, w: goalW, h: boardH, rowH: goalRowH, fontSize: 8, align: 'center', valign: 'middle', border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: goalColW }
@@ -6929,8 +6958,10 @@ async function msCallGemini(apiKey, parsed) {
         { x: tlX, y: boardY, w: tlW, h: 0.32, colW: [tlW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
             const goalTableY = boardY + 0.32;
-            const goalTableH = goalBoardH - 0.32;   // ← boardH 를 goalBoardH 로
+            const goalTableH = goalBoardH - 0.32;
             slide.addShape(pptx.ShapeType.rect, { x: tlX, y: goalTableY, w: tlW, h: goalTableH, fill: { color: 'FFFFFF' }, line: { color: BORDER, width: BORDER_W } });
+
+        // (이 아래부터 if (tl.items.length > 0) { ... } 등 기존 코드는 계속 그대로 유지됩니다)
 
         if (tl.items.length > 0) {
             const span = Math.max(1, tl.maxTs - tl.minTs);
