@@ -393,6 +393,22 @@
 .concept-table td input.u-input, .concept-table td textarea.u-input {
     background:#eceff1;
 }
+/* 💡 Summary 탭 개발 진척 타임라인 — Gantt chart Level 0 항목을 말풍선(텍스트 포함)으로 표시 */
+.sum-tl-wrap { position:relative; padding-top:46px; padding-bottom:46px; }
+.sum-tl-line-track { position:absolute; left:0; right:0; top:50%; height:3px; background:#d8d0e8; transform:translateY(-50%); }
+.sum-tl-dot { position:absolute; top:50%; width:10px; height:10px; background:#6f42c1; border:2px solid #fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.25); transform:translate(-50%,-50%); z-index:2; }
+.sum-tl-bubble {
+    position:absolute; transform:translateX(-50%); background:#fff; border:1.5px solid #6f42c1; border-radius:6px;
+    padding:4px 9px; font-size:11.5px; color:#333; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,0.15); z-index:2; line-height:1.35;
+}
+.sum-tl-bubble.below::after, .sum-tl-bubble.above::after {
+    content:''; position:absolute; left:50%; transform:translateX(-50%); border-width:6px 5px; border-style:solid; border-color:transparent;
+}
+.sum-tl-bubble.above { transform:translate(-50%,-100%); }
+.sum-tl-bubble.above::after { bottom:-6px; border-top-color:#6f42c1; }
+.sum-tl-bubble.below::after { top:-6px; border-bottom-color:#6f42c1; }
+.sum-tl-bubble .sum-tl-date { font-size:10px; color:#888; }
+.sum-tl-range { display:flex; justify-content:space-between; font-size:11px; color:#888; margin-top:4px; }
 
 @media print {
     #app-topbar { display: none !important; }
@@ -486,6 +502,11 @@
                 <label>인치</label><input type="text" id="sum-inch" class="u-input" placeholder="예: 32">
                 <label>KTK PN</label><input type="text" id="sum-ktk-pn" class="u-input" placeholder="예: 502574">
                 <label>KTK 모델명</label><input type="text" id="sum-ktk-model" class="u-input" placeholder="예: MVD&gt;KTS320DPS01,LNW">
+            </div>
+        </div>
+        <div class="concept-section">
+            <h3>프로젝트 멤버</h3>
+            <div class="concept-grid">
                 <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈">
                 <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인">
                 <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준">
@@ -509,17 +530,33 @@
         <div class="concept-section">
             <h3>마일스톤 (참고용 — Gantt chart Level 0 데이터와 추후 연동 예정)</h3>
             <table class="concept-table">
-                <thead><tr><th>단계</th><th>일정</th></tr></thead>
-                <tbody id="sum-milestone-body">
-                    <tr><td>기획 Start</td><td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>기획 Finish</td><td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>Proto DR</td><td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>DVR</td><td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>PRA</td><td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
+                <thead>
+                    <tr id="sum-milestone-head">
+                        <th>기획 Start</th>
+                        <th>기획 Finish</th>
+                        <th>Proto DR</th>
+                        <th>DVR</th>
+                        <th>PRA</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="sum-milestone-body">
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td>
+                    </tr>
                 </tbody>
             </table>
             <div class="concept-grid" style="margin-top:12px;">
                 <label>개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
+            </div>
+        </div>
+        <div class="concept-section">
+            <h3>개발 진척 타임라인 (Gantt chart Level 0 연동)</h3>
+            <div id="sum-level0-timeline" style="min-height:90px;">
+                <div style="color:#999; padding:10px 0;">Gantt chart 데이터를 불러오면 0레벨 항목이 타임라인으로 표시됩니다.</div>
             </div>
         </div>
     </div>
@@ -7070,6 +7107,48 @@ window.parseConceptSheetsFromWorkbook = function(workbook) {
     if ((a || b || c) && window.populateTabData) window.populateTabData();
 };
 
+// ── Summary 탭: Gantt chart Level 0 데이터와 연동된 진척 타임라인 (말풍선 + 텍스트) ──
+function _sumTlEscHtml(s) {
+    if (s === undefined || s === null) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function _sumTlFormatDate(ts) {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return '';
+    return (d.getMonth() + 1) + '/' + d.getDate();
+}
+window.renderSummaryTimeline = function() {
+    const container = document.getElementById('sum-level0-timeline');
+    if (!container) return;
+    if (!window.wrGetLevel0Timeline) {
+        container.innerHTML = '<div style="color:#999; padding:10px 0;">Gantt chart 데이터를 불러오면 0레벨 항목이 타임라인으로 표시됩니다.</div>';
+        return;
+    }
+    const tl = window.wrGetLevel0Timeline();
+    if (!tl.items || tl.items.length === 0) {
+        container.innerHTML = '<div style="color:#999; padding:10px 0;">0레벨 항목에 날짜가 없어 타임라인을 표시할 수 없습니다.</div>';
+        return;
+    }
+    const span = Math.max(1, tl.maxTs - tl.minTs);
+    const sorted = tl.items.slice().sort(function(a, b) { return a.start - b.start; });
+    const parts = sorted.map(function(it, i) {
+        const pct = ((it.start - tl.minTs) / span) * 100;
+        const isAbove = i % 2 === 0;
+        const cls = isAbove ? 'above' : 'below';
+        const topStyle = isAbove ? 'top:calc(50% - 14px);' : 'top:calc(50% + 14px);';
+        return '<div class="sum-tl-dot" style="left:' + pct + '%;"></div>'
+            + '<div class="sum-tl-bubble ' + cls + '" style="left:' + pct + '%; ' + topStyle + '">'
+            + _sumTlEscHtml(it.name) + '<br><span class="sum-tl-date">' + _sumTlFormatDate(it.start) + '</span></div>';
+    }).join('');
+    container.innerHTML =
+        '<div class="sum-tl-wrap">'
+        + '<div class="sum-tl-line-track"></div>'
+        + parts
+        + '</div>'
+        + '<div class="sum-tl-range"><span>' + _sumTlFormatDate(tl.minTs) + '</span><span>' + _sumTlFormatDate(tl.maxTs) + '</span></div>';
+};
+document.addEventListener('DOMContentLoaded', function() { if (window.renderSummaryTimeline) window.renderSummaryTimeline(); });
+
 function _escTabVal(v) { return (v === undefined || v === null) ? '' : String(v).replace(/"/g, '&quot;'); }
 
 function _readRowsFromTbody(tbodyId) {
@@ -7269,6 +7348,8 @@ document.addEventListener('DOMContentLoaded', function() { if (window.populateTa
         }
         // Weekly Report 탭은 매번 최신 기준주로 다시 그린다
         if (tabName === 'weekly' && window.showWeeklyReport) window.showWeeklyReport();
+        // Summary 탭은 Gantt chart Level 0 데이터와 연동된 타임라인을 매번 다시 그린다
+        if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
     };
 
     // 새로고침해도 마지막 상태 복원
