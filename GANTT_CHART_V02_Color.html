@@ -386,6 +386,13 @@
 .concept-add-row-btn {
     margin-top:8px; padding:6px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;
 }
+/* 💡 첨부 엑셀에서 회색으로 표시된 "사용자 작성 구간"과 동일하게 표시 (TYPE/ITEM/구조 열은 표시하지 않음) */
+.concept-grid input.u-input, .concept-grid textarea.u-input {
+    background:#eceff1;
+}
+.concept-table td input.u-input, .concept-table td textarea.u-input {
+    background:#eceff1;
+}
 
 @media print {
     #app-topbar { display: none !important; }
@@ -472,47 +479,47 @@
         <div class="concept-section">
             <h3>프로젝트 정보</h3>
             <div class="concept-grid">
-                <label>프로젝트 코드</label><input type="text" id="sum-project-code" placeholder="예: G2608OB">
-                <label>프로젝트 명칭</label><input type="text" id="sum-project-name" placeholder="예: LNW&gt;S32&gt;LOWER">
-                <label>고객사</label><input type="text" id="sum-customer" placeholder="예: LNW">
-                <label>고객 모델명</label><input type="text" id="sum-customer-model" placeholder="예: STELLAR32">
-                <label>인치</label><input type="text" id="sum-inch" placeholder="예: 32">
-                <label>KTK PN</label><input type="text" id="sum-ktk-pn" placeholder="예: 502574">
-                <label>KTK 모델명</label><input type="text" id="sum-ktk-model" placeholder="예: MVD&gt;KTS320DPS01,LNW">
-                <label>프로젝트 담당자</label><input type="text" id="sum-pm" placeholder="예: 박용훈">
-                <label>기구 담당자</label><input type="text" id="sum-mech" placeholder="예: 서경인">
-                <label>H/W 담당자</label><input type="text" id="sum-hw" placeholder="예: 조익현,조재준">
-                <label>F/W 담당자</label><input type="text" id="sum-fw" placeholder="예: 최종석">
-                <label>Module 담당자</label><input type="text" id="sum-module" placeholder="예: 김태홍">
-                <label>TSP 담당자</label><input type="text" id="sum-tsp" placeholder="예: 김진권,노태헌">
+                <label>고객사</label><input type="text" id="sum-customer" class="u-input" placeholder="예: LNW">
+                <label>프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
+                <label>프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
+                <label>고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
+                <label>인치</label><input type="text" id="sum-inch" class="u-input" placeholder="예: 32">
+                <label>KTK PN</label><input type="text" id="sum-ktk-pn" class="u-input" placeholder="예: 502574">
+                <label>KTK 모델명</label><input type="text" id="sum-ktk-model" class="u-input" placeholder="예: MVD&gt;KTS320DPS01,LNW">
+                <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈">
+                <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인">
+                <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준">
+                <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석">
+                <label>Module 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍">
+                <label>TSP 담당자</label><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌">
             </div>
         </div>
         <div class="concept-section">
             <h3>프로젝트 개요</h3>
             <div class="concept-grid">
-                <label>적용 목적</label><input type="text" id="sum-purpose" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발">
-                <label>연간 수요량</label><input type="text" id="sum-volume" placeholder="예: 약 20,000대/년">
-                <label>목표 양산 일정</label><input type="text" id="sum-mp-date" placeholder="예: 2027년 5월 납품 예정">
+                <label>적용 목적</label><input type="text" id="sum-purpose" class="u-input" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발">
+                <label>연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
+                <label>목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
             </div>
         </div>
         <div class="concept-section">
             <h3>추진 배경 및 의의</h3>
-            <textarea id="sum-background" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
+            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
         </div>
         <div class="concept-section">
             <h3>마일스톤 (참고용 — Gantt chart Level 0 데이터와 추후 연동 예정)</h3>
             <table class="concept-table">
                 <thead><tr><th>단계</th><th>일정</th></tr></thead>
                 <tbody id="sum-milestone-body">
-                    <tr><td>기획 Start</td><td><input type="text" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>기획 Finish</td><td><input type="text" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>Proto DR</td><td><input type="text" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>DVR</td><td><input type="text" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
-                    <tr><td>PRA</td><td><input type="text" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
+                    <tr><td>기획 Start</td><td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
+                    <tr><td>기획 Finish</td><td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
+                    <tr><td>Proto DR</td><td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
+                    <tr><td>DVR</td><td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
+                    <tr><td>PRA</td><td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td></tr>
                 </tbody>
             </table>
             <div class="concept-grid" style="margin-top:12px;">
-                <label>개발기간(일)</label><input type="text" id="sum-dev-days" placeholder="예: 603">
+                <label>개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
             </div>
         </div>
     </div>
@@ -525,10 +532,10 @@
             <table class="concept-table">
                 <thead><tr><th style="width:40px;">NO</th><th style="width:160px;">TYPE</th><th style="width:120px;">구분</th><th>Description</th><th style="width:220px;">Note</th></tr></thead>
                 <tbody id="briefspec-body">
-                    <tr><td class="bs-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" data-field="desc" value="Proto A"></td><td><input type="text" data-field="note"></td></tr>
-                    <tr><td class="bs-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" data-field="desc"></td><td><input type="text" data-field="note"></td></tr>
-                    <tr><td class="bs-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" data-field="desc"></td><td><input type="text" data-field="note"></td></tr>
-                    <tr><td class="bs-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" data-field="desc"></td><td><input type="text" data-field="note"></td></tr>
+                    <tr><td class="bs-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc" value="Proto A"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bs-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bs-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bs-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
             <button class="concept-add-row-btn" onclick="window.addBriefSpecRow && window.addBriefSpecRow()">+ 행 추가</button>
@@ -561,7 +568,7 @@
                     </tr>
                 </thead>
                 <tbody id="mctable-body">
-                    <tr><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" data-field="protoCost"></td><td><input type="text" data-field="protoNre"></td><td><input type="text" data-field="mpCost"></td><td><input type="text" data-field="mpNre"></td><td><input type="text" data-field="note"></td></tr>
+                    <tr><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" class="u-input" data-field="protoCost"></td><td><input type="text" class="u-input" data-field="protoNre"></td><td><input type="text" class="u-input" data-field="mpCost"></td><td><input type="text" class="u-input" data-field="mpNre"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
             </div>
@@ -689,7 +696,7 @@ ${mailText}`;
     var filterColumns = []; 
     var currentFilters = {}; 
     var existingDevStages = [];
-    var colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, alarm: -1 };
+    var colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
 
     window.currentDriveFileId = null;
     window.currentUserName = "비로그인 (로컬)"; 
@@ -806,7 +813,22 @@ ${mailText}`;
 
     window.saveToGoogleDrive = async function() {
         try {
-            if (!globalData || globalData.length <= 1) { alert("저장할 간트차트 데이터가 존재하지 않습니다."); return; }
+            const hasGanttData = globalData && globalData.length > 1;
+            let hasConceptData = false;
+            if (!hasGanttData) {
+                const td = window.collectTabData ? window.collectTabData() : (window.tabData || {});
+                const pm = window.projectMeta || {};
+                hasConceptData = !!(
+                    (td.briefSpec && td.briefSpec.length) ||
+                    (td.mcTable && td.mcTable.length) ||
+                    Object.keys(pm).some(function(k) { return pm[k] && String(pm[k]).trim(); }) ||
+                    (td.summary && Object.keys(td.summary).some(function(k) {
+                        const v = td.summary[k];
+                        return k !== 'milestones' && v && String(v).trim();
+                    }))
+                );
+            }
+            if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return; }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
             document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
             
@@ -1455,7 +1477,8 @@ ${mailText}`;
                 let data = new Uint8Array(e.target.result); let workbook;
                 try { workbook = XLSX.read(data, {type: 'array', cellStyles: true, cellHTML: true}); } catch (readErr) { workbook = XLSX.read(data, {type: 'array'}); }
                 
-                // 수정코드
+                // 💡 시트 순서가 Summary/Brief SPEC/M.C Table/GanttChart/수정이력 순이므로,
+                //    위치(SheetNames[0])가 아니라 이름으로 GanttChart 시트를 찾는다 (이름이 없는 옛 형식 파일은 첫 시트로 폴백)
                 let firstSheetName = workbook.SheetNames.find(n => n.trim() === "GanttChart") || workbook.SheetNames[0];
                 let worksheet = workbook.Sheets[firstSheetName];
                 let jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: true});
@@ -1472,6 +1495,10 @@ ${mailText}`;
                         }
                     }
                 }
+
+                // 💡 Summary / Brief SPEC / M.C Table 시트가 있으면 사용자가 회색 칸에 작성한 내용을 읽어와
+                //    projectMeta / tabData에 반영 (구글 드라이브 JSON과 동일하게, 로컬 엑셀에서도 복원)
+                if (window.parseConceptSheetsFromWorkbook) window.parseConceptSheetsFromWorkbook(workbook);
 
                 if(jsonData.length > 0) {
                     if (headerRow.length === 0) {
@@ -1500,7 +1527,6 @@ ${mailText}`;
                             else if(str.includes("업무내용") || str.includes("요청내용") || str.includes("업무상세내용") || str.includes("상세내용")) colIdx.content = idx;
                             else if(str.includes("답변") || str.includes("대응내용") || str.includes("대응")) colIdx.answer = idx;
                             else if(str.includes("현황")) colIdx.chart = idx;
-                            else if(str === "알림" || str.includes("알림여부")) colIdx.alarm = idx;
                         });
                         
                         filterColumns = []; let orderedNames = ['LEVEL(WBS)', '개발단계', '업무상태'];
@@ -1545,9 +1571,8 @@ ${mailText}`;
                         let name = ""; if (row._level === 0) name = origD0; if (row._level === 1) name = origD1; if (row._level === 2) name = origD2; if (row._level === 3) name = origD3; if (row._level === 4) name = origD4;
                         let contentStr = colIdx.content !== -1 ? (row[colIdx.content] || "").toString() : "";
                         row._isParallel = name.includes('*') || name.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
-                        row._알림 = colIdx.alarm !== -1 ? (String(row[colIdx.alarm] || '').trim().toUpperCase() === 'Y') : false;
 
-                        globalData.push(row);
+                        globalData.push(row); 
                     }
                 }
                     filesProcessed++;
@@ -2735,10 +2760,8 @@ ${mailText}`;
 
     function exportToExcel() {
         if (globalData.length <= 1) { alert("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요."); return; }
-            let exportData = []; let header = [...globalData[0]];
-                const alarmColIndex = header.length; header.push('알림');
-                exportData.push(header);
-                let rowNumCounter = 1;
+        let exportData = []; let header = [...globalData[0]]; exportData.push(header);
+        let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
             let row = globalData[i]; if (!row || row._isExplicitZero) continue; 
             let exportRow = []; let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
@@ -2763,7 +2786,6 @@ ${mailText}`;
                 else if (c === colIdx.dur1) { cellVal = (row._level === 1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
                 else if (c === colIdx.dur2) { cellVal = (row._level === 2) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
                 else if (c === colIdx.dur3) { cellVal = (row._level === 3) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
-                else if (c === alarmColIndex) { cellVal = row._알림 ? 'Y' : ''; }
                 exportRow.push(cellVal);
             }
             exportData.push(exportRow); rowNumCounter++;
@@ -6286,21 +6308,21 @@ async function msCallGemini(apiKey, parsed) {
     window.wrPptBaseColor = window.wrPptBaseColor || '19C3D6';
 
     window.projectMeta = window.projectMeta || {
-        프로젝트코드: "G2608OB",
-        프로젝트명: "LNW>S32>LOWER",
-        PN_모델명: "MVD>KTS320DPS01,LNW",
-        기구담당자: "서경인",
-        FW담당자: "최종석",
-        고객사: "LNW",      // 💡 신규: Summary 탭에서 프로젝트 단위로 입력 (기존 행 데이터의 고객 컬럼은 그대로 둠)
-        모델명: "STELLAR32",      // 💡 신규
-        인치: "32",         // 💡 신규
-        고객모델명: "STELLAR32",
-        KTKPN: "502574",
-        KTK모델명: "MVD>KTS320DPS01,LNW",
-        프로젝트담당자: "박용훈",
-        HW담당자: "조익현,조재준",
-        Module담당자: "김태홍",
-        TSP담당자: "김진권,노태헌"
+        프로젝트코드: "",
+        프로젝트명: "",
+        PN_모델명: "",
+        기구담당자: "",
+        FW담당자: "",
+        고객사: "",      // 💡 신규: Summary 탭에서 프로젝트 단위로 입력 (기존 행 데이터의 고객 컬럼은 그대로 둠)
+        모델명: "",      // 💡 신규
+        인치: "",         // 💡 신규
+        고객모델명: "",
+        KTKPN: "",
+        KTK모델명: "",
+        프로젝트담당자: "",
+        HW담당자: "",
+        Module담당자: "",
+        TSP담당자: ""
     };
     // 💡 기존에 저장된 파일에는 위 키들이 없을 수 있으므로 누락 시 빈 값으로 보강
     ['고객사', '모델명', '인치', '고객모델명', 'KTKPN', 'KTK모델명', '프로젝트담당자', 'HW담당자', 'Module담당자', 'TSP담당자'].forEach(function(k) {
@@ -6929,139 +6951,124 @@ async function msCallGemini(apiKey, parsed) {
 // 신규 탭(Summary / Brief SPEC / M.C Table) 데이터 바인딩 (컨셉 단계)
 // - 고객사/모델명/인치/프로젝트명 등 프로젝트 단위 정보는 projectMeta에 저장
 // - 그 외 Summary 개요/마일스톤, Brief SPEC, M.C Table 내용은 window.tabData에 저장
-// - 최초 진입 시 LNW>S32>LOWER(STELLAR32) 프로젝트의 기입 완료된 내용을 기본값으로 표시
+// - 기본값은 빈 상태이며, 실제 값은 JSON(구글 드라이브) 또는 로컬 엑셀 파일을 불러올 때 채워짐
 // ══════════════════════════════════════════════════════
 
-const _defaultBriefSpecData = [
-{type:'Development Stage',sub:'',desc:'Proto A',note:''},
-{type:'Touch or Glass',sub:'',desc:'With touch',note:''},
-{type:'Panel',sub:'',desc:'[BOE] MV315QHM-N41',note:''},
-{type:'Native Resolution',sub:'',desc:'2560 X 1440',note:''},
-{type:'Radius',sub:'',desc:'Flat type',note:''},
-{type:'Black Border (L/R/Top/Bottom)',sub:'',desc:'-',note:''},
-{type:'Thickness of Monitor',sub:'',desc:'-',note:''},
-{type:'Thickness of Glass',sub:'',desc:'3mm CSG',note:''},
-{type:'Casing',sub:'',desc:'-',note:''},
-{type:'Casing  color',sub:'',desc:'-',note:''},
-{type:'Mounting points',sub:'',desc:'User Mounting',note:''},
-{type:'LED Lighting',sub:'',desc:'-',note:''},
-{type:'AD Board',sub:'',desc:'PEONY-4CH LVDS',note:''},
-{type:'Video input',sub:'',desc:'1 X DP',note:''},
-{type:'Input voltage',sub:'',desc:'DC 24V / Molex 6P_39-01-2061',note:''},
-{type:'Color coordinate(x/y)',sub:'',desc:'X=0.305, Y=0.335 (±0.015)',note:''},
-{type:'Color Temperature(K)',sub:'',desc:'6850K',note:''},
-{type:'Brightness(Centre. Min)',sub:'',desc:'300 ~ 350 nits (min ~ max)',note:''},
-{type:'Datum point',sub:'',desc:'Center',note:''},
-{type:'Color Gamut',sub:'',desc:'WCG (NTSC  90%)',note:''},
-{type:'Uniformity(%)',sub:'',desc:'0.75',note:''},
-{type:'Certification',sub:'',desc:'UL, CE, CB, FCC',note:''},
-{type:'Viewing Angle (typ.)',sub:'',desc:'ALL 178° (Typ)',note:''},
-{type:'Power estimation \n(Max. W)',sub:'LCD Monitor',desc:'51W',note:''},
-{type:'',sub:'Light',desc:'-',note:''},
-{type:'',sub:'Total',desc:'51W',note:''},
-{type:'',sub:'Touch',desc:'2.5W(Via USB Power rail)',note:''}
-];
+window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
 
-const _defaultMcTableData = [
-{type:'PANEL',item:'FOG',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'LCM',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'FOG',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'LCM',group:'LCM IPS',pn:'',spec:'[BOE_QHD]MV315QHM-N41 $97',protoCost:109,protoNre:0,mpCost:109,mpNre:0,note:'회로：TCON & PMIC: +2$ // BLU： 프리즘+ DBEF+POP: +10$ '},
-{type:'',item:'FOG',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'LCM',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'PBM SUB',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'PANEL Parts COST',pn:'',spec:'',protoCost:109,protoNre:0,mpCost:109,mpNre:0,note:''},
-{type:'SLIMMING\nCUTTING',item:'FOG SLIMMING TOTAL',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'FOG CUTTING TOTAL',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'NRE',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'SLIMMING COST',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'Touch',item:'TOUCH SCREEN MODULE',group:'TSP PCT',pn:'',spec:'S 32" MVD 3T Sodalime',protoCost:64.65,protoNre:3500,mpCost:64.65,mpNre:3500,note:''},
-{type:'',item:'IC_TCH',group:'PBA-T',pn:303033,spec:'PBA-T>FLAMINGO-MA,R0,V00,P,H,100X62X1.4',protoCost:13.22,protoNre:0,mpCost:13.22,mpNre:0,note:''},
-{type:'',item:'GLASS',group:'GLASS CHEM',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'DB',group:'DB',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'NRE',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'Touch Parts COST',pn:'',spec:'',protoCost:77.87,protoNre:3500,mpCost:77.87,mpNre:3500,note:''},
-{type:'BLU',item:'',group:'BLU',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'PRESS TOOL',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'MOLD TOOL',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'NRE',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'BLU Parts COST',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'H/W',item:'BD 반제품',group:'PBA-AD(UHD)',pn:303309,spec:'PBA-AD>VIDEO,PEONY-QHD,R1,V00,MT9800UTF=',protoCost:26,protoNre:0,mpCost:26,mpNre:0,note:''},
-{type:'',item:'',group:'PBA-AD(FHD)',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'CONVERTER',group:'CONV',pn:302668,spec:'PBA-CNV>LEDRV,KCB-02508A-40,R1,V03A,24V=',protoCost:5,protoNre:0,mpCost:5,mpNre:0,note:''},
-{type:'',item:'DC FAN',group:'DC FAN',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'SPEAKER',group:'SPEAKER',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'POWER',group:'ADAPTOR',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'SMPS O/F',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'HARNESS',group:'HN BTB 1',pn:101831,spec:'HN BTB>06+12,0200,#28,YHH1+YH22,V1',protoCost:0.5,protoNre:0,mpCost:0.5,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTB 2',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTB 3',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTB 4',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTB 5',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTW 1',pn:102254,spec:'HN BTW>05+04,0250,#28,DG04+YE03,V0,SC22',protoCost:1.25,protoNre:0,mpCost:1.25,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTW 2',pn:102201,spec:'HN BTB>06+06,0400,#24,YHB9+YHL2,V0',protoCost:0.45,protoNre:0,mpCost:0.45,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTW 3',pn:106188,spec:'HN BTB_06+06,0300,#30,YH47+CL09,V0',protoCost:0.35,protoNre:0,mpCost:0.35,mpNre:0,note:''},
-{type:'',item:'',group:'HN MULTI',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN LVDS 1',pn:'T.B.D',spec:'VBY1 100mm Cable x 2 (51P,41P)',protoCost:9,protoNre:0,mpCost:9,mpNre:0,note:''},
-{type:'',item:'',group:'HN LVDS 2',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN FFC',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'P-ROOM',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'P-LED',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'BD 반제품(LED)',group:'PBA-M',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'PBA-S',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'PBM SUB',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'LED BAR 1',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'LED BAR 2',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'LED BAR 3',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'LED BAR 4',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'LED BAR 5',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'LED BAR 6',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'LED BAR 7',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTB 1',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'HN BTB 2',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'CABLE',group:'CB DSUB',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'CB DVI',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'CB DP',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'CB HDMI',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'CB LAN',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'CB USB-1',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'CB USB-2',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'Earth braid',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'P-CORD',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'ETC',group:'',pn:'',spec:'',protoCost:3,protoNre:0,mpCost:3,mpNre:0,note:''},
-{type:'',item:'NRE',group:'',pn:'',spec:'ARTWORK (NEW ADB) + PCB (SPL) + SMT (SPL)',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'Electric Parts COST',pn:'',spec:'',protoCost:45.55,protoNre:0,mpCost:45.55,mpNre:0,note:''},
-{type:'MECH',item:'METAL',group:'',pn:'',spec:'Metal',protoCost:13.776,protoNre:0,mpCost:13.776,mpNre:0,note:'Open-frame Only'},
-{type:'',item:'MOLD-1',group:'',pn:'',spec:'Mold',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'MOLD-2',group:'',pn:'',spec:'LED Lighting',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'DIE CAST',group:' ',pn:'',spec:'DIE CAST',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:'MVD, TVD : Multi Packing 10대 기준'},
-{type:'',item:'포장',group:' ',pn:'',spec:'포장',protoCost:4.191268965517241,protoNre:0,mpCost:4.191268965517241,mpNre:0,note:''},
-{type:'',item:'Tape, ETC',group:'',pn:'',spec:'Tape, ETC',protoCost:6.858620689655172,protoNre:0,mpCost:6.858620689655172,mpNre:0,note:''},
-{type:'',item:'',group:'Mechanical Parts COST',pn:'',spec:'',protoCost:24.82588965517241,protoNre:0,mpCost:24.82588965517241,mpNre:0,note:''},
-{type:'',item:'PRESS TOOL',group:'',pn:'',spec:'',protoCost:0,protoNre:52875,mpCost:0,mpNre:52875,note:''},
-{type:'',item:'MOLD TOOL',group:'',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'PACKAING TOOL',group:'',pn:'',spec:'',protoCost:0,protoNre:16000,mpCost:0,mpNre:16000,note:''},
-{type:'Total 1',item:'',group:'TOOLING COST',pn:'',spec:'',protoCost:0,protoNre:68875,mpCost:0,mpNre:68875,note:''},
-{type:'',item:'',group:'NRE COST',pn:'',spec:'',protoCost:0,protoNre:0,mpCost:0,mpNre:0,note:''},
-{type:'',item:'',group:'',pn:'',spec:'',protoCost:257.24588965517245,protoNre:72375,mpCost:257.24588965517245,mpNre:72375,note:''}
-];
-
-const _defaultSummaryData = {
-    purpose: 'LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발',
-    volume: '약 20,000대/년',
-    mpDate: '2027년 5월 납품 예정',
-    background: '  - LNW UK 신규 개발 Cabinet / 유럽시장 진출\n  - 전체 구성: 32" (MVD+TVD+TOPPER) + 18.5” (BTN)\n  - 신규 수주 확보를 통한 제품 포트폴리오 확장 및 시장 경쟁력 강화',
-    devDays: '603',
-    milestones: {
-        '기획Start':  { date: '2026-01-05' },
-        '기획Finish': { date: '2026-05-29' },
-        'ProtoDR':    { date: '2026-06-26' },
-        'DVR':        { date: '2027-04-30' },
-        'PRA':        { date: '2027-08-31' }
+// ── 로컬 엑셀 파일 로드 시, Summary/Brief SPEC/M.C Table 시트(회색 작성 구간)를
+//    읽어서 projectMeta / tabData로 복원하기 위한 파서 ──
+function _xlsxCellToDateStr(v) {
+    if (v === undefined || v === null || v === '') return '';
+    if (typeof v === 'number') {
+        const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+        if (!isNaN(d.getTime())) {
+            const y = d.getUTCFullYear(), m = String(d.getUTCMonth() + 1).padStart(2, '0'), dd = String(d.getUTCDate()).padStart(2, '0');
+            return y + '-' + m + '-' + dd;
+        }
     }
-};
+    return String(v).trim();
+}
 
-window.tabData = window.tabData || { summary: _defaultSummaryData, briefSpec: _defaultBriefSpecData, mcTable: _defaultMcTableData };
+function _parseSummarySheetFromWorkbook(workbook) {
+    const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'Summary' || n.trim().includes('Summary'); });
+    if (!sheetName) return false;
+    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    window.projectMeta = window.projectMeta || {};
+    window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
+    const pm = window.projectMeta;
+    const sd = window.tabData.summary || {};
+    sd.milestones = sd.milestones || {};
+    const labelMap = {
+        '고객사': function(v) { pm.고객사 = v; },
+        '프로젝트 코드': function(v) { pm.프로젝트코드 = v; },
+        '프로젝트 명칭': function(v) { pm.프로젝트명 = v; },
+        '고객 모델명': function(v) { pm.고객모델명 = v; pm.모델명 = v; },
+        '인치': function(v) { pm.인치 = v; },
+        'KTK PN': function(v) { pm.KTKPN = v; },
+        'KTK 모델명': function(v) { pm.KTK모델명 = v; pm.PN_모델명 = v; },
+        '프로젝트 담당자': function(v) { pm.프로젝트담당자 = v; },
+        '기구 담당자': function(v) { pm.기구담당자 = v; },
+        'H/W 담당자': function(v) { pm.HW담당자 = v; },
+        'F/W 담당자': function(v) { pm.FW담당자 = v; },
+        'Module 담당자': function(v) { pm.Module담당자 = v; },
+        'TSP 담당자': function(v) { pm.TSP담당자 = v; },
+        '적용 목적': function(v) { sd.purpose = v; },
+        '연간 수요량': function(v) { sd.volume = v; },
+        '목표 양산 일정': function(v) { sd.mpDate = v; },
+        '추진 배경 및 의의': function(v) { sd.background = v; },
+        '개발기간(일)': function(v) { sd.devDays = v; }
+    };
+    const milestoneMap = { '기획 Start': '기획Start', '기획 Finish': '기획Finish', 'Proto DR': 'ProtoDR', 'DVR': 'DVR', 'PRA': 'PRA' };
+    json.forEach(function(row) {
+        if (!row || row.length === 0) return;
+        const label = String(row[0] || '').trim();
+        if (!label) return;
+        const rawVal = row[1];
+        if (milestoneMap[label]) {
+            sd.milestones[milestoneMap[label]] = { date: _xlsxCellToDateStr(rawVal) };
+            return;
+        }
+        if (labelMap[label]) {
+            labelMap[label](rawVal === undefined || rawVal === null ? '' : String(rawVal).trim());
+        }
+    });
+    window.tabData.summary = sd;
+    return true;
+}
+
+function _parseBriefSpecSheetFromWorkbook(workbook) {
+    const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'Brief SPEC' || n.trim().includes('Brief SPEC'); });
+    if (!sheetName) return false;
+    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    const rows = [];
+    for (let i = 1; i < json.length; i++) {
+        const r = json[i];
+        if (!r || r.length === 0) continue;
+        const type = String(r[1] || '').trim();
+        const sub = String(r[2] || '').trim();
+        const desc = String(r[3] || '').trim();
+        const note = String(r[4] || '').trim();
+        if (!type && !sub && !desc && !note) continue;
+        rows.push({ type: type, sub: sub, desc: desc, note: note });
+    }
+    if (rows.length === 0) return false;
+    window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
+    window.tabData.briefSpec = rows;
+    return true;
+}
+
+function _parseMcTableSheetFromWorkbook(workbook) {
+    const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'M.C Table' || n.trim().includes('M.C Table'); });
+    if (!sheetName) return false;
+    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    const rows = [];
+    for (let i = 2; i < json.length; i++) { // 0,1행은 2단 헤더이므로 2행부터 데이터
+        const r = json[i];
+        if (!r || r.length === 0) continue;
+        const row = {
+            type: String(r[0] || '').trim(), item: String(r[1] || '').trim(), group: String(r[2] || '').trim(),
+            pn: (r[3] === undefined || r[3] === null) ? '' : String(r[3]).trim(), spec: String(r[4] || '').trim(),
+            protoCost: (r[5] === undefined || r[5] === null) ? '' : r[5], protoNre: (r[6] === undefined || r[6] === null) ? '' : r[6],
+            mpCost: (r[7] === undefined || r[7] === null) ? '' : r[7], mpNre: (r[8] === undefined || r[8] === null) ? '' : r[8],
+            note: String(r[9] || '').trim()
+        };
+        const isEmpty = !row.type && !row.item && !row.group && !row.pn && !row.spec && !row.note && row.protoCost === '' && row.protoNre === '' && row.mpCost === '' && row.mpNre === '';
+        if (isEmpty) continue;
+        rows.push(row);
+    }
+    if (rows.length === 0) return false;
+    window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
+    window.tabData.mcTable = rows;
+    return true;
+}
+
+window.parseConceptSheetsFromWorkbook = function(workbook) {
+    const a = _parseSummarySheetFromWorkbook(workbook);
+    const b = _parseBriefSpecSheetFromWorkbook(workbook);
+    const c = _parseMcTableSheetFromWorkbook(workbook);
+    if ((a || b || c) && window.populateTabData) window.populateTabData();
+};
 
 function _escTabVal(v) { return (v === undefined || v === null) ? '' : String(v).replace(/"/g, '&quot;'); }
 
@@ -7163,8 +7170,8 @@ window.populateTabData = function() {
             return '<tr><td class="bs-no">' + (i + 1) + '</td>'
                 + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
                 + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
-                + '<td><input type="text" data-field="desc" value="' + _escTabVal(r.desc) + '"></td>'
-                + '<td><input type="text" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
+                + '<td><input type="text" class="u-input" data-field="desc" value="' + _escTabVal(r.desc) + '"></td>'
+                + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
         }).join('');
     }
     if (td.mcTable && td.mcTable.length) {
@@ -7175,11 +7182,11 @@ window.populateTabData = function() {
                 + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
                 + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '"></td>'
                 + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '"></td>'
-                + '<td><input type="text" data-field="protoCost" value="' + _escTabVal(r.protoCost) + '"></td>'
-                + '<td><input type="text" data-field="protoNre" value="' + _escTabVal(r.protoNre) + '"></td>'
-                + '<td><input type="text" data-field="mpCost" value="' + _escTabVal(r.mpCost) + '"></td>'
-                + '<td><input type="text" data-field="mpNre" value="' + _escTabVal(r.mpNre) + '"></td>'
-                + '<td><input type="text" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
+                + '<td><input type="text" class="u-input" data-field="protoCost" value="' + _escTabVal(r.protoCost) + '"></td>'
+                + '<td><input type="text" class="u-input" data-field="protoNre" value="' + _escTabVal(r.protoNre) + '"></td>'
+                + '<td><input type="text" class="u-input" data-field="mpCost" value="' + _escTabVal(r.mpCost) + '"></td>'
+                + '<td><input type="text" class="u-input" data-field="mpNre" value="' + _escTabVal(r.mpNre) + '"></td>'
+                + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
         }).join('');
     }
 };
@@ -7192,8 +7199,8 @@ window.addBriefSpecRow = function() {
     tr.innerHTML = '<td class="bs-no">' + no + '</td>'
         + '<td><input type="text" data-field="type"></td>'
         + '<td><input type="text" data-field="sub"></td>'
-        + '<td><input type="text" data-field="desc"></td>'
-        + '<td><input type="text" data-field="note"></td>';
+        + '<td><input type="text" class="u-input" data-field="desc"></td>'
+        + '<td><input type="text" class="u-input" data-field="note"></td>';
     tbody.appendChild(tr);
 };
 
@@ -7206,11 +7213,11 @@ window.addMcTableRow = function() {
         + '<td><input type="text" data-field="group"></td>'
         + '<td><input type="text" data-field="pn"></td>'
         + '<td><input type="text" data-field="spec"></td>'
-        + '<td><input type="text" data-field="protoCost"></td>'
-        + '<td><input type="text" data-field="protoNre"></td>'
-        + '<td><input type="text" data-field="mpCost"></td>'
-        + '<td><input type="text" data-field="mpNre"></td>'
-        + '<td><input type="text" data-field="note"></td>';
+        + '<td><input type="text" class="u-input" data-field="protoCost"></td>'
+        + '<td><input type="text" class="u-input" data-field="protoNre"></td>'
+        + '<td><input type="text" class="u-input" data-field="mpCost"></td>'
+        + '<td><input type="text" class="u-input" data-field="mpNre"></td>'
+        + '<td><input type="text" class="u-input" data-field="note"></td>';
     tbody.appendChild(tr);
 };
 
