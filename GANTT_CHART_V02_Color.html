@@ -743,9 +743,9 @@
 
 <div id="tab-calendar" class="tab-panel">
     <div class="concept-tab-wrap">
-        <div class="concept-title-bar">
-            <span class="concept-title-icon">📅</span><span>Calendar</span><span class="concept-badge">컨셉 단계</span>
-            <div class="concept-title-actions"></div>
+        <div class="concept-header-box">
+            <h2>📅 Calendar<span class="concept-badge">컨셉 단계</span></h2>
+            <div class="btn-group"></div>
         </div>
         <div class="concept-section">
             <div id="cal-page"></div>
@@ -756,6 +756,10 @@
 <!-- 수정코드 -->
 <div id="tab-weekly" class="tab-panel">
     <div class="concept-tab-wrap">
+        <div class="concept-header-box">
+            <h2>📨 Weekly Report<span class="concept-badge">컨셉 단계</span></h2>
+            <div class="btn-group"></div>
+        </div>
         <div id="weekly-report-page"></div>
     </div>
 </div>
@@ -7868,15 +7872,8 @@ window.calRender = function() {
     const events = calBuildEvents();
     const eventsByDay = {};
     events.forEach(function(ev) {
-        let cur = new Date(ev.start);
-        const endD = new Date(ev.end);
-        let guard = 0;
-        while (cur.getTime() <= endD.getTime() && guard < 400) {
-            const k = calDateKey(cur);
-            (eventsByDay[k] = eventsByDay[k] || []).push(ev);
-            cur.setDate(cur.getDate() + 1);
-            guard++;
-        }
+    const k = calTsToKey(ev.start); // 시작일 기준으로만 등록 (요청 1번)
+    (eventsByDay[k] = eventsByDay[k] || []).push(ev);
     });
 
     const first = new Date(y, m, 1);
