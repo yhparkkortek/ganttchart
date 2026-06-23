@@ -758,7 +758,13 @@
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📨 Weekly Report<span class="concept-badge">컨셉 단계</span></h2>
-            <div class="btn-group"></div>
+            <div class="btn-group">
+                <label style="font-size:13px; color:#555; display:flex; align-items:center; gap:4px; font-weight:normal; margin-right:6px; cursor:pointer;">
+                    🎨 PPT 색상
+                    <input type="color" value="#19c3d6" oninput="window.wrPptBaseColor = this.value.replace('#','')" style="cursor:pointer; width:24px; height:24px; border:none; padding:0; background:none; border-radius:3px; outline:none;" title="PPT 출력시 적용될 메인 테마 색상을 선택하세요">
+                </label>
+                <button class="action-btn" onclick="window.exportWeeklyReportPPT()">📥 PPT 출력</button>
+            </div>
         </div>
         <div id="weekly-report-page"></div>
     </div>
@@ -6751,7 +6757,7 @@ async function msCallGemini(apiKey, parsed) {
         };
     };
 
-    // ── 팝업 표시 ─────────────────────────────────────────
+// ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
         const data = window.wrClassifyTasks();
 
@@ -6760,79 +6766,37 @@ async function msCallGemini(apiKey, parsed) {
 
         const SKY_C = '#2c5f8a', SKY_TINT = '#eef3f7', BORDER_C = '#e3e6ea';
 
+        // 💡 주간업무 보고 타이틀과 프로젝트 정보 패널을 완전히 삭제했습니다.
         container.innerHTML = `
-                <div style="background:${SKY_C}; color:white; border-radius:6px 6px 0 0; padding:14px 22px; display:flex; align-items:center; justify-content:space-between;">
-                    <span style="font-size:16px; font-weight:bold;">📅 주간 업무 보고</span>
-                    <div style="display:flex; gap:10px; align-items:center;">
-                        <label style="font-size:12px; color:#fff; display:flex; align-items:center; gap:4px;">
-                            PPT 색상
-                            <input type="color" id="wr-ppt-color" value="#${(window.wrPptBaseColor || '19C3D6').replace('#','')}" style="width:26px; height:22px; border:none; padding:0; cursor:pointer;">
-                        </label>
-                        <button onclick="window.exportWeeklyReportPPT()" style="padding:6px 14px; background:rgba(255,255,255,0.2); color:#fff; border:1px solid rgba(255,255,255,0.5); border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">📥 PPT 출력</button>
+            <div style="padding:10px 22px; border:1px solid ${BORDER_C}; border-radius:6px 6px 0 0; display:flex; justify-content:center; align-items:center; gap:14px; background:#fafafa;">
+                <button onclick="window.wrShiftWeek(-1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">◀ 이전주</button>
+                <div style="font-size:13px; font-weight:bold; color:#333;">기준주: ${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)</div>
+                <button onclick="window.wrShiftWeek(1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">다음주 ▶</button>
+                <button onclick="window.wrShiftWeek(0)" style="padding:5px 12px; border:1px solid ${SKY_C}; color:${SKY_C}; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">오늘</button>
+            </div>
+
+            <div style="padding:20px 22px; border:1px solid ${BORDER_C}; border-top:none; border-radius:0 0 6px 6px; background:#fff;">
+                <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                    <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">개발 진척 현황</div>
+                    <div style="padding:12px;">${wrRenderTimeline()}</div>
+                </div>
+
+                <div style="display:flex; gap:10px; margin-bottom:14px;">
+                    <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">주요 실적 (${data.thisWeekNo}W)</div>
+                        <div style="padding:12px;">${wrRenderEditableList(data.thisList)}</div>
+                    </div>
+                    <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">추진 계획 (${data.nextWeekNo}W)</div>
+                        <div style="padding:12px;">${wrRenderEditableList(data.nextList)}</div>
                     </div>
                 </div>
 
-                <div style="padding:10px 22px; border:1px solid ${BORDER_C}; border-top:none; display:flex; justify-content:center; align-items:center; gap:14px; background:#fafafa;">
-                    <button onclick="window.wrShiftWeek(-1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">◀ 이전주</button>
-                    <div style="font-size:13px; font-weight:bold; color:#333;">기준주: ${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)</div>
-                    <button onclick="window.wrShiftWeek(1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">다음주 ▶</button>
-                    <button onclick="window.wrShiftWeek(0)" style="padding:5px 12px; border:1px solid ${SKY_C}; color:${SKY_C}; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">오늘</button>
+                <div style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                    <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">문제점 및 Issue</div>
+                    <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                 </div>
-
-                <!-- 프로젝트 정보 패널 -->
-                <div style="padding:10px 22px; border:1px solid ${BORDER_C}; border-top:none; background:#fff;">
-                    <div onclick="window.wrToggleMetaPanel()" style="cursor:pointer; font-size:12px; color:${SKY_C}; font-weight:bold; display:flex; align-items:center; gap:4px;">
-                        <span id="wr-meta-toggle-icon">▶</span> 프로젝트 정보
-                    </div>
-                    <div id="wr-meta-panel" style="display:none; margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-                        <label style="font-size:12px; color:#555;">프로젝트코드
-                            <input type="text" id="wr-meta-code" value="${escapeHtml(window.projectMeta.프로젝트코드 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
-                        </label>
-                        <label style="font-size:12px; color:#555;">프로젝트명
-                            <input type="text" id="wr-meta-name" value="${escapeHtml(window.projectMeta.프로젝트명 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
-                        </label>
-                        <label style="font-size:12px; color:#555;">PN_모델명
-                            <input type="text" id="wr-meta-pn" value="${escapeHtml(window.projectMeta.PN_모델명 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
-                        </label>
-                        <label style="font-size:12px; color:#555;">기구 담당자
-                            <input type="text" id="wr-meta-mech" value="${escapeHtml(window.projectMeta.기구담당자 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
-                        </label>
-                        <label style="font-size:12px; color:#555;">F/W 담당자
-                            <input type="text" id="wr-meta-fw" value="${escapeHtml(window.projectMeta.FW담당자 || '')}" style="width:100%; padding:5px 7px; border:1px solid #ddd; border-radius:4px; margin-top:2px;">
-                        </label>
-                    </div>
-                </div>
-
-                <div style="padding:20px 22px; border:1px solid ${BORDER_C}; border-top:none; border-radius:0 0 6px 6px; background:#fff;">
-                    <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">개발 진척 현황</div>
-                        <div style="padding:12px;">${wrRenderTimeline()}</div>
-                    </div>
-
-                    <div style="display:flex; gap:10px; margin-bottom:14px;">
-                        <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">주요 실적 (${data.thisWeekNo}W)</div>
-                            <div style="padding:12px;">${wrRenderEditableList(data.thisList)}</div>
-                        </div>
-                        <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">추진 계획 (${data.nextWeekNo}W)</div>
-                            <div style="padding:12px;">${wrRenderEditableList(data.nextList)}</div>
-                        </div>
-                    </div>
-
-                    <div style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">문제점 및 Issue</div>
-                        <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
-                    </div>
-                </div>`;
-
-        const colorInput = document.getElementById('wr-ppt-color');
-        if (colorInput) colorInput.addEventListener('input', function() { window.wrPptBaseColor = this.value.replace('#',''); });
-
-        ['wr-meta-code','wr-meta-name','wr-meta-pn','wr-meta-mech','wr-meta-fw'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.addEventListener('change', window.wrSaveMetaFromInputs);
-        });
+            </div>`;
     };
   window.exportWeeklyReportPPT = function() {
         if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.'); return; }
