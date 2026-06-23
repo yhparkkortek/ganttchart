@@ -2862,7 +2862,7 @@ ${mailText}`;
             const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_').replace(/[\x00-\x1F\x7F"*/:<>?\\|]/g, ''); 
             
             const tableInfoTextElem = document.getElementById('table-info-text'); 
-            if (tableInfoTextElem) { tableInfoTextElem.textContent = `📑 [Gantt Chart] ` + infoStr.replace(/_/g, " > "); }
+            if (tableInfoTextElem) { tableInfoTextElem.textContent = infoStr.replace(/_/g, " > "); }
             
             const today = new Date(); 
             const yy = String(today.getFullYear()).slice(-2); 
@@ -6212,8 +6212,8 @@ async function msCallGemini(apiKey, parsed) {
 <style>
 /* 1. 모든 버튼을 동일한 규칙으로 고정 */
 .action-btn {
-    font-size: 13px !important;            /* 폰트 크기 통일 */
-    height: 30px !important;               /* 높이 통일 */
+    font-size: 12px !important;            /* 폰트 크기 통일 */
+    height: 28px !important;               /* 높이 통일 */
     padding: 0 10px !important;            /* 좌우 여백 통일 */
     min-width: 100px !important;           /* 너비 통일 */
     flex: 0 0 auto !important;             /* 늘어나지 않게 고정 */
