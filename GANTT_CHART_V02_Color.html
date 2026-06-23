@@ -486,6 +486,46 @@
 .concept-header-box .btn-group { margin-left: auto; display: flex; gap: 6px; }
 /* ========================================= */
 
+/* ── Calendar 탭 ───────────────────────── */
+.cal-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:10px; }
+.cal-nav-btns { display:flex; align-items:center; gap:10px; }
+.cal-toolbar button { padding:6px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12.5px; }
+.cal-toolbar button:hover { background:#2c5f8a; color:#fff; }
+.cal-month-label { font-size:16px; font-weight:bold; color:#2c5f8a; min-width:110px; text-align:center; }
+.cal-grid-wrap { border:1px solid #e3e6ea; border-radius:6px; overflow:hidden; }
+.cal-weekday-row { display:grid; grid-template-columns:repeat(7,1fr); background:#f4f6f8; }
+.cal-weekday-row > div { padding:7px; text-align:center; font-size:12px; font-weight:600; color:#555; border-bottom:1px solid #e3e6ea; }
+.cal-weekday-row > div:first-child { color:#e03131; }
+.cal-weekday-row > div:last-child { color:#1971c2; }
+.cal-body-row { display:grid; grid-template-columns:repeat(7,1fr); }
+.cal-day-cell { border-right:1px solid #eee; border-bottom:1px solid #eee; min-height:96px; padding:4px; box-sizing:border-box; position:relative; cursor:pointer; }
+.cal-day-cell:hover { background:#fafcfe; }
+.cal-day-cell.cal-other-month { background:#fafafa; color:#bbb; }
+.cal-day-cell.cal-today { background:#eef6fb; }
+.cal-day-num { font-size:12px; font-weight:600; color:#333; display:inline-block; padding:1px 6px; border-radius:10px; }
+.cal-day-cell.cal-today .cal-day-num { background:#2c5f8a; color:#fff; }
+.cal-day-cell.cal-weekend-sat .cal-day-num { color:#1971c2; }
+.cal-day-cell.cal-weekend-sun .cal-day-num { color:#e03131; }
+.cal-event-chip {
+    font-size:10.5px; padding:1px 5px; margin-top:2px; border-radius:3px; background:#e7f1ff; color:#1c5d99;
+    border-left:3px solid #2c5f8a; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.cal-event-chip:hover { background:#d7e8fb; }
+.cal-event-chip.cal-alarm-on { background:#fff3cd; border-left-color:#e67e22; color:#7a5210; }
+.cal-event-chip.cal-selected { background:#2c5f8a !important; color:#fff !important; border-left-color:#1c3f5c !important; font-weight:bold; }
+.cal-more-link { font-size:10.5px; color:#888; cursor:pointer; margin-top:2px; }
+.cal-more-link:hover { text-decoration:underline; color:#2c5f8a; }
+/* 선택된 업무의 기간을 가로 막대 + 화살표로 표시 (기본 숨김, 클릭 시에만 표시) */
+.cal-dur-bar { position:absolute; left:0; right:0; top:20px; height:4px; background:rgba(44,95,138,0.55); z-index:1; pointer-events:none; }
+.cal-dur-bar.cal-dur-start { left:50%; border-radius:3px 0 0 3px; }
+.cal-dur-bar.cal-dur-end { right:50%; border-radius:0 3px 3px 0; }
+.cal-dur-bar.cal-dur-end::after { content:'▶'; position:absolute; right:-3px; top:-6px; font-size:10px; color:#2c5f8a; }
+.cal-dur-bar.cal-dur-single { left:35%; right:35%; border-radius:3px; }
+.cal-dur-bar.cal-dur-single::after { content:'▶'; position:absolute; right:-3px; top:-6px; font-size:10px; color:#2c5f8a; }
+.cal-day-popup-item { padding:8px 10px; border:1px solid #e3e6ea; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; }
+.cal-day-popup-item:hover { border-color:#2c5f8a; }
+.cal-day-popup-item.cal-alarm-on { background:#fff3cd; border-color:#ffe08a; }
+
 </style>
 </head>
 <body>
@@ -703,13 +743,12 @@
 
 <div id="tab-calendar" class="tab-panel">
     <div class="concept-tab-wrap">
-        <!-- 수정코드 -->
-<div class="concept-title-bar">
-    <span class="concept-title-icon">📅</span><span>Calendar</span><span class="concept-badge">컨셉 단계</span>
-    <div class="concept-title-actions"></div>
-</div>
+        <div class="concept-title-bar">
+            <span class="concept-title-icon">📅</span><span>Calendar</span><span class="concept-badge">컨셉 단계</span>
+            <div class="concept-title-actions"></div>
+        </div>
         <div class="concept-section">
-            <p style="font-size:13px; color:#666;">Gantt chart의 Level 0/1 마일스톤을 월간 캘린더 형태로 보여주는 화면입니다. 세부 구현은 추후 작업에서 진행합니다.</p>
+            <div id="cal-page"></div>
         </div>
     </div>
 </div>
@@ -728,6 +767,16 @@
                 <span class="history-close" onclick="closeHistoryModal()">✖</span>
             </div>
             <div class="history-body" id="history-content"></div>
+        </div>
+    </div>
+
+    <div id="cal-day-popup-overlay" class="modal-overlay" onclick="window.closeCalDayPopup(event)">
+        <div class="history-modal" onclick="event.stopPropagation()" style="width:420px; max-width:92vw; height:auto; max-height:70vh;">
+            <div class="history-header">
+                <span id="cal-day-popup-title">업무 목록</span>
+                <span class="history-close" onclick="window.closeCalDayPopup()">✖</span>
+            </div>
+            <div class="history-body" id="cal-day-popup-body" style="padding:14px; overflow-y:auto;"></div>
         </div>
     </div>
 
@@ -7679,6 +7728,8 @@ document.addEventListener('DOMContentLoaded', function() { if (window.populateTa
         if (tabName === 'weekly' && window.showWeeklyReport) window.showWeeklyReport();
         // Summary 탭은 Gantt chart Level 0 데이터와 연동된 타임라인을 매번 다시 그린다
         if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
+        // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
+        if (tabName === 'calendar' && window.calRender) window.calRender();
     };
 
     // 새로고침해도 마지막 상태 복원
@@ -7688,6 +7739,219 @@ document.addEventListener('DOMContentLoaded', function() { if (window.populateTa
         if (lastTab && document.getElementById('tab-' + lastTab)) window.switchTab(lastTab);
     } catch(e) {}
 })();
+</script>
+
+<script>
+// ════════════════════════════════════════════════════
+// Calendar 탭 — Gantt chart 업무를 월간 캘린더로 표시
+// 1) 시작일 기준 표시, 클릭 시 완료일까지 기간을 막대+화살표로 표시 (기본은 숨김)
+// 2) 하루에 표시할 수 없을 만큼 많으면 "+N개 더보기" → 팝업으로 전체 목록
+// 3) Gantt의 🔔 알림(_알림) 표시와 동기화
+// 4) Google Calendar 연동: .ics 파일로 내보내기 (구글 캘린더에서 가져오기로 바로 추가 가능)
+// ════════════════════════════════════════════════════
+window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null };
+
+function calBuildEvents() {
+    const events = [];
+    if (typeof globalData === 'undefined' || !globalData || !globalData.length) return events;
+    for (let i = 1; i < globalData.length; i++) {
+        const row = globalData[i];
+        if (!row) continue;
+        // 리프 노드(자식이 없는 실제 업무)만 캘린더에 표시 — Weekly Report와 동일한 기준
+        const myLevel = (typeof row._level === 'number') ? row._level : 4;
+        const nextRow = globalData[i + 1];
+        const nextLevel = (nextRow && typeof nextRow._level === 'number') ? nextRow._level : -1;
+        const isLeaf = !(nextRow && nextLevel > myLevel);
+        if (!isLeaf) continue;
+        const name = (typeof wrTaskName === 'function') ? wrTaskName(row) : '';
+        if (!name) continue;
+        const s = row._calcStartTs;
+        if (!s) continue; // 시작일 기준 표시이므로 시작일이 없으면 제외
+        const e = row._calcPlanTs || s;
+        events.push({
+            idx: i, name: name, start: s, end: e,
+            assignee: (typeof colIdx !== 'undefined' && colIdx.assignee !== -1) ? (row[colIdx.assignee] || '') : '',
+            status: (typeof colIdx !== 'undefined' && colIdx.status !== -1) ? (row[colIdx.status] || '') : '',
+            alarm: !!row._알림
+        });
+    }
+    return events;
+}
+
+function calDateKey(d) { return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
+function calTsToKey(ts) { return calDateKey(new Date(ts)); }
+
+window.calChangeMonth = function(delta) {
+    window.calState.month += delta;
+    if (window.calState.month < 0) { window.calState.month = 11; window.calState.year--; }
+    if (window.calState.month > 11) { window.calState.month = 0; window.calState.year++; }
+    window.calState.selectedIdx = null;
+    window.calRender();
+};
+window.calGoToday = function() {
+    const t = new Date();
+    window.calState.year = t.getFullYear(); window.calState.month = t.getMonth(); window.calState.selectedIdx = null;
+    window.calRender();
+};
+window.calSelectEvent = function(idx) {
+    window.calState.selectedIdx = (window.calState.selectedIdx === idx) ? null : idx;
+    window.calRender();
+};
+
+window.calShowDayPopup = function(dateKey) {
+    const events = calBuildEvents().filter(function(ev) {
+        const dk1 = calTsToKey(ev.start), dk2 = calTsToKey(ev.end);
+        return dateKey >= dk1 && dateKey <= dk2;
+    }).sort(function(a, b) { return a.start - b.start; });
+    const overlay = document.getElementById('cal-day-popup-overlay');
+    const body = document.getElementById('cal-day-popup-body');
+    const title = document.getElementById('cal-day-popup-title');
+    if (!overlay || !body || !title) return;
+    title.textContent = '📅 ' + dateKey + ' 업무 (' + events.length + '건)';
+    if (events.length === 0) {
+        body.innerHTML = '<div style="color:#999; padding:20px; text-align:center;">해당 날짜에 업무가 없습니다.</div>';
+    } else {
+        const sMap = (typeof LANG !== 'undefined' && window._currentLang && LANG[window._currentLang]) ? LANG[window._currentLang].statusMap : null;
+        body.innerHTML = events.map(function(ev) {
+            const statusLabel = (sMap && sMap[ev.status]) || ev.status || '-';
+            const alarmCls = ev.alarm ? ' cal-alarm-on' : '';
+            const bell = ev.alarm ? '🔔 ' : '';
+            return '<div class="cal-day-popup-item' + alarmCls + '" onclick="window.calSelectEvent(' + ev.idx + '); window.closeCalDayPopup();">'
+                + '<div style="font-weight:bold; margin-bottom:3px;">' + bell + escapeHtml(ev.name) + '</div>'
+                + '<div style="color:#777;">' + wrFormatMD(ev.start) + ' ~ ' + wrFormatMD(ev.end)
+                + (ev.assignee ? ' · ' + escapeHtml(ev.assignee) : '') + ' · ' + escapeHtml(statusLabel) + '</div>'
+                + '</div>';
+        }).join('');
+    }
+    overlay.style.display = 'flex';
+};
+window.closeCalDayPopup = function(e) {
+    if (e && e.target !== document.getElementById('cal-day-popup-overlay')) return;
+    const overlay = document.getElementById('cal-day-popup-overlay');
+    if (overlay) overlay.style.display = 'none';
+};
+
+// 💡 Google Calendar 연동: 표준 .ics 파일로 내보내기 — 구글 캘린더 좌측 [+] → 가져오기로 바로 추가 가능
+// (Drive 연동에 쓰는 OAuth 권한 범위를 건드리지 않는 안전한 방식. 실시간 양방향 동기화가 필요하면 별도로 Calendar API 권한 추가가 필요합니다.)
+window.calExportICS = function() {
+    const events = calBuildEvents();
+    if (events.length === 0) { alert('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.'); return; }
+    function icsDate(ts) { const d = new Date(ts); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); }
+    function icsDateNext(ts) { const d = new Date(ts); d.setDate(d.getDate() + 1); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); }
+    function esc(s) { return (s || '').toString().replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;'); }
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kortek Gantt Chart//Calendar Export//KO'];
+    events.forEach(function(ev) {
+        lines.push('BEGIN:VEVENT');
+        lines.push('UID:gantt-' + ev.idx + '-' + icsDate(ev.start) + '@kortek');
+        lines.push('DTSTART;VALUE=DATE:' + icsDate(ev.start));
+        lines.push('DTEND;VALUE=DATE:' + icsDateNext(ev.end));
+        lines.push('SUMMARY:' + esc(ev.name));
+        const descParts = [];
+        if (ev.assignee) descParts.push('담당자: ' + ev.assignee);
+        if (ev.status) descParts.push('상태: ' + ev.status);
+        if (descParts.length) lines.push('DESCRIPTION:' + esc(descParts.join('\n')));
+        lines.push('END:VEVENT');
+    });
+    lines.push('END:VCALENDAR');
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = ((window.projectMeta && window.projectMeta.프로젝트명) || 'gantt').replace(/[^\w가-힣\-]/g, '_') + '_calendar.ics';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+};
+
+window.calRender = function() {
+    const container = document.getElementById('cal-page');
+    if (!container) return;
+    const y = window.calState.year, m = window.calState.month;
+    const events = calBuildEvents();
+    const eventsByDay = {};
+    events.forEach(function(ev) {
+        let cur = new Date(ev.start);
+        const endD = new Date(ev.end);
+        let guard = 0;
+        while (cur.getTime() <= endD.getTime() && guard < 400) {
+            const k = calDateKey(cur);
+            (eventsByDay[k] = eventsByDay[k] || []).push(ev);
+            cur.setDate(cur.getDate() + 1);
+            guard++;
+        }
+    });
+
+    const first = new Date(y, m, 1);
+    const startOffset = first.getDay();
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
+    const todayKey = calDateKey(new Date());
+    const selectedEvent = (window.calState.selectedIdx !== null) ? events.find(function(ev) { return ev.idx === window.calState.selectedIdx; }) : null;
+
+    let cellsHtml = '';
+    for (let c = 0; c < totalCells; c++) {
+        const dayNum = c - startOffset + 1;
+        const cellDate = new Date(y, m, dayNum);
+        const otherMonth = (dayNum < 1 || dayNum > daysInMonth);
+        const key = calDateKey(cellDate);
+        const dow = cellDate.getDay();
+        const dayEvents = (eventsByDay[key] || []).slice().sort(function(a, b) { return a.start - b.start; });
+
+        let cls = 'cal-day-cell';
+        if (otherMonth) cls += ' cal-other-month';
+        if (key === todayKey) cls += ' cal-today';
+        if (dow === 0) cls += ' cal-weekend-sun';
+        if (dow === 6) cls += ' cal-weekend-sat';
+
+        const MAX_CHIPS = 3;
+        const shown = dayEvents.slice(0, MAX_CHIPS);
+        const moreCount = dayEvents.length - shown.length;
+
+        const chipsHtml = shown.map(function(ev) {
+            const isSel = (window.calState.selectedIdx === ev.idx);
+            let chipCls = 'cal-event-chip';
+            if (ev.alarm) chipCls += ' cal-alarm-on';
+            if (isSel) chipCls += ' cal-selected';
+            const bell = ev.alarm ? '🔔' : '';
+            return '<div class="' + chipCls + '" title="' + escapeHtml(ev.name) + '" onclick="event.stopPropagation(); window.calSelectEvent(' + ev.idx + ');">' + bell + escapeHtml(ev.name) + '</div>';
+        }).join('');
+
+        const moreHtml = moreCount > 0 ? ('<div class="cal-more-link" onclick="event.stopPropagation(); window.calShowDayPopup(\'' + key + '\');">+' + moreCount + '개 더보기</div>') : '';
+
+        // 선택된 업무가 있을 때만 해당 기간 칸에 가로 막대+화살표 표시 (기본은 숨김)
+        let barHtml = '';
+        if (selectedEvent) {
+            const sk = calTsToKey(selectedEvent.start), ek = calTsToKey(selectedEvent.end);
+            if (key >= sk && key <= ek) {
+                let barCls = 'cal-dur-bar';
+                if (sk === ek) barCls += ' cal-dur-single';
+                else if (key === sk) barCls += ' cal-dur-start';
+                else if (key === ek) barCls += ' cal-dur-end';
+                barHtml = '<div class="' + barCls + '"></div>';
+            }
+        }
+
+        cellsHtml += '<div class="' + cls + '" onclick="window.calShowDayPopup(\'' + key + '\')">'
+            + barHtml
+            + '<span class="cal-day-num">' + cellDate.getDate() + '</span>'
+            + chipsHtml + moreHtml
+            + '</div>';
+    }
+
+    const monthLabel = y + '년 ' + (m + 1) + '월';
+    container.innerHTML =
+        '<div class="cal-toolbar">'
+        + '<div class="cal-nav-btns">'
+        + '<button onclick="window.calChangeMonth(-1)">◀ 이전</button>'
+        + '<span class="cal-month-label">' + monthLabel + '</span>'
+        + '<button onclick="window.calChangeMonth(1)">다음 ▶</button>'
+        + '<button onclick="window.calGoToday()">오늘</button>'
+        + '</div>'
+        + '<button onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다">📤 Google Calendar로 내보내기 (.ics)</button>'
+        + '</div>'
+        + '<div class="cal-grid-wrap">'
+        + '<div class="cal-weekday-row"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>'
+        + '<div class="cal-body-row">' + cellsHtml + '</div>'
+        + '</div>';
+};
 </script>
 
 </body>
