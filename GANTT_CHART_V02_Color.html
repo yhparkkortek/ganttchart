@@ -394,21 +394,24 @@
     background:#eceff1;
 }
 /* 💡 Summary 탭 개발 진척 타임라인 — Gantt chart Level 0 항목을 말풍선(텍스트 포함)으로 표시 */
-.sum-tl-wrap { position:relative; padding-top:46px; padding-bottom:46px; }
-.sum-tl-line-track { position:absolute; left:0; right:0; top:50%; height:3px; background:#d8d0e8; transform:translateY(-50%); }
-.sum-tl-dot { position:absolute; top:50%; width:10px; height:10px; background:#6f42c1; border:2px solid #fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.25); transform:translate(-50%,-50%); z-index:2; }
+.sum-tl-wrap { position:relative; padding-top:50px; padding-bottom:50px; }
+.sum-tl-inner { position:relative; height:3px; margin:0 56px; } /* 좌우 56px 인셋: 말풍선 텍스트가 외곽 상자를 벗어나지 않도록 */
+.sum-tl-line-track { position:absolute; left:0; right:0; top:0; height:3px; background:#d8d0e8; }
+.sum-tl-dot { position:absolute; top:0; width:10px; height:10px; background:#6f42c1; border:2px solid #fff; border-radius:50%; box-shadow:0 1px 3px rgba(0,0,0,0.25); transform:translate(-50%,-50%); z-index:2; }
 .sum-tl-bubble {
-    position:absolute; transform:translateX(-50%); background:#fff; border:1.5px solid #6f42c1; border-radius:6px;
-    padding:4px 9px; font-size:11.5px; color:#333; white-space:nowrap; box-shadow:0 1px 3px rgba(0,0,0,0.15); z-index:2; line-height:1.35;
+    position:absolute; top:0; max-width:130px; background:#fff; border:1.5px solid #6f42c1; border-radius:6px;
+    padding:4px 9px; font-size:11.5px; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    box-shadow:0 1px 3px rgba(0,0,0,0.15); z-index:2; line-height:1.35; cursor:pointer;
 }
 .sum-tl-bubble.below::after, .sum-tl-bubble.above::after {
     content:''; position:absolute; left:50%; transform:translateX(-50%); border-width:6px 5px; border-style:solid; border-color:transparent;
 }
-.sum-tl-bubble.above { transform:translate(-50%,-100%); }
+.sum-tl-bubble.above { transform:translate(-50%, calc(-100% - 14px)); }
+.sum-tl-bubble.below { transform:translate(-50%, 14px); }
 .sum-tl-bubble.above::after { bottom:-6px; border-top-color:#6f42c1; }
 .sum-tl-bubble.below::after { top:-6px; border-bottom-color:#6f42c1; }
 .sum-tl-bubble .sum-tl-date { font-size:10px; color:#888; }
-.sum-tl-range { display:flex; justify-content:space-between; font-size:11px; color:#888; margin-top:4px; }
+.sum-tl-range { display:flex; justify-content:space-between; font-size:11px; color:#888; margin:4px 56px 0; }
 
 @media print {
     #app-topbar { display: none !important; }
@@ -493,41 +496,6 @@
     <div class="concept-tab-wrap">
         <h2>📋 Summary<span class="concept-badge">컨셉 단계</span></h2>
         <div class="concept-section">
-            <h3>프로젝트 정보</h3>
-            <div class="concept-grid">
-                <label>고객사</label><input type="text" id="sum-customer" class="u-input" placeholder="예: LNW">
-                <label>프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
-                <label>프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
-                <label>고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
-                <label>인치</label><input type="text" id="sum-inch" class="u-input" placeholder="예: 32">
-                <label>KTK PN</label><input type="text" id="sum-ktk-pn" class="u-input" placeholder="예: 502574">
-                <label>KTK 모델명</label><input type="text" id="sum-ktk-model" class="u-input" placeholder="예: MVD&gt;KTS320DPS01,LNW">
-            </div>
-        </div>
-        <div class="concept-section">
-            <h3>프로젝트 멤버</h3>
-            <div class="concept-grid">
-                <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈">
-                <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인">
-                <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준">
-                <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석">
-                <label>Module 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍">
-                <label>TSP 담당자</label><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌">
-            </div>
-        </div>
-        <div class="concept-section">
-            <h3>프로젝트 개요</h3>
-            <div class="concept-grid">
-                <label>적용 목적</label><input type="text" id="sum-purpose" class="u-input" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발">
-                <label>연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
-                <label>목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
-            </div>
-        </div>
-        <div class="concept-section">
-            <h3>추진 배경 및 의의</h3>
-            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
-        </div>
-        <div class="concept-section">
             <h3>마일스톤 (참고용 — Gantt chart Level 0 데이터와 추후 연동 예정)</h3>
             <table class="concept-table">
                 <thead>
@@ -558,6 +526,43 @@
             <div id="sum-level0-timeline" style="min-height:90px;">
                 <div style="color:#999; padding:10px 0;">Gantt chart 데이터를 불러오면 0레벨 항목이 타임라인으로 표시됩니다.</div>
             </div>
+        </div>
+        <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
+            <div class="concept-section" style="flex:1 1 320px; margin-bottom:16px;">
+                <h3>프로젝트 정보</h3>
+                <div class="concept-grid">
+                    <label>고객사</label><input type="text" id="sum-customer" class="u-input" placeholder="예: LNW">
+                    <label>프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
+                    <label>프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
+                    <label>고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
+                    <label>인치</label><input type="text" id="sum-inch" class="u-input" placeholder="예: 32">
+                    <label>KTK PN</label><input type="text" id="sum-ktk-pn" class="u-input" placeholder="예: 502574">
+                    <label>KTK 모델명</label><input type="text" id="sum-ktk-model" class="u-input" placeholder="예: MVD&gt;KTS320DPS01,LNW">
+                </div>
+            </div>
+            <div class="concept-section" style="flex:1 1 320px; margin-bottom:16px;">
+                <h3>프로젝트 멤버</h3>
+                <div class="concept-grid">
+                    <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈">
+                    <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인">
+                    <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준">
+                    <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석">
+                    <label>Module 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍">
+                    <label>TSP 담당자</label><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌">
+                </div>
+            </div>
+        </div>
+        <div class="concept-section">
+            <h3>프로젝트 개요</h3>
+            <div class="concept-grid">
+                <label>적용 목적</label><input type="text" id="sum-purpose" class="u-input" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발">
+                <label>연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
+                <label>목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
+            </div>
+        </div>
+        <div class="concept-section">
+            <h3>추진 배경 및 의의</h3>
+            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
         </div>
     </div>
 </div>
@@ -7135,17 +7140,26 @@ window.renderSummaryTimeline = function() {
         const pct = ((it.start - tl.minTs) / span) * 100;
         const isAbove = i % 2 === 0;
         const cls = isAbove ? 'above' : 'below';
-        const topStyle = isAbove ? 'top:calc(50% - 14px);' : 'top:calc(50% + 14px);';
         return '<div class="sum-tl-dot" style="left:' + pct + '%;"></div>'
-            + '<div class="sum-tl-bubble ' + cls + '" style="left:' + pct + '%; ' + topStyle + '">'
+            + '<div class="sum-tl-bubble ' + cls + '" style="left:' + pct + '%;" onclick="window.sumTlBringToFront(this)">'
             + _sumTlEscHtml(it.name) + '<br><span class="sum-tl-date">' + _sumTlFormatDate(it.start) + '</span></div>';
     }).join('');
     container.innerHTML =
         '<div class="sum-tl-wrap">'
+        + '<div class="sum-tl-inner">'
         + '<div class="sum-tl-line-track"></div>'
         + parts
         + '</div>'
+        + '</div>'
         + '<div class="sum-tl-range"><span>' + _sumTlFormatDate(tl.minTs) + '</span><span>' + _sumTlFormatDate(tl.maxTs) + '</span></div>';
+};
+
+// 💡 말풍선이 겹쳐서 텍스트가 가려질 때, 클릭하면 해당 말풍선을 맨 앞으로 가져옴
+window.sumTlBringToFront = function(el) {
+    const wrap = el.closest('.sum-tl-wrap');
+    if (!wrap) return;
+    wrap.querySelectorAll('.sum-tl-bubble').forEach(function(b) { b.style.zIndex = '2'; });
+    el.style.zIndex = '50';
 };
 document.addEventListener('DOMContentLoaded', function() { if (window.renderSummaryTimeline) window.renderSummaryTimeline(); });
 
