@@ -104,11 +104,11 @@
     body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
     
     .btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
-    .action-btn { padding: 6px 12px; font-size: clamp(10px, 1vw, 13px); font-weight: bold; cursor: pointer; border: 2px solid #0056b3; background-color: #fff; color: #0056b3; border-radius: 6px; transition: 0.2s; height: clamp(24px, 2.5vw, 32px); box-sizing: border-box; display: flex; align-items: center; min-width: 120px; justify-content: center; }
-    .action-btn:hover { background-color: #0056b3; color: #fff; }
+    .action-btn { padding: 6px 12px; font-size: clamp(10px, 1vw, 13px); font-weight: bold; cursor: pointer; border: 1.5px solid #2c5f8a; background-color: #fff; color: #2c5f8a; border-radius: 6px; transition: 0.2s; height: clamp(24px, 2.5vw, 32px); box-sizing: border-box; display: flex; align-items: center; min-width: 120px; justify-content: center; }
+    .action-btn:hover { background-color: #2c5f8a; color: #fff; }
     #mail-btn:hover { background-color: #e67e22 !important; color: #fff !important; border-color: #e67e22 !important; }
     #excel-btn:hover { background-color: #28a745 !important; color: #fff !important; border-color: #28a745 !important; }
-    #print-btn:hover { background-color: #0056b3 !important; color: #fff !important; border-color: #0056b3 !important; }
+    #print-btn:hover { background-color: #2c5f8a !important; color: #fff !important; border-color: #2c5f8a !important; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .history-btn { border-color: #6f42c1; color: #6f42c1; }
     .history-btn:hover { background-color: #6f42c1; color: #fff; }
@@ -126,25 +126,24 @@
     
     .btn { padding: 3px 6px; margin: 2px; cursor: pointer; border: 1px solid #ccc; background-color: #fff; color: #333; border-radius: 12px; font-size: 11px; transition: 0.2s; }
     .btn:hover { background-color: #e2e6ea; }
-    .btn.active { background-color: #007bff; color: white; border-color: #007bff; font-weight: bold; box-shadow: 0 0 5px rgba(0,123,255,0.4); }
+    .btn.active { background-color: #2c5f8a; color: white; border-color: #2c5f8a; font-weight: bold; box-shadow: 0 0 5px rgba(44,95,138,0.4); }
     .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
     .btn.dimmed:hover { opacity: 0.8; background-color: #e2e6ea; color: #333; border: 1px solid #ccc; }
     .btn.active.dimmed { opacity: 1; border-style: solid; }
     .badge { background-color: #e9ecef; color: #333; padding: 2px 6px; border-radius: 10px; font-size: 11px; margin-left: 4px; font-weight: bold; }
-    .btn.active .badge { background-color: #fff; color: #007bff; }
+    .btn.active .badge { background-color: #fff; color: #2c5f8a; }
     
     #table-info {
         display: flex;
         align-items: center;
         font-size: 14px;
         font-weight: bold;
-        margin: 0;
+        margin: 0 0 10px 0;
         padding: 0 15px;
-        color: #0056b3;
-        background-color: #f8f9fa;
-        border: 1px solid #ccc;
-        border-bottom: none;
-        border-radius: 8px 8px 0 0;
+        color: #2c5f8a;
+        background-color: #fff;
+        border: 1px solid #e3e6ea;
+        border-radius: 6px;
         box-sizing: border-box;
         min-height: 50px;
         height: auto;
@@ -166,7 +165,7 @@
     .sub-parent-row-3 td { background: var(--c-l3-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l3-border); color: var(--c-l3-text); }
     .sub-parent-row-4 td { background: var(--c-l4-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l4-border); color: var(--c-l4-text); }
 
-    .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: scroll; border: 1px solid #ccc; border-radius: 0 0 8px 8px; position: relative; }
+    .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: scroll; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
     #file-status { font-weight: bold; color: #fff; font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 16px; }
     #print-header { display: none; }
@@ -230,7 +229,7 @@
     /* 필터 라벨 버튼화 스타일 */
     .filter-label { cursor: pointer; transition: 0.2s; user-select: none; border: 1px solid transparent; }
     .filter-label:hover { filter: brightness(0.92); }
-    .filter-label.active { background-color: #007bff !important; color: white !important; box-shadow: 0 0 5px rgba(0,123,255,0.4); border-color: #007bff; }
+    .filter-label.active { background-color: #2c5f8a !important; color: white !important; box-shadow: 0 0 5px rgba(44,95,138,0.4); border-color: #2c5f8a; }
 
     /* 현재 작업 중인 행 하이라이트(강조) 스타일 */
     tr.highlighted-row td {
@@ -420,6 +419,8 @@
 }
 
 #drop-zone:has(#dynamic-filters:empty) { display: none; }
+#dynamic-filters:empty { display: none !important; padding: 0 !important; border: none !important; margin: 0 !important; }
+
 
 </style>
 </head>
@@ -458,8 +459,6 @@
 
 <div id="app-main">
 <div id="tab-gantt" class="tab-panel active">
-<div id="dynamic-filters"></div>
-
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
     <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
@@ -476,9 +475,11 @@
 
         <div class="btn-group">
             <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
-            <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#0056b3; color:#0056b3;">🖨️ 인쇄 (PDF)</button>
+            <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
+
+    <div id="dynamic-filters"></div>
 
     <div id="print-header"><h2 id="print-title"></h2><div id="print-date"></div></div>
 
@@ -4460,7 +4461,12 @@ window.insertMailTask = function() {
         flex-wrap: wrap !important;
         gap: 10px 6px !important; /* 버튼들의 상하 간격 10px, 좌우 간격 6px 지정 */
         align-items: center !important;
-        margin-top: 5px !important;
+        margin: 0 0 10px 0 !important;
+        background: #fff !important;
+        border: 1px solid #e3e6ea !important;
+        border-radius: 6px !important;
+        padding: 10px 15px !important;
+        box-sizing: border-box !important;
     }
 
     /* 기존에 강제로 줄을 나누고 있던 칸막이 상자들을 해제하여 버튼들이 빈 공간으로 이어 흐르게 만듭니다 */
@@ -6614,10 +6620,10 @@ async function msCallGemini(apiKey, parsed) {
         const container = document.getElementById('weekly-report-page');
         if (!container) return;
 
-        const SKY_C = '#19C3D6', SKY_TINT = '#D8F5F9', BORDER_C = '#999';
+        const SKY_C = '#2c5f8a', SKY_TINT = '#eef3f7', BORDER_C = '#e3e6ea';
 
         container.innerHTML = `
-                <div style="background:${SKY_C}; color:white; border-radius:8px 8px 0 0; padding:14px 22px; display:flex; align-items:center; justify-content:space-between;">
+                <div style="background:${SKY_C}; color:white; border-radius:6px 6px 0 0; padding:14px 22px; display:flex; align-items:center; justify-content:space-between;">
                     <span style="font-size:16px; font-weight:bold;">📅 주간 업무 보고</span>
                     <div style="display:flex; gap:10px; align-items:center;">
                         <label style="font-size:12px; color:#fff; display:flex; align-items:center; gap:4px;">
@@ -6628,16 +6634,16 @@ async function msCallGemini(apiKey, parsed) {
                     </div>
                 </div>
 
-                <div style="padding:10px 22px; border:1px solid #eee; border-top:none; display:flex; justify-content:center; align-items:center; gap:14px; background:#fafafa;">
+                <div style="padding:10px 22px; border:1px solid ${BORDER_C}; border-top:none; display:flex; justify-content:center; align-items:center; gap:14px; background:#fafafa;">
                     <button onclick="window.wrShiftWeek(-1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">◀ 이전주</button>
                     <div style="font-size:13px; font-weight:bold; color:#333;">기준주: ${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)</div>
                     <button onclick="window.wrShiftWeek(1)" style="padding:5px 12px; border:1px solid #ccc; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">다음주 ▶</button>
-                    <button onclick="window.wrShiftWeek(0)" style="padding:5px 12px; border:1px solid #19C3D6; color:#19C3D6; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">오늘</button>
+                    <button onclick="window.wrShiftWeek(0)" style="padding:5px 12px; border:1px solid ${SKY_C}; color:${SKY_C}; background:#fff; border-radius:5px; cursor:pointer; font-size:13px;">오늘</button>
                 </div>
 
                 <!-- 프로젝트 정보 패널 -->
-                <div style="padding:10px 22px; border:1px solid #eee; border-top:none; background:#fff;">
-                    <div onclick="window.wrToggleMetaPanel()" style="cursor:pointer; font-size:12px; color:#19C3D6; font-weight:bold; display:flex; align-items:center; gap:4px;">
+                <div style="padding:10px 22px; border:1px solid ${BORDER_C}; border-top:none; background:#fff;">
+                    <div onclick="window.wrToggleMetaPanel()" style="cursor:pointer; font-size:12px; color:${SKY_C}; font-weight:bold; display:flex; align-items:center; gap:4px;">
                         <span id="wr-meta-toggle-icon">▶</span> 프로젝트 정보
                     </div>
                     <div id="wr-meta-panel" style="display:none; margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:8px;">
@@ -6659,25 +6665,25 @@ async function msCallGemini(apiKey, parsed) {
                     </div>
                 </div>
 
-                <div style="padding:20px 22px; border:1px solid #eee; border-top:none; border-radius:0 0 8px 8px; background:#fff;">
+                <div style="padding:20px 22px; border:1px solid ${BORDER_C}; border-top:none; border-radius:0 0 6px 6px; background:#fff;">
                     <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">개발 진척 현황</div>
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">개발 진척 현황</div>
                         <div style="padding:12px;">${wrRenderTimeline()}</div>
                     </div>
 
                     <div style="display:flex; gap:10px; margin-bottom:14px;">
                         <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">주요 실적 (${data.thisWeekNo}W)</div>
+                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">주요 실적 (${data.thisWeekNo}W)</div>
                             <div style="padding:12px;">${wrRenderEditableList(data.thisList)}</div>
                         </div>
                         <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">추진 계획 (${data.nextWeekNo}W)</div>
+                            <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">추진 계획 (${data.nextWeekNo}W)</div>
                             <div style="padding:12px;">${wrRenderEditableList(data.nextList)}</div>
                         </div>
                     </div>
 
                     <div style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px;">문제점 및 Issue</div>
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:14px; color:#2c5f8a;">문제점 및 Issue</div>
                         <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                     </div>
                 </div>`;
