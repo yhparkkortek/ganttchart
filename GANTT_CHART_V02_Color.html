@@ -689,7 +689,7 @@ ${mailText}`;
     var filterColumns = []; 
     var currentFilters = {}; 
     var existingDevStages = [];
-    var colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
+    var colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, alarm: -1 };
 
     window.currentDriveFileId = null;
     window.currentUserName = "비로그인 (로컬)"; 
@@ -1455,7 +1455,9 @@ ${mailText}`;
                 let data = new Uint8Array(e.target.result); let workbook;
                 try { workbook = XLSX.read(data, {type: 'array', cellStyles: true, cellHTML: true}); } catch (readErr) { workbook = XLSX.read(data, {type: 'array'}); }
                 
-                let firstSheetName = workbook.SheetNames[0]; let worksheet = workbook.Sheets[firstSheetName];
+                // 수정코드
+                let firstSheetName = workbook.SheetNames.find(n => n.trim() === "GanttChart") || workbook.SheetNames[0];
+                let worksheet = workbook.Sheets[firstSheetName];
                 let jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: true});
                 
                 let historySheetName = workbook.SheetNames.find(n => n.includes("수정이력"));
@@ -1498,6 +1500,7 @@ ${mailText}`;
                             else if(str.includes("업무내용") || str.includes("요청내용") || str.includes("업무상세내용") || str.includes("상세내용")) colIdx.content = idx;
                             else if(str.includes("답변") || str.includes("대응내용") || str.includes("대응")) colIdx.answer = idx;
                             else if(str.includes("현황")) colIdx.chart = idx;
+                            else if(str === "알림" || str.includes("알림여부")) colIdx.alarm = idx;
                         });
                         
                         filterColumns = []; let orderedNames = ['LEVEL(WBS)', '개발단계', '업무상태'];
@@ -1542,8 +1545,9 @@ ${mailText}`;
                         let name = ""; if (row._level === 0) name = origD0; if (row._level === 1) name = origD1; if (row._level === 2) name = origD2; if (row._level === 3) name = origD3; if (row._level === 4) name = origD4;
                         let contentStr = colIdx.content !== -1 ? (row[colIdx.content] || "").toString() : "";
                         row._isParallel = name.includes('*') || name.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
+                        row._알림 = colIdx.alarm !== -1 ? (String(row[colIdx.alarm] || '').trim().toUpperCase() === 'Y') : false;
 
-                        globalData.push(row); 
+                        globalData.push(row);
                     }
                 }
                     filesProcessed++;
@@ -2731,8 +2735,10 @@ ${mailText}`;
 
     function exportToExcel() {
         if (globalData.length <= 1) { alert("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요."); return; }
-        let exportData = []; let header = [...globalData[0]]; exportData.push(header);
-        let rowNumCounter = 1;
+            let exportData = []; let header = [...globalData[0]];
+                const alarmColIndex = header.length; header.push('알림');
+                exportData.push(header);
+                let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
             let row = globalData[i]; if (!row || row._isExplicitZero) continue; 
             let exportRow = []; let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
@@ -2757,6 +2763,7 @@ ${mailText}`;
                 else if (c === colIdx.dur1) { cellVal = (row._level === 1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
                 else if (c === colIdx.dur2) { cellVal = (row._level === 2) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
                 else if (c === colIdx.dur3) { cellVal = (row._level === 3) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === alarmColIndex) { cellVal = row._알림 ? 'Y' : ''; }
                 exportRow.push(cellVal);
             }
             exportData.push(exportRow); rowNumCounter++;
