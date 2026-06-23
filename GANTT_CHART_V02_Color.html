@@ -6843,11 +6843,11 @@ async function msCallGemini(apiKey, parsed) {
             if (metaCustomer && metaModel && metaInch) break;
         }
         const projTitle = [metaCustomer, metaModel, metaInch].filter(Boolean).join(' > ') || '주간 업무 보고';
-        slide.addText(projTitle, { x: 0.4, y: 0.2, w: 7.5, h: 0.55, fontSize: 30, bold: true, color: SKY_DARK, fontFace: 'Malgun Gothic' });
+        slide.addText(projTitle, { x: 0.4, y: 0.2, w: 7.5, h: 0.55, fontSize: 25, bold: true, color: SKY, fontFace: 'Malgun Gothic' });
 
         // ── 💡 우측 상단 H/W, 기구, F/W 담당자 표 (Summary 연동) ──
         const pm = window.projectMeta || {};
-        const metaHw = pm.HW담당자 || '-';
+        const metaHw = pm.프로젝트담당자 || '-';
         const metaMech = pm.기구담당자 || '-';
         const metaFw = pm.FW담당자 || '-';
 
@@ -6864,15 +6864,14 @@ async function msCallGemini(apiKey, parsed) {
         // ── 💡 모델 정보 줄 (프로젝트 코드, 프로젝트명 추가) ────────
         const pCode = pm.프로젝트코드 || '-';
         const pName = pm.프로젝트명 || projTitle;
+        const ktkModelName = pm.KTK모델명 || '-';
 
         slide.addTable(
-            [[{ text: '프로젝트코드', options: { fontSize: 10, color: '000000', bold: true, fill: { color: C.tint }, align: 'center' } },
-              { text: pCode, options: { fontSize: 10, color: '000000', align: 'center' } },
-              { text: '프로젝트명(칭)', options: { fontSize: 10, color: '000000', bold: true, fill: { color: C.tint }, align: 'center' } },
-              { text: pName, options: { fontSize: 10, color: '000000', align: 'center' } }]],
-            { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.5, 2.5, 1.5, 7.0], valign: 'middle' }
+            [[{ text: pCode, options: { fontSize: 14, color: '000000', bold: true, fill: { color: '#FFFAF0' }, align: 'center' } },
+              { text: pName, options: { fontSize: 14, color: '000000', bold: true, align: 'left' } },
+              { text: ktkModelName, options: { fontSize: 14, color: '000000', bold: true, align: 'left' } }]],
+            { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.5, 5, 6], valign: 'middle' }
         );
-
         // ── 💡 좌: 개발목표 일정 및 MC (Summary/MC 탭 연동) ──────
         const getMsDate = (stage) => {
             // HTML 화면 상의 마일스톤 입력칸에서 값을 읽어옵니다. (예: 2026-05-29 -> 26.05.29)
@@ -6896,7 +6895,7 @@ async function msCallGemini(apiKey, parsed) {
         }
         const targetMc = totalMpCost > 0 ? '$' + totalMpCost.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
 
-        const boardY = 1.0 + 0.4 + GAP, boardH = 1.8 + 0.32;
+        const boardY = 1.0 + 0.4 + GAP, boardH = 1.4 + 0.32;
         const goalX = 0.4, goalW = 4.0;
         const tlX = goalX + goalW + GAP, tlW = 12.5 - goalW - GAP;
 
@@ -6905,8 +6904,8 @@ async function msCallGemini(apiKey, parsed) {
         const goalColW = [labelColW, smallColW, dataColW, dataColW, dataColW, dataColW];
 
         const titleOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
-        const ghOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 8, align: 'center', valign: 'middle' };
-        const glOpt = { bold: true, fill: { color: 'F2F2F2' }, color: '000000', fontSize: 6.5, align: 'center', valign: 'middle' };
+        const ghOpt = { bold: true, color: '000000', fontSize: 8, align: 'center', valign: 'middle' };
+        const glOpt = { bold: true, color: '000000', fontSize: 6.5, align: 'center', valign: 'middle' };
 
         const titleRowH = 0.32, headRowH = 0.28;
         const dataRowH = (boardH - titleRowH - headRowH) / 4; 
