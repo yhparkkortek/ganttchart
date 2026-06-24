@@ -396,11 +396,21 @@
 .concept-add-row-btn {
     margin-top:8px; padding:6px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;
 }
-/* 행 관리(이동/추가/삭제) 버튼 - Gantt와 통일된 색상 */
-.row-act-cell { text-align:center; white-space:nowrap; }
-.row-act-btn { display:inline-block; width:20px; cursor:pointer; font-size:15px; color:#0056b3; user-select:none; }
-.row-act-btn.row-act-add { color:#28a745; }
-.row-act-btn.row-act-del { color:#e03131; }
+/* Brief SPEC / M.C Table: NO 클릭 팝업 + 묶음 선택 */
+.bm-no { cursor:pointer; text-align:center; user-select:none; }
+.bm-no:hover { background-color:#e9ecef; }
+tr.bm-selected > td { background-color:#fff3cd !important; }
+.bm-row-popup {
+    position:absolute; z-index:99999; display:none; background:#fff;
+    border:1px solid #ccc; border-radius:8px; padding:6px; box-shadow:0 4px 14px rgba(0,0,0,0.18);
+}
+.bm-pop-btn {
+    width:34px; height:32px; display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:22px; color:#0056b3; border-radius:4px;
+}
+.bm-pop-btn:hover { background:#f1f3f5; }
+.bm-pop-btn.bm-pop-add { border:2px solid #28a745; background:#e8f5e9; color:#28a745; font-size:18px; font-weight:bold; }
+.bm-pop-btn.bm-pop-del { border:2px solid #e03131; background:#fff5f5; color:#e03131; font-size:18px; font-weight:bold; }
 /* 💡 첨부 엑셀에서 회색으로 표시된 "사용자 작성 구간"과 동일하게 표시 (TYPE/ITEM/구조 열은 표시하지 않음) */
 .concept-grid input.u-input, .concept-grid textarea.u-input {
     background:#eceff1;
@@ -699,12 +709,12 @@
         </div>
         <div class="concept-section">
             <table class="concept-table">
-                <thead><tr><th style="width:40px;">NO</th><th style="width:160px;">TYPE</th><th style="width:120px;">구분</th><th>Description</th><th style="width:220px;">Note</th></tr></thead>
+                <thead><tr><th style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th><th style="width:160px;">TYPE</th><th style="width:120px;">구분</th><th>Description</th><th style="width:220px;">Note</th></tr></thead>
                 <tbody id="briefspec-body">
-                    <tr><td class="bs-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc" value="Proto A"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bs-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bs-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bs-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc" value="Proto A"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
             <button class="concept-add-row-btn" onclick="window.addBriefSpecRow && window.addBriefSpecRow()">+ 행 추가</button>
@@ -713,7 +723,7 @@
 </div>
 
 <div id="tab-mctable" class="tab-panel">
-    <div class="concept-tab-wrap" style="max-width:1500px;">
+    <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>💰 M.C Table (견적)<span class="concept-badge">컨셉 단계</span></h2>
             <div class="btn-group"></div>
@@ -730,6 +740,7 @@
             <table class="concept-table" style="min-width:1300px;">
                 <thead>
                     <tr>
+                        <th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
                         <th rowspan="2" style="width:100px;">TYPE</th>
                         <th rowspan="2" style="width:160px;">ITEM</th>
                         <th rowspan="2" style="width:140px;">GROUP</th>
@@ -747,7 +758,7 @@
                     </tr>
                 </thead>
                 <tbody id="mctable-body">
-                    <tr><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" class="u-input" data-field="protoCost"></td><td><input type="text" class="u-input" data-field="protoNre"></td><td><input type="text" class="u-input" data-field="mpCost"></td><td><input type="text" class="u-input" data-field="mpNre"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no"></td><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" class="u-input" data-field="protoCost"></td><td><input type="text" class="u-input" data-field="protoNre"></td><td><input type="text" class="u-input" data-field="mpCost"></td><td><input type="text" class="u-input" data-field="mpNre"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
             </div>
@@ -7358,9 +7369,9 @@ function _readRowsFromTbody(tbodyId) {
     if (!tbody) return [];
     const rows = [];
     tbody.querySelectorAll('tr').forEach(function(tr) {
-        const firstCell = tr.cells[0];
-        const catInput = firstCell ? firstCell.querySelector('input') : null;
-        const category = catInput ? catInput.value : (firstCell ? firstCell.textContent.trim() : '');
+        if (tr.classList.contains('mc-summary-row')) return; // 합계/TOTAL 행은 저장 데이터에서 제외
+        const catInput = tr.querySelector('td:not(.bm-no) input');
+        const category = catInput ? catInput.value : '';
         const rowObj = { category: category };
         tr.querySelectorAll('input[data-field]').forEach(function(inp) { rowObj[inp.dataset.field] = inp.value; });
         rows.push(rowObj);
@@ -7451,13 +7462,16 @@ window.populateTabData = function() {
     // Brief SPEC 탭 렌더링
     if (td.briefSpec && td.briefSpec.length) {
         const tbody = document.getElementById('briefspec-body');
-        if (tbody) tbody.innerHTML = td.briefSpec.map(function(r, i) {
-            return '<tr><td class="bs-no">' + (i + 1) + '</td>'
-                + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
-                + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
-                + '<td><input type="text" class="u-input" data-field="desc" value="' + _escTabVal(r.desc) + '"></td>'
-                + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
-        }).join('');
+        if (tbody) {
+            tbody.innerHTML = td.briefSpec.map(function(r) {
+                return '<tr><td class="bm-no"></td>'
+                    + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
+                    + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="desc" value="' + _escTabVal(r.desc) + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
+            }).join('');
+            if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
+        }
     }
     
     // 💰 M.C Table 탭 렌더링
@@ -7505,7 +7519,7 @@ window.populateTabData = function() {
                 const bgColor = isTotal ? '#e3f2fd' : '#fff9c4';
                 
                 return '<tr class="mc-summary-row"' + rowStyle + ' style="background-color:' + bgColor + '; font-weight:bold;">'
-                    + '<td colspan="5" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>'
+                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>'
                     + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCur(sums.protoCost) + '" readonly></td>'
                     + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCur(sums.protoNre) + '" readonly></td>'
                     + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCur(sums.mpCost) + '" readonly></td>'
@@ -7562,6 +7576,7 @@ window.populateTabData = function() {
                 }
 
                 htmlChunks.push('<tr' + rowStyle + '>'
+                    + '<td class="bm-no"></td>'
                     + '<td class="mc-cat" style="border-bottom: 1px solid #eee;">'
                     + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
                     + '<input type="hidden" data-real-type value="' + _escTabVal(rowType) + '">'
@@ -7583,6 +7598,7 @@ window.populateTabData = function() {
             htmlChunks.push(renderSubtotalRow('TOTAL', grandtotal, true));
 
             tbody.innerHTML = htmlChunks.join('');
+            if (window.bmSetupAllRows) window.bmSetupAllRows('mc');
 
             // 💡 열 너비 조정 및 정렬 속성 스크립트로 제어
             setTimeout(function() {
@@ -7591,7 +7607,7 @@ window.populateTabData = function() {
 
                 // 스타일 강제 적용하여 정확한 너비 배분
                 table.style.tableLayout = 'fixed';
-                table.style.width = '1600px';
+                table.style.width = '100%';
 
                 const theadRows = table.querySelectorAll('thead tr');
                 if(theadRows.length >= 2) {
@@ -7605,12 +7621,13 @@ window.populateTabData = function() {
                     });
                     
                     // 상위 텍스트 열 너비 넓히기
-                    if(tr1.children[0]) tr1.children[0].style.width = '80px';  // TYPE
-                    if(tr1.children[1]) tr1.children[1].style.width = '180px';  // ITEM
-                    if(tr1.children[2]) tr1.children[2].style.width = '140px';  // GROUP
-                    if(tr1.children[3]) tr1.children[3].style.width = '70px';  // P/N
-                    if(tr1.children[4]) tr1.children[4].style.width = '300px';  // Specification
-                    if(tr1.children[7]) tr1.children[7].style.width = '400px';  // Note
+                    if(tr1.children[0]) tr1.children[0].style.width = '40px';  // NO
+                    if(tr1.children[1]) tr1.children[1].style.width = '80px';  // TYPE
+                    if(tr1.children[2]) tr1.children[2].style.width = '180px';  // ITEM
+                    if(tr1.children[3]) tr1.children[3].style.width = '140px';  // GROUP
+                    if(tr1.children[4]) tr1.children[4].style.width = '70px';  // P/N
+                    if(tr1.children[5]) tr1.children[5].style.width = '300px';  // Specification
+                    if(tr1.children[8]) tr1.children[8].style.width = '400px';  // Note
                     
                     // 하위 가격 금액 열 너비 좁히기
                     if(tr2.children[0]) tr2.children[0].style.width = '70px';   // PROTO Cost
@@ -7628,10 +7645,10 @@ window.populateTabData = function() {
                             if (hide[8]) { let td = tr.querySelector('td:nth-child(4)'); if(td) td.style.display = 'none'; }
                             if (hide[9]) { let td = tr.querySelector('td:nth-child(5)'); if(td) td.style.display = 'none'; }
                         } else {
-                            if (hide[6]) { let td = tr.querySelector('td:nth-child(6)'); if(td) td.style.display = 'none'; }
-                            if (hide[7]) { let td = tr.querySelector('td:nth-child(7)'); if(td) td.style.display = 'none'; }
-                            if (hide[8]) { let td = tr.querySelector('td:nth-child(8)'); if(td) td.style.display = 'none'; }
-                            if (hide[9]) { let td = tr.querySelector('td:nth-child(9)'); if(td) td.style.display = 'none'; }
+                            if (hide[6]) { let td = tr.querySelector('td:nth-child(7)'); if(td) td.style.display = 'none'; }
+                            if (hide[7]) { let td = tr.querySelector('td:nth-child(8)'); if(td) td.style.display = 'none'; }
+                            if (hide[8]) { let td = tr.querySelector('td:nth-child(9)'); if(td) td.style.display = 'none'; }
+                            if (hide[9]) { let td = tr.querySelector('td:nth-child(10)'); if(td) td.style.display = 'none'; }
                         }
                     });
 
@@ -7662,37 +7679,245 @@ window.populateTabData = function() {
     }
 };
 
+// ============================================================
+// Brief SPEC / M.C Table 공용 — NO 클릭 팝업, 묶음 선택, 이동/추가/삭제
+// ============================================================
+window._bmSelected = { bs: new Set(), mc: new Set() };
+window._bmAnchor   = { bs: null, mc: null };
+
+const BM_CONF = {
+    bs: {
+        tbodyId: 'briefspec-body',
+        isSkip: function() { return false; },
+        rowHtml: function() {
+            return '<td class="bm-no"></td>'
+                + '<td><input type="text" data-field="type"></td>'
+                + '<td><input type="text" data-field="sub"></td>'
+                + '<td><input type="text" class="u-input" data-field="desc"></td>'
+                + '<td><input type="text" class="u-input" data-field="note"></td>';
+        }
+    },
+    mc: {
+        tbodyId: 'mctable-body',
+        isSkip: function(tr) { return tr.classList.contains('mc-summary-row'); },
+        rowHtml: function() {
+            return '<td class="bm-no"></td>'
+                + '<td class="mc-cat"><input type="text" data-field="type" style="border:none; width:100%; font-size:12.5px;"></td>'
+                + '<td><input type="text" data-field="item"></td>'
+                + '<td><input type="text" data-field="group"></td>'
+                + '<td><input type="text" data-field="pn"></td>'
+                + '<td><input type="text" data-field="spec"></td>'
+                + '<td><input type="text" class="u-input" data-field="protoCost"></td>'
+                + '<td><input type="text" class="u-input" data-field="protoNre"></td>'
+                + '<td><input type="text" class="u-input" data-field="mpCost"></td>'
+                + '<td><input type="text" class="u-input" data-field="mpNre"></td>'
+                + '<td><input type="text" class="u-input" data-field="note"></td>';
+        }
+    }
+};
+
+function bmDataRows(key) {
+    const tbody = document.getElementById(BM_CONF[key].tbodyId);
+    if (!tbody) return [];
+    return Array.prototype.filter.call(tbody.children, function(tr) { return !BM_CONF[key].isSkip(tr); });
+}
+
+// 행 전체에 번호 매기기 + NO 클릭 이벤트 연결 (초기 로드, 데이터 복원, 행 변경 후 항상 호출)
+window.bmSetupAllRows = function(key) {
+    bmDataRows(key).forEach(function(tr, i) {
+        const noTd = tr.querySelector('.bm-no');
+        if (!noTd) return;
+        noTd.textContent = i + 1;
+        noTd.onclick = function(ev) { window.bmOnNoClick(key, tr, ev); };
+    });
+};
+
+function bmPaintSelection(key) {
+    const tbody = document.getElementById(BM_CONF[key].tbodyId);
+    if (!tbody) return;
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr.bm-selected'), function(tr) { tr.classList.remove('bm-selected'); });
+    window._bmSelected[key].forEach(function(tr) { if (tr.parentNode) tr.classList.add('bm-selected'); });
+}
+
+function bmClearSelection(key) {
+    const tbody = document.getElementById(BM_CONF[key].tbodyId);
+    if (tbody) Array.prototype.forEach.call(tbody.querySelectorAll('tr.bm-selected'), function(tr) { tr.classList.remove('bm-selected'); });
+    window._bmSelected[key].clear();
+    window._bmAnchor[key] = null;
+}
+
+function bmClosePopup() {
+    const popup = document.getElementById('bm-row-popup');
+    if (popup) popup.style.display = 'none';
+}
+
+window.bmOnNoClick = function(key, tr, ev) {
+    if (window.getSelection) window.getSelection().removeAllRanges();
+    const sel = window._bmSelected[key];
+    const rows = bmDataRows(key);
+
+    if (ev && ev.shiftKey && window._bmAnchor[key]) {
+        const a = rows.indexOf(window._bmAnchor[key]);
+        const b = rows.indexOf(tr);
+        sel.clear();
+        if (a !== -1 && b !== -1) {
+            const lo = Math.min(a, b), hi = Math.max(a, b);
+            for (let k = lo; k <= hi; k++) sel.add(rows[k]);
+        } else { sel.add(tr); }
+        bmPaintSelection(key);
+        bmOpenPopup(key, tr);
+        return;
+    }
+    if (ev && (ev.ctrlKey || ev.metaKey)) {
+        if (sel.has(tr)) sel.delete(tr); else sel.add(tr);
+        window._bmAnchor[key] = tr;
+        bmPaintSelection(key);
+        if (sel.size > 0) bmOpenPopup(key, tr); else bmClosePopup();
+        return;
+    }
+    // 같은 행 한 개만 선택된 상태에서 다시 클릭하면 닫기
+    const popup = document.getElementById('bm-row-popup');
+    if (popup && popup.style.display === 'block' && popup.dataset.key === key && sel.size === 1 && sel.has(tr)) {
+        bmClosePopup();
+        bmClearSelection(key);
+        return;
+    }
+    sel.clear(); sel.add(tr);
+    window._bmAnchor[key] = tr;
+    bmPaintSelection(key);
+    bmOpenPopup(key, tr);
+};
+
+function bmOpenPopup(key, refTr) {
+    let popup = document.getElementById('bm-row-popup');
+    if (!popup) {
+        popup = document.createElement('div');
+        popup.id = 'bm-row-popup';
+        popup.className = 'bm-row-popup';
+        popup.innerHTML =
+            '<div style="display:grid; grid-template-columns:repeat(2,34px); grid-template-rows:repeat(2,32px); gap:4px;">'
+            + '<span id="bm-up"  class="bm-pop-btn" title="위로 이동(묶음)">🔼</span>'
+            + '<span id="bm-dn"  class="bm-pop-btn" title="아래로 이동(묶음)">🔽</span>'
+            + '<span id="bm-add" class="bm-pop-btn bm-pop-add" title="행 추가">➕</span>'
+            + '<span id="bm-del" class="bm-pop-btn bm-pop-del" title="행 삭제">➖</span>'
+            + '</div>';
+        document.body.appendChild(popup);
+        document.addEventListener('click', function(e) {
+            if (!popup.contains(e.target) && !e.target.closest('.bm-no')) {
+                bmClosePopup();
+                bmClearSelection('bs');
+                bmClearSelection('mc');
+            }
+        });
+    }
+    popup.dataset.key = key;
+
+    const noTd = refTr.querySelector('.bm-no');
+    const rect = noTd.getBoundingClientRect();
+    popup.style.display = 'block';
+    const popupW = popup.offsetWidth, popupH = popup.offsetHeight;
+    let top = rect.top + window.scrollY;
+    let left = rect.right + window.scrollX + 5;
+    if (left + popupW > window.innerWidth) left = rect.left + window.scrollX - popupW - 5;
+    if (top + popupH > window.innerHeight + window.scrollY) top = rect.bottom + window.scrollY - popupH;
+    popup.style.top = top + 'px';
+    popup.style.left = left + 'px';
+
+    const actions = {
+        'bm-up':  function() { bmMoveSelected(key, -1); },
+        'bm-dn':  function() { bmMoveSelected(key, 1); },
+        'bm-add': function() { bmAddAfter(key, refTr); },
+        'bm-del': function() { bmDeleteSelected(key); }
+    };
+    Object.keys(actions).forEach(function(id) {
+        const btn = document.getElementById(id);
+        const nb = btn.cloneNode(true);
+        btn.parentNode.replaceChild(nb, btn);
+        document.getElementById(id).addEventListener('click', actions[id]);
+    });
+}
+
+// 선택된 행들을 묶음으로 위/아래 이동 (순서 유지)
+function bmMoveSelected(key, dir) {
+    const sel = window._bmSelected[key];
+    if (!sel || sel.size === 0) return;
+    const tbody = document.getElementById(BM_CONF[key].tbodyId);
+    const rows = bmDataRows(key);
+    const selArr = rows.filter(function(tr) { return sel.has(tr); });
+    if (selArr.length === 0) return;
+    const selSet = new Set(selArr);
+    let target = null;
+
+    if (dir === -1) {
+        const firstIdx = rows.indexOf(selArr[0]);
+        for (let i = firstIdx - 1; i >= 0; i--) { if (!selSet.has(rows[i])) { target = rows[i]; break; } }
+        if (!target) return;
+        selArr.forEach(function(tr) { tbody.insertBefore(tr, target); });
+    } else {
+        const lastIdx = rows.indexOf(selArr[selArr.length - 1]);
+        for (let j = lastIdx + 1; j < rows.length; j++) { if (!selSet.has(rows[j])) { target = rows[j]; break; } }
+        if (!target) return;
+        let anchor = target;
+        selArr.forEach(function(tr) { anchor.after(tr); anchor = tr; });
+    }
+    window.bmSetupAllRows(key);
+    bmPaintSelection(key);
+    bmOpenPopup(key, selArr[0]);
+}
+
+function bmAddAfter(key, refTr) {
+    const sel = window._bmSelected[key];
+    const rows = bmDataRows(key);
+    let basis = refTr;
+    if (sel && sel.size > 1) {
+        const selArr = rows.filter(function(tr) { return sel.has(tr); });
+        basis = selArr[selArr.length - 1];
+    }
+    const tr = document.createElement('tr');
+    tr.innerHTML = BM_CONF[key].rowHtml();
+    basis.after(tr);
+    sel.clear(); sel.add(tr);
+    window._bmAnchor[key] = tr;
+    window.bmSetupAllRows(key);
+    bmPaintSelection(key);
+    bmOpenPopup(key, tr);
+}
+
+function bmDeleteSelected(key) {
+    const sel = window._bmSelected[key];
+    if (!sel || sel.size === 0) return;
+    const rows = bmDataRows(key);
+    if (rows.length - sel.size < 1) { alert('최소 1개 행은 있어야 합니다.'); return; }
+    if (!confirm('선택한 ' + sel.size + '개 행을 삭제하시겠습니까?')) return;
+    sel.forEach(function(tr) { if (tr.parentNode) tr.remove(); });
+    sel.clear();
+    window._bmAnchor[key] = null;
+    window.bmSetupAllRows(key);
+    bmClosePopup();
+}
+
 window.addBriefSpecRow = function() {
     const tbody = document.getElementById('briefspec-body');
     if (!tbody) return;
-    const no = tbody.querySelectorAll('tr').length + 1;
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td class="bs-no">' + no + '</td>'
-        + '<td><input type="text" data-field="type"></td>'
-        + '<td><input type="text" data-field="sub"></td>'
-        + '<td><input type="text" class="u-input" data-field="desc"></td>'
-        + '<td><input type="text" class="u-input" data-field="note"></td>';
+    tr.innerHTML = BM_CONF.bs.rowHtml();
     tbody.appendChild(tr);
+    window.bmSetupAllRows('bs');
 };
 
 window.addMcTableRow = function() {
     const tbody = document.getElementById('mctable-body');
     if (!tbody) return;
     const tr = document.createElement('tr');
-    tr.innerHTML = '<td class="mc-cat"><input type="text" data-field="type" style="border:none; width:100%; font-size:12.5px;"></td>'
-        + '<td><input type="text" data-field="item"></td>'
-        + '<td><input type="text" data-field="group"></td>'
-        + '<td><input type="text" data-field="pn"></td>'
-        + '<td><input type="text" data-field="spec"></td>'
-        + '<td><input type="text" class="u-input" data-field="protoCost"></td>'
-        + '<td><input type="text" class="u-input" data-field="protoNre"></td>'
-        + '<td><input type="text" class="u-input" data-field="mpCost"></td>'
-        + '<td><input type="text" class="u-input" data-field="mpNre"></td>'
-        + '<td><input type="text" class="u-input" data-field="note"></td>';
+    tr.innerHTML = BM_CONF.mc.rowHtml();
     tbody.appendChild(tr);
+    window.bmSetupAllRows('mc');
 };
 
-document.addEventListener('DOMContentLoaded', function() { if (window.populateTabData) window.populateTabData(); });
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.populateTabData) window.populateTabData();
+    if (window.bmSetupAllRows) { window.bmSetupAllRows('bs'); window.bmSetupAllRows('mc'); }
+});
 </script>
 
 <script>
