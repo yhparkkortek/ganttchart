@@ -623,12 +623,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 </div> <!-- /#tab-gantt -->
 
 <div id="tab-summary" class="tab-panel">
-
-            <style>
-            #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
-            #sum-milestone-body td, #sum-milestone-body input { text-align: center !important; }
-            </style>
-
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Summary<span class="concept-badge">컨셉 단계</span></h2>
@@ -636,8 +630,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         </div>
         <div class="concept-section">
             <h3>마일스톤 (참고용 — Gantt chart Level 0 데이터와 추후 연동 예정)</h3>
-            <style>                
-                #sum-milestone-head th { text-align: center !important; }
+            <style>
+                #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #sum-milestone-body td, #sum-milestone-body input { text-align: center !important; }
             </style>
             <table class="concept-table">
@@ -730,6 +724,9 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             <div class="btn-group"></div>
         </div>
         <div class="concept-section">
+            <style>
+                #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
+            </style>
             <table class="concept-table">
                 <thead><tr><th style="width:4%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th><th style="width:12%;">TYPE</th><th style="width:9%;">구분</th><th style="width:20%;">Model A</th><th style="width:20%;">Model B</th><th style="width:20%;">Model C</th><th style="width:15%;">Note</th></tr></thead>
                 <tbody id="briefspec-body">
@@ -737,10 +734,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     <tr><td class="bm-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                     <tr><td class="bm-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                     <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                </tbody>
-                </tbody>text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bm-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
             <button class="concept-add-row-btn" onclick="window.addBriefSpecRow && window.addBriefSpecRow()">+ 행 추가</button>
@@ -751,7 +744,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 <div id="tab-mctable" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>💰 M.C Table<span class="concept-badge">컨셉 단계</span></h2>
+            <h2>💰 M.C Table (견적)<span class="concept-badge">컨셉 단계</span></h2>
             <div class="btn-group"></div>
         </div>
         <div class="concept-section">
@@ -7232,7 +7225,7 @@ function _parseSummarySheetFromWorkbook(workbook) {
         '추진 배경 및 의의': function(v) { sd.background = v; },
         '개발기간(일)': function(v) { sd.devDays = v; }
     };
-    const milestoneMap = { 'PROTO Start': '기획Start', 'PROTO End': '기획Finish', 'Proto DR': 'ProtoDR', 'ES Start': 'ESStart', 'ES End': 'ESEnd', 'DVR': 'DVR', 'PP Start': 'PPStart', 'PP End': 'PPEnd', 'PRA': 'PRA' };
+    const milestoneMap = { '기획 Start': '기획Start', 'PROTO Start': '기획Start', '기획 Finish': '기획Finish', 'PROTO End': '기획Finish', 'Proto DR': 'ProtoDR', 'ES Start': 'ESStart', 'ES End': 'ESEnd', 'DVR': 'DVR', 'PP Start': 'PPStart', 'PP End': 'PPEnd', 'PRA': 'PRA' };
     json.forEach(function(row) {
         if (!row || row.length === 0) return;
         const label = String(row[0] || '').trim();
@@ -7501,7 +7494,7 @@ window.populateTabData = function() {
                     + '<td><input type="text" class="u-input" data-field="modelC" value="' + _escTabVal(r.modelC) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
             }).join('');
-            window.bmSetupAllRows('bs');
+            if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
         }
     }
     
