@@ -728,7 +728,20 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                 #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
             </style>
             <table class="concept-table">
-                <thead><tr><th style="width:4%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th><th style="width:12%;">TYPE</th><th style="width:9%;">구분</th><th style="width:20%;">Model A</th><th style="width:20%;">Model B</th><th style="width:20%;">Model C</th><th style="width:15%;">Note</th></tr></thead>
+                <thead>
+                    <tr>
+                        <th rowspan="2" style="width:4%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
+                        <th rowspan="2" style="width:12%;">TYPE</th>
+                        <th rowspan="2" style="width:9%;">구분</th>
+                        <th colspan="3" style="width:60%;">Description</th>
+                        <th rowspan="2" style="width:15%;">Note</th>
+                    </tr>
+                    <tr>
+                        <th>Model A</th>
+                        <th>Model B</th>
+                        <th>Model C</th>
+                    </tr>
+                </thead>
                 <tbody id="briefspec-body">
                     <tr><td class="bm-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA" value="Proto A"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                     <tr><td class="bm-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
@@ -736,7 +749,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
-            <button class="concept-add-row-btn" onclick="window.addBriefSpecRow && window.addBriefSpecRow()">+ 행 추가</button>
+            <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)">🔽 펼치기 (숨은 행 보기)</button>
         </div>
     </div>
 </div>
@@ -781,7 +794,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                 </tbody>
             </table>
             </div>
-            <button class="concept-add-row-btn" onclick="window.addMcTableRow && window.addMcTableRow()">+ 행 추가</button>
+            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)">🔽 펼치기 (숨은 행 보기)</button>
             <p style="font-size:11.5px; color:#999; margin-top:10px;">※ 합계/금형비 등 세부 자동계산 로직은 추후 상세 작업에서 구현합니다.</p>
         </div>
     </div>
@@ -7486,7 +7499,10 @@ window.populateTabData = function() {
         if (tbody) {
             tbody.innerHTML = td.briefSpec.map(function(r) {
                 const modelA = r.modelA !== undefined ? r.modelA : (r.desc || ''); // 구버전 desc 호환
-                return '<tr><td class="bm-no"></td>'
+                // 💡 MC Table과 동일하게: Model A/B/C, Note가 모두 비어있으면 행 숨김 처리
+                const isRowEmpty = !modelA && !r.modelB && !r.modelC && !r.note;
+                const rowStyle = isRowEmpty ? ' style="display:none;" data-auto-hidden="1"' : '';
+                return '<tr' + rowStyle + '><td class="bm-no"></td>'
                     + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
                     + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="modelA" value="' + _escTabVal(modelA) + '"></td>'
@@ -7584,7 +7600,7 @@ window.populateTabData = function() {
                 let displayType = '';
                 
                 if (isRowEmpty) {
-                    rowStyle = ' style="display:none;"'; // 가격 없는 행 숨김 처리 강제
+                    rowStyle = ' style="display:none;" data-auto-hidden="1"'; // 가격 없는 행 숨김 처리 강제
                 } else {
                     // 유의미한 데이터가 노출될 때만 열 유지 플래그 활성화
                     if (pCost !== 0) hasProtoCost = true;
@@ -7757,6 +7773,20 @@ window.bmSetupAllRows = function(key) {
         if (tr.style.display !== 'none') { n++; noTd.textContent = n; }
         noTd.onclick = function(ev) { window.bmOnNoClick(key, tr, ev); };
     });
+};
+
+// "펼치기" 버튼: 자동으로 숨겨진(내용 없는) 행을 보이거나 다시 숨김
+window._bmExpanded = { bs: false, mc: false };
+window.bmToggleHidden = function(key, btnEl) {
+    const tbody = document.getElementById(BM_CONF[key].tbodyId);
+    if (!tbody) return;
+    const expand = !window._bmExpanded[key];
+    window._bmExpanded[key] = expand;
+    Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-auto-hidden="1"]'), function(tr) {
+        tr.style.display = expand ? '' : 'none';
+    });
+    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기 (숨은 행 보기)';
+    window.bmSetupAllRows(key);
 };
 
 function bmPaintSelection(key) {
