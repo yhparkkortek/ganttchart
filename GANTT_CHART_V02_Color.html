@@ -623,6 +623,12 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 </div> <!-- /#tab-gantt -->
 
 <div id="tab-summary" class="tab-panel">
+
+            <style>
+            #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
+            #sum-milestone-body td, #sum-milestone-body input { text-align: center !important; }
+            </style>
+
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Summary<span class="concept-badge">컨셉 단계</span></h2>
@@ -630,17 +636,26 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         </div>
         <div class="concept-section">
             <h3>마일스톤 (참고용 — Gantt chart Level 0 데이터와 추후 연동 예정)</h3>
-            <style>
+            <style>                
                 #sum-milestone-head th { text-align: center !important; }
                 #sum-milestone-body td, #sum-milestone-body input { text-align: center !important; }
             </style>
             <table class="concept-table">
                 <thead>
+                    <tr>
+                        <th colspan="3">PROTO</th>
+                        <th colspan="3">ES</th>
+                        <th colspan="3">PP</th>
+                    </tr>
                     <tr id="sum-milestone-head">
-                        <th>기획 Start</th>
-                        <th>기획 Finish</th>
-                        <th>Proto DR</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>DR</th>
+                        <th>Start</th>
+                        <th>End</th>
                         <th>DVR</th>
+                        <th>Start</th>
+                        <th>End</th>
                         <th>PRA</th>
                     </tr>
                 </thead>
@@ -649,7 +664,11 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         <td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td>
                     </tr>
                 </tbody>
@@ -712,10 +731,14 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         </div>
         <div class="concept-section">
             <table class="concept-table">
-                <thead><tr><th style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th><th style="width:160px;">TYPE</th><th style="width:120px;">구분</th><th>Description</th><th style="width:220px;">Note</th></tr></thead>
+                <thead><tr><th style="width:4%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th><th style="width:12%;">TYPE</th><th style="width:9%;">구분</th><th style="width:20%;">Model A</th><th style="width:20%;">Model B</th><th style="width:20%;">Model C</th><th style="width:15%;">Note</th></tr></thead>
                 <tbody id="briefspec-body">
-                    <tr><td class="bm-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc" value="Proto A"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bm-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA" value="Proto A"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                </tbody>
+                </tbody>text" class="u-input" data-field="note"></td></tr>
                     <tr><td class="bm-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                     <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="desc"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
@@ -728,7 +751,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 <div id="tab-mctable" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>💰 M.C Table (견적)<span class="concept-badge">컨셉 단계</span></h2>
+            <h2>💰 M.C Table<span class="concept-badge">컨셉 단계</span></h2>
             <div class="btn-group"></div>
         </div>
         <div class="concept-section">
@@ -3047,7 +3070,7 @@ ${mailText}`;
             ['목표 양산 일정', sd.mpDate || ''],
             ['추진 배경 및 의의', sd.background || ''],
         ];
-        [['기획Start', '기획 Start'], ['기획Finish', '기획 Finish'], ['ProtoDR', 'Proto DR'], ['DVR', 'DVR'], ['PRA', 'PRA']].forEach(([key, label]) => {
+        [['기획Start', 'PROTO Start'], ['기획Finish', 'PROTO End'], ['ProtoDR', 'Proto DR'], ['ESStart', 'ES Start'], ['ESEnd', 'ES End'], ['DVR', 'DVR'], ['PPStart', 'PP Start'], ['PPEnd', 'PP End'], ['PRA', 'PRA']].forEach(([key, label]) => {
             const m = (sd.milestones && sd.milestones[key]) || {};
             summaryData.push([label, m.date || '']);
         });
@@ -3063,8 +3086,8 @@ ${mailText}`;
         XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
         // ── Brief SPEC 시트 (컨셉 단계) ──
-        const briefSpecData = [['NO', 'TYPE', '', 'Description', 'Note']];
-        (tabData.briefSpec || []).forEach((r, i) => { briefSpecData.push([i + 1, r.type || '', r.sub || '', r.desc || '', r.note || '']); });
+        const briefSpecData = [['NO', 'TYPE', '', 'Model A', 'Model B', 'Model C', 'Note']];
+        (tabData.briefSpec || []).forEach((r, i) => { briefSpecData.push([i + 1, r.type || '', r.sub || '', r.modelA || r.desc || '', r.modelB || '', r.modelC || '', r.note || '']); });
         const wsBrief = XLSX.utils.aoa_to_sheet(briefSpecData);
         for (let key in wsBrief) {
             if (key[0] === '!') continue;
@@ -7209,7 +7232,7 @@ function _parseSummarySheetFromWorkbook(workbook) {
         '추진 배경 및 의의': function(v) { sd.background = v; },
         '개발기간(일)': function(v) { sd.devDays = v; }
     };
-    const milestoneMap = { '기획 Start': '기획Start', '기획 Finish': '기획Finish', 'Proto DR': 'ProtoDR', 'DVR': 'DVR', 'PRA': 'PRA' };
+    const milestoneMap = { 'PROTO Start': '기획Start', 'PROTO End': '기획Finish', 'Proto DR': 'ProtoDR', 'ES Start': 'ESStart', 'ES End': 'ESEnd', 'DVR': 'DVR', 'PP Start': 'PPStart', 'PP End': 'PPEnd', 'PRA': 'PRA' };
     json.forEach(function(row) {
         if (!row || row.length === 0) return;
         const label = String(row[0] || '').trim();
@@ -7237,10 +7260,12 @@ function _parseBriefSpecSheetFromWorkbook(workbook) {
         if (!r || r.length === 0) continue;
         const type = String(r[1] || '').trim();
         const sub = String(r[2] || '').trim();
-        const desc = String(r[3] || '').trim();
-        const note = String(r[4] || '').trim();
-        if (!type && !sub && !desc && !note) continue;
-        rows.push({ type: type, sub: sub, desc: desc, note: note });
+        const modelA = String(r[3] || '').trim();
+        const modelB = String(r[4] || '').trim();
+        const modelC = String(r[5] || '').trim();
+        const note = String(r[6] || '').trim();
+        if (!type && !sub && !modelA && !modelB && !modelC && !note) continue;
+        rows.push({ type: type, sub: sub, modelA: modelA, modelB: modelB, modelC: modelC, note: note });
     }
     if (rows.length === 0) return false;
     window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
@@ -7467,13 +7492,16 @@ window.populateTabData = function() {
         const tbody = document.getElementById('briefspec-body');
         if (tbody) {
             tbody.innerHTML = td.briefSpec.map(function(r) {
+                const modelA = r.modelA !== undefined ? r.modelA : (r.desc || ''); // 구버전 desc 호환
                 return '<tr><td class="bm-no"></td>'
                     + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
                     + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="desc" value="' + _escTabVal(r.desc) + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="modelA" value="' + _escTabVal(modelA) + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="modelB" value="' + _escTabVal(r.modelB) + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="modelC" value="' + _escTabVal(r.modelC) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
             }).join('');
-            if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
+            window.bmSetupAllRows('bs');
         }
     }
     
@@ -7696,7 +7724,9 @@ const BM_CONF = {
             return '<td class="bm-no"></td>'
                 + '<td><input type="text" data-field="type"></td>'
                 + '<td><input type="text" data-field="sub"></td>'
-                + '<td><input type="text" class="u-input" data-field="desc"></td>'
+                + '<td><input type="text" class="u-input" data-field="modelA"></td>'
+                + '<td><input type="text" class="u-input" data-field="modelB"></td>'
+                + '<td><input type="text" class="u-input" data-field="modelC"></td>'
                 + '<td><input type="text" class="u-input" data-field="note"></td>';
         }
     },
