@@ -7407,7 +7407,10 @@ function _readRowsFromTbody(tbodyId) {
         const catInput = tr.querySelector('td:not(.bm-no) input');
         const category = catInput ? catInput.value : '';
         const rowObj = { category: category };
-        tr.querySelectorAll('input[data-field]').forEach(function(inp) { rowObj[inp.dataset.field] = inp.value; });
+        tr.querySelectorAll('input[data-field]').forEach(function(inp) {
+            const realInp = tr.querySelector('input[data-real-for="' + inp.dataset.field + '"]');
+            rowObj[inp.dataset.field] = realInp ? realInp.value : inp.value;
+        });
         rows.push(rowObj);
     });
     return rows;
@@ -7552,18 +7555,23 @@ window.populateTabData = function() {
                 return isNaN(num) ? 0 : num;
             };
 
+            // 💡 SUBTOTAL/TOTAL 전용 포맷: 0원도 "$0.00"으로 명시 표시 (가격 정보 없음을 알 수 있게)
+            const fmtCurSummary = function(num) {
+                num = Number(num) || 0;
+                return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            };
+
             // 💡 합계 행 생성 함수: TOTAL 행은 옅은 하늘색(#e3f2fd), SUBTOTAL은 노란색(#fff9c4)
             const renderSubtotalRow = function(label, sums, isTotal) {
-                const isSumEmpty = (sums.protoCost === 0 && sums.protoNre === 0 && sums.mpCost === 0 && sums.mpNre === 0);
-                const rowStyle = isSumEmpty ? ' style="display:none;"' : ''; // 합계가 0이면 요약행도 숨김
+                // 💡 합계가 $0이라도 그룹 구분을 위해 SUBTOTAL 행은 항상 표시 (라벨만 보이고 금액칸은 빈칸)
                 const bgColor = isTotal ? '#e3f2fd' : '#fff9c4';
-                
-                return '<tr class="mc-summary-row"' + rowStyle + ' style="background-color:' + bgColor + '; font-weight:bold;">'
+
+                return '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
                     + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCur(sums.protoCost) + '" readonly></td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCur(sums.protoNre) + '" readonly></td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCur(sums.mpCost) + '" readonly></td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCur(sums.mpNre) + '" readonly></td>'
+                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.protoCost) + '" readonly></td>'
+                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.protoNre) + '" readonly></td>'
+                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.mpCost) + '" readonly></td>'
+                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.mpNre) + '" readonly></td>'
                     + '<td></td></tr>';
             };
 
@@ -7582,8 +7590,7 @@ window.populateTabData = function() {
                 const mCost = parseNum(r.mpCost);
                 const mNre = parseNum(r.mpNre);
                 
-                // 💡 핵심 수정: 금액 합산이 0원인지 여부 판단 (행 숨김 기준)
-                const isRowEmpty = (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
+                const isPriceEmpty = (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
                 
                 // 데이터 합산 누적
                 subtotal.protoCost += pCost;
@@ -7598,22 +7605,32 @@ window.populateTabData = function() {
 
                 let rowStyle = '';
                 let displayType = '';
-                
-                if (isRowEmpty) {
-                    rowStyle = ' style="display:none;" data-auto-hidden="1"'; // 가격 없는 행 숨김 처리 강제
-                } else {
-                    // 유의미한 데이터가 노출될 때만 열 유지 플래그 활성화
-                    if (pCost !== 0) hasProtoCost = true;
-                    if (pNre !== 0) hasProtoNre = true;
-                    if (mCost !== 0) hasMpCost = true;
-                    if (mNre !== 0) hasMpNre = true;
-                    
-                    // 💡 그룹 묶음 로직 보완: 화면에 보인 실제 이전 유형과 비교하여 그룹핑 깨짐 방지
-                    if (rowType && rowType !== lastVisibleType) {
-                        displayType = rowType;
-                        lastVisibleType = rowType;
-                    }
+
+                // 💡 그룹의 첫 행(TYPE 라벨을 보여주는 행)인지 먼저 판단
+                const isGroupHeader = !!(rowType && rowType !== lastVisibleType);
+                if (isGroupHeader) {
+                    displayType = rowType;
+                    lastVisibleType = rowType;
                 }
+
+                // 💡 가격 없는 행은 기본 숨김(펼치기 버튼으로 재표시) — 단, TYPE 라벨을 가진
+                //    그룹 첫 행은 가격이 없어도 항상 표시
+                const isRowEmpty = isPriceEmpty && !isGroupHeader;
+                if (isRowEmpty) {
+                    rowStyle = ' style="display:none;" data-auto-hidden="1"';
+                }
+                // 💡 가격 없어 예외로 보이는 그룹 헤더 행은 ITEM/GROUP/P-N/Spec이 의미 없는(쓰레기) 값일 수 있으므로
+                //    NO/TYPE/Note만 보이게 비워서 표시
+                const isException = isGroupHeader && isPriceEmpty;
+                const dispItem = isException ? '' : r.item;
+                const dispGroup = isException ? '' : r.group;
+                const dispPn = isException ? '' : r.pn;
+                const dispSpec = isException ? '' : r.spec;
+                // 유의미한 가격이 있으면 열 유지 플래그 활성화 (행 숨김 여부와 무관)
+                if (pCost !== 0) hasProtoCost = true;
+                if (pNre !== 0) hasProtoNre = true;
+                if (mCost !== 0) hasMpCost = true;
+                if (mNre !== 0) hasMpNre = true;
 
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
@@ -7621,10 +7638,10 @@ window.populateTabData = function() {
                     + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
                     + '<input type="hidden" data-real-type value="' + _escTabVal(rowType) + '">'
                     + '</td>'
-                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
-                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
-                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '"></td>'
-                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '"></td>'
+                    + '<td><input type="text" data-field="item" value="' + _escTabVal(dispItem) + '">' + (isException ? '<input type="hidden" data-real-for="item" value="' + _escTabVal(r.item) + '">' : '') + '</td>'
+                    + '<td><input type="text" data-field="group" value="' + _escTabVal(dispGroup) + '">' + (isException ? '<input type="hidden" data-real-for="group" value="' + _escTabVal(r.group) + '">' : '') + '</td>'
+                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(dispPn) + '">' + (isException ? '<input type="hidden" data-real-for="pn" value="' + _escTabVal(r.pn) + '">' : '') + '</td>'
+                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(dispSpec) + '">' + (isException ? '<input type="hidden" data-real-for="spec" value="' + _escTabVal(r.spec) + '">' : '') + '</td>'
                     + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:#777; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:#777; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:#777; text-align:center;"></td>'
