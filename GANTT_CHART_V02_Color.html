@@ -762,6 +762,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         </div>
         <div class="concept-section">
             <div id="mc-rev-tabs" style="margin-bottom:10px; display:flex; gap:6px; align-items:center;">
+                <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기 (숨은 행 보기)</button>
+                <div style="width:1px; height:20px; background:#ddd; margin:0 6px;"></div>
                 <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
                 <button class="mc-rev-btn" data-rev="R2" onclick="window.mcSwitchRevision('R2')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R2</button>
                 <button class="mc-rev-btn" data-rev="R3" onclick="window.mcSwitchRevision('R3')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R3</button>
@@ -804,11 +806,11 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                 </tbody>
             </table>
             </div>
-            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)">🔽 펼치기 (숨은 행 보기)</button>
             <p style="font-size:11.5px; color:#999; margin-top:10px;">※ 합계/금형비 등 세부 자동계산 로직은 추후 상세 작업에서 구현합니다.</p>
             </div>
             <div id="mc-comparison-section" style="display:none;">
                 <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
+                    <!-- 돌아가기 버튼 제거: R1~R5 버튼이 동일 기능을 수행 -->
                     <button id="mc-comp-empty-toggle-btn" onclick="window.mcToggleEmptyRevCols()" style="padding:6px 14px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">🔽 빈 리비전 열 보기</button>
                 </div>
                 <div style="overflow-x:auto;">
@@ -7361,13 +7363,12 @@ function _parseMcTableSheetRows(workbook, sheetName) {
     for (let i = 2; i < json.length; i++) { // 0,1행은 2단 헤더이므로 2행부터 데이터
         const r = json[i];
         if (!r || r.length === 0) continue;
-        // 수정 (r[1]부터 읽음 — NO 컬럼 건너뜀)
         const row = {
-            type: String(r[1] || '').trim(), item: String(r[2] || '').trim(), group: String(r[3] || '').trim(),
-            pn: (r[4] === undefined || r[4] === null) ? '' : String(r[4]).trim(), spec: String(r[5] || '').trim(),
-            protoCost: (r[6] === undefined || r[6] === null) ? '' : r[6], protoNre: (r[7] === undefined || r[7] === null) ? '' : r[7],
-            mpCost: (r[8] === undefined || r[8] === null) ? '' : r[8], mpNre: (r[9] === undefined || r[9] === null) ? '' : r[9],
-            note: String(r[10] || '').trim()
+            type: String(r[0] || '').trim(), item: String(r[1] || '').trim(), group: String(r[2] || '').trim(),
+            pn: (r[3] === undefined || r[3] === null) ? '' : String(r[3]).trim(), spec: String(r[4] || '').trim(),
+            protoCost: (r[5] === undefined || r[5] === null) ? '' : r[5], protoNre: (r[6] === undefined || r[6] === null) ? '' : r[6],
+            mpCost: (r[7] === undefined || r[7] === null) ? '' : r[7], mpNre: (r[8] === undefined || r[8] === null) ? '' : r[8],
+            note: String(r[9] || '').trim()
         };
         const isEmpty = !row.type && !row.item && !row.group && !row.pn && !row.spec && !row.note && row.protoCost === '' && row.protoNre === '' && row.mpCost === '' && row.mpNre === '';
         if (isEmpty) continue;
@@ -7622,7 +7623,8 @@ window.populateTabData = function() {
                 const modelA = r.modelA !== undefined ? r.modelA : (r.desc || ''); // 구버전 desc 호환
                 // 💡 MC Table과 동일하게: Model A/B/C, Note가 모두 비어있으면 행 숨김 처리
                 const isRowEmpty = !modelA && !r.modelB && !r.modelC && !r.note;
-                const rowStyle = isRowEmpty ? ' style="display:none;" data-auto-hidden="1"' : '';
+                const keepHidden = isRowEmpty && !(window._bmExpanded && window._bmExpanded.bs);
+                const rowStyle = isRowEmpty ? (' style="' + (keepHidden ? 'display:none;' : '') + '" data-auto-hidden="1"') : '';
                 return '<tr' + rowStyle + '><td class="bm-no"></td>'
                     + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
                     + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
@@ -7644,15 +7646,9 @@ window.populateTabData = function() {
 
             // 원본 데이터 중 수동 기입된 합계 행 제외
             const validRows = _mcActiveRows.filter(function(r) {
-            const t = String(r.type || '').toUpperCase().replace(/\s/g, '');
-            if (t === 'SUBTOTAL' || t === 'TOTAL') return false;
-            // 💡 과거 수기로 입력된 "OOO SUB TOTAL" / "TOTAL" 잔재 행 제외
-            //    (TYPE/ITEM/GROUP/P-N 없이 Specification에만 라벨 텍스트가 있는 행)
-            const specUp = String(r.spec || '').toUpperCase().replace(/\s/g, '');
-            const isLegacyLabelRow = !r.type && !r.item && !r.group && !r.pn
-                && (specUp.endsWith('SUBTOTAL') || specUp === 'TOTAL');
-            return !isLegacyLabelRow;
-        });
+                const t = String(r.type || '').toUpperCase().replace(/\s/g, '');
+                return t !== 'SUBTOTAL' && t !== 'TOTAL';
+            });
 
             let currentType = '';
             let htmlChunks = [];
@@ -7679,9 +7675,10 @@ window.populateTabData = function() {
                 return isNaN(num) ? 0 : num;
             };
 
-            // 💡 SUBTOTAL/TOTAL 전용 포맷: 0원도 "$0.00"으로 명시 표시 (가격 정보 없음을 알 수 있게)
+            // 💡 SUBTOTAL/TOTAL 전용 포맷: 가격 정보가 전혀 없으면 "정보없음"으로 명시 표시
             const fmtCurSummary = function(num) {
                 num = Number(num) || 0;
+                if (num === 0) return '정보없음';
                 return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
 
@@ -7699,8 +7696,6 @@ window.populateTabData = function() {
                     + '<td></td></tr>';
             };
 
-            let groupColorType = '';
-            let groupParity = 0;
             let prevType = ''; // 💡 그룹의 "진짜 첫 행"을 판별 — 가격(숨김여부)과 무관하게 데이터 순서로만 판단
 
             validRows.forEach(function(r, idx) {
@@ -7709,16 +7704,14 @@ window.populateTabData = function() {
                 if (rowType) prevType = rowType;
                 if (rowType) currentType = rowType;
 
-                // 🎨 TYPE 그룹마다 배경을 교차시켜 구분 + 그룹 시작 카운트
-                if (isGroupStart) groupParity++;
-                const bandColor = (groupParity % 2 === 1) ? '#ffffff' : '#f3f7fb';
-
                 const pCost = parseNum(r.protoCost);
                 const pNre = parseNum(r.protoNre);
                 const mCost = parseNum(r.mpCost);
                 const mNre = parseNum(r.mpNre);
+
                 const isPriceEmpty = (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
 
+                // 데이터 합산 누적
                 subtotal.protoCost += pCost;
                 subtotal.protoNre += pNre;
                 subtotal.mpCost += mCost;
@@ -7729,11 +7722,14 @@ window.populateTabData = function() {
                 grandtotal.mpCost += mCost;
                 grandtotal.mpNre += mNre;
 
-                const isRowEmpty = isPriceEmpty;
+                // 💡 그룹의 첫 행은 가격이 없어도 항상 표시 (접었을 때도 TYPE 라벨이 사라지지 않도록)
+                const isRowEmpty = isPriceEmpty && !isGroupStart;
                 // 💡 TYPE 라벨: 숨김/펼침 상태와 무관하게 "그룹의 실제 첫 행"에만 항상 고정 표시
                 const displayType = isGroupStart ? rowType : '';
 
-                let rowStyle = ' style="background-color:' + bandColor + ';' + (isRowEmpty ? ' display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
+                // 💡 펼치기 상태(window._bmExpanded.mc)일 때는 재렌더링해도 숨겨진 행을 계속 보여줌
+                const keepHiddenRow = isRowEmpty && !(window._bmExpanded && window._bmExpanded.mc);
+                let rowStyle = ' style="' + (keepHiddenRow ? 'display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
 
                 if (pCost !== 0) hasProtoCost = true;
                 if (pNre !== 0) hasProtoNre = true;
@@ -7747,7 +7743,7 @@ window.populateTabData = function() {
                     + '<td class="bm-no"></td>'
                     + '<td class="mc-cat" style="' + catCellStyle + '">'
                     + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
-                    + (isGroupStart ? '' : '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">')        
+                    + (isGroupStart ? '' : '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">')
                     + '</td>'
                     + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
                     + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
@@ -7915,11 +7911,16 @@ window.bmSetupAllRows = function(key) {
 
 // "펼치기" 버튼: 자동으로 숨겨진(내용 없는) 행을 보이거나 다시 숨김
 window._bmExpanded = { bs: false, mc: false };
+try {
+    window._bmExpanded.bs = localStorage.getItem('gantt_bs_expanded') === '1';
+    window._bmExpanded.mc = localStorage.getItem('gantt_mc_expanded') === '1';
+} catch (e) {}
 window.bmToggleHidden = function(key, btnEl) {
     const tbody = document.getElementById(BM_CONF[key].tbodyId);
     if (!tbody) return;
     const expand = !window._bmExpanded[key];
     window._bmExpanded[key] = expand;
+    try { localStorage.setItem('gantt_' + key + '_expanded', expand ? '1' : '0'); } catch (e) {}
     Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-auto-hidden="1"]'), function(tr) {
         tr.style.display = expand ? '' : 'none';
     });
@@ -8179,6 +8180,15 @@ window.mcSwitchRevision = function(rev) {
     });
 };
 
+// 💡 TYPE 등 그룹 라벨을 수정했을 때, SUBTOTAL/그룹 구분을 화면에 즉시 다시 반영
+window.mcRefreshTable = function() {
+    window.tabData = window.tabData || {};
+    window.tabData.mcRevisions = window.tabData.mcRevisions || {};
+    const cur = window.tabData.mcActiveRevision || 'R1';
+    window.tabData.mcRevisions[cur] = _readRowsFromTbody('mctable-body');
+    window.populateTabData();
+};
+
 // ────────────────────────────────────────────────────────
 // 📊 M.C Table Comparison (R1~R5 비교표)
 // ────────────────────────────────────────────────────────
@@ -8229,6 +8239,7 @@ window.mcBuildComparisonRows = function() {
                 indexByKey[key] = entry;
                 order.push(entry);
             }
+            // 대표 텍스트는 비어있을 때만 보강 (먼저 채워진 리비전, 즉 R1 우선 값을 유지)
             if (!entry.type) entry.type = r.type || '';
             if (!entry.item) entry.item = r.item || '';
             if (!entry.group) entry.group = r.group || '';
@@ -8268,6 +8279,13 @@ window.mcUpdateSalesPrice = function(rev, val) {
     window.tabData.mcCompare.salesPrice = window.tabData.mcCompare.salesPrice || {};
     window.tabData.mcCompare.salesPrice[rev] = _mcParseNum(val);
     window.mcRenderComparisonTable();
+};
+
+// 💡 비교표 전용 NOTE 저장 (R1~R5 리비전 데이터와는 완전히 별도로 보관됨)
+window.mcUpdateCompareNote = function(key, val) {
+    window.tabData.mcCompare = window.tabData.mcCompare || { salesPrice: {}, notes: {} };
+    window.tabData.mcCompare.notes = window.tabData.mcCompare.notes || {};
+    window.tabData.mcCompare.notes[key] = val;
 };
 
 window.mcRenderComparisonTable = function() {
@@ -8323,7 +8341,6 @@ window.mcRenderComparisonTable = function() {
             tbody += '<td style="text-align:center; color:#777;">' + _mcFmtCur(p.cost) + '</td>'
                 + '<td style="text-align:center; color:#777;">' + _mcFmtCur(p.nre) + '</td>';
         });
-        // 💡 NOTE는 R1~R5와 무관한 비교표 전용 입력란 (별도 저장소에 보관)
         tbody += '<td><input type="text" class="u-input" style="background:transparent;" value="' + _mcEsc(r.note) + '" onchange="window.mcUpdateCompareNote(\'' + r.key + '\', this.value)"></td></tr>';
     });
     tbody += '</tbody>';
@@ -8361,6 +8378,13 @@ window.mcRenderComparisonTable = function() {
 document.addEventListener('DOMContentLoaded', function() {
     if (window.populateTabData) window.populateTabData();
     if (window.bmSetupAllRows) { window.bmSetupAllRows('bs'); window.bmSetupAllRows('mc'); }
+    // 💡 저장된 펼치기 상태에 맞춰 버튼 텍스트 동기화
+    ['bs', 'mc'].forEach(function(key) {
+        const btn = document.getElementById(key + '-toggle-hidden-btn');
+        if (btn && window._bmExpanded && window._bmExpanded[key]) {
+            btn.textContent = '🔼 접기';
+        }
+    });
 });
 </script>
 
