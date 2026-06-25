@@ -7648,7 +7648,6 @@ window.populateTabData = function() {
             });
 
             let currentType = '';
-            let lastVisibleType = ''; // 화면에 실제 노출된 마지막 TYPE 추적용
             let htmlChunks = [];
             
             let subtotal = { protoCost: 0, protoNre: 0, mpCost: 0, mpNre: 0 };
@@ -7695,23 +7694,22 @@ window.populateTabData = function() {
 
             let groupColorType = '';
             let groupParity = 0;
+            let prevType = ''; // 💡 그룹의 "진짜 첫 행"을 판별 — 가격(숨김여부)과 무관하게 데이터 순서로만 판단
 
             validRows.forEach(function(r, idx) {
                 let rowType = String(r.type || '').trim();
+                const isGroupStart = !!(rowType && rowType !== prevType);
+                if (rowType) prevType = rowType;
                 if (rowType) currentType = rowType;
 
-                // 🎨 TYPE 그룹이 바뀔 때마다 밴딩 색을 교차시키기 위한 인덱스
-                if (rowType && rowType !== groupColorType) {
-                    groupColorType = rowType;
-                    groupParity++;
-                }
+                // 🎨 TYPE 그룹마다 배경을 교차시켜 구분 + 그룹 시작 카운트
+                if (isGroupStart) groupParity++;
                 const bandColor = (groupParity % 2 === 1) ? '#ffffff' : '#f3f7fb';
 
                 const pCost = parseNum(r.protoCost);
                 const pNre = parseNum(r.protoNre);
                 const mCost = parseNum(r.mpCost);
                 const mNre = parseNum(r.mpNre);
-
                 const isPriceEmpty = (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
 
                 subtotal.protoCost += pCost;
@@ -7724,21 +7722,18 @@ window.populateTabData = function() {
                 grandtotal.mpCost += mCost;
                 grandtotal.mpNre += mNre;
 
-                let displayType = '';
                 const isRowEmpty = isPriceEmpty;
-                let rowStyle = ' style="background-color:' + bandColor + ';' + (isRowEmpty ? ' display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
+                // 💡 TYPE 라벨: 숨김/펼침 상태와 무관하게 "그룹의 실제 첫 행"에만 항상 고정 표시
+                const displayType = isGroupStart ? rowType : '';
 
-                if (!isRowEmpty && rowType && rowType !== lastVisibleType) {
-                    displayType = rowType;
-                    lastVisibleType = rowType;
-                }
+                let rowStyle = ' style="background-color:' + bandColor + ';' + (isRowEmpty ? ' display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
 
                 if (pCost !== 0) hasProtoCost = true;
                 if (pNre !== 0) hasProtoNre = true;
                 if (mCost !== 0) hasMpCost = true;
                 if (mNre !== 0) hasMpNre = true;
 
-                // 🎨 그룹의 첫 행(라벨이 보이는 행)에 좌측 강조선을 줘서 그룹 시작을 표시
+                // 🎨 그룹 시작 행에 좌측 강조선
                 const catCellStyle = 'border-bottom: 1px solid #eee;' + (displayType ? ' border-left: 3px solid #2c5f8a;' : '');
 
                 htmlChunks.push('<tr' + rowStyle + '>'
@@ -7757,8 +7752,8 @@ window.populateTabData = function() {
                     + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:#777; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>');
 
-                // 💡 TYPE 그룹의 끝 판정: ① ITEM에 'NRE'가 포함된 행(그룹의 NRE 비용 행) 직후
-                //    ② 또는 다음 행의 TYPE이 바뀌는 경우  ③ 또는 표의 마지막 행인 경우 → SUBTOTAL 삽입
+                // 💡 TYPE 그룹의 끝 판정(첨부 엑셀 기준): ① ITEM이 'NRE'인 행 직후
+                //    ② 또는 다음 행의 TYPE이 바뀌는 경우  ③ 또는 표의 마지막 행 → SUBTOTAL 삽입
                 const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
                 const nextRow = validRows[idx + 1];
                 const nextType = nextRow ? String(nextRow.type || '').trim() : '';
