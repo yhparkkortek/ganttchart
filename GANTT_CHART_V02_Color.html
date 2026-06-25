@@ -7361,12 +7361,13 @@ function _parseMcTableSheetRows(workbook, sheetName) {
     for (let i = 2; i < json.length; i++) { // 0,1행은 2단 헤더이므로 2행부터 데이터
         const r = json[i];
         if (!r || r.length === 0) continue;
+        // 수정 (r[1]부터 읽음 — NO 컬럼 건너뜀)
         const row = {
-            type: String(r[0] || '').trim(), item: String(r[1] || '').trim(), group: String(r[2] || '').trim(),
-            pn: (r[3] === undefined || r[3] === null) ? '' : String(r[3]).trim(), spec: String(r[4] || '').trim(),
-            protoCost: (r[5] === undefined || r[5] === null) ? '' : r[5], protoNre: (r[6] === undefined || r[6] === null) ? '' : r[6],
-            mpCost: (r[7] === undefined || r[7] === null) ? '' : r[7], mpNre: (r[8] === undefined || r[8] === null) ? '' : r[8],
-            note: String(r[9] || '').trim()
+            type: String(r[1] || '').trim(), item: String(r[2] || '').trim(), group: String(r[3] || '').trim(),
+            pn: (r[4] === undefined || r[4] === null) ? '' : String(r[4]).trim(), spec: String(r[5] || '').trim(),
+            protoCost: (r[6] === undefined || r[6] === null) ? '' : r[6], protoNre: (r[7] === undefined || r[7] === null) ? '' : r[7],
+            mpCost: (r[8] === undefined || r[8] === null) ? '' : r[8], mpNre: (r[9] === undefined || r[9] === null) ? '' : r[9],
+            note: String(r[10] || '').trim()
         };
         const isEmpty = !row.type && !row.item && !row.group && !row.pn && !row.spec && !row.note && row.protoCost === '' && row.protoNre === '' && row.mpCost === '' && row.mpNre === '';
         if (isEmpty) continue;
@@ -7643,9 +7644,15 @@ window.populateTabData = function() {
 
             // 원본 데이터 중 수동 기입된 합계 행 제외
             const validRows = _mcActiveRows.filter(function(r) {
-                const t = String(r.type || '').toUpperCase().replace(/\s/g, '');
-                return t !== 'SUBTOTAL' && t !== 'TOTAL';
-            });
+            const t = String(r.type || '').toUpperCase().replace(/\s/g, '');
+            if (t === 'SUBTOTAL' || t === 'TOTAL') return false;
+            // 💡 과거 수기로 입력된 "OOO SUB TOTAL" / "TOTAL" 잔재 행 제외
+            //    (TYPE/ITEM/GROUP/P-N 없이 Specification에만 라벨 텍스트가 있는 행)
+            const specUp = String(r.spec || '').toUpperCase().replace(/\s/g, '');
+            const isLegacyLabelRow = !r.type && !r.item && !r.group && !r.pn
+                && (specUp.endsWith('SUBTOTAL') || specUp === 'TOTAL');
+            return !isLegacyLabelRow;
+        });
 
             let currentType = '';
             let htmlChunks = [];
@@ -7739,8 +7746,8 @@ window.populateTabData = function() {
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
                     + '<td class="mc-cat" style="' + catCellStyle + '">'
-                    + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
-                    + '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">'
+                    + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
+                    + (isGroupStart ? '' : '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">')        
                     + '</td>'
                     + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
                     + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
@@ -7801,10 +7808,10 @@ window.populateTabData = function() {
                     if(tr1.children[8]) tr1.children[8].style.width = '400px';  // Note
                     
                     // 하위 가격 금액 열 너비 좁히기
-                    if(tr2.children[0]) tr2.children[0].style.width = '70px';   // PROTO Cost
-                    if(tr2.children[1]) tr2.children[1].style.width = '70px';   // PROTO NRE
-                    if(tr2.children[2]) tr2.children[2].style.width = '70px';   // MP Cost
-                    if(tr2.children[3]) tr2.children[3].style.width = '70px';   // MP NRE
+                    if(tr2.children[0]) tr2.children[0].style.width = '55px';   // PROTO Cost
+                    if(tr2.children[1]) tr2.children[1].style.width = '55px';   // PROTO NRE
+                    if(tr2.children[2]) tr2.children[2].style.width = '55px';   // MP Cost
+                    if(tr2.children[3]) tr2.children[3].style.width = '55px';   // MP NRE
 
                     // 전체 데이터가 비어 있는 열 숨김 처리
                     const hide = { 6: !hasProtoCost, 7: !hasProtoNre, 8: !hasMpCost, 9: !hasMpNre };
