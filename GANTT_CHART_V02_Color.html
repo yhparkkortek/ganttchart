@@ -809,7 +809,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             </div>
             <div id="mc-comparison-section" style="display:none;">
                 <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
-                    <button onclick="window.mcHideComparison()" style="padding:6px 14px; border:1.5px solid #6c757d; background:#fff; color:#6c757d; border-radius:5px; cursor:pointer; font-size:12.5px;">⬅ 돌아가기</button>
                     <button id="mc-comp-empty-toggle-btn" onclick="window.mcToggleEmptyRevCols()" style="padding:6px 14px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">🔽 빈 리비전 열 보기</button>
                 </div>
                 <div style="overflow-x:auto;">
@@ -7694,45 +7693,41 @@ window.populateTabData = function() {
                     + '<td></td></tr>';
             };
 
+            let groupColorType = '';
+            let groupParity = 0;
+
             validRows.forEach(function(r, idx) {
                 let rowType = String(r.type || '').trim();
-                
-                // TYPE 그룹 변경 감지 및 SUBTOTAL 삽입
-                if (rowType && currentType && rowType !== currentType) {
-                    htmlChunks.push(renderSubtotalRow(currentType + ' SUBTOTAL', subtotal, false));
-                    subtotal = { protoCost: 0, protoNre: 0, mpCost: 0, mpNre: 0 };
-                }
                 if (rowType) currentType = rowType;
+
+                // 🎨 TYPE 그룹이 바뀔 때마다 밴딩 색을 교차시키기 위한 인덱스
+                if (rowType && rowType !== groupColorType) {
+                    groupColorType = rowType;
+                    groupParity++;
+                }
+                const bandColor = (groupParity % 2 === 1) ? '#ffffff' : '#f3f7fb';
 
                 const pCost = parseNum(r.protoCost);
                 const pNre = parseNum(r.protoNre);
                 const mCost = parseNum(r.mpCost);
                 const mNre = parseNum(r.mpNre);
-                
+
                 const isPriceEmpty = (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
-                
-                // 데이터 합산 누적
+
                 subtotal.protoCost += pCost;
                 subtotal.protoNre += pNre;
                 subtotal.mpCost += mCost;
                 subtotal.mpNre += mNre;
-                
+
                 grandtotal.protoCost += pCost;
                 grandtotal.protoNre += pNre;
                 grandtotal.mpCost += mCost;
                 grandtotal.mpNre += mNre;
 
-                let rowStyle = '';
                 let displayType = '';
-
-                // 💡 가격이 없는 행은 기본 숨김 (펼치기 버튼으로 재표시) — TYPE 라벨 중복 방지는
-                //    displayType을 "실제로 보이는 첫 행"에만 부여하는 아래 로직으로 처리
                 const isRowEmpty = isPriceEmpty;
-                if (isRowEmpty) {
-                    rowStyle = ' style="display:none;" data-auto-hidden="1"';
-                }
+                let rowStyle = ' style="background-color:' + bandColor + ';' + (isRowEmpty ? ' display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
 
-                // 💡 TYPE 라벨은 실제로 화면에 보이는 첫 행에만 부여 (빈 행이 숨겨지면 다음으로 보이는 행이 라벨을 이어받음)
                 if (!isRowEmpty && rowType && rowType !== lastVisibleType) {
                     displayType = rowType;
                     lastVisibleType = rowType;
@@ -7743,11 +7738,14 @@ window.populateTabData = function() {
                 if (mCost !== 0) hasMpCost = true;
                 if (mNre !== 0) hasMpNre = true;
 
+                // 🎨 그룹의 첫 행(라벨이 보이는 행)에 좌측 강조선을 줘서 그룹 시작을 표시
+                const catCellStyle = 'border-bottom: 1px solid #eee;' + (displayType ? ' border-left: 3px solid #2c5f8a;' : '');
+
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
-                    + '<td class="mc-cat" style="border-bottom: 1px solid #eee;">'
+                    + '<td class="mc-cat" style="' + catCellStyle + '">'
                     + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
-                    + '<input type="hidden" data-real-type value="' + _escTabVal(rowType) + '">'
+                    + '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">'
                     + '</td>'
                     + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
                     + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
@@ -7758,11 +7756,21 @@ window.populateTabData = function() {
                     + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:#777; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:#777; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>');
+
+                // 💡 TYPE 그룹의 끝 판정: ① ITEM에 'NRE'가 포함된 행(그룹의 NRE 비용 행) 직후
+                //    ② 또는 다음 행의 TYPE이 바뀌는 경우  ③ 또는 표의 마지막 행인 경우 → SUBTOTAL 삽입
+                const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+                const nextRow = validRows[idx + 1];
+                const nextType = nextRow ? String(nextRow.type || '').trim() : '';
+                const isLastRow = !nextRow;
+                const typeWillChange = !!(nextRow && nextType && nextType !== currentType);
+
+                if (currentType && (itemHasNre || typeWillChange || isLastRow)) {
+                    htmlChunks.push(renderSubtotalRow(currentType + ' SUBTOTAL', subtotal, false));
+                    subtotal = { protoCost: 0, protoNre: 0, mpCost: 0, mpNre: 0 };
+                }
             });
 
-            if (currentType) {
-                htmlChunks.push(renderSubtotalRow(currentType + ' SUBTOTAL', subtotal, false));
-            }
             htmlChunks.push(renderSubtotalRow('TOTAL', grandtotal, true));
 
             tbody.innerHTML = htmlChunks.join('');
@@ -8153,6 +8161,13 @@ window.mcSwitchRevision = function(rev) {
     window.tabData.mcActiveRevision = rev;
     window.tabData.mcTable = window.tabData.mcRevisions['R1'] || []; // 엑셀 저장 호환용 별칭
     window.populateTabData();
+
+    // 💡 비교 화면에서 R1~R5를 누르면 "돌아가기"와 동일하게 일반 화면으로 복귀
+    const compSection = document.getElementById('mc-comparison-section');
+    if (compSection && compSection.style.display !== 'none') {
+        window.mcHideComparison();
+    }
+
     document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
         const active = b.dataset.rev === rev;
         b.classList.toggle('active', active);
@@ -8191,6 +8206,8 @@ window.mcBuildComparisonRows = function() {
     const revs = ['R1','R2','R3','R4','R5'];
     const td = window.tabData || {};
     td.mcRevisions = td.mcRevisions || {};
+    td.mcCompare = td.mcCompare || { salesPrice: {}, notes: {} };
+    td.mcCompare.notes = td.mcCompare.notes || {};
     const order = [];
     const indexByKey = {};
 
@@ -8205,15 +8222,14 @@ window.mcBuildComparisonRows = function() {
             const key = _mcRowKey(r);
             let entry = indexByKey[key];
             if (!entry) {
-                entry = { key: key, type: '', item: '', group: '', note: '', prices: {} };
+                // 💡 NOTE는 R1~R5 데이터가 아니라 비교표 전용 저장소(td.mcCompare.notes)에서만 가져옴
+                entry = { key: key, type: '', item: '', group: '', note: td.mcCompare.notes[key] || '', prices: {} };
                 indexByKey[key] = entry;
                 order.push(entry);
             }
-            // 대표 텍스트는 비어있을 때만 보강 (먼저 채워진 리비전, 즉 R1 우선 값을 유지)
             if (!entry.type) entry.type = r.type || '';
             if (!entry.item) entry.item = r.item || '';
             if (!entry.group) entry.group = r.group || '';
-            if (!entry.note) entry.note = r.note || '';
             entry.prices[rev] = { cost: _mcParseNum(r.mpCost), nre: _mcParseNum(r.mpNre) };
         });
     });
@@ -8305,7 +8321,8 @@ window.mcRenderComparisonTable = function() {
             tbody += '<td style="text-align:center; color:#777;">' + _mcFmtCur(p.cost) + '</td>'
                 + '<td style="text-align:center; color:#777;">' + _mcFmtCur(p.nre) + '</td>';
         });
-        tbody += '<td>' + _mcEsc(r.note) + '</td></tr>';
+        // 💡 NOTE는 R1~R5와 무관한 비교표 전용 입력란 (별도 저장소에 보관)
+        tbody += '<td><input type="text" class="u-input" style="background:transparent;" value="' + _mcEsc(r.note) + '" onchange="window.mcUpdateCompareNote(\'' + r.key + '\', this.value)"></td></tr>';
     });
     tbody += '</tbody>';
 
