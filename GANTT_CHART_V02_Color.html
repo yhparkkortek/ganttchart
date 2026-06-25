@@ -762,7 +762,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         </div>
         <div class="concept-section">
             <div id="mc-rev-tabs" style="margin-bottom:10px; display:flex; gap:6px; align-items:center;">
-                <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기 (숨은 행 보기)</button>
+                <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기</button>
                 <div style="width:1px; height:20px; background:#ddd; margin:0 6px;"></div>
                 <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
                 <button class="mc-rev-btn" data-rev="R2" onclick="window.mcSwitchRevision('R2')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R2</button>
@@ -7924,7 +7924,7 @@ window.bmToggleHidden = function(key, btnEl) {
     Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-auto-hidden="1"]'), function(tr) {
         tr.style.display = expand ? '' : 'none';
     });
-    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기 (숨은 행 보기)';
+    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기';
     window.bmSetupAllRows(key);
 };
 
