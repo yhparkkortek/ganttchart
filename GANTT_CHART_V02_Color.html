@@ -7676,7 +7676,6 @@ window.populateTabData = function() {
             // 💡 SUBTOTAL/TOTAL 전용 포맷: 가격 정보가 전혀 없으면 "정보없음"으로 명시 표시
             const fmtCurSummary = function(num) {
                 num = Number(num) || 0;
-                if (num === 0) return '정보없음';
                 return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
 
@@ -7737,21 +7736,24 @@ window.populateTabData = function() {
                 // 🎨 그룹 시작 행에 좌측 강조선
                 const catCellStyle = 'border-bottom: 1px solid #eee;' + (displayType ? ' border-left: 3px solid #2c5f8a;' : '');
 
+                const isHeaderOnlyRow = isGroupStart && isPriceEmpty;
+                const hideCellStyle = isHeaderOnlyRow ? ' visibility:hidden;' : '';
+
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
                     + '<td class="mc-cat" style="' + catCellStyle + '">'
                     + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
                     + (isGroupStart ? '' : '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">')
                     + '</td>'
-                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
-                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
-                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '"></td>'
-                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>');
+                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '" style="' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '" style="' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '" style="' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="' + hideCellStyle + '"></td></tr>');
 
                 // 💡 TYPE 그룹의 끝 판정(첨부 엑셀 기준): ① ITEM이 'NRE'인 행 직후
                 //    ② 또는 다음 행의 TYPE이 바뀌는 경우  ③ 또는 표의 마지막 행 → SUBTOTAL 삽입
