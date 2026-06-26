@@ -749,7 +749,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
-            <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)">🔽 펼치기</button>
+            <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)">🔽 펼치기 (숨은 행 보기)</button>
         </div>
     </div>
 </div>
@@ -762,7 +762,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         </div>
         <div class="concept-section">
             <div id="mc-rev-tabs" style="margin-bottom:10px; display:flex; gap:6px; align-items:center;">
-                <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기</button>
+                <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기 (숨은 행 보기)</button>
                 <div style="width:1px; height:20px; background:#ddd; margin:0 6px;"></div>
                 <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
                 <button class="mc-rev-btn" data-rev="R2" onclick="window.mcSwitchRevision('R2')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R2</button>
@@ -805,7 +805,9 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     <tr><td class="bm-no"></td><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" class="u-input" data-field="protoCost"></td><td><input type="text" class="u-input" data-field="protoNre"></td><td><input type="text" class="u-input" data-field="mpCost"></td><td><input type="text" class="u-input" data-field="mpNre"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
-            
+            </div>
+            <p style="font-size:11.5px; color:#999; margin-top:10px;">※ 합계/금형비 등 세부 자동계산 로직은 추후 상세 작업에서 구현합니다.</p>
+            </div>
             <div id="mc-comparison-section" style="display:none;">
                 <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
                     <!-- 돌아가기 버튼 제거: R1~R5 버튼이 동일 기능을 수행 -->
@@ -7676,6 +7678,7 @@ window.populateTabData = function() {
             // 💡 SUBTOTAL/TOTAL 전용 포맷: 가격 정보가 전혀 없으면 "정보없음"으로 명시 표시
             const fmtCurSummary = function(num) {
                 num = Number(num) || 0;
+                if (num === 0) return '정보없음';
                 return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
 
@@ -7736,24 +7739,21 @@ window.populateTabData = function() {
                 // 🎨 그룹 시작 행에 좌측 강조선
                 const catCellStyle = 'border-bottom: 1px solid #eee;' + (displayType ? ' border-left: 3px solid #2c5f8a;' : '');
 
-                const isHeaderOnlyRow = isGroupStart && isPriceEmpty;
-                const hideCellStyle = isHeaderOnlyRow ? ' visibility:hidden;' : '';
-
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
                     + '<td class="mc-cat" style="' + catCellStyle + '">'
                     + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
                     + (isGroupStart ? '' : '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">')
                     + '</td>'
-                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '" style="' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '" style="' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '" style="' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:#777; text-align:center;' + hideCellStyle + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="' + hideCellStyle + '"></td></tr>');
+                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
+                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
+                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '"></td>'
+                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:#777; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:#777; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:#777; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:#777; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>');
 
                 // 💡 TYPE 그룹의 끝 판정(첨부 엑셀 기준): ① ITEM이 'NRE'인 행 직후
                 //    ② 또는 다음 행의 TYPE이 바뀌는 경우  ③ 또는 표의 마지막 행 → SUBTOTAL 삽입
@@ -7924,7 +7924,7 @@ window.bmToggleHidden = function(key, btnEl) {
     Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-auto-hidden="1"]'), function(tr) {
         tr.style.display = expand ? '' : 'none';
     });
-    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기';
+    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기 (숨은 행 보기)';
     window.bmSetupAllRows(key);
 };
 
