@@ -385,6 +385,8 @@
 .concept-section { background:#fff; border:1px solid #e3e6ea; border-radius:6px; padding:16px 18px; margin-bottom:16px; }
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
+.concept-grid-2col { grid-template-columns: 140px 1fr 140px 1fr; }
+.concept-grid-mem { grid-template-columns: 90px 1fr 1fr 90px 1fr 1fr; }
 .concept-grid label { font-size:12.5px; color:#666; }
 .concept-grid input, .concept-grid textarea {
     width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
@@ -451,7 +453,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
    ========================================= */
 
 /* 1. 마일스톤 입력창 텍스트 중앙 맞춤 (개발기간은 제외됨) */
-#sum-milestone-body .u-input { text-align: center !important; }
+#sum-milestone-body .u-input, #sum-milestone-body-actual .u-input { text-align: center !important; }
 
 /* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
 .sum-tl-bubble.above::after, .sum-tl-bubble.below::after { border-color: transparent !important; border-width: 0 !important; }
@@ -625,18 +627,18 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 <div id="tab-summary" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>📋 Summary<span class="concept-badge">컨셉 단계</span></h2>
+            <h2>📋 Summary</h2>
             <div class="btn-group"></div>
         </div>
         <div class="concept-section">
-            <h3>마일스톤 (참고용 — Gantt chart Level 0 데이터와 추후 연동 예정)</h3>
             <style>
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
-                #sum-milestone-body td, #sum-milestone-body input { text-align: center !important; }
+                #sum-milestone-body td, #sum-milestone-body input, #sum-milestone-body-actual td, #sum-milestone-body-actual input { text-align: center !important; }
             </style>
             <table class="concept-table">
                 <thead>
                     <tr>
+                        <th rowspan="2" style="width:60px;">구분</th>
                         <th colspan="3">PROTO</th>
                         <th colspan="3">ES</th>
                         <th colspan="3">PP</th>
@@ -655,6 +657,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                 </thead>
                 <tbody>
                     <tr id="sum-milestone-body">
+                        <td style="font-weight:bold; background:#f4f6f8;">계획</td>
                         <td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
@@ -664,6 +667,18 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td>
+                    </tr>
+                    <tr id="sum-milestone-body-actual">
+                        <td style="font-weight:bold; background:#fff8e6;">실적</td>
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
                     </tr>
                 </tbody>
             </table>
@@ -678,36 +693,38 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             </div>
         </div>
         <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
-            <div class="concept-section" style="flex:1 1 320px; margin-bottom:16px;">
+            <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
+                <h3>프로젝트 개요</h3>
+                <div class="concept-grid">
+                    <label style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="3" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발"></textarea>
+                    <label>연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
+                    <label>목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
+                </div>
+            </div>
+            <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
                 <h3>프로젝트 정보</h3>
                 <div class="concept-grid">
                     <label>고객사</label><input type="text" id="sum-customer" class="u-input" placeholder="예: LNW">
+                    <label>고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
                     <label>프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
                     <label>프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
-                    <label>고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
-                    <label>인치</label><input type="text" id="sum-inch" class="u-input" placeholder="예: 32">
-                    <label>KTK PN</label><input type="text" id="sum-ktk-pn" class="u-input" placeholder="예: 502574">
-                    <label>KTK 모델명</label><input type="text" id="sum-ktk-model" class="u-input" placeholder="예: MVD&gt;KTS320DPS01,LNW">
+                    <label>KTK PN_모델명</label><input type="text" id="sum-ktk-pn-model" class="u-input" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW">
                 </div>
             </div>
-            <div class="concept-section" style="flex:1 1 320px; margin-bottom:16px;">
+            <div class="concept-section" style="flex:2 1 460px; margin-bottom:16px;">
                 <h3>프로젝트 멤버</h3>
-                <div class="concept-grid">
-                    <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈">
-                    <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인">
-                    <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준">
-                    <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석">
-                    <label>Module 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍">
-                    <label>TSP 담당자</label><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌">
+                <div class="concept-grid concept-grid-mem">
+                    <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
+                    <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
+                    <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
+                    <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">
+                    <label>TSP 담당자</label><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
+                    <label>LCM 담당자</label><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
+                    <label>Slimming 담당자</label><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
+                    <label>Cutting 담당자</label><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
+                    <label>BLU 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
+                    <label>Tooling 담당자</label><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
                 </div>
-            </div>
-        </div>
-        <div class="concept-section">
-            <h3>프로젝트 개요</h3>
-            <div class="concept-grid">
-                <label>적용 목적</label><input type="text" id="sum-purpose" class="u-input" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발">
-                <label>연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
-                <label>목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
             </div>
         </div>
         <div class="concept-section">
@@ -720,26 +737,29 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 <div id="tab-briefspec" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>📐 Brief SPEC<span class="concept-badge">컨셉 단계</span></h2>
+            <h2>📐 Brief SPEC</h2>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" style="margin:0;">🔽 펼치기</button>
             <div class="btn-group"></div>
         </div>
         <div class="concept-section">
             <style>
                 #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
+                #briefspec-body input[data-field="modelA"], #briefspec-body input[data-field="modelB"], #briefspec-body input[data-field="modelC"] { text-align: center !important; }
             </style>
             <table class="concept-table">
                 <thead>
                     <tr>
                         <th rowspan="2" style="width:2%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
-                        <th rowspan="2" style="width:8%;">TYPE</th>
-                        <th rowspan="2" style="width:4%;">구분</th>
-                        <th colspan="3" style="width:45%;">Description</th>
+                        <th rowspan="2" style="width:17%;">TYPE</th>
+                        <th rowspan="2" style="width:8%;">구분</th>
+                        <th id="bs-desc-th" colspan="3" style="width:45%;">Description</th>
                         <th rowspan="2" style="width:30%;">Note</th>
                     </tr>
                     <tr>
-                        <th>Model A</th>
-                        <th>Model B</th>
-                        <th>Model C</th>
+                        <th data-col="modelA">Model A</th>
+                        <th data-col="modelB">Model B</th>
+                        <th data-col="modelC">Model C</th>
                     </tr>
                 </thead>
                 <tbody id="briefspec-body">
@@ -749,7 +769,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
-            <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)">🔽 펼치기 (숨은 행 보기)</button>
+            
         </div>
     </div>
 </div>
@@ -757,21 +777,22 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 <div id="tab-mctable" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>💰 M.C Table (견적)<span class="concept-badge">컨셉 단계</span></h2>
-            <div class="btn-group"></div>
-        </div>
-        <div class="concept-section">
-            <div id="mc-rev-tabs" style="margin-bottom:10px; display:flex; gap:6px; align-items:center;">
-                <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기 (숨은 행 보기)</button>
-                <div style="width:1px; height:20px; background:#ddd; margin:0 6px;"></div>
+            <h2>💰 M.C Table (견적)</h2>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기</button>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <div style="display:flex; gap:6px; align-items:center;">
                 <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
                 <button class="mc-rev-btn" data-rev="R2" onclick="window.mcSwitchRevision('R2')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R2</button>
                 <button class="mc-rev-btn" data-rev="R3" onclick="window.mcSwitchRevision('R3')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R3</button>
                 <button class="mc-rev-btn" data-rev="R4" onclick="window.mcSwitchRevision('R4')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R4</button>
                 <button class="mc-rev-btn" data-rev="R5" onclick="window.mcSwitchRevision('R5')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R5</button>
-                <div style="width:1px; height:20px; background:#ddd; margin:0 6px;"></div>
-                <button class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
             </div>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <button class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
+            <div class="btn-group"></div>
+        </div>
+        <div class="concept-section">
             <div id="mc-normal-section">
             <div style="overflow-x:auto;">
             <style>
@@ -824,7 +845,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 <div id="tab-calendar" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>📅 Calendar<span class="concept-badge">컨셉 단계</span></h2>
+            <h2>📅 Calendar</h2>
             <div class="btn-group"></div>
         </div>
         <div class="concept-section">
@@ -837,7 +858,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 <div id="tab-weekly" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>📨 Weekly Report<span class="concept-badge">컨셉 단계</span></h2>
+            <h2>📨 Weekly Report</h2>
             <div class="btn-group">
                 <label style="font-size:13px; color:#555; display:flex; align-items:center; gap:4px; font-weight:normal; margin-right:6px; cursor:pointer;">
                     🎨 PPT 색상
@@ -7429,7 +7450,8 @@ function _sumTlEscHtml(s) {
 function _sumTlFormatDate(ts) {
     const d = new Date(ts);
     if (isNaN(d.getTime())) return '';
-    return (d.getMonth() + 1) + '/' + d.getDate();
+    const yy = String(d.getFullYear()).slice(-2);
+    return (d.getMonth() + 1) + '/' + d.getDate() + " '" + yy;
 }
 window.renderSummaryTimeline = function() {
     const container = document.getElementById('sum-level0-timeline');
@@ -7504,7 +7526,10 @@ window.sumTlBringToFront = function(el) {
     el.style.zIndex = '50';
     el.classList.add('active');
 };
-document.addEventListener('DOMContentLoaded', function() { if (window.renderSummaryTimeline) window.renderSummaryTimeline(); });
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.renderSummaryTimeline) window.renderSummaryTimeline();
+    if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
+});
 
 function _escTabVal(v) { return (v === undefined || v === null) ? '' : String(v).replace(/"/g, '&quot;'); }
 
@@ -7538,7 +7563,7 @@ window.collectTabData = function() {
     sd.background = getVal('sum-background');
     sd.devDays = getVal('sum-dev-days');
     const milestones = {};
-    document.querySelectorAll('#sum-milestone-body input[data-stage]').forEach(function(inp) {
+    document.querySelectorAll('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]').forEach(function(inp) {
         milestones[inp.dataset.stage] = milestones[inp.dataset.stage] || {};
         milestones[inp.dataset.stage][inp.dataset.field] = inp.value;
     });
@@ -7553,15 +7578,34 @@ window.collectTabData = function() {
     bind('sum-project-name', '프로젝트명');
     bind('sum-customer', '고객사');
     bind('sum-customer-model', '고객모델명');
-    bind('sum-inch', '인치');
-    bind('sum-ktk-pn', 'KTKPN');
-    bind('sum-ktk-model', 'KTK모델명');
+    // 💡 KTK PN_모델명: 화면엔 하나로 합쳐서 입력받고, 내부 데이터는 기존 호환을 위해 KTKPN / KTK모델명으로 분리 저장
+    const ktkCombinedEl = document.getElementById('sum-ktk-pn-model');
+    if (ktkCombinedEl) {
+        const ktkVal = ktkCombinedEl.value || '';
+        const us = ktkVal.indexOf('_');
+        pm.KTKPN = us === -1 ? ktkVal : ktkVal.slice(0, us);
+        pm.KTK모델명 = us === -1 ? '' : ktkVal.slice(us + 1);
+    }
     bind('sum-pm', '프로젝트담당자');
     bind('sum-mech', '기구담당자');
     bind('sum-hw', 'HW담당자');
     bind('sum-fw', 'FW담당자');
-    bind('sum-module', 'Module담당자');
     bind('sum-tsp', 'TSP담당자');
+    bind('sum-lcm', 'LCM담당자');
+    bind('sum-slimming', 'Slimming담당자');
+    bind('sum-cutting', 'Cutting담당자');
+    bind('sum-module', 'Module담당자');
+    bind('sum-tooling', 'Tooling담당자');
+    bind('sum-pm-email', '프로젝트담당자이메일');
+    bind('sum-mech-email', '기구담당자이메일');
+    bind('sum-hw-email', 'HW담당자이메일');
+    bind('sum-fw-email', 'FW담당자이메일');
+    bind('sum-tsp-email', 'TSP담당자이메일');
+    bind('sum-lcm-email', 'LCM담당자이메일');
+    bind('sum-slimming-email', 'Slimming담당자이메일');
+    bind('sum-cutting-email', 'Cutting담당자이메일');
+    bind('sum-module-email', 'Module담당자이메일');
+    bind('sum-tooling-email', 'Tooling담당자이메일');
     // 고객모델명을 기존 모델명/PN_모델명 필드와도 동기화 (weeklyReport 등 기존 로직 호환)
     if (pm.고객모델명) pm.모델명 = pm.고객모델명;
     if (pm.KTK모델명) pm.PN_모델명 = pm.KTK모델명;
@@ -7593,15 +7637,28 @@ window.populateTabData = function() {
     setVal('sum-project-name', pm.프로젝트명);
     setVal('sum-customer', pm.고객사);
     setVal('sum-customer-model', pm.고객모델명);
-    setVal('sum-inch', pm.인치);
-    setVal('sum-ktk-pn', pm.KTKPN);
-    setVal('sum-ktk-model', pm.KTK모델명);
+    // 💡 KTK PN / KTK 모델명을 하나의 필드로 합쳐서 표시 (예: 502574_MVD>KTS320DPS01,LNW)
+    setVal('sum-ktk-pn-model', [pm.KTKPN || '', pm.KTK모델명 || ''].filter(Boolean).join('_'));
     setVal('sum-pm', pm.프로젝트담당자);
     setVal('sum-mech', pm.기구담당자);
     setVal('sum-hw', pm.HW담당자);
     setVal('sum-fw', pm.FW담당자);
-    setVal('sum-module', pm.Module담당자);
     setVal('sum-tsp', pm.TSP담당자);
+    setVal('sum-lcm', pm.LCM담당자);
+    setVal('sum-slimming', pm.Slimming담당자);
+    setVal('sum-cutting', pm.Cutting담당자);
+    setVal('sum-module', pm.Module담당자);
+    setVal('sum-tooling', pm.Tooling담당자);
+    setVal('sum-pm-email', pm.프로젝트담당자이메일);
+    setVal('sum-mech-email', pm.기구담당자이메일);
+    setVal('sum-hw-email', pm.HW담당자이메일);
+    setVal('sum-fw-email', pm.FW담당자이메일);
+    setVal('sum-tsp-email', pm.TSP담당자이메일);
+    setVal('sum-lcm-email', pm.LCM담당자이메일);
+    setVal('sum-slimming-email', pm.Slimming담당자이메일);
+    setVal('sum-cutting-email', pm.Cutting담당자이메일);
+    setVal('sum-module-email', pm.Module담당자이메일);
+    setVal('sum-tooling-email', pm.Tooling담당자이메일);
     setVal('sum-purpose', sd.purpose);
     setVal('sum-volume', sd.volume);
     setVal('sum-mp-date', sd.mpDate);
@@ -7609,7 +7666,7 @@ window.populateTabData = function() {
     setVal('sum-dev-days', sd.devDays);
     
     if (sd.milestones) {
-        document.querySelectorAll('#sum-milestone-body input[data-stage]').forEach(function(inp) {
+        document.querySelectorAll('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]').forEach(function(inp) {
             const m = sd.milestones[inp.dataset.stage];
             if (m && m[inp.dataset.field]) inp.value = m[inp.dataset.field];
         });
@@ -7634,6 +7691,7 @@ window.populateTabData = function() {
                     + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
             }).join('');
             if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
+            if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
         }
     }
     
@@ -7685,6 +7743,7 @@ window.populateTabData = function() {
             // 💡 합계 행 생성 함수: TOTAL 행은 옅은 하늘색(#e3f2fd), SUBTOTAL은 노란색(#fff9c4)
             const renderSubtotalRow = function(label, sums, isTotal) {
                 // 💡 합계가 $0이라도 그룹 구분을 위해 SUBTOTAL 행은 항상 표시 (라벨만 보이고 금액칸은 빈칸)
+                // 💡 mc-summary-row는 data-auto-hidden이 없으므로 "접기" 실행 시에도 항상 표시됨
                 const bgColor = isTotal ? '#e3f2fd' : '#fff9c4';
 
                 return '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
@@ -7696,12 +7755,31 @@ window.populateTabData = function() {
                     + '<td></td></tr>';
             };
 
-            let prevType = ''; // 💡 그룹의 "진짜 첫 행"을 판별 — 가격(숨김여부)과 무관하게 데이터 순서로만 판단
+            // 💡 TYPE 열 rowspan 병합 구간을 미리 계산. 병합 구간 = SUBTOTAL이 끝나는 구간과 동일
+            //    (ITEM=NRE / TYPE 변경 / 마지막 행 — SUBTOTAL 삽입 트리거와 완전히 동일한 기준)
+            //    이렇게 맞춰야 rowspan 셀이 SUBTOTAL 행을 침범해 표가 깨지는 일이 없음.
+            const mergeSpan = {};
+            (function() {
+                let segStart = 0;
+                let curType = '';
+                validRows.forEach(function(r, idx) {
+                    const rt = String(r.type || '').trim();
+                    if (rt) curType = rt;
+                    const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+                    const nextRow = validRows[idx + 1];
+                    const nextType = nextRow ? String(nextRow.type || '').trim() : '';
+                    const isLastRow = !nextRow;
+                    const typeWillChange = !!(nextRow && nextType && nextType !== curType);
+                    if (itemHasNre || typeWillChange || isLastRow) {
+                        mergeSpan[segStart] = idx - segStart + 1;
+                        segStart = idx + 1;
+                    }
+                });
+            })();
 
             validRows.forEach(function(r, idx) {
                 let rowType = String(r.type || '').trim();
-                const isGroupStart = !!(rowType && rowType !== prevType);
-                if (rowType) prevType = rowType;
+                const isGroupStart = mergeSpan.hasOwnProperty(idx);
                 if (rowType) currentType = rowType;
 
                 const pCost = parseNum(r.protoCost);
@@ -7722,9 +7800,9 @@ window.populateTabData = function() {
                 grandtotal.mpCost += mCost;
                 grandtotal.mpNre += mNre;
 
-                // 💡 그룹의 첫 행은 가격이 없어도 항상 표시 (접었을 때도 TYPE 라벨이 사라지지 않도록)
+                // 💡 병합 구간의 첫 행(=TYPE 셀을 가진 행)은 가격이 없어도 항상 표시
+                //    (접기 실행해도 TYPE 라벨이 사라지지 않도록)
                 const isRowEmpty = isPriceEmpty && !isGroupStart;
-                // 💡 TYPE 라벨: 숨김/펼침 상태와 무관하게 "그룹의 실제 첫 행"에만 항상 고정 표시
                 const displayType = isGroupStart ? rowType : '';
 
                 // 💡 펼치기 상태(window._bmExpanded.mc)일 때는 재렌더링해도 숨겨진 행을 계속 보여줌
@@ -7736,16 +7814,19 @@ window.populateTabData = function() {
                 if (mCost !== 0) hasMpCost = true;
                 if (mNre !== 0) hasMpNre = true;
 
-                // 🎨 그룹 시작 행에 좌측 강조선
-                const catCellStyle = 'border-bottom: 1px solid #eee;' + (displayType ? ' border-left: 3px solid #2c5f8a;' : '');
+                // 💡 TYPE 칸: 병합 구간의 첫 행에서만 rowspan으로 실제 셀 생성, 나머지 행은 <td> 자체를 만들지 않음
+                //    (위쪽 셀이 rowspan으로 덮어주므로 — 실제 엑셀처럼 통째로 합쳐진 셀이 됨)
+                const catCellHtml = isGroupStart
+                    ? ('<td class="mc-cat" rowspan="' + (mergeSpan[idx] || 1) + '" style="border-bottom:1px solid #eee; border-left:3px solid #2c5f8a; vertical-align:middle;">'
+                        + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent; text-align:center;">'
+                        + '</td>')
+                    : '';
 
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
-                    + '<td class="mc-cat" style="' + catCellStyle + '">'
-                    + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent;">'
-                    + (isGroupStart ? '' : '<input type="hidden" data-real-for="type" value="' + _escTabVal(rowType) + '">')
-                    + '</td>'
-                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
+                    + catCellHtml
+                    + '<td>' + (isGroupStart ? '' : '<input type="hidden" data-field="type" value="' + _escTabVal(rowType) + '">')
+                        + '<input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
                     + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
                     + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '"></td>'
                     + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '"></td>'
@@ -7915,6 +7996,43 @@ try {
     window._bmExpanded.bs = localStorage.getItem('gantt_bs_expanded') === '1';
     window._bmExpanded.mc = localStorage.getItem('gantt_mc_expanded') === '1';
 } catch (e) {}
+
+// "접기" 상태일 때 Model A/B/C 중 전체 데이터가 비어있는 열을 통째로 숨김 (Note 열은 항상 표시)
+window.bsRefreshColumnVisibility = function() {
+    const tbody = document.getElementById('briefspec-body');
+    if (!tbody) return;
+    const collapsed = !(window._bmExpanded && window._bmExpanded.bs);
+    let visibleCount = 0;
+    ['modelA', 'modelB', 'modelC'].forEach(function(field) {
+        let hasData = false;
+        const inputs = tbody.querySelectorAll('input[data-field="' + field + '"]');
+        Array.prototype.forEach.call(inputs, function(inp) {
+            if (inp.value && inp.value.trim() !== '') hasData = true;
+        });
+        const hide = collapsed && !hasData;
+        if (!hide) visibleCount++;
+        const th = document.querySelector('#tab-briefspec thead th[data-col="' + field + '"]');
+        if (th) th.style.display = hide ? 'none' : '';
+        Array.prototype.forEach.call(inputs, function(inp) {
+            const td = inp.closest('td');
+            if (td) td.style.display = hide ? 'none' : '';
+        });
+    });
+    const descTh = document.getElementById('bs-desc-th');
+    if (descTh) descTh.colSpan = visibleCount || 1;
+};
+(function() {
+    const tbody = document.getElementById('briefspec-body');
+    if (tbody) {
+        tbody.addEventListener('input', function(e) {
+            const f = e.target && e.target.dataset && e.target.dataset.field;
+            if (f === 'modelA' || f === 'modelB' || f === 'modelC') {
+                window.bsRefreshColumnVisibility();
+            }
+        });
+    }
+})();
+
 window.bmToggleHidden = function(key, btnEl) {
     const tbody = document.getElementById(BM_CONF[key].tbodyId);
     if (!tbody) return;
@@ -7924,8 +8042,9 @@ window.bmToggleHidden = function(key, btnEl) {
     Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-auto-hidden="1"]'), function(tr) {
         tr.style.display = expand ? '' : 'none';
     });
-    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기 (숨은 행 보기)';
+    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기';
     window.bmSetupAllRows(key);
+    if (key === 'bs' && window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
 };
 
 function bmPaintSelection(key) {
@@ -8069,6 +8188,7 @@ function bmAddAfter(key, refTr) {
         const selArr = rows.filter(function(tr) { return sel.has(tr); });
         basis = selArr[selArr.length - 1];
     }
+    const basisIdx = rows.indexOf(basis);
     const tr = document.createElement('tr');
     tr.innerHTML = BM_CONF[key].rowHtml();
     basis.after(tr);
@@ -8077,6 +8197,20 @@ function bmAddAfter(key, refTr) {
     window.bmSetupAllRows(key);
     bmPaintSelection(key);
     bmOpenPopup(key, tr);
+
+    // 💡 M.C Table은 TYPE 열이 rowspan으로 병합되어 있어, 행이 추가되면 표 전체를 다시 그려 병합/SUBTOTAL을 재계산해야 함
+    if (key === 'mc' && window.mcRefreshTable) {
+        window.mcRefreshTable();
+        const newRows = bmDataRows('mc');
+        const newTr = newRows[basisIdx + 1];
+        if (newTr) {
+            sel.clear(); sel.add(newTr);
+            window._bmAnchor[key] = newTr;
+            bmPaintSelection(key);
+            bmClosePopup();
+            bmOpenPopup(key, newTr);
+        }
+    }
 }
 
 function bmConfirmModal(message, onYes) {
@@ -8134,6 +8268,8 @@ function bmDeleteSelected(key) {
         window._bmAnchor[key] = null;
         window.bmSetupAllRows(key);
         bmClosePopup();
+        // 💡 M.C Table은 TYPE 열 rowspan/SUBTOTAL을 다시 계산해야 함
+        if (key === 'mc' && window.mcRefreshTable) window.mcRefreshTable();
     });
 }
 
