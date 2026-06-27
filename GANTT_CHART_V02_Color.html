@@ -7733,10 +7733,9 @@ window.populateTabData = function() {
                 return isNaN(num) ? 0 : num;
             };
 
-            // 💡 SUBTOTAL/TOTAL 전용 포맷: 가격 정보가 전혀 없으면 "정보없음"으로 명시 표시
+            // 💡 SUBTOTAL/TOTAL 전용 포맷: 0이면 $0.00으로 표시
             const fmtCurSummary = function(num) {
                 num = Number(num) || 0;
-                if (num === 0) return '정보없음';
                 return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
 
@@ -7755,11 +7754,8 @@ window.populateTabData = function() {
                     + '<td></td></tr>';
             };
 
-            // 💡 TYPE 열 rowspan 병합 구간을 미리 계산. 병합 구간 = SUBTOTAL이 끝나는 구간과 동일
-            //    (ITEM=NRE / TYPE 변경 / 마지막 행 — SUBTOTAL 삽입 트리거와 완전히 동일한 기준)
-            //    이렇게 맞춰야 rowspan 셀이 SUBTOTAL 행을 침범해 표가 깨지는 일이 없음.
             // 💡 TYPE 값이 빈 칸인 행(엑셀에서 그룹 첫 줄에만 적혀있고 나머지는 빈칸인 경우)을
-            //    바로 위 행의 TYPE 값으로 채워서, 모든 행에 TYPE이 반복해서 보이게 함 (병합 없음)
+            //    바로 위 행의 TYPE 값으로 채워서, 모든 행에 TYPE이 반복해서 들어가게 함 (안전장치)
             (function() {
                 let lastType = '';
                 validRows.forEach(function(r) {
@@ -7768,6 +7764,41 @@ window.populateTabData = function() {
                     else r.type = lastType;
                 });
             })();
+
+            // 💡 각 행의 가격 유무를 미리 계산
+            const rowEmptyFlags = validRows.map(function(r) {
+                const pCost = parseNum(r.protoCost), pNre = parseNum(r.protoNre), mCost = parseNum(r.mpCost), mNre = parseNum(r.mpNre);
+                return (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
+            });
+            // 💡 SUBTOTAL 구간(그룹) 전체에 가격 정보가 하나도 없으면, 그 구간이 통째로 숨겨져서
+            //    TYPE조차 안 보이게 되는 걸 막기 위해 — 그 구간의 첫 행만은 강제로 보이게 표시해둠
+            const forceVisible = {};
+            (function() {
+                let segStart = 0;
+                let curType = '';
+                validRows.forEach(function(r, idx) {
+                    const rt = String(r.type || '').trim();
+                    if (rt) curType = rt;
+                    const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+                    const nextRow = validRows[idx + 1];
+                    const nextType = nextRow ? String(nextRow.type || '').trim() : '';
+                    const isLastRow = !nextRow;
+                    const typeWillChange = !!(nextRow && nextType && nextType !== curType);
+                    if (itemHasNre || typeWillChange || isLastRow) {
+                        let allEmpty = true;
+                        for (let i = segStart; i <= idx; i++) { if (!rowEmptyFlags[i]) { allEmpty = false; break; } }
+                        if (allEmpty) forceVisible[segStart] = true;
+                        segStart = idx + 1;
+                    }
+                });
+            })();
+
+            // 💡 펼침/접힘 상태 — 화면에 "보이는 행" 기준으로 TYPE 글자를 한 번만 보여주기 위해 사용
+            const expanded = !!(window._bmExpanded && window._bmExpanded.mc);
+            // 💡 화면에 보이는 행들 중, 직전에 "글자로 보여준" TYPE과 같으면 이번엔 글자만 투명 처리.
+            //    <td> 자체는 모든 행에 항상 그대로 있고 값도 항상 정상 저장되므로, 행이 숨겨지거나 다시 보여도
+            //    표 구조(열 개수)가 절대 깨지지 않음 (rowspan을 전혀 안 쓰기 때문)
+            let lastShownType = null;
 
             validRows.forEach(function(r, idx) {
                 let rowType = String(r.type || '').trim();
@@ -7778,7 +7809,7 @@ window.populateTabData = function() {
                 const mCost = parseNum(r.mpCost);
                 const mNre = parseNum(r.mpNre);
 
-                const isPriceEmpty = (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
+                const isPriceEmpty = rowEmptyFlags[idx];
 
                 // 데이터 합산 누적
                 subtotal.protoCost += pCost;
@@ -7791,11 +7822,12 @@ window.populateTabData = function() {
                 grandtotal.mpCost += mCost;
                 grandtotal.mpNre += mNre;
 
-                // 💡 단순 규칙: Cost/NRE가 전부 없는 행은 숨김, 예외 없음
-                const isRowEmpty = isPriceEmpty;
+                // 💡 가격 없으면 숨김. 다만 그룹 전체가 가격 없으면, 그 그룹 첫 행만은 TYPE 표시를 위해 강제로 보임
+                const isRowEmpty = isPriceEmpty && !forceVisible[idx];
 
-                // 💡 펼치기 상태(window._bmExpanded.mc)일 때는 재렌더링해도 숨겨진 행을 계속 보여줌
-                const keepHiddenRow = isRowEmpty && !(window._bmExpanded && window._bmExpanded.mc);
+                // 💡 펼치기 상태일 때는 재렌더링해도 숨겨진 행을 계속 보여줌
+                const keepHiddenRow = isRowEmpty && !expanded;
+                const isVisible = !keepHiddenRow;
                 let rowStyle = ' style="' + (keepHiddenRow ? 'display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
 
                 if (pCost !== 0) hasProtoCost = true;
@@ -7803,20 +7835,34 @@ window.populateTabData = function() {
                 if (mCost !== 0) hasMpCost = true;
                 if (mNre !== 0) hasMpNre = true;
 
+                // 💡 보이는 행 기준으로, 직전에 보여준 TYPE과 같으면 글자만 투명 처리 (값은 항상 그대로 저장됨)
+                let showTypeText = false;
+                if (isVisible) {
+                    if (rowType !== lastShownType) { showTypeText = true; lastShownType = rowType; }
+                }
+                const typeColor = showTypeText ? '#333' : 'transparent';
+                const catCellStyle = 'border-bottom:1px solid #eee;' + (showTypeText ? ' border-left:3px solid #2c5f8a;' : '');
+
+                // 💡 그룹 전체가 가격 없어서 "접힌 상태에서만" 강제로 보이는 행이면, TYPE 칸만 보이고 ITEM~Note는 숨김
+                //    (펼친 상태에서는 모든 정보가 정상적으로 다 보여야 함)
+                const isForcedEmptyRow = isPriceEmpty && !!forceVisible[idx] && !expanded;
+                const otherColor = isForcedEmptyRow ? 'transparent' : '#333';
+                const priceColor = isForcedEmptyRow ? 'transparent' : '#777';
+
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
-                    + '<td class="mc-cat" style="border-bottom:1px solid #eee;">'
-                    + '<input type="text" data-field="type" value="' + _escTabVal(rowType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent; text-align:center;">'
+                    + '<td class="mc-cat" style="' + catCellStyle + '">'
+                    + '<input type="text" data-field="type" value="' + _escTabVal(rowType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:' + typeColor + '; background:transparent; text-align:center;">'
                     + '</td>'
-                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
-                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
-                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '"></td>'
-                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:#777; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>');
+                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '" style="color:' + otherColor + ';"></td>'
+                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '" style="color:' + otherColor + ';"></td>'
+                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '" style="color:' + otherColor + ';"></td>'
+                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="color:' + otherColor + ';"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="color:' + otherColor + ';"></td></tr>');
 
                 // 💡 TYPE 그룹의 끝 판정(첨부 엑셀 기준): ① ITEM이 'NRE'인 행 직후
                 //    ② 또는 다음 행의 TYPE이 바뀌는 경우  ③ 또는 표의 마지막 행 → SUBTOTAL 삽입
@@ -7872,42 +7918,8 @@ window.populateTabData = function() {
                     if(tr2.children[2]) tr2.children[2].style.width = '55px';   // MP Cost
                     if(tr2.children[3]) tr2.children[3].style.width = '55px';   // MP NRE
 
-                    // 전체 데이터가 비어 있는 열 숨김 처리
-                    const hide = { 6: !hasProtoCost, 7: !hasProtoNre, 8: !hasMpCost, 9: !hasMpNre };
-
-                    table.querySelectorAll('tbody tr').forEach(tr => {
-                        if(tr.classList.contains('mc-summary-row')) {
-                            if (hide[6]) { let td = tr.querySelector('td:nth-child(2)'); if(td) td.style.display = 'none'; }
-                            if (hide[7]) { let td = tr.querySelector('td:nth-child(3)'); if(td) td.style.display = 'none'; }
-                            if (hide[8]) { let td = tr.querySelector('td:nth-child(4)'); if(td) td.style.display = 'none'; }
-                            if (hide[9]) { let td = tr.querySelector('td:nth-child(5)'); if(td) td.style.display = 'none'; }
-                        } else {
-                            if (hide[6]) { let td = tr.querySelector('td:nth-child(7)'); if(td) td.style.display = 'none'; }
-                            if (hide[7]) { let td = tr.querySelector('td:nth-child(8)'); if(td) td.style.display = 'none'; }
-                            if (hide[8]) { let td = tr.querySelector('td:nth-child(9)'); if(td) td.style.display = 'none'; }
-                            if (hide[9]) { let td = tr.querySelector('td:nth-child(10)'); if(td) td.style.display = 'none'; }
-                        }
-                    });
-
-                    if (hide[6]) { let th = tr2.querySelector('th:nth-child(1)'); if(th) th.style.display = 'none'; }
-                    if (hide[7]) { let th = tr2.querySelector('th:nth-child(2)'); if(th) th.style.display = 'none'; }
-                    if (hide[8]) { let th = tr2.querySelector('th:nth-child(3)'); if(th) th.style.display = 'none'; }
-                    if (hide[9]) { let th = tr2.querySelector('th:nth-child(4)'); if(th) th.style.display = 'none'; }
-                    
-                    const thProto = tr1.querySelector('th:nth-child(7)');
-                    const thMp = tr1.querySelector('th:nth-child(8)');
-                    
-                    let protoColspan = 2 - (hide[6] ? 1 : 0) - (hide[7] ? 1 : 0);
-                    if (thProto) {
-                        if (protoColspan === 0) thProto.style.display = 'none';
-                        else thProto.setAttribute('colspan', protoColspan);
-                    }
-
-                    let mpColspan = 2 - (hide[8] ? 1 : 0) - (hide[9] ? 1 : 0);
-                    if (thMp) {
-                        if (mpColspan === 0) thMp.style.display = 'none';
-                        else thMp.setAttribute('colspan', mpColspan);
-                    }
+                    // 💡 R1~R5 개별 화면에서는 열(컬럼) 숨김을 더 이상 하지 않음 — 행 숨김(빈 행 가리기)만 유지.
+                    //    열 숨김은 비교(Comparison) 화면에서만 적용하기로 함.
                 }
             }, 10);
         } catch (error) {
@@ -8021,11 +8033,18 @@ window.bmToggleHidden = function(key, btnEl) {
     const expand = !window._bmExpanded[key];
     window._bmExpanded[key] = expand;
     try { localStorage.setItem('gantt_' + key + '_expanded', expand ? '1' : '0'); } catch (e) {}
-    Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-auto-hidden="1"]'), function(tr) {
-        tr.style.display = expand ? '' : 'none';
-    });
     if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기';
-    window.bmSetupAllRows(key);
+
+    if (key === 'mc' && window.mcRefreshTable) {
+        // 💡 M.C Table은 "보이는 행 기준으로 TYPE 글자를 어디에 표시할지"가 펼침/접힘 상태에 따라 달라지므로,
+        //    단순히 display만 풀어주면 안 되고 표 전체를 다시 그려야 함
+        window.mcRefreshTable();
+    } else {
+        Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-auto-hidden="1"]'), function(tr) {
+            tr.style.display = expand ? '' : 'none';
+        });
+        window.bmSetupAllRows(key);
+    }
     if (key === 'bs' && window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
 };
 
