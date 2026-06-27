@@ -7755,9 +7755,11 @@ window.populateTabData = function() {
                     + '<td></td></tr>';
             };
 
-            // 💡 TYPE 값이 빈 칸인 행(엑셀 병합 셀을 가져왔거나, 예전 버그로 누락된 경우)을
-            //    바로 위 행의 TYPE 값으로 자동 보정 — 이래야 그룹 경계 계산이 어긋나지 않음.
-            //    (validRows는 실제 데이터 배열을 그대로 참조하므로, 한 번 그려지면 저장 데이터도 같이 보정됨)
+            // 💡 TYPE 열 rowspan 병합 구간을 미리 계산. 병합 구간 = SUBTOTAL이 끝나는 구간과 동일
+            //    (ITEM=NRE / TYPE 변경 / 마지막 행 — SUBTOTAL 삽입 트리거와 완전히 동일한 기준)
+            //    이렇게 맞춰야 rowspan 셀이 SUBTOTAL 행을 침범해 표가 깨지는 일이 없음.
+            // 💡 TYPE 값이 빈 칸인 행(엑셀에서 그룹 첫 줄에만 적혀있고 나머지는 빈칸인 경우)을
+            //    바로 위 행의 TYPE 값으로 채워서, 모든 행에 TYPE이 반복해서 보이게 함 (병합 없음)
             (function() {
                 let lastType = '';
                 validRows.forEach(function(r) {
@@ -7767,31 +7769,8 @@ window.populateTabData = function() {
                 });
             })();
 
-            // 💡 TYPE 열 rowspan 병합 구간을 미리 계산. 병합 구간 = SUBTOTAL이 끝나는 구간과 동일
-            //    (ITEM=NRE / TYPE 변경 / 마지막 행 — SUBTOTAL 삽입 트리거와 완전히 동일한 기준)
-            //    이렇게 맞춰야 rowspan 셀이 SUBTOTAL 행을 침범해 표가 깨지는 일이 없음.
-            const mergeSpan = {};
-            (function() {
-                let segStart = 0;
-                let curType = '';
-                validRows.forEach(function(r, idx) {
-                    const rt = String(r.type || '').trim();
-                    if (rt) curType = rt;
-                    const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
-                    const nextRow = validRows[idx + 1];
-                    const nextType = nextRow ? String(nextRow.type || '').trim() : '';
-                    const isLastRow = !nextRow;
-                    const typeWillChange = !!(nextRow && nextType && nextType !== curType);
-                    if (itemHasNre || typeWillChange || isLastRow) {
-                        mergeSpan[segStart] = idx - segStart + 1;
-                        segStart = idx + 1;
-                    }
-                });
-            })();
-
             validRows.forEach(function(r, idx) {
                 let rowType = String(r.type || '').trim();
-                const isGroupStart = mergeSpan.hasOwnProperty(idx);
                 if (rowType) currentType = rowType;
 
                 const pCost = parseNum(r.protoCost);
@@ -7812,10 +7791,8 @@ window.populateTabData = function() {
                 grandtotal.mpCost += mCost;
                 grandtotal.mpNre += mNre;
 
-                // 💡 병합 구간의 첫 행(=TYPE 셀을 가진 행)은 가격이 없어도 항상 표시
-                //    (접기 실행해도 TYPE 라벨이 사라지지 않도록)
-                const isRowEmpty = isPriceEmpty && !isGroupStart;
-                const displayType = isGroupStart ? rowType : '';
+                // 💡 단순 규칙: Cost/NRE가 전부 없는 행은 숨김, 예외 없음
+                const isRowEmpty = isPriceEmpty;
 
                 // 💡 펼치기 상태(window._bmExpanded.mc)일 때는 재렌더링해도 숨겨진 행을 계속 보여줌
                 const keepHiddenRow = isRowEmpty && !(window._bmExpanded && window._bmExpanded.mc);
@@ -7826,19 +7803,12 @@ window.populateTabData = function() {
                 if (mCost !== 0) hasMpCost = true;
                 if (mNre !== 0) hasMpNre = true;
 
-                // 💡 TYPE 칸: 병합 구간의 첫 행에서만 rowspan으로 실제 셀 생성, 나머지 행은 <td> 자체를 만들지 않음
-                //    (위쪽 셀이 rowspan으로 덮어주므로 — 실제 엑셀처럼 통째로 합쳐진 셀이 됨)
-                const catCellHtml = isGroupStart
-                    ? ('<td class="mc-cat" rowspan="' + (mergeSpan[idx] || 1) + '" style="border-bottom:1px solid #eee; border-left:3px solid #2c5f8a; vertical-align:middle;">'
-                        + '<input type="text" data-field="type" value="' + _escTabVal(displayType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent; text-align:center;">'
-                        + '</td>')
-                    : '';
-
                 htmlChunks.push('<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
-                    + catCellHtml
-                    + '<td>' + (isGroupStart ? '' : '<input type="hidden" data-field="type" value="' + _escTabVal(rowType) + '">')
-                        + '<input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
+                    + '<td class="mc-cat" style="border-bottom:1px solid #eee;">'
+                    + '<input type="text" data-field="type" value="' + _escTabVal(rowType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:#333; background:transparent; text-align:center;">'
+                    + '</td>'
+                    + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '"></td>'
                     + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '"></td>'
                     + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '"></td>'
                     + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '"></td>'
