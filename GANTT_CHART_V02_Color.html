@@ -802,7 +802,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     vertical-align: middle !important;
                 }
             </style>
-            <table class="concept-table" style="min-width:1300px;">
+            <table class="concept-table" style="min-width:1500px;">
                 <thead>
                     <tr>
                         <th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
@@ -811,7 +811,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         <th rowspan="2" style="width:140px;">GROUP</th>
                         <th rowspan="2" style="width:120px;">P/N</th>
                         <th rowspan="2" style="min-width:280px;">Specification</th>
-                        <th colspan="2">PROTO</th>
+                        <th colspan="2">PROTO A</th>
+                        <th colspan="2">PROTO B</th>
                         <th colspan="2">MP</th>
                         <th rowspan="2" style="min-width:220px;">Note</th>
                     </tr>
@@ -820,19 +821,29 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         <th style="width:55px;">NRE</th>
                         <th style="width:65px;">Cost($)</th>
                         <th style="width:55px;">NRE</th>
+                        <th style="width:65px;">Cost($)</th>
+                        <th style="width:55px;">NRE</th>
                     </tr>
                 </thead>
                 <tbody id="mctable-body">
-                    <tr><td class="bm-no"></td><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" class="u-input" data-field="protoCost"></td><td><input type="text" class="u-input" data-field="protoNre"></td><td><input type="text" class="u-input" data-field="mpCost"></td><td><input type="text" class="u-input" data-field="mpNre"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no"></td><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" class="u-input" data-field="protoCost"></td><td><input type="text" class="u-input" data-field="protoNre"></td><td><input type="text" class="u-input" data-field="protoBCost"></td><td><input type="text" class="u-input" data-field="protoBNre"></td><td><input type="text" class="u-input" data-field="mpCost"></td><td><input type="text" class="u-input" data-field="mpNre"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
             </div>
-            <p style="font-size:11.5px; color:#999; margin-top:10px;">※ 합계/금형비 등 세부 자동계산 로직은 추후 상세 작업에서 구현합니다.</p>
+            <div id="mc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-size:13px;">
+                    <span>📜 견적 수정이력 확인</span>
+                    <span id="mc-history-toggle-icon">▶</span>
+                </div>
+                <div id="mc-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                    <table id="mc-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
+                </div>
+            </div>
             </div>
             <div id="mc-comparison-section" style="display:none;">
                 <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
                     <!-- 돌아가기 버튼 제거: R1~R5 버튼이 동일 기능을 수행 -->
-                    <button id="mc-comp-empty-toggle-btn" onclick="window.mcToggleEmptyRevCols()" style="padding:6px 14px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">🔽 빈 리비전 열 보기</button>
+                    <button id="mc-comp-toggle-hidden-btn" onclick="window.mcToggleCompareExpand(this)" style="padding:6px 14px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">🔽 펼치기</button>
                 </div>
                 <div style="overflow-x:auto;">
                     <table class="concept-table" id="mc-comparison-table" style="min-width:900px;"></table>
@@ -3149,11 +3160,11 @@ ${mailText}`;
         // ── M.C Table 시트 (R1~R5, 컨셉 단계: BOM 원가/금형비) ──
         function _buildMcSheet(rows) {
             const mcData = [
-                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', 'PROTO', '', 'MP', '', 'Note'],
-                ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', ''],
+                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', 'PROTO A', '', 'PROTO B', '', 'MP', '', 'Note'],
+                ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', ''],
             ];
             (rows || []).forEach(r => {
-                mcData.push([r.type || '', r.item || '', r.group || '', r.pn || '', r.spec || '', r.protoCost || '', r.protoNre || '', r.mpCost || '', r.mpNre || '', r.note || '']);
+                mcData.push([r.type || '', r.item || '', r.group || '', r.pn || '', r.spec || '', r.protoCost || '', r.protoNre || '', r.protoBCost || '', r.protoBNre || '', r.mpCost || '', r.mpNre || '', r.note || '']);
             });
             const wsMc = XLSX.utils.aoa_to_sheet(mcData);
             wsMc['!merges'] = [
@@ -3162,9 +3173,10 @@ ${mailText}`;
                 { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, // GROUP
                 { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } }, // P/N
                 { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } }, // Specification
-                { s: { r: 0, c: 5 }, e: { r: 0, c: 6 } }, // PROTO
-                { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }, // MP
-                { s: { r: 0, c: 9 }, e: { r: 1, c: 9 } }, // Note
+                { s: { r: 0, c: 5 }, e: { r: 0, c: 6 } }, // PROTO A
+                { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }, // PROTO B
+                { s: { r: 0, c: 9 }, e: { r: 0, c: 10 } }, // MP
+                { s: { r: 0, c: 11 }, e: { r: 1, c: 11 } }, // Note
             ];
             for (let key in wsMc) {
                 if (key[0] === '!') continue;
@@ -3172,7 +3184,7 @@ ${mailText}`;
                 wsMc[key].s.font = { sz: 10, name: "맑은 고딕" };
                 wsMc[key].s.alignment = { vertical: "center", wrapText: true };
             }
-            wsMc['!cols'] = [{wch: 12}, {wch: 18}, {wch: 16}, {wch: 10}, {wch: 36}, {wch: 10}, {wch: 8}, {wch: 10}, {wch: 8}, {wch: 30}];
+            wsMc['!cols'] = [{wch: 12}, {wch: 18}, {wch: 16}, {wch: 10}, {wch: 36}, {wch: 10}, {wch: 8}, {wch: 10}, {wch: 8}, {wch: 10}, {wch: 8}, {wch: 30}];
             return wsMc;
         }
         const mcRevisionsForExport = tabData.mcRevisions || {};
@@ -7388,10 +7400,12 @@ function _parseMcTableSheetRows(workbook, sheetName) {
             type: String(r[0] || '').trim(), item: String(r[1] || '').trim(), group: String(r[2] || '').trim(),
             pn: (r[3] === undefined || r[3] === null) ? '' : String(r[3]).trim(), spec: String(r[4] || '').trim(),
             protoCost: (r[5] === undefined || r[5] === null) ? '' : r[5], protoNre: (r[6] === undefined || r[6] === null) ? '' : r[6],
-            mpCost: (r[7] === undefined || r[7] === null) ? '' : r[7], mpNre: (r[8] === undefined || r[8] === null) ? '' : r[8],
-            note: String(r[9] || '').trim()
+            protoBCost: (r[7] === undefined || r[7] === null) ? '' : r[7], protoBNre: (r[8] === undefined || r[8] === null) ? '' : r[8],
+            mpCost: (r[9] === undefined || r[9] === null) ? '' : r[9], mpNre: (r[10] === undefined || r[10] === null) ? '' : r[10],
+            note: String(r[11] || '').trim()
         };
-        const isEmpty = !row.type && !row.item && !row.group && !row.pn && !row.spec && !row.note && row.protoCost === '' && row.protoNre === '' && row.mpCost === '' && row.mpNre === '';
+        const isEmpty = !row.type && !row.item && !row.group && !row.pn && !row.spec && !row.note
+            && row.protoCost === '' && row.protoNre === '' && row.protoBCost === '' && row.protoBNre === '' && row.mpCost === '' && row.mpNre === '';
         if (isEmpty) continue;
         rows.push(row);
     }
@@ -7711,10 +7725,11 @@ window.populateTabData = function() {
             let currentType = '';
             let htmlChunks = [];
             
-            let subtotal = { protoCost: 0, protoNre: 0, mpCost: 0, mpNre: 0 };
-            let grandtotal = { protoCost: 0, protoNre: 0, mpCost: 0, mpNre: 0 };
+            let subtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
+            let grandtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
             
             let hasProtoCost = false; let hasProtoNre = false;
+            let hasProtoBCost = false; let hasProtoBNre = false;
             let hasMpCost = false; let hasMpNre = false;
             
             // 💡 통화 포맷 함수: 0원 빈칸 처리 + 3자리 쉼표(toLocaleString) 적용
@@ -7741,21 +7756,19 @@ window.populateTabData = function() {
 
             // 💡 합계 행 생성 함수: TOTAL 행은 옅은 하늘색(#e3f2fd), SUBTOTAL은 노란색(#fff9c4)
             const renderSubtotalRow = function(label, sums, isTotal) {
-                // 💡 합계가 $0이라도 그룹 구분을 위해 SUBTOTAL 행은 항상 표시 (라벨만 보이고 금액칸은 빈칸)
-                // 💡 mc-summary-row는 data-auto-hidden이 없으므로 "접기" 실행 시에도 항상 표시됨
                 const bgColor = isTotal ? '#e3f2fd' : '#fff9c4';
-
+                const valCell = function(v) {
+                    return '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(v) + '" readonly></td>';
+                };
                 return '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
                     + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.protoCost) + '" readonly></td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.protoNre) + '" readonly></td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.mpCost) + '" readonly></td>'
-                    + '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(sums.mpNre) + '" readonly></td>'
+                    + valCell(sums.protoCost) + valCell(sums.protoNre)
+                    + valCell(sums.protoBCost) + valCell(sums.protoBNre)
+                    + valCell(sums.mpCost) + valCell(sums.mpNre)
                     + '<td></td></tr>';
             };
 
-            // 💡 TYPE 값이 빈 칸인 행(엑셀에서 그룹 첫 줄에만 적혀있고 나머지는 빈칸인 경우)을
-            //    바로 위 행의 TYPE 값으로 채워서, 모든 행에 TYPE이 반복해서 들어가게 함 (안전장치)
+            // 💡 TYPE 값이 빈 칸인 행을 바로 위 행의 TYPE 값으로 채워서, 모든 행에 TYPE이 반복해서 들어가게 함 (안전장치)
             (function() {
                 let lastType = '';
                 validRows.forEach(function(r) {
@@ -7765,10 +7778,12 @@ window.populateTabData = function() {
                 });
             })();
 
-            // 💡 각 행의 가격 유무를 미리 계산
+            // 💡 각 행의 가격 유무를 미리 계산 (PROTO A/B/MP 전부 포함)
             const rowEmptyFlags = validRows.map(function(r) {
-                const pCost = parseNum(r.protoCost), pNre = parseNum(r.protoNre), mCost = parseNum(r.mpCost), mNre = parseNum(r.mpNre);
-                return (pCost === 0 && pNre === 0 && mCost === 0 && mNre === 0);
+                const pCost = parseNum(r.protoCost), pNre = parseNum(r.protoNre);
+                const pbCost = parseNum(r.protoBCost), pbNre = parseNum(r.protoBNre);
+                const mCost = parseNum(r.mpCost), mNre = parseNum(r.mpNre);
+                return (pCost === 0 && pNre === 0 && pbCost === 0 && pbNre === 0 && mCost === 0 && mNre === 0);
             });
             // 💡 SUBTOTAL 구간(그룹) 전체에 가격 정보가 하나도 없으면, 그 구간이 통째로 숨겨져서
             //    TYPE조차 안 보이게 되는 걸 막기 위해 — 그 구간의 첫 행만은 강제로 보이게 표시해둠
@@ -7795,9 +7810,6 @@ window.populateTabData = function() {
 
             // 💡 펼침/접힘 상태 — 화면에 "보이는 행" 기준으로 TYPE 글자를 한 번만 보여주기 위해 사용
             const expanded = !!(window._bmExpanded && window._bmExpanded.mc);
-            // 💡 화면에 보이는 행들 중, 직전에 "글자로 보여준" TYPE과 같으면 이번엔 글자만 투명 처리.
-            //    <td> 자체는 모든 행에 항상 그대로 있고 값도 항상 정상 저장되므로, 행이 숨겨지거나 다시 보여도
-            //    표 구조(열 개수)가 절대 깨지지 않음 (rowspan을 전혀 안 쓰기 때문)
             let lastShownType = null;
 
             validRows.forEach(function(r, idx) {
@@ -7806,6 +7818,8 @@ window.populateTabData = function() {
 
                 const pCost = parseNum(r.protoCost);
                 const pNre = parseNum(r.protoNre);
+                const pbCost = parseNum(r.protoBCost);
+                const pbNre = parseNum(r.protoBNre);
                 const mCost = parseNum(r.mpCost);
                 const mNre = parseNum(r.mpNre);
 
@@ -7814,28 +7828,32 @@ window.populateTabData = function() {
                 // 데이터 합산 누적
                 subtotal.protoCost += pCost;
                 subtotal.protoNre += pNre;
+                subtotal.protoBCost += pbCost;
+                subtotal.protoBNre += pbNre;
                 subtotal.mpCost += mCost;
                 subtotal.mpNre += mNre;
 
                 grandtotal.protoCost += pCost;
                 grandtotal.protoNre += pNre;
+                grandtotal.protoBCost += pbCost;
+                grandtotal.protoBNre += pbNre;
                 grandtotal.mpCost += mCost;
                 grandtotal.mpNre += mNre;
 
                 // 💡 가격 없으면 숨김. 다만 그룹 전체가 가격 없으면, 그 그룹 첫 행만은 TYPE 표시를 위해 강제로 보임
                 const isRowEmpty = isPriceEmpty && !forceVisible[idx];
 
-                // 💡 펼치기 상태일 때는 재렌더링해도 숨겨진 행을 계속 보여줌
                 const keepHiddenRow = isRowEmpty && !expanded;
                 const isVisible = !keepHiddenRow;
                 let rowStyle = ' style="' + (keepHiddenRow ? 'display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
 
                 if (pCost !== 0) hasProtoCost = true;
                 if (pNre !== 0) hasProtoNre = true;
+                if (pbCost !== 0) hasProtoBCost = true;
+                if (pbNre !== 0) hasProtoBNre = true;
                 if (mCost !== 0) hasMpCost = true;
                 if (mNre !== 0) hasMpNre = true;
 
-                // 💡 보이는 행 기준으로, 직전에 보여준 TYPE과 같으면 글자만 투명 처리 (값은 항상 그대로 저장됨)
                 let showTypeText = false;
                 if (isVisible) {
                     if (rowType !== lastShownType) { showTypeText = true; lastShownType = rowType; }
@@ -7843,8 +7861,6 @@ window.populateTabData = function() {
                 const typeColor = showTypeText ? '#333' : 'transparent';
                 const catCellStyle = 'border-bottom:1px solid #eee;' + (showTypeText ? ' border-left:3px solid #2c5f8a;' : '');
 
-                // 💡 그룹 전체가 가격 없어서 "접힌 상태에서만" 강제로 보이는 행이면, TYPE 칸만 보이고 ITEM~Note는 숨김
-                //    (펼친 상태에서는 모든 정보가 정상적으로 다 보여야 함)
                 const isForcedEmptyRow = isPriceEmpty && !!forceVisible[idx] && !expanded;
                 const otherColor = isForcedEmptyRow ? 'transparent' : '#333';
                 const priceColor = isForcedEmptyRow ? 'transparent' : '#777';
@@ -7860,12 +7876,12 @@ window.populateTabData = function() {
                     + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="color:' + otherColor + ';"></td>'
                     + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoBCost" value="' + fmtCur(r.protoBCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    + '<td><input type="text" class="u-input" data-field="protoBNre" value="' + fmtCur(r.protoBNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                     + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="color:' + otherColor + ';"></td></tr>');
 
-                // 💡 TYPE 그룹의 끝 판정(첨부 엑셀 기준): ① ITEM이 'NRE'인 행 직후
-                //    ② 또는 다음 행의 TYPE이 바뀌는 경우  ③ 또는 표의 마지막 행 → SUBTOTAL 삽입
                 const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
                 const nextRow = validRows[idx + 1];
                 const nextType = nextRow ? String(nextRow.type || '').trim() : '';
@@ -7874,11 +7890,44 @@ window.populateTabData = function() {
 
                 if (currentType && (itemHasNre || typeWillChange || isLastRow)) {
                     htmlChunks.push(renderSubtotalRow(currentType + ' SUBTOTAL', subtotal, false));
-                    subtotal = { protoCost: 0, protoNre: 0, mpCost: 0, mpNre: 0 };
+                    subtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
                 }
             });
 
-            htmlChunks.push(renderSubtotalRow('TOTAL', grandtotal, true));
+            htmlChunks.push(renderSubtotalRow('TOTAL(M.C)', grandtotal, true));
+
+            // 💡 영업판가 행 (PROTO A/B, MP 각각 개별 입력 — 비교 페이지와 달리 합치지 않음)
+            const renderSalesPriceRow = function(rev) {
+                const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[rev]) || {};
+                const cell = function(field) {
+                    const raw = sp[field];
+                    const display = raw ? '$' + parseNum(raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+                    return '<td><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + rev + '\', \'' + field + '\', this.value)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
+                };
+                return '<tr class="mc-summary-row" style="background-color:#e8f5e9; font-weight:bold;">'
+                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>'
+                    + cell('protoCost') + cell('protoNre') + cell('protoBCost') + cell('protoBNre') + cell('mpCost') + cell('mpNre')
+                    + '<td></td></tr>';
+            };
+
+            // 💡 재료비율 행 (읽기 전용, TOTAL(M.C) ÷ 영업판가 — 칸별로 개별 계산)
+            const renderRatioRow = function(rev, totals) {
+                const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[rev]) || {};
+                const ratioCell = function(field) {
+                    const spVal = parseNum(sp[field]);
+                    const totalVal = totals[field] || 0;
+                    const text = spVal > 0 ? (totalVal / spVal * 100).toFixed(1) + '%' : '-';
+                    return '<td style="text-align:center; font-weight:bold; color:#e65100;">' + text + '</td>';
+                };
+                return '<tr class="mc-summary-row" style="background-color:#ffe0b2; font-weight:bold;">'
+                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>'
+                    + ratioCell('protoCost') + ratioCell('protoNre') + ratioCell('protoBCost') + ratioCell('protoBNre') + ratioCell('mpCost') + ratioCell('mpNre')
+                    + '<td></td></tr>';
+            };
+
+            const _curRevForSales = td.mcActiveRevision || 'R1';
+            htmlChunks.push(renderSalesPriceRow(_curRevForSales));
+            htmlChunks.push(renderRatioRow(_curRevForSales, grandtotal));
 
             tbody.innerHTML = htmlChunks.join('');
             if (window.bmSetupAllRows) window.bmSetupAllRows('mc');
@@ -7910,16 +7959,41 @@ window.populateTabData = function() {
                     if(tr1.children[3]) tr1.children[3].style.width = '140px';  // GROUP
                     if(tr1.children[4]) tr1.children[4].style.width = '70px';  // P/N
                     if(tr1.children[5]) tr1.children[5].style.width = '300px';  // Specification
-                    if(tr1.children[8]) tr1.children[8].style.width = '400px';  // Note
+                    if(tr1.children[9]) tr1.children[9].style.width = '400px';  // Note (PROTO B 추가로 인덱스 8→9)
                     
-                    // 하위 가격 금액 열 너비 좁히기
-                    if(tr2.children[0]) tr2.children[0].style.width = '55px';   // PROTO Cost
-                    if(tr2.children[1]) tr2.children[1].style.width = '55px';   // PROTO NRE
-                    if(tr2.children[2]) tr2.children[2].style.width = '55px';   // MP Cost
-                    if(tr2.children[3]) tr2.children[3].style.width = '55px';   // MP NRE
+                    // 하위 가격 금액 열 너비 좁히기 (PROTO A/B/MP 총 6칸)
+                    if(tr2.children[0]) tr2.children[0].style.width = '55px';   // PROTO A Cost
+                    if(tr2.children[1]) tr2.children[1].style.width = '55px';   // PROTO A NRE
+                    if(tr2.children[2]) tr2.children[2].style.width = '55px';   // PROTO B Cost
+                    if(tr2.children[3]) tr2.children[3].style.width = '55px';   // PROTO B NRE
+                    if(tr2.children[4]) tr2.children[4].style.width = '55px';   // MP Cost
+                    if(tr2.children[5]) tr2.children[5].style.width = '55px';   // MP NRE
 
-                    // 💡 R1~R5 개별 화면에서는 열(컬럼) 숨김을 더 이상 하지 않음 — 행 숨김(빈 행 가리기)만 유지.
-                    //    열 숨김은 비교(Comparison) 화면에서만 적용하기로 함.
+                    // 💡 "접기" 상태에서, 표 전체에 가격이 하나도 없는 쌍(PROTO A / PROTO B / MP)은
+                    //    Cost+NRE를 항상 묶어서 통째로 숨김 (colspan은 건드리지 않음 — 쌍 단위라 항상 정합 유지)
+                    const hidePairs = {
+                        protoA: !(hasProtoCost || hasProtoNre) && !expanded,
+                        protoB: !(hasProtoBCost || hasProtoBNre) && !expanded,
+                        mp: !(hasMpCost || hasMpNre) && !expanded
+                    };
+                    if (tr1.children[6]) tr1.children[6].style.display = hidePairs.protoA ? 'none' : '';
+                    if (tr1.children[7]) tr1.children[7].style.display = hidePairs.protoB ? 'none' : '';
+                    if (tr1.children[8]) tr1.children[8].style.display = hidePairs.mp ? 'none' : '';
+                    [0,1].forEach(function(i) { if (tr2.children[i]) tr2.children[i].style.display = hidePairs.protoA ? 'none' : ''; });
+                    [2,3].forEach(function(i) { if (tr2.children[i]) tr2.children[i].style.display = hidePairs.protoB ? 'none' : ''; });
+                    [4,5].forEach(function(i) { if (tr2.children[i]) tr2.children[i].style.display = hidePairs.mp ? 'none' : ''; });
+
+                    table.querySelectorAll('tbody tr').forEach(function(tr) {
+                        if (tr.classList.contains('mc-summary-row')) {
+                            [1,2].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoA ? 'none' : ''; });
+                            [3,4].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoB ? 'none' : ''; });
+                            [5,6].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.mp ? 'none' : ''; });
+                        } else {
+                            [6,7].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoA ? 'none' : ''; });
+                            [8,9].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoB ? 'none' : ''; });
+                            [10,11].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.mp ? 'none' : ''; });
+                        }
+                    });
                 }
             }, 10);
         } catch (error) {
@@ -7960,6 +8034,8 @@ const BM_CONF = {
                 + '<td><input type="text" data-field="spec"></td>'
                 + '<td><input type="text" class="u-input" data-field="protoCost"></td>'
                 + '<td><input type="text" class="u-input" data-field="protoNre"></td>'
+                + '<td><input type="text" class="u-input" data-field="protoBCost"></td>'
+                + '<td><input type="text" class="u-input" data-field="protoBNre"></td>'
                 + '<td><input type="text" class="u-input" data-field="mpCost"></td>'
                 + '<td><input type="text" class="u-input" data-field="mpNre"></td>'
                 + '<td><input type="text" class="u-input" data-field="note"></td>';
@@ -8326,10 +8402,85 @@ window.mcRefreshTable = function() {
     window.populateTabData();
 };
 
+// 💡 R1~R5 개별 화면의 영업판가(PROTO/MP × Cost/NRE 개별) 입력 저장 — 비교 페이지의 salesPrice와는 별도 저장소
+window.mcUpdateSalesPriceDetail = function(rev, field, val) {
+    window.tabData = window.tabData || {};
+    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
+    window.tabData.mcSalesPriceDetail[rev] = window.tabData.mcSalesPriceDetail[rev] || {};
+    window.tabData.mcSalesPriceDetail[rev][field] = val;
+    window.mcRefreshTable();
+};
+
+// 💡 수정이력 박스 펼치기/접기
+window.mcToggleHistoryBox = function() {
+    const body = document.getElementById('mc-history-body');
+    const icon = document.getElementById('mc-history-toggle-icon');
+    if (!body) return;
+    const expand = body.style.display === 'none';
+    body.style.display = expand ? 'block' : 'none';
+    if (icon) icon.textContent = expand ? '▼' : '▶';
+    if (expand) window.mcRenderHistoryTable();
+};
+
+// 💡 변경 사항 1건 기록
+window.mcLogChange = function(rowLabel, field, oldVal, newVal) {
+    if (String(oldVal || '') === String(newVal || '')) return;
+    window.tabData = window.tabData || {};
+    window.tabData.mcChangeLog = window.tabData.mcChangeLog || [];
+    window.tabData.mcChangeLog.push({
+        time: new Date().toLocaleString('ko-KR'),
+        userName: window.currentUserName || '비로그인',
+        rev: window.tabData.mcActiveRevision || 'R1',
+        row: rowLabel, field: field, oldVal: oldVal, newVal: newVal
+    });
+};
+
+// 💡 수정이력 표 그리기
+window.mcRenderHistoryTable = function() {
+    const table = document.getElementById('mc-history-table');
+    if (!table) return;
+    const logs = (window.tabData && window.tabData.mcChangeLog) || [];
+    if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
+    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">리비전</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th></tr></thead><tbody>';
+    logs.slice().reverse().forEach(function(log) {
+        html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
+            + '<td style="padding:4px 8px; text-align:center;">' + log.rev + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold;">' + log.row + '</td>'
+            + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + log.field + '</span></td>'
+            + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
+            + '<td style="padding:4px 8px; color:#2f9e44;">' + (log.newVal || '-') + '</td></tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+};
+
+// 💡 M.C Table 입력칸 변경 감지 (한 번만 등록 — tbody 자체는 재사용되므로 안전)
+(function() {
+    const tbody = document.getElementById('mctable-body');
+    if (tbody) {
+        tbody.addEventListener('focusin', function(e) {
+            if (e.target.matches && e.target.matches('input[data-field]')) e.target.dataset._histOld = e.target.value;
+        });
+        tbody.addEventListener('change', function(e) {
+            const el = e.target;
+            if (!el.matches || !el.matches('input[data-field]')) return;
+            const tr = el.closest('tr');
+            if (!tr || tr.classList.contains('mc-summary-row')) return;
+            const typeInp = tr.querySelector('input[data-field="type"]');
+            const itemInp = tr.querySelector('input[data-field="item"]');
+            const rowLabel = (((typeInp && typeInp.value) || '') + ' ' + ((itemInp && itemInp.value) || '')).trim() || '행';
+            const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
+            window.mcLogChange(rowLabel, el.dataset.field, oldVal, el.value);
+            el.dataset._histOld = el.value;
+        });
+    }
+})();
+
 // ────────────────────────────────────────────────────────
 // 📊 M.C Table Comparison (R1~R5 비교표)
 // ────────────────────────────────────────────────────────
-window._mcCompShowEmpty = false; // 빈 리비전(데이터 없는 R2~R5) 열 표시 여부
+window._mcCompExpanded = false; // 비교표 펼침 상태 (가격 없는 행/열도 모두 표시)
+try { window._mcCompExpanded = localStorage.getItem('gantt_mcComp_expanded') === '1'; } catch (e) {}
 
 function _mcParseNum(val) {
     if (val === undefined || val === null) return 0;
@@ -8404,10 +8555,10 @@ window.mcHideComparison = function() {
     document.getElementById('mc-normal-section').style.display = '';
 };
 
-window.mcToggleEmptyRevCols = function() {
-    window._mcCompShowEmpty = !window._mcCompShowEmpty;
-    const btn = document.getElementById('mc-comp-empty-toggle-btn');
-    if (btn) btn.textContent = window._mcCompShowEmpty ? '🔼 빈 리비전 열 숨기기' : '🔽 빈 리비전 열 보기';
+window.mcToggleCompareExpand = function(btnEl) {
+    window._mcCompExpanded = !window._mcCompExpanded;
+    try { localStorage.setItem('gantt_mcComp_expanded', window._mcCompExpanded ? '1' : '0'); } catch (e) {}
+    if (btnEl) btnEl.textContent = window._mcCompExpanded ? '🔼 접기' : '🔽 펼치기';
     window.mcRenderComparisonTable();
 };
 
@@ -8433,6 +8584,7 @@ window.mcRenderComparisonTable = function() {
     const td = window.tabData || {};
     td.mcCompare = td.mcCompare || { salesPrice: {} };
     td.mcCompare.salesPrice = td.mcCompare.salesPrice || {};
+    const expanded = !!window._mcCompExpanded;
 
     // 리비전별 합계 + 데이터 존재 여부 (R1은 항상 표시)
     const totals = {};
@@ -8452,7 +8604,13 @@ window.mcRenderComparisonTable = function() {
         });
     });
 
-    const visibleRevs = revs.filter(function(rev) { return rev === 'R1' || hasData[rev] || window._mcCompShowEmpty; });
+    // 💡 "접기" 상태: 가격 정보가 전혀 없는 리비전 열(Cost+NRE 쌍)은 숨김. "펼치기": 전부 표시
+    const visibleRevs = revs.filter(function(rev) { return rev === 'R1' || hasData[rev] || expanded; });
+
+    // 💡 "접기" 상태: 모든 리비전에서 가격이 0인 행(항목)은 숨김. "펼치기": 전부 표시
+    const displayRows = expanded ? rows : rows.filter(function(r) {
+        return revs.some(function(rev) { const p = r.prices[rev]; return p && (p.cost || p.nre); });
+    });
 
     // 헤더
     let thead = '<thead><tr>'
@@ -8467,7 +8625,7 @@ window.mcRenderComparisonTable = function() {
 
     // 항목 행 (한 줄씩 하이라이트 구분을 위해 짝/홀 배경 교차)
     let tbody = '<tbody>';
-    rows.forEach(function(r, idx) {
+    displayRows.forEach(function(r, idx) {
         const zebra = idx % 2 === 0 ? '#ffffff' : '#fafbfc';
         tbody += '<tr style="background-color:' + zebra + ';"><td style="text-align:center;">' + (idx+1) + '</td>'
             + '<td>' + _mcEsc(r.type) + '</td>'
@@ -8522,6 +8680,8 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.textContent = '🔼 접기';
         }
     });
+    const compBtn = document.getElementById('mc-comp-toggle-hidden-btn');
+    if (compBtn && window._mcCompExpanded) compBtn.textContent = '🔼 접기';
 });
 </script>
 
