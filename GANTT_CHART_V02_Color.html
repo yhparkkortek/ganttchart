@@ -779,7 +779,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         <div class="concept-header-box">
             <h2>💰 M.C Table</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('mc', this)" style="margin:0;">🔽 펼치기</button>
+            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0;">🔽 펼치기</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div style="display:flex; gap:6px; align-items:center;">
                 <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
@@ -789,18 +789,63 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                 <button class="mc-rev-btn" data-rev="R5" onclick="window.mcSwitchRevision('R5')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R5</button>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
+            <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
             <div class="btn-group"></div>
         </div>
         <div class="concept-section">
             <div id="mc-normal-section">
-            <div style="overflow-x:auto;">
+            <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
             <style>
                 /* M.C Table 탭 내의 표 머릿글(th) 중앙 정렬 강제 적용 */
                 #tab-mctable .concept-table th {
                     text-align: center !important;
                     vertical-align: middle !important;
                 }
+                /* 💡 가격 정보 시작 지점(Spec 오른쪽) + PROTO A / PROTO B / MP 쌍 구분선 — TYPE 강조선과 동일 색상 */
+                    #mc-normal-section .concept-table thead tr:nth-child(2) th:nth-child(1),
+                    #mc-normal-section .concept-table tbody tr:not(.mc-summary-row) td:nth-child(7),
+                    #mc-normal-section .concept-table tbody tr.mc-summary-row td:nth-child(2) {
+                        border-left: 2px solid #2c5f8a !important;
+                    }
+                    #mc-normal-section .concept-table thead tr:nth-child(2) th:nth-child(3),
+                    #mc-normal-section .concept-table tbody tr:not(.mc-summary-row) td:nth-child(9),
+                    #mc-normal-section .concept-table tbody tr.mc-summary-row td:nth-child(4) {
+                        border-left: 2px solid #2c5f8a !important;
+                    }
+                    #mc-normal-section .concept-table thead tr:nth-child(2) th:nth-child(5),
+                    #mc-normal-section .concept-table tbody tr:not(.mc-summary-row) td:nth-child(11),
+                    #mc-normal-section .concept-table tbody tr.mc-summary-row td:nth-child(6) {
+                        border-left: 2px solid #2c5f8a !important;
+                    }
+                    /* 💡 Comparison 표: 리비전 개수가 가변적이라 JS에서 class="mc-comp-divider"를 직접 붙여줌 (GROUP 오른쪽부터 매 리비전 Cost 칸마다) */
+                    .mc-comp-divider {
+                        border-left: 2px solid #2c5f8a !important;
+                    }
+                    /* 💡 스크롤 시 머릿글 고정 */
+                    /* 💡 다른 페이지와 동일한 border-collapse 유지, 격자선은 box-shadow로 그려서 sticky 충돌 회피 */
+                    #tab-mctable .concept-table,
+                    #mc-comparison-table {
+                        border-collapse: collapse;
+                    }
+                    #tab-mctable .concept-table thead,
+                    #mc-comparison-table thead {
+                        position: sticky !important;
+                        top: 0 !important;
+                        z-index: 16;
+                    }
+                    #tab-mctable .concept-table th,
+                    #tab-mctable .concept-table td,
+                    #mc-comparison-table th,
+                    #mc-comparison-table td {
+                        border-top: none;
+                        border-right: none;
+                        border-bottom: none;
+                        box-shadow: inset -1px 0 0 #ddd, inset 0 -1px 0 #ddd;
+                    }
+                    #tab-mctable .concept-table thead th,
+                    #mc-comparison-table thead th {
+                        background-color: #f4f6f8 !important;
+                    }
             </style>
             <table class="concept-table" style="min-width:1500px;">
                 <thead>
@@ -813,7 +858,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         <th rowspan="2" style="min-width:280px;">Specification</th>
                         <th colspan="2">PROTO A</th>
                         <th colspan="2">PROTO B</th>
-                        <th colspan="2">MP</th>
+                        <th id="mc-th-mp" colspan="2">MP</th>
                         <th rowspan="2" style="min-width:220px;">Note</th>
                     </tr>
                     <tr>
@@ -831,9 +876,9 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             </table>
             </div>
             <div id="mc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
-                <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; justify-content:space-between; align-items:center; cursor:pointer; font-size:13px;">
-                    <span>📜 수정이력 확인</span>
+                <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                     <span id="mc-history-toggle-icon">▶</span>
+                    <span>📜 수정이력 확인</span>
                 </div>
                 <div id="mc-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
                     <table id="mc-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
@@ -841,11 +886,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             </div>
             </div>
             <div id="mc-comparison-section" style="display:none;">
-                <div style="margin-bottom:10px; display:flex; gap:8px; align-items:center;">
-                    <!-- 돌아가기 버튼 제거: R1~R5 버튼이 동일 기능을 수행 -->
-                    <button id="mc-comp-toggle-hidden-btn" onclick="window.mcToggleCompareExpand(this)" style="padding:6px 14px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">🔽 펼치기</button>
-                </div>
-                <div style="overflow-x:auto;">
+                <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
                     <table class="concept-table" id="mc-comparison-table" style="min-width:900px;"></table>
                 </div>
             </div>
@@ -3194,6 +3235,32 @@ ${mailText}`;
             const sheetName = rev === 'R1' ? 'M.C Table' : ('M.C Table ' + rev);
             XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows), sheetName);
         });
+
+        // ── M.C 영업판가 시트 ──
+        const mcSalesDetail = tabData.mcSalesPriceDetail || {};
+        const mcSalesData = [['리비전', 'PROTO A Cost', 'PROTO A NRE', 'PROTO B Cost', 'PROTO B NRE', 'MP Cost', 'MP NRE']];
+        ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
+            const sp = mcSalesDetail[rev];
+            if (!sp) return;
+            mcSalesData.push([rev, sp.protoCost || '', sp.protoNre || '', sp.protoBCost || '', sp.protoBNre || '', sp.mpCost || '', sp.mpNre || '']);
+        });
+        if (mcSalesData.length > 1) {
+            const wsMcSales = XLSX.utils.aoa_to_sheet(mcSalesData);
+            wsMcSales['!cols'] = [{wch: 10}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}];
+            XLSX.utils.book_append_sheet(wb, wsMcSales, "M.C 영업판가");
+        }
+
+        // ── M.C 수정이력 시트 ──
+        const mcLogs = tabData.mcChangeLog || [];
+        if (mcLogs.length) {
+            const mcLogData = [['변경 일시', '수정자', '리비전', '항목', '필드', '변경 전 (Old)', '변경 후 (New)']];
+            mcLogs.forEach(function(log) {
+                mcLogData.push([log.time, log.userName || '알 수 없음', log.rev, log.row, log.field, log.oldVal, log.newVal]);
+            });
+            const wsMcLog = XLSX.utils.aoa_to_sheet(mcLogData);
+            wsMcLog['!cols'] = [{wch: 20}, {wch: 14}, {wch: 8}, {wch: 20}, {wch: 12}, {wch: 30}, {wch: 30}];
+            XLSX.utils.book_append_sheet(wb, wsMcLog, "M.C 수정이력");
+        }
 
         // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
         if (window.mcBuildComparisonRows) {
@@ -7448,14 +7515,55 @@ function _parseMcComparisonSheetFromWorkbook(workbook) {
     return true;
 }
 
+// 💡 "M.C 영업판가" 시트를 읽어 tabData.mcSalesPriceDetail로 복원
+function _parseMcSalesDetailSheetFromWorkbook(workbook) {
+    const sheetName = 'M.C 영업판가';
+    if (!workbook.Sheets[sheetName]) return false;
+    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    if (!json.length) return false;
+    window.tabData = window.tabData || {};
+    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
+    for (let i = 1; i < json.length; i++) {
+        const r = json[i];
+        if (!r || !r[0]) continue;
+        const rev = String(r[0]).trim();
+        window.tabData.mcSalesPriceDetail[rev] = {
+            protoCost: r[1] || '', protoNre: r[2] || '',
+            protoBCost: r[3] || '', protoBNre: r[4] || '',
+            mpCost: r[5] || '', mpNre: r[6] || ''
+        };
+    }
+    return true;
+}
+
+// 💡 "M.C 수정이력" 시트를 읽어 tabData.mcChangeLog로 복원
+function _parseMcChangeLogSheetFromWorkbook(workbook) {
+    const sheetName = 'M.C 수정이력';
+    if (!workbook.Sheets[sheetName]) return false;
+    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    if (!json.length) return false;
+    window.tabData = window.tabData || {};
+    window.tabData.mcChangeLog = window.tabData.mcChangeLog || [];
+    for (let i = 1; i < json.length; i++) {
+        const r = json[i];
+        if (!r || !r[0]) continue;
+        window.tabData.mcChangeLog.push({
+            time: r[0], userName: r[1] || '알 수 없음', rev: r[2] || '',
+            row: r[3] || '', field: r[4] || '', oldVal: r[5], newVal: r[6]
+        });
+    }
+    return true;
+}
+
 window.parseConceptSheetsFromWorkbook = function(workbook) {
     const a = _parseSummarySheetFromWorkbook(workbook);
     const b = _parseBriefSpecSheetFromWorkbook(workbook);
     const c = _parseMcTableSheetFromWorkbook(workbook);
     const d = _parseMcComparisonSheetFromWorkbook(workbook);
-    if ((a || b || c || d) && window.populateTabData) window.populateTabData();
+    const e = _parseMcSalesDetailSheetFromWorkbook(workbook);
+    const f = _parseMcChangeLogSheetFromWorkbook(workbook);
+    if ((a || b || c || d || e || f) && window.populateTabData) window.populateTabData();
 };
-
 // ── Summary 탭: Gantt chart Level 0 데이터와 연동된 진척 타임라인 (말풍선 + 텍스트) ──
 function _sumTlEscHtml(s) {
     if (s === undefined || s === null) return '';
@@ -7711,7 +7819,11 @@ window.populateTabData = function() {
     
     // 💰 M.C Table 탭 렌더링 (현재 활성 리비전 데이터를 표시)
     const _mcActiveRows = (td.mcRevisions && td.mcRevisions[td.mcActiveRevision]) || [];
-    if (_mcActiveRows.length) {
+    const _mcTbodyEl = document.getElementById('mctable-body');
+    if (!_mcActiveRows.length) {
+        // 💡 데이터가 전혀 없는 리비전으로 전환한 경우, 이전 리비전 내용이 남아있지 않도록 표를 비움
+        if (_mcTbodyEl) _mcTbodyEl.innerHTML = '';
+    } else {
         try {
             const tbody = document.getElementById('mctable-body');
             if (!tbody) return;
@@ -7926,11 +8038,29 @@ window.populateTabData = function() {
             };
 
             const _curRevForSales = td.mcActiveRevision || 'R1';
+            const mpTh = document.getElementById('mc-th-mp');
+            if (mpTh) mpTh.textContent = 'MP(' + _curRevForSales + ')';
             htmlChunks.push(renderSalesPriceRow(_curRevForSales));
             htmlChunks.push(renderRatioRow(_curRevForSales, grandtotal));
 
             tbody.innerHTML = htmlChunks.join('');
             if (window.bmSetupAllRows) window.bmSetupAllRows('mc');
+
+            // 💡 Cost 정보가 전혀 없는 리비전은 "접기" 상태에서 R1~R5 버튼 자체를 숨김
+            //    (R1, 현재 보고 있는 리비전, "펼치기" 상태일 때는 항상 보임)
+            (function() {
+                const _curRev = td.mcActiveRevision || 'R1';
+                ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
+                    const btn = document.querySelector('.mc-rev-btn[data-rev="' + rev + '"]');
+                    if (!btn) return;
+                    if (rev === 'R1' || rev === _curRev || expanded) { btn.style.display = ''; return; }
+                    const revRows = (td.mcRevisions && td.mcRevisions[rev]) || [];
+                    const hasAny = revRows.some(function(r) {
+                        return parseNum(r.protoCost) || parseNum(r.protoNre) || parseNum(r.protoBCost) || parseNum(r.protoBNre) || parseNum(r.mpCost) || parseNum(r.mpNre);
+                    });
+                    btn.style.display = hasAny ? '' : 'none';
+                });
+            })();
 
             // 💡 열 너비 조정 및 정렬 속성 스크립트로 제어
             setTimeout(function() {
@@ -7962,13 +8092,14 @@ window.populateTabData = function() {
                     if(tr1.children[9]) tr1.children[9].style.width = '400px';  // Note (PROTO B 추가로 인덱스 8→9)
                     
                     // 하위 가격 금액 열 너비 좁히기 (PROTO A/B/MP 총 6칸)
-                    if(tr2.children[0]) tr2.children[0].style.width = '55px';   // PROTO A Cost
-                    if(tr2.children[1]) tr2.children[1].style.width = '55px';   // PROTO A NRE
-                    if(tr2.children[2]) tr2.children[2].style.width = '55px';   // PROTO B Cost
-                    if(tr2.children[3]) tr2.children[3].style.width = '55px';   // PROTO B NRE
-                    if(tr2.children[4]) tr2.children[4].style.width = '55px';   // MP Cost
-                    if(tr2.children[5]) tr2.children[5].style.width = '55px';   // MP NRE
+                    if(tr2.children[0]) tr2.children[0].style.width = '30px';   // PROTO A Cost ($100.00)
+                    if(tr2.children[1]) tr2.children[1].style.width = '50px';   // PROTO A NRE ($10,000.00)
+                    if(tr2.children[2]) tr2.children[2].style.width = '30px';   // PROTO B Cost
+                    if(tr2.children[3]) tr2.children[3].style.width = '50px';   // PROTO B NRE
+                    if(tr2.children[4]) tr2.children[4].style.width = '30px';   // MP Cost
+                    if(tr2.children[5]) tr2.children[5].style.width = '50px';   // MP NRE
 
+                    
                     // 💡 "접기" 상태에서, 표 전체에 가격이 하나도 없는 쌍(PROTO A / PROTO B / MP)은
                     //    Cost+NRE를 항상 묶어서 통째로 숨김 (colspan은 건드리지 않음 — 쌍 단위라 항상 정합 유지)
                     const hidePairs = {
@@ -8252,9 +8383,18 @@ function bmMoveSelected(key, dir) {
         let anchor = target;
         selArr.forEach(function(tr) { anchor.after(tr); anchor = tr; });
     }
-    window.bmSetupAllRows(key);
-    bmPaintSelection(key);
-    bmOpenPopup(key, selArr[0]);
+
+    // 💡 M.C Table은 TYPE 표시/SUBTOTAL 경계가 행 순서에 의존하므로, 이동 후 표 전체를 다시 그려야 함
+    if (key === 'mc' && window.mcRefreshTable) {
+        sel.clear();
+        window._bmAnchor[key] = null;
+        bmClosePopup();
+        window.mcRefreshTable();
+    } else {
+        window.bmSetupAllRows(key);
+        bmPaintSelection(key);
+        bmOpenPopup(key, selArr[0]);
+    }
 }
 
 function bmAddAfter(key, refTr) {
@@ -8400,6 +8540,11 @@ window.mcRefreshTable = function() {
     const cur = window.tabData.mcActiveRevision || 'R1';
     window.tabData.mcRevisions[cur] = _readRowsFromTbody('mctable-body');
     window.populateTabData();
+    // 💡 수정이력 박스가 펼쳐져 있으면 최신 내용으로 같이 갱신
+    const historyBody = document.getElementById('mc-history-body');
+    if (historyBody && historyBody.style.display !== 'none' && window.mcRenderHistoryTable) {
+        window.mcRenderHistoryTable();
+    }
 };
 
 // 💡 R1~R5 개별 화면의 영업판가(PROTO/MP × Cost/NRE 개별) 입력 저장 — 비교 페이지의 salesPrice와는 별도 저장소
@@ -8407,7 +8552,9 @@ window.mcUpdateSalesPriceDetail = function(rev, field, val) {
     window.tabData = window.tabData || {};
     window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
     window.tabData.mcSalesPriceDetail[rev] = window.tabData.mcSalesPriceDetail[rev] || {};
+    const oldVal = window.tabData.mcSalesPriceDetail[rev][field] || '';
     window.tabData.mcSalesPriceDetail[rev][field] = val;
+    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val);
     window.mcRefreshTable();
 };
 
@@ -8441,12 +8588,16 @@ window.mcRenderHistoryTable = function() {
     if (!table) return;
     const logs = (window.tabData && window.tabData.mcChangeLog) || [];
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
-    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">리비전</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th></tr></thead><tbody>';
+    const fieldLabel = { type:'TYPE', item:'ITEM', group:'GROUP', pn:'P/N', spec:'Specification',
+        protoCost:'PROTO A Cost', protoNre:'PROTO A NRE', protoBCost:'PROTO B Cost', protoBNre:'PROTO B NRE',
+        mpCost:'MP Cost', mpNre:'MP NRE', note:'Note' };
+    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">리비전</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th></tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
             + '<td style="padding:4px 8px; text-align:center;">' + log.rev + '</td>'
             + '<td style="padding:4px 8px; font-weight:bold;">' + log.row + '</td>'
-            + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + log.field + '</span></td>'
+            + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (fieldLabel[log.field] || log.field) + '</span></td>'
             + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
             + '<td style="padding:4px 8px; color:#2f9e44;">' + (log.newVal || '-') + '</td></tr>';
     });
@@ -8538,8 +8689,18 @@ window.mcBuildComparisonRows = function() {
     return order;
 };
 
+// 💡 R1~R5 / Comparison 화면 어디서 누르든 같은 버튼 하나가 알맞은 펼치기 동작을 수행
+window.mcToggleHiddenUnified = function(btnEl) {
+    const compSection = document.getElementById('mc-comparison-section');
+    const isComparisonVisible = compSection && compSection.style.display !== 'none';
+    if (isComparisonVisible) {
+        window.mcToggleCompareExpand(btnEl);
+    } else {
+        window.bmToggleHidden('mc', btnEl);
+    }
+};
+
 window.mcShowComparison = function() {
-    // 현재 화면 내용을 활성 리비전에 저장해서 비교표에 최신 데이터가 반영되게 함
     window.tabData = window.tabData || {};
     window.tabData.mcRevisions = window.tabData.mcRevisions || {};
     const cur = window.tabData.mcActiveRevision || 'R1';
@@ -8547,18 +8708,36 @@ window.mcShowComparison = function() {
 
     document.getElementById('mc-normal-section').style.display = 'none';
     document.getElementById('mc-comparison-section').style.display = 'block';
+    const btn = document.getElementById('mc-toggle-hidden-btn');
+    if (btn) btn.textContent = window._mcCompExpanded ? '🔼 접기' : '🔽 펼치기';
+    const compBtn = document.getElementById('mc-comparison-btn');
+    if (compBtn) { compBtn.style.background = '#e67e22'; compBtn.style.color = '#fff'; }
+
+    // 💡 비교 화면으로 전환하면 R1~R5 버튼은 전부 비활성(흰색)으로
+    document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
+        b.classList.remove('active');
+        b.style.background = '#fff';
+        b.style.color = '#2c5f8a';
+        b.style.fontWeight = 'normal';
+    });
+
     window.mcRenderComparisonTable();
 };
 
 window.mcHideComparison = function() {
     document.getElementById('mc-comparison-section').style.display = 'none';
     document.getElementById('mc-normal-section').style.display = '';
+    const btn = document.getElementById('mc-toggle-hidden-btn');
+    if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? '🔼 접기' : '🔽 펼치기';
+    const compBtn = document.getElementById('mc-comparison-btn');
+    if (compBtn) { compBtn.style.background = '#fff'; compBtn.style.color = '#e67e22'; }
 };
 
 window.mcToggleCompareExpand = function(btnEl) {
     window._mcCompExpanded = !window._mcCompExpanded;
     try { localStorage.setItem('gantt_mcComp_expanded', window._mcCompExpanded ? '1' : '0'); } catch (e) {}
-    if (btnEl) btnEl.textContent = window._mcCompExpanded ? '🔼 접기' : '🔽 펼치기';
+    const btn = btnEl || document.getElementById('mc-toggle-hidden-btn');
+    if (btn) btn.textContent = window._mcCompExpanded ? '🔼 접기' : '🔽 펼치기';
     window.mcRenderComparisonTable();
 };
 
@@ -8566,6 +8745,18 @@ window.mcUpdateSalesPrice = function(rev, val) {
     window.tabData.mcCompare = window.tabData.mcCompare || { salesPrice: {} };
     window.tabData.mcCompare.salesPrice = window.tabData.mcCompare.salesPrice || {};
     window.tabData.mcCompare.salesPrice[rev] = _mcParseNum(val);
+    window.mcRenderComparisonTable();
+};
+
+// 💡 비교 페이지에서 영업판가를 수정하면, 메인 R1~R5 표의 MP 영업판가(mcSalesPriceDetail)에 직접 반영
+//    (메인 표는 "현재 활성 리비전"만 화면에 있어서, 다른 리비전을 수정할 땐 mcRefreshTable()을 호출하면 안 됨 — 데이터만 갱신)
+window.mcUpdateSalesPriceFromCompare = function(rev, field, val) {
+    window.tabData = window.tabData || {};
+    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
+    window.tabData.mcSalesPriceDetail[rev] = window.tabData.mcSalesPriceDetail[rev] || {};
+    const oldVal = window.tabData.mcSalesPriceDetail[rev][field] || '';
+    window.tabData.mcSalesPriceDetail[rev][field] = val;
+    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val);
     window.mcRenderComparisonTable();
 };
 
@@ -8618,56 +8809,148 @@ window.mcRenderComparisonTable = function() {
         + '<th rowspan="2" style="width:90px;">TYPE</th>'
         + '<th rowspan="2" style="width:160px;">ITEM</th>'
         + '<th rowspan="2" style="width:140px;">GROUP</th>';
-    visibleRevs.forEach(function(rev) { thead += '<th colspan="2">' + rev + ' MP</th>'; });
+    visibleRevs.forEach(function(rev) { thead += '<th colspan="2" class="mc-comp-divider">MP(' + rev + ')</th>'; });
     thead += '<th rowspan="2" style="min-width:200px;">Note</th></tr><tr>';
-    visibleRevs.forEach(function() { thead += '<th style="width:65px;">Cost($)</th><th style="width:55px;">NRE</th>'; });
+    visibleRevs.forEach(function(rev) { thead += '<th class="mc-comp-divider" style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>'; });
     thead += '</tr></thead>';
 
-    // 항목 행 (한 줄씩 하이라이트 구분을 위해 짝/홀 배경 교차)
+    // 💡 TYPE 그룹 경계 계산 (메인 표와 동일 기준: ITEM=NRE / TYPE 변경 / 마지막 행)
+    const compMergeSpan = {};
+    (function() {
+        let segStart = 0;
+        let curType = '';
+        rows.forEach(function(r, idx) {
+            const rt = String(r.type || '').trim();
+            if (rt) curType = rt;
+            const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+            const nextRow = rows[idx + 1];
+            const nextType = nextRow ? String(nextRow.type || '').trim() : '';
+            const isLastRow = !nextRow;
+            const typeWillChange = !!(nextRow && nextType && nextType !== curType);
+            if (itemHasNre || typeWillChange || isLastRow) {
+                compMergeSpan[segStart] = idx - segStart + 1;
+                segStart = idx + 1;
+            }
+        });
+    })();
+
+    // 💡 행별로 "전체 리비전에서 가격이 전부 0인지" 미리 계산
+    const compRowAllEmpty = rows.map(function(r) {
+        return !visibleRevs.some(function(rev) { const p = r.prices[rev]; return p && (p.cost || p.nre); });
+    });
+    // 💡 그룹(세그먼트) 전체가 가격 없음이면, 그 그룹 첫 행만 강제로 보이게(TYPE만 표시, 나머지는 투명)
+    const compForceVisible = {};
+    Object.keys(compMergeSpan).forEach(function(startStr) {
+        const start = parseInt(startStr, 10);
+        const len = compMergeSpan[start];
+        let allEmpty = true;
+        for (let i = start; i < start + len; i++) { if (!compRowAllEmpty[i]) { allEmpty = false; break; } }
+        if (allEmpty) compForceVisible[start] = true;
+    });
+
+    // 항목 행 — TYPE은 화면에 "보이는 행" 기준 한 번만 표시, 그룹 종료 시 SUBTOTAL 삽입
     let tbody = '<tbody>';
-    displayRows.forEach(function(r, idx) {
-        const zebra = idx % 2 === 0 ? '#ffffff' : '#fafbfc';
-        tbody += '<tr style="background-color:' + zebra + ';"><td style="text-align:center;">' + (idx+1) + '</td>'
-            + '<td>' + _mcEsc(r.type) + '</td>'
-            + '<td>' + _mcEsc(r.item) + '</td>'
-            + '<td>' + _mcEsc(r.group) + '</td>';
+    let lastShownCompType = null;
+    let compSubtotal = {};
+    visibleRevs.forEach(function(rev) { compSubtotal[rev] = { cost: 0, nre: 0 }; });
+    let compCurrentType = '';
+    let dispIdx = 0;
+
+    rows.forEach(function(r, idx) {
+        const naturallyVisible = displayRows.indexOf(r) !== -1;
+        const isForcedRow = !naturallyVisible && !!compForceVisible[idx];
+        const isDisplayed = naturallyVisible || isForcedRow;
+        let rowType = String(r.type || '').trim();
+        if (rowType) compCurrentType = rowType;
+
+        if (isDisplayed) {
+            const zebra = dispIdx % 2 === 0 ? '#ffffff' : '#fafbfc';
+            let showTypeText = (rowType !== lastShownCompType);
+            if (showTypeText) lastShownCompType = rowType;
+            const otherColor = isForcedRow ? 'transparent' : '#333';
+            const priceColor = isForcedRow ? 'transparent' : '#777';
+            const typeCellStyle = 'color:' + (showTypeText ? '#333' : 'transparent') + ';' + (showTypeText ? ' border-left:3px solid #2c5f8a;' : '');
+            tbody += '<tr style="background-color:' + zebra + ';"><td style="text-align:center;">' + (dispIdx+1) + '</td>'
+                + '<td style="' + typeCellStyle + '">' + _mcEsc(rowType) + '</td>'
+                + '<td style="color:' + otherColor + ';">' + _mcEsc(r.item) + '</td>'
+                + '<td style="color:' + otherColor + ';">' + _mcEsc(r.group) + '</td>';
+            visibleRevs.forEach(function(rev) {
+            const p = r.prices[rev] || { cost: 0, nre: 0 };
+            tbody += '<td class="mc-comp-divider" style="text-align:center; color:' + priceColor + ';">' + _mcFmtCur(p.cost) + '</td>'
+                + '<td style="text-align:center; color:' + priceColor + ';">' + _mcFmtCur(p.nre) + '</td>';
+          });
+            tbody += '<td><input type="text" class="u-input" style="background:transparent; color:' + otherColor + ';" value="' + _mcEsc(r.note) + '" onchange="window.mcUpdateCompareNote(\'' + r.key + '\', this.value)"></td></tr>';
+            dispIdx++;
+        }
+
+        // 💡 SUBTOTAL 합산은 화면 표시 여부와 무관하게 항상 전체 데이터 기준으로 누적
         visibleRevs.forEach(function(rev) {
             const p = r.prices[rev] || { cost: 0, nre: 0 };
-            tbody += '<td style="text-align:center; color:#777;">' + _mcFmtCur(p.cost) + '</td>'
-                + '<td style="text-align:center; color:#777;">' + _mcFmtCur(p.nre) + '</td>';
+            compSubtotal[rev].cost += p.cost;
+            compSubtotal[rev].nre += p.nre;
         });
-        tbody += '<td><input type="text" class="u-input" style="background:transparent;" value="' + _mcEsc(r.note) + '" onchange="window.mcUpdateCompareNote(\'' + r.key + '\', this.value)"></td></tr>';
+
+        const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+        const nextRow = rows[idx + 1];
+        const nextType = nextRow ? String(nextRow.type || '').trim() : '';
+        const isLastRow = !nextRow;
+        const typeWillChange = !!(nextRow && nextType && nextType !== compCurrentType);
+
+        if (compCurrentType && (itemHasNre || typeWillChange || isLastRow)) {
+            tbody += '<tr style="background-color:#fff9c4; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + compCurrentType + ' SUBTOTAL</td>';
+            visibleRevs.forEach(function(rev) {
+            tbody += '<td class="mc-comp-divider" style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].cost) + '</td>'
+                + '<td style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].nre) + '</td>';
+        });
+            tbody += '<td></td></tr>';
+            visibleRevs.forEach(function(rev) { compSubtotal[rev] = { cost: 0, nre: 0 }; });
+        }
     });
     tbody += '</tbody>';
 
     // TOTAL 행 (하늘색)
     let totalRow = '<tr style="background-color:#e3f2fd; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px;">TOTAL</td>';
     visibleRevs.forEach(function(rev) {
-        totalRow += '<td style="text-align:center;">' + _mcFmtCurSummary(totals[rev].cost) + '</td>'
+        totalRow += '<td class="mc-comp-divider" style="text-align:center;">' + _mcFmtCurSummary(totals[rev].cost) + '</td>'
             + '<td style="text-align:center;">' + _mcFmtCurSummary(totals[rev].nre) + '</td>';
     });
     totalRow += '<td></td></tr>';
 
-    // 영업판가 행 (연두색, 입력 가능 — 리비전별 별도 입력)
+    // 영업판가 행 (연두색, 입력 가능 — 메인 R1~R5 표의 MP 영업판가와 동일한 저장소를 공유함)
     let salesRow = '<tr style="background-color:#e8f5e9; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px;">영업판가</td>';
     visibleRevs.forEach(function(rev) {
-        const val = td.mcCompare.salesPrice[rev] || '';
-        salesRow += '<td colspan="2" style="text-align:center;">'
-            + '<input type="text" class="u-input" style="text-align:center; font-weight:bold; background:transparent;" value="' + (val ? _mcFmtCurSummary(val) : '') + '" onchange="window.mcUpdateSalesPrice(\'' + rev + '\', this.value)">'
-            + '</td>';
+        const detail = (td.mcSalesPriceDetail && td.mcSalesPriceDetail[rev]) || {};
+        const costVal = detail.mpCost ? _mcFmtCurSummary(_mcParseNum(detail.mpCost)) : '';
+        const nreVal = detail.mpNre ? _mcFmtCurSummary(_mcParseNum(detail.mpNre)) : '';
+        salesRow += '<td class="mc-comp-divider" style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + costVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpCost\', this.value)"></td>'
+            + '<td style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + nreVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpNre\', this.value)"></td>';
     });
     salesRow += '<td></td></tr>';
 
-    // 재료비율 행 (주황색, TOTAL MP Cost ÷ 영업판가)
-    let ratioRow = '<tr style="background-color:#ffe0b2; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px;">재료비율 (M.C ÷ 영업판가)</td>';
+    // 재료비율 행 (주황색, TOTAL MP Cost/NRE 각각 ÷ 영업판가)
+    let ratioRow = '<tr style="background-color:#ffe0b2; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px;">재료비율 (M.C ÷ 영업판가) [%]</td>';
     visibleRevs.forEach(function(rev) {
-        const sp = td.mcCompare.salesPrice[rev] || 0;
-        const ratioText = sp > 0 ? (totals[rev].cost / sp * 100).toFixed(1) + '%' : '-';
-        ratioRow += '<td colspan="2" style="text-align:center;">' + ratioText + '</td>';
+        const detail = (td.mcSalesPriceDetail && td.mcSalesPriceDetail[rev]) || {};
+        const spCost = _mcParseNum(detail.mpCost);
+        const spNre = _mcParseNum(detail.mpNre);
+        const costRatio = spCost > 0 ? (totals[rev].cost / spCost * 100).toFixed(1) + '%' : '-';
+        const nreRatio = spNre > 0 ? (totals[rev].nre / spNre * 100).toFixed(1) + '%' : '-';
+        ratioRow += '<td class="mc-comp-divider" style="text-align:center; color:#e65100;">' + costRatio + '</td>'
+            + '<td style="text-align:center; color:#e65100;">' + nreRatio + '</td>';
     });
     ratioRow += '<td></td></tr>';
 
     table.innerHTML = thead + tbody + '<tfoot>' + totalRow + salesRow + ratioRow + '</tfoot>';
+
+
+    // 💡 비교 화면에서도 동일하게: Cost 정보 없는 리비전 버튼은 "접기" 상태에서 숨김
+    //    (이 함수에 이미 계산되어 있는 hasData[rev], expanded를 그대로 재사용)
+    ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
+        const btn = document.querySelector('.mc-rev-btn[data-rev="' + rev + '"]');
+        if (!btn) return;
+        if (rev === 'R1' || expanded) { btn.style.display = ''; return; }
+        btn.style.display = hasData[rev] ? '' : 'none';
+    });
 };
 
 document.addEventListener('DOMContentLoaded', function() {
@@ -8680,9 +8963,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.textContent = '🔼 접기';
         }
     });
-    const compBtn = document.getElementById('mc-comp-toggle-hidden-btn');
-    if (compBtn && window._mcCompExpanded) compBtn.textContent = '🔼 접기';
-});
+    });
 </script>
 
 <script>
