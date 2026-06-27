@@ -842,6 +842,18 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         border-bottom: none;
                         box-shadow: inset -1px 0 0 #ddd, inset 0 -1px 0 #ddd;
                     }
+                    /* 💡 표 맨 위쪽 끝 선 보강 (헤더 1행 위쪽) */
+                    #tab-mctable .concept-table thead tr:first-child th,
+                    #mc-comparison-table thead tr:first-child th {
+                        box-shadow: inset -1px 0 0 #ddd, inset 0 -1px 0 #ddd, inset 0 2px 0 #ccc;
+                    }
+                    /* 💡 표 맨 왼쪽 바깥쪽 선 보강 (NO열 왼쪽) */
+                    #tab-mctable .concept-table th:first-child,
+                    #tab-mctable .concept-table td:first-child,
+                    #mc-comparison-table th:first-child,
+                    #mc-comparison-table td:first-child {
+                        box-shadow: inset -1px 0 0 #ddd, inset 0 -1px 0 #ddd, inset 2px 0 0 #ccc;
+                    }
                     #tab-mctable .concept-table thead th,
                     #mc-comparison-table thead th {
                         background-color: #f4f6f8 !important;
