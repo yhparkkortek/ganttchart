@@ -391,7 +391,7 @@
 .concept-grid input, .concept-grid textarea {
     width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
 }
-.concept-table { width:100%; border-collapse:collapse; font-size:12.5px; }
+.concept-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
 .concept-table th, .concept-table td { border:1px solid #e3e6ea; padding:6px 8px; }
 .concept-table th { background:#f4f6f8; font-weight:600; color:#555; }
 .concept-table td input, .concept-table td textarea { border:none; width:100%; font-size:12.5px; padding:2px; font-family:inherit; }
@@ -822,37 +822,12 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         border-left: 2px solid #2c5f8a !important;
                     }
                     /* 💡 스크롤 시 머릿글 고정 */
-                    /* 💡 다른 페이지와 동일한 border-collapse 유지, 격자선은 box-shadow로 그려서 sticky 충돌 회피 */
-                    #tab-mctable .concept-table,
-                    #mc-comparison-table {
-                        border-collapse: collapse;
-                    }
+                    /* 💡 .concept-table 전체가 이제 separate 방식이라 sticky 헤더가 충돌 없이 정상 동작함 */
                     #tab-mctable .concept-table thead,
                     #mc-comparison-table thead {
                         position: sticky !important;
                         top: 0 !important;
                         z-index: 16;
-                    }
-                    #tab-mctable .concept-table th,
-                    #tab-mctable .concept-table td,
-                    #mc-comparison-table th,
-                    #mc-comparison-table td {
-                        border-top: none;
-                        border-right: none;
-                        border-bottom: none;
-                        box-shadow: inset -1px 0 0 #ddd, inset 0 -1px 0 #ddd;
-                    }
-                    /* 💡 표 맨 위쪽 끝 선 보강 (헤더 1행 위쪽) */
-                    #tab-mctable .concept-table thead tr:first-child th,
-                    #mc-comparison-table thead tr:first-child th {
-                        box-shadow: inset -1px 0 0 #ddd, inset 0 -1px 0 #ddd, inset 0 2px 0 #ccc;
-                    }
-                    /* 💡 표 맨 왼쪽 바깥쪽 선 보강 (NO열 왼쪽) */
-                    #tab-mctable .concept-table th:first-child,
-                    #tab-mctable .concept-table td:first-child,
-                    #mc-comparison-table th:first-child,
-                    #mc-comparison-table td:first-child {
-                        box-shadow: inset -1px 0 0 #ddd, inset 0 -1px 0 #ddd, inset 2px 0 0 #ccc;
                     }
                     #tab-mctable .concept-table thead th,
                     #mc-comparison-table thead th {
