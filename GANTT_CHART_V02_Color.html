@@ -7755,6 +7755,18 @@ window.populateTabData = function() {
                     + '<td></td></tr>';
             };
 
+            // 💡 TYPE 값이 빈 칸인 행(엑셀 병합 셀을 가져왔거나, 예전 버그로 누락된 경우)을
+            //    바로 위 행의 TYPE 값으로 자동 보정 — 이래야 그룹 경계 계산이 어긋나지 않음.
+            //    (validRows는 실제 데이터 배열을 그대로 참조하므로, 한 번 그려지면 저장 데이터도 같이 보정됨)
+            (function() {
+                let lastType = '';
+                validRows.forEach(function(r) {
+                    const rt = String(r.type || '').trim();
+                    if (rt) lastType = rt;
+                    else r.type = lastType;
+                });
+            })();
+
             // 💡 TYPE 열 rowspan 병합 구간을 미리 계산. 병합 구간 = SUBTOTAL이 끝나는 구간과 동일
             //    (ITEM=NRE / TYPE 변경 / 마지막 행 — SUBTOTAL 삽입 트리거와 완전히 동일한 기준)
             //    이렇게 맞춰야 rowspan 셀이 SUBTOTAL 행을 침범해 표가 깨지는 일이 없음.
