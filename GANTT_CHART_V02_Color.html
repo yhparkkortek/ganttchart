@@ -833,30 +833,62 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     #mc-comparison-table thead th {
                         background-color: #f4f6f8 !important;
                     }
+                    /* 💡 R1~R5 표 줄무늬 — input 배경까지 강제로 덮어써서 효과가 보이게 함 (16계조 중 1단계 진한 회색) */
+                    #tab-mctable .concept-table tbody tr.mc-zebra-a,
+                    #tab-mctable .concept-table tbody tr.mc-zebra-a input {
+                        background-color: #ffffff !important;
+                    }
+                    #tab-mctable .concept-table tbody tr.mc-zebra-b,
+                    #tab-mctable .concept-table tbody tr.mc-zebra-b input {
+                        background-color: #efefef !important;
+                    }
+                    #tab-briefspec .concept-table tbody tr.mc-zebra-a,
+                    #tab-briefspec .concept-table tbody tr.mc-zebra-a input {
+                        background-color: #ffffff !important;
+                    }
+                    #tab-briefspec .concept-table tbody tr.mc-zebra-b,
+                    #tab-briefspec .concept-table tbody tr.mc-zebra-b input {
+                        background-color: #efefef !important;
+                    }
             </style>
             <table class="concept-table" style="min-width:1500px;">
-                <thead>
-                    <tr>
-                        <th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
-                        <th rowspan="2" style="width:100px;">TYPE</th>
-                        <th rowspan="2" style="width:160px;">ITEM</th>
-                        <th rowspan="2" style="width:140px;">GROUP</th>
-                        <th rowspan="2" style="width:120px;">P/N</th>
-                        <th rowspan="2" style="min-width:280px;">Specification</th>
-                        <th colspan="2">PROTO A</th>
-                        <th colspan="2">PROTO B</th>
-                        <th id="mc-th-mp" colspan="2">MP</th>
-                        <th rowspan="2" style="min-width:220px;">Note</th>
-                    </tr>
-                    <tr>
-                        <th style="width:65px;">Cost($)</th>
-                        <th style="width:55px;">NRE</th>
-                        <th style="width:65px;">Cost($)</th>
-                        <th style="width:55px;">NRE</th>
-                        <th style="width:65px;">Cost($)</th>
-                        <th style="width:55px;">NRE</th>
-                    </tr>
-                </thead>
+                <colgroup>
+                    <col id="mc-col-no">
+                    <col id="mc-col-type">
+                    <col id="mc-col-item">
+                    <col id="mc-col-group">
+                    <col id="mc-col-pn">
+                    <col id="mc-col-spec">
+                    <col id="mc-col-protocost">
+                    <col id="mc-col-protonre">
+                    <col id="mc-col-protobcost">
+                    <col id="mc-col-protobnre">
+                    <col id="mc-col-mpcost">
+                    <col id="mc-col-mpnre">
+                    <col id="mc-col-note">
+                </colgroup>
+                <thead id="mc-thead">
+                <tr>
+                    <th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
+                    <th rowspan="2" style="width:100px;">TYPE</th>
+                    <th rowspan="2" style="width:160px;">ITEM</th>
+                    <th rowspan="2" style="width:140px;">GROUP</th>
+                    <th rowspan="2" style="width:120px;">P/N</th>
+                    <th rowspan="2" style="min-width:280px;">Specification</th>
+                    <th colspan="2">PROTO A</th>
+                    <th colspan="2">PROTO B</th>
+                    <th id="mc-th-mp" colspan="2">MP</th>
+                    <th rowspan="2" style="min-width:220px;">Note</th>
+                </tr>
+                <tr>
+                    <th style="width:65px;">Cost($)</th>
+                    <th style="width:55px;">NRE</th>
+                    <th style="width:65px;">Cost($)</th>
+                    <th style="width:55px;">NRE</th>
+                    <th style="width:65px;">Cost($)</th>
+                    <th style="width:55px;">NRE</th>
+                </tr>
+            </thead>
                 <tbody id="mctable-body">
                     <tr><td class="bm-no"></td><td class="mc-cat"><input type="text" data-field="type" value="회로" style="border:none; width:100%; font-size:12.5px;"></td><td><input type="text" data-field="item" value="AD Board"></td><td><input type="text" data-field="group"></td><td><input type="text" data-field="pn"></td><td><input type="text" data-field="spec"></td><td><input type="text" class="u-input" data-field="protoCost"></td><td><input type="text" class="u-input" data-field="protoNre"></td><td><input type="text" class="u-input" data-field="protoBCost"></td><td><input type="text" class="u-input" data-field="protoBNre"></td><td><input type="text" class="u-input" data-field="mpCost"></td><td><input type="text" class="u-input" data-field="mpNre"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
@@ -7785,20 +7817,26 @@ window.populateTabData = function() {
     if (td.briefSpec && td.briefSpec.length) {
         const tbody = document.getElementById('briefspec-body');
         if (tbody) {
-            tbody.innerHTML = td.briefSpec.map(function(r) {
+            let bsZebraIdx = 0;
+            const bsChunks = [];
+            td.briefSpec.forEach(function(r) {
                 const modelA = r.modelA !== undefined ? r.modelA : (r.desc || ''); // 구버전 desc 호환
                 // 💡 MC Table과 동일하게: Model A/B/C, Note가 모두 비어있으면 행 숨김 처리
                 const isRowEmpty = !modelA && !r.modelB && !r.modelC && !r.note;
                 const keepHidden = isRowEmpty && !(window._bmExpanded && window._bmExpanded.bs);
-                const rowStyle = isRowEmpty ? (' style="' + (keepHidden ? 'display:none;' : '') + '" data-auto-hidden="1"') : '';
-                return '<tr' + rowStyle + '><td class="bm-no"></td>'
+                const isVisible = !keepHidden;
+                const zebraClass = isVisible ? (bsZebraIdx % 2 === 0 ? 'mc-zebra-a' : 'mc-zebra-b') : '';
+                if (isVisible) bsZebraIdx++;
+                const rowStyle = (zebraClass ? ' class="' + zebraClass + '"' : '') + (isRowEmpty ? (' style="' + (keepHidden ? 'display:none;' : '') + '" data-auto-hidden="1"') : '');
+                bsChunks.push('<tr' + rowStyle + '><td class="bm-no"></td>'
                     + '<td><input type="text" data-field="type" value="' + _escTabVal(r.type) + '"></td>'
                     + '<td><input type="text" data-field="sub" value="' + _escTabVal(r.sub) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="modelA" value="' + _escTabVal(modelA) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="modelB" value="' + _escTabVal(r.modelB) + '"></td>'
                     + '<td><input type="text" class="u-input" data-field="modelC" value="' + _escTabVal(r.modelC) + '"></td>'
-                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>';
-            }).join('');
+                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '"></td></tr>');
+            });
+            tbody.innerHTML = bsChunks.join('');
             if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
             if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
         }
@@ -7808,14 +7846,12 @@ window.populateTabData = function() {
     const _mcActiveRows = (td.mcRevisions && td.mcRevisions[td.mcActiveRevision]) || [];
     const _mcTbodyEl = document.getElementById('mctable-body');
     if (!_mcActiveRows.length) {
-        // 💡 데이터가 전혀 없는 리비전으로 전환한 경우, 이전 리비전 내용이 남아있지 않도록 표를 비움
         if (_mcTbodyEl) _mcTbodyEl.innerHTML = '';
     } else {
         try {
             const tbody = document.getElementById('mctable-body');
             if (!tbody) return;
 
-            // 원본 데이터 중 수동 기입된 합계 행 제외
             const validRows = _mcActiveRows.filter(function(r) {
                 const t = String(r.type || '').toUpperCase().replace(/\s/g, '');
                 return t !== 'SUBTOTAL' && t !== 'TOTAL';
@@ -7823,51 +7859,29 @@ window.populateTabData = function() {
 
             let currentType = '';
             let htmlChunks = [];
-            
+
             let subtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
             let grandtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
-            
-            let hasProtoCost = false; let hasProtoNre = false;
-            let hasProtoBCost = false; let hasProtoBNre = false;
-            let hasMpCost = false; let hasMpNre = false;
-            
-            // 💡 통화 포맷 함수: 0원 빈칸 처리 + 3자리 쉼표(toLocaleString) 적용
+
             const fmtCur = function(val) {
                 if (val === undefined || val === null) return '';
                 let s = String(val).trim();
                 if (s === '') return '';
                 let num = parseFloat(s.replace(/[^0-9.-]+/g, ''));
-                if (isNaN(num) || num === 0) return ''; 
+                if (isNaN(num) || num === 0) return '';
                 return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
-
             const parseNum = function(val) {
                 if (val === undefined || val === null) return 0;
                 let num = parseFloat(String(val).replace(/[^0-9.-]+/g, ''));
                 return isNaN(num) ? 0 : num;
             };
-
-            // 💡 SUBTOTAL/TOTAL 전용 포맷: 0이면 $0.00으로 표시
             const fmtCurSummary = function(num) {
                 num = Number(num) || 0;
                 return '$' + num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
             };
 
-            // 💡 합계 행 생성 함수: TOTAL 행은 옅은 하늘색(#e3f2fd), SUBTOTAL은 노란색(#fff9c4)
-            const renderSubtotalRow = function(label, sums, isTotal) {
-                const bgColor = isTotal ? '#e3f2fd' : '#fff9c4';
-                const valCell = function(v) {
-                    return '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(v) + '" readonly></td>';
-                };
-                return '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
-                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>'
-                    + valCell(sums.protoCost) + valCell(sums.protoNre)
-                    + valCell(sums.protoBCost) + valCell(sums.protoBNre)
-                    + valCell(sums.mpCost) + valCell(sums.mpNre)
-                    + '<td></td></tr>';
-            };
-
-            // 💡 TYPE 값이 빈 칸인 행을 바로 위 행의 TYPE 값으로 채워서, 모든 행에 TYPE이 반복해서 들어가게 함 (안전장치)
+            // 💡 TYPE 빈칸 보정 (그룹 첫 줄에만 적혀있는 경우 대응)
             (function() {
                 let lastType = '';
                 validRows.forEach(function(r) {
@@ -7877,15 +7891,78 @@ window.populateTabData = function() {
                 });
             })();
 
-            // 💡 각 행의 가격 유무를 미리 계산 (PROTO A/B/MP 전부 포함)
+            // 💡 [핵심] hidePairs를 데이터 생성 "이전에" 미리 한 번 스캔해서 확정.
+            //    이렇게 해야 colgroup/thead/tbody가 전부 같은 기준으로, 같은 시점에 만들어져서
+            //    칸 수가 서로 어긋나는 일이 구조적으로 없어짐.
+            let hasProtoCost = false, hasProtoNre = false, hasProtoBCost = false, hasProtoBNre = false, hasMpCost = false, hasMpNre = false;
+            validRows.forEach(function(r) {
+                if (parseNum(r.protoCost)) hasProtoCost = true;
+                if (parseNum(r.protoNre)) hasProtoNre = true;
+                if (parseNum(r.protoBCost)) hasProtoBCost = true;
+                if (parseNum(r.protoBNre)) hasProtoBNre = true;
+                if (parseNum(r.mpCost)) hasMpCost = true;
+                if (parseNum(r.mpNre)) hasMpNre = true;
+            });
+            const expanded = !!(window._bmExpanded && window._bmExpanded.mc);
+            const hidePairs = {
+                protoA: !(hasProtoCost || hasProtoNre) && !expanded,
+                protoB: !(hasProtoBCost || hasProtoBNre) && !expanded,
+                mp: !(hasMpCost || hasMpNre) && !expanded
+            };
+            const curRev = td.mcActiveRevision || 'R1';
+
+            // 💡 colgroup 통째로 재생성 — 숨길 쌍은 <col> 자체를 처음부터 안 만듦
+            const colgroupEl = document.querySelector('#tab-mctable colgroup');
+            if (colgroupEl) {
+                let cg = '<col style="width:40px;"><col style="width:80px;"><col style="width:180px;"><col style="width:140px;"><col style="width:70px;"><col style="width:300px;">';
+                if (!hidePairs.protoA) cg += '<col style="width:70px;"><col style="width:90px;">';
+                if (!hidePairs.protoB) cg += '<col style="width:70px;"><col style="width:90px;">';
+                if (!hidePairs.mp) cg += '<col style="width:70px;"><col style="width:90px;">';
+                cg += '<col style="width:400px;">';
+                colgroupEl.innerHTML = cg;
+            }
+            // 💡 thead 통째로 재생성 — 위 colgroup과 정확히 같은 hidePairs 기준
+            const theadEl = document.getElementById('mc-thead');
+            if (theadEl) {
+                let row1 = '<tr>'
+                    + '<th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>'
+                    + '<th rowspan="2" style="width:80px;">TYPE</th>'
+                    + '<th rowspan="2" style="width:180px;">ITEM</th>'
+                    + '<th rowspan="2" style="width:140px;">GROUP</th>'
+                    + '<th rowspan="2" style="width:70px;">P/N</th>'
+                    + '<th rowspan="2" style="min-width:300px;">Specification</th>';
+                if (!hidePairs.protoA) row1 += '<th colspan="2">PROTO A</th>';
+                if (!hidePairs.protoB) row1 += '<th colspan="2">PROTO B</th>';
+                if (!hidePairs.mp) row1 += '<th colspan="2">MP(' + curRev + ')</th>';
+                row1 += '<th rowspan="2" style="min-width:400px;">Note</th></tr>';
+                let row2 = '<tr>';
+                if (!hidePairs.protoA) row2 += '<th style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>';
+                if (!hidePairs.protoB) row2 += '<th style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>';
+                if (!hidePairs.mp) row2 += '<th style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>';
+                row2 += '</tr>';
+                theadEl.innerHTML = row1 + row2;
+            }
+
+            // 💡 합계 행 생성 함수 — hidePairs에 맞춰 같은 쌍만 출력
+            const renderSummaryRow = function(label, sums, bgColor) {
+                const valCell = function(v) {
+                    return '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(v) + '" readonly></td>';
+                };
+                let html = '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
+                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>';
+                if (!hidePairs.protoA) html += valCell(sums.protoCost) + valCell(sums.protoNre);
+                if (!hidePairs.protoB) html += valCell(sums.protoBCost) + valCell(sums.protoBNre);
+                if (!hidePairs.mp) html += valCell(sums.mpCost) + valCell(sums.mpNre);
+                html += '<td></td></tr>';
+                return html;
+            };
+
             const rowEmptyFlags = validRows.map(function(r) {
                 const pCost = parseNum(r.protoCost), pNre = parseNum(r.protoNre);
                 const pbCost = parseNum(r.protoBCost), pbNre = parseNum(r.protoBNre);
                 const mCost = parseNum(r.mpCost), mNre = parseNum(r.mpNre);
                 return (pCost === 0 && pNre === 0 && pbCost === 0 && pbNre === 0 && mCost === 0 && mNre === 0);
             });
-            // 💡 SUBTOTAL 구간(그룹) 전체에 가격 정보가 하나도 없으면, 그 구간이 통째로 숨겨져서
-            //    TYPE조차 안 보이게 되는 걸 막기 위해 — 그 구간의 첫 행만은 강제로 보이게 표시해둠
             const forceVisible = {};
             (function() {
                 let segStart = 0;
@@ -7907,51 +7984,31 @@ window.populateTabData = function() {
                 });
             })();
 
-            // 💡 펼침/접힘 상태 — 화면에 "보이는 행" 기준으로 TYPE 글자를 한 번만 보여주기 위해 사용
-            const expanded = !!(window._bmExpanded && window._bmExpanded.mc);
             let lastShownType = null;
+            let mainZebraIdx = 0;
 
             validRows.forEach(function(r, idx) {
                 let rowType = String(r.type || '').trim();
                 if (rowType) currentType = rowType;
 
-                const pCost = parseNum(r.protoCost);
-                const pNre = parseNum(r.protoNre);
-                const pbCost = parseNum(r.protoBCost);
-                const pbNre = parseNum(r.protoBNre);
-                const mCost = parseNum(r.mpCost);
-                const mNre = parseNum(r.mpNre);
-
+                const pCost = parseNum(r.protoCost), pNre = parseNum(r.protoNre);
+                const pbCost = parseNum(r.protoBCost), pbNre = parseNum(r.protoBNre);
+                const mCost = parseNum(r.mpCost), mNre = parseNum(r.mpNre);
                 const isPriceEmpty = rowEmptyFlags[idx];
 
-                // 데이터 합산 누적
-                subtotal.protoCost += pCost;
-                subtotal.protoNre += pNre;
-                subtotal.protoBCost += pbCost;
-                subtotal.protoBNre += pbNre;
-                subtotal.mpCost += mCost;
-                subtotal.mpNre += mNre;
+                subtotal.protoCost += pCost; subtotal.protoNre += pNre;
+                subtotal.protoBCost += pbCost; subtotal.protoBNre += pbNre;
+                subtotal.mpCost += mCost; subtotal.mpNre += mNre;
+                grandtotal.protoCost += pCost; grandtotal.protoNre += pNre;
+                grandtotal.protoBCost += pbCost; grandtotal.protoBNre += pbNre;
+                grandtotal.mpCost += mCost; grandtotal.mpNre += mNre;
 
-                grandtotal.protoCost += pCost;
-                grandtotal.protoNre += pNre;
-                grandtotal.protoBCost += pbCost;
-                grandtotal.protoBNre += pbNre;
-                grandtotal.mpCost += mCost;
-                grandtotal.mpNre += mNre;
-
-                // 💡 가격 없으면 숨김. 다만 그룹 전체가 가격 없으면, 그 그룹 첫 행만은 TYPE 표시를 위해 강제로 보임
                 const isRowEmpty = isPriceEmpty && !forceVisible[idx];
-
                 const keepHiddenRow = isRowEmpty && !expanded;
                 const isVisible = !keepHiddenRow;
-                let rowStyle = ' style="' + (keepHiddenRow ? 'display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
-
-                if (pCost !== 0) hasProtoCost = true;
-                if (pNre !== 0) hasProtoNre = true;
-                if (pbCost !== 0) hasProtoBCost = true;
-                if (pbNre !== 0) hasProtoBNre = true;
-                if (mCost !== 0) hasMpCost = true;
-                if (mNre !== 0) hasMpNre = true;
+                const zebraClass = isVisible ? (mainZebraIdx % 2 === 0 ? 'mc-zebra-a' : 'mc-zebra-b') : '';
+                if (isVisible) mainZebraIdx++;
+                let rowStyle = (zebraClass ? ' class="' + zebraClass + '"' : '') + ' style="' + (keepHiddenRow ? 'display:none;' : '') + '"' + (isRowEmpty ? ' data-auto-hidden="1"' : '');
 
                 let showTypeText = false;
                 if (isVisible) {
@@ -7964,7 +8021,7 @@ window.populateTabData = function() {
                 const otherColor = isForcedEmptyRow ? 'transparent' : '#333';
                 const priceColor = isForcedEmptyRow ? 'transparent' : '#777';
 
-                htmlChunks.push('<tr' + rowStyle + '>'
+                let rowHtml = '<tr' + rowStyle + '>'
                     + '<td class="bm-no"></td>'
                     + '<td class="mc-cat" style="' + catCellStyle + '">'
                     + '<input type="text" data-field="type" value="' + _escTabVal(rowType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:' + typeColor + '; background:transparent; text-align:center;">'
@@ -7972,14 +8029,22 @@ window.populateTabData = function() {
                     + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '" style="color:' + otherColor + ';"></td>'
                     + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '" style="color:' + otherColor + ';"></td>'
                     + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '" style="color:' + otherColor + ';"></td>'
-                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="color:' + otherColor + ';"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoBCost" value="' + fmtCur(r.protoBCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="protoBNre" value="' + fmtCur(r.protoBNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:' + priceColor + '; text-align:center;"></td>'
-                    + '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="color:' + otherColor + ';"></td></tr>');
+                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="color:' + otherColor + ';"></td>';
+
+                if (!hidePairs.protoA) {
+                    rowHtml += '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                        + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
+                }
+                if (!hidePairs.protoB) {
+                    rowHtml += '<td><input type="text" class="u-input" data-field="protoBCost" value="' + fmtCur(r.protoBCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                        + '<td><input type="text" class="u-input" data-field="protoBNre" value="' + fmtCur(r.protoBNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
+                }
+                if (!hidePairs.mp) {
+                    rowHtml += '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                        + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
+                }
+                rowHtml += '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="color:' + otherColor + ';"></td></tr>';
+                htmlChunks.push(rowHtml);
 
                 const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
                 const nextRow = validRows[idx + 1];
@@ -7988,59 +8053,49 @@ window.populateTabData = function() {
                 const typeWillChange = !!(nextRow && nextType && nextType !== currentType);
 
                 if (currentType && (itemHasNre || typeWillChange || isLastRow)) {
-                    htmlChunks.push(renderSubtotalRow(currentType + ' SUBTOTAL', subtotal, false));
+                    htmlChunks.push(renderSummaryRow(currentType + ' SUBTOTAL', subtotal, '#fff9c4'));
                     subtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
                 }
             });
 
-            htmlChunks.push(renderSubtotalRow('TOTAL(M.C)', grandtotal, true));
+            htmlChunks.push(renderSummaryRow('TOTAL(M.C)', grandtotal, '#e3f2fd'));
 
-            // 💡 영업판가 행 (PROTO A/B, MP 각각 개별 입력 — 비교 페이지와 달리 합치지 않음)
-            const renderSalesPriceRow = function(rev) {
-                const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[rev]) || {};
-                const cell = function(field) {
-                    const raw = sp[field];
-                    const display = raw ? '$' + parseNum(raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-                    return '<td><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + rev + '\', \'' + field + '\', this.value)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
-                };
-                return '<tr class="mc-summary-row" style="background-color:#e8f5e9; font-weight:bold;">'
-                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>'
-                    + cell('protoCost') + cell('protoNre') + cell('protoBCost') + cell('protoBNre') + cell('mpCost') + cell('mpNre')
-                    + '<td></td></tr>';
+            // 💡 영업판가 행
+            const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[curRev]) || {};
+            const spCell = function(field) {
+                const raw = sp[field];
+                const display = raw ? '$' + parseNum(raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
+                return '<td><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
             };
+            let salesHtml = '<tr class="mc-summary-row" style="background-color:#e8f5e9; font-weight:bold;"><td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
+            if (!hidePairs.protoA) salesHtml += spCell('protoCost') + spCell('protoNre');
+            if (!hidePairs.protoB) salesHtml += spCell('protoBCost') + spCell('protoBNre');
+            if (!hidePairs.mp) salesHtml += spCell('mpCost') + spCell('mpNre');
+            salesHtml += '<td></td></tr>';
+            htmlChunks.push(salesHtml);
 
-            // 💡 재료비율 행 (읽기 전용, TOTAL(M.C) ÷ 영업판가 — 칸별로 개별 계산)
-            const renderRatioRow = function(rev, totals) {
-                const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[rev]) || {};
-                const ratioCell = function(field) {
-                    const spVal = parseNum(sp[field]);
-                    const totalVal = totals[field] || 0;
-                    const text = spVal > 0 ? (totalVal / spVal * 100).toFixed(1) + '%' : '-';
-                    return '<td style="text-align:center; font-weight:bold; color:#e65100;">' + text + '</td>';
-                };
-                return '<tr class="mc-summary-row" style="background-color:#ffe0b2; font-weight:bold;">'
-                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>'
-                    + ratioCell('protoCost') + ratioCell('protoNre') + ratioCell('protoBCost') + ratioCell('protoBNre') + ratioCell('mpCost') + ratioCell('mpNre')
-                    + '<td></td></tr>';
+            // 💡 재료비율 행
+            const ratioCell = function(field, totalVal) {
+                const spVal = parseNum(sp[field]);
+                const text = spVal > 0 ? (totalVal / spVal * 100).toFixed(1) + '%' : '-';
+                return '<td style="text-align:center; font-weight:bold; color:#e65100;">' + text + '</td>';
             };
-
-            const _curRevForSales = td.mcActiveRevision || 'R1';
-            const mpTh = document.getElementById('mc-th-mp');
-            if (mpTh) mpTh.textContent = 'MP(' + _curRevForSales + ')';
-            htmlChunks.push(renderSalesPriceRow(_curRevForSales));
-            htmlChunks.push(renderRatioRow(_curRevForSales, grandtotal));
+            let ratioHtml = '<tr class="mc-summary-row" style="background-color:#ffe0b2; font-weight:bold;"><td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
+            if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost) + ratioCell('protoNre', grandtotal.protoNre);
+            if (!hidePairs.protoB) ratioHtml += ratioCell('protoBCost', grandtotal.protoBCost) + ratioCell('protoBNre', grandtotal.protoBNre);
+            if (!hidePairs.mp) ratioHtml += ratioCell('mpCost', grandtotal.mpCost) + ratioCell('mpNre', grandtotal.mpNre);
+            ratioHtml += '<td></td></tr>';
+            htmlChunks.push(ratioHtml);
 
             tbody.innerHTML = htmlChunks.join('');
             if (window.bmSetupAllRows) window.bmSetupAllRows('mc');
 
-            // 💡 Cost 정보가 전혀 없는 리비전은 "접기" 상태에서 R1~R5 버튼 자체를 숨김
-            //    (R1, 현재 보고 있는 리비전, "펼치기" 상태일 때는 항상 보임)
+            // 💡 Cost 정보 없는 리비전은 "접기" 상태에서 R1~R5 버튼 숨김
             (function() {
-                const _curRev = td.mcActiveRevision || 'R1';
                 ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
                     const btn = document.querySelector('.mc-rev-btn[data-rev="' + rev + '"]');
                     if (!btn) return;
-                    if (rev === 'R1' || rev === _curRev || expanded) { btn.style.display = ''; return; }
+                    if (rev === 'R1' || rev === curRev || expanded) { btn.style.display = ''; return; }
                     const revRows = (td.mcRevisions && td.mcRevisions[rev]) || [];
                     const hasAny = revRows.some(function(r) {
                         return parseNum(r.protoCost) || parseNum(r.protoNre) || parseNum(r.protoBCost) || parseNum(r.protoBNre) || parseNum(r.mpCost) || parseNum(r.mpNre);
@@ -8049,70 +8104,20 @@ window.populateTabData = function() {
                 });
             })();
 
-            // 💡 열 너비 조정 및 정렬 속성 스크립트로 제어
+            // 💡 표 너비 = 보이는 col 너비 합계로 정확히 고정 (table-layout:fixed 안정화)
             setTimeout(function() {
                 const table = document.querySelector('#tab-mctable .concept-table');
                 if (!table) return;
-
-                // 스타일 강제 적용하여 정확한 너비 배분
                 table.style.tableLayout = 'fixed';
-                table.style.width = '100%';
-
-                const theadRows = table.querySelectorAll('thead tr');
-                if(theadRows.length >= 2) {
-                    const tr1 = theadRows[0];
-                    const tr2 = theadRows[1];
-                    
-                    // 머릿글 중앙 정렬 스타일 주입
-                    table.querySelectorAll('thead th').forEach(th => {
-                        th.style.textAlign = 'center';
-                        th.style.verticalAlign = 'middle';
-                    });
-                    
-                    // 상위 텍스트 열 너비 넓히기
-                    if(tr1.children[0]) tr1.children[0].style.width = '40px';  // NO
-                    if(tr1.children[1]) tr1.children[1].style.width = '80px';  // TYPE
-                    if(tr1.children[2]) tr1.children[2].style.width = '180px';  // ITEM
-                    if(tr1.children[3]) tr1.children[3].style.width = '140px';  // GROUP
-                    if(tr1.children[4]) tr1.children[4].style.width = '70px';  // P/N
-                    if(tr1.children[5]) tr1.children[5].style.width = '300px';  // Specification
-                    if(tr1.children[9]) tr1.children[9].style.width = '400px';  // Note (PROTO B 추가로 인덱스 8→9)
-                    
-                    // 하위 가격 금액 열 너비 좁히기 (PROTO A/B/MP 총 6칸)
-                    if(tr2.children[0]) tr2.children[0].style.width = '30px';   // PROTO A Cost ($100.00)
-                    if(tr2.children[1]) tr2.children[1].style.width = '50px';   // PROTO A NRE ($10,000.00)
-                    if(tr2.children[2]) tr2.children[2].style.width = '30px';   // PROTO B Cost
-                    if(tr2.children[3]) tr2.children[3].style.width = '50px';   // PROTO B NRE
-                    if(tr2.children[4]) tr2.children[4].style.width = '30px';   // MP Cost
-                    if(tr2.children[5]) tr2.children[5].style.width = '50px';   // MP NRE
-
-                    
-                    // 💡 "접기" 상태에서, 표 전체에 가격이 하나도 없는 쌍(PROTO A / PROTO B / MP)은
-                    //    Cost+NRE를 항상 묶어서 통째로 숨김 (colspan은 건드리지 않음 — 쌍 단위라 항상 정합 유지)
-                    const hidePairs = {
-                        protoA: !(hasProtoCost || hasProtoNre) && !expanded,
-                        protoB: !(hasProtoBCost || hasProtoBNre) && !expanded,
-                        mp: !(hasMpCost || hasMpNre) && !expanded
-                    };
-                    if (tr1.children[6]) tr1.children[6].style.display = hidePairs.protoA ? 'none' : '';
-                    if (tr1.children[7]) tr1.children[7].style.display = hidePairs.protoB ? 'none' : '';
-                    if (tr1.children[8]) tr1.children[8].style.display = hidePairs.mp ? 'none' : '';
-                    [0,1].forEach(function(i) { if (tr2.children[i]) tr2.children[i].style.display = hidePairs.protoA ? 'none' : ''; });
-                    [2,3].forEach(function(i) { if (tr2.children[i]) tr2.children[i].style.display = hidePairs.protoB ? 'none' : ''; });
-                    [4,5].forEach(function(i) { if (tr2.children[i]) tr2.children[i].style.display = hidePairs.mp ? 'none' : ''; });
-
-                    table.querySelectorAll('tbody tr').forEach(function(tr) {
-                        if (tr.classList.contains('mc-summary-row')) {
-                            [1,2].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoA ? 'none' : ''; });
-                            [3,4].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoB ? 'none' : ''; });
-                            [5,6].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.mp ? 'none' : ''; });
-                        } else {
-                            [6,7].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoA ? 'none' : ''; });
-                            [8,9].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.protoB ? 'none' : ''; });
-                            [10,11].forEach(function(i) { if (tr.children[i]) tr.children[i].style.display = hidePairs.mp ? 'none' : ''; });
-                        }
-                    });
-                }
+                table.querySelectorAll('thead th').forEach(function(th) {
+                    th.style.textAlign = 'center';
+                    th.style.verticalAlign = 'middle';
+                });
+                let totalColW = 0;
+                document.querySelectorAll('#tab-mctable colgroup col').forEach(function(c) {
+                    totalColW += parseFloat(c.style.width) || 0;
+                });
+                if (totalColW > 0) table.style.width = totalColW + 'px';
             }, 10);
         } catch (error) {
             console.error("M.C Table 업그레이드 렌더링 에러:", error);
@@ -8927,8 +8932,19 @@ window.mcRenderComparisonTable = function() {
     });
     ratioRow += '<td></td></tr>';
 
-    table.innerHTML = thead + tbody + '<tfoot>' + totalRow + salesRow + ratioRow + '</tfoot>';
+    // 💡 R1~R5 표와 동일한 방식: colgroup으로 칸 너비를 명시 고정 (리비전 개수가 가변이라 매번 새로 생성)
+    let compColgroup = '<colgroup>'
+        + '<col style="width:40px;"><col style="width:90px;"><col style="width:160px;"><col style="width:140px;">';
+    visibleRevs.forEach(function() { compColgroup += '<col style="width:70px;"><col style="width:90px;">'; });
+    compColgroup += '<col style="width:200px;"></colgroup>';
 
+    table.style.tableLayout = 'fixed';
+    table.innerHTML = compColgroup + thead + tbody + '<tfoot>' + totalRow + salesRow + ratioRow + '</tfoot>';
+
+    // 💡 표 너비 = 보이는 col 너비 합계로 정확히 고정 (메인 표에서 겪었던 너비 뭉개짐 방지)
+    let compTotalColW = 0;
+    table.querySelectorAll('colgroup col').forEach(function(c) { compTotalColW += parseFloat(c.style.width) || 0; });
+    if (compTotalColW > 0) table.style.width = compTotalColW + 'px';
 
     // 💡 비교 화면에서도 동일하게: Cost 정보 없는 리비전 버튼은 "접기" 상태에서 숨김
     //    (이 함수에 이미 계산되어 있는 hasData[rev], expanded를 그대로 재사용)
