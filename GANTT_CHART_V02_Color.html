@@ -500,7 +500,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 }
 
 /* 5. 페이지 내부 박스 — UHD 등 넓은 화면에서 끝없이 늘어나지 않도록 최대 너비 고정 (왼쪽 맞춤) */
-.concept-tab-wrap { padding: 0 !important; max-width: 1800px !important; margin: 0 !important; box-sizing: border-box; }
+.concept-tab-wrap { padding: 0 !important; max-width: 1200px !important; margin: 0 !important; box-sizing: border-box; }
+.concept-tab-wrap.mc-wrap-expanded { max-width: none !important; }
 .concept-section { padding: 12px 18px !important; margin-bottom: 12px !important; border-radius: 6px !important; }
 
 /* 6. 타이틀 박스화 (Gantt의 헤더 디자인과 통일) */
@@ -750,9 +751,9 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             <table class="concept-table">
                 <thead>
                     <tr>
-                        <th rowspan="2" style="width:2%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
+                        <th rowspan="2" style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
                         <th rowspan="2" style="width:17%;">TYPE</th>
-                        <th rowspan="2" style="width:8%;">구분</th>
+                        <th rowspan="2" style="width:8%;">TYPE2</th>
                         <th id="bs-desc-th" colspan="3" style="width:45%;">Description</th>
                         <th rowspan="2" style="width:30%;">Note</th>
                     </tr>
@@ -782,11 +783,11 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0;">🔽 펼치기</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div style="display:flex; gap:6px; align-items:center;">
-                <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
-                <button class="mc-rev-btn" data-rev="R2" onclick="window.mcSwitchRevision('R2')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R2</button>
-                <button class="mc-rev-btn" data-rev="R3" onclick="window.mcSwitchRevision('R3')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R3</button>
-                <button class="mc-rev-btn" data-rev="R4" onclick="window.mcSwitchRevision('R4')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R4</button>
                 <button class="mc-rev-btn" data-rev="R5" onclick="window.mcSwitchRevision('R5')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R5</button>
+                <button class="mc-rev-btn" data-rev="R4" onclick="window.mcSwitchRevision('R4')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R4</button>
+                <button class="mc-rev-btn" data-rev="R3" onclick="window.mcSwitchRevision('R3')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R3</button>
+                <button class="mc-rev-btn" data-rev="R2" onclick="window.mcSwitchRevision('R2')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R2</button>
+                <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
@@ -802,21 +803,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     vertical-align: middle !important;
                 }
                 /* 💡 가격 정보 시작 지점(Spec 오른쪽) + PROTO A / PROTO B / MP 쌍 구분선 — TYPE 강조선과 동일 색상 */
-                    #mc-normal-section .concept-table thead tr:nth-child(2) th:nth-child(1),
-                    #mc-normal-section .concept-table tbody tr:not(.mc-summary-row) td:nth-child(7),
-                    #mc-normal-section .concept-table tbody tr.mc-summary-row td:nth-child(2) {
-                        border-left: 2px solid #2c5f8a !important;
-                    }
-                    #mc-normal-section .concept-table thead tr:nth-child(2) th:nth-child(3),
-                    #mc-normal-section .concept-table tbody tr:not(.mc-summary-row) td:nth-child(9),
-                    #mc-normal-section .concept-table tbody tr.mc-summary-row td:nth-child(4) {
-                        border-left: 2px solid #2c5f8a !important;
-                    }
-                    #mc-normal-section .concept-table thead tr:nth-child(2) th:nth-child(5),
-                    #mc-normal-section .concept-table tbody tr:not(.mc-summary-row) td:nth-child(11),
-                    #mc-normal-section .concept-table tbody tr.mc-summary-row td:nth-child(6) {
-                        border-left: 2px solid #2c5f8a !important;
-                    }
+                    
                     /* 💡 Comparison 표: 리비전 개수가 가변적이라 JS에서 class="mc-comp-divider"를 직접 붙여줌 (GROUP 오른쪽부터 매 리비전 Cost 칸마다) */
                     .mc-comp-divider {
                         border-left: 2px solid #2c5f8a !important;
@@ -851,7 +838,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                         background-color: #efefef !important;
                     }
             </style>
-            <table class="concept-table" style="min-width:1500px;">
+            <table class="concept-table">
                 <colgroup>
                     <col id="mc-col-no">
                     <col id="mc-col-type">
@@ -3285,7 +3272,7 @@ ${mailText}`;
         if (window.mcBuildComparisonRows) {
             const compRows = window.mcBuildComparisonRows();
             const compSalesPrice = (tabData.mcCompare && tabData.mcCompare.salesPrice) || {};
-            const revs = ['R1', 'R2', 'R3', 'R4', 'R5'];
+            const revs = ['R5', 'R4', 'R3', 'R2', 'R1'];
             const header1 = ['NO', 'TYPE', 'ITEM', 'GROUP'];
             const header2 = ['', '', '', ''];
             revs.forEach(function(rev) { header1.push(rev + ' MP', ''); header2.push('Cost($)', 'NRE'); });
@@ -7904,6 +7891,7 @@ window.populateTabData = function() {
                 if (parseNum(r.mpNre)) hasMpNre = true;
             });
             const expanded = !!(window._bmExpanded && window._bmExpanded.mc);
+            const hidePnSpec = !expanded; // 💡 접힌 상태에서는 P/N, Specification 열도 통째로 숨김
             const hidePairs = {
                 protoA: !(hasProtoCost || hasProtoNre) && !expanded,
                 protoB: !(hasProtoBCost || hasProtoBNre) && !expanded,
@@ -7914,7 +7902,8 @@ window.populateTabData = function() {
             // 💡 colgroup 통째로 재생성 — 숨길 쌍은 <col> 자체를 처음부터 안 만듦
             const colgroupEl = document.querySelector('#tab-mctable colgroup');
             if (colgroupEl) {
-                let cg = '<col style="width:40px;"><col style="width:80px;"><col style="width:180px;"><col style="width:140px;"><col style="width:70px;"><col style="width:300px;">';
+                let cg = '<col style="width:40px;"><col style="width:90px;"><col style="width:160px;"><col style="width:140px;">';
+                if (!hidePnSpec) cg += '<col style="width:90px;"><col style="width:280px;">';
                 if (!hidePairs.protoA) cg += '<col style="width:70px;"><col style="width:90px;">';
                 if (!hidePairs.protoB) cg += '<col style="width:70px;"><col style="width:90px;">';
                 if (!hidePairs.mp) cg += '<col style="width:70px;"><col style="width:90px;">';
@@ -7926,33 +7915,32 @@ window.populateTabData = function() {
             if (theadEl) {
                 let row1 = '<tr>'
                     + '<th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>'
-                    + '<th rowspan="2" style="width:80px;">TYPE</th>'
-                    + '<th rowspan="2" style="width:180px;">ITEM</th>'
-                    + '<th rowspan="2" style="width:140px;">GROUP</th>'
-                    + '<th rowspan="2" style="width:70px;">P/N</th>'
-                    + '<th rowspan="2" style="min-width:300px;">Specification</th>';
+                    + '<th rowspan="2" style="width:90px;">TYPE</th>'
+                    + '<th rowspan="2" style="width:160px;">ITEM</th>'
+                    + '<th rowspan="2" style="width:140px;">GROUP</th>';
+                if (!hidePnSpec) row1 += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
                 if (!hidePairs.protoA) row1 += '<th colspan="2">PROTO A</th>';
                 if (!hidePairs.protoB) row1 += '<th colspan="2">PROTO B</th>';
                 if (!hidePairs.mp) row1 += '<th colspan="2">MP(' + curRev + ')</th>';
                 row1 += '<th rowspan="2" style="min-width:400px;">Note</th></tr>';
                 let row2 = '<tr>';
-                if (!hidePairs.protoA) row2 += '<th style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>';
-                if (!hidePairs.protoB) row2 += '<th style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>';
-                if (!hidePairs.mp) row2 += '<th style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>';
+                if (!hidePairs.protoA) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
+                if (!hidePairs.protoB) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
+                if (!hidePairs.mp) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
                 row2 += '</tr>';
                 theadEl.innerHTML = row1 + row2;
             }
 
             // 💡 합계 행 생성 함수 — hidePairs에 맞춰 같은 쌍만 출력
             const renderSummaryRow = function(label, sums, bgColor) {
-                const valCell = function(v) {
-                    return '<td><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(v) + '" readonly></td>';
+                const valCell = function(v, border) {
+                    return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(v) + '" readonly></td>';
                 };
                 let html = '<tr class="mc-summary-row" style="background-color:' + bgColor + '; font-weight:bold;">'
-                    + '<td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>';
-                if (!hidePairs.protoA) html += valCell(sums.protoCost) + valCell(sums.protoNre);
-                if (!hidePairs.protoB) html += valCell(sums.protoBCost) + valCell(sums.protoBNre);
-                if (!hidePairs.mp) html += valCell(sums.mpCost) + valCell(sums.mpNre);
+                    + '<td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + label + '</td>';
+                if (!hidePairs.protoA) html += valCell(sums.protoCost, true) + valCell(sums.protoNre);
+                if (!hidePairs.protoB) html += valCell(sums.protoBCost, true) + valCell(sums.protoBNre);
+                if (!hidePairs.mp) html += valCell(sums.mpCost, true) + valCell(sums.mpNre);
                 html += '<td></td></tr>';
                 return html;
             };
@@ -8027,20 +8015,25 @@ window.populateTabData = function() {
                     + '<input type="text" data-field="type" value="' + _escTabVal(rowType) + '" onchange="window.mcRefreshTable()" style="border:none; width:100%; font-size:12.5px; font-weight:bold; color:' + typeColor + '; background:transparent; text-align:center;">'
                     + '</td>'
                     + '<td><input type="text" data-field="item" value="' + _escTabVal(r.item) + '" style="color:' + otherColor + ';"></td>'
-                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '" style="color:' + otherColor + ';"></td>'
-                    + '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '" style="color:' + otherColor + ';"></td>'
-                    + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="color:' + otherColor + ';"></td>';
+                    + '<td><input type="text" data-field="group" value="' + _escTabVal(r.group) + '" style="color:' + otherColor + ';">'
+                    + (hidePnSpec ? '<input type="hidden" data-field="pn" value="' + _escTabVal(r.pn) + '"><input type="hidden" data-field="spec" value="' + _escTabVal(r.spec) + '">' : '')
+                    + '</td>';
+
+                if (!hidePnSpec) {
+                    rowHtml += '<td><input type="text" data-field="pn" value="' + _escTabVal(r.pn) + '" style="color:' + otherColor + ';"></td>'
+                        + '<td><input type="text" data-field="spec" value="' + _escTabVal(r.spec) + '" style="color:' + otherColor + ';"></td>';
+                }
 
                 if (!hidePairs.protoA) {
-                    rowHtml += '<td><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    rowHtml += '<td style="border-left:2px solid #2c5f8a;"><input type="text" class="u-input" data-field="protoCost" value="' + fmtCur(r.protoCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                         + '<td><input type="text" class="u-input" data-field="protoNre" value="' + fmtCur(r.protoNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
                 }
                 if (!hidePairs.protoB) {
-                    rowHtml += '<td><input type="text" class="u-input" data-field="protoBCost" value="' + fmtCur(r.protoBCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    rowHtml += '<td style="border-left:2px solid #2c5f8a;"><input type="text" class="u-input" data-field="protoBCost" value="' + fmtCur(r.protoBCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                         + '<td><input type="text" class="u-input" data-field="protoBNre" value="' + fmtCur(r.protoBNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
                 }
                 if (!hidePairs.mp) {
-                    rowHtml += '<td><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
+                    rowHtml += '<td style="border-left:2px solid #2c5f8a;"><input type="text" class="u-input" data-field="mpCost" value="' + fmtCur(r.mpCost) + '" style="color:' + priceColor + '; text-align:center;"></td>'
                         + '<td><input type="text" class="u-input" data-field="mpNre" value="' + fmtCur(r.mpNre) + '" style="color:' + priceColor + '; text-align:center;"></td>';
                 }
                 rowHtml += '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="color:' + otherColor + ';"></td></tr>';
@@ -8062,28 +8055,28 @@ window.populateTabData = function() {
 
             // 💡 영업판가 행
             const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[curRev]) || {};
-            const spCell = function(field) {
+            const spCell = function(field, border) {
                 const raw = sp[field];
                 const display = raw ? '$' + parseNum(raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-                return '<td><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
+                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
             };
-            let salesHtml = '<tr class="mc-summary-row" style="background-color:#e8f5e9; font-weight:bold;"><td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
-            if (!hidePairs.protoA) salesHtml += spCell('protoCost') + spCell('protoNre');
-            if (!hidePairs.protoB) salesHtml += spCell('protoBCost') + spCell('protoBNre');
-            if (!hidePairs.mp) salesHtml += spCell('mpCost') + spCell('mpNre');
+            let salesHtml = '<tr class="mc-summary-row" style="background-color:#e8f5e9; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
+            if (!hidePairs.protoA) salesHtml += spCell('protoCost', true) + spCell('protoNre');
+            if (!hidePairs.protoB) salesHtml += spCell('protoBCost', true) + spCell('protoBNre');
+            if (!hidePairs.mp) salesHtml += spCell('mpCost', true) + spCell('mpNre');
             salesHtml += '<td></td></tr>';
             htmlChunks.push(salesHtml);
 
             // 💡 재료비율 행
-            const ratioCell = function(field, totalVal) {
+            const ratioCell = function(field, totalVal, border) {
                 const spVal = parseNum(sp[field]);
                 const text = spVal > 0 ? (totalVal / spVal * 100).toFixed(1) + '%' : '-';
-                return '<td style="text-align:center; font-weight:bold; color:#e65100;">' + text + '</td>';
+                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a; text-align:center; font-weight:bold; color:#e65100;"' : ' style="text-align:center; font-weight:bold; color:#e65100;"') + '>' + text + '</td>';
             };
-            let ratioHtml = '<tr class="mc-summary-row" style="background-color:#ffe0b2; font-weight:bold;"><td colspan="6" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
-            if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost) + ratioCell('protoNre', grandtotal.protoNre);
-            if (!hidePairs.protoB) ratioHtml += ratioCell('protoBCost', grandtotal.protoBCost) + ratioCell('protoBNre', grandtotal.protoBNre);
-            if (!hidePairs.mp) ratioHtml += ratioCell('mpCost', grandtotal.mpCost) + ratioCell('mpNre', grandtotal.mpNre);
+            let ratioHtml = '<tr class="mc-summary-row" style="background-color:#ffe0b2; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
+            if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost, true) + ratioCell('protoNre', grandtotal.protoNre);
+            if (!hidePairs.protoB) ratioHtml += ratioCell('protoBCost', grandtotal.protoBCost, true) + ratioCell('protoBNre', grandtotal.protoBNre);
+            if (!hidePairs.mp) ratioHtml += ratioCell('mpCost', grandtotal.mpCost, true) + ratioCell('mpNre', grandtotal.mpNre);
             ratioHtml += '<td></td></tr>';
             htmlChunks.push(ratioHtml);
 
@@ -8113,11 +8106,17 @@ window.populateTabData = function() {
                     th.style.textAlign = 'center';
                     th.style.verticalAlign = 'middle';
                 });
-                let totalColW = 0;
-                document.querySelectorAll('#tab-mctable colgroup col').forEach(function(c) {
-                    totalColW += parseFloat(c.style.width) || 0;
-                });
-                if (totalColW > 0) table.style.width = totalColW + 'px';
+
+                // 💡 Note 열은 너비를 지정하지 않고 비워둠 — table-layout:fixed에서
+                //    "너비가 없는 칸"은 남은 공간을 자동으로 채우는 브라우저 기본 동작을 그대로 이용.
+                const cols = document.querySelectorAll('#mc-normal-section colgroup col');
+                const noteCol = cols[cols.length - 1];
+                if (noteCol) noteCol.style.width = '';
+                table.style.width = '100%';
+
+                // 💡 펼친 상태일 때만 내부 박스(.concept-tab-wrap)를 최대로 — 접힌 상태는 기존 1200px 그대로 유지
+                const mcWrap = document.querySelector('#tab-mctable .concept-tab-wrap');
+                if (mcWrap) mcWrap.classList.toggle('mc-wrap-expanded', expanded);
             }, 10);
         } catch (error) {
             console.error("M.C Table 업그레이드 렌더링 에러:", error);
@@ -8508,13 +8507,15 @@ window.mcSwitchRevision = function(rev) {
     window.tabData.mcRevisions[cur] = _readRowsFromTbody('mctable-body');
     window.tabData.mcActiveRevision = rev;
     window.tabData.mcTable = window.tabData.mcRevisions['R1'] || []; // 엑셀 저장 호환용 별칭
-    window.populateTabData();
 
     // 💡 비교 화면에서 R1~R5를 누르면 "돌아가기"와 동일하게 일반 화면으로 복귀
+    //    (populateTabData()의 너비 계산이 화면이 보이는 상태에서 실행되도록, 먼저 화면을 복귀시킴)
     const compSection = document.getElementById('mc-comparison-section');
     if (compSection && compSection.style.display !== 'none') {
         window.mcHideComparison();
     }
+
+    window.populateTabData();
 
     document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
         const active = b.dataset.rev === rev;
@@ -8622,8 +8623,6 @@ window.mcRenderHistoryTable = function() {
 // ────────────────────────────────────────────────────────
 // 📊 M.C Table Comparison (R1~R5 비교표)
 // ────────────────────────────────────────────────────────
-window._mcCompExpanded = false; // 비교표 펼침 상태 (가격 없는 행/열도 모두 표시)
-try { window._mcCompExpanded = localStorage.getItem('gantt_mcComp_expanded') === '1'; } catch (e) {}
 
 function _mcParseNum(val) {
     if (val === undefined || val === null) return 0;
@@ -8646,7 +8645,7 @@ function _mcRowKey(r) {
 
 // R1~R5 데이터를 동일 항목(TYPE+ITEM+GROUP) 기준으로 매칭하여 한 줄로 합침
 window.mcBuildComparisonRows = function() {
-    const revs = ['R1','R2','R3','R4','R5'];
+    const revs = ['R5','R4','R3','R2','R1'];
     const td = window.tabData || {};
     td.mcRevisions = td.mcRevisions || {};
     td.mcCompare = td.mcCompare || { salesPrice: {}, notes: {} };
@@ -8666,7 +8665,7 @@ window.mcBuildComparisonRows = function() {
             let entry = indexByKey[key];
             if (!entry) {
                 // 💡 NOTE는 R1~R5 데이터가 아니라 비교표 전용 저장소(td.mcCompare.notes)에서만 가져옴
-                entry = { key: key, type: '', item: '', group: '', note: td.mcCompare.notes[key] || '', prices: {} };
+                entry = { key: key, type: '', item: '', group: '', pn: '', spec: '', note: td.mcCompare.notes[key] || '', prices: {} };
                 indexByKey[key] = entry;
                 order.push(entry);
             }
@@ -8674,6 +8673,8 @@ window.mcBuildComparisonRows = function() {
             if (!entry.type) entry.type = r.type || '';
             if (!entry.item) entry.item = r.item || '';
             if (!entry.group) entry.group = r.group || '';
+            if (!entry.pn) entry.pn = r.pn || '';
+            if (!entry.spec) entry.spec = r.spec || '';
             entry.prices[rev] = { cost: _mcParseNum(r.mpCost), nre: _mcParseNum(r.mpNre) };
         });
     });
@@ -8701,7 +8702,7 @@ window.mcShowComparison = function() {
     document.getElementById('mc-normal-section').style.display = 'none';
     document.getElementById('mc-comparison-section').style.display = 'block';
     const btn = document.getElementById('mc-toggle-hidden-btn');
-    if (btn) btn.textContent = window._mcCompExpanded ? '🔼 접기' : '🔽 펼치기';
+    if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? '🔼 접기' : '🔽 펼치기';
     const compBtn = document.getElementById('mc-comparison-btn');
     if (compBtn) { compBtn.style.background = '#e67e22'; compBtn.style.color = '#fff'; }
 
@@ -8726,10 +8727,11 @@ window.mcHideComparison = function() {
 };
 
 window.mcToggleCompareExpand = function(btnEl) {
-    window._mcCompExpanded = !window._mcCompExpanded;
-    try { localStorage.setItem('gantt_mcComp_expanded', window._mcCompExpanded ? '1' : '0'); } catch (e) {}
+    window._bmExpanded = window._bmExpanded || {};
+    window._bmExpanded.mc = !window._bmExpanded.mc;
+    try { localStorage.setItem('gantt_mc_expanded', window._bmExpanded.mc ? '1' : '0'); } catch (e) {}
     const btn = btnEl || document.getElementById('mc-toggle-hidden-btn');
-    if (btn) btn.textContent = window._mcCompExpanded ? '🔼 접기' : '🔽 펼치기';
+    if (btn) btn.textContent = window._bmExpanded.mc ? '🔼 접기' : '🔽 펼치기';
     window.mcRenderComparisonTable();
 };
 
@@ -8762,12 +8764,12 @@ window.mcUpdateCompareNote = function(key, val) {
 window.mcRenderComparisonTable = function() {
     const table = document.getElementById('mc-comparison-table');
     if (!table) return;
-    const revs = ['R1','R2','R3','R4','R5'];
+    const revs = ['R5','R4','R3','R2','R1'];
     const rows = window.mcBuildComparisonRows();
     const td = window.tabData || {};
     td.mcCompare = td.mcCompare || { salesPrice: {} };
     td.mcCompare.salesPrice = td.mcCompare.salesPrice || {};
-    const expanded = !!window._mcCompExpanded;
+    const expanded = !!(window._bmExpanded && window._bmExpanded.mc);
 
     // 리비전별 합계 + 데이터 존재 여부 (R1은 항상 표시)
     const totals = {};
@@ -8801,6 +8803,7 @@ window.mcRenderComparisonTable = function() {
         + '<th rowspan="2" style="width:90px;">TYPE</th>'
         + '<th rowspan="2" style="width:160px;">ITEM</th>'
         + '<th rowspan="2" style="width:140px;">GROUP</th>';
+    if (expanded) thead += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
     visibleRevs.forEach(function(rev) { thead += '<th colspan="2" class="mc-comp-divider">MP(' + rev + ')</th>'; });
     thead += '<th rowspan="2" style="min-width:200px;">Note</th></tr><tr>';
     visibleRevs.forEach(function(rev) { thead += '<th class="mc-comp-divider" style="width:70px;">Cost($)</th><th style="width:90px;">NRE</th>'; });
@@ -8866,6 +8869,10 @@ window.mcRenderComparisonTable = function() {
                 + '<td style="' + typeCellStyle + '">' + _mcEsc(rowType) + '</td>'
                 + '<td style="color:' + otherColor + ';">' + _mcEsc(r.item) + '</td>'
                 + '<td style="color:' + otherColor + ';">' + _mcEsc(r.group) + '</td>';
+            if (expanded) {
+                tbody += '<td style="color:' + otherColor + ';">' + _mcEsc(r.pn) + '</td>'
+                    + '<td style="color:' + otherColor + ';">' + _mcEsc(r.spec) + '</td>';
+            }
             visibleRevs.forEach(function(rev) {
             const p = r.prices[rev] || { cost: 0, nre: 0 };
             tbody += '<td class="mc-comp-divider" style="text-align:center; color:' + priceColor + ';">' + _mcFmtCur(p.cost) + '</td>'
@@ -8889,7 +8896,7 @@ window.mcRenderComparisonTable = function() {
         const typeWillChange = !!(nextRow && nextType && nextType !== compCurrentType);
 
         if (compCurrentType && (itemHasNre || typeWillChange || isLastRow)) {
-            tbody += '<tr style="background-color:#fff9c4; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + compCurrentType + ' SUBTOTAL</td>';
+            tbody += '<tr style="background-color:#fff9c4; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + compCurrentType + ' SUBTOTAL</td>';
             visibleRevs.forEach(function(rev) {
             tbody += '<td class="mc-comp-divider" style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].cost) + '</td>'
                 + '<td style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].nre) + '</td>';
@@ -8901,7 +8908,7 @@ window.mcRenderComparisonTable = function() {
     tbody += '</tbody>';
 
     // TOTAL 행 (하늘색)
-    let totalRow = '<tr style="background-color:#e3f2fd; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px;">TOTAL</td>';
+    let totalRow = '<tr style="background-color:#e3f2fd; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">TOTAL</td>';
     visibleRevs.forEach(function(rev) {
         totalRow += '<td class="mc-comp-divider" style="text-align:center;">' + _mcFmtCurSummary(totals[rev].cost) + '</td>'
             + '<td style="text-align:center;">' + _mcFmtCurSummary(totals[rev].nre) + '</td>';
@@ -8909,7 +8916,7 @@ window.mcRenderComparisonTable = function() {
     totalRow += '<td></td></tr>';
 
     // 영업판가 행 (연두색, 입력 가능 — 메인 R1~R5 표의 MP 영업판가와 동일한 저장소를 공유함)
-    let salesRow = '<tr style="background-color:#e8f5e9; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px;">영업판가</td>';
+    let salesRow = '<tr style="background-color:#e8f5e9; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">영업판가</td>';
     visibleRevs.forEach(function(rev) {
         const detail = (td.mcSalesPriceDetail && td.mcSalesPriceDetail[rev]) || {};
         const costVal = detail.mpCost ? _mcFmtCurSummary(_mcParseNum(detail.mpCost)) : '';
@@ -8920,7 +8927,7 @@ window.mcRenderComparisonTable = function() {
     salesRow += '<td></td></tr>';
 
     // 재료비율 행 (주황색, TOTAL MP Cost/NRE 각각 ÷ 영업판가)
-    let ratioRow = '<tr style="background-color:#ffe0b2; font-weight:bold;"><td colspan="4" style="text-align:right; padding-right:15px;">재료비율 (M.C ÷ 영업판가) [%]</td>';
+    let ratioRow = '<tr style="background-color:#ffe0b2; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">재료비율 (M.C ÷ 영업판가)</td>';
     visibleRevs.forEach(function(rev) {
         const detail = (td.mcSalesPriceDetail && td.mcSalesPriceDetail[rev]) || {};
         const spCost = _mcParseNum(detail.mpCost);
@@ -8935,16 +8942,22 @@ window.mcRenderComparisonTable = function() {
     // 💡 R1~R5 표와 동일한 방식: colgroup으로 칸 너비를 명시 고정 (리비전 개수가 가변이라 매번 새로 생성)
     let compColgroup = '<colgroup>'
         + '<col style="width:40px;"><col style="width:90px;"><col style="width:160px;"><col style="width:140px;">';
+    if (expanded) compColgroup += '<col style="width:90px;"><col style="width:280px;">';
     visibleRevs.forEach(function() { compColgroup += '<col style="width:70px;"><col style="width:90px;">'; });
     compColgroup += '<col style="width:200px;"></colgroup>';
 
     table.style.tableLayout = 'fixed';
     table.innerHTML = compColgroup + thead + tbody + '<tfoot>' + totalRow + salesRow + ratioRow + '</tfoot>';
 
-    // 💡 표 너비 = 보이는 col 너비 합계로 정확히 고정 (메인 표에서 겪었던 너비 뭉개짐 방지)
-    let compTotalColW = 0;
-    table.querySelectorAll('colgroup col').forEach(function(c) { compTotalColW += parseFloat(c.style.width) || 0; });
-    if (compTotalColW > 0) table.style.width = compTotalColW + 'px';
+    // 💡 Note 열은 최소 너비를 보장 (리비전이 많아 칸 합계가 박스를 넘으면 가로 스크롤로 처리)
+    const compCols = table.querySelectorAll('colgroup col');
+    const compNoteCol = compCols[compCols.length - 1];
+    if (compNoteCol) compNoteCol.style.width = '220px';
+    table.style.width = '100%';
+
+    // 💡 펼친 상태일 때만 내부 박스(.concept-tab-wrap)를 최대로 — 접힌 상태는 기존 1200px 그대로 유지
+    const mcWrap = document.querySelector('#tab-mctable .concept-tab-wrap');
+    if (mcWrap) mcWrap.classList.toggle('mc-wrap-expanded', expanded);
 
     // 💡 비교 화면에서도 동일하게: Cost 정보 없는 리비전 버튼은 "접기" 상태에서 숨김
     //    (이 함수에 이미 계산되어 있는 hasData[rev], expanded를 그대로 재사용)
