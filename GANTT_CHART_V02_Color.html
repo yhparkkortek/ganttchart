@@ -33,26 +33,38 @@
         --w-default: 81px;
         --w-status: 60px;
 
-        --c-l0-bg: #1a237e;
-        --c-l0-border: #0d47a1;
+        --c-l0-bg: #424242;
+        --c-l0-border: #212121;
         --c-l0-text: #ffffff;
-        --c-l0-chart-label: #e8eaf6;
+        --c-l0-chart-label: #e0e0e0;
 
-        --c-l1-bg: #dce2f2;
-        --c-l1-border: #b4bedc;
-        --c-l1-text: #1a237e;
+        --c-l1-bg: #e0e0e0;
+        --c-l1-border: #bdbdbd;
+        --c-l1-text: #212121;
 
-        --c-l2-bg: #e8eaf6;
-        --c-l2-border: #c5cae9;
-        --c-l2-text: #283593;
+        --c-l2-bg: #eeeeee;
+        --c-l2-border: #d6d6d6;
+        --c-l2-text: #333333;
 
         --c-l3-bg: #ffffff;
         --c-l3-border: #dee2e6;
         --c-l3-text: #333333;
 
-        --c-l4-bg: #f8f9fc;
+        --c-l4-bg: #f8f9fa;
         --c-l4-border: #e9ecef;
         --c-l4-text: #495057;
+
+        --grad-0: linear-gradient(90deg, #3a3a3a, #4d4d4d);
+        --grad-1: linear-gradient(90deg, #c8c8c8, #d6d6d6);
+        --grad-2: linear-gradient(90deg, #dedede, #e6e6e6);
+        --grad-3: linear-gradient(90deg, #eeeeee, #f2f2f2);
+        --grad-4: linear-gradient(90deg, #f7f7f7, #fcfcfc);
+
+        --chart-l0: #FF0000;
+        --chart-l1: #757575;
+        --chart-l2: #9e9e9e;
+        --chart-l3: #bdbdbd;
+        --chart-l4: #d6d6d6;
     }
 
     /* 차트 확장 모드 */
@@ -568,8 +580,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         <button id="auth_button" class="topbar-btn" onclick="handleAuthClick()" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 드라이브 연동하기</button>
         <button id="drive_load_btn" class="topbar-btn" onclick="loadFromGoogleDrive()" disabled>📥 프로젝트 가져오기</button>
         <button id="drive_save_btn" class="topbar-btn" onclick="saveToGoogleDrive()" disabled>📤 프로젝트 저장하기</button>
-        <div class="tb-sep"></div>
-        <button id="history-btn" class="topbar-btn" onclick="showHistoryModal()">🕒 수정이력 확인</button>
     </div>
     <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
@@ -594,15 +604,11 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
     <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
+        <button id="history-btn" class="action-btn" onclick="showHistoryModal()">🕒 수정이력 확인</button>
+        <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 6px;"></span>
         <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
         <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
         <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
-            <label for="themePicker" class="action-btn" style="cursor:pointer; gap:6px;">
-            <span id="theme-label-text">🎨 테마</span>
-            <input type="color" id="themePicker" value="#c8c8c8" oninput="window.updateThemeColor(this.value)"
-                style="cursor:pointer; width:24px; height:24px; border:none; padding:0; background:none; border-radius:3px; outline:none;"
-                title="원하는 색상을 선택하면 전체 테마가 자동으로 생성됩니다.">
-        </label>
         </div>
 
         <div class="btn-group">
@@ -2659,7 +2665,7 @@ ${mailText}`;
                 'drive_load_btn': '📂 불러오기',
                 'chart-expand-btn':    '📊 차트 확장',
                 'chart-expand-btn-on': '📊 기본 보기',
-                'theme-label-text': '🎨 테마',
+                
                 'fs-btn':         '🖥️ 전체화면',
                 'excel-btn':      '💾 파일 저장',
                 'print-btn':      '🖨️ 인쇄 (PDF)',
@@ -2691,7 +2697,7 @@ ${mailText}`;
                 'drive_load_btn': '📂 Load',
                 'chart-expand-btn':    '📊 Chart View',
                 'chart-expand-btn-on': '📊 Basic View',
-                'theme-label-text': '🎨 Theme',
+               
                 'fs-btn':         '🖥️ Fullscreen',
                 'excel-btn':      '💾 Save File',
                 'print-btn':      '🖨️ Print (PDF)',
@@ -3495,23 +3501,7 @@ window.handleAuthClick = function() {
     </style>
     `);
 
-    // 명도/채도 계산 HSL 변환 함수
-    function hexToHSL(H) {
-        let r = 0, g = 0, b = 0;
-        if (H.length === 4) { r = "0x" + H[1] + H[1]; g = "0x" + H[2] + H[2]; b = "0x" + H[3] + H[3]; } 
-        else if (H.length === 7) { r = "0x" + H[1] + H[2]; g = "0x" + H[3] + H[4]; b = "0x" + H[5] + H[6]; }
-        r /= 255; g /= 255; b /= 255;
-        let cmin = Math.min(r,g,b), cmax = Math.max(r,g,b), delta = cmax - cmin, h = 0, s = 0, l = 0;
-        if (delta === 0) h = 0;
-        else if (cmax === r) h = ((g - b) / delta) % 6;
-        else if (cmax === g) h = (b - r) / delta + 2;
-        else h = (r - g) / delta + 4;
-        h = Math.round(h * 60); if (h < 0) h += 360;
-        l = (cmax + cmin) / 2;
-        s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1));
-        s = +(s * 100).toFixed(1); l = +(l * 100).toFixed(1);
-        return { h, s, l };
-    }
+    
 
     // ── 차트 확장 토글 ─────────────────────────────────────
  window._chartExpanded = false;
@@ -3570,69 +3560,7 @@ window.handleAuthClick = function() {
         // 💡 컬럼 순서가 바뀌었으므로 sticky 왼쪽열 위치/배경을 즉시 재계산 (안 하면 스크롤 시 뒤가 투과되어 보임)
         if (window.updateStickyPositions) window.updateStickyPositions();
     };
-    // 테마 색상 동적 덮어쓰기
-    window.updateThemeColor = function(baseHex) {
-        let hsl = hexToHSL(baseHex);
-        let h = hsl.h, s = hsl.s, l = hsl.l;
-        
-        let l0Text = l > 60 ? '#333333' : '#ffffff';
-        let darkTextL = Math.min(l, 40); 
-        let root = document.documentElement;
 
-        // 1. 기존 고정 배경색 투명화
-        root.style.setProperty('--c-l0-bg', 'transparent');
-        root.style.setProperty('--c-l1-bg', 'transparent');
-        root.style.setProperty('--c-l2-bg', 'transparent');
-        root.style.setProperty('--c-l3-bg', 'transparent');
-        root.style.setProperty('--c-l4-bg', 'transparent');
-
-        // 2. 테두리 및 텍스트 색상
-        root.style.setProperty('--c-l0-border', `hsl(${h}, ${s}%, ${Math.max(0, l - 15)}%)`);
-        root.style.setProperty('--c-l0-text', l0Text);
-        root.style.setProperty('--c-l0-chart-label', l0Text === '#ffffff' ? `hsl(${h}, ${s}%, 90%)` : `hsl(${h}, ${s}%, 20%)`);
-        root.style.setProperty('--c-l1-border', `hsl(${h}, ${s}%, ${Math.min(90, l + 10)}%)`);
-        root.style.setProperty('--c-l1-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
-        root.style.setProperty('--c-l2-border', `hsl(${h}, ${s}%, ${Math.min(90, l + 20)}%)`);
-        root.style.setProperty('--c-l2-text', `hsl(${h}, ${s}%, ${darkTextL}%)`);
-        root.style.setProperty('--c-l3-border', `#dee2e6`);
-        root.style.setProperty('--c-l3-text', `#333333`);
-        root.style.setProperty('--c-l4-border', `#e9ecef`);
-        root.style.setProperty('--c-l4-text', `#495057`);
-
-        // =========================================================================
-        // 🛠️ [여기를 수정하세요 1] WBS 배경 그라디에이션 명도(밝기) 조절
-        // =========================================================================
-        // l + 숫자 (예: l + 25) 의 숫자를 키우면 색이 더 하얗게(연하게) 변합니다.
-        // 첫 번째 hsl(...)은 그라디에이션의 시작색, 두 번째 hsl(...)은 끝색입니다.
-        // 단계별 격차를 확 늘려두었습니다.
-        
-        // 레벨 0 (가장 진한 원본 테마색)
-        root.style.setProperty('--grad-0', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.max(0, l - 10)}%), hsl(${h}, ${s}%, ${l}%))`);
-        // 레벨 1 
-        root.style.setProperty('--grad-1', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(85, l + 25)}%), hsl(${h}, ${s}%, ${Math.min(90, l + 35)}%))`);
-        // 레벨 2
-        root.style.setProperty('--grad-2', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(92, l + 50)}%), hsl(${h}, ${s}%, ${Math.min(95, l + 60)}%))`);
-        // 레벨 3
-        root.style.setProperty('--grad-3', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(95, l + 70)}%), hsl(${h}, ${s}%, ${Math.min(97, l + 80)}%))`);
-        // 레벨 4 (가장 연한 흰색에 가까운 색)
-        root.style.setProperty('--grad-4', `linear-gradient(90deg, hsl(${h}, ${s}%, ${Math.min(98, l + 85)}%), hsl(${h}, ${s}%, 99%))`);
-
-
-        // =========================================================================
-        // 🛠️ [여기를 수정하세요 2] 차트 막대(스케줄 바) 색상 고정 및 연동 (격차 확대 버전)
-        // =========================================================================
-        // 1레벨과 2레벨 사이의 시각적 차이를 확실하게 벌렸습니다.
-
-        root.style.setProperty('--chart-l0', `#FF0000`); // 0레벨: 무조건 빨간색 고정
-        root.style.setProperty('--chart-l1', `hsl(${h}, ${s}%, ${l}%)`); // 1레벨: 테마 색상 원본 (기준점)
-
-        // 2레벨: 밝기를 20 더 높여서(l + 20) 1레벨과 확실히 대비되게 만듦
-        root.style.setProperty('--chart-l2', `hsl(${h}, ${Math.max(20, s - 15)}%, ${Math.min(70, l + 20)}%)`); 
-
-        // 3, 4레벨: 2레벨이 연해진 만큼 밸런스를 맞추기 위해 간격을 20씩 띄워줌
-        root.style.setProperty('--chart-l3', `hsl(${h}, ${Math.max(10, s - 30)}%, ${Math.min(85, l + 40)}%)`); 
-        root.style.setProperty('--chart-l4', `hsl(${h}, ${Math.max(5, s - 45)}%, ${Math.min(95, l + 60)}%)`);
-    };
 
     // 차트 생성 로직
     window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level) {
@@ -3722,18 +3650,7 @@ window.handleAuthClick = function() {
             </div>`;
     };
 
-    setTimeout(() => {
-        const picker = document.getElementById('themePicker');
-        if (picker) {
-            const savedColor = localStorage.getItem('gantt_theme_color') || '#c8c8c8';
-            picker.value = savedColor;
-            picker.oninput = function() {
-                window.updateThemeColor(this.value);
-                localStorage.setItem('gantt_theme_color', this.value);
-            };
-            window.updateThemeColor(savedColor);
-        }
-    }, 100);
+    
 </script>
 
 <script>
@@ -6481,13 +6398,8 @@ async function msCallGemini(apiKey, parsed) {
 </style>
 
 <script>
-    function getSolidHsl(baseHex) {
-        let h=0, s=0, l=80;
-        if (typeof hexToHSL === 'function') {
-            try { let hsl = hexToHSL(baseHex); if(hsl && !isNaN(hsl.h)) { h = hsl.h; s = hsl.s; l = hsl.l; } } catch(e) {}
-        }
-        return {h, s, l};
-    }
+    // 💡 WBS 레벨별 고정 회색 계조 (테마 기능 삭제 — 더 이상 사용자가 색을 바꿀 수 없음)
+    const SOLID_GRAY = { 0: '#616161', 1: '#dcdcdc', 2: '#e9e9e9', 3: '#f1f1f1', 4: '#f8f8f8' };
 
     window.updateStickyPositions = function() {
         const table = document.getElementById('myTable');
@@ -6521,10 +6433,6 @@ async function msCallGemini(apiKey, parsed) {
             }
         });
 
-        const picker = document.getElementById('themePicker');
-        const baseHex = picker ? picker.value : '#c8c8c8';
-        const {h, s, l} = getSolidHsl(baseHex);
-
         const trs = table.querySelectorAll('tbody tr');
         trs.forEach(tr => {
             if (tr.cells.length <= 1) return;
@@ -6536,12 +6444,7 @@ async function msCallGemini(apiKey, parsed) {
             else if(tr.classList.contains('sub-parent-row-3')) level = 3;
             else if(tr.classList.contains('sub-parent-row-4')) level = 4;
 
-            let solidColor = '#ffffff';
-            if(level === 0) solidColor = `hsl(${h}, ${s}%, ${Math.max(0, l - 10)}%)`;
-            else if(level === 1) solidColor = `hsl(${h}, ${s}%, ${Math.min(85, l + 25)}%)`;
-            else if(level === 2) solidColor = `hsl(${h}, ${s}%, ${Math.min(92, l + 50)}%)`;
-            else if(level === 3) solidColor = `hsl(${h}, ${s}%, ${Math.min(95, l + 70)}%)`;
-            else if(level === 4) solidColor = `hsl(${h}, ${s}%, ${Math.min(98, l + 85)}%)`;
+            let solidColor = SOLID_GRAY[level] !== undefined ? SOLID_GRAY[level] : '#ffffff';
 
             Array.from(tr.children).forEach((td, idx) => {
                 if (idx < chartIdx) {
@@ -6606,14 +6509,7 @@ async function msCallGemini(apiKey, parsed) {
     document.addEventListener('focusout', (e) => { if (e.target.tagName === 'TD') window.updateStickyPositions(); });
     window.addEventListener('resize', () => { clearTimeout(window._stickyTimer); window._stickyTimer = setTimeout(window.updateStickyPositions, 50); });
 
-    if (typeof window.updateThemeColor === 'function' && !window._themeHooked) {
-        window._themeHooked = true;
-        const oldThemeFn = window.updateThemeColor;
-        window.updateThemeColor = function(baseHex) {
-            oldThemeFn(baseHex);
-            setTimeout(window.updateStickyPositions, 50);
-        };
-    }
+    
 </script>
 
 <script>
