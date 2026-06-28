@@ -165,17 +165,19 @@
     }
 
     table { border-collapse: collapse; width: auto; min-width: 100%; font-size: var(--table-font-size); table-layout: fixed; }
+    /* 💡 Gantt 표는 Brief SPEC/M.C Table과 동일하게 separate 방식으로 — 헤더 고정(sticky)과 충돌 없도록 */
+    #myTable { border-collapse: separate; border-spacing: 0; }
     th, td { padding: var(--table-cell-padding); text-align: left; vertical-align: middle; line-height: var(--table-line-height); box-sizing: border-box; border: 1px solid #ddd; }
     th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 10px !important; padding-bottom: 10px !important; }
     
-    .parent-row td { background: var(--c-l0-bg) !important; font-weight: bold; border-top: 3px solid var(--c-l0-border); color: var(--c-l0-text) !important; border-right: 1px solid #ffffff33; }
+    .parent-row td { background: var(--c-l0-bg) !important; font-weight: bold; color: var(--c-l0-text) !important; }
     .parent-row .no-td, .parent-row .no-td .row-num-span { color: var(--c-l0-text) !important; }
     .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: var(--c-l0-chart-label) !important; }
 
-    .sub-parent-row td { background: var(--c-l1-bg) !important; font-weight: normal; border-top: 2px solid var(--c-l1-border); color: var(--c-l1-text); }
-    .sub-parent-row-2 td { background: var(--c-l2-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l2-border); color: var(--c-l2-text); }
-    .sub-parent-row-3 td { background: var(--c-l3-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l3-border); color: var(--c-l3-text); }
-    .sub-parent-row-4 td { background: var(--c-l4-bg) !important; font-weight: normal; border-top: 1px dashed var(--c-l4-border); color: var(--c-l4-text); }
+    .sub-parent-row td { background: var(--c-l1-bg) !important; font-weight: normal; color: var(--c-l1-text); }
+    .sub-parent-row-2 td { background: var(--c-l2-bg) !important; font-weight: normal; color: var(--c-l2-text); }
+    .sub-parent-row-3 td { background: var(--c-l3-bg) !important; font-weight: normal; color: var(--c-l3-text); }
+    .sub-parent-row-4 td { background: var(--c-l4-bg) !important; font-weight: normal; color: var(--c-l4-text); }
 
     .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: scroll; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
@@ -897,9 +899,15 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             <div id="mc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
                 <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                     <span id="mc-history-toggle-icon">▶</span>
-                    <span>📜 수정이력 확인</span>
+                    <span>📜 견적 수정이력 확인</span>
                 </div>
                 <div id="mc-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                    <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
+                        <label>시작일 <input type="date" id="mc-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <label>종료일 <input type="date" id="mc-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <input type="password" id="mc-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                        <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteMcHistoryByDateRange()">🗑️ 구간 삭제</button>
+                    </div>
                     <table id="mc-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
                 </div>
             </div>
@@ -947,6 +955,12 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
             <div class="history-header">
                 <span>🕒 변경 이력 (Session History)</span>
                 <span class="history-close" onclick="closeHistoryModal()">✖</span>
+            </div>
+            <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 20px; border-bottom:1px solid #e3e6ea; background:#f8f9fa; flex-wrap:wrap; font-size:12px; color:#555;">
+                <label>시작일 <input type="date" id="history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
+                <label>종료일 <input type="date" id="history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteHistoryByDateRange()">🗑️ 구간 삭제</button>
             </div>
             <div class="history-body" id="history-content"></div>
         </div>
@@ -1996,6 +2010,65 @@ ${mailText}`;
         });
     }
 
+
+    // 💡 수정이력 — 비밀번호 확인 후 날짜 구간 내 기록 삭제 (Gantt changeLogs + M.C Table mcChangeLog 둘 다 정리)
+window.deleteHistoryByDateRange = function() {
+    const pwEl = document.getElementById('history-del-pw');
+    const pw = pwEl ? pwEl.value : '';
+    if (pw !== 'kortek') {
+        if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.');
+        return;
+    }
+    const fromStr = (document.getElementById('history-del-from') || {}).value;
+    const toStr = (document.getElementById('history-del-to') || {}).value;
+    if (!fromStr || !toStr) {
+        if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.');
+        return;
+    }
+    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
+    const toTs = new Date(toStr + 'T23:59:59').getTime();
+    if (fromTs > toTs) {
+        if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.');
+        return;
+    }
+
+    // 💡 "2026. 6. 28. 오후 3:24:00" 형식(toLocaleString('ko-KR'))의 시각 문자열을 직접 파싱
+    const parseKoDateTime = function(str) {
+        const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+        if (!m) return null;
+        let h = parseInt(m[5], 10);
+        if (m[4] === '오후' && h < 12) h += 12;
+        if (m[4] === '오전' && h === 12) h = 0;
+        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
+    };
+    const inRange = function(log) {
+        const ts = parseKoDateTime(log.time);
+        return ts !== null && ts >= fromTs && ts <= toTs;
+    };
+
+    const doDelete = function() {
+        let removedCount = 0;
+        if (window.changeLogs && window.changeLogs.length) {
+            const before = window.changeLogs.length;
+            window.changeLogs = window.changeLogs.filter(function(log) { return !inRange(log); });
+            removedCount += before - window.changeLogs.length;
+        }
+        if (window.tabData && window.tabData.mcChangeLog && window.tabData.mcChangeLog.length) {
+            const before2 = window.tabData.mcChangeLog.length;
+            window.tabData.mcChangeLog = window.tabData.mcChangeLog.filter(function(log) { return !inRange(log); });
+            removedCount += before2 - window.tabData.mcChangeLog.length;
+        }
+        if (pwEl) pwEl.value = '';
+        window.showHistoryModal();
+        const msg = removedCount + '건의 기록을 삭제했습니다.';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+    };
+
+    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
+    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
+    else if (confirm(confirmMsg)) doDelete();
+};
+
     window.showHistoryModal = function() {
         let content = document.getElementById('history-content');
         if (!window.changeLogs || window.changeLogs.length === 0) {
@@ -2979,45 +3052,26 @@ ${mailText}`;
     // =========================================================
     // 🎛️ 필터 적용 및 파일명 동적 조립 함수 (누락 복원 및 버그 완벽 수정)
     // =========================================================
+    // 💡 담당자/고객/모델/인치 — 더 이상 엑셀 행에서 읽지 않고 Summary(프로젝트 정보) 값을 그대로 사용
+    window.getSummaryAssignee = function() { return ((window.projectMeta || {}).프로젝트담당자 || '').trim(); };
+    window.getSummaryCustomer = function() { return ((window.projectMeta || {}).고객사 || '').trim(); };
+    window.getSummaryModel    = function() { return ((window.projectMeta || {}).고객모델명 || '').trim(); };
+    // 💡 인치: KTK 모델명(">" 오른쪽)의 4,5,6번째 글자를 가져와 "320" → "32.0" 형식으로 변환
+    window.getSummaryInch = function() {
+        const raw = String((window.projectMeta || {}).KTK모델명 || '');
+        const afterGt = raw.indexOf('>') !== -1 ? raw.slice(raw.indexOf('>') + 1) : raw;
+        const digits = afterGt.slice(3, 6);
+        if (digits.length < 2) return '';
+        return digits.slice(0, -1) + '.' + digits.slice(-1);
+    };
+
     window.updatePrintTitle = function() {
         try {
-            let getFilterText = (idx) => { 
-                if (idx === -1 || !currentFilters || !currentFilters[idx] || currentFilters[idx].has('All')) return "All"; 
-                return Array.from(currentFilters[idx]).join(', '); 
-            };
-            
-            let customer = getFilterText(colIdx.customer); 
-            let model = getFilterText(colIdx.model); 
-            let inch = getFilterText(colIdx.inch); 
-            let assignee = getFilterText(colIdx.assignee);
-            
-            // 필터가 All일 경우 데이터의 첫 번째 행에서 실제 텍스트를 파싱하는 안전장치
-            if (customer === "All" && globalData && globalData.length > 1) { 
-                for(let i=1; i<globalData.length; i++) { 
-                    if(globalData[i] && globalData[i][colIdx.customer]) { customer = globalData[i][colIdx.customer].toString().trim(); break; } 
-                } 
-            }
-            if (model === "All" && globalData && globalData.length > 1) { 
-                for(let i=1; i<globalData.length; i++) { 
-                    if(globalData[i] && globalData[i][colIdx.model]) { model = globalData[i][colIdx.model].toString().trim(); break; } 
-                } 
-            }
-            if ((inch === "All" || colIdx.inch === -1) && globalData && globalData.length > 1) { 
-                inch = ""; 
-                for(let i=1; i<globalData.length; i++) { 
-                    if(globalData[i] && colIdx.inch !== -1 && globalData[i][colIdx.inch]) { inch = globalData[i][colIdx.inch].toString().trim(); break; } 
-                } 
-            }
-            if (inch && inch !== "All") { let inchNum = parseFloat(inch); if (!isNaN(inchNum)) inch = inchNum.toFixed(1); }
-            if (assignee === "All" && globalData && globalData.length > 1) { 
-                for(let i=1; i<globalData.length; i++) { 
-                    if(globalData[i] && globalData[i][colIdx.assignee]) { assignee = globalData[i][colIdx.assignee].toString().trim(); break; } 
-                } 
-            }
-
-            customer = customer || "All";
-            model = model || "All";
-            assignee = assignee || "All";
+            // 💡 더 이상 엑셀 행/필터에서 찾지 않고, Summary(프로젝트 정보)에 입력된 값을 그대로 사용
+            let customer = window.getSummaryCustomer() || "All";
+            let model = window.getSummaryModel() || "All";
+            let inch = window.getSummaryInch();
+            let assignee = window.getSummaryAssignee() || "All";
 
             const infoStr = inch ? `${customer}_${model}_${inch}_${assignee}` : `${customer}_${model}_${assignee}`; 
             const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_').replace(/[\x00-\x1F\x7F"*/:<>?\\|]/g, ''); 
@@ -3488,20 +3542,7 @@ window.handleAuthClick = function() {
     // =========================================================
     // 🎨 테마 색상 동적 반영 & 차트 막대(단색 검은색 고정)
     // =========================================================
-    const existingStyle = document.getElementById('wbs-gradient-style');
-    if (existingStyle) existingStyle.remove();
-
-    document.head.insertAdjacentHTML('beforeend', `
-    <style id="wbs-gradient-style">
-        table#myTable tr.parent-row { background-image: var(--grad-0) !important; }
-        table#myTable tr.sub-parent-row { background-image: var(--grad-1) !important; }
-        table#myTable tr.sub-parent-row-2 { background-image: var(--grad-2) !important; }
-        table#myTable tr.sub-parent-row-3 { background-image: var(--grad-3) !important; }
-        table#myTable tr.sub-parent-row-4 { background-image: var(--grad-4) !important; }
-    </style>
-    `);
-
-    
+       
 
     // ── 차트 확장 토글 ─────────────────────────────────────
  window._chartExpanded = false;
@@ -5610,17 +5651,11 @@ function mfMatchProject(subject, body) {
 
 // ─── Gemini 분석 ─────────────────────────────────────────
 async function mfCallGemini(apiKey, parsed) {
-    let assignee='', customer='', model='', inch='';
-    if (globalData && globalData.length > 1) {
-        for (let i=1; i<globalData.length; i++) {
-            const r = globalData[i]; if (!r) continue;
-            if (!assignee && colIdx.assignee!==-1) assignee = r[colIdx.assignee]||'';
-            if (!customer && colIdx.customer!==-1) customer = r[colIdx.customer]||'';
-            if (!model    && colIdx.model   !==-1) model    = r[colIdx.model]   ||'';
-            if (!inch     && colIdx.inch    !==-1) inch     = r[colIdx.inch]    ||'';
-            if (assignee && customer && model) break;
-        }
-    }
+    // 💡 더 이상 엑셀 행에서 찾지 않고 Summary(프로젝트 정보) 값을 그대로 사용
+    let assignee = window.getSummaryAssignee();
+    let customer = window.getSummaryCustomer();
+    let model = window.getSummaryModel();
+    let inch = window.getSummaryInch();
     // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
     const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date);
@@ -6296,18 +6331,12 @@ window.msSelectAll = function(select) {
 
 async function msCallGemini(apiKey, parsed) {
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
-    
-    let assignee='', customer='', model='', inch='';
-    if (globalData && globalData.length > 1) {
-        for (let i=1; i<globalData.length; i++) {
-            const r = globalData[i]; if (!r) continue;
-            if (!assignee && colIdx.assignee!==-1) assignee = r[colIdx.assignee]||'';
-            if (!customer && colIdx.customer!==-1) customer = r[colIdx.customer]||'';
-            if (!model    && colIdx.model   !==-1) model    = r[colIdx.model]   ||'';
-            if (!inch     && colIdx.inch    !==-1) inch     = r[colIdx.inch]    ||'';
-            if (assignee && customer && model) break;
-        }
-    }
+
+    // 💡 더 이상 엑셀 행에서 찾지 않고 Summary(프로젝트 정보) 값을 그대로 사용
+    let assignee = window.getSummaryAssignee();
+    let customer = window.getSummaryCustomer();
+    let model = window.getSummaryModel();
+    let inch = window.getSummaryInch();
 
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
@@ -6399,7 +6428,7 @@ async function msCallGemini(apiKey, parsed) {
 
 <script>
     // 💡 WBS 레벨별 고정 회색 계조 (테마 기능 삭제 — 더 이상 사용자가 색을 바꿀 수 없음)
-    const SOLID_GRAY = { 0: '#616161', 1: '#dcdcdc', 2: '#e9e9e9', 3: '#f1f1f1', 4: '#f8f8f8' };
+    const SOLID_GRAY = { 0: '#00a1b6', 1: '#828282', 2: '#b4b4b4', 3: '#e6e6e6', 4: '#ffffff' };
 
     window.updateStickyPositions = function() {
         const table = document.getElementById('myTable');
@@ -6978,15 +7007,10 @@ async function msCallGemini(apiKey, parsed) {
         const sectW  = (12.5 - GAP) / 2;
         const col2X  = 0.4 + sectW + GAP;
 
-        // ── 헤더: 프로젝트 타이틀 구성 ───────────────────────
-        let metaCustomer = "", metaModel = "", metaInch = "";
-        for (let i = 1; i < globalData.length; i++) {
-            const r = globalData[i]; if (!r) continue;
-            if (!metaCustomer && colIdx.customer !== -1 && r[colIdx.customer]) metaCustomer = r[colIdx.customer].toString().trim();
-            if (!metaModel && colIdx.model !== -1 && r[colIdx.model]) metaModel = r[colIdx.model].toString().trim();
-            if (!metaInch && colIdx.inch !== -1 && r[colIdx.inch]) metaInch = r[colIdx.inch].toString().trim();
-            if (metaCustomer && metaModel && metaInch) break;
-        }
+        // ── 헤더: 프로젝트 타이틀 구성 (Summary 참조) ───────────────────────
+        const metaCustomer = window.getSummaryCustomer();
+        const metaModel = window.getSummaryModel();
+        const metaInch = window.getSummaryInch();
         const projTitle = [metaCustomer, metaModel, metaInch].filter(Boolean).join(' > ') || '주간 업무 보고';
         slide.addText(projTitle, { x: 0.4, y: 0.2, w: 7.5, h: 0.55, fontSize: 25, bold: true, color: SKY, fontFace: 'Malgun Gothic' });
 
@@ -8501,6 +8525,58 @@ window.mcRenderHistoryTable = function() {
     table.innerHTML = html;
 };
 
+// 💡 M.C Table 수정이력 — 비밀번호 확인 후 날짜 구간 내 기록 삭제 (mcChangeLog만 정리, Gantt changeLogs와는 무관)
+window.deleteMcHistoryByDateRange = function() {
+    const pwEl = document.getElementById('mc-history-del-pw');
+    const pw = pwEl ? pwEl.value : '';
+    if (pw !== 'kortek') {
+        if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.');
+        return;
+    }
+    const fromStr = (document.getElementById('mc-history-del-from') || {}).value;
+    const toStr = (document.getElementById('mc-history-del-to') || {}).value;
+    if (!fromStr || !toStr) {
+        if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.');
+        return;
+    }
+    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
+    const toTs = new Date(toStr + 'T23:59:59').getTime();
+    if (fromTs > toTs) {
+        if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.');
+        return;
+    }
+
+    const parseKoDateTime = function(str) {
+        const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+        if (!m) return null;
+        let h = parseInt(m[5], 10);
+        if (m[4] === '오후' && h < 12) h += 12;
+        if (m[4] === '오전' && h === 12) h = 0;
+        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
+    };
+    const inRange = function(log) {
+        const ts = parseKoDateTime(log.time);
+        return ts !== null && ts >= fromTs && ts <= toTs;
+    };
+
+    const doDelete = function() {
+        let removedCount = 0;
+        if (window.tabData && window.tabData.mcChangeLog && window.tabData.mcChangeLog.length) {
+            const before = window.tabData.mcChangeLog.length;
+            window.tabData.mcChangeLog = window.tabData.mcChangeLog.filter(function(log) { return !inRange(log); });
+            removedCount = before - window.tabData.mcChangeLog.length;
+        }
+        if (pwEl) pwEl.value = '';
+        if (window.mcRenderHistoryTable) window.mcRenderHistoryTable();
+        const msg = removedCount + '건의 견적 수정이력을 삭제했습니다.';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+    };
+
+    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 견적 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
+    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
+    else if (confirm(confirmMsg)) doDelete();
+};
+
 // 💡 M.C Table 입력칸 변경 감지 (한 번만 등록 — tbody 자체는 재사용되므로 안전)
 (function() {
     const tbody = document.getElementById('mctable-body');
@@ -8974,7 +9050,7 @@ function calBuildEvents() {
         const e = row._calcPlanTs || s;
         events.push({
             idx: i, name: name, start: s, end: e,
-            assignee: (typeof colIdx !== 'undefined' && colIdx.assignee !== -1) ? (row[colIdx.assignee] || '') : '',
+            assignee: window.getSummaryAssignee(),
             status: (typeof colIdx !== 'undefined' && colIdx.status !== -1) ? (row[colIdx.status] || '') : '',
             alarm: !!row._알림
         });
