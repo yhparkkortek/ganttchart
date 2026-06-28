@@ -386,7 +386,7 @@
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
 .concept-grid-2col { grid-template-columns: 140px 1fr 140px 1fr; }
-.concept-grid-mem { grid-template-columns: 90px 1fr 1fr 90px 1fr 1fr; }
+.concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
 .concept-grid label { font-size:12.5px; color:#666; }
 .concept-grid input, .concept-grid textarea {
     width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
@@ -712,18 +712,25 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     <label>KTK PN_모델명</label><input type="text" id="sum-ktk-pn-model" class="u-input" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW">
                 </div>
             </div>
-            <div class="concept-section" style="flex:2 1 460px; margin-bottom:16px;">
-                <h3>프로젝트 멤버</h3>
+        </div>
+        <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
+            <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
+                <h3>프로젝트 멤버-1</h3>
                 <div class="concept-grid concept-grid-mem">
                     <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
                     <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
                     <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
-                    <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">
+                    <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">                  
+                    <label>BLU 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
+                </div>
+            </div>
+            <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
+                <h3>프로젝트 멤버-2</h3>
+                <div class="concept-grid concept-grid-mem">
                     <label>TSP 담당자</label><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
                     <label>LCM 담당자</label><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
                     <label>Slimming 담당자</label><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
                     <label>Cutting 담당자</label><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
-                    <label>BLU 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
                     <label>Tooling 담당자</label><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
