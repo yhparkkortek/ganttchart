@@ -75,9 +75,11 @@
     }
 
     th.chart-th, td.chart-td {
-        overflow-x: auto;
         max-width: var(--w-chart);
         white-space: nowrap;
+    }
+    td.chart-td {
+        overflow-x: auto;
     }
     /* 확장모드에서 뒤로 이동된 상세내용 열 숨김 */
     #myTable.chart-expanded th.detail-th,
@@ -170,16 +172,20 @@
     th, td { padding: var(--table-cell-padding); text-align: left; vertical-align: middle; line-height: var(--table-line-height); box-sizing: border-box; border: 1px solid #ddd; }
     th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 10px !important; padding-bottom: 10px !important; }
     
-    .parent-row td { background: var(--c-l0-bg) !important; font-weight: bold; color: var(--c-l0-text) !important; }
-    .parent-row .no-td, .parent-row .no-td .row-num-span { color: var(--c-l0-text) !important; }
-    .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: var(--c-l0-chart-label) !important; }
+    /* 💡 TEST: 레벨별 배경색 전부 흰색으로, 줄무늬(zebra)로 대체 — 0레벨(최상위)은 글자만 검은색+굵게 구분 */
+    .parent-row td { background: #ffffff !important; font-weight: bold; color: #000000 !important; }
+    .parent-row .no-td, .parent-row .no-td .row-num-span { color: #000000 !important; }
+    .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: #495057 !important; }
 
-    .sub-parent-row td { background: var(--c-l1-bg) !important; font-weight: normal; color: var(--c-l1-text); }
-    .sub-parent-row-2 td { background: var(--c-l2-bg) !important; font-weight: normal; color: var(--c-l2-text); }
-    .sub-parent-row-3 td { background: var(--c-l3-bg) !important; font-weight: normal; color: var(--c-l3-text); }
-    .sub-parent-row-4 td { background: var(--c-l4-bg) !important; font-weight: normal; color: var(--c-l4-text); }
+    .sub-parent-row td { background: #ffffff !important; font-weight: normal; color: #333333; }
+    .sub-parent-row-2 td { background: #ffffff !important; font-weight: normal; color: #333333; }
+    .sub-parent-row-3 td { background: #ffffff !important; font-weight: normal; color: #333333; }
+    .sub-parent-row-4 td { background: #ffffff !important; font-weight: normal; color: #333333; }
 
-    .container { height: calc(100vh - 50px); overflow-y: auto; overflow-x: scroll; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
+    /* 💡 줄무늬 — 짝수 번째 보이는 행만 옅은 회색 (M.C Table/Brief SPEC과 동일한 톤) */
+    #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
+
+    .container { height: auto; overflow: visible; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
     #file-status { font-weight: bold; color: #fff; font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 16px; }
     #print-header { display: none; }
@@ -383,6 +389,7 @@
     transition: margin-left 0.18s ease;
     height: calc(100vh - var(--topbar-h));
     overflow-y: auto;
+    overflow-x: auto;
 }
 #app-main.sb-collapsed { margin-left: var(--sb-w-collapsed); }
 
@@ -2723,7 +2730,7 @@ window.deleteHistoryByDateRange = function() {
 
     const LANG = {
         ko: {
-            header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
+            header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '소요일':'소요일', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
             status: ['진행','완료','대기','보류'],
             statusMap: { '진행':'진행','완료':'완료','대기':'대기','보류':'보류',
                          'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'보류' },
@@ -2755,7 +2762,7 @@ window.deleteHistoryByDateRange = function() {
         },
 
         en: {
-            header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Dur.', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
+            header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Dur.', '소요일':'work', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
             status: ['Progress','Done','Pending','On Hold'],
             statusMap: { '진행':'Progress','완료':'Done','대기':'Pending','보류':'On Hold',
                          'Progress':'Progress','Done':'Done','Pending':'Pending','On Hold':'On Hold' },
@@ -2855,12 +2862,12 @@ window.deleteHistoryByDateRange = function() {
             let thStyle = "text-align: center; white-space: nowrap; overflow: hidden; border-right: none;";
             let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
 
+            if (idx === colIdx.period) return; // 💡 "소요일"은 완료~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
             if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; }
             else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
             else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
             else if (colStr.includes("상태")) { widthClass = "width: var(--w-status); min-width: 30px;"; }
-            else if (colStr.includes("기간")) { widthClass = "width: var(--w-period); min-width: 30px;"; }
             else { widthClass = "width: var(--w-default); min-width: 30px;"; }
 
             const lang = LANG[window._currentLang || 'ko'];
@@ -2868,18 +2875,21 @@ window.deleteHistoryByDateRange = function() {
             const displayCell = lang.header[cellKey] || escapeHtml(cell);
             headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             if (idx === colIdx.plan) {
-                const periodLabel = lang.header['기간'] || '기간';
+                const periodLabel = lang.header['소요일'] || '소요일';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
-                if (!hasPeriodCol) headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px;">${periodLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">${wbsLabel}</th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
 
         let bodyHtml = '';
+        let ganttZebraIdx = 0; // 💡 보이는 행 기준 줄무늬 카운터
         for(let i = 1; i < data.length; i++) {
             if (!data[i]) continue; let row = data[i];
             let trClass = row._level === 0 ? 'class="parent-row"' : (row._level === 1 ? 'class="sub-parent-row"' : (row._level === 2 ? 'class="sub-parent-row-2"' : (row._level === 3 ? 'class="sub-parent-row-3"' : 'class="sub-parent-row-4"')));
+            if (ganttZebraIdx % 2 === 1) trClass = trClass.replace('class="', 'class="gantt-zebra-b ');
+            ganttZebraIdx++;
             if (row._알림) trClass = trClass.replace('class="', 'class="alarm-on ');
             bodyHtml += `<tr data-row-index="${i}" ${trClass}>`;
             
@@ -2950,9 +2960,11 @@ window.deleteHistoryByDateRange = function() {
                         let displayDate = row._calcPlanTs ? formatTableDate(row._calcPlanTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
                         tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
                         bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
-                        if (!hasPeriodCol) {
+                        {
+                            // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시
+                            //    글자색은 모든 레벨에서 빨간색, 굵기만 0레벨=bold / 나머지=normal
                             let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
-                            bodyHtml += `<td style="text-align: center; font-weight: bold; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
+                            bodyHtml += `<td style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
                         }
                         let taskTxt = "";
                         if (row._level === 0) taskTxt = row._origDev; else if (row._level === 1) taskTxt = row._origT1; else if (row._level === 2) taskTxt = row._origT2; else if (row._level === 3) taskTxt = row._origT3; else if (row._level === 4) taskTxt = row._origT4;
@@ -2967,9 +2979,7 @@ window.deleteHistoryByDateRange = function() {
                         continue; 
                     } 
                     else if (cellIndex === colIdx.period) {
-                        let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
-                        tdHtml = `<span style="color: #e03131; font-weight: ${getFontWeight(row._level)};">${calcDays}</span>`;
-                        tdStyle = "text-align: center; white-space: nowrap;";
+                        continue; // 💡 "소요일"은 완료~개발업무 사이에서 이미 렌더링했으므로 원래 자리에서는 건너뜀
                     }
                     else if (cellIndex === colIdx.content || cellIndex === colIdx.answer) {
                         let cellText = cell.toString().trim(); let hasKor = /[가-힣]/.test(cellText); let hasEng = /[a-zA-Z]/.test(cellText); let transMode = 0; 
@@ -3684,7 +3694,7 @@ window.handleAuthClick = function() {
         
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
                 <div class="chart-axis-wrapper" style="position:relative; height:12px; overflow:visible;">${labelHTML}</div>
-                <div style="position:relative; height:10px; background-color:#f8f9fa; border:2px solid #ced4da; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
+                <div style="position:relative; height:10px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
                     ${gridLines}${todayLine}
                     <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
                 </div>
@@ -3935,7 +3945,7 @@ window.handleAuthClick = function() {
         .filter-group { display: flex; align-items: center; flex-wrap: wrap; transition: 0.3s; margin-bottom: 0 !important; }
 
         td.no-td, td.date-td, td.status-td { color: #333333 !important; }
-        .parent-row td.no-td, .parent-row td.date-td, .parent-row td.status-td, .parent-row td.sticky-col { color: var(--c-l0-text) !important; }
+        .parent-row td.no-td, .parent-row td.date-td, .parent-row td.status-td, .parent-row td.sticky-col { color: #000000 !important; }
         
     </style>
     `);
@@ -4738,6 +4748,9 @@ window.insertMailTask = function() {
         .date-clickable { letter-spacing: -0.3px; font-weight: normal; }
     }
 
+    /* 💡 #table-info(상단 버튼줄)도 sticky라서, Gantt 표 헤더는 그 높이만큼 아래에서 고정 */
+    #myTable th { top: var(--gantt-info-h, 60px) !important; }
+
     /* 🖨️ 인쇄 모드 완전히 처음부터 다시 잡기 (화면 모드에는 영향 0%) */
     @media print {
         /* 1️⃣ 상단 버튼, 필터 바 등 인쇄에 필요 없는 조작 화면 전체 숨기기 */
@@ -4782,6 +4795,7 @@ window.insertMailTask = function() {
             box-shadow: none !important;  /* 테두리 그림자 제거 */
         }
 
+    
         /* 6️⃣ 한 행이 다음 페이지로 넘어갈 때 애매하게 중간에서 댕강 잘리는 현상 방지 */
         #myTable tbody tr {
             page-break-inside: avoid !important;
@@ -6375,7 +6389,7 @@ async function msCallGemini(apiKey, parsed) {
     html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; box-sizing: border-box !important; }
     body { display: flex !important; flex-direction: column !important; padding: 15px 15px 0 15px !important; }
     .controls, #table-info, hr, #dynamic-filters { flex-shrink: 0 !important; }
-    .container { flex-grow: 1 !important; flex-shrink: 1 !important; height: 100% !important; min-height: 0 !important; overflow: auto !important; margin-bottom: 15px !important; }
+    .container { margin-bottom: 15px !important; }
 
     /* 2. 차트는 고정셀 밑으로 가도록 Z-index 하향 */
     td.chart-td { position: relative !important; z-index: 1 !important; }
@@ -6466,14 +6480,8 @@ async function msCallGemini(apiKey, parsed) {
         trs.forEach(tr => {
             if (tr.cells.length <= 1) return;
 
-            let level = 3;
-            if(tr.classList.contains('parent-row')) level = 0;
-            else if(tr.classList.contains('sub-parent-row')) level = 1;
-            else if(tr.classList.contains('sub-parent-row-2')) level = 2;
-            else if(tr.classList.contains('sub-parent-row-3')) level = 3;
-            else if(tr.classList.contains('sub-parent-row-4')) level = 4;
-
-            let solidColor = SOLID_GRAY[level] !== undefined ? SOLID_GRAY[level] : '#ffffff';
+            // 💡 TEST: 레벨별 회색 계조 대신 줄무늬 기준으로 통일 (본문 셀 배경과 일치시키기 위함)
+            let solidColor = tr.classList.contains('gantt-zebra-b') ? '#f5f5f5' : '#ffffff';
 
             Array.from(tr.children).forEach((td, idx) => {
                 if (idx < chartIdx) {
@@ -6502,9 +6510,8 @@ async function msCallGemini(apiKey, parsed) {
                     if (isEditing) {
                         // 💡 수정 상태일 때는 지정하신 파란색 안쪽 테두리를 강제로 입힙니다.
                         td.style.setProperty('box-shadow', 'inset 0 0 0 2px #0056b3', 'important');
-                    } else if (idx === chartIdx - 1) {
-                        td.style.setProperty('box-shadow', `4px 0 6px -1px rgba(0,0,0,0.2), 0 0 0 1.5px ${bg}`, 'important');
                     } else {
+                        // 💡 "현황" 열 경계의 입체 그림자(drop-shadow) 제거 — 다른 칸과 동일하게 단순한 경계선만
                         td.style.setProperty('box-shadow', `0 0 0 1.5px ${bg}`, 'important');
                     }
                 } else {
@@ -7300,8 +7307,20 @@ async function msCallGemini(apiKey, parsed) {
 // 신규 탭(Summary / Brief SPEC / M.C Table) 데이터 바인딩 (컨셉 단계)
 // - 고객사/모델명/인치/프로젝트명 등 프로젝트 단위 정보는 projectMeta에 저장
 // - 그 외 Summary 개요/마일스톤, Brief SPEC, M.C Table 내용은 window.tabData에 저장
-// - 기본값은 빈 상태이며, 실제 값은 JSON(구글 드라이브) 또는 로컬 엑셀 파일을 불러올 때 채워짐
+// 기본값은 빈 상태이며, 실제 값은 JSON(구글 드라이브) 또는 로컬 엑셀 파일을 불러올 때 채워짐
 // ══════════════════════════════════════════════════════
+
+// 💡 #table-info(상단 버튼줄) 높이를 측정해서 Gantt 표 헤더 sticky 위치를 자동 보정
+function updateGanttInfoHeight() {
+    const infoEl = document.getElementById('table-info');
+    if (infoEl) {
+        document.documentElement.style.setProperty('--gantt-info-h', infoEl.offsetHeight + 'px');
+    }
+}
+window.addEventListener('resize', updateGanttInfoHeight);
+window.addEventListener('load', updateGanttInfoHeight);
+setTimeout(updateGanttInfoHeight, 300); // 필터 버튼이 렌더링된 후 한 번 더 측정
+
 
 window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
 
