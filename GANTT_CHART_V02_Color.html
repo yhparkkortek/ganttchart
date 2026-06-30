@@ -710,7 +710,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Summary</h2>
-            <div class="btn-group"></div>
+            <div class="btn-group"><button type="button" class="action-btn" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
         </div>
         <div class="concept-section">
             <style>
@@ -3163,6 +3163,56 @@ window.deleteHistoryByDateRange = function() {
         
         tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
     }
+
+    // 💡 Summary "실적" 표를 Gantt 0레벨 업무(시작일 기준)와 연동
+    window.syncSummaryActualsFromGantt = function() {
+        if (!globalData || globalData.length < 2) { alert('Gantt 데이터가 없습니다.'); return; }
+        const level0Rows = [];
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i];
+            if (row && row._level === 0 && row._calcStartTs) {
+                level0Rows.push({ name: (row._origDev || '').toString().trim(), startTs: row._calcStartTs });
+            }
+        }
+        if (level0Rows.length === 0) { alert('시작일이 있는 0레벨 업무를 찾을 수 없습니다.'); return; }
+
+        const findByName = function(name) {
+            return level0Rows.find(r => r.name === name) || level0Rows.find(r => r.name.includes(name));
+        };
+
+        const firstStart = level0Rows.reduce((min, r) => (r.startTs < min ? r.startTs : min), level0Rows[0].startTs);
+        const protoDR = findByName('PROTO DR');
+        const dvr = findByName('DVR');
+        const pra = findByName('PRA');
+
+        if (!protoDR) { alert('0레벨 업무 중 "PROTO DR"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
+        if (!dvr) { alert('0레벨 업무 중 "DVR"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
+        if (!pra) { alert('0레벨 업무 중 "PRA"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
+
+        const DAY = 86400000;
+        const addDays = function(ts, days) { return ts + days * DAY; };
+        const addMonths = function(ts, months) { const d = new Date(ts); d.setMonth(d.getMonth() + months); return d.getTime(); };
+
+        const result = {
+            '기획Start': firstStart,
+            '기획Finish': addDays(protoDR.startTs, -14),
+            'ProtoDR': protoDR.startTs,
+            'ESStart': addDays(protoDR.startTs, 14),
+            'ESEnd': addDays(dvr.startTs, -14),
+            'DVR': dvr.startTs,
+            'PPStart': addDays(dvr.startTs, 14),
+            'PPEnd': addMonths(pra.startTs, -1),
+            'PRA': pra.startTs,
+        };
+
+        Object.keys(result).forEach(function(stage) {
+            const inp = document.querySelector('#sum-milestone-body-actual input[data-stage="' + stage + '"]');
+            if (inp) inp.value = formatTsToYMD(result[stage]);
+        });
+
+        if (window.collectTabData) window.collectTabData();
+        alert('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.');
+    };
 
     function toggleTranslation(btn, encodedText, transMode) {
         let container = btn.parentElement; let contentSpan = container.querySelector('.content-span');
