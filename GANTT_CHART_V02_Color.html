@@ -73,6 +73,11 @@
         width: 1300px !important;
         min-width: 1300px !important;
     }
+    #myTable.chart-expanded th.status-th,
+    #myTable.chart-expanded td.status-td {
+        width: var(--w-status) !important;
+        min-width: var(--w-status) !important;
+    }
 
     th.chart-th, td.chart-td {
         max-width: var(--w-chart);
@@ -174,6 +179,7 @@
     
     /* 💡 TEST: 레벨별 배경색 전부 흰색으로, 줄무늬(zebra)로 대체 — 0레벨(최상위)은 글자만 검은색+굵게 구분 */
     .parent-row td { background: #ffffff !important; font-weight: bold; color: #000000 !important; }
+    .parent-row td.period-td { color: #e03131 !important; }
     .parent-row .no-td, .parent-row .no-td .row-num-span { color: #000000 !important; }
     .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: #495057 !important; }
 
@@ -185,7 +191,11 @@
     /* 💡 줄무늬 — 짝수 번째 보이는 행만 옅은 회색 (M.C Table/Brief SPEC과 동일한 톤) */
     #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
 
-    .container { height: auto; overflow: visible; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
+    /* 💡 TEMP: Gantt 표를 Brief SPEC/M.C Table과 완전히 동일한 테두리/헤더 스타일로 통일 */
+    #myTable th, #myTable td { border: 1px solid #e3e6ea !important; }
+    #myTable th { background: #f4f6f8 !important; font-weight: 600 !important; color: #555 !important; }
+
+    .container { height: calc(100vh - 220px); overflow-y: auto; overflow-x: auto; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
     #file-status { font-weight: bold; color: #fff; font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 16px; }
     #print-header { display: none; }
@@ -389,7 +399,6 @@
     transition: margin-left 0.18s ease;
     height: calc(100vh - var(--topbar-h));
     overflow-y: auto;
-    overflow-x: auto;
 }
 #app-main.sb-collapsed { margin-left: var(--sb-w-collapsed); }
 
@@ -613,8 +622,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
     <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
-        <button id="history-btn" class="action-btn" onclick="showHistoryModal()">🕒 수정이력 확인</button>
-        <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 6px;"></span>
+     
         <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
         <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
         <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
@@ -637,6 +645,21 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                 <tr><td colspan="20" style="text-align:center; padding: 50px; color: #777;">위에서 파일을 선택하시거나 드라이브에서 불러오시면 데이터가 표시됩니다.</td></tr>
             </tbody>
         </table>
+    </div>
+    <div id="gantt-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+        <div id="gantt-history-header" onclick="window.ganttToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+            <span id="gantt-history-toggle-icon">▶</span>
+            <span>🕒 변경 이력 확인</span>
+        </div>
+        <div id="gantt-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+            <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
+                <label>시작일 <input type="date" id="history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
+                <label>종료일 <input type="date" id="history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteHistoryByDateRange()">🗑️ 구간 삭제</button>
+            </div>
+            <div id="history-content"></div>
+        </div>
     </div>
 </div> <!-- /#tab-gantt -->
 
@@ -2018,6 +2041,21 @@ ${mailText}`;
     }
 
 
+    // 💡 Gantt 변경 이력 — M.C Table과 동일하게 표 하단 펼침 박스 형태로 표시
+    window.ganttToggleHistoryBox = function() {
+        const body = document.getElementById('gantt-history-body');
+        const icon = document.getElementById('gantt-history-toggle-icon');
+        if (!body) return;
+        const isOpen = body.style.display !== 'none';
+        body.style.display = isOpen ? 'none' : 'block';
+        if (icon) icon.textContent = isOpen ? '▶' : '▼';
+        if (!isOpen && window.showHistoryModal) {
+            // 💡 기존 showHistoryModal()의 렌더링 로직을 그대로 재사용하되, 모달을 띄우지 않고 박스 안의 #history-content만 채움
+            window.showHistoryModal();
+        }
+    };
+
+
     // 💡 수정이력 — 비밀번호 확인 후 날짜 구간 내 기록 삭제 (Gantt changeLogs + M.C Table mcChangeLog 둘 다 정리)
 window.deleteHistoryByDateRange = function() {
     const pwEl = document.getElementById('history-del-pw');
@@ -2111,7 +2149,6 @@ window.deleteHistoryByDateRange = function() {
             html += '</tbody></table>';
             content.innerHTML = html;
         }
-        document.getElementById('history-overlay').style.display = 'flex';
     };
 
     window.closeHistoryModal = function(e) {
@@ -2863,6 +2900,7 @@ window.deleteHistoryByDateRange = function() {
             let widthClass = ""; let thClass = ""; let colStr = colName.toLowerCase();
 
             if (idx === colIdx.period) return; // 💡 "소요일"은 완료~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
+            if (colStr.includes("상태")) return; // 💡 "상태"는 소요일~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
             if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; }
             else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
@@ -2876,8 +2914,10 @@ window.deleteHistoryByDateRange = function() {
             headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             if (idx === colIdx.plan) {
                 const periodLabel = lang.header['소요일'] || '소요일';
+                const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
                 headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
+                headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px;">${statusLabel}</th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">${wbsLabel}</th>`;
             }
         });
@@ -2917,7 +2957,7 @@ window.deleteHistoryByDateRange = function() {
                     tdAttrs += ` class="no-td" onclick="window.onRowNoClick(this, ${i}, event); event.stopPropagation();" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택"`;
                     const alarmOn = !!row._알림;
                     const alarmStyle = alarmOn
-                        ? 'opacity:1; filter:grayscale(1) sepia(1) saturate(6) hue-rotate(-50deg) brightness(0.8); transform:scale(1.3);'
+                        ? 'opacity:1; filter:grayscale(1) sepia(1) saturate(6) hue-rotate(180deg) brightness(0.9); transform:scale(1.3);'
                         : 'opacity:0.35; transform:scale(1.0);';
                     tdHtml = `
                         <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative;">
@@ -2929,19 +2969,7 @@ window.deleteHistoryByDateRange = function() {
                     tdStyle = "text-align: left; vertical-align: top; white-space: pre-wrap; word-break: break-all; font-size: 11px;";
                     if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응")) tdAttrs += ` class="detail-td"`;
                } else if (colStr.includes("상태")) {
-                    const statusVal = cell.toString().trim();
-                    tdHtml = `<select onchange="window.updateStatus(this, ${i}, ${cellIndex})"
-                        ondblclick="window.setStatusDone(this, ${i}, ${cellIndex})"
-                        style="border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit;
-                               -webkit-appearance:none; -moz-appearance:none; appearance:none;">
-                        ${(LANG[window._currentLang||'ko'].status).map(s =>
-                            `<option value="${s}" ${statusVal===s?'selected':''}>${s}</option>`
-                        ).join('')}
-                    </select>`;
-                    tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
-                    tdAttrs = ` class="status-td" data-raw="${encodeURIComponent(statusVal)}"`;
-                    bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
-                    continue;
+                    continue; // 💡 "상태"는 소요일~개발업무 사이에서 이미 렌더링했으므로 원래 자리에서는 건너뜀
                 } else if (["시작", "완료", "기간", "view", "보고"].some(k => colStr.includes(k))) {
                     tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
                     tdAttrs += ` class="date-td"`;
@@ -2962,9 +2990,21 @@ window.deleteHistoryByDateRange = function() {
                         bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시
-                            //    글자색은 모든 레벨에서 빨간색, 굵기만 0레벨=bold / 나머지=normal
                             let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
-                            bodyHtml += `<td style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
+                            bodyHtml += `<td class="period-td" style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
+                        }
+                        if (colIdx.status !== -1) {
+                            // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
+                            const statusVal = (row[colIdx.status] !== undefined && row[colIdx.status] !== null) ? row[colIdx.status].toString().trim() : '';
+                            const statusSelectHtml = `<select onchange="window.updateStatus(this, ${i}, ${colIdx.status})"
+                                ondblclick="window.setStatusDone(this, ${i}, ${colIdx.status})"
+                                style="border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit; white-space:nowrap;
+                                       -webkit-appearance:none; -moz-appearance:none; appearance:none;">
+                                ${(LANG[window._currentLang||'ko'].status).map(s =>
+                                    `<option value="${s}" ${statusVal===s?'selected':''}>${s}</option>`
+                                ).join('')}
+                            </select>`;
+                            bodyHtml += `<td class="status-td" data-raw="${encodeURIComponent(statusVal)}" style="text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};">${statusSelectHtml}</td>`;
                         }
                         let taskTxt = "";
                         if (row._level === 0) taskTxt = row._origDev; else if (row._level === 1) taskTxt = row._origT1; else if (row._level === 2) taskTxt = row._origT2; else if (row._level === 3) taskTxt = row._origT3; else if (row._level === 4) taskTxt = row._origT4;
@@ -4748,8 +4788,20 @@ window.insertMailTask = function() {
         .date-clickable { letter-spacing: -0.3px; font-weight: normal; }
     }
 
+   
+
     /* 💡 #table-info(상단 버튼줄)도 sticky라서, Gantt 표 헤더는 그 높이만큼 아래에서 고정 */
-    #myTable th { top: var(--gantt-info-h, 60px) !important; }
+    #myTable thead { position: sticky !important; top: 0 !important; z-index: 16; }
+
+    /* 💡 TEMP: Gantt 표를 Brief SPEC/M.C Table과 동일한 단순 스타일로 통일 */
+    #myTable th { background: #f4f6f8 !important; }
+    #myTable td, #myTable th { border-right: 1px solid #ddd !important; border-left: none !important; }
+    #myTable .parent-row td { background: #ffffff !important; }
+    #myTable .sub-parent-row td,
+    #myTable .sub-parent-row-2 td,
+    #myTable .sub-parent-row-3 td,
+    #myTable .sub-parent-row-4 td { background: #ffffff !important; }
+    #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
 
     /* 🖨️ 인쇄 모드 완전히 처음부터 다시 잡기 (화면 모드에는 영향 0%) */
     @media print {
@@ -4848,6 +4900,8 @@ window.insertMailTask = function() {
     #dynamic-filters > div:first-child > *:first-child {
         margin-left: 0 !important;
     }
+
+
 </style>
 
 <div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
@@ -6402,8 +6456,7 @@ async function msCallGemini(apiKey, parsed) {
         box-shadow: 0 0 0 1.5px #f4f6f8 !important; 
     }
     th.sticky-col.sticky-last {
-        /* 마지막 열은 구분감을 위해 그림자 추가 */
-        box-shadow: 4px 0 6px -1px rgba(0,0,0,0.2), 0 0 0 1.5px #f4f6f8 !important;
+        box-shadow: 0 0 0 1.5px #f4f6f8 !important;
     }
 </style>
 
@@ -6444,86 +6497,22 @@ async function msCallGemini(apiKey, parsed) {
     // 💡 WBS 레벨별 고정 회색 계조 (테마 기능 삭제 — 더 이상 사용자가 색을 바꿀 수 없음)
     const SOLID_GRAY = { 0: '#00a1b6', 1: '#828282', 2: '#b4b4b4', 3: '#e6e6e6', 4: '#ffffff' };
 
+    // 💡 TEMP: 좌측 고정열 기능 비활성화 — 다른 탭(Summary/Brief SPEC/M.C Table)처럼 단순한 표로 통일
     window.updateStickyPositions = function() {
         const table = document.getElementById('myTable');
         if (!table) return;
-        const ths = Array.from(table.querySelectorAll('thead th'));
-        if (ths.length === 0) return;
-
-        let chartIdx = ths.findIndex(th => th.classList.contains('chart-th'));
-        if (chartIdx === -1) chartIdx = ths.length;
-
-        let leftOffsets = [];
-        let currentLeft = 0;
-
-        // 헤더 렌더링
-        ths.forEach((th, idx) => {
-            leftOffsets.push(currentLeft);
-            if (idx < chartIdx) {
-                th.classList.add('sticky-col');
-                if (idx === chartIdx - 1) th.classList.add('sticky-last');
-                else th.classList.remove('sticky-last');
-                
-                th.style.setProperty('position', 'sticky', 'important');
-                th.style.setProperty('left', currentLeft + 'px', 'important');
-                th.style.setProperty('background-color', '#f4f6f8', 'important');
-                th.style.setProperty('z-index', '60', 'important');
-                
-                currentLeft += th.getBoundingClientRect().width;
-            } else {
-                th.classList.remove('sticky-col', 'sticky-last');
-                th.style.position = ''; th.style.left = ''; th.style.backgroundColor = ''; th.style.zIndex = '';
-            }
-        });
-
-        const trs = table.querySelectorAll('tbody tr');
-        trs.forEach(tr => {
-            if (tr.cells.length <= 1) return;
-
-            // 💡 TEST: 레벨별 회색 계조 대신 줄무늬 기준으로 통일 (본문 셀 배경과 일치시키기 위함)
-            let solidColor = tr.classList.contains('gantt-zebra-b') ? '#f5f5f5' : '#ffffff';
-
-            Array.from(tr.children).forEach((td, idx) => {
-                if (idx < chartIdx) {
-                    td.classList.add('sticky-col');
-                    if (idx === chartIdx - 1) td.classList.add('sticky-last');
-                    else td.classList.remove('sticky-last');
-                    
-                    // 💡 [핵심 변환] 현재 칸이 더블클릭되어 수정 모드 상태(contenteditable)인지 감지
-                    const isEditing = td.getAttribute('contenteditable') === 'true' || document.activeElement === td;
-                    
-                    // 💡 수정 중=노란색, 다중선택=옅은 빨강, 알림켜짐=옅은 주황, 평소=테마 배경색
-                    const isSelected = td.parentElement && td.parentElement.classList.contains('multi-selected');
-                    const isAlarmOn = td.parentElement && td.parentElement.classList.contains('alarm-on');
-                    const bg = isEditing ? '#fff9c4' : (isSelected ? '#ffcccc' : (isAlarmOn ? '#fff7e6' : solidColor));
-                    const zIdx = isEditing ? '70' : '50';
-
-                    td.style.setProperty('position', 'sticky', 'important');
-                    td.style.setProperty('left', leftOffsets[idx] + 'px', 'important');
-                    td.style.setProperty('background-color', bg, 'important');
-                    td.style.setProperty('background-image', 'none', 'important');
-                    td.style.setProperty('z-index', zIdx, 'important');
-                    
-                    td.style.setProperty('border-right', 'none', 'important');
-                    td.style.setProperty('border-left', 'none', 'important');
-                    
-                    if (isEditing) {
-                        // 💡 수정 상태일 때는 지정하신 파란색 안쪽 테두리를 강제로 입힙니다.
-                        td.style.setProperty('box-shadow', 'inset 0 0 0 2px #0056b3', 'important');
-                    } else {
-                        // 💡 "현황" 열 경계의 입체 그림자(drop-shadow) 제거 — 다른 칸과 동일하게 단순한 경계선만
-                        td.style.setProperty('box-shadow', `0 0 0 1.5px ${bg}`, 'important');
-                    }
-                } else {
-                    td.classList.remove('sticky-col', 'sticky-last');
-                    td.style.position = ''; td.style.left = '';
-                    td.style.backgroundColor = ''; td.style.backgroundImage = ''; td.style.zIndex = '';
-                    td.style.borderRight = ''; td.style.borderLeft = ''; td.style.boxShadow = '';
-                }
-            });
+        table.querySelectorAll('th, td').forEach(el => {
+            el.classList.remove('sticky-col', 'sticky-last');
+            el.style.position = '';
+            el.style.left = '';
+            el.style.backgroundColor = '';
+            el.style.backgroundImage = '';
+            el.style.zIndex = '';
+            el.style.borderRight = '';
+            el.style.borderLeft = '';
+            el.style.boxShadow = '';
         });
     };
-
     // 💡 [버벅임 해결] 무한루프의 주범이었던 style 감지를 완벽하게 차단하고 오직 행이 바뀔 때만 작동하게 만듭니다.
     if (!window._stickyObserver) {
         window._stickyObserver = new MutationObserver((mutations) => {
@@ -7309,17 +7298,6 @@ async function msCallGemini(apiKey, parsed) {
 // - 그 외 Summary 개요/마일스톤, Brief SPEC, M.C Table 내용은 window.tabData에 저장
 // 기본값은 빈 상태이며, 실제 값은 JSON(구글 드라이브) 또는 로컬 엑셀 파일을 불러올 때 채워짐
 // ══════════════════════════════════════════════════════
-
-// 💡 #table-info(상단 버튼줄) 높이를 측정해서 Gantt 표 헤더 sticky 위치를 자동 보정
-function updateGanttInfoHeight() {
-    const infoEl = document.getElementById('table-info');
-    if (infoEl) {
-        document.documentElement.style.setProperty('--gantt-info-h', infoEl.offsetHeight + 'px');
-    }
-}
-window.addEventListener('resize', updateGanttInfoHeight);
-window.addEventListener('load', updateGanttInfoHeight);
-setTimeout(updateGanttInfoHeight, 300); // 필터 버튼이 렌더링된 후 한 번 더 측정
 
 
 window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
