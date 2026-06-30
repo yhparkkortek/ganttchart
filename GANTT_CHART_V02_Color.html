@@ -102,15 +102,6 @@
     }
 
     @media print {
-        :root {
-                --w-no: 3%;         
-                --w-date: 3%;        
-                --w-period: 3%;      
-                --w-wbs: 20%;        
-                --w-detail: 28%;     
-                --w-chart: 15%;      
-                --w-default: 3%;     
-                }
                 .trans-btn-hide-print, #auth_button, #drive_save_btn, #drive_load_btn { display: none !important; }
                 .controls, hr, #table-info .btn-group { display: none !important; }
                 #table-info { position: static !important; border-radius: 0 !important; }
@@ -119,7 +110,6 @@
                 table { page-break-inside: auto; }
                 tr { page-break-inside: avoid; }
             }
-
     body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
     
     .btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
@@ -195,7 +185,7 @@
     #myTable th, #myTable td { border: 1px solid #e3e6ea !important; }
     #myTable th { background: #f4f6f8 !important; font-weight: 600 !important; color: #555 !important; }
 
-    .container { height: calc(100vh - 220px); overflow-y: auto; overflow-x: auto; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
+    .container { height: auto; overflow: visible; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
     #file-status { font-weight: bold; color: #fff; font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 16px; }
     #print-header { display: none; }
@@ -639,26 +629,28 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     <div id="print-header"><h2 id="print-title"></h2><div id="print-date"></div></div>
 
     <div class="container" id="table-container">
+        <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px);">
         <table id="myTable">
             <thead id="table-head"></thead>
             <tbody id="table-body">
                 <tr><td colspan="20" style="text-align:center; padding: 50px; color: #777;">위에서 파일을 선택하시거나 드라이브에서 불러오시면 데이터가 표시됩니다.</td></tr>
             </tbody>
         </table>
-    </div>
-    <div id="gantt-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
-        <div id="gantt-history-header" onclick="window.ganttToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
-            <span id="gantt-history-toggle-icon">▶</span>
-            <span>🕒 변경 이력 확인</span>
         </div>
-        <div id="gantt-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
-            <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
-                <label>시작일 <input type="date" id="history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
-                <label>종료일 <input type="date" id="history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
-                <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
-                <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteHistoryByDateRange()">🗑️ 구간 삭제</button>
+        <div id="gantt-history-box" style="margin:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+            <div id="gantt-history-header" onclick="window.ganttToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                <span id="gantt-history-toggle-icon">▶</span>
+                <span>🕒 변경 이력 확인</span>
             </div>
-            <div id="history-content"></div>
+            <div id="gantt-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
+                    <label>시작일 <input type="date" id="history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
+                    <label>종료일 <input type="date" id="history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                    <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                    <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteHistoryByDateRange()">🗑️ 구간 삭제</button>
+                </div>
+                <div id="history-content"></div>
+            </div>
         </div>
     </div>
 </div> <!-- /#tab-gantt -->
@@ -4832,11 +4824,7 @@ window.insertMailTask = function() {
             padding: 0 !important;
         }
 
-        /* 4️⃣ 🚨 [핵심] 표가 옆으로 짜부라지거나 찌그러지는 현상 절대 방지 */
-        #myTable {
-            width: max-content !important; /* 🔒 억지로 구기지 말고 표 본연의 넓이를 유지해라 */
-            table-layout: auto !important;
-        }
+      
 
         /* 5️⃣ 화면용 '틀 고정(Sticky)' 및 자바스크립트 가로 좌표 계산을 완전 리셋 */
         #myTable thead th, 
@@ -4854,10 +4842,9 @@ window.insertMailTask = function() {
             break-inside: avoid !important;
         }
 
-        /* 7️⃣ 가로가 긴 간트차트 특성에 맞춰 용지 방향을 '가로'로 고정 */
+        /* 7️⃣ 기본 인쇄 용지 설정 (A4 세로, 표준 여백) */
         @page {
-            size: landscape;
-            margin: 10mm;
+            margin: 15mm;
         }
     }
     /* 행 액션 팝업 */
