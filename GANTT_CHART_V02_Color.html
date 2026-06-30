@@ -2078,6 +2078,16 @@ ${mailText}`;
         const tableClone = sourceTable.cloneNode(true);
         tableClone.removeAttribute('id'); // 원본과 id 충돌 방지
         // 💡 인쇄는 화면에 보이는 상태(확장/기본) 그대로 따라가도록 클래스 및 열 순서를 그대로 유지
+
+        // 💡 <select>(업무상태)는 인쇄 시 선택된 텍스트가 안 그려지는 브라우저가 많아 일반 텍스트로 치환
+        tableClone.querySelectorAll('select').forEach(function(sel) {
+            const selectedOption = sel.options[sel.selectedIndex];
+            const span = document.createElement('span');
+            span.textContent = selectedOption ? selectedOption.textContent : '';
+            span.style.cssText = sel.getAttribute('style') || '';
+            sel.parentNode.replaceChild(span, sel);
+        });
+
         printArea.appendChild(tableClone);
 
         document.body.classList.add('gantt-printing-mode');
@@ -6641,6 +6651,22 @@ async function msCallGemini(apiKey, parsed) {
 
 /* ✨ 2. 인쇄(프린트) 전용 설정 */
     @media print {
+        /* 0. 업무상태 색상 / 번역 강조색 — 인쇄 사본은 id="myTable"이 없으므로 #gantt-print-area 기준으로 재선언 */
+        #gantt-print-area tbody tr.status-done td { color: rgba(0, 0, 0, 0.2) !important; }
+        #gantt-print-area tbody tr.status-delay td { color: #e03131 !important; }
+        #gantt-print-area tbody tr.status-pending td { color: #f08c00 !important; }
+        #gantt-print-area tbody tr.status-done.parent-row .no-td .row-num-span { color: rgba(0, 0, 0, 0.2) !important; }
+        #gantt-print-area tbody tr.status-delay.parent-row .no-td .row-num-span { color: #e03131 !important; }
+        #gantt-print-area tbody tr.status-pending.parent-row .no-td .row-num-span { color: #f08c00 !important; }
+        #gantt-print-area tbody tr.status-done .content-cell-trans,
+        #gantt-print-area tbody tr.status-done .content-cell-trans * { color: rgba(0, 0, 0, 0.2) !important; }
+        #gantt-print-area tbody tr.status-delay .content-cell-trans,
+        #gantt-print-area tbody tr.status-delay .content-cell-trans * { color: #e03131 !important; }
+        #gantt-print-area tbody tr.status-pending .content-cell-trans,
+        #gantt-print-area tbody tr.status-pending .content-cell-trans * { color: #f08c00 !important; }
+        #gantt-print-area tbody tr .content-cell-trans .trans-result,
+        #gantt-print-area tbody tr .content-cell-trans .trans-result * { color: var(--trans-text) !important; }
+
         /* 1. 폰트 크기 및 셀 여백 자동 축소 (인쇄할 때만 작아짐) */
         :root {
             --table-font-size: 10px !important;
