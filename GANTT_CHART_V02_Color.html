@@ -67,14 +67,14 @@
         --chart-l4: #d6d6d6;
     }
 
-    /* 차트 확장 모드 */
-    #myTable.chart-expanded th.chart-th,
-    #myTable.chart-expanded td.chart-td {
+/* 차트 확장 모드 */
+    table.chart-expanded th.chart-th,
+    table.chart-expanded td.chart-td {
         width: 1300px !important;
         min-width: 1300px !important;
     }
-    #myTable.chart-expanded th.status-th,
-    #myTable.chart-expanded td.status-td {
+    table.chart-expanded th.status-th,
+    table.chart-expanded td.status-td {
         width: var(--w-status) !important;
         min-width: var(--w-status) !important;
     }
@@ -86,9 +86,9 @@
     td.chart-td {
         overflow-x: auto;
     }
-    /* 확장모드에서 뒤로 이동된 상세내용 열 숨김 */
-    #myTable.chart-expanded th.detail-th,
-    #myTable.chart-expanded td.detail-td {
+/* 확장모드에서 뒤로 이동된 상세내용 열 숨김 */
+    table.chart-expanded th.detail-th,
+    table.chart-expanded td.detail-td {
         width: 0 !important;
         min-width: 0 !important;
         max-width: 0 !important;
@@ -277,12 +277,63 @@
         background-color: #ffcccc !important;
     }
 
-    /* 알림 켜진 행 표시 (전체 행에 옅은 주황 배경 + 좌측 강조선) */
-    #myTable tr.alarm-on td {
-        background-color: #fff7e6 !important;
+    /* 💡 업무 상태가 "완료"인 행 — 글자색만 20% 회색으로 (배경/줄무늬/알람 색상에는 영향 없음, 0레벨 No 포함 전부 적용) */
+    #myTable tbody tr.status-done td {
+        color: rgba(0, 0, 0, 0.2) !important;
     }
-    #myTable tr.alarm-on td:first-child {
-        box-shadow: inset 3px 0 0 0 #f5a623;
+    /* 0레벨 No 칸은 .row-num-span 전용 규칙이 별도로 검정색을 강제하고 있어서, 동일하게 덮어써야 함 */
+    #myTable tbody tr.status-done.parent-row .no-td .row-num-span {
+        color: rgba(0, 0, 0, 0.2) !important;
+    }
+    /* 상세내용/개발업무 칸의 번역 관련 요소들도 .content-cell-trans * 규칙(검정 강제)에 가려지므로 동일하게 덮어써야 함 */
+    #myTable tbody tr.status-done .content-cell-trans,
+    #myTable tbody tr.status-done .content-cell-trans * {
+        color: rgba(0, 0, 0, 0.2) !important;
+    }
+    #myTable tbody tr.status-delay .content-cell-trans,
+    #myTable tbody tr.status-delay .content-cell-trans * {
+        color: #e03131 !important;
+    }
+    #myTable tbody tr.status-pending .content-cell-trans,
+    #myTable tbody tr.status-pending .content-cell-trans * {
+        color: #f08c00 !important;
+    }
+    /* 번역 결과물(.trans-result)은 행 상태색보다 항상 파란색이 우선 — [대괄호] bold 태그 포함 전체 */
+    #myTable tbody tr .content-cell-trans .trans-result,
+    #myTable tbody tr .content-cell-trans .trans-result * {
+        color: var(--trans-text) !important;
+    }
+
+    /* 번역 버튼(🌐) 아이콘 — 기본은 파란색, "완료" 행에서만 20% 회색으로 예외 적용 */
+    .trans-btn-hide-print {
+        color: #0056b3;
+    }
+    #myTable tbody tr.status-done .trans-btn-hide-print {
+        color: rgba(0, 0, 0, 0.2) !important;
+    }
+
+    /* 💡 업무 상태가 "지연(구 보류)"인 행 — 글자색 빨강 */
+    #myTable tbody tr.status-delay td {
+        color: #e03131 !important;
+    }
+    #myTable tbody tr.status-delay.parent-row .no-td .row-num-span {
+        color: #e03131 !important;
+    }
+
+    /* 💡 업무 상태가 "대기(Pending)"인 행 — 글자색 주황 */
+    #myTable tbody tr.status-pending td {
+        color: #f08c00 !important;
+    }
+    #myTable tbody tr.status-pending.parent-row .no-td .row-num-span {
+        color: #f08c00 !important;
+    }
+
+    /* 알림 켜진 행 표시 (전체 행에 옅은 푸른 배경 + 좌측 강조선) — 지브라(줄무늬) 행보다 우선 적용되도록 tbody까지 포함해 우선순위 보강 */
+    #myTable tbody tr.alarm-on td {
+        background-color: #e3f2fd !important;
+    }
+    #myTable tbody tr.alarm-on td:first-child {
+        box-shadow: inset 3px 0 0 0 #4285f4;
     }
 
     /* 📌 더블클릭하여 텍스트(TXT) 입력/수정 중일 때 상태를 눈에 띄게 강조 (상세내용 창 추가) */
@@ -2008,10 +2059,40 @@ ${mailText}`;
         if (!doc.fullscreenElement) requestFullScreen.call(docEl); else cancelFullScreen.call(doc);
     }
 
-    // 🔒 [수정] 복잡한 전체화면 확인 단계를 싹 빼고, 곧바로 깨끗하게 인쇄창만 띄웁니다.
+    // 🔒 [수정] 표를 깨끗한 사본으로 복제해서 별도 인쇄 전용 영역에 넣고, 그 영역만 인쇄
+    //    화면의 스크롤 박스/필터 숨김 등에 전혀 영향받지 않음 (필터링된 행 전체가 항상 그대로 인쇄됨)
     window.smartPrint = function() {
+        const sourceTable = document.getElementById('myTable');
+        if (!sourceTable) { window.print(); return; }
+
+        // 인쇄 전용 컨테이너가 이미 있으면 비우고, 없으면 새로 생성
+        let printArea = document.getElementById('gantt-print-area');
+        if (!printArea) {
+            printArea = document.createElement('div');
+            printArea.id = 'gantt-print-area';
+            document.body.appendChild(printArea);
+        }
+        printArea.innerHTML = '';
+
+        // 💡 표를 통째로 복제 (현재 화면에 보이는 필터링/정렬 상태 그대로, sticky 등 인라인 스타일은 인쇄 CSS가 따로 정리)
+        const tableClone = sourceTable.cloneNode(true);
+        tableClone.removeAttribute('id'); // 원본과 id 충돌 방지
+        // 💡 인쇄는 화면에 보이는 상태(확장/기본) 그대로 따라가도록 클래스 및 열 순서를 그대로 유지
+        printArea.appendChild(tableClone);
+
+        document.body.classList.add('gantt-printing-mode');
         window.print();
     };
+
+    // 💡 인쇄가 끝나면(취소 포함) 인쇄 전용 사본을 정리 — 단, afterprint가 미리보기 직후 너무 빨리
+    //    발생하는 브라우저(Chrome 등)에서 사본이 미리보기 도중 비워지지 않도록 약간 지연시킴
+    window.addEventListener('afterprint', function() {
+        setTimeout(function() {
+            const printArea = document.getElementById('gantt-print-area');
+            if (printArea) printArea.innerHTML = '';
+            document.body.classList.remove('gantt-printing-mode');
+        }, 1000);
+    });
 
     function logChange(rowIndex, colIndex, oldVal, newVal) {
         if (!globalData || globalData.length === 0) return;
@@ -2760,9 +2841,9 @@ window.deleteHistoryByDateRange = function() {
     const LANG = {
         ko: {
             header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '소요일':'소요일', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
-            status: ['진행','완료','대기','보류'],
-            statusMap: { '진행':'진행','완료':'완료','대기':'대기','보류':'보류',
-                         'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'보류' },
+            status: ['진행','완료','대기','지연'],
+            statusMap: { '진행':'진행','완료':'완료','대기':'대기','지연':'지연','보류':'지연',
+                         'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'지연','On going':'진행','Delay':'지연' },
             btnText: '🌐 ENG',
             ui: {
                 'file-input-label': '📂 파일 선택',
@@ -2792,9 +2873,9 @@ window.deleteHistoryByDateRange = function() {
 
         en: {
             header: { 'no':'No', '시작':'Start', '완료':'End', '개발업무(wbs)':'Task (WBS)', '기간':'Dur.', '소요일':'work', '상태':'Status', '업무상세내용':'Details', '현황':'Chart' },
-            status: ['Progress','Done','Pending','On Hold'],
-            statusMap: { '진행':'Progress','완료':'Done','대기':'Pending','보류':'On Hold',
-                         'Progress':'Progress','Done':'Done','Pending':'Pending','On Hold':'On Hold' },
+            status: ['On going','Done','Pending','Delay'],
+            statusMap: { '진행':'On going','완료':'Done','대기':'Pending','보류':'Delay','지연':'Delay',
+                         'Progress':'On going','On going':'On going','Done':'Done','Pending':'Pending','On Hold':'Delay','Delay':'Delay' },
             btnText: '🌐 한글',
             ui: {
                 'file-input-label': '📂 File Select',
@@ -2893,7 +2974,7 @@ window.deleteHistoryByDateRange = function() {
 
             if (idx === colIdx.period) return; // 💡 "소요일"은 완료~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
             if (colStr.includes("상태")) return; // 💡 "상태"는 소요일~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
-            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px;"; thClass = "chart-th"; }
+            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px; position: relative;"; thClass = "chart-th"; }
             else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
             else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
@@ -2903,7 +2984,13 @@ window.deleteHistoryByDateRange = function() {
             const lang = LANG[window._currentLang || 'ko'];
             const cellKey = (cell||'').toString().replace(/\s+/g,'').toLowerCase();
             const displayCell = lang.header[cellKey] || escapeHtml(cell);
-            headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
+            if (thClass === 'chart-th') {
+                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}">
+                    <div class="chart-th-axis" style="position:relative; height:12px; overflow:hidden;"></div>
+                </th>`;
+            } else {
+                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
+            }
             if (idx === colIdx.plan) {
                 const periodLabel = lang.header['소요일'] || '소요일';
                 const statusLabel = lang.header['상태'] || '상태';
@@ -2914,6 +3001,7 @@ window.deleteHistoryByDateRange = function() {
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
+        if (window.updateChartHeaderAxis) window.updateChartHeaderAxis();
 
         let bodyHtml = '';
         let ganttZebraIdx = 0; // 💡 보이는 행 기준 줄무늬 카운터
@@ -2923,6 +3011,17 @@ window.deleteHistoryByDateRange = function() {
             if (ganttZebraIdx % 2 === 1) trClass = trClass.replace('class="', 'class="gantt-zebra-b ');
             ganttZebraIdx++;
             if (row._알림) trClass = trClass.replace('class="', 'class="alarm-on ');
+            if (colIdx.status !== -1) {
+                const statusVal = (row[colIdx.status] || '').toString().trim();
+                const statusLow = statusVal.toLowerCase();
+                if (statusVal.includes('완료') || statusLow.includes('done') || statusLow.includes('complete')) {
+                    trClass = trClass.replace('class="', 'class="status-done ');
+                } else if (statusVal.includes('보류') || statusVal.includes('지연') || statusLow.includes('hold') || statusLow.includes('delay')) {
+                    trClass = trClass.replace('class="', 'class="status-delay ');
+                } else if (statusVal.includes('대기') || statusLow.includes('pending')) {
+                    trClass = trClass.replace('class="', 'class="status-pending ');
+                }
+            }
             bodyHtml += `<tr data-row-index="${i}" ${trClass}>`;
             
             for(let cellIndex = 0; cellIndex < data[0].length; cellIndex++) {
@@ -2954,7 +3053,7 @@ window.deleteHistoryByDateRange = function() {
                     tdHtml = `
                         <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative;">
                             <span onclick="window.wrToggleAlarm(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기)' : '알림 꺼짐 (클릭하여 켜기)'}"
-                                style="font-size:13px; cursor:pointer; flex-shrink:0; ${alarmStyle}">🔔</span>
+                                style="font-size:13px; cursor:pointer; flex-shrink:0; ${alarmStyle}">📌</span>
                             <span class="row-num-span"></span>
                         </div>`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
@@ -3007,7 +3106,16 @@ window.deleteHistoryByDateRange = function() {
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
                         let wbsRawValue = encodeURIComponent(taskTxt);
                         let wbsAttrs = wbsColIdx !== -1 ? ` data-raw="${wbsRawValue}" ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${wbsColIdx})" title="더블클릭하여 수정 가능&#10;&#10;* 표시: 다른 업무와 병렬로 진행되는 업무"` : ``;
-                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${prefix}${escapeHtml(taskTxt)}</td>`;
+
+                        let hasKorWbs = /[가-힣]/.test(taskTxt); let hasEngWbs = /[a-zA-Z]/.test(taskTxt);
+                        let transModeWbs = hasKorWbs ? 1 : (hasEngWbs ? 2 : 0);
+                        let wbsInnerHtml;
+                        if (transModeWbs > 0 && taskTxt.trim() !== '') {
+                            let safeTextWbs = encodeURIComponent(taskTxt).replace(/'/g, "%27").replace(/\\/g, "\\\\");
+                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print" style="display:inline-block; cursor:pointer; font-size:8px; border-radius:3px; padding:1px 2px; margin-right:3px; background:transparent; vertical-align:middle;" onclick="toggleTranslation(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>';                        } else {
+                            wbsInnerHtml = prefix + escapeHtml(taskTxt);
+                        }
+                        bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}</td>`;
                         continue; 
                     } 
                     else if (cellIndex === colIdx.period) {
@@ -3024,9 +3132,9 @@ window.deleteHistoryByDateRange = function() {
                         if (transMode > 0) {
                             let safeText = encodeURIComponent(cellText).replace(/'/g, "%27").replace(/\\/g, "\\\\");
                             let displayHtml = linkifyAndEscape(cellText);
-                            tdStyle += " position: relative; padding-left: 22px;"; tdAttrs += ` class="content-cell-trans"`;
-                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border: 1px solid #ced4da; border-radius: 3px; padding: 2px 2px; color: #495057; background: #fff; z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.05);" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + '); event.stopPropagation();">🌐</span>';
-                        } else { tdHtml = linkifyAndEscape(cellText); }
+                            tdStyle += " position: relative; padding-left: 22px;";
+                            tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans"`;
+                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText); }
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
@@ -3048,8 +3156,8 @@ window.deleteHistoryByDateRange = function() {
 
     function toggleTranslation(btn, encodedText, transMode) {
         let container = btn.parentElement; let contentSpan = container.querySelector('.content-span');
-        if (btn.dataset.expanded === "true") { contentSpan.innerHTML = contentSpan.dataset.origHtml; btn.dataset.expanded = "false"; btn.style.backgroundColor = "#fff"; return; }
-        if (contentSpan.dataset.transHtml) { contentSpan.innerHTML = contentSpan.dataset.transHtml; btn.dataset.expanded = "true"; btn.style.backgroundColor = "#e2e6ea"; return; }
+        if (btn.dataset.expanded === "true") { contentSpan.innerHTML = contentSpan.dataset.origHtml; btn.dataset.expanded = "false"; btn.style.backgroundColor = "transparent"; return; }
+        if (contentSpan.dataset.transHtml) { contentSpan.innerHTML = contentSpan.dataset.transHtml; btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; return; }
         btn.style.pointerEvents = 'none'; btn.style.opacity = '0.5';
         let text = decodeURIComponent(encodedText); let targetLang = transMode === 1 ? 'en' : 'ko'; let labelPrefix = transMode === 1 ? 'ENG' : '한글';
         let urls = [];
@@ -3064,9 +3172,9 @@ window.deleteHistoryByDateRange = function() {
             urls.forEach((url, idx) => { let rx = new RegExp(`\\s*ZXZX${idx}ZXZX\\s*`, 'gi'); translated = translated.replace(rx, ' ' + url + ' '); });
             let transDisplayHtml = linkifyAndEscape(translated.trim());
             let cleanOrigHtml = contentSpan.innerHTML.replace(/(<br\s*\/?>|\s|&nbsp;)+$/gi, ' ').trim();
-            let finalHtml = cleanOrigHtml + '<br><span style="color: var(--trans-text); font-weight: normal;"><b>[' + labelPrefix + ']</b><br>' + transDisplayHtml + '</span>';
+            let finalHtml = cleanOrigHtml + '<br><span class="trans-result" style="color: var(--trans-text) !important; font-weight: normal;">' + transDisplayHtml + '</span>';
             contentSpan.dataset.origHtml = cleanOrigHtml; contentSpan.dataset.transHtml = finalHtml; contentSpan.innerHTML = finalHtml;
-            btn.dataset.expanded = "true"; btn.style.backgroundColor = "#e2e6ea"; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
+            btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
         }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert("번역 중 오류가 발생했습니다."); });
     }
 
@@ -3160,6 +3268,9 @@ window.deleteHistoryByDateRange = function() {
 
                 if (showRow) {
                     tr.style.display = "";
+                    // 💡 필터 적용 후 "보이는 행" 순서 기준으로 줄무늬 다시 매기기
+                    tr.classList.remove('gantt-zebra-b');
+                    if ((visibleCount - 1) % 2 === 1) tr.classList.add('gantt-zebra-b');
                     let noTd = tr.querySelector('.no-td'); 
                     if (noTd) { 
                         let span = noTd.querySelector('.row-num-span');
@@ -3642,6 +3753,45 @@ window.handleAuthClick = function() {
 
         // 💡 컬럼 순서가 바뀌었으므로 sticky 왼쪽열 위치/배경을 즉시 재계산 (안 하면 스크롤 시 뒤가 투과되어 보임)
         if (window.updateStickyPositions) window.updateStickyPositions();
+
+        if (window.updateChartHeaderAxis) window.updateChartHeaderAxis();
+    };
+
+    // 표 머릿글에 월/년(또는 기본 4분할) 눈금 라벨을 표시 — 확장/기본 모드 공통
+    window.updateChartHeaderAxis = function() {
+        const headerAxis = document.querySelector('#myTable thead .chart-th-axis');
+        if (!headerAxis) return;
+
+        const isExpanded = document.documentElement.style.getPropertyValue('--chart-month-detail') === '1';
+        const viewStartTs = window.ganttViewStartTs; const viewDuration = window.ganttViewDuration;
+        if (!viewStartTs || !viewDuration) { headerAxis.innerHTML = ''; return; }
+
+        let labelHTML = '';
+
+        if (isExpanded) {
+            const viewStart = new Date(viewStartTs);
+            const viewEnd   = new Date(viewStartTs + viewDuration);
+            let cur = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            while (cur <= viewEnd) {
+                let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
+                if (pct >= 0 && pct <= 101) {
+                    let yr = cur.getFullYear().toString().slice(2);
+                    let lbl = `${months[cur.getMonth()]} '${yr}`;
+                    labelHTML += `<span class="chart-label" style="position:absolute; left:${pct}%; transform:translateX(-50%); white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold; color:#495057;">${lbl}</span>`;
+                }
+                cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+            }
+        } else {
+            const labelPositions = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
+            for (let i = 0; i < labelPositions.length; i++) {
+                let pct = labelPositions[i];
+                let ts  = viewStartTs + (viewDuration * pct / 100);
+                labelHTML += `<span class="chart-label" style="position:absolute; left:${pct}%; transform:translateX(-50%); white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold; overflow:hidden;">${formatChartLabel(ts)}</span>`;
+            }
+        }
+
+        headerAxis.innerHTML = labelHTML;
     };
 
 
@@ -3650,6 +3800,7 @@ window.handleAuthClick = function() {
     let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
     let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
     let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
+    let isDone = statusStr.includes('완료') || statusStr.includes('done') || statusStr.includes('complete');
     
     let tsStart = rowStartTs; let tsEnd = rowPlanTs;
     if (!tsStart && !tsEnd) return `<div>-</div>`; 
@@ -3666,6 +3817,7 @@ window.handleAuthClick = function() {
     let gradVar = level === 0 ? 'var(--chart-l0)' : (level === 1 ? 'var(--chart-l1)' : (level === 2 ? 'var(--chart-l2)' : (level === 3 ? 'var(--chart-l3)' : 'var(--chart-l4)')));
     let gradientStyle = `background: ${gradVar};`;
     if (isCancel || isDrop) { gradientStyle = `background: #adb5bd;`; } 
+    let barOpacity = isDone ? 0.2 : 0.95; 
 
     let todayTs = new Date().setHours(0,0,0,0); let todayPct = ((todayTs - viewStartTs) / viewDuration) * 100;
     let labelFontSize = "var(--chart-label-size)";
@@ -3676,7 +3828,7 @@ window.handleAuthClick = function() {
     let labelHTML = '';
 
     if (isExpanded) {
-        // ── 확장 모드: 월단위 눈금 + 라벨 ──────────────────
+        // ── 확장 모드: 월단위 눈금만 표시 (월/년 라벨은 표 머릿글로 이동됨) ──
         const viewStart = new Date(viewStartTs);
         const viewEnd   = new Date(viewStartTs + viewDuration);
 
@@ -3685,35 +3837,15 @@ window.handleAuthClick = function() {
         while (cur <= viewEnd) {
             let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
             if (pct >= 0 && pct <= 101) {
-                // 눈금선
                 gridLines += `<div style="position:absolute; top:0; bottom:0; left:${pct}%; border-left:1px solid #adb5bd; z-index:1;"></div>`;
-                // 월 라벨
-                let mon = cur.getMonth() + 1;
-                let yr  = cur.getFullYear().toString().slice(2);
-                const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-                let lbl = `${months[cur.getMonth()]} '${yr}`;
-                let alignStyle = pct <= 0 ? `left:0; transform:translateX(0); padding-left:2px;` 
-                               : pct >= 100 ? `right:0; transform:translateX(0); padding-right:2px;` 
-                               : `left:${pct}%; transform:translateX(-50%);`;
-                labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; color:#495057;">${lbl}</span>`;
             }
-            // 다음 달로
             cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
         }
     } else {
-        // ── 기본 모드: 4분할 눈금 ───────────────────────────
-        for (let i = 1; i < 4; i++) {
-            let leftPct = (i / 4) * 100;
+        // ── 기본 모드: 8분할 눈금만 표시 (라벨은 표 머릿글로 이동됨) ──
+        for (let i = 1; i < 8; i++) {
+            let leftPct = (i / 8) * 100;
             gridLines += `<div style="position:absolute; top:0; bottom:0; left:${leftPct}%; border-left:1px dashed #dee2e6; z-index:1;"></div>`;
-        }
-        const labelPositions = [0, 25, 50, 75, 100];
-        for (let i = 0; i < 5; i++) {
-            let pct = labelPositions[i];
-            let ts  = viewStartTs + (viewDuration * pct / 100);
-            let alignStyle = i === 0 ? "left:0; transform:translateX(0); padding-left:2px;" 
-                           : i === 4 ? "right:0; transform:translateX(0); padding-right:2px;" 
-                           : `left:${pct}%; transform:translateX(-50%);`;
-            labelHTML += `<span class="chart-label" style="position:absolute; ${alignStyle} white-space:nowrap; z-index:5; font-size:${labelFontSize}; font-weight:${labelWeight}; overflow:hidden;">${formatChartLabel(ts)}</span>`;
         }
     }
 
@@ -3724,11 +3856,12 @@ window.handleAuthClick = function() {
     
     let durationDays = countWorkingDays(tsStart, tsEnd);
         
+    let dateRangeLabel = formatTsToYMD(tsStart) + " ~ " + formatTsToYMD(tsEnd);
+
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
-                <div class="chart-axis-wrapper" style="position:relative; height:12px; overflow:visible;">${labelHTML}</div>
-                <div style="position:relative; height:10px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:2px;">
+                <div style="position:relative; height:10px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
                     ${gridLines}${todayLine}
-                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:0.95; box-shadow:0 1px 3px rgba(0,0,0,0.2);"></div>
+                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:${barOpacity}; box-shadow:0 1px 3px rgba(0,0,0,0.2);" title="${dateRangeLabel}"></div>
                 </div>
             </div>`;
     };
@@ -4780,6 +4913,41 @@ window.insertMailTask = function() {
         .date-clickable { letter-spacing: -0.3px; font-weight: normal; }
     }
 
+    /* 💡 인쇄 전용 사본은 평소 화면에서는 항상 숨김 (인쇄할 때만 @media print에서 보이게 함) */
+    #gantt-print-area { display: none; }
+
+    @media print {
+        /* 💡 평소 화면의 표(원본)는 인쇄에서 완전히 숨기고, 인쇄 전용 사본만 보여줌 */
+        #table-container,
+        #gantt-history-box,
+        #dynamic-filters {
+            display: none !important;
+        }
+        #gantt-print-area {
+            display: block !important;
+        }
+
+        /* 💡 인쇄 전용 사본 표를 인쇄 용지 가로 폭에 정확히 맞춤 */
+        #gantt-print-area table {
+            width: 100% !important;
+            table-layout: fixed !important;
+            border-collapse: collapse !important;
+        }
+        #gantt-print-area th, #gantt-print-area td {
+            position: static !important;
+            left: auto !important;
+            top: auto !important;
+            box-shadow: none !important;
+        }
+
+        /* 💡 행 단위로 페이지를 자연스럽게 나누되, 한 행이 페이지 중간에서 잘리지 않게 보호 */
+        #gantt-print-area table { page-break-inside: auto !important; }
+        #gantt-print-area tr { page-break-inside: avoid !important; break-inside: avoid !important; }
+
+        /* 💡 thead가 매 페이지 위에 반복되도록 (표준 인쇄 동작) */
+        #gantt-print-area thead { display: table-header-group !important; }
+    }
+
    
 
     /* 💡 #table-info(상단 버튼줄)도 sticky라서, Gantt 표 헤더는 그 높이만큼 아래에서 고정 */
@@ -4794,6 +4962,14 @@ window.insertMailTask = function() {
     #myTable .sub-parent-row-3 td,
     #myTable .sub-parent-row-4 td { background: #ffffff !important; }
     #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
+
+    /* 💡 알람 행 색상이 지브라 줄무늬보다 항상 위에 오도록 동일 우선순위에서 더 뒤에 재선언 */
+    #myTable tbody tr.alarm-on td {
+        background-color: #e3f2fd !important;
+    }
+    #myTable tbody tr.alarm-on td:first-child {
+        box-shadow: inset 3px 0 0 0 #4285f4;
+    }
 
     /* 🖨️ 인쇄 모드 완전히 처음부터 다시 잡기 (화면 모드에는 영향 0%) */
     @media print {
@@ -4845,6 +5021,35 @@ window.insertMailTask = function() {
         /* 7️⃣ 기본 인쇄 용지 설정 (A4 세로, 표준 여백) */
         @page {
             margin: 15mm;
+        }
+
+        /* 8️⃣ [핵심] 평소 화면용 overflow:hidden/height:100% 제약이 인쇄 시 콘텐츠를
+            한 페이지 분량으로 잘라버리는 것을 방지 — 인쇄할 때만 이 제약을 완전히 풉니다 */
+        html, body {
+            height: auto !important;
+            overflow: visible !important;
+        }
+        body {
+            display: block !important;
+        }
+
+        /* 8️⃣ 표를 감싸는 스크롤 박스를 풀어서, 필터링된 행이 전부(스크롤 안 보이는 부분까지) 인쇄되게 함 */
+        #table-container,
+        #table-container > div {
+            overflow: visible !important;
+            max-height: none !important;
+            height: auto !important;
+        }
+
+        /* 9️⃣ 표를 인쇄 용지 가로 폭에 정확히 맞춤 (필터로 칸이 적어졌든 많든 항상 폭 100%) */
+        #myTable {
+            width: 100% !important;
+            table-layout: fixed !important;
+        }
+
+        /* 🔟 견적/변경이력 박스는 인쇄에서 제외 */
+        #gantt-history-box {
+            display: none !important;
         }
     }
     /* 행 액션 팝업 */
@@ -6426,16 +6631,84 @@ async function msCallGemini(apiKey, parsed) {
 </script>
 
 <style>
-    /* 1. 바깥 스크롤 제거 및 레이아웃 고정 */
-    html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; box-sizing: border-box !important; }
-    body { display: flex !important; flex-direction: column !important; padding: 15px 15px 0 15px !important; }
-    .controls, #table-info, hr, #dynamic-filters { flex-shrink: 0 !important; }
-    .container { margin-bottom: 15px !important; }
+    /* 1. 화면(스크린) 전용 설정 */
+    @media screen {
+        html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; box-sizing: border-box !important; }
+        body { display: flex !important; flex-direction: column !important; padding: 15px 15px 0 15px !important; }
+        .controls, #table-info, hr, #dynamic-filters { flex-shrink: 0 !important; }
+        .container { margin-bottom: 15px !important; }
+    }
 
-    /* 2. 차트는 고정셀 밑으로 가도록 Z-index 하향 */
+/* ✨ 2. 인쇄(프린트) 전용 설정 */
+    @media print {
+        /* 1. 폰트 크기 및 셀 여백 자동 축소 (인쇄할 때만 작아짐) */
+        :root {
+            --table-font-size: 10px !important;
+            --chart-label-size: 10px !important;
+            --date-font-size: 10px !important;
+            --detail-font-size: 10px !important;
+        }
+        
+        /* 혹시 변수가 안 먹힐 경우를 대비한 폰트 강제 축소 */
+        #gantt-print-area th, 
+        #gantt-print-area td, 
+        #gantt-print-area span, 
+        #gantt-print-area div {
+            font-size: 12px !important;
+            line-height: 1.1 !important;
+        }
+
+        /* 2. 인쇄 영역 이외 숨김 처리 */
+        body > :not(#gantt-print-area) {
+            display: none !important;
+        }
+        
+        #gantt-print-area {
+            display: block !important;
+            width: 100%;
+        }
+
+        /* 3. 여백 최소화 및 가로 모드 */
+        @page {
+            size: landscape; 
+            margin: 5mm !important; /* 여백을 5mm로 최소화 */
+        }
+
+        html, body {
+            display: block !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            overflow: visible !important;
+            background: #fff !important;
+        }
+
+        /* 4. [핵심] 브라우저의 표 강제 찌그러트림 방지 및 70% 자동 축소 */
+        #gantt-print-area table {
+            width: max-content !important; /* 억지로 좁히지 말고 내용물 너비만큼 무조건 유지 */
+            max-width: none !important;
+            table-layout: fixed !important; 
+            zoom: 0.7 !important; /* ✨ 인쇄 시 무조건 70% 배율로 자동 축소 */
+        }
+        
+        /* 5. 확장보기 시 전체 비율 강제 축소 */
+        #gantt-print-area table.chart-expanded {
+            zoom: 0.7 !important; /* ✨ 확장보기도 동일하게 70% 배율 적용 */
+        }
+
+        #gantt-print-area tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+        #gantt-print-area thead {
+            display: table-header-group !important;
+        }
+    }
+
+    /* 3. 차트는 고정셀 밑으로 가도록 Z-index 하향 */
     td.chart-td { position: relative !important; z-index: 1 !important; }
 
-    /* 3. 헤더(th)의 세로 선 제거 및 틈새 메우기 */
+    /* 4. 헤더(th)의 세로 선 제거 및 틈새 메우기 */
     th.sticky-col {
         border-right: none !important; 
         border-left: none !important;
