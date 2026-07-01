@@ -7658,18 +7658,29 @@ async function msCallGemini(apiKey, parsed) {
             if (!revFirstTs[l.rev] || ts < revFirstTs[l.rev]) revFirstTs[l.rev] = ts;
         });
 
-        // 마일스톤 날짜 → 가장 가까운 R
+        // 마일스톤 날짜 이전에 등록된 R 중 가장 늦은(최신) R
+        // → 해당 시점까지 존재한 견적 중 최신본 참조
         const closestRev = (rawDate) => {
             if (!rawDate) return null;
             const tgt = new Date(rawDate).getTime();
             if (isNaN(tgt)) return null;
-            let best = null, minD = Infinity;
+            // 1순위: 마일스톤 날짜 이전 R 중 등록일이 가장 늦은 것
+            let best = null, bestTs = -Infinity;
             ['R1','R2','R3','R4','R5'].forEach(r => {
                 const ts = revFirstTs[r];
                 if (!ts) return;
-                const d = Math.abs(tgt - ts);
-                if (d < minD) { minD = d; best = r; }
+                // 같은 날짜면 번호 큰 R 우선 (R5 > R4 > ... > R1)
+                const sameDay = bestTs !== -Infinity && Math.abs(ts - bestTs) < 86400000;
+                if (ts <= tgt && (ts > bestTs || (sameDay && r > best))) {
+                    bestTs = ts; best = r;
+                }
             });
+            // 2순위: 이전 R이 없으면(모두 미래) 가장 번호 큰(최신) R 폴백
+            if (!best) {
+                ['R5','R4','R3','R2','R1'].forEach(r => {
+                    if (!best && revFirstTs[r]) best = r;
+                });
+            }
             return best;
         };
 
@@ -7878,7 +7889,7 @@ async function msCallGemini(apiKey, parsed) {
                 const assignee = wrExtractAssignee(rawContent);
                 const contentStr = wrStripIssueLines(rawContent)
                     .split('\n').filter(line => !isAssigneeLine(line)).join('\n').trim();   // ← 추가: 담당자 줄 제외
-                const header = `▶ ${t.text}${assignee ? `  [${assignee}]` : ''}`;
+                const header = `✓ ${t.text}${assignee ? `  [${assignee}]` : ''}`;
                 return contentStr ? `${header}\n${contentStr}\n` : header;
             }).join('\n');
         };
@@ -7892,7 +7903,7 @@ async function msCallGemini(apiKey, parsed) {
         const sectionY = goalTableY + goalTableH + GAP, sectionH = 0.3;
         const bodyH = Math.max(1.75, maxLines * lineHeightIn + 0.16);   // 여유 패딩 포함, 최소 1.75 유지
         const sectTitleOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
-        const sectBodyOpt = { fontSize: 10, valign: 'top', color: '000000', align: 'left' };
+        const sectBodyOpt = { fontSize: 10, valign: 'top', color: '000000', align: 'left', fontFace: 'Malgun Gothic' };
 
         slide.addTable(
             [
