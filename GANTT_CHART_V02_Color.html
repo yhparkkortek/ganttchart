@@ -7502,8 +7502,8 @@ async function msCallGemini(apiKey, parsed) {
             s1.background = { color: 'FFFFFF' };
             addSlideHeader(s1);
 
-            const LX = 0.4,  LW = 7.4;   // 좌측 컬럼 (60%)
-            const RX = 8.0,  RW = 4.9;   // 우측 컬럼 (40%)
+            const LX = 0.4,  LW = 7.5;   // 좌측 컬럼 (gap 0.1"로 축소)
+            const RX = 8.0,  RW = 4.93;  // 우측 컬럼 (슬라이드 우측까지 채움)
             const CY    = 1.55;           // 컨텐츠 시작 Y
             const BOX_H = 7.3 - CY;      // 박스 높이 (하단 여백 0.2")
             const PAD   = 0.13;           // 박스 내부 패딩
@@ -7539,41 +7539,46 @@ async function msCallGemini(apiKey, parsed) {
             const imgY  = CY + 1.15, imgH = BOX_H - 1.15 - PAD;
             const MGAP  = 0.08;   // 이미지↔이미지, 이미지↔박스 여백
 
-            // 비율 유지 + 중앙 배치 헬퍼
-            const placeImg = (imgEntry, bx, by, bw, bh) => {
+            const IMGAP = 0.21;   // 이미지↔이미지 간격 (20px ≈ 0.21" @96dpi)
+            const IMARG = 0.10;   // 이미지↔박스 내부 여백
+
+            // 이미지 영역 테두리 박스
+            const iBoxX = LX + PAD, iBoxW = LW - PAD*2;
+            s1.addShape(pptx.ShapeType.rect, { x: iBoxX, y: imgY, w: iBoxW, h: imgH, fill: { color: 'F8F8F8' }, line: { color: 'CCCCCC', width: 0.75 } });
+
+            // 비율 유지 + 슬롯 중앙 배치 헬퍼
+            const fitSlot = (imgEntry, sx, sy, sw, sh) => {
                 const src = (typeof imgEntry === 'string') ? imgEntry : imgEntry.data;
-                const iw  = (imgEntry && imgEntry.w) ? imgEntry.w : null;
-                const ih  = (imgEntry && imgEntry.h) ? imgEntry.h : null;
-                // 할당 영역에서 MGAP 만큼 여백 적용
-                const ax = bx + MGAP, ay = by + MGAP, aw = bw - MGAP*2, ah = bh - MGAP*2;
+                const iw  = imgEntry && imgEntry.w ? imgEntry.w : null;
+                const ih  = imgEntry && imgEntry.h ? imgEntry.h : null;
+                const ax = sx + IMARG, ay = sy + IMARG, aw = sw - IMARG*2, ah = sh - IMARG*2;
                 if (iw && ih) {
-                    // 비율 계산 후 중앙 배치
-                    const scale = Math.min(aw / iw, ah / ih);
-                    const dw = iw * scale, dh = ih * scale;
-                    const ox = (aw - dw) / 2, oy = (ah - dh) / 2;
-                    s1.addImage({ data: src, x: ax + ox, y: ay + oy, w: dw, h: dh });
+                    const ratio  = iw / ih;
+                    const aRatio = aw / ah;
+                    let dw, dh;
+                    if (ratio > aRatio) { dw = aw; dh = aw / ratio; }
+                    else               { dh = ah; dw = ah * ratio; }
+                    s1.addImage({ data: src, x: ax + (aw-dw)/2, y: ay + (ah-dh)/2, w: dw, h: dh });
                 } else {
-                    // 크기 정보 없으면 contain 방식 폴백
                     s1.addImage({ data: src, x: ax, y: ay, w: aw, h: ah, sizing: { type: 'contain', w: aw, h: ah } });
                 }
             };
 
             if (imgs.length === 0) {
-                s1.addText('제품 사진\n(Summary 탭에서 등록)', { x: LX, y: imgY + imgH/2 - 0.3, w: LW, h: 0.6, fontSize: 10, color: 'AAAAAA', align: 'center' });
+                s1.addText('제품 사진\n(Summary 탭에서 등록)', { x: iBoxX, y: imgY + imgH/2 - 0.3, w: iBoxW, h: 0.6, fontSize: 10, color: 'AAAAAA', align: 'center' });
             } else if (imgs.length === 1) {
-                placeImg(imgs[0], LX, imgY, LW, imgH);
+                fitSlot(imgs[0], iBoxX, imgY, iBoxW, imgH);
             } else if (imgs.length === 2) {
-                const hw = (LW - MGAP) / 2;   // MGAP 1개: 두 이미지 사이
-                placeImg(imgs[0], LX,       imgY, hw, imgH);
-                placeImg(imgs[1], LX+hw+MGAP, imgY, hw, imgH);
+                const sw = (iBoxW - IMGAP) / 2;
+                fitSlot(imgs[0], iBoxX,          imgY, sw, imgH);
+                fitSlot(imgs[1], iBoxX+sw+IMGAP, imgY, sw, imgH);
             } else {
-                // 3장: 왼쪽 1장 크게, 오른쪽 2장 위아래
-                const bigW = (LW - MGAP) * 0.40;
-                const sdW  = LW - bigW - MGAP;
-                const sdH  = (imgH - MGAP) / 2;
-                placeImg(imgs[0], LX,            imgY,         bigW, imgH);
-                placeImg(imgs[1], LX+bigW+MGAP,  imgY,         sdW,  sdH);
-                placeImg(imgs[2], LX+bigW+MGAP,  imgY+sdH+MGAP, sdW, sdH);
+                const bigW = (iBoxW - IMGAP) * 0.40;
+                const sdW  = iBoxW - bigW - IMGAP;
+                const sdH  = (imgH - IMGAP) / 2;
+                fitSlot(imgs[0], iBoxX,            imgY,             bigW, imgH);
+                fitSlot(imgs[1], iBoxX+bigW+IMGAP, imgY,             sdW,  sdH);
+                fitSlot(imgs[2], iBoxX+bigW+IMGAP, imgY+sdH+IMGAP,   sdW,  sdH);
             }
 
             // ── 우측: 개발 Concept ────────────────────────────────────────
@@ -7619,7 +7624,7 @@ async function msCallGemini(apiKey, parsed) {
             rY += bgH + 0.15;
 
             // ── 우측: Key Point ───────────────────────────────────────────
-            const kpY = Math.min(Math.max(rY, CY + BOX_H - 0.6), 7.3 - 0.6);
+            const kpY = Math.min(Math.max(rY, CY + BOX_H - 0.6), 7.3 - 0.6) - 0.32;
             s1.addText('※  Key Point :', { x: RX+PAD, y: kpY, w: RW-PAD*2, h: 0.28, fontSize: 11, bold: true, color: '333333', ...rOpt });
             s1.addText('- 해당없음', { x: RX+PAD+0.08, y: kpY+0.3, w: RW-PAD*2-0.08, h: 0.25, fontSize: 9.5, color: '555555', ...rOpt });
         }
