@@ -3028,13 +3028,16 @@ window.deleteHistoryByDateRange = function() {
             ganttZebraIdx++;
             if (row._알림) trClass = trClass.replace('class="', 'class="alarm-on ');
             if (colIdx.status !== -1) {
-                const statusVal = (row[colIdx.status] || '').toString().trim();
-                const statusLow = statusVal.toLowerCase();
-                if (statusVal.includes('완료') || statusLow.includes('done') || statusLow.includes('complete')) {
+                const _rawSt = (row[colIdx.status] || '').toString().trim();
+                const _koMap = LANG['ko'].statusMap;
+                const _koKey = Object.keys(_koMap).find(k => k.toLowerCase() === _rawSt.toLowerCase());
+                // 항상 한글 기준값으로 정규화해서 판단 (드롭다운과 동일 기준)
+                const _normSt = (_koKey ? _koMap[_koKey] : _rawSt);
+                if (_normSt === '완료') {
                     trClass = trClass.replace('class="', 'class="status-done ');
-                } else if (statusVal.includes('보류') || statusVal.includes('지연') || statusLow.includes('hold') || statusLow.includes('delay')) {
+                } else if (_normSt === '지연' || _normSt === '보류') {
                     trClass = trClass.replace('class="', 'class="status-delay ');
-                } else if (statusVal.includes('대기') || statusLow.includes('pending')) {
+                } else if (_normSt === '대기') {
                     trClass = trClass.replace('class="', 'class="status-pending ');
                 }
             }
@@ -3104,8 +3107,10 @@ window.deleteHistoryByDateRange = function() {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
                             const statusRaw = (row[colIdx.status] !== undefined && row[colIdx.status] !== null) ? row[colIdx.status].toString().trim() : '';
                             const lang = LANG[window._currentLang||'ko'];
-                            // 엑셀 저장값(구버전 포함)을 현재 lang의 표시값으로 변환
-                            const statusVal = lang.statusMap[statusRaw] || statusRaw;
+                            // 대소문자 무시로 statusMap 조회 (엑셀 저장값이 소문자인 경우도 대응)
+                            const _smKeys = Object.keys(lang.statusMap);
+                            const _smMatch = _smKeys.find(k => k.toLowerCase() === statusRaw.toLowerCase());
+                            const statusVal = (_smMatch ? lang.statusMap[_smMatch] : null) || statusRaw;
                             const statusSelectHtml = `<select onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\"
                                 ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\"
                                 style=\"border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit; white-space:nowrap;
