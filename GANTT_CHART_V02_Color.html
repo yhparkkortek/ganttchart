@@ -130,10 +130,9 @@
     .controls { margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; transition: 0.3s; }
     #app-topbar.drag-over { outline: 3px dashed #fff; outline-offset: -3px; background-color: #3d7fc4 !important; }
     
-    .filter-group { margin-bottom: 10px; display: flex; align-items: center; flex-wrap: wrap; transition: 0.3s; }
     .filter-label { font-weight: bold; width: 60px; margin-right: 6px; background: #e9ecef; padding: 3px; text-align: center; border-radius: 4px; font-size: 11px; }
-    
-    .btn { padding: 3px 6px; margin: 2px; cursor: pointer; border: 1px solid #ccc; background-color: #fff; color: #333; border-radius: 12px; font-size: 11px; transition: 0.2s; }
+        
+    .btn { padding: 1px 4px; margin: 1px; cursor: pointer; border: 1px solid #ccc; background-color: #fff; color: #333; border-radius: 12px; font-size: 11px; transition: 0.2s; }
     .btn:hover { background-color: #e2e6ea; }
     .btn.active { background-color: #2c5f8a; color: white; border-color: #2c5f8a; font-weight: bold; box-shadow: 0 0 5px rgba(44,95,138,0.4); }
     .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
@@ -531,6 +530,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 
 /* 1. 마일스톤 입력창 텍스트 중앙 맞춤 (개발기간은 제외됨) */
 #sum-milestone-body .u-input, #sum-milestone-body-actual .u-input { text-align: center !important; }
+#sum-milestone-body .u-input { background: #f4f6f8 !important; }
+#sum-milestone-body-actual .u-input { background: #fff8e6 !important; }
 
 /* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
 .sum-tl-bubble.above::after, .sum-tl-bubble.below::after { border-color: transparent !important; border-width: 0 !important; }
@@ -744,8 +745,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     </tr>
                 </thead>
                 <tbody>
-                    <tr id="sum-milestone-body">
-                        <td style="font-weight:bold; background:#f4f6f8;">계획</td>
+                    <tr id="sum-milestone-body" style="background:#f4f6f8;">
+                        <td style="font-weight:bold;">계획</td>
                         <td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
@@ -4054,7 +4055,7 @@ window.handleAuthClick = function() {
                     btn.textContent = wbsLabels[val] || `Level ${val}`;
                 } else if (col.name === '개발단계') {
                     btn.title = val;
-                    let displayVal = val.length > 10 ? val.substring(0, 10) + "~" : val;
+                    let displayVal = val.length > 8 ? val.substring(0, 8) + "~" : val;
                     btn.textContent = displayVal;
                 } else if (col.name === '담당자') {
                     let countAll = assigneeModelsAll[val] ? assigneeModelsAll[val].size : 0; let countActive = assigneeModelsActive[val] ? assigneeModelsActive[val].size : 0;
@@ -5037,6 +5038,11 @@ window.insertMailTask = function() {
     #myTable .sub-parent-row-4 td { background: #ffffff !important; }
     #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
 
+    /* 💡 다중선택(Ctrl/Shift)이 지브라보다 항상 위에 오도록 재선언 */
+    #myTable tbody tr.multi-selected td {
+        background-color: #ffcccc !important;
+    }
+
     /* 💡 알람 행 색상이 지브라 줄무늬보다 항상 위에 오도록 동일 우선순위에서 더 뒤에 재선언 */
     #myTable tbody tr.alarm-on td {
         background-color: #e3f2fd !important;
@@ -5142,13 +5148,13 @@ window.insertMailTask = function() {
     #dynamic-filters {
         display: flex !important;
         flex-wrap: wrap !important;
-        gap: 10px 6px !important; /* 버튼들의 상하 간격 10px, 좌우 간격 6px 지정 */
+        gap: 4px 4px !important;
         align-items: center !important;
-        margin: 0 0 10px 0 !important;
+        margin: 0 0 6px 0 !important;
         background: #fff !important;
         border: 1px solid #e3e6ea !important;
         border-radius: 6px !important;
-        padding: 10px 15px !important;
+        padding: 6px 10px !important;
         box-sizing: border-box !important;
     }
 
