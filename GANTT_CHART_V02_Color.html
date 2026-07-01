@@ -636,6 +636,14 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .cal-day-popup-item:hover { border-color:#2c5f8a; }
 .cal-day-popup-item.cal-alarm-on { background:#fff3cd; border-color:#ffe08a; }
 
+/* 제품 사진 업로드 슬롯 */
+.prod-img-slot { position:relative; width:180px; min-height:140px; border:2px dashed #ccc; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; background:#fafafa; transition:border-color 0.2s; }
+.prod-img-slot:hover { border-color:#2c5f8a; }
+.prod-img-slot .prod-placeholder { color:#aaa; font-size:12px; text-align:center; padding:8px; pointer-events:none; }
+.prod-img-slot img.prod-preview { width:100%; height:140px; object-fit:contain; display:none; }
+.prod-img-slot .prod-del-btn { display:none; position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:11px; cursor:pointer; line-height:20px; text-align:center; padding:0; }
+.prod-img-slot .prod-del-btn:hover { background:rgba(200,0,0,0.8); }
+
 </style>
 </head>
 <body>
@@ -830,6 +838,29 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         <div class="concept-section">
             <h3>추진 배경 및 의의</h3>
             <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
+        </div>
+        <div class="concept-section" id="product-images-section">
+            <h3>제품 사진 <span style="font-size:11px;color:#999;font-weight:normal;">(최대 3장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
+            <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;">
+                <div class="prod-img-slot" id="prod-img-slot-0" title="클릭하여 사진 추가">
+                    <div class="prod-placeholder">📷<br>사진 1<br>클릭하여 추가</div>
+                    <img class="prod-preview" alt="제품사진1">
+                    <button class="prod-del-btn" title="삭제">✕</button>
+                    <input type="file" accept="image/*" style="display:none;">
+                </div>
+                <div class="prod-img-slot" id="prod-img-slot-1" title="클릭하여 사진 추가">
+                    <div class="prod-placeholder">📷<br>사진 2<br>클릭하여 추가</div>
+                    <img class="prod-preview" alt="제품사진2">
+                    <button class="prod-del-btn" title="삭제">✕</button>
+                    <input type="file" accept="image/*" style="display:none;">
+                </div>
+                <div class="prod-img-slot" id="prod-img-slot-2" title="클릭하여 사진 추가">
+                    <div class="prod-placeholder">📷<br>사진 3<br>클릭하여 추가</div>
+                    <img class="prod-preview" alt="제품사진3">
+                    <button class="prod-del-btn" title="삭제">✕</button>
+                    <input type="file" accept="image/*" style="display:none;">
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -7410,9 +7441,8 @@ async function msCallGemini(apiKey, parsed) {
         const pptx = new PptxGenJS();
         pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
         pptx.layout = 'WIDE';
-        const slide = pptx.addSlide();
-        slide.background = { color: 'FFFFFF' };
 
+        // ── 공통 상수 & 헬퍼 (슬라이드 1·2 공유) ──────────────────────────────
         const C = wrDeriveColors(window.wrPptBaseColor || '19C3D6');
         const SKY = C.base, SKY_DARK = C.dark;
         const BORDER = 'A6A6A6';
@@ -7422,46 +7452,149 @@ async function msCallGemini(apiKey, parsed) {
         const sectW  = (12.5 - GAP) / 2;
         const col2X  = 0.4 + sectW + GAP;
 
-        // ── 헤더: 프로젝트 타이틀 구성 (Summary 참조) ───────────────────────
         const metaCustomer = window.getSummaryCustomer();
-        const metaModel = window.getSummaryModel();
-        const metaInch = window.getSummaryInch();
-        const projTitle = [metaCustomer, metaModel, metaInch].filter(Boolean).join(' > ') || '주간 업무 보고';
-        slide.addText(projTitle, { x: 0.4, y: 0.2, w: 7.5, h: 0.55, fontSize: 25, bold: true, color: SKY, fontFace: 'Malgun Gothic' });
-
-        // ── 💡 우측 상단 H/W, 기구, F/W 담당자 표 (Summary 연동) ──
-        const pm = window.projectMeta || {};
-        const metaHw = pm.프로젝트담당자 || '-';
-        const metaMech = pm.기구담당자 || '-';
-        const metaFw = pm.FW담당자 || '-';
-
-        slide.addTable(
-            [[{ text: 'H/W(통합 PL)', options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } },
-              { text: '기구', options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } },
-              { text: 'F/W', options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } }],
-             [{ text: metaHw }, { text: metaMech }, { text: metaFw }]],
-            { x: 9.0, y: 0.15, w: 3.9, h: 0.6, fontSize: 10, align: 'center', valign: 'middle', border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.3, 1.3, 1.3] }
-        );
-
-        slide.addShape(pptx.ShapeType.rect, { x: 0.4, y: 0.85, w: 12.5, h: 0.04, fill: { color: SKY } });
-
-        // ── 💡 모델 정보 줄 (프로젝트 코드, 프로젝트명 추가) ────────
-        const pCode = pm.프로젝트코드 || '-';
-        const pName = pm.프로젝트명 || projTitle;
+        const metaModel    = window.getSummaryModel();
+        const metaInch     = window.getSummaryInch();
+        const projTitle    = [metaCustomer, metaModel, metaInch].filter(Boolean).join(' > ') || '주간 업무 보고';
+        const pm           = window.projectMeta || {};
+        const metaHw       = pm.프로젝트담당자 || '-';
+        const metaMech     = pm.기구담당자 || '-';
+        const metaFw       = pm.FW담당자 || '-';
+        const pCode        = pm.프로젝트코드 || '-';
+        const pName        = pm.프로젝트명 || projTitle;
         const ktkModelName = pm.KTK모델명 || '-';
 
-        slide.addTable(
-            [[{ text: pCode, options: { fontSize: 14, color: '000000', bold: true, fill: { color: '#FFFAF0' }, align: 'center' } },
-              { text: pName, options: { fontSize: 14, color: '000000', bold: true, align: 'left' } },
-              { text: ktkModelName, options: { fontSize: 14, color: '000000', bold: true, align: 'left' } }]],
-            { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.5, 5, 6], valign: 'middle' }
-        );
-        // ── 💡 좌: 개발목표 일정 및 MC (Summary/MC 탭 연동) ──────
+        // getMsDate: "2026-05-29" → "26.05.29" (슬라이드 1·2 공통 사용)
         const getMsDate = (stage) => {
-            // HTML 화면 상의 마일스톤 입력칸에서 값을 읽어옵니다. (예: 2026-05-29 -> 26.05.29)
             const el = document.querySelector(`#sum-milestone-body input[data-stage="${stage}"]`);
-            return el && el.value ? el.value.substring(2).replace(/-/g, '.') : '-'; 
+            return el && el.value ? el.value.substring(2).replace(/-/g, '.') : '-';
         };
+        const getMsDateRaw = (stage) => {
+            const el = document.querySelector(`#sum-milestone-body input[data-stage="${stage}"]`);
+            return el ? el.value : '';
+        };
+
+        // 슬라이드 공통 헤더 (타이틀 + 담당자 표 + 구분선 + 모델 정보 행)
+        const addSlideHeader = (sl) => {
+            sl.addText(projTitle, { x: 0.4, y: 0.2, w: 7.5, h: 0.55, fontSize: 25, bold: true, color: SKY, fontFace: 'Malgun Gothic' });
+            sl.addTable(
+                [[{ text: 'H/W(통합 PL)', options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } },
+                  { text: '기구',         options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } },
+                  { text: 'F/W',          options: { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS-2, align: 'center' } }],
+                 [{ text: metaHw }, { text: metaMech }, { text: metaFw }]],
+                { x: 9.0, y: 0.15, w: 3.9, h: 0.6, fontSize: 10, align: 'center', valign: 'middle',
+                  border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.3, 1.3, 1.3] }
+            );
+            sl.addShape(pptx.ShapeType.rect, { x: 0.4, y: 0.85, w: 12.5, h: 0.04, fill: { color: SKY } });
+            sl.addTable(
+                [[{ text: pCode,        options: { fontSize: 14, color: '000000', bold: true, fill: { color: '#FFFAF0' }, align: 'center' } },
+                  { text: pName,        options: { fontSize: 14, color: '000000', bold: true, align: 'left' } },
+                  { text: ktkModelName, options: { fontSize: 14, color: '000000', bold: true, align: 'left' } }]],
+                { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.5, 5, 6], valign: 'middle' }
+            );
+        };
+
+        // ════════════════════════════════════════════════════════════════════
+        // 슬라이드 1 : 프로젝트 개요
+        // ════════════════════════════════════════════════════════════════════
+        {
+            const s1 = pptx.addSlide();
+            s1.background = { color: 'FFFFFF' };
+            addSlideHeader(s1);
+
+            const LX = 0.4, LW = 5.6;    // 좌측 컬럼
+            const RX = 6.2, RW = 6.73;   // 우측 컬럼
+            const CY = 1.55;              // 컨텐츠 시작 Y
+
+            // ── 과제개요 텍스트 ───────────────────────────────────────────
+            const gradeChar = (pCode || '').replace(/\s/g, '').slice(-1).toUpperCase();
+            const gradeStr  = ({ A:'A등급', B:'B등급', C:'C등급', D:'D등급', E:'E등급' }[gradeChar]) || gradeChar || '-';
+
+            const startFmt = getMsDate('기획Start'), praFmt = getMsDate('PRA');
+            const startRaw = getMsDateRaw('기획Start'), praRaw = getMsDateRaw('PRA');
+            let devMonths = '-';
+            if (startRaw && praRaw) {
+                const a = new Date(startRaw), b = new Date(praRaw);
+                if (!isNaN(a) && !isNaN(b)) { const m = (b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth(); if (m>0) devMonths=m; }
+            }
+            const memberKeys = ['기구담당자','HW담당자','FW담당자','Module담당자','TSP담당자','LCM담당자','Slimming담당자','Cutting담당자','Tooling담당자'];
+            const extraCount = memberKeys.filter(k => pm[k] && String(pm[k]).trim()).length;
+            const devDtStr   = (startFmt !== '-' && praFmt !== '-') ? `${startFmt} ~ ${praFmt} (개발기간 ${devMonths}월)` : '-';
+
+            s1.addText(
+                `✓ 과제개요 : ${pm.프로젝트명 || projTitle}\n` +
+                `✓ 과제구분 : 프로젝트코드 ${pCode} / ${gradeStr}\n` +
+                `✓ 개발일정 : ${devDtStr}\n` +
+                `✓ 투입자원 : ${metaHw} 외 ${extraCount}명  (개발비용 : T.B.D)`,
+                { x: LX, y: CY, w: LW, h: 1.0, fontSize: 9.5, color: '333333', fontFace: 'Malgun Gothic', valign: 'top', lineSpacingMultiple: 1.35 }
+            );
+
+            // ── 제품 사진 ────────────────────────────────────────────────
+            const imgs      = ((window.tabData || {}).productImages || []).filter(Boolean);
+            const imgY      = CY + 1.1, imgH = 4.6;
+            if (imgs.length === 0) {
+                s1.addShape(pptx.ShapeType.rect, { x: LX, y: imgY, w: LW, h: imgH, fill: { color: 'F5F5F5' }, line: { color: 'CCCCCC', width: 1 } });
+                s1.addText('제품 사진\n(Summary 탭에서 등록)', { x: LX, y: imgY + imgH/2 - 0.3, w: LW, h: 0.6, fontSize: 10, color: 'AAAAAA', align: 'center' });
+            } else if (imgs.length === 1) {
+                s1.addImage({ data: imgs[0], x: LX, y: imgY, w: LW, h: imgH, sizing: { type: 'contain', w: LW, h: imgH } });
+            } else if (imgs.length === 2) {
+                const hw = (LW - 0.07) / 2;
+                s1.addImage({ data: imgs[0], x: LX,           y: imgY, w: hw, h: imgH, sizing: { type: 'contain', w: hw, h: imgH } });
+                s1.addImage({ data: imgs[1], x: LX+hw+0.07,   y: imgY, w: hw, h: imgH, sizing: { type: 'contain', w: hw, h: imgH } });
+            } else {
+                const bigW = LW * 0.38, sdW = LW - bigW - 0.07, sdH = (imgH - 0.07) / 2;
+                s1.addImage({ data: imgs[0], x: LX,           y: imgY,           w: bigW, h: imgH, sizing: { type: 'contain', w: bigW, h: imgH } });
+                s1.addImage({ data: imgs[1], x: LX+bigW+0.07, y: imgY,           w: sdW,  h: sdH,  sizing: { type: 'contain', w: sdW,  h: sdH  } });
+                s1.addImage({ data: imgs[2], x: LX+bigW+0.07, y: imgY+sdH+0.07,  w: sdW,  h: sdH,  sizing: { type: 'contain', w: sdW,  h: sdH  } });
+            }
+
+            // ── 우측: 개발 Concept ────────────────────────────────────────
+            const bsRows   = ((window.tabData || {}).briefSpec || []);
+            const getBsVal = (kw) => { const r = bsRows.find(r => r.type && r.type.toLowerCase().replace(/\s/g,'').includes(kw.toLowerCase().replace(/\s/g,''))); return r ? (r.modelA||r.modelB||r.modelC||'') : ''; };
+            const rOpt = { fontFace: 'Malgun Gothic', valign: 'top' };
+            let rY = CY;
+
+            s1.addText('❖  개발  Concept', { x: RX, y: rY, w: RW, h: 0.3, fontSize: 11, bold: true, color: '333333', ...rOpt });
+            rY += 0.3;
+            s1.addText(
+                `- ${metaCustomer||'고객명'} _ ${pm.고객모델명||pm.모델명||'고객 모델명'}\n` +
+                `- ${metaInch||'XX'}" _ ${getBsVal('resolution')||getBsVal('nativeresolution')||'해상도'}\n` +
+                `- Brightness : ${getBsVal('luminance')||getBsVal('brightness')||''}`,
+                { x: RX+0.1, y: rY, w: RW-0.1, h: 0.72, fontSize: 9.5, color: '555555', ...rOpt, lineSpacingMultiple: 1.35 }
+            );
+            rY += 0.78;
+
+            // ── 우측: 제품 SPEC (Brief SPEC 전 행) ───────────────────────
+            s1.addText('❖  제품  SPEC', { x: RX, y: rY, w: RW, h: 0.3, fontSize: 11, bold: true, color: '333333', ...rOpt });
+            rY += 0.3;
+            const specRows = bsRows.filter(r => r.type && (r.modelA||r.modelB||r.modelC));
+            const specTxt  = specRows.length > 0
+                ? specRows.map(r => `- ${r.type}${r.sub?' ('+r.sub+')':''} : ${r.modelA||r.modelB||r.modelC||''}`).join('\n')
+                : '(Brief SPEC 탭에서 입력)';
+            const specH    = Math.max(0.5, specRows.length * 0.175 + 0.12);
+            s1.addText(specTxt, { x: RX+0.1, y: rY, w: RW-0.1, h: specH, fontSize: 9.5, color: '555555', ...rOpt, lineSpacingMultiple: 1.3 });
+            rY += specH + 0.12;
+
+            // ── 우측: 제품 특징 ───────────────────────────────────────────
+            s1.addText('❖  제품  특징', { x: RX, y: rY, w: RW, h: 0.28, fontSize: 11, bold: true, color: '333333', ...rOpt });
+            rY += 0.28;
+            const bgTxt = ((window.tabData||{}).summary||{}).background || '(추진 배경 및 의의)';
+            s1.addText(`  추진 배경 및 의의\n${bgTxt}`, { x: RX+0.1, y: rY, w: RW-0.1, h: 1.0, fontSize: 9.5, color: '555555', ...rOpt, lineSpacingMultiple: 1.3 });
+            rY += 1.1;
+
+            // ── 우측: Key Point (공란) ─────────────────────────────────
+            const kpY = Math.max(rY, 6.55);
+            s1.addText('※  Key Point :', { x: RX, y: kpY, w: RW, h: 0.28, fontSize: 11, bold: true, color: '333333', ...rOpt });
+        }
+
+        // ════════════════════════════════════════════════════════════════════
+        // 슬라이드 2 : 주간 업무 보고 (기존 코드)
+        // ════════════════════════════════════════════════════════════════════
+        const slide = pptx.addSlide();
+        slide.background = { color: 'FFFFFF' };
+        addSlideHeader(slide);
+        // ── 💡 좌: 개발목표 일정 및 MC (Summary/MC 탭 연동) ──────
+        // getMsDate / getMsDateRaw는 상단 공통 상수 블록에서 이미 정의됨
         const startDt = getMsDate('기획Start');
         const protoDrDt = getMsDate('ProtoDR');
         const dvrDt = getMsDate('DVR');
@@ -8206,6 +8339,21 @@ window.populateTabData = function() {
             if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
             if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
         }
+    }
+
+    // 💡 제품 사진 복원
+    if (td.productImages) {
+        td.productImages.forEach(function(b64, i) {
+            if (!b64) return;
+            const slot = document.getElementById('prod-img-slot-' + i);
+            if (!slot) return;
+            const img = slot.querySelector('img.prod-preview');
+            const ph  = slot.querySelector('.prod-placeholder');
+            const del = slot.querySelector('.prod-del-btn');
+            if (img) { img.src = b64; img.style.display = 'block'; }
+            if (ph)  ph.style.display = 'none';
+            if (del) del.style.display = 'block';
+        });
     }
     
     // 💰 M.C Table 탭 렌더링 (현재 활성 리비전 데이터를 표시)
@@ -9400,9 +9548,72 @@ window.mcRenderComparisonTable = function() {
     });
 };
 
+// 💡 제품 사진 업로드 슬롯 초기화
+window.initProductImageSlots = function() {
+    [0, 1, 2].forEach(function(i) {
+        const slot = document.getElementById('prod-img-slot-' + i);
+        if (!slot) return;
+        const fileInput = slot.querySelector('input[type="file"]');
+        const img  = slot.querySelector('img.prod-preview');
+        const ph   = slot.querySelector('.prod-placeholder');
+        const del  = slot.querySelector('.prod-del-btn');
+
+        // 슬롯 클릭 → 파일 선택 (삭제 버튼 클릭은 제외)
+        slot.addEventListener('click', function(e) {
+            if (e.target === del) return;
+            fileInput.click();
+        });
+
+        // 파일 선택 → JPEG 압축 → 저장
+        fileInput.addEventListener('change', function() {
+            const file = fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                const tempImg = new Image();
+                tempImg.onload = function() {
+                    const MAX = 1000;
+                    let w = tempImg.width, h = tempImg.height;
+                    if (w > MAX || h > MAX) {
+                        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+                        else        { w = Math.round(w * MAX / h); h = MAX; }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+                    const b64 = canvas.toDataURL('image/jpeg', 0.80);
+                    // tabData에 저장
+                    window.tabData = window.tabData || {};
+                    window.tabData.productImages = window.tabData.productImages || [null, null, null];
+                    window.tabData.productImages[i] = b64;
+                    // 미리보기 갱신
+                    img.src = b64; img.style.display = 'block';
+                    ph.style.display = 'none';
+                    del.style.display = 'block';
+                };
+                tempImg.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+            fileInput.value = ''; // 같은 파일 재선택 허용
+        });
+
+        // 삭제 버튼
+        del.addEventListener('click', function(e) {
+            e.stopPropagation();
+            window.tabData = window.tabData || {};
+            window.tabData.productImages = window.tabData.productImages || [null, null, null];
+            window.tabData.productImages[i] = null;
+            img.src = ''; img.style.display = 'none';
+            ph.style.display = '';
+            del.style.display = 'none';
+        });
+    });
+};
+
 document.addEventListener('DOMContentLoaded', function() {
     if (window.populateTabData) window.populateTabData();
     if (window.bmSetupAllRows) { window.bmSetupAllRows('bs'); window.bmSetupAllRows('mc'); }
+    if (window.initProductImageSlots) window.initProductImageSlots();
     // 💡 저장된 펼치기 상태에 맞춰 버튼 텍스트 동기화
     ['bs', 'mc'].forEach(function(key) {
         const btn = document.getElementById(key + '-toggle-hidden-btn');
