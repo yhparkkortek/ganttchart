@@ -7619,9 +7619,10 @@ async function msCallGemini(apiKey, parsed) {
             rY += bgH + 0.15;
 
             // ── 우측: Key Point ───────────────────────────────────────────
+            const kpY = Math.min(Math.max(rY, CY + BOX_H - 0.6), 7.3 - 0.6);
+            s1.addText('※  Key Point :', { x: RX+PAD, y: kpY, w: RW-PAD*2, h: 0.28, fontSize: 11, bold: true, color: '333333', ...rOpt });
             s1.addText('- 해당없음', { x: RX+PAD+0.08, y: kpY+0.3, w: RW-PAD*2-0.08, h: 0.25, fontSize: 9.5, color: '555555', ...rOpt });
         }
-
         // ════════════════════════════════════════════════════════════════════
         // 슬라이드 2 : 주간 업무 보고 (기존 코드)
         // ════════════════════════════════════════════════════════════════════
