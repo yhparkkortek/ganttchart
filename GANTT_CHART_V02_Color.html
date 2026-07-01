@@ -9502,8 +9502,24 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
         const row = globalData[ev.idx];
         const sMap = (typeof LANG !== 'undefined' && window._currentLang && LANG[window._currentLang]) ? LANG[window._currentLang].statusMap : null;
         const statusLabel = (sMap && sMap[ev.status]) || ev.status || '-';
-        const contentText = (colIdx.content !== -1 && row[colIdx.content]) ? row[colIdx.content].toString().trim().replace(/\n/g, ' · \n') : '';
-        const answerText  = (colIdx.answer  !== -1 && row[colIdx.answer])  ? row[colIdx.answer].toString().trim().replace(/\n/g, ' · \n')  : '';
+        
+        // ✅ [수정된 부분] \r 제거, 다중 줄바꿈 압축, 다중 공백 압축을 먼저 수행한 뒤 기존 로직 처리
+        const contentText = (colIdx.content !== -1 && row[colIdx.content]) 
+            ? row[colIdx.content].toString().trim()
+                .replace(/\r/g, '')
+                .replace(/(\n[ \t]*){2,}/g, '\n')
+                .replace(/ {2,}/g, ' ')
+                .replace(/\n/g, ' · \n') 
+            : '';
+            
+        const answerText  = (colIdx.answer  !== -1 && row[colIdx.answer])  
+            ? row[colIdx.answer].toString().trim()
+                .replace(/\r/g, '')
+                .replace(/(\n[ \t]*){2,}/g, '\n')
+                .replace(/ {2,}/g, ' ')
+                .replace(/\n/g, ' · \n')  
+            : '';
+
         title.textContent = '📋 ' + ev.name;
         body.innerHTML =
             '<div style="margin-bottom:10px;">'
