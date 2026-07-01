@@ -854,13 +854,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
                     <button class="prod-del-btn" title="삭제">✕</button>
                     <input type="file" accept="image/*" style="display:none;">
                 </div>
-                <div class="prod-img-slot" id="prod-img-slot-2" title="클릭하여 사진 추가">
-                    <div class="prod-placeholder">📷<br>사진 3<br>클릭하여 추가</div>
-                    <img class="prod-preview" alt="제품사진3">
-                    <button class="prod-del-btn" title="삭제">✕</button>
-                    <input type="file" accept="image/*" style="display:none;">
-                </div>
-            </div>
+             </div>
         </div>
     </div>
 </div>
@@ -7465,6 +7459,10 @@ async function msCallGemini(apiKey, parsed) {
         const ktkModelName = pm.KTK모델명 || '-';
 
         // getMsDate: "2026-05-29" → "26.05.29" (슬라이드 1·2 공통 사용)
+        // ── 💡 이미지 간격/여백 — 여기서 자유롭게 조절 ─────────────────
+        const IMG_GAP  = 0.05;   // 이미지↔이미지 사이 간격 (인치, 0.05 ≈ 5px)
+        const IMG_MARG = 0.08;   // 이미지↔박스 내부 여백 (인치)
+
         const getMsDate = (stage) => {
             const el = document.querySelector(`#sum-milestone-body input[data-stage="${stage}"]`);
             return el && el.value ? el.value.substring(2).replace(/-/g, '.') : '-';
@@ -7539,8 +7537,8 @@ async function msCallGemini(apiKey, parsed) {
             const imgY  = CY + 1.15, imgH = BOX_H - 1.15 - PAD;
             const MGAP  = 0.08;   // 이미지↔이미지, 이미지↔박스 여백
 
-            const IMGAP = 0.10;   // 이미지↔이미지 간격 (10px ≈ 0.10" @96dpi)
-            const IMARG = 0.10;   // 이미지↔박스 내부 여백
+            const IMGAP = IMG_GAP;    // 상단 공통 상수 참조
+            const IMARG = IMG_MARG;   // 상단 공통 상수 참조
 
             // 이미지 영역 테두리 박스
             const iBoxX = LX + PAD, iBoxW = LW - PAD*2;
@@ -7568,17 +7566,12 @@ async function msCallGemini(apiKey, parsed) {
                 s1.addText('제품 사진\n(Summary 탭에서 등록)', { x: iBoxX, y: imgY + imgH/2 - 0.3, w: iBoxW, h: 0.6, fontSize: 10, color: 'AAAAAA', align: 'center' });
             } else if (imgs.length === 1) {
                 fitSlot(imgs[0], iBoxX, imgY, iBoxW, imgH);
-            } else if (imgs.length === 2) {
-                const sw = (iBoxW - IMGAP) / 2;
-                fitSlot(imgs[0], iBoxX,          imgY, sw, imgH);
-                fitSlot(imgs[1], iBoxX+sw+IMGAP, imgY, sw, imgH);
             } else {
-                const bigW = (iBoxW - IMGAP) * 0.40;
-                const sdW  = iBoxW - bigW - IMGAP;
-                const sdH  = (imgH - IMGAP) / 2;
-                fitSlot(imgs[0], iBoxX,            imgY,             bigW, imgH);
-                fitSlot(imgs[1], iBoxX+bigW+IMGAP, imgY,             sdW,  sdH);
-                fitSlot(imgs[2], iBoxX+bigW+IMGAP, imgY+sdH+IMGAP,   sdW,  sdH);
+                // 2장: 왼쪽 33% / 오른쪽 67%
+                const sw1 = (iBoxW - IMGAP) * 0.33;
+                const sw2 = iBoxW - sw1 - IMGAP;
+                fitSlot(imgs[0], iBoxX,          imgY, sw1, imgH);
+                fitSlot(imgs[1], iBoxX+sw1+IMGAP, imgY, sw2, imgH);
             }
 
             // ── 우측: 개발 Concept ────────────────────────────────────────
@@ -9664,7 +9657,7 @@ window.mcRenderComparisonTable = function() {
 
 // 💡 제품 사진 업로드 슬롯 초기화
 window.initProductImageSlots = function() {
-    [0, 1, 2].forEach(function(i) {
+    [0, 1].forEach(function(i) {
         const slot = document.getElementById('prod-img-slot-' + i);
         if (!slot) return;
         const fileInput = slot.querySelector('input[type="file"]');
