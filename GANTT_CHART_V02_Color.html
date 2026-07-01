@@ -3102,13 +3102,16 @@ window.deleteHistoryByDateRange = function() {
                         }
                         if (colIdx.status !== -1) {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
-                            const statusVal = (row[colIdx.status] !== undefined && row[colIdx.status] !== null) ? row[colIdx.status].toString().trim() : '';
-                            const statusSelectHtml = `<select onchange="window.updateStatus(this, ${i}, ${colIdx.status})"
-                                ondblclick="window.setStatusDone(this, ${i}, ${colIdx.status})"
-                                style="border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit; white-space:nowrap;
-                                       -webkit-appearance:none; -moz-appearance:none; appearance:none;">
-                                ${(LANG[window._currentLang||'ko'].status).map(s =>
-                                    `<option value="${s}" ${statusVal===s?'selected':''}>${s}</option>`
+                            const statusRaw = (row[colIdx.status] !== undefined && row[colIdx.status] !== null) ? row[colIdx.status].toString().trim() : '';
+                            const lang = LANG[window._currentLang||'ko'];
+                            // 엑셀 저장값(구버전 포함)을 현재 lang의 표시값으로 변환
+                            const statusVal = lang.statusMap[statusRaw] || statusRaw;
+                            const statusSelectHtml = `<select onchange=\"window.updateStatus(this, ${i}, ${colIdx.status})\"
+                                ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\"
+                                style=\"border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit; white-space:nowrap;
+                                       -webkit-appearance:none; -moz-appearance:none; appearance:none;\">
+                                ${lang.status.map(s =>
+                                    `<option value=\"${s}\" ${statusVal===s?'selected':''}>${s}</option>`
                                 ).join('')}
                             </select>`;
                             bodyHtml += `<td class="status-td" data-raw="${encodeURIComponent(statusVal)}" style="text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};">${statusSelectHtml}</td>`;
