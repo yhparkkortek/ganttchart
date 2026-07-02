@@ -816,7 +816,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div>
 
 <!-- 알람 상세 모달 -->
-<div id="alarm-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000;" onclick="window.closeAlarmModal()"></div>
+<div id="alarm-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000;"></div>
 <div id="alarm-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
   width:520px; max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   z-index:9001; padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
@@ -829,12 +829,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <button id="alarm-modal-send-btn" class="action-btn"
       style="border-color:#2c5f8a; color:#2c5f8a;"
       onclick="window.sendSingleAlarm(false)">📧 즉시 발송</button>
-    <button id="alarm-modal-send-all-btn" class="action-btn"
-      style="border-color:#6f42c1; color:#6f42c1;"
-      onclick="window.sendSingleAlarm(true)" title="프로젝트 전체 멤버에게 발송">📧 ALL 발송</button>
-    <button class="action-btn"
-      style="border-color:#e67e22; color:#e67e22;"
-      onclick="window.resetAlarmHistory()">🔄 이력 초기화</button>
     <button onclick="window.closeAlarmModal()"
       style="padding:6px 16px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; cursor:pointer; font-size:12.5px;">닫기</button>
   </div>
