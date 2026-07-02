@@ -674,10 +674,122 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
         <div class="sb-item active" data-tab="gantt" onclick="window.switchTab('gantt')"><span class="sb-ico">📊</span><span class="sb-label">Gantt chart</span></div>
         <div class="sb-item" data-tab="calendar" onclick="window.switchTab('calendar')"><span class="sb-ico">📅</span><span class="sb-label">Calendar</span></div>
         <div class="sb-item" data-tab="weekly" onclick="window.switchTab('weekly')"><span class="sb-ico">📨</span><span class="sb-label">Weekly Report</span></div>
+        <div class="sb-item" data-tab="alarm" onclick="window.switchTab('alarm')"><span class="sb-ico">🔔</span><span class="sb-label">Alarm</span></div>
     </div>
 </div>
 
 <div id="app-main">
+
+<!-- ══════════════════════════════════════════════
+     Alarm 탭 패널
+     ══════════════════════════════════════════════ -->
+<div id="tab-alarm" class="tab-panel">
+  <div class="concept-tab-wrap" style="max-width:1200px; padding:22px 26px;">
+    <div class="concept-header-box">
+      <h2>🔔 알람 관리</h2>
+      <span id="alarm-server-status" style="margin-left:14px; font-size:12px; color:#999;">확인 중...</span>
+      <div class="btn-group">
+        <button class="action-btn" onclick="window.openAlarmSettings()" style="border-color:#555; color:#555;" title="SMTP·자동발송·참조인 설정">⚙️ 설정</button>
+        <button class="action-btn" onclick="window.renderAlarmTab()" style="border-color:#2c5f8a; color:#2c5f8a;">🔄 새로고침</button>
+        <button class="action-btn" id="alarm-send-all-btn"
+          onclick="window.sendAllPendingAlarms()"
+          style="border-color:#e67e22; color:#e67e22;"
+          title="과거 미발송분 포함 전체 발송">📧 미발송 일괄 발송</button>
+      </div>
+    </div>
+
+    <!-- 알람 목록 테이블 -->
+    <div class="concept-section" style="padding:0; overflow:hidden;">
+      <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <thead>
+          <tr style="background:#f4f6f8;">
+            <th style="padding:10px 12px; text-align:left; width:28%;">업무명</th>
+            <th style="padding:10px 12px; text-align:center; width:10%;">담당자</th>
+            <th style="padding:10px 12px; text-align:left; width:18%;">담당자 이메일</th>
+            <th style="padding:10px 12px; text-align:center; width:10%;">완료 예정일</th>
+            <th style="padding:10px 12px; text-align:center; width:8%;">D-Day</th>
+            <th style="padding:10px 12px; text-align:center; width:13%;">발송 상태</th>
+            <th style="padding:10px 12px; text-align:center; width:13%;">마지막 발송</th>
+          </tr>
+        </thead>
+        <tbody id="alarm-table-body">
+          <tr><td colspan="7" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ── 알람 설정 모달 ── -->
+<div id="alarm-settings-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9100;" onclick="window.closeAlarmSettings()"></div>
+<div id="alarm-settings-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:480px; max-width:94vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+  z-index:9101; padding:26px 28px 20px; font-family:'맑은 고딕',sans-serif;">
+
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+    <h3 style="margin:0; font-size:15px; color:#2c5f8a;">⚙️ 알람 설정</h3>
+    <button onclick="window.closeAlarmSettings()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+  </div>
+
+  <!-- 자동 발송 ON/OFF -->
+  <div style="background:#f8f9fa; border-radius:6px; padding:12px 14px; margin-bottom:14px;">
+    <div style="display:flex; align-items:center; justify-content:space-between;">
+      <span style="font-size:13px; font-weight:bold; color:#333;">자동 메일 발송</span>
+      <div style="display:flex; gap:6px;">
+        <button id="alarm-auto-on-btn"  onclick="window.setAlarmAuto(true)"
+          style="padding:4px 14px; border-radius:4px; border:2px solid #27ae60; cursor:pointer; font-size:12.5px;">ON</button>
+        <button id="alarm-auto-off-btn" onclick="window.setAlarmAuto(false)"
+          style="padding:4px 14px; border-radius:4px; border:2px solid #ccc; cursor:pointer; font-size:12.5px;">OFF</button>
+      </div>
+    </div>
+    <p style="margin:6px 0 0; font-size:11.5px; color:#888;">ON: 앱 시작 시 D-7/3/1 자동 체크 발송 &nbsp;|&nbsp; OFF: 수동 발송만 허용</p>
+  </div>
+
+  <!-- SMTP 설정 -->
+  <div style="background:#f8f9fa; border-radius:6px; padding:12px 14px; margin-bottom:14px;">
+    <p style="margin:0 0 10px; font-size:13px; font-weight:bold; color:#333;">📮 SMTP 설정</p>
+    <div style="display:grid; grid-template-columns:90px 1fr; gap:7px 10px; align-items:center; font-size:12.5px;">
+      <label>서버 주소</label><input id="as-smtp-host" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
+      <label>포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="587">
+      <label>계정</label><input id="as-smtp-user" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="user@kortek.co.kr">
+      <label>비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
+    </div>
+    <button onclick="window.saveSmtpConfig()" style="margin-top:10px; padding:5px 14px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12.5px;">💾 서버에 저장 (즉시 적용)</button>
+    <span id="as-smtp-save-msg" style="font-size:11.5px; color:#27ae60; margin-left:8px;"></span>
+  </div>
+
+  <!-- CC 참조인 -->
+  <div style="background:#f8f9fa; border-radius:6px; padding:12px 14px; margin-bottom:18px;">
+    <p style="margin:0 0 10px; font-size:13px; font-weight:bold; color:#333;">👥 CC 참조인 <span style="font-weight:normal; font-size:11.5px; color:#888;">(프로젝트별 저장)</span></p>
+    <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+    <button onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 참조인 추가</button>
+  </div>
+
+  <div style="display:flex; justify-content:flex-end; gap:8px;">
+    <button onclick="window.saveAlarmSettings()" style="padding:6px 18px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">저장</button>
+    <button onclick="window.closeAlarmSettings()" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">닫기</button>
+  </div>
+</div>
+
+<!-- 알람 상세 모달 -->
+<div id="alarm-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000;" onclick="window.closeAlarmModal()"></div>
+<div id="alarm-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:520px; max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+  z-index:9001; padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+    <h3 id="alarm-modal-title" style="margin:0; font-size:15px; color:#2c5f8a;">알람 상세</h3>
+    <button onclick="window.closeAlarmModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+  </div>
+  <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
+  <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+    <button id="alarm-modal-send-btn" class="action-btn"
+      style="border-color:#2c5f8a; color:#2c5f8a;"
+      onclick="window.sendSingleAlarm()">📧 즉시 발송</button>
+    <button onclick="window.closeAlarmModal()"
+      style="padding:6px 16px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; cursor:pointer; font-size:12.5px;">닫기</button>
+  </div>
+</div>
+
 <div id="tab-gantt" class="tab-panel active">
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
@@ -3510,6 +3622,12 @@ window.deleteHistoryByDateRange = function() {
             ['연간 수요량', sd.volume || ''],
             ['목표 양산 일정', sd.mpDate || ''],
             ['추진 배경 및 의의', sd.background || ''],
+            ['PM 이메일', meta.프로젝트담당자이메일 || ''],
+            ['기구 이메일', meta.기구담당자이메일 || ''],
+            ['HW 이메일', meta.HW담당자이메일 || ''],
+            ['FW 이메일', meta.FW담당자이메일 || ''],
+            ['TSP 이메일', meta.TSP담당자이메일 || ''],
+            ['LCM 이메일', meta.LCM담당자이메일 || ''],
         ];
         [['기획Start', 'PROTO Start'], ['기획Finish', 'PROTO End'], ['ProtoDR', 'Proto DR'], ['ESStart', 'ES Start'], ['ESEnd', 'ES End'], ['DVR', 'DVR'], ['PPStart', 'PP Start'], ['PPEnd', 'PP End'], ['PRA', 'PRA']].forEach(([key, label]) => {
             const m = (sd.milestones && sd.milestones[key]) || {};
@@ -8308,6 +8426,556 @@ function _readRowsFromTbody(tbodyId) {
     return rows;
 }
 
+// ══════════════════════════════════════════════════════════════
+// 📧 알람 메일 발송 (Python 로컬 서버 연동)
+// ══════════════════════════════════════════════════════════════
+const MAIL_SERVER = 'http://127.0.0.1:5000';
+const ALARM_DAYS  = [7, 3, 1];   // 몇 일 전 알람
+
+// 발송 이력 키 생성 (중복 방지)
+const alarmKey = (rowId, dDay) => `gantt_alarm_${rowId}_${dDay}d`;
+
+// 메일 발송
+const sendAlarmMail = async (to, subject, body) => {
+    try {
+        const res = await fetch(`${MAIL_SERVER}/send-mail`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to, subject, body })
+        });
+        return await res.json();
+    } catch(e) {
+        console.warn('메일 서버 미실행:', e.message);
+        return { ok: false, error: e.message };
+    }
+};
+
+// 알람 대상 행 수집 + 발송
+window.checkAndSendAlarms = async function(isManual) {
+    // 서버 실행 여부 확인
+    try {
+        const h = await fetch(`${MAIL_SERVER}/health`, { signal: AbortSignal.timeout(2000) });
+        const hd = await h.json();
+        if (!hd.ok) throw new Error('서버 응답 없음');
+    } catch(e) {
+        if (isManual) {
+            if (window.bmAlertModal) window.bmAlertModal('메일 서버가 실행되지 않았습니다.\nstart.bat을 먼저 실행해 주세요.');
+            else alert('메일 서버가 실행되지 않았습니다.\nstart.bat을 먼저 실행해 주세요.');
+        }
+        return;
+    }
+
+    const pm      = window.projectMeta || {};
+    const today   = new Date(); today.setHours(0,0,0,0);
+
+    // 프로젝트 전체 멤버 이메일 수집
+    const allEmails = [
+        pm.프로젝트담당자이메일, pm.기구담당자이메일,
+        pm.HW담당자이메일, pm.FW담당자이메일,
+        pm.TSP담당자이메일, pm.LCM담당자이메일,
+        pm.Slimming담당자이메일, pm.Cutting담당자이메일,
+        pm.Module담당자이메일, pm.Tooling담당자이메일,
+    ].filter(e => e && e.includes('@')).join(',');
+
+    if (!allEmails) {
+        if (isManual) {
+            if (window.bmAlertModal) window.bmAlertModal('Summary 탭에 이메일 주소를 입력해 주세요.');
+            else alert('Summary 탭에 이메일 주소를 입력해 주세요.');
+        }
+        return;
+    }
+
+    // Gantt 행에서 📌 알람 + 완료일 수집
+    let sentCount = 0;
+    const rows = document.querySelectorAll('#gantt-body tr');
+    for (const tr of rows) {
+        const alarmCell = tr.querySelector('td[data-col="alarm"]') ||
+                          [...tr.querySelectorAll('td')].find(td => td.textContent.includes('📌'));
+        if (!alarmCell) continue;
+
+        // 완료 예정일 (due-date 셀 또는 data-due 속성)
+        const dueTd   = tr.querySelector('td[data-col="end"], td[data-field="end"]');
+        const dueStr  = dueTd ? dueTd.textContent.trim() : (tr.dataset.due || '');
+        if (!dueStr || dueStr === '-') continue;
+
+        const dueDate = new Date(dueStr.replace(/\./g, '-'));
+        if (isNaN(dueDate)) continue;
+        dueDate.setHours(0,0,0,0);
+
+        const diffDays = Math.round((dueDate - today) / 86400000);
+
+        for (const dDay of ALARM_DAYS) {
+            if (diffDays !== dDay) continue;
+
+            // 중복 발송 방지
+            const key = alarmKey(tr.dataset.id || dueStr, dDay);
+            if (localStorage.getItem(key)) continue;
+
+            // 담당자 이름 추출
+            const assigneeTd = tr.querySelector('td[data-col="assignee"], td[data-field="assignee"]');
+            const assignee   = assigneeTd ? assigneeTd.textContent.trim() : '담당자';
+
+            // 업무명 추출
+            const taskTd  = tr.querySelector('td[data-col="task"], td[data-field="wbs"]') || tr.querySelector('td:nth-child(3)');
+            const taskName = taskTd ? taskTd.textContent.trim() : '업무';
+
+            const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
+            const subject   = `[Gantt 알람] ${projTitle} — "${taskName}" 완료일 ${dDay}일 전`;
+            const body      = `
+<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
+  <p><b>${assignee}님께</b></p>
+  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDay}일 후(${dueStr})</b>로 다가왔습니다.</p>
+  <table style="border-collapse:collapse; margin:12px 0;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${taskName}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${dueStr}</b></td></tr>
+  </table>
+  <p>본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
+</div>`;
+
+            const result = await sendAlarmMail(allEmails, subject, body);
+            if (result.ok) {
+                localStorage.setItem(key, new Date().toISOString());
+                sentCount++;
+                console.log(`[알람] 발송 완료: ${taskName} (${dDay}일 전)`);
+            }
+        }
+    }
+
+    if (isManual) {
+        const msg = sentCount > 0 ? `${sentCount}건의 알람 메일을 발송했습니다.` : '발송할 알람이 없습니다. (이미 발송됐거나 해당 없음)';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+    } else if (sentCount > 0) {
+        console.log(`[알람] 자동 발송 ${sentCount}건 완료`);
+    }
+};
+
+// ══════════════════════════════════════════════════════════════
+// ⚙️ 알람 설정 (SMTP / 자동발송 / CC)
+// ══════════════════════════════════════════════════════════════
+
+// 설정 불러오기
+window.loadAlarmSettings = function() {
+    try {
+        return JSON.parse(localStorage.getItem('gantt_alarm_settings') || '{}');
+    } catch(e) { return {}; }
+};
+
+// 설정 저장
+window.saveAlarmSettings = function() {
+    const ccRows = [...document.querySelectorAll('.alarm-cc-row')].map(row => ({
+        name:  row.querySelector('.cc-name').value.trim(),
+        email: row.querySelector('.cc-email').value.trim(),
+    })).filter(r => r.email);
+
+    const cfg = window.loadAlarmSettings();
+    cfg.ccList = ccRows;
+    localStorage.setItem('gantt_alarm_settings', JSON.stringify(cfg));
+    window.closeAlarmSettings();
+    if (window.bmAlertModal) window.bmAlertModal('설정이 저장되었습니다.');
+    else alert('설정이 저장되었습니다.');
+};
+
+// 자동발송 ON/OFF
+window.setAlarmAuto = function(enabled) {
+    const cfg = window.loadAlarmSettings();
+    cfg.autoSend = enabled;
+    localStorage.setItem('gantt_alarm_settings', JSON.stringify(cfg));
+    window.refreshAlarmAutoButtons(enabled);
+};
+
+window.refreshAlarmAutoButtons = function(enabled) {
+    const onBtn  = document.getElementById('alarm-auto-on-btn');
+    const offBtn = document.getElementById('alarm-auto-off-btn');
+    if (!onBtn || !offBtn) return;
+    if (enabled) {
+        onBtn.style.background  = '#27ae60'; onBtn.style.color  = '#fff';
+        offBtn.style.background = '#fff';    offBtn.style.color = '#555'; offBtn.style.borderColor = '#ccc';
+    } else {
+        offBtn.style.background = '#e03131'; offBtn.style.color = '#fff'; offBtn.style.borderColor = '#e03131';
+        onBtn.style.background  = '#fff';    onBtn.style.color  = '#27ae60';
+    }
+};
+
+// SMTP 서버에 저장 (즉시 적용)
+window.saveSmtpConfig = async function() {
+    const cfg = {
+        host: document.getElementById('as-smtp-host').value.trim(),
+        port: parseInt(document.getElementById('as-smtp-port').value) || 587,
+        user: document.getElementById('as-smtp-user').value.trim(),
+        pass: document.getElementById('as-smtp-pass').value,
+    };
+    if (!cfg.host || !cfg.user || !cfg.pass) {
+        alert('서버 주소, 계정, 비밀번호를 모두 입력해 주세요.'); return;
+    }
+    const msgEl = document.getElementById('as-smtp-save-msg');
+    try {
+        const res = await fetch('http://127.0.0.1:5000/config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cfg)
+        });
+        const data = await res.json();
+        if (data.ok) {
+            // 비밀번호 제외 로컬 저장
+            const localCfg = window.loadAlarmSettings();
+            localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user };
+            localStorage.setItem('gantt_alarm_settings', JSON.stringify(localCfg));
+            if (msgEl) { msgEl.textContent = '✓ 저장됨'; setTimeout(() => { if(msgEl) msgEl.textContent=''; }, 3000); }
+        } else throw new Error(data.error);
+    } catch(e) {
+        if (msgEl) msgEl.style.color = '#e03131';
+        if (msgEl) { msgEl.textContent = '실패: ' + e.message; setTimeout(() => { if(msgEl) { msgEl.textContent=''; msgEl.style.color='#27ae60'; } }, 4000); }
+    }
+};
+
+// CC 행 추가
+window.addAlarmCcRow = function(name='', email='') {
+    const list = document.getElementById('alarm-cc-list');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'alarm-cc-row';
+    row.style.cssText = 'display:flex; gap:6px; align-items:center;';
+    row.innerHTML = `
+        <input class="cc-name u-input" placeholder="이름" value="${name}"
+          style="width:90px; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+        <input class="cc-email u-input" placeholder="이메일" value="${email}"
+          style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+        <button onclick="this.parentElement.remove()"
+          style="border:none; background:none; color:#e03131; cursor:pointer; font-size:16px; padding:0 4px;">✕</button>`;
+    list.appendChild(row);
+};
+
+// 설정 모달 열기
+window.openAlarmSettings = function() {
+    const cfg  = window.loadAlarmSettings();
+    const smtp = cfg.smtp || {};
+    document.getElementById('as-smtp-host').value = smtp.host || 'kmail.kortek.co.kr';
+    document.getElementById('as-smtp-port').value = smtp.port || 587;
+    document.getElementById('as-smtp-user').value = smtp.user || '';
+    document.getElementById('as-smtp-pass').value = '';
+    window.refreshAlarmAutoButtons(cfg.autoSend !== false);
+    const list = document.getElementById('alarm-cc-list');
+    if (list) {
+        list.innerHTML = '';
+        (cfg.ccList || []).forEach(r => window.addAlarmCcRow(r.name, r.email));
+    }
+    document.getElementById('alarm-settings-overlay').style.display = 'block';
+    document.getElementById('alarm-settings-modal').style.display  = 'block';
+};
+
+// 설정 모달 닫기
+window.closeAlarmSettings = function() {
+    document.getElementById('alarm-settings-overlay').style.display = 'none';
+    document.getElementById('alarm-settings-modal').style.display   = 'none';
+};
+
+// ══════════════════════════════════════════════════════════════
+// 🔔 알람 탭 렌더링 & 모달
+// ══════════════════════════════════════════════════════════════
+window._alarmCurrentItem = null;
+
+// 📌 알람 행 데이터 수집 — DOM 인덱스 + globalData 혼합
+window.collectAlarmItems = function() {
+    const items   = [];
+    const pm      = window.projectMeta || {};
+    const ci      = window.colIdx || {};
+    const gdata   = window.globalData || [];
+    const today   = new Date(); today.setHours(0,0,0,0);
+
+    // 담당자명 → 이메일 매핑 테이블
+    const nameToEmail = {};
+    ['프로젝트담당자','기구담당자','HW담당자','FW담당자','TSP담당자',
+     'LCM담당자','Slimming담당자','Cutting담당자','Module담당자','Tooling담당자'].forEach(k => {
+        const name = (pm[k] || '').trim();
+        const email = (pm[k + '이메일'] || '').trim();
+        if (name && email) nameToEmail[name] = email;
+    });
+
+    // CC 참조인 이메일
+    const cfg    = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+    const ccMails = (cfg.ccList || []).filter(r => r.email).map(r => r.email).join(',');
+
+    document.querySelectorAll('#table-body tr').forEach(function(tr, rowIdx) {
+        const tds = tr.querySelectorAll('td');
+        if (!tds.length) return;
+
+        // td[0] = 📌 알람 아이콘 셀
+        if (!tds[0] || !tds[0].textContent.includes('📌')) return;
+
+        // td[2] = 완료 예정일 (plan 컬럼)
+        const dueRaw = tds[2] ? tds[2].textContent.trim() : '';
+        if (!dueRaw || dueRaw === '-') return;
+
+        // "MM/DD" → 올해 또는 내년 날짜로 변환
+        let dueDate;
+        if (/^\d{1,2}\/\d{1,2}$/.test(dueRaw)) {
+            const [m, d] = dueRaw.split('/').map(Number);
+            const yr = new Date().getFullYear();
+            dueDate = new Date(yr, m - 1, d);
+            if (dueDate < today) dueDate.setFullYear(yr + 1);
+        } else {
+            dueDate = new Date(dueRaw.replace(/\./g, '-'));
+        }
+        if (isNaN(dueDate)) return;
+        dueDate.setHours(0,0,0,0);
+        const diffDays = Math.round((dueDate - today) / 86400000);
+        const dueStr   = `${dueDate.getMonth()+1}/${dueDate.getDate()}`;
+
+        // td[5] = 업무명 (WBS), 🌐 접두 제거
+        const taskName = tds[5] ? tds[5].textContent.trim().replace(/^🌐\s*/, '') : '-';
+
+        // globalData에서 담당자 + 내용 읽기
+        const rowData   = gdata[rowIdx] || [];
+        const assignee  = ci.assignee >= 0 ? String(rowData[ci.assignee] || '-').trim() : '-';
+        const content   = ci.content  >= 0 ? String(rowData[ci.content]  || '').trim() : '';
+
+        const assigneeEmail = nameToEmail[assignee] || '';
+
+        // 발송 이력 (로컬스토리지)
+        const rowId   = taskName + '_' + dueStr;
+        const sentLog = {};
+        [7, 3, 1].forEach(d => {
+            const v = localStorage.getItem('gantt_alarm_' + rowId + '_' + d + 'd');
+            if (v) sentLog[d] = v;
+        });
+        // 수동 일괄발송 이력
+        const bulkV = localStorage.getItem('gantt_alarm_' + rowId + '_bulk');
+        if (bulkV) sentLog['bulk'] = bulkV;
+        const manualV = localStorage.getItem('gantt_alarm_' + rowId + '_manual');
+        if (manualV) sentLog['manual'] = manualV;
+
+        items.push({ rowId, taskName, assignee, assigneeEmail, ccMails, dueStr, dueDate, diffDays, content, sentLog, tr });
+    });
+    return items;
+};
+
+// 알람 탭 렌더링
+window.renderAlarmTab = async function() {
+    const tbody = document.getElementById('alarm-table-body');
+    if (!tbody) return;
+
+    // 서버 상태 확인
+    const statusEl = document.getElementById('alarm-server-status');
+    try {
+        const r = await fetch('http://127.0.0.1:5000/health', { signal: AbortSignal.timeout(2000) });
+        const d = await r.json();
+        if (statusEl) statusEl.innerHTML = '<span style="color:#27ae60;">● 메일 서버 연결됨</span>';
+    } catch(e) {
+        if (statusEl) statusEl.innerHTML = '<span style="color:#e03131;">● 메일 서버 미연결 — start.bat을 실행하세요</span>';
+    }
+
+    const items = window.collectAlarmItems();
+    if (!items.length) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
+        return;
+    }
+
+    const dDayLabel = (d) => {
+        if (d === 0)  return '<span style="color:#e03131; font-weight:bold;">D-Day</span>';
+        if (d < 0)    return '<span style="color:#888;">D+' + Math.abs(d) + '</span>';
+        if (d <= 3)   return '<span style="color:#e03131; font-weight:bold;">D-' + d + '</span>';
+        if (d <= 7)   return '<span style="color:#e67e22; font-weight:bold;">D-' + d + '</span>';
+        return 'D-' + d;
+    };
+
+    const sentStatus = (sentLog, diffDays) => {
+        const sent = Object.keys(sentLog).map(Number).sort((a,b) => a-b);
+        if (!sent.length) {
+            if (diffDays <= 7 && diffDays >= 0) return '<span style="color:#e03131;">⚠ 미발송</span>';
+            return '<span style="color:#aaa;">-</span>';
+        }
+        return sent.map(d => '<span style="color:#27ae60; font-size:11px;">✓ D-' + d + '전</span>').join('<br>');
+    };
+
+    const lastSent = (sentLog) => {
+        const times = Object.values(sentLog);
+        if (!times.length) return '-';
+        return times.sort().reverse()[0].substring(0, 16).replace('T', ' ');
+    };
+
+    tbody.innerHTML = items.map((item, idx) => `
+        <tr style="cursor:pointer; border-bottom:1px solid #eee;"
+            onmouseover="this.style.background='#f0f8ff'" onmouseout="this.style.background=''"
+            onclick="window.openAlarmModal(${idx})">
+            <td style="padding:9px 12px;">${item.taskName}</td>
+            <td style="padding:9px 12px; text-align:center;">${item.assignee}</td>
+            <td style="padding:9px 12px; font-size:11.5px; color:#555;">${item.assigneeEmail || '<span style="color:#e03131;">미입력</span>'}</td>
+            <td style="padding:9px 12px; text-align:center;">${item.dueStr}</td>
+            <td style="padding:9px 12px; text-align:center;">${dDayLabel(item.diffDays)}</td>
+            <td style="padding:9px 12px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays)}</td>
+            <td style="padding:9px 12px; text-align:center; font-size:11.5px; color:#888;">${lastSent(item.sentLog)}</td>
+        </tr>`).join('');
+
+    window._alarmItems = items;
+};
+
+// 모달 열기
+window.openAlarmModal = function(idx) {
+    const item = (window._alarmItems || [])[idx];
+    if (!item) return;
+    window._alarmCurrentItem = item;
+
+    const pm        = window.projectMeta || {};
+    const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
+    const sent      = Object.keys(item.sentLog).map(Number).sort((a,b) => a-b);
+    const sentHtml  = sent.length ? sent.map(d => `✓ D-${d}일 전 발송 (${item.sentLog[d].substring(0,16).replace('T',' ')})`).join('<br>') : '발송 이력 없음';
+
+    document.getElementById('alarm-modal-title').textContent = '🔔 ' + item.taskName;
+    document.getElementById('alarm-modal-body').innerHTML = `
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; width:110px; border-radius:4px;">프로젝트</td><td style="padding:6px 10px;">${projTitle}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">업무명</td><td style="padding:6px 10px;">${item.taskName}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">담당자</td><td style="padding:6px 10px;">${item.assignee}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">담당자 이메일</td><td style="padding:6px 10px;">${item.assigneeEmail || '<span style="color:#e03131;">미입력 — Summary 탭에서 이메일을 입력해 주세요</span>'}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">완료 예정일</td><td style="padding:6px 10px; color:#e03131; font-weight:bold;">${item.dueStr} (D-${item.diffDays})</td></tr>
+            ${item.content ? `<tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">업무 내용</td><td style="padding:6px 10px;">${item.content}</td></tr>` : ''}
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">발송 이력</td><td style="padding:6px 10px; color:#555; font-size:12px;">${sentHtml}</td></tr>
+        </table>`;
+
+    document.getElementById('alarm-modal-overlay').style.display = 'block';
+    document.getElementById('alarm-modal').style.display = 'block';
+};
+
+// 모달 닫기
+window.closeAlarmModal = function() {
+    document.getElementById('alarm-modal-overlay').style.display = 'none';
+    document.getElementById('alarm-modal').style.display = 'none';
+    window._alarmCurrentItem = null;
+};
+
+// 개별 즉시 발송
+window.sendSingleAlarm = async function() {
+    const item = window._alarmCurrentItem;
+    if (!item) return;
+
+    const pm        = window.projectMeta || {};
+    const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
+    const allEmails = [
+        pm.프로젝트담당자이메일, pm.기구담당자이메일,
+        pm.HW담당자이메일, pm.FW담당자이메일, pm.TSP담당자이메일,
+        pm.LCM담당자이메일, pm.Slimming담당자이메일,
+        pm.Cutting담당자이메일, pm.Module담당자이메일, pm.Tooling담당자이메일,
+    ].filter(e => e && e.includes('@')).join(',');
+
+    if (!allEmails) {
+        if (window.bmAlertModal) window.bmAlertModal('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
+        else alert('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
+        return;
+    }
+
+    const dDay    = item.diffDays;
+    const subject = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 D-${dDay}`;
+    const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
+  <p><b>${item.assignee}님께</b></p>
+  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">D-${dDay}일 (${item.dueStr})</b>입니다.</p>
+  <table style="border-collapse:collapse; margin:12px 0;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
+    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">내용</td><td style="padding:6px 12px;">${item.content}</td></tr>` : ''}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${item.assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${item.dueStr}</b></td></tr>
+  </table>
+  <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
+</div>`;
+
+    const btn = document.getElementById('alarm-modal-send-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '발송 중...'; }
+
+    try {
+        const res = await fetch('http://127.0.0.1:5000/send-mail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ to: allEmails, subject, body })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            // 발송 이력 저장
+            const key = `gantt_alarm_${item.rowId}_manual`;
+            localStorage.setItem(key, new Date().toISOString());
+            item.sentLog['manual'] = new Date().toISOString();
+            window.closeAlarmModal();
+            window.renderAlarmTab();
+            if (window.bmAlertModal) window.bmAlertModal('발송 완료!');
+            else alert('발송 완료!');
+        } else {
+            throw new Error(data.error);
+        }
+    } catch(e) {
+        if (window.bmAlertModal) window.bmAlertModal('발송 실패: ' + e.message);
+        else alert('발송 실패: ' + e.message);
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '📧 즉시 발송'; }
+    }
+};
+
+// 미발송 일괄 발송 (수동 버튼 — 과거 미발송 포함)
+window.sendAllPendingAlarms = async function() {
+    const items = window.collectAlarmItems();
+    const pending = items.filter(item => {
+        // D-7 이하인데 한 번도 발송 안 된 항목
+        return item.diffDays <= 7 && Object.keys(item.sentLog).length === 0;
+    });
+
+    if (!pending.length) {
+        if (window.bmAlertModal) window.bmAlertModal('미발송 항목이 없습니다.');
+        else alert('미발송 항목이 없습니다.');
+        return;
+    }
+
+    const pm        = window.projectMeta || {};
+    const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
+    const allEmails = [
+        pm.프로젝트담당자이메일, pm.기구담당자이메일,
+        pm.HW담당자이메일, pm.FW담당자이메일, pm.TSP담당자이메일,
+        pm.LCM담당자이메일, pm.Slimming담당자이메일,
+        pm.Cutting담당자이메일, pm.Module담당자이메일, pm.Tooling담당자이메일,
+    ].filter(e => e && e.includes('@')).join(',');
+
+    if (!allEmails) {
+        if (window.bmAlertModal) window.bmAlertModal('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
+        else alert('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
+        return;
+    }
+
+    let sentCount = 0;
+    for (const item of pending) {
+        const subject = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 D-${item.diffDays}`;
+        const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
+  <p><b>${item.assignee}님께</b></p>
+  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">D-${item.diffDays}일 (${item.dueStr})</b>입니다.</p>
+  <table style="border-collapse:collapse; margin:12px 0;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
+    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">내용</td><td style="padding:6px 12px;">${item.content}</td></tr>` : ''}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${item.assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${item.dueStr}</b></td></tr>
+  </table>
+  <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
+</div>`;
+
+        try {
+            const res = await fetch('http://127.0.0.1:5000/send-mail', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: allEmails, subject, body })
+            });
+            const data = await res.json();
+            if (data.ok) {
+                localStorage.setItem(`gantt_alarm_${item.rowId}_bulk`, new Date().toISOString());
+                sentCount++;
+            }
+        } catch(e) {
+            console.warn('일괄 발송 실패:', item.taskName, e.message);
+        }
+    }
+
+    window.renderAlarmTab();
+    const msg = sentCount > 0 ? `${sentCount}건 발송 완료!` : '발송 실패. 메일 서버를 확인해 주세요.';
+    if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+};
+
 window.collectTabData = function() {
     window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
 
@@ -9732,6 +10400,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.populateTabData) window.populateTabData();
     if (window.bmSetupAllRows) { window.bmSetupAllRows('bs'); window.bmSetupAllRows('mc'); }
     if (window.initProductImageSlots) window.initProductImageSlots();
+    // 자동 알람 체크 (3초 후 — 화면 렌더링 완료 후 실행)
+    setTimeout(() => { if (window.checkAndSendAlarms) window.checkAndSendAlarms(false); }, 3000);
     // 💡 저장된 펼치기 상태에 맞춰 버튼 텍스트 동기화
     ['bs', 'mc'].forEach(function(key) {
         const btn = document.getElementById(key + '-toggle-hidden-btn');
@@ -9791,6 +10461,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
         // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
         if (tabName === 'calendar' && window.calRender) window.calRender();
+        // Alarm 탭은 매번 최신 알람 목록을 다시 그린다
+        if (tabName === 'alarm' && window.renderAlarmTab) window.renderAlarmTab();
     };
 
     // 새로고침해도 마지막 상태 복원
