@@ -840,8 +840,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <span id="table-info-text">📊 Gantt Chart</span>
     <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
      
-        <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" style="border-color:#e67e22; color:#e67e22;" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
-        <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()" style="border-color:#e67e22; color:#e67e22; height:32px;">📧 메일로 업무 추가</button>
+        <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
+        <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()">📧 업무 추가</button>
         <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
         </div>
 
@@ -3185,7 +3185,7 @@ window.deleteHistoryByDateRange = function() {
                 'file-input-label': '📂 파일 선택',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
-                'mail-btn':       '📧 메일로 업무 추가',
+                'mail-btn':       '📧 업무 추가',
                 'weekly-report-btn': '📅 주간 업무 보고',
                 'drive_save_btn': '💾 저장하기',
                 'drive_load_btn': '📂 불러오기',
@@ -5535,7 +5535,7 @@ window.insertMailTask = function() {
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
        <div id="mail-drag-handle" class="history-header" style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:move; border-bottom:1.5px solid #2c5f8a; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
-            <span style="font-size:14px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">⠿ 메일 내용으로 업무 추가</span>
+            <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
             <div style="display:flex; gap:6px; justify-self:center;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
@@ -5582,7 +5582,7 @@ window.insertMailTask = function() {
                     </div>
                     <div style="display:flex; gap:5px;">
                         <input id="mail-gemini-key" type="password" placeholder="AIza..."
-                            style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                            style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                         <button class="action-btn" onclick="window.saveGeminiKey()" style="min-width:auto !important; padding:0 10px !important;">
                             💾 저장
                         </button>
@@ -5600,11 +5600,11 @@ window.insertMailTask = function() {
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
-                    <div style="display:flex; gap:6px; justify-content:center;">
-                        <button class="action-btn" onclick="window.editPrompt()" style="min-width:auto !important;">
+                    <div style="display:flex; gap:8px; justify-content:center;">
+                        <button class="action-btn" onclick="window.editPrompt()" style="min-width:130px !important;">
                             ✏️ 프롬프트
                         </button>
-                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="min-width:auto !important; border-color:#e67e22; color:#e67e22;">
+                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="min-width:130px !important; border-color:#e67e22; color:#e67e22;">
                             🤖 AI 분석
                         </button>
                     </div>
@@ -5642,11 +5642,11 @@ window.insertMailTask = function() {
                         <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
                         <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
                     </div>
-                    <div id="mf-analyze-group" style="display:none; gap:6px; margin-bottom:8px; flex-shrink:0;">
-                        <button class="action-btn" onclick="window.mfClearFiles()" style="flex:1; min-width:auto !important; border-color:#e03131; color:#e03131;">
+                    <div id="mf-analyze-group" style="display:none; gap:8px; margin-bottom:8px; flex-shrink:0; justify-content:center;">
+                        <button class="action-btn" onclick="window.mfClearFiles()" style="min-width:130px !important; border-color:#e03131; color:#e03131;">
                             🗑️ 전체 비우기
                         </button>
-                        <button class="action-btn" id="mf-analyze-btn" onclick="window.mfAnalyze()" style="flex:2; min-width:auto !important; border-color:#e67e22; color:#e67e22;">
+                        <button class="action-btn" id="mf-analyze-btn" onclick="window.mfAnalyze()" style="min-width:130px !important; border-color:#e67e22; color:#e67e22;">
                             🤖 AI 일괄 분석 (<span id="mf-file-count">0</span>개)
                         </button>
                     </div>
@@ -5664,9 +5664,9 @@ window.insertMailTask = function() {
                             </label>
                         </div>
                     </div>
-                    <div id="mf-result-list" style="flex:1; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
+                    <div id="mf-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
                     <button class="action-btn" id="mf-batch-btn" onclick="window.mfBatchInsert()"
-                            style="display:none; width:100%; margin-top:8px; min-width:auto !important;">
+                            style="display:none; width:100%; margin:auto 0 0 -0.5px !important; min-width:auto !important; height:38px !important; position:relative; top:0.5px;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -5678,9 +5678,9 @@ window.insertMailTask = function() {
                         <div style="font-size:11px; font-weight:bold; color:#333; margin-bottom:6px;">🔐 메일 서버 접속</div>
                         <div style="display:flex; gap:6px; margin-bottom:6px;">
                             <input id="ms-userid" type="text" placeholder="yhpark@kortek.co.kr"
-                                   style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                             <input id="ms-password" type="password" placeholder="비밀번호"
-                                   style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
                         <div style="margin-bottom:6px;">
                             <div style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
@@ -5689,15 +5689,15 @@ window.insertMailTask = function() {
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:6px;">
                             <input id="ms-start-date" type="date"
-                                   style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                             <input id="ms-end-date" type="date"
-                                   style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
-                        <div style="display:flex; gap:6px; align-items:center;">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
                                 <input type="checkbox" id="ms-save-id"> ID 저장
                             </label>
-                            <button class="action-btn" onclick="window.msFetchMail()" style="flex:1; min-width:auto !important; border-color:#e67e22; color:#e67e22;">
+                            <button class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; border-color:#e67e22; color:#e67e22;">
                                 📥 메일 가져오기
                             </button>
                         </div>
@@ -5722,9 +5722,8 @@ window.insertMailTask = function() {
                     <!-- 결과 목록 -->
                     <div id="ms-result-list" style="flex:1; overflow-y:auto;"></div>
                     <!-- 연속등록 버튼 -->
-                    <button id="ms-batch-btn" onclick="window.msBatchInsert()"
-                            style="display:none; width:100%; padding:8px; background:#0056b3; color:white;
-                                   border:none; font-size:11px; font-weight:bold; cursor:pointer; flex-shrink:0;">
+                    <button class="action-btn" id="ms-batch-btn" onclick="window.msBatchInsert()"
+                            style="display:none; width:calc(100% - 24px); margin:auto 12px 12px 12px !important; min-width:auto !important; height:38px !important; flex-shrink:0;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -5792,9 +5791,7 @@ window.insertMailTask = function() {
                             ✅ 개별 등록
                         </button>
                     </div>
-                    <div style="font-size:11px; color:#6c757d; margin-top:4px; flex-shrink:0;">
-                        💡 등록 시 업무명에 📧 표시가 붙습니다. 확인 후 더블클릭으로 제거하세요.
-                    </div>
+                    
                 </div>
 
             </div><!-- end 오른쪽 패널 -->
