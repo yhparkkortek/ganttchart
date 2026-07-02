@@ -705,7 +705,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <thead>
           <tr style="background:#f4f6f8;">
             <th style="padding:8px 10px; text-align:left; width:18%;">업무명</th>
-            <th style="padding:8px 10px; text-align:center; width:6%;">업무상태</th>
+            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap;">업무상태</th>
             <th style="padding:8px 10px; text-align:center; width:7%;">발신인</th>
             <th style="padding:8px 10px; text-align:left; width:12%;">발신인 이메일</th>
             <th style="padding:8px 10px; text-align:center; width:7%;">수신인</th>
@@ -8847,11 +8847,14 @@ window.collectAlarmItems = function() {
         const toEmails   = [...new Set(allPeople.map(n => nameToEmail[n]).filter(Boolean))];
         const missingPeople = allPeople.filter(n => !nameToEmail[n]);
 
-        const assignee      = senderName;
-        const assigneeEmail = nameToEmail[senderName] || '';
-        const receiverStr   = receiverNames.join(', ') || senderName;
-        const receiverEmail = toEmails.join(',') || assigneeEmail;
-        const toEmail       = toEmails.join(',') || assigneeEmail;
+        const assignee       = senderName;
+        const assigneeEmail  = nameToEmail[senderName] || '';
+        const receiverStr    = receiverNames.join(', ') || '-';
+        // 수신인 이메일만 (표시용)
+        const receiverEmails = [...new Set(receiverNames.map(n => nameToEmail[n]).filter(Boolean))];
+        const receiverEmail  = receiverEmails.join(',');
+        // 실제 발송 = 발신인 + 수신인 전원
+        const toEmail        = [...new Set([assigneeEmail, ...receiverEmails].filter(Boolean))].join(',');
 
         // 발송 이력
         const rowId   = rowIdx + '_' + dueStr;
@@ -8930,16 +8933,34 @@ window.renderAlarmTab = async function() {
         return `<span style="color:#e03131; font-size:11px;">미입력</span>`;
     };
 
+    // 이름 목록 → "첫번째 외 N명" + tooltip
+    const nameCell = (nameStr) => {
+        if (!nameStr || nameStr === '-') return '-';
+        const names = nameStr.split(/[,，]/).map(n => n.trim()).filter(Boolean);
+        if (names.length <= 1) return names[0] || '-';
+        return `<span title="${names.join(', ')}" style="cursor:help; border-bottom:1px dashed #aaa;">
+            ${names[0]} 외 ${names.length - 1}명</span>`;
+    };
+    const emailCell2 = (email, missing) => {
+        if (!email) {
+            if (missing && missing.length) return `<span style="color:#e03131; font-size:11px;" title="${missing.join(', ')} 이메일 미등록">미등록 ⚠</span>`;
+            return `<span style="color:#e03131; font-size:11px;">미입력</span>`;
+        }
+        const emails = email.split(',').map(e => e.trim()).filter(Boolean);
+        if (emails.length <= 1) return `<span style="font-size:11px;">${emails[0]}</span>`;
+        return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa;" title="${emails.join('\n')}">${emails[0]} 외 ${emails.length-1}</span>`;
+    };
+
     tbody.innerHTML = items.map((item, idx) => `
         <tr style="cursor:pointer; border-bottom:1px solid #eee;"
             onmouseover="this.style.background='#f0f8ff'" onmouseout="this.style.background=''"
             onclick="window.openAlarmModal(${idx})">
             <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.status || '-'}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.assignee}</td>
-            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell(item.assigneeEmail, item.missingPeople)}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.receiverStr}</td>
-            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell(item.receiverEmail, item.missingPeople)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.assignee)}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.assigneeEmail, item.missingPeople)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.receiverStr)}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.receiverEmail, item.missingPeople)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.dueStr}</td>
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays)}</td>
@@ -8963,8 +8984,11 @@ window.openAlarmModal = function(idx) {
     // 업무내용 줄바꿈: 날짜 이후, [섹션키워드] 이전에 개행
     const formatContent = (text) => {
         return text
-            .replace(/(\d{4}-\d{2}-\d{2})\s+/g, '$1\n')
+            .replace(/_x000d_/gi, '\n')              // 엑셀 CR 치환
+            .replace(/\r\n/g, '\n').replace(/\r/g, '\n')  // 윈도우 개행 정규화
+            .replace(/(\d{4}-\d{2}-\d{2})\s+/g, '$1\n')  // 날짜 뒤 개행
             .replace(/\]\s*\[(핵심내용|To\s*[Dd]o|비고|결과|일정|특이사항|진행)/g, ']\n[$1')
+            .replace(/\n{3,}/g, '\n\n')              // 3중 이상 개행 → 2줄로 제한
             .trim();
     };
     const formattedContent = item.content ? formatContent(item.content) : '';
