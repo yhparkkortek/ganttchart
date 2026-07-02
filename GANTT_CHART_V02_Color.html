@@ -821,7 +821,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
     <button id="alarm-modal-send-btn" class="action-btn"
       style="border-color:#2c5f8a; color:#2c5f8a;"
-      onclick="window.sendSingleAlarm()">📧 즉시 발송</button>
+      onclick="window.sendSingleAlarm(false)">📧 즉시 발송</button>
+    <button id="alarm-modal-send-all-btn" class="action-btn"
+      style="border-color:#6f42c1; color:#6f42c1;"
+      onclick="window.sendSingleAlarm(true)" title="프로젝트 전체 멤버에게 발송">📧 ALL 발송</button>
     <button class="action-btn"
       style="border-color:#e67e22; color:#e67e22;"
       onclick="window.resetAlarmHistory()">🔄 이력 초기화</button>
@@ -8988,7 +8991,7 @@ window.openAlarmModal = function(idx) {
             .replace(/\r\n/g, '\n').replace(/\r/g, '\n')  // 윈도우 개행 정규화
             .replace(/(\d{4}-\d{2}-\d{2})\s+/g, '$1\n')  // 날짜 뒤 개행
             .replace(/\]\s*\[(핵심내용|To\s*[Dd]o|비고|결과|일정|특이사항|진행)/g, ']\n[$1')
-            .replace(/\n{3,}/g, '\n\n')              // 3중 이상 개행 → 2줄로 제한
+            .replace(/\n{2,}/g, '\n')                // 연속 개행 → 1줄로 제한
             .trim();
     };
     const formattedContent = item.content ? formatContent(item.content) : '';
@@ -9022,18 +9025,26 @@ window.closeAlarmModal = function() {
 };
 
 // 개별 즉시 발송
-window.sendSingleAlarm = async function() {
+window.sendSingleAlarm = async function(sendAll) {
     const item = window._alarmCurrentItem;
     if (!item) return;
 
     const pm        = window.projectMeta || {};
     const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
-    const allEmails = [
+
+    // ALL 모드: 프로젝트 전체 멤버 이메일
+    const allMemberEmails = [
         pm.프로젝트담당자이메일, pm.기구담당자이메일,
         pm.HW담당자이메일, pm.FW담당자이메일, pm.TSP담당자이메일,
         pm.LCM담당자이메일, pm.Slimming담당자이메일,
         pm.Cutting담당자이메일, pm.Module담당자이메일, pm.Tooling담당자이메일,
-    ].filter(e => e && e.includes('@')).join(',');
+    ].flatMap(e => (e || '').split(/[,，]/).map(x => x.trim()))
+     .filter(e => e && e.includes('@'));
+
+    // 일반 모드: 발신인 + 수신인만
+    const allEmails = sendAll
+        ? [...new Set(allMemberEmails)].join(',')
+        : item.toEmail || [...new Set(allMemberEmails)].join(',');
 
     if (!allEmails) {
         if (window.bmAlertModal) window.bmAlertModal('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
