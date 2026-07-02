@@ -1311,7 +1311,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     // 🛠️ 전역 변수 선언 (순서 꼬임 및 TDZ 에러 방지)
     // =========================================================
 
-if (window.name !== 'gantt_popup') {
+if (window.name !== 'gantt_popup' && !sessionStorage.getItem('gantt_popup_done')) {
+    sessionStorage.setItem('gantt_popup_done', '1');
     const newWin = window.open(location.href, 'gantt_popup',
         `width=${screen.width},height=${screen.height},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
     if (newWin) {
