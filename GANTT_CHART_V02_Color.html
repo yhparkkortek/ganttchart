@@ -704,13 +704,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
           <tr style="background:#f4f6f8;">
-            <th style="padding:10px 12px; text-align:left; width:28%;">업무명</th>
-            <th style="padding:10px 12px; text-align:center; width:10%;">담당자</th>
-            <th style="padding:10px 12px; text-align:left; width:18%;">담당자 이메일</th>
-            <th style="padding:10px 12px; text-align:center; width:10%;">완료 예정일</th>
-            <th style="padding:10px 12px; text-align:center; width:8%;">D-Day</th>
-            <th style="padding:10px 12px; text-align:center; width:13%;">발송 상태</th>
-            <th style="padding:10px 12px; text-align:center; width:13%;">마지막 발송</th>
+            <th style="padding:8px 10px; text-align:left; width:18%;">업무명</th>
+            <th style="padding:8px 10px; text-align:center; width:6%;">업무상태</th>
+            <th style="padding:8px 10px; text-align:center; width:7%;">발신인</th>
+            <th style="padding:8px 10px; text-align:left; width:12%;">발신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:7%;">수신인</th>
+            <th style="padding:8px 10px; text-align:left; width:12%;">수신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:9%;">완료 예정일</th>
+            <th style="padding:8px 10px; text-align:center; width:6%;">D-Day</th>
+            <th style="padding:8px 10px; text-align:center; width:10%;">발송 상태</th>
+            <th style="padding:8px 10px; text-align:center; width:13%;">마지막 발송</th>
           </tr>
         </thead>
         <tbody id="alarm-table-body">
@@ -819,6 +822,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <button id="alarm-modal-send-btn" class="action-btn"
       style="border-color:#2c5f8a; color:#2c5f8a;"
       onclick="window.sendSingleAlarm()">📧 즉시 발송</button>
+    <button class="action-btn"
+      style="border-color:#e67e22; color:#e67e22;"
+      onclick="window.resetAlarmHistory()">🔄 이력 초기화</button>
     <button onclick="window.closeAlarmModal()"
       style="padding:6px 16px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; cursor:pointer; font-size:12.5px;">닫기</button>
   </div>
@@ -8753,6 +8759,21 @@ window.closeAlarmSettings = function() {
     document.getElementById('alarm-settings-modal').style.display   = 'none';
 };
 
+// 발송 이력 초기화
+window.resetAlarmHistory = function() {
+    const item = window._alarmCurrentItem;
+    if (!item) return;
+    // localStorage에서 해당 rowId 관련 키 전부 삭제
+    const prefix = 'gantt_alarm_' + item.rowId + '_';
+    Object.keys(localStorage).filter(k => k.startsWith(prefix)).forEach(k => localStorage.removeItem(k));
+    item.sentLog = {};
+    // 모달 닫고 목록 갱신
+    window.closeAlarmModal();
+    window.renderAlarmTab();
+    if (window.bmAlertModal) window.bmAlertModal('발송 이력이 초기화되었습니다.');
+    else alert('발송 이력이 초기화되었습니다.');
+};
+
 // ══════════════════════════════════════════════════════════════
 // 🔔 알람 탭 렌더링 & 모달
 // ══════════════════════════════════════════════════════════════
@@ -8803,16 +8824,27 @@ window.collectAlarmItems = function() {
         const taskTd   = tr.querySelectorAll('td')[5];
         const taskName = taskTd ? taskTd.textContent.trim().replace(/^🌐\s*/, '') : '-';
 
-        // 담당자 (globalData assignee 컬럼)
-        const assignee      = String(row[ci.assignee] || '-').trim();
-        const assigneeEmail = nameToEmail[assignee] || '';
-
-        // 내용 (content 컬럼에서 발신→수신 추출)
+        // 업무 내용
         const contentRaw = String(row[ci.content] || '').trim();
-        // "발신→수신" 패턴에서 수신자 추출
-        const toMatch    = contentRaw.match(/→\s*([^\]\n]+)/);
-        const toName     = toMatch ? toMatch[1].trim() : assignee;
-        const toEmail    = nameToEmail[toName] || assigneeEmail;
+
+        // [발신인→수신인] 패턴 추출
+        const arrowMatch  = contentRaw.match(/\[([^\]→]+)→([^\]]+)\]/);
+        const senderName  = arrowMatch ? arrowMatch[1].trim() : String(row[ci.assignee] || '-').trim();
+        const receiverRaw = arrowMatch ? arrowMatch[2].trim() : '';
+        // 수신인 다중 지원 (콤마 구분)
+        const receiverNames = receiverRaw
+            ? receiverRaw.split(/[,，]/).map(n => n.trim()).filter(Boolean)
+            : [];
+        // 발신인 + 수신인 전원
+        const allPeople  = [...new Set([senderName, ...receiverNames].filter(Boolean))];
+        const toEmails   = [...new Set(allPeople.map(n => nameToEmail[n]).filter(Boolean))];
+        const missingPeople = allPeople.filter(n => !nameToEmail[n]);
+
+        const assignee      = senderName;
+        const assigneeEmail = nameToEmail[senderName] || '';
+        const receiverStr   = receiverNames.join(', ') || senderName;
+        const receiverEmail = toEmails.join(',') || assigneeEmail;
+        const toEmail       = toEmails.join(',') || assigneeEmail;
 
         // 발송 이력
         const rowId   = rowIdx + '_' + dueStr;
@@ -8826,10 +8858,14 @@ window.collectAlarmItems = function() {
         const manualV = localStorage.getItem('gantt_alarm_' + rowId + '_manual');
         if (manualV) sentLog['manual'] = manualV;
 
+        const statusVal = ci.status >= 0 ? String(row[ci.status] || '').trim() : '';
         items.push({
             rowId, taskName,
-            assignee: toName,        // 수신 담당자
-            assigneeEmail: toEmail,  // 수신 담당자 이메일
+            status: statusVal,
+            assignee, assigneeEmail,
+            receiverStr, receiverEmail,
+            missingPeople,
+            toEmail,
             ccMails, dueStr, dueDate, diffDays,
             content: contentRaw, sentLog, tr
         });
@@ -8881,17 +8917,26 @@ window.renderAlarmTab = async function() {
         return times.sort().reverse()[0].substring(0, 16).replace('T', ' ');
     };
 
+    const emailCell = (email, missing) => {
+        if (email) return `<span style="font-size:11px;">${email}</span>`;
+        if (missing && missing.length) return `<span style="color:#e03131; font-size:11px;">미등록: ${missing.join(', ')}</span>`;
+        return `<span style="color:#e03131; font-size:11px;">미입력</span>`;
+    };
+
     tbody.innerHTML = items.map((item, idx) => `
         <tr style="cursor:pointer; border-bottom:1px solid #eee;"
             onmouseover="this.style.background='#f0f8ff'" onmouseout="this.style.background=''"
             onclick="window.openAlarmModal(${idx})">
-            <td style="padding:9px 12px;">${item.taskName}</td>
-            <td style="padding:9px 12px; text-align:center;">${item.assignee}</td>
-            <td style="padding:9px 12px; font-size:11.5px; color:#555;">${item.assigneeEmail || '<span style="color:#e03131;">미입력</span>'}</td>
-            <td style="padding:9px 12px; text-align:center;">${item.dueStr}</td>
-            <td style="padding:9px 12px; text-align:center;">${dDayLabel(item.diffDays)}</td>
-            <td style="padding:9px 12px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays)}</td>
-            <td style="padding:9px 12px; text-align:center; font-size:11.5px; color:#888;">${lastSent(item.sentLog)}</td>
+            <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.status || '-'}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.assignee}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell(item.assigneeEmail, item.missingPeople)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.receiverStr}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell(item.receiverEmail, item.missingPeople)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.dueStr}</td>
+            <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11px; color:#888;">${lastSent(item.sentLog)}</td>
         </tr>`).join('');
 
     window._alarmItems = items;
@@ -8908,16 +8953,30 @@ window.openAlarmModal = function(idx) {
     const sent      = Object.keys(item.sentLog).map(Number).sort((a,b) => a-b);
     const sentHtml  = sent.length ? sent.map(d => `✓ D-${d}일 전 발송 (${item.sentLog[d].substring(0,16).replace('T',' ')})`).join('<br>') : '발송 이력 없음';
 
+    // 업무내용 줄바꿈: 날짜 이후, [섹션키워드] 이전에 개행
+    const formatContent = (text) => {
+        return text
+            .replace(/(\d{4}-\d{2}-\d{2})\s+/g, '$1\n')
+            .replace(/\]\s*\[(핵심내용|To\s*[Dd]o|비고|결과|일정|특이사항|진행)/g, ']\n[$1')
+            .trim();
+    };
+    const formattedContent = item.content ? formatContent(item.content) : '';
+
+    const emailWarn = (email, name) => email
+        ? `<span style="color:#27ae60;">${email}</span>`
+        : `<span style="color:#e03131;">미등록 — Summary 탭에 <b>${name}</b> 이메일을 입력해 주세요</span>`;
+
     document.getElementById('alarm-modal-title').textContent = '🔔 ' + item.taskName;
     document.getElementById('alarm-modal-body').innerHTML = `
-        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; width:110px; border-radius:4px;">프로젝트</td><td style="padding:6px 10px;">${projTitle}</td></tr>
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px; line-height:1.6;">
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; width:100px;">프로젝트</td><td style="padding:6px 10px;">${projTitle}</td></tr>
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">업무명</td><td style="padding:6px 10px;">${item.taskName}</td></tr>
-            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">담당자</td><td style="padding:6px 10px;">${item.assignee}</td></tr>
-            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">담당자 이메일</td><td style="padding:6px 10px;">${item.assigneeEmail || '<span style="color:#e03131;">미입력 — Summary 탭에서 이메일을 입력해 주세요</span>'}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">업무상태</td><td style="padding:6px 10px;">${item.status || '-'}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">발신인</td><td style="padding:6px 10px;">${item.assignee} &nbsp; ${emailWarn(item.assigneeEmail, item.assignee)}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">수신인</td><td style="padding:6px 10px;">${item.receiverStr} &nbsp; ${emailWarn(item.receiverEmail, item.receiverStr)}</td></tr>
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">완료 예정일</td><td style="padding:6px 10px; color:#e03131; font-weight:bold;">${item.dueStr} (D-${item.diffDays})</td></tr>
-            ${item.content ? `<tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">업무 내용</td><td style="padding:6px 10px;">${item.content}</td></tr>` : ''}
-            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">발송 이력</td><td style="padding:6px 10px; color:#555; font-size:12px;">${sentHtml}</td></tr>
+            ${formattedContent ? `<tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">업무 내용</td><td style="padding:6px 10px; white-space:pre-wrap; font-size:12px; color:#444;">${formattedContent}</td></tr>` : ''}
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">발송 이력</td><td style="padding:6px 10px; color:#555; font-size:12px;">${sentHtml}</td></tr>
         </table>`;
 
     document.getElementById('alarm-modal-overlay').style.display = 'block';
