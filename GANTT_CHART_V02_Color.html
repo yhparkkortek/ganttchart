@@ -635,6 +635,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .cal-day-popup-item { padding:8px 10px; border:1px solid #e3e6ea; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; }
 .cal-day-popup-item:hover { border-color:#2c5f8a; }
 .cal-day-popup-item.cal-alarm-on { background:#fff3cd; border-color:#ffe08a; }
+tr.alarm-on > td { background-color: #e8f4fd !important; }
+tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 제품 사진 업로드 슬롯 */
 .prod-img-slot { position:relative; width:180px; min-height:140px; border:2px dashed #ccc; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; background:#fafafa; transition:border-color 0.2s; }
@@ -728,6 +730,39 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
   <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
     <h3 style="margin:0; font-size:15px; color:#2c5f8a;">⚙️ 알람 설정</h3>
     <button onclick="window.closeAlarmSettings()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+  </div>
+
+  <!-- 설치 안내 (접기/펼치기) -->
+  <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:10px 14px; margin-bottom:14px;">
+    <div onclick="const b=document.getElementById('install-guide');b.style.display=b.style.display==='none'?'block':'none'"
+      style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
+      <span style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+      <span style="font-size:12px; color:#7a5210;">▼ 펼치기</span>
+    </div>
+    <div id="install-guide" style="display:none; margin-top:10px; font-size:12.5px; color:#555; line-height:2.0;">
+      <b>Step 1.</b> Python 설치
+      <a href="https://www.python.org/downloads/" target="_blank"
+        style="margin-left:8px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
+        python.org 바로가기 →
+      </a><br>
+      　　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>
+      <b>Step 2.</b> 아래 파일 2개 다운로드 후 같은 폴더에 저장<br>
+      　　
+      <a href="https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_server.py"
+        download="mail_server.py"
+        style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
+        mail_server.py ↓
+      </a>
+      　
+      <a href="https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start.bat"
+        download="start.bat"
+        style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
+        start.bat ↓
+      </a><br>
+      <b>Step 3.</b> <b>start.bat</b> 더블클릭 → 검은 창 유지<br>
+      <b>Step 4.</b> 아래 SMTP 설정 입력 후 <b>[서버에 저장]</b> 클릭<br>
+      <b>Step 5.</b> 앱 사용 중에는 start.bat 창을 닫지 마세요
+    </div>
   </div>
 
   <!-- 자동 발송 ON/OFF -->
@@ -1873,6 +1908,11 @@ ${mailText}`;
         logChange(rowIndex, -1, '알림 설정', row._알림 ? '알림 켜짐' : '알림 꺼짐');
         renderTable(globalData);
         applyFilters();
+        // 알람 탭이 열려 있으면 즉시 갱신
+        const alarmPanel = document.getElementById('tab-alarm');
+        if (alarmPanel && alarmPanel.classList.contains('active')) {
+            if (window.renderAlarmTab) window.renderAlarmTab();
+        }
     };
 
     window.onRowNoClick = function(td, i, ev) {
@@ -2101,6 +2141,24 @@ ${mailText}`;
                     }
                 }
 
+                // 💡 알림메일 시트 → _loadedAlarmNames 복원
+                const alarmSheetName = workbook.SheetNames.find(n => n.includes('알림메일'));
+                if (alarmSheetName) {
+                    const alarmWs   = workbook.Sheets[alarmSheetName];
+                    const alarmJson = XLSX.utils.sheet_to_json(alarmWs, { header: 1, defval: '' });
+                    window._loadedAlarmNames = new Set();
+                    for (let k = 1; k < alarmJson.length; k++) {
+                        const aRow = alarmJson[k];
+                        if (aRow && aRow[0]) {
+                            const nm  = String(aRow[0]).replace(/📧/g, '').trim();
+                            // 완료일(aRow[2]) → YYYY-MM-DD 정규화
+                            let due   = String(aRow[2] || '').trim();
+                            if (/^\d{4}-\d{2}-\d{2}/.test(due)) due = due.slice(0, 10);
+                            if (nm) window._loadedAlarmNames.add(nm + '|' + due);
+                        }
+                    }
+                }
+
                 // 💡 Summary / Brief SPEC / M.C Table 시트가 있으면 사용자가 회색 칸에 작성한 내용을 읽어와
                 //    projectMeta / tabData에 반영 (구글 드라이브 JSON과 동일하게, 로컬 엑셀에서도 복원)
                 if (window.parseConceptSheetsFromWorkbook) window.parseConceptSheetsFromWorkbook(workbook);
@@ -2183,7 +2241,7 @@ ${mailText}`;
                     filesProcessed++;
                     if(filesProcessed === totalFiles) { 
                         globalData = [headerRow, ...globalData];
-                        
+
                         // ✅ 파일 로드 시 이름 확인
                         const authBtn = document.getElementById('auth_button');
                         const isGoogleLoggedIn = authBtn && authBtn.innerText.includes('🟢');
@@ -2202,7 +2260,32 @@ ${mailText}`;
                             }
                         }
                         
-                        window.recalculateSchedules(); 
+                        window.recalculateSchedules();
+
+                        // 💡 recalculateSchedules 내부 setTimeout 완료 후 _알림 복원
+                        if (window._loadedAlarmNames && window._loadedAlarmNames.size > 0) {
+                            setTimeout(() => {
+                                globalData.forEach((row, idx) => {
+                                    if (idx === 0) return;
+                                    const lv = row._level || 0;
+                                    let nm = '';
+                                    if (lv === 0)      nm = row._origDev || '';
+                                    else if (lv === 1) nm = row._origT1  || '';
+                                    else if (lv === 2) nm = row._origT2  || '';
+                                    else if (lv === 3) nm = row._origT3  || '';
+                                    else if (lv === 4) nm = row._origT4  || '';
+                                    nm = nm.replace(/📧/g, '').trim();
+                                    const due = String(row[colIdx.plan] || '').trim().slice(0, 10);
+                                    if (nm && window._loadedAlarmNames.has(nm + '|' + due)) {
+                                        row._알림 = true;
+                                    }
+                                });
+                                // 복원 완료 후 _loadedAlarmNames 제거 → 이후 row._알림만 사용
+                                window._loadedAlarmNames = null;
+                                renderTable(globalData);
+                                applyFilters();
+                            }, 800);
+                        }
                     }
             };
             reader.readAsArrayBuffer(file);
@@ -8675,77 +8758,81 @@ window.closeAlarmSettings = function() {
 // ══════════════════════════════════════════════════════════════
 window._alarmCurrentItem = null;
 
-// 📌 알람 행 데이터 수집 — DOM 인덱스 + globalData 혼합
+// 📌 알람 행 데이터 수집 — globalData 직접 참조
 window.collectAlarmItems = function() {
-    const items   = [];
-    const pm      = window.projectMeta || {};
-    const ci      = window.colIdx || {};
-    const gdata   = window.globalData || [];
-    const today   = new Date(); today.setHours(0,0,0,0);
+    const items  = [];
+    const pm     = window.projectMeta || {};
+    const ci     = window.colIdx || {};
+    const gdata  = window.globalData || [];
+    const today  = new Date(); today.setHours(0,0,0,0);
 
-    // 담당자명 → 이메일 매핑 테이블
+    // 담당자명 → 이메일 매핑
     const nameToEmail = {};
     ['프로젝트담당자','기구담당자','HW담당자','FW담당자','TSP담당자',
      'LCM담당자','Slimming담당자','Cutting담당자','Module담당자','Tooling담당자'].forEach(k => {
-        const name = (pm[k] || '').trim();
+        const name  = (pm[k] || '').trim();
         const email = (pm[k + '이메일'] || '').trim();
         if (name && email) nameToEmail[name] = email;
     });
 
-    // CC 참조인 이메일
-    const cfg    = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+    // CC 이메일
+    const cfg     = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
     const ccMails = (cfg.ccList || []).filter(r => r.email).map(r => r.email).join(',');
 
-    document.querySelectorAll('#table-body tr').forEach(function(tr, rowIdx) {
-        const tds = tr.querySelectorAll('td');
-        if (!tds.length) return;
+    document.querySelectorAll('#table-body tr').forEach(function(tr) {
+        // dataset.rowIndex → globalData 인덱스 (1-based, 0번은 헤더)
+        const rowIdx = parseInt(tr.dataset.rowIndex);
+        if (isNaN(rowIdx) || rowIdx < 1) return;
+        const row = gdata[rowIdx];
+        if (!row) return;
 
-        // td[0] = 📌 알람 아이콘 셀
-        if (!tds[0] || !tds[0].textContent.includes('📌')) return;
+        // _알림 또는 알림메일 시트 로드 데이터 체크
+        // _알림(토글) 또는 알림메일 시트 복합키 매칭
+        if (!row._알림) return;
 
-        // td[2] = 완료 예정일 (plan 컬럼)
-        const dueRaw = tds[2] ? tds[2].textContent.trim() : '';
+        // 완료 예정일 (plan 컬럼 = YYYY-MM-DD)
+        const dueRaw = String(row[ci.plan] || '').trim();
         if (!dueRaw || dueRaw === '-') return;
-
-        // "MM/DD" → 올해 또는 내년 날짜로 변환
-        let dueDate;
-        if (/^\d{1,2}\/\d{1,2}$/.test(dueRaw)) {
-            const [m, d] = dueRaw.split('/').map(Number);
-            const yr = new Date().getFullYear();
-            dueDate = new Date(yr, m - 1, d);
-            if (dueDate < today) dueDate.setFullYear(yr + 1);
-        } else {
-            dueDate = new Date(dueRaw.replace(/\./g, '-'));
-        }
+        const dueDate = new Date(dueRaw);
         if (isNaN(dueDate)) return;
         dueDate.setHours(0,0,0,0);
         const diffDays = Math.round((dueDate - today) / 86400000);
-        const dueStr   = `${dueDate.getMonth()+1}/${dueDate.getDate()}`;
+        const dueStr   = `${dueDate.getFullYear()}-${String(dueDate.getMonth()+1).padStart(2,'0')}-${String(dueDate.getDate()).padStart(2,'0')}`;
 
-        // td[5] = 업무명 (WBS), 🌐 접두 제거
-        const taskName = tds[5] ? tds[5].textContent.trim().replace(/^🌐\s*/, '') : '-';
+        // 업무명 (WBS 컬럼 td[5])
+        const taskTd   = tr.querySelectorAll('td')[5];
+        const taskName = taskTd ? taskTd.textContent.trim().replace(/^🌐\s*/, '') : '-';
 
-        // globalData에서 담당자 + 내용 읽기
-        const rowData   = gdata[rowIdx] || [];
-        const assignee  = ci.assignee >= 0 ? String(rowData[ci.assignee] || '-').trim() : '-';
-        const content   = ci.content  >= 0 ? String(rowData[ci.content]  || '').trim() : '';
-
+        // 담당자 (globalData assignee 컬럼)
+        const assignee      = String(row[ci.assignee] || '-').trim();
         const assigneeEmail = nameToEmail[assignee] || '';
 
-        // 발송 이력 (로컬스토리지)
-        const rowId   = taskName + '_' + dueStr;
+        // 내용 (content 컬럼에서 발신→수신 추출)
+        const contentRaw = String(row[ci.content] || '').trim();
+        // "발신→수신" 패턴에서 수신자 추출
+        const toMatch    = contentRaw.match(/→\s*([^\]\n]+)/);
+        const toName     = toMatch ? toMatch[1].trim() : assignee;
+        const toEmail    = nameToEmail[toName] || assigneeEmail;
+
+        // 발송 이력
+        const rowId   = rowIdx + '_' + dueStr;
         const sentLog = {};
         [7, 3, 1].forEach(d => {
             const v = localStorage.getItem('gantt_alarm_' + rowId + '_' + d + 'd');
             if (v) sentLog[d] = v;
         });
-        // 수동 일괄발송 이력
-        const bulkV = localStorage.getItem('gantt_alarm_' + rowId + '_bulk');
-        if (bulkV) sentLog['bulk'] = bulkV;
+        const bulkV   = localStorage.getItem('gantt_alarm_' + rowId + '_bulk');
+        if (bulkV)   sentLog['bulk']   = bulkV;
         const manualV = localStorage.getItem('gantt_alarm_' + rowId + '_manual');
         if (manualV) sentLog['manual'] = manualV;
 
-        items.push({ rowId, taskName, assignee, assigneeEmail, ccMails, dueStr, dueDate, diffDays, content, sentLog, tr });
+        items.push({
+            rowId, taskName,
+            assignee: toName,        // 수신 담당자
+            assigneeEmail: toEmail,  // 수신 담당자 이메일
+            ccMails, dueStr, dueDate, diffDays,
+            content: contentRaw, sentLog, tr
+        });
     });
     return items;
 };
