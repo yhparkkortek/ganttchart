@@ -5534,45 +5534,39 @@ window.insertMailTask = function() {
 <div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
         <!-- 헤더 -->
-       <div id="mail-drag-handle" class="history-header" style="background:#e67e22; color:white; flex-direction:column; padding:0; flex-shrink:0; position:relative; cursor:move;">
-            <!-- 타이틀 + X 버튼 -->
-            <div style="display:flex; align-items:center; justify-content:space-between; width:100%; box-sizing:border-box; padding:8px 14px; min-height:36px;">
-                <span style="font-size:14px; font-weight:bold; color:white;">⠿ 메일 내용으로 업무 추가</span>
-                <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
-                    style="background:rgba(0,0,0,0.25); border:1px solid rgba(255,255,255,0.5);
-                           color:white; font-size:20px; font-weight:bold; cursor:pointer;
-                           width:25px; height:25px; border-radius:4px; line-height:1;
-                           display:flex; align-items:center; justify-content:center; flex-shrink:0;"
-                    title="닫기">×</button>
-            </div>
-            <!-- 탭 버튼 -->
-            <div style="display:flex; justify-content:center; background:#e67e22; border-bottom:1px solid rgba(0,0,0,0.05); flex-shrink:0; padding:8px 12px;">
-                <div style="display:flex; gap:6px; width:50%; min-width:300px;">
-                    <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
-                        style="flex:1; text-align:center; padding:10px 8px; cursor:pointer;
-                                background:#ffffff; color:#e67e22; border-radius:6px;
-                                font-size:13px; font-weight:bold; white-space:nowrap;
-                                box-shadow:0 2px 5px rgba(0,0,0,0.15); transition:all 0.25s;">
-                        ✏️ 직접 입력
-                    </div>
-                    <div id="mail-tab-file" onclick="window.switchMailTab('file')"
-                        style="flex:1; text-align:center; padding:10px 8px; cursor:pointer;
-                                background:rgba(0, 0, 0, 0.12); color:rgba(255,255,255,0.85);
-                                border-radius:6px; font-size:13px; font-weight:normal;
-                                white-space:nowrap; transition:all 0.25s;">
-                        📂 파일 첨부
-                    </div>
-                    <div id="mail-tab-server" onclick="window.switchMailTab('server')"
-                        style="flex:1; text-align:center; padding:10px 8px; cursor:pointer;
-                                background:rgba(0, 0, 0, 0.12); color:rgba(255,255,255,0.85);
-                                border-radius:6px; font-size:13px; font-weight:normal;
-                                white-space:nowrap; transition:all 0.25s;">
-                        🌐 메일 서버
-                    </div>
+       <div id="mail-drag-handle" class="history-header" style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:move; border-bottom:1.5px solid #2c5f8a; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
+            <span style="font-size:14px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">⠿ 메일 내용으로 업무 추가</span>
+            <div style="display:flex; gap:6px; justify-self:center;">
+                <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
+                    style="text-align:center; padding:6px 12px; cursor:pointer;
+                            background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
+                            font-size:13px; font-weight:bold; white-space:nowrap; transition:all 0.2s;">
+                    ✏️ 직접 입력
+                </div>
+                <div id="mail-tab-file" onclick="window.switchMailTab('file')"
+                    style="text-align:center; padding:6px 12px; cursor:pointer;
+                            background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px;
+                            font-size:13px; font-weight:normal;
+                            white-space:nowrap; transition:all 0.2s;">
+                    📂 파일 첨부
+                </div>
+                <div id="mail-tab-server" onclick="window.switchMailTab('server')"
+                    style="text-align:center; padding:6px 12px; cursor:pointer;
+                            background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px;
+                            font-size:13px; font-weight:normal;
+                            white-space:nowrap; transition:all 0.2s;">
+                    🌐 메일 서버
                 </div>
             </div>
+            <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
+                style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
+                       color:#2c5f8a; font-size:16px; cursor:pointer;
+                       width:28px; height:28px; padding:0; line-height:1; justify-self:end;
+                       display:flex; align-items:center; justify-content:center; transition:0.15s;"
+                onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';"
+                onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';"
+                title="닫기">×</button>
         </div>
-
         <!-- ===== 공통 좌우분할 컨테이너 ===== -->
         <div style="display:flex; flex:1; overflow:hidden;">
 
@@ -5582,19 +5576,17 @@ window.insertMailTask = function() {
             <div style="width:360px; min-width:360px; display:flex; flex-direction:column; border-right:2px solid #dee2e6; overflow:hidden;">
 
                 <!-- API 키 (공통) -->
-                <div style="padding:10px 12px; background:#e7f3ff; border-bottom:1px solid #b3d7ff; flex-shrink:0;">
-                    <div style="font-size:11px; color:#0056b3; font-weight:bold; margin-bottom:4px;">
+                <div style="padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
+                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px;">
                         🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(팀원 각자 입력)</span>
                     </div>
                     <div style="display:flex; gap:5px;">
                         <input id="mail-gemini-key" type="password" placeholder="AIza..."
-                            style="flex:1; padding:6px 8px; border:1px solid #b3d7ff; border-radius:4px; font-size:12px;">
-                        <button onclick="window.saveGeminiKey()"
-                            style="padding:6px 10px; background:#0056b3; color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer;">
+                            style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                        <button class="action-btn" onclick="window.saveGeminiKey()" style="min-width:auto !important; padding:0 10px !important;">
                             💾 저장
                         </button>
-                        <button onclick="window.clearGeminiKey()"
-                            style="padding:6px 8px; background:#dee2e6; color:#333; border:none; border-radius:4px; font-size:11px; cursor:pointer;">
+                        <button class="action-btn" onclick="window.clearGeminiKey()" style="min-width:auto !important; padding:0 8px !important; border-color:#e03131; color:#e03131;">
                             🗑️
                         </button>
                     </div>
@@ -5609,21 +5601,17 @@ window.insertMailTask = function() {
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
                     <div style="display:flex; gap:6px;">
-                        <button onclick="window.editPrompt()"
-                            style="flex:1; padding:8px; background:#6c757d; color:white; border:none;
-                                   border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+                        <button class="action-btn" onclick="window.editPrompt()" style="flex:1; min-width:auto !important;">
                             ✏️ 프롬프트
                         </button>
-                        <button onclick="window.analyzeMailContent()" id="mail-analyze-btn"
-                            style="flex:2; padding:8px; background:#e67e22; color:white; border:none;
-                                   border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="flex:2; min-width:auto !important; border-color:#e67e22; color:#e67e22;">
                             🤖 AI 분석
                         </button>
                     </div>
                     <div id="mail-loading" style="display:none; text-align:center; padding:15px; color:#e67e22; font-weight:bold; font-size:12px;">
                         ⏳ AI 분석 중...
                     </div>
-                    <div id="mail-error" style="display:none; color:#dc3545; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-top:6px;"></div>
+                    <div id="mail-error" style="display:none; color:#e03131; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-top:6px;"></div>
 
                     <!-- 직접입력 분석 결과 목록 (누적) -->
                     <div id="paste-result-header" style="display:none; margin-top:10px; padding:6px 8px; background:#f8f9fa; border-radius:6px; border:1px solid #dee2e6; flex-shrink:0;">
@@ -5643,24 +5631,22 @@ window.insertMailTask = function() {
                     <input type="file" id="mf-input" multiple accept=".eml,.msg,.html,.htm,.txt"
                            style="display:none;" onchange="window.mfHandleFiles(this.files)">
                     <div id="mf-dropzone"
-                         style="border:2px dashed #e67e22; border-radius:8px; padding:14px;
-                                text-align:center; cursor:pointer; background:#fff8f3;
+                         style="border:1.5px dashed #2c5f8a; border-radius:6px; padding:14px;
+                                text-align:center; cursor:pointer; background:#f8f9fa;
                                 transition:0.2s; margin-bottom:8px; flex-shrink:0;"
                          onclick="document.getElementById('mf-input').click()"
-                         ondragover="event.preventDefault(); this.style.background='#ffe8d6';"
-                         ondragleave="this.style.background='#fff8f3';"
-                         ondrop="event.preventDefault(); this.style.background='#fff8f3'; window.mfHandleFiles(event.dataTransfer.files)">
+                         ondragover="event.preventDefault(); this.style.background='#e9eef3';"
+                         ondragleave="this.style.background='#f8f9fa';"
+                         ondrop="event.preventDefault(); this.style.background='#f8f9fa'; window.mfHandleFiles(event.dataTransfer.files)">
                         <div style="font-size:20px;">📁</div>
-                        <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
+                        <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
                         <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
                     </div>
                     <div id="mf-analyze-group" style="display:none; gap:6px; margin-bottom:8px; flex-shrink:0;">
-                        <button onclick="window.mfClearFiles()"
-                                style="flex:1; padding:8px; background:#6c757d; color:white; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                        <button class="action-btn" onclick="window.mfClearFiles()" style="flex:1; min-width:auto !important; border-color:#e03131; color:#e03131;">
                             🗑️ 전체 비우기
                         </button>
-                        <button id="mf-analyze-btn" onclick="window.mfAnalyze()"
-                                style="flex:2; padding:8px; background:#e67e22; color:white; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                        <button class="action-btn" id="mf-analyze-btn" onclick="window.mfAnalyze()" style="flex:2; min-width:auto !important; border-color:#e67e22; color:#e67e22;">
                             🤖 AI 일괄 분석 (<span id="mf-file-count">0</span>개)
                         </button>
                     </div>
@@ -5679,10 +5665,8 @@ window.insertMailTask = function() {
                         </div>
                     </div>
                     <div id="mf-result-list" style="flex:1; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
-                    <button id="mf-batch-btn" onclick="window.mfBatchInsert()"
-                            style="display:none; width:100%; margin-top:8px; padding:8px;
-                                   background:#0056b3; color:white; border:none; border-radius:6px;
-                                   font-size:11px; font-weight:bold; cursor:pointer; flex-shrink:0;">
+                    <button class="action-btn" id="mf-batch-btn" onclick="window.mfBatchInsert()"
+                            style="display:none; width:100%; margin-top:8px; min-width:auto !important;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -5926,15 +5910,15 @@ window.switchMailTab = function(tab) {
     ].forEach(({ el, active }) => {
         if (!el) return;
         if (active) {
-            // 선택된 탭 스타일
-            el.style.background  = '#ffffff';
-            el.style.color       = '#e67e22';
+            // 선택된 탭 스타일 (네이비 채움)
+            el.style.background  = '#2c5f8a';
+            el.style.color       = '#fff';
             el.style.fontWeight  = 'bold';
-            el.style.boxShadow   = '0 2px 5px rgba(0,0,0,0.15)';
+            el.style.boxShadow   = 'none';
         } else {
-            // 선택되지 않은 대기 탭 스타일
-            el.style.background  = 'rgba(0, 0, 0, 0.12)';
-            el.style.color       = 'rgba(255,255,255,0.85)';
+            // 선택되지 않은 대기 탭 스타일 (흰 배경 + 네이비 테두리)
+            el.style.background  = '#fff';
+            el.style.color       = '#2c5f8a';
             el.style.fontWeight  = 'normal';
             el.style.boxShadow   = 'none';
         }
