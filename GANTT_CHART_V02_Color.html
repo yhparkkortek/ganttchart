@@ -8781,6 +8781,9 @@ window._alarmCurrentItem = null;
 
 // 📌 알람 행 데이터 수집 — globalData 직접 참조
 window.collectAlarmItems = function() {
+    // 최신 Summary 입력값을 projectMeta에 반영
+    if (window.collectTabData) window.collectTabData();
+
     const items  = [];
     const pm     = window.projectMeta || {};
     const ci     = window.colIdx || {};
@@ -8791,9 +8794,13 @@ window.collectAlarmItems = function() {
     const nameToEmail = {};
     ['프로젝트담당자','기구담당자','HW담당자','FW담당자','TSP담당자',
      'LCM담당자','Slimming담당자','Cutting담당자','Module담당자','Tooling담당자'].forEach(k => {
-        const name  = (pm[k] || '').trim();
-        const email = (pm[k + '이메일'] || '').trim();
-        if (name && email) nameToEmail[name] = email;
+        const names  = (pm[k] || '').split(/[,，]/).map(n => n.trim()).filter(Boolean);
+        const emails = (pm[k + '이메일'] || '').split(/[,，]/).map(e => e.trim()).filter(Boolean);
+        names.forEach((name, i) => {
+            // 동일 인덱스 이메일 우선, 없으면 첫 번째 이메일로 폴백
+            const email = emails[i] || emails[0] || '';
+            if (name && email) nameToEmail[name] = email;
+        });
     });
 
     // CC 이메일
