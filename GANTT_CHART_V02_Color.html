@@ -718,7 +718,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           </tr>
         </thead>
         <tbody id="alarm-table-body">
-          <tr><td colspan="7" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
+          <tr><td colspan="10" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
         </tbody>
       </table>
       </div>
@@ -1973,6 +1973,7 @@ ${mailText}`;
 
         renderTable(globalData);
         applyFilters();
+        if (window.paintRowSelection) window.paintRowSelection(); // 일괄 토글 후에도 선택 하이라이트 유지
         // 알람 탭이 열려 있으면 즉시 갱신
         const alarmPanel = document.getElementById('tab-alarm');
         if (alarmPanel && alarmPanel.classList.contains('active')) {
@@ -8995,7 +8996,7 @@ window.renderAlarmTab = async function() {
 
     const items = window.collectAlarmItems();
     if (!items.length) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
         return;
     }
 
