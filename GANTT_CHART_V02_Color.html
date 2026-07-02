@@ -5600,11 +5600,11 @@ window.insertMailTask = function() {
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
-                    <div style="display:flex; gap:6px;">
-                        <button class="action-btn" onclick="window.editPrompt()" style="flex:1; min-width:auto !important;">
+                    <div style="display:flex; gap:6px; justify-content:center;">
+                        <button class="action-btn" onclick="window.editPrompt()" style="min-width:auto !important;">
                             ✏️ 프롬프트
                         </button>
-                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="flex:2; min-width:auto !important; border-color:#e67e22; color:#e67e22;">
+                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="min-width:auto !important; border-color:#e67e22; color:#e67e22;">
                             🤖 AI 분석
                         </button>
                     </div>
@@ -5682,14 +5682,12 @@ window.insertMailTask = function() {
                             <input id="ms-password" type="password" placeholder="비밀번호"
                                    style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
-                        <div style="display:flex; gap:6px; margin-bottom:6px;">
-                            <div style="display:flex; gap:6px; margin-bottom:6px;">
-                            <div style="flex:1;">
-                                <div style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
-                                <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler (비우면 전체)"
-                                       style="width:100%; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; box-sizing:border-box;">
-                            </div>
+                        <div style="margin-bottom:6px;">
+                            <div style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
+                            <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler (비우면 전체)"
+                                   style="width:100%; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; box-sizing:border-box;">
                         </div>
+                        <div style="display:flex; gap:6px; margin-bottom:6px;">
                             <input id="ms-start-date" type="date"
                                    style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                             <input id="ms-end-date" type="date"
@@ -5699,9 +5697,7 @@ window.insertMailTask = function() {
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
                                 <input type="checkbox" id="ms-save-id"> ID 저장
                             </label>
-                            <button onclick="window.msFetchMail()"
-                                    style="flex:1; padding:7px; background:#e67e22; color:white; border:none;
-                                           border-radius:5px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            <button class="action-btn" onclick="window.msFetchMail()" style="flex:1; min-width:auto !important; border-color:#e67e22; color:#e67e22;">
                                 📥 메일 가져오기
                             </button>
                         </div>
