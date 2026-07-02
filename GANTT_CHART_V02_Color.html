@@ -477,11 +477,15 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     border:1px solid #ced4da; border-radius:8px; padding:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15);
 }
 .bm-pop-btn {
-    width:30px; height:30px; display:flex; align-items:center; justify-content:center;
-    cursor:pointer; font-size:34px; color:#0056b3; user-select:none;
+    width:33px; height:33px; padding:0; margin:0; line-height:1; box-sizing:border-box;
+    display:flex; align-items:center; justify-content:center;
+    border:1.5px solid #2c5f8a; border-radius:6px; background:#fff; color:#2c5f8a;
+    font-size:20px; font-weight:bold; -webkit-text-stroke:0.5px currentColor;
+    cursor:pointer; user-select:none; transition:0.15s;
 }
-.bm-pop-btn.bm-pop-add { width:32px; height:30px; padding-top:1px; margin-top:3px; border:2px solid #28a745; border-radius:4px; background:#e8f5e9; color:#28a745; font-size:20px; font-weight:bold; }
-.bm-pop-btn.bm-pop-del { width:32px; height:30px; padding-top:1px; margin-top:3px; border:2px solid #e03131; border-radius:4px; background:#fff5f5; color:#e03131; font-size:20px; font-weight:bold; }
+.bm-pop-btn:hover { background:#2c5f8a; color:#fff; }
+.bm-pop-btn.bm-pop-danger { border-color:#e03131; color:#e03131; }
+.bm-pop-btn.bm-pop-danger:hover { background:#e03131; color:#fff; }
 /* 💡 첨부 엑셀에서 회색으로 표시된 "사용자 작성 구간"과 동일하게 표시 (TYPE/ITEM/구조 열은 표시하지 않음) */
 .concept-grid input.u-input, .concept-grid textarea.u-input {
     background:#eceff1;
@@ -1955,8 +1959,24 @@ ${mailText}`;
         const row = globalData[rowIndex];
         if (!row) return;
 
-        // 이미 여러 행이 선택되어 있고, 그 중 한 행의 핀을 클릭했다면 → 선택된 행 전체를 같은 상태로 일괄 토글
-        // (다른 일괄기능-이동/삭제/들여쓰기-과 동일하게, 클릭 순간 Ctrl/Shift를 다시 누르고 있을 필요 없음)
+        // Ctrl/Shift + 핀 클릭 → 즉시 토글하지 않고, 이 행을 다중선택 목록에 추가/제거만 함
+        // (핀을 여러 개 Ctrl/Shift로 먼저 고른 뒤, 마지막에 아무 핀이나 '일반 클릭'하면 전체 일괄 토글됨)
+        if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
+            if (!window._selectedRows) window._selectedRows = new Set();
+            const sel = window._selectedRows;
+            if (ev.shiftKey && window._selAnchor != null) {
+                sel.clear();
+                const a = Math.min(window._selAnchor, rowIndex), b = Math.max(window._selAnchor, rowIndex);
+                for (let k = a; k <= b; k++) sel.add(k);
+            } else {
+                if (sel.has(rowIndex)) sel.delete(rowIndex); else sel.add(rowIndex);
+                window._selAnchor = rowIndex;
+            }
+            if (window.paintRowSelection) window.paintRowSelection();
+            return;
+        }
+
+        // 이미 여러 행이 선택되어 있고, 그 중 한 행의 핀을 '일반 클릭'했다면 → 선택된 행 전체를 같은 상태로 일괄 토글
         const isBulk = window._selectedRows && window._selectedRows.size > 1 && window._selectedRows.has(rowIndex);
 
         if (isBulk) {
@@ -1973,7 +1993,7 @@ ${mailText}`;
 
         renderTable(globalData);
         applyFilters();
-        if (window.paintRowSelection) window.paintRowSelection(); // 일괄 토글 후에도 선택 하이라이트 유지
+        if (window.paintRowSelection) window.paintRowSelection(); // 토글 후에도 선택 하이라이트 유지
         // 알람 탭이 열려 있으면 즉시 갱신
         const alarmPanel = document.getElementById('tab-alarm');
         if (alarmPanel && alarmPanel.classList.contains('active')) {
@@ -9915,11 +9935,11 @@ function bmOpenPopup(key, refTr) {
         popup.id = 'bm-row-popup';
         popup.className = 'bm-row-popup';
         popup.innerHTML =
-            '<div style="display:grid; grid-template-columns:repeat(2,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center;">'
-            + '<span id="bm-up"  class="bm-pop-btn" title="위로 이동(묶음)">🔼</span>'
-            + '<span id="bm-dn"  class="bm-pop-btn" title="아래로 이동(묶음)">🔽</span>'
-            + '<span id="bm-add" class="bm-pop-btn bm-pop-add" title="행 추가">➕</span>'
-            + '<span id="bm-del" class="bm-pop-btn bm-pop-del" title="행 삭제">➖</span>'
+            '<div style="display:grid; grid-template-columns:repeat(2,33px); grid-template-rows:repeat(2,33px); gap:4px; align-items:center; justify-items:center;">'
+            + '<span id="bm-up"  class="bm-pop-btn" title="위로 이동(묶음)">▲</span>'
+            + '<span id="bm-dn"  class="bm-pop-btn" title="아래로 이동(묶음)">▼</span>'
+            + '<span id="bm-add" class="bm-pop-btn bm-pop-add" title="행 추가">+</span>'
+            + '<span id="bm-del" class="bm-pop-btn bm-pop-del bm-pop-danger" title="행 삭제">−</span>'
             + '</div>';
         document.body.appendChild(popup);
         document.addEventListener('click', function(e) {
