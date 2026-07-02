@@ -1955,9 +1955,9 @@ ${mailText}`;
         const row = globalData[rowIndex];
         if (!row) return;
 
-        // Ctrl/Shift 클릭 + 다중 선택된 행 중 하나라면 → 선택된 행 전체를 같은 상태로 일괄 토글
-        const isBulk = ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey)
-            && window._selectedRows && window._selectedRows.size > 1 && window._selectedRows.has(rowIndex);
+        // 이미 여러 행이 선택되어 있고, 그 중 한 행의 핀을 클릭했다면 → 선택된 행 전체를 같은 상태로 일괄 토글
+        // (다른 일괄기능-이동/삭제/들여쓰기-과 동일하게, 클릭 순간 Ctrl/Shift를 다시 누르고 있을 필요 없음)
+        const isBulk = window._selectedRows && window._selectedRows.size > 1 && window._selectedRows.has(rowIndex);
 
         if (isBulk) {
             const newState = !row._알림; // 클릭한 행 기준으로 전체를 동일하게 맞춤
@@ -5365,8 +5365,8 @@ window.insertMailTask = function() {
     #myTable .sub-parent-row-4 td { background: #ffffff !important; }
     #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
 
-    /* 💡 다중선택(Ctrl/Shift)이 지브라보다 항상 위에 오도록 재선언 */
-    #myTable tbody tr.multi-selected td {
+    /* 💡 다중선택(Ctrl/Shift)이 알람(파랑)·지브라(회색)보다 항상 최우선이 되도록 클래스 중복으로 특이도 강화 */
+    #myTable tbody tr.multi-selected.multi-selected td {
         background-color: #ffcccc !important;
     }
 
@@ -10903,6 +10903,13 @@ window.closeCalDayPopup = function(e) {
     if (overlay) overlay.style.display = 'none';
 };
 
+// 담당자 이름에서 성(첫 글자)을 뗀 표시용 이름 — "박용훈" → "용훈"
+function calShortName(name) {
+    const n = (name || '').trim();
+    // 3글자 이상 한글 이름이면 첫 글자(성)를 제거, 2글자 이하는 그대로 표시
+    return (n.length >= 3) ? n.slice(1) : n;
+}
+
 // 💡 Google Calendar 연동: 표준 .ics 파일로 내보내기 — 구글 캘린더 좌측 [+] → 가져오기로 바로 추가 가능
 // (Drive 연동에 쓰는 OAuth 권한 범위를 건드리지 않는 안전한 방식. 실시간 양방향 동기화가 필요하면 별도로 Calendar API 권한 추가가 필요합니다.)
 // ICS 텍스트 생성 (다운로드/Gist 업로드 공용)
@@ -10919,7 +10926,7 @@ function calBuildICSText() {
         lines.push('UID:gantt-' + ev.idx + '-' + icsDate(ev.end) + '@kortek');
         lines.push('DTSTART;VALUE=DATE:' + icsDate(ev.end));
         lines.push('DTEND;VALUE=DATE:' + icsDateNext(ev.end));
-        lines.push('SUMMARY:' + esc((ev.assignee ? '[' + ev.assignee + ']' : '') + ev.name));
+        lines.push('SUMMARY:' + esc((ev.assignee ? '[' + calShortName(ev.assignee) + ']' : '') + ev.name));
         const descParts = [];
         if (ev.assignee) descParts.push('담당자: ' + ev.assignee);
         if (ev.status) descParts.push('상태: ' + ev.status);
@@ -11011,7 +11018,7 @@ window.calRender = function() {
     const events = calBuildEvents();
     const eventsByDay = {};
     events.forEach(function(ev) {
-        const k = calTsToKey(ev.start);
+        const k = calTsToKey(ev.end); // 마감일 기준으로 캘린더에 표시
         (eventsByDay[k] = eventsByDay[k] || []).push(ev);
     });
     const todayKey = calDateKey(new Date());
@@ -11041,7 +11048,7 @@ window.calRender = function() {
             const otherMonth = (dayNum < 1 || dayNum > daysInMonth);
             const key = calDateKey(cellDate);
             const dow = cellDate.getDay();
-            const dayEvents = (eventsByDay[key] || []).slice().sort(function(a, b) { return a.start - b.start; });
+            const dayEvents = (eventsByDay[key] || []).slice().sort(function(a, b) { return a.end - b.end; });
 
             let cls = 'cal-day-cell';
             if (otherMonth) cls += ' cal-other-month';
