@@ -9,6 +9,7 @@
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
 <style>
     :root {
@@ -2570,12 +2571,12 @@ window.deleteHistoryByDateRange = function() {
         popup.innerHTML = `
            <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(2,33px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
     
-            <span id="rap-up"    class="rap-btn" title="위로 이동">▲</span>
-            <span id="rap-left"  class="rap-btn" title="WBS 레벨 올리기">◀</span>
-            <span id="rap-right" class="rap-btn" title="WBS 레벨 내리기">▶</span>
-            <span id="rap-dn"    class="rap-btn" title="아래로 이동">▼</span>
-            <span id="rap-add"   class="rap-btn" title="행 추가">+</span>
-            <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제">−</span>
+            <span id="rap-up"    class="rap-btn" title="위로 이동"><i class="ti ti-chevron-up"></i></span>
+            <span id="rap-left"  class="rap-btn" title="WBS 레벨 올리기"><i class="ti ti-chevron-left"></i></span>
+            <span id="rap-right" class="rap-btn" title="WBS 레벨 내리기"><i class="ti ti-chevron-right"></i></span>
+            <span id="rap-dn"    class="rap-btn" title="아래로 이동"><i class="ti ti-chevron-down"></i></span>
+            <span id="rap-add"   class="rap-btn" title="행 추가"><i class="ti ti-plus"></i></span>
+            <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제"><i class="ti ti-minus"></i></span>
 
         </div>`;
         document.body.appendChild(popup);
@@ -5479,7 +5480,7 @@ window.insertMailTask = function() {
         width: 33px; height: 33px; padding: 0; margin: 0; line-height: 1; box-sizing: border-box;
         display: flex; align-items: center; justify-content: center;
         border: 1.5px solid #2c5f8a; border-radius: 6px; background: #fff; color: #2c5f8a;
-        font-size: 20px; font-weight: bold; -webkit-text-stroke: 0.5px currentColor;
+        font-size: 18px;
         cursor: pointer; user-select: none; -webkit-user-select: none; transition: 0.15s;
     }
     .rap-btn:hover { background: #2c5f8a; color: #fff; }
@@ -9930,10 +9931,10 @@ function bmOpenPopup(key, refTr) {
         popup.className = 'bm-row-popup';
         popup.innerHTML =
             '<div style="display:grid; grid-template-columns:repeat(2,33px); grid-template-rows:repeat(2,33px); gap:4px; align-items:center; justify-items:center;">'
-            + '<span id="bm-up"  class="bm-pop-btn" title="위로 이동(묶음)">▲</span>'
-            + '<span id="bm-dn"  class="bm-pop-btn" title="아래로 이동(묶음)">▼</span>'
-            + '<span id="bm-add" class="bm-pop-btn bm-pop-add" title="행 추가">+</span>'
-            + '<span id="bm-del" class="bm-pop-btn bm-pop-del bm-pop-danger" title="행 삭제">−</span>'
+            + '<span id="bm-up"  class="bm-pop-btn" title="위로 이동(묶음)"><i class="ti ti-chevron-up"></i></span>'
+            + '<span id="bm-dn"  class="bm-pop-btn" title="아래로 이동(묶음)"><i class="ti ti-chevron-down"></i></span>'
+            + '<span id="bm-add" class="bm-pop-btn bm-pop-add" title="행 추가"><i class="ti ti-plus"></i></span>'
+            + '<span id="bm-del" class="bm-pop-btn bm-pop-del bm-pop-danger" title="행 삭제"><i class="ti ti-minus"></i></span>'
             + '</div>';
         document.body.appendChild(popup);
         document.addEventListener('click', function(e) {
