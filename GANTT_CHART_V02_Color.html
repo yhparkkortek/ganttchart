@@ -2553,14 +2553,14 @@ window.deleteHistoryByDateRange = function() {
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-           <div style="display:grid; grid-template-columns:repeat(3,30px); grid-template-rows:repeat(2,30px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
+           <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(2,33px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
     
-            <span id="rap-up"    style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#0056b3;font-size:34px;" title="위로 이동">🔼</span>
-            <span id="rap-left"  style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;font-size:34px;" title="WBS 레벨 올리기">◀️</span>
-            <span id="rap-right" style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#666;font-size:34px;" title="WBS 레벨 내리기">▶️</span>
-            <span id="rap-dn"    style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#0056b3;font-size:34px;" title="아래로 이동">🔽</span>
-            <span id="rap-add"   style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding-top:1px;border:2px solid #28a745;border-radius:4px;background:#e8f5e9;color:#28a745;font-size:20px;font-weight:bold;margin-top:3px;" title="행 추가">➕</span>
-            <span id="rap-del"   style="width:32px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding-top:1px;border:2px solid #e03131;border-radius:4px;background:#fff5f5;color:#e03131;font-size:20px;font-weight:bold;margin-top:3px;" title="행 삭제">➖</span>
+            <span id="rap-up"    class="rap-btn" title="위로 이동">▲</span>
+            <span id="rap-left"  class="rap-btn" title="WBS 레벨 올리기">◀</span>
+            <span id="rap-right" class="rap-btn" title="WBS 레벨 내리기">▶</span>
+            <span id="rap-dn"    class="rap-btn" title="아래로 이동">▼</span>
+            <span id="rap-add"   class="rap-btn" title="행 추가">+</span>
+            <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제">−</span>
 
         </div>`;
         document.body.appendChild(popup);
@@ -5459,6 +5459,18 @@ window.insertMailTask = function() {
             display: none !important;
         }
     }
+    
+    .rap-btn {
+        width: 33px; height: 33px; padding: 0; margin: 0; line-height: 1; box-sizing: border-box;
+        display: flex; align-items: center; justify-content: center;
+        border: 1.5px solid #2c5f8a; border-radius: 6px; background: #fff; color: #2c5f8a;
+        font-size: 20px; font-weight: bold; -webkit-text-stroke: 0.5px currentColor;
+        cursor: pointer; user-select: none; -webkit-user-select: none; transition: 0.15s;
+    }
+    .rap-btn:hover { background: #2c5f8a; color: #fff; }
+    .rap-btn-danger { border-color: #e03131; color: #e03131; }
+    .rap-btn-danger:hover { background: #e03131; color: #fff; }
+    
     /* 행 액션 팝업 */
     .row-action-popup {
         position: fixed;
