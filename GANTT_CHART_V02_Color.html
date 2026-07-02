@@ -789,9 +789,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <p style="margin:0 0 10px; font-size:13px; font-weight:bold; color:#333;">📮 SMTP 설정</p>
     <div style="display:grid; grid-template-columns:90px 1fr; gap:7px 10px; align-items:center; font-size:12.5px;">
       <label>서버 주소</label><input id="as-smtp-host" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
-      <label>포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="587">
+      <label>포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="25">
       <label>계정</label><input id="as-smtp-user" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="user@kortek.co.kr">
       <label>비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
+    </div>
+    <p style="margin:6px 0 0; font-size:11px; color:#999;">🔒 보안상 비밀번호는 이 화면에 저장되지 않습니다 — 다시 열 때마다 빈 칸으로 보이는 게 정상이며, 서버에는 이미 적용되어 있습니다.</p>
     </div>
     <button onclick="window.saveSmtpConfig()" style="margin-top:10px; padding:5px 14px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12.5px;">💾 서버에 저장 (즉시 적용)</button>
     <span id="as-smtp-save-msg" style="font-size:11.5px; color:#27ae60; margin-left:8px;"></span>
@@ -8740,7 +8742,7 @@ window.refreshAlarmAutoButtons = function(enabled) {
 window.saveSmtpConfig = async function() {
     const cfg = {
         host: document.getElementById('as-smtp-host').value.trim(),
-        port: parseInt(document.getElementById('as-smtp-port').value) || 587,
+        port: parseInt(document.getElementById('as-smtp-port').value) || 25,
         user: document.getElementById('as-smtp-user').value.trim(),
         pass: document.getElementById('as-smtp-pass').value,
     };
@@ -8748,6 +8750,13 @@ window.saveSmtpConfig = async function() {
         alert('서버 주소, 계정, 비밀번호를 모두 입력해 주세요.'); return;
     }
     const msgEl = document.getElementById('as-smtp-save-msg');
+
+    // ✅ 서버 연결 성공 여부와 무관하게 host/port/user는 항상 먼저 로컬 저장
+    // (비밀번호는 보안상 로컬에 저장하지 않고 서버에만 전달)
+    const localCfg = window.loadAlarmSettings();
+    localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user };
+    localStorage.setItem('gantt_alarm_settings', JSON.stringify(localCfg));
+
     try {
         const res = await fetch('http://127.0.0.1:5000/config', {
             method: 'POST',
@@ -8756,15 +8765,11 @@ window.saveSmtpConfig = async function() {
         });
         const data = await res.json();
         if (data.ok) {
-            // 비밀번호 제외 로컬 저장
-            const localCfg = window.loadAlarmSettings();
-            localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user };
-            localStorage.setItem('gantt_alarm_settings', JSON.stringify(localCfg));
-            if (msgEl) { msgEl.textContent = '✓ 저장됨'; setTimeout(() => { if(msgEl) msgEl.textContent=''; }, 3000); }
+            if (msgEl) { msgEl.style.color = '#27ae60'; msgEl.textContent = '✓ 서버에 즉시 적용됨'; setTimeout(() => { if(msgEl) msgEl.textContent=''; }, 3000); }
         } else throw new Error(data.error);
     } catch(e) {
-        if (msgEl) msgEl.style.color = '#e03131';
-        if (msgEl) { msgEl.textContent = '실패: ' + e.message; setTimeout(() => { if(msgEl) { msgEl.textContent=''; msgEl.style.color='#27ae60'; } }, 4000); }
+        if (msgEl) msgEl.style.color = '#e67e22';
+        if (msgEl) { msgEl.textContent = '⚠ 로컬엔 저장됨, 서버 미연결 (start.bat 확인)'; setTimeout(() => { if(msgEl) { msgEl.textContent=''; msgEl.style.color='#27ae60'; } }, 5000); }
     }
 };
 
@@ -8790,7 +8795,7 @@ window.openAlarmSettings = function() {
     const cfg  = window.loadAlarmSettings();
     const smtp = cfg.smtp || {};
     document.getElementById('as-smtp-host').value = smtp.host || 'kmail.kortek.co.kr';
-    document.getElementById('as-smtp-port').value = smtp.port || 587;
+    document.getElementById('as-smtp-port').value = smtp.port || 25;
     document.getElementById('as-smtp-user').value = smtp.user || '';
     document.getElementById('as-smtp-pass').value = '';
     window.refreshAlarmAutoButtons(cfg.autoSend !== false);
@@ -8963,12 +8968,17 @@ window.renderAlarmTab = async function() {
     };
 
     const sentStatus = (sentLog, diffDays) => {
-        const sent = Object.keys(sentLog).map(Number).sort((a,b) => a-b);
-        if (!sent.length) {
+        const keys = Object.keys(sentLog);
+        if (!keys.length) {
             if (diffDays <= 7 && diffDays >= 0) return '<span style="color:#e03131;">⚠ 미발송</span>';
             return '<span style="color:#aaa;">-</span>';
         }
-        return sent.map(d => '<span style="color:#27ae60; font-size:11px;">✓ D-' + d + '전</span>').join('<br>');
+        const dayKeys = keys.filter(k => !isNaN(Number(k))).map(Number).sort((a,b) => a-b);
+        const parts = dayKeys.map(d => '<span style="color:#27ae60; font-size:11px;">✓ D-' + d + '전</span>');
+        if (keys.includes('bulk') || keys.includes('manual')) {
+            parts.push('<span style="color:#27ae60; font-size:11px;">✓ 발송완료</span>');
+        }
+        return parts.join('<br>');
     };
 
     const lastSent = (sentLog) => {
@@ -9012,11 +9022,25 @@ window.renderAlarmTab = async function() {
             <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.receiverEmail, item.missingPeople)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.dueStr}</td>
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays)}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px; ${Object.keys(item.sentLog).length ? 'cursor:pointer; text-decoration:underline dotted;' : ''}"
+                title="${Object.keys(item.sentLog).length ? '클릭하면 발송 이력이 초기화됩니다 (재발송 가능)' : ''}"
+                onclick="event.stopPropagation(); window.resetAlarmSent(${idx});">${sentStatus(item.sentLog, item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#888;">${lastSent(item.sentLog)}</td>
         </tr>`).join('');
 
     window._alarmItems = items;
+};
+
+// 발송 이력 초기화 (오발송 등 재발송이 필요할 때)
+window.resetAlarmSent = function(idx) {
+    const item = (window._alarmItems || [])[idx];
+    if (!item || !Object.keys(item.sentLog).length) return;
+    const ok = confirm(`"${item.taskName}"의 발송 이력을 초기화하시겠습니까?\n(다시 "미발송" 상태가 되어 재발송이 가능해집니다)`);
+    if (!ok) return;
+    ['7d', '3d', '1d', 'bulk', 'manual'].forEach(suffix => {
+        localStorage.removeItem(`gantt_alarm_${item.rowId}_${suffix}`);
+    });
+    window.renderAlarmTab();
 };
 
 // 모달 열기
