@@ -701,25 +701,27 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
     <!-- 알람 목록 테이블 -->
     <div class="concept-section" style="padding:0; overflow:hidden;">
-      <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:collapse; font-size:12.5px;">
-        <thead>
+      <div style="overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 280px);">
+      <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
+        <thead style="position:sticky; top:0; z-index:10;">
           <tr style="background:#f4f6f8;">
-            <th style="padding:8px 10px; text-align:left; width:18%;">업무명</th>
-            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap;">업무상태</th>
-            <th style="padding:8px 10px; text-align:center; width:7%;">발신인</th>
-            <th style="padding:8px 10px; text-align:left; width:12%;">발신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:7%;">수신인</th>
-            <th style="padding:8px 10px; text-align:left; width:12%;">수신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:9%;">완료 예정일</th>
-            <th style="padding:8px 10px; text-align:center; width:6%;">D-Day</th>
-            <th style="padding:8px 10px; text-align:center; width:10%;">발송 상태</th>
-            <th style="padding:8px 10px; text-align:center; width:13%;">마지막 발송</th>
+            <th style="padding:8px 10px; text-align:left; width:18%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">업무명</th>
+            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">업무상태</th>
+            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">발신인</th>
+            <th style="padding:8px 10px; text-align:left; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">발신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">수신인</th>
+            <th style="padding:8px 10px; text-align:left; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">수신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">완료 예정일</th>
+            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">D-Day</th>
+            <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">발송 상태</th>
+            <th style="padding:8px 10px; text-align:center; width:13%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">마지막 발송</th>
           </tr>
         </thead>
         <tbody id="alarm-table-body">
           <tr><td colspan="7" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
         </tbody>
       </table>
+      </div>
     </div>
   </div>
 </div>
@@ -8940,18 +8942,17 @@ window.renderAlarmTab = async function() {
     const nameCell = (nameStr) => {
         if (!nameStr || nameStr === '-') return '-';
         const names = nameStr.split(/[,，]/).map(n => n.trim()).filter(Boolean);
-        if (names.length <= 1) return names[0] || '-';
-        return `<span title="${names.join(', ')}" style="cursor:help; border-bottom:1px dashed #aaa;">
-            ${names[0]} 외 ${names.length - 1}명</span>`;
+        if (names.length <= 1) return `<span style="white-space:nowrap;">${names[0] || '-'}</span>`;
+        return `<span title="${names.join('\n')}" style="cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;">${names[0]} 외 ${names.length-1}명</span>`;
     };
     const emailCell2 = (email, missing) => {
         if (!email) {
-            if (missing && missing.length) return `<span style="color:#e03131; font-size:11px;" title="${missing.join(', ')} 이메일 미등록">미등록 ⚠</span>`;
-            return `<span style="color:#e03131; font-size:11px;">미입력</span>`;
+            if (missing && missing.length) return `<span style="color:#e03131; font-size:11px; white-space:nowrap;" title="${missing.join('\n')} 이메일 미등록">미등록 ⚠</span>`;
+            return `<span style="color:#e03131; font-size:11px; white-space:nowrap;">미입력</span>`;
         }
         const emails = email.split(',').map(e => e.trim()).filter(Boolean);
-        if (emails.length <= 1) return `<span style="font-size:11px;">${emails[0]}</span>`;
-        return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa;" title="${emails.join('\n')}">${emails[0]} 외 ${emails.length-1}</span>`;
+        if (emails.length <= 1) return `<span style="font-size:11px; white-space:nowrap;">${emails[0]}</span>`;
+        return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;" title="${emails.join('\n')}">${emails[0]} 외 ${emails.length-1}</span>`;
     };
 
     tbody.innerHTML = items.map((item, idx) => `
