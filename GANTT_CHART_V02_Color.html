@@ -10695,7 +10695,6 @@ function calBuildEvents() {
     for (let i = 1; i < globalData.length; i++) {
         const row = globalData[i];
         if (!row) continue;
-        // 리프 노드(자식이 없는 실제 업무)만 캘린더에 표시 — Weekly Report와 동일한 기준
         const myLevel = (typeof row._level === 'number') ? row._level : 4;
         const nextRow = globalData[i + 1];
         const nextLevel = (nextRow && typeof nextRow._level === 'number') ? nextRow._level : -1;
@@ -10704,13 +10703,22 @@ function calBuildEvents() {
         const name = (typeof wrTaskName === 'function') ? wrTaskName(row) : '';
         if (!name) continue;
         const s = row._calcStartTs;
-        if (!s) continue; // 시작일 기준 표시이므로 시작일이 없으면 제외
+        if (!s) continue;
         const e = row._calcPlanTs || s;
+
+        function cleanText(v) {
+            return v ? v.toString().trim().replace(/\r/g, '').replace(/(\n[ \t]*){2,}/g, '\n').replace(/ {2,}/g, ' ') : '';
+        }
+        const contentText = (colIdx.content !== -1) ? cleanText(row[colIdx.content]) : '';
+        const answerText  = (colIdx.answer  !== -1) ? cleanText(row[colIdx.answer])  : '';
+
         events.push({
             idx: i, name: name, start: s, end: e,
             assignee: window.getSummaryAssignee(),
             status: (typeof colIdx !== 'undefined' && colIdx.status !== -1) ? (row[colIdx.status] || '') : '',
-            alarm: !!row._알림
+            alarm: !!row._알림,
+            content: contentText,
+            answer: answerText
         });
     }
     return events;
@@ -10823,15 +10831,19 @@ function calBuildICSText() {
     function esc(s) { return (s || '').toString().replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;'); }
     const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Kortek Gantt Chart//Calendar Export//KO'];
     events.forEach(function(ev) {
+        // 마감일(ev.end) 하루만 이벤트로 등록 — 기간 전체 막대 표시 방지
         lines.push('BEGIN:VEVENT');
-        lines.push('UID:gantt-' + ev.idx + '-' + icsDate(ev.start) + '@kortek');
-        lines.push('DTSTART;VALUE=DATE:' + icsDate(ev.start));
+        lines.push('UID:gantt-' + ev.idx + '-' + icsDate(ev.end) + '@kortek');
+        lines.push('DTSTART;VALUE=DATE:' + icsDate(ev.end));
         lines.push('DTEND;VALUE=DATE:' + icsDateNext(ev.end));
-        lines.push('SUMMARY:' + esc(ev.name));
+        lines.push('SUMMARY:' + esc((ev.assignee ? '[' + ev.assignee + ']' : '') + ev.name));
         const descParts = [];
         if (ev.assignee) descParts.push('담당자: ' + ev.assignee);
         if (ev.status) descParts.push('상태: ' + ev.status);
-        if (descParts.length) lines.push('DESCRIPTION:' + esc(descParts.join('\n')));
+        descParts.push('시작일: ' + wrFormatMD(ev.start) + ' / 마감일: ' + wrFormatMD(ev.end));
+        if (ev.content) descParts.push('--- 내용 ---\n' + ev.content);
+        if (ev.answer)  descParts.push('--- 답변/코멘트 ---\n' + ev.answer);
+        lines.push('DESCRIPTION:' + esc(descParts.join('\n')));
         lines.push('END:VEVENT');
     });
     lines.push('END:VCALENDAR');
