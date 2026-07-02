@@ -1198,6 +1198,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
             </div>
             <button class="action-btn" onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다">📤 ics 파일로 내보내기</button>
+            <button class="action-btn" onclick="window.calSyncToGist()" title="최초 1회 URL 등록 후 자동 갱신 (몇 시간 지연 가능)">🔗 자동 동기화</button>
         </div>
         <div class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
@@ -10813,9 +10814,10 @@ window.closeCalDayPopup = function(e) {
 
 // 💡 Google Calendar 연동: 표준 .ics 파일로 내보내기 — 구글 캘린더 좌측 [+] → 가져오기로 바로 추가 가능
 // (Drive 연동에 쓰는 OAuth 권한 범위를 건드리지 않는 안전한 방식. 실시간 양방향 동기화가 필요하면 별도로 Calendar API 권한 추가가 필요합니다.)
-window.calExportICS = function() {
+// ICS 텍스트 생성 (다운로드/Gist 업로드 공용)
+function calBuildICSText() {
     const events = calBuildEvents();
-    if (events.length === 0) { alert('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.'); return; }
+    if (events.length === 0) return null;
     function icsDate(ts) { const d = new Date(ts); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); }
     function icsDateNext(ts) { const d = new Date(ts); d.setDate(d.getDate() + 1); return d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0'); }
     function esc(s) { return (s || '').toString().replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;'); }
@@ -10833,12 +10835,70 @@ window.calExportICS = function() {
         lines.push('END:VEVENT');
     });
     lines.push('END:VCALENDAR');
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+    return lines.join('\r\n');
+}
+
+window.calExportICS = function() {
+    const icsText = calBuildICSText();
+    if (!icsText) { alert('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.'); return; }
+    const blob = new Blob([icsText], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = ((window.projectMeta && window.projectMeta.프로젝트명) || 'gantt').replace(/[^\w가-힣\-]/g, '_') + '_calendar.ics';
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
     setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+};
+
+// 🔗 Google Calendar 자동 구독 동기화: GitHub Secret Gist에 ICS를 올려두고
+// 구글 캘린더가 그 raw URL을 주기적으로(수시간 간격) 다시 읽어가게 하는 방식.
+// - 쓰기(gist 생성/갱신): GitHub Personal Access Token(gist 권한)으로 인증
+// - 읽기(구글이 가져가는 것): 인증 없는 raw URL — "링크를 아는 사람만 접근 가능" 수준이며 완전 비공개는 아님
+window.calSyncToGist = async function() {
+    const icsText = calBuildICSText();
+    if (!icsText) { alert('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.'); return; }
+
+    let token = localStorage.getItem('gantt_gist_token');
+    if (!token) {
+        token = prompt('GitHub Personal Access Token을 입력하세요 (gist 권한만 필요, 최초 1회):');
+        if (!token) return;
+        localStorage.setItem('gantt_gist_token', token);
+    }
+
+    const filename = ((window.projectMeta && window.projectMeta.프로젝트명) || 'gantt').replace(/[^\w가-힣\-]/g, '_') + '_calendar.ics';
+    let gistId = localStorage.getItem('gantt_gist_id');
+
+    try {
+        let resp;
+        if (!gistId) {
+            // 최초: secret gist 생성
+            resp = await fetch('https://api.github.com/gists', {
+                method: 'POST',
+                headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    description: 'Kortek Gantt Chart Calendar Sync (secret)',
+                    public: false,
+                    files: { [filename]: { content: icsText } }
+                })
+            });
+        } else {
+            // 이후: 기존 gist 갱신
+            resp = await fetch('https://api.github.com/gists/' + gistId, {
+                method: 'PATCH',
+                headers: { 'Authorization': 'token ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: { [filename]: { content: icsText } } })
+            });
+        }
+        if (!resp.ok) throw new Error('GitHub API 오류: ' + resp.status);
+        const data = await resp.json();
+        if (!gistId) {
+            gistId = data.id;
+            localStorage.setItem('gantt_gist_id', gistId);
+        }
+        const rawUrl = data.files[filename].raw_url.replace(/\/raw\/[0-9a-f]+\//, '/raw/'); // 항상 최신본을 가리키는 URL
+        prompt('구글 캘린더 좌측 [다른 캘린더 +] → "URL로 만들기"에 아래 주소를 붙여넣으세요:\n(최초 1회만 등록하면 이후 자동 갱신됩니다)', rawUrl);
+    } catch (err) {
+        alert('동기화 실패: ' + err.message + '\n토큰이 올바른지, gist 권한이 있는지 확인해주세요.');
+    }
 };
 
 window.calRender = function() {
