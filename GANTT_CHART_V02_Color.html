@@ -1199,6 +1199,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
             <button class="action-btn" onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다">📤 ics 파일로 내보내기</button>
             <button class="action-btn" onclick="window.calSyncToGist()" title="최초 1회 URL 등록 후 자동 갱신 (몇 시간 지연 가능)">🔗 자동 동기화</button>
+            <button class="action-btn" onclick="window.openCalSyncHelp()" title="자동 동기화 설정 방법 보기">❓ 사용법</button>
         </div>
         <div class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
@@ -1252,6 +1253,41 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <span class="history-close" onclick="window.closeCalDayPopup()">✖</span>
             </div>
             <div class="history-body" id="cal-day-popup-body" style="padding:14px; overflow-y:auto;"></div>
+        </div>
+    </div>
+
+    <div id="cal-sync-help-overlay" class="modal-overlay" onclick="window.closeCalSyncHelp(event)">
+        <div class="history-modal" onclick="event.stopPropagation()" style="width:520px; max-width:92vw; height:auto; max-height:80vh;">
+            <div class="history-header">
+                <span>❓ 구글 캘린더 자동 동기화 설정 방법</span>
+                <span class="history-close" onclick="window.closeCalSyncHelp()">✖</span>
+            </div>
+            <div class="history-body" style="padding:16px; overflow-y:auto; font-size:12.5px; line-height:1.7; color:#333;">
+                <b>1단계. GitHub 토큰 준비 (최초 1회만)</b>
+                <ol style="margin:6px 0 14px 18px; padding:0;">
+                    <li><a href="https://github.com/settings/tokens" target="_blank">github.com/settings/tokens</a> 접속 (GitHub 로그인 필요)</li>
+                    <li><b>Generate new token → Generate new token (classic)</b> 클릭</li>
+                    <li>Note: 아무 이름(예: gantt-sync), Expiration: No expiration 권장</li>
+                    <li>권한(Scopes)은 <b>gist</b> 항목 하나만 체크</li>
+                    <li><b>Generate token</b> 클릭 → 나오는 토큰(ghp_로 시작)을 복사해서 잘 보관 (다시 볼 수 없음)</li>
+                </ol>
+                <b>2단계. 앱에서 동기화 실행</b>
+                <ol style="margin:6px 0 14px 18px; padding:0;">
+                    <li>캘린더 탭에서 <b>🔗 자동 동기화</b> 버튼 클릭</li>
+                    <li>토큰 입력창이 뜨면 1단계에서 복사한 토큰 붙여넣기 (최초 1회만 물어봄)</li>
+                    <li>완료되면 주소창(https://gist.githubusercontent.com/...)이 표시됨 → 전체 복사</li>
+                </ol>
+                <b>3단계. 구글 캘린더에 등록 (최초 1회만)</b>
+                <ol style="margin:6px 0 14px 18px; padding:0;">
+                    <li><a href="https://calendar.google.com" target="_blank">calendar.google.com</a> 접속</li>
+                    <li>왼쪽 사이드바 <b>다른 캘린더 옆 [+]</b> 클릭</li>
+                    <li><b>URL로 만들기</b> 선택</li>
+                    <li>2단계에서 복사한 주소 붙여넣고 <b>캘린더 추가</b></li>
+                </ol>
+                <b>이후에는?</b>
+                <p style="margin:4px 0 14px;">데이터가 바뀔 때마다 <b>🔗 자동 동기화</b> 버튼만 다시 누르면 됩니다. 구글 캘린더 등록은 최초 1회만 하면 되고, 주소도 그대로 유지됩니다. 구글 쪽 반영은 보통 8~24시간 정도 걸릴 수 있습니다.</p>
+                <p style="margin:4px 0 0; color:#e03131;">⚠️ 토큰은 비밀번호와 같으니 다른 사람과 공유하지 마세요. 이 링크(gist 주소)를 아는 사람은 누구나 일정 내용을 볼 수 있으니, 민감한 프로젝트라면 사용을 신중히 결정하세요.</p>
+            </div>
         </div>
     </div>
 
@@ -10911,6 +10947,14 @@ window.calSyncToGist = async function() {
     } catch (err) {
         alert('동기화 실패: ' + err.message + '\n토큰이 올바른지, gist 권한이 있는지 확인해주세요.');
     }
+};
+
+window.openCalSyncHelp = function() {
+    document.getElementById('cal-sync-help-overlay').style.display = 'flex';
+};
+window.closeCalSyncHelp = function(e) {
+    if (e && e.target !== document.getElementById('cal-sync-help-overlay')) return;
+    document.getElementById('cal-sync-help-overlay').style.display = 'none';
 };
 
 window.calRender = function() {
