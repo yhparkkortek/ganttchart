@@ -1315,11 +1315,11 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
 - 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
   * 출력 형식: [업무유형][발신자→수신자] YYYY-MM-DD\n[핵심내용]내용\n[To do]후속조치
   * 업무유형은 아래 중 가장 적합한 하나 선택:
-    [요청/문의] 기술검토요청 / 사양검토요청 / 호환성검토요청 / 인증검토요청 / 자료요청 / 견적요청 / 납기문의 / 일정문의 / 승인요청 / 샘플요청 / 불량분석요청 / 테스트요청 / 변경요청 / 확인요청 / 협조요청
-    [회신/답변] 기술답변 / 사양답변 / 호환성답변 / 인증답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 불량분석회신 / 테스트결과회신 / 변경수락 / 변경거절 / 불가통보
-    [공유/안내] 현황공유 / 진행보고 / 결과보고 / 완료보고 / 변경안내 / 이슈알림 / 지연안내 / 회의안내 / 회의록공유 / 인증취득안내 / 단종EOL안내 / 가격변동안내
-    [조치/처리] 문제해결 / 임시조치 / 개선제안 / 대안제시 / 결정사항 / 보류안내 / 취소안내
-    [계약/구매] 발주안내 / 계약검토요청 / 계약완료 / 인보이스요청 / 결제안내
+    [요청/문의] 검토요청 / 자료요청 / 견적요청 / 일정·납기문의 / 승인요청 / 샘플요청 / 분석·테스트요청 / 변경·확인·협조요청
+    [회신/답변] 검토답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 분석·테스트회신 / 변경수락·거절
+    [공유/안내] 진행·결과보고 / 변경안내 / 이슈·지연안내 / 회의안내·공유 / 인증·단종·가격안내
+    [조치/처리] 문제해결·조치 / 개선·대안제시 / 결정사항 / 보류·취소
+    [계약/구매] 발주 / 계약검토·완료 / 인보이스·결제
     위 목록에 없으면: 기타
   * 예시: "[샘플발송] [James Kwon → 박용훈] 2025-05-01\n[핵심내용]S32 Proto A 샘플(LV 9ea, UK 28ea) 발송 예정. AD보드 FW 4종 첨부\n[To do]Fast Touch Response 튜닝 확인 및 회신 요청"
     - wbs레벨: 3 (일반 업무)
@@ -6264,13 +6264,19 @@ function mfMatchProject(subject, body) {
 
 // ─── Gemini 분석 ─────────────────────────────────────────
 async function mfCallGemini(apiKey, parsed) {
-    // 💡 더 이상 엑셀 행에서 찾지 않고 Summary(프로젝트 정보) 값을 그대로 사용
+    // 동일 메일 캐싱 (제목+발신자+본문 앞 200자 해시)
+    const cacheKey = 'gemini_cache_' + btoa(encodeURIComponent(
+        (parsed.subject || '') + (parsed.sender || '') + (parsed.body || '').substring(0, 200)
+    ).substring(0, 100));
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) { try { return JSON.parse(cached); } catch(e) {} }
+
     let assignee = window.getSummaryAssignee();
     let customer = window.getSummaryCustomer();
     let model = window.getSummaryModel();
     let inch = window.getSummaryInch();
     // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
-    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
+    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date);
 
     const GAS_URL = localStorage.getItem('gas_server_url') || 
@@ -6292,7 +6298,9 @@ async function mfCallGemini(apiKey, parsed) {
             console.log('GAS응답status:', data.status, '메시지:', data.message);
             if (data.status !== 'success') throw new Error(data.message);
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            return window.parseGeminiTask(text);
+            const result = window.parseGeminiTask(text);
+            if (result) { try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {} }
+            return result;
         } catch (err) {
             if (attempt < MAX_RETRY) {
                 console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
