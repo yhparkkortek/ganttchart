@@ -7672,7 +7672,7 @@ async function msCallGemini(apiKey, parsed) {
             }
             const memberKeys = ['기구담당자','HW담당자','FW담당자','Module담당자','TSP담당자','LCM담당자','Slimming담당자','Cutting담당자','Tooling담당자'];
             const extraCount = memberKeys.filter(k => pm[k] && String(pm[k]).trim()).length;
-            const devDtStr   = (startFmt !== '-' && praFmt !== '-') ? `${startFmt} ~ ${praFmt} (개발기간 ${devMonths}월)` : '-';
+            const devDtStr   = (startFmt !== '-' && praFmt !== '-') ? `${startFmt} ~ ${praFmt} (개발기간 ${devMonths}개월)` : '-';
 
             s1.addText([
                 { text: '✓ 과제개요', options: { bold: true } }, { text: ` : ${pm.프로젝트명 || projTitle}\n` },
