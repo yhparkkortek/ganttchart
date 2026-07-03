@@ -9256,6 +9256,14 @@ window.populateTabData = function() {
             if (img) { img.src = src; img.style.display = 'block'; }
             if (ph)  ph.style.display = 'none';
             if (del) del.style.display = 'block';
+            // 구버전(w/h 없는) 데이터는 원본 크기를 다시 측정해서 채워 넣음 → PPT 내보내기 시 비율 유지
+            if (!entry.w || !entry.h) {
+                const measureImg = new Image();
+                measureImg.onload = function() {
+                    td.productImages[i] = { data: src, w: measureImg.naturalWidth, h: measureImg.naturalHeight };
+                };
+                measureImg.src = src;
+            }
         });
     }
     
