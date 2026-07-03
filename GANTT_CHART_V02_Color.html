@@ -6754,6 +6754,7 @@ window.msFetchMail = async function() {
                 results.push({
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
+                    body: mail.body,
                     project, task,
                     selected: !!task,
                     registered: false,
@@ -6763,6 +6764,7 @@ window.msFetchMail = async function() {
                 results.push({
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
+                    body: mail.body,
                     project: null, task: null,
                     selected: false, registered: false, error: e.message
                 });
