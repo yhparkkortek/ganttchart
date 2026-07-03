@@ -7179,8 +7179,18 @@ window.mfAnalyze = async function() {
         const f = window._mfFiles[i];
         progText.textContent = `${i+1}/${window._mfFiles.length} — ${f.name}`;
         progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
+        let parsed = null;
         try {
-            const parsed  = await mfParseFile(f);
+            parsed = await mfParseFile(f);
+        } catch (e) {
+            results.push({
+                idx:i, fileName:f.name, subject:f.name, sender:'', date:'', body:'',
+                project:null, task:null, selected:false, registered:false, error:'파일 읽기 실패: ' + e.message
+            });
+            if (i < window._mfFiles.length-1) await new Promise(r=>setTimeout(r,400));
+            continue;
+        }
+        try {
             if (i > 0) await new Promise(r => setTimeout(r, 2000)); // 1.5초 딜레이
             const task = await mfCallGemini(apiKey, parsed);
             results.push({
@@ -7192,12 +7202,17 @@ window.mfAnalyze = async function() {
                 project: null, task,
                 selected: !!task,
                 registered: false,
-                error: !task ? 'AI분석실패' : null
+                error: !task ? 'AI 분석 실패 (본문은 아래에서 확인 가능)' : null
             });
         } catch(e) {
+            // ✅ Gemini 호출 자체가 실패해도, 이미 추출된 메일 본문(parsed)은 그대로 보존
             results.push({
-                idx:i, fileName:f.name, subject:f.name, sender:'', date:'',
-                project:null, task:null, selected:false, registered:false, error:e.message
+                idx:i, fileName:f.name,
+                subject: parsed.subject || f.name,
+                sender: parsed.sender || '',
+                date: parsed.date || '',
+                body: parsed.body || '',
+                project:null, task:null, selected:false, registered:false, error: e.message
             });
         }
         if (i < window._mfFiles.length-1)
@@ -7355,13 +7370,19 @@ window.mfSelectItem = function(idx) {
     const r = window._mfResults[idx];
     if (!r) return;
 
-    // task 없으면 안내 표시
+    // task 없으면 안내 + 확보된 본문(있다면)과 수동 전환 버튼 표시
     if (!r.task) {
         const emptyEl = document.getElementById('mail-right-empty');
         if (emptyEl) emptyEl.innerHTML =
             `<div style="font-size:32px;">⚠️</div>
              <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || 'AI 분석 실패')}</div>
-             <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject)}</div>`;
+             <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject)}</div>
+             ${r.body ? `
+             <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
+                <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
+                <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
+                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:12px; width:100%;">✏️ 이 본문으로 직접 입력해서 등록</button>
+             </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
         document.getElementById('mail-right-empty').style.display = 'flex';
         document.getElementById('mail-right-detail').style.display = 'none';
         return;
@@ -7387,6 +7408,22 @@ window.mfSelectItem = function(idx) {
         window._mfCurrentIdx = -1;
         window.recalculateSchedules();
     });
+};
+
+// ✅ AI 분석 실패 항목을, 추출된 본문을 상세내용에 채운 "빈 업무" 상태로 전환해 수동 입력 흐름으로 넘김
+window.mfRetryAsManual = function(idx) {
+    const r = window._mfResults[idx];
+    if (!r) return;
+    r.task = {
+        '업무명': r.subject || '새 업무',
+        '시작일': '날짜확인필요', '완료일': '날짜확인필요',
+        '상태': '진행', '개발단계': '', '상세내용': r.body || '',
+        'wbs레벨': 4
+    };
+    r.selected = true;
+    r.error = null;
+    mfRenderList(window._mfResults); // 좌측 목록 체크박스/스타일 갱신
+    window.mfSelectItem(idx);
 };
 
 // mfRightInsert → mailRightInsert 으로 통합
