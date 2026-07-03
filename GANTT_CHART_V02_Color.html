@@ -630,6 +630,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="auth_button" class="topbar-btn" onclick="handleAuthClick()" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 드라이브 연동하기</button>
         <button id="drive_load_btn" class="topbar-btn" onclick="loadFromGoogleDrive()" disabled>📥 프로젝트 가져오기</button>
         <button id="drive_save_btn" class="topbar-btn" onclick="saveToGoogleDrive()" disabled>📤 프로젝트 저장하기</button>
+        <div class="tb-sep"></div>
+        <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()">📥 업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
     </div>
     <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
@@ -5213,18 +5215,14 @@ window.clearPromptLogs = function() {
     }
 };
         
-window.insertMailTask = function() {
-    if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
-    if (!globalData || globalData.length <= 1) { alert('먼저 엑셀 파일을 로드해주세요.'); return; }
-
-    const r = window._mailAnalyzedResult;
-    const insertAfter = parseInt(document.getElementById('mail-insert-position').value);
+// ✅ [공용] 분석 결과(r) → 간트 행 객체 생성 (개별 등록 / 보관함 배치 공용)
+window.buildMailTaskRow = function(r) {
     const wbsLevel = parseInt(r['wbs레벨'] ?? 4);
 
     let newRow = new Array(globalData[0].length).fill("");
     newRow._level = wbsLevel;
     newRow._origDev = ""; newRow._origT1 = ""; newRow._origT2 = ""; newRow._origT3 = ""; newRow._origT4 = "";
-    // ✅ 메일 추가 항목임을 표시하기 위해 * 처리 (사용자가 확인 후 제거 가능)
+    // ✅ 메일 추가 항목임을 표시하기 위해 📧 처리 (사용자가 확인 후 제거 가능)
     const taskName = (r['업무명'] || "새 업무") + ' 📧';
     if (wbsLevel === 0) newRow._origDev = taskName;
     else if (wbsLevel === 1) newRow._origT1 = taskName;
@@ -5257,27 +5255,198 @@ window.insertMailTask = function() {
     if (colIdx.devStage !== -1) newRow[colIdx.devStage] = (r['개발단계'] || "").toString().trim();
     if (colIdx.content !== -1) newRow[colIdx.content] = (r['상세내용'] || "").toString().trim().replace(/\\n/g, '\n');
 
-    if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
-            alert('⚠️ 시작일 또는 완료일을 먼저 입력해주세요.');
-            return;
-        }
-        
     // 소요일 설정
     if (wbsLevel === 1 && colIdx.dur1 !== -1) newRow[colIdx.dur1] = "1";
     else if (wbsLevel === 2 && colIdx.dur2 !== -1) newRow[colIdx.dur2] = "1";
     else if (wbsLevel === 3 && colIdx.dur3 !== -1) newRow[colIdx.dur3] = "1";
     else if (wbsLevel === 4 && colIdx.dur4 !== -1) newRow[colIdx.dur4] = "1";
     else if (colIdx.period !== -1) newRow[colIdx.period] = "1";
-    // ✅ 날짜 미입력 시 삽입 차단
-    
-    const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
-    globalData.splice(pos, 0, newRow);
 
-    logChange(pos, -1, "없음", `메일 분석으로 추가: ${taskName}`);
+    return { row: newRow, taskName: taskName };
+};
+
+window.insertMailTask = function() {
+    if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
+    if (!globalData || globalData.length <= 1) { alert('먼저 엑셀 파일을 로드해주세요.'); return; }
+
+    const r = window._mailAnalyzedResult;
+    // ✅ 날짜 미입력 시 삽입 차단 (필드 매핑 전에 선검증)
+    if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
+        alert('⚠️ 시작일 또는 완료일을 먼저 입력해주세요.');
+        return;
+    }
+
+    const insertAfter = parseInt(document.getElementById('mail-insert-position').value);
+    const built = window.buildMailTaskRow(r);
+
+    const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
+    globalData.splice(pos, 0, built.row);
+
+    logChange(pos, -1, "없음", `메일 분석으로 추가: ${built.taskName}`);
     window.closeMailAnalyzer();
     window.recalculateSchedules();
-    alert(`✅ "${taskName}" 업무가 추가되었습니다!`);
+    alert(`✅ "${built.taskName}" 업무가 추가되었습니다!`);
 };
+
+// =========================================================
+// 📥 [Phase 1] 업무 보관함 (Task Inbox) — 프로젝트 독립 스테이징
+// =========================================================
+window.TaskInbox = {
+    KEY: 'gantt_task_inbox',
+    load: function() {
+        try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
+    },
+    save: function(list) {
+        localStorage.setItem(this.KEY, JSON.stringify(list));
+        window.updateInboxBadge();
+    },
+    add: function(task, meta) {
+        const list = this.load();
+        list.unshift({
+            uid: 'ib_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            task: JSON.parse(JSON.stringify(task)),
+            source: (meta && meta.source) || '메일분석',
+            addedAt: new Date().toISOString(),
+            status: '대기',            // 대기 | 배치됨 (Phase2에서 '전송됨' 추가)
+            history: []
+        });
+        this.save(list);
+    },
+    remove: function(uid) {
+        this.save(this.load().filter(it => it.uid !== uid));
+    },
+    setStatus: function(uid, status, historyEntry) {
+        const list = this.load();
+        const it = list.find(x => x.uid === uid);
+        if (!it) return;
+        it.status = status;
+        if (historyEntry) (it.history = it.history || []).push(historyEntry);
+        this.save(list);
+    }
+};
+
+window.updateInboxBadge = function() {
+    const badge = document.getElementById('inbox-badge');
+    if (!badge) return;
+    const n = window.TaskInbox.load().filter(it => it.status === '대기').length;
+    badge.textContent = n;
+    badge.style.display = n > 0 ? 'inline-block' : 'none';
+};
+
+window.openTaskInbox = function() {
+    window.renderTaskInbox();
+    document.getElementById('task-inbox-overlay').style.display = 'flex';
+};
+window.closeTaskInbox = function() {
+    document.getElementById('task-inbox-overlay').style.display = 'none';
+};
+
+// 현재 프로젝트의 개발단계(L0) 목록 수집
+window.getCurrentL0List = function() {
+    const arr = [];
+    if (!globalData || globalData.length <= 1 || !colIdx || colIdx.devStage === -1) return arr;
+    for (let i = 1; i < globalData.length; i++) {
+        const row = globalData[i]; if (!row) continue;
+        const v = (row[colIdx.devStage] || '').toString().trim();
+        if (v && arr.indexOf(v) === -1) arr.push(v);
+    }
+    return arr;
+};
+
+window.renderTaskInbox = function() {
+    const listEl = document.getElementById('inbox-list');
+    if (!listEl) return;
+    const items = window.TaskInbox.load();
+    if (items.length === 0) {
+        listEl.innerHTML = '<div style="padding:40px 0; text-align:center; color:#aaa; font-size:13px;">보관함이 비어 있습니다.<br>메일 분석 화면에서 [📥 보관함] 버튼으로 업무를 담아주세요.</div>';
+        return;
+    }
+    const l0List = window.getCurrentL0List();
+    const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;' };
+    let html = '';
+    items.forEach(function(it) {
+        const t = it.task || {};
+        const l0Options = ['<option value="__END__">(맨 끝에 추가)</option>']
+            .concat(l0List.map(function(v) {
+                const selAttr = (v === (t['개발단계'] || '').trim()) ? ' selected' : '';
+                return '<option value="' + escapeHtml(v) + '"' + selAttr + '>' + escapeHtml(v) + ' 구간 끝</option>';
+            })).join('');
+        const dateStr = (t['시작일'] || '?') + ' ~ ' + (t['완료일'] || '?');
+        const when = it.addedAt ? new Date(it.addedAt).toLocaleString() : '';
+        html += `
+        <div style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fff;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                <div style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</div>
+                <span style="font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${it.status}</span>
+            </div>
+            <div style="font-size:11px; color:#888; margin-top:3px;">
+                ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''} · ${escapeHtml(it.source || '')} · ${when}
+            </div>
+            <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
+                <select id="inbox-l0-${it.uid}" style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
+                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap;">➡️ 현재 프로젝트에 배치</button>
+                <button class="action-btn" onclick="if(confirm('이 업무를 보관함에서 삭제할까요?')){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131;">🗑</button>
+            </div>
+        </div>`;
+    });
+    listEl.innerHTML = html;
+};
+
+window.inboxPlaceToCurrent = function(uid) {
+    if (!globalData || globalData.length <= 1) { alert('먼저 프로젝트(엑셀 또는 드라이브)를 로드해주세요.'); return; }
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const r = it.task;
+    if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
+        alert('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.');
+        return;
+    }
+    const sel = document.getElementById('inbox-l0-' + uid);
+    const chosenL0 = sel ? sel.value : '__END__';
+
+    const built = window.buildMailTaskRow(r);
+
+    let pos = globalData.length;
+    if (chosenL0 !== '__END__' && colIdx.devStage !== -1) {
+        let last = -1;
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i]; if (!row) continue;
+            if ((row[colIdx.devStage] || '').toString().trim() === chosenL0) last = i;
+        }
+        if (last !== -1) pos = last + 1;
+        built.row[colIdx.devStage] = chosenL0; // 배치 구간과 개발단계 값 일치시킴
+    }
+    globalData.splice(pos, 0, built.row);
+
+    logChange(pos, -1, "없음", `보관함에서 배치: ${built.taskName}`);
+    window.recalculateSchedules();
+    window.TaskInbox.setStatus(uid, '배치됨', {
+        type: '현재프로젝트배치',
+        target: (window.projectMeta || {}).프로젝트명 || '현재 프로젝트',
+        at: new Date().toISOString()
+    });
+    window.renderTaskInbox();
+    alert(`✅ "${built.taskName}" 업무가 [${chosenL0 === '__END__' ? '맨 끝' : chosenL0}] 위치에 배치되었습니다.`);
+};
+
+window.inboxClearDone = function() {
+    const list = window.TaskInbox.load();
+    const remain = list.filter(function(it) { return it.status === '대기'; });
+    if (remain.length === list.length) { alert('정리할 처리 완료 항목이 없습니다.'); return; }
+    if (!confirm(`처리 완료(배치됨/전송됨) 항목 ${list.length - remain.length}건을 정리할까요?\n(재전송이 필요할 수 있다면 남겨두세요)`)) return;
+    window.TaskInbox.save(remain);
+    window.renderTaskInbox();
+};
+
+window.mailRightToInbox = function() {
+    if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
+    window.TaskInbox.add(window._mailAnalyzedResult, { source: '업무 추가(메일분석)' });
+    alert(`📥 "${window._mailAnalyzedResult['업무명'] || '새 업무'}" 업무를 보관함에 담았습니다.\n상단바 [📥 업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`);
+};
+
+// 페이지 로드 시 뱃지 초기화
+window.updateInboxBadge();
+
 </script>
 
 <style>
@@ -5490,6 +5659,21 @@ window.insertMailTask = function() {
 
 
 </style>
+
+<!-- 📥 업무 보관함 모달 -->
+<div id="task-inbox-overlay" class="modal-overlay" style="display:none;" onclick="window.closeTaskInbox()">
+    <div class="history-modal" onclick="event.stopPropagation()" style="max-width:760px; width:92vw; max-height:84vh; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-shrink:0;">
+            <span style="font-size:15px; font-weight:bold; color:#2c5f8a;">📥 업무 보관함</span>
+            <div style="display:flex; gap:8px;">
+                <button class="action-btn" onclick="window.inboxClearDone()" style="font-size:12px;">🧹 처리됨 정리</button>
+                <button class="action-btn" onclick="window.closeTaskInbox()" style="font-size:12px;">✕ 닫기</button>
+            </div>
+        </div>
+        <p style="margin:0 0 10px; font-size:12px; color:#888; flex-shrink:0;">분석된 업무를 프로젝트와 독립적으로 보관합니다. 프로젝트를 전환해도 유지되며, 현재 열린 프로젝트의 개발단계(L0) 구간을 선택해 배치할 수 있습니다.</p>
+        <div id="inbox-list" style="flex:1; overflow-y:auto; min-height:120px;"></div>
+    </div>
+</div>
 
 <div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
@@ -5749,6 +5933,13 @@ window.insertMailTask = function() {
                                        border-radius:6px; font-size:13px; font-weight:bold;
                                        cursor:pointer; white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
                             ✅ 개별 등록
+                        </button>
+                        <button onclick="window.mailRightToInbox()"
+                                style="padding:10px 16px; background:#fff; color:#e67e22; border:1px solid #e67e22;
+                                       border-radius:6px; font-size:13px; font-weight:bold;
+                                       cursor:pointer; white-space:nowrap;"
+                                title="현재 프로젝트가 아닌 업무를 보관함에 담아두고, 나중에 다른 프로젝트에 배치합니다.">
+                            📥 보관함
                         </button>
                     </div>
                     
