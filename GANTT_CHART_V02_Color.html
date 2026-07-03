@@ -2857,7 +2857,7 @@ window.deleteHistoryByDateRange = function() {
 
             // 시작일 선택 시 완료일 자동 설정 (시작일 + 3일)
             if (fieldKey === '시작일') {
-                const planDate = new Date(new Date(str).getTime() + 3 * 24 * 60 * 60 * 1000);
+                const planDate = new Date(new Date(str).getTime() + 1 * 24 * 60 * 60 * 1000);
                 const planStr = planDate.getFullYear() + '-' + String(planDate.getMonth()+1).padStart(2,'0') + '-' + String(planDate.getDate()).padStart(2,'0');
                 window._mailAnalyzedResult['완료일'] = planStr;
                 const planSpan = document.getElementById('mail-date-완료일');
@@ -5005,7 +5005,7 @@ window.renderMailResult = function(result) {
     const hasDate = result['시작일'] && !result['시작일'].includes('날짜확인필요');
 
     if (hasDate && (!result['완료일'] || result['완료일'].includes('날짜확인필요'))) {
-        const planDate = new Date(new Date(result['시작일']).getTime() + 3 * 24 * 60 * 60 * 1000);
+        const planDate = new Date(new Date(result['시작일']).getTime() + 1 * 24 * 60 * 60 * 1000);
         const planStr = planDate.getFullYear() + '-' + String(planDate.getMonth()+1).padStart(2,'0') + '-' + String(planDate.getDate()).padStart(2,'0');
         result['완료일'] = planStr;
         window._mailAnalyzedResult['완료일'] = planStr;
@@ -6225,7 +6225,7 @@ function cleanMailBody(raw) {
         /-{3,}\s*Original Message\s*-{3,}/i,
         /-{3,}\s*Forwarded message\s*-{3,}/i,
         /_{10,}/,
-        /\n\s*보낸\s*사람\s*:/,
+        /\n\*{0,2}\s*보낸\s*사람\s*:/,
         /\n\s*From:\s.+\n\s*(Sent|To|보낸\s*날짜)\s*:/i,
         /\n[^\n]{0,80}\d{4}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}[^\n]{0,40}(작성|wrote)\s*:/i,
         /\nOn\s.+\swrote:/i
@@ -6362,6 +6362,15 @@ window.mfAnalyze = async function() {
 };
 
 // ─── 왼쪽 목록 렌더링 ───────────────────────────────────
+
+window.mfDeleteItem = function(idx) {
+    const r = window._mfResults[idx];
+    if (!r) return;
+    const label = r.task ? (r.task['업무명'] || '새업무') : r.subject;
+    if (!confirm(`"${label}"\n이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`)) return;
+    window._mfResults.splice(idx, 1);
+    mfRenderList(window._mfResults);
+};
 function mfRenderList(results) {
     const list = document.getElementById('mf-result-list');
     let html = '';
@@ -6408,9 +6417,12 @@ function mfRenderList(results) {
                         : ''}
                     ${r.registered
                         ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>`
-                        : ''}
+                        : `<span style="color:#999; font-size:10px;">⬜미등록</span>`}
                 </div>
             </div>
+            <button data-del-idx="${i}" title="목록에서 삭제"
+                    style="flex-shrink:0; border:none; background:none; color:#bbb; cursor:pointer; font-size:13px; padding:2px 4px;"
+                    onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑</button>
         </div>`;
     });
 
@@ -6427,10 +6439,19 @@ function mfRenderList(results) {
 
         // 행 클릭
         row.addEventListener('click', function(e) {
-            // 체크박스 클릭은 제외
-            if (e.target.type === 'checkbox') return;
+            // 체크박스·삭제버튼 클릭은 제외
+            if (e.target.type === 'checkbox' || e.target.dataset.delIdx !== undefined) return;
             window.mfSelectItem(i);
         });
+
+        // 삭제 버튼
+        const delBtn = row.querySelector('[data-del-idx]');
+        if (delBtn) {
+            delBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                window.mfDeleteItem(i);
+            });
+        }
 
         // 체크박스 변경
         const cb = row.querySelector('input[type=checkbox]');
@@ -6543,7 +6564,7 @@ window.mfBatchInsert = async function() {
     // mfBatchInsert 함수 루프 부분 수정
     for (let i = window._mfResults.length - 1; i >= 0; i--) {
         const r = window._mfResults[i];
-        if (r.selected && r.task) {
+        if (r.selected && r.task && !r.registered) {
             // 💡 중요: 만약 분석 창을 통해 수정한 데이터가 있다면 그것을 task에 덮어씌움
             if (window._mfCurrentIdx === i && window._mailAnalyzedResult) {
                 r.task = window._mailAnalyzedResult;
@@ -6551,7 +6572,7 @@ window.mfBatchInsert = async function() {
             
             if (mfDirectInsert(r.task)) {
                 r.registered = true;
-                window._mfResults.splice(i, 1);
+                r.selected = false;
             }
         }
     }
@@ -6767,6 +6788,15 @@ window.msFetchMail = async function() {
 };
 
 // ─── 목록 렌더링 (파일첨부 탭과 동일 구조) ──────────────
+
+window.msDeleteItem = function(idx) {
+    const r = window._msResults[idx];
+    if (!r) return;
+    const label = r.task ? (r.task['업무명'] || '새업무') : r.subject;
+    if (!confirm(`"${label}"\n이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`)) return;
+    window._msResults.splice(idx, 1);
+    msRenderList(window._msResults);
+};
 function msRenderList(results) {
     const list = document.getElementById('ms-result-list');
     let html = '';
@@ -6794,9 +6824,14 @@ function msRenderList(results) {
                     ${r.project
                         ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r.project}</span>`
                         : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
-                    ${r.registered ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>` : ''}
+                    ${r.registered
+                        ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>`
+                        : `<span style="color:#999; font-size:10px;">⬜미등록</span>`}
                 </div>
             </div>
+            <button data-del-idx="${i}" title="목록에서 삭제"
+                    style="flex-shrink:0; border:none; background:none; color:#bbb; cursor:pointer; font-size:13px; padding:2px 4px;"
+                    onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑</button>
         </div>`;
     });
 
@@ -6806,9 +6841,16 @@ function msRenderList(results) {
         const row = document.getElementById(`ms-list-item-${i}`);
         if (!row) return;
         row.addEventListener('click', function(e) {
-            if (e.target.type === 'checkbox') return;
+            if (e.target.type === 'checkbox' || e.target.dataset.delIdx !== undefined) return;
             window.msSelectItem(i);
         });
+        const delBtn = row.querySelector('[data-del-idx]');
+        if (delBtn) {
+            delBtn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                window.msDeleteItem(i);
+            });
+        }
         const cb = row.querySelector('input[type=checkbox]');
         if (cb) cb.addEventListener('change', function() {
             window._msResults[i].selected = this.checked;
@@ -6892,7 +6934,7 @@ window.msBatchInsert = async function() {
             try {
                 if (mfDirectInsert(r.task)) {
                     r.registered = true;
-                    window._msResults.splice(i, 1);
+                    r.selected = false;
                 }
             } catch(e) { console.error(e); }
         }
