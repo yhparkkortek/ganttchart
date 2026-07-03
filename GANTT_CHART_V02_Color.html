@@ -364,7 +364,7 @@
 }
 #app-topbar .tb-logo-wrap { width: var(--sb-w-expanded); height: 100%; flex-shrink:0; display:flex; align-items:center; padding-left: 20px; justify-content:flex-start; box-sizing:border-box; }
 #app-topbar .tb-logo { height: 40px; width: auto; max-width: calc(var(--sb-w-expanded) - 36px); object-fit: contain; display:block; }
-#app-topbar .tb-btns { display:flex; align-items:center; margin-left: 15px; gap:8px; flex-wrap:nowrap; }
+#app-topbar .tb-btns { display:flex; align-items:center; margin-left: 15px; gap:0px; flex-wrap:nowrap; }
 #app-topbar .tb-sep { width:1px; height:22px; background:rgba(255,255,255,0.4); margin:0 4px; }
 #app-topbar .tb-lang { margin-left:auto; flex-shrink:0; }
 .topbar-btn {
@@ -374,7 +374,7 @@
     height: 30px;               /* 🎯 높이 30px 강제 지정 */
     box-sizing: border-box;     /* 테두리 두께를 30px 안에 포함시킴 */
     padding: 0 12px;            /* 🎯 상하 패딩을 0으로 지우고 좌우 여백만 유지 */
-    font-size: 13px;            /* 🎯 글자 크기 13px */
+    font-size: 14px;            /* 🎯 글자 크기 13px */
     
     background: transparent; 
     border: none; 
@@ -439,6 +439,12 @@
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
 .concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
+.mem3-cols { column-count: 2; column-gap: 16px; }
+.mem3-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; break-inside: avoid-column; -webkit-column-break-inside: avoid; }
+.mem3-row .u-input { flex: 1 1 0; min-width: 0; }
+.mem3-row .mem3-email { flex: 1.4 1 0; }
+.mem3-row .mem3-del { flex: 0 0 22px; text-align: center; }
+@media (max-width: 700px) { .mem3-cols { column-count: 1; } }
 .concept-grid label { font-size:12.5px; color:#666; }
 .concept-grid input, .concept-grid textarea {
     width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
@@ -632,6 +638,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="drive_save_btn" class="topbar-btn" onclick="saveToGoogleDrive()" disabled>📤 프로젝트 저장하기</button>
         <div class="tb-sep"></div>
         <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()">📥 업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
+        <button id="mail-btn" class="topbar-btn" onclick="window.showMailAnalyzer()">📧 업무 추가</button>
     </div>
     <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
@@ -649,6 +656,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="sb-item" data-tab="calendar" onclick="window.switchTab('calendar')"><span class="sb-ico">📅</span><span class="sb-label">Calendar</span></div>
         <div class="sb-item" data-tab="weekly" onclick="window.switchTab('weekly')"><span class="sb-ico">📨</span><span class="sb-label">Weekly Report</span></div>
         <div class="sb-item" data-tab="alarm" onclick="window.switchTab('alarm')"><span class="sb-ico">🔔</span><span class="sb-label">Alarm</span></div>
+        <div class="sb-item" data-tab="address" onclick="window.switchTab('address')"><span class="sb-ico">📇</span><span class="sb-label">Address</span></div>
     </div>
 </div>
 
@@ -811,7 +819,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="redo-btn" class="action-btn" onclick="window.redoLastAction()" disabled title="다시 실행 (Ctrl+Y)">↪️ 다시실행</button>
         <button id="recalc-range-btn" class="action-btn" onclick="window.recalcSelectedRange()" title="선택한 행들만 일정 고정을 해제하고 다시 계산합니다 (Ctrl/Shift로 행 선택 후 클릭)">🔓 선택 구간 재계산</button>
         <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지). 🔒 이미 고정된 날짜는 이동하지 않고, 화면상 행의 표시 순서만 정리됩니다.">📅 날짜순 정렬</button>
-        <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()">📧 업무 추가</button>
         <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
         </div>
 
@@ -851,6 +858,50 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
     </div>
 </div> <!-- /#tab-gantt -->
+
+<div id="tab-address" class="tab-panel">
+    <div id="table-info">
+        <span id="table-info-text">📇 Address Book</span>
+        <div class="btn-group" style="margin-left:auto;">
+            <label class="action-btn" style="cursor:pointer;" for="addr-file-input">📂 주소록 불러오기</label>
+            <input type="file" id="addr-file-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importAddressExcel(this.files)">
+            <button class="action-btn" onclick="window.exportAddressExcel()">💾 주소록 내보내기</button>
+            <button class="action-btn" onclick="window.addAddressRow()">➕ 행 추가</button>
+            <button class="action-btn" onclick="window.deleteSelectedAddressRows()" style="color:#e03131; border-color:#e03131;">🗑 선택 삭제</button>
+            <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
+            <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
+        </div>
+    </div>
+    <div style="padding:12px; height:calc(100% - 50px); box-sizing:border-box; overflow:hidden; display:flex; flex-direction:column;">
+        <div style="font-size:11px; color:#888; margin-bottom:6px;">
+            💡 이름 칸은 Summary 탭 담당자 자동완성 소스로 쓰입니다. 행 번호를 Ctrl/Shift 클릭하면 여러 명 선택 후 일괄 삭제할 수 있습니다.
+        </div>
+        <div id="address-table-wrap" style="flex:1; overflow:auto; border:1px solid #e0e0e0; border-radius:6px;">
+            <table id="address-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
+                <colgroup>
+                    <col style="width:40px;"><col style="width:16%;"><col style="width:14%;"><col style="width:16%;">
+                    <col style="width:22%;"><col style="width:14%;"><col style="width:14%;"><col style="width:40px;">
+                </colgroup>
+                <thead>
+                    <tr style="background:#f4f6f8;">
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6;">#</th>
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">이름</th>
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">부서</th>
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">직함</th>
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">이메일</th>
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">휴대폰</th>
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">근무처 전화</th>
+                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6;"></th>
+                    </tr>
+                </thead>
+                <tbody id="address-table-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 📇 이름 자동완성 드롭다운 (Summary 담당자 칸 전용, 공용 1개) -->
+<div id="addr-autocomplete-dropdown" style="display:none; position:absolute; z-index:99999; background:#fff; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:220px; overflow-y:auto;"></div>
 
 <div id="tab-summary" class="tab-panel">
     <div class="concept-tab-wrap">
@@ -971,17 +1022,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
                 💡 위 멤버-1,2에 없는 추가 인원을 자유롭게 등록하세요. 여기 등록된 이름/메일도 알림메일 발송(전체 참조) 대상에 자동으로 포함됩니다.
             </div>
-            <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-                <thead>
-                    <tr style="background:#f4f6f8;">
-                        <th style="padding:6px 8px; text-align:left; width:26%;">담당업무</th>
-                        <th style="padding:6px 8px; text-align:left; width:26%;">이름</th>
-                        <th style="padding:6px 8px; text-align:left; width:38%;">메일</th>
-                        <th style="padding:6px 8px; width:10%;"></th>
-                    </tr>
-                </thead>
-                <tbody id="sum-member3-body"></tbody>
-            </table>
+            <div style="display:flex; gap:6px; font-size:11px; color:#888; font-weight:bold; margin-bottom:4px; padding:0 4px;">
+                <span style="flex:1 1 0;">담당업무</span><span style="flex:1 1 0;">이름</span><span style="flex:1.4 1 0;">메일</span><span style="flex:0 0 22px;"></span>
+            </div>
+            <div id="sum-member3-body" class="mem3-cols"></div>
             <button type="button" onclick="window.addMember3Row()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="product-images-section">
@@ -6261,8 +6305,8 @@ window.updateInboxBadge();
                 <button onclick="window.closeTaskInbox()"
                     style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
                            color:#2c5f8a; font-size:16px; cursor:pointer;
-                           width:28px; height:28px; padding:0; line-height:1; box-sizing:border-box;
-                           margin-top:2px;
+                           width:28px; height: 29px; padding:0; line-height:1; box-sizing:border-box;
+                           margin-top:4px;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
                     onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';"
                     onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';"
@@ -10209,38 +10253,275 @@ window.sendAllPendingAlarms = async function() {
 
 // 💡 프로젝트 멤버-3 (자유 추가 인원) 행 렌더링
 window.renderMember3Rows = function(rows) {
-    const tbody = document.getElementById('sum-member3-body');
-    if (!tbody) return;
+    const wrap = document.getElementById('sum-member3-body');
+    if (!wrap) return;
     if (!rows || !rows.length) {
-        tbody.innerHTML = '';
+        wrap.innerHTML = '';
         return;
     }
-    tbody.innerHTML = rows.map(function(r) {
-        return '<tr>'
-            + '<td style="padding:4px 6px;"><input type="text" data-field="role" class="u-input" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계"></td>'
-            + '<td style="padding:4px 6px;"><input type="text" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동"></td>'
-            + '<td style="padding:4px 6px;"><input type="email" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com"></td>'
-            + '<td style="padding:4px 6px; text-align:center;"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>'
-            + '</tr>';
+    wrap.innerHTML = rows.map(function(r) {
+        return '<div class="mem3-row">'
+            + '<input type="text" data-field="role" class="u-input" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계">'
+            + '<input type="text" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동">'
+            + '<input type="email" data-field="email" class="u-input mem3-email" value="' + _escTabVal(r.email) + '" placeholder="email@company.com">'
+            + '<span class="mem3-del"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></span>'
+            + '</div>';
     }).join('');
 };
 
 window.addMember3Row = function() {
-    const tbody = document.getElementById('sum-member3-body');
-    if (!tbody) return;
-    const tr = document.createElement('tr');
-    tr.innerHTML = '<td style="padding:4px 6px;"><input type="text" data-field="role" class="u-input" placeholder="예: PCB 설계"></td>'
-        + '<td style="padding:4px 6px;"><input type="text" data-field="name" class="u-input" placeholder="예: 홍길동"></td>'
-        + '<td style="padding:4px 6px;"><input type="email" data-field="email" class="u-input" placeholder="email@company.com"></td>'
-        + '<td style="padding:4px 6px; text-align:center;"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>';
-    tbody.appendChild(tr);
+    const wrap = document.getElementById('sum-member3-body');
+    if (!wrap) return;
+    const div = document.createElement('div');
+    div.className = 'mem3-row';
+    div.innerHTML = '<input type="text" data-field="role" class="u-input" placeholder="예: PCB 설계">'
+        + '<input type="text" data-field="name" class="u-input" placeholder="예: 홍길동">'
+        + '<input type="email" data-field="email" class="u-input mem3-email" placeholder="email@company.com">'
+        + '<span class="mem3-del"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></span>';
+    wrap.appendChild(div);
 };
 
 window.deleteMember3Row = function(btn) {
-    const tr = btn.closest('tr');
-    if (tr) tr.remove();
+    const row = btn.closest('.mem3-row');
+    if (row) row.remove();
     if (window.collectTabData) window.collectTabData();
 };
+
+// =========================================================
+// 📇 Address Book — CRUD, 다중선택, 정렬
+// =========================================================
+window._addrSelectedRows = new Set();
+window._addrLastClickedIdx = null;
+
+window.renderAddressTable = function() {
+    const tbody = document.getElementById('address-table-body');
+    if (!tbody) return;
+    window.tabData = window.tabData || {};
+    const rows = window.tabData.addressBook || [];
+    tbody.innerHTML = rows.map(function(p, i) {
+        const sel = window._addrSelectedRows.has(i);
+        return '<tr data-idx="' + i + '"' + (sel ? ' style="background:#fff3e0;"' : '') + '>'
+            + '<td onclick="window.addrRowClick(event,' + i + ')" style="padding:5px; text-align:center; cursor:pointer; color:#888; user-select:none; border-bottom:1px solid #f0f0f0;">' + (i + 1) + '</td>'
+            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="name" value="' + _escTabVal(p.name) + '" onchange="window.collectAddressData()"></td>'
+            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="dept" value="' + _escTabVal(p.dept) + '" onchange="window.collectAddressData()"></td>'
+            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="title" value="' + _escTabVal(p.title) + '" onchange="window.collectAddressData()"></td>'
+            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="email" value="' + _escTabVal(p.email) + '" onchange="window.collectAddressData()"></td>'
+            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="mobile" value="' + _escTabVal(p.mobile) + '" onchange="window.collectAddressData()"></td>'
+            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="phone" value="' + _escTabVal(p.phone) + '" onchange="window.collectAddressData()"></td>'
+            + '<td style="padding:3px; text-align:center; border-bottom:1px solid #f0f0f0;"><button type="button" onclick="window.deleteAddressRow(' + i + ')" style="border:none; background:none; color:#bbb; cursor:pointer;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>'
+            + '</tr>';
+    }).join('');
+};
+
+window.addrRowClick = function(e, idx) {
+    if (e.shiftKey && window._addrLastClickedIdx !== null) {
+        const lo = Math.min(window._addrLastClickedIdx, idx), hi = Math.max(window._addrLastClickedIdx, idx);
+        for (let i = lo; i <= hi; i++) window._addrSelectedRows.add(i);
+    } else if (e.ctrlKey || e.metaKey) {
+        if (window._addrSelectedRows.has(idx)) window._addrSelectedRows.delete(idx);
+        else window._addrSelectedRows.add(idx);
+        window._addrLastClickedIdx = idx;
+    } else {
+        window._addrSelectedRows = new Set([idx]);
+        window._addrLastClickedIdx = idx;
+    }
+    window.renderAddressTable();
+};
+
+window.addAddressRow = function() {
+    window.tabData = window.tabData || {};
+    window.tabData.addressBook = window.tabData.addressBook || [];
+    window.tabData.addressBook.push({ name: '', dept: '', title: '', email: '', mobile: '', phone: '' });
+    window.renderAddressTable();
+};
+
+window.deleteAddressRow = function(idx) {
+    if (!confirm('이 인원을 주소록에서 삭제할까요?')) return;
+    window.collectAddressData();
+    window.tabData.addressBook.splice(idx, 1);
+    window._addrSelectedRows = new Set();
+    window.renderAddressTable();
+};
+
+window.deleteSelectedAddressRows = function() {
+    if (!window._addrSelectedRows || window._addrSelectedRows.size === 0) { alert('삭제할 행을 선택해주세요. (행 번호를 Ctrl/Shift 클릭)'); return; }
+    if (!confirm(window._addrSelectedRows.size + '명을 주소록에서 삭제할까요?')) return;
+    window.collectAddressData();
+    window.tabData.addressBook = window.tabData.addressBook.filter(function(_, i) { return !window._addrSelectedRows.has(i); });
+    window._addrSelectedRows = new Set();
+    window.renderAddressTable();
+};
+
+window.sortAddressBy = function(field) {
+    window.collectAddressData();
+    window.tabData.addressBook.sort(function(a, b) { return String(a[field] || '').localeCompare(String(b[field] || ''), 'ko'); });
+    window._addrSelectedRows = new Set();
+    window.renderAddressTable();
+};
+
+window.collectAddressData = function() {
+    window.tabData = window.tabData || {};
+    const rows = [];
+    document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
+        const get = function(f) { const el = tr.querySelector('[data-field="' + f + '"]'); return el ? el.value : ''; };
+        rows.push({ name: get('name'), dept: get('dept'), title: get('title'), email: get('email'), mobile: get('mobile'), phone: get('phone') });
+    });
+    window.tabData.addressBook = rows;
+};
+
+// =========================================================
+// 📇 Address Book — 엑셀/CSV 불러오기 · 내보내기
+// =========================================================
+window.importAddressExcel = function(files) {
+    if (!files || !files.length) return;
+    const file = files[0];
+    const curCount = (window.tabData && window.tabData.addressBook) ? window.tabData.addressBook.length : 0;
+    if (!confirm('"' + file.name + '" 파일로 현재 주소록(' + curCount + '명)을 전체 교체합니다.\n계속할까요?')) {
+        document.getElementById('addr-file-input').value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        try {
+            const wb = XLSX.read(e.target.result, { type: 'array' });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+            const pick = function(row, keys) {
+                for (const k of keys) { if (row[k] !== undefined && String(row[k]).trim() !== '') return String(row[k]).trim(); }
+                return '';
+            };
+            const list = json.map(function(row) {
+                const first = pick(row, ['이름', '성명', 'Name']);
+                const last  = pick(row, ['성']);
+                return {
+                    name:  (last + first) || first,
+                    dept:  pick(row, ['부서', 'Department']),
+                    title: pick(row, ['직함', '직책', 'Title']),
+                    email: pick(row, ['전자 메일 주소', '이메일', 'Email', 'E-mail']),
+                    mobile: pick(row, ['휴대폰', '휴대전화', 'Mobile']),
+                    phone: pick(row, ['근무처 전화', '회사 전화', 'Work Phone'])
+                };
+            }).filter(function(p) { return p.name; });
+
+            window.tabData = window.tabData || {};
+            window.tabData.addressBook = list;
+            window._addrSelectedRows = new Set();
+            window.renderAddressTable();
+            alert('✅ 주소록 ' + list.length + '명을 불러왔습니다.');
+        } catch (err) {
+            alert('❌ 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+        }
+        document.getElementById('addr-file-input').value = '';
+    };
+    reader.readAsArrayBuffer(file);
+};
+
+window.exportAddressExcel = function() {
+    window.collectAddressData();
+    const rows = window.tabData.addressBook || [];
+    const aoa = [['이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']].concat(
+        rows.map(function(p) { return [p.name, p.dept, p.title, p.email, p.mobile, p.phone]; })
+    );
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Address');
+    XLSX.writeFile(wb, '주소록_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+};
+
+// =========================================================
+// 📇 이름 자동완성 — Address Book 기반, 부서/직함 표시 드롭다운
+// =========================================================
+function addrShowSuggestions(inputEl, query, emailEl, isMulti) {
+    const dd = document.getElementById('addr-autocomplete-dropdown');
+    if (!dd) return;
+    if (!query) { dd.style.display = 'none'; return; }
+    const list = (window.tabData.addressBook || []).filter(function(p) {
+        return p.name && p.name.indexOf(query) !== -1;
+    }).slice(0, 8);
+    if (!list.length) { dd.style.display = 'none'; return; }
+
+    const rect = inputEl.getBoundingClientRect();
+    dd.style.left  = (rect.left + window.scrollX) + 'px';
+    dd.style.top   = (rect.bottom + window.scrollY + 2) + 'px';
+    dd.style.width = Math.max(rect.width, 220) + 'px';
+    dd.innerHTML = list.map(function(p, i) {
+        return '<div class="addr-ac-item" data-i="' + i + '" style="padding:6px 10px; cursor:pointer; font-size:12.5px; border-bottom:1px solid #f0f0f0;">'
+            + '<b>' + escapeHtml(p.name) + '</b> <span style="color:#888;">' + escapeHtml(p.dept || '') + (p.title ? (' · ' + escapeHtml(p.title)) : '') + '</span></div>';
+    }).join('');
+    Array.from(dd.querySelectorAll('.addr-ac-item')).forEach(function(el, i) {
+        el.addEventListener('mousedown', function(ev) {
+            ev.preventDefault(); // input blur보다 먼저 처리되도록
+            addrApplyPick(inputEl, emailEl, isMulti, list[i]);
+            dd.style.display = 'none';
+        });
+        el.addEventListener('mouseover', function() { el.style.background = '#f0f6ff'; });
+        el.addEventListener('mouseout',  function() { el.style.background = '#fff'; });
+    });
+    dd.style.display = 'block';
+}
+
+function addrApplyPick(inputEl, emailEl, isMulti, person) {
+    if (isMulti) {
+        const parts = inputEl.value.split(',');
+        parts[parts.length - 1] = person.name;
+        inputEl.value = parts.map(function(s) { return s.trim(); }).filter(Boolean).join(',');
+        if (emailEl && person.email) {
+            const existing = (emailEl.value || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+            if (existing.indexOf(person.email) === -1) existing.push(person.email);
+            emailEl.value = existing.join(',');
+        }
+    } else {
+        inputEl.value = person.name;
+        if (emailEl && person.email) emailEl.value = person.email;
+    }
+    if (window.collectTabData) window.collectTabData();
+}
+
+// isMulti=true 이면 "조익현,조재준"처럼 콤마로 여러 명 입력 가능한 칸으로 취급(마지막 이름만 매칭/치환)
+window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti) {
+    if (!inputEl) return;
+    inputEl.addEventListener('input', function() {
+        const val = inputEl.value;
+        const query = isMulti ? val.split(',').pop().trim() : val.trim();
+        addrShowSuggestions(inputEl, query, emailEl, !!isMulti);
+    });
+    inputEl.addEventListener('blur', function() {
+        setTimeout(function() {
+            const dd = document.getElementById('addr-autocomplete-dropdown');
+            if (dd) dd.style.display = 'none';
+        }, 150);
+    });
+};
+
+// 📇 멤버-1/2 (고정 10칸) — 콤마로 여러 명 입력 가능하므로 isMulti=true
+[['sum-pm','sum-pm-email'], ['sum-mech','sum-mech-email'], ['sum-hw','sum-hw-email'],
+ ['sum-fw','sum-fw-email'], ['sum-module','sum-module-email'],
+ ['sum-tsp','sum-tsp-email'], ['sum-lcm','sum-lcm-email'], ['sum-slimming','sum-slimming-email'],
+ ['sum-cutting','sum-cutting-email'], ['sum-tooling','sum-tooling-email']
+].forEach(function(pair) {
+    const nameEl  = document.getElementById(pair[0]);
+    const emailEl = document.getElementById(pair[1]);
+    if (nameEl) window.attachAddressAutocomplete(nameEl, emailEl, true);
+});
+
+// 📇 멤버-3 (자유 추가, 행이 동적으로 생기므로 이벤트 위임 방식)
+(function() {
+    const wrap = document.getElementById('sum-member3-body');
+    if (!wrap) return;
+    wrap.addEventListener('input', function(e) {
+        if (!e.target.matches('[data-field="name"]')) return;
+        const row = e.target.closest('.mem3-row');
+        const emailEl = row ? row.querySelector('[data-field="email"]') : null;
+        addrShowSuggestions(e.target, e.target.value.trim(), emailEl, false);
+    });
+    wrap.addEventListener('focusout', function(e) {
+        if (!e.target.matches('[data-field="name"]')) return;
+        setTimeout(function() {
+            const dd = document.getElementById('addr-autocomplete-dropdown');
+            if (dd) dd.style.display = 'none';
+        }, 150);
+    });
+})();
 
 window.collectTabData = function() {
     window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
@@ -10313,13 +10594,16 @@ window.collectTabData = function() {
 
     // 💡 프로젝트 멤버-3 (자유 추가 인원) 수집
     const member3Rows = [];
-    document.querySelectorAll('#sum-member3-body tr').forEach(function(tr) {
-        const role  = (tr.querySelector('[data-field="role"]')  || {}).value || '';
-        const name  = (tr.querySelector('[data-field="name"]')  || {}).value || '';
-        const email = (tr.querySelector('[data-field="email"]') || {}).value || '';
+    document.querySelectorAll('#sum-member3-body .mem3-row').forEach(function(row) {
+        const role  = (row.querySelector('[data-field="role"]')  || {}).value || '';
+        const name  = (row.querySelector('[data-field="name"]')  || {}).value || '';
+        const email = (row.querySelector('[data-field="email"]') || {}).value || '';
         if (role || name || email) member3Rows.push({ role: role, name: name, email: email });
     });
     window.tabData.projectMembers3 = member3Rows;
+
+    // 📇 Address Book도 함께 수집 (드라이브/JSON 저장에 포함)
+    if (window.collectAddressData) window.collectAddressData();
 
     // Brief SPEC / M.C Table
     window.tabData.briefSpec = _readRowsFromTbody('briefspec-body');
@@ -10386,6 +10670,10 @@ window.populateTabData = function() {
 
     // 💡 프로젝트 멤버-3 렌더링
     if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
+
+    // 📇 Address Book 렌더링
+    window.tabData.addressBook = td.addressBook || [];
+    if (window.renderAddressTable) window.renderAddressTable();
 
     setVal('sum-purpose', sd.purpose);
     setVal('sum-volume', sd.volume);
