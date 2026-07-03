@@ -3692,6 +3692,10 @@ window.deleteHistoryByDateRange = function() {
             ['F/W 담당자', meta.FW담당자 || ''],
             ['Module 담당자', meta.Module담당자 || ''],
             ['TSP 담당자', meta.TSP담당자 || ''],
+            ['LCM 담당자', meta.LCM담당자 || ''],
+            ['Slimming 담당자', meta.Slimming담당자 || ''],
+            ['Cutting 담당자', meta.Cutting담당자 || ''],
+            ['Tooling 담당자', meta.Tooling담당자 || ''],
             ['적용 목적', sd.purpose || ''],
             ['연간 수요량', sd.volume || ''],
             ['목표 양산 일정', sd.mpDate || ''],
@@ -3700,8 +3704,12 @@ window.deleteHistoryByDateRange = function() {
             ['기구 이메일', meta.기구담당자이메일 || ''],
             ['HW 이메일', meta.HW담당자이메일 || ''],
             ['FW 이메일', meta.FW담당자이메일 || ''],
+            ['Module 이메일', meta.Module담당자이메일 || ''],
             ['TSP 이메일', meta.TSP담당자이메일 || ''],
             ['LCM 이메일', meta.LCM담당자이메일 || ''],
+            ['Slimming 이메일', meta.Slimming담당자이메일 || ''],
+            ['Cutting 이메일', meta.Cutting담당자이메일 || ''],
+            ['Tooling 이메일', meta.Tooling담당자이메일 || ''],
         ];
         [['기획Start', 'PROTO Start'], ['기획Finish', 'PROTO End'], ['ProtoDR', 'Proto DR'], ['ESStart', 'ES Start'], ['ESEnd', 'ES End'], ['DVR', 'DVR'], ['PPStart', 'PP Start'], ['PPEnd', 'PP End'], ['PRA', 'PRA']].forEach(([key, label]) => {
             const m = (sd.milestones && sd.milestones[key]) || {};
@@ -3889,6 +3897,25 @@ window.deleteHistoryByDateRange = function() {
             }
             wsAlarm['!cols'] = [{wch: 28}, {wch: 12}, {wch: 12}, {wch: 10}, {wch: 45}];
             XLSX.utils.book_append_sheet(wb, wsAlarm, "알림메일");
+        }
+
+        // ── 제품사진_원본데이터 시트: 사진(base64)을 셀 글자수 제한(약 32,767자) 때문에 여러 행으로 나눠 저장 ──
+        const CHUNK_SIZE = 30000;
+        const piRows = [['슬롯', '순번', '가로(w)', '세로(h)', '데이터(base64 조각)']];
+        (tabData.productImages || []).forEach(function(entry, slotIdx) {
+            if (!entry) return;
+            const src = (typeof entry === 'string') ? entry : entry.data;
+            if (!src) return;
+            const w = (entry && entry.w) || '';
+            const h = (entry && entry.h) || '';
+            for (let c = 0; c * CHUNK_SIZE < src.length; c++) {
+                piRows.push([slotIdx, c, w, h, src.substr(c * CHUNK_SIZE, CHUNK_SIZE)]);
+            }
+        });
+        if (piRows.length > 1) {
+            const wsProdImg = XLSX.utils.aoa_to_sheet(piRows);
+            wsProdImg['!cols'] = [{wch: 6}, {wch: 6}, {wch: 8}, {wch: 8}, {wch: 40}];
+            XLSX.utils.book_append_sheet(wb, wsProdImg, "제품사진_원본데이터");
         }
 
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
@@ -8130,11 +8157,25 @@ function _parseSummarySheetFromWorkbook(workbook) {
         'F/W 담당자': function(v) { pm.FW담당자 = v; },
         'Module 담당자': function(v) { pm.Module담당자 = v; },
         'TSP 담당자': function(v) { pm.TSP담당자 = v; },
+        'LCM 담당자': function(v) { pm.LCM담당자 = v; },
+        'Slimming 담당자': function(v) { pm.Slimming담당자 = v; },
+        'Cutting 담당자': function(v) { pm.Cutting담당자 = v; },
+        'Tooling 담당자': function(v) { pm.Tooling담당자 = v; },
         '적용 목적': function(v) { sd.purpose = v; },
         '연간 수요량': function(v) { sd.volume = v; },
         '목표 양산 일정': function(v) { sd.mpDate = v; },
         '추진 배경 및 의의': function(v) { sd.background = v; },
-        '개발기간(일)': function(v) { sd.devDays = v; }
+        '개발기간(일)': function(v) { sd.devDays = v; },
+        'PM 이메일': function(v) { pm.프로젝트담당자이메일 = v; },
+        '기구 이메일': function(v) { pm.기구담당자이메일 = v; },
+        'HW 이메일': function(v) { pm.HW담당자이메일 = v; },
+        'FW 이메일': function(v) { pm.FW담당자이메일 = v; },
+        'Module 이메일': function(v) { pm.Module담당자이메일 = v; },
+        'TSP 이메일': function(v) { pm.TSP담당자이메일 = v; },
+        'LCM 이메일': function(v) { pm.LCM담당자이메일 = v; },
+        'Slimming 이메일': function(v) { pm.Slimming담당자이메일 = v; },
+        'Cutting 이메일': function(v) { pm.Cutting담당자이메일 = v; },
+        'Tooling 이메일': function(v) { pm.Tooling담당자이메일 = v; }
     };
     const milestoneMap = { '기획 Start': '기획Start', 'PROTO Start': '기획Start', '기획 Finish': '기획Finish', 'PROTO End': '기획Finish', 'Proto DR': 'ProtoDR', 'ES Start': 'ESStart', 'ES End': 'ESEnd', 'DVR': 'DVR', 'PP Start': 'PPStart', 'PP End': 'PPEnd', 'PRA': 'PRA' };
     json.forEach(function(row) {
@@ -8276,6 +8317,37 @@ function _parseMcChangeLogSheetFromWorkbook(workbook) {
     return true;
 }
 
+// 💡 "제품사진_원본데이터" 시트를 읽어 여러 행에 나뉜 base64 조각을 순번대로 합쳐 tabData.productImages로 복원
+function _parseProductImagesSheetFromWorkbook(workbook) {
+    const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === '제품사진_원본데이터'; });
+    if (!sheetName) return false;
+    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    const slots = {};
+    for (let i = 1; i < json.length; i++) {
+        const r = json[i];
+        if (!r || r.length === 0 || r[4] === undefined || r[4] === '') continue;
+        const slotIdx = parseInt(r[0], 10);
+        const chunkIdx = parseInt(r[1], 10);
+        if (isNaN(slotIdx) || isNaN(chunkIdx)) continue;
+        slots[slotIdx] = slots[slotIdx] || { w: r[2] || '', h: r[3] || '', chunks: [] };
+        slots[slotIdx].chunks[chunkIdx] = String(r[4]);
+    }
+    const keys = Object.keys(slots);
+    if (!keys.length) return false;
+    window.tabData = window.tabData || {};
+    window.tabData.productImages = window.tabData.productImages || [null, null, null];
+    keys.forEach(function(k) {
+        const slotIdx = parseInt(k, 10);
+        const s = slots[k];
+        window.tabData.productImages[slotIdx] = {
+            data: s.chunks.join(''),
+            w: parseInt(s.w, 10) || undefined,
+            h: parseInt(s.h, 10) || undefined
+        };
+    });
+    return true;
+}
+
 window.parseConceptSheetsFromWorkbook = function(workbook) {
     const a = _parseSummarySheetFromWorkbook(workbook);
     const b = _parseBriefSpecSheetFromWorkbook(workbook);
@@ -8283,7 +8355,8 @@ window.parseConceptSheetsFromWorkbook = function(workbook) {
     const d = _parseMcComparisonSheetFromWorkbook(workbook);
     const e = _parseMcSalesDetailSheetFromWorkbook(workbook);
     const f = _parseMcChangeLogSheetFromWorkbook(workbook);
-    if ((a || b || c || d || e || f) && window.populateTabData) window.populateTabData();
+    const g = _parseProductImagesSheetFromWorkbook(workbook);
+    if ((a || b || c || d || e || f || g) && window.populateTabData) window.populateTabData();
 };
 // ── Summary 탭: Gantt chart Level 0 데이터와 연동된 진척 타임라인 (말풍선 + 텍스트) ──
 function _sumTlEscHtml(s) {
