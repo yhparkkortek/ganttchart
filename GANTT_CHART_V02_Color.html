@@ -10682,7 +10682,7 @@ window.populateTabData = function() {
             const spCell = function(field, border) {
                 const raw = sp[field];
                 const display = raw ? '$' + parseNum(raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
+                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value, this)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
             };
             let salesHtml = '<tr class="mc-summary-row" style="background-color:#e8f5e9; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
             if (!hidePairs.protoA) salesHtml += spCell('protoCost', true) + spCell('protoNre');
@@ -11147,13 +11147,18 @@ window.mcRefreshTable = function() {
 };
 
 // 💡 R1~R5 개별 화면의 영업판가(PROTO/MP × Cost/NRE 개별) 입력 저장 — 비교 페이지의 salesPrice와는 별도 저장소
-window.mcUpdateSalesPriceDetail = function(rev, field, val) {
+window.mcUpdateSalesPriceDetail = function(rev, field, val, el) {
     window.tabData = window.tabData || {};
     window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
     window.tabData.mcSalesPriceDetail[rev] = window.tabData.mcSalesPriceDetail[rev] || {};
     const oldVal = window.tabData.mcSalesPriceDetail[rev][field] || '';
+    if (String(oldVal) === String(val)) return; // 실제 변경 없으면 종료
+
+    const reason = window.promptOptionalReason(`영업판가 (${rev}) 변경`);
+    if (reason === null) { if (el) el.value = oldVal; return; } // 취소 → 입력값 원복, 저장 안 함
+
     window.tabData.mcSalesPriceDetail[rev][field] = val;
-    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val);
+    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val, reason);
     window.mcRefreshTable();
 };
 
@@ -11273,7 +11278,16 @@ window.deleteMcHistoryByDateRange = function() {
             const itemInp = tr.querySelector('input[data-field="item"]');
             const rowLabel = (((typeInp && typeInp.value) || '') + ' ' + ((itemInp && itemInp.value) || '')).trim() || '행';
             const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
-            window.mcLogChange(rowLabel, el.dataset.field, oldVal, el.value);
+            if (String(oldVal) === String(el.value)) return; // 실제 변경 없으면 프롬프트 자체를 띄우지 않음
+
+            const fieldLabelMap = { type:'TYPE', item:'ITEM', group:'GROUP', pn:'P/N', spec:'Specification',
+                protoCost:'PROTO A Cost', protoNre:'PROTO A NRE', protoBCost:'PROTO B Cost', protoBNre:'PROTO B NRE',
+                mpCost:'MP Cost', mpNre:'MP NRE', note:'Note' };
+            const fieldLabel = fieldLabelMap[el.dataset.field] || el.dataset.field;
+            const reason = window.promptOptionalReason(`[${rowLabel}] ${fieldLabel} 변경`);
+            if (reason === null) { el.value = oldVal; return; } // 취소 → 원래 값으로 되돌리고 저장 안 함
+
+            window.mcLogChange(rowLabel, el.dataset.field, oldVal, el.value, reason);
             el.dataset._histOld = el.value;
         });
     }
@@ -11396,13 +11410,18 @@ window.mcToggleCompareExpand = function(btnEl) {
 
 // 💡 비교 페이지에서 영업판가를 수정하면, 메인 R1~R5 표의 MP 영업판가(mcSalesPriceDetail)에 직접 반영
 //    (메인 표는 "현재 활성 리비전"만 화면에 있어서, 다른 리비전을 수정할 땐 mcRefreshTable()을 호출하면 안 됨 — 데이터만 갱신)
-window.mcUpdateSalesPriceFromCompare = function(rev, field, val) {
+window.mcUpdateSalesPriceFromCompare = function(rev, field, val, el) {
     window.tabData = window.tabData || {};
     window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
     window.tabData.mcSalesPriceDetail[rev] = window.tabData.mcSalesPriceDetail[rev] || {};
     const oldVal = window.tabData.mcSalesPriceDetail[rev][field] || '';
+    if (String(oldVal) === String(val)) return; // 실제 변경 없으면 종료
+
+    const reason = window.promptOptionalReason(`영업판가 (${rev}) 변경`);
+    if (reason === null) { if (el) el.value = oldVal; return; } // 취소 → 입력값 원복, 저장 안 함
+
     window.tabData.mcSalesPriceDetail[rev][field] = val;
-    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val);
+    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val, reason);
     window.mcRenderComparisonTable();
 };
 
@@ -11573,8 +11592,8 @@ window.mcRenderComparisonTable = function() {
         const detail = (td.mcSalesPriceDetail && td.mcSalesPriceDetail[rev]) || {};
         const costVal = detail.mpCost ? _mcFmtCurSummary(_mcParseNum(detail.mpCost)) : '';
         const nreVal = detail.mpNre ? _mcFmtCurSummary(_mcParseNum(detail.mpNre)) : '';
-        salesRow += '<td class="mc-comp-divider" style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + costVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpCost\', this.value)"></td>'
-            + '<td style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + nreVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpNre\', this.value)"></td>';
+        salesRow += '<td class="mc-comp-divider" style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + costVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpCost\', this.value, this)"></td>'
+            + '<td style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + nreVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpNre\', this.value, this)"></td>';
     });
     salesRow += '<td></td></tr>';
 
