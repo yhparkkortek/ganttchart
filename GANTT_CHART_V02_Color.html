@@ -935,31 +935,55 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
             </div>
         </div>
+        <div class="concept-section">
+            <h3>추진 배경 및 의의</h3>
+            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:80px; max-height:220px; overflow-y:auto;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
+        </div>
         <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3>프로젝트 멤버-1</h3>
+                <div style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
+                    💡 담당업무명(맨 왼쪽 칸)은 자유롭게 수정하실 수 있습니다. 실제 데이터는 내부적으로 고정된 항목에 저장되므로 PPT·엑셀·알림메일 자동연동에는 영향이 없습니다 — 다만 팀원이 알아보기 쉽도록 원래 의미(H/W, TSP 등)는 가급적 유지해 주세요.
+                </div>
                 <div class="concept-grid concept-grid-mem">
-                    <label>프로젝트 담당자</label><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
-                    <label>기구 담당자</label><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
-                    <label>H/W 담당자</label><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
-                    <label>F/W 담당자</label><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">                  
-                    <label>BLU 담당자</label><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자"><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">                  
+                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3>프로젝트 멤버-2</h3>
+                <div style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
+                    💡 담당업무명(맨 왼쪽 칸)은 자유롭게 수정하실 수 있습니다. 실제 데이터는 내부적으로 고정된 항목에 저장되므로 PPT·엑셀·알림메일 자동연동에는 영향이 없습니다.
+                </div>
                 <div class="concept-grid concept-grid-mem">
-                    <label>TSP 담당자</label><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
-                    <label>LCM 담당자</label><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
-                    <label>Slimming 담당자</label><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
-                    <label>Cutting 담당자</label><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
-                    <label>Tooling 담당자</label><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
         </div>
         <div class="concept-section">
-            <h3>추진 배경 및 의의</h3>
-            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
+            <h3>프로젝트 멤버-3 <span style="font-size:11px;color:#999;font-weight:normal;">(자유 추가 · 알림메일 수신 대상에 자동 포함)</span></h3>
+            <div style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
+                💡 위 멤버-1,2에 없는 추가 인원을 자유롭게 등록하세요. 여기 등록된 이름/메일도 알림메일 발송(전체 참조) 대상에 자동으로 포함됩니다.
+            </div>
+            <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+                <thead>
+                    <tr style="background:#f4f6f8;">
+                        <th style="padding:6px 8px; text-align:left; width:26%;">담당업무</th>
+                        <th style="padding:6px 8px; text-align:left; width:26%;">이름</th>
+                        <th style="padding:6px 8px; text-align:left; width:38%;">메일</th>
+                        <th style="padding:6px 8px; width:10%;"></th>
+                    </tr>
+                </thead>
+                <tbody id="sum-member3-body"></tbody>
+            </table>
+            <button type="button" onclick="window.addMember3Row()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="product-images-section">
             <h3>제품 사진 <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
@@ -8878,6 +8902,10 @@ window.collectAlarmItems = function() {
             if (name && email) nameToEmail[name] = email;
         });
     });
+    // 💡 프로젝트 멤버-3 (자유 추가 인원)도 이름→이메일 매핑에 포함
+    ((window.tabData || {}).projectMembers3 || []).forEach(m => {
+        if (m.name && m.email) nameToEmail[m.name.trim()] = m.email.trim();
+    });
 
     // CC 이메일
     const cfg     = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
@@ -9123,12 +9151,13 @@ window.sendSingleAlarm = async function(sendAll) {
     const pm        = window.projectMeta || {};
     const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
 
-    // ALL 모드: 프로젝트 전체 멤버 이메일
+    // ALL 모드: 프로젝트 전체 멤버 이메일 (멤버-3 자유 추가 인원 포함)
     const allMemberEmails = [
         pm.프로젝트담당자이메일, pm.기구담당자이메일,
         pm.HW담당자이메일, pm.FW담당자이메일, pm.TSP담당자이메일,
         pm.LCM담당자이메일, pm.Slimming담당자이메일,
         pm.Cutting담당자이메일, pm.Module담당자이메일, pm.Tooling담당자이메일,
+        ...((window.tabData || {}).projectMembers3 || []).map(m => m.email),
     ].flatMap(e => (e || '').split(/[,，]/).map(x => x.trim()))
      .filter(e => e && e.includes('@'));
 
@@ -9209,6 +9238,7 @@ window.sendAllPendingAlarms = async function() {
         pm.HW담당자이메일, pm.FW담당자이메일, pm.TSP담당자이메일,
         pm.LCM담당자이메일, pm.Slimming담당자이메일,
         pm.Cutting담당자이메일, pm.Module담당자이메일, pm.Tooling담당자이메일,
+        ...((window.tabData || {}).projectMembers3 || []).map(m => m.email),
     ].filter(e => e && e.includes('@')).join(',');
 
     if (!allEmails) {
@@ -9252,6 +9282,41 @@ window.sendAllPendingAlarms = async function() {
     window.renderAlarmTab();
     const msg = sentCount > 0 ? `${sentCount}건 발송 완료!` : '발송 실패. 메일 서버를 확인해 주세요.';
     if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+};
+
+// 💡 프로젝트 멤버-3 (자유 추가 인원) 행 렌더링
+window.renderMember3Rows = function(rows) {
+    const tbody = document.getElementById('sum-member3-body');
+    if (!tbody) return;
+    if (!rows || !rows.length) {
+        tbody.innerHTML = '';
+        return;
+    }
+    tbody.innerHTML = rows.map(function(r) {
+        return '<tr>'
+            + '<td style="padding:4px 6px;"><input type="text" data-field="role" class="u-input" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계"></td>'
+            + '<td style="padding:4px 6px;"><input type="text" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동"></td>'
+            + '<td style="padding:4px 6px;"><input type="email" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com"></td>'
+            + '<td style="padding:4px 6px; text-align:center;"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>'
+            + '</tr>';
+    }).join('');
+};
+
+window.addMember3Row = function() {
+    const tbody = document.getElementById('sum-member3-body');
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td style="padding:4px 6px;"><input type="text" data-field="role" class="u-input" placeholder="예: PCB 설계"></td>'
+        + '<td style="padding:4px 6px;"><input type="text" data-field="name" class="u-input" placeholder="예: 홍길동"></td>'
+        + '<td style="padding:4px 6px;"><input type="email" data-field="email" class="u-input" placeholder="email@company.com"></td>'
+        + '<td style="padding:4px 6px; text-align:center;"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>';
+    tbody.appendChild(tr);
+};
+
+window.deleteMember3Row = function(btn) {
+    const tr = btn.closest('tr');
+    if (tr) tr.remove();
+    if (window.collectTabData) window.collectTabData();
 };
 
 window.collectTabData = function() {
@@ -9313,6 +9378,26 @@ window.collectTabData = function() {
     if (pm.고객모델명) pm.모델명 = pm.고객모델명;
     if (pm.KTK모델명) pm.PN_모델명 = pm.KTK모델명;
 
+    // 💡 멤버-1,2 담당업무 라벨(자유 수정 텍스트) 저장 — 내부 키는 고정, 화면 표시 텍스트만 별도 보관
+    pm.memberLabels = pm.memberLabels || {};
+    [['sum-pm-label','프로젝트담당자'],['sum-mech-label','기구담당자'],['sum-hw-label','HW담당자'],
+     ['sum-fw-label','FW담당자'],['sum-module-label','Module담당자'],['sum-tsp-label','TSP담당자'],
+     ['sum-lcm-label','LCM담당자'],['sum-slimming-label','Slimming담당자'],
+     ['sum-cutting-label','Cutting담당자'],['sum-tooling-label','Tooling담당자']].forEach(function(pair) {
+        const el = document.getElementById(pair[0]);
+        if (el && el.value) pm.memberLabels[pair[1]] = el.value;
+    });
+
+    // 💡 프로젝트 멤버-3 (자유 추가 인원) 수집
+    const member3Rows = [];
+    document.querySelectorAll('#sum-member3-body tr').forEach(function(tr) {
+        const role  = (tr.querySelector('[data-field="role"]')  || {}).value || '';
+        const name  = (tr.querySelector('[data-field="name"]')  || {}).value || '';
+        const email = (tr.querySelector('[data-field="email"]') || {}).value || '';
+        if (role || name || email) member3Rows.push({ role: role, name: name, email: email });
+    });
+    window.tabData.projectMembers3 = member3Rows;
+
     // Brief SPEC / M.C Table
     window.tabData.briefSpec = _readRowsFromTbody('briefspec-body');
     const _curRev = window.tabData.mcActiveRevision || 'R1';
@@ -9362,6 +9447,23 @@ window.populateTabData = function() {
     setVal('sum-cutting-email', pm.Cutting담당자이메일);
     setVal('sum-module-email', pm.Module담당자이메일);
     setVal('sum-tooling-email', pm.Tooling담당자이메일);
+
+    // 💡 멤버-1,2 담당업무 라벨 복원 (사용자가 바꾼 적 없으면 기본 텍스트 그대로 유지)
+    const ml = pm.memberLabels || {};
+    setVal('sum-pm-label', ml.프로젝트담당자);
+    setVal('sum-mech-label', ml.기구담당자);
+    setVal('sum-hw-label', ml.HW담당자);
+    setVal('sum-fw-label', ml.FW담당자);
+    setVal('sum-module-label', ml.Module담당자);
+    setVal('sum-tsp-label', ml.TSP담당자);
+    setVal('sum-lcm-label', ml.LCM담당자);
+    setVal('sum-slimming-label', ml.Slimming담당자);
+    setVal('sum-cutting-label', ml.Cutting담당자);
+    setVal('sum-tooling-label', ml.Tooling담당자);
+
+    // 💡 프로젝트 멤버-3 렌더링
+    if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
+
     setVal('sum-purpose', sd.purpose);
     setVal('sum-volume', sd.volume);
     setVal('sum-mp-date', sd.mpDate);
