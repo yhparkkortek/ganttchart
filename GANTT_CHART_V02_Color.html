@@ -860,9 +860,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div> <!-- /#tab-gantt -->
 
 <div id="tab-address" class="tab-panel">
-    <div id="table-info">
-        <span id="table-info-text">📇 Address Book</span>
-        <div class="btn-group" style="margin-left:auto;">
+    <div class="concept-section">
+        <h3>📇 Address Book <span style="font-size:11px;color:#999;font-weight:normal;">(이름 칸은 Summary 담당자 자동완성 소스로 사용됩니다)</span></h3>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
             <label class="action-btn" style="cursor:pointer;" for="addr-file-input">📂 주소록 불러오기</label>
             <input type="file" id="addr-file-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importAddressExcel(this.files)">
             <button class="action-btn" onclick="window.exportAddressExcel()">💾 주소록 내보내기</button>
@@ -871,27 +871,36 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
             <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
         </div>
-    </div>
-    <div style="padding:12px; height:calc(100% - 50px); box-sizing:border-box; overflow:hidden; display:flex; flex-direction:column;">
-        <div style="font-size:11px; color:#888; margin-bottom:6px;">
-            💡 이름 칸은 Summary 탭 담당자 자동완성 소스로 쓰입니다. 행 번호를 Ctrl/Shift 클릭하면 여러 명 선택 후 일괄 삭제할 수 있습니다.
+        <div style="font-size:11px; color:#888; margin-bottom:8px;">
+            💡 행 번호를 Ctrl/Shift 클릭하면 여러 명 선택 후 일괄 삭제할 수 있습니다.
         </div>
-        <div id="address-table-wrap" style="flex:1; overflow:auto; border:1px solid #e0e0e0; border-radius:6px;">
-            <table id="address-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
+        <style>
+            #tab-address .concept-table th { text-align: center !important; vertical-align: middle !important; }
+            #tab-address .concept-table thead {
+                position: sticky !important;
+                top: 0 !important;
+                z-index: 16;
+            }
+            #tab-address .concept-table thead th {
+                background-color: #f4f6f8 !important;
+            }
+        </style>
+        <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+            <table class="concept-table">
                 <colgroup>
                     <col style="width:40px;"><col style="width:16%;"><col style="width:14%;"><col style="width:16%;">
                     <col style="width:22%;"><col style="width:14%;"><col style="width:14%;"><col style="width:40px;">
                 </colgroup>
                 <thead>
-                    <tr style="background:#f4f6f8;">
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6;">#</th>
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">이름</th>
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">부서</th>
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">직함</th>
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">이메일</th>
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">휴대폰</th>
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6; text-align:left;">근무처 전화</th>
-                        <th style="position:sticky; top:0; z-index:2; padding:6px; background:#f4f6f8; border-bottom:2px solid #dee2e6;"></th>
+                    <tr>
+                        <th title="클릭: 선택 / Ctrl·Shift 클릭: 여러 행 선택">#</th>
+                        <th>이름</th>
+                        <th>부서</th>
+                        <th>직함</th>
+                        <th>이메일</th>
+                        <th>휴대폰</th>
+                        <th>근무처 전화</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody id="address-table-body"></tbody>
@@ -10301,14 +10310,14 @@ window.renderAddressTable = function() {
     tbody.innerHTML = rows.map(function(p, i) {
         const sel = window._addrSelectedRows.has(i);
         return '<tr data-idx="' + i + '"' + (sel ? ' style="background:#fff3e0;"' : '') + '>'
-            + '<td onclick="window.addrRowClick(event,' + i + ')" style="padding:5px; text-align:center; cursor:pointer; color:#888; user-select:none; border-bottom:1px solid #f0f0f0;">' + (i + 1) + '</td>'
-            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="name" value="' + _escTabVal(p.name) + '" onchange="window.collectAddressData()"></td>'
-            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="dept" value="' + _escTabVal(p.dept) + '" onchange="window.collectAddressData()"></td>'
-            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="title" value="' + _escTabVal(p.title) + '" onchange="window.collectAddressData()"></td>'
-            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="email" value="' + _escTabVal(p.email) + '" onchange="window.collectAddressData()"></td>'
-            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="mobile" value="' + _escTabVal(p.mobile) + '" onchange="window.collectAddressData()"></td>'
-            + '<td style="padding:3px; border-bottom:1px solid #f0f0f0;"><input class="u-input" data-field="phone" value="' + _escTabVal(p.phone) + '" onchange="window.collectAddressData()"></td>'
-            + '<td style="padding:3px; text-align:center; border-bottom:1px solid #f0f0f0;"><button type="button" onclick="window.deleteAddressRow(' + i + ')" style="border:none; background:none; color:#bbb; cursor:pointer;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>'
+            + '<td onclick="window.addrRowClick(event,' + i + ')" style="text-align:center; cursor:pointer; color:#888; user-select:none;">' + (i + 1) + '</td>'
+            + '<td><input class="u-input" data-field="name" value="' + _escTabVal(p.name) + '" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="dept" value="' + _escTabVal(p.dept) + '" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="title" value="' + _escTabVal(p.title) + '" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="email" value="' + _escTabVal(p.email) + '" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="mobile" value="' + _escTabVal(p.mobile) + '" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="phone" value="' + _escTabVal(p.phone) + '" onchange="window.collectAddressData()"></td>'
+            + '<td style="text-align:center;"><button type="button" onclick="window.deleteAddressRow(' + i + ')" style="border:none; background:none; color:#bbb; cursor:pointer;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>'
             + '</tr>';
     }).join('');
 };
