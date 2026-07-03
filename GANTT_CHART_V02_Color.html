@@ -1938,6 +1938,8 @@ ${mailText}`;
             if (colIdx.plan  !== -1) row[colIdx.plan]  = "";
         });
 
+        // 이 액션 전체(재계산+정렬)를 하나의 Undo 단위로 묶기 위해, 중간 자동 스냅샷을 잠시 억제
+        window._isRestoringUndo = true;
         window._suppressFreezeLog = true; // 아래에서 상세 로그를 남기므로 일괄 요약 로그는 생략
         window.recalculateSchedules();
         window._suppressFreezeLog = false;
@@ -1960,9 +1962,17 @@ ${mailText}`;
             }
         });
 
+        // 🔀 영향받은 구간(최소~최대 선택 인덱스)만 시작일 기준으로 행 순서 정리 (구간 밖은 그대로 유지)
+        const fromIdx = indices[0], toIdx = indices[indices.length - 1];
+        window._sortSubRangeByStartDate(fromIdx, toIdx);
+        window.recalculateSchedules();
+
+        window._isRestoringUndo = false;
+        window.pushUndoSnapshot(); // 재계산+정렬 전체를 하나의 Undo 단위로 기록
+
         window._selectedRows = new Set();
         if (typeof window.syncRowHighlight === 'function') window.syncRowHighlight();
-        alert(changedCount > 0 ? `✅ ${changedCount}건의 일정이 재계산되었습니다.\n(사유: ${reason})` : 'ℹ️ 선택한 구간의 일정에 변경이 없었습니다.');
+        alert(changedCount > 0 ? `✅ ${changedCount}건의 일정이 재계산되고, 구간 내 행 순서도 정리되었습니다.\n(사유: ${reason})` : 'ℹ️ 선택한 구간의 일정에 변경이 없어 순서만 정리되었습니다.');
     };
 
     // =========================================================
@@ -3012,6 +3022,39 @@ window.deleteHistoryByDateRange = function() {
         globalData = [header, ...out];
         logChange(0, -1, '날짜 정렬', '시작일 기준 정렬');
         window.recalculateSchedules();
+    };
+
+    // ─── 🔀 [부분 정렬] 지정한 인덱스 구간(fromIdx~toIdx)만 시작일 기준으로 재정렬 ───
+    //     "선택 구간 재계산" 직후, 영향받은 구간만 순서를 정리할 때 사용. 구간 밖은 절대 건드리지 않음.
+    window._sortSubRangeByStartDate = function(fromIdx, toIdx) {
+        if (!globalData || fromIdx == null || toIdx == null || fromIdx > toIdx) return;
+        fromIdx = Math.max(1, fromIdx); toIdx = Math.min(globalData.length - 1, toIdx);
+        if (fromIdx > toIdx) return;
+
+        const slice = globalData.slice(fromIdx, toIdx + 1);
+        const startTs = (row) => (row && typeof row._calcStartTs === 'number') ? row._calcStartTs : Infinity;
+
+        const roots = [];
+        const stack = [];
+        for (const row of slice) {
+            const node = { row, children: [] };
+            const lv = (typeof row._level === 'number') ? row._level : 4;
+            while (stack.length && stack[stack.length - 1].level >= lv) stack.pop();
+            if (stack.length === 0) roots.push(node);
+            else stack[stack.length - 1].node.children.push(node);
+            stack.push({ node, level: lv });
+        }
+        const sortNodes = (nodes) => {
+            nodes.sort((a, b) => startTs(a.row) - startTs(b.row));
+            for (const n of nodes) sortNodes(n.children);
+        };
+        sortNodes(roots);
+
+        const out = [];
+        const flatten = (nodes) => { for (const n of nodes) { out.push(n.row); flatten(n.children); } };
+        flatten(roots);
+
+        for (let i = 0; i < out.length; i++) globalData[fromIdx + i] = out[i];
     };
 
     window.currentCalendarTarget = null; window.currentCalendarTs = null; window.currentViewYear = null; window.currentViewMonth = null; window.currentCalendarRow = null; window.currentCalendarCol = null;
@@ -6192,9 +6235,9 @@ window.updateInboxBadge();
 </style>
 
 <style>
-/* 📥 보관함/배분 안내 툴팁 (hover) */
+/* 📥 보관함/배분 안내 툴팁 (hover) — 아이콘 기준 오른쪽 아래로 펼침 */
 .inbox-help-ico { position:relative; display:inline-block; cursor:help; font-size:13px; margin-left:6px; vertical-align:middle; font-weight:normal; }
-.inbox-help-ico .inbox-help-tip { display:none; position:absolute; top:22px; left:-12px; z-index:9999; width:min(360px, 80vw); background:#2c3e50; color:#fff; font-size:11.5px; font-weight:normal; line-height:1.65; padding:10px 12px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.25); white-space:normal; text-align:left; }
+.inbox-help-ico .inbox-help-tip { display:none; position:absolute; top:20px; left:0; z-index:9999; width:min(300px, 78vw); max-width:300px; background:#2c3e50; color:#fff; font-size:11.5px; font-weight:normal; line-height:1.6; padding:9px 11px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.25); white-space:normal; text-align:left; }
 .inbox-help-ico:hover .inbox-help-tip { display:block; }
 </style>
 
@@ -6218,7 +6261,8 @@ window.updateInboxBadge();
                 <button onclick="window.closeTaskInbox()"
                     style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
                            color:#2c5f8a; font-size:16px; cursor:pointer;
-                           width:28px; height:28px; padding:0; line-height:1;
+                           width:28px; height:28px; padding:0; line-height:1; box-sizing:border-box;
+                           margin-top:2px;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
                     onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';"
                     onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';"
