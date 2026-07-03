@@ -3715,7 +3715,12 @@ window.deleteHistoryByDateRange = function() {
             const m = (sd.milestones && sd.milestones[key]) || {};
             summaryData.push([label, m.date || '']);
         });
+        [['기획Start', '실적 PROTO Start'], ['기획Finish', '실적 PROTO End'], ['ProtoDR', '실적 Proto DR'], ['ESStart', '실적 ES Start'], ['ESEnd', '실적 ES End'], ['DVR', '실적 DVR'], ['PPStart', '실적 PP Start'], ['PPEnd', '실적 PP End'], ['PRA', '실적 PRA']].forEach(([key, label]) => {
+            const m = (sd.milestones && sd.milestones[key]) || {};
+            summaryData.push([label, m.actualDate || '']);
+        });
         summaryData.push(['개발기간(일)', sd.devDays || '']);
+        summaryData.push(['현재 M.C 리비전', tabData.mcActiveRevision || 'R1']);
         const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
         for (let key in wsSummary) {
             if (key[0] === '!') continue;
@@ -7830,6 +7835,16 @@ async function msCallGemini(apiKey, parsed) {
                     if (!best && revFirstTs[r]) best = r;
                 });
             }
+            // 3순위: 수정이력이 아예 없는 프로젝트(엑셀/드라이브로 데이터를 통째로 불러온 경우 등)는
+            //         시점 판단이 불가능하므로, 실제 데이터가 있는 가장 최신 리비전으로 대체 표시
+            if (!best) {
+                ['R5','R4','R3','R2','R1'].forEach(r => {
+                    if (!best) {
+                        const rows = ((window.tabData || {}).mcRevisions || {})[r] || [];
+                        if (rows.length) best = r;
+                    }
+                });
+            }
             return best;
         };
 
@@ -8166,6 +8181,7 @@ function _parseSummarySheetFromWorkbook(workbook) {
         '목표 양산 일정': function(v) { sd.mpDate = v; },
         '추진 배경 및 의의': function(v) { sd.background = v; },
         '개발기간(일)': function(v) { sd.devDays = v; },
+        '현재 M.C 리비전': function(v) { window.tabData.mcActiveRevision = v || 'R1'; },
         'PM 이메일': function(v) { pm.프로젝트담당자이메일 = v; },
         '기구 이메일': function(v) { pm.기구담당자이메일 = v; },
         'HW 이메일': function(v) { pm.HW담당자이메일 = v; },
@@ -8178,13 +8194,18 @@ function _parseSummarySheetFromWorkbook(workbook) {
         'Tooling 이메일': function(v) { pm.Tooling담당자이메일 = v; }
     };
     const milestoneMap = { '기획 Start': '기획Start', 'PROTO Start': '기획Start', '기획 Finish': '기획Finish', 'PROTO End': '기획Finish', 'Proto DR': 'ProtoDR', 'ES Start': 'ESStart', 'ES End': 'ESEnd', 'DVR': 'DVR', 'PP Start': 'PPStart', 'PP End': 'PPEnd', 'PRA': 'PRA' };
+    const actualMilestoneMap = { '실적 PROTO Start': '기획Start', '실적 PROTO End': '기획Finish', '실적 Proto DR': 'ProtoDR', '실적 ES Start': 'ESStart', '실적 ES End': 'ESEnd', '실적 DVR': 'DVR', '실적 PP Start': 'PPStart', '실적 PP End': 'PPEnd', '실적 PRA': 'PRA' };
     json.forEach(function(row) {
         if (!row || row.length === 0) return;
         const label = String(row[0] || '').trim();
         if (!label) return;
         const rawVal = row[1];
         if (milestoneMap[label]) {
-            sd.milestones[milestoneMap[label]] = { date: _xlsxCellToDateStr(rawVal) };
+            sd.milestones[milestoneMap[label]] = Object.assign({}, sd.milestones[milestoneMap[label]], { date: _xlsxCellToDateStr(rawVal) });
+            return;
+        }
+        if (actualMilestoneMap[label]) {
+            sd.milestones[actualMilestoneMap[label]] = Object.assign({}, sd.milestones[actualMilestoneMap[label]], { actualDate: _xlsxCellToDateStr(rawVal) });
             return;
         }
         if (labelMap[label]) {
@@ -8256,25 +8277,48 @@ function _parseMcTableSheetFromWorkbook(workbook) {
     return found;
 }
 
-// 💡 "MC Comparison" 시트의 영업판가 행을 읽어 mcCompare.salesPrice로 복원
+// 💡 "MC Comparison" 시트를 읽어 영업판가(salesPrice)와 항목별 메모(notes)를 복원
 function _parseMcComparisonSheetFromWorkbook(workbook) {
     const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'MC Comparison'; });
     if (!sheetName) return false;
     const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
-    const salesRow = json.find(function(r) { return r && String(r[3] || '').trim() === '영업판가'; });
-    if (!salesRow) return false;
     window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
-    window.tabData.mcCompare = window.tabData.mcCompare || { salesPrice: {} };
+    window.tabData.mcCompare = window.tabData.mcCompare || { salesPrice: {}, notes: {} };
     window.tabData.mcCompare.salesPrice = window.tabData.mcCompare.salesPrice || {};
-    const revs = ['R1','R2','R3','R4','R5'];
-    revs.forEach(function(rev, idx) {
-        const col = 4 + idx * 2; // NO,TYPE,ITEM,GROUP(0-3) 다음부터 리비전별 Cost,NRE 쌍
-        const val = salesRow[col];
-        if (val !== undefined && val !== '' && !isNaN(parseFloat(val))) {
-            window.tabData.mcCompare.salesPrice[rev] = parseFloat(val);
-        }
-    });
-    return true;
+    window.tabData.mcCompare.notes = window.tabData.mcCompare.notes || {};
+    let found = false;
+
+    const salesRow = json.find(function(r) { return r && String(r[3] || '').trim() === '영업판가'; });
+    if (salesRow) {
+        const revs = ['R1','R2','R3','R4','R5'];
+        revs.forEach(function(rev, idx) {
+            const col = 4 + idx * 2; // NO,TYPE,ITEM,GROUP(0-3) 다음부터 리비전별 Cost,NRE 쌍
+            const val = salesRow[col];
+            if (val !== undefined && val !== '' && !isNaN(parseFloat(val))) {
+                window.tabData.mcCompare.salesPrice[rev] = parseFloat(val);
+            }
+        });
+        found = true;
+    }
+
+    // 항목별 메모(맨 마지막 Note 열) 복원 — TYPE+ITEM+GROUP 조합을 키로 매칭
+    const specialLabels = ['TOTAL', '영업판가', '재료비율(%)'];
+    for (let i = 2; i < json.length; i++) {
+        const r = json[i];
+        if (!r || r.length === 0) continue;
+        const group = String(r[3] || '').trim();
+        if (specialLabels.indexOf(group) !== -1) continue;
+        const type = String(r[1] || '').trim();
+        const item = String(r[2] || '').trim();
+        if (!type && !item && !group) continue;
+        const note = String(r[r.length - 1] || '').trim();
+        if (!note) continue;
+        const key = [type, item, group].join('|').toLowerCase();
+        window.tabData.mcCompare.notes[key] = note;
+        found = true;
+    }
+
+    return found;
 }
 
 // 💡 "M.C 영업판가" 시트를 읽어 tabData.mcSalesPriceDetail로 복원
