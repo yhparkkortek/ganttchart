@@ -1508,19 +1508,22 @@ ${mailText}`;
             
             let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
             
+            // 💡 [수정] 현재 불러와서 작업 중인 고유 파일 ID가 있다면 그것을 끝까지 유지하고, 없을 때만 이름으로 새로 검색합니다.
+            if (!window.currentDriveFileId) {
+                window.currentDriveFileId = await window.findSaveFile(dynamicFileName);
+            }
+            let fileId = window.currentDriveFileId;
+
+            // 📥 [Phase 2.5] 저장 직전, 내가 파일을 연 이후 도착한 배분 업무를 원격 원장에서 찾아 자동 병합
+            if (fileId) { await window.mergeRemoteDistributions(fileId); }
+
             let serializedGlobalData = globalData.map(row => {
                 let obj = { data: Array.from(row) };
                 for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
                 return obj;
             });
 
-            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}) };
-            
-            // 💡 [수정] 현재 불러와서 작업 중인 고유 파일 ID가 있다면 그것을 끝까지 유지하고, 없을 때만 이름으로 새로 검색합니다.
-            if (!window.currentDriveFileId) {
-                window.currentDriveFileId = await window.findSaveFile(dynamicFileName);
-            }
-            let fileId = window.currentDriveFileId;
+            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [] };
             let boundary = 'foo_bar_baz';
             let metadata = { name: dynamicFileName, mimeType: 'application/json' };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
@@ -1602,6 +1605,7 @@ ${mailText}`;
                 filterColumns = saveData.filterColumns || filterColumns;
                 window.projectMeta = saveData.projectMeta || window.projectMeta || {};
                 window.tabData = saveData.tabData || window.tabData || {};
+                window.projectDistributions = saveData.distributions || []; // 📥 [Phase 2.5] 배분 원장 보관 (병합 기준점)
                 if (window.populateTabData) window.populateTabData();
                 window.currentDriveFileId = fileId;
                 window.recalculateSchedules();
@@ -2174,7 +2178,7 @@ ${mailText}`;
             window.currentDriveFileId = null;
         }
             
-        globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {};
+        globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = []; // 📥 [Phase 2.5] 새 프로젝트 로드 시 원장 초기화
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
         let headerRow = []; let filesProcessed = 0; let totalFiles = files.length;
         // 드라이브 연동 유지 시 기존 로그 보존
@@ -5215,11 +5219,14 @@ window.clearPromptLogs = function() {
     }
 };
         
-// ✅ [공용] 분석 결과(r) → 간트 행 객체 생성 (개별 등록 / 보관함 배치 공용)
-window.buildMailTaskRow = function(r) {
+// ✅ [공용] 분석 결과(r) → 간트 행 객체 생성 (개별 등록 / 보관함 배치 / 타 프로젝트 배분 공용)
+//    gd/ci 생략 시 현재 프로젝트(globalData/colIdx) 기준으로 동작
+window.buildMailTaskRow = function(r, gd, ci) {
+    gd = gd || globalData;
+    ci = ci || colIdx;
     const wbsLevel = parseInt(r['wbs레벨'] ?? 4);
 
-    let newRow = new Array(globalData[0].length).fill("");
+    let newRow = new Array(gd[0].length).fill("");
     newRow._level = wbsLevel;
     newRow._origDev = ""; newRow._origT1 = ""; newRow._origT2 = ""; newRow._origT3 = ""; newRow._origT4 = "";
     // ✅ 메일 추가 항목임을 표시하기 위해 📧 처리 (사용자가 확인 후 제거 가능)
@@ -5232,15 +5239,15 @@ window.buildMailTaskRow = function(r) {
 
     newRow._startForced = false; newRow._planForced = false;
 
-    // ✅ 고객/모델/인치/담당자는 기존 데이터에서 직접 복사
+    // ✅ 고객/모델/인치/담당자는 대상 데이터의 기존 행에서 직접 복사
     let refRow = null;
-    for (let i = 1; i < globalData.length; i++) {
-        if (globalData[i]) { refRow = globalData[i]; break; }
+    for (let i = 1; i < gd.length; i++) {
+        if (gd[i]) { refRow = gd[i]; break; }
     }
-    if (colIdx.assignee !== -1) newRow[colIdx.assignee] = refRow ? (refRow[colIdx.assignee] || "") : "";
-    if (colIdx.customer !== -1) newRow[colIdx.customer] = refRow ? (refRow[colIdx.customer] || "") : "";
-    if (colIdx.model !== -1) newRow[colIdx.model] = refRow ? (refRow[colIdx.model] || "") : "";
-    if (colIdx.inch !== -1) newRow[colIdx.inch] = refRow ? (refRow[colIdx.inch] || "") : "";
+    if (ci.assignee !== -1) newRow[ci.assignee] = refRow ? (refRow[ci.assignee] || "") : "";
+    if (ci.customer !== -1) newRow[ci.customer] = refRow ? (refRow[ci.customer] || "") : "";
+    if (ci.model !== -1) newRow[ci.model] = refRow ? (refRow[ci.model] || "") : "";
+    if (ci.inch !== -1) newRow[ci.inch] = refRow ? (refRow[ci.inch] || "") : "";
     // ✅ 분석 결과 매핑
     const _fixYear = (d) => {
     if (!d) return d;
@@ -5249,18 +5256,18 @@ window.buildMailTaskRow = function(r) {
         return new Date().getFullYear() + m[2];
     return d;
     };
-    if (colIdx.start !== -1 && r['시작일']) { newRow[colIdx.start] = _fixYear(r['시작일']); newRow._startForced = true; }
-    if (colIdx.plan !== -1 && r['완료일']) { newRow[colIdx.plan] = _fixYear(r['완료일']); newRow._planForced = true; }
-    if (colIdx.status !== -1) newRow[colIdx.status] = (r['상태'] || "진행").toString().trim();
-    if (colIdx.devStage !== -1) newRow[colIdx.devStage] = (r['개발단계'] || "").toString().trim();
-    if (colIdx.content !== -1) newRow[colIdx.content] = (r['상세내용'] || "").toString().trim().replace(/\\n/g, '\n');
+    if (ci.start !== -1 && r['시작일']) { newRow[ci.start] = _fixYear(r['시작일']); newRow._startForced = true; }
+    if (ci.plan !== -1 && r['완료일']) { newRow[ci.plan] = _fixYear(r['완료일']); newRow._planForced = true; }
+    if (ci.status !== -1) newRow[ci.status] = (r['상태'] || "진행").toString().trim();
+    if (ci.devStage !== -1) newRow[ci.devStage] = (r['개발단계'] || "").toString().trim();
+    if (ci.content !== -1) newRow[ci.content] = (r['상세내용'] || "").toString().trim().replace(/\\n/g, '\n');
 
     // 소요일 설정
-    if (wbsLevel === 1 && colIdx.dur1 !== -1) newRow[colIdx.dur1] = "1";
-    else if (wbsLevel === 2 && colIdx.dur2 !== -1) newRow[colIdx.dur2] = "1";
-    else if (wbsLevel === 3 && colIdx.dur3 !== -1) newRow[colIdx.dur3] = "1";
-    else if (wbsLevel === 4 && colIdx.dur4 !== -1) newRow[colIdx.dur4] = "1";
-    else if (colIdx.period !== -1) newRow[colIdx.period] = "1";
+    if (wbsLevel === 1 && ci.dur1 !== -1) newRow[ci.dur1] = "1";
+    else if (wbsLevel === 2 && ci.dur2 !== -1) newRow[ci.dur2] = "1";
+    else if (wbsLevel === 3 && ci.dur3 !== -1) newRow[ci.dur3] = "1";
+    else if (wbsLevel === 4 && ci.dur4 !== -1) newRow[ci.dur4] = "1";
+    else if (ci.period !== -1) newRow[ci.period] = "1";
 
     return { row: newRow, taskName: taskName };
 };
@@ -5382,9 +5389,11 @@ window.renderTaskInbox = function() {
             <div style="font-size:11px; color:#888; margin-top:3px;">
                 ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''} · ${escapeHtml(it.source || '')} · ${when}
             </div>
+            ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
                 <select id="inbox-l0-${it.uid}" style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
-                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap;">➡️ 현재 프로젝트에 배치</button>
+                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap;">➡️ 현재 프로젝트</button>
+                <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#1971c2; border-color:#1971c2;">📤 다른 프로젝트</button>
                 <button class="action-btn" onclick="if(confirm('이 업무를 보관함에서 삭제할까요?')){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131;">🗑</button>
             </div>
         </div>`;
@@ -5442,6 +5451,297 @@ window.mailRightToInbox = function() {
     if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
     window.TaskInbox.add(window._mailAnalyzedResult, { source: '업무 추가(메일분석)' });
     alert(`📥 "${window._mailAnalyzedResult['업무명'] || '새 업무'}" 업무를 보관함에 담았습니다.\n상단바 [📥 업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`);
+};
+
+// =========================================================
+// 📤 [Phase 2] 드라이브 백그라운드 배분 + 배분 원장(distributions)
+// =========================================================
+window._distCtx = null;
+
+window.closeInboxDist = function() {
+    document.getElementById('inbox-dist-overlay').style.display = 'none';
+    window._distCtx = null;
+};
+
+window.inboxOpenDistribute = async function(uid) {
+    const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+    const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+    if (!token) { alert('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
+
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const r = it.task;
+    if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
+        alert('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.');
+        return;
+    }
+
+    window._distCtx = { uid: uid, task: JSON.parse(JSON.stringify(r)), taskName: (r['업무명'] || '새 업무') };
+    document.getElementById('dist-step2').style.display = 'none';
+    document.getElementById('dist-task-name').textContent = window._distCtx.taskName + ' 📧';
+    const listEl = document.getElementById('dist-file-list');
+    listEl.innerHTML = '<div style="padding:24px; text-align:center; color:#888; font-size:12px;">📂 프로젝트 목록을 불러오는 중...</div>';
+    document.getElementById('inbox-dist-overlay').style.display = 'flex';
+
+    try {
+        const resp = await gapi.client.drive.files.list({
+            q: `mimeType='application/json' and name contains 'Gantt' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+            fields: 'files(id, name, modifiedTime)', orderBy: 'modifiedTime desc',
+            corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
+        });
+        const files = resp.result.files || [];
+        listEl.innerHTML = '';
+        if (!files.length) {
+            listEl.innerHTML = '<div style="padding:24px; text-align:center; color:#aaa; font-size:12px;">공용 폴더에 프로젝트 파일이 없습니다.</div>';
+            return;
+        }
+        files.forEach(function(f) {
+            const d = new Date(f.modifiedTime);
+            const div = document.createElement('div');
+            div.style.cssText = 'padding:10px 12px; border:1px solid #ced4da; border-radius:8px; cursor:pointer; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
+            div.onmouseover = function() { this.style.background = '#eef6ff'; this.style.borderColor = '#1971c2'; };
+            div.onmouseout  = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+            div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(f.name) + '</span><span style="color:#999; white-space:nowrap; margin-left:8px;">' + d.toLocaleString() + '</span>';
+            div.addEventListener('click', function() { window.inboxDistPickFile(f.id, f.name); });
+            listEl.appendChild(div);
+        });
+    } catch (err) {
+        listEl.innerHTML = '<div style="padding:24px; text-align:center; color:#e03131; font-size:12px;">❌ 목록 호출 실패: 드라이브 연동 상태 또는 권한을 확인해주세요.</div>';
+    }
+};
+
+// 대상 파일 선택 → 내용/시점 확보 → L0 선택 단계 표시
+window.inboxDistPickFile = async function(fileId, fileName) {
+    const ctx = window._distCtx;
+    if (!ctx) return;
+    document.getElementById('dist-step2').style.display = 'none';
+    try {
+        const metaResp    = await gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true });
+        const contentResp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
+        const saveData = contentResp.result;
+        if (!saveData || !saveData.globalData || !saveData.colIdx) {
+            alert('⚠️ 대상 파일에 간트 데이터가 없거나 구조를 해석할 수 없습니다.');
+            return;
+        }
+        ctx.fileId = fileId;
+        ctx.fileName = fileName;
+        ctx.fetchedModifiedTime = metaResp.result.modifiedTime;
+        ctx.saveData = saveData;
+        ctx.rows = saveData.globalData.map(function(obj) {
+            let row = obj.data;
+            for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
+            return row;
+        });
+        window.inboxDistFillL0Select(undefined);
+        document.getElementById('dist-target-name').textContent = fileName;
+        document.getElementById('dist-step2').style.display = 'block';
+    } catch (err) { alert('대상 프로젝트 로드 실패: ' + err.message); }
+};
+
+// 대상 프로젝트의 L0 목록으로 드롭다운 구성 (preferred 값 우선 선택)
+window.inboxDistFillL0Select = function(preferred) {
+    const ctx = window._distCtx;
+    const tCol = ctx.saveData.colIdx;
+    const l0s = [];
+    if (tCol.devStage !== -1) {
+        for (let i = 1; i < ctx.rows.length; i++) {
+            const v = (((ctx.rows[i] || [])[tCol.devStage]) || '').toString().trim();
+            if (v && l0s.indexOf(v) === -1) l0s.push(v);
+        }
+    }
+    const want = (preferred !== undefined) ? preferred : ((ctx.task['개발단계'] || '').trim());
+    const sel = document.getElementById('dist-l0-select');
+    sel.innerHTML = '<option value="__END__">(맨 끝에 추가)</option>' + l0s.map(function(v) {
+        return '<option value="' + escapeHtml(v) + '"' + (v === want ? ' selected' : '') + '>' + escapeHtml(v) + ' 구간 끝</option>';
+    }).join('');
+};
+
+// 충돌 감지 시 최신본 재확보
+window.inboxDistReload = async function(prevL0) {
+    const ctx = window._distCtx;
+    try {
+        const metaResp    = await gapi.client.drive.files.get({ fileId: ctx.fileId, fields: 'modifiedTime', supportsAllDrives: true });
+        const contentResp = await gapi.client.drive.files.get({ fileId: ctx.fileId, alt: 'media', supportsAllDrives: true });
+        const saveData = contentResp.result;
+        if (!saveData || !saveData.globalData || !saveData.colIdx) { alert('⚠️ 최신본 구조를 해석할 수 없습니다.'); return false; }
+        ctx.saveData = saveData;
+        ctx.rows = saveData.globalData.map(function(obj) {
+            let row = obj.data;
+            for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
+            return row;
+        });
+        ctx.fetchedModifiedTime = metaResp.result.modifiedTime;
+        window.inboxDistFillL0Select(prevL0);
+        const sel = document.getElementById('dist-l0-select');
+        if (prevL0 !== '__END__' && sel.value !== prevL0) {
+            alert('⚠️ 최신본에서 선택했던 개발단계 구간이 사라졌습니다.\n구간을 다시 선택한 후 전송해주세요.');
+            return false;
+        }
+        return true;
+    } catch (err) { alert('최신본 확보 실패: ' + err.message); return false; }
+};
+
+// 전송 실행 (attempt: 충돌 자동 재시도 횟수)
+window.inboxDistExecute = async function(attempt) {
+    const ctx = window._distCtx;
+    if (!ctx || !ctx.fileId) return;
+    const btn = document.getElementById('dist-exec-btn');
+    btn.disabled = true; btn.textContent = '⏳ 전송 중...';
+    try {
+        const chosenL0 = document.getElementById('dist-l0-select').value;
+
+        // (a) 충돌 검사: 전송 직전 modifiedTime 재확인
+        const mResp = await gapi.client.drive.files.get({ fileId: ctx.fileId, fields: 'modifiedTime', supportsAllDrives: true });
+        if (mResp.result.modifiedTime !== ctx.fetchedModifiedTime) {
+            if ((attempt || 0) >= 2) {
+                alert('⚠️ 대상 파일이 계속 갱신되고 있어 전송을 중단했습니다.\n잠시 후 다시 시도해주세요.');
+                return;
+            }
+            alert('⚠️ 대상 파일이 방금 다른 사용자에 의해 갱신되었습니다.\n최신본을 받아 자동 재시도합니다.');
+            const ok = await window.inboxDistReload(chosenL0);
+            if (!ok) return;
+            return await window.inboxDistExecute((attempt || 0) + 1);
+        }
+
+        // 행 생성 — 대상 프로젝트의 컬럼 구조(colIdx) 기준
+        const tCol = ctx.saveData.colIdx;
+        const built = window.buildMailTaskRow(ctx.task, ctx.rows, tCol);
+        built.row._알림 = true; // ✅ 배분 업무는 대상 프로젝트에서 D-7/3/1 알림 대상으로 자동 설정
+
+        // L0 일치 구간 끝 위치 계산
+        let pos = ctx.rows.length;
+        if (chosenL0 !== '__END__' && tCol.devStage !== -1) {
+            let last = -1;
+            for (let i = 1; i < ctx.rows.length; i++) {
+                const row = ctx.rows[i]; if (!row) continue;
+                if ((row[tCol.devStage] || '').toString().trim() === chosenL0) last = i;
+            }
+            if (last !== -1) pos = last + 1;
+            built.row[tCol.devStage] = chosenL0;
+        }
+        ctx.rows.splice(pos, 0, built.row);
+
+        // 배분 원장 + 대상 프로젝트 수정이력 기록
+        const nowIso = new Date().toISOString();
+        const userName = window.currentUserName || '비로그인 (로컬)';
+        ctx.saveData.distributions = ctx.saveData.distributions || [];
+        const distUid = 'd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        ctx.saveData.distributions.push({
+            uid: distUid, inboxUid: ctx.uid,
+            task: JSON.parse(JSON.stringify(ctx.task)),
+            taskName: built.taskName, targetL0: chosenL0,
+            insertedAt: nowIso, by: userName, source: '업무보관함', processed: false
+        });
+        ctx.saveData.changeLogs = ctx.saveData.changeLogs || [];
+        ctx.saveData.changeLogs.push({
+            time: new Date().toLocaleString('ko-KR'), userName: userName,
+            rowName: pos, colName: '행 조작', oldVal: '없음',
+            newVal: `보관함에서 배분 추가: ${built.taskName}`
+        });
+
+        // 직렬화 (saveToGoogleDrive와 동일 규격)
+        ctx.saveData.globalData = ctx.rows.map(function(row) {
+            let o = { data: Array.from(row) };
+            for (let k in row) { if (k.startsWith('_')) o[k] = row[k]; }
+            return o;
+        });
+
+        // PATCH 업로드
+        const tokenObj = gapi.client.getToken();
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) { alert('🔒 구글 인증 토큰이 유실되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.'); return; }
+        const boundary = 'inbox_dist_boundary';
+        const metadata = { name: ctx.fileName, mimeType: 'application/json' };
+        const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                   + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(ctx.saveData)
+                   + "\r\n--" + boundary + "--";
+        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + ctx.fileId + '?uploadType=multipart&supportsAllDrives=true', {
+            method: 'PATCH',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
+            body: body
+        });
+        const file = await resp.json();
+        if (resp.ok && file && file.id) {
+            window.TaskInbox.setStatus(ctx.uid, '전송됨', { type: '드라이브전송', target: ctx.fileName, distUid: distUid, at: nowIso });
+            alert(`🎉 "${built.taskName}" 업무가 [${ctx.fileName}] 프로젝트의 [${chosenL0 === '__END__' ? '맨 끝' : chosenL0}] 위치로 전송되었습니다!\n(📌 알림 자동 설정 · 수정이력/배분원장 기록 완료)`);
+            window.closeInboxDist();
+            window.renderTaskInbox();
+        } else {
+            const status = resp.status || (file && file.error ? file.error.code : 0);
+            let msg = '업로드 중 오류가 발생했습니다.';
+            if (status === 401) msg = '🔒 구글 인증 세션이 만료되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.';
+            else if (status === 403) msg = '🚫 공유 폴더의 편집자 권한이 없습니다.';
+            else if (file && file.error) msg = `구글 드라이브 에러 (${status}): ${file.error.message}`;
+            alert('❌ 전송 실패\n\n' + msg);
+        }
+    } catch (err) {
+        alert('전송 시스템 에러: ' + err.message);
+    } finally {
+        btn.disabled = false; btn.textContent = '🚀 전송 실행';
+    }
+};
+
+// =========================================================
+// 📥 [Phase 2.5] 저장 시 배분 원장 자동 병합
+//    낡은 사본으로 저장해도 "내가 연 이후 배분된 업무"가 유실되지 않도록 방어
+// =========================================================
+window.mergeRemoteDistributions = async function(fileId) {
+    try {
+        const resp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
+        const remote = resp.result || {};
+        const remoteDists = remote.distributions || [];
+        if (!remoteDists.length) return;
+
+        window.projectDistributions = window.projectDistributions || [];
+        const knownUids = {};
+        window.projectDistributions.forEach(function(d) { if (d && d.uid) knownUids[d.uid] = true; });
+
+        let mergedNames = [];
+        remoteDists.forEach(function(d) {
+            if (!d || !d.uid || knownUids[d.uid]) return; // 이미 아는 배분 → 로컬 상태 존중 (삭제했다면 삭제 유지)
+
+            // 원장 엔트리 자체는 무조건 보존 (내 저장으로 원격 이력이 지워지는 것 방지)
+            window.projectDistributions.push(d);
+            knownUids[d.uid] = true;
+            if (d.processed === true || !d.task) return;
+
+            // 내 데이터에 없는 배분 업무 행 재삽입 (L0 일치 구간 끝)
+            const built = window.buildMailTaskRow(d.task);
+            built.row._알림 = true;
+            let pos = globalData.length;
+            if (d.targetL0 && d.targetL0 !== '__END__' && colIdx.devStage !== -1) {
+                let last = -1;
+                for (let i = 1; i < globalData.length; i++) {
+                    const row = globalData[i]; if (!row) continue;
+                    if ((row[colIdx.devStage] || '').toString().trim() === d.targetL0) last = i;
+                }
+                if (last !== -1) pos = last + 1;
+                built.row[colIdx.devStage] = d.targetL0;
+            }
+            globalData.splice(pos, 0, built.row);
+
+            window.changeLogs.push({
+                time: new Date().toLocaleString('ko-KR'),
+                userName: '자동 병합',
+                rowName: pos, colName: '행 조작', oldVal: '없음',
+                newVal: `배분 업무 자동 병합: ${built.taskName} (배분자: ${d.by || '알수없음'})`
+            });
+            mergedNames.push(built.taskName);
+        });
+
+        // 원장 크기 제한: 최근 100건만 유지 (파일 비대화 방지)
+        if (window.projectDistributions.length > 100) {
+            window.projectDistributions = window.projectDistributions.slice(-100);
+        }
+
+        if (mergedNames.length) {
+            window.recalculateSchedules();
+            alert(`📥 작업하는 동안 다른 사용자가 배분한 업무 ${mergedNames.length}건이 자동 병합되어 함께 저장됩니다.\n\n· ${mergedNames.join('\n· ')}`);
+        }
+    } catch (err) {
+        // 병합 확인 실패해도 저장 자체는 막지 않음 (기존 저장 동작 보존)
+        console.warn('배분 원장 병합 확인 실패(저장은 계속 진행):', err);
+    }
 };
 
 // 페이지 로드 시 뱃지 초기화
@@ -5660,18 +5960,51 @@ window.updateInboxBadge();
 
 </style>
 
+<style>
+/* 📥 보관함/배분 안내 툴팁 (hover) */
+.inbox-help-ico { position:relative; display:inline-block; cursor:help; font-size:13px; margin-left:6px; vertical-align:middle; font-weight:normal; }
+.inbox-help-ico .inbox-help-tip { display:none; position:absolute; top:22px; left:-12px; z-index:9999; width:min(360px, 80vw); background:#2c3e50; color:#fff; font-size:11.5px; font-weight:normal; line-height:1.65; padding:10px 12px; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.25); white-space:normal; text-align:left; }
+.inbox-help-ico:hover .inbox-help-tip { display:block; }
+</style>
+
 <!-- 📥 업무 보관함 모달 -->
 <div id="task-inbox-overlay" class="modal-overlay" style="display:none;" onclick="window.closeTaskInbox()">
     <div class="history-modal" onclick="event.stopPropagation()" style="max-width:760px; width:92vw; max-height:84vh; display:flex; flex-direction:column;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-shrink:0;">
-            <span style="font-size:15px; font-weight:bold; color:#2c5f8a;">📥 업무 보관함</span>
+            <span style="font-size:15px; font-weight:bold; color:#2c5f8a;">📥 업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+                📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
+                ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
+                📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>
+                전송된 업무가 팀원의 동시 저장으로 유실된 경우, '전송됨' 항목을 같은 방법으로 재전송하면 복구됩니다.
+            </span></span></span>
             <div style="display:flex; gap:8px;">
                 <button class="action-btn" onclick="window.inboxClearDone()" style="font-size:12px;">🧹 처리됨 정리</button>
                 <button class="action-btn" onclick="window.closeTaskInbox()" style="font-size:12px;">✕ 닫기</button>
             </div>
         </div>
-        <p style="margin:0 0 10px; font-size:12px; color:#888; flex-shrink:0;">분석된 업무를 프로젝트와 독립적으로 보관합니다. 프로젝트를 전환해도 유지되며, 현재 열린 프로젝트의 개발단계(L0) 구간을 선택해 배치할 수 있습니다.</p>
         <div id="inbox-list" style="flex:1; overflow-y:auto; min-height:120px;"></div>
+    </div>
+</div>
+
+<!-- 📤 업무 배분(다른 프로젝트로 전송) 모달 -->
+<div id="inbox-dist-overlay" class="modal-overlay" style="display:none;" onclick="window.closeInboxDist()">
+    <div class="history-modal" onclick="event.stopPropagation()" style="max-width:640px; width:92vw; max-height:84vh; display:flex; flex-direction:column;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-shrink:0;">
+            <span style="font-size:15px; font-weight:bold; color:#2c5f8a;">📤 다른 프로젝트로 전송<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+                전송 직전 대상 파일의 갱신 여부를 확인하며, 다른 사용자가 방금 저장한 경우 최신본을 받아 자동 재시도합니다.<br><br>
+                전송 시 📌 알림이 자동 설정되고, 대상 프로젝트의 수정이력과 배분 원장에 함께 기록됩니다.
+            </span></span></span>
+            <button class="action-btn" onclick="window.closeInboxDist()" style="font-size:12px;">✕ 닫기</button>
+        </div>
+        <p style="margin:0 0 10px; font-size:12px; color:#555; flex-shrink:0;">전송 업무: <b id="dist-task-name" style="color:#e67e22;"></b></p>
+        <div id="dist-file-list" style="flex:1; overflow-y:auto; min-height:100px;"></div>
+        <div id="dist-step2" style="display:none; flex-shrink:0; border-top:2px solid #eee; padding-top:10px; margin-top:10px;">
+            <p style="margin:0 0 8px; font-size:12px; color:#555;">대상: <b id="dist-target-name" style="color:#1971c2;"></b> — 삽입할 개발단계(L0) 구간을 선택하세요.</p>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <select id="dist-l0-select" style="flex:1; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;"></select>
+                <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#1971c2; border-color:#1971c2; white-space:nowrap;">🚀 전송 실행</button>
+            </div>
+        </div>
     </div>
 </div>
 
