@@ -807,7 +807,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <span id="table-info-text">📊 Gantt Chart</span>
     <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
      
-        <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지)">📅 날짜순 정렬</button>
+        <button id="undo-btn" class="action-btn" onclick="window.undoLastAction()" disabled title="실행 취소 (Ctrl+Z)">↩️ 실행취소</button>
+        <button id="redo-btn" class="action-btn" onclick="window.redoLastAction()" disabled title="다시 실행 (Ctrl+Y)">↪️ 다시실행</button>
+        <button id="recalc-range-btn" class="action-btn" onclick="window.recalcSelectedRange()" title="선택한 행들만 일정 고정을 해제하고 다시 계산합니다 (Ctrl/Shift로 행 선택 후 클릭)">🔓 선택 구간 재계산</button>
+        <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지). 🔒 이미 고정된 날짜는 이동하지 않고, 화면상 행의 표시 순서만 정리됩니다.">📅 날짜순 정렬</button>
         <button id="mail-btn" class="action-btn" onclick="window.showMailAnalyzer()">📧 업무 추가</button>
         <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
         </div>
@@ -1849,26 +1852,41 @@ ${mailText}`;
                 currentL0Start = addWorkingDays(maxL0End, 1);
             }
 
+            let _newlyFrozenCount = 0;
             function applyDatesToRow(node) {
                 node.row._calcStartTs = node.startTs;
                 node.row._calcPlanTs = node.endTs;
 
-                // 📌 리프(자식 없는) 행이고, 셀이 비어있어 Auto 상태였다면 → 계산 결과를 셀에 써넣어 Manual로 전환(굳히기)
-                // 부모/중간 레벨(자식이 있는 행)은 자식의 변화를 계속 반영해야 하므로 굳히지 않음.
+                // 🔒 [일정 고정] 리프(자식 없는) 행이 날짜를 새로 계산받으면 그 즉시 셀에 값을 써넣고
+                //     Forced로 전환해 굳힙니다. 이후 새 업무가 들어오거나 다른 행이 움직여도
+                //     이 행은 재계산에서 제외되며, "선택 구간 재계산"으로 명시적으로 풀었을 때만 다시 계산됩니다.
+                //     부모/중간 레벨(자식이 있는 행)은 자식의 변화를 계속 반영해야 하므로 굳히지 않습니다.
                 if (node.children.length === 0 && !node.row._isExplicitZero) {
-                    const startEmpty = colIdx.start !== -1 && (!node.row[colIdx.start] || node.row[colIdx.start].toString().trim() === "");
-                    const planEmpty  = colIdx.plan  !== -1 && (!node.row[colIdx.plan]  || node.row[colIdx.plan].toString().trim()  === "");
-                    if (startEmpty && node.startTs) {
-                        node.row[colIdx.start] = formatTsToYMD(node.startTs);
-                    }
-                    if (planEmpty && node.endTs) {
-                        node.row[colIdx.plan] = formatTsToYMD(node.endTs);
+                    const wasFrozen = node.row._startForced || node.row._planForced;
+                    if (!wasFrozen) {
+                        if (colIdx.start !== -1 && node.startTs) node.row[colIdx.start] = formatTsToYMD(node.startTs);
+                        if (colIdx.plan  !== -1 && node.endTs)   node.row[colIdx.plan]  = formatTsToYMD(node.endTs);
+                        node.row._startForced = true;
+                        node.row._planForced  = true;
+                        _newlyFrozenCount++;
                     }
                 }
 
                 for (let child of node.children) applyDatesToRow(child);
             }
             for (let l0Node of tree) applyDatesToRow(l0Node);
+
+            // 🔒 여러 건이 한 번에 새로 고정된 경우(최초 로드/대량 가져오기 등) 요약 로그 1건만 남김.
+            //    새 업무 1건이 추가되며 조용히 고정되는 일상적인 경우는 로그를 남기지 않음(노이즈 방지).
+            //    "선택 구간 재계산"이 자체적으로 상세 로그를 남기는 동안에는 window._suppressFreezeLog로 중복 억제.
+            if (_newlyFrozenCount >= 2 && !window._suppressFreezeLog) {
+                window.changeLogs.push({
+                    time: new Date().toLocaleString('ko-KR'),
+                    userName: window.currentUserName || '비로그인 (로컬)',
+                    rowName: '-', colName: '일정 고정',
+                    oldVal: '자동 계산 상태', newVal: `일정 자동 고정: ${_newlyFrozenCount}건`, reason: ''
+                });
+            }
 
             let chartMinTs = null; let chartMaxTs = null;
             for (let i = 1; i < globalData.length; i++) {
@@ -1882,6 +1900,7 @@ ${mailText}`;
             window.ganttViewStartTs = chartMinTs - padding; window.ganttViewDuration = (chartMaxTs + padding) - window.ganttViewStartTs;
 
             renderTable(globalData); applyFilters();
+            window.pushUndoSnapshot();
             
             if (statusEl) { statusEl.textContent = "✅ 일정이 업데이트 되었습니다."; }
 
@@ -1890,6 +1909,144 @@ ${mailText}`;
             }
         }, 10);
     };
+
+// ─── 🔓 선택 구간 일정 재계산 (Ctrl/Shift로 선택한 행만 잠금 해제 후 다시 계산) ───
+    window.recalcSelectedRange = function() {
+        const sel = window._selectedRows;
+        if (!sel || sel.size === 0) { alert('먼저 재계산할 행을 선택해주세요. (Ctrl/Shift로 여러 행 선택 가능)'); return; }
+        const indices = Array.from(sel).sort(function(a,b){ return a-b; });
+
+        const reason = window.promptOptionalReason('선택 구간 일정 재계산');
+        if (reason === null) return; // 취소
+
+        // 재계산 전 스냅샷 (변경 여부 판정용)
+        const before = {};
+        indices.forEach(function(i) {
+            const row = globalData[i]; if (!row) return;
+            before[i] = {
+                start: row._calcStartTs, plan: row._calcPlanTs,
+                startStr: colIdx.start !== -1 ? (row[colIdx.start] || '') : '',
+                planStr:  colIdx.plan  !== -1 ? (row[colIdx.plan]  || '') : ''
+            };
+        });
+
+        // 선택 행만 잠금 해제 후 재계산
+        indices.forEach(function(i) {
+            const row = globalData[i]; if (!row) return;
+            row._startForced = false; row._planForced = false;
+            if (colIdx.start !== -1) row[colIdx.start] = "";
+            if (colIdx.plan  !== -1) row[colIdx.plan]  = "";
+        });
+
+        window._suppressFreezeLog = true; // 아래에서 상세 로그를 남기므로 일괄 요약 로그는 생략
+        window.recalculateSchedules();
+        window._suppressFreezeLog = false;
+
+        // 실제로 날짜가 바뀐 행만 로그
+        let changedCount = 0;
+        indices.forEach(function(i) {
+            const row = globalData[i]; const b = before[i];
+            if (!row || !b) return;
+            if (b.start !== row._calcStartTs || b.plan !== row._calcPlanTs) {
+                changedCount++;
+                const oldTxt = `시작 ${b.startStr || (b.start ? formatTsToYMD(b.start) : '-')} · 완료 ${b.planStr || (b.plan ? formatTsToYMD(b.plan) : '-')}`;
+                const newTxt = `시작 ${colIdx.start !== -1 ? (row[colIdx.start] || '-') : '-'} · 완료 ${colIdx.plan !== -1 ? (row[colIdx.plan] || '-') : '-'}`;
+                window.changeLogs.push({
+                    time: new Date().toLocaleString('ko-KR'),
+                    userName: window.currentUserName || '비로그인 (로컬)',
+                    rowName: i, colName: '일정 재계산',
+                    oldVal: oldTxt, newVal: newTxt, reason: reason
+                });
+            }
+        });
+
+        window._selectedRows = new Set();
+        if (typeof window.syncRowHighlight === 'function') window.syncRowHighlight();
+        alert(changedCount > 0 ? `✅ ${changedCount}건의 일정이 재계산되었습니다.\n(사유: ${reason})` : 'ℹ️ 선택한 구간의 일정에 변경이 없었습니다.');
+    };
+
+    // =========================================================
+    // ↩️↪️ Undo / Redo — recalculateSchedules() 종료 시점마다 자동 스냅샷
+    // =========================================================
+    window._undoStack = [];
+    window._redoStack = [];
+    window._isRestoringUndo = false;
+    const UNDO_MAX = 50;
+
+    function _snapshotState() {
+        return {
+            globalData: globalData.map(function(row, idx) {
+                if (idx === 0 || !Array.isArray(row)) return { data: Array.from(row || []) };
+                let o = { data: Array.from(row) };
+                for (let k in row) { if (k.startsWith('_')) o[k] = row[k]; }
+                return o;
+            }),
+            colIdx: JSON.parse(JSON.stringify(colIdx))
+        };
+    }
+
+    function _restoreState(snap) {
+        globalData = snap.globalData.map(function(obj) {
+            let row = obj.data;
+            for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
+            return row;
+        });
+        colIdx = JSON.parse(JSON.stringify(snap.colIdx));
+    }
+
+    window.pushUndoSnapshot = function() {
+        if (window._isRestoringUndo) return;
+        if (!globalData || globalData.length === 0) return;
+        window._undoStack.push(_snapshotState());
+        if (window._undoStack.length > UNDO_MAX) window._undoStack.shift();
+        window._redoStack = []; // 새 작업이 생기면 redo 스택은 무효화
+        window.updateUndoRedoButtons();
+    };
+
+    window.undoLastAction = function() {
+        if (window._undoStack.length < 2) { alert('더 이상 실행 취소할 작업이 없습니다.'); return; }
+        window._isRestoringUndo = true;
+        const current = window._undoStack.pop();
+        window._redoStack.push(current);
+        const prev = window._undoStack[window._undoStack.length - 1];
+        _restoreState(prev);
+        window.recalculateSchedules();
+        window._isRestoringUndo = false;
+        window.updateUndoRedoButtons();
+    };
+
+    window.redoLastAction = function() {
+        if (window._redoStack.length === 0) { alert('다시 실행할 작업이 없습니다.'); return; }
+        window._isRestoringUndo = true;
+        const next = window._redoStack.pop();
+        window._undoStack.push(next);
+        _restoreState(next);
+        window.recalculateSchedules();
+        window._isRestoringUndo = false;
+        window.updateUndoRedoButtons();
+    };
+
+    window.updateUndoRedoButtons = function() {
+        const u = document.getElementById('undo-btn'); const r = document.getElementById('redo-btn');
+        if (u) u.disabled = window._undoStack.length < 2;
+        if (r) r.disabled = window._redoStack.length === 0;
+    };
+
+    // 단축키: Ctrl+Z(실행취소) / Ctrl+Y 또는 Ctrl+Shift+Z(다시실행)
+    window.addEventListener('keydown', function(e) {
+        const activeEl = document.activeElement;
+        const isInput = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' ||
+                         activeEl.isContentEditable || activeEl.getAttribute('contenteditable') === 'true');
+        if (isInput) return; // 셀 편집 중에는 브라우저 기본 텍스트 undo에 맡김
+        const ctrl = e.ctrlKey || e.metaKey;
+        if (!ctrl) return;
+        if (e.key === 'z' || e.key === 'Z') {
+            if (e.shiftKey) { e.preventDefault(); window.redoLastAction(); }
+            else { e.preventDefault(); window.undoLastAction(); }
+        } else if (e.key === 'y' || e.key === 'Y') {
+            e.preventDefault(); window.redoLastAction();
+        }
+    });
 
     // 💡 현재 조작 중인 행의 하이라이트를 추적·관리하는 헬퍼 함수 정의
     window.highlightRow = function(rowIndex) {
@@ -2416,7 +2573,7 @@ ${mailText}`;
         }, 1000);
     });
 
-    function logChange(rowIndex, colIndex, oldVal, newVal) {
+    function logChange(rowIndex, colIndex, oldVal, newVal, reason) {
         if (!globalData || globalData.length === 0) return;
         let colName = colIndex === -1 ? "행 조작" : (globalData[0][colIndex] || `Col ${colIndex}`);
         let rowName = rowIndex; 
@@ -2431,9 +2588,19 @@ ${mailText}`;
         } else if (globalData[rowIndex]) { rowName = globalData[rowIndex][colIdx.no] || rowIndex; }
         
         window.changeLogs.push({ 
-            time: new Date().toLocaleString('ko-KR'), userName: window.currentUserName || "비로그인 (로컬)", rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal 
+            time: new Date().toLocaleString('ko-KR'), userName: window.currentUserName || "비로그인 (로컬)", rowName: rowName, colName: colName, oldVal: oldVal, newVal: newVal, reason: reason || ''
         });
     }
+
+    // ✅ [공용] 선택적 사유 입력 — 비워두면 "사유 미기재"로 자동 기록.
+    //    Gantt(changeLogs)뿐 아니라 M.C Table 등 다른 이력 페이지에서도 동일하게 재사용.
+    //    취소(Cancel) 시 null 반환 → 호출부는 작업 자체를 중단하도록 처리할 것.
+    window.promptOptionalReason = function(actionLabel) {
+        const input = prompt(`📝 ${actionLabel} 사유를 입력해주세요.\n(선택 입력 — 비워두고 확인을 누르면 "사유 미기재"로 기록됩니다)`, '');
+        if (input === null) return null;
+        const trimmed = input.trim();
+        return trimmed ? trimmed : '사유 미기재';
+    };
 
 
     // 💡 Gantt 변경 이력 — M.C Table과 동일하게 표 하단 펼침 박스 형태로 표시
@@ -2518,12 +2685,13 @@ window.deleteHistoryByDateRange = function() {
                 <table class="history-table">
                     <thead>
                         <tr>
-                            <th style="width:15%;">변경 일시</th>
-                            <th style="width:12%;">수정자</th>
-                            <th style="width:10%;">No (행)</th>
-                            <th style="width:12%;">변경 항목</th>
-                            <th style="width:25%;">변경 전 (Old)</th>
-                            <th style="width:26%;">변경 후 (New)</th>
+                            <th style="width:13%;">변경 일시</th>
+                            <th style="width:10%;">수정자</th>
+                            <th style="width:8%;">No (행)</th>
+                            <th style="width:11%;">변경 항목</th>
+                            <th style="width:21%;">변경 전 (Old)</th>
+                            <th style="width:21%;">변경 후 (New)</th>
+                            <th style="width:16%;">사유</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -2538,6 +2706,7 @@ window.deleteHistoryByDateRange = function() {
                         <td><span class="badge" style="background:#e7f1ff; color:#0056b3;">${escapeHtml(log.colName)}</span></td>
                         <td class="val-old">${escapeHtml(log.oldVal || "-")}</td>
                         <td class="val-new">${escapeHtml(log.newVal || "-")}</td>
+                        <td style="color:#6c757d; font-size:11px;">${escapeHtml(log.reason || "-")}</td>
                     </tr>
                 `;
             });
@@ -3071,7 +3240,7 @@ window.deleteHistoryByDateRange = function() {
             
             if ([colIdx.start, colIdx.plan, colIdx.period, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4].includes(colIndex)) {
                 window.recalculateSchedules();
-            } else { renderTable(globalData); applyFilters(); }
+            } else { renderTable(globalData); applyFilters(); window.pushUndoSnapshot(); }
         } else { td.innerHTML = td.dataset.displayHtml || oldText; }
    };  // ← blurCell 끝
 
@@ -3082,6 +3251,7 @@ window.deleteHistoryByDateRange = function() {
             // 하위 행도 함께 변경
             window.applyStatusToChildren(rowIndex, colIndex, newVal);
             renderTable(globalData); applyFilters();
+            window.pushUndoSnapshot();
         }
     };
 
@@ -10918,7 +11088,7 @@ window.mcToggleHistoryBox = function() {
 };
 
 // 💡 변경 사항 1건 기록
-window.mcLogChange = function(rowLabel, field, oldVal, newVal) {
+window.mcLogChange = function(rowLabel, field, oldVal, newVal, reason) {
     if (String(oldVal || '') === String(newVal || '')) return;
     window.tabData = window.tabData || {};
     window.tabData.mcChangeLog = window.tabData.mcChangeLog || [];
@@ -10926,7 +11096,7 @@ window.mcLogChange = function(rowLabel, field, oldVal, newVal) {
         time: new Date().toLocaleString('ko-KR'),
         userName: window.currentUserName || '비로그인',
         rev: window.tabData.mcActiveRevision || 'R1',
-        row: rowLabel, field: field, oldVal: oldVal, newVal: newVal
+        row: rowLabel, field: field, oldVal: oldVal, newVal: newVal, reason: reason || ''
     });
 };
 
@@ -10939,7 +11109,7 @@ window.mcRenderHistoryTable = function() {
     const fieldLabel = { type:'TYPE', item:'ITEM', group:'GROUP', pn:'P/N', spec:'Specification',
         protoCost:'PROTO A Cost', protoNre:'PROTO A NRE', protoBCost:'PROTO B Cost', protoBNre:'PROTO B NRE',
         mpCost:'MP Cost', mpNre:'MP NRE', note:'Note' };
-    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">리비전</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th></tr></thead><tbody>';
+    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">리비전</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th><th style="padding:4px 8px;">사유</th></tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
             + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
@@ -10947,7 +11117,8 @@ window.mcRenderHistoryTable = function() {
             + '<td style="padding:4px 8px; font-weight:bold;">' + log.row + '</td>'
             + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (fieldLabel[log.field] || log.field) + '</span></td>'
             + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
-            + '<td style="padding:4px 8px; color:#2f9e44;">' + (log.newVal || '-') + '</td></tr>';
+            + '<td style="padding:4px 8px; color:#2f9e44;">' + (log.newVal || '-') + '</td>'
+            + '<td style="padding:4px 8px; color:#6c757d;">' + (log.reason || '-') + '</td></tr>';
     });
     html += '</tbody>';
     table.innerHTML = html;
