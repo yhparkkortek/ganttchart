@@ -5272,6 +5272,44 @@ window.buildMailTaskRow = function(r, gd, ci) {
     return { row: newRow, taskName: taskName };
 };
 
+// ✅ [공용] L0~L4 구간(개발단계 devStage는 하위 레벨까지 forward-fill 되어 있음) 내에서
+//    시작일 기준 최적 삽입 위치를 계산. useAuto=false 또는 조건 미충족 시 "구간 끝"으로 fallback.
+window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
+    if (l0Value === '__END__' || !rows || rows.length <= 1) {
+        return { pos: rows ? rows.length : 0, usedDateMatch: false, previewLabel: '📍 맨 끝에 추가' };
+    }
+    // 구간 범위 탐색
+    let first = -1, last = -1;
+    if (ci.devStage !== -1) {
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i]; if (!row) continue;
+            if ((row[ci.devStage] || '').toString().trim() === l0Value) { if (first === -1) first = i; last = i; }
+        }
+    }
+    if (first === -1) {
+        return { pos: rows.length, usedDateMatch: false, previewLabel: '⚠️ 해당 구간을 찾지 못해 맨 끝에 추가됩니다.' };
+    }
+    const fallback = { pos: last + 1, usedDateMatch: false, previewLabel: `📍 [${l0Value}] 구간 끝에 추가` };
+    if (!useAuto) return fallback;
+
+    const startTs = (startDateStr && !startDateStr.includes('날짜확인필요') && typeof parseDateValue === 'function' && parseDateValue(startDateStr))
+        ? parseDateValue(startDateStr).ts : null;
+    if (!startTs) return fallback; // 날짜 미확정 → fallback 유지
+
+    let bestIndex = -1;
+    for (let i = first; i <= last; i++) {
+        const row = rows[i]; if (!row) continue;
+        const rowStartTs = row._calcStartTs;
+        if (rowStartTs && rowStartTs > startTs) { bestIndex = i - 1; break; }
+    }
+    if (bestIndex === -1) return fallback; // 구간 내 모든 행보다 늦은 날짜 → 결과적으로 구간 끝과 동일
+
+    const pos = Math.max(bestIndex + 1, first);
+    const anchorRow = rows[pos];
+    const anchorName = anchorRow ? (anchorRow._origDev || anchorRow._origT1 || anchorRow._origT2 || anchorRow._origT3 || anchorRow._origT4 || '') : '';
+    return { pos: pos, usedDateMatch: true, previewLabel: `🎯 [${l0Value}] 구간 내 "${anchorName || (pos + '행')}" 앞에 자동 삽입` };
+};
+
 window.insertMailTask = function() {
     if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
     if (!globalData || globalData.length <= 1) { alert('먼저 엑셀 파일을 로드해주세요.'); return; }
@@ -5391,14 +5429,33 @@ window.renderTaskInbox = function() {
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
                 <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap;">➡️ 현재 프로젝트</button>
                 <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#1971c2; border-color:#1971c2;">📤 다른 프로젝트</button>
                 <button class="action-btn" onclick="if(confirm('이 업무를 보관함에서 삭제할까요?')){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131;">🗑</button>
             </div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
+                <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
+                    <input type="checkbox" id="inbox-auto-${it.uid}" checked onchange="window.inboxRecomputePreview('${it.uid}')" style="cursor:pointer;">
+                    🎯 자동 위치(시작일 기준)
+                </label>
+                <span id="inbox-preview-${it.uid}" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+            </div>
         </div>`;
     });
     listEl.innerHTML = html;
+    items.forEach(function(it) { window.inboxRecomputePreview(it.uid); }); // 초기 미리보기 계산
+};
+
+window.inboxRecomputePreview = function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const sel = document.getElementById('inbox-l0-' + uid);
+    const autoEl = document.getElementById('inbox-auto-' + uid);
+    const previewEl = document.getElementById('inbox-preview-' + uid);
+    if (!sel || !previewEl) return;
+    const info = window.computeL0InsertPos(globalData, colIdx, sel.value, it.task['시작일'], autoEl ? autoEl.checked : true);
+    previewEl.textContent = info.previewLabel;
 };
 
 window.inboxPlaceToCurrent = function(uid) {
@@ -5411,18 +5468,14 @@ window.inboxPlaceToCurrent = function(uid) {
         return;
     }
     const sel = document.getElementById('inbox-l0-' + uid);
+    const autoEl = document.getElementById('inbox-auto-' + uid);
     const chosenL0 = sel ? sel.value : '__END__';
+    const useAuto = autoEl ? autoEl.checked : true;
 
     const built = window.buildMailTaskRow(r);
-
-    let pos = globalData.length;
+    const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, r['시작일'], useAuto);
+    const pos = posInfo.pos;
     if (chosenL0 !== '__END__' && colIdx.devStage !== -1) {
-        let last = -1;
-        for (let i = 1; i < globalData.length; i++) {
-            const row = globalData[i]; if (!row) continue;
-            if ((row[colIdx.devStage] || '').toString().trim() === chosenL0) last = i;
-        }
-        if (last !== -1) pos = last + 1;
         built.row[colIdx.devStage] = chosenL0; // 배치 구간과 개발단계 값 일치시킴
     }
     globalData.splice(pos, 0, built.row);
@@ -5435,7 +5488,7 @@ window.inboxPlaceToCurrent = function(uid) {
         at: new Date().toISOString()
     });
     window.renderTaskInbox();
-    alert(`✅ "${built.taskName}" 업무가 [${chosenL0 === '__END__' ? '맨 끝' : chosenL0}] 위치에 배치되었습니다.`);
+    alert(`✅ "${built.taskName}" 업무가 배치되었습니다.\n(${posInfo.previewLabel})`);
 };
 
 window.inboxClearDone = function() {
@@ -5554,6 +5607,18 @@ window.inboxDistFillL0Select = function(preferred) {
     sel.innerHTML = '<option value="__END__">(맨 끝에 추가)</option>' + l0s.map(function(v) {
         return '<option value="' + escapeHtml(v) + '"' + (v === want ? ' selected' : '') + '>' + escapeHtml(v) + ' 구간 끝</option>';
     }).join('');
+    sel.onchange = window.distRecomputePreview;
+    window.distRecomputePreview();
+};
+
+window.distRecomputePreview = function() {
+    const ctx = window._distCtx;
+    const sel = document.getElementById('dist-l0-select');
+    const autoEl = document.getElementById('dist-auto-position');
+    const previewEl = document.getElementById('dist-position-preview');
+    if (!ctx || !ctx.saveData || !sel || !previewEl) return;
+    const info = window.computeL0InsertPos(ctx.rows, ctx.saveData.colIdx, sel.value, ctx.task['시작일'], autoEl ? autoEl.checked : true);
+    previewEl.textContent = info.previewLabel;
 };
 
 // 충돌 감지 시 최신본 재확보
@@ -5608,15 +5673,11 @@ window.inboxDistExecute = async function(attempt) {
         const built = window.buildMailTaskRow(ctx.task, ctx.rows, tCol);
         built.row._알림 = true; // ✅ 배분 업무는 대상 프로젝트에서 D-7/3/1 알림 대상으로 자동 설정
 
-        // L0 일치 구간 끝 위치 계산
-        let pos = ctx.rows.length;
+        // L0~4 구간 내 시작일 기준 최적 위치 계산 (자동 미충족 시 구간 끝 fallback)
+        const autoEl = document.getElementById('dist-auto-position');
+        const posInfo = window.computeL0InsertPos(ctx.rows, tCol, chosenL0, ctx.task['시작일'], autoEl ? autoEl.checked : true);
+        const pos = posInfo.pos;
         if (chosenL0 !== '__END__' && tCol.devStage !== -1) {
-            let last = -1;
-            for (let i = 1; i < ctx.rows.length; i++) {
-                const row = ctx.rows[i]; if (!row) continue;
-                if ((row[tCol.devStage] || '').toString().trim() === chosenL0) last = i;
-            }
-            if (last !== -1) pos = last + 1;
             built.row[tCol.devStage] = chosenL0;
         }
         ctx.rows.splice(pos, 0, built.row);
@@ -5663,7 +5724,7 @@ window.inboxDistExecute = async function(attempt) {
         const file = await resp.json();
         if (resp.ok && file && file.id) {
             window.TaskInbox.setStatus(ctx.uid, '전송됨', { type: '드라이브전송', target: ctx.fileName, distUid: distUid, at: nowIso });
-            alert(`🎉 "${built.taskName}" 업무가 [${ctx.fileName}] 프로젝트의 [${chosenL0 === '__END__' ? '맨 끝' : chosenL0}] 위치로 전송되었습니다!\n(📌 알림 자동 설정 · 수정이력/배분원장 기록 완료)`);
+            alert(`🎉 "${built.taskName}" 업무가 [${ctx.fileName}] 프로젝트로 전송되었습니다!\n(${posInfo.previewLabel})\n(📌 알림 자동 설정 · 수정이력/배분원장 기록 완료)`);
             window.closeInboxDist();
             window.renderTaskInbox();
         } else {
@@ -6026,12 +6087,19 @@ window.updateInboxBadge();
             <p style="margin:0 0 10px; font-size:12px; color:#888; flex-shrink:0;">전송 업무: <b id="dist-task-name" style="color:#e67e22;"></b></p>
             <div id="dist-file-list" style="flex:1; overflow-y:auto; min-height:100px;"></div>
             <div id="dist-step2" style="display:none; flex-shrink:0; border-top:2px solid #eee; padding-top:10px; margin-top:10px;">
-                <p style="margin:0 0 8px; font-size:12px; color:#555;">대상: <b id="dist-target-name" style="color:#1971c2;"></b> — 삽입할 개발단계(L0) 구간을 선택하세요.</p>
-                <div style="display:flex; gap:8px; align-items:center;">
-                    <select id="dist-l0-select" style="flex:1; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;"></select>
-                    <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#1971c2; border-color:#1971c2; white-space:nowrap;">🚀 전송 실행</button>
-                </div>
+            <p style="margin:0 0 8px; font-size:12px; color:#555;">대상: <b id="dist-target-name" style="color:#1971c2;"></b> — 삽입할 개발단계(L0) 구간을 선택하세요.</p>
+            <div style="display:flex; gap:8px; align-items:center;">
+                <select id="dist-l0-select" style="flex:1; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;"></select>
+                <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#1971c2; border-color:#1971c2; white-space:nowrap;">🚀 전송 실행</button>
             </div>
+            <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:#555;">
+                <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
+                    <input type="checkbox" id="dist-auto-position" checked onchange="window.distRecomputePreview()" style="cursor:pointer;">
+                    🎯 자동 위치(시작일 기준)
+                </label>
+                <span id="dist-position-preview" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+            </div>
+        </div>
         </div>
     </div>
 </div>
