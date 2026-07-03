@@ -104,7 +104,7 @@
 
     @media print {
                 .trans-btn-hide-print, #auth_button, #drive_save_btn, #drive_load_btn { display: none !important; }
-                .controls, hr, #table-info .btn-group { display: none !important; }
+                hr, #table-info .btn-group { display: none !important; }
                 #table-info { position: static !important; border-radius: 0 !important; }
                 .container { height: auto !important; overflow: visible !important; border: none !important; }
                 body { margin: 0 !important; }
@@ -122,12 +122,7 @@
     .history-btn { border-color: #6f42c1; color: #6f42c1; }
     .history-btn:hover { background-color: #6f42c1; color: #fff; }
 
-    .drive-save-style { background-color: #2da44e; color: white; border-color: #2da44e; }
-    .drive-save-style:hover { background-color: #22863a; border-color: #22863a; }
-    .drive-load-style { background-color: #ff9800; color: white; border-color: #ff9800; }
-    .drive-load-style:hover { background-color: #e68a00; border-color: #e68a00; }
 
-    .controls { margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #dee2e6; transition: 0.3s; }
     #app-topbar.drag-over { outline: 3px dashed #fff; outline-offset: -3px; background-color: #3d7fc4 !important; }
     
     .filter-label { font-weight: bold; width: 60px; margin-right: 6px; background: #e9ecef; padding: 3px; text-align: center; border-radius: 4px; font-size: 11px; }
@@ -170,7 +165,7 @@
     .parent-row td { background: #ffffff !important; font-weight: bold; color: #000000 !important; }
     .parent-row td.period-td { color: #e03131 !important; }
     .parent-row .no-td, .parent-row .no-td .row-num-span { color: #000000 !important; }
-    .parent-row .chart-axis-wrapper, .parent-row .chart-label { color: #495057 !important; }
+    .parent-row .chart-label { color: #495057 !important; }
 
     .sub-parent-row td { background: #ffffff !important; font-weight: normal; color: #333333; }
     .sub-parent-row-2 td { background: #ffffff !important; font-weight: normal; color: #333333; }
@@ -190,7 +185,6 @@
     #print-header { display: none; }
 
     .chart-label { color: #000; font-weight: bold; font-size: var(--chart-label-size); }
-    .chart-axis-wrapper { position: relative; height: 10px; width: 100%; font-size: var(--chart-label-size); color: #adb5bd; line-height: 10px; white-space: nowrap; font-weight: normal; }
     .date-clickable { cursor: pointer; border-bottom: 1px dashed #adb5bd; padding-bottom: 1px; transition: 0.2s; display: inline-block; }
     .date-clickable:hover { color: #0056b3; border-bottom-color: #0056b3; font-weight: bold; }
     
@@ -209,7 +203,7 @@
 
     :fullscreen { background-color: #f4f6f8; overflow: auto; padding: 0; }
     :fullscreen body { margin: 0; padding: 0; background-color: white; min-height: 100vh; }
-    :fullscreen .controls, :fullscreen hr { display: none !important; } 
+    :fullscreen hr { display: none !important; } 
     :fullscreen #table-info { top: 0; border-radius: 0; margin: 0; width: 100%; border-bottom: 1px solid #ccc; }
     :fullscreen .container { max-height: none; height: calc(100vh - 50px); border: none; border-radius: 0; overflow-x: auto; width: 100%; }
 
@@ -223,9 +217,6 @@
     .no-td:hover { background-color: #e9ecef !important; } 
     .row-actions { display: none; gap: 2px; justify-content: center; margin-top: 3px; }
     .row-actions.show { display: flex; } 
-    .row-action-btn { cursor: pointer; font-size: 9px; font-weight:bold; border-radius: 3px; padding: 0; width: 16px; height: 16px; line-height: 16px; text-align: center; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.15); border: 1px solid #333; color: #333; display: inline-flex; align-items: center; justify-content: center; }
-    .row-action-btn:hover { background: #333; color: #fff; }
-    .row-action-btn.add, .row-action-btn.del, .row-action-btn.lvl-up, .row-action-btn.lvl-dn { border-color: #333; color: #333; }
 
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; }
     .history-modal { background: #fff; width: 90%; max-width: 900px; height: 80vh; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: fadeIn 0.2s; }
@@ -407,9 +398,6 @@
     display: flex; align-items: center; justify-content: space-between;
     padding: 14px 14px 3px 14px; height: 30px; flex-shrink: 0;
 }
-#app-sidebar .sb-header .sb-title {
-    font-weight: bold; font-size: 15px; white-space: nowrap; overflow: hidden;
-}
 #app-sidebar .sb-toggle-btn {
     background: none; border: none; color: #fff;
     width: 26px; height: 26px; border-radius: 4px; cursor: pointer;
@@ -429,7 +417,6 @@
 #app-sidebar .sb-item:hover { background: rgba(255,255,255,0.08); }
 #app-sidebar .sb-item.active { background: rgba(255,255,255,0.16); border-left-color: #ffce54; font-weight: bold; }
 #app-sidebar.collapsed { width: var(--sb-w-collapsed); }
-#app-sidebar.collapsed .sb-title,
 #app-sidebar.collapsed .sb-label { display: none; }
 #app-sidebar.collapsed .sb-item { justify-content: center; padding: 11px 0; }
 
@@ -448,14 +435,9 @@
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
 .concept-tab-wrap h2 { margin-top:0; font-size:19px; color:#2c5f8a; }
-.concept-tab-wrap .concept-badge {
-    display:inline-block; font-size:11px; background:#fff3cd; color:#8a6d1d;
-    border:1px solid #ffe69c; border-radius:4px; padding:2px 8px; margin-left:8px; vertical-align:middle;
-}
 .concept-section { background:#fff; border:1px solid #e3e6ea; border-radius:6px; padding:16px 18px; margin-bottom:16px; }
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
-.concept-grid-2col { grid-template-columns: 140px 1fr 140px 1fr; }
 .concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
 .concept-grid label { font-size:12.5px; color:#666; }
 .concept-grid input, .concept-grid textarea {
@@ -511,13 +493,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .sum-tl-bubble.above::after { bottom:-6px; border-top-color:#6f42c1; }
 .sum-tl-bubble.below::after { top:-6px; border-bottom-color:#6f42c1; }
 .sum-tl-bubble .sum-tl-date { font-size:10px; color:#888; }
-/* 점↔상자 연결 수직선 */
-.sum-tl-connector { position:absolute; left:50%; width:1.5px; background:#6f42c1; transform:translateX(-50%); z-index:1; pointer-events:none; }
-.sum-tl-bubble.above .sum-tl-connector { bottom:-14px; height:14px; }
-.sum-tl-bubble.below .sum-tl-connector { top:-14px; height:14px; }
-/* 오늘 라벨 숨김 */
-.sum-tl-today-label { display:none; }
-.sum-tl-range { display:flex; justify-content:space-between; font-size:11px; color:#888; margin:4px 56px 0; }
 .cal-month-block { margin-bottom: 32px; }
 .cal-month-title { font-size: 15px; font-weight: bold; color: #2c5f8a; margin-bottom: 8px; padding-left: 4px; }
 
@@ -578,10 +553,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     box-shadow: 0 1px 4px rgba(231,76,60,0.6);
     transform: translate(-50%, -50%); z-index: 3;
 }
-.sum-tl-today-label {
-    position: absolute; top: -20px; left: 50%; transform: translateX(-50%);
-    font-size: 11px; color: #e74c3c; font-weight: bold; white-space: nowrap;
-}
 
 /* 5. 페이지 내부 박스 — UHD 등 넓은 화면에서 끝없이 늘어나지 않도록 최대 너비 고정 (왼쪽 맞춤) */
 .concept-tab-wrap { padding: 0 !important; max-width: 1200px !important; margin: 0 !important; box-sizing: border-box; }
@@ -599,11 +570,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 /* ========================================= */
 
 /* ── Calendar 탭 ───────────────────────── */
-.cal-toolbar { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; flex-wrap:wrap; gap:10px; }
-.cal-nav-btns { display:flex; align-items:center; gap:10px; }
-.cal-toolbar button { padding:6px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12.5px; }
-.cal-toolbar button:hover { background:#2c5f8a; color:#fff; }
-.cal-month-label { font-size:16px; font-weight:bold; color:#2c5f8a; min-width:110px; text-align:center; }
 .cal-grid-wrap { border:1px solid #e3e6ea; border-radius:6px; overflow:hidden; }
 .cal-weekday-row { display:grid; grid-template-columns:repeat(7,1fr); background:#f4f6f8; }
 .cal-weekday-row > div { padding:7px; text-align:center; font-size:12px; font-weight:600; color:#555; border-bottom:1px solid #e3e6ea; }
@@ -2855,60 +2821,6 @@ window.deleteHistoryByDateRange = function() {
         window.recalculateSchedules();
     };
 
-    window.showMovePopup = function(index) {
-    let modal = document.getElementById('move-row-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'move-row-modal';
-        modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
-        modal.innerHTML = `
-            <div style="background:#fff;border-radius:10px;padding:28px 32px;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
-                <div style="font-size:18px;margin-bottom:16px;font-weight:bold;">↕️ 행 이동</div>
-                <div id="move-row-msg" style="font-size:13px;color:#495057;margin-bottom:20px;"></div>
-                <div style="display:flex;gap:12px;justify-content:center;">
-                    <button id="move-row-up" style="padding:9px 24px;background:#0056b3;color:#fff;border:none;border-radius:7px;font-size:16px;font-weight:700;cursor:pointer;">▲ 위로</button>
-                    <button id="move-row-dn" style="padding:9px 24px;background:#0056b3;color:#fff;border:none;border-radius:7px;font-size:16px;font-weight:700;cursor:pointer;">▼ 아래로</button>
-                    <button id="move-row-cancel" style="padding:9px 24px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:14px;cursor:pointer;">✖ 닫기</button>
-                </div>
-            </div>`;
-        document.body.appendChild(modal);
-    }
-
-    let tr = document.querySelector(`tr[data-row-index="${index}"]`);
-    let rowName = index;
-    if (tr) {
-        let span = tr.querySelector('.row-num-span');
-        if (span && span.textContent) rowName = span.textContent.trim();
-    }
-
-    document.getElementById('move-row-msg').textContent = `${rowName}번 행을 이동할 방향을 선택하세요.`;
-    modal.style.display = 'flex';
-
-    // 버튼 이벤트 재등록 (클론으로 중복 방지)
-    ['move-row-up', 'move-row-dn', 'move-row-cancel'].forEach(id => {
-        let btn = document.getElementById(id);
-        let newBtn = btn.cloneNode(true);
-        btn.parentNode.replaceChild(newBtn, btn);
-    });
-
-    document.getElementById('move-row-up').addEventListener('click', function() {
-        modal.style.display = 'none';
-        window.moveRow(index, -1);
-    });
-    document.getElementById('move-row-dn').addEventListener('click', function() {
-        modal.style.display = 'none';
-        window.moveRow(index, +1);
-    });
-    document.getElementById('move-row-cancel').addEventListener('click', function() {
-        modal.style.display = 'none';
-    });
-
-    // 배경 클릭 시 닫기
-    modal.onclick = function(e) {
-        if (e.target === modal) modal.style.display = 'none';
-    };
-};
-    
     window.currentCalendarTarget = null; window.currentCalendarTs = null; window.currentViewYear = null; window.currentViewMonth = null; window.currentCalendarRow = null; window.currentCalendarCol = null;
 
     window.showCalendar = function(btn, ts, rowIndex, colIndex) {
@@ -5396,7 +5308,6 @@ window.insertMailTask = function() {
     /* 🖨️ 인쇄 모드 완전히 처음부터 다시 잡기 (화면 모드에는 영향 0%) */
     @media print {
         /* 1️⃣ 상단 버튼, 필터 바 등 인쇄에 필요 없는 조작 화면 전체 숨기기 */
-        .controls, 
         #drop-zone, 
         #table-info, 
         .btn-group, 
@@ -6310,16 +6221,6 @@ function cleanMailBody(raw) {
     return s;
 }
 
-// ─── 프로젝트 매칭 ──────────────────────────────────────
-function mfMatchProject(subject, body) {
-    const text = subject + ' ' + body.substring(0, 500);
-    const keywords = mfBuildProjectKeywords();
-    for (const [proj, patterns] of Object.entries(keywords)) {
-        if (patterns.some(p => p.test(text))) return proj;
-    }
-    return null;
-}
-
 // ─── Gemini 분석 ─────────────────────────────────────────
 async function mfCallGemini(apiKey, parsed) {
     // 동일 메일 캐싱 (제목+발신자+본문 앞 200자 해시)
@@ -6520,28 +6421,6 @@ function mfRenderList(results) {
         });
     });
 }
-
-window.mfSetProject = function(project) {
-    const idx = window._mfCurrentIdx;
-    if (idx < 0) return;
-    window._mfResults[idx].project  = project;
-    window._mfResults[idx].selected = !!project;
-    // 왼쪽 목록 해당 항목 업데이트
-    const item = document.getElementById(`mf-list-item-${idx}`);
-    if (item && project) {
-        const badge = item.querySelector('div > div:last-child');
-        if (badge) badge.innerHTML =
-            `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px;
-                          border-radius:3px; font-size:10px; font-weight:bold;">
-                 ${project}</span>`;
-        item.style.background = '#fff';
-        // 체크박스 활성화
-        const cb = item.querySelector('input[type=checkbox]');
-        if (cb) { cb.disabled = false; cb.checked = true; }
-        window._mfResults[idx].selected = true;
-    }
-    window.mfSyncCheckAll();
-};
 
 window.mfToggleCheck = function(idx, checked) {
     if (window._mfResults && window._mfResults[idx] !== undefined) {
@@ -7054,7 +6933,7 @@ async function msCallGemini(apiKey, parsed) {
     @media screen {
         html, body { height: 100% !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; box-sizing: border-box !important; }
         body { display: flex !important; flex-direction: column !important; padding: 15px 15px 0 15px !important; }
-        .controls, #table-info, hr, #dynamic-filters { flex-shrink: 0 !important; }
+        #table-info, hr, #dynamic-filters { flex-shrink: 0 !important; }
         .container { margin-bottom: 15px !important; }
     }
 
@@ -7593,20 +7472,6 @@ async function msCallGemini(apiKey, parsed) {
             </table>`;
     }
 
-    // 입력칸 변경 시 globalData에 즉시 반영 (저장은 기존 '드라이브에 저장' 버튼이 처리)
-    window.wrBindInputs = function() {
-        document.querySelectorAll('#weekly-report-modal input[data-row-idx]').forEach(inp => {
-            inp.addEventListener('change', function() {
-                const idx = parseInt(this.dataset.rowIdx, 10);
-                const field = this.dataset.field;
-                if (globalData[idx]) {
-                    globalData[idx][field] = this.value;
-                    logChange(idx, -1, `주간보고 ${field}`, this.value);
-                }
-            });
-        });
-    };
-
     window.wrShiftWeek = function(direction) {
         if (direction === 0) {
             window.wrBaseDate = new Date();
@@ -7629,26 +7494,6 @@ async function msCallGemini(apiKey, parsed) {
             if (diff < minDiff) { minDiff = diff; nearestIdx = i; }
         });
         window.sumTlBringToFront(nearestIdx, 'wr-level0-timeline');
-    };
-
-    window.wrToggleMetaPanel = function() {
-        const panel = document.getElementById('wr-meta-panel');
-        const icon = document.getElementById('wr-meta-toggle-icon');
-        if (!panel) return;
-        const isHidden = panel.style.display === 'none';
-        panel.style.display = isHidden ? 'grid' : 'none';
-        if (icon) icon.textContent = isHidden ? '▼' : '▶';
-    };
-
-    window.wrSaveMetaFromInputs = function() {
-        const get = (id) => { const el = document.getElementById(id); return el ? el.value : ''; };
-        window.projectMeta = {
-            프로젝트코드: get('wr-meta-code'),
-            프로젝트명: get('wr-meta-name'),
-            PN_모델명: get('wr-meta-pn'),
-            기구담당자: get('wr-meta-mech'),
-            FW담당자: get('wr-meta-fw')
-        };
     };
 
 // ── 팝업 표시 ─────────────────────────────────────────
@@ -8831,21 +8676,6 @@ window.openAlarmSettings = function() {
 window.closeAlarmSettings = function() {
     document.getElementById('alarm-settings-overlay').style.display = 'none';
     document.getElementById('alarm-settings-modal').style.display   = 'none';
-};
-
-// 발송 이력 초기화
-window.resetAlarmHistory = function() {
-    const item = window._alarmCurrentItem;
-    if (!item) return;
-    // localStorage에서 해당 rowId 관련 키 전부 삭제
-    const prefix = 'gantt_alarm_' + item.rowId + '_';
-    Object.keys(localStorage).filter(k => k.startsWith(prefix)).forEach(k => localStorage.removeItem(k));
-    item.sentLog = {};
-    // 모달 닫고 목록 갱신
-    window.closeAlarmModal();
-    window.renderAlarmTab();
-    if (window.bmAlertModal) window.bmAlertModal('발송 이력이 초기화되었습니다.');
-    else alert('발송 이력이 초기화되었습니다.');
 };
 
 // ══════════════════════════════════════════════════════════════
@@ -10078,24 +9908,6 @@ function bmDeleteSelected(key) {
     });
 }
 
-window.addBriefSpecRow = function() {
-    const tbody = document.getElementById('briefspec-body');
-    if (!tbody) return;
-    const tr = document.createElement('tr');
-    tr.innerHTML = BM_CONF.bs.rowHtml();
-    tbody.appendChild(tr);
-    window.bmSetupAllRows('bs');
-};
-
-window.addMcTableRow = function() {
-    const tbody = document.getElementById('mctable-body');
-    if (!tbody) return;
-    const tr = document.createElement('tr');
-    tr.innerHTML = BM_CONF.mc.rowHtml();
-    tbody.appendChild(tr);
-    window.bmSetupAllRows('mc');
-};
-
 // 💡 R1~R5 리비전 전환: 현재 화면 내용을 활성 리비전에 저장하고, 선택한 리비전 데이터로 다시 그림
 window.mcSwitchRevision = function(rev) {
     window.tabData = window.tabData || {};
@@ -10381,13 +10193,6 @@ window.mcToggleCompareExpand = function(btnEl) {
     try { localStorage.setItem('gantt_mc_expanded', window._bmExpanded.mc ? '1' : '0'); } catch (e) {}
     const btn = btnEl || document.getElementById('mc-toggle-hidden-btn');
     if (btn) btn.textContent = window._bmExpanded.mc ? '🔼 접기' : '🔽 펼치기';
-    window.mcRenderComparisonTable();
-};
-
-window.mcUpdateSalesPrice = function(rev, val) {
-    window.tabData.mcCompare = window.tabData.mcCompare || { salesPrice: {} };
-    window.tabData.mcCompare.salesPrice = window.tabData.mcCompare.salesPrice || {};
-    window.tabData.mcCompare.salesPrice[rev] = _mcParseNum(val);
     window.mcRenderComparisonTable();
 };
 
