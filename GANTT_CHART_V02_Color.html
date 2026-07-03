@@ -860,51 +860,72 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div> <!-- /#tab-gantt -->
 
 <div id="tab-address" class="tab-panel">
-    <div class="concept-section">
-        <h3>📇 Address Book <span style="font-size:11px;color:#999;font-weight:normal;">(이름 칸은 Summary 담당자 자동완성 소스로 사용됩니다)</span></h3>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px;">
-            <label class="action-btn" style="cursor:pointer;" for="addr-file-input">📂 주소록 불러오기</label>
+    <div class="concept-tab-wrap">
+        <div class="concept-header-box">
+            <h2>📇 Address</h2>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <label class="concept-add-row-btn" for="addr-file-input" style="margin:0; cursor:pointer;">📂 불러오기</label>
             <input type="file" id="addr-file-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importAddressExcel(this.files)">
-            <button class="action-btn" onclick="window.exportAddressExcel()">💾 주소록 내보내기</button>
-            <button class="action-btn" onclick="window.addAddressRow()">➕ 행 추가</button>
-            <button class="action-btn" onclick="window.deleteSelectedAddressRows()" style="color:#e03131; border-color:#e03131;">🗑 선택 삭제</button>
-            <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
-            <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
+            <div class="btn-group">
+                <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
+                <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
+            </div>
         </div>
-        <div style="font-size:11px; color:#888; margin-bottom:8px;">
-            💡 행 번호를 Ctrl/Shift 클릭하면 여러 명 선택 후 일괄 삭제할 수 있습니다.
-        </div>
-        <style>
-            #tab-address .concept-table th { text-align: center !important; vertical-align: middle !important; }
-            #tab-address .concept-table thead {
-                position: sticky !important;
-                top: 0 !important;
-                z-index: 16;
-            }
-            #tab-address .concept-table thead th {
-                background-color: #f4f6f8 !important;
-            }
-        </style>
-        <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
-            <table class="concept-table">
-                <colgroup>
-                    <col style="width:40px;"><col style="width:16%;"><col style="width:14%;"><col style="width:16%;">
-                    <col style="width:22%;"><col style="width:14%;"><col style="width:14%;"><col style="width:40px;">
-                </colgroup>
-                <thead>
-                    <tr>
-                        <th title="클릭: 선택 / Ctrl·Shift 클릭: 여러 행 선택">#</th>
-                        <th>이름</th>
-                        <th>부서</th>
-                        <th>직함</th>
-                        <th>이메일</th>
-                        <th>휴대폰</th>
-                        <th>근무처 전화</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody id="address-table-body"></tbody>
-            </table>
+        <div class="concept-section">
+            <style>
+                #tab-address .concept-table th { text-align: center !important; vertical-align: middle !important; }
+                #tab-address .concept-table thead {
+                    position: sticky !important;
+                    top: 0 !important;
+                    z-index: 16;
+                }
+                #tab-address .concept-table thead th {
+                    background-color: #f4f6f8 !important;
+                }
+                #tab-address .concept-table td input.u-input {
+                    background: transparent !important;
+                    text-align: center !important;
+                }
+                #tab-address .concept-table tbody tr.mc-zebra-a,
+                #tab-address .concept-table tbody tr.mc-zebra-a input {
+                    background-color: #ffffff !important;
+                }
+                #tab-address .concept-table tbody tr.mc-zebra-b,
+                #tab-address .concept-table tbody tr.mc-zebra-b input {
+                    background-color: #efefef !important;
+                }
+            </style>
+            <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+                <table class="concept-table">
+                    <thead>
+                        <tr>
+                            <th style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
+                            <th style="width:15%;">이름</th>
+                            <th style="width:13%;">부서</th>
+                            <th style="width:15%;">직함</th>
+                            <th style="width:24%;">이메일</th>
+                            <th style="width:15%;">휴대폰</th>
+                            <th style="width:15%;">근무처 전화</th>
+                        </tr>
+                    </thead>
+                    <tbody id="address-table-body"></tbody>
+                </table>
+            </div>
+            <div id="addr-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                <div id="addr-history-header" onclick="window.addrToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                    <span id="addr-history-toggle-icon">▶</span>
+                    변경 이력 확인
+                </div>
+                <div id="addr-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                    <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                        <label>시작일 <input type="date" id="addr-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <label>종료일 <input type="date" id="addr-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <input type="password" id="addr-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                        <button class="action-btn" onclick="window.deleteAddrHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
+                    </div>
+                    <table id="addr-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -1086,10 +1107,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </tr>
                 </thead>
                 <tbody id="briefspec-body">
-                    <tr><td class="bm-no">1</td><td><input type="text" data-field="type" value="Development Stage"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA" value="Proto A"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bm-no">2</td><td><input type="text" data-field="type" value="Touch or Glass"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bm-no">3</td><td><input type="text" data-field="type" value="Panel"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
-                    <tr><td class="bm-no">4</td><td><input type="text" data-field="type" value="Native Resolution"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
+                    <tr><td class="bm-no">1</td><td><input type="text" data-field="type"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
             
@@ -2801,6 +2819,7 @@ window.deleteHistoryByDateRange = function() {
 
         </div>`;
         document.body.appendChild(popup);
+        _makeFloatingPopupDraggable(popup);
 
         // 외부 클릭 시 닫기
         document.addEventListener('click', function(e) {
@@ -4211,6 +4230,22 @@ window.deleteHistoryByDateRange = function() {
             const wsProdImg = XLSX.utils.aoa_to_sheet(piRows);
             wsProdImg['!cols'] = [{wch: 6}, {wch: 6}, {wch: 8}, {wch: 8}, {wch: 40}];
             XLSX.utils.book_append_sheet(wb, wsProdImg, "제품사진_원본데이터");
+        }
+
+        // ── 📇 Address 시트 ──
+        const addrRows = tabData.addressBook || [];
+        if (addrRows.length > 0) {
+            const addrData = [['이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']];
+            addrRows.forEach(function(p) { addrData.push([p.name, p.dept, p.title, p.email, p.mobile, p.phone]); });
+            const wsAddr = XLSX.utils.aoa_to_sheet(addrData);
+            for (let key in wsAddr) {
+                if (key[0] === '!') continue;
+                if (!wsAddr[key].s) wsAddr[key].s = {};
+                wsAddr[key].s.font = { sz: 10, name: "맑은 고딕" };
+                wsAddr[key].s.alignment = { vertical: "center" };
+            }
+            wsAddr['!cols'] = [{wch: 14}, {wch: 14}, {wch: 16}, {wch: 26}, {wch: 16}, {wch: 16}];
+            XLSX.utils.book_append_sheet(wb, wsAddr, "Address");
         }
 
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
@@ -10306,65 +10341,29 @@ window.renderAddressTable = function() {
     const tbody = document.getElementById('address-table-body');
     if (!tbody) return;
     window.tabData = window.tabData || {};
-    const rows = window.tabData.addressBook || [];
-    tbody.innerHTML = rows.map(function(p, i) {
-        const sel = window._addrSelectedRows.has(i);
-        return '<tr data-idx="' + i + '"' + (sel ? ' style="background:#fff3e0;"' : '') + '>'
-            + '<td onclick="window.addrRowClick(event,' + i + ')" style="text-align:center; cursor:pointer; color:#888; user-select:none;">' + (i + 1) + '</td>'
+    let rows = window.tabData.addressBook || [];
+    if (!rows.length) rows = [{ name: '', dept: '', title: '', email: '', mobile: '', phone: '' }]; // bm 팝업 재오픈용 최소 1행 유지
+
+    tbody.innerHTML = rows.map(function(p) {
+        return '<tr>'
+            + '<td class="bm-no"></td>'
             + '<td><input class="u-input" data-field="name" value="' + _escTabVal(p.name) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="dept" value="' + _escTabVal(p.dept) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="title" value="' + _escTabVal(p.title) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="email" value="' + _escTabVal(p.email) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="mobile" value="' + _escTabVal(p.mobile) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="phone" value="' + _escTabVal(p.phone) + '" onchange="window.collectAddressData()"></td>'
-            + '<td style="text-align:center;"><button type="button" onclick="window.deleteAddressRow(' + i + ')" style="border:none; background:none; color:#bbb; cursor:pointer;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></td>'
             + '</tr>';
     }).join('');
-};
 
-window.addrRowClick = function(e, idx) {
-    if (e.shiftKey && window._addrLastClickedIdx !== null) {
-        const lo = Math.min(window._addrLastClickedIdx, idx), hi = Math.max(window._addrLastClickedIdx, idx);
-        for (let i = lo; i <= hi; i++) window._addrSelectedRows.add(i);
-    } else if (e.ctrlKey || e.metaKey) {
-        if (window._addrSelectedRows.has(idx)) window._addrSelectedRows.delete(idx);
-        else window._addrSelectedRows.add(idx);
-        window._addrLastClickedIdx = idx;
-    } else {
-        window._addrSelectedRows = new Set([idx]);
-        window._addrLastClickedIdx = idx;
-    }
-    window.renderAddressTable();
-};
-
-window.addAddressRow = function() {
-    window.tabData = window.tabData || {};
-    window.tabData.addressBook = window.tabData.addressBook || [];
-    window.tabData.addressBook.push({ name: '', dept: '', title: '', email: '', mobile: '', phone: '' });
-    window.renderAddressTable();
-};
-
-window.deleteAddressRow = function(idx) {
-    if (!confirm('이 인원을 주소록에서 삭제할까요?')) return;
-    window.collectAddressData();
-    window.tabData.addressBook.splice(idx, 1);
-    window._addrSelectedRows = new Set();
-    window.renderAddressTable();
-};
-
-window.deleteSelectedAddressRows = function() {
-    if (!window._addrSelectedRows || window._addrSelectedRows.size === 0) { alert('삭제할 행을 선택해주세요. (행 번호를 Ctrl/Shift 클릭)'); return; }
-    if (!confirm(window._addrSelectedRows.size + '명을 주소록에서 삭제할까요?')) return;
-    window.collectAddressData();
-    window.tabData.addressBook = window.tabData.addressBook.filter(function(_, i) { return !window._addrSelectedRows.has(i); });
-    window._addrSelectedRows = new Set();
-    window.renderAddressTable();
+    if (window.bmSetupAllRows) window.bmSetupAllRows('addr');
 };
 
 window.sortAddressBy = function(field) {
     window.collectAddressData();
     window.tabData.addressBook.sort(function(a, b) { return String(a[field] || '').localeCompare(String(b[field] || ''), 'ko'); });
-    window._addrSelectedRows = new Set();
+    window._bmSelected.addr.clear();
+    window._bmAnchor.addr = null;
     window.renderAddressTable();
 };
 
@@ -10425,17 +10424,6 @@ window.importAddressExcel = function(files) {
     reader.readAsArrayBuffer(file);
 };
 
-window.exportAddressExcel = function() {
-    window.collectAddressData();
-    const rows = window.tabData.addressBook || [];
-    const aoa = [['이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']].concat(
-        rows.map(function(p) { return [p.name, p.dept, p.title, p.email, p.mobile, p.phone]; })
-    );
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Address');
-    XLSX.writeFile(wb, '주소록_' + new Date().toISOString().slice(0, 10) + '.xlsx');
-};
 
 // =========================================================
 // 📇 이름 자동완성 — Address Book 기반, 부서/직함 표시 드롭다운
@@ -10682,7 +10670,7 @@ window.populateTabData = function() {
 
     // 📇 Address Book 렌더링
     window.tabData.addressBook = td.addressBook || [];
-    if (window.renderAddressTable) window.renderAddressTable();
+    if (window.renderAddressTable) window.renderAddressTable(); // 내부에서 bmSetupAllRows('addr') 자동 호출됨
 
     setVal('sum-purpose', sd.purpose);
     setVal('sum-volume', sd.volume);
@@ -11048,10 +11036,81 @@ window.populateTabData = function() {
 // ============================================================
 // Brief SPEC / M.C Table 공용 — NO 클릭 팝업, 묶음 선택, 이동/추가/삭제
 // ============================================================
-window._bmSelected = { bs: new Set(), mc: new Set() };
-window._bmAnchor   = { bs: null, mc: null };
+window._bmSelected = { bs: new Set(), mc: new Set(), addr: new Set() };
+window._bmAnchor   = { bs: null, mc: null, addr: null };
+
+// ─── 행 액션 팝업(➕➖⬆️⬇️) 마우스 드래그 이동 — 버튼 클릭은 그대로 유지, 팝업의 여백(패딩) 부분만 드래그 핸들 ───
+function _makeFloatingPopupDraggable(popup) {
+    if (popup.dataset.dragBound) return;
+    popup.dataset.dragBound = '1';
+    let isDragging = false, startX, startY, origLeft, origTop;
+    popup.style.cursor = 'move';
+    popup.addEventListener('mousedown', function(e) {
+        if (e.target.closest('.bm-pop-btn') || e.target.closest('.rap-btn')) return; // 버튼 클릭은 드래그 시작 안 함
+        isDragging = true;
+        const rect = popup.getBoundingClientRect();
+        origLeft = rect.left; origTop = rect.top;
+        startX = e.clientX; startY = e.clientY;
+        popup.style.left = origLeft + 'px';
+        popup.style.top  = origTop  + 'px';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        popup.style.left = (origLeft + e.clientX - startX) + 'px';
+        popup.style.top  = (origTop  + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', function() { isDragging = false; });
+}
+
+// ─── 행 액션 팝업 버튼(➕➖⬆️⬇️◀▶) "누르고 있으면 계속 실행" 공용 처리 ───
+(function() {
+    const REPEAT_IDS = ['bm-up', 'bm-dn', 'bm-add', 'bm-del', 'rap-up', 'rap-dn', 'rap-left', 'rap-right', 'rap-add', 'rap-del'];
+    const HOLD_DELAY = 480;   // 처음 누르고 이 시간(ms) 지나면 반복 시작
+    const REPEAT_INTERVAL = 130; // 이후 이 간격(ms)마다 반복 실행
+    let holdTimer = null, repeatTimer = null, activeId = null;
+
+    function stopRepeat() {
+        clearTimeout(holdTimer);
+        clearInterval(repeatTimer);
+        holdTimer = null; repeatTimer = null; activeId = null;
+    }
+
+    document.addEventListener('mousedown', function(e) {
+        const btn = e.target.closest('.bm-pop-btn, .rap-btn');
+        if (!btn || !btn.id || REPEAT_IDS.indexOf(btn.id) === -1) return;
+        activeId = btn.id;
+        holdTimer = setTimeout(function() {
+            repeatTimer = setInterval(function() {
+                // 💡 팝업이 재오픈될 때마다 버튼 DOM이 새로 바뀌므로(clone), 매 tick마다 id로 다시 찾아서 클릭
+                const live = document.getElementById(activeId);
+                if (live) live.click(); else stopRepeat();
+            }, REPEAT_INTERVAL);
+        }, HOLD_DELAY);
+    });
+
+    document.addEventListener('mouseup', stopRepeat);
+    document.addEventListener('mouseleave', function(e) {
+        if (e.target === document.documentElement) stopRepeat(); // 브라우저 창 밖으로 나가면 중지
+    });
+    window.addEventListener('blur', stopRepeat); // 창 포커스 잃으면 중지
+})();
 
 const BM_CONF = {
+    addr: {
+        tbodyId: 'address-table-body',
+        isSkip: function() { return false; },
+        rowHtml: function() {
+            return '<td class="bm-no"></td>'
+                + '<td><input type="text" class="u-input" data-field="name"></td>'
+                + '<td><input type="text" class="u-input" data-field="dept"></td>'
+                + '<td><input type="text" class="u-input" data-field="title"></td>'
+                + '<td><input type="email" class="u-input" data-field="email"></td>'
+                + '<td><input type="text" class="u-input" data-field="mobile"></td>'
+                + '<td><input type="text" class="u-input" data-field="phone"></td>';
+        }
+    },
+    
     bs: {
         tbodyId: 'briefspec-body',
         isSkip: function() { return false; },
@@ -11086,6 +11145,130 @@ const BM_CONF = {
     }
 };
 
+// 💡 Address 입력칸 변경 감지 (M.C Table과 동일한 사유 입력 팝업 + 취소 시 원복 방식)
+(function() {
+    const tbody = document.getElementById('address-table-body');
+    if (tbody) {
+        tbody.addEventListener('focusin', function(e) {
+            if (e.target.matches && e.target.matches('input[data-field]')) e.target.dataset._histOld = e.target.value;
+        });
+        tbody.addEventListener('change', function(e) {
+            const el = e.target;
+            if (!el.matches || !el.matches('input[data-field]')) return;
+            const tr = el.closest('tr');
+            if (!tr) return;
+            const nameInp = tr.querySelector('input[data-field="name"]');
+            const rowLabel = (nameInp && nameInp.value) ? nameInp.value.trim() : '행';
+            const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
+            if (String(oldVal) === String(el.value)) { if (window.collectAddressData) window.collectAddressData(); return; }
+
+            const fieldLabelMap = { name: '이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
+            const fieldLabel = fieldLabelMap[el.dataset.field] || el.dataset.field;
+            const reason = window.promptOptionalReason(`[${rowLabel}] ${fieldLabel} 변경`);
+            if (reason === null) { el.value = oldVal; return; } // 취소 → 원복, 저장/기록 안 함
+
+            window.addrLogChange(rowLabel, el.dataset.field, oldVal, el.value, reason);
+            el.dataset._histOld = el.value;
+            if (window.collectAddressData) window.collectAddressData();
+        });
+    }
+})();
+
+// 💡 Address 수정이력 — 펼침/접힘
+window.addrToggleHistoryBox = function() {
+    const body = document.getElementById('addr-history-body');
+    const icon = document.getElementById('addr-history-toggle-icon');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.textContent = isOpen ? '▶' : '▼';
+    if (!isOpen && window.addrRenderHistoryTable) window.addrRenderHistoryTable();
+};
+
+window.addrLogChange = function(rowLabel, field, oldVal, newVal, reason) {
+    if (String(oldVal || '') === String(newVal || '')) return;
+    window.tabData = window.tabData || {};
+    window.tabData.addressChangeLog = window.tabData.addressChangeLog || [];
+    window.tabData.addressChangeLog.push({
+        time: new Date().toLocaleString('ko-KR'),
+        userName: window.currentUserName || '비로그인',
+        row: rowLabel, field: field, oldVal: oldVal, newVal: newVal, reason: reason || ''
+    });
+};
+
+// 💡 수정이력 표 그리기
+window.addrRenderHistoryTable = function() {
+    const table = document.getElementById('addr-history-table');
+    if (!table) return;
+    const logs = (window.tabData && window.tabData.addressChangeLog) || [];
+    if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
+    const fieldLabel = { name: '이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
+    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">이름</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th><th style="padding:4px 8px;">사유</th></tr></thead><tbody>';
+    logs.slice().reverse().forEach(function(log) {
+        html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold;">' + (log.row || '') + '</td>'
+            + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (fieldLabel[log.field] || log.field) + '</span></td>'
+            + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
+            + '<td style="padding:4px 8px; color:#2f9e44;">' + (log.newVal || '-') + '</td>'
+            + '<td style="padding:4px 8px; color:#6c757d;">' + (log.reason || '-') + '</td></tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+};
+
+// 💡 Address 수정이력 — 비밀번호 확인 후 날짜 구간 내 기록 삭제 (M.C Table과 동일한 패턴, addressChangeLog만 정리)
+window.deleteAddrHistoryByDateRange = function() {
+    const pwEl = document.getElementById('addr-history-del-pw');
+    const pw = pwEl ? pwEl.value : '';
+    if (pw !== 'kortek') {
+        if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.');
+        return;
+    }
+    const fromStr = (document.getElementById('addr-history-del-from') || {}).value;
+    const toStr = (document.getElementById('addr-history-del-to') || {}).value;
+    if (!fromStr || !toStr) {
+        if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.');
+        return;
+    }
+    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
+    const toTs = new Date(toStr + 'T23:59:59').getTime();
+    if (fromTs > toTs) {
+        if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.');
+        return;
+    }
+
+    const parseKoDateTime = function(str) {
+        const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+        if (!m) return null;
+        let h = parseInt(m[5], 10);
+        if (m[4] === '오후' && h < 12) h += 12;
+        if (m[4] === '오전' && h === 12) h = 0;
+        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
+    };
+    const inRange = function(log) {
+        const ts = parseKoDateTime(log.time);
+        return ts !== null && ts >= fromTs && ts <= toTs;
+    };
+
+    const doDelete = function() {
+        let removedCount = 0;
+        if (window.tabData && window.tabData.addressChangeLog && window.tabData.addressChangeLog.length) {
+            const before = window.tabData.addressChangeLog.length;
+            window.tabData.addressChangeLog = window.tabData.addressChangeLog.filter(function(log) { return !inRange(log); });
+            removedCount = before - window.tabData.addressChangeLog.length;
+        }
+        if (pwEl) pwEl.value = '';
+        if (window.addrRenderHistoryTable) window.addrRenderHistoryTable();
+        const msg = removedCount + '건의 주소록 수정이력을 삭제했습니다.';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+    };
+
+    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 주소록 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
+    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
+    else if (confirm(confirmMsg)) doDelete();
+};
+
 function bmDataRows(key) {
     const tbody = document.getElementById(BM_CONF[key].tbodyId);
     if (!tbody) return [];
@@ -11098,7 +11281,12 @@ window.bmSetupAllRows = function(key) {
     bmDataRows(key).forEach(function(tr) {
         const noTd = tr.querySelector('.bm-no');
         if (!noTd) return;
-        if (tr.style.display !== 'none') { n++; noTd.textContent = n; }
+        if (tr.style.display !== 'none') {
+            n++;
+            noTd.textContent = n;
+            tr.classList.remove('mc-zebra-a', 'mc-zebra-b');
+            tr.classList.add(n % 2 === 1 ? 'mc-zebra-a' : 'mc-zebra-b');
+        }
         noTd.onclick = function(ev) { window.bmOnNoClick(key, tr, ev); };
     });
 };
@@ -11237,11 +11425,13 @@ function bmOpenPopup(key, refTr) {
             + '<span id="bm-del" class="bm-pop-btn bm-pop-del bm-pop-danger" title="행 삭제"><i class="ti ti-minus"></i></span>'
             + '</div>';
         document.body.appendChild(popup);
+        _makeFloatingPopupDraggable(popup);
         document.addEventListener('click', function(e) {
             if (!popup.contains(e.target) && !e.target.closest('.bm-no')) {
                 bmClosePopup();
                 bmClearSelection('bs');
                 bmClearSelection('mc');
+                bmClearSelection('addr');
             }
         });
     }
@@ -11297,11 +11487,21 @@ function bmMoveSelected(key, dir) {
     }
 
     // 💡 M.C Table은 TYPE 표시/SUBTOTAL 경계가 행 순서에 의존하므로, 이동 후 표 전체를 다시 그려야 함
+    //    (단, Brief SPEC/Address와 동일하게 팝업은 닫지 않고 재오픈해서 연속 클릭이 가능하도록 통일)
     if (key === 'mc' && window.mcRefreshTable) {
-        sel.clear();
-        window._bmAnchor[key] = null;
-        bmClosePopup();
+        const movedIdArr = selArr.map(function(tr) { return tr; });
         window.mcRefreshTable();
+        const newRows = bmDataRows('mc');
+        // mcRefreshTable이 표를 통째로 다시 그리므로, 이동했던 행들의 새 위치를 순서 기준으로 재탐색
+        sel.clear();
+        const firstNewIdx = Math.max(0, newRows.length - movedIdArr.length); // 대략적 위치 추정 fallback
+        const anchorTr = newRows[dir === -1 ? Math.max(0, firstNewIdx - movedIdArr.length) : firstNewIdx] || newRows[0];
+        if (anchorTr) {
+            sel.add(anchorTr);
+            window._bmAnchor[key] = anchorTr;
+            bmPaintSelection(key);
+            bmOpenPopup(key, anchorTr);
+        }
     } else {
         window.bmSetupAllRows(key);
         bmPaintSelection(key);
