@@ -8917,8 +8917,11 @@ window.openAlarmModal = function(idx) {
 
     const pm        = window.projectMeta || {};
     const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
-    const sent      = Object.keys(item.sentLog).map(Number).sort((a,b) => a-b);
-    const sentHtml  = sent.length ? sent.map(d => `✓ D-${d}일 전 발송 (${item.sentLog[d].substring(0,16).replace('T',' ')})`).join('<br>') : '발송 이력 없음';
+    const dayKeys   = Object.keys(item.sentLog).filter(k => !isNaN(Number(k))).map(Number).sort((a,b) => a-b);
+    const sentParts = dayKeys.map(d => `✓ D-${d}일 전 발송 (${item.sentLog[d].substring(0,16).replace('T',' ')})`);
+    if (item.sentLog.manual) sentParts.push(`✓ 즉시 발송 (${item.sentLog.manual.substring(0,16).replace('T',' ')})`);
+    if (item.sentLog.bulk)   sentParts.push(`✓ 일괄 발송 (${item.sentLog.bulk.substring(0,16).replace('T',' ')})`);
+    const sentHtml  = sentParts.length ? sentParts.join('<br>') : '발송 이력 없음';
 
     // 업무내용 줄바꿈: 날짜 이후, [섹션키워드] 이전에 개행
     const formattedContent = item.content ? window.alarmFormatContent(item.content) : '';
