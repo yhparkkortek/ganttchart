@@ -2434,7 +2434,7 @@ ${mailText}`;
         }
             
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = []; // 📥 [Phase 2.5] 새 프로젝트 로드 시 원장 초기화
-        colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
+        colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
         let headerRow = []; let filesProcessed = 0; let totalFiles = files.length;
         // 드라이브 연동 유지 시 기존 로그 보존
         window.changeLogs = []; window.lastSavedLogCount = 0;
@@ -2497,7 +2497,7 @@ ${mailText}`;
                             else if(str === "보고" || strUpper === "VIEW" || strUpper === "LEVEL(WBS)" || strUpper === "LEVELWBS") colIdx.bogo = idx;
                             else if(str.includes("시작")) colIdx.start = idx;
                             else if(str.includes("계획") || str.includes("완료")) colIdx.plan = idx;
-                            else if(str === "기간" || str === "기간일") colIdx.period = idx;
+                            else if(str === "기간" || str === "기간일" || str === "소요일") colIdx.period = idx;
                             else if(str === "소요1") colIdx.dur1 = idx;
                             else if(str === "소요2") colIdx.dur2 = idx;
                             else if(str === "소요3" || str === "소요" || str.includes("소요일수")) colIdx.dur3 = idx;
@@ -2507,6 +2507,7 @@ ${mailText}`;
                             else if(str === "업무구분2" || str === "업무2") colIdx.taskType2 = idx;
                             else if(str === "업무구분3" || str === "업무3") colIdx.taskType3 = idx;
                             else if(str === "업무구분4" || str === "업무4") colIdx.taskType4 = idx;
+                            else if(strUpper === "개발업무(WBS)") colIdx.wbs = idx;
                             else if(str.includes("상태") || str.includes("업무상태")) colIdx.status = idx;
                             else if(str.includes("고객")) colIdx.customer = idx;
                             else if(str.includes("모델")) colIdx.model = idx;
@@ -2521,6 +2522,7 @@ ${mailText}`;
                         orderedNames.forEach(name => {
                             if (name === 'LEVEL(WBS)' && colIdx.bogo !== -1) filterColumns.push({ index: colIdx.bogo, name: 'LEVEL(WBS)' });
                             else if (name === '개발단계' && colIdx.devStage !== -1) filterColumns.push({ index: colIdx.devStage, name: '개발단계' });
+                            else if (name === '개발단계' && colIdx.wbs !== -1) filterColumns.push({ index: colIdx.wbs, name: '개발단계' });
                             else if (name === '업무상태' && colIdx.status !== -1) filterColumns.push({ index: colIdx.status, name: '업무상태' });
                         });
                     }
@@ -2538,6 +2540,13 @@ ${mailText}`;
                         let origD3 = colIdx.taskType3 !== -1 ? stripPrefix((row[colIdx.taskType3] || "").toString().trim()) : "";
                         let origD4 = colIdx.taskType4 !== -1 ? stripPrefix((row[colIdx.taskType4] || "").toString().trim()) : "";
 
+                        // 💡 웹형 엑셀(단일 "개발업무(WBS)" 열): LEVEL(WBS) 값으로 레벨 판별해 라우팅
+                        if (colIdx.wbs !== -1 && colIdx.devStage === -1) {
+                            const wbsTxt = stripPrefix((row[colIdx.wbs] || "").toString());
+                            const lvRaw = parseInt(colIdx.bogo !== -1 ? row[colIdx.bogo] : "", 10);
+                            const lv = isNaN(lvRaw) ? 3 : Math.max(0, Math.min(4, lvRaw));
+                            if (lv === 0) origD0 = wbsTxt; else if (lv === 1) origD1 = wbsTxt; else if (lv === 2) origD2 = wbsTxt; else if (lv === 3) origD3 = wbsTxt; else origD4 = wbsTxt;
+                        }
                         row._origDev = origD0; row._origT1 = origD1; row._origT2 = origD2; row._origT3 = origD3; row._origT4 = origD4;
                         if (origD0 !== "") { lastDev = origD0; lastT1 = ""; lastT2 = ""; lastT3 = ""; lastT4 = ""; }
                         if (origD1 !== "") { lastT1 = origD1; lastT2 = ""; lastT3 = ""; lastT4 = ""; }
@@ -2546,6 +2555,7 @@ ${mailText}`;
                         if (origD4 !== "") { lastT4 = origD4; }
 
                         if (colIdx.devStage !== -1) row[colIdx.devStage] = lastDev;
+                        if (colIdx.wbs !== -1 && colIdx.devStage === -1) row[colIdx.wbs] = lastDev; // 💡 개발단계 필터용
                         if (colIdx.taskType1 !== -1) row[colIdx.taskType1] = lastT1;
                         if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = lastT2;
                         if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = lastT3;
@@ -3535,7 +3545,7 @@ window.deleteHistoryByDateRange = function() {
         // ✅ 추가: 레벨별 bold 한 곳에서 관리
         const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';
 
-        let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
+        let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs];
         let hasPeriodCol = colIdx.period !== -1;
 
         let headHtml = '<tr>';
@@ -3953,45 +3963,49 @@ window.deleteHistoryByDateRange = function() {
 
     function exportToExcel() {
         if (globalData.length <= 1) { alert("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요."); return; }
-        let exportData = []; let header = [...globalData[0]]; exportData.push(header);
+        // ── GanttChart 시트: 웹 화면과 동일 구성 ──
+        const _hdrContent = (colIdx.content !== -1 && globalData[0][colIdx.content]) ? globalData[0][colIdx.content] : '업무 상세내용';
+        const _hdrAnswer  = (colIdx.answer  !== -1 && globalData[0][colIdx.answer])  ? globalData[0][colIdx.answer]  : '답변';
+        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, _hdrAnswer]];
+        let ganttL0Rows = [];
         let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
-            let row = globalData[i]; if (!row || row._isExplicitZero) continue; 
-            let exportRow = []; let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
-            for (let c = 0; c < header.length; c++) {
-                let cellVal = row[c] !== undefined && row[c] !== null ? row[c] : "";
-                if (c === colIdx.chart) { cellVal = ""; } 
-                else if (c === colIdx.no) { cellVal = rowNumCounter; } 
-                else if (c === colIdx.bogo) { cellVal = row._level !== undefined ? row._level : ""; } 
-                else if (c === colIdx.devStage)  { cellVal = (row._level === 0) ? (row._origDev !== undefined ? row._origDev : "") : ""; }
-                else if (c === colIdx.taskType1) { cellVal = (row._level === 1) ? prefix + (row._origT1 !== undefined ? row._origT1 : "") : ""; }
-                else if (c === colIdx.taskType2) { cellVal = (row._level === 2) ? prefix + (row._origT2 !== undefined ? row._origT2 : "") : ""; }
-                else if (c === colIdx.taskType3) { cellVal = (row._level === 3) ? prefix + (row._origT3 !== undefined ? row._origT3 : "") : ""; }
-                else if (c === colIdx.taskType4) { cellVal = (row._level === 4) ? prefix + (row._origT4 !== undefined ? row._origT4 : "") : ""; }
-                else if (c === colIdx.dur4) { cellVal = (row._level === 4) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
-                else if (c === colIdx.start) { 
-                    if (row._level === 0 || row._startForced || !row._finalDuration) { cellVal = row._calcStartTs ? formatTsToYMD(row._calcStartTs) : ""; } else { cellVal = ""; }
-                } 
-                else if (c === colIdx.plan) { 
-                    if (row._level === 0 || row._planForced || !row._finalDuration) { cellVal = row._calcPlanTs ? formatTsToYMD(row._calcPlanTs) : ""; } else { cellVal = ""; }
-                } 
-                else if (c === colIdx.period) { cellVal = (colIdx.dur1 === -1 && colIdx.dur2 === -1 && colIdx.dur3 === -1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
-                else if (c === colIdx.dur1) { cellVal = (row._level === 1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
-                else if (c === colIdx.dur2) { cellVal = (row._level === 2) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
-                else if (c === colIdx.dur3) { cellVal = (row._level === 3) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
-                exportRow.push(cellVal);
-            }
-            exportData.push(exportRow); rowNumCounter++;
+            let row = globalData[i]; if (!row || row._isExplicitZero) continue;
+            const lv = row._level !== undefined ? row._level : 0;
+            const prefix = lv > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
+            let taskTxt = lv === 0 ? row._origDev : lv === 1 ? row._origT1 : lv === 2 ? row._origT2 : lv === 3 ? row._origT3 : row._origT4;
+            if (taskTxt === undefined || taskTxt === null) taskTxt = '';
+            const indent = new Array(lv + 1).join('  ');
+            // 💡 시작/완료: 기존 규칙 유지 (L0/강제 지정만 기록 → 재가져오기 시 자동연산 보존)
+            const startVal = (lv === 0 || row._startForced || !row._finalDuration) ? (row._calcStartTs ? formatTsToYMD(row._calcStartTs) : '') : '';
+            const planVal  = (lv === 0 || row._planForced  || !row._finalDuration) ? (row._calcPlanTs  ? formatTsToYMD(row._calcPlanTs)  : '') : '';
+            const days = countWorkingDays(row._calcStartTs, row._calcPlanTs);
+            const statusVal  = colIdx.status  !== -1 ? (row[colIdx.status]  || '') : '';
+            const contentVal = colIdx.content !== -1 ? (row[colIdx.content] || '') : '';
+            const answerVal  = colIdx.answer  !== -1 ? (row[colIdx.answer]  || '') : '';
+            exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, answerVal]);
+            if (lv === 0) ganttL0Rows.push(exportData.length - 1);
+            rowNumCounter++;
         }
-
         const ws = XLSX.utils.aoa_to_sheet(exportData);
-        for (let key in ws) {
-            if (key[0] === '!') continue;
-            if (!ws[key].s) ws[key].s = {};
-            ws[key].s.font = { sz: 10, name: "맑은 고딕" };
-            if (typeof ws[key].v === 'string' && ws[key].v.includes('\n')) ws[key].s.alignment = { wrapText: true, vertical: "top" };
-            else ws[key].s.alignment = { vertical: "center" };
-        }
+        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:45}];
+        // 열별 정렬 + L0 강조 + 지브라 (헤더는 공통 스타일러가 남색 처리)
+        (function() {
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            for (let r = 1; r <= range.e.r; r++) {
+                const isL0 = ganttL0Rows.indexOf(r) !== -1;
+                for (let c = 0; c <= range.e.c; c++) {
+                    const cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
+                    if (!cell) continue;
+                    cell.s = {
+                        font: { name: "맑은 고딕", sz: 10, bold: isL0, color: { rgb: "1F2937" } },
+                        fill: isL0 ? { patternType: "solid", fgColor: { rgb: "E9EEF6" } }
+                                   : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
+                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : "left", wrapText: c >= 7 }
+                    };
+                }
+            }
+        })();
 
         const wb = XLSX.utils.book_new();
 
@@ -4071,33 +4085,73 @@ window.deleteHistoryByDateRange = function() {
         XLSX.utils.book_append_sheet(wb, wsBrief, "Brief SPEC");
 
         // ── M.C Table 시트 (R1~R5, 컨셉 단계: BOM 원가/금형비) ──
-        function _buildMcSheet(rows) {
+        function _buildMcSheet(rows, rev) {
+            const num = function(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[^0-9.-]+/g, '')); return isNaN(n) ? 0 : n; };
+            const cellMoney = function(v) { const n = num(v); return n === 0 ? '' : n; };
             const mcData = [
                 ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', 'PROTO A', '', 'PROTO B', '', 'MP', '', 'Note'],
                 ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', ''],
             ];
-            (rows || []).forEach(r => {
-                mcData.push([r.type || '', r.item || '', r.group || '', r.pn || '', r.spec || '', r.protoCost || '', r.protoNre || '', r.protoBCost || '', r.protoBNre || '', r.mpCost || '', r.mpNre || '', r.note || '']);
+            const valid = (rows || []).filter(function(r) { const t = String(r.type || '').toUpperCase().replace(/\s/g, ''); return t !== 'SUBTOTAL' && t !== 'TOTAL'; });
+            let lastType = '';
+            const typed = valid.map(function(r) { const t = String(r.type || '').trim(); if (t) lastType = t; return lastType; }); // 💡 TYPE 빈칸 보정 (웹과 동일)
+            const zero = function() { return { pc: 0, pn: 0, bc: 0, bn: 0, mc: 0, mn: 0 }; };
+            let sub = zero(), grand = zero(), curType = '';
+            const summaryRows = [];
+            valid.forEach(function(r, idx) {
+                curType = typed[idx] || curType;
+                mcData.push([String(r.type || ''), r.item || '', r.group || '', r.pn || '', r.spec || '', cellMoney(r.protoCost), cellMoney(r.protoNre), cellMoney(r.protoBCost), cellMoney(r.protoBNre), cellMoney(r.mpCost), cellMoney(r.mpNre), r.note || '']);
+                sub.pc += num(r.protoCost); sub.pn += num(r.protoNre); sub.bc += num(r.protoBCost); sub.bn += num(r.protoBNre); sub.mc += num(r.mpCost); sub.mn += num(r.mpNre);
+                grand.pc += num(r.protoCost); grand.pn += num(r.protoNre); grand.bc += num(r.protoBCost); grand.bn += num(r.protoBNre); grand.mc += num(r.mpCost); grand.mn += num(r.mpNre);
+                const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+                const nextType = idx + 1 < typed.length ? typed[idx + 1] : '';
+                const isLast = idx === valid.length - 1;
+                if (curType && (itemHasNre || isLast || (nextType && nextType !== curType))) {
+                    mcData.push([curType + ' SUBTOTAL', '', '', '', '', sub.pc, sub.pn, sub.bc, sub.bn, sub.mc, sub.mn, '']);
+                    summaryRows.push({ r: mcData.length - 1, color: 'FFF9C4' });
+                    sub = zero();
+                }
             });
+            mcData.push(['TOTAL(M.C)', '', '', '', '', grand.pc, grand.pn, grand.bc, grand.bn, grand.mc, grand.mn, '']);
+            summaryRows.push({ r: mcData.length - 1, color: 'E3F2FD' });
+            const sp = ((tabData.mcSalesPriceDetail || {})[rev]) || {};
+            const spv = function(f) { return num(sp[f]); };
+            mcData.push(['영업판가', '', '', '', '', spv('protoCost') || '', spv('protoNre') || '', spv('protoBCost') || '', spv('protoBNre') || '', spv('mpCost') || '', spv('mpNre') || '', '']);
+            summaryRows.push({ r: mcData.length - 1, color: 'E8F5E9' });
+            const ratio = function(tot, f) { const s = spv(f); return s > 0 ? (tot / s * 100).toFixed(1) + '%' : '-'; };
+            mcData.push(['재료비율(%)', '', '', '', '', ratio(grand.pc, 'protoCost'), ratio(grand.pn, 'protoNre'), ratio(grand.bc, 'protoBCost'), ratio(grand.bn, 'protoBNre'), ratio(grand.mc, 'mpCost'), ratio(grand.mn, 'mpNre'), '']);
+            summaryRows.push({ r: mcData.length - 1, color: 'FFE0B2' });
+
             const wsMc = XLSX.utils.aoa_to_sheet(mcData);
             wsMc['!merges'] = [
-                { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, // TYPE
-                { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } }, // ITEM
-                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, // GROUP
-                { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } }, // P/N
-                { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } }, // Specification
-                { s: { r: 0, c: 5 }, e: { r: 0, c: 6 } }, // PROTO A
-                { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } }, // PROTO B
-                { s: { r: 0, c: 9 }, e: { r: 0, c: 10 } }, // MP
-                { s: { r: 0, c: 11 }, e: { r: 1, c: 11 } }, // Note
+                { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } },
+                { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } },
+                { s: { r: 0, c: 5 }, e: { r: 0, c: 6 } }, { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } },
+                { s: { r: 0, c: 9 }, e: { r: 0, c: 10 } }, { s: { r: 0, c: 11 }, e: { r: 1, c: 11 } },
             ];
-            for (let key in wsMc) {
-                if (key[0] === '!') continue;
-                if (!wsMc[key].s) wsMc[key].s = {};
-                wsMc[key].s.font = { sz: 10, name: "맑은 고딕" };
-                wsMc[key].s.alignment = { vertical: "center", wrapText: true };
+            summaryRows.forEach(function(s) { wsMc['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 4 } }); }); // 💡 웹 colspan과 동일
+            // 2행 서브헤더 남색 처리
+            for (let c = 0; c <= 11; c++) {
+                const h2 = wsMc[XLSX.utils.encode_cell({ r: 1, c: c })];
+                if (h2) h2.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
             }
-            wsMc['!cols'] = [{wch: 12}, {wch: 18}, {wch: 16}, {wch: 10}, {wch: 36}, {wch: 10}, {wch: 8}, {wch: 10}, {wch: 8}, {wch: 10}, {wch: 8}, {wch: 30}];
+            // 💡 금액 $ 서식(숫자 유지 → 재가져오기 안전) + 요약행 색상
+            const range = XLSX.utils.decode_range(wsMc['!ref']);
+            for (let r = 2; r <= range.e.r; r++) {
+                const sum = summaryRows.find(function(s) { return s.r === r; });
+                for (let c = 0; c <= range.e.c; c++) {
+                    const cell = wsMc[XLSX.utils.encode_cell({ r: r, c: c })];
+                    if (!cell) continue;
+                    if (c >= 5 && c <= 10 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+                    if (sum) cell.s = {
+                        font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
+                        fill: { patternType: "solid", fgColor: { rgb: sum.color } },
+                        alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
+                    };
+                }
+            }
+            wsMc['!cols'] = [{wch:12},{wch:18},{wch:16},{wch:12},{wch:36},{wch:11},{wch:10},{wch:11},{wch:10},{wch:11},{wch:10},{wch:30}];
             return wsMc;
         }
         const mcRevisionsForExport = tabData.mcRevisions || {};
@@ -4105,7 +4159,7 @@ window.deleteHistoryByDateRange = function() {
             const rows = mcRevisionsForExport[rev] || (rev === 'R1' ? tabData.mcTable : null);
             if (rev !== 'R1' && (!rows || !rows.length)) return; // R1은 항상 저장, R2~R5는 데이터 있을 때만
             const sheetName = rev === 'R1' ? 'M.C Table' : ('M.C Table ' + rev);
-            XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows), sheetName);
+            XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev), sheetName);
         });
 
         // ── M.C 영업판가 시트 ──
@@ -4267,7 +4321,48 @@ window.deleteHistoryByDateRange = function() {
 
         // 💡 전 시트 공통 스타일 적용 (웹페이지 수준 디자인)
         applyExcelStyles(wb);
+        // 💡 전 시트 공통 스타일 적용 (웹페이지 수준 디자인)
+        applyExcelStyles(wb);
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
+    }
+
+    // ===== 엑셀 출력 공통 스타일러 =====
+    function applyExcelStyles(wb) {
+        const NAVY = "1F3A5F", BORDER = { style: "thin", color: { rgb: "B7C1CE" } };
+        const allBorder = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+        wb.SheetNames.forEach(name => {
+            const ws = wb.Sheets[name];
+            if (!ws['!ref']) return;
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            const colW = [];
+            for (let r = range.s.r; r <= range.e.r; r++) {
+                for (let c = range.s.c; c <= range.e.c; c++) {
+                    const addr = XLSX.utils.encode_cell({ r, c });
+                    const cell = ws[addr];
+                    if (!cell) continue;
+                    // 열 너비 계산 (한글 2배 가중치, 최대 45)
+                    const txt = String(cell.v ?? "");
+                    const len = txt.split('\n').reduce((m, line) => {
+                        let w = 0; for (const ch of line) w += /[가-힣ㄱ-ㅎ]/.test(ch) ? 2 : 1;
+                        return Math.max(m, w);
+                    }, 0);
+                    colW[c] = Math.min(45, Math.max(colW[c] || 6, len + 2));
+                    // 스타일
+                    const isHeader = (r === range.s.r);
+                    cell.s = {
+                        font: { name: "맑은 고딕", sz: 10, bold: isHeader, color: { rgb: isHeader ? "FFFFFF" : "1F2937" } },
+                        fill: isHeader ? { patternType: "solid", fgColor: { rgb: NAVY } }
+                              : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F4F6F9" } } : undefined),
+                        border: allBorder,
+                        alignment: { vertical: "center", horizontal: isHeader ? "center" : undefined,
+                                     wrapText: txt.includes('\n') }
+                    };
+                }
+            }
+            ws['!cols'] = colW.map(w => ({ wch: w }));
+            ws['!rows'] = ws['!rows'] || [];
+            ws['!rows'][0] = { hpt: 22 };  // 헤더 행 높이
+        });
     }
 
     // ===== 엑셀 출력 공통 스타일러 =====
@@ -9338,7 +9433,9 @@ function _parseSummarySheetFromWorkbook(workbook) {
         if (!label) return;
         const rawVal = row[1];
         if (milestoneMap[label]) {
-            sd.milestones[milestoneMap[label]] = Object.assign({}, sd.milestones[milestoneMap[label]], { date: _xlsxCellToDateStr(rawVal) });
+            const patch = { date: _xlsxCellToDateStr(rawVal) };
+            if (row.length > 2 && String(row[2] || '').trim() !== '') patch.actualDate = _xlsxCellToDateStr(row[2]); // 💡 3열(실적) 형식 지원
+            sd.milestones[milestoneMap[label]] = Object.assign({}, sd.milestones[milestoneMap[label]], patch);
             return;
         }
         if (actualMilestoneMap[label]) {
@@ -9383,6 +9480,8 @@ function _parseMcTableSheetRows(workbook, sheetName) {
     for (let i = 2; i < json.length; i++) { // 0,1행은 2단 헤더이므로 2행부터 데이터
         const r = json[i];
         if (!r || r.length === 0) continue;
+        const _t0 = String(r[0] || '').trim();
+        if (/SUBTOTAL/i.test(_t0) || /^TOTAL/i.test(_t0) || _t0 === '영업판가' || _t0.indexOf('재료비율') === 0) continue; // 💡 요약행 제외
         const row = {
             type: String(r[0] || '').trim(), item: String(r[1] || '').trim(), group: String(r[2] || '').trim(),
             pn: (r[3] === undefined || r[3] === null) ? '' : String(r[3]).trim(), spec: String(r[4] || '').trim(),
