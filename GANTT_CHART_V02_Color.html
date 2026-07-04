@@ -2449,7 +2449,7 @@ ${mailText}`;
                 
                 // 💡 시트 순서가 Summary/Brief SPEC/M.C Table/GanttChart/수정이력 순이므로,
                 //    위치(SheetNames[0])가 아니라 이름으로 GanttChart 시트를 찾는다 (이름이 없는 옛 형식 파일은 첫 시트로 폴백)
-                let firstSheetName = workbook.SheetNames.find(n => n.trim() === "GanttChart") || workbook.SheetNames[0];
+                let firstSheetName = workbook.SheetNames.find(n => n.trim() === "GanttChart") || workbook.SheetNames.find(n => n.trim() === "GanttChart_RAW") || workbook.SheetNames[0];
                 let worksheet = workbook.Sheets[firstSheetName];
                 let jsonData = XLSX.utils.sheet_to_json(worksheet, {header: 1, defval: "", raw: true});
                 
@@ -3975,46 +3975,45 @@ window.deleteHistoryByDateRange = function() {
         // ── GanttChart 시트: 웹 화면과 동일 구성 ──
         const _hdrContent = (colIdx.content !== -1 && globalData[0][colIdx.content]) ? globalData[0][colIdx.content] : '업무 상세내용';
         const _hdrAnswer  = (colIdx.answer  !== -1 && globalData[0][colIdx.answer])  ? globalData[0][colIdx.answer]  : '답변';
-        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, _hdrAnswer]];
-        let ganttL0Rows = [];
+        let exportData = []; let header = [...globalData[0]]; exportData.push(header);
         let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
-            let row = globalData[i]; if (!row || row._isExplicitZero) continue;
-            const lv = row._level !== undefined ? row._level : 0;
-            const prefix = lv > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
-            let taskTxt = lv === 0 ? row._origDev : lv === 1 ? row._origT1 : lv === 2 ? row._origT2 : lv === 3 ? row._origT3 : row._origT4;
-            if (taskTxt === undefined || taskTxt === null) taskTxt = '';
-            const indent = new Array(lv + 1).join('  ');
-            // 💡 시작/완료: 기존 규칙 유지 (L0/강제 지정만 기록 → 재가져오기 시 자동연산 보존)
-            const startVal = (lv === 0 || row._startForced || !row._finalDuration) ? (row._calcStartTs ? formatTsToYMD(row._calcStartTs) : '') : '';
-            const planVal  = (lv === 0 || row._planForced  || !row._finalDuration) ? (row._calcPlanTs  ? formatTsToYMD(row._calcPlanTs)  : '') : '';
-            const days = countWorkingDays(row._calcStartTs, row._calcPlanTs);
-            const statusVal  = colIdx.status  !== -1 ? (row[colIdx.status]  || '') : '';
-            const contentVal = colIdx.content !== -1 ? (row[colIdx.content] || '') : '';
-            const answerVal  = colIdx.answer  !== -1 ? (row[colIdx.answer]  || '') : '';
-            exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, answerVal]);
-            if (lv === 0) ganttL0Rows.push(exportData.length - 1);
-            rowNumCounter++;
-        }
-        const ws = XLSX.utils.aoa_to_sheet(exportData);
-        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:45}];
-        // 열별 정렬 + L0 강조 + 지브라 (헤더는 공통 스타일러가 남색 처리)
-        (function() {
-            const range = XLSX.utils.decode_range(ws['!ref']);
-            for (let r = 1; r <= range.e.r; r++) {
-                const isL0 = ganttL0Rows.indexOf(r) !== -1;
-                for (let c = 0; c <= range.e.c; c++) {
-                    const cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
-                    if (!cell) continue;
-                    cell.s = {
-                        font: { name: "맑은 고딕", sz: 10, bold: isL0, color: { rgb: "1F2937" } },
-                        fill: isL0 ? { patternType: "solid", fgColor: { rgb: "E9EEF6" } }
-                                   : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
-                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : "left", wrapText: c >= 7 }
-                    };
-                }
+            let row = globalData[i]; if (!row || row._isExplicitZero) continue; 
+            let exportRow = []; let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
+            for (let c = 0; c < header.length; c++) {
+                let cellVal = row[c] !== undefined && row[c] !== null ? row[c] : "";
+                if (c === colIdx.chart) { cellVal = ""; } 
+                else if (c === colIdx.no) { cellVal = rowNumCounter; } 
+                else if (c === colIdx.bogo) { cellVal = row._level !== undefined ? row._level : ""; } 
+                else if (c === colIdx.devStage)  { cellVal = (row._level === 0) ? (row._origDev !== undefined ? row._origDev : "") : ""; }
+                else if (c === colIdx.taskType1) { cellVal = (row._level === 1) ? prefix + (row._origT1 !== undefined ? row._origT1 : "") : ""; }
+                else if (c === colIdx.taskType2) { cellVal = (row._level === 2) ? prefix + (row._origT2 !== undefined ? row._origT2 : "") : ""; }
+                else if (c === colIdx.taskType3) { cellVal = (row._level === 3) ? prefix + (row._origT3 !== undefined ? row._origT3 : "") : ""; }
+                else if (c === colIdx.taskType4) { cellVal = (row._level === 4) ? prefix + (row._origT4 !== undefined ? row._origT4 : "") : ""; }
+                else if (c === colIdx.dur4) { cellVal = (row._level === 4) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.start) { 
+                    if (row._level === 0 || row._startForced || !row._finalDuration) { cellVal = row._calcStartTs ? formatTsToYMD(row._calcStartTs) : ""; } else { cellVal = ""; }
+                } 
+                else if (c === colIdx.plan) { 
+                    if (row._level === 0 || row._planForced || !row._finalDuration) { cellVal = row._calcPlanTs ? formatTsToYMD(row._calcPlanTs) : ""; } else { cellVal = ""; }
+                } 
+                else if (c === colIdx.period) { cellVal = (colIdx.dur1 === -1 && colIdx.dur2 === -1 && colIdx.dur3 === -1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.dur1) { cellVal = (row._level === 1) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.dur2) { cellVal = (row._level === 2) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                else if (c === colIdx.dur3) { cellVal = (row._level === 3) ? countWorkingDays(row._calcStartTs, row._calcPlanTs) : ""; }
+                exportRow.push(cellVal);
             }
-        })();
+            exportData.push(exportRow); rowNumCounter++;
+        }
+
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        for (let key in ws) {
+            if (key[0] === '!') continue;
+            if (!ws[key].s) ws[key].s = {};
+            ws[key].s.font = { sz: 10, name: "맑은 고딕" };
+            if (typeof ws[key].v === 'string' && ws[key].v.includes('\n')) ws[key].s.alignment = { wrapText: true, vertical: "top" };
+            else ws[key].s.alignment = { vertical: "center" };
+        }
 
         const wb = XLSX.utils.book_new();
 
@@ -4168,20 +4167,7 @@ window.deleteHistoryByDateRange = function() {
             XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev), sheetName);
         });
 
-        // ── M.C 영업판가 시트 ──
-        const mcSalesDetail = tabData.mcSalesPriceDetail || {};
-        const mcSalesData = [['리비전', 'PROTO A Cost', 'PROTO A NRE', 'PROTO B Cost', 'PROTO B NRE', 'MP Cost', 'MP NRE']];
-        ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
-            const sp = mcSalesDetail[rev];
-            if (!sp) return;
-            mcSalesData.push([rev, sp.protoCost || '', sp.protoNre || '', sp.protoBCost || '', sp.protoBNre || '', sp.mpCost || '', sp.mpNre || '']);
-        });
-        if (mcSalesData.length > 1) {
-            const wsMcSales = XLSX.utils.aoa_to_sheet(mcSalesData);
-            wsMcSales['!cols'] = [{wch: 10}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}, {wch: 12}];
-            XLSX.utils.book_append_sheet(wb, wsMcSales, "M.C 영업판가");
-        }
-
+        
         // ── M.C 수정이력 시트 ──
         const mcLogs = tabData.mcChangeLog || [];
         if (mcLogs.length) {
@@ -4242,6 +4228,12 @@ window.deleteHistoryByDateRange = function() {
         }
 
         XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
+        const wsRaw = _buildGanttRawSheet();
+        if (wsRaw) {
+            XLSX.utils.book_append_sheet(wb, wsRaw, "GanttChart_RAW");
+            wb.Workbook = wb.Workbook || {}; wb.Workbook.Sheets = wb.Workbook.Sheets || [];
+            wb.Workbook.Sheets[wb.SheetNames.indexOf("GanttChart_RAW")] = { name: "GanttChart_RAW", Hidden: 1 }; // 숨김
+        }
 
         if (window.changeLogs && window.changeLogs.length > 0) {
             let logData = [['변경 일시', '수정자', 'No (행)', '변경 항목', '변경 전 (Old)', '변경 후 (New)']];
@@ -4329,7 +4321,51 @@ window.deleteHistoryByDateRange = function() {
         applyExcelStyles(wb);
         // 💡 전 시트 공통 스타일 적용 (웹페이지 수준 디자인)
         applyExcelStyles(wb);
+        // 💡 전 시트 공통 스타일 적용 (개별 지정 스타일은 보존)
+        applyExcelStyles(wb);
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
+    }
+
+    // ===== 엑셀 출력 공통 스타일러 =====
+    function applyExcelStyles(wb) {
+        const NAVY = "1F3A5F", BORDER = { style: "thin", color: { rgb: "B7C1CE" } };
+        const allBorder = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+        wb.SheetNames.forEach(function(name) {
+            const ws = wb.Sheets[name];
+            if (!ws || !ws['!ref']) return;
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            const colW = [];
+            for (let r = range.s.r; r <= range.e.r; r++) {
+                for (let c = range.s.c; c <= range.e.c; c++) {
+                    const cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
+                    if (!cell) continue;
+                    // 열 너비 자동 계산 (한글 2배 가중치, 최대 45자) — !cols 기지정 시트는 건너뜀
+                    if (!ws['!cols']) {
+                        const txt = String(cell.v === undefined || cell.v === null ? '' : cell.v);
+                        const len = txt.split('\n').reduce(function(m, line) {
+                            let w = 0; for (const ch of line) w += /[가-힣ㄱ-ㅎ]/.test(ch) ? 2 : 1;
+                            return Math.max(m, w);
+                        }, 0);
+                        colW[c] = Math.min(45, Math.max(colW[c] || 6, len + 2));
+                    }
+                    const isHeader = (r === range.s.r);
+                    const txt2 = String(cell.v === undefined || cell.v === null ? '' : cell.v);
+                    const base = {
+                        font: { name: "맑은 고딕", sz: 10, bold: isHeader, color: { rgb: isHeader ? "FFFFFF" : "1F2937" } },
+                        fill: isHeader ? { patternType: "solid", fgColor: { rgb: NAVY } }
+                              : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
+                        border: allBorder,
+                        alignment: { vertical: "center", horizontal: isHeader ? "center" : undefined, wrapText: txt2.indexOf('\n') !== -1 }
+                    };
+                    // 💡 시트별 개별 지정(L0 강조, SUBTOTAL 색, 계획/실적 배경 등)이 우선 — 테두리 등 기본값만 보강
+                    cell.s = Object.assign(base, cell.s || {});
+                    if (!cell.s.border) cell.s.border = allBorder;
+                }
+            }
+            if (!ws['!cols'] && colW.length) ws['!cols'] = colW.map(function(w) { return { wch: w || 6 }; });
+            ws['!rows'] = ws['!rows'] || [];
+            ws['!rows'][0] = { hpt: 22 };
+        });
     }
 
     // ===== 엑셀 출력 공통 스타일러 =====
