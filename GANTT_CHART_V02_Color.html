@@ -1049,18 +1049,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
             <h3>프로젝트 멤버-3 <span style="font-size:11px;color:#999;font-weight:normal;">(자유 추가)</span></h3>
-            <div style="display:flex; gap:20px; flex-wrap:wrap;">
+            <div style="display:flex; gap:50px; flex-wrap:wrap;">
                 <div style="flex:1 1 260px; min-width:260px;">
-                    <div style="display:grid; grid-template-columns:100px 1fr 1fr auto; gap:6px 8px; font-size:11px; color:#888; font-weight:bold; margin-bottom:6px;">
-                        <span>담당업무</span><span>이름</span><span>메일</span><span></span>
-                    </div>
-                    <div id="sum-member3-col-a" class="concept-grid" style="grid-template-columns:100px 1fr 1fr auto; row-gap:10px; column-gap:8px;"></div>
+                    <div id="sum-member3-col-a" class="concept-grid" style="grid-template-columns:140px 1fr 1fr; row-gap:10px; column-gap:12px;"></div>
                 </div>
                 <div style="flex:1 1 260px; min-width:260px;">
-                    <div style="display:grid; grid-template-columns:100px 1fr 1fr auto; gap:6px 8px; font-size:11px; color:#888; font-weight:bold; margin-bottom:6px;">
-                        <span>담당업무</span><span>이름</span><span>메일</span><span></span>
-                    </div>
-                    <div id="sum-member3-col-b" class="concept-grid" style="grid-template-columns:100px 1fr 1fr auto; row-gap:10px; column-gap:8px;"></div>
+                    <div id="sum-member3-col-b" class="concept-grid" style="grid-template-columns:140px 1fr 1fr; row-gap:10px; column-gap:12px;"></div>
                 </div>
             </div>
             <button type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
@@ -10332,8 +10326,12 @@ window.renderMember3Rows = function(rows) {
     const build = function(r, idx) {
         return '<input type="text" data-idx="' + idx + '" data-field="role" class="u-input mem-label" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계">'
             + '<input type="text" data-idx="' + idx + '" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동">'
-            + '<input type="email" data-idx="' + idx + '" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com">'
-            + '<button type="button" onclick="window.deleteMember3Row(' + idx + ')" style="border:1px solid #e03131; background:#fff; color:#e03131; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>';
+            + '<div style="position:relative; display:flex; align-items:center;">'
+            +   '<input type="email" data-idx="' + idx + '" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com" style="width:100%; padding-right:24px; box-sizing:border-box;">'
+            +   '<button type="button" onclick="window.deleteMember3Row(' + idx + ')" title="이 인원 삭제"'
+            +     ' style="position:absolute; right:3px; top:50%; transform:translateY(-50%); border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:13px; line-height:1; width:18px; height:18px; padding:0; display:flex; align-items:center; justify-content:center;"'
+            +     ' onmouseover="this.style.background=\'#e03131\'; this.style.borderColor=\'#e03131\'; this.style.color=\'#fff\';" onmouseout="this.style.background=\'#fff\'; this.style.borderColor=\'#ccc\'; this.style.color=\'#999\';">－</button>'
+            + '</div>';
     };
 
     let htmlA = '', htmlB = '';
@@ -10352,17 +10350,24 @@ window.addMember3Row = function() {
 };
 
 window.deleteMember3Row = function(idx) {
-    if (!window.tabData || !window.tabData.projectMembers3) return;
-    if (window.collectTabData) window.collectTabData(); // 삭제 전 현재 입력값 먼저 반영
-    window.tabData.projectMembers3.splice(idx, 1);
-    window.renderMember3Rows(window.tabData.projectMembers3);
-};
+    window.tabData = window.tabData || {};
+    // 💡 collectTabData() 전체를 부르지 않고, member-3 DOM만 직접 읽어서 최신 배열을 만듦 (다른 탭 로직과 완전 분리)
+    const m3map = {};
+    document.querySelectorAll('#sum-member3-col-a [data-idx], #sum-member3-col-b [data-idx]').forEach(function(el) {
+        const i = el.dataset.idx;
+        m3map[i] = m3map[i] || {};
+        m3map[i][el.dataset.field] = el.value;
+    });
+    const current = Object.keys(m3map)
+        .sort(function(a, b) { return Number(a) - Number(b); })
+        .map(function(k) { return { role: m3map[k].role || '', name: m3map[k].name || '', email: m3map[k].email || '' }; });
 
-window.deleteMember3Row = function(btn) {
-    // grid는 행 단위 wrapper가 없으므로, 클릭한 버튼 기준 앞의 input 3개 + 버튼 자신까지 4개를 같이 제거
-    let el = btn;
-    for (let i = 0; i < 4; i++) { const prev = el.previousElementSibling; el.remove(); el = prev; if (!el && i < 3) break; }
-    if (window.collectTabData) window.collectTabData();
+    console.log('🗑 삭제 전 인원 수:', current.length, '삭제할 idx:', idx);
+    current.splice(idx, 1);
+    console.log('🗑 삭제 후 인원 수:', current.length);
+
+    window.tabData.projectMembers3 = current;
+    window.renderMember3Rows(current);
 };
 
 // =========================================================
