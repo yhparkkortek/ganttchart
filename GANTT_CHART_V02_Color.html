@@ -1526,6 +1526,7 @@ ${mailText}`;
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
                 alert(`🎉 구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
                 if (authBtn) authBtn.innerText = `🟢 ${window.currentUserName}`;
+                if (window.TaskInbox && window.TaskInbox.loadFromDrive) window.TaskInbox.loadFromDrive(); // 💡 개인 보관함 드라이브 복원
             } catch(e) {
                 console.error("사용자 정보 추출 실패, 공용 모드로 진입:", e);
                 window.currentUserName = "익명 사용자";
@@ -4317,11 +4318,22 @@ window.deleteHistoryByDateRange = function() {
             XLSX.utils.book_append_sheet(wb, wsAddr, "Address");
         }
 
-        // 💡 전 시트 공통 스타일 적용 (웹페이지 수준 디자인)
-        applyExcelStyles(wb);
-        // 💡 전 시트 공통 스타일 적용 (웹페이지 수준 디자인)
-        applyExcelStyles(wb);
-        // 💡 전 시트 공통 스타일 적용 (개별 지정 스타일은 보존)
+        // ── 업무 보관함 시트 (이 PC 사용자의 보관함 스냅샷 · 출력 전용, 가져오기 시 무시됨) ──
+        try {
+            const inboxItems = (window.TaskInbox && window.TaskInbox.load()) || [];
+            if (inboxItems.length) {
+                const inboxData = [['상태', '출처', '담은 일시', 'WBS레벨', '개발단계(L0)', '업무명', '상세내용', '시작일', '완료일', '업무상태']];
+                inboxItems.forEach(function(it) {
+                    const t = it.task || {};
+                    inboxData.push([it.status || '', it.source || '', it.addedAt ? new Date(it.addedAt).toLocaleString('ko-KR') : '', 'L' + (t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4), t['개발단계'] || '', t['업무명'] || '', (t['상세내용'] || '').toString(), t['시작일'] || '', t['완료일'] || '', t['상태'] || '']);
+                });
+                const wsInbox = XLSX.utils.aoa_to_sheet(inboxData);
+                wsInbox['!cols'] = [{wch:8},{wch:16},{wch:18},{wch:8},{wch:14},{wch:26},{wch:60},{wch:11},{wch:11},{wch:8}];
+                XLSX.utils.book_append_sheet(wb, wsInbox, "업무 보관함");
+            }
+        } catch (e) { console.warn('보관함 시트 생성 실패:', e); }
+
+        // 💡 전 시트 공통 스타일 적용 — 모든 시트 추가 후, 저장 직전에 1회만 호출
         applyExcelStyles(wb);
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
     }
@@ -5834,12 +5846,19 @@ window.insertMailTask = function() {
 // =========================================================
 window.TaskInbox = {
     KEY: 'gantt_task_inbox',
+    _driveFileId: null,
+    _syncTimer: null,
+    _fileName: function() {
+        const name = (window.currentUserName || '').replace(/[\\\/:*?"<>|]/g, '').trim();
+        return (name && name !== '비로그인 (로컬)') ? ('TaskInbox_' + name + '.json') : null;
+    },
     load: function() {
         try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
     },
-    save: function(list) {
+    save: function(list, skipSync) {
         localStorage.setItem(this.KEY, JSON.stringify(list));
         window.updateInboxBadge();
+        if (!skipSync) this.scheduleDriveSync(); // 💡 저장할 때마다 드라이브 자동 동기화 (3초 디바운스)
     },
     add: function(task, meta) {
         const list = this.load();
@@ -5863,6 +5882,51 @@ window.TaskInbox = {
         it.status = status;
         if (historyEntry) (it.history = it.history || []).push(historyEntry);
         this.save(list);
+    },
+    // ── 💡 [A안] 구글 드라이브 개인 보관함 동기화 ──
+    _token: function() {
+        try { const t = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null; return (t ? t.access_token : null) || window.googleAccessToken || null; } catch(e) { return window.googleAccessToken || null; }
+    },
+    scheduleDriveSync: function() {
+        const self = this;
+        if (self._syncTimer) clearTimeout(self._syncTimer);
+        self._syncTimer = setTimeout(function() { self.syncToDrive(); }, 3000);
+    },
+    syncToDrive: async function() {
+        const fname = this._fileName(); const token = this._token();
+        if (!fname || !token) return; // 비로그인: localStorage 단독 동작
+        try {
+            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(fname);
+            const boundary = 'inbox_sync_boundary';
+            const metadata = { name: fname, mimeType: 'application/json' };
+            if (!this._driveFileId) metadata.parents = [SHARED_FOLDER_ID];
+            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ inbox: this.load(), savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
+            const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
+            const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
+            const file = await resp.json();
+            if (resp.ok && file && file.id) this._driveFileId = file.id;
+        } catch (e) { console.warn('보관함 드라이브 동기화 실패(로컬에는 저장됨):', e); }
+    },
+    loadFromDrive: async function() {
+        const fname = this._fileName(); const token = this._token();
+        if (!fname || !token) return;
+        try {
+            this._driveFileId = await window.findSaveFile(fname);
+            if (!this._driveFileId) { this.scheduleDriveSync(); return; } // 첫 사용: 로컬 내용을 드라이브로 업로드
+            const resp = await fetch('https://www.googleapis.com/drive/v3/files/' + this._driveFileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const remote = (data && data.inbox) || [];
+            // 💡 uid 기준 병합: 같은 항목은 로컬 우선(현재 기기에서 조작한 상태가 최신), 드라이브에만 있으면 복원
+            const local = this.load(); const byUid = {};
+            remote.forEach(function(it) { if (it && it.uid) byUid[it.uid] = it; });
+            local.forEach(function(it) { if (it && it.uid) byUid[it.uid] = it; });
+            const merged = Object.keys(byUid).map(function(k) { return byUid[k]; }).sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
+            this.save(merged, true);
+            this.scheduleDriveSync();
+            const ov = document.getElementById('task-inbox-overlay');
+            if (window.renderTaskInbox && ov && ov.style.display === 'flex') window.renderTaskInbox();
+        } catch (e) { console.warn('보관함 드라이브 복원 실패(로컬 유지):', e); }
     }
 };
 
@@ -5922,6 +5986,13 @@ window.renderTaskInbox = function() {
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
                 ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''} · ${escapeHtml(it.source || '')} · ${when}
+                <a href="javascript:void(0)" onclick="var d=document.getElementById('inbox-detail-${it.uid}'); var open=d.style.display==='none'; d.style.display=open?'block':'none'; this.textContent=open?'▲ 상세 접기':'▼ 상세 보기';" style="margin-left:6px; color:#1971c2; text-decoration:none; font-weight:bold;">▼ 상세 보기</a>
+            </div>
+            <div id="inbox-detail-${it.uid}" style="display:none; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
+                <div><b>업무명</b> : ${escapeHtml(t['업무명'] || '')}</div>
+                <div><b>상세내용</b> : <span style="white-space:pre-wrap;">${escapeHtml((t['상세내용'] || '').toString())}</span></div>
+                <div><b>기간</b> : ${escapeHtml(t['시작일'] || '?')} ~ ${escapeHtml(t['완료일'] || '?')} · <b>상태</b> : ${escapeHtml(t['상태'] || '진행')} · <b>WBS레벨</b> : L${escapeHtml(String(t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4))}</div>
+                ${(it.history && it.history.length) ? '<div style="margin-top:4px;"><b>이력</b> : ' + it.history.map(function(h){ return escapeHtml((h.time || '') + ' ' + (h.type || '') + ' → ' + (h.target || '')); }).join('<br>　　　　') + '</div>' : ''}
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
