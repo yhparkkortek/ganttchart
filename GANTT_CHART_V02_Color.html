@@ -1048,10 +1048,22 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
         </div>
         <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
-                <h3>프로젝트 멤버-3 <span style="font-size:11px;color:#999;font-weight:normal;">(자유 추가)</span></h3>
-                <div id="sum-member3-body" class="concept-grid" style="grid-template-columns: 140px 1fr 1fr auto; row-gap:10px; column-gap:12px;"></div>
-                <button type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
+            <h3>프로젝트 멤버-3 <span style="font-size:11px;color:#999;font-weight:normal;">(자유 추가)</span></h3>
+            <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                <div style="flex:1 1 260px; min-width:260px;">
+                    <div style="display:grid; grid-template-columns:100px 1fr 1fr auto; gap:6px 8px; font-size:11px; color:#888; font-weight:bold; margin-bottom:6px;">
+                        <span>담당업무</span><span>이름</span><span>메일</span><span></span>
+                    </div>
+                    <div id="sum-member3-col-a" class="concept-grid" style="grid-template-columns:100px 1fr 1fr auto; row-gap:10px; column-gap:8px;"></div>
+                </div>
+                <div style="flex:1 1 260px; min-width:260px;">
+                    <div style="display:grid; grid-template-columns:100px 1fr 1fr auto; gap:6px 8px; font-size:11px; color:#888; font-weight:bold; margin-bottom:6px;">
+                        <span>담당업무</span><span>이름</span><span>메일</span><span></span>
+                    </div>
+                    <div id="sum-member3-col-b" class="concept-grid" style="grid-template-columns:100px 1fr 1fr auto; row-gap:10px; column-gap:8px;"></div>
+                </div>
             </div>
+            <button type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="product-images-section">
             <h3>제품 사진 <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
@@ -10308,26 +10320,42 @@ window.sendAllPendingAlarms = async function() {
 
 // 💡 프로젝트 멤버-3 (자유 추가 인원) 행 렌더링
 window.renderMember3Rows = function(rows) {
-    const wrap = document.getElementById('sum-member3-body');
-    if (!wrap) return;
-    if (!rows || !rows.length) { wrap.innerHTML = ''; return; }
-    wrap.innerHTML = rows.map(function(r) {
-        return '<input type="text" data-field="role" class="u-input mem-label" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계">'
-            + '<input type="text" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동">'
-            + '<input type="email" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com">'
-            + '<button type="button" onclick="window.deleteMember3Row(this)" style="border:1px solid #e03131; background:#fff; color:#e03131; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>';
-    }).join('');
+    const colA = document.getElementById('sum-member3-col-a');
+    const colB = document.getElementById('sum-member3-col-b');
+    if (!colA || !colB) {
+        console.warn('⚠️ sum-member3-col-a/b 요소를 찾지 못했습니다. Summary 멤버-3 HTML(2열 구조) diff가 적용됐는지 확인해주세요.');
+        return;
+    }
+    window.tabData = window.tabData || {};
+    window.tabData.projectMembers3 = rows || [];
+
+    const build = function(r, idx) {
+        return '<input type="text" data-idx="' + idx + '" data-field="role" class="u-input mem-label" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계">'
+            + '<input type="text" data-idx="' + idx + '" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동">'
+            + '<input type="email" data-idx="' + idx + '" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com">'
+            + '<button type="button" onclick="window.deleteMember3Row(' + idx + ')" style="border:1px solid #e03131; background:#fff; color:#e03131; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>';
+    };
+
+    let htmlA = '', htmlB = '';
+    (rows || []).forEach(function(r, idx) {
+        if (idx % 2 === 0) htmlA += build(r, idx); else htmlB += build(r, idx);
+    });
+    colA.innerHTML = htmlA;
+    colB.innerHTML = htmlB;
 };
 
 window.addMember3Row = function() {
-    const wrap = document.getElementById('sum-member3-body');
-    if (!wrap) return;
-    wrap.insertAdjacentHTML('beforeend',
-        '<input type="text" data-field="role" class="u-input mem-label" placeholder="예: PCB 설계">'
-        + '<input type="text" data-field="name" class="u-input" placeholder="예: 홍길동">'
-        + '<input type="email" data-field="email" class="u-input" placeholder="email@company.com">'
-        + '<button type="button" onclick="window.deleteMember3Row(this)" style="border:1px solid #e03131; background:#fff; color:#e03131; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>'
-    );
+    window.tabData = window.tabData || {};
+    window.tabData.projectMembers3 = window.tabData.projectMembers3 || [];
+    window.tabData.projectMembers3.push({ role: '', name: '', email: '' });
+    window.renderMember3Rows(window.tabData.projectMembers3);
+};
+
+window.deleteMember3Row = function(idx) {
+    if (!window.tabData || !window.tabData.projectMembers3) return;
+    if (window.collectTabData) window.collectTabData(); // 삭제 전 현재 입력값 먼저 반영
+    window.tabData.projectMembers3.splice(idx, 1);
+    window.renderMember3Rows(window.tabData.projectMembers3);
 };
 
 window.deleteMember3Row = function(btn) {
@@ -10597,12 +10625,15 @@ window.collectTabData = function() {
 
     // 💡 프로젝트 멤버-3 (자유 추가 인원) 수집
     const member3Rows = [];
-    const m3roleInputs = document.querySelectorAll('#sum-member3-body input[data-field="role"]');
-    m3roleInputs.forEach(function(roleEl) {
-        const rowGroup = [roleEl, roleEl.nextElementSibling, roleEl.nextElementSibling && roleEl.nextElementSibling.nextElementSibling];
-        const role = roleEl.value || '';
-        const name = (rowGroup[1] || {}).value || '';
-        const email = (rowGroup[2] || {}).value || '';
+    const m3map = {};
+    document.querySelectorAll('#sum-member3-col-a [data-idx], #sum-member3-col-b [data-idx]').forEach(function(el) {
+        const idx = el.dataset.idx;
+        m3map[idx] = m3map[idx] || {};
+        m3map[idx][el.dataset.field] = el.value;
+    });
+    Object.keys(m3map).sort(function(a, b) { return a - b; }).forEach(function(k) {
+        const r = m3map[k];
+        const role = r.role || '', name = r.name || '', email = r.email || '';
         if (role || name || email) member3Rows.push({ role: role, name: name, email: email });
     });
     window.tabData.projectMembers3 = member3Rows;
