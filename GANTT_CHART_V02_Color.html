@@ -5997,8 +5997,8 @@ window.renderTaskInbox = function() {
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; gap:6px; margin-top:8px; align-items:center;">
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
-                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap;">➡️ 현재 프로젝트</button>
-                <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#1971c2; border-color:#1971c2;">📤 다른 프로젝트</button>
+                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap; background:#2c5f8a; color:#fff;">➡️ 현재 프로젝트</button>
+                <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22;">📤 다른 프로젝트</button>
                 <button class="action-btn" onclick="if(confirm('이 업무를 보관함에서 삭제할까요?')){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131;">🗑</button>
             </div>
             <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -6599,7 +6599,9 @@ window.updateInboxBadge();
 <div id="task-inbox-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
     <div class="history-modal" id="task-inbox-modal" onclick="event.stopPropagation()"
          style="pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-                max-width:760px; width:92vw; max-height:84vh; display:flex; flex-direction:column;">
+                width:min(760px, 92vw); height:auto; max-width:96vw; max-height:92vh;
+                min-width:420px; min-height:240px; resize:both; overflow:hidden;
+                display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
@@ -6633,7 +6635,9 @@ window.updateInboxBadge();
 <div id="inbox-dist-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
     <div class="history-modal" id="inbox-dist-modal" onclick="event.stopPropagation()"
          style="pointer-events:all; position:fixed; top:9vh; left:50%; transform:translateX(-50%);
-                max-width:640px; width:92vw; max-height:82vh; display:flex; flex-direction:column;">
+                width:min(640px, 92vw); height:auto; max-width:96vw; max-height:92vh;
+                min-width:420px; min-height:240px; resize:both; overflow:hidden;
+                display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-dist-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
@@ -6658,7 +6662,7 @@ window.updateInboxBadge();
             <p style="margin:0 0 8px; font-size:12px; color:#555;">대상: <b id="dist-target-name" style="color:#1971c2;"></b> — 삽입할 개발단계(L0) 구간을 선택하세요.</p>
             <div style="display:flex; gap:8px; align-items:center;">
                 <select id="dist-l0-select" style="flex:1; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;"></select>
-                <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#1971c2; border-color:#1971c2; white-space:nowrap;">🚀 전송 실행</button>
+                <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#2c5f8a; border-color:#2c5f8a; white-space:nowrap;">🚀 전송 실행</button>
             </div>
             <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
@@ -6745,7 +6749,7 @@ window.updateInboxBadge();
                         <button class="action-btn" onclick="window.editPrompt()" style="min-width:130px !important;">
                             ✏️ 프롬프트
                         </button>
-                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="min-width:130px !important;">
+                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="min-width:130px !important; background:#2c5f8a; color:#fff;">
                             🤖 AI 분석
                         </button>
                     </div>
@@ -6759,7 +6763,7 @@ window.updateInboxBadge();
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <span style="font-size:11px; font-weight:bold;">📋 분석결과 <span id="paste-result-count">0</span>개</span>
                             <button onclick="window.pasteClearResults()"
-                                style="padding:2px 8px; background:#dc3545; color:white; border:none; border-radius:3px; font-size:10px; cursor:pointer;">
+                                style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
                                 🗑️ 초기화
                             </button>
                         </div>
@@ -6787,7 +6791,7 @@ window.updateInboxBadge();
                         <button class="action-btn" onclick="window.mfClearFiles()" style="min-width:130px !important; border-color:#e03131; color:#e03131;">
                             🗑️ 전체 비우기
                         </button>
-                        <button class="action-btn" id="mf-analyze-btn" onclick="window.mfAnalyze()" style="min-width:130px !important; border-color:#e67e22; color:#e67e22;">
+                        <button class="action-btn" id="mf-analyze-btn" onclick="window.mfAnalyze()" style="min-width:130px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                             🤖 AI 일괄 분석 (<span id="mf-file-count">0</span>개)
                         </button>
                     </div>
@@ -6807,7 +6811,7 @@ window.updateInboxBadge();
                     </div>
                     <div id="mf-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
                     <button class="action-btn" id="mf-batch-btn" onclick="window.mfBatchInsert()"
-                            style="display:none; width:100%; margin:auto 0 0 -0.5px !important; min-width:auto !important; height:38px !important; position:relative; top:0.5px;">
+                            style="display:none; width:100%; margin:auto 0 0 -0.5px !important; min-width:auto !important; height:38px !important; position:relative; top:0.5px; background:#2c5f8a; color:#fff;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -6864,7 +6868,7 @@ window.updateInboxBadge();
                     <div id="ms-result-list" style="flex:1; overflow-y:auto;"></div>
                     <!-- 연속등록 버튼 -->
                     <button class="action-btn" id="ms-batch-btn" onclick="window.msBatchInsert()"
-                            style="display:none; width:calc(100% - 24px); margin:auto 12px 12px 12px !important; min-width:auto !important; height:38px !important; flex-shrink:0;">
+                            style="display:none; width:calc(100% - 24px); margin:auto 12px 12px 12px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -6926,7 +6930,7 @@ window.updateInboxBadge();
                                 style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;">
                         </select>
                         <button onclick="window.mailRightInsert()"
-                                style="padding:10px 24px; background:#0056b3; color:white; border:none;
+                                style="padding:10px 24px; background:#2c5f8a; color:white; border:none;
                                        border-radius:6px; font-size:13px; font-weight:bold;
                                        cursor:pointer; white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
                             ✅ 개별 등록
