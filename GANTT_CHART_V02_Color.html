@@ -640,7 +640,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="drive_load_btn" class="topbar-btn" onclick="loadFromGoogleDrive()" disabled>프로젝트 가져오기</button>
         <button id="drive_save_btn" class="topbar-btn" onclick="saveToGoogleDrive()" disabled>프로젝트 저장하기</button>
         <div class="tb-sep"></div>
-        <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()">업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
+        <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()"><span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
         <button id="mail-btn" class="topbar-btn" onclick="window.showMailAnalyzer()">업무 추가</button>
     </div>
     <div id="file-status">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
@@ -1371,20 +1371,63 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 
     <div id="drive-file-modal-overlay" class="modal-overlay" onclick="window.closeDriveModal(event)">
-        <div class="history-modal" onclick="event.stopPropagation()" style="height: auto; max-height: 80vh; max-width: 500px;">
-            <div class="history-header" style="background-color: #ff9800; color: white;">
-                <span>📂 구글 드라이브 프로젝트 불러오기</span>
-                <span class="history-close" style="color: white;" onclick="window.closeDriveModal()">✖</span>
+        <div class="history-modal" id="drive-file-modal" onclick="event.stopPropagation()"
+             style="position:fixed; top:8vh; left:50%; transform:translateX(-50%);
+                    width:min(500px, 92vw); height:auto; max-width:96vw; max-height:82vh;
+                    min-width:360px; min-height:280px; resize:both; overflow:hidden;
+                    display:flex; flex-direction:column;">
+            <div id="drive-drag-handle" class="history-header"
+                 style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
+                        cursor:move; border-bottom:1.5px solid #2c5f8a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📂 구글 드라이브 프로젝트 불러오기</span>
+                <button onclick="window.closeDriveModal()"
+                    style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
+                           color:#2c5f8a; font-size:16px; cursor:pointer;
+                           width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+                           display:flex; align-items:center; justify-content:center; transition:0.15s;"
+                    onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';"
+                    onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';"
+                    title="닫기">×</button>
             </div>
-            <div class="history-body" style="padding: 20px;">
+            <div class="history-body" style="padding: 20px; overflow-y:auto; flex:1;">
                 <p style="margin-top:0; margin-bottom:15px; font-size: 14px; color: #555;">불러올 프로젝트 파일을 선택해 주세요.</p>
-                <div id="drive-file-list" style="display:flex; flex-direction:column; gap:10px; max-height: 400px; overflow-y: auto;">
+                <div id="drive-file-list" style="display:flex; flex-direction:column; gap:10px;">
                 </div>
             </div>
         </div>
     </div>
 
 <script>
+// ─── 구글 드라이브 불러오기 모달 드래그 기능 (업무 보관함 등과 동일 패턴) ───
+(function() {
+    let isDragging = false, startX, startY, origLeft, origTop;
+    document.addEventListener('mousedown', function(e) {
+        const handle = document.getElementById('drive-drag-handle');
+        if (!handle || !handle.contains(e.target)) return;
+        const modal = document.getElementById('drive-file-modal');
+        if (!modal) return;
+        isDragging = true;
+        const rect = modal.getBoundingClientRect();
+        origLeft = rect.left; origTop = rect.top;
+        startX = e.clientX; startY = e.clientY;
+        modal.style.transform = 'none';
+        modal.style.left = origLeft + 'px';
+        modal.style.top  = origTop  + 'px';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const modal = document.getElementById('drive-file-modal');
+        if (!modal) return;
+        modal.style.left = (origLeft + e.clientX - startX) + 'px';
+        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', function() { isDragging = false; });
+})();
+</script>
+
+<script>
+
     // =========================================================
     // 🛠️ 전역 변수 선언 (순서 꼬임 및 TDZ 에러 방지)
     // =========================================================
@@ -3442,13 +3485,14 @@ window.deleteHistoryByDateRange = function() {
                          'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'지연','On going':'진행','Delay':'지연' },
             btnText: '🌐 ENG',
             ui: {
-                'file-input-label': '엑셀 선택',
+                'file-input-label':'🟩엑셀 열기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
                 'mail-btn':       '업무 추가',
+                'inbox-btn-label': '업무 보관함',
                 'weekly-report-btn': '📅 주간 업무 보고',
-                'drive_save_btn': '저장하기',
-                'drive_load_btn': '불러오기',
+                'drive_save_btn': '💾 저장',
+                'drive_load_btn': '📂 열기',
                 'chart-expand-btn':    '📊 차트 확장',
                 'chart-expand-btn-on': '📊 기본 보기',
                 
@@ -3474,13 +3518,14 @@ window.deleteHistoryByDateRange = function() {
                          'Progress':'On going','On going':'On going','Done':'Done','Pending':'Pending','On Hold':'Delay','Delay':'Delay' },
             btnText: '🌐 한글',
             ui: {
-                'file-input-label': 'Load excel',
+                'file-input-label':'🟩Open Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
                 'mail-btn':       'Add Task via Mail',
+                'inbox-btn-label': 'Task Inbox',
                 'weekly-report-btn': '📅 Weekly Report',
-                'drive_save_btn': 'Save',
-                'drive_load_btn': 'Load',
+                'drive_save_btn': '💾 Save',
+                'drive_load_btn': '📂 Load',
                 'chart-expand-btn':    '📊 Chart View',
                 'chart-expand-btn-on': '📊 Basic View',
                
@@ -6684,7 +6729,7 @@ window.updateInboxBadge();
 </div>
 
 <div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
-    <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); max-width:1200px; width:96vw; height:92vh; max-height:92vh; display:flex; flex-direction:column;">
+    <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:820px; min-height:520px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
         <!-- 헤더 -->
        <div id="mail-drag-handle" class="history-header" style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:move; border-bottom:1.5px solid #2c5f8a; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
             <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
