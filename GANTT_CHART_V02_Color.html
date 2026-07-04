@@ -1370,9 +1370,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
     </div>
 
-    <div id="drive-file-modal-overlay" class="modal-overlay" onclick="window.closeDriveModal(event)">
+<div id="drive-file-modal-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
         <div class="history-modal" id="drive-file-modal" onclick="event.stopPropagation()"
-             style="position:fixed; top:8vh; left:50%; transform:translateX(-50%);
+             style="pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
                     width:min(500px, 92vw); height:auto; max-width:96vw; max-height:82vh;
                     min-width:360px; min-height:280px; resize:both; overflow:hidden;
                     display:flex; flex-direction:column;">
@@ -1770,8 +1770,7 @@ ${mailText}`;
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
     }
     
-    window.closeDriveModal = function(e) {
-        if (e && e.target !== document.getElementById('drive-file-modal-overlay')) return;
+    window.closeDriveModal = function() {
         document.getElementById('drive-file-modal-overlay').style.display = 'none';
     }
 
@@ -6650,8 +6649,6 @@ window.updateInboxBadge();
                 width:min(760px, 92vw); height:auto; max-width:96vw; max-height:92vh;
                 min-width:520px; min-height:280px; resize:both; overflow:hidden;
                 display:flex; flex-direction:column;">
-                min-width:420px; min-height:240px; resize:both; overflow:hidden;
-                display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
@@ -6687,8 +6684,6 @@ window.updateInboxBadge();
          style="pointer-events:all; position:fixed; top:9vh; left:50%; transform:translateX(-50%);
                 width:min(640px, 92vw); height:auto; max-width:96vw; max-height:92vh;
                 min-width:480px; min-height:280px; resize:both; overflow:hidden;
-                display:flex; flex-direction:column;">
-                min-width:420px; min-height:240px; resize:both; overflow:hidden;
                 display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-dist-drag-handle" class="history-header"
