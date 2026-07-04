@@ -1047,16 +1047,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
             </div>
         </div>
-        <div class="concept-section">
-            <h3>프로젝트 멤버-3 <span style="font-size:11px;color:#999;font-weight:normal;">(자유 추가 · 알림메일 수신 대상에 자동 포함)</span></h3>
-            <div style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
-                💡 위 멤버-1,2에 없는 추가 인원을 자유롭게 등록하세요. 여기 등록된 이름/메일도 알림메일 발송(전체 참조) 대상에 자동으로 포함됩니다.
+        <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
+                <h3>프로젝트 멤버-3 <span style="font-size:11px;color:#999;font-weight:normal;">(자유 추가)</span></h3>
+                <div id="sum-member3-body" class="concept-grid" style="grid-template-columns: 140px 1fr 1fr auto; row-gap:10px; column-gap:12px;"></div>
+                <button type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
             </div>
-            <div style="display:flex; gap:6px; font-size:11px; color:#888; font-weight:bold; margin-bottom:4px; padding:0 4px;">
-                <span style="flex:1 1 0;">담당업무</span><span style="flex:1 1 0;">이름</span><span style="flex:1.4 1 0;">메일</span><span style="flex:0 0 22px;"></span>
-            </div>
-            <div id="sum-member3-body" class="mem3-cols"></div>
-            <button type="button" onclick="window.addMember3Row()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="product-images-section">
             <h3>제품 사진 <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
@@ -1091,6 +1086,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #briefspec-body input[data-field="modelA"], #briefspec-body input[data-field="modelB"], #briefspec-body input[data-field="modelC"] { text-align: center !important; }
             </style>
+            <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
             <table class="concept-table">
                 <thead>
                     <tr>
@@ -1110,7 +1106,22 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <tr><td class="bm-no">1</td><td><input type="text" data-field="type"></td><td><input type="text" data-field="sub"></td><td><input type="text" class="u-input" data-field="modelA"></td><td><input type="text" class="u-input" data-field="modelB"></td><td><input type="text" class="u-input" data-field="modelC"></td><td><input type="text" class="u-input" data-field="note"></td></tr>
                 </tbody>
             </table>
-            
+            </div>
+            <div id="bs-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                <div id="bs-history-header" onclick="window.bsToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                    <span id="bs-history-toggle-icon">▶</span>
+                    <span>🕒 변경 이력 확인</span>
+                </div>
+                <div id="bs-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                    <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                        <label>시작일 <input type="date" id="bs-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <label>종료일 <input type="date" id="bs-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <input type="password" id="bs-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                        <button class="action-btn" onclick="window.deleteBsHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
+                    </div>
+                    <table id="bs-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -10299,35 +10310,30 @@ window.sendAllPendingAlarms = async function() {
 window.renderMember3Rows = function(rows) {
     const wrap = document.getElementById('sum-member3-body');
     if (!wrap) return;
-    if (!rows || !rows.length) {
-        wrap.innerHTML = '';
-        return;
-    }
+    if (!rows || !rows.length) { wrap.innerHTML = ''; return; }
     wrap.innerHTML = rows.map(function(r) {
-        return '<div class="mem3-row">'
-            + '<input type="text" data-field="role" class="u-input" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계">'
+        return '<input type="text" data-field="role" class="u-input mem-label" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계">'
             + '<input type="text" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동">'
-            + '<input type="email" data-field="email" class="u-input mem3-email" value="' + _escTabVal(r.email) + '" placeholder="email@company.com">'
-            + '<span class="mem3-del"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></span>'
-            + '</div>';
+            + '<input type="email" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com">'
+            + '<button type="button" onclick="window.deleteMember3Row(this)" style="border:1px solid #e03131; background:#fff; color:#e03131; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>';
     }).join('');
 };
 
 window.addMember3Row = function() {
     const wrap = document.getElementById('sum-member3-body');
     if (!wrap) return;
-    const div = document.createElement('div');
-    div.className = 'mem3-row';
-    div.innerHTML = '<input type="text" data-field="role" class="u-input" placeholder="예: PCB 설계">'
+    wrap.insertAdjacentHTML('beforeend',
+        '<input type="text" data-field="role" class="u-input mem-label" placeholder="예: PCB 설계">'
         + '<input type="text" data-field="name" class="u-input" placeholder="예: 홍길동">'
-        + '<input type="email" data-field="email" class="u-input mem3-email" placeholder="email@company.com">'
-        + '<span class="mem3-del"><button type="button" onclick="window.deleteMember3Row(this)" style="border:none; background:none; color:#bbb; cursor:pointer; font-size:13px;" onmouseover="this.style.color=\'#dc3545\'" onmouseout="this.style.color=\'#bbb\'">🗑</button></span>';
-    wrap.appendChild(div);
+        + '<input type="email" data-field="email" class="u-input" placeholder="email@company.com">'
+        + '<button type="button" onclick="window.deleteMember3Row(this)" style="border:1px solid #e03131; background:#fff; color:#e03131; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>'
+    );
 };
 
 window.deleteMember3Row = function(btn) {
-    const row = btn.closest('.mem3-row');
-    if (row) row.remove();
+    // grid는 행 단위 wrapper가 없으므로, 클릭한 버튼 기준 앞의 input 3개 + 버튼 자신까지 4개를 같이 제거
+    let el = btn;
+    for (let i = 0; i < 4; i++) { const prev = el.previousElementSibling; el.remove(); el = prev; if (!el && i < 3) break; }
     if (window.collectTabData) window.collectTabData();
 };
 
@@ -10591,10 +10597,12 @@ window.collectTabData = function() {
 
     // 💡 프로젝트 멤버-3 (자유 추가 인원) 수집
     const member3Rows = [];
-    document.querySelectorAll('#sum-member3-body .mem3-row').forEach(function(row) {
-        const role  = (row.querySelector('[data-field="role"]')  || {}).value || '';
-        const name  = (row.querySelector('[data-field="name"]')  || {}).value || '';
-        const email = (row.querySelector('[data-field="email"]') || {}).value || '';
+    const m3roleInputs = document.querySelectorAll('#sum-member3-body input[data-field="role"]');
+    m3roleInputs.forEach(function(roleEl) {
+        const rowGroup = [roleEl, roleEl.nextElementSibling, roleEl.nextElementSibling && roleEl.nextElementSibling.nextElementSibling];
+        const role = roleEl.value || '';
+        const name = (rowGroup[1] || {}).value || '';
+        const email = (rowGroup[2] || {}).value || '';
         if (role || name || email) member3Rows.push({ role: role, name: name, email: email });
     });
     window.tabData.projectMembers3 = member3Rows;
@@ -11330,6 +11338,108 @@ window.bsRefreshColumnVisibility = function() {
             if (f === 'modelA' || f === 'modelB' || f === 'modelC') {
                 window.bsRefreshColumnVisibility();
             }
+        });
+    }
+})();
+
+window.bsToggleHistoryBox = function() {
+    const body = document.getElementById('bs-history-body');
+    const icon = document.getElementById('bs-history-toggle-icon');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.textContent = isOpen ? '▶' : '▼';
+    if (!isOpen && window.bsRenderHistoryTable) window.bsRenderHistoryTable();
+};
+
+window.bsLogChange = function(rowLabel, field, oldVal, newVal, reason) {
+    if (String(oldVal || '') === String(newVal || '')) return;
+    window.tabData = window.tabData || {};
+    window.tabData.bsChangeLog = window.tabData.bsChangeLog || [];
+    window.tabData.bsChangeLog.push({
+        time: new Date().toLocaleString('ko-KR'),
+        userName: window.currentUserName || '비로그인',
+        row: rowLabel, field: field, oldVal: oldVal, newVal: newVal, reason: reason || ''
+    });
+};
+
+window.bsRenderHistoryTable = function() {
+    const table = document.getElementById('bs-history-table');
+    if (!table) return;
+    const logs = (window.tabData && window.tabData.bsChangeLog) || [];
+    if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
+    const fieldLabel = { type: 'TYPE', sub: 'TYPE2', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' };
+    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">TYPE</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th><th style="padding:4px 8px;">사유</th></tr></thead><tbody>';
+    logs.slice().reverse().forEach(function(log) {
+        html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold;">' + (log.row || '') + '</td>'
+            + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (fieldLabel[log.field] || log.field) + '</span></td>'
+            + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
+            + '<td style="padding:4px 8px; color:#2f9e44;">' + (log.newVal || '-') + '</td>'
+            + '<td style="padding:4px 8px; color:#6c757d;">' + (log.reason || '-') + '</td></tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+};
+
+window.deleteBsHistoryByDateRange = function() {
+    const pwEl = document.getElementById('bs-history-del-pw');
+    const pw = pwEl ? pwEl.value : '';
+    if (pw !== 'kortek') { if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.'); return; }
+    const fromStr = (document.getElementById('bs-history-del-from') || {}).value;
+    const toStr = (document.getElementById('bs-history-del-to') || {}).value;
+    if (!fromStr || !toStr) { if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.'); return; }
+    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
+    const toTs = new Date(toStr + 'T23:59:59').getTime();
+    if (fromTs > toTs) { if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
+    const parseKoDateTime = function(str) {
+        const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+        if (!m) return null;
+        let h = parseInt(m[5], 10);
+        if (m[4] === '오후' && h < 12) h += 12;
+        if (m[4] === '오전' && h === 12) h = 0;
+        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
+    };
+    const inRange = function(log) { const ts = parseKoDateTime(log.time); return ts !== null && ts >= fromTs && ts <= toTs; };
+    const doDelete = function() {
+        let removedCount = 0;
+        if (window.tabData && window.tabData.bsChangeLog && window.tabData.bsChangeLog.length) {
+            const before = window.tabData.bsChangeLog.length;
+            window.tabData.bsChangeLog = window.tabData.bsChangeLog.filter(function(log) { return !inRange(log); });
+            removedCount = before - window.tabData.bsChangeLog.length;
+        }
+        if (pwEl) pwEl.value = '';
+        if (window.bsRenderHistoryTable) window.bsRenderHistoryTable();
+        const msg = removedCount + '건의 Brief SPEC 수정이력을 삭제했습니다.';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+    };
+    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 Brief SPEC 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
+    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
+    else if (confirm(confirmMsg)) doDelete();
+};
+
+// 💡 Brief SPEC 입력칸 변경 감지 (사유 입력 팝업 + 취소 시 원복)
+(function() {
+    const tbody = document.getElementById('briefspec-body');
+    if (tbody) {
+        tbody.addEventListener('focusin', function(e) {
+            if (e.target.matches && e.target.matches('input[data-field]')) e.target.dataset._histOld = e.target.value;
+        });
+        tbody.addEventListener('change', function(e) {
+            const el = e.target;
+            if (!el.matches || !el.matches('input[data-field]')) return;
+            const tr = el.closest('tr');
+            if (!tr) return;
+            const typeInp = tr.querySelector('input[data-field="type"]');
+            const rowLabel = (typeInp && typeInp.value) ? typeInp.value.trim() : '행';
+            const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
+            if (String(oldVal) === String(el.value)) return;
+            const fieldLabelMap = { type: 'TYPE', sub: 'TYPE2', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' };
+            const reason = window.promptOptionalReason(`[${rowLabel}] ${fieldLabelMap[el.dataset.field] || el.dataset.field} 변경`);
+            if (reason === null) { el.value = oldVal; return; }
+            window.bsLogChange(rowLabel, el.dataset.field, oldVal, el.value, reason);
+            el.dataset._histOld = el.value;
         });
     }
 })();
