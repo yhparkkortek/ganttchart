@@ -10540,23 +10540,27 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti) {
     if (nameEl) window.attachAddressAutocomplete(nameEl, emailEl, true);
 });
 
-// 📇 멤버-3 (자유 추가, 행이 동적으로 생기므로 이벤트 위임 방식)
+// 📇 멤버-3 (자유 추가, 2열 구조 — 두 컬럼 각각에 이벤트 위임 연결)
 (function() {
-    const wrap = document.getElementById('sum-member3-body');
-    if (!wrap) return;
-    wrap.addEventListener('input', function(e) {
-        if (!e.target.matches('[data-field="name"]')) return;
-        const row = e.target.closest('.mem3-row');
-        const emailEl = row ? row.querySelector('[data-field="email"]') : null;
-        addrShowSuggestions(e.target, e.target.value.trim(), emailEl, false);
-    });
-    wrap.addEventListener('focusout', function(e) {
-        if (!e.target.matches('[data-field="name"]')) return;
-        setTimeout(function() {
-            const dd = document.getElementById('addr-autocomplete-dropdown');
-            if (dd) dd.style.display = 'none';
-        }, 150);
-    });
+    function bindMember3Autocomplete(id) {
+        const wrap = document.getElementById(id);
+        if (!wrap) return;
+        wrap.addEventListener('input', function(e) {
+            if (!e.target.matches('[data-field="name"]')) return;
+            const idx = e.target.dataset.idx;
+            const emailEl = wrap.querySelector('[data-idx="' + idx + '"][data-field="email"]');
+            addrShowSuggestions(e.target, e.target.value.trim(), emailEl, false);
+        });
+        wrap.addEventListener('focusout', function(e) {
+            if (!e.target.matches('[data-field="name"]')) return;
+            setTimeout(function() {
+                const dd = document.getElementById('addr-autocomplete-dropdown');
+                if (dd) dd.style.display = 'none';
+            }, 150);
+        });
+    }
+    bindMember3Autocomplete('sum-member3-col-a');
+    bindMember3Autocomplete('sum-member3-col-b');
 })();
 
 window.collectTabData = function() {
