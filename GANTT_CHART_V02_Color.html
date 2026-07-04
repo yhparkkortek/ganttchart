@@ -4023,7 +4023,24 @@ window.deleteHistoryByDateRange = function() {
         // ── GanttChart 시트: 웹 화면과 동일 구성 ──
         const _hdrContent = (colIdx.content !== -1 && globalData[0][colIdx.content]) ? globalData[0][colIdx.content] : '업무 상세내용';
         const _hdrAnswer  = (colIdx.answer  !== -1 && globalData[0][colIdx.answer])  ? globalData[0][colIdx.answer]  : '답변';
-        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, _hdrAnswer]];
+        // 💡 텍스트 막대(유니코드 블록)로 웹의 현황 막대 위치를 흉내냄 — 전체 타임라인 기준, 총 20칸
+        const BAR_LEN = 20;
+        function _textStatusBar(startTs, planTs, statusVal) {
+            const viewStart = window.ganttViewStartTs, viewDur = window.ganttViewDuration;
+            if (!viewStart || !viewDur || (!startTs && !planTs)) return '';
+            let ts0 = startTs, ts1 = planTs || startTs; if (ts1 < ts0) ts1 = ts0;
+            const startPct = Math.max(0, Math.min(1, (ts0 - viewStart) / viewDur));
+            const endPct   = Math.max(0, Math.min(1, (ts1 - viewStart) / viewDur));
+            let startCell = Math.round(startPct * BAR_LEN);
+            let endCell   = Math.round(endPct * BAR_LEN);
+            if (endCell <= startCell) endCell = startCell + 1;
+            const s = String(statusVal || '').toLowerCase();
+            const mark = (s.includes('취소') || s.includes('cancel') || s.includes('드랍') || s.includes('drop')) ? '▓' : '█';
+            let bar = '';
+            for (let k = 0; k < BAR_LEN; k++) bar += (k >= startCell && k < endCell) ? mark : '░';
+            return bar;
+        }
+        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, _hdrAnswer, '현황']];
         let ganttL0Rows = [];
         let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
@@ -4039,12 +4056,13 @@ window.deleteHistoryByDateRange = function() {
             const statusVal  = colIdx.status  !== -1 ? (row[colIdx.status]  || '') : '';
             const contentVal = colIdx.content !== -1 ? (row[colIdx.content] || '') : '';
             const answerVal  = colIdx.answer  !== -1 ? (row[colIdx.answer]  || '') : '';
-            exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, answerVal]);
+            const barVal = _textStatusBar(row._calcStartTs, row._calcPlanTs, statusVal);
+            exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, answerVal, barVal]);
             if (lv === 0) ganttL0Rows.push(exportData.length - 1);
             rowNumCounter++;
         }
         const ws = XLSX.utils.aoa_to_sheet(exportData);
-        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:45}];
+        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:45},{wch:24}];
         (function() {
             const range = XLSX.utils.decode_range(ws['!ref']);
             for (let r = 1; r <= range.e.r; r++) {
@@ -4053,10 +4071,12 @@ window.deleteHistoryByDateRange = function() {
                     const cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
                     if (!cell) continue;
                     cell.s = {
-                        font: { name: "맑은 고딕", sz: 10, bold: isL0, color: { rgb: "1F2937" } },
+                        font: c === 9
+                            ? { name: "Consolas", sz: 11, bold: true, color: { rgb: "1F3A5F" } }
+                            : { name: "맑은 고딕", sz: 10, bold: isL0, color: { rgb: "1F2937" } },
                         fill: isL0 ? { patternType: "solid", fgColor: { rgb: "E9EEF6" } }
                                    : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
-                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : "left", wrapText: c >= 7 }
+                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : (c === 9 ? "center" : "left"), wrapText: c === 7 || c === 8 }
                     };
                 }
             }
@@ -4100,6 +4120,19 @@ window.deleteHistoryByDateRange = function() {
             /*21*/ ['F/W 담당자', meta.FW담당자 || '', meta.FW담당자이메일 || '', '', 'Cutting 담당자', meta.Cutting담당자 || '', meta.Cutting담당자이메일 || '', '', '', ''],
             /*22*/ ['BLU 담당자', meta.Module담당자 || '', meta.Module담당자이메일 || '', '', 'Tooling 담당자', meta.Tooling담당자 || '', meta.Tooling담당자이메일 || '', '', '', ''],
         ];
+        // 💡 프로젝트 멤버-3 (자유 추가 인원)
+        const member3 = tabData.projectMembers3 || [];
+        if (member3.length) {
+            summaryData.push([]);
+            summaryData.push(['프로젝트 멤버-3', '', '', '', '', '', '', '', '', '']);
+            for (let i = 0; i < member3.length; i += 2) {
+                const a = member3[i], b = member3[i + 1];
+                summaryData.push([
+                    a.role || '', a.name || '', a.email || '', '',
+                    b ? (b.role || '') : '', b ? (b.name || '') : '', b ? (b.email || '') : '', '', '', ''
+                ]);
+            }
+        }
         const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
         wsSummary['!merges'] = [
             { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },   // 구분
@@ -4118,7 +4151,9 @@ window.deleteHistoryByDateRange = function() {
             for (let c = 0; c <= 9; c++) { [0, 1].forEach(function(r) { const cell = wsSummary[XLSX.utils.encode_cell({ r: r, c: c })]; if (cell) cell.s = NAVYS; }); }
             rowFill(2, 'F4F6F8');  // 계획 — 웹 #f4f6f8
             rowFill(3, 'FFF8E6');  // 실적 — 웹 #fff8e6
-            [6, 14, 17].forEach(function(r) { for (let c = 0; c <= 9; c++) { const cell = wsSummary[XLSX.utils.encode_cell({ r: r, c: c })]; if (cell && String(cell.v || '') !== '') cell.s = NAVYS; } });
+            const member3TitleRow = summaryData.findIndex(function(row) { return row[0] === '프로젝트 멤버-3'; });
+            const navyRows = member3TitleRow === -1 ? [6, 14, 17] : [6, 14, 17, member3TitleRow];
+            navyRows.forEach(function(r) { for (let c = 0; c <= 9; c++) { const cell = wsSummary[XLSX.utils.encode_cell({ r: r, c: c })]; if (cell && String(cell.v || '') !== '') cell.s = NAVYS; } });
         })();
         wsSummary['!cols'] = [{wch:16},{wch:22},{wch:24},{wch:6},{wch:16},{wch:24},{wch:24},{wch:11},{wch:11},{wch:11}];
         XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
@@ -4708,9 +4743,9 @@ window.handleAuthClick = function() {
     let dateRangeLabel = formatTsToYMD(tsStart) + " ~ " + formatTsToYMD(tsEnd);
 
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
-                <div style="position:relative; height:10px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
+                <div style="position:relative; height:15px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
                     ${gridLines}${todayLine}
-                    <div style="position:absolute; top:2px; bottom:2px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:${barOpacity}; box-shadow:0 1px 3px rgba(0,0,0,0.2);" title="${dateRangeLabel}"></div>
+                    <div style="position:absolute; top:3px; bottom:3px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:${barOpacity}; box-shadow:0 1px 3px rgba(0,0,0,0.2);" title="${dateRangeLabel}"></div>
                 </div>
             </div>`;
     };
