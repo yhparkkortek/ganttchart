@@ -7,7 +7,7 @@
 
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
@@ -4265,7 +4265,48 @@ window.deleteHistoryByDateRange = function() {
             XLSX.utils.book_append_sheet(wb, wsAddr, "Address");
         }
 
+        // 💡 전 시트 공통 스타일 적용 (웹페이지 수준 디자인)
+        applyExcelStyles(wb);
         const fileName = `${window.exportFilenameStr || "GanttChart"}.xlsx`; XLSX.writeFile(wb, fileName);
+    }
+
+    // ===== 엑셀 출력 공통 스타일러 =====
+    function applyExcelStyles(wb) {
+        const NAVY = "1F3A5F", BORDER = { style: "thin", color: { rgb: "B7C1CE" } };
+        const allBorder = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
+        wb.SheetNames.forEach(name => {
+            const ws = wb.Sheets[name];
+            if (!ws['!ref']) return;
+            const range = XLSX.utils.decode_range(ws['!ref']);
+            const colW = [];
+            for (let r = range.s.r; r <= range.e.r; r++) {
+                for (let c = range.s.c; c <= range.e.c; c++) {
+                    const addr = XLSX.utils.encode_cell({ r, c });
+                    const cell = ws[addr];
+                    if (!cell) continue;
+                    // 열 너비 계산 (한글 2배 가중치, 최대 45)
+                    const txt = String(cell.v ?? "");
+                    const len = txt.split('\n').reduce((m, line) => {
+                        let w = 0; for (const ch of line) w += /[가-힣ㄱ-ㅎ]/.test(ch) ? 2 : 1;
+                        return Math.max(m, w);
+                    }, 0);
+                    colW[c] = Math.min(45, Math.max(colW[c] || 6, len + 2));
+                    // 스타일
+                    const isHeader = (r === range.s.r);
+                    cell.s = {
+                        font: { name: "맑은 고딕", sz: 10, bold: isHeader, color: { rgb: isHeader ? "FFFFFF" : "1F2937" } },
+                        fill: isHeader ? { patternType: "solid", fgColor: { rgb: NAVY } }
+                              : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F4F6F9" } } : undefined),
+                        border: allBorder,
+                        alignment: { vertical: "center", horizontal: isHeader ? "center" : undefined,
+                                     wrapText: txt.includes('\n') }
+                    };
+                }
+            }
+            ws['!cols'] = colW.map(w => ({ wch: w }));
+            ws['!rows'] = ws['!rows'] || [];
+            ws['!rows'][0] = { hpt: 22 };  // 헤더 행 높이
+        });
     }
 
     function formatChartLabel(ts) {
