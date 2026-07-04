@@ -4127,12 +4127,7 @@ window.deleteHistoryByDateRange = function() {
         const briefSpecData = [['NO', 'TYPE', '', 'Model A', 'Model B', 'Model C', 'Note']];
         (tabData.briefSpec || []).forEach((r, i) => { briefSpecData.push([i + 1, r.type || '', r.sub || '', r.modelA || r.desc || '', r.modelB || '', r.modelC || '', r.note || '']); });
         const wsBrief = XLSX.utils.aoa_to_sheet(briefSpecData);
-        for (let key in wsBrief) {
-            if (key[0] === '!') continue;
-            if (!wsBrief[key].s) wsBrief[key].s = {};
-            wsBrief[key].s.font = { sz: 10, name: "맑은 고딕" };
-            wsBrief[key].s.alignment = { vertical: "center", wrapText: true };
-        }
+        // 💡 스타일은 공통 applyExcelStyles가 일괄 처리 (헤더 흰색/남색, 지브라 등)
         wsBrief['!cols'] = [{wch: 6}, {wch: 22}, {wch: 14}, {wch: 35}, {wch: 30}];
         XLSX.utils.book_append_sheet(wb, wsBrief, "Brief SPEC");
 
@@ -4264,11 +4259,42 @@ window.deleteHistoryByDateRange = function() {
             ratioRow.push('');
             compData.push(ratioRow);
             const wsComp = XLSX.utils.aoa_to_sheet(compData);
-            for (let key in wsComp) {
-                if (key[0] === '!') continue;
-                if (!wsComp[key].s) wsComp[key].s = {};
-                wsComp[key].s.font = { sz: 10, name: "맑은 고딕" };
-                wsComp[key].s.alignment = { vertical: "center" };
+            // 💡 헤더 병합 (NO/TYPE/ITEM/GROUP/Note는 2행 세로병합, 리비전별 MP는 Cost($)/NRE 2열 가로병합)
+            wsComp['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } },
+            ];
+            revs.forEach(function(rev, i) { const c0 = 4 + i * 2; wsComp['!merges'].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } }); });
+            wsComp['!merges'].push({ s: { r: 0, c: 4 + revs.length * 2 }, e: { r: 1, c: 4 + revs.length * 2 } }); // Note
+            const compSummaryRows = [
+                { r: compData.length - 3, color: 'E3F2FD' }, // TOTAL
+                { r: compData.length - 2, color: 'E8F5E9' }, // 영업판가
+                { r: compData.length - 1, color: 'FFE0B2' }, // 재료비율(%)
+            ];
+            compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 3 } }); });
+            // 헤더 2행 남색 처리
+            for (let r = 0; r <= 1; r++) {
+                for (let c = 0; c < header1.length; c++) {
+                    const h = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
+                    if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                }
+            }
+            // 데이터/요약행 스타일 + $ 서식
+            const compRange = XLSX.utils.decode_range(wsComp['!ref']);
+            for (let r = 2; r <= compRange.e.r; r++) {
+                const sum = compSummaryRows.find(function(s) { return s.r === r; });
+                for (let c = 0; c <= compRange.e.c; c++) {
+                    const cell = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
+                    if (!cell) continue;
+                    if (c >= 4 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+                    if (sum) {
+                        cell.s = {
+                            font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
+                            fill: { patternType: "solid", fgColor: { rgb: sum.color } },
+                            alignment: { vertical: "center", horizontal: c === 3 ? "right" : "center" }
+                        };
+                    }
+                }
             }
             wsComp['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 20 }, { wch: 16 }];
             XLSX.utils.book_append_sheet(wb, wsComp, "MC Comparison");
@@ -4280,12 +4306,7 @@ window.deleteHistoryByDateRange = function() {
             let logData = [['변경 일시', '수정자', 'No (행)', '변경 항목', '변경 전 (Old)', '변경 후 (New)']];
             window.changeLogs.forEach(log => { logData.push([log.time, log.userName || "알 수 없음", log.rowName, log.colName, log.oldVal, log.newVal]); });
             const wsLog = XLSX.utils.aoa_to_sheet(logData);
-            for (let key in wsLog) {
-                if (key[0] === '!') continue;
-                if (!wsLog[key].s) wsLog[key].s = {};
-                wsLog[key].s.font = { sz: 10, name: "맑은 고딕" };
-                wsLog[key].s.alignment = { vertical: "center", wrapText: true };
-            }
+            // 💡 스타일은 공통 applyExcelStyles가 일괄 처리
             wsLog['!cols'] = [{wch: 22}, {wch: 15}, {wch: 12}, {wch: 15}, {wch: 35}, {wch: 35}]; 
             XLSX.utils.book_append_sheet(wb, wsLog, "Gantt 수정이력");
         }
@@ -4348,12 +4369,7 @@ window.deleteHistoryByDateRange = function() {
             const addrData = [['이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']];
             addrRows.forEach(function(p) { addrData.push([p.name, p.dept, p.title, p.email, p.mobile, p.phone]); });
             const wsAddr = XLSX.utils.aoa_to_sheet(addrData);
-            for (let key in wsAddr) {
-                if (key[0] === '!') continue;
-                if (!wsAddr[key].s) wsAddr[key].s = {};
-                wsAddr[key].s.font = { sz: 10, name: "맑은 고딕" };
-                wsAddr[key].s.alignment = { vertical: "center" };
-            }
+            // 💡 스타일은 공통 applyExcelStyles가 일괄 처리
             wsAddr['!cols'] = [{wch: 14}, {wch: 14}, {wch: 16}, {wch: 26}, {wch: 16}, {wch: 16}];
             XLSX.utils.book_append_sheet(wb, wsAddr, "Address");
         }
@@ -11377,6 +11393,23 @@ function _makeFloatingPopupDraggable(popup) {
         clearTimeout(holdTimer);
         clearInterval(repeatTimer);
         holdTimer = null; repeatTimer = null; activeId = null;
+        // 💡 연속 누르기 중 M.C Table 이동/추가가 있었다면, 손을 뗀 시점에 SUBTOTAL 재계산을 몰아서 1회 실행
+        if (window._bmMcDirty) {
+            window._bmMcDirty = false;
+            if (window.mcRefreshTable) {
+                window.mcRefreshTable();
+                const anchor = window._bmAnchor && window._bmAnchor.mc;
+                if (anchor && window.bmDataRows) {
+                    const newRows = window.bmDataRows('mc');
+                    const stillThere = newRows.indexOf(anchor) !== -1 ? anchor : newRows[0];
+                    if (stillThere && window.bmPaintSelection && window.bmOpenPopup) {
+                        window._bmSelected.mc.clear(); window._bmSelected.mc.add(stillThere);
+                        window.bmPaintSelection('mc');
+                        window.bmOpenPopup('mc', stillThere);
+                    }
+                }
+            }
+        }
     }
 
     document.addEventListener('mousedown', function(e) {
@@ -11891,30 +11924,14 @@ function bmMoveSelected(key, dir) {
         selArr.forEach(function(tr) { anchor.after(tr); anchor = tr; });
     }
 
-    // 💡 M.C Table은 TYPE 표시/SUBTOTAL 경계가 행 순서에 의존하므로, 이동 후 표 전체를 다시 그려야 함
-    //    (단, Brief SPEC/Address와 동일하게 팝업은 닫지 않고 재오픈해서 연속 클릭이 가능하도록 통일)
-    if (key === 'mc' && window.mcRefreshTable) {
-        const movedIdArr = selArr.map(function(tr) { return tr; });
-        window.mcRefreshTable();
-        const newRows = bmDataRows('mc');
-        // mcRefreshTable이 표를 통째로 다시 그리므로, 이동했던 행들의 새 위치를 순서 기준으로 재탐색
-        sel.clear();
-        const firstNewIdx = Math.max(0, newRows.length - movedIdArr.length); // 대략적 위치 추정 fallback
-        const anchorTr = newRows[dir === -1 ? Math.max(0, firstNewIdx - movedIdArr.length) : firstNewIdx] || newRows[0];
-        if (anchorTr) {
-            sel.add(anchorTr);
-            window._bmAnchor[key] = anchorTr;
-            bmPaintSelection(key);
-            bmOpenPopup(key, anchorTr);
-        }
-    } else {
-        window.bmSetupAllRows(key);
-        bmPaintSelection(key);
-        // 💡 팝업을 다시 열지 않음(재-clone/재배치 없음) — rap-*(GanttChart)와 동일한 방식.
-        //    연속 누르기 중 버튼 DOM/위치가 매번 바뀌는 불안정성을 제거.
-        const popup = document.getElementById('bm-row-popup');
-        if (popup) popup.dataset.key = key;
-    }
+    // 💡 M.C Table은 TYPE/SUBTOTAL 재계산을 위해 표 전체를 다시 그려야 하지만,
+    //    누르고 있는 동안 매번 다시 그리면 위치 추정이 틀어져 연속 누르기가 끊길 수 있음.
+    //    → 누르는 동안은 DOM만 재배열(다른 탭과 동일), 재계산은 손을 뗄 때 한 번만(stopRepeat에서 처리)
+    window.bmSetupAllRows(key);
+    bmPaintSelection(key);
+    const popup = document.getElementById('bm-row-popup');
+    if (popup) popup.dataset.key = key;
+    if (key === 'mc') window._bmMcDirty = true;
 }
 
 function bmAddAfter(key, refTr) {
@@ -11934,20 +11951,9 @@ function bmAddAfter(key, refTr) {
     window.bmSetupAllRows(key);
     bmPaintSelection(key);
 
-    // 💡 M.C Table은 표 전체를 다시 그려야 해서 팝업 재오픈이 불가피하지만,
-    //    Brief SPEC/Address는 행 DOM이 그대로 남아있으므로 rap-*(GanttChart)와 동일하게
-    //    팝업을 다시 열지 않고 유지 (연속 누르기 중 버튼 재생성 문제 방지)
-    if (key === 'mc' && window.mcRefreshTable) {
-        window.mcRefreshTable();
-        const newRows = bmDataRows('mc');
-        const newTr = newRows[basisIdx + 1];
-        if (newTr) {
-            sel.clear(); sel.add(newTr);
-            window._bmAnchor[key] = newTr;
-            bmPaintSelection(key);
-            bmClosePopup();
-            bmOpenPopup(key, newTr);
-        }
+    // 💡 M.C Table도 누르는 동안은 재계산 없이 DOM만 유지, 재계산은 손을 뗄 때 한 번만(stopRepeat에서 처리)
+    if (key === 'mc') {
+        window._bmMcDirty = true;
     } else {
         const popup = document.getElementById('bm-row-popup');
         if (popup) popup.dataset.key = key;
