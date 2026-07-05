@@ -130,6 +130,10 @@
     .btn { padding: 1px 4px; margin: 1px; cursor: pointer; border: 1px solid #ccc; background-color: #fff; color: #333; border-radius: 12px; font-size: 11px; transition: 0.2s; }
     .btn:hover { background-color: #e2e6ea; }
     .btn.active { background-color: #2c5f8a; color: white; border-color: #2c5f8a; font-weight: bold; box-shadow: 0 0 5px rgba(44,95,138,0.4); }
+    .filter-group .btn[data-value="완료"] { color: rgba(0,0,0,0.4); }
+    .filter-group .btn[data-value="지연"] { color: #e03131; }
+    .filter-group .btn[data-value="대기"] { color: #f08c00; }
+    .filter-group .btn.active[data-value] { color: #fff !important; }
     .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
     .btn.dimmed:hover { opacity: 0.8; background-color: #e2e6ea; color: #333; border: 1px solid #ccc; }
     .btn.active.dimmed { opacity: 1; border-style: solid; }
@@ -3624,10 +3628,10 @@ window.deleteHistoryByDateRange = function() {
             if (colStr.includes("상태")) return; // 💡 "상태"는 소요일~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
             if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px; position: relative;"; thClass = "chart-th"; }
             else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
-            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
-            else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
-            else if (colStr.includes("상태")) { widthClass = "width: var(--w-status); min-width: 30px;"; }
-            else { widthClass = "width: var(--w-default); min-width: 30px;"; }
+            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px; max-width: var(--w-no);"; }
+            else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px; max-width: var(--w-date);"; }
+            else if (colStr.includes("상태")) { widthClass = "width: var(--w-status); min-width: 30px; max-width: var(--w-status);"; }
+            else { widthClass = "width: var(--w-default); min-width: 30px; max-width: var(--w-default);"; }
 
             const lang = LANG[window._currentLang || 'ko'];
             const cellKey = (cell||'').toString().replace(/\s+/g,'').toLowerCase();
@@ -3643,9 +3647,9 @@ window.deleteHistoryByDateRange = function() {
                 const periodLabel = lang.header['소요일'] || '소요일';
                 const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
-                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
-                headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px;">${statusLabel}</th>`;
-                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">${wbsLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
+                headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);"><span onclick="window.translateAllWbs(); event.stopPropagation();" title="한글 업무명 전체 번역 / 다시 누르면 원복" style="cursor:pointer; font-size:11px; margin-right:4px;">🌐</span>${wbsLabel}</th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
@@ -3747,9 +3751,11 @@ window.deleteHistoryByDateRange = function() {
                                 ondblclick=\"window.setStatusDone(this, ${i}, ${colIdx.status})\"
                                 style=\"border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit; white-space:nowrap;
                                        -webkit-appearance:none; -moz-appearance:none; appearance:none;\">
-                                ${lang.status.map(s =>
-                                    `<option value=\"${s}\" ${statusVal===s?'selected':''}>${s}</option>`
-                                ).join('')}
+                                ${lang.status.map((s, idx) => {
+                                    const optColor = ['', 'rgba(0,0,0,0.45)', '#f08c00', '#e03131'][idx] || '';
+                                    const colorAttr = optColor ? ` style=\"color:${optColor};\"` : '';
+                                    return `<option value=\"${s}\" ${statusVal===s?'selected':''}${colorAttr}>${s}</option>`;
+                                }).join('')}
                             </select>`;
                             bodyHtml += `<td class="status-td" data-raw="${encodeURIComponent(statusVal)}" style="text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};">${statusSelectHtml}</td>`;
                         }
