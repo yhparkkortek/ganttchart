@@ -11334,7 +11334,7 @@ window.populateTabData = function() {
                 let row1 = '<tr>'
                     + '<th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>'
                     + '<th rowspan="2" style="width:90px;">TYPE</th>'
-                    + '<th rowspan="2" style="width:160px;">ITEM<th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 'etc.'를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th></th>'
+                    + '<th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 &#39;etc.&#39;를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th>'
                     + '<th rowspan="2" style="width:140px;">GROUP</th>';
                 if (!hidePnSpec) row1 += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
                 if (!hidePairs.protoA) row1 += '<th colspan="2">PROTO A</th>';
@@ -12584,7 +12584,7 @@ window.mcRenderComparisonTable = function() {
     let thead = '<thead><tr>'
         + '<th rowspan="2" style="width:40px;">NO</th>'
         + '<th rowspan="2" style="width:90px;">TYPE</th>'
-        + '<th rowspan="2" style="width:160px;<th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 'etc.'를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th>">ITEM</th>'
+        + '<th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 &#39;etc.&#39;를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th>'
         + '<th rowspan="2" style="width:140px;">GROUP</th>';
     if (expanded) thead += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
     visibleRevs.forEach(function(rev) { thead += '<th colspan="2" class="mc-comp-divider">MP(' + rev + ')</th>'; });
@@ -12672,7 +12672,7 @@ window.mcRenderComparisonTable = function() {
             compSubtotal[rev].nre += p.nre;
         });
 
-        const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+        const itemHasNre = /\betc\b|\bNRE\b/i.test(String(r.item || ''));  // 💡 "etc."를 기준으로 사용 (구버전 "NRE" 표기도 계속 인식)
         const nextRow = rows[idx + 1];
         const nextType = nextRow ? String(nextRow.type || '').trim() : '';
         const isLastRow = !nextRow;
