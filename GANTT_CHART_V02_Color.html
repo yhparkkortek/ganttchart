@@ -646,9 +646,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="color:#2c5f8a; border-color:#2c5f8a;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
     </div>
     <div id="file-status" style="text-decoration:underline;">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
-    <div id="new-project-hint" style="font-size:11.5px; color:#888; margin-top:2px;">
-        📌 신규 프로젝트를 시작하시나요? <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="color:#2c5f8a; font-weight:bold; text-decoration:underline;">📥 참조 엑셀 다운로드</a> 후 작성하여 위 영역에 드래그하세요.
-    </div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
 </div>
 
@@ -1397,6 +1394,19 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
     </div>
 
+<!-- 📌 새 프로젝트 시작 안내 팝업 -->
+<div id="new-project-modal-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); align-items:center; justify-content:center; z-index:99998;">
+    <div style="background:#fff; border-radius:12px; padding:32px 36px; max-width:420px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+        <div style="font-size:36px; margin-bottom:12px;">📌</div>
+        <div style="font-size:14.5px; color:#333; line-height:1.7; margin-bottom:20px;">
+            새 프로젝트를 시작합니다.<br>참조 엑셀을 다운로드해서 작성한 뒤<br>화면에 드래그하세요.
+        </div>
+        <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; padding:10px 22px; background:#2c5f8a; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px;">📥 참조 엑셀 다운로드</a>
+        <br>
+        <button class="action-btn" style="margin-top:16px;" onclick="document.getElementById('new-project-modal-overlay').style.display='none';">확인</button>
+    </div>
+</div>
+
 <div id="drive-file-modal-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
         <div class="history-modal" id="drive-file-modal" onclick="event.stopPropagation()"
              style="pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
@@ -1715,20 +1725,31 @@ ${mailText}`;
         } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
-    // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화
+    // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭)
     window.startNewProject = function() {
-        if (globalData && globalData.length > 1) {
-            if (!confirm('현재 화면의 내용을 지우고 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)')) return;
-        }
+        if (!confirm('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)')) return;
+
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = [];
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
         window.changeLogs = []; window.lastSavedLogCount = 0;
         window.currentDriveFileId = null;
         window.projectMeta = {}; window.tabData = {};
+
         if (typeof renderTable === 'function') renderTable(globalData);
+        if (window.clearAllTabFields) window.clearAllTabFields(); // 💡 Summary/Brief SPEC/M.C Table/Address까지 함께 비움
+
         document.getElementById('file-status').textContent = "📌 새 프로젝트를 시작합니다. 참조 엑셀을 다운로드해서 작성한 뒤 이 영역에 드래그하세요.";
-        const hint = document.getElementById('new-project-hint');
-        if (hint) hint.style.display = 'block';
+        document.getElementById('new-project-modal-overlay').style.display = 'flex';
+    };
+
+    // 💡 Summary/Brief SPEC/M.C Table/Address 탭 필드를 전부 비움 (populateTabData는 "채우기"만 하고
+    //    비어있는 값은 건너뛰기 때문에, 새 프로젝트 시작 시 기존 값이 그대로 남는 문제를 방지)
+    window.clearAllTabFields = function() {
+        document.querySelectorAll('#tab-summary input, #tab-summary textarea').forEach(function(el) { el.value = ''; });
+        ['briefspec-body', 'address-table-body', 'mctable-body'].forEach(function(id) {
+            const el = document.getElementById(id); if (el) el.innerHTML = '';
+        });
+        if (window.renderMember3Rows) window.renderMember3Rows([]);
     };
 
     window.saveToGoogleDrive = async function() {
@@ -3812,8 +3833,6 @@ window.deleteHistoryByDateRange = function() {
 
     function renderTable(data) {
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
-        const npHint = document.getElementById('new-project-hint');
-        if (npHint) npHint.style.display = (data && data.length > 1) ? 'none' : 'block';
         if(!data || data.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; return; }
         
         // ✅ 추가: 레벨별 bold 한 곳에서 관리
