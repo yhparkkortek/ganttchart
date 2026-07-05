@@ -4729,6 +4729,18 @@ window.handleAuthClick = function() {
         if (window.updateStickyPositions) window.updateStickyPositions();
 
         if (window.updateChartHeaderAxis) window.updateChartHeaderAxis();
+
+        // 💡 표 너비 = 보이는 열 너비 합계로 정확히 고정 (table-layout:fixed가 남는 공간을
+        //    다른 열들에 나눠 재분배하면서 발생하는 "관계없는 열까지 흔들리는" 현상 방지)
+        requestAnimationFrame(function() {
+            const headRow = table.querySelector('thead tr');
+            if (!headRow) return;
+            let total = 0;
+            headRow.querySelectorAll('th').forEach(function(th) {
+                if (th.offsetWidth > 0) total += th.offsetWidth;
+            });
+            if (total > 0) table.style.width = total + 'px';
+        });
     };
 
     // 표 머릿글에 월/년(또는 기본 4분할) 눈금 라벨을 표시 — 확장/기본 모드 공통
@@ -13025,15 +13037,13 @@ function calBuildEvents() {
             return v ? v.toString().trim().replace(/\r/g, '').replace(/(\n[ \t]*){2,}/g, '\n').replace(/ {2,}/g, ' ') : '';
         }
         const contentText = (colIdx.content !== -1) ? cleanText(row[colIdx.content]) : '';
-        const answerText  = (colIdx.answer  !== -1) ? cleanText(row[colIdx.answer])  : '';
 
         events.push({
             idx: i, name: name, start: s, end: e,
             assignee: window.getSummaryAssignee(),
             status: (typeof colIdx !== 'undefined' && colIdx.status !== -1) ? (row[colIdx.status] || '') : '',
             alarm: !!row._알림,
-            content: contentText,
-            answer: answerText
+            content: contentText
         });
     }
     return events;
@@ -13083,14 +13093,6 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
                 .replace(/\n/g, ' · \n') 
             : '';
             
-        const answerText  = (colIdx.answer  !== -1 && row[colIdx.answer])  
-            ? row[colIdx.answer].toString().trim()
-                .replace(/\r/g, '')
-                .replace(/(\n[ \t]*){2,}/g, '\n')
-                .replace(/ {2,}/g, ' ')
-                .replace(/\n/g, ' · \n')  
-            : '';
-
         title.textContent = '📋 ' + ev.name;
         body.innerHTML =
             '<div style="margin-bottom:10px;">'
@@ -13102,8 +13104,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
             + ' &nbsp;·&nbsp; ' + escapeHtml(statusLabel)
             + '</div>'
             + (contentText ? '<div style="font-size:12px; white-space:pre-line; line-height:1.5; margin-bottom:6px;">' + escapeHtml(contentText) + '</div>' : '')
-            + (answerText  ? '<div style="font-size:11.5px; color:#2c5f8a; white-space:pre-line; line-height:1.5; border-top:1px solid #eee; padding-top:8px;">' + escapeHtml(answerText) + '</div>' : '')
-            + (!contentText && !answerText ? '<div style="color:#aaa; padding:24px; text-align:center; font-size:12px;">상세 내용 없음</div>' : '');
+            + (!contentText ? '<div style="color:#aaa; padding:24px; text-align:center; font-size:12px;">상세 내용 없음</div>' : '');
     } else {
         // 날짜 숫자 클릭 → 업무 목록을 버튼으로 표시
         const events = allEvents.filter(function(ev) {
