@@ -1610,6 +1610,7 @@ ${mailText}`;
             if (authBtn) authBtn.disabled = true;
             document.getElementById('drive_save_btn').disabled = false;
             document.getElementById('drive_load_btn').disabled = false;
+            const bkBtn1 = document.getElementById('backup_restore_btn'); if (bkBtn1) bkBtn1.disabled = false;
             
             // 연동 성공 직후 프로젝트 리스트 팝업 자동 동기화
             setTimeout(() => {
@@ -4861,6 +4862,7 @@ window.handleAuthClick = function() {
                 authBtn.innerText = `🟢 ${window.currentUserName}`;
                 document.getElementById('drive_save_btn').disabled = false;
                 document.getElementById('drive_load_btn').disabled = false;
+                const bkBtn2 = document.getElementById('backup_restore_btn'); if (bkBtn2) bkBtn2.disabled = false;
                 window.isDriveConnected = true; // ✅ 연동 완료 플래그
 
                 // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
