@@ -1081,9 +1081,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
              </div>
         </div>
-        </di</div>
-             </div>
-        </div>
         <div id="sum-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
             <div id="sum-history-header" onclick="window.sumToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                 <span id="sum-history-toggle-icon">▶</span>
@@ -1100,10 +1097,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
         </div>
         </div>
-    </div>
-</div>
-
-<div id="tab-briefspec" class="tab-panel">v>
     </div>
 </div>
 
@@ -1243,7 +1236,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <tr>
                     <th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
                     <th rowspan="2" style="width:100px;">TYPE</th>
-                    <th rowspan="2" style="width:160px;">ITEM</th>
+                    <th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 'etc.'를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th>
                     <th rowspan="2" style="width:140px;">GROUP</th>
                     <th rowspan="2" style="width:120px;">P/N</th>
                     <th rowspan="2" style="min-width:280px;">Specification</th>
@@ -10701,6 +10694,143 @@ window.deleteMember3Row = function(idx) {
     window.renderMember3Rows(current);
 };
 
+// ── Summary 탭 변경이력 (토글/기록/렌더링/삭제) — Brief SPEC/M.C Table과 동일 패턴 ──
+window.sumToggleHistoryBox = function() {
+    const body = document.getElementById('sum-history-body');
+    const icon = document.getElementById('sum-history-toggle-icon');
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : 'block';
+    if (icon) icon.textContent = isOpen ? '▶' : '▼';
+    if (!isOpen && window.sumRenderHistoryTable) window.sumRenderHistoryTable();
+};
+
+window.sumLogChange = function(rowLabel, field, oldVal, newVal) {
+    if (String(oldVal || '') === String(newVal || '')) return;
+    window.tabData = window.tabData || {};
+    window.tabData.sumChangeLog = window.tabData.sumChangeLog || [];
+    window.tabData.sumChangeLog.push({
+        time: new Date().toLocaleString('ko-KR'),
+        userName: window.currentUserName || '비로그인',
+        row: rowLabel, field: field, oldVal: oldVal, newVal: newVal
+    });
+};
+
+window.sumRenderHistoryTable = function() {
+    const table = document.getElementById('sum-history-table');
+    if (!table) return;
+    const logs = (window.tabData && window.tabData.sumChangeLog) || [];
+    if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
+    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th></tr></thead><tbody>';
+    logs.slice().reverse().forEach(function(log) {
+        html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold;">' + (log.row || '') + '</td>'
+            + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (log.field || '') + '</span></td>'
+            + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
+            + '<td style="padding:4px 8px; color:#2f9e44;">' + (log.newVal || '-') + '</td></tr>';
+    });
+    html += '</tbody>';
+    table.innerHTML = html;
+};
+
+window.deleteSumHistoryByDateRange = function() {
+    const pwEl = document.getElementById('sum-history-del-pw');
+    const pw = pwEl ? pwEl.value : '';
+    if (pw !== 'kortek') { if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.'); return; }
+    const fromStr = (document.getElementById('sum-history-del-from') || {}).value;
+    const toStr = (document.getElementById('sum-history-del-to') || {}).value;
+    if (!fromStr || !toStr) { if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.'); return; }
+    const fromTs = new Date(fromStr + 'T00:00:00').getTime();
+    const toTs = new Date(toStr + 'T23:59:59').getTime();
+    if (fromTs > toTs) { if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
+    const parseKoDateTime = function(str) {
+        const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
+        if (!m) return null;
+        let h = parseInt(m[5], 10);
+        if (m[4] === '오후' && h < 12) h += 12;
+        if (m[4] === '오전' && h === 12) h = 0;
+        return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10), h, parseInt(m[6], 10), parseInt(m[7], 10)).getTime();
+    };
+    const inRange = function(log) { const ts = parseKoDateTime(log.time); return ts !== null && ts >= fromTs && ts <= toTs; };
+    const doDelete = function() {
+        let removedCount = 0;
+        if (window.tabData && window.tabData.sumChangeLog && window.tabData.sumChangeLog.length) {
+            const before = window.tabData.sumChangeLog.length;
+            window.tabData.sumChangeLog = window.tabData.sumChangeLog.filter(function(log) { return !inRange(log); });
+            removedCount = before - window.tabData.sumChangeLog.length;
+        }
+        if (pwEl) pwEl.value = '';
+        if (window.sumRenderHistoryTable) window.sumRenderHistoryTable();
+        const msg = removedCount + '건의 Summary 수정이력을 삭제했습니다.';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+    };
+    const confirmMsg = fromStr + ' ~ ' + toStr + ' 구간의 Summary 수정이력을 삭제하시겠습니까? (되돌릴 수 없습니다)';
+    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doDelete);
+    else if (confirm(confirmMsg)) doDelete();
+};
+
+// 💡 Summary 입력칸 변경 감지 (탭 전체에 이벤트 위임 — 필드별 data-field 구조가 제각각이라 유형별로 라벨을 찾아냄)
+(function() {
+    const wrap = document.getElementById('tab-summary');
+    if (!wrap) return;
+
+    const findFieldLabel = function(el) {
+        // 1) 마일스톤 표 (data-stage 보유)
+        if (el.dataset && el.dataset.stage) {
+            const rowType = el.closest('#sum-milestone-body-actual') ? '실적' : '계획';
+            return { row: el.dataset.stage, field: rowType };
+        }
+        // 2) 멤버-3 (자유 추가, data-idx + data-field 보유)
+        if (el.dataset && el.dataset.idx !== undefined && el.dataset.field) {
+            const group = el.closest('.concept-grid') || el.parentElement;
+            const roleInput = group ? group.querySelector('[data-idx="' + el.dataset.idx + '"][data-field="role"]') : null;
+            const roleName = (roleInput && roleInput.value) ? roleInput.value : ('인원 ' + (Number(el.dataset.idx) + 1));
+            const fieldLabel = { role: '역할', name: '이름', email: '이메일' }[el.dataset.field] || el.dataset.field;
+            return { row: roleName, field: fieldLabel };
+        }
+        // 3) 멤버-1/2 (고정 3열: 역할라벨 input / 이름 input / 이메일 input)
+        const memGrid = el.closest('.concept-grid-mem');
+        if (memGrid) {
+            const children = Array.prototype.filter.call(memGrid.children, function(c) { return c.tagName === 'INPUT'; });
+            const idx = children.indexOf(el);
+            if (idx !== -1) {
+                const groupStart = Math.floor(idx / 3) * 3;
+                const roleInput = children[groupStart];
+                const roleName = (roleInput && roleInput.value) ? roleInput.value : '담당자';
+                const fieldLabel = idx % 3 === 0 ? '역할명' : (idx % 3 === 1 ? '이름' : '이메일');
+                return { row: roleName, field: fieldLabel };
+            }
+        }
+        // 4) 일반 <label> 형제가 있는 입력칸
+        const prev = el.previousElementSibling;
+        if (prev && prev.tagName === 'LABEL') {
+            const section = el.closest('.concept-section');
+            const h3 = section ? section.querySelector('h3') : null;
+            return { row: h3 ? h3.textContent.trim() : '프로젝트 개요', field: prev.textContent.trim() };
+        }
+        // 5) 그 외 (예: 추진 배경 textarea) — 가장 가까운 h3를 항목명으로 사용
+        const section2 = el.closest('.concept-section');
+        const h3b = section2 ? section2.querySelector('h3') : null;
+        return { row: h3b ? h3b.textContent.trim() : 'Summary', field: el.id || '내용' };
+    };
+
+    wrap.addEventListener('focusin', function(e) {
+        const el = e.target;
+        if (!el.matches || !el.matches('input[type="text"], input[type="email"], textarea')) return;
+        el.dataset._histOld = el.value;
+    });
+    wrap.addEventListener('change', function(e) {
+        const el = e.target;
+        if (!el.matches || !el.matches('input[type="text"], input[type="email"], textarea')) return;
+        const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
+        if (String(oldVal) === String(el.value)) return;
+        const info = findFieldLabel(el);
+        window.sumLogChange(info.row, info.field, oldVal, el.value);
+        el.dataset._histOld = el.value;
+    });
+})();
+
 // =========================================================
 // 📇 Address Book — CRUD, 다중선택, 정렬
 // =========================================================
@@ -11204,7 +11334,7 @@ window.populateTabData = function() {
                 let row1 = '<tr>'
                     + '<th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>'
                     + '<th rowspan="2" style="width:90px;">TYPE</th>'
-                    + '<th rowspan="2" style="width:160px;">ITEM</th>'
+                    + '<th rowspan="2" style="width:160px;">ITEM<th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 'etc.'를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th></th>'
                     + '<th rowspan="2" style="width:140px;">GROUP</th>';
                 if (!hidePnSpec) row1 += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
                 if (!hidePairs.protoA) row1 += '<th colspan="2">PROTO A</th>';
@@ -11457,11 +11587,18 @@ function _makeFloatingPopupDraggable(popup) {
         if (window._bmMcDirty) {
             window._bmMcDirty = false;
             if (window.mcRefreshTable) {
-                window.mcRefreshTable();
+                // 💡 mcRefreshTable()이 tbody를 통째로 다시 그리면 기존 tr 참조는 무효화(detached)되어
+                //    "새 표에서 못 찾음 → 무조건 첫 행" 으로 떨어지는 게 상단 이동 버그의 원인이었음.
+                //    그래서 다시 그리기 '전'에 현재 위치(인덱스)를 먼저 기억해두고, 그 위치로 재선택한다.
                 const anchor = window._bmAnchor && window._bmAnchor.mc;
+                let anchorIdx = -1;
                 if (anchor && window.bmDataRows) {
+                    anchorIdx = window.bmDataRows('mc').indexOf(anchor);
+                }
+                window.mcRefreshTable();
+                if (anchorIdx !== -1 && window.bmDataRows) {
                     const newRows = window.bmDataRows('mc');
-                    const stillThere = newRows.indexOf(anchor) !== -1 ? anchor : newRows[0];
+                    const stillThere = newRows[Math.min(anchorIdx, newRows.length - 1)];
                     if (stillThere && window.bmPaintSelection && window.bmOpenPopup) {
                         window._bmSelected.mc.clear(); window._bmSelected.mc.add(stillThere);
                         window.bmPaintSelection('mc');
@@ -12447,7 +12584,7 @@ window.mcRenderComparisonTable = function() {
     let thead = '<thead><tr>'
         + '<th rowspan="2" style="width:40px;">NO</th>'
         + '<th rowspan="2" style="width:90px;">TYPE</th>'
-        + '<th rowspan="2" style="width:160px;">ITEM</th>'
+        + '<th rowspan="2" style="width:160px;<th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 'etc.'를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th>">ITEM</th>'
         + '<th rowspan="2" style="width:140px;">GROUP</th>';
     if (expanded) thead += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
     visibleRevs.forEach(function(rev) { thead += '<th colspan="2" class="mc-comp-divider">MP(' + rev + ')</th>'; });
@@ -12463,7 +12600,7 @@ window.mcRenderComparisonTable = function() {
         rows.forEach(function(r, idx) {
             const rt = String(r.type || '').trim();
             if (rt) curType = rt;
-            const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+            const itemHasNre = /\betc\b|\bNRE\b/i.test(String(r.item || ''));  // 💡 "etc."를 기준으로 사용 (구버전 "NRE" 표기도 계속 인식)
             const nextRow = rows[idx + 1];
             const nextType = nextRow ? String(nextRow.type || '').trim() : '';
             const isLastRow = !nextRow;
