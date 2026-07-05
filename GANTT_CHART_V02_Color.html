@@ -428,6 +428,7 @@
     margin-top: var(--topbar-h);
     transition: margin-left 0.18s ease;
     height: calc(100vh - var(--topbar-h));
+    min-height: 0;
     overflow-y: auto;
 }
 #app-main.sb-collapsed { margin-left: var(--sb-w-collapsed); }
@@ -942,6 +943,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <h2>📋 Summary</h2>
             <div class="btn-group"><button type="button" class="action-btn" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
         </div>
+        <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
         <div class="concept-section">
             <style>
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
@@ -1079,6 +1081,29 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
              </div>
         </div>
+        </di</div>
+             </div>
+        </div>
+        <div id="sum-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+            <div id="sum-history-header" onclick="window.sumToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                <span id="sum-history-toggle-icon">▶</span>
+                <span>🕒 변경 이력 확인</span>
+            </div>
+            <div id="sum-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                    <label>시작일 <input type="date" id="sum-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
+                    <label>종료일 <input type="date" id="sum-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                    <input type="password" id="sum-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                    <button class="action-btn" onclick="window.deleteSumHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
+                </div>
+                <table id="sum-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
+            </div>
+        </div>
+        </div>
+    </div>
+</div>
+
+<div id="tab-briefspec" class="tab-panel">v>
     </div>
 </div>
 
