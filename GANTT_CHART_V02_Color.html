@@ -4198,18 +4198,26 @@ window.deleteHistoryByDateRange = function() {
             const zero = function() { return { pc: 0, pn: 0, bc: 0, bn: 0, mc: 0, mn: 0 }; };
             let sub = zero(), grand = zero(), curType = '';
             const summaryRows = [];
+            const typeMerges = []; // 💡 SUBTOTAL로 끊기기 전까지는 TYPE이 항상 같으므로, 그 구간을 A열 세로 병합
+            let segStartRow = mcData.length; // 현재 TYPE 병합 구간의 시작 행(헤더 2행 포함 mcData 기준)
             valid.forEach(function(r, idx) {
                 curType = typed[idx] || curType;
                 mcData.push([String(r.type || ''), r.item || '', r.group || '', r.pn || '', r.spec || '', cellMoney(r.protoCost), cellMoney(r.protoNre), cellMoney(r.protoBCost), cellMoney(r.protoBNre), cellMoney(r.mpCost), cellMoney(r.mpNre), r.note || '']);
+                const curRowIdx = mcData.length - 1;
                 sub.pc += num(r.protoCost); sub.pn += num(r.protoNre); sub.bc += num(r.protoBCost); sub.bn += num(r.protoBNre); sub.mc += num(r.mpCost); sub.mn += num(r.mpNre);
                 grand.pc += num(r.protoCost); grand.pn += num(r.protoNre); grand.bc += num(r.protoBCost); grand.bn += num(r.protoBNre); grand.mc += num(r.mpCost); grand.mn += num(r.mpNre);
-                const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+                const itemHasEtc = /\betc\b|\bNRE\b/i.test(String(r.item || ''));
                 const nextType = idx + 1 < typed.length ? typed[idx + 1] : '';
                 const isLast = idx === valid.length - 1;
-                if (curType && (itemHasNre || isLast || (nextType && nextType !== curType))) {
+                if (curType && (itemHasEtc || isLast || (nextType && nextType !== curType))) {
+                    // 💡 이 구간(segStartRow~curRowIdx)은 전부 같은 TYPE이었으므로, 2행 이상이면 A열을 병합
+                    if (curRowIdx > segStartRow) {
+                        typeMerges.push({ s: { r: segStartRow, c: 0 }, e: { r: curRowIdx, c: 0 } });
+                    }
                     mcData.push([curType + ' SUBTOTAL', '', '', '', '', sub.pc, sub.pn, sub.bc, sub.bn, sub.mc, sub.mn, '']);
                     summaryRows.push({ r: mcData.length - 1, color: 'FFF9C4' });
                     sub = zero();
+                    segStartRow = mcData.length; // 다음 구간은 바로 다음에 push될 행부터
                 }
             });
             mcData.push(['TOTAL(M.C)', '', '', '', '', grand.pc, grand.pn, grand.bc, grand.bn, grand.mc, grand.mn, '']);
@@ -4231,6 +4239,7 @@ window.deleteHistoryByDateRange = function() {
                 { s: { r: 0, c: 9 }, e: { r: 0, c: 10 } }, { s: { r: 0, c: 11 }, e: { r: 1, c: 11 } },
             ];
             summaryRows.forEach(function(s) { wsMc['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 4 } }); }); // 💡 웹 colspan과 동일
+            typeMerges.forEach(function(m) { wsMc['!merges'].push(m); }); // 💡 TYPE 열 — 같은 그룹 구간만큼 세로 병합
             // 2행 서브헤더 남색 처리
             for (let c = 0; c <= 11; c++) {
                 const h2 = wsMc[XLSX.utils.encode_cell({ r: 1, c: c })];
@@ -4290,6 +4299,8 @@ window.deleteHistoryByDateRange = function() {
             let compCurType = '';
             const compGroupSubtotal = {}; revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
             const compSubtotalRowIdx = []; // 💡 이후 하이라이트/우측정렬 스타일을 적용할 SUBTOTAL 행 위치 기록
+            const compTypeMerges = []; // 💡 SUBTOTAL로 끊기기 전까지는 TYPE이 항상 같으므로, 그 구간을 B열 세로 병합
+            let compSegStartRow = compData.length; // 현재 TYPE 병합 구간의 시작 행(헤더 2행 포함 compData 기준)
             compRows.forEach(function(r, idx) {
                 const rt = String(r.type || '').trim();
                 if (rt) compCurType = rt;
@@ -4302,6 +4313,7 @@ window.deleteHistoryByDateRange = function() {
                 });
                 row.push(r.note || '');
                 compData.push(row);
+                const compCurRowIdx = compData.length - 1;
 
                 // 💡 본표/웹 화면 Comparison 페이지와 동일한 기준으로 SUBTOTAL 삽입: ITEM="etc."(구버전 "NRE") / TYPE 변경 / 마지막 행
                 const itemHasEtc = /\betc\b|\bNRE\b/i.test(String(r.item || ''));
@@ -4310,6 +4322,10 @@ window.deleteHistoryByDateRange = function() {
                 const isLastRow = !nextRow;
                 const typeWillChange = !!(nextRow && nextType && nextType !== compCurType);
                 if (compCurType && (itemHasEtc || typeWillChange || isLastRow)) {
+                    // 💡 이 구간(compSegStartRow~compCurRowIdx)은 전부 같은 TYPE이었으므로, 2행 이상이면 B열을 병합
+                    if (compCurRowIdx > compSegStartRow) {
+                        compTypeMerges.push({ s: { r: compSegStartRow, c: 1 }, e: { r: compCurRowIdx, c: 1 } });
+                    }
                     // 💡 라벨은 반드시 0번 칸(병합 anchor)에 넣어야 저장 시 사라지지 않음
                     const subRow = [compCurType + ' SUBTOTAL', '', '', ''];
                     revs.forEach(function(rev) { subRow.push(compGroupSubtotal[rev].cost || '', compGroupSubtotal[rev].nre || ''); });
@@ -4317,6 +4333,7 @@ window.deleteHistoryByDateRange = function() {
                     compSubtotalRowIdx.push(compData.length);
                     compData.push(subRow);
                     revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
+                    compSegStartRow = compData.length; // 다음 구간은 바로 다음에 push될 행부터
                 }
             });
 
@@ -4350,12 +4367,22 @@ window.deleteHistoryByDateRange = function() {
                 { r: compData.length - 1, color: 'FFE0B2' }, // 재료비율(%)
             ]);
             compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 3 } }); });
+            compTypeMerges.forEach(function(m) { wsComp['!merges'].push(m); }); // 💡 TYPE(B열) — 같은 그룹 구간만큼 세로 병합
             // 헤더 2행 남색 처리
             for (let r = 0; r <= 1; r++) {
                 for (let c = 0; c < header1.length; c++) {
                     const h = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
                     if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
                 }
+            }
+            // 💡 A(NO)·B(TYPE)열 데이터 행 전체에 헤더와 동일한 남색/흰색 적용 (요약행은 제외 — 아래 요약행 색상이 우선)
+            const compSummaryRowSet = new Set(compSummaryRows.map(function(s) { return s.r; }));
+            for (let r = 2; r < compData.length; r++) {
+                if (compSummaryRowSet.has(r)) continue;
+                [0, 1].forEach(function(c) {
+                    const cell = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
+                    if (cell) cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                });
             }
             // 데이터/요약행 스타일 + $ 서식
             const compRange = XLSX.utils.decode_range(wsComp['!ref']);
@@ -12140,15 +12167,31 @@ function bmMoveSelected(key, dir) {
     const selSet = new Set(selArr);
     let target = null;
 
+    // 💡 M.C Table은 TYPE 그룹 경계를 넘어가는 이동을 막음 — SUBTOTAL 구간이 흔들리지 않도록
+    //    (TYPE 칸이 빈칸인 행은 "위쪽에서 가장 가까운 값"을 그 행의 TYPE으로 간주 — 화면 렌더링과 동일 규칙)
+    let effTypes = null, blockType = null;
+    if (key === 'mc') {
+        let lastType = '';
+        effTypes = rows.map(function(tr) {
+            const inp = tr.querySelector('input[data-field="type"]');
+            const v = inp ? inp.value.trim() : '';
+            if (v) lastType = v;
+            return lastType;
+        });
+        blockType = effTypes[rows.indexOf(selArr[0])];
+    }
+
     if (dir === -1) {
         const firstIdx = rows.indexOf(selArr[0]);
         for (let i = firstIdx - 1; i >= 0; i--) { if (!selSet.has(rows[i])) { target = rows[i]; break; } }
         if (!target) return;
+        if (key === 'mc' && effTypes[rows.indexOf(target)] !== blockType) return; // 다른 TYPE 그룹 경계 — 이동 중단
         selArr.forEach(function(tr) { tbody.insertBefore(tr, target); });
     } else {
         const lastIdx = rows.indexOf(selArr[selArr.length - 1]);
         for (let j = lastIdx + 1; j < rows.length; j++) { if (!selSet.has(rows[j])) { target = rows[j]; break; } }
         if (!target) return;
+        if (key === 'mc' && effTypes[rows.indexOf(target)] !== blockType) return; // 다른 TYPE 그룹 경계 — 이동 중단
         let anchor = target;
         selArr.forEach(function(tr) { anchor.after(tr); anchor = tr; });
     }
