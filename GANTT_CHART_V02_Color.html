@@ -201,12 +201,6 @@
     .cal-close { cursor: pointer; color: #adb5bd; font-size: 14px; line-height: 1; padding: 0 5px; margin-left: 5px; }
     .cal-close:hover { color: #e03131; }
 
-    :fullscreen { background-color: #f4f6f8; overflow: auto; padding: 0; }
-    :fullscreen body { margin: 0; padding: 0; background-color: white; min-height: 100vh; }
-    :fullscreen hr { display: none !important; } 
-    :fullscreen #table-info { top: 0; border-radius: 0; margin: 0; width: 100%; border-bottom: 1px solid #ccc; }
-    :fullscreen .container { max-height: none; height: calc(100vh - 50px); border: none; border-radius: 0; overflow-x: auto; width: 100%; }
-
     .content-cell-trans { position: relative; padding-left: 22px !important; }
 
     td[ondblclick] { transition: background-color 0.2s; }
@@ -827,7 +821,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
 
         <div class="btn-group">
-            <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
@@ -2701,14 +2694,6 @@ ${mailText}`;
     }
 
     
-    // 전체화면 토글 기능은 원래대로 깔끔하게 유지합니다.
-    function toggleFullScreen() {
-        const doc = window.document; const docEl = doc.documentElement;
-        const requestFullScreen = docEl.requestFullscreen || docEl.webkitRequestFullscreen || docEl.msRequestFullscreen;
-        const cancelFullScreen = doc.exitFullscreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
-        if (!doc.fullscreenElement) requestFullScreen.call(docEl); else cancelFullScreen.call(doc);
-    }
-
     // 🔒 [수정] 표를 깨끗한 사본으로 복제해서 별도 인쇄 전용 영역에 넣고, 그 영역만 인쇄
     //    화면의 스크롤 박스/필터 숨김 등에 전혀 영향받지 않음 (필터링된 행 전체가 항상 그대로 인쇄됨)
     window.smartPrint = function() {
@@ -3513,7 +3498,6 @@ window.deleteHistoryByDateRange = function() {
                 'chart-expand-btn':    '📊 차트 확장',
                 'chart-expand-btn-on': '📊 기본 보기',
                 
-                'fs-btn':         '🖥️ 전체화면',
                 'excel-btn':      '🟩 엑셀 저장',
                 'print-btn':      '🖨️ 인쇄 (PDF)',
                 'date-sort-btn':  '📅 날짜순 정렬',
@@ -3546,7 +3530,6 @@ window.deleteHistoryByDateRange = function() {
                 'chart-expand-btn':    '📊 Chart View',
                 'chart-expand-btn-on': '📊 Basic View',
                
-                'fs-btn':         '🖥️ Fullscreen',
                 'excel-btn':      '🟩 Save Excel',
                 'print-btn':      '🖨️ Print (PDF)',
                 'date-sort-btn':  '📅 Sort by Date',
