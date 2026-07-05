@@ -643,7 +643,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()"><span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
         <button id="mail-btn" class="topbar-btn" onclick="window.showMailAnalyzer()">업무 추가</button>
         <div class="tb-sep"></div>
-        <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="color:#2c5f8a; border-color:#2c5f8a;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
+        <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="font-weight:bold;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
     </div>
     <div id="file-status" style="text-decoration:underline;">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
@@ -6876,13 +6876,13 @@ window.updateInboxBadge();
 
     /* 🖨️ [공용] 각 탭(Address/Summary/Brief SPEC/M.C Table/Calendar/Weekly) 인쇄 사본 */
     #tab-print-area { display: none; }
-    body.tab-printing-mode #app-topbar,
-    body.tab-printing-mode #app-sidebar,
-    body.tab-printing-mode .concept-header-box,
-    body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area) {
-        display: none !important;
-    }
     @media print {
+        body.tab-printing-mode #app-topbar,
+        body.tab-printing-mode #app-sidebar,
+        body.tab-printing-mode .concept-header-box,
+        body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area) {
+            display: none !important;
+        }
         body.tab-printing-mode #tab-print-area {
             display: block !important;
             position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0;
