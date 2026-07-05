@@ -1638,6 +1638,70 @@ ${mailText}`;
         } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
+    // 💡 백업 폴더(Drive) 찾기/생성 — SHARED_FOLDER_ID 안에 "Backups" 폴더가 없으면 새로 만듦
+    window.getOrCreateBackupFolder = async function(token) {
+        if (window._backupFolderId) return window._backupFolderId;
+        const q = `mimeType='application/vnd.google-apps.folder' and name='Backups' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const listData = await listRes.json();
+        if (listData.files && listData.files.length > 0) {
+            window._backupFolderId = listData.files[0].id;
+            return window._backupFolderId;
+        }
+        const createRes = await fetch(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: 'Backups', mimeType: 'application/vnd.google-apps.folder', parents: [SHARED_FOLDER_ID] })
+        });
+        const created = await createRes.json();
+        window._backupFolderId = created.id;
+        return window._backupFolderId;
+    };
+
+    // 💡 저장 시마다 드라이브 Backups 폴더에 타임스탬프 백업 파일 생성 + 7일 지난 백업 자동 삭제
+    window.backupToDrive = async function(saveData, baseName) {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return;
+            const folderId = await window.getOrCreateBackupFolder(token);
+
+            const now = new Date();
+            const ts = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0')
+                + '_' + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
+            const backupName = '백업_' + (baseName || 'GanttChart').replace(/\.json$/i, '') + '_' + ts + '.json';
+
+            const boundary = 'backup_boundary';
+            const metadata = { name: backupName, mimeType: 'application/json', parents: [folderId] };
+            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
+                + "\r\n--" + boundary + "--";
+
+            await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                body: body
+            });
+
+            // 💡 7일(604800000ms) 지난 백업은 자동 정리
+            const listQ = `'${folderId}' in parents and trashed=false`;
+            const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(listQ)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,createdTime)`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const listData = await listRes.json();
+            const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const oldFiles = (listData.files || []).filter(function(f) { return new Date(f.createdTime).getTime() < cutoff; });
+            for (const f of oldFiles) {
+                await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?supportsAllDrives=true`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            }
+        } catch (err) { console.error('Drive 백업 실패:', err); }
+    };
+
     window.saveToGoogleDrive = async function() {
         try {
             const hasGanttData = globalData && globalData.length > 1;
@@ -1709,6 +1773,7 @@ ${mailText}`;
             if (response.ok && file && file.id) {
                 window.currentDriveFileId = file.id; 
                 window.lastSavedLogCount = window.changeLogs.length; 
+                window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
                 alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
                 document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
             } else {
