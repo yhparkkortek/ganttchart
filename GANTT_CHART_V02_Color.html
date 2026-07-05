@@ -638,7 +638,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="auth_button" class="topbar-btn" onclick="handleAuthClick()" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 드라이브 연동하기</button>
         <button id="drive_load_btn" class="topbar-btn" onclick="loadFromGoogleDrive()" disabled>📂 열기</button>
         <button id="drive_save_btn" class="topbar-btn" onclick="saveToGoogleDrive()" disabled>💾 저장</button>
-        <button id="backup_restore_btn" class="topbar-btn" onclick="window.loadBackupList()" disabled title="드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)">🔄 백업 복원</button>
+        <button id="backup_restore_btn" class="topbar-btn" onclick="window.loadBackupList()" disabled title="드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)">🗄 백업 복원</button>
         <div class="tb-sep"></div>
         <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()"><span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
         <button id="mail-btn" class="topbar-btn" onclick="window.showMailAnalyzer()">업무 추가</button>
@@ -681,7 +681,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           onclick="window.sendAllPendingAlarms()"
           style="border-color:#e67e22; color:#e67e22;"
           title="과거 미발송분 포함 전체 발송">📧 일괄 발송</button>
-        <button class="action-btn" onclick="window.printTabSection('tab-alarm', {orientation:'portrait', paginate:50})" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
       </div>
     </div>
 
@@ -875,7 +874,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
                 <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
             </div>
-            <button class="action-btn" onclick="window.printTabSection('tab-address', {orientation:'portrait', paginate:50})" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" onclick="window.printTabSection('tab-address')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <style>
@@ -944,8 +943,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📋 Summary</h2>
             <div class="btn-group"><button type="button" class="action-btn" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
-            <button class="action-btn" onclick="window.printTabSection('tab-summary', {orientation:'portrait', fit:true, minScale:0.7})" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
-        </div>
             <button class="action-btn" onclick="window.printTabSection('tab-summary')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
@@ -1112,9 +1109,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" style="margin:0;">🔽 펼치기</button>
             <div class="btn-group"></div>
-            <button class="action-btn" onclick="window.printTabSection('tab-briefspec', {orientation:'landscape', fit:true, minScale:0.7})" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
-        </div>
-            <div class="btn-group"></div>
             <button class="action-btn" onclick="window.printTabSection('tab-briefspec')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
@@ -1179,7 +1173,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
             <div class="btn-group"></div>
-            <button class="action-btn" onclick="window.printTabSection('tab-mctable', {orientation:'landscape', fit:true, minScale:0.7})" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" onclick="window.printTabSection('tab-mctable')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <div id="mc-normal-section">
@@ -1307,7 +1301,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button class="action-btn" onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다">📤 ics 파일로 내보내기</button>
             <button class="action-btn" onclick="window.calSyncToGist()" title="최초 1회 URL 등록 후 자동 갱신 (몇 시간 지연 가능)">🔗 Google 자동 동기화</button>
             <button class="action-btn" onclick="window.openCalSyncHelp()" title="자동 동기화 설정 방법 보기">❓ 사용법</button>
-            <button class="action-btn" onclick="window.printCalendar3Months()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (이전/이번/다음달)</button>
+            <button class="action-btn" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
@@ -1333,7 +1327,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </label>
                 <button class="action-btn" onclick="window.exportWeeklyReportPPT()">📥 PPT 출력</button>
             </div>
-            <button class="action-btn" onclick="window.printTabSection('tab-weekly', {orientation:'portrait', fit:true, minScale:0.7})" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" onclick="window.printTabSection('tab-weekly')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
        <div id="weekly-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);"></div>
     </div>
@@ -2932,31 +2926,9 @@ ${mailText}`;
         }, 1000);
     });
 
-    // 🖨️ [공용] 인쇄 방향(가로/세로)을 그때그때 바꾸기 위해 <style>을 동적으로 주입
-    window._setPrintPageSize = function(orientation) {
-        let styleEl = document.getElementById('dynamic-print-page-style');
-        if (!styleEl) { styleEl = document.createElement('style'); styleEl.id = 'dynamic-print-page-style'; document.head.appendChild(styleEl); }
-        styleEl.textContent = '@media print { @page { size: A4 ' + orientation + '; margin: 10mm; } }';
-    };
-
-    // 🖨️ [공용] 콘텐츠를 페이지 크기에 맞게 축소 (minScale 아래로는 축소하지 않고 자연스럽게 다음 페이지로 넘어가게 둠)
-    window._fitPrintScale = function(el, pageWidthMm, pageHeightMm, minScale) {
-        const pxPerMm = 96 / 25.4;
-        const pageW = pageWidthMm * pxPerMm, pageH = pageHeightMm * pxPerMm;
-        const rect = el.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
-        let scale = Math.min(pageW / rect.width, pageH / rect.height, 1);
-        if (scale < minScale) scale = minScale;
-        el.style.transformOrigin = 'top left';
-        el.style.transform = 'scale(' + scale.toFixed(3) + ')';
-        el.style.width = (100 / scale) + '%';
-    };
-
-    // 🖨️ [공용] Gantt 인쇄 방식을 그대로 재사용 — 탭 콘텐츠 전체를 사본으로 떠서 인쇄
-    // opts: { orientation: 'portrait'|'landscape', fit: bool, minScale: 0~1, paginate: 페이지당 행수 }
-    window.printTabSection = function(tabId, opts) {
-        opts = opts || {};
-        const orientation = opts.orientation || 'landscape';
+    // 🖨️ [공용] Gantt 인쇄 방식을 그대로 재사용 — 탭 콘텐츠 전체(.concept-tab-wrap)를 사본으로 떠서,
+    //    제목/버튼 영역(.concept-header-box)만 제외하고 인쇄 (섹션이 여러 개인 탭도 전부 포함되도록)
+    window.printTabSection = function(tabId) {
         const tabEl = document.getElementById(tabId);
         const source = tabEl ? tabEl.querySelector('.concept-tab-wrap') : null;
         if (!source) { window.print(); return; }
@@ -2966,7 +2938,8 @@ ${mailText}`;
         printArea.innerHTML = '';
 
         const clone = source.cloneNode(true);
-        clone.querySelectorAll('.concept-header-box').forEach(function(el) { el.remove(); });
+        clone.querySelectorAll('.concept-header-box').forEach(function(el) { el.remove(); }); // 제목/버튼 영역 제외
+        // 💡 <select>는 인쇄 시 선택된 텍스트가 안 그려지는 브라우저가 많아 일반 텍스트로 치환 (Gantt와 동일 처리)
         clone.querySelectorAll('select').forEach(function(sel) {
             const selectedOption = sel.options[sel.selectedIndex];
             const span = document.createElement('span');
@@ -2974,46 +2947,10 @@ ${mailText}`;
             span.style.cssText = sel.getAttribute('style') || '';
             sel.parentNode.replaceChild(span, sel);
         });
-
-        // 💡 50행씩 페이지 분할 (알람 관리 / Address) — 헤더(thead)를 각 페이지마다 반복
-        if (opts.paginate) {
-            const table = clone.querySelector('table');
-            if (table) {
-                const theadSrc = table.querySelector('thead');
-                const tbodySrc = table.querySelector('tbody');
-                const rows = tbodySrc ? Array.from(tbodySrc.children) : [];
-                const parent = table.parentNode;
-                const chunkSize = opts.paginate;
-                for (let i = 0; i < rows.length; i += chunkSize) {
-                    const chunk = rows.slice(i, i + chunkSize);
-                    const pageTable = table.cloneNode(false);
-                    if (theadSrc) pageTable.appendChild(theadSrc.cloneNode(true));
-                    const newTbody = document.createElement('tbody');
-                    chunk.forEach(function(r) { newTbody.appendChild(r.cloneNode(true)); });
-                    pageTable.appendChild(newTbody);
-                    const pageDiv = document.createElement('div');
-                    if (i + chunkSize < rows.length) pageDiv.style.pageBreakAfter = 'always';
-                    pageDiv.appendChild(pageTable);
-                    parent.insertBefore(pageDiv, table);
-                }
-                table.remove();
-            }
-        }
-
         printArea.appendChild(clone);
-        window._setPrintPageSize(orientation);
-        document.body.classList.add('tab-printing-mode');
 
-        if (opts.fit) {
-            requestAnimationFrame(function() {
-                const pageWmm = (orientation === 'landscape' ? 297 : 210) - 20;
-                const pageHmm = (orientation === 'landscape' ? 210 : 297) - 20;
-                window._fitPrintScale(clone, pageWmm, pageHmm, opts.minScale || 0.7);
-                window.print();
-            });
-        } else {
-            window.print();
-        }
+        document.body.classList.add('tab-printing-mode');
+        window.print();
     };
 
     window.addEventListener('afterprint', function() {
@@ -3021,46 +2958,8 @@ ${mailText}`;
             const printArea = document.getElementById('tab-print-area');
             if (printArea) printArea.innerHTML = '';
             document.body.classList.remove('tab-printing-mode');
-            const styleEl = document.getElementById('dynamic-print-page-style');
-            if (styleEl) styleEl.textContent = '';
         }, 1000);
     });
-
-    // 🖨️ Calendar 전용: 이전달/이번달/다음달을 각각 가로 1페이지에 맞춰 인쇄
-    window.printCalendar3Months = function() {
-        if (!window.calState || !window.calRender) { window.print(); return; }
-        const origY = window.calState.year, origM = window.calState.month;
-
-        let printArea = document.getElementById('tab-print-area');
-        if (!printArea) { printArea = document.createElement('div'); printArea.id = 'tab-print-area'; document.body.appendChild(printArea); }
-        printArea.innerHTML = '';
-
-        [-1, 0, 1].forEach(function(delta, i) {
-            let m = origM + delta, y = origY;
-            if (m < 0) { m = 11; y--; } if (m > 11) { m = 0; y++; }
-            window.calState.year = y; window.calState.month = m; window.calState.selectedIdx = null;
-            window.calRender();
-            const calEl = document.getElementById('cal-page');
-            const pageDiv = document.createElement('div');
-            pageDiv.className = 'cal-print-page';
-            if (i < 2) pageDiv.style.pageBreakAfter = 'always';
-            pageDiv.appendChild(calEl.cloneNode(true));
-            printArea.appendChild(pageDiv);
-        });
-
-        // 화면 상태 원복
-        window.calState.year = origY; window.calState.month = origM; window.calState.selectedIdx = null;
-        window.calRender();
-
-        window._setPrintPageSize('landscape');
-        document.body.classList.add('tab-printing-mode');
-        requestAnimationFrame(function() {
-            document.querySelectorAll('#tab-print-area .cal-print-page').forEach(function(pg) {
-                window._fitPrintScale(pg, 277, 190, 0.6);
-            });
-            window.print();
-        });
-    };
 
     function logChange(rowIndex, colIndex, oldVal, newVal, reason) {
         if (!globalData || globalData.length === 0) return;
@@ -6876,13 +6775,13 @@ window.updateInboxBadge();
 
     /* 🖨️ [공용] 각 탭(Address/Summary/Brief SPEC/M.C Table/Calendar/Weekly) 인쇄 사본 */
     #tab-print-area { display: none; }
+    body.tab-printing-mode #app-topbar,
+    body.tab-printing-mode #app-sidebar,
+    body.tab-printing-mode .concept-header-box,
+    body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area) {
+        display: none !important;
+    }
     @media print {
-        body.tab-printing-mode #app-topbar,
-        body.tab-printing-mode #app-sidebar,
-        body.tab-printing-mode .concept-header-box,
-        body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area) {
-            display: none !important;
-        }
         body.tab-printing-mode #tab-print-area {
             display: block !important;
             position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0;
