@@ -4184,8 +4184,7 @@ window.deleteHistoryByDateRange = function() {
         wsBrief['!cols'] = [{wch: 6}, {wch: 22}, {wch: 14}, {wch: 35}, {wch: 30}];
         XLSX.utils.book_append_sheet(wb, wsBrief, "Brief SPEC");
 
-        // ── M.C Table 시트 (R1~R5, 컨셉 단계: BOM 원가/금형비) ──
-        // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
+                // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
         if (window.mcBuildComparisonRows) {
             const compRows = window.mcBuildComparisonRows();
             const revs = ['R5', 'R4', 'R3', 'R2', 'R1'];
@@ -4300,6 +4299,86 @@ window.deleteHistoryByDateRange = function() {
             wsComp['!cols'] = [{ wch: 14 }, { wch: 20 }, { wch: 16 }];
             XLSX.utils.book_append_sheet(wb, wsComp, "MC Comparison");
         }
+        function _buildMcSheet(rows, rev) {
+            const num = function(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[^0-9.-]+/g, '')); return isNaN(n) ? 0 : n; };
+            const cellMoney = function(v) { const n = num(v); return n === 0 ? '' : n; };
+            const mcData = [
+                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', 'PROTO A', '', 'PROTO B', '', 'MP', '', 'Note'],
+                ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', ''],
+            ];
+            const valid = (rows || []).filter(function(r) { const t = String(r.type || '').toUpperCase().replace(/\s/g, ''); return t !== 'SUBTOTAL' && t !== 'TOTAL'; });
+            let lastType = '';
+            const typed = valid.map(function(r) { const t = String(r.type || '').trim(); if (t) lastType = t; return lastType; });
+            const zero = function() { return { pc: 0, pn: 0, bc: 0, bn: 0, mc: 0, mn: 0 }; };
+            let sub = zero(), grand = zero(), curType = '';
+            const summaryRows = [];
+            const typeMerges = [];
+            let segStartRow = mcData.length;
+            valid.forEach(function(r, idx) {
+                curType = typed[idx] || curType;
+                mcData.push([String(r.type || ''), r.item || '', r.group || '', r.pn || '', r.spec || '', cellMoney(r.protoCost), cellMoney(r.protoNre), cellMoney(r.protoBCost), cellMoney(r.protoBNre), cellMoney(r.mpCost), cellMoney(r.mpNre), r.note || '']);
+                const curRowIdx = mcData.length - 1;
+                sub.pc += num(r.protoCost); sub.pn += num(r.protoNre); sub.bc += num(r.protoBCost); sub.bn += num(r.protoBNre); sub.mc += num(r.mpCost); sub.mn += num(r.mpNre);
+                grand.pc += num(r.protoCost); grand.pn += num(r.protoNre); grand.bc += num(r.protoBCost); grand.bn += num(r.protoBNre); grand.mc += num(r.mpCost); grand.mn += num(r.mpNre);
+                const itemHasEtc = /\betc\b|\bNRE\b/.test(String(r.item || ''));
+                const nextType = idx + 1 < typed.length ? typed[idx + 1] : '';
+                const isLast = idx === valid.length - 1;
+                if (curType && (itemHasEtc || isLast || (nextType && nextType !== curType))) {
+                    if (curRowIdx > segStartRow) {
+                        typeMerges.push({ s: { r: segStartRow, c: 0 }, e: { r: curRowIdx, c: 0 } });
+                    }
+                    mcData.push([curType + ' SUBTOTAL', '', '', '', '', sub.pc, sub.pn, sub.bc, sub.bn, sub.mc, sub.mn, '']);
+                    summaryRows.push({ r: mcData.length - 1, color: 'FFF9C4' });
+                    sub = zero();
+                    segStartRow = mcData.length;
+                }
+            });
+            mcData.push(['TOTAL(M.C)', '', '', '', '', grand.pc, grand.pn, grand.bc, grand.bn, grand.mc, grand.mn, '']);
+            summaryRows.push({ r: mcData.length - 1, color: 'E3F2FD' });
+            const sp = ((tabData.mcSalesPriceDetail || {})[rev]) || {};
+            const spv = function(f) { return num(sp[f]); };
+            mcData.push(['영업판가', '', '', '', '', spv('protoCost') || '', spv('protoNre') || '', spv('protoBCost') || '', spv('protoBNre') || '', spv('mpCost') || '', spv('mpNre') || '', '']);
+            summaryRows.push({ r: mcData.length - 1, color: 'E8F5E9' });
+            const ratio = function(tot, f) { const s = spv(f); return s > 0 ? (tot / s * 100).toFixed(1) + '%' : '-'; };
+            mcData.push(['재료비율 (M.C ÷ 영업판가) [%]', '', '', '', '', ratio(grand.pc, 'protoCost'), ratio(grand.pn, 'protoNre'), ratio(grand.bc, 'protoBCost'), ratio(grand.bn, 'protoBNre'), ratio(grand.mc, 'mpCost'), ratio(grand.mn, 'mpNre'), '']);
+            summaryRows.push({ r: mcData.length - 1, color: 'FFE0B2' });
+
+            const wsMc = XLSX.utils.aoa_to_sheet(mcData);
+            wsMc['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } },
+                { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } },
+                { s: { r: 0, c: 5 }, e: { r: 0, c: 6 } }, { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } },
+                { s: { r: 0, c: 9 }, e: { r: 0, c: 10 } }, { s: { r: 0, c: 11 }, e: { r: 1, c: 11 } },
+            ];
+            summaryRows.forEach(function(s) { wsMc['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 4 } }); });
+            typeMerges.forEach(function(m) { wsMc['!merges'].push(m); });
+            for (let c = 0; c <= 11; c++) {
+                const h2 = wsMc[XLSX.utils.encode_cell({ r: 1, c: c })];
+                if (h2) h2.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+            }
+            const range = XLSX.utils.decode_range(wsMc['!ref']);
+            for (let r = 2; r <= range.e.r; r++) {
+                const sum = summaryRows.find(function(s) { return s.r === r; });
+                for (let c = 0; c <= range.e.c; c++) {
+                    const cell = wsMc[XLSX.utils.encode_cell({ r: r, c: c })];
+                    if (!cell) continue;
+                    if (c >= 5 && c <= 10 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+                    if (sum) {
+                        cell.s = {
+                            font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
+                            fill: { patternType: "solid", fgColor: { rgb: sum.color } },
+                            alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
+                        };
+                    } else if (c === 0) {
+                        cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                    }
+                }
+            }
+            wsMc['!cols'] = [{wch:12},{wch:18},{wch:16},{wch:12},{wch:36},{wch:11},{wch:10},{wch:11},{wch:10},{wch:11},{wch:10},{wch:30}];
+            return wsMc;
+        }
+        
         const mcRevisionsForExport = tabData.mcRevisions || {};
         ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
             const rows = mcRevisionsForExport[rev] || (rev === 'R1' ? tabData.mcTable : null);
@@ -4319,121 +4398,6 @@ window.deleteHistoryByDateRange = function() {
             const wsMcLog = XLSX.utils.aoa_to_sheet(mcLogData);
             wsMcLog['!cols'] = [{wch: 20}, {wch: 14}, {wch: 8}, {wch: 20}, {wch: 12}, {wch: 30}, {wch: 30}];
             XLSX.utils.book_append_sheet(wb, wsMcLog, "M.C 수정이력");
-        }
-
-        // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
-        if (window.mcBuildComparisonRows) {
-            const compRows = window.mcBuildComparisonRows();
-            const compSalesPrice = (tabData.mcCompare && tabData.mcCompare.salesPrice) || {};
-            const revs = ['R5', 'R4', 'R3', 'R2', 'R1'];
-            const header1 = ['TYPE', 'ITEM', 'GROUP']; // 💡 NO열 삭제
-            const header2 = ['', '', ''];
-            revs.forEach(function(rev) { header1.push(rev + ' MP', ''); header2.push('Cost($)', 'NRE'); });
-            header1.push('Note'); header2.push('');
-            const compData = [header1, header2];
-            const totals = {}; revs.forEach(function(rev) { totals[rev] = { cost: 0, nre: 0 }; });
-
-            let compCurType = '';
-            const compGroupSubtotal = {}; revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
-            const compSubtotalRowIdx = []; // 💡 이후 하이라이트/우측정렬 스타일을 적용할 SUBTOTAL 행 위치 기록
-            const compTypeMerges = []; // 💡 SUBTOTAL로 끊기기 전까지는 TYPE이 항상 같으므로, 그 구간을 A열 세로 병합
-            let compSegStartRow = compData.length; // 현재 TYPE 병합 구간의 시작 행(헤더 2행 포함 compData 기준)
-            compRows.forEach(function(r, idx) {
-                const rt = String(r.type || '').trim();
-                if (rt) compCurType = rt;
-                const row = [r.type, r.item, r.group]; // 💡 NO(idx+1) 삭제
-                revs.forEach(function(rev) {
-                    const p = r.prices[rev] || { cost: 0, nre: 0 };
-                    row.push(p.cost || '', p.nre || '');
-                    totals[rev].cost += p.cost; totals[rev].nre += p.nre;
-                    compGroupSubtotal[rev].cost += p.cost; compGroupSubtotal[rev].nre += p.nre;
-                });
-                row.push(r.note || '');
-                compData.push(row);
-                const compCurRowIdx = compData.length - 1;
-
-                // 💡 본표/웹 화면 Comparison 페이지와 동일한 기준으로 SUBTOTAL 삽입: ITEM="etc."(구버전 "NRE") / TYPE 변경 / 마지막 행
-                const itemHasEtc = /\betc\b|\bNRE\b/i.test(String(r.item || ''));
-                const nextRow = compRows[idx + 1];
-                const nextType = nextRow ? String(nextRow.type || '').trim() : '';
-                const isLastRow = !nextRow;
-                const typeWillChange = !!(nextRow && nextType && nextType !== compCurType);
-                if (compCurType && (itemHasEtc || typeWillChange || isLastRow)) {
-                    // 💡 이 구간(compSegStartRow~compCurRowIdx)은 전부 같은 TYPE이었으므로, 2행 이상이면 A열을 병합
-                    if (compCurRowIdx > compSegStartRow) {
-                        compTypeMerges.push({ s: { r: compSegStartRow, c: 0 }, e: { r: compCurRowIdx, c: 0 } });
-                    }
-                    // 💡 라벨은 반드시 0번 칸(병합 anchor)에 넣어야 저장 시 사라지지 않음
-                    const subRow = [compCurType + ' SUBTOTAL', '', ''];
-                    revs.forEach(function(rev) { subRow.push(compGroupSubtotal[rev].cost || '', compGroupSubtotal[rev].nre || ''); });
-                    subRow.push('');
-                    compSubtotalRowIdx.push(compData.length);
-                    compData.push(subRow);
-                    revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
-                    compSegStartRow = compData.length; // 다음 구간은 바로 다음에 push될 행부터
-                }
-            });
-
-            const totalRow = ['TOTAL(M.C)', '', ''];
-            revs.forEach(function(rev) { totalRow.push(totals[rev].cost, totals[rev].nre); });
-            totalRow.push('');
-            compData.push(totalRow);
-            const salesRow = ['영업판가', '', ''];
-            revs.forEach(function(rev) { salesRow.push(compSalesPrice[rev] || '', ''); });
-            salesRow.push('');
-            compData.push(salesRow);
-            const ratioRow = ['재료비율(%)', '', ''];
-            revs.forEach(function(rev) {
-                const sp = compSalesPrice[rev] || 0;
-                ratioRow.push(sp > 0 ? (totals[rev].cost / sp * 100).toFixed(1) : '', '');
-            });
-            ratioRow.push('');
-            compData.push(ratioRow);
-
-            const wsComp = XLSX.utils.aoa_to_sheet(compData);
-            // 💡 헤더 병합 (TYPE/ITEM/GROUP/Note는 2행 세로병합, 리비전별 MP는 Cost($)/NRE 2열 가로병합)
-            wsComp['!merges'] = [
-                { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
-                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
-            ];
-            revs.forEach(function(rev, i) { const c0 = 3 + i * 2; wsComp['!merges'].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } }); });
-            wsComp['!merges'].push({ s: { r: 0, c: 3 + revs.length * 2 }, e: { r: 1, c: 3 + revs.length * 2 } }); // Note
-            const compSummaryRows = compSubtotalRowIdx.map(function(r) { return { r: r, color: 'FFF9C4' }; }).concat([
-                { r: compData.length - 3, color: 'E3F2FD' }, // TOTAL(M.C)
-                { r: compData.length - 2, color: 'E8F5E9' }, // 영업판가
-                { r: compData.length - 1, color: 'FFE0B2' }, // 재료비율(%)
-            ]);
-            compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 2 } }); });
-            compTypeMerges.forEach(function(m) { wsComp['!merges'].push(m); }); // 💡 TYPE(A열) — 같은 그룹 구간만큼 세로 병합
-            // 헤더 2행 남색 처리
-            for (let r = 0; r <= 1; r++) {
-                for (let c = 0; c < header1.length; c++) {
-                    const h = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
-                    if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
-                }
-            }
-            // 데이터/요약행 스타일 + $ 서식 + TYPE(A)열 남색/흰색
-            const compRange = XLSX.utils.decode_range(wsComp['!ref']);
-            for (let r = 2; r <= compRange.e.r; r++) {
-                const sum = compSummaryRows.find(function(s) { return s.r === r; });
-                for (let c = 0; c <= compRange.e.c; c++) {
-                    const cell = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
-                    if (!cell) continue;
-                    if (c >= 3 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
-                    if (sum) {
-                        cell.s = {
-                            font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
-                            fill: { patternType: "solid", fgColor: { rgb: sum.color } },
-                            alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
-                        };
-                    } else if (c === 0) {
-                        // 💡 본표(M.C Table)와 동일하게 TYPE(A)열은 헤더 같은 남색/흰색
-                        cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
-                    }
-                }
-            }
-            wsComp['!cols'] = [{ wch: 14 }, { wch: 20 }, { wch: 16 }]; // 💡 NO열 삭제로 3칸
-            XLSX.utils.book_append_sheet(wb, wsComp, "MC Comparison");
         }
 
         XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
@@ -12156,8 +12120,23 @@ function bmOpenPopup(key, refTr) {
                 bmClearSelection('addr');
             }
         });
+        // 💡 [핵심 수정] 버튼을 매번 cloneNode로 교체하던 방식을 제거하고,
+        //    절대 사라지지 않는 팝업 컨테이너에 이벤트 위임 리스너를 "딱 한 번만" 붙인다.
+        //    표가 몇 번을 다시 그려져도 이 버튼들은 그대로 유지되므로 클릭이 씹힐 일이 없다.
+        //    실행 대상(key/refTr)은 클릭 시점에 popup._bmKey / popup._bmRefTr 에서 읽는다.
+        popup.addEventListener('click', function(e) {
+            const btn = e.target.closest('.bm-pop-btn');
+            if (!btn) return;
+            const k = popup._bmKey, tr = popup._bmRefTr;
+            if (btn.id === 'bm-up') bmMoveSelected(k, -1);
+            else if (btn.id === 'bm-dn') bmMoveSelected(k, 1);
+            else if (btn.id === 'bm-add') bmAddAfter(k, tr);
+            else if (btn.id === 'bm-del') bmDeleteSelected(k);
+        });
     }
     popup.dataset.key = key;
+    popup._bmKey = key;
+    popup._bmRefTr = refTr;
 
     const noTd = refTr.querySelector('.bm-no');
     const rect = noTd.getBoundingClientRect();
@@ -12169,19 +12148,6 @@ function bmOpenPopup(key, refTr) {
     if (top + popupH > window.innerHeight + window.scrollY) top = rect.bottom + window.scrollY - popupH;
     popup.style.top = top + 'px';
     popup.style.left = left + 'px';
-
-    const actions = {
-        'bm-up':  function() { bmMoveSelected(key, -1); },
-        'bm-dn':  function() { bmMoveSelected(key, 1); },
-        'bm-add': function() { bmAddAfter(key, refTr); },
-        'bm-del': function() { bmDeleteSelected(key); }
-    };
-    Object.keys(actions).forEach(function(id) {
-        const btn = document.getElementById(id);
-        const nb = btn.cloneNode(true);
-        btn.parentNode.replaceChild(nb, btn);
-        document.getElementById(id).addEventListener('click', actions[id]);
-    });
 }
 
 // 선택된 행들을 묶음으로 위/아래 이동 (순서 유지)
