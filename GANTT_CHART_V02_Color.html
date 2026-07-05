@@ -2926,10 +2926,11 @@ ${mailText}`;
         }, 1000);
     });
 
-    // 🖨️ [공용] Gantt 인쇄 방식을 그대로 재사용 — 각 탭의 .concept-section만 사본으로 떠서 인쇄
+    // 🖨️ [공용] Gantt 인쇄 방식을 그대로 재사용 — 탭 콘텐츠 전체(.concept-tab-wrap)를 사본으로 떠서,
+    //    제목/버튼 영역(.concept-header-box)만 제외하고 인쇄 (섹션이 여러 개인 탭도 전부 포함되도록)
     window.printTabSection = function(tabId) {
         const tabEl = document.getElementById(tabId);
-        const source = tabEl ? tabEl.querySelector('.concept-section') : null;
+        const source = tabEl ? tabEl.querySelector('.concept-tab-wrap') : null;
         if (!source) { window.print(); return; }
 
         let printArea = document.getElementById('tab-print-area');
@@ -2937,6 +2938,7 @@ ${mailText}`;
         printArea.innerHTML = '';
 
         const clone = source.cloneNode(true);
+        clone.querySelectorAll('.concept-header-box').forEach(function(el) { el.remove(); }); // 제목/버튼 영역 제외
         // 💡 <select>는 인쇄 시 선택된 텍스트가 안 그려지는 브라우저가 많아 일반 텍스트로 치환 (Gantt와 동일 처리)
         clone.querySelectorAll('select').forEach(function(sel) {
             const selectedOption = sel.options[sel.selectedIndex];
