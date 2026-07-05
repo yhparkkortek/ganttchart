@@ -9726,8 +9726,8 @@ async function msCallGemini(apiKey, parsed) {
             const minorItems = milestones.filter(it => !/RFQ|PROTO DR|DVR|MP/i.test(it.name));
 
             const majorPctMap = new Map();
-            majorItems.forEach((it, i) => {
-                majorPctMap.set(it, majorItems.length > 1 ? i / (majorItems.length - 1) : 0);
+            majorItems.forEach((it) => {
+                majorPctMap.set(it, (it.start - tl.minTs) / span);
             });
 
             // 역삼각형(major) 전용 줄을 위쪽에 분리, 트랙+다이아몬드(minor)는 그 아래 줄
