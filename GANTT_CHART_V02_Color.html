@@ -79,6 +79,25 @@
         width: var(--w-status) !important;
         min-width: var(--w-status) !important;
     }
+    table.chart-expanded th.no-th,
+    table.chart-expanded td.no-td {
+        width: var(--w-no) !important;
+        min-width: var(--w-no) !important;
+    }
+    table.chart-expanded th.date-th,
+    table.chart-expanded td.date-td {
+        width: var(--w-date) !important;
+        min-width: var(--w-date) !important;
+    }
+    table.chart-expanded th.period-th {
+        width: var(--w-period) !important;
+        min-width: var(--w-period) !important;
+    }
+    table.chart-expanded th.wbs-th,
+    table.chart-expanded td.wbs-cell {
+        width: var(--w-wbs) !important;
+        min-width: var(--w-wbs) !important;
+    }
 
     th.chart-th, td.chart-td {
         max-width: var(--w-chart);
@@ -827,7 +846,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
 
         <div class="btn-group">
-            <button class="action-btn" onclick="toggleFullScreen()" id="fs-btn">🖥️ 전체화면</button>
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
@@ -1108,6 +1126,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" style="margin:0;">🔽 펼치기</button>
             <div class="btn-group"></div>
         </div>
+        <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
         <div class="concept-section">
             <style>
                 #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
@@ -3620,7 +3639,7 @@ window.deleteHistoryByDateRange = function() {
         // ✅ 추가: 레벨별 bold 한 곳에서 관리
         const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';
 
-        let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs];
+        let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs, colIdx.answer];
         let hasPeriodCol = colIdx.period !== -1;
 
         let headHtml = '<tr>';
@@ -3634,8 +3653,8 @@ window.deleteHistoryByDateRange = function() {
             if (colStr.includes("상태")) return; // 💡 "상태"는 소요일~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
             if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px; position: relative;"; thClass = "chart-th"; }
             else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
-            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; }
-            else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px;"; }
+            else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px;"; thClass = "no-th"; }
+            else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px;"; thClass = "date-th"; }
             else if (colStr.includes("상태")) { widthClass = "width: var(--w-status); min-width: 30px;"; }
             else { widthClass = "width: var(--w-default); min-width: 30px;"; }
 
@@ -3653,9 +3672,9 @@ window.deleteHistoryByDateRange = function() {
                 const periodLabel = lang.header['소요일'] || '소요일';
                 const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
-                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
+                headHtml += `<th class="period-th" style="text-align: center; width: var(--w-period); min-width: 30px; font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px;">${statusLabel}</th>`;
-                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px;">${wbsLabel}</th>`;
+                headHtml += `<th class="wbs-th" style="text-align: center; width: var(--w-wbs); min-width: 100px;">${wbsLabel}</th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
@@ -3870,6 +3889,13 @@ window.deleteHistoryByDateRange = function() {
         alert('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.');
     };
 
+    window.toggleAllWbsTranslation = function() {
+        // 💡 각 업무명 칸에 이미 있는 개별 🌐 버튼을 전부 순서대로 눌러주는 것 — 새 번역 로직 없이 기존 걸 그대로 재사용
+        document.querySelectorAll('#myTable tbody tr td.wbs-cell .trans-btn-hide-print').forEach(function(btn) {
+            if (btn.offsetParent !== null) btn.click(); // 필터로 숨겨진(display:none) 행은 건너뜀
+        });
+    };
+
     function toggleTranslation(btn, encodedText, transMode) {
         let container = btn.parentElement; let contentSpan = container.querySelector('.content-span');
         if (btn.dataset.expanded === "true") { contentSpan.innerHTML = contentSpan.dataset.origHtml; btn.dataset.expanded = "false"; btn.style.backgroundColor = "transparent"; return; }
@@ -4058,7 +4084,7 @@ window.deleteHistoryByDateRange = function() {
             for (let k = 0; k < BAR_LEN; k++) bar += (k >= startCell && k < endCell) ? mark : '░';
             return bar;
         }
-        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, _hdrAnswer, '현황']];
+        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, '현황']];
         let ganttL0Rows = [];
         let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
@@ -4073,14 +4099,13 @@ window.deleteHistoryByDateRange = function() {
             const days = countWorkingDays(row._calcStartTs, row._calcPlanTs);
             const statusVal  = colIdx.status  !== -1 ? (row[colIdx.status]  || '') : '';
             const contentVal = colIdx.content !== -1 ? (row[colIdx.content] || '') : '';
-            const answerVal  = colIdx.answer  !== -1 ? (row[colIdx.answer]  || '') : '';
             const barVal = _textStatusBar(row._calcStartTs, row._calcPlanTs, statusVal);
-            exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, answerVal, barVal]);
+            exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, barVal]);
             if (lv === 0) ganttL0Rows.push(exportData.length - 1);
             rowNumCounter++;
         }
         const ws = XLSX.utils.aoa_to_sheet(exportData);
-        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:45},{wch:24}];
+        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:24}];
         (function() {
             const range = XLSX.utils.decode_range(ws['!ref']);
             for (let r = 1; r <= range.e.r; r++) {
@@ -4089,12 +4114,12 @@ window.deleteHistoryByDateRange = function() {
                     const cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
                     if (!cell) continue;
                     cell.s = {
-                        font: c === 9
+                        font: c === 8
                             ? { name: "Consolas", sz: 11, bold: true, color: { rgb: "1F3A5F" } }
                             : { name: "맑은 고딕", sz: 10, bold: isL0, color: { rgb: "1F2937" } },
                         fill: isL0 ? { patternType: "solid", fgColor: { rgb: "E9EEF6" } }
                                    : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
-                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : (c === 9 ? "center" : "left"), wrapText: c === 7 || c === 8 }
+                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : (c === 8 ? "center" : "left"), wrapText: c === 7 }
                     };
                 }
             }
@@ -5155,8 +5180,13 @@ window.handleAuthClick = function() {
                 let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val; 
                 if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
                 
+                // 💡 WBS 레벨 숫자를 사람이 읽기 좋은 라벨로 매핑
+                const wbsLabels = { '0': '0 (대분류)', '1': '1 (소분류1)', '2': '2 (소분류2)', '3': '3 (세부업무)', '4': '4 (하위업무)' };
+
                 // 💡 자바스크립트로 정확히 10글자 측정 후 넘치면 자르고 '~' 붙이기
-                if (col.name === '개발단계') {
+                if (col.name === 'LEVEL(WBS)') {
+                    btn.textContent = wbsLabels[val] || `Level ${val}`;
+                } else if (col.name === '개발단계') {
                     btn.title = val; // 원본 전체 글자는 마우스 오버 시 툴팁으로 보존
                     let displayVal = val.length > 10 ? val.substring(0, 10) + "~" : val;
                     btn.textContent = displayVal;
