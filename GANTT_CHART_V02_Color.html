@@ -3503,6 +3503,9 @@ window.deleteHistoryByDateRange = function() {
                 'date-sort-btn':  '📅 날짜순 정렬',
                 'file-status-default': '파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)',
                 'file-status-updated': '✅ 일정이 업데이트 되었습니다.',
+                'undo-btn': '↩️ 실행취소',
+                'redo-btn': '↪️ 다시실행',
+                'recalc-range-btn': '🔓 선택 구간 재계산',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -3535,6 +3538,9 @@ window.deleteHistoryByDateRange = function() {
                 'date-sort-btn':  '📅 Sort by Date',
                 'file-status-default': 'Select a file or drag & drop an Excel file here. (Double-click any item to edit)',
                 'file-status-updated': '✅ Schedule has been updated.',
+                'undo-btn': '↩️ Undo',
+                'redo-btn': '↪️ Redo',
+                'recalc-range-btn': '🔓 Recalc Selected Range',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -3585,6 +3591,7 @@ window.deleteHistoryByDateRange = function() {
             renderTable(globalData);
             generateFilters(globalData);
             applyFilters();
+            window.translateAllWbs(window._currentLang === 'en');
                     document.querySelectorAll('.filter-label').forEach(el => {
                 const colName = el.dataset.colName;
                 if (colName) el.textContent = LANG[window._currentLang].filterLabel[colName] || colName;
@@ -3761,7 +3768,8 @@ window.deleteHistoryByDateRange = function() {
                         let wbsInnerHtml;
                         if (transModeWbs > 0 && taskTxt.trim() !== '') {
                             let safeTextWbs = encodeURIComponent(taskTxt).replace(/'/g, "%27").replace(/\\/g, "\\\\");
-                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print" style="display:inline-block; cursor:pointer; font-size:8px; border-radius:3px; padding:1px 2px; margin-right:3px; background:transparent; vertical-align:middle;" onclick="toggleTranslation(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>';                        } else {
+                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print" data-trans-mode="' + transModeWbs + '" style="display:inline-block; cursor:pointer; font-size:8px; border-radius:3px; padding:1px 2px; margin-right:3px; background:transparent; vertical-align:middle;" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>';
+                        } else {
                             wbsInnerHtml = prefix + escapeHtml(taskTxt);
                         }
                         bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}</td>`;
@@ -3876,6 +3884,36 @@ window.deleteHistoryByDateRange = function() {
             btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
         }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert("번역 중 오류가 발생했습니다."); });
     }
+
+    // 💡 WBS 업무명은 상세내용/답변과 달리 "교체" 방식 — 원문 ↔ 번역문 한 줄 토글
+    function toggleTranslationWbs(btn, encodedText, transMode) {
+        let contentSpan = btn.nextElementSibling;
+        if (btn.dataset.expanded === "true") {
+            contentSpan.textContent = decodeURIComponent(encodedText);
+            btn.dataset.expanded = "false"; btn.style.backgroundColor = "transparent";
+            return;
+        }
+        btn.style.pointerEvents = 'none'; btn.style.opacity = '0.5';
+        let text = decodeURIComponent(encodedText); let targetLang = transMode === 1 ? 'en' : 'ko';
+        fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${targetLang}&dt=t&q=${encodeURIComponent(text)}`)
+        .then(res => res.json())
+        .then(tData => {
+            let translated = ''; tData[0].forEach(item => translated += item[0]);
+            contentSpan.textContent = translated.trim();
+            btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
+        }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert("번역 중 오류가 발생했습니다."); });
+    }
+
+    // forceExpand: true → 한글 업무명 전체 번역 표시 / false → 전체 원복
+    window.translateAllWbs = function(forceExpand) {
+        const btns = Array.from(document.querySelectorAll('#myTable td.wbs-cell .trans-btn-hide-print'))
+            .filter(function(b) { return b.dataset.transMode === '1'; }); // 한글 → 영문 대상만
+        btns.forEach(function(btn) {
+            const isExpanded = btn.dataset.expanded === 'true';
+            if (forceExpand && !isExpanded) btn.click();
+            else if (!forceExpand && isExpanded) btn.click();
+        });
+    };
 
     function initColumnResizers() {
         const table = document.getElementById('myTable'); const thElements = document.querySelectorAll('th');
@@ -4856,7 +4894,7 @@ window.handleAuthClick = function() {
             let assignee = colIdx.assignee !== -1 ? data[i][colIdx.assignee] : "";
             let status = colIdx.status !== -1 && data[i][colIdx.status] ? data[i][colIdx.status].toString().toLowerCase() : "";
             let model = colIdx.model !== -1 ? data[i][colIdx.model] : "";
-            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : "";
+            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : (colIdx.wbs !== -1 ? data[i][colIdx.wbs] : "");
             
             if (devStage !== undefined && devStage !== null) {
                 let s = devStage.toString().trim(); if (s !== '' && !existingDevStages.includes(s)) existingDevStages.push(s);
@@ -5086,7 +5124,7 @@ window.handleAuthClick = function() {
             let assignee = colIdx.assignee !== -1 ? data[i][colIdx.assignee] : "";
             let status = colIdx.status !== -1 && data[i][colIdx.status] ? data[i][colIdx.status].toString().toLowerCase() : "";
             let model = colIdx.model !== -1 ? data[i][colIdx.model] : "";
-            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : "";
+            let devStage = colIdx.devStage !== -1 ? data[i][colIdx.devStage] : (colIdx.wbs !== -1 ? data[i][colIdx.wbs] : "");
             
             if (devStage !== undefined && devStage !== null) {
                 let s = devStage.toString().trim(); if (s !== '' && !existingDevStages.includes(s)) existingDevStages.push(s);
