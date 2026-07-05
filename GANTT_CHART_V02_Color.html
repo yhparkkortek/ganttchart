@@ -27,7 +27,7 @@
 
         --w-no: 45px;
         --w-date: 54px;
-        --w-period: 30px;
+        --w-period: 44px;
         --w-wbs: 304px;
         --w-detail: 1238px;
         --w-chart: 391px;
@@ -3423,6 +3423,14 @@ window.deleteHistoryByDateRange = function() {
             if (colIndex === colIdx.taskType2) row._origT2 = newText;
             if (colIndex === colIdx.taskType3) row._origT3 = newText;
             if (colIndex === colIdx.taskType4) row._origT4 = newText;
+            // 💡 단일 "개발업무(WBS)" 열 모드: 레벨로 어느 필드를 수정한 것인지 판단
+            if (colIndex === colIdx.wbs && colIdx.devStage === -1) {
+                if (row._level === 0) row._origDev = newText;
+                else if (row._level === 1) row._origT1 = newText;
+                else if (row._level === 2) row._origT2 = newText;
+                else if (row._level === 3) row._origT3 = newText;
+                else row._origT4 = newText;
+            }
             
             if (colIndex === colIdx.plan) {
                 if (colIdx.period !== -1) globalData[rowIndex][colIdx.period] = "";
@@ -3649,7 +3657,7 @@ window.deleteHistoryByDateRange = function() {
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
                 headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
-                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);"><span onclick="window.translateAllWbs(); event.stopPropagation();" title="한글 업무명 전체 번역 / 다시 누르면 원복" style="cursor:pointer; font-size:11px; margin-right:4px;">🌐</span>${wbsLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);">${wbsLabel}</th>`;
             }
         });
         headHtml += '</tr>'; thead.innerHTML = headHtml;
@@ -3766,6 +3774,7 @@ window.deleteHistoryByDateRange = function() {
                         let indentEm = (row._level || 0) * 1.2;
                         let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
+                        if (wbsColIdx === -1 && colIdx.wbs !== -1) wbsColIdx = colIdx.wbs; // 💡 단일 "개발업무(WBS)" 열 모드 대응
                         let wbsRawValue = encodeURIComponent(taskTxt);
                         let wbsAttrs = wbsColIdx !== -1 ? ` data-raw="${wbsRawValue}" ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${wbsColIdx})" title="더블클릭하여 수정 가능&#10;&#10;* 표시: 다른 업무와 병렬로 진행되는 업무"` : ``;
 
