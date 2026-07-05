@@ -4206,7 +4206,7 @@ window.deleteHistoryByDateRange = function() {
                 const curRowIdx = mcData.length - 1;
                 sub.pc += num(r.protoCost); sub.pn += num(r.protoNre); sub.bc += num(r.protoBCost); sub.bn += num(r.protoBNre); sub.mc += num(r.mpCost); sub.mn += num(r.mpNre);
                 grand.pc += num(r.protoCost); grand.pn += num(r.protoNre); grand.bc += num(r.protoBCost); grand.bn += num(r.protoBNre); grand.mc += num(r.mpCost); grand.mn += num(r.mpNre);
-                const itemHasEtc = /\betc\b|\bNRE\b/i.test(String(r.item || ''));
+                const itemHasEtc = /\betc\b|\bNRE\b/.test(String(r.item || ''));
                 const nextType = idx + 1 < typed.length ? typed[idx + 1] : '';
                 const isLast = idx === valid.length - 1;
                 if (curType && (itemHasEtc || isLast || (nextType && nextType !== curType))) {
@@ -11427,7 +11427,7 @@ window.populateTabData = function() {
                 validRows.forEach(function(r, idx) {
                     const rt = String(r.type || '').trim();
                     if (rt) curType = rt;
-                    const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+                    const itemHasNre = /\betc\b|\bNRE\b/.test(String(r.item || ''));  // 💡 "etc."(소문자)를 기준으로 사용 — 대문자 "ETC" 항목명과 구분. 구버전 "NRE" 표기도 계속 인식
                     const nextRow = validRows[idx + 1];
                     const nextType = nextRow ? String(nextRow.type || '').trim() : '';
                     const isLastRow = !nextRow;
@@ -11508,7 +11508,7 @@ window.populateTabData = function() {
                 rowHtml += '<td><input type="text" class="u-input" data-field="note" value="' + _escTabVal(r.note) + '" style="color:' + otherColor + ';"></td></tr>';
                 htmlChunks.push(rowHtml);
 
-                const itemHasNre = /\bNRE\b/i.test(String(r.item || ''));
+                const itemHasNre = /\betc\b|\bNRE\b/.test(String(r.item || ''));  // 💡 "etc."(소문자)를 기준으로 사용 — 대문자 "ETC" 항목명과 구분. 구버전 "NRE" 표기도 계속 인식
                 const nextRow = validRows[idx + 1];
                 const nextType = nextRow ? String(nextRow.type || '').trim() : '';
                 const isLastRow = !nextRow;
@@ -12674,7 +12674,7 @@ window.mcRenderComparisonTable = function() {
         rows.forEach(function(r, idx) {
             const rt = String(r.type || '').trim();
             if (rt) curType = rt;
-            const itemHasNre = /\betc\b|\bNRE\b/i.test(String(r.item || ''));  // 💡 "etc."를 기준으로 사용 (구버전 "NRE" 표기도 계속 인식)
+            const itemHasNre = /\betc\b|\bNRE\b/.test(String(r.item || ''));  // 💡 "etc."(소문자)를 기준으로 사용 — 대문자 "ETC" 항목명과 구분. 구버전 "NRE" 표기도 계속 인식
             const nextRow = rows[idx + 1];
             const nextType = nextRow ? String(nextRow.type || '').trim() : '';
             const isLastRow = !nextRow;
@@ -12746,7 +12746,7 @@ window.mcRenderComparisonTable = function() {
             compSubtotal[rev].nre += p.nre;
         });
 
-        const itemHasNre = /\betc\b|\bNRE\b/i.test(String(r.item || ''));  // 💡 "etc."를 기준으로 사용 (구버전 "NRE" 표기도 계속 인식)
+        const itemHasNre = /\betc\b|\bNRE\b/.test(String(r.item || ''));  // 💡 "etc."(소문자)를 기준으로 사용 — 대문자 "ETC" 항목명과 구분. 구버전 "NRE" 표기도 계속 인식
         const nextRow = rows[idx + 1];
         const nextType = nextRow ? String(nextRow.type || '').trim() : '';
         const isLastRow = !nextRow;
