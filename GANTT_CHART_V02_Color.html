@@ -3610,7 +3610,7 @@ window.deleteHistoryByDateRange = function() {
         // ✅ 추가: 레벨별 bold 한 곳에서 관리
         const getFontWeight = (level) => level === 0 ? 'bold' : 'normal';
 
-        let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs];
+        let hiddenCols = [colIdx.bogo, colIdx.assignee, colIdx.customer, colIdx.model, colIdx.inch, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs, colIdx.answer];
         let hasPeriodCol = colIdx.period !== -1;
 
         let headHtml = '<tr>';
@@ -4061,7 +4061,6 @@ window.deleteHistoryByDateRange = function() {
         if (globalData.length <= 1) { alert("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요."); return; }
         // ── GanttChart 시트: 웹 화면과 동일 구성 ──
         const _hdrContent = (colIdx.content !== -1 && globalData[0][colIdx.content]) ? globalData[0][colIdx.content] : '업무 상세내용';
-        const _hdrAnswer  = (colIdx.answer  !== -1 && globalData[0][colIdx.answer])  ? globalData[0][colIdx.answer]  : '답변';
         // 💡 텍스트 막대(유니코드 블록)로 웹의 현황 막대 위치를 흉내냄 — 전체 타임라인 기준, 총 20칸
         const BAR_LEN = 20;
         function _textStatusBar(startTs, planTs, statusVal) {
@@ -4079,7 +4078,7 @@ window.deleteHistoryByDateRange = function() {
             for (let k = 0; k < BAR_LEN; k++) bar += (k >= startCell && k < endCell) ? mark : '░';
             return bar;
         }
-        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, _hdrAnswer, '현황']];
+        let exportData = [['NO', 'LEVEL(WBS)', '시작', '완료', '소요일', '상태', '개발업무 (WBS)', _hdrContent, '현황']];
         let ganttL0Rows = [];
         let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
@@ -4094,14 +4093,13 @@ window.deleteHistoryByDateRange = function() {
             const days = countWorkingDays(row._calcStartTs, row._calcPlanTs);
             const statusVal  = colIdx.status  !== -1 ? (row[colIdx.status]  || '') : '';
             const contentVal = colIdx.content !== -1 ? (row[colIdx.content] || '') : '';
-            const answerVal  = colIdx.answer  !== -1 ? (row[colIdx.answer]  || '') : '';
             const barVal = _textStatusBar(row._calcStartTs, row._calcPlanTs, statusVal);
-            exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, answerVal, barVal]);
+exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent + prefix + taskTxt, contentVal, barVal]);
             if (lv === 0) ganttL0Rows.push(exportData.length - 1);
             rowNumCounter++;
         }
         const ws = XLSX.utils.aoa_to_sheet(exportData);
-        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:45},{wch:24}];
+        ws['!cols'] = [{wch:5},{wch:10},{wch:11},{wch:11},{wch:7},{wch:8},{wch:34},{wch:55},{wch:24}];
         (function() {
             const range = XLSX.utils.decode_range(ws['!ref']);
             for (let r = 1; r <= range.e.r; r++) {
@@ -4110,12 +4108,12 @@ window.deleteHistoryByDateRange = function() {
                     const cell = ws[XLSX.utils.encode_cell({ r: r, c: c })];
                     if (!cell) continue;
                     cell.s = {
-                        font: c === 9
+                        font: c === 8
                             ? { name: "Consolas", sz: 11, bold: true, color: { rgb: "1F3A5F" } }
                             : { name: "맑은 고딕", sz: 10, bold: isL0, color: { rgb: "1F2937" } },
                         fill: isL0 ? { patternType: "solid", fgColor: { rgb: "E9EEF6" } }
-                                   : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
-                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : (c === 9 ? "center" : "left"), wrapText: c === 7 || c === 8 }
+                                : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
+                        alignment: { vertical: "center", horizontal: c <= 5 ? "center" : (c === 8 ? "center" : "left"), wrapText: c === 7 }
                     };
                 }
             }
