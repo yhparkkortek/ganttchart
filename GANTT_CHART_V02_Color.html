@@ -6057,6 +6057,23 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
             const row = rows[i]; if (!row) continue;
             if ((row[ci.devStage] || '').toString().trim() === l0Value) { if (first === -1) first = i; last = i; }
         }
+    } else if (ci.wbs !== -1) {
+        // 💡 단일 "개발업무(WBS)" 열 모드: LEVEL 0 행을 찾아서, 다음 LEVEL 0 행 전까지를 그 구간으로 간주
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i]; if (!row) continue;
+            if (row._level === 0) {
+                const label = (row._origDev || row[ci.wbs] || '').toString().trim();
+                if (label === l0Value) {
+                    first = i; last = i;
+                    for (let j = i + 1; j < rows.length; j++) {
+                        const r2 = rows[j]; if (!r2) continue;
+                        if (r2._level === 0) break;
+                        last = j;
+                    }
+                    break;
+                }
+            }
+        }
     }
     if (first === -1) {
         return { pos: rows.length, usedDateMatch: false, previewLabel: '⚠️ 해당 구간을 찾지 못해 맨 끝에 추가됩니다.' };
@@ -6265,6 +6282,7 @@ window.renderTaskInbox = function() {
                 <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22; flex-shrink:0;">📤 다른 프로젝트</button>
                 <button class="action-btn" onclick="if(confirm('이 업무를 보관함에서 삭제할까요?')){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
             </div>
+            <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
             <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="inbox-auto-${it.uid}" checked onchange="window.inboxRecomputePreview('${it.uid}')" style="cursor:pointer;">
@@ -6360,12 +6378,18 @@ window.inboxOpenDistribute = async function(uid) {
         return;
     }
 
+    // 💡 같은 항목에서 다시 누르면 인라인 목록을 접기 (토글)
+    const inlineEl = document.getElementById('inbox-dist-inline-' + uid);
+    if (!inlineEl) return;
+    const alreadyOpen = inlineEl.style.display !== 'none' && inlineEl.dataset.uid === uid;
+    // 다른 항목에서 열려있던 인라인 목록은 닫기
+    document.querySelectorAll('[id^="inbox-dist-inline-"]').forEach(function(el) { el.style.display = 'none'; el.innerHTML = ''; });
+    if (alreadyOpen) return;
+
     window._distCtx = { uid: uid, task: JSON.parse(JSON.stringify(r)), taskName: (r['업무명'] || '새 업무') };
-    document.getElementById('dist-step2').style.display = 'none';
-    document.getElementById('dist-task-name').textContent = window._distCtx.taskName + ' 📧';
-    const listEl = document.getElementById('dist-file-list');
-    listEl.innerHTML = '<div style="padding:24px; text-align:center; color:#888; font-size:12px;">📂 프로젝트 목록을 불러오는 중...</div>';
-    document.getElementById('inbox-dist-overlay').style.display = 'flex';
+    inlineEl.dataset.uid = uid;
+    inlineEl.style.display = 'block';
+    inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#888; font-size:12px;">📂 프로젝트 목록을 불러오는 중...</div>';
 
     try {
         const resp = await gapi.client.drive.files.list({
@@ -6374,23 +6398,28 @@ window.inboxOpenDistribute = async function(uid) {
             corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
         });
         const files = resp.result.files || [];
-        listEl.innerHTML = '';
+        inlineEl.innerHTML = '';
         if (!files.length) {
-            listEl.innerHTML = '<div style="padding:24px; text-align:center; color:#aaa; font-size:12px;">공용 폴더에 프로젝트 파일이 없습니다.</div>';
+            inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#aaa; font-size:12px;">공용 폴더에 프로젝트 파일이 없습니다.</div>';
             return;
         }
         files.forEach(function(f) {
             const d = new Date(f.modifiedTime);
             const div = document.createElement('div');
-            div.style.cssText = 'padding:10px 12px; border:1px solid #ced4da; border-radius:8px; cursor:pointer; margin-bottom:6px; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
+            div.style.cssText = 'padding:8px 10px; border:1px solid #ced4da; border-radius:6px; cursor:pointer; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
             div.onmouseover = function() { this.style.background = '#eef6ff'; this.style.borderColor = '#1971c2'; };
             div.onmouseout  = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
-            div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(f.name) + '</span><span style="color:#999; white-space:nowrap; margin-left:8px;">' + d.toLocaleString() + '</span>';
-            div.addEventListener('click', function() { window.inboxDistPickFile(f.id, f.name); });
-            listEl.appendChild(div);
+            div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(f.name) + '</span><span style="color:#999; white-space:nowrap; margin-left:8px; font-size:11px;">' + d.toLocaleString() + '</span>';
+            div.addEventListener('click', function() {
+                document.getElementById('dist-step2').style.display = 'none';
+                document.getElementById('dist-task-name').textContent = window._distCtx.taskName + ' 📧';
+                document.getElementById('inbox-dist-overlay').style.display = 'flex'; // 파일 선택 후엔 상세 배치 단계만 팝업으로
+                window.inboxDistPickFile(f.id, f.name);
+            });
+            inlineEl.appendChild(div);
         });
     } catch (err) {
-        listEl.innerHTML = '<div style="padding:24px; text-align:center; color:#e03131; font-size:12px;">❌ 목록 호출 실패: 드라이브 연동 상태 또는 권한을 확인해주세요.</div>';
+        inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#e03131; font-size:12px;">❌ 목록 호출 실패: 드라이브 연동 상태 또는 권한을 확인해주세요.</div>';
     }
 };
 
