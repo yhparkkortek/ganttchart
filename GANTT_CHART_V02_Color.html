@@ -877,6 +877,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
                 <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
             </div>
+            <button class="action-btn" onclick="window.printTabSection('tab-address')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <style>
@@ -945,6 +946,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📋 Summary</h2>
             <div class="btn-group"><button type="button" class="action-btn" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
+            <button class="action-btn" onclick="window.printTabSection('tab-summary')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
         <div class="concept-section">
@@ -1110,6 +1112,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" style="margin:0;">🔽 펼치기</button>
             <div class="btn-group"></div>
+            <button class="action-btn" onclick="window.printTabSection('tab-briefspec')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <style>
@@ -1173,6 +1176,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
             <div class="btn-group"></div>
+            <button class="action-btn" onclick="window.printTabSection('tab-mctable')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <div id="mc-normal-section">
@@ -1300,6 +1304,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button class="action-btn" onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다">📤 ics 파일로 내보내기</button>
             <button class="action-btn" onclick="window.calSyncToGist()" title="최초 1회 URL 등록 후 자동 갱신 (몇 시간 지연 가능)">🔗 Google 자동 동기화</button>
             <button class="action-btn" onclick="window.openCalSyncHelp()" title="자동 동기화 설정 방법 보기">❓ 사용법</button>
+            <button class="action-btn" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
@@ -1325,8 +1330,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </label>
                 <button class="action-btn" onclick="window.exportWeeklyReportPPT()">📥 PPT 출력</button>
             </div>
+            <button class="action-btn" onclick="window.printTabSection('tab-weekly')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
-       <div id="weekly-report-page" style="overflow-y:auto; max-height:calc(100vh - 160px);"></div>
+       <div id="weekly-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);"></div>
     </div>
 </div>
 
@@ -2895,6 +2901,39 @@ ${mailText}`;
             const printArea = document.getElementById('gantt-print-area');
             if (printArea) printArea.innerHTML = '';
             document.body.classList.remove('gantt-printing-mode');
+        }, 1000);
+    });
+
+    // 🖨️ [공용] Gantt 인쇄 방식을 그대로 재사용 — 각 탭의 .concept-section만 사본으로 떠서 인쇄
+    window.printTabSection = function(tabId) {
+        const tabEl = document.getElementById(tabId);
+        const source = tabEl ? tabEl.querySelector('.concept-section') : null;
+        if (!source) { window.print(); return; }
+
+        let printArea = document.getElementById('tab-print-area');
+        if (!printArea) { printArea = document.createElement('div'); printArea.id = 'tab-print-area'; document.body.appendChild(printArea); }
+        printArea.innerHTML = '';
+
+        const clone = source.cloneNode(true);
+        // 💡 <select>는 인쇄 시 선택된 텍스트가 안 그려지는 브라우저가 많아 일반 텍스트로 치환 (Gantt와 동일 처리)
+        clone.querySelectorAll('select').forEach(function(sel) {
+            const selectedOption = sel.options[sel.selectedIndex];
+            const span = document.createElement('span');
+            span.textContent = selectedOption ? selectedOption.textContent : '';
+            span.style.cssText = sel.getAttribute('style') || '';
+            sel.parentNode.replaceChild(span, sel);
+        });
+        printArea.appendChild(clone);
+
+        document.body.classList.add('tab-printing-mode');
+        window.print();
+    };
+
+    window.addEventListener('afterprint', function() {
+        setTimeout(function() {
+            const printArea = document.getElementById('tab-print-area');
+            if (printArea) printArea.innerHTML = '';
+            document.body.classList.remove('tab-printing-mode');
         }, 1000);
     });
 
@@ -6710,6 +6749,29 @@ window.updateInboxBadge();
 
     /* 💡 인쇄 전용 사본은 평소 화면에서는 항상 숨김 (인쇄할 때만 @media print에서 보이게 함) */
     #gantt-print-area { display: none; }
+
+    /* 🖨️ [공용] 각 탭(Address/Summary/Brief SPEC/M.C Table/Calendar/Weekly) 인쇄 사본 */
+    #tab-print-area { display: none; }
+    body.tab-printing-mode #app-topbar,
+    body.tab-printing-mode #app-sidebar,
+    body.tab-printing-mode .concept-header-box,
+    body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area) {
+        display: none !important;
+    }
+    @media print {
+        body.tab-printing-mode #tab-print-area {
+            display: block !important;
+            position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0;
+        }
+        body.tab-printing-mode #tab-print-area table,
+        body.tab-printing-mode #tab-print-area .concept-table {
+            width: 100% !important; font-size: 10px !important; table-layout: auto !important;
+        }
+        body.tab-printing-mode #tab-print-area * {
+            max-height: none !important; overflow: visible !important;
+        }
+        @page { size: A4 landscape; margin: 10mm; }
+    }
 
     @media print {
         /* 💡 평소 화면의 표(원본)는 인쇄에서 완전히 숨기고, 인쇄 전용 사본만 보여줌 */
