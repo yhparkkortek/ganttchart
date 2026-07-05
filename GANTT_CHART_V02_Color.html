@@ -642,8 +642,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="tb-sep"></div>
         <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()"><span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
         <button id="mail-btn" class="topbar-btn" onclick="window.showMailAnalyzer()">업무 추가</button>
+        <div class="tb-sep"></div>
+        <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="color:#2c5f8a; border-color:#2c5f8a;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
     </div>
     <div id="file-status" style="text-decoration:underline;">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
+    <div id="new-project-hint" style="font-size:11.5px; color:#888; margin-top:2px;">
+        📌 신규 프로젝트를 시작하시나요? <a href="https://drive.google.com/uc?export=download&id=YOUR_FILE_ID" target="_blank" style="color:#2c5f8a; font-weight:bold; text-decoration:underline;">📥 참조 엑셀 다운로드</a> 후 작성하여 위 영역에 드래그하세요.
+    </div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
 </div>
 
@@ -1700,7 +1705,23 @@ ${mailText}`;
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
             }
-        } catch (err) { console.error('Drive 백업 실패:', err); }
+        } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
+    }
+
+    // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화
+    window.startNewProject = function() {
+        if (globalData && globalData.length > 1) {
+            if (!confirm('현재 화면의 내용을 지우고 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)')) return;
+        }
+        globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = [];
+        colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
+        window.changeLogs = []; window.lastSavedLogCount = 0;
+        window.currentDriveFileId = null;
+        window.projectMeta = {}; window.tabData = {};
+        if (typeof renderTable === 'function') renderTable(globalData);
+        document.getElementById('file-status').textContent = "📌 새 프로젝트를 시작합니다. 참조 엑셀을 다운로드해서 작성한 뒤 이 영역에 드래그하세요.";
+        const hint = document.getElementById('new-project-hint');
+        if (hint) hint.style.display = 'block';
     };
 
     window.saveToGoogleDrive = async function() {
@@ -3751,6 +3772,8 @@ window.deleteHistoryByDateRange = function() {
 
     function renderTable(data) {
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
+        const npHint = document.getElementById('new-project-hint');
+        if (npHint) npHint.style.display = (data && data.length > 1) ? 'none' : 'block';
         if(!data || data.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; return; }
         
         // ✅ 추가: 레벨별 bold 한 곳에서 관리
@@ -4072,8 +4095,11 @@ window.deleteHistoryByDateRange = function() {
             let startX, startWidth, startTableWidth;
             resizer.addEventListener('mousedown', function(e) {
                 e.preventDefault(); startX = e.clientX; startWidth = th.offsetWidth; startTableWidth = table.offsetWidth;
-                // 💡 thElements는 이미 숨김 컬럼이 빠진 채로 수집되므로, 원본 인덱스(hiddenCols)와 비교하면 안 됨 → 전부 고정
-                thElements.forEach((t) => { t.style.width = t.offsetWidth + 'px'; });
+                // 💡 [수정] 드래그 대상이 아닌 열은 절대 건드리지 않음 — max-width로 고정된 열까지 스냅샷되어
+                //    줌/리사이즈 이후 값이 영구적으로 어긋나는 문제를 방지 (상세내용/현황 열만 실제로 유동적)
+                if (!th.classList.contains('detail-th') && !th.classList.contains('chart-th')) {
+                    // 고정 열은 이미 CSS로 고정되어 있으므로 스냅샷 자체가 불필요
+                } 
                 table.style.width = startTableWidth + 'px'; resizer.classList.add('resizing');
                 const mouseMoveHandler = function(e) {
                     const diff = e.clientX - startX; const newWidth = startWidth + diff;
