@@ -4245,7 +4245,7 @@ window.deleteHistoryByDateRange = function() {
                 const h2 = wsMc[XLSX.utils.encode_cell({ r: 1, c: c })];
                 if (h2) h2.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
             }
-            // 💡 금액 $ 서식(숫자 유지 → 재가져오기 안전) + 요약행 색상
+            // 💡 금액 $ 서식(숫자 유지 → 재가져오기 안전) + 요약행 색상 + TYPE(A)열 남색/흰색
             const range = XLSX.utils.decode_range(wsMc['!ref']);
             for (let r = 2; r <= range.e.r; r++) {
                 const sum = summaryRows.find(function(s) { return s.r === r; });
@@ -4253,11 +4253,16 @@ window.deleteHistoryByDateRange = function() {
                     const cell = wsMc[XLSX.utils.encode_cell({ r: r, c: c })];
                     if (!cell) continue;
                     if (c >= 5 && c <= 10 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
-                    if (sum) cell.s = {
-                        font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
-                        fill: { patternType: "solid", fgColor: { rgb: sum.color } },
-                        alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
-                    };
+                    if (sum) {
+                        cell.s = {
+                            font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
+                            fill: { patternType: "solid", fgColor: { rgb: sum.color } },
+                            alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
+                        };
+                    } else if (c === 0) {
+                        // 💡 Comparison 시트와 동일하게 TYPE(A)열은 헤더 같은 남색/흰색
+                        cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                    }
                 }
             }
             wsMc['!cols'] = [{wch:12},{wch:18},{wch:16},{wch:12},{wch:36},{wch:11},{wch:10},{wch:11},{wch:10},{wch:11},{wch:10},{wch:30}];
@@ -4289,8 +4294,8 @@ window.deleteHistoryByDateRange = function() {
             const compRows = window.mcBuildComparisonRows();
             const compSalesPrice = (tabData.mcCompare && tabData.mcCompare.salesPrice) || {};
             const revs = ['R5', 'R4', 'R3', 'R2', 'R1'];
-            const header1 = ['NO', 'TYPE', 'ITEM', 'GROUP'];
-            const header2 = ['', '', '', ''];
+            const header1 = ['TYPE', 'ITEM', 'GROUP']; // 💡 NO열 삭제
+            const header2 = ['', '', ''];
             revs.forEach(function(rev) { header1.push(rev + ' MP', ''); header2.push('Cost($)', 'NRE'); });
             header1.push('Note'); header2.push('');
             const compData = [header1, header2];
@@ -4299,12 +4304,12 @@ window.deleteHistoryByDateRange = function() {
             let compCurType = '';
             const compGroupSubtotal = {}; revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
             const compSubtotalRowIdx = []; // 💡 이후 하이라이트/우측정렬 스타일을 적용할 SUBTOTAL 행 위치 기록
-            const compTypeMerges = []; // 💡 SUBTOTAL로 끊기기 전까지는 TYPE이 항상 같으므로, 그 구간을 B열 세로 병합
+            const compTypeMerges = []; // 💡 SUBTOTAL로 끊기기 전까지는 TYPE이 항상 같으므로, 그 구간을 A열 세로 병합
             let compSegStartRow = compData.length; // 현재 TYPE 병합 구간의 시작 행(헤더 2행 포함 compData 기준)
             compRows.forEach(function(r, idx) {
                 const rt = String(r.type || '').trim();
                 if (rt) compCurType = rt;
-                const row = [idx + 1, r.type, r.item, r.group];
+                const row = [r.type, r.item, r.group]; // 💡 NO(idx+1) 삭제
                 revs.forEach(function(rev) {
                     const p = r.prices[rev] || { cost: 0, nre: 0 };
                     row.push(p.cost || '', p.nre || '');
@@ -4322,12 +4327,12 @@ window.deleteHistoryByDateRange = function() {
                 const isLastRow = !nextRow;
                 const typeWillChange = !!(nextRow && nextType && nextType !== compCurType);
                 if (compCurType && (itemHasEtc || typeWillChange || isLastRow)) {
-                    // 💡 이 구간(compSegStartRow~compCurRowIdx)은 전부 같은 TYPE이었으므로, 2행 이상이면 B열을 병합
+                    // 💡 이 구간(compSegStartRow~compCurRowIdx)은 전부 같은 TYPE이었으므로, 2행 이상이면 A열을 병합
                     if (compCurRowIdx > compSegStartRow) {
-                        compTypeMerges.push({ s: { r: compSegStartRow, c: 1 }, e: { r: compCurRowIdx, c: 1 } });
+                        compTypeMerges.push({ s: { r: compSegStartRow, c: 0 }, e: { r: compCurRowIdx, c: 0 } });
                     }
                     // 💡 라벨은 반드시 0번 칸(병합 anchor)에 넣어야 저장 시 사라지지 않음
-                    const subRow = [compCurType + ' SUBTOTAL', '', '', ''];
+                    const subRow = [compCurType + ' SUBTOTAL', '', ''];
                     revs.forEach(function(rev) { subRow.push(compGroupSubtotal[rev].cost || '', compGroupSubtotal[rev].nre || ''); });
                     subRow.push('');
                     compSubtotalRowIdx.push(compData.length);
@@ -4337,15 +4342,15 @@ window.deleteHistoryByDateRange = function() {
                 }
             });
 
-            const totalRow = ['TOTAL(M.C)', '', '', ''];
+            const totalRow = ['TOTAL(M.C)', '', ''];
             revs.forEach(function(rev) { totalRow.push(totals[rev].cost, totals[rev].nre); });
             totalRow.push('');
             compData.push(totalRow);
-            const salesRow = ['영업판가', '', '', ''];
+            const salesRow = ['영업판가', '', ''];
             revs.forEach(function(rev) { salesRow.push(compSalesPrice[rev] || '', ''); });
             salesRow.push('');
             compData.push(salesRow);
-            const ratioRow = ['재료비율(%)', '', '', ''];
+            const ratioRow = ['재료비율(%)', '', ''];
             revs.forEach(function(rev) {
                 const sp = compSalesPrice[rev] || 0;
                 ratioRow.push(sp > 0 ? (totals[rev].cost / sp * 100).toFixed(1) : '', '');
@@ -4354,20 +4359,20 @@ window.deleteHistoryByDateRange = function() {
             compData.push(ratioRow);
 
             const wsComp = XLSX.utils.aoa_to_sheet(compData);
-            // 💡 헤더 병합 (NO/TYPE/ITEM/GROUP/Note는 2행 세로병합, 리비전별 MP는 Cost($)/NRE 2열 가로병합)
+            // 💡 헤더 병합 (TYPE/ITEM/GROUP/Note는 2행 세로병합, 리비전별 MP는 Cost($)/NRE 2열 가로병합)
             wsComp['!merges'] = [
                 { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
-                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } },
+                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
             ];
-            revs.forEach(function(rev, i) { const c0 = 4 + i * 2; wsComp['!merges'].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } }); });
-            wsComp['!merges'].push({ s: { r: 0, c: 4 + revs.length * 2 }, e: { r: 1, c: 4 + revs.length * 2 } }); // Note
+            revs.forEach(function(rev, i) { const c0 = 3 + i * 2; wsComp['!merges'].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } }); });
+            wsComp['!merges'].push({ s: { r: 0, c: 3 + revs.length * 2 }, e: { r: 1, c: 3 + revs.length * 2 } }); // Note
             const compSummaryRows = compSubtotalRowIdx.map(function(r) { return { r: r, color: 'FFF9C4' }; }).concat([
                 { r: compData.length - 3, color: 'E3F2FD' }, // TOTAL(M.C)
                 { r: compData.length - 2, color: 'E8F5E9' }, // 영업판가
                 { r: compData.length - 1, color: 'FFE0B2' }, // 재료비율(%)
             ]);
-            compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 3 } }); });
-            compTypeMerges.forEach(function(m) { wsComp['!merges'].push(m); }); // 💡 TYPE(B열) — 같은 그룹 구간만큼 세로 병합
+            compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 2 } }); });
+            compTypeMerges.forEach(function(m) { wsComp['!merges'].push(m); }); // 💡 TYPE(A열) — 같은 그룹 구간만큼 세로 병합
             // 헤더 2행 남색 처리
             for (let r = 0; r <= 1; r++) {
                 for (let c = 0; c < header1.length; c++) {
@@ -4375,33 +4380,27 @@ window.deleteHistoryByDateRange = function() {
                     if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
                 }
             }
-            // 💡 A(NO)·B(TYPE)열 데이터 행 전체에 헤더와 동일한 남색/흰색 적용 (요약행은 제외 — 아래 요약행 색상이 우선)
-            const compSummaryRowSet = new Set(compSummaryRows.map(function(s) { return s.r; }));
-            for (let r = 2; r < compData.length; r++) {
-                if (compSummaryRowSet.has(r)) continue;
-                [0, 1].forEach(function(c) {
-                    const cell = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
-                    if (cell) cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
-                });
-            }
-            // 데이터/요약행 스타일 + $ 서식
+            // 데이터/요약행 스타일 + $ 서식 + TYPE(A)열 남색/흰색
             const compRange = XLSX.utils.decode_range(wsComp['!ref']);
             for (let r = 2; r <= compRange.e.r; r++) {
                 const sum = compSummaryRows.find(function(s) { return s.r === r; });
                 for (let c = 0; c <= compRange.e.c; c++) {
                     const cell = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
                     if (!cell) continue;
-                    if (c >= 4 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+                    if (c >= 3 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
                     if (sum) {
                         cell.s = {
                             font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
                             fill: { patternType: "solid", fgColor: { rgb: sum.color } },
                             alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
                         };
+                    } else if (c === 0) {
+                        // 💡 본표(M.C Table)와 동일하게 TYPE(A)열은 헤더 같은 남색/흰색
+                        cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
                     }
                 }
             }
-            wsComp['!cols'] = [{ wch: 6 }, { wch: 14 }, { wch: 20 }, { wch: 16 }];
+            wsComp['!cols'] = [{ wch: 14 }, { wch: 20 }, { wch: 16 }]; // 💡 NO열 삭제로 3칸
             XLSX.utils.book_append_sheet(wb, wsComp, "MC Comparison");
         }
 
