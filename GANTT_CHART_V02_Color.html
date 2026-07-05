@@ -4286,31 +4286,56 @@ window.deleteHistoryByDateRange = function() {
             header1.push('Note'); header2.push('');
             const compData = [header1, header2];
             const totals = {}; revs.forEach(function(rev) { totals[rev] = { cost: 0, nre: 0 }; });
+
+            let compCurType = '';
+            const compGroupSubtotal = {}; revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
+            const compSubtotalRowIdx = []; // 💡 이후 하이라이트/우측정렬 스타일을 적용할 SUBTOTAL 행 위치 기록
             compRows.forEach(function(r, idx) {
+                const rt = String(r.type || '').trim();
+                if (rt) compCurType = rt;
                 const row = [idx + 1, r.type, r.item, r.group];
                 revs.forEach(function(rev) {
                     const p = r.prices[rev] || { cost: 0, nre: 0 };
                     row.push(p.cost || '', p.nre || '');
                     totals[rev].cost += p.cost; totals[rev].nre += p.nre;
+                    compGroupSubtotal[rev].cost += p.cost; compGroupSubtotal[rev].nre += p.nre;
                 });
                 row.push(r.note || '');
                 compData.push(row);
+
+                // 💡 본표/웹 화면 Comparison 페이지와 동일한 기준으로 SUBTOTAL 삽입: ITEM="etc."(구버전 "NRE") / TYPE 변경 / 마지막 행
+                const itemHasEtc = /\betc\b|\bNRE\b/i.test(String(r.item || ''));
+                const nextRow = compRows[idx + 1];
+                const nextType = nextRow ? String(nextRow.type || '').trim() : '';
+                const isLastRow = !nextRow;
+                const typeWillChange = !!(nextRow && nextType && nextType !== compCurType);
+                if (compCurType && (itemHasEtc || typeWillChange || isLastRow)) {
+                    // 💡 라벨은 반드시 0번 칸(병합 anchor)에 넣어야 저장 시 사라지지 않음
+                    const subRow = [compCurType + ' SUBTOTAL', '', '', ''];
+                    revs.forEach(function(rev) { subRow.push(compGroupSubtotal[rev].cost || '', compGroupSubtotal[rev].nre || ''); });
+                    subRow.push('');
+                    compSubtotalRowIdx.push(compData.length);
+                    compData.push(subRow);
+                    revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
+                }
             });
-            const totalRow = ['', '', '', 'TOTAL'];
+
+            const totalRow = ['TOTAL(M.C)', '', '', ''];
             revs.forEach(function(rev) { totalRow.push(totals[rev].cost, totals[rev].nre); });
             totalRow.push('');
             compData.push(totalRow);
-            const salesRow = ['', '', '', '영업판가'];
+            const salesRow = ['영업판가', '', '', ''];
             revs.forEach(function(rev) { salesRow.push(compSalesPrice[rev] || '', ''); });
             salesRow.push('');
             compData.push(salesRow);
-            const ratioRow = ['', '', '', '재료비율(%)'];
+            const ratioRow = ['재료비율(%)', '', '', ''];
             revs.forEach(function(rev) {
                 const sp = compSalesPrice[rev] || 0;
                 ratioRow.push(sp > 0 ? (totals[rev].cost / sp * 100).toFixed(1) : '', '');
             });
             ratioRow.push('');
             compData.push(ratioRow);
+
             const wsComp = XLSX.utils.aoa_to_sheet(compData);
             // 💡 헤더 병합 (NO/TYPE/ITEM/GROUP/Note는 2행 세로병합, 리비전별 MP는 Cost($)/NRE 2열 가로병합)
             wsComp['!merges'] = [
@@ -4319,11 +4344,11 @@ window.deleteHistoryByDateRange = function() {
             ];
             revs.forEach(function(rev, i) { const c0 = 4 + i * 2; wsComp['!merges'].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } }); });
             wsComp['!merges'].push({ s: { r: 0, c: 4 + revs.length * 2 }, e: { r: 1, c: 4 + revs.length * 2 } }); // Note
-            const compSummaryRows = [
-                { r: compData.length - 3, color: 'E3F2FD' }, // TOTAL
+            const compSummaryRows = compSubtotalRowIdx.map(function(r) { return { r: r, color: 'FFF9C4' }; }).concat([
+                { r: compData.length - 3, color: 'E3F2FD' }, // TOTAL(M.C)
                 { r: compData.length - 2, color: 'E8F5E9' }, // 영업판가
                 { r: compData.length - 1, color: 'FFE0B2' }, // 재료비율(%)
-            ];
+            ]);
             compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 3 } }); });
             // 헤더 2행 남색 처리
             for (let r = 0; r <= 1; r++) {
@@ -4344,7 +4369,7 @@ window.deleteHistoryByDateRange = function() {
                         cell.s = {
                             font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
                             fill: { patternType: "solid", fgColor: { rgb: sum.color } },
-                            alignment: { vertical: "center", horizontal: c === 3 ? "right" : "center" }
+                            alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
                         };
                     }
                 }
@@ -11584,28 +11609,35 @@ function _makeFloatingPopupDraggable(popup) {
         clearInterval(repeatTimer);
         holdTimer = null; repeatTimer = null; activeId = null;
         // 💡 연속 누르기 중 M.C Table 이동/추가가 있었다면, 손을 뗀 시점에 SUBTOTAL 재계산을 몰아서 1회 실행
+        //    ⚠️ 이 재계산(표 전체 다시 그리기)을 mouseup에서 "즉시" 실행하면, 버튼 DOM이 통째로
+        //       교체되면서 뒤이어 브라우저가 보내는 click 이벤트가 씹혀버려
+        //       "두 번째 클릭부터 안 눌림" 버그가 생김. 그래서 이번 클릭의 click이 먼저 끝나도록
+        //       한 tick(0ms) 미뤄서 실행한다.
         if (window._bmMcDirty) {
-            window._bmMcDirty = false;
-            if (window.mcRefreshTable) {
-                // 💡 mcRefreshTable()이 tbody를 통째로 다시 그리면 기존 tr 참조는 무효화(detached)되어
-                //    "새 표에서 못 찾음 → 무조건 첫 행" 으로 떨어지는 게 상단 이동 버그의 원인이었음.
-                //    그래서 다시 그리기 '전'에 현재 위치(인덱스)를 먼저 기억해두고, 그 위치로 재선택한다.
-                const anchor = window._bmAnchor && window._bmAnchor.mc;
-                let anchorIdx = -1;
-                if (anchor && window.bmDataRows) {
-                    anchorIdx = window.bmDataRows('mc').indexOf(anchor);
-                }
-                window.mcRefreshTable();
-                if (anchorIdx !== -1 && window.bmDataRows) {
-                    const newRows = window.bmDataRows('mc');
-                    const stillThere = newRows[Math.min(anchorIdx, newRows.length - 1)];
-                    if (stillThere && window.bmPaintSelection && window.bmOpenPopup) {
-                        window._bmSelected.mc.clear(); window._bmSelected.mc.add(stillThere);
-                        window.bmPaintSelection('mc');
-                        window.bmOpenPopup('mc', stillThere);
+            setTimeout(function() {
+                if (!window._bmMcDirty) return;
+                window._bmMcDirty = false;
+                if (window.mcRefreshTable) {
+                    // 💡 mcRefreshTable()이 tbody를 통째로 다시 그리면 기존 tr 참조는 무효화(detached)되어
+                    //    "새 표에서 못 찾음 → 무조건 첫 행" 으로 떨어지는 게 상단 이동 버그의 원인이었음.
+                    //    그래서 다시 그리기 '전'에 현재 위치(인덱스)를 먼저 기억해두고, 그 위치로 재선택한다.
+                    const anchor = window._bmAnchor && window._bmAnchor.mc;
+                    let anchorIdx = -1;
+                    if (anchor && window.bmDataRows) {
+                        anchorIdx = window.bmDataRows('mc').indexOf(anchor);
+                    }
+                    window.mcRefreshTable();
+                    if (anchorIdx !== -1 && window.bmDataRows) {
+                        const newRows = window.bmDataRows('mc');
+                        const stillThere = newRows[Math.min(anchorIdx, newRows.length - 1)];
+                        if (stillThere && window.bmPaintSelection && window.bmOpenPopup) {
+                            window._bmSelected.mc.clear(); window._bmSelected.mc.add(stillThere);
+                            window.bmPaintSelection('mc');
+                            window.bmOpenPopup('mc', stillThere);
+                        }
                     }
                 }
-            }
+            }, 0);
         }
     }
 
