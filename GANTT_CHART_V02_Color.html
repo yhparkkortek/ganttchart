@@ -1003,7 +1003,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
         </div>
         <div class="concept-section">
-            <h3 style="margin:0 0 4px 0;">개발 진척 타임라인</h3>
+            <h3 style="margin:0 0 4px 0;">개발 진척 현황</h3>
             <div id="sum-level0-timeline" style="min-height:90px; margin-top:0;">
                 <div style="color:#999; padding:10px 0;">Gantt chart 데이터를 불러오면 0레벨 항목이 타임라인으로 표시됩니다.</div>
             </div>
@@ -1402,8 +1402,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             새 프로젝트를 시작합니다.<br>참조 엑셀을 다운로드해서 작성한 뒤<br>화면에 드래그하세요.
         </div>
         <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; padding:10px 22px; background:#2c5f8a; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px;">📥 참조 엑셀 다운로드</a>
-        <br>
-        <button class="action-btn" style="margin-top:16px;" onclick="document.getElementById('new-project-modal-overlay').style.display='none';">확인</button>
+        <div style="display:flex; justify-content:center; margin-top:16px;">
+            <button class="action-btn" onclick="document.getElementById('new-project-modal-overlay').style.display='none';">확인</button>
+        </div>
     </div>
 </div>
 
@@ -8973,7 +8974,8 @@ async function msCallGemini(apiKey, parsed) {
     function wrFormatMD(ts) {
         if (!ts) return "";
         const d = new Date(ts);
-        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+        const yy = String(d.getFullYear()).slice(-2);
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} '${yy}`;
     }
     function wrGetWeekNumber(ts) {
         const d = new Date(ts);
