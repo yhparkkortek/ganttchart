@@ -4302,9 +4302,12 @@ window.deleteHistoryByDateRange = function() {
         function _buildMcSheet(rows, rev) {
             const num = function(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[^0-9.-]+/g, '')); return isNaN(n) ? 0 : n; };
             const cellMoney = function(v) { const n = num(v); return n === 0 ? '' : n; };
+            // 💡 견적 마지막 수정 날짜 — 이 리비전(rev)의 마지막 변경이력 시각 (없으면 '-')
+            const revChangeLogs = (tabData.mcChangeLog || []).filter(function(l) { return l.rev === rev; });
+            const mcLatestDate = revChangeLogs.length ? revChangeLogs[revChangeLogs.length - 1].time : '-';
             const mcData = [
-                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', 'PROTO A', '', 'PROTO B', '', 'MP', '', 'Note'],
-                ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', ''],
+                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', 'PROTO A', '', 'PROTO B', '', 'MP', '', '최종수정: ' + mcLatestDate],
+                ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Note'],
             ];
             const valid = (rows || []).filter(function(r) { const t = String(r.type || '').toUpperCase().replace(/\s/g, ''); return t !== 'SUBTOTAL' && t !== 'TOTAL'; });
             let lastType = '';
@@ -4349,7 +4352,7 @@ window.deleteHistoryByDateRange = function() {
                 { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } },
                 { s: { r: 0, c: 4 }, e: { r: 1, c: 4 } },
                 { s: { r: 0, c: 5 }, e: { r: 0, c: 6 } }, { s: { r: 0, c: 7 }, e: { r: 0, c: 8 } },
-                { s: { r: 0, c: 9 }, e: { r: 0, c: 10 } }, { s: { r: 0, c: 11 }, e: { r: 1, c: 11 } },
+                { s: { r: 0, c: 9 }, e: { r: 0, c: 10 } },
             ];
             summaryRows.forEach(function(s) { wsMc['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 4 } }); });
             typeMerges.forEach(function(m) { wsMc['!merges'].push(m); });
@@ -4357,6 +4360,9 @@ window.deleteHistoryByDateRange = function() {
                 const h2 = wsMc[XLSX.utils.encode_cell({ r: 1, c: c })];
                 if (h2) h2.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
             }
+            // 💡 Note 헤더 상단 셀(최종수정 날짜)만 우측 정렬 — 나머지 헤더는 기본 중앙정렬 유지
+            const noteDateCell = wsMc[XLSX.utils.encode_cell({ r: 0, c: 11 })];
+            if (noteDateCell) noteDateCell.s = { alignment: { vertical: "center", horizontal: "right" } };
             const range = XLSX.utils.decode_range(wsMc['!ref']);
             for (let r = 2; r <= range.e.r; r++) {
                 const sum = summaryRows.find(function(s) { return s.r === r; });
@@ -11619,6 +11625,31 @@ function _makeFloatingPopupDraggable(popup) {
     document.addEventListener('mouseup', function() { isDragging = false; });
 }
 
+// 💡 M.C Table 이동/추가 후 SUBTOTAL·TYPE 재계산 — 클릭 한 번당 정확히 한 번 실행
+window.mcFlushDirty = function() {
+    if (!window._bmMcDirty) return;
+    window._bmMcDirty = false;
+    if (!window.mcRefreshTable) return;
+    const anchor = window._bmAnchor && window._bmAnchor.mc;
+    let anchorIdx = -1;
+    if (anchor && window.bmDataRows) {
+        anchorIdx = window.bmDataRows('mc').indexOf(anchor);
+    }
+    window.mcRefreshTable();
+    if (anchorIdx !== -1 && window.bmDataRows) {
+        const newRows = window.bmDataRows('mc');
+        const stillThere = newRows[Math.min(anchorIdx, newRows.length - 1)];
+        if (stillThere && window.bmPaintSelection) {
+            window._bmSelected.mc.clear(); window._bmSelected.mc.add(stillThere);
+            window._bmAnchor.mc = stillThere;
+            window.bmPaintSelection('mc');
+            // 💡 버튼 박스(팝업)는 처음 연 위치에 계속 고정 — 참조만 새 행으로 갈아끼운다.
+            const popup = document.getElementById('bm-row-popup');
+            if (popup) { popup._bmRefTr = stillThere; popup.dataset.key = 'mc'; }
+        }
+    }
+};
+
 // ─── 행 액션 팝업 버튼(➕➖⬆️⬇️◀▶) "누르고 있으면 계속 실행" 공용 처리 ───
 (function() {
     const REPEAT_IDS = ['bm-up', 'bm-dn', 'bm-add', 'bm-del', 'rap-up', 'rap-dn', 'rap-left', 'rap-right', 'rap-add', 'rap-del'];
@@ -11630,34 +11661,8 @@ function _makeFloatingPopupDraggable(popup) {
         clearTimeout(holdTimer);
         clearInterval(repeatTimer);
         holdTimer = null; repeatTimer = null; activeId = null;
-        // 💡 연속 누르기 중 M.C Table 이동/추가가 있었다면, 손을 뗀 시점에 SUBTOTAL 재계산을 몰아서 1회 실행
-        //    ⚠️ 이 재계산(표 전체 다시 그리기)을 mouseup에서 "즉시" 실행하면, 버튼 DOM이 통째로
-        //       교체되면서 뒤이어 브라우저가 보내는 click 이벤트가 씹혀버려
-        //       "두 번째 클릭부터 안 눌림" 버그가 생김. 그래서 이번 클릭의 click이 먼저 끝나도록
-        //       한 tick(0ms) 미뤄서 실행한다.
-        if (window._bmMcDirty) {
-            setTimeout(function() {
-                if (!window._bmMcDirty) return;
-                window._bmMcDirty = false;
-                if (window.mcRefreshTable) {
-                    const anchor = window._bmAnchor && window._bmAnchor.mc;
-                    let anchorIdx = -1;
-                    if (anchor && window.bmDataRows) {
-                        anchorIdx = window.bmDataRows('mc').indexOf(anchor);
-                    }
-                    window.mcRefreshTable();
-                    if (anchorIdx !== -1 && window.bmDataRows) {
-                        const newRows = window.bmDataRows('mc');
-                        const stillThere = newRows[Math.min(anchorIdx, newRows.length - 1)];
-                        if (stillThere && window.bmPaintSelection && window.bmOpenPopup) {
-                            window._bmSelected.mc.clear(); window._bmSelected.mc.add(stillThere);
-                            window.bmPaintSelection('mc');
-                            window.bmOpenPopup('mc', stillThere);
-                        }
-                    }
-                }
-            }, 0);
-        }
+        // 💡 혹시 아직 처리 안 된 게 남아있으면(안전망) 여기서도 한 번 정리 — 평소엔 각 클릭에서 이미 처리됨
+        if (window._bmMcDirty) setTimeout(window.mcFlushDirty, 0);
     }
 
     document.addEventListener('mousedown', function(e) {
@@ -12197,7 +12202,7 @@ function bmMoveSelected(key, dir) {
     bmPaintSelection(key);
     const popup = document.getElementById('bm-row-popup');
     if (popup) popup.dataset.key = key;
-    if (key === 'mc') window._bmMcDirty = true;
+    if (key === 'mc') { window._bmMcDirty = true; setTimeout(window.mcFlushDirty, 0); }
 }
 
 function bmAddAfter(key, refTr) {
@@ -12217,9 +12222,10 @@ function bmAddAfter(key, refTr) {
     window.bmSetupAllRows(key);
     bmPaintSelection(key);
 
-    // 💡 M.C Table도 누르는 동안은 재계산 없이 DOM만 유지, 재계산은 손을 뗄 때 한 번만(stopRepeat에서 처리)
+    // 💡 M.C Table은 클릭 즉시(다음 tick) 재계산
     if (key === 'mc') {
         window._bmMcDirty = true;
+        setTimeout(window.mcFlushDirty, 0);
     } else {
         const popup = document.getElementById('bm-row-popup');
         if (popup) popup.dataset.key = key;
