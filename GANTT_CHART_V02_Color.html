@@ -5881,6 +5881,22 @@ window.showMailAnalyzer = function() {
     document.getElementById('mail-analyzer-overlay').style.display = 'flex';
 };
 
+// 💡 텍스트박스에 다시 타이핑 시작하면, 이전 분석 결과 표시(✅완료/⚠️실패)로 남아있던
+//    AI 분석 버튼을 원래 상태로 되돌림 (한 번만 등록되도록 플래그로 방지)
+if (!window._mailInputListenerBound) {
+    window._mailInputListenerBound = true;
+    document.addEventListener('input', (e) => {
+        if (e.target && e.target.id === 'mail-content-input') {
+            const btn = document.getElementById('mail-analyze-btn');
+            if (btn && !btn.disabled) {
+                btn.innerHTML = '🤖 AI 분석';
+                btn.style.background = '#2c5f8a';
+                btn.style.borderColor = '#2c5f8a';
+            }
+        }
+    });
+}
+
 window.closeMailAnalyzer = function(e) {
     if (e) return; // 배경 클릭 무시, X 버튼으로만 닫기
     document.getElementById('mail-analyzer-overlay').style.display = 'none';
@@ -5928,17 +5944,23 @@ window.populateInsertPosition = function() {
     }
 };
 
-window.analyzeMailContent = function() {
+window.analyzeMailContent = async function() {
     const apiKey = localStorage.getItem('gemini_api_key');
     if (!apiKey) { alert('먼저 AI API 키를 입력하고 저장해주세요.'); return; }
 
     const mailText = document.getElementById('mail-content-input').value.trim();
     if (!mailText) { alert('메일 내용을 입력해주세요.'); return; }
 
+    const analyzeBtn = document.getElementById('mail-analyze-btn');
     document.getElementById('mail-loading').style.display = 'block';
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
-    document.getElementById('mail-analyze-btn').disabled = true;
+
+    // 💡 파일첨부 탭 개별 버튼과 동일한 스타일: 버튼 자체가 진행 상태를 표시
+    analyzeBtn.disabled = true;
+    analyzeBtn.innerHTML = '⏳ 분석중...';
+    analyzeBtn.style.background = '#6c86a3';
+    analyzeBtn.style.borderColor = '#6c86a3';
 
     // ✅ 프로젝트 정보 함수 내부에서 직접 수집
     let projectAssignee = "";
@@ -5956,88 +5978,87 @@ window.analyzeMailContent = function() {
         }
     }
 
-    const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailText, null);
+    // 💡 파일 첨부 탭과 동일하게, Gemini로 보내는 본문은 2000자로 제한 (응답 잘림/실패 방지)
+    const mailTextForPrompt = mailText.substring(0, 2000);
+    const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailTextForPrompt, null);
 
     // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
 
-    fetch(GAS_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({
-            userApiKey: localStorage.getItem('gemini_api_key'),
-            prompt: prompt,
-            model: 'gemini-2.5-flash-lite'
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        document.getElementById('mail-loading').style.display = 'none';
-        document.getElementById('mail-analyze-btn').disabled = false;
+    const MAX_RETRY = 3;
+    let lastErr = null;
+    let parsed = null;
 
-        if (data.status !== 'success') {
-            throw new Error(data.message || "구글 서버 응답 오류");
-        }
-
-        let text = data.result.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        text = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        let jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) throw new Error('JSON 형식을 찾을 수 없습니다.');
-        text = jsonMatch[0];
-            
-        // JSON 안전 처리
-        text = text
-            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-            .replace(/\n/g, '\\n')
-            .replace(/\r/g, '\\r')
-            .replace(/\t/g, '\\t');
-        text = text.replace(/\\\\n/g, '\\n').replace(/\\\\r/g, '\\r').replace(/\\\\t/g, '\\t');
-            
-        let parsed;
+    window._mailAnalyzeCancelled = false;
+    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+        if (window._mailAnalyzeCancelled) { parsed = null; lastErr = new Error('사용자가 중단함'); break; }
         try {
-            parsed = JSON.parse(text);
-        } catch(e) {
-            parsed = {
-                업무명: (text.match(/"업무명"\s*:\s*"([^"]*)"/) || [])[1] || "",
-                시작일: (text.match(/"시작일"\s*:\s*"([^"]*)"/) || [])[1] || "",
-                완료일: (text.match(/"완료일"\s*:\s*"([^"]*)"/) || [])[1] || "",
-                상태: (text.match(/"상태"\s*:\s*"([^"]*)"/) || [])[1] || "진행",
-                개발단계: (text.match(/"개발단계"\s*:\s*"([^"]*)"/) || [])[1] || "",
-                상세내용: (text.match(/"상세내용"\s*:\s*"([\s\S]*?)"(?:\s*,|\s*\})/) || [])[1] || "",
-                wbs레벨: parseInt((text.match(/"wbs레벨"\s*:\s*(\d)/) || [])[1] || "4"),
-            };
+            const res = await fetch(GAS_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({
+                    userApiKey: apiKey,
+                    prompt: prompt,
+                    model: 'gemini-2.5-flash-lite'
+                })
+            });
+            const data = await res.json();
+
+            if (data.status !== 'success') {
+                throw new Error(data.message || "구글 서버 응답 오류");
+            }
+
+            const text = data.result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            parsed = window.parseGeminiTask(text);
+            if (!parsed) throw new Error('JSON 형식을 찾을 수 없습니다.');
+            lastErr = null;
+            break;
+        } catch (err) {
+            lastErr = err;
+            if (attempt < MAX_RETRY && !window._mailAnalyzeCancelled) {
+                console.warn(`AI 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
+                await new Promise(r => setTimeout(r, 3000));
+            }
         }
-        window._mailAnalyzedResult = parsed;
-        // 오른쪽 패널에 표시
-        const mailInput = document.getElementById('mail-content-input');
-        const mailText = mailInput ? mailInput.value : '';
-        mailShowRightDetail('직접입력', '', '', mailText, null, parsed, () => {
-            window.insertMailTask();
-            document.getElementById('mail-right-empty').style.display  = 'flex';
-            document.getElementById('mail-right-detail').style.display = 'none';
-        });
-        // 누적 목록에 추가
-        pasteAddResult(parsed, mailText);
-    })
-    .catch(err => {
-        document.getElementById('mail-loading').style.display = 'none';
-        document.getElementById('mail-analyze-btn').disabled = false;
+    }
+
+    document.getElementById('mail-loading').style.display = 'none';
+    analyzeBtn.disabled = false;
+
+    if (!parsed) {
+        analyzeBtn.innerHTML = '⚠️ 실패(재시도)';
+        analyzeBtn.style.background = '#e03131';
+        analyzeBtn.style.borderColor = '#e03131';
         const errDiv = document.getElementById('mail-error');
         errDiv.style.display = 'block';
-        errDiv.textContent = '❌ 분석 실패: ' + err.message;
-    });
-        };
-    
-    window.showMailCalendar = function(btn, ts, fieldKey) {
-    window.currentCalendarTarget = btn;
-    window.currentCalendarTs = Number(ts);
-    window.currentCalendarRow = null;
-    window.currentCalendarCol = null;
-    window.currentCalendarMailField = fieldKey;
-    window.currentViewYear = new Date(ts).getFullYear();
-    window.currentViewMonth = new Date(ts).getMonth();
-    window.calendarFixedPos = null;
-    renderCalendar(false);
+        errDiv.textContent = '❌ 분석 실패: ' + (lastErr ? lastErr.message : '알 수 없는 오류') + ` (${MAX_RETRY}회 재시도 후에도 실패)`;
+        return;
+    }
+
+    analyzeBtn.innerHTML = '✅ 완료';
+    analyzeBtn.style.background = '#28a745';
+    analyzeBtn.style.borderColor = '#28a745';
+
+    window._mailAnalyzedResult = parsed;
+    // 💡 파일첨부/메일서버와 동일하게: 자동으로 오른쪽 패널 열지 않고, 목록에만 추가
+    //    (미리보기는 목록에서 항목을 클릭했을 때만 표시됨)
+    const mailInput = document.getElementById('mail-content-input');
+    const mailTextDisplay = mailInput ? mailInput.value : '';
+    pasteAddResult(parsed, mailTextDisplay);
+};
+
+// ─── 직접입력 분석 강제 중단/초기화 ─────────────────────────
+window.mailResetAnalysis = function() {
+    window._mailAnalyzeCancelled = true;
+    document.getElementById('mail-loading').style.display = 'none';
+    const analyzeBtn = document.getElementById('mail-analyze-btn');
+    analyzeBtn.disabled = false;
+    analyzeBtn.innerHTML = '🤖 AI 분석';
+    analyzeBtn.style.background = '#2c5f8a';
+    analyzeBtn.style.borderColor = '#2c5f8a';
+    const errDiv = document.getElementById('mail-error');
+    errDiv.style.display = 'block';
+    errDiv.textContent = '⏹ 분석을 중단하고 초기 상태로 되돌렸습니다.';
 };
 
 window.renderMailResult = function(result) {
@@ -7475,7 +7496,7 @@ window.updateInboxBadge();
         <!-- 헤더 -->
        <div id="mail-drag-handle" class="history-header" style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:move; border-bottom:1.5px solid #2c5f8a; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
             <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
-            <div style="display:flex; gap:6px; justify-self:center;">
+            <div style="display:flex; gap:6px; justify-self:center; align-items:center;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
                             background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
@@ -7496,6 +7517,11 @@ window.updateInboxBadge();
                             white-space:nowrap; transition:all 0.2s;">
                     🌐 메일 서버
                 </div>
+                <div style="width:1px; height:20px; background:#dee2e6; margin:0 4px;"></div>
+                <button class="action-btn" onclick="window.editPrompt()" title="3개 탭 공용 AI 분석 프롬프트 수정"
+                    style="min-width:auto !important; padding:6px 12px !important; font-size:13px;">
+                    ✏️ 프롬프트
+                </button>
             </div>
             <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                 style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
@@ -7540,29 +7566,35 @@ window.updateInboxBadge();
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
                     <div style="display:flex; gap:8px; justify-content:center;">
-                        <button class="action-btn" onclick="window.editPrompt()" style="min-width:130px !important;">
-                            ✏️ 프롬프트
-                        </button>
                         <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="min-width:130px !important; background:#2c5f8a; color:#fff;">
                             🤖 AI 분석
                         </button>
                     </div>
-                    <div id="mail-loading" style="display:none; text-align:center; padding:15px; color:#e67e22; font-weight:bold; font-size:12px;">
-                        ⏳ AI 분석 중...
+                    <div id="mail-loading" style="display:none; text-align:center; padding:6px 0;">
+                        <button class="action-btn" onclick="window.mailResetAnalysis()" style="min-width:auto !important; padding:3px 10px !important; font-size:11px; border-color:#e03131; color:#e03131;">⏹ 중단/초기화</button>
                     </div>
                     <div id="mail-error" style="display:none; color:#e03131; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-top:6px;"></div>
 
-                    <!-- 직접입력 분석 결과 목록 (누적) -->
-                    <div id="paste-result-header" style="display:none; margin-top:10px; padding:6px 8px; background:#f8f9fa; border-radius:6px; border:1px solid #dee2e6; flex-shrink:0;">
+                    <!-- 직접입력 분석 결과 목록 (누적) — 파일첨부/메일서버와 동일한 체크박스+일괄등록 구조 -->
+                    <div id="paste-result-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; margin-bottom:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <span style="font-size:11px; font-weight:bold;">📋 분석결과 <span id="paste-result-count">0</span>개</span>
-                            <button onclick="window.pasteClearResults()"
-                                style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
-                                🗑️ 초기화
-                            </button>
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <label style="font-size:10px; color:#555; cursor:pointer;">
+                                    <input type="checkbox" id="paste-check-all" onchange="window.pasteSelectAll(this.checked)"> 전체선택
+                                </label>
+                                <button onclick="window.pasteClearResults()"
+                                    style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
+                                    🗑️ 초기화
+                                </button>
+                            </div>
                         </div>
                     </div>
-                    <div id="paste-result-list" style="flex:1; overflow-y:auto; margin-top:4px; display:none;"></div>
+                    <div id="paste-result-list" style="flex:1; overflow-y:auto; margin-top:4px; display:none; border:1px solid #dee2e6; border-radius:6px;"></div>
+                    <button class="action-btn" id="paste-batch-btn" onclick="window.pasteBatchInsert()"
+                            style="display:none; width:100%; margin-top:8px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                        ⚡ 선택항목 연속등록
+                    </button>
                 </div>
 
                 <!-- ── 파일첨부 탭 왼쪽 ── -->
@@ -7581,6 +7613,7 @@ window.updateInboxBadge();
                         <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
                         <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
                     </div>
+                    <div id="mf-pending-list" style="display:none; max-height:180px; overflow-y:auto; margin-bottom:8px; border:1px solid #dee2e6; border-radius:6px; flex-shrink:0;"></div>
                     <div id="mf-analyze-group" style="display:none; gap:8px; margin-bottom:8px; flex-shrink:0; justify-content:center;">
                         <button class="action-btn" onclick="window.mfClearFiles()" style="min-width:130px !important; border-color:#e03131; color:#e03131;">
                             🗑️ 전체 비우기
@@ -7590,12 +7623,15 @@ window.updateInboxBadge();
                         </button>
                     </div>
                     <div id="mf-progress" style="display:none; margin-bottom:8px; flex-shrink:0;">
-                        <div style="font-size:11px; font-weight:bold; margin-bottom:3px;">⏳ <span id="mf-prog-text"></span></div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px;">
+                            <div style="font-size:11px; font-weight:bold;">⏳ <span id="mf-prog-text"></span></div>
+                            <button class="action-btn" onclick="window.mfResetAnalysis()" style="min-width:auto !important; padding:2px 8px !important; font-size:10px; border-color:#e03131; color:#e03131;">⏹ 중단/초기화</button>
+                        </div>
                         <div style="background:#e9ecef; border-radius:4px; height:5px; overflow:hidden;">
                             <div id="mf-prog-bar" style="height:100%; background:#e67e22; transition:width 0.3s; width:0%;"></div>
                         </div>
                     </div>
-                    <div id="mf-list-header" style="display:none; flex-shrink:0; margin-bottom:4px;">
+                    <div id="mf-list-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; margin-bottom:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center;">
                             <span style="font-size:11px; font-weight:bold;">📋 분석결과 <span id="mf-result-count">0</span>개</span>
                             <label style="font-size:10px; color:#555; cursor:pointer;">
@@ -7605,7 +7641,7 @@ window.updateInboxBadge();
                     </div>
                     <div id="mf-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
                     <button class="action-btn" id="mf-batch-btn" onclick="window.mfBatchInsert()"
-                            style="display:none; width:100%; margin:auto 0 0 -0.5px !important; min-width:auto !important; height:38px !important; position:relative; top:0.5px; background:#2c5f8a; color:#fff;">
+                            style="display:none; width:100%; margin-top:8px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -7636,7 +7672,7 @@ window.updateInboxBadge();
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
                                 <input type="checkbox" id="ms-save-id"> ID 저장
                             </label>
-                            <button class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important;">
+                            <button class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                                 📥 메일 가져오기
                             </button>
                         </div>
@@ -7644,7 +7680,10 @@ window.updateInboxBadge();
                     </div>
                     <!-- 진행바 -->
                     <div id="ms-progress" style="display:none; padding:8px 12px; flex-shrink:0;">
-                        <div style="font-size:11px; font-weight:bold; margin-bottom:3px; color:#e67e22;">⏳ <span id="ms-prog-text">메일 가져오는 중...</span></div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px;">
+                            <div style="font-size:11px; font-weight:bold; color:#e67e22;">⏳ <span id="ms-prog-text">메일 가져오는 중...</span></div>
+                            <button class="action-btn" onclick="window.msStopAnalysis()" style="min-width:auto !important; padding:2px 8px !important; font-size:10px; border-color:#e03131; color:#e03131;">⏹ 중단</button>
+                        </div>
                         <div style="background:#e9ecef; border-radius:4px; height:5px; overflow:hidden;">
                             <div id="ms-prog-bar" style="height:100%; background:#e67e22; width:0%; transition:width 0.3s;"></div>
                         </div>
@@ -7659,10 +7698,10 @@ window.updateInboxBadge();
                         </div>
                     </div>
                     <!-- 결과 목록 -->
-                    <div id="ms-result-list" style="flex:1; overflow-y:auto;"></div>
+                    <div id="ms-result-list" style="flex:1; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; margin:0 12px;"></div>
                     <!-- 연속등록 버튼 -->
                     <button class="action-btn" id="ms-batch-btn" onclick="window.msBatchInsert()"
-                            style="display:none; width:calc(100% - 24px); margin:auto 12px 12px 12px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff;">
+                            style="display:none; width:calc(100% - 24px); margin:8px 12px 12px 12px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -7942,42 +7981,139 @@ window.pasteClearResults = function() {
 
 function pasteAddResult(task, mailText) {
     const idx = window._pasteResults.length;
-    window._pasteResults.push({ idx, task, mailText, registered: false });
-    
+    window._pasteResults.push({ idx, task, mailText, selected: !!task, registered: false });
+    pasteRenderResultList();
+}
+
+// ─── 직접입력 누적 결과 목록 렌더링 (파일첨부/메일서버와 동일한 UI: 체크박스+번호+이름+상태pill+×삭제) ─────
+function pasteRenderResultList() {
     const list = document.getElementById('paste-result-list');
     const header = document.getElementById('paste-result-header');
     const count = document.getElementById('paste-result-count');
-    
+    const batchBtn = document.getElementById('paste-batch-btn');
+    const arr = window._pasteResults || [];
+
+    if (!arr.length) {
+        list.style.display = 'none';
+        header.style.display = 'none';
+        batchBtn.style.display = 'none';
+        list.innerHTML = '';
+        return;
+    }
+
     list.style.display = 'block';
     header.style.display = 'block';
-    count.textContent = window._pasteResults.length;
-    
-    const item = document.createElement('div');
-    item.id = `paste-item-${idx}`;
-    item.style.cssText = 'padding:7px 8px; border-bottom:1px solid #f0f0f0; background:#fff; cursor:pointer; transition:background 0.15s;';
-    item.innerHTML = `
-        <div style="font-size:12px; font-weight:bold; color:#333; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-            ${escapeHtml(task['업무명']||'새업무')} 📧
+    batchBtn.style.display = 'block';
+    count.textContent = arr.length;
+
+    list.innerHTML = arr.map((r, i) => `
+        <div id="paste-item-${i}" data-idx="${i}"
+             style="display:flex; align-items:center; gap:6px; padding:7px 8px; border-bottom:1px solid #f0f0f0;
+                    background:${r.registered ? '#d4edda' : '#fff'}; cursor:pointer; transition:background 0.15s;">
+            <input type="checkbox" data-idx="${i}" ${r.selected ? 'checked':''} style="flex-shrink:0;">
+            <span style="font-size:10px; color:#aaa; flex-shrink:0; width:16px;">${i+1}</span>
+            <span style="flex:1; min-width:0; font-size:12px; font-weight:bold; color:#333;
+                         white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"
+                  title="${escapeHtml(r.task['업무명']||'새업무')}">
+                ${escapeHtml(r.task['업무명']||'새업무')} 📧
+            </span>
+            <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; border-radius:12px;
+                         ${r.registered ? 'background:#28a745; color:#fff;' : 'background:#f1f3f5; color:#888;'}">
+                ${r.registered ? '✅ 완료' : '⬜ 미등록'}
+            </span>
+            <button data-del-idx="${i}" title="목록에서 삭제"
+                    style="flex-shrink:0; background:#fff; border:1px solid #e03131; color:#e03131; border-radius:4px;
+                           width:20px; height:20px; line-height:1; cursor:pointer;">×</button>
         </div>
-        <div style="font-size:10px; color:#888; margin-top:2px;">
-            ${task['시작일']?.includes('날짜확인필요') ? '⚠️날짜필요' : (task['시작일']||'')}
-            ${task['상태'] ? `<span style="background:#e7f3ff;color:#0056b3;padding:1px 4px;border-radius:3px;margin-left:4px;">${task['상태']}</span>` : ''}
-        </div>`;
-    item.addEventListener('click', () => {
-        // 이전 활성 초기화
-        document.querySelectorAll('[id^="paste-item-"]').forEach(el => el.style.background = '#fff');
-        item.style.background = '#fff3e0';
-        const r = window._pasteResults[idx];
-        mailShowRightDetail('직접입력', '', '', r.mailText||'', null, r.task, () => {
-            window.insertMailTask();
-            r.registered = true;
-            item.style.background = '#d4edda';
-            document.getElementById('mail-right-empty').style.display  = 'flex';
-            document.getElementById('mail-right-detail').style.display = 'none';
+    `).join('');
+
+    // 이벤트 연결 (체크박스 / 삭제 / 행클릭 미리보기)
+    arr.forEach((r, i) => {
+        const row = document.getElementById(`paste-item-${i}`);
+        if (!row) return;
+
+        row.addEventListener('click', (e) => {
+            if (e.target.type === 'checkbox' || e.target.dataset.delIdx !== undefined) return;
+            mailShowRightDetail('직접입력', '', '', r.mailText||'', null, r.task, () => {
+                window.insertMailTask();
+                r.registered = true;
+                pasteRenderResultList();
+                document.getElementById('mail-right-empty').style.display  = 'flex';
+                document.getElementById('mail-right-detail').style.display = 'none';
+            });
         });
+
+        const cb = row.querySelector('input[type=checkbox]');
+        if (cb) cb.addEventListener('change', function() { window.pasteToggleCheck(i, this.checked); });
+
+        const delBtn = row.querySelector('[data-del-idx]');
+        if (delBtn) delBtn.addEventListener('click', function(e) { e.stopPropagation(); window.pasteDeleteResult(i); });
     });
-    list.appendChild(item);
+
+    window.pasteSyncCheckAll();
 }
+
+window.pasteToggleCheck = function(idx, checked) {
+    if (window._pasteResults[idx]) window._pasteResults[idx].selected = checked;
+    window.pasteSyncCheckAll();
+};
+
+window.pasteSyncCheckAll = function() {
+    const all = document.querySelectorAll('#paste-result-list input[type=checkbox]');
+    const chk = document.querySelectorAll('#paste-result-list input[type=checkbox]:checked');
+    const ca  = document.getElementById('paste-check-all');
+    if (ca) ca.checked = all.length > 0 && all.length === chk.length;
+};
+
+window.pasteSelectAll = function(select) {
+    document.querySelectorAll('#paste-result-list input[type=checkbox]').forEach(cb => {
+        cb.checked = select;
+        const idx = parseInt(cb.dataset.idx);
+        if (!isNaN(idx) && window._pasteResults[idx]) window._pasteResults[idx].selected = select;
+    });
+};
+
+// ─── 목록에서 항목 하나 삭제 (Gantt에 이미 등록된 실제 데이터는 지워지지 않음) ─────
+window.pasteDeleteResult = function(idx) {
+    const r = window._pasteResults[idx];
+    if (!r) return;
+    if (!confirm(`"${r.task['업무명']||'새업무'}"\n이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`)) return;
+    window._pasteResults.splice(idx, 1);
+    pasteRenderResultList();
+};
+
+// ─── 선택항목 연속등록 (파일첨부 탭의 mfDirectInsert 로직 재사용) ─────
+window.pasteBatchInsert = function() {
+    const validTargets = window._pasteResults.filter(r =>
+        r.selected && r.task && !r.registered &&
+        !( (r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요') )
+    );
+    const excludedCount = window._pasteResults.filter(r => r.selected && r.task && !r.registered).length - validTargets.length;
+
+    if (!validTargets.length) {
+        alert(excludedCount > 0 ? '⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)' : '등록할 항목을 체크해주세요.');
+        return;
+    }
+
+    let previewMsg = `✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`;
+    if (excludedCount > 0) previewMsg += `\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`;
+    previewMsg += '\n\n[등록할 업무 목록]\n' + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
+    if (!confirm(previewMsg + '\n\n위 내용으로 등록하시겠습니까?')) return;
+
+    for (let i = window._pasteResults.length - 1; i >= 0; i--) {
+        const r = window._pasteResults[i];
+        if (r.selected && r.task && !r.registered) {
+            if (mfDirectInsert(r.task)) {
+                r.registered = true;
+                r.selected = false;
+            }
+        }
+    }
+
+    pasteRenderResultList();
+    window.recalculateSchedules();
+    alert(`✅ ${validTargets.length}개 항목이 등록되었습니다!`);
+};
 
 // ─── 파일 선택 ───────────────────────────────────────────
 window.mfHandleFiles = function(files) {
@@ -8017,12 +8153,11 @@ window.mfHandleFiles = function(files) {
             <div style="font-size:20px;">📁</div>
             <div style="font-weight:bold; color:#e67e22; font-size:12px; margin-top:3px;">
                 ${arr.length}개 선택됨 (클릭하여 추가 변경)
-            </div>
-            <div style="font-size:10px; color:#aaa; margin-top:2px;">
-                ${arr.map(f=>f.name).slice(0,2).join(', ')}${arr.length>2?` 외 ${arr.length-2}개`:''}
             </div>`;
     }
     document.getElementById('mf-input').value = '';
+    // 💡 추가된 파일 목록을 아래에 펼쳐서 보여줌 (개별 분석/제외 가능)
+    mfRenderPendingList();
 };
 
 // ─── 파일 목록 전체 비우기 (새로 추가된 기능) ─────────────────
@@ -8053,6 +8188,108 @@ window.mfClearFiles = function() {
     document.getElementById('mail-right-empty').style.display = 'flex';
     document.getElementById('mail-right-detail').style.display = 'none';
     document.getElementById('mf-input').value = '';
+    // 💡 추가된 파일 목록도 함께 비움
+    mfRenderPendingList();
+};
+
+// ─── 대기 중인(분석 전) 파일 목록 렌더링 (개별 분석/제외 가능) ─────────
+function mfRenderPendingList() {
+    const box = document.getElementById('mf-pending-list');
+    if (!box) return;
+    const arr = window._mfFiles || [];
+    if (!arr.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+    box.style.display = 'block';
+    box.innerHTML = arr.map((f, i) => `
+        <div id="mf-pending-item-${i}" style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid #f0f0f0; font-size:11px;">
+            <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(f.name)}">${i+1}. ${escapeHtml(f.name)}</span>
+            <button id="mf-pending-analyze-${i}" class="action-btn" onclick="window.mfAnalyzeSingle(${i})" style="min-width:60px !important; padding:2px 8px !important; font-size:10px; background:#2c5f8a; color:#fff;">🤖 분석</button>
+            <button id="mf-pending-remove-${i}" onclick="window.mfRemoveFile(${i})" title="목록에서 제외 (잘못 올린 파일 삭제)"
+                style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:4px; width:20px; height:20px; line-height:1; cursor:pointer; flex-shrink:0;">×</button>
+        </div>
+    `).join('');
+}
+
+// ─── 목록에서 특정 파일 하나 제외 (실수로 잘못 올린 파일 제거용) ─────────
+window.mfRemoveFile = function(idx) {
+    if (!window._mfFiles) return;
+    window._mfFiles.splice(idx, 1);
+    const arr = window._mfFiles;
+    document.getElementById('mf-file-count').textContent = arr.length;
+    const btnGroup = document.getElementById('mf-analyze-group');
+    if (btnGroup) btnGroup.style.display = arr.length ? 'flex' : 'none';
+    const dz = document.getElementById('mf-dropzone');
+    if (dz) {
+        dz.innerHTML = arr.length
+            ? `<div style="font-size:20px;">📁</div>
+               <div style="font-weight:bold; color:#e67e22; font-size:12px; margin-top:3px;">${arr.length}개 선택됨 (클릭하여 추가 변경)</div>`
+            : `<div style="font-size:20px;">📁</div>
+               <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
+               <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>`;
+    }
+    mfRenderPendingList();
+};
+
+// ─── 파일 1개만 개별 분석 (일괄 분석 버튼과 별개) ─────────────────
+window.mfAnalyzeSingle = async function(idx) {
+    const apiKey = localStorage.getItem('gemini_api_key');
+    if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
+    const f = window._mfFiles && window._mfFiles[idx];
+    if (!f) return;
+
+    // 💡 클릭한 버튼에 즉시 로딩 상태 표시 (진행 중임을 눈으로 확인 가능하게)
+    //    X(제외) 버튼은 분석 중에도 항상 눌리도록 절대 비활성화하지 않음
+    const btn = document.getElementById(`mf-pending-analyze-${idx}`);
+    const originalBtnHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '⏳ 분석중...'; btn.style.opacity = '0.7'; }
+
+    let parsed = null;
+    let result;
+    try {
+        parsed = await mfParseFile(f);
+    } catch (e) {
+        if (!window._mfFiles.includes(f)) return; // 💡 그 사이 X로 제외됨 → 결과 버리고 조용히 종료
+        result = {
+            idx: window._mfResults.length, fileName: f.name, subject: f.name, sender:'', date:'', body:'',
+            project:null, task:null, selected:false, registered:false, error: '파일 읽기 실패: ' + e.message
+        };
+        window._mfResults.push(result);
+        document.getElementById('mf-result-count').textContent = window._mfResults.length;
+        mfRenderList(window._mfResults);
+        const btnAfter = document.getElementById(`mf-pending-analyze-${idx}`);
+        if (btnAfter) { btnAfter.disabled = false; btnAfter.innerHTML = originalBtnHtml; btnAfter.style.opacity = ''; }
+        return;
+    }
+
+    try {
+        const task = await mfCallGemini(apiKey, parsed);
+        if (!window._mfFiles.includes(f)) return; // 💡 분석 중 X로 제외됨 → 결과 버리고 조용히 종료
+        result = {
+            idx: window._mfResults.length, fileName: f.name,
+            subject: parsed.subject, sender: parsed.sender, date: parsed.date, body: parsed.body,
+            project: null, task, selected: !!task, registered: false,
+            error: !task ? 'AI 분석 실패 (재시도 후에도 실패 / 본문은 아래에서 확인 가능)' : null
+        };
+    } catch (e) {
+        if (!window._mfFiles.includes(f)) return; // 💡 분석 중 X로 제외됨 → 결과 버리고 조용히 종료
+        result = {
+            idx: window._mfResults.length, fileName: f.name,
+            subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body: parsed.body || '',
+            project:null, task:null, selected:false, registered:false, error: e.message
+        };
+    }
+    window._mfResults.push(result);
+    document.getElementById('mf-result-count').textContent = window._mfResults.length;
+    mfRenderList(window._mfResults);
+
+    // 💡 완료 후 버튼 상태 복구 + 완료 표시 (성공/실패 색상 구분)
+    //    이 시점에 idx 위치의 파일이 이미 제외/변경됐을 수 있으므로 요소 존재만 확인 후 갱신
+    const btnAfter = document.getElementById(`mf-pending-analyze-${idx}`);
+    if (btnAfter) {
+        btnAfter.disabled = false;
+        btnAfter.style.opacity = '';
+        btnAfter.innerHTML = result.task ? '✅ 완료' : '⚠️ 실패(재분석)';
+        btnAfter.style.background = result.task ? '#28a745' : '#e03131';
+    }
 };
 
 // ─── 파일 파싱 ───────────────────────────────────────────
@@ -8327,7 +8564,9 @@ window.mfAnalyze = async function() {
     const progText = document.getElementById('mf-prog-text');
     const results  = [];
 
+    window._mfAnalyzeCancelled = false;
     for (let i=0; i<window._mfFiles.length; i++) {
+        if (window._mfAnalyzeCancelled) break;
         const f = window._mfFiles[i];
         progText.textContent = `${i+1}/${window._mfFiles.length} — ${f.name}`;
         progBar.style.width  = `${Math.round(((i+1)/window._mfFiles.length)*100)}%`;
@@ -8378,6 +8617,14 @@ window.mfAnalyze = async function() {
     document.getElementById('mf-progress').style.display  = 'none';
     document.getElementById('mf-result-count').textContent = results.length;
     mfRenderList(results);
+};
+
+// ─── 파일 일괄 분석 강제 중단/초기화 ─────────────────────────
+window.mfResetAnalysis = function() {
+    window._mfAnalyzeCancelled = true; // 다음 루프 반복에서 멈춤
+    document.getElementById('mf-analyze-btn').disabled  = false;
+    document.getElementById('mf-progress').style.display = 'none';
+    document.getElementById('mf-prog-bar').style.width    = '0%';
 };
 
 // ─── 왼쪽 목록 렌더링 ───────────────────────────────────
@@ -8745,9 +8992,11 @@ window.msFetchMail = async function() {
     if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
 
     // UI 초기화
+    window._msAnalyzeCancelled = false;
     document.getElementById('ms-status').textContent   = '📡 서버에 연결 중...';
     document.getElementById('ms-progress').style.display = 'block';
     document.getElementById('ms-result-list').innerHTML = ''; document.getElementById('ms-list-header').style.display = 'none';
+    document.getElementById('ms-batch-btn').style.display = 'none';
     document.getElementById('ms-prog-bar').style.width = '10%';
     document.getElementById('ms-prog-text').textContent = '메일 가져오는 중...';
 
@@ -8774,15 +9023,24 @@ window.msFetchMail = async function() {
         document.getElementById('ms-status').textContent    = `✅ ${data.count}개 메일 수집 완료`;
         document.getElementById('ms-result-count').textContent = data.count;
 
-        // 2단계: 각 메일 AI 분석 (파일첨부 탭과 동일 로직)
-        const results = [];
+        // 💡 건별로 채워나갈 배열 (중단하더라도 여기까지 담긴 내용은 그대로 표시됨)
+        window._msResults = [];
+        document.getElementById('ms-list-header').style.display = 'block'; // 0개부터 바로 보여줌
+
+        // 2단계: 각 메일 AI 분석 (파일첨부 탭과 동일 로직) — 1건씩 완료될 때마다 화면 갱신
         for (let i = 0; i < data.data.length; i++) {
+            if (window._msAnalyzeCancelled) {
+                document.getElementById('ms-prog-text').textContent = `⏹ 중단됨 (${i}/${data.data.length}건 분석 완료)`;
+                break;
+            }
+
             const mail = data.data[i];
             document.getElementById('ms-prog-bar').style.width =
                 `${30 + Math.round((i / data.data.length) * 65)}%`;
             document.getElementById('ms-prog-text').textContent =
                 `AI 분석 중... ${i+1}/${data.data.length} — ${mail.subject.substring(0,20)}`;
 
+            let item;
             try {
                 const project = null;
                 const task    = await msCallGemini(apiKey, {
@@ -8792,7 +9050,7 @@ window.msFetchMail = async function() {
                     fileName: mail.fileName
                 });
 
-                results.push({
+                item = {
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     body: mail.body,
@@ -8800,34 +9058,47 @@ window.msFetchMail = async function() {
                     selected: !!task,
                     registered: false,
                     error: !task ? 'AI분석실패' : null
-                });
+                };
             } catch(e) {
-                results.push({
+                item = {
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     body: mail.body,
                     project: null, task: null,
                     selected: false, registered: false, error: e.message
-                });
+                };
             }
-            if (i < data.data.length - 1) await new Promise(r => setTimeout(r, 4000));
+
+            // 💡 1건 끝날 때마다 바로 목록에 반영 (진행상황 실시간 확인)
+            window._msResults.push(item);
+            const analyzedSoFar = window._msResults.filter(r => r.task).length;
+            document.getElementById('ms-analyzed-count').textContent = analyzedSoFar;
+            msRenderList(window._msResults);
+
+            if (i < data.data.length - 1 && !window._msAnalyzeCancelled) await new Promise(r => setTimeout(r, 4000));
         }
 
-        window._msResults = results;
-        const analyzedCount = results.filter(r => r.task).length;
-        document.getElementById('ms-analyzed-count').textContent = analyzedCount;
         document.getElementById('ms-prog-bar').style.width  = '100%';
-        document.getElementById('ms-prog-text').textContent = '분석 완료!';
+        document.getElementById('ms-prog-text').textContent = window._msAnalyzeCancelled ? '⏹ 중단됨 (아래는 여기까지 분석된 내용)' : '분석 완료!';
         document.getElementById('ms-progress').style.display = 'none';
         document.getElementById('ms-list-header').style.display = 'block';
         document.getElementById('ms-batch-btn').style.display   = 'block';
 
-        msRenderList(results);
-
     } catch(e) {
         document.getElementById('ms-status').textContent = `❌ 오류: ${e.message}`;
         document.getElementById('ms-progress').style.display = 'none';
+        // 💡 오류가 나도, 그 전까지 수집/분석된 내용이 있으면 화면에 표시
+        if (window._msResults && window._msResults.length) {
+            document.getElementById('ms-list-header').style.display = 'block';
+            document.getElementById('ms-batch-btn').style.display   = 'block';
+            msRenderList(window._msResults);
+        }
     }
+};
+
+// ─── 메일서버 분석 중단 (지금까지 분석된 내용은 그대로 유지) ─────────
+window.msStopAnalysis = function() {
+    window._msAnalyzeCancelled = true;
 };
 
 // ─── 목록 렌더링 (파일첨부 탭과 동일 구조) ──────────────
@@ -9003,6 +9274,266 @@ window.msSelectAll = function(select) {
             if (!isNaN(idx)) window._msResults[idx].selected = select;
         });
 };
+
+// ═══════════════════════════════════════════════════════════
+// 🧩 AR: 직접입력/파일첨부/메일서버 3탭 공용 분석결과 목록 엔진
+//    렌더링/체크박스/삭제/일괄등록/실패항목 수동전환을 여기 한 곳에서만 관리.
+//    아래에서 mf*/ms*/paste* 기존 함수들을 이 엔진으로 재연결합니다.
+// ═══════════════════════════════════════════════════════════
+window._pasteCurrentIdx = -1;
+
+const AR = {
+    cfg: {
+        mf: {
+            getArr: () => window._mfResults,
+            listId: 'mf-result-list', headerId: 'mf-list-header', checkAllId: 'mf-check-all',
+            batchBtnId: 'mf-batch-btn', countId: 'mf-result-count', activeClass: 'mf-active',
+            getCurIdx: () => window._mfCurrentIdx, setCurIdx: (v) => window._mfCurrentIdx = v,
+        },
+        ms: {
+            getArr: () => window._msResults,
+            listId: 'ms-result-list', headerId: 'ms-list-header', checkAllId: 'ms-check-all',
+            batchBtnId: 'ms-batch-btn', countId: null, activeClass: 'ms-active',
+            getCurIdx: () => window._msCurrentIdx, setCurIdx: (v) => window._msCurrentIdx = v,
+        },
+        paste: {
+            getArr: () => window._pasteResults,
+            listId: 'paste-result-list', headerId: 'paste-result-header', checkAllId: 'paste-check-all',
+            batchBtnId: 'paste-batch-btn', countId: 'paste-result-count', activeClass: 'paste-active',
+            getCurIdx: () => window._pasteCurrentIdx, setCurIdx: (v) => window._pasteCurrentIdx = v,
+        },
+    },
+
+    render(tabKey) {
+        const c = AR.cfg[tabKey];
+        const arr = c.getArr() || [];
+        const list = document.getElementById(c.listId);
+        const header = document.getElementById(c.headerId);
+        const batchBtn = document.getElementById(c.batchBtnId);
+        if (!list) return;
+
+        if (!arr.length) {
+            list.style.display = 'none';
+            if (header) header.style.display = 'none';
+            if (batchBtn) batchBtn.style.display = 'none';
+            list.innerHTML = '';
+            return;
+        }
+
+        list.innerHTML = arr.map((r, i) => {
+            const canSel = !!r.task;
+            const bg = r.registered ? '#d4edda' : canSel ? '#fff' : '#fafafa';
+            const taskName = r.task ? (r.task['업무명'] || '새업무') : null;
+            return `
+            <div id="${tabKey}-list-item-${i}" data-idx="${i}"
+                 style="display:flex; align-items:center; gap:6px; padding:7px 8px; border-bottom:1px solid #f0f0f0;
+                        background:${bg}; cursor:pointer; transition:background 0.15s;">
+                <input type="checkbox" data-idx="${i}" ${canSel && r.selected ? 'checked':''} ${canSel ? '' : 'disabled'} style="flex-shrink:0;">
+                <span style="font-size:10px; color:#aaa; flex-shrink:0; width:16px;">${i+1}</span>
+                <div style="flex:1; min-width:0;">
+                    <div style="font-size:12px; font-weight:${canSel?'bold':'normal'}; color:${canSel?'#333':'#aaa'};
+                                white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                        ${canSel ? escapeHtml(taskName) + ' 📧' : escapeHtml((r.subject||'').substring(0,35))}
+                    </div>
+                    <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap;">
+                        ${r.date ? `<span style="font-size:10px; color:#aaa;">${r.date}</span>` : ''}
+                        ${r.project
+                            ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r.project}</span>`
+                            : (!canSel ? `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>` : '')}
+                        ${r.task && r.task['시작일']
+                            ? `<span style="font-size:10px; color:#888;">${r.task['시작일'].includes('날짜확인필요') ? '⚠️날짜필요' : r.task['시작일']}</span>`
+                            : ''}
+                        ${r.registered
+                            ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>`
+                            : `<span style="color:#999; font-size:10px;">⬜미등록</span>`}
+                    </div>
+                </div>
+                <button data-del-idx="${i}" title="목록에서 삭제"
+                        style="flex-shrink:0; border:none; background:none; color:#bbb; cursor:pointer; font-size:13px; padding:2px 4px;"
+                        onmouseover="this.style.color='#dc3545'" onmouseout="this.style.color='#bbb'">🗑</button>
+            </div>`;
+        }).join('');
+
+        if (header) header.style.display = 'flex';
+        list.style.display = 'block';
+        if (batchBtn) batchBtn.style.display = 'block';
+        if (c.countId) { const el = document.getElementById(c.countId); if (el) el.textContent = arr.length; }
+        AR.syncCheckAll(tabKey);
+
+        arr.forEach((r, i) => {
+            const row = document.getElementById(`${tabKey}-list-item-${i}`);
+            if (!row) return;
+            row.addEventListener('click', (e) => {
+                if (e.target.type === 'checkbox' || e.target.dataset.delIdx !== undefined) return;
+                AR.selectItem(tabKey, i);
+            });
+            const delBtn = row.querySelector('[data-del-idx]');
+            if (delBtn) delBtn.addEventListener('click', (e) => { e.stopPropagation(); AR.deleteItem(tabKey, i); });
+            const cb = row.querySelector('input[type=checkbox]');
+            if (cb) cb.addEventListener('change', function() { AR.toggleCheck(tabKey, i, this.checked); });
+            row.addEventListener('mouseover', function() { if (!this.classList.contains(c.activeClass)) this.style.background = '#e7f3ff'; });
+            row.addEventListener('mouseout', function() {
+                if (!this.classList.contains(c.activeClass)) {
+                    const rr = c.getArr()[i];
+                    this.style.background = rr.registered ? '#d4edda' : (rr.task ? '#fff' : '#fafafa');
+                }
+            });
+        });
+    },
+
+    toggleCheck(tabKey, idx, checked) {
+        const arr = AR.cfg[tabKey].getArr();
+        if (arr && arr[idx]) arr[idx].selected = checked;
+        AR.syncCheckAll(tabKey);
+    },
+
+    syncCheckAll(tabKey) {
+        const c = AR.cfg[tabKey];
+        const all = document.querySelectorAll(`#${c.listId} input[type=checkbox]:not(:disabled)`);
+        const chk = document.querySelectorAll(`#${c.listId} input[type=checkbox]:not(:disabled):checked`);
+        const ca = document.getElementById(c.checkAllId);
+        if (ca) ca.checked = all.length > 0 && all.length === chk.length;
+    },
+
+    selectAll(tabKey, select) {
+        const c = AR.cfg[tabKey];
+        const arr = c.getArr();
+        document.querySelectorAll(`#${c.listId} input[type=checkbox]:not(:disabled)`).forEach(cb => {
+            cb.checked = select;
+            const idx = parseInt(cb.dataset.idx);
+            if (!isNaN(idx) && arr[idx]) arr[idx].selected = select;
+        });
+    },
+
+    deleteItem(tabKey, idx) {
+        const arr = AR.cfg[tabKey].getArr();
+        const r = arr[idx];
+        if (!r) return;
+        const label = r.task ? (r.task['업무명'] || '새업무') : r.subject;
+        if (!confirm(`"${label}"\n이 분석 항목을 목록에서 삭제하시겠습니까?\n(등록된 항목이라도 Gantt Chart의 실제 데이터는 지워지지 않습니다)`)) return;
+        arr.splice(idx, 1);
+        AR.render(tabKey);
+    },
+
+    retryAsManual(tabKey, idx) {
+        const r = AR.cfg[tabKey].getArr()[idx];
+        if (!r) return;
+        r.task = {
+            '업무명': r.subject || '새 업무',
+            '시작일': '날짜확인필요', '완료일': '날짜확인필요',
+            '상태': '진행', '개발단계': '', '상세내용': r.body || '',
+            'wbs레벨': 4
+        };
+        r.selected = true;
+        r.error = null;
+        AR.render(tabKey);
+        AR.selectItem(tabKey, idx);
+    },
+
+    selectItem(tabKey, idx) {
+        const c = AR.cfg[tabKey];
+        const r = c.getArr()[idx];
+        if (!r) return;
+
+        if (!r.task) {
+            const emptyEl = document.getElementById('mail-right-empty');
+            if (emptyEl) emptyEl.innerHTML =
+                `<div style="font-size:32px;">⚠️</div>
+                 <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || 'AI 분석 실패')}</div>
+                 <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject||'')}</div>
+                 ${r.body ? `
+                 <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
+                    <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
+                    <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
+                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:12px; width:100%;">✏️ 이 본문으로 직접 입력해서 등록</button>
+                 </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
+            document.getElementById('mail-right-empty').style.display = 'flex';
+            document.getElementById('mail-right-detail').style.display = 'none';
+            return;
+        }
+
+        const prevIdx = c.getCurIdx();
+        if (prevIdx >= 0) {
+            const prev = document.getElementById(`${tabKey}-list-item-${prevIdx}`);
+            const prevR = c.getArr()[prevIdx];
+            if (prev) { prev.classList.remove(c.activeClass); prev.style.background = prevR?.registered ? '#d4edda' : '#fff'; }
+        }
+        c.setCurIdx(idx);
+        const cur = document.getElementById(`${tabKey}-list-item-${idx}`);
+        if (cur) { cur.classList.add(c.activeClass); cur.style.background = '#fff3e0'; }
+
+        mailShowRightDetail(r.subject||'직접입력', r.sender||'', r.date||'', r.body||r.mailText||'', r.project, r.task, () => {
+            if (window._mailAnalyzedResult) r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
+            if (!mfDirectInsert(r.task)) return;
+            r.registered = true;
+            r.selected = false;
+            c.setCurIdx(-1);
+            AR.render(tabKey);
+            document.getElementById('mail-right-empty').style.display = 'flex';
+            document.getElementById('mail-right-detail').style.display = 'none';
+            window.recalculateSchedules();
+        });
+    },
+
+    batchInsert(tabKey) {
+        const c = AR.cfg[tabKey];
+        const arr = c.getArr();
+        const validTargets = arr.filter(r =>
+            r.selected && r.task && !r.registered &&
+            !( (r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요') )
+        );
+        const excludedCount = arr.filter(r => r.selected && r.task && !r.registered).length - validTargets.length;
+
+        if (!validTargets.length) {
+            alert(excludedCount > 0 ? '⚠️ 날짜가 없는 항목은 등록할 수 없습니다. (제외됨)' : '등록할 항목을 체크해주세요.');
+            return;
+        }
+
+        let previewMsg = `✅ 총 ${validTargets.length}개 항목을 일괄 등록합니다.\n`;
+        if (excludedCount > 0) previewMsg += `\n⚠️ 날짜가 없는 ${excludedCount}개 항목은 자동으로 제외되었습니다.`;
+        previewMsg += '\n\n[등록할 업무 목록]\n' + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
+        if (!confirm(previewMsg + '\n\n위 내용으로 등록하시겠습니까?')) return;
+
+        for (let i = arr.length - 1; i >= 0; i--) {
+            const r = arr[i];
+            if (r.selected && r.task && !r.registered) {
+                if (c.getCurIdx() === i && window._mailAnalyzedResult) r.task = window._mailAnalyzedResult;
+                if (mfDirectInsert(r.task)) { r.registered = true; r.selected = false; }
+            }
+        }
+
+        AR.render(tabKey);
+        window.recalculateSchedules();
+        alert(`✅ ${validTargets.length}개 항목이 등록되었습니다!`);
+    },
+};
+
+// ── 3탭 기존 함수명은 그대로 유지하되(다른 곳에서 호출하는 이름 그대로), 내부는 전부 AR로 위임 ──
+window.mfRenderList    = () => AR.render('mf');
+window.mfToggleCheck   = (idx, checked) => AR.toggleCheck('mf', idx, checked);
+window.mfSyncCheckAll  = () => AR.syncCheckAll('mf');
+window.mfSelectAll     = (select) => AR.selectAll('mf', select);
+window.mfDeleteItem    = (idx) => AR.deleteItem('mf', idx);
+window.mfSelectItem    = (idx) => AR.selectItem('mf', idx);
+window.mfRetryAsManual = (idx) => AR.retryAsManual('mf', idx);
+window.mfBatchInsert   = () => AR.batchInsert('mf');
+
+window.msRenderList    = () => AR.render('ms');
+window.msSyncCheckAll  = () => AR.syncCheckAll('ms');
+window.msSelectAll     = (select) => AR.selectAll('ms', select);
+window.msDeleteItem    = (idx) => AR.deleteItem('ms', idx);
+window.msSelectItem    = (idx) => AR.selectItem('ms', idx);
+window.msRetryAsManual = (idx) => AR.retryAsManual('ms', idx);
+window.msBatchInsert   = () => AR.batchInsert('ms');
+
+window.pasteRenderResultList = () => AR.render('paste');
+window.pasteToggleCheck      = (idx, checked) => AR.toggleCheck('paste', idx, checked);
+window.pasteSyncCheckAll     = () => AR.syncCheckAll('paste');
+window.pasteSelectAll        = (select) => AR.selectAll('paste', select);
+window.pasteDeleteResult     = (idx) => AR.deleteItem('paste', idx);
+window.pasteSelectItem       = (idx) => AR.selectItem('paste', idx);
+window.pasteRetryAsManual    = (idx) => AR.retryAsManual('paste', idx);
+window.pasteBatchInsert      = () => AR.batchInsert('paste');
 
 async function msCallGemini(apiKey, parsed) {
     const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
