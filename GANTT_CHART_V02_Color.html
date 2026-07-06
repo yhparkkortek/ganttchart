@@ -1476,13 +1476,18 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     // 🛠️ 전역 변수 선언 (순서 꼬임 및 TDZ 에러 방지)
     // =========================================================
 
-if (window.name !== 'gantt_popup' && !sessionStorage.getItem('gantt_popup_done')) {
-    sessionStorage.setItem('gantt_popup_done', '1');
-    const newWin = window.open(location.href, 'gantt_popup',
-        `width=${screen.width},height=${screen.height},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
-    if (newWin) {
-        newWin.focus();
-        window.close();
+// 💡 sessionStorage/window.name은 강력 새로고침(Ctrl+F5) 시 브라우저에 따라 리셋될 수 있어,
+//    탭을 닫아도·새로고침해도 살아있는 localStorage로 "이미 팝업 전환했음"을 영구 기록합니다.
+//    → 이후로는 Ctrl+F5를 아무리 눌러도 새 창이 다시 열리지 않고 지금 창 그대로 새로고침됩니다.
+if (!localStorage.getItem('gantt_popup_done')) {
+    localStorage.setItem('gantt_popup_done', '1');
+    if (window.name !== 'gantt_popup') {
+        const newWin = window.open(location.href, 'gantt_popup',
+            `width=${screen.width},height=${screen.height},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
+        if (newWin) {
+            newWin.focus();
+            window.close();
+        }
     }
 }
 
