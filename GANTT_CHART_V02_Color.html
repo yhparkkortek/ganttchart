@@ -2919,16 +2919,6 @@ ${mailText}`;
 
     // 💡 인쇄가 끝나면(취소 포함) 인쇄 전용 사본을 정리 — 단, afterprint가 미리보기 직후 너무 빨리
     //    발생하는 브라우저(Chrome 등)에서 사본이 미리보기 도중 비워지지 않도록 약간 지연시킴
-    window.addEventListener('afterprint', function() {
-        setTimeout(function() {
-            const printArea = document.getElementById('gantt-print-area');
-            if (printArea) printArea.innerHTML = '';
-            document.body.classList.remove('gantt-printing-mode');
-        }, 1000);
-    });
-
-    // 🖨️ [공용] Gantt 인쇄 방식을 그대로 재사용 — 탭 콘텐츠 전체(.concept-tab-wrap)를 사본으로 떠서,
-    //    제목/버튼 영역(.concept-header-box)만 제외하고 인쇄 (섹션이 여러 개인 탭도 전부 포함되도록)
     window.printTabSection = function(tabId) {
         const tabEl = document.getElementById(tabId);
         const source = tabEl ? tabEl.querySelector('.concept-tab-wrap') : null;
@@ -2948,9 +2938,61 @@ ${mailText}`;
             span.style.cssText = sel.getAttribute('style') || '';
             sel.parentNode.replaceChild(span, sel);
         });
-        printArea.appendChild(clone);
 
+        const isSummary = (tabId === 'tab-summary');
+        if (isSummary) {
+            // 📷 제품 사진 섹션은 인쇄에서 제외
+            clone.querySelectorAll('#product-images-section').forEach(function(el) { el.remove(); });
+            // 💡 화면용 내부 스크롤 제한(overflow-y:auto/max-height) 해제 → 전체 내용이 실제 높이로 측정되도록
+            clone.querySelectorAll('[style*="overflow-y"]').forEach(function(el) {
+                el.style.overflow = 'visible';
+                el.style.maxHeight = 'none';
+            });
+        }
+
+        printArea.appendChild(clone);
         document.body.classList.add('tab-printing-mode');
+
+        if (isSummary) {
+            document.body.classList.add('printing-tab-summary');
+
+            // 📐 A4 세로(portrait) 표준 여백 기준 페이지 폭/높이(px)
+            const pageWidthPx  = (210 - 20) * 96 / 25.4; // A4 세로 실측 가로폭
+            const pageHeightPx = (297 - 20) * 96 / 25.4; // A4 세로 실측 세로폭
+
+            printArea.style.position = 'fixed';
+            printArea.style.left = '-99999px';
+            printArea.style.top = '0';
+            printArea.style.display = 'block';
+
+            // 🎯 [핵심] 폭을 바꾸면 콘텐츠가 다시 흐름(reflow)되어 높이가 달라지므로,
+            //    "폭 확정 → 높이 재측정 → scale 재계산"을 반복해서 값이 수렴하도록 합니다.
+            //    (폭을 페이지 폭 그대로 두고 시작 → 그 폭에서의 실제 높이로 scale을 구함 → scale로
+            //     보정폭을 다시 정하고 → 그 폭에서 다시 높이를 재측정 … 3회면 충분히 안정됩니다)
+            // 💡 transform:scale()은 화면에 그려지는 모습만 줄일 뿐 페이지 나눔 계산에 쓰이는
+            //    실제 레이아웃 높이는 줄지 않아, 그룹(멤버-1/2 등)이 축소 전 크기 기준으로 통째로
+            //    다음 페이지로 밀려버립니다. zoom은 레이아웃 자체를 다시 계산하므로 페이지 나눔도
+            //    축소된 크기 그대로 정확히 반영됩니다 (Gantt 인쇄에서 이미 zoom을 쓰는 것과 동일한 이유).
+            let width = pageWidthPx;
+            let scale = 1;
+            for (let i = 0; i < 4; i++) {
+                clone.style.zoom = 1;
+                clone.style.width = width + 'px';
+                const h = clone.scrollHeight;
+                scale = Math.min(1, pageHeightPx / h);
+                width = pageWidthPx / scale;
+            }
+
+            clone.style.width = width + 'px';
+            clone.style.zoom = scale;
+
+            // 측정용 임시 고정 스타일 리셋 (실제 인쇄 출력은 CSS 클래스가 제어)
+            printArea.style.position = '';
+            printArea.style.left = '';
+            printArea.style.top = '';
+            printArea.style.display = '';
+        }
+
         window.print();
     };
 
@@ -2959,6 +3001,7 @@ ${mailText}`;
             const printArea = document.getElementById('tab-print-area');
             if (printArea) printArea.innerHTML = '';
             document.body.classList.remove('tab-printing-mode');
+            document.body.classList.remove('printing-tab-summary');
         }, 1000);
     });
 
@@ -6774,7 +6817,7 @@ window.updateInboxBadge();
     /* 💡 인쇄 전용 사본은 평소 화면에서는 항상 숨김 (인쇄할 때만 @media print에서 보이게 함) */
     #gantt-print-area { display: none; }
 
-    /* 🖨️ [공용] 각 탭(Address/Summary/Brief SPEC/M.C Table/Calendar/Weekly) 인쇄 사본 */
+    /* 🖨️ [공용] 각 탭 인쇄 사본 */
     #tab-print-area { display: none; }
     body.tab-printing-mode #app-topbar,
     body.tab-printing-mode #app-sidebar,
@@ -6782,19 +6825,67 @@ window.updateInboxBadge();
     body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area) {
         display: none !important;
     }
+
     @media print {
+        /* JS의 계산식이 올바르게 적용되도록 기본 축 복원 */
         body.tab-printing-mode #tab-print-area {
             display: block !important;
-            position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 0;
+            position: absolute !important;
+            left: 0 !important;
+            top: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
-        body.tab-printing-mode #tab-print-area table,
-        body.tab-printing-mode #tab-print-area .concept-table {
+        
+        /* 💡 Summary는 JS에서 계산한 scale로 이미 크기를 맞추므로, 폰트 10px 강제(이중 축소) 대상에서 제외 */
+        body.tab-printing-mode:not(.printing-tab-summary) #tab-print-area table,
+        body.tab-printing-mode:not(.printing-tab-summary) #tab-print-area .concept-table {
             width: 100% !important; font-size: 10px !important; table-layout: auto !important;
         }
+        
         body.tab-printing-mode #tab-print-area * {
-            max-height: none !important; overflow: visible !important;
+            max-height: none !important;
+            overflow: visible !important;
         }
-        @page { size: A4 landscape; margin: 10mm; }
+        
+        /* 절대좌표 밀림 및 겹침 현상 방지 (Summary는 JS가 계산한 width 보정값을 써야 하므로 width 강제 제외) */
+        body.tab-printing-mode:not(.printing-tab-summary) #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode #tab-print-area > .concept-tab-wrap > * {
+            position: relative !important;
+            display: block !important;
+            width: 100% !important;
+            height: auto !important;
+            top: auto !important;
+            left: auto !important;
+        }
+        body.tab-printing-mode.printing-tab-summary #tab-print-area > .concept-tab-wrap {
+            position: relative !important;
+            display: block !important;
+            height: auto !important;
+            top: auto !important;
+            left: auto !important;
+            /* width는 강제하지 않음 — JS가 scale 보정을 위해 넣은 인라인 width를 그대로 사용 */
+        }
+
+        /* ══════════════════════════════════════════════════════
+           🎯 [Summary 탭 전용] 정석 세로 지정 (하단 충돌이 해제되어 정상 작동)
+           ══════════════════════════════════════════════════════ */
+        body.printing-tab-summary {
+            page: summaryPortraitPage !important;
+        }
+        @page summaryPortraitPage { 
+            size: A4 portrait !important; 
+            margin: 10mm !important;
+        }
+
+        /* 세로 1장 범위 안에서 페이지가 임의로 쪼개지는 현상 방지 (표/행 단위만 — 컨테이너 전체에 걸면 살짝 넘칠 때 페이지 전체가 강제로 밀려 큰 여백이 생김) */
+        body.printing-tab-summary #tab-print-area table,
+        body.printing-tab-summary #tab-print-area tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
     }
 
     @media print {
@@ -8710,10 +8801,13 @@ async function msCallGemini(apiKey, parsed) {
             width: 100%;
         }
 
-        /* 3. 여백 최소화 및 가로 모드 */
-        @page {
-            size: landscape; 
-            margin: 5mm !important; /* 여백을 5mm로 최소화 */
+        /* 3. 여백 최소화 및 가로 모드 (진짜 Gantt 인쇄일 때만 적용되도록 범위를 정확히 좁힘) */
+        body.gantt-printing-mode {
+            page: ganttLandscapePage;
+        }
+        @page ganttLandscapePage {
+            size: A4 landscape; 
+            margin: 5mm !important; 
         }
 
         html, body {
@@ -9755,9 +9849,9 @@ async function msCallGemini(apiKey, parsed) {
             slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: trackRowY + 0.04, w: Math.max(0.05, lineW * todayPct), h: 0.08, rectRadius: 0.04, fill: { color: SKY_DARK } });
 
             // major: 삼각형은 실제 날짜 위치에 고정, 라벨끼리 겹치면 최소 간격만큼 밀어냄
-            const majorLabelW = 0.95;
+            const majorLabelW = 1.05; // majorLabelH는 위에서 이미 선언됨 (9831번째 줄) — 재사용
             const majorSorted = majorItems.slice().sort((a, b) => a.start - b.start);
-            const minLabelGap = majorLabelW * 0.55;
+            const minLabelGap = majorLabelW * 1.0; // 💡 라벨 사이에 여백이 남도록 더 넓게
             const majorLabelXs = majorSorted.map((it) => lineX + lineW * majorPctMap.get(it) - majorLabelW / 2);
             for (let pass = 0; pass < 5; pass++) {
                 for (let i = 1; i < majorLabelXs.length; i++) {
@@ -9775,10 +9869,31 @@ async function msCallGemini(apiKey, parsed) {
                     x: dotX - triW / 2, y: trackRowY - triH, w: triW, h: triH,
                     fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
                 });
-                const labelY = trackRowY - triH - triLabelGap - majorLabelH;
+                const majorExtraLift = 0.06; // 💡 역삼각형 라벨을 위로 살짝 더 띄움
+                const labelY = trackRowY - triH - triLabelGap - majorLabelH - majorExtraLift;
                 let labelX = majorLabelXs[idx]; // 💡 라벨만 겹침 방지로 조정된 위치
                 if (labelX < tlX + 0.08) labelX = tlX + 0.08;
                 if (labelX + majorLabelW > tlX + tlW - 0.08) labelX = tlX + tlW - 0.08 - majorLabelW;
+                const labelCenterX = labelX + majorLabelW / 2;
+                { // 💡 위치가 같아도 항상 2단 꺾은선을 그림
+                    const connY = labelY + majorLabelH;      // 라벨 하단 높이
+                    const triTopY = trackRowY - triH;        // 삼각형 꼭대기 높이
+                    const midY = connY + (triTopY - connY) / 2; // 💡 중간 높이에서 한 번 더 꺾음
+                    const lineOpt = { color: SKY_DARK, width: 0.75, dashType: 'dash' }; // 💡 라벨 글자색과 동일
+                    // 1단: 마커(dotX)에서 수직으로 중간 높이까지
+                    slide.addShape(pptx.ShapeType.line, {
+                        x: dotX, y: midY, w: 0.001, h: Math.max(0.001, triTopY - midY), line: lineOpt
+                    });
+                    // 2단: 중간 높이에서 라벨 중심 x위치까지 수평 이동
+                    slide.addShape(pptx.ShapeType.line, {
+                        x: Math.min(dotX, labelCenterX), y: midY,
+                        w: Math.max(0.001, Math.abs(labelCenterX - dotX)), h: 0.001, line: lineOpt
+                    });
+                    // 3단: 라벨 중심 x위치에서 수직으로 라벨까지 마무리
+                    slide.addShape(pptx.ShapeType.line, {
+                        x: labelCenterX, y: connY, w: 0.001, h: Math.max(0.001, midY - connY), line: lineOpt
+                    });
+                }
                 slide.addText(`${it.name}\n${wrFormatMD(it.start)}`, {
                     x: labelX, y: labelY, w: majorLabelW, h: majorLabelH,
                     fontSize: 8.5, bold: true, align: 'center', valign: 'bottom', color: SKY_DARK
@@ -9826,7 +9941,8 @@ async function msCallGemini(apiKey, parsed) {
                 const assignee = wrExtractAssignee(rawContent);
                 const contentStr = wrStripIssueLines(rawContent)
                     .split('\n').filter(line => !isAssigneeLine(line)).join('\n').trim();   // ← 추가: 담당자 줄 제외
-                const header = `✓ ${t.text}${assignee ? `  [${assignee}]` : ''}`;
+                const textNoYear = t.text.replace(/\s*'\d{2}(?=[~)])/g, ''); // 💡 PPT에서만 년도 제거
+                const header = `✓ ${textNoYear}${assignee ? `  [${assignee}]` : ''}`;
                 return contentStr ? `${header}\n${contentStr}\n` : header;
             }).join('\n');
         };
