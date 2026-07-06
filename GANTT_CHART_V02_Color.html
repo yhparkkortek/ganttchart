@@ -869,9 +869,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📇 Address</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <label class="concept-add-row-btn" for="addr-file-input" style="margin:0; cursor:pointer;">📂 불러오기</label>
-            <input type="file" id="addr-file-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importAddressExcel(this.files)">
-            <button class="concept-add-row-btn" onclick="window.importAddressFromDrive()" style="margin:0;">☁️ 드라이브에서 불러오기</button>
+            <button class="concept-add-row-btn" onclick="window.importAddressFromDrive()" style="margin:0;">📂 불러오기</button>
             <div class="btn-group">
                 <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
                 <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
@@ -11700,22 +11698,6 @@ window._applyAddressWorkbookBuffer = function(arrayBuffer, sourceLabel) {
         alert('❌ 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
         return false;
     }
-};
-
-window.importAddressExcel = function(files) {
-    if (!files || !files.length) return;
-    const file = files[0];
-    const curCount = (window.tabData && window.tabData.addressBook) ? window.tabData.addressBook.length : 0;
-    if (!confirm('"' + file.name + '" 파일로 현재 주소록(' + curCount + '명)을 전체 교체합니다.\n계속할까요?')) {
-        document.getElementById('addr-file-input').value = '';
-        return;
-    }
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        window._applyAddressWorkbookBuffer(e.target.result, '"' + file.name + '"');
-        document.getElementById('addr-file-input').value = '';
-    };
-    reader.readAsArrayBuffer(file);
 };
 
 // ☁️ 구글 드라이브에 저장된 주소록 시트를 바로 불러오기 (기존 드라이브 연동 로그인 재사용)
