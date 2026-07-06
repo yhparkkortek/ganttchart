@@ -1485,12 +1485,6 @@ if (!localStorage.getItem('gantt_popup_done')) {
         const newWin = window.open(location.href, 'gantt_popup',
             `width=${screen.width},height=${screen.height},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
         if (newWin) {
-            newWiif (!localStorage.getItem('gantt_popup_done')) {
-    localStorage.setItem('gantt_popup_done', '1');
-    if (window.name !== 'gantt_popup') {
-        const newWin = window.open(location.href, 'gantt_popup',
-            `width=${screen.width},height=${screen.height},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
-        if (newWin) {
             newWin.focus();
             window.close();
             // 💡 주소창에 직접 입력해 연 탭은 스크립트로 닫을 수 없어 close()가 무시될 수 있음
@@ -1501,10 +1495,6 @@ if (!localStorage.getItem('gantt_popup_done')) {
                     'font-family:\'Malgun Gothic\',sans-serif;color:#555;font-size:16px;text-align:center;padding:20px;">' +
                     '✅ 새 창으로 이동했습니다.<br>이 탭은 닫아주셔도 됩니다.</div>';
             }, 300);
-        }
-    }
-}n.focus();
-            window.close();
         }
     }
 }
@@ -1539,8 +1529,13 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
 - 완료일: 마감일이 명시된 경우만 추출 (규칙은 시작일과 동일), 없으면 "날짜확인필요"
 - 상태: 진행/대기/완료/보류 중 하나
 - 개발단계: RFI/RFQ/NRE/AWARD/KICK-OFF/DESIGN/SAMPLE/EVT/ES/DVT/PVT/FAI/PP/SOP/MP/EC/RMA/EOL 중 해당하는 단계 (불명확하면 빈값)
-- 상세내용: 아래 형식으로 300자 이내 작성, 반드시 줄바꿈(\n)으로 구분
-  * 출력 형식: [업무유형][발신자→수신자] YYYY-MM-DD\n[핵심내용]내용\n[To do]후속조치
+- 상세내용: 아래 형식으로 600자 이내 작성 (기존 대비 약 2배 더 상세하게, 배경·수량·모델명·수치 등 구체적 사실을 최대한 포함), 반드시 줄바꿈(\n)으로 구분
+  * [발신자→수신자] 판별 가이드 (★문맥 분석 필수★):
+    - 인사말(Hi, Regards)이나 서명이 없을 수 있으므로, 문장의 주어·목적어 등 문맥을 분석해 발신자/수신자를 정확히 식별하세요.
+    - 발신자: 자료를 첨부/발송(attached, sending)하거나 피드백·승인을 요청(wondering, requesting)하는 주체 (예: "I'd like to send~"에서 'I')
+    - 수신자: 자료를 받아 검토해야 하거나 피드백을 제공(provide feedback)해야 하는 대상 (예: "Please provide~", "your CAD update"에서 'You')
+    - 본문에 언급된 이름(영문/국문)을 있는 그대로 추출하되, 발신자/수신자 정보가 본문에 드러나지 않는다면 프로젝트 담당자명 등으로 임의 추정해 치환하지 마세요. 본문에 쓰인 영문 표기(예: Anthony→Andy 같은 애칭)를 최우선으로 사용하세요.
+  * 출력 형식: [업무유형][발신자→수신자] YYYY-MM-DD\n[핵심내용]내용(기존보다 2배 더 구체적으로 배경·수치·조건까지 서술)\n[To do]후속조치(누가, 무엇을, 언제까지 해야 하는지 구체적으로 서술)
   * 업무유형은 아래 중 가장 적합한 하나 선택:
     [요청/문의] 검토요청 / 자료요청 / 견적요청 / 일정·납기문의 / 승인요청 / 샘플요청 / 분석·테스트요청 / 변경·확인·협조요청
     [회신/답변] 검토답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 분석·테스트회신 / 변경수락·거절
@@ -3976,6 +3971,8 @@ window.deleteHistoryByDateRange = function() {
                 'undo-btn': '↩️ 실행취소',
                 'redo-btn': '↪️ 다시실행',
                 'recalc-range-btn': '🔓 선택 구간 재계산',
+                'backup_restore_btn': '🔄 백업 복원',
+                'new-project-btn': '➕ 새 프로젝트',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -4011,6 +4008,8 @@ window.deleteHistoryByDateRange = function() {
                 'undo-btn': '↩️ Undo',
                 'redo-btn': '↪️ Redo',
                 'recalc-range-btn': '🔓 Recalc Selected Range',
+                'backup_restore_btn': '🔄 Restore Backup',
+                'new-project-btn': '➕ New Project',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
