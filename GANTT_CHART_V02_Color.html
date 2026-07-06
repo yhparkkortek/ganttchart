@@ -7566,7 +7566,7 @@ window.updateInboxBadge();
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
                     <div style="display:flex; gap:8px; justify-content:center;">
-                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="min-width:130px !important; background:#2c5f8a; color:#fff;">
+                        <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="width:100%; min-width:auto !important; margin:0 !important; background:#2c5f8a; color:#fff;">
                             🤖 AI 분석
                         </button>
                     </div>
@@ -7647,28 +7647,28 @@ window.updateInboxBadge();
                 </div>
 
                 <!-- ── 메일서버 탭 왼쪽 ── -->
-                <div id="mail-tab-server-content" style="display:none; flex-direction:column; flex:1; overflow:hidden;">
+                <div id="mail-tab-server-content" style="display:none; flex-direction:column; flex:1; overflow:hidden; padding:12px;">
                     <!-- 접속 정보 -->
-                    <div style="padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
-                        <div style="font-size:11px; font-weight:bold; color:#333; margin-bottom:6px;">🔐 메일 서버 접속</div>
-                        <div style="display:flex; gap:6px; margin-bottom:6px;">
+                    <div style="padding:10px 0; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
+                        <div style="font-size:11px; font-weight:bold; color:#333; margin-bottom:6px; padding:0 12px;">🔐 메일 서버 접속</div>
+                        <div style="display:flex; gap:6px; margin-bottom:6px; padding:0 12px;">
                             <input id="ms-userid" type="text" placeholder="yhpark@kortek.co.kr"
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                             <input id="ms-password" type="password" placeholder="비밀번호"
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
-                        <div style="margin-bottom:6px;">
+                        <div style="margin-bottom:6px; padding:0 12px;">
                             <div style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
                             <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler (비우면 전체)"
                                    style="width:100%; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; box-sizing:border-box;">
                         </div>
-                        <div style="display:flex; gap:6px; margin-bottom:6px;">
+                        <div style="display:flex; gap:6px; margin-bottom:6px; padding:0 12px;">
                             <input id="ms-start-date" type="date"
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                             <input id="ms-end-date" type="date"
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px;">
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
                                 <input type="checkbox" id="ms-save-id"> ID 저장
                             </label>
@@ -7676,10 +7676,11 @@ window.updateInboxBadge();
                                 📥 메일 가져오기
                             </button>
                         </div>
-                        <div id="ms-status" style="font-size:11px; margin-top:4px; color:#666;"></div>
+                        <div id="ms-status" style="font-size:11px; margin-top:4px; color:#666; padding:0 12px;"></div>
                     </div>
                     <!-- 진행바 -->
-                    <div id="ms-progress" style="display:none; padding:8px 12px; flex-shrink:0;">
+                    <div id="ms-progress" style="display:none; padding:8px 0; flex-shrink:0;">
+                        <div style="padding:0 12px;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px;">
                             <div style="font-size:11px; font-weight:bold; color:#e67e22;">⏳ <span id="ms-prog-text">메일 가져오는 중...</span></div>
                             <button class="action-btn" onclick="window.msStopAnalysis()" style="min-width:auto !important; padding:2px 8px !important; font-size:10px; border-color:#e03131; color:#e03131;">⏹ 중단</button>
@@ -7687,10 +7688,11 @@ window.updateInboxBadge();
                         <div style="background:#e9ecef; border-radius:4px; height:5px; overflow:hidden;">
                             <div id="ms-prog-bar" style="height:100%; background:#e67e22; width:0%; transition:width 0.3s;"></div>
                         </div>
+                        </div>
                     </div>
                     <!-- 결과 목록 헤더 -->
-                    <div id="ms-list-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div id="ms-list-header" style="display:none; padding:6px 0; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px;">
                             <span style="font-size:11px; font-weight:bold;">📋 수집 <span id="ms-result-count">0</span>개 / 분석 <span id="ms-analyzed-count">0</span>개</span>
                             <label style="font-size:10px; color:#555; cursor:pointer;">
                                 <input type="checkbox" id="ms-check-all" onchange="window.msSelectAll(this.checked)"> 전체선택
@@ -7698,10 +7700,10 @@ window.updateInboxBadge();
                         </div>
                     </div>
                     <!-- 결과 목록 -->
-                    <div id="ms-result-list" style="flex:1; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; margin:0 12px;"></div>
+                    <div id="ms-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
                     <!-- 연속등록 버튼 -->
                     <button class="action-btn" id="ms-batch-btn" onclick="window.msBatchInsert()"
-                            style="display:none; width:calc(100% - 24px); margin:8px 12px 12px 12px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                            style="display:none; width:100%; margin-top:8px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
