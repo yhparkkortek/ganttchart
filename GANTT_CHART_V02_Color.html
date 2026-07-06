@@ -871,6 +871,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <label class="concept-add-row-btn" for="addr-file-input" style="margin:0; cursor:pointer;">📂 불러오기</label>
             <input type="file" id="addr-file-input" accept=".xlsx,.xls,.csv" style="display:none;" onchange="window.importAddressExcel(this.files)">
+            <button class="concept-add-row-btn" onclick="window.importAddressFromDrive()" style="margin:0;">☁️ 드라이브에서 불러오기</button>
             <div class="btn-group">
                 <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
                 <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
@@ -11666,6 +11667,41 @@ window.collectAddressData = function() {
 // =========================================================
 // 📇 Address Book — 엑셀/CSV 불러오기 · 내보내기
 // =========================================================
+// 💡 공용 파싱 로직 — 로컬 파일이든 구글 드라이브에서 받아온 버퍼든 동일하게 처리
+window._applyAddressWorkbookBuffer = function(arrayBuffer, sourceLabel) {
+    try {
+        const wb = XLSX.read(arrayBuffer, { type: 'array' });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
+        const pick = function(row, keys) {
+            for (const k of keys) { if (row[k] !== undefined && String(row[k]).trim() !== '') return String(row[k]).trim(); }
+            return '';
+        };
+        const list = json.map(function(row) {
+            const first = pick(row, ['이름', '성명', 'Name']);
+            const last  = pick(row, ['성']);
+            return {
+                name:  (last + first) || first,
+                dept:  pick(row, ['부서', 'Department']),
+                title: pick(row, ['직함', '직책', 'Title']),
+                email: pick(row, ['전자 메일 주소', '이메일', 'Email', 'E-mail']),
+                mobile: pick(row, ['휴대폰', '휴대전화', 'Mobile']),
+                phone: pick(row, ['근무처 전화', '회사 전화', 'Work Phone'])
+            };
+        }).filter(function(p) { return p.name; });
+
+        window.tabData = window.tabData || {};
+        window.tabData.addressBook = list;
+        window._addrSelectedRows = new Set();
+        window.renderAddressTable();
+        alert('✅ ' + (sourceLabel || '파일') + '에서 주소록 ' + list.length + '명을 불러왔습니다.');
+        return true;
+    } catch (err) {
+        alert('❌ 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+        return false;
+    }
+};
+
 window.importAddressExcel = function(files) {
     if (!files || !files.length) return;
     const file = files[0];
@@ -11676,38 +11712,35 @@ window.importAddressExcel = function(files) {
     }
     const reader = new FileReader();
     reader.onload = function(e) {
-        try {
-            const wb = XLSX.read(e.target.result, { type: 'array' });
-            const ws = wb.Sheets[wb.SheetNames[0]];
-            const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
-            const pick = function(row, keys) {
-                for (const k of keys) { if (row[k] !== undefined && String(row[k]).trim() !== '') return String(row[k]).trim(); }
-                return '';
-            };
-            const list = json.map(function(row) {
-                const first = pick(row, ['이름', '성명', 'Name']);
-                const last  = pick(row, ['성']);
-                return {
-                    name:  (last + first) || first,
-                    dept:  pick(row, ['부서', 'Department']),
-                    title: pick(row, ['직함', '직책', 'Title']),
-                    email: pick(row, ['전자 메일 주소', '이메일', 'Email', 'E-mail']),
-                    mobile: pick(row, ['휴대폰', '휴대전화', 'Mobile']),
-                    phone: pick(row, ['근무처 전화', '회사 전화', 'Work Phone'])
-                };
-            }).filter(function(p) { return p.name; });
-
-            window.tabData = window.tabData || {};
-            window.tabData.addressBook = list;
-            window._addrSelectedRows = new Set();
-            window.renderAddressTable();
-            alert('✅ 주소록 ' + list.length + '명을 불러왔습니다.');
-        } catch (err) {
-            alert('❌ 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
-        }
+        window._applyAddressWorkbookBuffer(e.target.result, '"' + file.name + '"');
         document.getElementById('addr-file-input').value = '';
     };
     reader.readAsArrayBuffer(file);
+};
+
+// ☁️ 구글 드라이브에 저장된 주소록 시트를 바로 불러오기 (기존 드라이브 연동 로그인 재사용)
+window.importAddressFromDrive = async function() {
+    const ADDR_SHEET_FILE_ID = '1jskqTXVOKCqXSXRqsv275OYQVQg6NyWD';
+
+    const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
+    if (!tokenObj) {
+        alert('먼저 상단의 [🔵 드라이브 연동하기]로 구글 드라이브 로그인을 해주세요.\n로그인 후 이 버튼을 다시 눌러주세요.');
+        return;
+    }
+
+    const curCount = (window.tabData && window.tabData.addressBook) ? window.tabData.addressBook.length : 0;
+    if (!confirm('구글 드라이브의 주소록 시트로 현재 주소록(' + curCount + '명)을 전체 교체합니다.\n계속할까요?')) return;
+
+    try {
+        const url = 'https://www.googleapis.com/drive/v3/files/' + ADDR_SHEET_FILE_ID
+            + '/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + tokenObj.access_token } });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' (드라이브 파일 접근 권한을 확인해주세요)');
+        const buf = await res.arrayBuffer();
+        window._applyAddressWorkbookBuffer(buf, '구글 드라이브 주소록');
+    } catch (err) {
+        alert('❌ 드라이브 파일을 불러오는 중 오류가 발생했습니다: ' + err.message);
+    }
 };
 
 
