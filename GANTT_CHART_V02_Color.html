@@ -2940,9 +2940,14 @@ ${mailText}`;
         });
 
         const isSummary = (tabId === 'tab-summary');
+        const isBriefSpec = (tabId === 'tab-briefspec');
+        const fitOnePage = isSummary || isBriefSpec; // 💡 1페이지 축소 대상 탭
+
         if (isSummary) {
             // 📷 제품 사진 섹션은 인쇄에서 제외
             clone.querySelectorAll('#product-images-section').forEach(function(el) { el.remove(); });
+        }
+        if (fitOnePage) {
             // 💡 화면용 내부 스크롤 제한(overflow-y:auto/max-height) 해제 → 전체 내용이 실제 높이로 측정되도록
             clone.querySelectorAll('[style*="overflow-y"]').forEach(function(el) {
                 el.style.overflow = 'visible';
@@ -2953,40 +2958,39 @@ ${mailText}`;
         printArea.appendChild(clone);
         document.body.classList.add('tab-printing-mode');
 
-        if (isSummary) {
-            document.body.classList.add('printing-tab-summary');
+        if (isSummary) document.body.classList.add('printing-tab-summary');
+        if (isBriefSpec) document.body.classList.add('printing-tab-briefspec');
 
-            // 📐 A4 세로(portrait) 표준 여백 기준 페이지 폭/높이(px)
-            const pageWidthPx  = (210 - 20) * 96 / 25.4; // A4 세로 실측 가로폭
-            const pageHeightPx = (297 - 20) * 96 / 25.4; // A4 세로 실측 세로폭
+        if (fitOnePage) {
+            // 📐 탭별 방향에 맞는 표준 여백 기준 페이지 폭/높이(px)
+            // Summary = A4 세로, Brief SPEC = A4 가로
+            // 💡 SAFETY: 실측과 실제 인쇄 렌더링 간의 미세한 오차로 경계선에서 다음 페이지로
+            //    넘어가는 것을 막기 위한 여유 마진 (4%)
+            const SAFETY = 0.96;
+            const pageWidthPx  = (isBriefSpec ? (297 - 20) * 96 / 25.4 : (210 - 20) * 96 / 25.4) * SAFETY;
+            const pageHeightPx = (isBriefSpec ? (210 - 20) * 96 / 25.4 : (297 - 20) * 96 / 25.4) * SAFETY;
 
             printArea.style.position = 'fixed';
             printArea.style.left = '-99999px';
             printArea.style.top = '0';
             printArea.style.display = 'block';
 
-            // 🎯 [핵심] 폭을 바꾸면 콘텐츠가 다시 흐름(reflow)되어 높이가 달라지므로,
-            //    "폭 확정 → 높이 재측정 → scale 재계산"을 반복해서 값이 수렴하도록 합니다.
-            //    (폭을 페이지 폭 그대로 두고 시작 → 그 폭에서의 실제 높이로 scale을 구함 → scale로
-            //     보정폭을 다시 정하고 → 그 폭에서 다시 높이를 재측정 … 3회면 충분히 안정됩니다)
-            // 💡 transform:scale()은 화면에 그려지는 모습만 줄일 뿐 페이지 나눔 계산에 쓰이는
-            //    실제 레이아웃 높이는 줄지 않아, 그룹(멤버-1/2 등)이 축소 전 크기 기준으로 통째로
-            //    다음 페이지로 밀려버립니다. zoom은 레이아웃 자체를 다시 계산하므로 페이지 나눔도
-            //    축소된 크기 그대로 정확히 반영됩니다 (Gantt 인쇄에서 이미 zoom을 쓰는 것과 동일한 이유).
+            // 💡 Brief SPEC은 내용이 페이지보다 짧을 때도 확대해서 페이지를 꽉 채움 (Summary는 기존처럼 1배율 상한 유지)
+            const maxScale = isBriefSpec ? 999 : 1;
+
             let width = pageWidthPx;
             let scale = 1;
             for (let i = 0; i < 4; i++) {
                 clone.style.zoom = 1;
                 clone.style.width = width + 'px';
                 const h = clone.scrollHeight;
-                scale = Math.min(1, pageHeightPx / h);
+                scale = Math.min(maxScale, pageHeightPx / h);
                 width = pageWidthPx / scale;
             }
 
             clone.style.width = width + 'px';
             clone.style.zoom = scale;
 
-            // 측정용 임시 고정 스타일 리셋 (실제 인쇄 출력은 CSS 클래스가 제어)
             printArea.style.position = '';
             printArea.style.left = '';
             printArea.style.top = '';
@@ -3002,6 +3006,7 @@ ${mailText}`;
             if (printArea) printArea.innerHTML = '';
             document.body.classList.remove('tab-printing-mode');
             document.body.classList.remove('printing-tab-summary');
+            document.body.classList.remove('printing-tab-briefspec');
         }, 1000);
     });
 
@@ -6840,8 +6845,8 @@ window.updateInboxBadge();
         }
         
         /* 💡 Summary는 JS에서 계산한 scale로 이미 크기를 맞추므로, 폰트 10px 강제(이중 축소) 대상에서 제외 */
-        body.tab-printing-mode:not(.printing-tab-summary) #tab-print-area table,
-        body.tab-printing-mode:not(.printing-tab-summary) #tab-print-area .concept-table {
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec) #tab-print-area table,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec) #tab-print-area .concept-table {
             width: 100% !important; font-size: 10px !important; table-layout: auto !important;
         }
         
@@ -6851,7 +6856,7 @@ window.updateInboxBadge();
         }
         
         /* 절대좌표 밀림 및 겹침 현상 방지 (Summary는 JS가 계산한 width 보정값을 써야 하므로 width 강제 제외) */
-        body.tab-printing-mode:not(.printing-tab-summary) #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec) #tab-print-area > .concept-tab-wrap,
         body.tab-printing-mode #tab-print-area > .concept-tab-wrap > * {
             position: relative !important;
             display: block !important;
@@ -6860,13 +6865,13 @@ window.updateInboxBadge();
             top: auto !important;
             left: auto !important;
         }
-        body.tab-printing-mode.printing-tab-summary #tab-print-area > .concept-tab-wrap {
+        body.tab-printing-mode.printing-tab-summary #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode.printing-tab-briefspec #tab-print-area > .concept-tab-wrap {
             position: relative !important;
             display: block !important;
             height: auto !important;
             top: auto !important;
             left: auto !important;
-            /* width는 강제하지 않음 — JS가 scale 보정을 위해 넣은 인라인 width를 그대로 사용 */
         }
 
         /* ══════════════════════════════════════════════════════
@@ -6880,9 +6885,30 @@ window.updateInboxBadge();
             margin: 10mm !important;
         }
 
-        /* 세로 1장 범위 안에서 페이지가 임의로 쪼개지는 현상 방지 (표/행 단위만 — 컨테이너 전체에 걸면 살짝 넘칠 때 페이지 전체가 강제로 밀려 큰 여백이 생김) */
+        /* 🎯 [Brief SPEC 탭 전용] A4 가로 + 1페이지 축소 */
+        body.printing-tab-briefspec {
+            page: briefspecLandscapePage !important;
+        }
+        @page briefspecLandscapePage {
+            size: A4 landscape !important;
+            margin: 10mm !important;
+        }
+        /* 💡 화면용 #tab-briefspec 선택자는 인쇄 사본(#tab-print-area)엔 적용 안 되므로 인쇄 전용으로 재선언 */
+        body.printing-tab-briefspec #tab-print-area th {
+            text-align: center !important;
+            vertical-align: middle !important;
+        }
+        /* 🩹 화면용 .concept-tab-wrap의 max-width:1200px 제한이 JS가 계산한 인쇄 너비를 가로막지 못하도록 해제 */
+        body.printing-tab-summary #tab-print-area > .concept-tab-wrap,
+        body.printing-tab-briefspec #tab-print-area > .concept-tab-wrap {
+            max-width: none !important;
+        }
+
+        /* 1장 범위 안에서 페이지가 임의로 쪼개지는 현상 방지 (표/행 단위만) */
         body.printing-tab-summary #tab-print-area table,
-        body.printing-tab-summary #tab-print-area tr {
+        body.printing-tab-summary #tab-print-area tr,
+        body.printing-tab-briefspec #tab-print-area table,
+        body.printing-tab-briefspec #tab-print-area tr {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }
