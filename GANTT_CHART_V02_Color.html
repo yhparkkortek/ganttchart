@@ -8977,6 +8977,12 @@ async function msCallGemini(apiKey, parsed) {
         const yy = String(d.getFullYear()).slice(-2);
         return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} '${yy}`;
     }
+    // 💡 PPT 출력 전용: 년도 제외 (화면 표시는 년도 포함 유지)
+    function _pptFormatMD(ts) {
+        if (!ts) return "";
+        const d = new Date(ts);
+        return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
+    }
     function wrGetWeekNumber(ts) {
         const d = new Date(ts);
         const start = new Date(d.getFullYear(), 0, 1);
@@ -9338,7 +9344,7 @@ async function msCallGemini(apiKey, parsed) {
             if (!issue) return;
             const assignee = wrExtractAssignee(contentStr);
             const issueWithTask = `[${t.text}]\n${issue}`;
-            issueRows.push([issueWithTask, fix || '-', `${wrFormatMD(t.row._calcStartTs)}~${wrFormatMD(t.row._calcPlanTs)}`, assignee || '-']);
+            issueRows.push([issueWithTask, fix || '-', `${_pptFormatMD(t.row._calcStartTs)}~${_pptFormatMD(t.row._calcPlanTs)}`, assignee || '-']);
         });
 
         const pptx = new PptxGenJS();
@@ -9748,21 +9754,33 @@ async function msCallGemini(apiKey, parsed) {
             const todayPct = Math.max(0, Math.min(1, (todayTs - tl.minTs) / span));
             slide.addShape(pptx.ShapeType.roundRect, { x: lineX, y: trackRowY + 0.04, w: Math.max(0.05, lineW * todayPct), h: 0.08, rectRadius: 0.04, fill: { color: SKY_DARK } });
 
-            // major: 등간격 배치, 위쪽 줄에서만 그려짐
-            majorItems.forEach((it) => {
-            const pct = majorPctMap.get(it);
-            const dotX = lineX + lineW * pct;
-            slide.addShape(pptx.ShapeType.triangle, {
-                x: dotX - triW / 2, y: trackRowY - triH, w: triW, h: triH,   // ← 여기 majorRowY를 trackRowY로
-                fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
-            });
-            const labelW = 0.95, labelH = 0.34;
-            const labelY = trackRowY - triH - triLabelGap - labelH;
-                let labelX = dotX - labelW / 2;
+            // major: 삼각형은 실제 날짜 위치에 고정, 라벨끼리 겹치면 최소 간격만큼 밀어냄
+            const majorLabelW = 0.95;
+            const majorSorted = majorItems.slice().sort((a, b) => a.start - b.start);
+            const minLabelGap = majorLabelW * 0.55;
+            const majorLabelXs = majorSorted.map((it) => lineX + lineW * majorPctMap.get(it) - majorLabelW / 2);
+            for (let pass = 0; pass < 5; pass++) {
+                for (let i = 1; i < majorLabelXs.length; i++) {
+                    if (majorLabelXs[i] - majorLabelXs[i - 1] < minLabelGap) {
+                        const mid = (majorLabelXs[i] + majorLabelXs[i - 1]) / 2;
+                        majorLabelXs[i - 1] = mid - minLabelGap / 2;
+                        majorLabelXs[i] = mid + minLabelGap / 2;
+                    }
+                }
+            }
+            majorSorted.forEach((it, idx) => {
+                const pct = majorPctMap.get(it);
+                const dotX = lineX + lineW * pct; // 💡 삼각형은 항상 실제 날짜 위치
+                slide.addShape(pptx.ShapeType.triangle, {
+                    x: dotX - triW / 2, y: trackRowY - triH, w: triW, h: triH,
+                    fill: { color: '2B2B2B' }, line: { color: 'FFFFFF', width: 0.75 }, rotate: 180
+                });
+                const labelY = trackRowY - triH - triLabelGap - majorLabelH;
+                let labelX = majorLabelXs[idx]; // 💡 라벨만 겹침 방지로 조정된 위치
                 if (labelX < tlX + 0.08) labelX = tlX + 0.08;
-                if (labelX + labelW > tlX + tlW - 0.08) labelX = tlX + tlW - 0.08 - labelW;
+                if (labelX + majorLabelW > tlX + tlW - 0.08) labelX = tlX + tlW - 0.08 - majorLabelW;
                 slide.addText(`${it.name}\n${wrFormatMD(it.start)}`, {
-                    x: labelX, y: labelY, w: labelW, h: labelH,
+                    x: labelX, y: labelY, w: majorLabelW, h: majorLabelH,
                     fontSize: 8.5, bold: true, align: 'center', valign: 'bottom', color: SKY_DARK
                 });
             });
