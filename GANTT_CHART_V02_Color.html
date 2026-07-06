@@ -682,6 +682,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           style="border-color:#e67e22; color:#e67e22;"
           title="과거 미발송분 포함 전체 발송">📧 일괄 발송</button>
       </div>
+      <button class="action-btn" onclick="window.printTabSection('tab-alarm')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
     </div>
 
     <!-- 알람 목록 테이블 -->
@@ -890,6 +891,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 #tab-address .concept-table td input.u-input {
                     background: transparent !important;
                     text-align: center !important;
+                }
+                /* 🩹 인쇄 사본(#tab-print-area)에는 위 #tab-address 선택자가 적용 안 되므로 인쇄 전용으로 재선언 */
+                @media print {
+                    body.printing-tab-address #tab-print-area input.u-input {
+                        background: transparent !important;
+                    }
                 }
                 #tab-address .concept-table tbody tr.mc-zebra-a,
                 #tab-address .concept-table tbody tr.mc-zebra-a input {
@@ -2944,13 +2951,16 @@ ${mailText}`;
         const isMcTable = (tabId === 'tab-mctable');
         const isCalendar = (tabId === 'tab-calendar');
         const isWeekly = (tabId === 'tab-weekly');
+        const isAlarm = (tabId === 'tab-alarm');
+        const isAddress = (tabId === 'tab-address');
+        const isRowPagedPortrait = isAlarm || isAddress; // 🎯 A4 세로 + 40행/페이지 (여러 페이지로 이어짐)
         const fitOnePage = isSummary || isBriefSpec; // 💡 1페이지 축소 대상 탭
 
         if (isSummary) {
             // 📷 제품 사진 섹션은 인쇄에서 제외
             clone.querySelectorAll('#product-images-section').forEach(function(el) { el.remove(); });
         }
-        if (fitOnePage || isMcTable || isCalendar || isWeekly) {
+        if (fitOnePage || isMcTable || isCalendar || isWeekly || isRowPagedPortrait) {
             // 💡 화면용 내부 스크롤 제한(overflow-y:auto/max-height) 해제 → 전체 내용이 실제 높이로 측정되도록
             clone.querySelectorAll('[style*="overflow-y"]').forEach(function(el) {
                 el.style.overflow = 'visible';
@@ -3118,6 +3128,39 @@ ${mailText}`;
             clone.style.width = (pageWidthPx / FIXED_SCALE) + 'px';
         }
 
+        if (isRowPagedPortrait) {
+            document.body.classList.add(isAlarm ? 'printing-tab-alarm' : 'printing-tab-address');
+
+            // 📐 A4 세로 표준 여백 기준 페이지 폭/높이(px)
+            const pageWidthPx  = (210 - 20) * 96 / 25.4;
+            const pageHeightPx = (297 - 20) * 96 / 25.4;
+            const TARGET_ROWS_PER_PAGE = 40;
+
+            printArea.style.position = 'fixed';
+            printArea.style.left = '-99999px';
+            printArea.style.top = '0';
+            printArea.style.display = 'block';
+
+            clone.style.zoom = 1;
+            clone.style.width = pageWidthPx + 'px';
+
+            const theadEl = clone.querySelector('thead');
+            const rowEl = clone.querySelector('tbody tr');
+            const theadHeight = theadEl ? theadEl.offsetHeight : 0;
+            const rowHeight = rowEl ? rowEl.offsetHeight : 24;
+
+            const budget = theadHeight + TARGET_ROWS_PER_PAGE * rowHeight;
+            const scale = budget > 0 ? Math.min(1, pageHeightPx / budget) : 1;
+
+            clone.style.width = (pageWidthPx / scale) + 'px';
+            clone.style.zoom = scale;
+
+            printArea.style.position = '';
+            printArea.style.left = '';
+            printArea.style.top = '';
+            printArea.style.display = '';
+        }
+
         window.print();
     };
 
@@ -3131,6 +3174,8 @@ ${mailText}`;
             document.body.classList.remove('printing-tab-mctable');
             document.body.classList.remove('printing-tab-calendar');
             document.body.classList.remove('printing-tab-weekly');
+            document.body.classList.remove('printing-tab-alarm');
+            document.body.classList.remove('printing-tab-address');
         }, 1000);
     });
 
@@ -6969,14 +7014,14 @@ window.updateInboxBadge();
         }
         
         /* 💡 Summary는 JS에서 계산한 scale로 이미 크기를 맞추므로, 폰트 10px 강제(이중 축소) 대상에서 제외 */
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly) #tab-print-area table,
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly) #tab-print-area .concept-table {
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-address) #tab-print-area table,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-address) #tab-print-area .concept-table {
             width: 100% !important; font-size: 10px !important; table-layout: auto !important;
         }
         
                 
         /* 절대좌표 밀림 및 겹침 현상 방지 (Summary는 JS가 계산한 width 보정값을 써야 하므로 width 강제 제외) */
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly) #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-address) #tab-print-area > .concept-tab-wrap,
         body.tab-printing-mode #tab-print-area > .concept-tab-wrap > * {
             position: relative !important;
             display: block !important;
@@ -7096,6 +7141,27 @@ window.updateInboxBadge();
         body.printing-tab-weekly #tab-print-area tr {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
+        }
+
+        /* 🎯 [Address / Alarm 탭 공통] A4 세로 + 40행/페이지 */
+        body.printing-tab-address,
+        body.printing-tab-alarm {
+            page: rowPagedPortraitPage !important;
+        }
+        @page rowPagedPortraitPage {
+            size: A4 portrait !important;
+            margin: 10mm !important;
+        }
+        body.printing-tab-address #tab-print-area tr,
+        body.printing-tab-alarm #tab-print-area tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+        /* 💡 화면용 #tab-address 선택자는 인쇄 사본(#tab-print-area)엔 적용 안 되므로 인쇄 전용으로 재선언 */
+        body.printing-tab-address #tab-print-area th,
+        body.printing-tab-alarm #tab-print-area th {
+            text-align: center !important;
+            vertical-align: middle !important;
         }
     }
 
