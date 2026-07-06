@@ -2942,15 +2942,16 @@ ${mailText}`;
         const isSummary = (tabId === 'tab-summary');
         const isBriefSpec = (tabId === 'tab-briefspec');
         const isMcTable = (tabId === 'tab-mctable');
+        const isCalendar = (tabId === 'tab-calendar');
+        const isWeekly = (tabId === 'tab-weekly');
         const fitOnePage = isSummary || isBriefSpec; // 💡 1페이지 축소 대상 탭
 
         if (isSummary) {
             // 📷 제품 사진 섹션은 인쇄에서 제외
             clone.querySelectorAll('#product-images-section').forEach(function(el) { el.remove(); });
         }
-        if (fitOnePage || isMcTable) {
+        if (fitOnePage || isMcTable || isCalendar || isWeekly) {
             // 💡 화면용 내부 스크롤 제한(overflow-y:auto/max-height) 해제 → 전체 내용이 실제 높이로 측정되도록
-            //    (M.C Table도 포함 — 접힘 상태에서 1페이지 맞춤 계산 시 이 제한 때문에 실제보다 작게 측정되던 문제 해결)
             clone.querySelectorAll('[style*="overflow-y"]').forEach(function(el) {
                 el.style.overflow = 'visible';
                 el.style.maxHeight = 'none';
@@ -3066,6 +3067,57 @@ ${mailText}`;
             printArea.style.display = '';
         }
 
+        if (isCalendar) {
+            document.body.classList.add('printing-tab-calendar');
+
+            // 📐 A4 가로 표준 여백 기준 페이지 폭/높이(px) + 경계선 오차 방지 여유 마진
+            const pageWidthPx  = (297 - 20) * 96 / 25.4;
+            const pageHeightPx = (210 - 20) * 96 / 25.4;
+            const SAFETY = 0.96;
+            const targetW = pageWidthPx * SAFETY;
+            const targetH = pageHeightPx * SAFETY;
+
+            printArea.style.position = 'fixed';
+            printArea.style.left = '-99999px';
+            printArea.style.top = '0';
+            printArea.style.display = 'block';
+
+            // 💡 달마다 주 수(4~6주)가 달라 높이가 다르므로, 각 달 블록을 개별로 측정해서
+            //    그 페이지에 맞는 배율을 따로 계산 (한 달 = 한 페이지)
+            const monthBlocks = clone.querySelectorAll('.cal-month-block');
+            monthBlocks.forEach(function(block) {
+                let width = targetW;
+                let scale = 1;
+                for (let i = 0; i < 4; i++) {
+                    block.style.zoom = 1;
+                    block.style.width = width + 'px';
+                    const h = block.scrollHeight;
+                    scale = Math.min(999, targetH / h); // 짧으면 확대도 허용
+                    width = targetW / scale;
+                }
+                block.style.width = width + 'px';
+                block.style.zoom = scale;
+            });
+
+            printArea.style.position = '';
+            printArea.style.left = '';
+            printArea.style.top = '';
+            printArea.style.display = '';
+        }
+
+        if (isWeekly) {
+            // 💡 내용량에 따라 배율이 달라지지 않도록, 실측 기반 동적 계산을 쓰지 않고
+            //    고정된 배율 하나만 항상 적용 — 내용이 적어도 절대 자연 크기(확대처럼 보임)로 돌아가지 않음
+            document.body.classList.add('printing-tab-weekly');
+
+            const FIXED_SCALE = 0.82; // 🎯 스크린샷2 수준의 밀도가 나오도록 맞춘 고정 배율 (필요시 이 값만 조정)
+            const pageWidthPx = (210 - 20) * 96 / 25.4; // A4 세로 실측 가로폭
+
+            clone.style.transformOrigin = 'top left';
+            clone.style.zoom = FIXED_SCALE;
+            clone.style.width = (pageWidthPx / FIXED_SCALE) + 'px';
+        }
+
         window.print();
     };
 
@@ -3077,6 +3129,8 @@ ${mailText}`;
             document.body.classList.remove('printing-tab-summary');
             document.body.classList.remove('printing-tab-briefspec');
             document.body.classList.remove('printing-tab-mctable');
+            document.body.classList.remove('printing-tab-calendar');
+            document.body.classList.remove('printing-tab-weekly');
         }, 1000);
     });
 
@@ -6915,14 +6969,14 @@ window.updateInboxBadge();
         }
         
         /* 💡 Summary는 JS에서 계산한 scale로 이미 크기를 맞추므로, 폰트 10px 강제(이중 축소) 대상에서 제외 */
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable) #tab-print-area table,
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable) #tab-print-area .concept-table {
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly) #tab-print-area table,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly) #tab-print-area .concept-table {
             width: 100% !important; font-size: 10px !important; table-layout: auto !important;
         }
         
                 
         /* 절대좌표 밀림 및 겹침 현상 방지 (Summary는 JS가 계산한 width 보정값을 써야 하므로 width 강제 제외) */
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable) #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly) #tab-print-area > .concept-tab-wrap,
         body.tab-printing-mode #tab-print-area > .concept-tab-wrap > * {
             position: relative !important;
             display: block !important;
@@ -6933,7 +6987,9 @@ window.updateInboxBadge();
         }
         body.tab-printing-mode.printing-tab-summary #tab-print-area > .concept-tab-wrap,
         body.tab-printing-mode.printing-tab-briefspec #tab-print-area > .concept-tab-wrap,
-        body.tab-printing-mode.printing-tab-mctable #tab-print-area > .concept-tab-wrap {
+        body.tab-printing-mode.printing-tab-mctable #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode.printing-tab-calendar #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode.printing-tab-weekly #tab-print-area > .concept-tab-wrap {
             position: relative !important;
             display: block !important;
             height: auto !important;
@@ -6968,7 +7024,9 @@ window.updateInboxBadge();
         /* 🩹 화면용 .concept-tab-wrap의 max-width:1200px 제한이 JS가 계산한 인쇄 너비를 가로막지 못하도록 해제 */
         body.printing-tab-summary #tab-print-area > .concept-tab-wrap,
         body.printing-tab-briefspec #tab-print-area > .concept-tab-wrap,
-        body.printing-tab-mctable #tab-print-area > .concept-tab-wrap {
+        body.printing-tab-mctable #tab-print-area > .concept-tab-wrap,
+        body.printing-tab-calendar #tab-print-area > .concept-tab-wrap,
+        body.printing-tab-weekly #tab-print-area > .concept-tab-wrap {
             max-width: none !important;
         }
 
@@ -7003,6 +7061,39 @@ window.updateInboxBadge();
         body.printing-tab-briefspec #tab-print-area table,
         body.printing-tab-briefspec #tab-print-area tr,
         body.printing-tab-mctable #tab-print-area tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+
+        /* 🎯 [Calendar 탭 전용] A4 가로 + 한 달 = 한 페이지 */
+        body.printing-tab-calendar {
+            page: calendarLandscapePage !important;
+        }
+        @page calendarLandscapePage {
+            size: A4 landscape !important;
+            margin: 10mm !important;
+        }
+        /* 달 블록마다 다음 페이지로 강제 분리 (마지막 달은 그대로 끝) */
+        body.printing-tab-calendar #tab-print-area .cal-month-block {
+            page-break-after: always !important;
+            break-after: page !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
+        body.printing-tab-calendar #tab-print-area .cal-month-block:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
+        }
+
+        /* 🎯 [Weekly Report 탭 전용] A4 세로 + 1페이지 맞춤 */
+        body.printing-tab-weekly {
+            page: weeklyPortraitPage !important;
+        }
+        @page weeklyPortraitPage {
+            size: A4 portrait !important;
+            margin: 10mm !important;
+        }
+        body.printing-tab-weekly #tab-print-area tr {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }
