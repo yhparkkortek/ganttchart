@@ -1485,7 +1485,25 @@ if (!localStorage.getItem('gantt_popup_done')) {
         const newWin = window.open(location.href, 'gantt_popup',
             `width=${screen.width},height=${screen.height},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
         if (newWin) {
+            newWiif (!localStorage.getItem('gantt_popup_done')) {
+    localStorage.setItem('gantt_popup_done', '1');
+    if (window.name !== 'gantt_popup') {
+        const newWin = window.open(location.href, 'gantt_popup',
+            `width=${screen.width},height=${screen.height},left=0,top=0,menubar=no,toolbar=no,location=no,status=no`);
+        if (newWin) {
             newWin.focus();
+            window.close();
+            // 💡 주소창에 직접 입력해 연 탭은 스크립트로 닫을 수 없어 close()가 무시될 수 있음
+            //    → 그런 경우 원래 탭은 안내 문구로 교체해서 중복 창처럼 혼란스럽지 않게 함
+            setTimeout(function() {
+                document.body.innerHTML =
+                    '<div style="display:flex;align-items:center;justify-content:center;height:100vh;' +
+                    'font-family:\'Malgun Gothic\',sans-serif;color:#555;font-size:16px;text-align:center;padding:20px;">' +
+                    '✅ 새 창으로 이동했습니다.<br>이 탭은 닫아주셔도 됩니다.</div>';
+            }, 300);
+        }
+    }
+}n.focus();
             window.close();
         }
     }
