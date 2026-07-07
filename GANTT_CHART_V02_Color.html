@@ -5879,6 +5879,7 @@ window.showMailAnalyzer = function() {
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
     document.getElementById('mail-analyzer-overlay').style.display = 'flex';
+    window.bringModalToFront('mail-analyzer-overlay');
 
     // 💡 새로 열 때는 "AI 분석" 버튼이 다시 전체 폭 단일 버튼으로 시작
     const analyzeBtn = document.getElementById('mail-analyze-btn');
@@ -6741,6 +6742,15 @@ window.TaskInbox = {
     }
 };
 
+// 💡 공용: 모달을 열 때마다 그 순간 가장 높은 z-index를 부여해서 항상 맨 위로 오게 함
+window._topModalZ = window._topModalZ || 9999;
+window.bringModalToFront = function(overlayId) {
+    const el = document.getElementById(overlayId);
+    if (!el) return;
+    window._topModalZ += 1;
+    el.style.zIndex = String(window._topModalZ);
+};
+
 window.updateInboxBadge = function() {
     const badge = document.getElementById('inbox-badge');
     if (!badge) return;
@@ -6752,6 +6762,7 @@ window.updateInboxBadge = function() {
 window.openTaskInbox = function() {
     window.renderTaskInbox();
     document.getElementById('task-inbox-overlay').style.display = 'flex';
+    window.bringModalToFront('task-inbox-overlay');
 };
 window.closeTaskInbox = function() {
     document.getElementById('task-inbox-overlay').style.display = 'none';
