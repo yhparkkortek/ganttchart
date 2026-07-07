@@ -6710,6 +6710,13 @@ window._distCtx = null;
 
 window.closeInboxDist = function() {
     document.getElementById('inbox-dist-overlay').style.display = 'none';
+    // 💡 dist-step2를 안전한 곳으로 옮긴 뒤, 열려있던 카드의 인라인 패널을 접음
+    const step2 = document.getElementById('dist-step2');
+    if (step2) document.body.appendChild(step2);
+    if (window._distCtx && window._distCtx.uid) {
+        const inlineEl = document.getElementById('inbox-dist-inline-' + window._distCtx.uid);
+        if (inlineEl) { inlineEl.style.display = 'none'; inlineEl.innerHTML = ''; }
+    }
     window._distCtx = null;
 };
 
@@ -6730,6 +6737,12 @@ window.inboxOpenDistribute = async function(uid) {
     const inlineEl = document.getElementById('inbox-dist-inline-' + uid);
     if (!inlineEl) return;
     const alreadyOpen = inlineEl.style.display !== 'none' && inlineEl.dataset.uid === uid;
+
+    // 💡 dist-step2는 여러 항목이 재사용하는 단일 요소라, 다른 항목 슬롯을 비우기 전에
+    //    잠시 안전한 곳(body)으로 옮겨둬서 innerHTML='' 처리 때 함께 삭제되지 않게 보호
+    const step2 = document.getElementById('dist-step2');
+    if (step2) document.body.appendChild(step2);
+
     // 다른 항목에서 열려있던 인라인 목록은 닫기
     document.querySelectorAll('[id^="inbox-dist-inline-"]').forEach(function(el) { el.style.display = 'none'; el.innerHTML = ''; });
     if (alreadyOpen) return;
@@ -6760,12 +6773,12 @@ window.inboxOpenDistribute = async function(uid) {
             div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(f.name) + '</span><span style="color:#999; white-space:nowrap; margin-left:8px; font-size:11px;">' + d.toLocaleString() + '</span>';
             div.addEventListener('click', function() {
                 document.getElementById('dist-step2').style.display = 'none';
-                document.getElementById('dist-task-name').textContent = window._distCtx.taskName + ' 📧';
-                document.getElementById('inbox-dist-overlay').style.display = 'flex'; // 파일 선택 후엔 상세 배치 단계만 팝업으로
                 window.inboxDistPickFile(f.id, f.name);
             });
             inlineEl.appendChild(div);
         });
+        // 💡 상세 배치 단계(개발단계 선택 + 전송실행)를 팝업이 아니라 이 카드 안으로 이동
+        inlineEl.appendChild(document.getElementById('dist-step2'));
     } catch (err) {
         inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#e03131; font-size:12px;">❌ 목록 호출 실패: 드라이브 연동 상태 또는 권한을 확인해주세요.</div>';
     }
