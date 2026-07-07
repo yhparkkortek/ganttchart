@@ -6495,6 +6495,48 @@ window.computeCalcDatesForRows = function(rows, ci) {
     for (let l0Node of tree) applyDatesToRow(l0Node);
 };
 
+// 💡 공용: L0(개발단계) 구간별 이름 + 날짜범위(계산된 시작~완료 기준)를 함께 뽑아줌
+//    devStage 컬럼 모드/WBS 단일컬럼 모드 모두 지원. 현재 프로젝트/다른 프로젝트 공용.
+window.buildL0SectionInfo = function(rows, ci) {
+    const out = [];
+    const findOrAdd = function(name) {
+        for (let i = 0; i < out.length; i++) { if (out[i].name === name) return out[i]; }
+        const e = { name: name, startTs: null, endTs: null };
+        out.push(e);
+        return e;
+    };
+    const feed = function(name, row) {
+        if (!name) return;
+        const e = findOrAdd(name);
+        const s = row._calcStartTs, p = row._calcPlanTs;
+        if (s && (e.startTs === null || s < e.startTs)) e.startTs = s;
+        if (p && (e.endTs === null || p > e.endTs)) e.endTs = p;
+    };
+
+    if (!rows || rows.length <= 1 || !ci) return out;
+    if (ci.devStage !== -1) {
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i]; if (!row) continue;
+            feed((row[ci.devStage] || '').toString().trim(), row);
+        }
+    } else if (ci.wbs !== -1) {
+        let curName = null;
+        for (let i = 1; i < rows.length; i++) {
+            const row = rows[i]; if (!row) continue;
+            if (row._level === 0) curName = (row._origDev || row[ci.wbs] || '').toString().trim();
+            feed(curName, row);
+        }
+    }
+    return out;
+};
+
+// 💡 타임스탬프 → "YYYY/MM" 형식으로 간단 표기
+window.formatYM = function(ts) {
+    if (!ts) return '?';
+    const d = new Date(ts);
+    return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0');
+};
+
 window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
     if (l0Value === '__END__' || !rows || rows.length <= 1) {
         return { pos: rows ? rows.length : 0, usedDateMatch: false, previewLabel: '📍 맨 끝에 추가' };
@@ -6678,25 +6720,8 @@ window.closeTaskInbox = function() {
 
 // 현재 프로젝트의 개발단계(L0) 목록 수집
 window.getCurrentL0List = function() {
-    const arr = [];
-    if (!globalData || globalData.length <= 1 || !colIdx) return arr;
-    if (colIdx.devStage !== -1) {
-        for (let i = 1; i < globalData.length; i++) {
-            const row = globalData[i]; if (!row) continue;
-            const v = (row[colIdx.devStage] || '').toString().trim();
-            if (v && arr.indexOf(v) === -1) arr.push(v);
-        }
-    } else if (colIdx.wbs !== -1) {
-        // 💡 단일 "개발업무(WBS)" 컬럼 모드: _level===0인 행에서 구간명을 추출
-        for (let i = 1; i < globalData.length; i++) {
-            const row = globalData[i]; if (!row) continue;
-            if (row._level === 0) {
-                const v = (row._origDev || row[colIdx.wbs] || '').toString().trim();
-                if (v && arr.indexOf(v) === -1) arr.push(v);
-            }
-        }
-    }
-    return arr;
+    if (!globalData || globalData.length <= 1 || !colIdx) return [];
+    return window.buildL0SectionInfo(globalData, colIdx);
 };
 
 window.renderTaskInbox = function() {
@@ -6713,9 +6738,10 @@ window.renderTaskInbox = function() {
     items.forEach(function(it) {
         const t = it.task || {};
         const l0Options = ['<option value="__END__">(맨 끝에 추가)</option>']
-            .concat(l0List.map(function(v) {
-                const selAttr = (v === (t['개발단계'] || '').trim()) ? ' selected' : '';
-                return '<option value="' + escapeHtml(v) + '"' + selAttr + '>' + escapeHtml(v) + ' 구간 끝</option>';
+            .concat(l0List.map(function(sec) {
+                const selAttr = (sec.name === (t['개발단계'] || '').trim()) ? ' selected' : '';
+                const range = window.formatYM(sec.startTs) + '~' + window.formatYM(sec.endTs);
+                return '<option value="' + escapeHtml(sec.name) + '"' + selAttr + '>' + escapeHtml(sec.name) + ' 구간 끝 (' + range + ')</option>';
             })).join('');
         const dateStr = (t['시작일'] || '?') + ' ~ ' + (t['완료일'] || '?');
         const when = it.addedAt ? new Date(it.addedAt).toLocaleString() : '';
@@ -6872,6 +6898,9 @@ window.inboxOpenDistribute = async function(uid) {
     // 💡 "다른 프로젝트" 패널이 펼쳐진 동안은 "현재 프로젝트"용 자동위치 줄을 숨겨 중복처럼 안 보이게 함
     const curAutoRow = document.getElementById('inbox-cur-auto-row-' + uid);
     if (curAutoRow) curAutoRow.style.display = 'none';
+    // 💡 전송할 업무 자체의 기간을 같이 표시해서, 대상 구간 날짜와 바로 비교할 수 있게 함
+    const rangeEl = document.getElementById('dist-task-daterange');
+    if (rangeEl) rangeEl.textContent = `(업무 기간: ${r['시작일'] || '?'} ~ ${r['완료일'] || '?'})`;
     inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#888; font-size:12px;">📂 프로젝트 목록을 불러오는 중...</div>';
 
     try {
@@ -6940,26 +6969,12 @@ window.inboxDistPickFile = async function(fileId, fileName) {
 window.inboxDistFillL0Select = function(preferred) {
     const ctx = window._distCtx;
     const tCol = ctx.saveData.colIdx;
-    const l0s = [];
-    if (tCol.devStage !== -1) {
-        for (let i = 1; i < ctx.rows.length; i++) {
-            const v = (((ctx.rows[i] || [])[tCol.devStage]) || '').toString().trim();
-            if (v && l0s.indexOf(v) === -1) l0s.push(v);
-        }
-    } else if (tCol.wbs !== -1) {
-        // 💡 단일 "개발업무(WBS)" 컬럼 모드: 대상 프로젝트도 이 모드일 수 있으므로 동일하게 처리
-        for (let i = 1; i < ctx.rows.length; i++) {
-            const row = ctx.rows[i]; if (!row) continue;
-            if (row._level === 0) {
-                const v = (row._origDev || row[tCol.wbs] || '').toString().trim();
-                if (v && l0s.indexOf(v) === -1) l0s.push(v);
-            }
-        }
-    }
+    const l0s = window.buildL0SectionInfo(ctx.rows, tCol);
     const want = (preferred !== undefined) ? preferred : ((ctx.task['개발단계'] || '').trim());
     const sel = document.getElementById('dist-l0-select');
-    sel.innerHTML = '<option value="__END__">(맨 끝에 추가)</option>' + l0s.map(function(v) {
-        return '<option value="' + escapeHtml(v) + '"' + (v === want ? ' selected' : '') + '>' + escapeHtml(v) + ' 구간 끝</option>';
+    sel.innerHTML = '<option value="__END__">(맨 끝에 추가)</option>' + l0s.map(function(sec) {
+        const range = window.formatYM(sec.startTs) + '~' + window.formatYM(sec.endTs);
+        return '<option value="' + escapeHtml(sec.name) + '"' + (sec.name === want ? ' selected' : '') + '>' + escapeHtml(sec.name) + ' 구간 끝 (' + range + ')</option>';
     }).join('');
     sel.onchange = window.distRecomputePreview;
     window.distRecomputePreview();
@@ -7622,7 +7637,7 @@ window.updateInboxBadge();
             <p style="margin:0 0 10px; font-size:12px; color:#888; flex-shrink:0;">전송 업무: <b id="dist-task-name" style="color:#e67e22;"></b></p>
             <div id="dist-file-list" style="flex:1; overflow-y:auto; min-height:100px;"></div>
             <div id="dist-step2" style="display:none; flex-shrink:0; border-top:2px solid #eee; padding-top:10px; margin-top:10px;">
-            <p style="margin:0 0 8px; font-size:12px; color:#555;">대상: <b id="dist-target-name" style="color:#1971c2;"></b> — 삽입할 개발단계(L0) 구간을 선택하세요.</p>
+            <p style="margin:0 0 8px; font-size:12px; color:#555;">대상: <b id="dist-target-name" style="color:#1971c2;"></b> — 삽입할 개발단계(L0) 구간을 선택하세요. <span id="dist-task-daterange" style="color:#e67e22; font-weight:bold;"></span></p>
             <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
                 <select id="dist-l0-select" style="flex:1 1 160px; min-width:160px; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;"></select>
                 <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#2c5f8a; border-color:#2c5f8a; white-space:nowrap; flex-shrink:0;">🚀 전송 실행</button>
