@@ -6744,6 +6744,12 @@ window.getCurrentL0List = function() {
 window.renderTaskInbox = function() {
     const listEl = document.getElementById('inbox-list');
     if (!listEl) return;
+    // 💡 목록을 통째로 다시 그리기 전에, 여러 카드가 공유하는 dist-step2가
+    //    현재 어느 카드 안에 들어있든 함께 파괴되지 않도록 body로 먼저 대피
+    const step2 = document.getElementById('dist-step2');
+    if (step2 && step2.parentElement && step2.parentElement.id !== 'inbox-dist-overlay') {
+        document.body.appendChild(step2);
+    }
     const items = window.TaskInbox.load();
     if (items.length === 0) {
         listEl.innerHTML = '<div style="padding:40px 0; text-align:center; color:#aaa; font-size:13px;">보관함이 비어 있습니다.<br>메일 분석 화면에서 [📥 보관함] 버튼으로 업무를 담아주세요.</div>';
