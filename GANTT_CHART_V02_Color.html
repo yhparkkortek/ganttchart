@@ -14096,7 +14096,9 @@ window.mcAddUnit = function() {
     const units = window.getMcUnits();
     const defaultRevs = window.tabData.mcRevisions || {};
     const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
-    const isNaming = hasDefaultData; // 💡 제품구분자가 이미 있든 없든, 이름표 없는 데이터가 있으면 "이름 붙이기" 모드
+    // 💡 "이름 붙이기 모드"는 지금 화면이 진짜 "이름 없는 상태"(mcActiveUnit이 비어있음)일 때만.
+    //    이미 어떤 제품구분자(MVD 등)를 보고 있는 중이면, 그건 "새로운 구분자 추가"이지 "이름 붙이기"가 아님.
+    const isNaming = !window.mcActiveUnit && hasDefaultData;
 
     ov.dataset.mode = isNaming ? 'name-existing' : 'add-new';
     if (titleEl) titleEl.textContent = isNaming ? '📌 지금 있는 M.C Table 데이터, 제품구분자를 정해주세요' : '➕ 제품구분자 추가';
