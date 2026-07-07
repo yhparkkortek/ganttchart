@@ -8760,7 +8760,8 @@ function cleanMailBody(raw) {
 // ─── Gemini 분석 ─────────────────────────────────────────
 async function mfCallGemini(apiKey, parsed) {
     // 동일 메일 캐싱 (제목+발신자+본문 앞 200자 해시)
-    const cacheKey = 'gemini_cache_' + btoa(encodeURIComponent(
+    // 💡 v2: 출처 태그 로직 추가로 캐시 포맷이 바뀌어서, 예전 캐시가 섞이지 않도록 버전 마커 포함
+    const cacheKey = 'gemini_cache_v2_' + btoa(encodeURIComponent(
         (parsed.subject || '') + (parsed.sender || '') + (parsed.body || '').substring(0, 200)
     ).substring(0, 100));
     const cached = sessionStorage.getItem(cacheKey);
