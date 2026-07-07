@@ -1171,7 +1171,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 📌 TYPE이 비어있는 행은 바로 위 행의 TYPE을 그대로 이어받은 것으로 간주됩니다 (그룹 구분용).
             </span></span></h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0; padding:6px 8px;">🔽</button>
+            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0;">🔽 펼치기</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
             <button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>
@@ -1311,8 +1311,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
             </div>
             <button class="action-btn" onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다">📤 ics 파일로 내보내기</button>
-            <button class="action-btn" onclick="window.calSyncToGist()" title="최초 1회 URL 등록 후 자동 갱신 (몇 시간 지연 가능)">🔗 Google 자동 동기화</button>
-            <button class="action-btn" onclick="window.openCalSyncHelp()" title="자동 동기화 설정 방법 보기">❓ 사용법</button>
+            <button class="action-btn" onclick="window.openCalSyncHelp()" title="설정 방법 확인 후 동기화 실행">🔗 Google 자동 동기화</button>
             <button class="action-btn" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);">
@@ -1374,8 +1373,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div id="cal-sync-help-overlay" class="modal-overlay" onclick="window.closeCalSyncHelp(event)">
         <div class="history-modal" onclick="event.stopPropagation()" style="width:520px; max-width:92vw; height:auto; max-height:80vh;">
             <div class="history-header">
-                <span>❓ 구글 캘린더 자동 동기화 설정 방법</span>
+                <span>🔗 Google 자동 동기화</span>
                 <span class="history-close" onclick="window.closeCalSyncHelp()">✖</span>
+            </div>
+            <div style="padding:14px 16px 0;">
+                <button class="action-btn" onclick="window.calSyncToGist()" style="width:100%; background:#2c5f8a; color:#fff;">🔗 지금 동기화 실행</button>
             </div>
             <div class="history-body" style="padding:16px; overflow-y:auto; font-size:12.5px; line-height:1.7; color:#333;">
                 <b>1단계. GitHub 토큰 준비 (최초 1회만)</b>
@@ -13644,6 +13646,12 @@ try {
     window._bmExpanded.bs = localStorage.getItem('gantt_bs_expanded') === '1';
     window._bmExpanded.mc = localStorage.getItem('gantt_mc_expanded') === '1';
 } catch (e) {}
+// 💡 M.C Table 버튼은 페이지 로드 시 초기 텍스트가 항상 "🔽 펼치기"로 고정돼 있어서,
+//    저장된 상태가 "펼침"이어도 버튼만 "접힘"처럼 보이는 불일치가 있었음 → 로드 시 동기화
+(function() {
+    const btn = document.getElementById('mc-toggle-hidden-btn');
+    if (btn) btn.textContent = window._bmExpanded.mc ? '🔼 접기' : '🔽 펼치기';
+})();
 
 // "접기" 상태일 때 Model A/B/C 중 전체 데이터가 비어있는 열을 통째로 숨김 (Note 열은 항상 표시)
 window.bsRefreshColumnVisibility = function() {
@@ -14152,7 +14160,9 @@ window.mcRenameUnit = function(oldName) {
 // 💡 데이터는 있는데 아직 제품구분자가 하나도 없으면, 자동으로 이름 지정 팝업을 띄움
 //    (엑셀/프로젝트를 불러온 직후 호출됨)
 window.mcCheckNeedsNaming = function() {
-    // 💡 이미 제품구분자가 있든 없든, "이름표 없는" 데이터가 조금이라도 있으면 항상 이름을 물어봄
+    // 💡 이미 제품구분자가 하나라도 등록되어 있다면, 맨 위 mcRevisions는 진짜 "이름 없는 새 데이터"가
+    //    아니라 예전 활성화면의 잔재일 뿐이므로 다시 물어보지 않음 (아래 mcNormalizeAfterLoad가 정리함)
+    if (window.getMcUnits().length > 0) return;
     const defaultRevs = window.tabData.mcRevisions || {};
     const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
     if (hasDefaultData && !window.mcActiveUnit) {
@@ -14168,12 +14178,20 @@ window.mcNormalizeAfterLoad = function() {
     window.mcActiveUnit = '';
     window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
     window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
-    // 방금 불러온 tabData.mcRevisions(있다면)를 "기본 자리"의 최신값으로 재연결
-    window.tabData.mcRevisionsByUnit[''] = window.tabData.mcRevisions || window.tabData.mcRevisionsByUnit[''] || {};
-    window.tabData.mcSalesPriceDetailByUnit[''] = window.tabData.mcSalesPriceDetail || window.tabData.mcSalesPriceDetailByUnit[''] || {};
-    window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[''];
-    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[''];
     window.tabData.mcUnits = window.tabData.mcUnits || [];
+
+    if (window.tabData.mcUnits.length > 0) {
+        // 💡 이미 이름 붙은 제품구분자가 있으면, 맨 위 mcRevisions는 저장 시점에 활성화돼있던
+        //    화면의 잔재일 뿐 진짜 "이름 없는 데이터"가 아니므로 완전히 비워서 재확인 팝업을 막음
+        window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[''] = {};
+        window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[''] = {};
+    } else {
+        // 진짜 단일(구분자 없음) 프로젝트: 지금까지처럼 그대로 기본 자리로 재연결
+        window.tabData.mcRevisionsByUnit[''] = window.tabData.mcRevisions || window.tabData.mcRevisionsByUnit[''] || {};
+        window.tabData.mcSalesPriceDetailByUnit[''] = window.tabData.mcSalesPriceDetail || window.tabData.mcSalesPriceDetailByUnit[''] || {};
+        window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[''];
+        window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[''];
+    }
 
     if (window.mcRenderUnitTabs) window.mcRenderUnitTabs();
     setTimeout(window.mcCheckNeedsNaming, 300);
