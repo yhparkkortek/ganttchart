@@ -1950,6 +1950,7 @@ ${mailText}`;
                 window.projectMeta = saveData.projectMeta || window.projectMeta || {};
                 window.tabData = saveData.tabData || window.tabData || {};
                 window.projectDistributions = saveData.distributions || [];
+                window.mcNormalizeAfterLoad();
                 if (window.populateTabData) window.populateTabData();
                 window.recalculateSchedules();
                 alert(`🎉 [${fileName}] 백업으로 복원되었습니다!\n확인 후 [저장] 버튼을 눌러 공용 드라이브에도 반영해주세요.`);
@@ -1977,6 +1978,7 @@ ${mailText}`;
                 window.projectMeta = saveData.projectMeta || window.projectMeta || {};
                 window.tabData = saveData.tabData || window.tabData || {};
                 window.projectDistributions = saveData.distributions || []; // 📥 [Phase 2.5] 배분 원장 보관 (병합 기준점)
+                window.mcNormalizeAfterLoad();
                 if (window.populateTabData) window.populateTabData();
                 window.currentDriveFileId = fileId;
                 window.recalculateSchedules();
@@ -14106,6 +14108,25 @@ window.mcCheckNeedsNaming = function() {
     if (hasDefaultData && !window.mcActiveUnit) {
         window.mcAddUnit();
     }
+};
+
+// 💡 공용: tabData를 통째로 교체하는 모든 불러오기 경로(드라이브 등)에서 호출.
+//    mcActiveUnit/mcRevisions 포인터를 다시 정합성 있게 맞추고, 화면(탭 바)도 갱신하고,
+//    이름표 없는 데이터가 있으면 자동으로 이름 확인 팝업을 띄움.
+window.mcNormalizeAfterLoad = function() {
+    window.tabData = window.tabData || {};
+    window.mcActiveUnit = '';
+    window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
+    window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
+    // 방금 불러온 tabData.mcRevisions(있다면)를 "기본 자리"의 최신값으로 재연결
+    window.tabData.mcRevisionsByUnit[''] = window.tabData.mcRevisions || window.tabData.mcRevisionsByUnit[''] || {};
+    window.tabData.mcSalesPriceDetailByUnit[''] = window.tabData.mcSalesPriceDetail || window.tabData.mcSalesPriceDetailByUnit[''] || {};
+    window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[''];
+    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[''];
+    window.tabData.mcUnits = window.tabData.mcUnits || [];
+
+    if (window.mcRenderUnitTabs) window.mcRenderUnitTabs();
+    setTimeout(window.mcCheckNeedsNaming, 300);
 };
 
 window.mcAddUnitCancel = function() {
