@@ -4691,7 +4691,9 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         XLSX.utils.book_append_sheet(wb, wsBrief, "Brief SPEC");
 
                 // ── MC 종류별(기본 + 추가된 종류) 반복: Comparison + R1~R5 시트 ──
-        [''].concat(window.getMcUnits()).forEach(function(_mcUnitKey) {
+        // 💡 제품구분자가 하나라도 있으면 그것들만 순회(이름 없는 "기본" 자리는 이제 존재하지 않음).
+        //    아직 제품구분자를 하나도 안 쓰는(단일종류) 프로젝트만 예전처럼 ''(이름 없음) 하나로 저장.
+        (window.getMcUnits().length ? window.getMcUnits() : ['']).forEach(function(_mcUnitKey) {
             // 💡 이 종류의 저장소를 잠깐 가리키게 함 (화면 상태는 안 건드림)
             window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
             window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
@@ -14066,10 +14068,12 @@ window.mcRenderUnitTabs = function() {
     bar.style.display = 'flex';
     bar.innerHTML = units.map(function(u) {
         const active = (window.mcActiveUnit || '') === u;
-        return '<button class="mc-unit-btn" data-unit="' + escapeHtml(u) + '" onclick="window.mcSwitchUnit(\'' + escapeHtml(u).replace(/'/g, "\\'") + '\')"'
+        // 💡 이미 활성화된 칩을 한 번 더 누르면 전환이 아니라 "이름 바꾸기"로 동작
+        const clickFn = active ? 'window.mcRenameUnit' : 'window.mcSwitchUnit';
+        return '<button class="mc-unit-btn" data-unit="' + escapeHtml(u) + '" onclick="' + clickFn + '(\'' + escapeHtml(u).replace(/'/g, "\\'") + '\')" title="' + (active ? '클릭하여 이름 바꾸기' : '') + '"'
             + ' style="padding:6px 10px; border:1.5px solid #6f42c1; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold;'
             + ' background:' + (active ? '#6f42c1' : '#fff') + '; color:' + (active ? '#fff' : '#6f42c1') + ';">'
-            + escapeHtml(u)
+            + escapeHtml(u) + (active ? ' ✏️' : '')
             + ' <span onclick="event.stopPropagation(); window.mcRemoveUnit(\'' + escapeHtml(u).replace(/'/g, "\\'") + '\')" title="이 제품구분자 제거" style="opacity:0.7;">✕</span>'
             + '</button>';
     }).join('');
@@ -14097,6 +14101,22 @@ window.mcAddUnit = function() {
     input.value = '';
     ov.style.display = 'flex';
     setTimeout(function() { input.focus(); }, 50);
+};
+
+// 💡 이미 있는 제품구분자의 이름을 바꿈 (같은 팝업을 "이름변경 모드"로 재사용)
+window.mcRenameUnit = function(oldName) {
+    const ov = document.getElementById('mc-add-unit-overlay');
+    const input = document.getElementById('mc-add-unit-input');
+    const titleEl = document.getElementById('mc-add-unit-title');
+    const descEl = document.getElementById('mc-add-unit-desc');
+    if (!ov || !input) return;
+    ov.dataset.mode = 'rename';
+    ov.dataset.renameTarget = oldName;
+    if (titleEl) titleEl.textContent = '✏️ "' + oldName + '" 이름 바꾸기';
+    if (descEl) descEl.innerHTML = '새 이름을 입력하세요. (기존 견적 데이터는 그대로 유지됩니다)';
+    input.value = oldName;
+    ov.style.display = 'flex';
+    setTimeout(function() { input.focus(); input.select(); }, 50);
 };
 
 // 💡 데이터는 있는데 아직 제품구분자가 하나도 없으면, 자동으로 이름 지정 팝업을 띄움
@@ -14154,21 +14174,43 @@ window.mcAddUnitConfirm = function() {
 
     const ov = document.getElementById('mc-add-unit-overlay');
     const isNaming = ov && ov.dataset.mode === 'name-existing';
+    const isRenaming = ov && ov.dataset.mode === 'rename';
 
-    if (isNaming) {
+    if (isRenaming) {
+        const oldName = ov.dataset.renameTarget;
+        if (name !== oldName) {
+            if (units.some(function(u) { return u.toLowerCase() === name.toLowerCase() && u !== oldName; })) {
+                alert('"' + name + '"은 이미 다른 제품구분자로 사용 중입니다.');
+                return;
+            }
+            const idx = units.indexOf(oldName);
+            if (idx !== -1) units[idx] = name;
+            window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
+            window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
+            window.tabData.mcRevisionsByUnit[name] = window.tabData.mcRevisionsByUnit[oldName];
+            window.tabData.mcSalesPriceDetailByUnit[name] = window.tabData.mcSalesPriceDetailByUnit[oldName];
+            delete window.tabData.mcRevisionsByUnit[oldName];
+            delete window.tabData.mcSalesPriceDetailByUnit[oldName];
+            if (window.mcActiveUnit === oldName) window.mcActiveUnit = name;
+            window.mcRenderUnitTabs();
+        }
+    } else if (isNaming) {
         // 💡 기존 데이터를 통째로 이 이름으로 이관 (내용은 그대로, 이름표만 붙임)
-        //    "기본"이라는 별도 자리는 이제 없으므로, 옮긴 데이터를 그대로 활성 포인터로 계속 사용
         window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
         window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
         const movedRevisions = window.tabData.mcRevisions || {};
         const movedSales = window.tabData.mcSalesPriceDetail || {};
         window.tabData.mcRevisionsByUnit[name] = movedRevisions;
         window.tabData.mcSalesPriceDetailByUnit[name] = movedSales;
+        // 💡 "기본" 자리는 반드시 완전히 삭제 — 지우지 않으면 새 이름과 같은 객체를 계속 같이 가리켜서
+        //    엑셀 내보내기 때 "이름 없음"과 "새 이름" 두 시트로 중복 생성됨
+        delete window.tabData.mcRevisionsByUnit[''];
+        delete window.tabData.mcSalesPriceDetailByUnit[''];
         units.push(name);
         window.mcActiveUnit = name;
-        window.tabData.mcRevisions = movedRevisions;         // 💡 그대로 계속 가리키게 함
+        window.tabData.mcRevisions = movedRevisions;
         window.tabData.mcSalesPriceDetail = movedSales;
-        window.tabData.mcTable = movedRevisions.R1 || [];    // 엑셀 호환용 별칭도 유지
+        window.tabData.mcTable = movedRevisions.R1 || [];
         window.mcRenderUnitTabs();
         window.populateTabData();
     } else {
@@ -14176,9 +14218,7 @@ window.mcAddUnitConfirm = function() {
         units.push(name);
         window.mcRenderUnitTabs();
     }
-    // 💡 mcAddUnitCancel()을 다시 타면 mode가 아직 'name-existing'일 때 재귀 호출되므로,
-    //    성공 후에는 직접 닫고 mode도 초기화
-    if (ov) { ov.dataset.mode = ''; ov.style.display = 'none'; }
+    if (ov) { ov.dataset.mode = ''; ov.dataset.renameTarget = ''; ov.style.display = 'none'; }
 };
 
 // 종류 제거 (프로젝트 목록에서만 빼고, 저장된 견적 데이터는 유지)
