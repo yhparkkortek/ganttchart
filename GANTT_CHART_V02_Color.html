@@ -14175,18 +14175,24 @@ window.mcCheckNeedsNaming = function() {
 //    이름표 없는 데이터가 있으면 자동으로 이름 확인 팝업을 띄움.
 window.mcNormalizeAfterLoad = function() {
     window.tabData = window.tabData || {};
-    window.mcActiveUnit = '';
     window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
     window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
     window.tabData.mcUnits = window.tabData.mcUnits || [];
 
     if (window.tabData.mcUnits.length > 0) {
-        // 💡 이미 이름 붙은 제품구분자가 있으면, 맨 위 mcRevisions는 저장 시점에 활성화돼있던
-        //    화면의 잔재일 뿐 진짜 "이름 없는 데이터"가 아니므로 완전히 비워서 재확인 팝업을 막음
-        window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[''] = {};
-        window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[''] = {};
+        // 💡 이미 이름 붙은 제품구분자가 있으면, 맨 위 mcRevisions(저장 시점 잔재)는 버리고
+        //    "첫 번째 제품구분자"를 곧바로 활성화해서 그 데이터가 즉시 보이도록 함
+        window.tabData.mcRevisionsByUnit[''] = {};
+        window.tabData.mcSalesPriceDetailByUnit[''] = {};
+        const firstUnit = window.tabData.mcUnits[0];
+        window.mcActiveUnit = firstUnit;
+        window.tabData.mcRevisionsByUnit[firstUnit] = window.tabData.mcRevisionsByUnit[firstUnit] || {};
+        window.tabData.mcSalesPriceDetailByUnit[firstUnit] = window.tabData.mcSalesPriceDetailByUnit[firstUnit] || {};
+        window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[firstUnit];
+        window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[firstUnit];
     } else {
         // 진짜 단일(구분자 없음) 프로젝트: 지금까지처럼 그대로 기본 자리로 재연결
+        window.mcActiveUnit = '';
         window.tabData.mcRevisionsByUnit[''] = window.tabData.mcRevisions || window.tabData.mcRevisionsByUnit[''] || {};
         window.tabData.mcSalesPriceDetailByUnit[''] = window.tabData.mcSalesPriceDetail || window.tabData.mcSalesPriceDetailByUnit[''] || {};
         window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[''];
@@ -14194,6 +14200,7 @@ window.mcNormalizeAfterLoad = function() {
     }
 
     if (window.mcRenderUnitTabs) window.mcRenderUnitTabs();
+    if (window.populateTabData) window.populateTabData();
     setTimeout(window.mcCheckNeedsNaming, 300);
 };
 
