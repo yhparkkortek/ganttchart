@@ -8719,6 +8719,21 @@ function mfParseFile(file) {
     });
 }
 
+// 💡 공용: AI가 프롬프트 지시를 따라 스스로 만들어 넣은 [출처] 줄이 있으면 제거 (코드가 만드는 것과 중복 방지)
+window.stripAiGeneratedSourceTag = function(text) {
+    return (text || '').replace(/\n?\[출처\][^\n]*/g, '').trim();
+};
+// 💡 공용: 메일 날짜 문자열에서 요일/초/타임존 부분을 없애고 간단히 표기
+//    "Tue, 7 Jul 2026 14:48:16 +0900 (KST)" → "7 Jul 2026 14:48"
+window.cleanMailDateForTag = function(dateStr) {
+    if (!dateStr) return '';
+    return dateStr
+        .replace(/^[A-Za-z]{3},\s*/, '')
+        .replace(/(:\d{2})\s*[+-]\d{4}\s*\([^)]*\)\s*$/, '')
+        .trim();
+};
+
+
 // ─── 메일 본문 정제 (AI 입력 토큰 절약 + 품질 향상) ──────────
 function cleanMailBody(raw) {
     if (!raw) return '';
@@ -8796,8 +8811,9 @@ async function mfCallGemini(apiKey, parsed) {
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const result = window.parseGeminiTask(text);
             if (result) {
-                // 💡 원본 메일을 나중에 찾을 수 있도록, AI 응답이 아니라 실제 파싱된 원본 메타데이터를 그대로 덧붙임
-                const srcTag = `[출처] ${parsed.subject || ''}_${parsed.date || ''}_${parsed.sender || ''}`;
+                // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
+                result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
+                const srcTag = `[출처] ${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
                 result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
                 try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
             }
@@ -9845,8 +9861,9 @@ async function msCallGemini(apiKey, parsed) {
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const result = window.parseGeminiTask(text);
             if (result) {
-                // 💡 원본 메일을 나중에 찾을 수 있도록, AI 응답이 아니라 실제 파싱된 원본 메타데이터를 그대로 덧붙임
-                const srcTag = `[출처] ${parsed.subject || ''}_${parsed.date || ''}_${parsed.sender || ''}`;
+                // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
+                result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
+                const srcTag = `[출처] ${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
                 result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
             }
             return result;
