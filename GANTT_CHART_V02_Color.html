@@ -1535,7 +1535,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
     - 발신자: 자료를 첨부/발송(attached, sending)하거나 피드백·승인을 요청(wondering, requesting)하는 주체 (예: "I'd like to send~"에서 'I')
     - 수신자: 자료를 받아 검토해야 하거나 피드백을 제공(provide feedback)해야 하는 대상 (예: "Please provide~", "your CAD update"에서 'You')
     - 본문에 언급된 이름(영문/국문)을 있는 그대로 추출하되, 발신자/수신자 정보가 본문에 드러나지 않는다면 프로젝트 담당자명 등으로 임의 추정해 치환하지 마세요. 본문에 쓰인 영문 표기(예: Anthony→Andy 같은 애칭)를 최우선으로 사용하세요.
-  * 출력 형식: [업무유형][발신자→수신자] YYYY-MM-DD\n[핵심내용]내용(기존보다 2배 더 구체적으로 배경·수치·조건까지 서술)\n[To do]후속조치(누가, 무엇을, 언제까지 해야 하는지 구체적으로 서술)
+  * 출력 형식: [업무유형][발신자→수신자] YYYY-MM-DD\n[핵심내용]내용(기존보다 2배 더 구체적으로 배경·수치·조건까지 서술)\n[To do]후속조치(누가, 무엇을, 언제까지 해야 하는지 구체적으로 서술)\n[출처]메일 본문 안에서 확인 가능한 제목(Subject)이나 첫 줄 요약 문구, 날짜, 발신자명을 "제목_날짜_발신자" 형태로 간단히 기재 (본문에 제목이 명시되어 있지 않으면 첫 문장을 20자 이내로 축약해서 대신 사용)
   * 업무유형은 아래 중 가장 적합한 하나 선택:
     [요청/문의] 검토요청 / 자료요청 / 견적요청 / 일정·납기문의 / 승인요청 / 샘플요청 / 분석·테스트요청 / 변경·확인·협조요청
     [회신/답변] 검토답변 / 자료제공 / 견적회신 / 납기회신 / 승인완료 / 샘플발송 / 분석·테스트회신 / 변경수락·거절
@@ -4451,10 +4451,10 @@ window.deleteHistoryByDateRange = function() {
             const printDateEl = document.getElementById('print-date');
             if (printDateEl) printDateEl.textContent = "인쇄일자: " + dateStringFull;
             
-            const exportName = `${dateStringYYMMDD}_[Gantt Chart] ${safeInfoStr}`; 
+            const exportName = `${dateStringYYMMDD}_${safeInfoStr}`; 
             document.title = exportName; 
             window.exportFilenameStr = exportName;
-            window.driveSaveFilenameStr = `[Gantt Chart] ${safeInfoStr}`;  // 날짜 없는 드라이브 전용 파일명
+            window.driveSaveFilenameStr = `${safeInfoStr}`;  // 날짜 없는 드라이브 전용 파일명
         } catch (err) {
             console.error("파일명 자동 조립 엔진 오류:", err);
         }
@@ -6900,6 +6900,11 @@ window.inboxClearDone = function() {
 window.mailRightToInbox = function() {
     if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
     window.TaskInbox.add(window._mailAnalyzedResult, { source: '업무 추가(메일분석)' });
+    // 💡 상단바 배지 카운트 즉시 갱신
+    if (window.updateInboxBadge) window.updateInboxBadge();
+    // 💡 업무 보관함이 지금 열려있다면(둘 다 열어둔 상태), 그 자리에서 바로 목록도 갱신
+    const ov = document.getElementById('task-inbox-overlay');
+    if (ov && ov.style.display === 'flex' && window.renderTaskInbox) window.renderTaskInbox();
     alert(`📥 "${window._mailAnalyzedResult['업무명'] || '새 업무'}" 업무를 보관함에 담았습니다.\n상단바 [업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`);
 };
 
@@ -8783,7 +8788,12 @@ async function mfCallGemini(apiKey, parsed) {
             if (data.status !== 'success') throw new Error(data.message);
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const result = window.parseGeminiTask(text);
-            if (result) { try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {} }
+            if (result) {
+                // 💡 원본 메일을 나중에 찾을 수 있도록, AI 응답이 아니라 실제 파싱된 원본 메타데이터를 그대로 덧붙임
+                const srcTag = `[출처] ${parsed.subject || ''}_${parsed.date || ''}_${parsed.sender || ''}`;
+                result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
+                try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
+            }
             return result;
         } catch (err) {
             if (attempt < MAX_RETRY) {
@@ -9826,7 +9836,13 @@ async function msCallGemini(apiKey, parsed) {
             const data = await resp.json();
             if (data.status !== 'success') throw new Error(data.message);
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            return window.parseGeminiTask(text);
+            const result = window.parseGeminiTask(text);
+            if (result) {
+                // 💡 원본 메일을 나중에 찾을 수 있도록, AI 응답이 아니라 실제 파싱된 원본 메타데이터를 그대로 덧붙임
+                const srcTag = `[출처] ${parsed.subject || ''}_${parsed.date || ''}_${parsed.sender || ''}`;
+                result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
+            }
+            return result;
                 } catch(err) {
                 if (attempt < MAX_RETRY) {
                     console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
