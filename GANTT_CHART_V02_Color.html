@@ -5879,6 +5879,18 @@ window.showMailAnalyzer = function() {
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
     document.getElementById('mail-analyzer-overlay').style.display = 'flex';
+
+    // 💡 새로 열 때는 "AI 분석" 버튼이 다시 전체 폭 단일 버튼으로 시작
+    const analyzeBtn = document.getElementById('mail-analyze-btn');
+    if (analyzeBtn) {
+        analyzeBtn.style.width = '100%';
+        analyzeBtn.disabled = false;
+        analyzeBtn.innerHTML = '🤖 AI 분석';
+        analyzeBtn.style.background = '#2c5f8a';
+        analyzeBtn.style.borderColor = '#2c5f8a';
+    }
+    const loadingDiv = document.getElementById('mail-loading');
+    if (loadingDiv) loadingDiv.style.display = 'none';
 };
 
 // 💡 텍스트박스에 다시 타이핑 시작하면, 이전 분석 결과 표시(✅완료/⚠️실패)로 남아있던
@@ -5952,7 +5964,12 @@ window.analyzeMailContent = async function() {
     if (!mailText) { alert('메일 내용을 입력해주세요.'); return; }
 
     const analyzeBtn = document.getElementById('mail-analyze-btn');
-    document.getElementById('mail-loading').style.display = 'block';
+    const loadingDiv = document.getElementById('mail-loading');
+    // 💡 flex 비율 대신 width(calc)로 2:1 분할 — .action-btn의 flex !important 규칙과
+    //    충돌하지 않도록, "선택항목 연속등록"과 동일하게 width 속성만 사용
+    analyzeBtn.style.width = 'calc(66.6667% - 5.33px)';
+    loadingDiv.style.display = 'block';
+    loadingDiv.style.width = 'calc(33.3333% - 2.67px)';
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
 
@@ -6022,8 +6039,8 @@ window.analyzeMailContent = async function() {
         }
     }
 
-    document.getElementById('mail-loading').style.display = 'none';
     analyzeBtn.disabled = false;
+    // 💡 성공/실패 모두 2:1 분리 레이아웃을 유지 (버튼 하나로 다시 합쳐지지 않음)
 
     if (!parsed) {
         analyzeBtn.innerHTML = '⚠️ 실패(재시도)';
@@ -6035,7 +6052,7 @@ window.analyzeMailContent = async function() {
         return;
     }
 
-    analyzeBtn.innerHTML = '✅ 완료';
+    analyzeBtn.innerHTML = '✅ AI 재분석';
     analyzeBtn.style.background = '#28a745';
     analyzeBtn.style.borderColor = '#28a745';
 
@@ -6050,7 +6067,7 @@ window.analyzeMailContent = async function() {
 // ─── 직접입력 분석 강제 중단/초기화 ─────────────────────────
 window.mailResetAnalysis = function() {
     window._mailAnalyzeCancelled = true;
-    document.getElementById('mail-loading').style.display = 'none';
+    // 💡 2:1 분리 레이아웃은 유지, 라벨/색상만 초기 상태로
     const analyzeBtn = document.getElementById('mail-analyze-btn');
     analyzeBtn.disabled = false;
     analyzeBtn.innerHTML = '🤖 AI 분석';
@@ -7757,29 +7774,27 @@ window.updateInboxBadge();
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
-                    <div style="display:flex; gap:8px; justify-content:center;">
+                    <div style="display:flex; gap:8px;">
                         <button class="action-btn" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="width:100%; min-width:auto !important; margin:0 !important; background:#2c5f8a; color:#fff;">
                             🤖 AI 분석
                         </button>
-                    </div>
-                    <div id="mail-loading" style="display:none; text-align:center; padding:6px 0;">
-                        <button class="action-btn" onclick="window.mailResetAnalysis()" style="min-width:auto !important; padding:3px 10px !important; font-size:11px; border-color:#e03131; color:#e03131;">⏹ 중단/초기화</button>
+                        <div id="mail-loading" style="display:none;">
+                            <button class="action-btn" onclick="window.mailResetAnalysis()" style="width:100%; min-width:auto !important; padding:0 10px !important; font-size:11px; border-color:#e03131; color:#e03131; margin:0 !important;">⏹ 중단/초기화</button>
+                        </div>
                     </div>
                     <div id="mail-error" style="display:none; color:#e03131; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-top:6px;"></div>
 
                     <!-- 직접입력 분석 결과 목록 (누적) — 파일첨부/메일서버와 동일한 체크박스+일괄등록 구조 -->
                     <div id="paste-result-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;">
                             <span style="font-size:11px; font-weight:bold;">📋 분석결과 <span id="paste-result-count">0</span>개</span>
-                            <div style="display:flex; align-items:center; gap:10px;">
-                                <label style="font-size:10px; color:#555; cursor:pointer;">
-                                    <input type="checkbox" id="paste-check-all" onchange="window.pasteSelectAll(this.checked)"> 전체선택
-                                </label>
-                                <button onclick="window.pasteClearResults()"
-                                    style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
-                                    🗑️ 초기화
-                                </button>
-                            </div>
+                            <label style="font-size:10px; color:#555; cursor:pointer;">
+                                <input type="checkbox" id="paste-check-all" onchange="window.pasteSelectAll(this.checked)"> 전체선택
+                            </label>
+                            <button onclick="window.pasteClearResults()"
+                                style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
+                                🗑️ 초기화
+                            </button>
                         </div>
                     </div>
                     <div id="paste-result-list" style="flex:1; overflow-y:auto; margin-top:4px; display:none; border:1px solid #dee2e6; border-radius:6px;"></div>
@@ -7824,11 +7839,15 @@ window.updateInboxBadge();
                         </div>
                     </div>
                     <div id="mf-list-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; margin-bottom:4px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;">
                             <span style="font-size:11px; font-weight:bold;">📋 분석결과 <span id="mf-result-count">0</span>개</span>
                             <label style="font-size:10px; color:#555; cursor:pointer;">
                                 <input type="checkbox" id="mf-check-all" onchange="window.mfSelectAll(this.checked)"> 전체선택
                             </label>
+                            <button onclick="window.mfClearResults()"
+                                style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
+                                🗑️ 초기화
+                            </button>
                         </div>
                     </div>
                     <div id="mf-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
@@ -7884,11 +7903,15 @@ window.updateInboxBadge();
                     </div>
                     <!-- 결과 목록 헤더 -->
                     <div id="ms-list-header" style="display:none; padding:6px 0; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px; width:100%; box-sizing:border-box;">
                             <span style="font-size:11px; font-weight:bold;">📋 수집 <span id="ms-result-count">0</span>개 / 분석 <span id="ms-analyzed-count">0</span>개</span>
                             <label style="font-size:10px; color:#555; cursor:pointer;">
                                 <input type="checkbox" id="ms-check-all" onchange="window.msSelectAll(this.checked)"> 전체선택
                             </label>
+                            <button onclick="window.msClearResults()"
+                                style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
+                                🗑️ 초기화
+                            </button>
                         </div>
                     </div>
                     <!-- 결과 목록 -->
@@ -8384,6 +8407,18 @@ window.mfClearFiles = function() {
     document.getElementById('mf-input').value = '';
     // 💡 추가된 파일 목록도 함께 비움
     mfRenderPendingList();
+};
+
+// ─── 파일첨부 분석결과 목록 초기화 (업로드 대기 파일과 별개, 진짜로 결과 배열을 비움) ─────
+window.mfClearResults = function() {
+    if (!window._mfResults || !window._mfResults.length) return;
+    if (!confirm(`분석결과 ${window._mfResults.length}개를 모두 지우시겠습니까? (등록된 항목의 실제 Gantt 데이터는 지워지지 않습니다)`)) return;
+    window._mfResults = [];
+    document.getElementById('mf-result-list').style.display = 'none';
+    document.getElementById('mf-list-header').style.display = 'none';
+    document.getElementById('mf-batch-btn').style.display = 'none';
+    document.getElementById('mail-right-empty').style.display = 'flex';
+    document.getElementById('mail-right-detail').style.display = 'none';
 };
 
 // ─── 대기 중인(분석 전) 파일 목록 렌더링 (개별 분석/제외 가능) ─────────
@@ -9293,6 +9328,18 @@ window.msFetchMail = async function() {
 // ─── 메일서버 분석 중단 (지금까지 분석된 내용은 그대로 유지) ─────────
 window.msStopAnalysis = function() {
     window._msAnalyzeCancelled = true;
+};
+
+// ─── 메일서버 분석결과 목록 초기화 ─────────────────────────
+window.msClearResults = function() {
+    if (!window._msResults || !window._msResults.length) return;
+    if (!confirm(`수집/분석 결과 ${window._msResults.length}개를 모두 지우시겠습니까? (등록된 항목의 실제 Gantt 데이터는 지워지지 않습니다)`)) return;
+    window._msResults = [];
+    document.getElementById('ms-result-list').style.display = 'none';
+    document.getElementById('ms-list-header').style.display = 'none';
+    document.getElementById('ms-batch-btn').style.display = 'none';
+    document.getElementById('mail-right-empty').style.display = 'flex';
+    document.getElementById('mail-right-detail').style.display = 'none';
 };
 
 // ─── 목록 렌더링 (파일첨부 탭과 동일 구조) ──────────────
