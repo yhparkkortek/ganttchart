@@ -1671,7 +1671,7 @@ ${mailText}`;
         document.getElementById('file-status').textContent = "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
         try {
             let response = await gapi.client.drive.files.list({
-                q: `mimeType='application/json' and name contains 'Gantt' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+                q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
                 fields: 'files(id, name, modifiedTime)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             
@@ -6781,6 +6781,7 @@ window.renderTaskInbox = function() {
     //    현재 어느 카드 안에 들어있든 함께 파괴되지 않도록 body로 먼저 대피
     const step2 = document.getElementById('dist-step2');
     if (step2 && step2.parentElement && step2.parentElement.id !== 'inbox-dist-overlay') {
+        step2.style.display = 'none';
         document.body.appendChild(step2);
     }
     const items = window.TaskInbox.load();
@@ -6917,7 +6918,7 @@ window.closeInboxDist = function() {
     document.getElementById('inbox-dist-overlay').style.display = 'none';
     // 💡 dist-step2를 안전한 곳으로 옮긴 뒤, 열려있던 카드의 인라인 패널을 접음
     const step2 = document.getElementById('dist-step2');
-    if (step2) document.body.appendChild(step2);
+    if (step2) { step2.style.display = 'none'; document.body.appendChild(step2); }
     if (window._distCtx && window._distCtx.uid) {
         const inlineEl = document.getElementById('inbox-dist-inline-' + window._distCtx.uid);
         if (inlineEl) { inlineEl.style.display = 'none'; inlineEl.innerHTML = ''; }
@@ -6948,7 +6949,7 @@ window.inboxOpenDistribute = async function(uid) {
     // 💡 dist-step2는 여러 항목이 재사용하는 단일 요소라, 다른 항목 슬롯을 비우기 전에
     //    잠시 안전한 곳(body)으로 옮겨둬서 innerHTML='' 처리 때 함께 삭제되지 않게 보호
     const step2 = document.getElementById('dist-step2');
-    if (step2) document.body.appendChild(step2);
+    if (step2) { step2.style.display = 'none'; document.body.appendChild(step2); }
 
     // 다른 항목에서 열려있던 인라인 목록은 닫기 (+ 그 항목들의 "현재 프로젝트" 자동위치 줄 복원)
     document.querySelectorAll('[id^="inbox-dist-inline-"]').forEach(function(el) {
@@ -6969,7 +6970,7 @@ window.inboxOpenDistribute = async function(uid) {
 
     try {
         const resp = await gapi.client.drive.files.list({
-            q: `mimeType='application/json' and name contains 'Gantt' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+            q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
             fields: 'files(id, name, modifiedTime)', orderBy: 'modifiedTime desc',
             corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
         });
@@ -12974,7 +12975,12 @@ window.populateTabData = function() {
                 if (!hidePairs.protoA) row1 += '<th colspan="2">PROTO A</th>';
                 if (!hidePairs.protoB) row1 += '<th colspan="2">PROTO B</th>';
                 if (!hidePairs.mp) row1 += '<th colspan="2">MP(' + curRev + ')</th>';
-                row1 += '<th rowspan="2" style="min-width:400px;">Note</th></tr>';
+                // 💡 엑셀 내보내기와 동일하게, 이 리비전의 마지막 수정이력 시각을 Note 헤더 위에 표시
+                const _mcRevLogs = (td.mcChangeLog || []).filter(function(l) { return l.rev === curRev; });
+                const _mcLatestDate = _mcRevLogs.length ? _mcRevLogs[_mcRevLogs.length - 1].time : '-';
+                row1 += '<th rowspan="2" style="min-width:400px; position:relative;">'
+                    + '<div style="font-size:9px; font-weight:normal; color:#dce6f0; text-align:right; margin-bottom:2px;">최종수정: ' + _mcLatestDate + '</div>'
+                    + 'Note</th></tr>';
                 let row2 = '<tr>';
                 if (!hidePairs.protoA) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
                 if (!hidePairs.protoB) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
@@ -14885,7 +14891,44 @@ window.calRender = function() {
             + '</div>';
     }
 
-    container.innerHTML = allHtml;
+    container.innerHTML = container.innerHTML = allHtml;
+};
+</script>
+
+<!-- 💡 인쇄 전용 하단 푸터 (좌: 저작권, 우: 인쇄일자+파일명 / 가운데 페이지번호는 크롬 인쇄창 "머리글과 바닥글" 옵션 사용) -->
+<style>
+    #print-footer { display: none; }
+    @media print {
+        #print-footer {
+            display: flex !important;
+            position: fixed;
+            left: 10mm; right: 10mm; bottom: 4mm;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 8px;
+            color: #888;
+            font-family: 'Malgun Gothic', sans-serif;
+        }
+    }
+</style>
+<div id="print-footer">
+    <span id="print-footer-left"></span>
+    <span id="print-footer-right"></span>
+</div>
+<script>
+window.addEventListener('beforeprint', function() {
+    const footer = document.getElementById('print-footer');
+    if (!footer) return;
+    const now = new Date();
+    const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
+    const fileName = window.driveSaveFilenameStr || (window.projectMeta && window.projectMeta.프로젝트명) || '';
+
+    document.getElementById('print-footer-left').textContent = `ⓒ Copyright ${now.getFullYear()} KORTEK Corporation`;
+    document.getElementById('print-footer-right').textContent = `(인쇄 날짜)${dateStr}_${fileName}`;
+});
+</script>
+
+</body>allHtml;
 };
 </script>
 
