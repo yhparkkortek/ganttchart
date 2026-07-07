@@ -1175,6 +1175,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:6px; margin-right:6px;"></div>
             <button class="concept-add-row-btn" id="mc-add-unit-btn" onclick="window.mcAddUnit()" style="margin:0 12px 0 0; display:none;">➕ 제품구분자 추가</button>
+            <button class="concept-add-row-btn" onclick="window.mcClearAllPrices()" style="margin:0 12px 0 0; border-color:#e03131; color:#e03131;">🧹 금액 전체 삭제</button>
             <div style="display:flex; gap:6px; align-items:center;">
                 <button class="mc-rev-btn" data-rev="R5" onclick="window.mcSwitchRevision('R5')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R5</button>
                 <button class="mc-rev-btn" data-rev="R4" onclick="window.mcSwitchRevision('R4')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R4</button>
@@ -4824,19 +4825,20 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                 const rows = mcRevisionsForExport[rev] || (rev === 'R1' && !_mcUnitKey ? tabData.mcTable : null);
                 if (rev !== 'R1' && (!rows || !rows.length)) return;
                 const sheetName = 'M.C Table' + _mcSuffix + ' ' + rev;
-                XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev), sheetName);
+                XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev, _mcUnitKey), sheetName);
             });
 
             tabData.mcRevisions = _mcPrevRevisions; tabData.mcSalesPriceDetail = _mcPrevSales;
         });
-        function _buildMcSheet(rows, rev) {
+        function _buildMcSheet(rows, rev, unitLabel) {
             const num = function(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[^0-9.-]+/g, '')); return isNaN(n) ? 0 : n; };
             const cellMoney = function(v) { const n = num(v); return n === 0 ? '' : n; };
             // 💡 견적 마지막 수정 날짜 — 이 리비전(rev)의 마지막 변경이력 시각 (없으면 '-')
             const revChangeLogs = (tabData.mcChangeLog || []).filter(function(l) { return l.rev === rev; });
             const mcLatestDate = revChangeLogs.length ? revChangeLogs[revChangeLogs.length - 1].time : '-';
+            const _mcUnitTag = unitLabel ? '[' + unitLabel + ']' : '';
             const mcData = [
-                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', 'PROTO A', '', 'PROTO B', '', 'MP', '', '최종수정: ' + mcLatestDate],
+                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', _mcUnitTag + 'PROTO A', '', _mcUnitTag + 'PROTO B', '', _mcUnitTag + 'MP', '', '최종수정: ' + mcLatestDate],
                 ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Note'],
             ];
             const valid = (rows || []).filter(function(r) { const t = String(r.type || '').toUpperCase().replace(/\s/g, ''); return t !== 'SUBTOTAL' && t !== 'TOTAL'; });
@@ -13123,9 +13125,10 @@ window.populateTabData = function() {
                     + '<th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 &#39;etc.&#39;를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th>'
                     + '<th rowspan="2" style="width:140px;">GROUP</th>';
                 if (!hidePnSpec) row1 += '<th rowspan="2" style="width:90px;">P/N</th><th rowspan="2" style="min-width:280px;">Specification</th>';
-                if (!hidePairs.protoA) row1 += '<th colspan="2">PROTO A</th>';
-                if (!hidePairs.protoB) row1 += '<th colspan="2">PROTO B</th>';
-                if (!hidePairs.mp) row1 += '<th colspan="2">MP(' + curRev + ')</th>';
+                const _mcUnitTag = window.mcActiveUnit ? '[' + escapeHtml(window.mcActiveUnit) + ']' : '';
+                if (!hidePairs.protoA) row1 += '<th colspan="2">' + _mcUnitTag + 'PROTO A</th>';
+                if (!hidePairs.protoB) row1 += '<th colspan="2">' + _mcUnitTag + 'PROTO B</th>';
+                if (!hidePairs.mp) row1 += '<th colspan="2">' + _mcUnitTag + 'MP(' + curRev + ')</th>';
                 row1 += '<th rowspan="2" style="min-width:400px;">Note</th></tr>';
                 // 💡 엑셀 내보내기와 동일하게, 이 리비전의 마지막 수정이력 시각을 "견적 수정이력 확인" 줄 오른쪽에 표시
                 const _mcRevLogs = (td.mcChangeLog || []).filter(function(l) { return l.rev === curRev; });
@@ -13947,6 +13950,7 @@ function bmMoveSelected(key, dir) {
 window.bmAddFirstRow = function(key) {
     const tbody = document.getElementById(BM_CONF[key].tbodyId);
     if (!tbody) return;
+    tbody.innerHTML = ''; // 💡 "행이 없습니다" 안내 줄을 먼저 비우고 새 행만 남김
     const tr = document.createElement('tr');
     tr.innerHTML = BM_CONF[key].rowHtml();
     tbody.appendChild(tr);
@@ -14034,7 +14038,9 @@ function bmDeleteSelected(key) {
     const sel = window._bmSelected[key];
     if (!sel || sel.size === 0) return;
     const rows = bmDataRows(key);
-    if (rows.length - sel.size < 1) { bmAlertModal('최소 1개 행은 있어야 합니다.'); return; }
+    // 💡 M.C Table은 "➕ 첫 행 추가" 버튼으로 언제든 다시 시작할 수 있어서 완전 삭제(0행)를 허용.
+    //    다른 탭(Brief SPEC/Address)은 아직 빈 상태 복구 UI가 없으므로 기존처럼 최소 1행 유지.
+    if (key !== 'mc' && rows.length - sel.size < 1) { bmAlertModal('최소 1개 행은 있어야 합니다.'); return; }
     bmConfirmModal('선택한 ' + sel.size + '개 행을 삭제하시겠습니까?', function() {
         sel.forEach(function(tr) { if (tr.parentNode) tr.remove(); });
         sel.clear();
@@ -14300,6 +14306,26 @@ window.mcSwitchRevision = function(rev) {
         b.style.color = active ? '#fff' : '#2c5f8a';
         b.style.fontWeight = active ? 'bold' : 'normal';
     });
+};
+
+// 💡 행(TYPE/ITEM/GROUP/Note 등)은 그대로 두고, 금액 칸(Cost/NRE 전부)만 비움
+window.mcClearAllPrices = function() {
+    const tbody = document.getElementById('mctable-body');
+    if (!tbody) return;
+    const priceFields = ['protoCost', 'protoNre', 'protoBCost', 'protoBNre', 'mpCost', 'mpNre'];
+    const inputs = tbody.querySelectorAll('input[data-field]');
+    let count = 0;
+    inputs.forEach(function(inp) {
+        if (priceFields.indexOf(inp.dataset.field) !== -1 && inp.value !== '') count++;
+    });
+    if (!count) { alert('이미 비어있습니다.'); return; }
+    if (!confirm(`현재 리비전의 금액 ${count}칸을 모두 지우시겠습니까?\n(TYPE/ITEM/GROUP/Note 등 나머지 내용은 그대로 유지됩니다)`)) return;
+
+    inputs.forEach(function(inp) {
+        if (priceFields.indexOf(inp.dataset.field) !== -1) inp.value = '';
+    });
+    window._bmMcDirty = true;
+    setTimeout(window.mcFlushDirty, 0);
 };
 
 // 💡 TYPE 등 그룹 라벨을 수정했을 때, SUBTOTAL/그룹 구분을 화면에 즉시 다시 반영
