@@ -7542,8 +7542,15 @@ window.updateInboxBadge();
 
                 <!-- API 키 (공통) -->
                 <div style="padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
-                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px;">
-                        🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(팀원 각자 입력)</span>
+                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                        <span>🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(팀원 각자 입력)</span></span>
+                        <button onclick="window.open('https://aistudio.google.com/apikey', '_blank')"
+                                style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap;">
+                            🔗 발급받기
+                        </button>
+                    </div>
+                    <div style="font-size:10px; color:#888; margin-bottom:5px; line-height:1.4;">
+                        구글 계정으로 로그인 → <b>[Create API key]</b> 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)
                     </div>
                     <div style="display:flex; gap:5px;">
                         <input id="mail-gemini-key" type="password" placeholder="AIza..."
@@ -7592,7 +7599,7 @@ window.updateInboxBadge();
                     </div>
                     <div id="paste-result-list" style="flex:1; overflow-y:auto; margin-top:4px; display:none; border:1px solid #dee2e6; border-radius:6px;"></div>
                     <button class="action-btn" id="paste-batch-btn" onclick="window.pasteBatchInsert()"
-                            style="display:none; width:100%; margin-top:8px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                            style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -7641,7 +7648,7 @@ window.updateInboxBadge();
                     </div>
                     <div id="mf-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
                     <button class="action-btn" id="mf-batch-btn" onclick="window.mfBatchInsert()"
-                            style="display:none; width:100%; margin-top:8px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                            style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -7703,7 +7710,7 @@ window.updateInboxBadge();
                     <div id="ms-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
                     <!-- 연속등록 버튼 -->
                     <button class="action-btn" id="ms-batch-btn" onclick="window.msBatchInsert()"
-                            style="display:none; width:100%; margin-top:8px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                            style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
                 </div>
@@ -7760,18 +7767,18 @@ window.updateInboxBadge();
                         <div id="mail-result-table"></div>
                     </div>
 
-                    <div style="display:flex; gap:8px; align-items:stretch; flex-shrink:0; margin-top:10px; margin-bottom:5px;">
+                    <div style="display:flex; gap:8px; align-items:stretch; flex-shrink:0; margin:8px 0 0 -1px;">
                         <select id="mail-insert-position"
-                                style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;">
+                                style="flex:1; height:38px; box-sizing:border-box; padding:0 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;">
                         </select>
                         <button onclick="window.mailRightInsert()"
-                                style="padding:10px 24px; background:#2c5f8a; color:white; border:none;
+                                style="height:38px; box-sizing:border-box; padding:0 24px; background:#2c5f8a; color:white; border:none;
                                        border-radius:6px; font-size:13px; font-weight:bold;
                                        cursor:pointer; white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
                             ✅ 개별 등록
                         </button>
                         <button onclick="window.mailRightToInbox()"
-                                style="padding:10px 16px; background:#fff; color:#e67e22; border:1px solid #e67e22;
+                                style="height:38px; box-sizing:border-box; padding:0 16px; background:#fff; color:#e67e22; border:1px solid #e67e22;
                                        border-radius:6px; font-size:13px; font-weight:bold;
                                        cursor:pointer; white-space:nowrap;"
                                 title="현재 프로젝트가 아닌 업무를 보관함에 담아두고, 나중에 다른 프로젝트에 배치합니다.">
