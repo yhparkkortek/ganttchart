@@ -1165,10 +1165,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-mctable" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>💰 M.C Table</h2>
+            <h2>💰 M.C Table<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+                📌 <b>ITEM</b> 열에 <b>"etc."</b>(소문자)를 적으면, 그 행이 현재 그룹의 마지막 행이 되어 SUBTOTAL이 계산됩니다.<br><br>
+                📌 <b>NO</b> 열 클릭: 메뉴(행 추가/삭제/이동) · <b>Ctrl/Shift</b> 클릭: 여러 행 선택<br><br>
+                📌 TYPE이 비어있는 행은 바로 위 행의 TYPE을 그대로 이어받은 것으로 간주됩니다 (그룹 구분용).
+            </span></span></h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0;">🔽 펼치기</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <div id="mc-unit-bar" style="display:none; align-items:center; gap:6px; margin-right:6px;"></div>
+            <button class="concept-add-row-btn" id="mc-add-unit-btn" onclick="window.mcAddUnit()" style="margin:0 12px 0 0; display:none;">➕ 제품구분자 추가</button>
             <div style="display:flex; gap:6px; align-items:center;">
                 <button class="mc-rev-btn" data-rev="R5" onclick="window.mcSwitchRevision('R5')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R5</button>
                 <button class="mc-rev-btn" data-rev="R4" onclick="window.mcSwitchRevision('R4')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R4</button>
@@ -4682,121 +4688,143 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         wsBrief['!cols'] = [{wch: 6}, {wch: 22}, {wch: 14}, {wch: 35}, {wch: 30}];
         XLSX.utils.book_append_sheet(wb, wsBrief, "Brief SPEC");
 
-                // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
-        if (window.mcBuildComparisonRows) {
-            const compRows = window.mcBuildComparisonRows();
-            const revs = ['R5', 'R4', 'R3', 'R2', 'R1'];
-            // 💡 영업판가는 mcCompare.salesPrice(옛 저장소, 항상 비어있음)가 아니라
-            //    비교 페이지 화면과 실제로 공유되는 저장소(mcSalesPriceDetail[rev].mpCost)에서 읽어야 함
-            const compSalesPrice = {};
-            revs.forEach(function(rev) {
-                const detail = (tabData.mcSalesPriceDetail && tabData.mcSalesPriceDetail[rev]) || {};
-                const n = parseFloat(String(detail.mpCost || '').replace(/[^0-9.-]+/g, ''));
-                compSalesPrice[rev] = isNaN(n) ? 0 : n;
-            });
-            const header1 = ['TYPE', 'ITEM', 'GROUP']; // 💡 NO열 삭제
-            const header2 = ['', '', ''];
-            revs.forEach(function(rev) { header1.push(rev + ' MP', ''); header2.push('Cost($)', 'NRE'); });
-            header1.push('Note'); header2.push('');
-            const compData = [header1, header2];
-            const totals = {}; revs.forEach(function(rev) { totals[rev] = { cost: 0, nre: 0 }; });
+                // ── MC 종류별(기본 + 추가된 종류) 반복: Comparison + R1~R5 시트 ──
+        [''].concat(window.getMcUnits()).forEach(function(_mcUnitKey) {
+            // 💡 이 종류의 저장소를 잠깐 가리키게 함 (화면 상태는 안 건드림)
+            window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
+            window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
+            const _mcRevSrc = _mcUnitKey ? (window.tabData.mcRevisionsByUnit[_mcUnitKey] || {}) : (window.tabData.mcRevisions || {});
+            const _mcSalesSrc = _mcUnitKey ? (window.tabData.mcSalesPriceDetailByUnit[_mcUnitKey] || {}) : (window.tabData.mcSalesPriceDetail || {});
+            const _mcHasData = Object.keys(_mcRevSrc).some(function(k) { return _mcRevSrc[k] && _mcRevSrc[k].length; });
+            if (_mcUnitKey && !_mcHasData) return; // 추가는 됐지만 데이터가 전혀 없는 종류는 시트 생성 안 함
 
-            let compCurType = '';
-            const compGroupSubtotal = {}; revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
-            const compSubtotalRowIdx = []; // 💡 이후 하이라이트/우측정렬 스타일을 적용할 SUBTOTAL 행 위치 기록
-            const compTypeMerges = []; // 💡 SUBTOTAL로 끊기기 전까지는 TYPE이 항상 같으므로, 그 구간을 A열 세로 병합
-            let compSegStartRow = compData.length; // 현재 TYPE 병합 구간의 시작 행(헤더 2행 포함 compData 기준)
-            compRows.forEach(function(r, idx) {
-                const rt = String(r.type || '').trim();
-                if (rt) compCurType = rt;
-                const row = [r.type, r.item, r.group]; // 💡 NO(idx+1) 삭제
+            const _mcPrevRevisions = tabData.mcRevisions, _mcPrevSales = tabData.mcSalesPriceDetail;
+            tabData.mcRevisions = _mcRevSrc; tabData.mcSalesPriceDetail = _mcSalesSrc;
+            const _mcSuffix = _mcUnitKey ? ('-' + _mcUnitKey) : '';
+
+            // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
+            if (window.mcBuildComparisonRows) {
+                const compRows = window.mcBuildComparisonRows();
+                const revs = ['R5', 'R4', 'R3', 'R2', 'R1'];
+                const compSalesPrice = {};
                 revs.forEach(function(rev) {
-                    const p = r.prices[rev] || { cost: 0, nre: 0 };
-                    row.push(p.cost || '', p.nre || '');
-                    totals[rev].cost += p.cost; totals[rev].nre += p.nre;
-                    compGroupSubtotal[rev].cost += p.cost; compGroupSubtotal[rev].nre += p.nre;
+                    const detail = (tabData.mcSalesPriceDetail && tabData.mcSalesPriceDetail[rev]) || {};
+                    const n = parseFloat(String(detail.mpCost || '').replace(/[^0-9.-]+/g, ''));
+                    compSalesPrice[rev] = isNaN(n) ? 0 : n;
                 });
-                row.push(r.note || '');
-                compData.push(row);
-                const compCurRowIdx = compData.length - 1;
+                const header1 = ['TYPE', 'ITEM', 'GROUP'];
+                const header2 = ['', '', ''];
+                revs.forEach(function(rev) { header1.push(rev + ' MP', ''); header2.push('Cost($)', 'NRE'); });
+                header1.push('Note'); header2.push('');
+                const compData = [header1, header2];
+                const totals = {}; revs.forEach(function(rev) { totals[rev] = { cost: 0, nre: 0 }; });
 
-                // 💡 본표/웹 화면 Comparison 페이지와 동일한 기준으로 SUBTOTAL 삽입: ITEM="etc."(소문자, 구버전 "NRE") / TYPE 변경 / 마지막 행
-                const itemHasEtc = /\betc\b|\bNRE\b/.test(String(r.item || ''));  // 💡 대문자 "ETC" 항목명과 구분
-                const nextRow = compRows[idx + 1];
-                const nextType = nextRow ? String(nextRow.type || '').trim() : '';
-                const isLastRow = !nextRow;
-                const typeWillChange = !!(nextRow && nextType && nextType !== compCurType);
-                if (compCurType && (itemHasEtc || typeWillChange || isLastRow)) {
-                    if (compCurRowIdx > compSegStartRow) {
-                        compTypeMerges.push({ s: { r: compSegStartRow, c: 0 }, e: { r: compCurRowIdx, c: 0 } });
+                let compCurType = '';
+                const compGroupSubtotal = {}; revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
+                const compSubtotalRowIdx = [];
+                const compTypeMerges = [];
+                let compSegStartRow = compData.length;
+                compRows.forEach(function(r, idx) {
+                    const rt = String(r.type || '').trim();
+                    if (rt) compCurType = rt;
+                    const row = [r.type, r.item, r.group];
+                    revs.forEach(function(rev) {
+                        const p = r.prices[rev] || { cost: 0, nre: 0 };
+                        row.push(p.cost || '', p.nre || '');
+                        totals[rev].cost += p.cost; totals[rev].nre += p.nre;
+                        compGroupSubtotal[rev].cost += p.cost; compGroupSubtotal[rev].nre += p.nre;
+                    });
+                    row.push(r.note || '');
+                    compData.push(row);
+                    const compCurRowIdx = compData.length - 1;
+
+                    const itemHasEtc = /\betc\b|\bNRE\b/.test(String(r.item || ''));
+                    const nextRow = compRows[idx + 1];
+                    const nextType = nextRow ? String(nextRow.type || '').trim() : '';
+                    const isLastRow = !nextRow;
+                    const typeWillChange = !!(nextRow && nextType && nextType !== compCurType);
+                    if (compCurType && (itemHasEtc || typeWillChange || isLastRow)) {
+                        if (compCurRowIdx > compSegStartRow) {
+                            compTypeMerges.push({ s: { r: compSegStartRow, c: 0 }, e: { r: compCurRowIdx, c: 0 } });
+                        }
+                        const subRow = [compCurType + ' SUBTOTAL', '', ''];
+                        revs.forEach(function(rev) { subRow.push(compGroupSubtotal[rev].cost || '', compGroupSubtotal[rev].nre || ''); });
+                        subRow.push('');
+                        compSubtotalRowIdx.push(compData.length);
+                        compData.push(subRow);
+                        revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
+                        compSegStartRow = compData.length;
                     }
-                    const subRow = [compCurType + ' SUBTOTAL', '', ''];
-                    revs.forEach(function(rev) { subRow.push(compGroupSubtotal[rev].cost || '', compGroupSubtotal[rev].nre || ''); });
-                    subRow.push('');
-                    compSubtotalRowIdx.push(compData.length);
-                    compData.push(subRow);
-                    revs.forEach(function(rev) { compGroupSubtotal[rev] = { cost: 0, nre: 0 }; });
-                    compSegStartRow = compData.length;
+                });
+
+                const totalRow = ['TOTAL(M.C)', '', ''];
+                revs.forEach(function(rev) { totalRow.push(totals[rev].cost, totals[rev].nre); });
+                totalRow.push('');
+                compData.push(totalRow);
+                const salesRow = ['영업판가', '', ''];
+                revs.forEach(function(rev) { salesRow.push(compSalesPrice[rev] || '', ''); });
+                salesRow.push('');
+                compData.push(salesRow);
+                const ratioRow = ['재료비율 (M.C ÷ 영업판가) [%]', '', ''];
+                revs.forEach(function(rev) {
+                    const sp = compSalesPrice[rev] || 0;
+                    ratioRow.push(sp > 0 ? (totals[rev].cost / sp * 100).toFixed(1) : '', '');
+                });
+                ratioRow.push('');
+                compData.push(ratioRow);
+
+                const wsComp = XLSX.utils.aoa_to_sheet(compData);
+                wsComp['!merges'] = [
+                    { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+                    { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
+                ];
+                revs.forEach(function(rev, i) { const c0 = 3 + i * 2; wsComp['!merges'].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } }); });
+                wsComp['!merges'].push({ s: { r: 0, c: 3 + revs.length * 2 }, e: { r: 1, c: 3 + revs.length * 2 } });
+                const compSummaryRows = compSubtotalRowIdx.map(function(r) { return { r: r, color: 'FFF9C4' }; }).concat([
+                    { r: compData.length - 3, color: 'E3F2FD' },
+                    { r: compData.length - 2, color: 'E8F5E9' },
+                    { r: compData.length - 1, color: 'FFE0B2' },
+                ]);
+                compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 2 } }); });
+                compTypeMerges.forEach(function(m) { wsComp['!merges'].push(m); });
+                for (let r = 0; r <= 1; r++) {
+                    for (let c = 0; c < header1.length; c++) {
+                        const h = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
+                        if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                    }
                 }
+                const compRange = XLSX.utils.decode_range(wsComp['!ref']);
+                for (let r = 2; r <= compRange.e.r; r++) {
+                    const sum = compSummaryRows.find(function(s) { return s.r === r; });
+                    for (let c = 0; c <= compRange.e.c; c++) {
+                        const cell = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
+                        if (!cell) continue;
+                        if (c >= 3 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
+                        if (sum) {
+                            cell.s = {
+                                font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
+                                fill: { patternType: "solid", fgColor: { rgb: sum.color } },
+                                alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
+                            };
+                        } else if (c === 0) {
+                            cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                        }
+                    }
+                }
+                wsComp['!cols'] = [{ wch: 14 }, { wch: 20 }, { wch: 16 }];
+                XLSX.utils.book_append_sheet(wb, wsComp, "MC Comparison" + _mcSuffix);
+            }
+
+            const mcRevisionsForExport = tabData.mcRevisions || {};
+            ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
+                const rows = mcRevisionsForExport[rev] || (rev === 'R1' && !_mcUnitKey ? tabData.mcTable : null);
+                if (rev !== 'R1' && (!rows || !rows.length)) return;
+                const sheetName = 'M.C Table' + _mcSuffix + ' ' + rev;
+                XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev), sheetName);
             });
 
-            const totalRow = ['TOTAL(M.C)', '', ''];
-            revs.forEach(function(rev) { totalRow.push(totals[rev].cost, totals[rev].nre); });
-            totalRow.push('');
-            compData.push(totalRow);
-            const salesRow = ['영업판가', '', ''];
-            revs.forEach(function(rev) { salesRow.push(compSalesPrice[rev] || '', ''); });
-            salesRow.push('');
-            compData.push(salesRow);
-            const ratioRow = ['재료비율 (M.C ÷ 영업판가) [%]', '', ''];
-            revs.forEach(function(rev) {
-                const sp = compSalesPrice[rev] || 0;
-                ratioRow.push(sp > 0 ? (totals[rev].cost / sp * 100).toFixed(1) : '', '');
-            });
-            ratioRow.push('');
-            compData.push(ratioRow);
-
-            const wsComp = XLSX.utils.aoa_to_sheet(compData);
-            wsComp['!merges'] = [
-                { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } }, { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
-                { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
-            ];
-            revs.forEach(function(rev, i) { const c0 = 3 + i * 2; wsComp['!merges'].push({ s: { r: 0, c: c0 }, e: { r: 0, c: c0 + 1 } }); });
-            wsComp['!merges'].push({ s: { r: 0, c: 3 + revs.length * 2 }, e: { r: 1, c: 3 + revs.length * 2 } }); // Note
-            const compSummaryRows = compSubtotalRowIdx.map(function(r) { return { r: r, color: 'FFF9C4' }; }).concat([
-                { r: compData.length - 3, color: 'E3F2FD' },
-                { r: compData.length - 2, color: 'E8F5E9' },
-                { r: compData.length - 1, color: 'FFE0B2' },
-            ]);
-            compSummaryRows.forEach(function(s) { wsComp['!merges'].push({ s: { r: s.r, c: 0 }, e: { r: s.r, c: 2 } }); });
-            compTypeMerges.forEach(function(m) { wsComp['!merges'].push(m); });
-            for (let r = 0; r <= 1; r++) {
-                for (let c = 0; c < header1.length; c++) {
-                    const h = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
-                    if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
-                }
-            }
-            const compRange = XLSX.utils.decode_range(wsComp['!ref']);
-            for (let r = 2; r <= compRange.e.r; r++) {
-                const sum = compSummaryRows.find(function(s) { return s.r === r; });
-                for (let c = 0; c <= compRange.e.c; c++) {
-                    const cell = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
-                    if (!cell) continue;
-                    if (c >= 3 && typeof cell.v === 'number') cell.z = '"$"#,##0.00';
-                    if (sum) {
-                        cell.s = {
-                            font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "333333" } },
-                            fill: { patternType: "solid", fgColor: { rgb: sum.color } },
-                            alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
-                        };
-                    } else if (c === 0) {
-                        cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
-                    }
-                }
-            }
-            wsComp['!cols'] = [{ wch: 14 }, { wch: 20 }, { wch: 16 }];
-            XLSX.utils.book_append_sheet(wb, wsComp, "MC Comparison");
-        }
+            tabData.mcRevisions = _mcPrevRevisions; tabData.mcSalesPriceDetail = _mcPrevSales;
+        });
         function _buildMcSheet(rows, rev) {
             const num = function(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[^0-9.-]+/g, '')); return isNaN(n) ? 0 : n; };
             const cellMoney = function(v) { const n = num(v); return n === 0 ? '' : n; };
@@ -4882,15 +4910,6 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             wsMc['!cols'] = [{wch:12},{wch:18},{wch:16},{wch:12},{wch:36},{wch:11},{wch:10},{wch:11},{wch:10},{wch:11},{wch:10},{wch:30}];
             return wsMc;
         }
-        
-        const mcRevisionsForExport = tabData.mcRevisions || {};
-        ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
-            const rows = mcRevisionsForExport[rev] || (rev === 'R1' ? tabData.mcTable : null);
-            if (rev !== 'R1' && (!rows || !rows.length)) return; // R1은 항상 저장, R2~R5는 데이터 있을 때만
-            const sheetName = 'M.C Table ' + rev;
-            XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev), sheetName);
-        });
-
         
         // ── M.C 수정이력 시트 ──
         const mcLogs = tabData.mcChangeLog || [];
@@ -7723,6 +7742,24 @@ window.updateInboxBadge();
                 <span id="dist-position-preview" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
             </div>
         </div>
+        </div>
+    </div>
+</div>
+
+<div id="mc-add-unit-overlay" class="modal-overlay" style="display:none;">
+    <div style="background:#fff; border-radius:8px; width:min(360px, 90vw); padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.2);">
+        <div id="mc-add-unit-title" style="font-size:14px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">➕ 제품구분자 추가</div>
+        <div id="mc-add-unit-desc" style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
+            예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>
+            ※ 위 예시가 아니어도, 이 프로젝트에 맞는 이름을 자유롭게 적으셔도 됩니다.<br>
+            ※ 취소하시면 우선 <b>"미지정"</b>으로 저장되고, 나중에 언제든 이름만 바꾸실 수 있습니다.
+        </div>
+        <input id="mc-add-unit-input" type="text" placeholder="예: BTN"
+               onkeydown="if(event.key==='Enter') window.mcAddUnitConfirm()"
+               style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; margin-bottom:14px;">
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+            <button class="action-btn" onclick="window.mcAddUnitCancel()" style="min-width:auto;">취소</button>
+            <button class="action-btn" onclick="window.mcAddUnitConfirm()" style="min-width:auto; background:#2c5f8a; color:#fff;">추가</button>
         </div>
     </div>
 </div>
@@ -11340,46 +11377,78 @@ function _parseMcTableSheetRows(workbook, sheetName) {
 // 💡 R1~R5 리비전 시트("M.C Table", "M.C Table R2"~"M.C Table R5")를 모두 읽어 mcRevisions로 복원
 function _parseMcTableSheetFromWorkbook(workbook) {
     window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
-    window.tabData.mcRevisions = window.tabData.mcRevisions || {};
+    // 💡 불러오기 전, 이름표 없는 임시 자리(mcActiveUnit='')와 그동안 등록됐던 제품구분자 목록을
+    //    모두 새로 초기화 — 지금 여는 엑셀 파일이 진짜 현재 상태이므로
+    window.mcActiveUnit = '';
+    window.tabData.mcRevisionsByUnit = {};
+    window.tabData.mcSalesPriceDetailByUnit = {};
+    window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[''] = {};
+    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[''] = {};
+    window.tabData.mcUnits = [];
+
+    // 1단계: 시트 이름에서 "어떤 제품구분자의 몇 번 리비전인지" 전부 추출
+    //   "M.C Table R1"        → 구분자 없음(이름표 없는 데이터), 리비전='R1'
+    //   "M.C Table-MAIN R2"   → 구분자='MAIN',                 리비전='R2'
+    //   "M.C Table" (구형)     → 구분자 없음,                    리비전='R1'
+    const entries = [];
+    workbook.SheetNames.forEach(function(n) {
+        const name = n.trim();
+        if (name === 'M.C Table') { entries.push({ unit: '', rev: 'R1', sheetName: n }); return; }
+        const m = name.match(/^M\.C Table(?:-(.+))? (R[1-5])$/);
+        if (m) entries.push({ unit: m[1] || '', rev: m[2], sheetName: n });
+    });
+
     let found = false;
-    ['R1','R2','R3','R4','R5'].forEach(function(rev) {
-        const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === ('M.C Table ' + rev) || (rev === 'R1' && n.trim() === 'M.C Table'); }); // 💡 구형 'M.C Table' 폴백
-        const parsed = _parseMcTableSheetRows(workbook, sheetName);
-        if (parsed) {
-            window.tabData.mcRevisions[rev] = parsed.rows;
-            if (parsed.sales) { window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {}; window.tabData.mcSalesPriceDetail[rev] = parsed.sales; }
-            found = true;
+    const namedUnitsSeen = [];
+    entries.forEach(function(entry) {
+        const parsed = _parseMcTableSheetRows(workbook, entry.sheetName);
+        if (!parsed) return;
+        found = true;
+
+        if (!entry.unit) {
+            // 이름표 없는 데이터 → 임시 자리('')에 저장, 나중에 mcCheckNeedsNaming이 이름을 물어봄
+            window.tabData.mcRevisions[entry.rev] = parsed.rows;
+            if (parsed.sales) window.tabData.mcSalesPriceDetail[entry.rev] = parsed.sales;
+        } else {
+            // 이미 이름 붙은 시트 → 바로 그 제품구분자로 등록
+            window.tabData.mcRevisionsByUnit[entry.unit] = window.tabData.mcRevisionsByUnit[entry.unit] || {};
+            window.tabData.mcRevisionsByUnit[entry.unit][entry.rev] = parsed.rows;
+            if (parsed.sales) {
+                window.tabData.mcSalesPriceDetailByUnit[entry.unit] = window.tabData.mcSalesPriceDetailByUnit[entry.unit] || {};
+                window.tabData.mcSalesPriceDetailByUnit[entry.unit][entry.rev] = parsed.sales;
+            }
+            if (namedUnitsSeen.indexOf(entry.unit) === -1) namedUnitsSeen.push(entry.unit);
         }
     });
+
+    // 💡 엑셀에 있던 순서 그대로 제품구분자 목록에 등록 → 불러온 즉시 화면 탭에 나타남
+    namedUnitsSeen.forEach(function(u) { if (window.tabData.mcUnits.indexOf(u) === -1) window.tabData.mcUnits.push(u); });
+
     if (window.tabData.mcRevisions.R1) window.tabData.mcTable = window.tabData.mcRevisions.R1;
+    if (found) setTimeout(window.mcCheckNeedsNaming, 300); // 💡 이름표 없는 데이터가 있었다면 자동으로 확인 팝업
     return found;
 }
 
 // 💡 "MC Comparison" 시트를 읽어 영업판가(salesPrice)와 항목별 메모(notes)를 복원
-function _parseMcComparisonSheetFromWorkbook(workbook) {
-    const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'MC Comparison'; });
-    if (!sheetName) return false;
+// 💡 시트 하나를 파싱해서 { salesPrice, notes }로 반환 (종류 구분 없이 순수 파싱만 담당)
+function _parseOneMcComparisonSheet(workbook, sheetName) {
     const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
-    window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
-    window.tabData.mcCompare = window.tabData.mcCompare || { salesPrice: {}, notes: {} };
-    window.tabData.mcCompare.salesPrice = window.tabData.mcCompare.salesPrice || {};
-    window.tabData.mcCompare.notes = window.tabData.mcCompare.notes || {};
+    const result = { salesPrice: {}, notes: {} };
     let found = false;
 
     const salesRow = json.find(function(r) { return r && String(r[3] || '').trim() === '영업판가'; });
     if (salesRow) {
         const revs = ['R1','R2','R3','R4','R5'];
         revs.forEach(function(rev, idx) {
-            const col = 4 + idx * 2; // NO,TYPE,ITEM,GROUP(0-3) 다음부터 리비전별 Cost,NRE 쌍
+            const col = 4 + idx * 2;
             const val = salesRow[col];
             if (val !== undefined && val !== '' && !isNaN(parseFloat(val))) {
-                window.tabData.mcCompare.salesPrice[rev] = parseFloat(val);
+                result.salesPrice[rev] = parseFloat(val);
             }
         });
         found = true;
     }
 
-    // 항목별 메모(맨 마지막 Note 열) 복원 — TYPE+ITEM+GROUP 조합을 키로 매칭
     const specialLabels = ['TOTAL', '영업판가', '재료비율(%)'];
     for (let i = 2; i < json.length; i++) {
         const r = json[i];
@@ -11392,9 +11461,41 @@ function _parseMcComparisonSheetFromWorkbook(workbook) {
         const note = String(r[r.length - 1] || '').trim();
         if (!note) continue;
         const key = [type, item, group].join('|').toLowerCase();
-        window.tabData.mcCompare.notes[key] = note;
+        result.notes[key] = note;
         found = true;
     }
+
+    return found ? result : null;
+}
+
+// 💡 "MC Comparison"(이름표 없음) / "MC Comparison-MAIN"(제품구분자별)을 모두 찾아 복원
+function _parseMcComparisonSheetFromWorkbook(workbook) {
+    window.tabData = window.tabData || { summary: {}, briefSpec: [], mcTable: [] };
+    window.tabData.mcCompare = window.tabData.mcCompare || { salesPrice: {}, notes: {} };
+    window.tabData.mcCompareByUnit = window.tabData.mcCompareByUnit || {};
+    let found = false;
+
+    workbook.SheetNames.forEach(function(n) {
+        const name = n.trim();
+        let unit = null;
+        if (name === 'MC Comparison') unit = '';
+        else {
+            const m = name.match(/^MC Comparison-(.+)$/);
+            if (m) unit = m[1];
+        }
+        if (unit === null) return;
+
+        const parsed = _parseOneMcComparisonSheet(workbook, n);
+        if (!parsed) return;
+        found = true;
+
+        if (!unit) {
+            window.tabData.mcCompare.salesPrice = parsed.salesPrice;
+            window.tabData.mcCompare.notes = parsed.notes;
+        } else {
+            window.tabData.mcCompareByUnit[unit] = parsed;
+        }
+    });
 
     return found;
 }
@@ -12799,7 +12900,9 @@ window.populateTabData = function() {
     const td = window.tabData || {};
     // 💡 R1~R5 리비전 데이터 구조 마이그레이션: 기존 mcTable은 R1으로 그대로 이전(기본값)
     td.mcRevisions = td.mcRevisions || {};
-    if ((!td.mcRevisions.R1 || !td.mcRevisions.R1.length) && td.mcTable && td.mcTable.length) {
+    // 💡 이 "구버전 mcTable에서 R1 복구" 로직은 기본 종류에만 해당됨.
+    //    다른 종류(BTN/MAIN 등)를 보고 있을 때는 절대 기본 데이터를 끌어오면 안 됨.
+    if (!window.mcActiveUnit && (!td.mcRevisions.R1 || !td.mcRevisions.R1.length) && td.mcTable && td.mcTable.length) {
         td.mcRevisions.R1 = td.mcTable;
     }
     td.mcActiveRevision = td.mcActiveRevision || 'R1';
@@ -12925,7 +13028,12 @@ window.populateTabData = function() {
     const _mcActiveRows = (td.mcRevisions && td.mcRevisions[td.mcActiveRevision]) || [];
     const _mcTbodyEl = document.getElementById('mctable-body');
     if (!_mcActiveRows.length) {
-        if (_mcTbodyEl) _mcTbodyEl.innerHTML = '';
+        // 💡 아무 행도 없으면 우클릭할 대상 자체가 없어 행 추가가 불가능했음 → 첫 행 추가 버튼 표시
+        if (_mcTbodyEl) {
+            _mcTbodyEl.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:24px 0;">'
+                + '<button class="action-btn" onclick="window.bmAddFirstRow(\'mc\')" style="min-width:auto; background:#2c5f8a; color:#fff;">➕ 첫 행 추가</button>'
+                + '</td></tr>';
+        }
     } else {
         try {
             const tbody = document.getElementById('mctable-body');
@@ -13831,6 +13939,22 @@ function bmMoveSelected(key, dir) {
     if (key === 'mc') { window._bmMcDirty = true; setTimeout(window.mcFlushDirty, 0); }
 }
 
+// 💡 완전히 빈 테이블(첫 행이 하나도 없어서 우클릭할 대상 자체가 없는 경우)에 첫 행을 추가
+window.bmAddFirstRow = function(key) {
+    const tbody = document.getElementById(BM_CONF[key].tbodyId);
+    if (!tbody) return;
+    const tr = document.createElement('tr');
+    tr.innerHTML = BM_CONF[key].rowHtml();
+    tbody.appendChild(tr);
+    window._bmSelected[key] = window._bmSelected[key] || new Set();
+    window._bmSelected[key].clear();
+    window._bmSelected[key].add(tr);
+    window._bmAnchor[key] = tr;
+    window.bmSetupAllRows(key);
+    bmPaintSelection(key);
+    if (key === 'mc') { window._bmMcDirty = true; setTimeout(window.mcFlushDirty, 0); }
+};
+
 function bmAddAfter(key, refTr) {
     const sel = window._bmSelected[key];
     const rows = bmDataRows(key);
@@ -13918,6 +14042,177 @@ function bmDeleteSelected(key) {
     });
 }
 
+// ═══════════════════════════════════════════════════════════
+// 🖥️ M.C Table 디스플레이 종류(BTN/MAIN/UPR/TPR) — 2단계: 화면 UI
+//    ⚠️ 아직 탭을 눌러도 테이블 데이터 자체는 안 바뀝니다 (3단계에서 연결)
+// ═══════════════════════════════════════════════════════════
+const MC_UNIT_LABELS = { BTN: 'BTN(버튼덱)', MAIN: 'MAIN', UPR: 'UPR(어퍼)', TPR: 'TPR(토퍼)' };
+
+window.mcRenderUnitTabs = function() {
+    const bar = document.getElementById('mc-unit-bar');
+    const addBtn = document.getElementById('mc-add-unit-btn');
+    if (!bar) return;
+    const units = window.getMcUnits();
+
+    // 💡 제품구분자도 없고 아직 이름 없는 데이터도 없는 "완전 초기 상태"에서는
+    //    "➕ 제품구분자 추가" 버튼 자체를 숨김 (분류할 대상이 아직 아무것도 없으므로)
+    const defaultRevs = window.tabData.mcRevisions || {};
+    const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
+    if (addBtn) addBtn.style.display = (units.length || hasDefaultData) ? 'inline-flex' : 'none';
+
+    if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    bar.style.display = 'flex';
+    bar.innerHTML = units.map(function(u) {
+        const active = (window.mcActiveUnit || '') === u;
+        return '<button class="mc-unit-btn" data-unit="' + escapeHtml(u) + '" onclick="window.mcSwitchUnit(\'' + escapeHtml(u).replace(/'/g, "\\'") + '\')"'
+            + ' style="padding:6px 10px; border:1.5px solid #6f42c1; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold;'
+            + ' background:' + (active ? '#6f42c1' : '#fff') + '; color:' + (active ? '#fff' : '#6f42c1') + ';">'
+            + escapeHtml(u)
+            + ' <span onclick="event.stopPropagation(); window.mcRemoveUnit(\'' + escapeHtml(u).replace(/'/g, "\\'") + '\')" title="이 제품구분자 제거" style="opacity:0.7;">✕</span>'
+            + '</button>';
+    }).join('');
+};
+
+// 종류 추가: 커스텀 팝업으로 이름 직접 입력 (예시 문구 드래그 선택/복사 가능)
+window.mcAddUnit = function() {
+    const ov = document.getElementById('mc-add-unit-overlay');
+    const input = document.getElementById('mc-add-unit-input');
+    const titleEl = document.getElementById('mc-add-unit-title');
+    const descEl = document.getElementById('mc-add-unit-desc');
+    if (!ov || !input) return;
+
+    const units = window.getMcUnits();
+    const defaultRevs = window.tabData.mcRevisions || {};
+    const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
+    const isNaming = hasDefaultData; // 💡 제품구분자가 이미 있든 없든, 이름표 없는 데이터가 있으면 "이름 붙이기" 모드
+
+    ov.dataset.mode = isNaming ? 'name-existing' : 'add-new';
+    if (titleEl) titleEl.textContent = isNaming ? '📌 지금 있는 M.C Table 데이터, 제품구분자를 정해주세요' : '➕ 제품구분자 추가';
+    if (descEl) descEl.innerHTML = isNaming
+        ? '지금까지 입력하신 견적(R1~R5)은 그대로 유지되고, <b>이름표만</b> 붙습니다.<br>예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ 취소하시면 우선 "미지정"으로 저장되고, 나중에 언제든 바꾸실 수 있습니다.'
+        : '예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ 위 예시가 아니어도, 이 프로젝트에 맞는 이름을 자유롭게 적으셔도 됩니다.';
+
+    input.value = '';
+    ov.style.display = 'flex';
+    setTimeout(function() { input.focus(); }, 50);
+};
+
+// 💡 데이터는 있는데 아직 제품구분자가 하나도 없으면, 자동으로 이름 지정 팝업을 띄움
+//    (엑셀/프로젝트를 불러온 직후 호출됨)
+window.mcCheckNeedsNaming = function() {
+    // 💡 이미 제품구분자가 있든 없든, "이름표 없는" 데이터가 조금이라도 있으면 항상 이름을 물어봄
+    const defaultRevs = window.tabData.mcRevisions || {};
+    const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
+    if (hasDefaultData && !window.mcActiveUnit) {
+        window.mcAddUnit();
+    }
+};
+
+window.mcAddUnitCancel = function() {
+    const ov = document.getElementById('mc-add-unit-overlay');
+    if (!ov) return;
+    if (ov.dataset.mode === 'name-existing') {
+        // 💡 이름 없는 상태로 둘 수 없으므로, 취소하면 "미지정"으로 자동 저장
+        const input = document.getElementById('mc-add-unit-input');
+        if (input) input.value = '미지정';
+        window.mcAddUnitConfirm();
+        return;
+    }
+    ov.style.display = 'none';
+};
+
+window.mcAddUnitConfirm = function() {
+    const input = document.getElementById('mc-add-unit-input');
+    const name = (input ? input.value : '').trim();
+    if (!name) { alert('이름을 입력해주세요.'); return; }
+    const units = window.getMcUnits();
+    if (units.some(function(u) { return u.toLowerCase() === name.toLowerCase(); })) {
+        alert('"' + name + '"은 이미 추가되어 있습니다.');
+        return;
+    }
+
+    const ov = document.getElementById('mc-add-unit-overlay');
+    const isNaming = ov && ov.dataset.mode === 'name-existing';
+
+    if (isNaming) {
+        // 💡 기존 데이터를 통째로 이 이름으로 이관 (내용은 그대로, 이름표만 붙임)
+        //    "기본"이라는 별도 자리는 이제 없으므로, 옮긴 데이터를 그대로 활성 포인터로 계속 사용
+        window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
+        window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
+        const movedRevisions = window.tabData.mcRevisions || {};
+        const movedSales = window.tabData.mcSalesPriceDetail || {};
+        window.tabData.mcRevisionsByUnit[name] = movedRevisions;
+        window.tabData.mcSalesPriceDetailByUnit[name] = movedSales;
+        units.push(name);
+        window.mcActiveUnit = name;
+        window.tabData.mcRevisions = movedRevisions;         // 💡 그대로 계속 가리키게 함
+        window.tabData.mcSalesPriceDetail = movedSales;
+        window.tabData.mcTable = movedRevisions.R1 || [];    // 엑셀 호환용 별칭도 유지
+        window.mcRenderUnitTabs();
+        window.populateTabData();
+    } else {
+        // 새 빈 종류 추가 (기존 동작)
+        units.push(name);
+        window.mcRenderUnitTabs();
+    }
+    // 💡 mcAddUnitCancel()을 다시 타면 mode가 아직 'name-existing'일 때 재귀 호출되므로,
+    //    성공 후에는 직접 닫고 mode도 초기화
+    if (ov) { ov.dataset.mode = ''; ov.style.display = 'none'; }
+};
+
+// 종류 제거 (프로젝트 목록에서만 빼고, 저장된 견적 데이터는 유지)
+window.mcRemoveUnit = function(unit) {
+    if (!confirm('"' + (MC_UNIT_LABELS[unit] || unit) + '" 종류를 목록에서 제거하시겠습니까?\n(저장된 견적 데이터는 지워지지 않고 보관됩니다)')) return;
+    const units = window.getMcUnits();
+    const idx = units.indexOf(unit);
+    if (idx !== -1) units.splice(idx, 1);
+    if (window.mcActiveUnit === unit) window.mcActiveUnit = '';
+    window.mcRenderUnitTabs();
+};
+
+// 종류 전환: 현재 화면 내용을 지금 종류에 저장하고, mcRevisions/mcSalesPriceDetail "포인터"를
+// 선택한 종류의 저장소로 바꿔치기 → 기존의 모든 리비전/영업판가/비교표 코드는 그대로 두고
+// 올바른 종류의 데이터를 자동으로 보게 됨
+window.mcSwitchUnit = function(unit) {
+    window.tabData = window.tabData || {};
+    window.tabData.mcRevisions = window.tabData.mcRevisions || {};
+    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
+
+    // 1. 지금 화면 내용을 현재 리비전에 저장
+    const curRev = window.tabData.mcActiveRevision || 'R1';
+    window.tabData.mcRevisions[curRev] = _readRowsFromTbody('mctable-body');
+
+    // 2. 현재 종류의 저장소를 보관 (다음에 다시 이 종류로 돌아올 때 쓰임)
+    const curKey = window.mcActiveUnit || '';
+    window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
+    window.tabData.mcRevisionsByUnit[curKey] = window.tabData.mcRevisions;
+    window.tabData.mcSalesPriceDetailByUnit = window.tabData.mcSalesPriceDetailByUnit || {};
+    window.tabData.mcSalesPriceDetailByUnit[curKey] = window.tabData.mcSalesPriceDetail;
+
+    // 3. 새 종류로 포인터 전환 (기존에 저장된 게 있으면 이어서, 없으면 새로 시작)
+    const newKey = unit || '';
+    window.mcActiveUnit = newKey;
+    window.tabData.mcRevisions = window.tabData.mcRevisionsByUnit[newKey] || {};
+    window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[newKey] || {};
+    window.tabData.mcRevisionsByUnit[newKey] = window.tabData.mcRevisions;
+    window.tabData.mcSalesPriceDetailByUnit[newKey] = window.tabData.mcSalesPriceDetail;
+
+    // 💡 비교 화면이 열려있으면 일반 화면으로 복귀 후 전환 (mcSwitchRevision과 동일한 처리)
+    const compSection = document.getElementById('mc-comparison-section');
+    if (compSection && compSection.style.display !== 'none') window.mcHideComparison();
+
+    window.populateTabData();
+    window.mcRenderUnitTabs();
+
+    document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
+        const active = b.dataset.rev === (window.tabData.mcActiveRevision || 'R1');
+        b.classList.toggle('active', active);
+        b.style.background = active ? '#2c5f8a' : '#fff';
+        b.style.color = active ? '#fff' : '#2c5f8a';
+        b.style.fontWeight = active ? 'bold' : 'normal';
+    });
+};
+
 // 💡 R1~R5 리비전 전환: 현재 화면 내용을 활성 리비전에 저장하고, 선택한 리비전 데이터로 다시 그림
 window.mcSwitchRevision = function(rev) {
     window.tabData = window.tabData || {};
@@ -13935,6 +14230,7 @@ window.mcSwitchRevision = function(rev) {
     }
 
     window.populateTabData();
+    window.mcRenderUnitTabs();
 
     document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
         const active = b.dataset.rev === rev;
@@ -13986,6 +14282,33 @@ window.mcToggleHistoryBox = function() {
     if (expand) window.mcRenderHistoryTable();
 };
 
+// ═══════════════════════════════════════════════════════════
+// 🖥️ M.C Table 디스플레이 종류(BTN/MAIN/UPR/TPR) 지원 — 1단계: 데이터 구조
+//    기본(단일 종류) 모드에서는 지금까지와 완전히 동일하게 tabData.mcRevisions를 그대로 사용.
+//    종류를 추가한 프로젝트만 tabData.mcRevisionsByUnit[unit]에 별도로 저장.
+// ═══════════════════════════════════════════════════════════
+window.mcActiveUnit = window.mcActiveUnit || '';  // '' = 기본(단일) 종류, 그 외 'BTN'/'MAIN'/'UPR'/'TPR'
+
+// 현재 활성 종류의 리비전 저장소(mcRevisions 객체)를 반환. 없으면 생성.
+window.getMcRevisionsStore = function(unit) {
+    const u = (unit !== undefined) ? unit : window.mcActiveUnit;
+    const key = u || '';
+    window.tabData = window.tabData || {};
+    window.tabData.mcRevisionsByUnit = window.tabData.mcRevisionsByUnit || {};
+    if (!window.tabData.mcRevisionsByUnit[key]) {
+        // 기본 종류(key==='')는 지금까지 써오던 mcRevisions를 최초 1회 그대로 이어받음
+        window.tabData.mcRevisionsByUnit[key] = (key === '' && window.tabData.mcRevisions) ? window.tabData.mcRevisions : {};
+    }
+    return window.tabData.mcRevisionsByUnit[key];
+};
+
+// 이 프로젝트가 등록해둔 디스플레이 종류 목록 (기본값: 빈 배열 = 아직 아무것도 추가 안 함 = 지금 화면 그대로)
+window.getMcUnits = function() {
+    window.tabData = window.tabData || {};
+    window.tabData.mcUnits = window.tabData.mcUnits || [];
+    return window.tabData.mcUnits;
+};
+
 // 💡 변경 사항 1건 기록
 window.mcLogChange = function(rowLabel, field, oldVal, newVal, reason) {
     if (String(oldVal || '') === String(newVal || '')) return;
@@ -13995,6 +14318,7 @@ window.mcLogChange = function(rowLabel, field, oldVal, newVal, reason) {
         time: new Date().toLocaleString('ko-KR'),
         userName: window.currentUserName || '비로그인',
         rev: window.tabData.mcActiveRevision || 'R1',
+        unit: window.mcActiveUnit || '',  // 💡 2단계부터 사용할 디스플레이 종류(BTN/MAIN/UPR/TPR). 지금은 항상 ''(기본 종류)
         row: rowLabel, field: field, oldVal: oldVal, newVal: newVal, reason: reason || ''
     });
 };
@@ -14944,10 +15268,8 @@ window.calRender = function() {
             left: 10mm; right: 10mm; bottom: 4mm;
             justify-content: space-between;
             align-items: center;
-            font-size: 20px !important;
-            color: red !important;
-            background: yellow !important;
-            z-index: 999999 !important;
+            font-size: 8px;
+            color: #888;
             font-family: 'Malgun Gothic', sans-serif;
         }
     }
