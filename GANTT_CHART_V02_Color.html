@@ -1175,6 +1175,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
             <button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>
+            <button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <button class="concept-add-row-btn" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
             <button id="mc-rev-cycle-btn" class="mc-rev-btn active" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 R1→R2→...→R5 순환"
@@ -14086,23 +14087,24 @@ const MC_UNIT_LABELS = { BTN: 'BTN(버튼덱)', MAIN: 'MAIN', UPR: 'UPR(어퍼)'
 window.mcRenderUnitTabs = function() {
     const bar = document.getElementById('mc-unit-bar');
     const addBtn = document.getElementById('mc-add-unit-btn');
+    const removeBtn = document.getElementById('mc-remove-unit-btn');
     if (!bar) return;
     const units = window.getMcUnits();
 
     const defaultRevs = window.tabData.mcRevisions || {};
     const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
     if (addBtn) addBtn.style.display = (units.length || hasDefaultData) ? 'inline-flex' : 'none';
+    if (removeBtn) removeBtn.style.display = units.length ? 'inline-flex' : 'none';
 
     if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = 'flex';
     const cur = window.mcActiveUnit || units[0];
-    // 💡 하나의 버튼: 클릭하면 다음 제품구분자로 순환 전환. 옆의 작은 ✏️/🗑️로 이름변경/제거.
+    // 💡 하나의 버튼: 클릭하면 다음 제품구분자로 순환 전환. 옆의 작은 ✏️로 이름변경. (🗑️는 ➕ 옆으로 이동)
     bar.innerHTML =
         '<button class="mc-unit-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
         + ' style="padding:6px 10px; min-width:auto; border:1.5px solid #6f42c1; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#6f42c1; color:#fff;">'
         + escapeHtml(cur) + '</button>'
-        + '<span onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="cursor:pointer; padding:2px 4px; font-size:12px;">✏️</span>'
-        + '<span onclick="window.mcRemoveUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이 제품구분자 제거" style="cursor:pointer; padding:2px 4px; font-size:12px; opacity:0.7;">🗑️</span>';
+        + '<span onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="cursor:pointer; padding:2px 4px; font-size:12px;">✏️</span>';
 };
 
 // 💡 제품구분자 순환 버튼 — 누를 때마다 다음 제품구분자로 전환 (없으면 처음으로 돌아감)
