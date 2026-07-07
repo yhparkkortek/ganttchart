@@ -1171,20 +1171,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 📌 TYPE이 비어있는 행은 바로 위 행의 TYPE을 그대로 이어받은 것으로 간주됩니다 (그룹 구분용).
             </span></span></h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0;">🔽 펼치기</button>
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <div id="mc-unit-bar" style="display:none; align-items:center; gap:6px; margin-right:6px;"></div>
-            <button class="concept-add-row-btn" id="mc-add-unit-btn" onclick="window.mcAddUnit()" style="margin:0 12px 0 0; display:none;">➕ 제품구분자 추가</button>
-            <button class="concept-add-row-btn" onclick="window.mcClearAllPrices()" style="margin:0 12px 0 0; border-color:#e03131; color:#e03131;">🧹 금액 전체 삭제</button>
-            <div style="display:flex; gap:6px; align-items:center;">
-                <button class="mc-rev-btn" data-rev="R5" onclick="window.mcSwitchRevision('R5')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R5</button>
-                <button class="mc-rev-btn" data-rev="R4" onclick="window.mcSwitchRevision('R4')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R4</button>
-                <button class="mc-rev-btn" data-rev="R3" onclick="window.mcSwitchRevision('R3')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R3</button>
-                <button class="mc-rev-btn" data-rev="R2" onclick="window.mcSwitchRevision('R2')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px;">R2</button>
-                <button class="mc-rev-btn active" data-rev="R1" onclick="window.mcSwitchRevision('R1')" style="padding:6px 16px; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
-            </div>
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" style="padding:6px 16px; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">📊 Comparison</button>
+            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0; padding:6px 8px;">🔽</button>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
+            <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
+            <button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
+            <button class="concept-add-row-btn" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
+            <button id="mc-rev-cycle-btn" class="mc-rev-btn active" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 R1→R2→...→R5 순환"
+                style="padding:6px 10px; min-width:auto; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
+            <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
+                style="margin-left:4px; padding:6px 10px; min-width:auto; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
             <div class="btn-group"></div>
             <button class="action-btn" onclick="window.printTabSection('tab-mctable')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
@@ -2950,6 +2946,16 @@ ${mailText}`;
 
         printArea.appendChild(tableClone);
 
+        // 💡 다른 탭들과 동일하게, 계산 전(측정 대상에 포함되는 시점)에 실제 콘텐츠로 삽입
+        const _pfNow = new Date();
+        const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
+        const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
+        const ganttFooterDiv = document.createElement('div');
+        ganttFooterDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:6px; color:#888; font-family:"Malgun Gothic",sans-serif;';
+        ganttFooterDiv.innerHTML = '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+            + '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+        printArea.appendChild(ganttFooterDiv);
+
         document.body.classList.add('gantt-printing-mode');
         window.print();
     };
@@ -2997,6 +3003,17 @@ ${mailText}`;
                 el.style.maxHeight = 'none';
             });
         }
+
+        // 💡 페이지 맞춤 계산(zoom/scale)이 이 콘텐츠 높이를 측정해서 결정되므로,
+        //    계산이 일어나기 전에 미리 붙여넣어야 페이지를 안 넘어감
+        const _pfNow = new Date();
+        const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
+        const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
+        const footerDiv = document.createElement('div');
+        footerDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:13px; color:#888; font-family:"Malgun Gothic",sans-serif;';
+        footerDiv.innerHTML = '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+            + '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+        clone.appendChild(footerDiv);
 
         printArea.appendChild(clone);
         document.body.classList.add('tab-printing-mode');
@@ -13304,18 +13321,9 @@ window.populateTabData = function() {
             tbody.innerHTML = htmlChunks.join('');
             if (window.bmSetupAllRows) window.bmSetupAllRows('mc');
 
-            // 💡 Cost 정보 없는 리비전은 "접기" 상태에서 R1~R5 버튼 숨김
+            // 💡 버튼이 R1~R5 순환식 하나로 통합되면서, "데이터 없는 리비전 버튼 숨김" 로직은
+            //    유일한 탐색 버튼 자체를 숨겨버리는 문제가 있어 제거함 (항상 보이도록)
             (function() {
-                ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
-                    const btn = document.querySelector('.mc-rev-btn[data-rev="' + rev + '"]');
-                    if (!btn) return;
-                    if (rev === 'R1' || rev === curRev || expanded) { btn.style.display = ''; return; }
-                    const revRows = (td.mcRevisions && td.mcRevisions[rev]) || [];
-                    const hasAny = revRows.some(function(r) {
-                        return parseNum(r.protoCost) || parseNum(r.protoNre) || parseNum(r.protoBCost) || parseNum(r.protoBNre) || parseNum(r.mpCost) || parseNum(r.mpNre);
-                    });
-                    btn.style.display = hasAny ? '' : 'none';
-                });
             })();
 
             // 💡 표 너비 = 보이는 col 너비 합계로 정확히 고정 (table-layout:fixed 안정화)
@@ -14073,25 +14081,30 @@ window.mcRenderUnitTabs = function() {
     if (!bar) return;
     const units = window.getMcUnits();
 
-    // 💡 제품구분자도 없고 아직 이름 없는 데이터도 없는 "완전 초기 상태"에서는
-    //    "➕ 제품구분자 추가" 버튼 자체를 숨김 (분류할 대상이 아직 아무것도 없으므로)
     const defaultRevs = window.tabData.mcRevisions || {};
     const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
     if (addBtn) addBtn.style.display = (units.length || hasDefaultData) ? 'inline-flex' : 'none';
 
     if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = 'flex';
-    bar.innerHTML = units.map(function(u) {
-        const active = (window.mcActiveUnit || '') === u;
-        // 💡 이미 활성화된 칩을 한 번 더 누르면 전환이 아니라 "이름 바꾸기"로 동작
-        const clickFn = active ? 'window.mcRenameUnit' : 'window.mcSwitchUnit';
-        return '<button class="mc-unit-btn" data-unit="' + escapeHtml(u) + '" onclick="' + clickFn + '(\'' + escapeHtml(u).replace(/'/g, "\\'") + '\')" title="' + (active ? '클릭하여 이름 바꾸기' : '') + '"'
-            + ' style="padding:6px 10px; border:1.5px solid #6f42c1; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold;'
-            + ' background:' + (active ? '#6f42c1' : '#fff') + '; color:' + (active ? '#fff' : '#6f42c1') + ';">'
-            + escapeHtml(u) + (active ? ' ✏️' : '')
-            + ' <span onclick="event.stopPropagation(); window.mcRemoveUnit(\'' + escapeHtml(u).replace(/'/g, "\\'") + '\')" title="이 제품구분자 제거" style="opacity:0.7;">✕</span>'
-            + '</button>';
-    }).join('');
+    const cur = window.mcActiveUnit || units[0];
+    // 💡 하나의 버튼: 클릭하면 다음 제품구분자로 순환 전환. 옆의 작은 ✏️/🗑️로 이름변경/제거.
+    bar.innerHTML =
+        '<button class="mc-unit-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
+        + ' style="padding:6px 10px; min-width:auto; border:1.5px solid #6f42c1; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#6f42c1; color:#fff;">'
+        + escapeHtml(cur) + '</button>'
+        + '<span onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="cursor:pointer; padding:2px 4px; font-size:12px;">✏️</span>'
+        + '<span onclick="window.mcRemoveUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이 제품구분자 제거" style="cursor:pointer; padding:2px 4px; font-size:12px; opacity:0.7;">🗑️</span>';
+};
+
+// 💡 제품구분자 순환 버튼 — 누를 때마다 다음 제품구분자로 전환 (없으면 처음으로 돌아감)
+window.mcCycleUnit = function() {
+    const units = window.getMcUnits();
+    if (!units.length) return;
+    const cur = window.mcActiveUnit || units[0];
+    const idx = units.indexOf(cur);
+    const next = units[(idx + 1) % units.length];
+    window.mcSwitchUnit(next);
 };
 
 // 종류 추가: 커스텀 팝업으로 이름 직접 입력 (예시 문구 드래그 선택/복사 가능)
@@ -14291,6 +14304,14 @@ window.mcSwitchUnit = function(unit) {
     });
 };
 
+// 💡 R1~R5 순환 버튼 — 누를 때마다 다음 리비전으로 전환 (없으면 처음으로 돌아감)
+window.mcCycleRevision = function() {
+    const order = ['R1', 'R2', 'R3', 'R4', 'R5'];
+    const cur = window.tabData.mcActiveRevision || 'R1';
+    const next = order[(order.indexOf(cur) + 1) % order.length];
+    window.mcSwitchRevision(next);
+};
+
 // 💡 R1~R5 리비전 전환: 현재 화면 내용을 활성 리비전에 저장하고, 선택한 리비전 데이터로 다시 그림
 window.mcSwitchRevision = function(rev) {
     window.tabData = window.tabData || {};
@@ -14310,13 +14331,8 @@ window.mcSwitchRevision = function(rev) {
     window.populateTabData();
     window.mcRenderUnitTabs();
 
-    document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
-        const active = b.dataset.rev === rev;
-        b.classList.toggle('active', active);
-        b.style.background = active ? '#2c5f8a' : '#fff';
-        b.style.color = active ? '#fff' : '#2c5f8a';
-        b.style.fontWeight = active ? 'bold' : 'normal';
-    });
+    const revBtn = document.getElementById('mc-rev-cycle-btn');
+    if (revBtn) { revBtn.textContent = rev; revBtn.dataset.rev = rev; }
 };
 
 // 💡 행(TYPE/ITEM/GROUP/Note 등)은 그대로 두고, 금액 칸(Cost/NRE 전부)만 비움
@@ -14865,14 +14881,7 @@ window.mcRenderComparisonTable = function() {
     const mcWrap = document.querySelector('#tab-mctable .concept-tab-wrap');
     if (mcWrap) mcWrap.classList.toggle('mc-wrap-expanded', expanded);
 
-    // 💡 비교 화면에서도 동일하게: Cost 정보 없는 리비전 버튼은 "접기" 상태에서 숨김
-    //    (이 함수에 이미 계산되어 있는 hasData[rev], expanded를 그대로 재사용)
-    ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
-        const btn = document.querySelector('.mc-rev-btn[data-rev="' + rev + '"]');
-        if (!btn) return;
-        if (rev === 'R1' || expanded) { btn.style.display = ''; return; }
-        btn.style.display = hasData[rev] ? '' : 'none';
-    });
+    // 💡 버튼이 하나(순환식)로 통합되어, "데이터 없는 리비전 버튼 숨김" 로직은 제거함
 };
 
 // 💡 제품 사진 업로드 슬롯 초기화
@@ -15354,39 +15363,6 @@ window.calRender = function() {
 
     container.innerHTML = container.innerHTML = allHtml;
 };
-</script>
-
-<!-- 💡 인쇄 전용 하단 푸터 (좌: 저작권, 우: 인쇄일자+파일명 / 가운데 페이지번호는 크롬 인쇄창 "머리글과 바닥글" 옵션 사용) -->
-<style>
-    #print-footer { display: none; }
-    @media print {
-        #print-footer {
-            display: flex !important;
-            position: fixed;
-            left: 10mm; right: 10mm; bottom: 4mm;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 8px;
-            color: #888;
-            font-family: 'Malgun Gothic', sans-serif;
-        }
-    }
-</style>
-<div id="print-footer">
-    <span id="print-footer-left"></span>
-    <span id="print-footer-right"></span>
-</div>
-<script>
-window.addEventListener('beforeprint', function() {
-    const footer = document.getElementById('print-footer');
-    if (!footer) return;
-    const now = new Date();
-    const dateStr = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-' + String(now.getDate()).padStart(2,'0');
-    const fileName = window.driveSaveFilenameStr || (window.projectMeta && window.projectMeta.프로젝트명) || '';
-
-    document.getElementById('print-footer-left').textContent = `ⓒ Copyright ${now.getFullYear()} KORTEK Corporation`;
-    document.getElementById('print-footer-right').textContent = `(인쇄 날짜)${dateStr}_${fileName}`;
-});
 </script>
 
 </body>
