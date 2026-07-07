@@ -6394,6 +6394,107 @@ window.buildMailTaskRow = function(r, gd, ci) {
 
 // ✅ [공용] L0~L4 구간(개발단계 devStage는 하위 레벨까지 forward-fill 되어 있음) 내에서
 //    시작일 기준 최적 삽입 위치를 계산. useAuto=false 또는 조건 미충족 시 "구간 끝"으로 fallback.
+// 💡 다른 프로젝트에서 방금 불러온 데이터는 화면에 표시된 적이 없어 _calcStartTs가 비어있을 수 있음.
+//    recalculateSchedules()의 핵심 계산 로직만 뽑아와서, DOM/로그 등 부작용 없이 순수하게
+//    각 행의 _calcStartTs / _calcPlanTs 만 채워주는 함수. (셀 값 자체는 건드리지 않음)
+window.computeCalcDatesForRows = function(rows, ci) {
+    if (!rows || rows.length === 0) return;
+    let tree = []; let stack = {}; let fileGlobalStartTs = null;
+
+    for (let row of rows) {
+        if (!row) continue;
+        let rawStart = ci.start !== -1 ? row[ci.start] : ""; let pDateStart = parseDateValue(rawStart); let parsedStartTs = pDateStart ? pDateStart.ts : null;
+        let rawPlan = ci.plan !== -1 ? row[ci.plan] : ""; let pDatePlan = parseDateValue(rawPlan); let parsedPlanTs = pDatePlan ? pDatePlan.ts : null;
+        let dur1 = ci.dur1 !== -1 ? getDurationDays(row[ci.dur1]) : null; let dur2 = ci.dur2 !== -1 ? getDurationDays(row[ci.dur2]) : null; let dur3 = ci.dur3 !== -1 ? getDurationDays(row[ci.dur3]) : null; let dur4 = ci.dur4 !== -1 ? getDurationDays(row[ci.dur4]) : null; let pDur = ci.period !== -1 ? getDurationDays(row[ci.period]) : null;
+        let planStr = rawPlan !== null && rawPlan !== undefined ? rawPlan.toString().trim() : ""; let match = planStr.match(/^(\d+)(일|days)?$/i);
+        let finalDur = 0; let hasDuration = (dur1 !== null || dur2 !== null || dur3 !== null || dur4 !== null || pDur !== null || match);
+
+        if (row._level === 1 && dur1 !== null) finalDur = dur1; else if (row._level === 2 && dur2 !== null) finalDur = dur2; else if (row._level === 3 && dur3 !== null) finalDur = dur3; else if (row._level === 4 && dur4 !== null) finalDur = dur4; else if (pDur !== null) finalDur = pDur; else if (match && parseInt(match[1], 10) < 10000) finalDur = parseInt(match[1], 10);
+
+        row._finalDuration = finalDur;
+        row._isExplicitZero = (finalDur === 0 && (dur1 === 0 || dur2 === 0 || dur3 === 0 || dur4 === 0 || pDur === 0 || (match && parseInt(match[1], 10) === 0)));
+
+        if (row._level === 0 || row._startForced || !hasDuration) row._explicitStartTs = parsedStartTs; else row._explicitStartTs = null;
+        if (row._level === 0 || row._planForced || !hasDuration) row._explicitPlanTs = parsedPlanTs; else row._explicitPlanTs = null;
+        if (row._explicitStartTs && row._explicitPlanTs && row._explicitPlanTs < row._explicitStartTs) row._explicitPlanTs = row._explicitStartTs;
+
+        if (row._explicitStartTs) {
+            if (fileGlobalStartTs === null || row._explicitStartTs < fileGlobalStartTs) fileGlobalStartTs = row._explicitStartTs;
+        }
+
+        let taskName = "";
+        if (row._level === 0) taskName = row._origDev || ""; else if (row._level === 1) taskName = row._origT1 || ""; else if (row._level === 2) taskName = row._origT2 || ""; else if (row._level === 3) taskName = row._origT3 || ""; else if (row._level === 4) taskName = row._origT4 || "";
+        let contentStr = ci.content !== -1 ? (row[ci.content] || "").toString() : "";
+        row._isParallel = taskName.includes('*') || taskName.includes('＊') || contentStr.includes('*') || contentStr.includes('＊');
+
+        let node = { row: row, level: row._level, isParallel: row._isParallel, explicitStartTs: row._explicitStartTs, explicitPlanTs: row._explicitPlanTs, duration: row._finalDuration, children: [], startTs: null, endTs: null };
+
+        if (node.level === 0) { tree.push(node); stack[0] = node; stack[1] = null; stack[2] = null; stack[3] = null; stack[4] = null; }
+        else {
+            let parentLvl = node.level - 1; while (parentLvl >= 0 && !stack[parentLvl]) parentLvl--;
+            if (parentLvl >= 0 && stack[parentLvl]) stack[parentLvl].children.push(node); else tree.push(node);
+            stack[node.level] = node; for (let l = node.level + 1; l <= 4; l++) stack[l] = null;
+        }
+    }
+
+    function propagateZero(node) {
+        if (node.children.length === 0) return !!node.row._isExplicitZero;
+        let allZero = true; for (let i = 0; i < node.children.length; i++) { if (!propagateZero(node.children[i])) allZero = false; }
+        node.row._isExplicitZero = allZero; return allZero;
+    }
+    for (let i = 0; i < tree.length; i++) propagateZero(tree[i]);
+
+    function scheduleNode(node, inheritedStartTs) {
+        if (node.explicitStartTs) node.startTs = node.explicitStartTs; else node.startTs = inheritedStartTs || new Date().setHours(0,0,0,0);
+        if (node.children.length === 0) {
+            let dur = node.duration || 0;
+            if (node.explicitPlanTs && (node.level === 0 || dur === 0 || node.row._planForced)) {
+                node.endTs = node.explicitPlanTs; node.row._finalDuration = countWorkingDays(node.startTs, node.endTs);
+            } else if (dur > 0) { node.endTs = addWorkingDays(node.startTs, dur - 1); }
+            else { node.endTs = node.startTs; }
+            return;
+        }
+        let currentWaterfallStart = node.startTs; let maxChildEnd = node.startTs; let groupStartTs = node.startTs; let isFirstValid = true;
+        for (let i = 0; i < node.children.length; i++) {
+            let child = node.children[i];
+            if (child.row._isExplicitZero) { scheduleNode(child, currentWaterfallStart); continue; }
+            let intendedStart;
+            if (isFirstValid) intendedStart = node.startTs;
+            else if (child.isParallel) intendedStart = groupStartTs;
+            else intendedStart = currentWaterfallStart;
+            scheduleNode(child, intendedStart);
+            if (isFirstValid) { groupStartTs = child.startTs; isFirstValid = false; }
+            else if (!child.isParallel) { groupStartTs = child.startTs; }
+            if (child.endTs > maxChildEnd) maxChildEnd = child.endTs;
+            currentWaterfallStart = addWorkingDays(maxChildEnd, 1);
+        }
+        node.endTs = maxChildEnd;
+    }
+
+    let currentL0Start = fileGlobalStartTs || new Date().setHours(0,0,0,0);
+    let maxL0End = currentL0Start; let groupL0StartTs = currentL0Start; let isFirstValidL0 = true;
+    for (let i = 0; i < tree.length; i++) {
+        let l0Node = tree[i];
+        if (l0Node.row._isExplicitZero) { scheduleNode(l0Node, currentL0Start); continue; }
+        let intendedStart;
+        if (isFirstValidL0) intendedStart = currentL0Start;
+        else if (l0Node.isParallel) intendedStart = groupL0StartTs;
+        else intendedStart = currentL0Start;
+        scheduleNode(l0Node, intendedStart);
+        if (isFirstValidL0) { groupL0StartTs = l0Node.startTs; isFirstValidL0 = false; }
+        else if (!l0Node.isParallel) { groupL0StartTs = l0Node.startTs; }
+        if (l0Node.endTs > maxL0End) maxL0End = l0Node.endTs;
+        currentL0Start = addWorkingDays(maxL0End, 1);
+    }
+
+    function applyDatesToRow(node) {
+        node.row._calcStartTs = node.startTs;
+        node.row._calcPlanTs = node.endTs;
+        for (let child of node.children) applyDatesToRow(child);
+    }
+    for (let l0Node of tree) applyDatesToRow(l0Node);
+};
+
 window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
     if (l0Value === '__END__' || !rows || rows.length <= 1) {
         return { pos: rows ? rows.length : 0, usedDateMatch: false, previewLabel: '📍 맨 끝에 추가' };
@@ -6827,6 +6928,8 @@ window.inboxDistPickFile = async function(fileId, fileName) {
             for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
             return row;
         });
+        // 💡 저장된 스냅샷의 _calcStartTs를 그대로 믿지 않고, 방금 불러온 데이터로 직접 재계산
+        window.computeCalcDatesForRows(ctx.rows.slice(1), ctx.saveData.colIdx);
         window.inboxDistFillL0Select(undefined);
         document.getElementById('dist-target-name').textContent = fileName;
         document.getElementById('dist-step2').style.display = 'block';
@@ -6886,6 +6989,8 @@ window.inboxDistReload = async function(prevL0) {
             for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
             return row;
         });
+        // 💡 여기서도 최신본 기준으로 재계산
+        window.computeCalcDatesForRows(ctx.rows.slice(1), ctx.saveData.colIdx);
         ctx.fetchedModifiedTime = metaResp.result.modifiedTime;
         window.inboxDistFillL0Select(prevL0);
         const sel = document.getElementById('dist-l0-select');
