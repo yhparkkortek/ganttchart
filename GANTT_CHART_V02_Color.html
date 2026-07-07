@@ -6578,11 +6578,22 @@ window.closeTaskInbox = function() {
 // 현재 프로젝트의 개발단계(L0) 목록 수집
 window.getCurrentL0List = function() {
     const arr = [];
-    if (!globalData || globalData.length <= 1 || !colIdx || colIdx.devStage === -1) return arr;
-    for (let i = 1; i < globalData.length; i++) {
-        const row = globalData[i]; if (!row) continue;
-        const v = (row[colIdx.devStage] || '').toString().trim();
-        if (v && arr.indexOf(v) === -1) arr.push(v);
+    if (!globalData || globalData.length <= 1 || !colIdx) return arr;
+    if (colIdx.devStage !== -1) {
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i]; if (!row) continue;
+            const v = (row[colIdx.devStage] || '').toString().trim();
+            if (v && arr.indexOf(v) === -1) arr.push(v);
+        }
+    } else if (colIdx.wbs !== -1) {
+        // 💡 단일 "개발업무(WBS)" 컬럼 모드: _level===0인 행에서 구간명을 추출
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i]; if (!row) continue;
+            if (row._level === 0) {
+                const v = (row._origDev || row[colIdx.wbs] || '').toString().trim();
+                if (v && arr.indexOf(v) === -1) arr.push(v);
+            }
+        }
     }
     return arr;
 };
@@ -6831,6 +6842,15 @@ window.inboxDistFillL0Select = function(preferred) {
         for (let i = 1; i < ctx.rows.length; i++) {
             const v = (((ctx.rows[i] || [])[tCol.devStage]) || '').toString().trim();
             if (v && l0s.indexOf(v) === -1) l0s.push(v);
+        }
+    } else if (tCol.wbs !== -1) {
+        // 💡 단일 "개발업무(WBS)" 컬럼 모드: 대상 프로젝트도 이 모드일 수 있으므로 동일하게 처리
+        for (let i = 1; i < ctx.rows.length; i++) {
+            const row = ctx.rows[i]; if (!row) continue;
+            if (row._level === 0) {
+                const v = (row._origDev || row[tCol.wbs] || '').toString().trim();
+                if (v && l0s.indexOf(v) === -1) l0s.push(v);
+            }
         }
     }
     const want = (preferred !== undefined) ? preferred : ((ctx.task['개발단계'] || '').trim());
@@ -7505,7 +7525,7 @@ window.updateInboxBadge();
             <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="dist-auto-position" checked onchange="window.distRecomputePreview()" style="cursor:pointer;">
-                    🎯 다른 프로젝트 자동위치(시작일 기준) <span style="color:#e67e22; font-weight:normal;">⚠️ 현재 임시로 "구간 끝"에만 배치됩니다</span>
+                    🎯 다른 프로젝트 자동위치(시작일 기준)
                 </label>
                 <span id="dist-position-preview" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
             </div>
