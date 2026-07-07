@@ -6631,10 +6631,10 @@ window.renderTaskInbox = function() {
                 <button class="action-btn" onclick="if(confirm('이 업무를 보관함에서 삭제할까요?')){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
-            <div style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
+            <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="inbox-auto-${it.uid}" checked onchange="window.inboxRecomputePreview('${it.uid}')" style="cursor:pointer;">
-                    🎯 자동 위치(시작일 기준)
+                    🎯 현재 프로젝트 자동위치(시작일 기준)
                 </label>
                 <span id="inbox-preview-${it.uid}" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
             </div>
@@ -6716,6 +6716,8 @@ window.closeInboxDist = function() {
     if (window._distCtx && window._distCtx.uid) {
         const inlineEl = document.getElementById('inbox-dist-inline-' + window._distCtx.uid);
         if (inlineEl) { inlineEl.style.display = 'none'; inlineEl.innerHTML = ''; }
+        const curAutoRow = document.getElementById('inbox-cur-auto-row-' + window._distCtx.uid);
+        if (curAutoRow) curAutoRow.style.display = 'flex';
     }
     window._distCtx = null;
 };
@@ -6743,13 +6745,21 @@ window.inboxOpenDistribute = async function(uid) {
     const step2 = document.getElementById('dist-step2');
     if (step2) document.body.appendChild(step2);
 
-    // 다른 항목에서 열려있던 인라인 목록은 닫기
-    document.querySelectorAll('[id^="inbox-dist-inline-"]').forEach(function(el) { el.style.display = 'none'; el.innerHTML = ''; });
-    if (alreadyOpen) return;
+    // 다른 항목에서 열려있던 인라인 목록은 닫기 (+ 그 항목들의 "현재 프로젝트" 자동위치 줄 복원)
+    document.querySelectorAll('[id^="inbox-dist-inline-"]').forEach(function(el) {
+        el.style.display = 'none'; el.innerHTML = '';
+        const otherUid = el.id.replace('inbox-dist-inline-', '');
+        const otherRow = document.getElementById('inbox-cur-auto-row-' + otherUid);
+        if (otherRow) otherRow.style.display = 'flex';
+    });
+    if (alreadyOpen) { const r2 = document.getElementById('inbox-cur-auto-row-' + uid); if (r2) r2.style.display = 'flex'; return; }
 
     window._distCtx = { uid: uid, task: JSON.parse(JSON.stringify(r)), taskName: (r['업무명'] || '새 업무') };
     inlineEl.dataset.uid = uid;
     inlineEl.style.display = 'block';
+    // 💡 "다른 프로젝트" 패널이 펼쳐진 동안은 "현재 프로젝트"용 자동위치 줄을 숨겨 중복처럼 안 보이게 함
+    const curAutoRow = document.getElementById('inbox-cur-auto-row-' + uid);
+    if (curAutoRow) curAutoRow.style.display = 'none';
     inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#888; font-size:12px;">📂 프로젝트 목록을 불러오는 중...</div>';
 
     try {
@@ -7495,7 +7505,7 @@ window.updateInboxBadge();
             <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="dist-auto-position" checked onchange="window.distRecomputePreview()" style="cursor:pointer;">
-                    🎯 자동 위치(시작일 기준)
+                    🎯 다른 프로젝트 자동위치(시작일 기준) <span style="color:#e67e22; font-weight:normal;">⚠️ 현재 임시로 "구간 끝"에만 배치됩니다</span>
                 </label>
                 <span id="dist-position-preview" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
             </div>
