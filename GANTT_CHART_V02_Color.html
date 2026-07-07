@@ -1270,9 +1270,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </table>
             </div>
             <div id="mc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
-                <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
-                    <span id="mc-history-toggle-icon">▶</span>
-                    <span>📜 견적 수정이력 확인</span>
+                <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; justify-content:space-between;">
+                    <span style="display:flex; align-items:center; gap:6px;">
+                        <span id="mc-history-toggle-icon">▶</span>
+                        <span>📜 견적 수정이력 확인</span>
+                    </span>
+                    <span id="mc-history-lastedit" style="font-size:11px; font-weight:normal; color:#888;"></span>
                 </div>
                 <div id="mc-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
                     <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
@@ -7271,7 +7274,7 @@ window.updateInboxBadge();
     body.tab-printing-mode #app-topbar,
     body.tab-printing-mode #app-sidebar,
     body.tab-printing-mode .concept-header-box,
-    body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area) {
+    body.tab-printing-mode #tab-print-area ~ *:not(#tab-print-area):not(#print-footer) {
         display: none !important;
     }
 
@@ -12977,12 +12980,12 @@ window.populateTabData = function() {
                 if (!hidePairs.protoA) row1 += '<th colspan="2">PROTO A</th>';
                 if (!hidePairs.protoB) row1 += '<th colspan="2">PROTO B</th>';
                 if (!hidePairs.mp) row1 += '<th colspan="2">MP(' + curRev + ')</th>';
-                // 💡 엑셀 내보내기와 동일하게, 이 리비전의 마지막 수정이력 시각을 Note 헤더 위에 표시
+                row1 += '<th rowspan="2" style="min-width:400px;">Note</th></tr>';
+                // 💡 엑셀 내보내기와 동일하게, 이 리비전의 마지막 수정이력 시각을 "견적 수정이력 확인" 줄 오른쪽에 표시
                 const _mcRevLogs = (td.mcChangeLog || []).filter(function(l) { return l.rev === curRev; });
                 const _mcLatestDate = _mcRevLogs.length ? _mcRevLogs[_mcRevLogs.length - 1].time : '-';
-                row1 += '<th rowspan="2" style="min-width:400px; position:relative;">'
-                    + '<div style="font-size:9px; font-weight:normal; color:#dce6f0; text-align:right; margin-bottom:2px;">최종수정: ' + _mcLatestDate + '</div>'
-                    + 'Note</th></tr>';
+                const _mcLastEditEl = document.getElementById('mc-history-lastedit');
+                if (_mcLastEditEl) _mcLastEditEl.textContent = '최종수정: ' + _mcLatestDate;
                 let row2 = '<tr>';
                 if (!hidePairs.protoA) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
                 if (!hidePairs.protoB) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
