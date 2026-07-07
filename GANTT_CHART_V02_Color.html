@@ -4821,9 +4821,18 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             }
 
             const mcRevisionsForExport = tabData.mcRevisions || {};
+            // 💡 참조 템플릿에서 온 TYPE/ITEM 라벨만 있고 금액이 전부 빈 "껍데기 행"은
+            //    실제 데이터로 치지 않음 — Cost/NRE 중 하나라도 값이 있어야 "데이터 있음"으로 간주
+            const _mcHasRealMoney = function(rows) {
+                if (!rows || !rows.length) return false;
+                const moneyFields = ['protoCost', 'protoNre', 'protoBCost', 'protoBNre', 'mpCost', 'mpNre'];
+                return rows.some(function(r) {
+                    return moneyFields.some(function(f) { return r[f] !== undefined && r[f] !== null && String(r[f]).trim() !== ''; });
+                });
+            };
             ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
                 const rows = mcRevisionsForExport[rev] || (rev === 'R1' && !_mcUnitKey ? tabData.mcTable : null);
-                if (rev !== 'R1' && (!rows || !rows.length)) return;
+                if (rev !== 'R1' && !_mcHasRealMoney(rows)) return; // R1은 골격 유지용으로 항상 저장, R2~R5는 실제 금액 있을 때만
                 const sheetName = 'M.C Table' + _mcSuffix + ' ' + rev;
                 XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev, _mcUnitKey), sheetName);
             });
