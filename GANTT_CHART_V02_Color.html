@@ -1675,7 +1675,8 @@ ${mailText}`;
                 fields: 'files(id, name, modifiedTime)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             
-            let files = response.result.files;
+            // 💡 업무 보관함 자동 백업 파일(TaskInbox_이름.json)은 프로젝트가 아니므로 목록에서 제외
+            let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_'); });
             if (!files || files.length === 0) {
                 alert("팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
                 document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
@@ -6974,7 +6975,8 @@ window.inboxOpenDistribute = async function(uid) {
             fields: 'files(id, name, modifiedTime)', orderBy: 'modifiedTime desc',
             corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
         });
-        const files = resp.result.files || [];
+        // 💡 업무 보관함 자동 백업 파일은 전송 대상 프로젝트가 아니므로 제외
+        const files = (resp.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_'); });
         inlineEl.innerHTML = '';
         if (!files.length) {
             inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#aaa; font-size:12px;">공용 폴더에 프로젝트 파일이 없습니다.</div>';
@@ -14926,10 +14928,6 @@ window.addEventListener('beforeprint', function() {
     document.getElementById('print-footer-left').textContent = `ⓒ Copyright ${now.getFullYear()} KORTEK Corporation`;
     document.getElementById('print-footer-right').textContent = `(인쇄 날짜)${dateStr}_${fileName}`;
 });
-</script>
-
-</body>allHtml;
-};
 </script>
 
 </body>
