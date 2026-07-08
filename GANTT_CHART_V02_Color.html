@@ -2119,6 +2119,7 @@ ${mailText}`;
                 else if (row._level === 3) { curT3 = text; curT4 = ""; }
                 else if (row._level === 4) { curT4 = text; }
                 
+                row._l0Group = curD0; // 💡 계획(Baseline) 키 충돌 방지용 — 이 행이 속한 0레벨 상위 그룹명
                 row._origDev = curD0; if (colIdx.devStage !== -1) row[colIdx.devStage] = curD0;
                 row._origT1 = curT1; if (colIdx.taskType1 !== -1) row[colIdx.taskType1] = curT1;
                 row._origT2 = curT2; if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = curT2;
@@ -2714,7 +2715,7 @@ ${mailText}`;
     function getTaskKey(row) {
         if (!row) return '';
         const txt = row._level === 0 ? row._origDev : row._level === 1 ? row._origT1 : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4;
-        return (row._level || 0) + '::' + (txt || '').toString().trim();
+        return (row._l0Group || '') + '::' + (row._level || 0) + '::' + (txt || '').toString().trim();
     }
 
     window.refreshBaselineDropdown = function() {
