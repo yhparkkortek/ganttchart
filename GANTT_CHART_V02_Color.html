@@ -825,11 +825,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button id="redo-btn" class="action-btn" onclick="window.redoLastAction()" disabled title="다시 실행 (Ctrl+Y)">↪️ 다시실행</button>
         <button id="recalc-range-btn" class="action-btn" onclick="window.recalcSelectedRange()" title="선택한 행들만 일정 고정을 해제하고 다시 계산합니다 (Ctrl/Shift로 행 선택 후 클릭)">🔓 선택 구간 재계산</button>
         <button id="date-sort-btn" class="action-btn" onclick="window.sortRowsByStartDate()" title="각 분류 그룹 안에서 행을 시작일 빠른 순으로 정렬합니다 (WBS 계층 유지). 🔒 이미 고정된 날짜는 이동하지 않고, 화면상 행의 표시 순서만 정리됩니다.">📅 날짜순 정렬</button>
-        <button id="baseline-save-btn" class="action-btn" onclick="window.saveScheduleBaseline()" title="현재 전체 일정(시작일)을 하나의 계획으로 저장합니다. 여러 번 저장 가능합니다.">📐 계획 저장</button>
-        <select id="baseline-select" class="action-btn" style="cursor:pointer;" onchange="window.setActiveBaseline(this.value)" title="비교할 계획을 선택하면 배지와 고스트바가 표시됩니다">
-            <option value="">계획 비교 끔</option>
-        </select>
-        <button id="baseline-delete-btn" class="action-btn" onclick="window.deleteScheduleBaseline()" title="드롭다운에서 선택된 계획을 삭제합니다">🗑️ 계획 삭제</button>
+        <button id="baseline-menu-btn" class="action-btn" onclick="window.toggleBaselineMenu(event)" title="계획(기준선) 저장 · 비교 · 삭제">📐 계획</button>
         <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
         </div>
 
@@ -2119,7 +2115,7 @@ ${mailText}`;
                 else if (row._level === 3) { curT3 = text; curT4 = ""; }
                 else if (row._level === 4) { curT4 = text; }
                 
-                row._l0Group = curD0; // 💡 계획(Baseline) 키 충돌 방지용 — 이 행이 속한 0레벨 상위 그룹명
+                row._l0Group = curD0; // 💡 계획(Baseline) 키 충돌 방지용
                 row._origDev = curD0; if (colIdx.devStage !== -1) row[colIdx.devStage] = curD0;
                 row._origT1 = curT1; if (colIdx.taskType1 !== -1) row[colIdx.taskType1] = curT1;
                 row._origT2 = curT2; if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = curT2;
@@ -2697,6 +2693,13 @@ ${mailText}`;
     //    ⚠️ 참고: 행 매칭은 "레벨+업무명 텍스트" 조합으로 하므로, 같은 레벨에 이름이 완전히 같은
     //    업무가 여러 개 있으면 첫 번째 것으로 뭉뚱그려 매칭될 수 있습니다.
     // ═══════════════════════════════════════════════════════
+    // ═══════════════════════════════════════════════════════
+    // 📐 계획(Baseline) 저장 및 비교 — "최초 수립 일정 대비 얼마나 바뀌었는지" 확인용
+    //    ⚠️ 참고: localStorage에 전역으로 저장되어, 같은 브라우저에서 다른 프로젝트 파일을 열어도
+    //    계획 목록이 공유됩니다.
+    //    ⚠️ 참고: 행 매칭은 "0레벨 소속 그룹명 + 레벨 + 업무명" 조합으로 하므로, 같은 0레벨 그룹
+    //    "안"에서 완전히 동일한 업무명이 반복되는 경우까지는 구분하지 못합니다.
+    // ═══════════════════════════════════════════════════════
     const BASELINE_STORAGE_KEY = 'gantt_schedule_baselines';
 
     window._scheduleBaselines = [];
@@ -2718,23 +2721,60 @@ ${mailText}`;
         return (row._l0Group || '') + '::' + (row._level || 0) + '::' + (txt || '').toString().trim();
     }
 
-    window.refreshBaselineDropdown = function() {
-        const sel = document.getElementById('baseline-select');
-        if (!sel) return;
-        const cur = sel.value;
-        let optsHtml = '<option value="">계획 비교 끔</option>';
-        window._scheduleBaselines.forEach(bl => {
-            optsHtml += `<option value="${bl.id}">${escapeHtml(bl.label)}</option>`;
-        });
-        sel.innerHTML = optsHtml;
-        sel.value = window._scheduleBaselines.some(bl => bl.id === cur) ? cur : '';
+    // 📐 계획 메뉴 팝업 — 저장/비교선택/삭제를 버튼 하나로 통합
+    window.toggleBaselineMenu = function(ev) {
+        if (ev) ev.stopPropagation();
+        let popup = document.getElementById('baseline-popup');
+        if (popup && popup.style.display === 'block') { popup.style.display = 'none'; return; }
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.id = 'baseline-popup';
+            popup.className = 'row-action-popup';
+            popup.style.minWidth = '230px';
+            popup.style.padding = '6px';
+            document.body.appendChild(popup);
+            document.addEventListener('click', function(e) {
+                if (!popup.contains(e.target) && e.target.id !== 'baseline-menu-btn') popup.style.display = 'none';
+            });
+        }
+        window.renderBaselineMenu();
+        const btn = document.getElementById('baseline-menu-btn');
+        const rect = btn.getBoundingClientRect();
+        popup.style.left = rect.left + 'px';
+        popup.style.top = (rect.bottom + 4) + 'px';
+        popup.style.display = 'block';
+    };
+
+    window.renderBaselineMenu = function() {
+        const popup = document.getElementById('baseline-popup');
+        if (!popup) return;
+        let html = `<div style="font-size:11px; font-weight:bold; color:#495057; padding:2px 6px 6px;">📐 계획(기준선)</div>`;
+        html += `<div onclick="window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
+        html += `<div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>`;
+
+        const offSelected = !window._activeBaselineId;
+        html += `<div onclick="window.setActiveBaseline(''); window.renderBaselineMenu();" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; ${offSelected ? 'background:#e7f5ff; font-weight:bold;' : ''}">${offSelected ? '✅' : '　'} 비교 끔</div>`;
+
+        if (window._scheduleBaselines.length === 0) {
+            html += `<div style="padding:8px; font-size:11px; color:#adb5bd;">저장된 계획이 없습니다</div>`;
+        } else {
+            window._scheduleBaselines.forEach(bl => {
+                const isActive = window._activeBaselineId === bl.id;
+                const dateStr = new Date(bl.savedAt).toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
+                html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:4px; ${isActive ? 'background:#e7f5ff;' : ''}">
+                    <span onclick="window.setActiveBaseline('${bl.id}'); window.renderBaselineMenu();" style="cursor:pointer; font-size:12px; flex:1; ${isActive ? 'font-weight:bold;' : ''}" title="${escapeHtml(bl.label)}">${isActive ? '✅' : '　'} ${escapeHtml(bl.label)} <span style="color:#adb5bd; font-size:10px;">(${dateStr})</span></span>
+                    <span onclick="window.deleteScheduleBaseline('${bl.id}')" title="이 계획 삭제" style="cursor:pointer; color:#e03131; font-size:12px; margin-left:6px;">🗑️</span>
+                </div>`;
+            });
+        }
+        popup.innerHTML = html;
     };
 
     window.saveScheduleBaseline = function() {
         if (!globalData || globalData.length <= 1) { alert('저장할 일정이 없습니다.'); return; }
         const defaultLabel = new Date().toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
         const label = prompt('이 계획의 이름을 입력하세요 (예: 킥오프 계획, 26년 5월 계획 등)', defaultLabel);
-        if (label === null) return; // 취소
+        if (label === null) return;
 
         const rows = {};
         for (let i = 1; i < globalData.length; i++) {
@@ -2745,7 +2785,7 @@ ${mailText}`;
         const baseline = { id: 'bl_' + Date.now(), label: (label || defaultLabel).trim(), savedAt: Date.now(), rows: rows };
         window._scheduleBaselines.push(baseline);
         persistScheduleBaselines();
-        window.refreshBaselineDropdown();
+        window.renderBaselineMenu();
         alert(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일을 저장했습니다.`);
     };
 
@@ -2763,10 +2803,7 @@ ${mailText}`;
         return ts || null;
     };
 
-    window.deleteScheduleBaseline = function() {
-        const sel = document.getElementById('baseline-select');
-        const id = sel ? sel.value : '';
-        if (!id) { alert('삭제할 계획을 먼저 드롭다운에서 선택해주세요.'); return; }
+    window.deleteScheduleBaseline = function(id) {
         const bl = window._scheduleBaselines.find(b => b.id === id);
         if (!bl) return;
         if (!confirm(`"${bl.label}" 계획을 삭제할까요? 되돌릴 수 없습니다.`)) return;
@@ -2779,8 +2816,7 @@ ${mailText}`;
             renderTable(globalData);
             applyFilters();
         }
-        window.refreshBaselineDropdown();
-        alert(`🗑️ "${bl.label}" 계획을 삭제했습니다.`);
+        window.renderBaselineMenu();
     };
 
     window.onRowNoClick = function(td, i, ev) {
@@ -4510,8 +4546,8 @@ window.deleteHistoryByDateRange = function() {
                                 : '';
                             const isLocked = !!(row._startForced && row._planForced);
                             const lockSvg = isLocked
-                                ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>'
-                                : '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 7.75-1.5"></path></svg>';
+                                ? '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>'
+                                : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 7.75-1.5"></path></svg>';
                             const lockIcon = `<span onclick="window.wrToggleScheduleLock(${i}, event); event.stopPropagation();" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}" style="display:inline-flex; cursor:pointer; margin-left:3px; vertical-align:middle; color:${isLocked ? '#333' : '#adb5bd'};">${lockSvg}</span>`;
                             let baselineBadge = '';
                             const baselineStartTs = window.getBaselineStartTs ? window.getBaselineStartTs(row) : null;
@@ -4519,10 +4555,10 @@ window.deleteHistoryByDateRange = function() {
                                 const diffDays = Math.round((row._calcStartTs - baselineStartTs) / 86400000);
                                 if (diffDays !== 0) {
                                     const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
-                                    baselineBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="display:block; font-size:9px; color:${badgeColor}; font-weight:bold;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}일</span>`;
+                                    baselineBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="position:absolute; bottom:0px; left:0; right:0; font-size:6px; line-height:1; color:${badgeColor}; font-weight:bold; pointer-events:none;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}일</span>`;
                                 }
                             }
-                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
+                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap; position:relative;" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
                         }
                         if (colIdx.status !== -1) {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
