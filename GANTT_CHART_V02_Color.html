@@ -4509,7 +4509,7 @@ window.deleteHistoryByDateRange = function() {
             const displayCell = lang.header[cellKey] || escapeHtml(cell);
             if (thClass === 'chart-th') {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}" ondblclick="window.toggleChartExpand()" title="더블클릭: 차트 확장/기본 보기 전환">
-                    <div class="chart-th-axis" style="position:relative; height:12px; overflow:hidden;"></div>
+                    <div class="chart-th-axis" style="position:relative; height:12px; overflow:hidden; margin:0 20px; box-sizing:border-box;"></div>
                 </th>`;
             } else {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
@@ -5709,6 +5709,16 @@ window.handleAuthClick = function() {
     };
 
     // 표 머릿글에 월/년(또는 기본 4분할) 눈금 라벨을 표시 — 확장/기본 모드 공통
+    window.getChartAxisTicks = function(isExpanded, viewStartTs, viewDuration) {
+        const totalDays = viewDuration / 86400000;
+        const approxMonths = Math.max(1, Math.round(totalDays / 30.44));
+        const unitMonths = isExpanded ? 1 : 3;
+        const numTicks = Math.max(2, Math.round(approxMonths / unitMonths) + 1);
+        let pcts = [];
+        for (let i = 0; i < numTicks; i++) pcts.push((i / (numTicks - 1)) * 100);
+        return pcts;
+    };
+
     window.updateChartHeaderAxis = function() {
         const headerAxis = document.querySelector('#myTable thead .chart-th-axis');
         if (!headerAxis) return;
@@ -5719,53 +5729,20 @@ window.handleAuthClick = function() {
 
         let labelHTML = '';
 
-        if (isExpanded) {
-            const viewStart = new Date(viewStartTs);
-            const viewEnd   = new Date(viewStartTs + viewDuration);
-            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            const mLbl = (d) => `${months[d.getMonth()]} '${d.getFullYear().toString().slice(2)}`;
-            let ticks = [];
-            ticks.push({ pct: 0, lbl: mLbl(viewStart) });
-            let cur = new Date(viewStart.getFullYear(), viewStart.getMonth() + 1, 1);
-            while (cur < viewEnd) {
-                let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
-                if (pct > 1.5 && pct < 98.5) ticks.push({ pct, lbl: mLbl(cur) });
-                cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-            }
-            ticks.push({ pct: 100, lbl: mLbl(viewEnd) });
+        const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+        const mLbl = (ts) => { const d = new Date(ts); return `${months[d.getMonth()]} '${d.getFullYear().toString().slice(2)}`; };
 
-            ticks.forEach((t, idx) => {
-                let transform = 'translateX(-50%)';
-                if (idx === 0) transform = 'translateX(0%)';
-                else if (idx === ticks.length - 1) transform = 'translateX(-100%)';
-                labelHTML += `<span class="chart-label" style="position:absolute; left:${t.pct}%; transform:${transform}; white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold; color:#495057;">${t.lbl}</span>`;
-            });
-        } else {
-            const viewStart = new Date(viewStartTs);
-            const viewEnd   = new Date(viewStartTs + viewDuration);
-            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            const mLbl = (d) => `${months[d.getMonth()]} '${d.getFullYear().toString().slice(2)}`;
-            let ticks = [];
-            // 💡 맨 앞 = 프로젝트 시작월(0%) 고정
-            ticks.push({ pct: 0, lbl: mLbl(viewStart) });
-            // 중간 눈금: 시작월 다음 분기부터 3개월 간격 (양 끝과 너무 가까우면 겹치니 건너뜀)
-            let cur = new Date(viewStart.getFullYear(), viewStart.getMonth() + 3, 1);
-            while (cur < viewEnd) {
-                let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
-                if (pct > 4 && pct < 96) ticks.push({ pct, lbl: mLbl(cur) });
-                cur = new Date(cur.getFullYear(), cur.getMonth() + 3, 1);
-            }
-            // 💡 맨 뒤 = 프로젝트 종료월(100%) 고정
-            ticks.push({ pct: 100, lbl: mLbl(viewEnd) });
+        // 💡 라벨과 눈금선이 항상 일치하도록, 공용 함수(window.getChartAxisTicks)로 위치 계산
+        const pcts = window.getChartAxisTicks(isExpanded, viewStartTs, viewDuration);
+        let ticks = pcts.map(pct => ({ pct, lbl: mLbl(viewStartTs + (viewDuration * pct / 100)) }));
 
-            ticks.forEach((t, idx) => {
-                // 맨 앞/맨 뒤 라벨은 안쪽으로 정렬해서 잘리지 않게, 중간은 중앙정렬
-                let transform = 'translateX(-50%)';
-                if (idx === 0) transform = 'translateX(0%)';
-                else if (idx === ticks.length - 1) transform = 'translateX(-100%)';
-                labelHTML += `<span class="chart-label" style="position:absolute; left:${t.pct}%; transform:${transform}; white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold;">${t.lbl}</span>`;
-            });
-        }
+        ticks.forEach((t, idx) => {
+            // 맨 앞/맨 뒤 라벨은 안쪽으로 정렬해서 잘리지 않게, 중간은 중앙정렬
+            let transform = 'translateX(-50%)';
+            if (idx === 0) transform = 'translateX(0%)';
+            else if (idx === ticks.length - 1) transform = 'translateX(-100%)';
+            labelHTML += `<span class="chart-label" style="position:absolute; left:${t.pct}%; transform:${transform}; white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold;">${t.lbl}</span>`;
+        });
 
         headerAxis.innerHTML = labelHTML;
     };
@@ -5803,26 +5780,14 @@ window.handleAuthClick = function() {
     let gridLines = '';
     let labelHTML = '';
 
-    if (isExpanded) {
-        // ── 확장 모드: 월단위 눈금만 표시 (월/년 라벨은 표 머릿글로 이동됨) ──
-        const viewStart = new Date(viewStartTs);
-        const viewEnd   = new Date(viewStartTs + viewDuration);
-
-        // 월 시작점 순회
-        let cur = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
-        while (cur <= viewEnd) {
-            let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
-            if (pct >= 0 && pct <= 101) {
-                gridLines += `<div style="position:absolute; top:0; bottom:0; left:${pct}%; border-left:1px solid #adb5bd; z-index:1;"></div>`;
-            }
-            cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-        }
-    } else {
-        // ── 기본 모드: 8분할 눈금만 표시 (라벨은 표 머릿글로 이동됨) ──
-        for (let i = 1; i < 8; i++) {
-            let leftPct = (i / 8) * 100;
-            gridLines += `<div style="position:absolute; top:0; bottom:0; left:${leftPct}%; border-left:1px dashed #dee2e6; z-index:1;"></div>`;
-        }
+    {
+        // 💡 라벨(표 머릿글)과 완전히 같은 위치에 눈금선을 그림 (window.getChartAxisTicks 공용 계산식)
+        const axisPcts = window.getChartAxisTicks(isExpanded, viewStartTs, viewDuration);
+        const lineStyle = isExpanded ? 'border-left:1px solid #adb5bd;' : 'border-left:1px dashed #dee2e6;';
+        axisPcts.forEach(pct => {
+            if (pct <= 0 || pct >= 100) return; // 양 끝 경계선은 막대 테두리와 겹치니 생략
+            gridLines += `<div style="position:absolute; top:0; bottom:0; left:${pct}%; ${lineStyle} z-index:1;"></div>`;
+        });
     }
 
     let todayLine = "";
