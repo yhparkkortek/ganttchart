@@ -2571,6 +2571,7 @@ ${mailText}`;
         const toLocked = !wasLocked; // 클릭한 행 기준으로 반대 상태로 전환
 
         function applyMode(r) {
+            r._scheduleModeManual = true; // 💡 사용자가 직접 토글한 행 — 자동재잠금 로직에서 제외
             if (toLocked) {
                 if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
                 if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
@@ -2632,6 +2633,7 @@ ${mailText}`;
 
         leafIndices.forEach(idx => {
             const r = globalData[idx];
+            r._scheduleModeManual = true; // 💡 사용자가 직접 토글한 행 — 자동재잠금 로직에서 제외
             if (toLocked) {
                 if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
                 if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
@@ -6581,7 +6583,8 @@ window.buildMailTaskRow = function(r, gd, ci) {
     newRow._level = wbsLevel;
     newRow._origDev = ""; newRow._origT1 = ""; newRow._origT2 = ""; newRow._origT3 = ""; newRow._origT4 = "";
     // ✅ 메일 추가 항목임을 표시하기 위해 📧 처리 (사용자가 확인 후 제거 가능)
-    const taskName = (r['업무명'] || "새 업무") + ' 📧';
+    // ✅ ＊AI 마커: 병렬(_isParallel) 판정에 걸려서, 실수로 잠금이 풀려도 다른 형제 업무 일정을 밀지 않고 이 업무 하나만 영향받음 + 화면에서 AI가 넣은 업무임을 구분 가능
+    const taskName = (r['업무명'] || "새 업무") + ' ＊AI📧';
     if (wbsLevel === 0) newRow._origDev = taskName;
     else if (wbsLevel === 1) newRow._origT1 = taskName;
     else if (wbsLevel === 2) newRow._origT2 = taskName;
