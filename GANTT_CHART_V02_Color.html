@@ -2650,15 +2650,11 @@ ${mailText}`;
     // 리프(최하위) 업무 전체를 한 번에 고정/자동으로 전환 (소요일 머릿글 자물쇠 클릭)
     window.wrToggleAllScheduleLock = function() {
         if (!globalData || globalData.length <= 1) return;
-        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        // 💡 레벨/리프 여부 상관없이 전체 행 대상 (일관성 우선 — 부모 행은 완료일엔 영향 없고 시작일에만 실질 영향 있음)
         const leafIndices = [];
         for (let idx = 1; idx < globalData.length; idx++) {
             const row = globalData[idx]; if (!row) continue;
-            const L = lvOf(row);
-            if (L === 0) continue; // 💡 0레벨(최상위 업무)은 전체 고정/풀기 대상에서 제외
-            const nextRow = globalData[idx + 1];
-            const isLeaf = !nextRow || lvOf(nextRow) <= L;
-            if (isLeaf) leafIndices.push(idx);
+            leafIndices.push(idx);
         }
         if (leafIndices.length === 0) return;
 
@@ -2668,7 +2664,7 @@ ${mailText}`;
         });
         const toLocked = !allLocked;
 
-        if (!confirm(toLocked ? `최하위 업무 ${leafIndices.length}건을 모두 고정할까요?` : `최하위 업무 ${leafIndices.length}건을 모두 자동으로 전환할까요?`)) return;
+        if (!confirm(toLocked ? `전체 업무 ${leafIndices.length}건을 모두 고정할까요?` : `전체 업무 ${leafIndices.length}건을 모두 자동으로 전환할까요?`)) return;
 
         leafIndices.forEach(idx => {
             const r = globalData[idx];
@@ -4317,7 +4313,7 @@ window.deleteHistoryByDateRange = function() {
                 const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
                 const headerLockSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
-                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="전체 고정 / 전체 자동 전환 (0레벨 제외, 최하위 업무 대상)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="전체 고정 / 전체 자동 전환 (전체 업무 대상, 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);">${wbsLabel}</th>`;
             }
