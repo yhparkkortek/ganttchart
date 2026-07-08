@@ -829,6 +829,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <select id="baseline-select" class="action-btn" style="cursor:pointer;" onchange="window.setActiveBaseline(this.value)" title="비교할 계획을 선택하면 배지와 고스트바가 표시됩니다">
             <option value="">계획 비교 끔</option>
         </select>
+        <button id="baseline-delete-btn" class="action-btn" onclick="window.deleteScheduleBaseline()" title="드롭다운에서 선택된 계획을 삭제합니다">🗑️ 계획 삭제</button>
         <button id="chart-expand-btn" onclick="window.toggleChartExpand()" class="action-btn" title="업무 상세내용 숨기고 현황 그래프 확장">📊 차트 확장</button>
         </div>
 
@@ -2742,6 +2743,46 @@ ${mailText}`;
 
         const baseline = { id: 'bl_' + Date.now(), label: (label || defaultLabel).trim(), savedAt: Date.now(), rows: rows };
         window._scheduleBaselines.push(baseline);
+        persistScheduleBaselines();
+        window.refreshBaselineDropdown();
+        alert(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일을 저장했습니다.`);
+    };
+
+    window.setActiveBaseline = function(id) {
+        window._activeBaselineId = id || null;
+        renderTable(globalData);
+        applyFilters();
+    };
+
+    window.getBaselineStartTs = function(row) {
+        if (!window._activeBaselineId || !row) return null;
+        const bl = window._scheduleBaselines.find(b => b.id === window._activeBaselineId);
+        if (!bl) return null;
+        const ts = bl.rows[getTaskKey(row)];
+        return ts || null;
+    };
+
+    window.deleteScheduleBaseline = function() {
+        const sel = document.getElementById('baseline-select');
+        const id = sel ? sel.value : '';
+        if (!id) { alert('삭제할 계획을 먼저 드롭다운에서 선택해주세요.'); return; }
+        const bl = window._scheduleBaselines.find(b => b.id === id);
+        if (!bl) return;
+        if (!confirm(`"${bl.label}" 계획을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+
+        window._scheduleBaselines = window._scheduleBaselines.filter(b => b.id !== id);
+        persistScheduleBaselines();
+
+        if (window._activeBaselineId === id) {
+            window._activeBaselineId = null;
+            renderTable(globalData);
+            applyFilters();
+        }
+        window.refreshBaselineDropdown();
+        alert(`🗑️ "${bl.label}" 계획을 삭제했습니다.`);
+    };
+
+    window.onRowNoClick = function(td, i, ev) {
         if (window.getSelection) window.getSelection().removeAllRanges();   // shift 클릭 시 글자 파랗게 선택되는 것 방지
         if (!window._selectedRows) window._selectedRows = new Set();
         const sel = window._selectedRows;
