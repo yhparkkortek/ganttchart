@@ -5728,12 +5728,28 @@ window.handleAuthClick = function() {
                 cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
             }
         } else {
-            const labelPositions = [0, 12.5, 25, 37.5, 50, 62.5, 75, 87.5, 100];
-            for (let i = 0; i < labelPositions.length; i++) {
-                let pct = labelPositions[i];
-                let ts  = viewStartTs + (viewDuration * pct / 100);
-                labelHTML += `<span class="chart-label" style="position:absolute; left:${pct}%; transform:translateX(-50%); white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold; overflow:hidden;">${formatChartLabel(ts)}</span>`;
+            const viewStart = new Date(viewStartTs);
+            const viewEnd   = new Date(viewStartTs + viewDuration);
+            const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            // 💡 뷰 시작월이 속한 분기의 첫 달부터 3개월 간격으로 눈금 생성
+            let startMonth = viewStart.getMonth() - (viewStart.getMonth() % 3);
+            let cur = new Date(viewStart.getFullYear(), startMonth, 1);
+            let ticks = [];
+            while (cur <= viewEnd) {
+                let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
+                if (pct >= -1 && pct <= 101) {
+                    let yr = cur.getFullYear().toString().slice(2);
+                    ticks.push({ pct: Math.max(0, Math.min(100, pct)), lbl: `${months[cur.getMonth()]} '${yr}` });
+                }
+                cur = new Date(cur.getFullYear(), cur.getMonth() + 3, 1);
             }
+            ticks.forEach((t, idx) => {
+                // 맨 앞/맨 뒤 라벨은 안쪽으로 정렬해서 잘리지 않게, 중간은 기존처럼 중앙정렬
+                let transform = 'translateX(-50%)';
+                if (idx === 0) transform = 'translateX(0%)';
+                else if (idx === ticks.length - 1) transform = 'translateX(-100%)';
+                labelHTML += `<span class="chart-label" style="position:absolute; left:${t.pct}%; transform:${transform}; white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold;">${t.lbl}</span>`;
+            });
         }
 
         headerAxis.innerHTML = labelHTML;
