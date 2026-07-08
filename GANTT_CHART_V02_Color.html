@@ -3318,9 +3318,9 @@ ${mailText}`;
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
         const ganttFooterDiv = document.createElement('div');
-        ganttFooterDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:6px; color:#000; font-family:"Malgun Gothic",sans-serif;';
-        ganttFooterDiv.innerHTML = '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
-            + '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>';
+        ganttFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:12px; font-size:4px; color:#000; font-family:"Malgun Gothic",sans-serif; page-break-inside:avoid; break-inside:avoid;';
+        ganttFooterDiv.innerHTML = '<span style="display:table-cell; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+            + '<span style="display:table-cell; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
         printArea.appendChild(ganttFooterDiv);
 
         document.body.classList.add('gantt-printing-mode');
@@ -3371,15 +3371,15 @@ ${mailText}`;
             });
         }
 
-        // 💡 페이지 맞춤 계산(zoom/scale)이 이 콘텐츠 높이를 측정해서 결정되므로,
-        //    계산이 일어나기 전에 미리 붙여넣어야 페이지를 안 넘어감
+        // 💡 페이지 맞춤 계산(zoom/scale)이 이 콘텐츠(footer 포함) 높이를 측정해서 결정되므로,
+        //    반드시 clone "안"에 footer를 넣은 다음, 계산이 일어나기 전에 clone을 printArea에 붙여야 함
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
         const footerDiv = document.createElement('div');
-        footerDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif;';
-        footerDiv.innerHTML = '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
-            + '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>';
+        footerDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:2px; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif; page-break-inside:avoid; break-inside:avoid;';
+        footerDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+            + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
         clone.appendChild(footerDiv);
 
         printArea.appendChild(clone);
@@ -3590,6 +3590,11 @@ ${mailText}`;
             document.body.classList.remove('printing-tab-weekly');
             document.body.classList.remove('printing-tab-alarm');
             document.body.classList.remove('printing-tab-address');
+
+            // 💡 Gantt 인쇄 전용 사본도 같이 정리 (안 지우면 다음 인쇄 때 다른 탭과 겹쳐 보임)
+            const ganttPrintArea = document.getElementById('gantt-print-area');
+            if (ganttPrintArea) ganttPrintArea.innerHTML = '';
+            document.body.classList.remove('gantt-printing-mode');
         }, 1000);
     });
 
@@ -8135,6 +8140,8 @@ window.updateInboxBadge();
         display: block; width: 100%; text-align: left; box-sizing: border-box;
         padding: 7px 10px; margin: 0; border-radius: 4px; background: transparent;
         border: none; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+        appearance: none; -webkit-appearance: none; outline: none;
+        font-family: inherit; line-height: normal; color: #000;
     }
     .topbar-menu-item:hover { background: #f1f3f5; }
     .topbar-menu-item:disabled { color: #adb5bd; cursor: not-allowed; }
