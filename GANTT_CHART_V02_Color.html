@@ -647,8 +647,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div style="position:relative; display:inline-block;">
             <button id="task-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('task-menu-popup', this)">📥 업무<span id="task-menu-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
             <div id="task-menu-popup" class="topbar-popup" style="display:none;">
-                <button id="inbox-btn" class="topbar-menu-item" onclick="window.openTaskInbox()"><span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
-                <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">업무 추가</button>
+                <button id="inbox-btn" class="topbar-menu-item" onclick="window.openTaskInbox()">📦 <span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
+                <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">✉️ 업무 추가</button>
             </div>
         </div>
         <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="font-weight:bold;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
@@ -3250,6 +3250,20 @@ ${mailText}`;
                         }
                         
                         window.recalculateSchedules();
+
+                        // 🔒 [초기 잠금] 프로젝트를 새로 불러온 직후, 계산된 일정을 그대로 전체 행(0레벨 포함) 잠금 상태로 고정
+                        //    recalculateSchedules 내부 setTimeout 계산이 끝난 뒤 실행되도록 넉넉히 지연시킴
+                        setTimeout(() => {
+                            for (let gi = 1; gi < globalData.length; gi++) {
+                                const gr = globalData[gi]; if (!gr) continue;
+                                if (colIdx.start !== -1 && gr._calcStartTs) gr[colIdx.start] = formatTsToYMD(gr._calcStartTs);
+                                if (colIdx.plan  !== -1 && gr._calcPlanTs)  gr[colIdx.plan]  = formatTsToYMD(gr._calcPlanTs);
+                                gr._startForced = true;
+                                gr._planForced  = true;
+                                gr._scheduleModeManual = true; // 자동재잠금 로직과 무관하게 항상 '수동 고정'으로 취급
+                            }
+                            window.recalculateSchedules();
+                        }, 900);
 
                         // 💡 recalculateSchedules 내부 setTimeout 완료 후 _알림 복원
                         if (window._loadedAlarmNames && window._loadedAlarmNames.size > 0) {
