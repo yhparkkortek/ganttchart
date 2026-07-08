@@ -2571,7 +2571,6 @@ ${mailText}`;
         const toLocked = !wasLocked; // 클릭한 행 기준으로 반대 상태로 전환
 
         function applyMode(r) {
-            r._scheduleModeManual = true; // 이 행은 사용자가 직접 관리 — 자동고정 로직 대상에서 제외
             if (toLocked) {
                 if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
                 if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
@@ -2583,14 +2582,67 @@ ${mailText}`;
             }
         }
 
-        if (isBulk) {
-            window._selectedRows.forEach(idx => { const r = globalData[idx]; if (r) applyMode(r); });
-            logChange(rowIndex, -1, '일정 모드', (toLocked ? '일괄 고정' : '일괄 자동') + ` (${window._selectedRows.size}건)`);
-        } else {
-            applyMode(row);
-            logChange(rowIndex, -1, '일정 모드', toLocked ? '고정' : '자동');
+        // 💡 "업무상태"와 동일한 패턴: 해당 행 + 레벨이 더 깊은 하위 행들 전부에 같은 상태 적용
+        function applyModeWithChildren(idx) {
+            const r = globalData[idx];
+            if (!r) return;
+            applyMode(r);
+            const parentLevel = r._level || 0;
+            for (let j = idx + 1; j < globalData.length; j++) {
+                const child = globalData[j];
+                if (!child) continue;
+                if ((child._level || 0) <= parentLevel) break;
+                applyMode(child);
+            }
         }
 
+        if (isBulk) {
+            window._selectedRows.forEach(idx => applyModeWithChildren(idx));
+            logChange(rowIndex, -1, '일정 모드', (toLocked ? '일괄 고정' : '일괄 자동') + ` (${window._selectedRows.size}건, 하위 포함)`);
+        } else {
+            applyModeWithChildren(rowIndex);
+            logChange(rowIndex, -1, '일정 모드', toLocked ? '고정 (하위 포함)' : '자동 (하위 포함)');
+        }
+
+        window.recalculateSchedules();
+    };
+
+    // 리프(최하위) 업무 전체를 한 번에 고정/자동으로 전환 (소요일 머릿글 자물쇠 클릭)
+    window.wrToggleAllScheduleLock = function() {
+        if (!globalData || globalData.length <= 1) return;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const leafIndices = [];
+        for (let idx = 1; idx < globalData.length; idx++) {
+            const row = globalData[idx]; if (!row) continue;
+            const L = lvOf(row);
+            const nextRow = globalData[idx + 1];
+            const isLeaf = !nextRow || lvOf(nextRow) <= L;
+            if (isLeaf) leafIndices.push(idx);
+        }
+        if (leafIndices.length === 0) return;
+
+        const allLocked = leafIndices.every(idx => {
+            const r = globalData[idx];
+            return !!(r._startForced && r._planForced);
+        });
+        const toLocked = !allLocked;
+
+        if (!confirm(toLocked ? `최하위 업무 ${leafIndices.length}건을 모두 고정할까요?` : `최하위 업무 ${leafIndices.length}건을 모두 자동으로 전환할까요?`)) return;
+
+        leafIndices.forEach(idx => {
+            const r = globalData[idx];
+            if (toLocked) {
+                if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
+                if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
+                r._startForced = true; r._planForced = true;
+            } else {
+                if (colIdx.start !== -1) r[colIdx.start] = "";
+                if (colIdx.plan  !== -1) r[colIdx.plan]  = "";
+                r._startForced = false; r._planForced = false;
+            }
+        });
+
+        logChange(0, -1, '일정 모드', (toLocked ? '전체 고정' : '전체 자동') + ` (${leafIndices.length}건)`);
         window.recalculateSchedules();
     };
 
@@ -4222,7 +4274,7 @@ window.deleteHistoryByDateRange = function() {
                 const periodLabel = lang.header['소요일'] || '소요일';
                 const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
-                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel}</th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="전체 고정 / 전체 자동 전환 (최하위 업무 전체 대상)" style="cursor:pointer; font-size:10px;">🔒</span></th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);">${wbsLabel}</th>`;
             }
