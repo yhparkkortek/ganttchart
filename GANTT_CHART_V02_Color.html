@@ -4278,14 +4278,11 @@ window.deleteHistoryByDateRange = function() {
                     const alarmOn = !!row._알림;
                     const alarmStyle = alarmOn
                         ? 'opacity:1; filter:grayscale(1) sepia(1) saturate(6) hue-rotate(180deg) brightness(0.9); transform:scale(1.3);'
-                        : 'opacity:0.35; transform:scale(1.0);';
-                    const isLocked = !!(row._startForced && row._planForced);
+                        : 'opacity:1; transform:scale(1.0);';
                     tdHtml = `
                         <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative;">
                             <span onclick="window.wrToggleAlarm(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)' : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'}"
                                 style="font-size:13px; cursor:pointer; flex-shrink:0; ${alarmStyle}">📌</span>
-                            <span onclick="window.wrToggleScheduleLock(${i}, event)" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}"
-                                style="font-size:12px; cursor:pointer; flex-shrink:0; opacity:${isLocked ? '1' : '0.4'};">${isLocked ? '🔒' : '🔓'}</span>
                             <span class="row-num-span"></span>
                         </div>`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
@@ -4316,9 +4313,11 @@ window.deleteHistoryByDateRange = function() {
                             let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
                             const periodEditable = colIdx.period !== -1;
                             const periodAttrs = periodEditable
-                                ? ` data-raw="${encodeURIComponent(String(calcDays))}" ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${colIdx.period})" title="더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)"`
+                                ? ` data-raw="${encodeURIComponent(String(calcDays))}" ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${colIdx.period})"`
                                 : '';
-                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
+                            const isLocked = !!(row._startForced && row._planForced);
+                            const lockIcon = `<span onclick="window.wrToggleScheduleLock(${i}, event); event.stopPropagation();" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}" style="font-size:11px; cursor:pointer; margin-left:3px;">${isLocked ? '🔒' : '🔓'}</span>`;
+                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}</td>`;
                         }
                         if (colIdx.status !== -1) {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
