@@ -3953,6 +3953,19 @@ window.deleteHistoryByDateRange = function() {
         td.dataset.displayHtml = td.innerHTML; td.setAttribute('contenteditable', 'true');
         let raw = td.getAttribute('data-raw'); if (raw) td.innerText = decodeURIComponent(raw); else td.innerText = "";
         td.focus(); let range = document.createRange(); let sel = window.getSelection(); range.selectNodeContents(td); sel.removeAllRanges(); sel.addRange(range);
+
+        // ⌨️ Enter = 편집 완료(저장), Shift+Enter = 줄바꿈 삽입
+        td.onkeydown = function(ev) {
+            if (ev.key === 'Enter') {
+                if (ev.shiftKey) {
+                    ev.preventDefault();
+                    document.execCommand('insertText', false, '\n');
+                } else {
+                    ev.preventDefault();
+                    td.blur();
+                }
+            }
+        };
     };
 
     window.blurCell = function(td, rowIndex, colIndex) {
@@ -4256,7 +4269,9 @@ window.deleteHistoryByDateRange = function() {
                 if (!nonEditableCols.includes(cellIndex) && !hiddenCols.includes(cellIndex)) {
                     const isDateCol = (cellIndex === colIdx.start || cellIndex === colIdx.plan);
                     const dateHint = isDateCol ? " · 날짜를 지우면 자동계산, 입력하면 고정되어 다른 행이 바뀌어도 안 움직임" : "";
-                    tdAttrs += ` ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능${dateHint}"`;
+                    const isDetailCol = (cellIndex === colIdx.content || cellIndex === colIdx.answer);
+                    const detailHint = isDetailCol ? " · Enter는 편집 완료, 줄바꿈은 Shift+Enter" : "";
+                    tdAttrs += ` ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능${dateHint}${detailHint}"`;
                 }
 
                 let tdStyle = ""; let tdHtml = '';
