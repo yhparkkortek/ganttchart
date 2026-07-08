@@ -4306,7 +4306,7 @@ window.deleteHistoryByDateRange = function() {
 
     const LANG = {
         ko: {
-            header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '소요일':'소요일', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
+            header: { 'no':'No', '시작':'시작', '완료':'완료', '개발업무(wbs)':'개발업무 (WBS)', '기간':'기간', '소요일':'소요', '상태':'상태', '업무상세내용':'업무 상세내용', '현황':'현황' },
             status: ['진행','완료','대기','지연'],
             statusMap: { '진행':'진행','완료':'완료','대기':'대기','지연':'지연','보류':'지연',
                          'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'지연','On going':'진행','Delay':'지연' },
@@ -4469,10 +4469,10 @@ window.deleteHistoryByDateRange = function() {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             }
             if (idx === colIdx.plan) {
-                const periodLabel = lang.header['소요일'] || '소요일';
+                const periodLabel = lang.header['소요일'] || '소요';
                 const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
-                const headerLockSvg = '<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
+                const headerLockSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
                 headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="전체 고정 / 전체 자동 전환 (전체 업무 대상, 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);">${wbsLabel}</th>`;
@@ -4580,10 +4580,10 @@ window.deleteHistoryByDateRange = function() {
                                 const diffDays = Math.round((row._calcStartTs - baselineStartTs) / 86400000);
                                 if (diffDays !== 0) {
                                     const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
-                                    baselineBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="position:absolute; bottom:0px; left:0; right:0; font-size:6px; line-height:1; color:${badgeColor}; font-weight:bold; pointer-events:none;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}일</span>`;
+                                    baselineBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="display:inline; font-size:6px; color:${badgeColor}; font-weight:bold; margin-left:1px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                                 }
                             }
-                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap; position:relative;" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
+                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
                         }
                         if (colIdx.status !== -1) {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
