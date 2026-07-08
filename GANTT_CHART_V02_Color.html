@@ -2064,6 +2064,18 @@ ${mailText}`;
         return currentDate.getTime();
     }
 
+    function countWorkingDays(startTs, endTs) {
+        if (!startTs || !endTs) return 0;
+        let count = 0; let cur = new Date(startTs); cur.setHours(0,0,0,0); let end = new Date(endTs); end.setHours(0,0,0,0);
+        if (cur > end) return 0;
+        while (cur <= end) {
+            let dayOfWeek = cur.getDay(); let dateStr = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, '0') + "-" + String(cur.getDate()).padStart(2, '0');
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !KOR_HOLIDAYS.includes(dateStr)) { count++; }
+            cur.setDate(cur.getDate() + 1);
+        }
+        return count;
+    }
+
     // 💡 두 날짜 사이의 "근무일 기준 부호 있는 이동량" — toTs가 fromTs보다 늦으면 양수, 빠르면 음수
     //    (계획 대비 시작/완료/소요 배지를 전부 같은 근무일 기준으로 맞추기 위한 함수)
     function workdayShift(fromTs, toTs) {
@@ -2072,7 +2084,6 @@ ${mailText}`;
         if (toTs > fromTs) return countWorkingDays(oneDayLater(fromTs), toTs);
         return -countWorkingDays(oneDayLater(toTs), fromTs);
     }
-        return count;
 
     // ════════════════════════════════════════════════════════════
     // 📌 일정 계산 규칙 (MS Project 방식: Auto ↔ Manual 자동 전환)
