@@ -12765,7 +12765,7 @@ window.importAddressFromDrive = async function() {
 
     try {
         const url = 'https://www.googleapis.com/drive/v3/files/' + ADDR_SHEET_FILE_ID
-    + '/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&supportsAllDrives=true';
+    + '?alt=media&supportsAllDrives=true';
         const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + tokenObj.access_token } });
         if (!res.ok) {
             let detail = '';
