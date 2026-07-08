@@ -2304,8 +2304,9 @@ ${mailText}`;
             }
             if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
             if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30); 
-            let totalDuration = chartMaxTs - chartMinTs; let padding = totalDuration * 0.05; if (padding === 0) padding = 86400000 * 7; 
-            window.ganttViewStartTs = chartMinTs - padding; window.ganttViewDuration = (chartMaxTs + padding) - window.ganttViewStartTs;
+            // 💡 여백 없이 프로젝트 실제 시작일~종료일 그대로를 축 범위로 사용
+            window.ganttViewStartTs = chartMinTs;
+            window.ganttViewDuration = Math.max(chartMaxTs - chartMinTs, 86400000 * 7); // 기간이 너무 짧으면 최소 7일 확보
 
             renderTable(globalData); applyFilters();
             window.pushUndoSnapshot();
@@ -5716,35 +5717,44 @@ window.handleAuthClick = function() {
         if (isExpanded) {
             const viewStart = new Date(viewStartTs);
             const viewEnd   = new Date(viewStartTs + viewDuration);
-            let cur = new Date(viewStart.getFullYear(), viewStart.getMonth(), 1);
             const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            while (cur <= viewEnd) {
+            const mLbl = (d) => `${months[d.getMonth()]} '${d.getFullYear().toString().slice(2)}`;
+            let ticks = [];
+            ticks.push({ pct: 0, lbl: mLbl(viewStart) });
+            let cur = new Date(viewStart.getFullYear(), viewStart.getMonth() + 1, 1);
+            while (cur < viewEnd) {
                 let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
-                if (pct >= 0 && pct <= 101) {
-                    let yr = cur.getFullYear().toString().slice(2);
-                    let lbl = `${months[cur.getMonth()]} '${yr}`;
-                    labelHTML += `<span class="chart-label" style="position:absolute; left:${pct}%; transform:translateX(-50%); white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold; color:#495057;">${lbl}</span>`;
-                }
+                if (pct > 1.5 && pct < 98.5) ticks.push({ pct, lbl: mLbl(cur) });
                 cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
             }
+            ticks.push({ pct: 100, lbl: mLbl(viewEnd) });
+
+            ticks.forEach((t, idx) => {
+                let transform = 'translateX(-50%)';
+                if (idx === 0) transform = 'translateX(0%)';
+                else if (idx === ticks.length - 1) transform = 'translateX(-100%)';
+                labelHTML += `<span class="chart-label" style="position:absolute; left:${t.pct}%; transform:${transform}; white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold; color:#495057;">${t.lbl}</span>`;
+            });
         } else {
             const viewStart = new Date(viewStartTs);
             const viewEnd   = new Date(viewStartTs + viewDuration);
             const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-            // 💡 뷰 시작월이 속한 분기의 첫 달부터 3개월 간격으로 눈금 생성
-            let startMonth = viewStart.getMonth() - (viewStart.getMonth() % 3);
-            let cur = new Date(viewStart.getFullYear(), startMonth, 1);
+            const mLbl = (d) => `${months[d.getMonth()]} '${d.getFullYear().toString().slice(2)}`;
             let ticks = [];
-            while (cur <= viewEnd) {
+            // 💡 맨 앞 = 프로젝트 시작월(0%) 고정
+            ticks.push({ pct: 0, lbl: mLbl(viewStart) });
+            // 중간 눈금: 시작월 다음 분기부터 3개월 간격 (양 끝과 너무 가까우면 겹치니 건너뜀)
+            let cur = new Date(viewStart.getFullYear(), viewStart.getMonth() + 3, 1);
+            while (cur < viewEnd) {
                 let pct = ((cur.getTime() - viewStartTs) / viewDuration) * 100;
-                if (pct >= -1 && pct <= 101) {
-                    let yr = cur.getFullYear().toString().slice(2);
-                    ticks.push({ pct: Math.max(0, Math.min(100, pct)), lbl: `${months[cur.getMonth()]} '${yr}` });
-                }
+                if (pct > 4 && pct < 96) ticks.push({ pct, lbl: mLbl(cur) });
                 cur = new Date(cur.getFullYear(), cur.getMonth() + 3, 1);
             }
+            // 💡 맨 뒤 = 프로젝트 종료월(100%) 고정
+            ticks.push({ pct: 100, lbl: mLbl(viewEnd) });
+
             ticks.forEach((t, idx) => {
-                // 맨 앞/맨 뒤 라벨은 안쪽으로 정렬해서 잘리지 않게, 중간은 기존처럼 중앙정렬
+                // 맨 앞/맨 뒤 라벨은 안쪽으로 정렬해서 잘리지 않게, 중간은 중앙정렬
                 let transform = 'translateX(-50%)';
                 if (idx === 0) transform = 'translateX(0%)';
                 else if (idx === ticks.length - 1) transform = 'translateX(-100%)';
