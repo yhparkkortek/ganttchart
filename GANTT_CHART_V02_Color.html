@@ -1781,6 +1781,24 @@ ${mailText}`;
     //    비어있는 값은 건너뛰기 때문에, 새 프로젝트 시작 시 기존 값이 그대로 남는 문제를 방지)
     window.clearAllTabFields = function() {
         document.querySelectorAll('#tab-summary input, #tab-summary textarea').forEach(function(el) { el.value = ''; });
+        // 💡 프로젝트 멤버-1,2의 담당자 라벨(sum-*-label)은 자유롭게 수정할 수 있지만,
+        //    새 프로젝트를 시작할 때는 항상 아래 기본 라벨로 복원되어야 한다.
+        var defaultMemberLabels = {
+            'sum-pm-label': '프로젝트 담당자',
+            'sum-mech-label': '기구 담당자',
+            'sum-hw-label': 'H/W 담당자',
+            'sum-fw-label': 'F/W 담당자',
+            'sum-module-label': 'BLU 담당자',
+            'sum-tsp-label': 'TSP 담당자',
+            'sum-lcm-label': 'LCM 담당자',
+            'sum-slimming-label': 'Slimming 담당자',
+            'sum-cutting-label': 'Cutting 담당자',
+            'sum-tooling-label': 'Tooling 담당자'
+        };
+        Object.keys(defaultMemberLabels).forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.value = defaultMemberLabels[id];
+        });
         ['briefspec-body', 'address-table-body', 'mctable-body'].forEach(function(id) {
             const el = document.getElementById(id); if (el) el.innerHTML = '';
         });
@@ -1789,6 +1807,16 @@ ${mailText}`;
 
     window.saveToGoogleDrive = async function() {
         try {
+            // 💡 저장(=프로젝트 등록/파일 생성) 전에 Summary 탭의 필수 정보가 입력되어 있는지 검증한다.
+            //    비어 있으면 "All_All_All" 같은 의미 없는 파일명으로 저장되므로 여기서 막는다.
+            if (window.collectTabData) window.collectTabData();
+            const requiredInfoError = window.validateRequiredProjectInfo ? window.validateRequiredProjectInfo() : '';
+            if (requiredInfoError) {
+                alert(requiredInfoError);
+                if (window.switchTab) window.switchTab('summary');
+                return;
+            }
+
             const hasGanttData = globalData && globalData.length > 1;
             let hasConceptData = false;
             if (!hasGanttData) {
@@ -4458,6 +4486,19 @@ window.deleteHistoryByDateRange = function() {
         const digits = afterGt.slice(3, 6);
         if (digits.length < 2) return '';
         return digits.slice(0, -1) + '.' + digits.slice(-1);
+    };
+
+    // 💡 저장(=파일 생성) 전 필수 검증: 파일명 조립에 쓰이는 Summary 항목이 비어 있으면
+    //    "All_All_All" 같은 의미 없는 파일명으로 저장되는 것을 막는다.
+    window.validateRequiredProjectInfo = function() {
+        const pm = window.projectMeta || {};
+        const missing = [];
+        if (!String(pm.고객사 || '').trim()) missing.push('고객사');
+        if (!String(pm.고객모델명 || '').trim()) missing.push('고객 모델명');
+        if (!String(pm.KTK모델명 || '').trim()) missing.push('KTK PN_모델명');
+        if (!String(pm.프로젝트담당자 || '').trim()) missing.push('프로젝트 담당자');
+        if (missing.length === 0) return '';
+        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
     };
 
     window.updatePrintTitle = function() {
