@@ -3318,9 +3318,9 @@ ${mailText}`;
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
         const ganttFooterDiv = document.createElement('div');
-        ganttFooterDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:6px; color:#888; font-family:"Malgun Gothic",sans-serif;';
-        ganttFooterDiv.innerHTML = '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
-            + '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+        ganttFooterDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:6px; color:#000; font-family:"Malgun Gothic",sans-serif;';
+        ganttFooterDiv.innerHTML = '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
+            + '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>';
         printArea.appendChild(ganttFooterDiv);
 
         document.body.classList.add('gantt-printing-mode');
@@ -3377,9 +3377,9 @@ ${mailText}`;
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
         const footerDiv = document.createElement('div');
-        footerDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:13px; color:#888; font-family:"Malgun Gothic",sans-serif;';
-        footerDiv.innerHTML = '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
-            + '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+        footerDiv.style.cssText = 'display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box; margin-top:2px; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif;';
+        footerDiv.innerHTML = '<span>' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
+            + '<span>ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>';
         clone.appendChild(footerDiv);
 
         printArea.appendChild(clone);
