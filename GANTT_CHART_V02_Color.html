@@ -2475,9 +2475,48 @@ ${mailText}`;
         }
     };
 
-    // ─── 행 다중 선택 (No. 칸 Ctrl/Shift 클릭) ───────────────────
+    // ─── 행 다중 선택 (No. 칸 Ctrl/Shift 클릭 + 테이블 전역 Ctrl/Shift 클릭) ───────────────────
     window._selectedRows = new Set();
     window._selAnchor = null;
+
+    // 💡 어느 셀에서든 Ctrl/Shift+클릭하면 그 행이 선택되도록 위임(delegation) 처리.
+    //    캡처 단계에서 가로채서, Ctrl/Shift가 눌리지 않은 "일반 클릭"은 절대 건드리지 않고 그대로 통과시킴.
+    //    (달력 열기·상태변경·편집 진입 등 각 셀 고유 동작에 전혀 영향 없음)
+    (function bindRowSelectDelegation() {
+        const tbody = document.getElementById('table-body');
+        if (!tbody || tbody._rowSelectDelegationBound) return;
+        tbody._rowSelectDelegationBound = true;
+        tbody.addEventListener('click', function(ev) {
+            if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) return; // 일반 클릭은 그대로 통과
+            const target = ev.target;
+            // 📌 알림 / 🔒 잠금 아이콘은 이미 자체 Ctrl/Shift 선택 로직이 있으므로 건드리지 않음
+            const ownOnclick = target.getAttribute && target.getAttribute('onclick');
+            if (ownOnclick && (ownOnclick.indexOf('wrToggleAlarm') !== -1 || ownOnclick.indexOf('wrToggleScheduleLock') !== -1)) return;
+            // No열은 기존 onRowNoClick이 전담 (팝업 메뉴까지 여는 추가 동작이 있어 그대로 둠)
+            if (target.closest('.no-td')) return;
+
+            const tr = target.closest('tr[data-row-index]');
+            if (!tr) return;
+            const i = parseInt(tr.getAttribute('data-row-index'), 10);
+            if (isNaN(i)) return;
+
+            ev.preventDefault();
+            ev.stopPropagation();
+            if (window.getSelection) window.getSelection().removeAllRanges();
+
+            if (!window._selectedRows) window._selectedRows = new Set();
+            const sel = window._selectedRows;
+            if (ev.shiftKey && window._selAnchor != null) {
+                sel.clear();
+                const a = Math.min(window._selAnchor, i), b = Math.max(window._selAnchor, i);
+                for (let k = a; k <= b; k++) sel.add(k);
+            } else {
+                if (sel.has(i)) sel.delete(i); else sel.add(i);
+                window._selAnchor = i;
+            }
+            if (window.paintRowSelection) window.paintRowSelection();
+        }, true); // 캡처 단계 — 셀 자체의 onclick(달력·드롭다운 등)보다 먼저 실행되어야 충돌 없이 가로챌 수 있음
+    })();
 
     window.paintRowSelection = function() {
         document.querySelectorAll('tr.multi-selected').forEach(tr => tr.classList.remove('multi-selected'));
