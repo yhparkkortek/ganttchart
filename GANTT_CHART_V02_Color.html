@@ -26,8 +26,8 @@
         --trans-text: #0056b3; 
 
         --w-no: 45px;        /* No 열 */
-        --w-date: 45px;       /* 시작일, 완료일 열 */
-        --w-period: 60px;     /* 소요(일) 열 */
+        --w-date: 58px;       /* 시작일, 완료일 열 */
+        --w-period: 34px;     /* 소요(일) 열 */
         --w-wbs: 300px;       /* 개발업무(WBS) 열 */
         --w-detail: 900px;    /* 업무 상세내용 열 */
         --w-chart: 400px;     /* 현황(간트 그래프) 열 */
@@ -2800,14 +2800,14 @@ ${mailText}`;
         const rows = {};
         for (let i = 1; i < globalData.length; i++) {
             const row = globalData[i]; if (!row || !row._calcStartTs) continue;
-            rows[getTaskKey(row)] = row._calcStartTs;
+            rows[getTaskKey(row)] = { s: row._calcStartTs, e: row._calcPlanTs || null };
         }
 
         const baseline = { id: 'bl_' + Date.now(), label: (label || defaultLabel).trim(), savedAt: Date.now(), rows: rows };
         window._scheduleBaselines.push(baseline);
         persistScheduleBaselines();
         window.renderBaselineMenu();
-        alert(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일을 저장했습니다.`);
+        alert(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일·완료일을 저장했습니다.`);
     };
 
     window.setActiveBaseline = function(id) {
@@ -2820,8 +2820,18 @@ ${mailText}`;
         if (!window._activeBaselineId || !row) return null;
         const bl = window._scheduleBaselines.find(b => b.id === window._activeBaselineId);
         if (!bl) return null;
-        const ts = bl.rows[getTaskKey(row)];
-        return ts || null;
+        const val = bl.rows[getTaskKey(row)];
+        if (val == null) return null;
+        return (typeof val === 'object') ? (val.s || null) : val; // 구버전(숫자만 저장) 호환
+    };
+
+    window.getBaselineEndTs = function(row) {
+        if (!window._activeBaselineId || !row) return null;
+        const bl = window._scheduleBaselines.find(b => b.id === window._activeBaselineId);
+        if (!bl) return null;
+        const val = bl.rows[getTaskKey(row)];
+        if (val == null || typeof val !== 'object') return null; // 구버전은 완료일 정보 없음
+        return val.e || null;
     };
 
     window.deleteScheduleBaseline = function(id) {
@@ -4541,7 +4551,7 @@ window.deleteHistoryByDateRange = function() {
                } else if (colStr.includes("상태")) {
                     continue; // 💡 "상태"는 소요일~개발업무 사이에서 이미 렌더링했으므로 원래 자리에서는 건너뜀
                 } else if (["시작", "완료", "기간", "view", "보고"].some(k => colStr.includes(k))) {
-                    tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'};`;
+                    tdStyle = `text-align: center; white-space: nowrap; font-weight: ${row._level === 0 ? 'bold' : 'normal'}; font-size: calc(var(--table-font-size) - 2px);`;
                     tdAttrs += ` class="date-td"`;
                 } else {
                     tdStyle = "text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;";
@@ -4551,12 +4561,30 @@ window.deleteHistoryByDateRange = function() {
                     if (cellIndex === colIdx.start) { 
                         let tsArg = row._calcStartTs || new Date().getTime();
                         let displayDate = row._calcStartTs ? formatTableDate(row._calcStartTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
-                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
+                        let startBadge = '';
+                        const baselineStartTs = window.getBaselineStartTs ? window.getBaselineStartTs(row) : null;
+                        if (baselineStartTs && row._calcStartTs) {
+                            const diffDays = Math.round((row._calcStartTs - baselineStartTs) / 86400000);
+                            if (diffDays !== 0) {
+                                const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
+                                startBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                            }
+                        }
+                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${startBadge}`;
                     } 
                     else if (cellIndex === colIdx.plan) { 
                         let tsArg = row._calcPlanTs || new Date().getTime();
                         let displayDate = row._calcPlanTs ? formatTableDate(row._calcPlanTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
-                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>`;
+                        let planBadge = '';
+                        const baselineEndTs = window.getBaselineEndTs ? window.getBaselineEndTs(row) : null;
+                        if (baselineEndTs && row._calcPlanTs) {
+                            const diffDays = Math.round((row._calcPlanTs - baselineEndTs) / 86400000);
+                            if (diffDays !== 0) {
+                                const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
+                                planBadge = `<span title="계획 대비 완료일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                            }
+                        }
+                        tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${planBadge}`;
                         bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시
@@ -4571,15 +4599,17 @@ window.deleteHistoryByDateRange = function() {
                                 : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 7.75-1.5"></path></svg>';
                             const lockIcon = `<span onclick="window.wrToggleScheduleLock(${i}, event); event.stopPropagation();" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}" style="display:inline-flex; cursor:pointer; margin-left:3px; vertical-align:middle; color:${isLocked ? '#333' : '#adb5bd'};">${lockSvg}</span>`;
                             let baselineBadge = '';
-                            const baselineStartTs = window.getBaselineStartTs ? window.getBaselineStartTs(row) : null;
-                            if (baselineStartTs && row._calcStartTs) {
-                                const diffDays = Math.round((row._calcStartTs - baselineStartTs) / 86400000);
-                                if (diffDays !== 0) {
-                                    const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
-                                    baselineBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                            const baselineStartTsForDur = window.getBaselineStartTs ? window.getBaselineStartTs(row) : null;
+                            const baselineEndTsForDur = window.getBaselineEndTs ? window.getBaselineEndTs(row) : null;
+                            if (baselineStartTsForDur && baselineEndTsForDur) {
+                                const baselineDur = countWorkingDays(baselineStartTsForDur, baselineEndTsForDur);
+                                const diffDur = calcDays - baselineDur;
+                                if (diffDur !== 0) {
+                                    const badgeColor = diffDur > 0 ? '#e03131' : '#1971c2';
+                                    baselineBadge = `<span title="계획 대비 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDur > 0 ? '▲' : '▼'}${Math.abs(diffDur)}</span>`;
                                 }
                             }
-                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
+                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap; font-size: calc(var(--table-font-size) - 2px);" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
                         }
                         if (colIdx.status !== -1) {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
