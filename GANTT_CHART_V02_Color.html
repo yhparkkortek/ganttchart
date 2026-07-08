@@ -2141,11 +2141,7 @@ ${mailText}`;
 
                 if (row._level === 0 || row._startForced || !hasDuration) row._explicitStartTs = parsedStartTs; else row._explicitStartTs = null;
                 if (row._level === 0 || row._planForced || !hasDuration) row._explicitPlanTs = parsedPlanTs; else row._explicitPlanTs = null;
-                if (row._explicitStartTs && row._explicitPlanTs && row._explicitPlanTs < row._explicitStartTs) {
-                    row._explicitPlanTs = row._explicitStartTs;
-                    if (colIdx.plan !== -1) row[colIdx.plan] = formatTsToYMD(row._explicitPlanTs);
-                }
-                
+                                
                 if (row._explicitStartTs) {
                     if (fileGlobalStartTs === null || row._explicitStartTs < fileGlobalStartTs) {
                         fileGlobalStartTs = row._explicitStartTs;
@@ -3832,21 +3828,6 @@ window.deleteHistoryByDateRange = function() {
         if (window.currentCalendarRow !== undefined && window.currentCalendarCol !== undefined && window.currentCalendarRow !== null) {
             let r = window.currentCalendarRow; let c = window.currentCalendarCol;
             let selectedTs = new Date(y, m, d).setHours(0,0,0,0);
-
-            if (c === colIdx.plan && colIdx.start !== -1) {
-                let startTs = globalData[r]._calcStartTs;
-                if (startTs && selectedTs < startTs) {
-                    alert(`⚠️ 완료일(${str})이 시작일(${formatTableDate(startTs)})보다 빠를 수 없습니다.`);
-                    return;
-                }
-            }
-            if (c === colIdx.start && colIdx.plan !== -1) {
-                let planTs = globalData[r]._calcPlanTs;
-                if (planTs && selectedTs > planTs) {
-                    alert(`⚠️ 시작일(${str})이 완료일(${formatTableDate(planTs)})보다 늦을 수 없습니다.`);
-                    return;
-                }
-            }
 
             let oldVal = globalData[r][c] || "";
             logChange(r, c, oldVal, str);
