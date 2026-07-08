@@ -2549,6 +2549,54 @@ ${mailText}`;
         }
     };
 
+    // 행별 일정 모드(자동↔고정) 토글. Ctrl/Shift는 선택만, 일반 클릭은 토글(선택된 행 있으면 일괄 적용)
+    window.wrToggleScheduleLock = function(rowIndex, ev) {
+        if (ev) ev.stopPropagation();
+        const row = globalData[rowIndex];
+        if (!row) return;
+
+        if (ev && (ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
+            if (!window._selectedRows) window._selectedRows = new Set();
+            const sel = window._selectedRows;
+            if (ev.shiftKey && window._selAnchor != null) {
+                sel.clear();
+                const a = Math.min(window._selAnchor, rowIndex), b = Math.max(window._selAnchor, rowIndex);
+                for (let k = a; k <= b; k++) sel.add(k);
+            } else {
+                if (sel.has(rowIndex)) sel.delete(rowIndex); else sel.add(rowIndex);
+                window._selAnchor = rowIndex;
+            }
+            if (window.paintRowSelection) window.paintRowSelection();
+            return;
+        }
+
+        const isBulk = window._selectedRows && window._selectedRows.size > 1 && window._selectedRows.has(rowIndex);
+        const wasLocked = !!(row._startForced && row._planForced);
+        const toLocked = !wasLocked; // 클릭한 행 기준으로 반대 상태로 전환
+
+        function applyMode(r) {
+            if (toLocked) {
+                if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
+                if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
+                r._startForced = true; r._planForced = true;
+            } else {
+                if (colIdx.start !== -1) r[colIdx.start] = "";
+                if (colIdx.plan  !== -1) r[colIdx.plan]  = "";
+                r._startForced = false; r._planForced = false;
+            }
+        }
+
+        if (isBulk) {
+            window._selectedRows.forEach(idx => { const r = globalData[idx]; if (r) applyMode(r); });
+            logChange(rowIndex, -1, '일정 모드', (toLocked ? '일괄 고정' : '일괄 자동') + ` (${window._selectedRows.size}건)`);
+        } else {
+            applyMode(row);
+            logChange(rowIndex, -1, '일정 모드', toLocked ? '고정' : '자동');
+        }
+
+        window.recalculateSchedules();
+    };
+
     window.onRowNoClick = function(td, i, ev) {
         if (window.getSelection) window.getSelection().removeAllRanges();   // shift 클릭 시 글자 파랗게 선택되는 것 방지
         if (!window._selectedRows) window._selectedRows = new Set();
@@ -4231,10 +4279,13 @@ window.deleteHistoryByDateRange = function() {
                     const alarmStyle = alarmOn
                         ? 'opacity:1; filter:grayscale(1) sepia(1) saturate(6) hue-rotate(180deg) brightness(0.9); transform:scale(1.3);'
                         : 'opacity:0.35; transform:scale(1.0);';
+                    const isLocked = !!(row._startForced && row._planForced);
                     tdHtml = `
                         <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative;">
                             <span onclick="window.wrToggleAlarm(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)' : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'}"
                                 style="font-size:13px; cursor:pointer; flex-shrink:0; ${alarmStyle}">📌</span>
+                            <span onclick="window.wrToggleScheduleLock(${i}, event)" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}"
+                                style="font-size:12px; cursor:pointer; flex-shrink:0; opacity:${isLocked ? '1' : '0.4'};">${isLocked ? '🔒' : '🔓'}</span>
                             <span class="row-num-span"></span>
                         </div>`;
                } else if (colStr.includes("상세") || colStr.includes("내용") || colStr.includes("답변") || colStr.includes("대응") || colStr === "현황") {
@@ -4263,7 +4314,11 @@ window.deleteHistoryByDateRange = function() {
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시
                             let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
-                            bodyHtml += `<td class="period-td" style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
+                            const periodEditable = colIdx.period !== -1;
+                            const periodAttrs = periodEditable
+                                ? ` data-raw="${encodeURIComponent(String(calcDays))}" ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${colIdx.period})" title="더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)"`
+                                : '';
+                            bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;">${calcDays}</td>`;
                         }
                         if (colIdx.status !== -1) {
                             // 💡 "상태" — 소요일 다음, 개발업무(WBS) 앞에 표시
