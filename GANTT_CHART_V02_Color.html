@@ -2773,12 +2773,8 @@ ${mailText}`;
     window.renderBaselineMenu = function() {
         const popup = document.getElementById('baseline-popup');
         if (!popup) return;
-        let html = `<div style="font-size:11px; font-weight:bold; color:#495057; padding:2px 6px 6px;">📐 계획(기준선)</div>`;
-        html += `<div onclick="window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
+        let html = `<div onclick="window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
         html += `<div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>`;
-
-        const offSelected = !window._activeBaselineId;
-        html += `<div onclick="window.setActiveBaseline(''); window.renderBaselineMenu();" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; ${offSelected ? 'background:#e7f5ff; font-weight:bold;' : ''}">${offSelected ? '✅' : '　'} 비교 끔</div>`;
 
         if (window._scheduleBaselines.length === 0) {
             html += `<div style="padding:8px; font-size:11px; color:#adb5bd;">저장된 계획이 없습니다</div>`;
@@ -2787,7 +2783,7 @@ ${mailText}`;
                 const isActive = window._activeBaselineId === bl.id;
                 const dateStr = new Date(bl.savedAt).toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
                 html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:4px; ${isActive ? 'background:#e7f5ff;' : ''}">
-                    <span onclick="window.setActiveBaseline('${bl.id}'); window.renderBaselineMenu();" style="cursor:pointer; font-size:12px; flex:1; ${isActive ? 'font-weight:bold;' : ''}" title="${escapeHtml(bl.label)}">${isActive ? '✅' : '　'} ${escapeHtml(bl.label)} <span style="color:#adb5bd; font-size:10px;">(${dateStr})</span></span>
+                    <span onclick="window.setActiveBaseline(${isActive ? "''" : `'${bl.id}'`}); window.renderBaselineMenu();" style="cursor:pointer; font-size:12px; flex:1; ${isActive ? 'font-weight:bold;' : ''}" title="${isActive ? '다시 클릭하면 비교가 꺼집니다' : escapeHtml(bl.label)}">${isActive ? '✅' : '　'} ${escapeHtml(bl.label)} <span style="color:#adb5bd; font-size:10px;">(${dateStr})</span></span>
                     <span onclick="window.deleteScheduleBaseline('${bl.id}')" title="이 계획 삭제" style="cursor:pointer; color:#e03131; font-size:12px; margin-left:6px;">🗑️</span>
                 </div>`;
             });
@@ -4473,7 +4469,7 @@ window.deleteHistoryByDateRange = function() {
                 const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
                 const headerLockSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
-                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); font-size: 10.5px; white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="전체 고정 / 전체 자동 전환 (전체 업무 대상, 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="전체 고정 / 전체 자동 전환 (전체 업무 대상, 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);">${wbsLabel}</th>`;
             }
@@ -4580,7 +4576,7 @@ window.deleteHistoryByDateRange = function() {
                                 const diffDays = Math.round((row._calcStartTs - baselineStartTs) / 86400000);
                                 if (diffDays !== 0) {
                                     const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
-                                    baselineBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="display:inline; font-size:6px; color:${badgeColor}; font-weight:bold; margin-left:1px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                                    baselineBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '일 지연' : (-diffDays) + '일 단축'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                                 }
                             }
                             bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap;" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
