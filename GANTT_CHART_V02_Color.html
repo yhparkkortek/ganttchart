@@ -3990,6 +3990,12 @@ window.deleteHistoryByDateRange = function() {
             }
             if (colIndex === colIdx.period || colIndex === colIdx.dur1 || colIndex === colIdx.dur2 || colIndex === colIdx.dur3 || colIndex === colIdx.dur4) {
                 globalData[rowIndex]._planForced = false; if (colIdx.plan !== -1) globalData[rowIndex][colIdx.plan] = "";
+                // 💡 편집한 칸이 실제로 반영되도록, 같은 행의 다른 레벨별 숨겨진 소요일 칸(dur1~4)도 함께 비움
+                //    (레벨별 dur 칸이 화면의 period 칸보다 우선순위가 높아 남아있으면 편집이 무시됨)
+                if (colIdx.dur1 !== -1 && colIndex !== colIdx.dur1) globalData[rowIndex][colIdx.dur1] = "";
+                if (colIdx.dur2 !== -1 && colIndex !== colIdx.dur2) globalData[rowIndex][colIdx.dur2] = "";
+                if (colIdx.dur3 !== -1 && colIndex !== colIdx.dur3) globalData[rowIndex][colIdx.dur3] = "";
+                if (colIdx.dur4 !== -1 && colIndex !== colIdx.dur4) globalData[rowIndex][colIdx.dur4] = "";
             }
 
             td.setAttribute('data-raw', encodeURIComponent(newText));
