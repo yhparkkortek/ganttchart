@@ -12765,9 +12765,13 @@ window.importAddressFromDrive = async function() {
 
     try {
         const url = 'https://www.googleapis.com/drive/v3/files/' + ADDR_SHEET_FILE_ID
-            + '/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+    + '/export?mimeType=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet&supportsAllDrives=true';
         const res = await fetch(url, { headers: { 'Authorization': 'Bearer ' + tokenObj.access_token } });
-        if (!res.ok) throw new Error('HTTP ' + res.status + ' (드라이브 파일 접근 권한을 확인해주세요)');
+        if (!res.ok) {
+            let detail = '';
+            try { const errJson = await res.json(); detail = errJson?.error?.message || ''; } catch(e) {}
+            throw new Error('HTTP ' + res.status + (detail ? ' - ' + detail : '') + ' (드라이브 파일 접근 권한을 확인해주세요)');
+        }
         const buf = await res.arrayBuffer();
         window._applyAddressWorkbookBuffer(buf, '구글 드라이브 주소록');
     } catch (err) {
