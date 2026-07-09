@@ -2835,7 +2835,7 @@ ${mailText}`;
         const popup = document.getElementById('baseline-popup');
         if (!popup) return;
         let html = `<div onclick="window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
-        html += `<div style="padding:2px 8px 4px; font-size:10px; color:#adb5bd;">최대 2개까지 골라 비교할 수 있어요 (A: 회색 · B: 청록색)</div>`;
+        html += `<div style="padding:2px 8px 4px; font-size:10px; color:#adb5bd;">최대 2개까지 비교할 수 있어요 (A: 회색 · B: 청록색)</div>`;
         html += `<div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>`;
 
         const q = window._compareQueue || [];
