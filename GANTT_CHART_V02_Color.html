@@ -7401,6 +7401,16 @@ window.openTaskInbox = function() {
     window.renderTaskInbox();
     document.getElementById('task-inbox-overlay').style.display = 'flex';
     window.bringModalToFront('task-inbox-overlay');
+    setTimeout(function() {
+        const modalEl = document.getElementById('task-inbox-modal');
+        const closeHandler = function(e) {
+            if (modalEl && !modalEl.contains(e.target)) {
+                window.closeTaskInbox();
+                document.removeEventListener('click', closeHandler);
+            }
+        };
+        document.addEventListener('click', closeHandler);
+    }, 0);
 };
 window.closeTaskInbox = function() {
     document.getElementById('task-inbox-overlay').style.display = 'none';
