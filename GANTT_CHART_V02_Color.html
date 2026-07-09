@@ -819,8 +819,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <button id="alarm-modal-send-btn" class="action-btn"
       style="border-color:#2c5f8a; color:#2c5f8a;"
       onclick="window.sendSingleAlarm(false)">📧 즉시 발송</button>
-    <button onclick="window.closeAlarmModal()"
-      style="padding:6px 16px; border:1px solid #ccc; border-radius:4px; background:#f8f9fa; cursor:pointer; font-size:12.5px;">닫기</button>
+    <button class="action-btn" onclick="window.closeAlarmModal()"
+      style="border-color:#ccc; color:#555; background:#f8f9fa;">닫기</button>
   </div>
 </div>
 
@@ -1316,11 +1316,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(1)">다음 ▶</button>
                 <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
             </div>
-            <button class="action-btn" onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다">📤 ics 파일로 내보내기</button>
-            <button class="action-btn" onclick="window.openCalSyncHelp()" title="설정 방법 확인 후 동기화 실행">🔗 Google 자동 동기화</button>
+            <button class="action-btn" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
             <button class="action-btn" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
-        <div class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);">
+        <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
         </div>
     </div>
@@ -1382,8 +1381,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <span>🔗 Google 자동 동기화</span>
                 <span class="history-close" onclick="window.closeCalSyncHelp()">✖</span>
             </div>
-            <div style="padding:14px 16px 0;">
-                <button class="action-btn" onclick="window.calSyncToGist()" style="width:100%; background:#2c5f8a; color:#fff;">🔗 지금 동기화 실행</button>
+            <div style="padding:14px 16px 0; display:flex; gap:8px;">
+                <button class="action-btn" onclick="window.calExportICS()" title="구글 캘린더 좌측 [다른 캘린더 +] → 가져오기에서 이 파일을 선택하면 바로 연동됩니다" style="flex:1;">📤 ICS 내보내기 (1회성)</button>
+                <button class="action-btn" onclick="window.calSyncToGist()" style="flex:1; background:#2c5f8a; color:#fff;">🔗 지금 동기화 실행 (자동)</button>
             </div>
             <div class="history-body" style="padding:16px; overflow-y:auto; font-size:12.5px; line-height:1.7; color:#333;">
                 <b>1단계. GitHub 토큰 준비 (최초 1회만)</b>
@@ -3444,7 +3444,7 @@ ${mailText}`;
                 + '<span style="display:table-cell; width:1100px; text-align:right; font-size:13px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
                 + '</td></tr>';
             footerTable.appendChild(footerTfoot);
-        } else {
+        } else if (!isCalendar) {
             const footerDiv = document.createElement('div');
             footerDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:2px; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif; page-break-inside:avoid; break-inside:avoid;';
             footerDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
@@ -3464,8 +3464,8 @@ ${mailText}`;
             // 💡 SAFETY: 실측과 실제 인쇄 렌더링 간의 미세한 오차로 경계선에서 다음 페이지로
             //    넘어가는 것을 막기 위한 여유 마진 (4%)
             const SAFETY = 0.96;
-            const pageWidthPx  = (isBriefSpec ? (297 - 20) * 96 / 25.4 : (210 - 20) * 96 / 25.4) * SAFETY;
-            const pageHeightPx = (isBriefSpec ? (210 - 20) * 96 / 25.4 : (297 - 20) * 96 / 25.4) * SAFETY;
+            const pageWidthPx  = (297 - 20) * 96 / 25.4 * SAFETY;
+            const pageHeightPx = (210 - 20) * 96 / 25.4 * SAFETY;
 
             printArea.style.position = 'fixed';
             printArea.style.left = '-99999px';
@@ -3487,6 +3487,14 @@ ${mailText}`;
 
             clone.style.width = width + 'px';
             clone.style.zoom = scale;
+
+            // 📌 안전 보정: 4회 수렴으로도 여전히 페이지를 넘으면, 실제 렌더링 높이를 다시 재서 한 번 더 줄임
+            const actualH = clone.getBoundingClientRect().height;
+            const trueTargetH = (210 - 20) * 96 / 25.4;
+            if (actualH > trueTargetH) {
+                scale = scale * (trueTargetH / actualH) * 0.98;
+                clone.style.zoom = scale;
+            }
 
             printArea.style.position = '';
             printArea.style.left = '';
@@ -3579,6 +3587,21 @@ ${mailText}`;
             // 💡 달마다 주 수(4~6주)가 달라 높이가 다르므로, 각 달 블록을 개별로 측정해서
             //    그 페이지에 맞는 배율을 따로 계산 (한 달 = 한 페이지)
             const monthBlocks = clone.querySelectorAll('.cal-month-block');
+
+            // 📌 달 블록(=페이지)마다 맨 끝에 카피라이트 푸터 추가 — 블록 전체가 페이지 높이에 맞춰
+            //    늘어나므로, 마지막 자식인 이 푸터는 자연스럽게 매 페이지 맨 아래에 위치하게 됨
+            monthBlocks.forEach(function(block) {
+                const footer = document.createElement('div');
+                footer.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:8px; font-size:11px; color:#000; font-family:"Malgun Gothic",sans-serif;';
+                footer.innerHTML = '<span style="display:table-cell; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+                    + '<span style="display:table-cell; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+                block.appendChild(footer);
+            });
+
+            // 📌 달마다 따로 배율을 정하면 내용 적은 달이 확대되어 페이지마다 글자 크기가
+            //    들쭉날쭉해짐 — 가장 내용이 많은(가장 많이 줄여야 하는) 달을 기준으로
+            //    배율을 하나만 정해서 모든 페이지에 똑같이 적용
+            let uniformScale = 1;
             monthBlocks.forEach(function(block) {
                 let width = targetW;
                 let scale = 1;
@@ -3586,11 +3609,14 @@ ${mailText}`;
                     block.style.zoom = 1;
                     block.style.width = width + 'px';
                     const h = block.scrollHeight;
-                    scale = Math.min(999, targetH / h); // 짧으면 확대도 허용
+                    scale = Math.min(1, targetH / h); // 여기선 확대 안 함 — 기준값 측정용
                     width = targetW / scale;
                 }
-                block.style.width = width + 'px';
-                block.style.zoom = scale;
+                uniformScale = Math.min(uniformScale, scale);
+            });
+            monthBlocks.forEach(function(block) {
+                block.style.width = (targetW / uniformScale) + 'px';
+                block.style.zoom = uniformScale;
             });
 
             printArea.style.position = '';
@@ -7908,9 +7934,10 @@ window.updateInboxBadge();
             left: auto !important;
         }
 
-        /* 📌 화면용 카드 박스(.concept-section)의 테두리/둥근모서리/배경은 인쇄에서 전부 제거 —
-           인쇄엔 도표(표) 내용만 남기고, 감싸는 박스는 안 보이게 함 */
-        #tab-print-area .concept-section {
+        /* 📌 화면용 카드 박스(.concept-section)의 테두리/둥근모서리/배경은 인쇄에서 제거 —
+           알람/주소록만 해당. Summary 등 다른 탭은 개별 섹션 박스가 그대로 인쇄되어야 하므로 제외 */
+        body.printing-tab-address #tab-print-area .concept-section,
+        body.printing-tab-alarm #tab-print-area .concept-section {
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
@@ -7920,11 +7947,16 @@ window.updateInboxBadge();
         /* ══════════════════════════════════════════════════════
            🎯 [Summary 탭 전용] 정석 세로 지정 (하단 충돌이 해제되어 정상 작동)
            ══════════════════════════════════════════════════════ */
-        body.printing-tab-summary {
-            page: summaryPortraitPage !important;
+        /* 💡 화면용 #tab-summary 선택자는 인쇄 사본(#tab-print-area)엔 적용 안 되므로 인쇄 전용으로 재선언 */
+        body.printing-tab-summary #tab-print-area th {
+            text-align: center !important;
+            vertical-align: middle !important;
         }
-        @page summaryPortraitPage { 
-            size: A4 portrait !important; 
+        body.printing-tab-summary {
+            page: summaryLandscapePage !important;
+        }
+        @page summaryLandscapePage { 
+            size: A4 landscape !important; 
             margin: 10mm !important;
         }
 
@@ -8039,14 +8071,6 @@ window.updateInboxBadge();
             vertical-align: middle !important;
         }
 
-        /* 📌 화면용 카드 박스(.concept-section)의 테두리/둥근모서리/배경은 인쇄에서 전부 제거 —
-           인쇄엔 도표(표) 내용만 남기고, 감싸는 박스는 안 보이게 함 (모든 탭 공통) */
-        #tab-print-area .concept-section {
-            border: none !important;
-            border-radius: 0 !important;
-            box-shadow: none !important;
-            background: transparent !important;
-        }
         /* 📌 tfoot(Copyright 푸터) 보호 — 알람/주소록 인쇄 사본에 박스/테두리가 새어들지 않게 차단 + 페이지마다 반복 */
         #tab-print-area tfoot { display: table-footer-group !important; }
         #tab-print-area tfoot tr,
@@ -11210,7 +11234,7 @@ async function msCallGemini(apiKey, parsed) {
         if (wrWeekLabel) wrWeekLabel.textContent = `${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)`;
 
         container.innerHTML = `
-            <div style="padding:20px 22px; border:1px solid ${BORDER_C}; border-radius:6px; background:#fff;">
+            <div style="padding:20px 22px;">
                 <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">개발 진척 현황</div>
                     <div style="padding:12px;">${wrRenderTimeline()}</div>
@@ -12748,13 +12772,16 @@ window.renderAlarmTab = async function() {
         return;
     }
 
-    const dDayLabel = (d) => {
+    window.dDayLabel = (d) => {
         if (d === 0)  return '<span style="color:#e03131; font-weight:bold;">D-Day</span>';
         if (d < 0)    return '<span style="color:#888;">D+' + Math.abs(d) + '</span>';
         if (d <= 3)   return '<span style="color:#e03131; font-weight:bold;">D-' + d + '</span>';
         if (d <= 7)   return '<span style="color:#e67e22; font-weight:bold;">D-' + d + '</span>';
         return 'D-' + d;
     };
+    // 💡 이메일 제목/본문처럼 HTML 태그 없이 순수 텍스트로 D+/D-를 표시할 때 씀
+    window.dDayPlain = (d) => (d === 0) ? 'D-Day' : (d < 0 ? 'D+' + Math.abs(d) : 'D-' + d);
+    const dDayLabel = window.dDayLabel, dDayPlain = window.dDayPlain;
 
     const sentStatus = (sentLog, diffDays, sentHidden, idx) => {
         const keys = Object.keys(sentLog);
@@ -12865,7 +12892,7 @@ window.openAlarmModal = function(idx) {
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">업무상태</td><td style="padding:6px 10px;">${item.status || '-'}</td></tr>
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">발신인</td><td style="padding:6px 10px;">${item.assignee} &nbsp; ${emailWarn(item.assigneeEmail, item.assignee)}</td></tr>
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">수신인</td><td style="padding:6px 10px;">${item.receiverStr} &nbsp; ${emailWarn(item.receiverEmail, item.receiverStr)}</td></tr>
-            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">완료 예정일</td><td style="padding:6px 10px; color:#e03131; font-weight:bold;">${item.dueStr} (D-${item.diffDays})</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">완료 예정일</td><td style="padding:6px 10px; color:#e03131; font-weight:bold;">${item.dueStr} (${dDayLabel(item.diffDays)})</td></tr>
             ${formattedContent ? `<tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">업무 내용</td><td style="padding:6px 10px; white-space:pre-wrap; font-size:12px; color:#444;">${formattedContent}</td></tr>` : ''}
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">발송 이력</td><td style="padding:6px 10px; color:#555; font-size:12px;">${sentHtml}</td></tr>
         </table>`;
@@ -12911,10 +12938,10 @@ window.sendSingleAlarm = async function(sendAll) {
     }
 
     const dDay    = item.diffDays;
-    const subject = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 D-${dDay}`;
+    const subject = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 ${dDayPlain(dDay)}`;
     const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
-  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">D-${dDay}일 (${item.dueStr})</b>입니다.</p>
+  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(dDay)}일 (${item.dueStr})</b>입니다.</p>
   <table style="border-collapse:collapse; margin:12px 0;">
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
@@ -12987,10 +13014,10 @@ window.sendAllPendingAlarms = async function() {
 
     let sentCount = 0;
     for (const item of pending) {
-        const subject = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 D-${item.diffDays}`;
+        const subject = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 ${dDayPlain(item.diffDays)}`;
         const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
-  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">D-${item.diffDays}일 (${item.dueStr})</b>입니다.</p>
+  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(item.diffDays)}일 (${item.dueStr})</b>입니다.</p>
   <table style="border-collapse:collapse; margin:12px 0;">
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
