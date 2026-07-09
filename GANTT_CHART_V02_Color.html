@@ -3373,11 +3373,13 @@ ${mailText}`;
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
-        const ganttFooterDiv = document.createElement('div');
-        ganttFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:12px; font-size:4px; color:#000; font-family:"Malgun Gothic",sans-serif; page-break-inside:avoid; break-inside:avoid;';
-        ganttFooterDiv.innerHTML = '<span style="display:table-cell; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
-            + '<span style="display:table-cell; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
-        printArea.appendChild(ganttFooterDiv);
+        // 📌 <tfoot>은 표가 여러 페이지로 나뉠 때 브라우저가 페이지마다 자동으로 반복해줌 (thead와 동일한 원리)
+        const ganttFooterTfoot = document.createElement('tfoot');
+        ganttFooterTfoot.innerHTML = '<tr><td colspan="100" style="padding-top:4px; margin:0; border:none; border-radius:0; box-shadow:none;">'
+            + '<span style="display:table-cell; width:1300px; text-align:left; font-size:8px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+            + '<span style="display:table-cell; width:1100px; text-align:right; font-size:8px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
+            + '</td></tr>';
+        tableClone.appendChild(ganttFooterTfoot);
 
         document.body.classList.add('gantt-printing-mode');
         window.print();
@@ -3432,11 +3434,23 @@ ${mailText}`;
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
-        const footerDiv = document.createElement('div');
-        footerDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:2px; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif; page-break-inside:avoid; break-inside:avoid;';
-        footerDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
-            + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
-        clone.appendChild(footerDiv);
+        // 📌 알람/주소록처럼 표 하나가 여러 페이지로 이어지는 탭은 <tfoot>으로 넣어 페이지마다 자동 반복
+        //    (그 외 탭은 기존처럼 맨 끝에 한 번만 — 1페이지로 맞추는 탭이라 반복이 필요 없음)
+        const footerTable = isRowPagedPortrait ? clone.querySelector('table') : null;
+        if (footerTable) {
+            const footerTfoot = document.createElement('tfoot');
+            footerTfoot.innerHTML = '<tr><td colspan="100" style="padding-top:2px; border:none;">'
+                + '<span style="display:table-cell; width:1300px; text-align:left; font-size:13px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+                + '<span style="display:table-cell; width:1100px; text-align:right; font-size:13px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
+                + '</td></tr>';
+            footerTable.appendChild(footerTfoot);
+        } else {
+            const footerDiv = document.createElement('div');
+            footerDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:2px; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif; page-break-inside:avoid; break-inside:avoid;';
+            footerDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+                + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+            clone.appendChild(footerDiv);
+        }
 
         printArea.appendChild(clone);
         document.body.classList.add('tab-printing-mode');
@@ -3611,18 +3625,30 @@ ${mailText}`;
             printArea.style.top = '0';
             printArea.style.display = 'block';
 
-            clone.style.zoom = 1;
-            clone.style.width = pageWidthPx + 'px';
+            // 📌 폭이 바뀌면 줄바꿈이 달라져 행 높이도 변하므로, M.C Table/캘린더와 동일하게
+            //    "폭 지정 → 실측 → 배율 재계산"을 4회 반복 수렴 (1회 측정의 오차 제거)
+            //    + 행 높이는 첫 행 하나가 아니라 tbody 전체 평균으로, tfoot(반복 푸터) 몫도 포함
+            const SAFETY = 0.96; // 경계선 오차 방지 여유 마진 (다른 탭과 동일)
+            const targetHeightPx = pageHeightPx * SAFETY;
 
             const theadEl = clone.querySelector('thead');
-            const rowEl = clone.querySelector('tbody tr');
-            const theadHeight = theadEl ? theadEl.offsetHeight : 0;
-            const rowHeight = rowEl ? rowEl.offsetHeight : 24;
+            const tbodyEl = clone.querySelector('tbody');
+            const tfootEl = clone.querySelector('tfoot');
 
-            const budget = theadHeight + TARGET_ROWS_PER_PAGE * rowHeight;
-            const scale = budget > 0 ? Math.min(1, pageHeightPx / budget) : 1;
-
-            clone.style.width = (pageWidthPx / scale) + 'px';
+            let width = pageWidthPx;
+            let scale = 1;
+            for (let i = 0; i < 4; i++) {
+                clone.style.zoom = 1;
+                clone.style.width = width + 'px';
+                const theadHeight = theadEl ? theadEl.offsetHeight : 0;
+                const tfootHeight = tfootEl ? tfootEl.offsetHeight : 0;
+                const rowCount = tbodyEl ? tbodyEl.children.length : 0;
+                const rowHeight = (tbodyEl && rowCount > 0) ? (tbodyEl.offsetHeight / rowCount) : 24;
+                const budget = theadHeight + TARGET_ROWS_PER_PAGE * rowHeight + tfootHeight;
+                scale = budget > 0 ? Math.min(1, targetHeightPx / budget) : 1;
+                width = pageWidthPx / scale;
+            }
+            clone.style.width = width + 'px';
             clone.style.zoom = scale;
 
             printArea.style.position = '';
@@ -7882,6 +7908,15 @@ window.updateInboxBadge();
             left: auto !important;
         }
 
+        /* 📌 화면용 카드 박스(.concept-section)의 테두리/둥근모서리/배경은 인쇄에서 전부 제거 —
+           인쇄엔 도표(표) 내용만 남기고, 감싸는 박스는 안 보이게 함 */
+        #tab-print-area .concept-section {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+
         /* ══════════════════════════════════════════════════════
            🎯 [Summary 탭 전용] 정석 세로 지정 (하단 충돌이 해제되어 정상 작동)
            ══════════════════════════════════════════════════════ */
@@ -8003,6 +8038,26 @@ window.updateInboxBadge();
             text-align: center !important;
             vertical-align: middle !important;
         }
+
+        /* 📌 화면용 카드 박스(.concept-section)의 테두리/둥근모서리/배경은 인쇄에서 전부 제거 —
+           인쇄엔 도표(표) 내용만 남기고, 감싸는 박스는 안 보이게 함 (모든 탭 공통) */
+        #tab-print-area .concept-section {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+        }
+        /* 📌 tfoot(Copyright 푸터) 보호 — 알람/주소록 인쇄 사본에 박스/테두리가 새어들지 않게 차단 + 페이지마다 반복 */
+        #tab-print-area tfoot { display: table-footer-group !important; }
+        #tab-print-area tfoot tr,
+        #tab-print-area tfoot td {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
     }
 
     @media print {
@@ -8035,6 +8090,19 @@ window.updateInboxBadge();
 
         /* 💡 thead가 매 페이지 위에 반복되도록 (표준 인쇄 동작) */
         #gantt-print-area thead { display: table-header-group !important; }
+        /* 📌 tfoot(Copyright 푸터)도 매 페이지 아래에 반복되도록 — M.C Table의 tfoot과 같은 표준 동작 */
+        #gantt-print-area tfoot { display: table-footer-group !important; }
+        #gantt-print-area tfoot tr,
+        #gantt-print-area tfoot td {
+            border: none !important;
+            border-radius: 0 !important;
+            box-shadow: none !important;
+            background: transparent !important;
+            margin: 0 !important;
+            padding-top: 4px !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+        }
     }
 
    
