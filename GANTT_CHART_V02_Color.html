@@ -2302,6 +2302,22 @@ ${mailText}`;
                 if (rStart && (chartMinTs === null || rStart < chartMinTs)) chartMinTs = rStart;
                 if (rEnd && (chartMaxTs === null || rEnd > chartMaxTs)) chartMaxTs = rEnd;
             }
+            // 📌 비교 중인 계획이 있으면 그 계획의 날짜도 축 범위에 포함 — 안 그러면 현재 일정 범위 밖으로
+            //    벗어난 비교 계획의 고스트바가 화면 가장자리에 눌려붙거나 안 보이게 됨
+            if (window._compareTargetId && typeof getBaselineById === 'function') {
+                const cmpBl = getBaselineById(window._compareTargetId);
+                if (cmpBl && cmpBl.rows) {
+                    Object.keys(cmpBl.rows).forEach(function(k) {
+                        const v = cmpBl.rows[k];
+                        const s = (v && typeof v === 'object') ? v.s : v;
+                        const e = (v && typeof v === 'object') ? v.e : null;
+                        if (s && (chartMinTs === null || s < chartMinTs)) chartMinTs = s;
+                        if (s && (chartMaxTs === null || s > chartMaxTs)) chartMaxTs = s;
+                        if (e && (chartMaxTs === null || e > chartMaxTs)) chartMaxTs = e;
+                        if (e && (chartMinTs === null || e < chartMinTs)) chartMinTs = e;
+                    });
+                }
+            }
             if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
             if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30); 
             // 💡 여백 없이 프로젝트 실제 시작일~종료일 그대로를 축 범위로 사용
@@ -2432,8 +2448,12 @@ ${mailText}`;
         const prev = window._undoStack[window._undoStack.length - 1];
         _restoreState(prev);
         window.recalculateSchedules();
-        window._isRestoringUndo = false;
-        window.updateUndoRedoButtons();
+        // 📌 recalculateSchedules() 내부가 setTimeout(10ms)으로 끝나므로, 그보다 늦게 풀어야
+        //    복원된 상태가 "새 작업"으로 몰래 다시 스택에 쌓이는 걸 막을 수 있음 (여러 번 undo 안 되던 원인)
+        setTimeout(function() {
+            window._isRestoringUndo = false;
+            window.updateUndoRedoButtons();
+        }, 30);
     };
 
     window.redoLastAction = function() {
@@ -2443,8 +2463,10 @@ ${mailText}`;
         window._undoStack.push(next);
         _restoreState(next);
         window.recalculateSchedules();
-        window._isRestoringUndo = false;
-        window.updateUndoRedoButtons();
+        setTimeout(function() {
+            window._isRestoringUndo = false;
+            window.updateUndoRedoButtons();
+        }, 30);
     };
 
     window.updateUndoRedoButtons = function() {
@@ -2737,7 +2759,7 @@ ${mailText}`;
     const CURRENT_BASELINE_ID = 'bl_current'; // 📌 "현재 일정" 고정 슬롯 id
 
     window._scheduleBaselines = [];
-    window._compareQueue = []; // 📐 비교 선택 큐 — 최대 2개, [A, B] 순서 (클릭 순서 FIFO)
+    window._compareTargetId = null; // 📐 비교할 계획 하나 — 항상 "현재 일정"과 대조됨
 
     function getBaselineById(id) {
         return window._scheduleBaselines.find(b => b.id === id);
@@ -2834,25 +2856,27 @@ ${mailText}`;
     window.renderBaselineMenu = function() {
         const popup = document.getElementById('baseline-popup');
         if (!popup) return;
-        let html = `<div onclick="window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
-        html += `<div style="padding:2px 8px 4px; font-size:10px; color:#adb5bd;">최대 2개까지 비교할 수 있어요 (A: 회색 · B: 청록색)</div>`;
+        let html = `<div onclick="event.stopPropagation(); window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
+        html += `<div style="padding:2px 8px 4px; font-size:10px; color:#adb5bd;">비교할 계획을 하나 클릭하세요 — 현재 일정과 대조됩니다 (선택됨: 청록색)</div>`;
         html += `<div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>`;
 
-        const q = window._compareQueue || [];
+        const targetId = window._compareTargetId;
         const list = window._scheduleBaselines.slice().sort((a, b) => (a.id === CURRENT_BASELINE_ID ? -1 : b.id === CURRENT_BASELINE_ID ? 1 : b.savedAt - a.savedAt));
 
         if (list.length === 0) {
             html += `<div style="padding:8px; font-size:11px; color:#adb5bd;">저장된 계획이 없습니다</div>`;
         } else {
             list.forEach(bl => {
-                const role = q.indexOf(bl.id); // -1: 없음, 0: A, 1: B
-                const isPinned = bl.id === CURRENT_BASELINE_ID;
+                const isPinned = bl.id === CURRENT_BASELINE_ID; // "현재 일정" — 비교 기준 자체라 선택 대상이 아님
+                const isTarget = bl.id === targetId;
                 const dateStr = new Date(bl.savedAt).toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
-                const tagStyle = role === 0 ? 'background:#868e96; color:#fff;' : role === 1 ? 'background:#0c8599; color:#fff;' : 'background:#f1f3f5; color:#adb5bd; border:1px solid #dee2e6;';
-                const tag = `<span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; font-size:10px; font-weight:bold; margin-right:6px; flex-shrink:0; ${tagStyle}">${role === 0 ? 'A' : role === 1 ? 'B' : ''}</span>`;
-                const delIcon = isPinned ? `<span style="width:12px; margin-left:6px; flex-shrink:0;"></span>` : `<span onclick="window.deleteScheduleBaseline('${bl.id}')" title="이 계획 삭제" style="cursor:pointer; color:#e03131; font-size:12px; margin-left:6px; flex-shrink:0;">🗑️</span>`;
-                html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:4px; ${role !== -1 ? 'background:#e7f5ff;' : ''}">
-                    <span onclick="window.toggleCompareSelection('${bl.id}');" style="cursor:pointer; font-size:12px; flex:1; display:flex; align-items:center; ${role !== -1 ? 'font-weight:bold;' : ''}" title="${escapeHtml(bl.label)}">${tag}${isPinned ? '📌 ' : ''}${escapeHtml(bl.label)} <span style="color:#adb5bd; font-size:10px; margin-left:4px;">(${dateStr})</span></span>
+                const dot = isTarget
+                    ? `<span style="display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:#0c8599; color:#fff; font-size:9px; margin-right:6px; flex-shrink:0;">✓</span>`
+                    : `<span style="display:inline-block; width:14px; height:14px; margin-right:6px; flex-shrink:0;"></span>`;
+                const delIcon = isPinned ? `<span style="width:12px; margin-left:6px; flex-shrink:0;"></span>` : `<span onclick="event.stopPropagation(); window.deleteScheduleBaseline('${bl.id}')" title="이 계획 삭제" style="cursor:pointer; color:#e03131; font-size:12px; margin-left:6px; flex-shrink:0;">🗑️</span>`;
+                const clickAttr = isPinned ? '' : `onclick="event.stopPropagation(); window.toggleCompareSelection('${bl.id}');"`;
+                html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:4px; ${isTarget ? 'background:#e6fcf5;' : ''}">
+                    <span ${clickAttr} style="cursor:${isPinned ? 'default' : 'pointer'}; font-size:12px; flex:1; display:flex; align-items:center; ${isTarget ? 'font-weight:bold;' : ''}" title="${escapeHtml(bl.label)}">${dot}${isPinned ? '📌 ' : ''}${escapeHtml(bl.label)} <span style="color:#adb5bd; font-size:10px; margin-left:4px;">(${dateStr})</span></span>
                     ${delIcon}
                 </div>`;
             });
@@ -2880,33 +2904,21 @@ ${mailText}`;
     };
 
     window.toggleCompareSelection = function(id) {
-        if (!window._compareQueue) window._compareQueue = [];
-        const idx = window._compareQueue.indexOf(id);
-        if (idx !== -1) {
-            window._compareQueue.splice(idx, 1); // 다시 클릭 → 선택 해제
-        } else {
-            window._compareQueue.push(id);
-            if (window._compareQueue.length > 2) window._compareQueue.shift(); // 3번째 클릭 시 A부터 밀려남
-        }
+        window._compareTargetId = (window._compareTargetId === id) ? null : id; // 다시 클릭하면 해제, 다른 걸 클릭하면 교체
         renderTable(globalData);
         applyFilters();
         window.renderBaselineMenu();
+        const popup = document.getElementById('baseline-popup');
+        if (popup) popup.style.display = 'block'; // 🔒 안전장치: 재렌더링 중 팝업이 닫히는 걸 방지
     };
 
-    // 1개 선택: 현재(live) vs 그 계획 / 2개 선택: A 계획 vs B 계획 (스냅샷끼리 비교, 현재는 배제)
+    // 선택한 계획 하나 vs 현재(live) — 그 이상도 이하도 아님
     window.getRowCompareInfo = function(row) {
-        const q = window._compareQueue || [];
-        if (!row || q.length === 0) return null;
-        if (q.length === 1) {
-            const bl = getBaselineById(q[0]);
-            const d = getBaselineRowDates(bl, row);
-            if (!bl || !d) return null;
-            return { mode: 'vsCurrent', aLabel: bl.label, aStart: d.s, aEnd: d.e, bLabel: '현재', bStart: row._calcStartTs, bEnd: row._calcPlanTs };
-        }
-        const blA = getBaselineById(q[0]), blB = getBaselineById(q[1]);
-        const dA = getBaselineRowDates(blA, row), dB = getBaselineRowDates(blB, row);
-        if (!blA || !blB || !dA || !dB) return null;
-        return { mode: 'vsPlan', aLabel: blA.label, aStart: dA.s, aEnd: dA.e, bLabel: blB.label, bStart: dB.s, bEnd: dB.e };
+        if (!row || !window._compareTargetId) return null;
+        const bl = getBaselineById(window._compareTargetId);
+        const d = getBaselineRowDates(bl, row);
+        if (!bl || !d) return null;
+        return { mode: 'vsCurrent', aLabel: bl.label, aStart: d.s, aEnd: d.e, bLabel: '현재', bStart: row._calcStartTs, bEnd: row._calcPlanTs };
     };
 
     window.deleteScheduleBaseline = function(id) {
@@ -2918,9 +2930,8 @@ ${mailText}`;
         window._scheduleBaselines = window._scheduleBaselines.filter(b => b.id !== id);
         persistScheduleBaselines();
 
-        const qIdx = (window._compareQueue || []).indexOf(id);
-        if (qIdx !== -1) {
-            window._compareQueue.splice(qIdx, 1);
+        if (window._compareTargetId === id) {
+            window._compareTargetId = null;
             renderTable(globalData);
             applyFilters();
         }
@@ -5916,24 +5927,17 @@ window.handleAuthClick = function() {
         
     let dateRangeLabel = formatTsToYMD(tsStart) + " ~ " + formatTsToYMD(tsEnd);
 
-    // 📐 계획(Baseline) 고스트바 — 1개 비교: 위쪽 회색 1겹(기존과 동일) / 2개 비교: 위쪽=A(회색), 아래쪽=B(청록색)
-    function buildGhostBarHtml(startTs, pos, color, planLabel) {
+    // 📐 계획(Baseline) 고스트바 — 선택한 계획의 시작일 위치에 청록색 1겹으로 표시
+    function buildGhostBarHtml(startTs, planLabel) {
         if (!startTs || startTs === tsStart) return '';
         const barLenTs = tsEnd - tsStart;
         const ghostEndTs = startTs + barLenTs;
         const ghostStartPct = Math.max(0, Math.min(100, ((startTs - viewStartTs) / viewDuration) * 100));
         const ghostEndPct = Math.max(0, Math.min(100, ((ghostEndTs - viewStartTs) / viewDuration) * 100));
         let ghostWidthPct = ghostEndPct - ghostStartPct; if (ghostWidthPct <= 0 && ghostEndPct > 0) ghostWidthPct = 0.5;
-        const posStyle = pos === 'bottom' ? 'bottom:0px;' : 'top:0px;';
-        return `<div style="position:absolute; ${posStyle} height:5px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, ${color}, ${color} 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px); border:1px solid ${color}; border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일: ${formatTsToYMD(startTs)}"></div>`;
+        return `<div style="position:absolute; top:0px; height:5px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(12,133,153,0.55), rgba(12,133,153,0.55) 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px); border:1px solid rgba(12,133,153,0.55); border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일: ${formatTsToYMD(startTs)}"></div>`;
     }
-    let ghostBarHtml = '';
-    if (compareInfo) {
-        ghostBarHtml += buildGhostBarHtml(compareInfo.aStart, 'top', 'rgba(120,120,120,0.55)', compareInfo.aLabel);
-        if (compareInfo.mode === 'vsPlan') {
-            ghostBarHtml += buildGhostBarHtml(compareInfo.bStart, 'bottom', 'rgba(12,133,153,0.6)', compareInfo.bLabel);
-        }
-    }
+    let ghostBarHtml = compareInfo ? buildGhostBarHtml(compareInfo.aStart, compareInfo.aLabel) : '';
 
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
                 <div style="position:relative; height:15px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
@@ -7967,6 +7971,33 @@ window.updateInboxBadge();
         @page briefspecLandscapePage {
             size: A4 landscape !important;
             margin: 10mm !important;
+        }
+        /* 📌 편집 중 드래그로 선택된 텍스트가 인쇄 시 회색(흑백 인쇄 기준)으로 같이 찍히는 것 방지 */
+        body.printing-tab-briefspec ::selection,
+        body.printing-tab-mctable ::selection {
+            background: transparent !important;
+        }
+        /* 📌 화면에서 "사용자 작성 구간" 표시용으로 쓰는 회색 배경(#eceff1, .u-input)은 인쇄에서 제거 —
+           주소록 탭과 동일한 패턴 */
+        body.printing-tab-briefspec #tab-print-area input.u-input,
+        body.printing-tab-briefspec #tab-print-area textarea.u-input,
+        body.printing-tab-mctable #tab-print-area input.u-input,
+        body.printing-tab-mctable #tab-print-area textarea.u-input {
+            background: transparent !important;
+        }
+        /* 📌 제브라 줄무늬(한 줄씩 흰색/연회색)는 화면용 선택자(#tab-briefspec/#tab-mctable)라 인쇄 사본엔
+           안 먹히므로 인쇄 전용으로 재선언 — 위 투명화 규칙 뒤에 와야 줄무늬 색이 제대로 덮어씀 */
+        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-a,
+        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-a input.u-input,
+        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-a,
+        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-a input.u-input {
+            background-color: #ffffff !important;
+        }
+        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-b,
+        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-b input.u-input,
+        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-b,
+        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-b input.u-input {
+            background-color: #efefef !important;
         }
         /* 💡 화면용 #tab-briefspec 선택자는 인쇄 사본(#tab-print-area)엔 적용 안 되므로 인쇄 전용으로 재선언 */
         body.printing-tab-briefspec #tab-print-area th {
