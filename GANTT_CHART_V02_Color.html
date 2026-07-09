@@ -1893,7 +1893,7 @@ ${mailText}`;
                 window.lastSavedLogCount = window.changeLogs.length; 
                 window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
                 alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
-                document.getElementById('file-status').textContent = `✅ 공용 저장소 백업 완료: ${dynamicFileName}`;
+                document.getElementById('file-status').textContent = `🔄 공용 저장소 백업 완료: ${dynamicFileName}`;
             } else {
                 console.error("구글 저장 실패 상세 정보:", file);
                 let errorMsg = "공유 폴더의 '편집자' 권한이 없거나 업로드 중 오류가 발생했습니다.";
@@ -1962,13 +1962,12 @@ ${mailText}`;
             listContainer.appendChild(fileBtn);
         });
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
-        window._bindDriveModalOutsideClose();
     };
 
     window.executeRestoreBackup = async function(fileId, fileName) {
         window.closeDriveModal();
         if (!confirm(`[${fileName}] 백업으로 복원하시겠습니까?\n현재 화면의 내용은 사라지고 이 백업 시점으로 되돌아갑니다.\n(공용 드라이브 파일에는 아직 저장되지 않으니, 확인 후 [저장]을 눌러야 반영됩니다)`)) return;
-        document.getElementById('file-status').textContent = `🗄 [${fileName}] 백업을 복원하는 중...`;
+        document.getElementById('file-status').textContent = `🔄 [${fileName}] 백업을 복원하는 중...`;
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
@@ -1988,7 +1987,7 @@ ${mailText}`;
                 if (window.populateTabData) window.populateTabData();
                 window.recalculateSchedules();
                 alert(`🎉 [${fileName}] 백업으로 복원되었습니다!\n확인 후 [저장] 버튼을 눌러 공용 드라이브에도 반영해주세요.`);
-                document.getElementById('file-status').textContent = `✅ 백업 복원 완료: ${fileName} (아직 저장 전)`;
+                document.getElementById('file-status').textContent = `🔄 백업 복원 완료: ${fileName} (아직 저장 전)`;
             }
         } catch (err) { alert("백업 복원 실패: " + err.message); }
     };
@@ -2037,26 +2036,11 @@ ${mailText}`;
             listContainer.appendChild(fileBtn);
         });
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
-        window._bindDriveModalOutsideClose();
     }
     
     window.closeDriveModal = function() {
         document.getElementById('drive-file-modal-overlay').style.display = 'none';
     }
-
-    // 📌 드래그 가능한 파일 창 — 바깥(다른 곳)을 클릭하면 자동으로 닫히도록 공용 헬퍼로 등록
-    window._bindDriveModalOutsideClose = function() {
-        setTimeout(function() {
-            const modalEl = document.getElementById('drive-file-modal');
-            const closeHandler = function(e) {
-                if (modalEl && !modalEl.contains(e.target)) {
-                    window.closeDriveModal();
-                    document.removeEventListener('click', closeHandler);
-                }
-            };
-            document.addEventListener('click', closeHandler);
-        }, 0);
-    };
 
     // =========================================================
     // 🛠️ 날짜 및 일정(Gantt) 코어 로직
@@ -7401,16 +7385,6 @@ window.openTaskInbox = function() {
     window.renderTaskInbox();
     document.getElementById('task-inbox-overlay').style.display = 'flex';
     window.bringModalToFront('task-inbox-overlay');
-    setTimeout(function() {
-        const modalEl = document.getElementById('task-inbox-modal');
-        const closeHandler = function(e) {
-            if (modalEl && !modalEl.contains(e.target)) {
-                window.closeTaskInbox();
-                document.removeEventListener('click', closeHandler);
-            }
-        };
-        document.addEventListener('click', closeHandler);
-    }, 0);
 };
 window.closeTaskInbox = function() {
     document.getElementById('task-inbox-overlay').style.display = 'none';
@@ -8003,27 +7977,26 @@ window.updateInboxBadge();
         body.printing-tab-mctable ::selection {
             background: transparent !important;
         }
-        /* 📌 화면에서 "사용자 작성 구간" 표시용으로 쓰는 회색 배경 및 기본 input 테두리/흰 배경은 인쇄에서 제거 —
-           TYPE2(sub)처럼 .u-input 클래스가 없는 칸도 포함해서 표 안의 모든 입력칸을 대상으로 함 */
-        body.printing-tab-briefspec #tab-print-area td input,
-        body.printing-tab-briefspec #tab-print-area td textarea,
-        body.printing-tab-mctable #tab-print-area td input,
-        body.printing-tab-mctable #tab-print-area td textarea {
+        /* 📌 화면에서 "사용자 작성 구간" 표시용으로 쓰는 회색 배경(#eceff1, .u-input)은 인쇄에서 제거 —
+           주소록 탭과 동일한 패턴 */
+        body.printing-tab-briefspec #tab-print-area input.u-input,
+        body.printing-tab-briefspec #tab-print-area textarea.u-input,
+        body.printing-tab-mctable #tab-print-area input.u-input,
+        body.printing-tab-mctable #tab-print-area textarea.u-input {
             background: transparent !important;
-            border: none !important;
         }
         /* 📌 제브라 줄무늬(한 줄씩 흰색/연회색)는 화면용 선택자(#tab-briefspec/#tab-mctable)라 인쇄 사본엔
            안 먹히므로 인쇄 전용으로 재선언 — 위 투명화 규칙 뒤에 와야 줄무늬 색이 제대로 덮어씀 */
         body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-a,
-        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-a input,
+        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-a input.u-input,
         body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-a,
-        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-a input {
+        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-a input.u-input {
             background-color: #ffffff !important;
         }
         body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-b,
-        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-b input,
+        body.printing-tab-briefspec #tab-print-area tbody tr.mc-zebra-b input.u-input,
         body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-b,
-        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-b input {
+        body.printing-tab-mctable #tab-print-area tbody tr.mc-zebra-b input.u-input {
             background-color: #efefef !important;
         }
         /* 💡 화면용 #tab-briefspec 선택자는 인쇄 사본(#tab-print-area)엔 적용 안 되므로 인쇄 전용으로 재선언 */
@@ -16071,7 +16044,6 @@ window.calRender = function() {
 
     container.innerHTML = container.innerHTML = allHtml;
 };
-
 </script>
 
 </body>
