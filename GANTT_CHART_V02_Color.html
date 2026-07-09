@@ -2734,9 +2734,34 @@ ${mailText}`;
     //    "안"에서 완전히 동일한 업무명이 반복되는 경우까지는 구분하지 못합니다.
     // ═══════════════════════════════════════════════════════
     const BASELINE_STORAGE_KEY = 'gantt_schedule_baselines';
+    const CURRENT_BASELINE_ID = 'bl_current'; // 📌 "현재 일정" 고정 슬롯 id
 
     window._scheduleBaselines = [];
-    window._activeBaselineId = null;
+    window._compareQueue = []; // 📐 비교 선택 큐 — 최대 2개, [A, B] 순서 (클릭 순서 FIFO)
+
+    function getBaselineById(id) {
+        return window._scheduleBaselines.find(b => b.id === id);
+    }
+    function getBaselineRowDates(bl, row) {
+        if (!bl || !row) return null;
+        const val = bl.rows[getTaskKey(row)];
+        if (val == null) return null;
+        return (typeof val === 'object') ? { s: val.s || null, e: val.e || null } : { s: val, e: null };
+    }
+    // 📌 "현재 일정" 고정 슬롯 — 계획 버튼 열 때마다 항상 최신 상태로 덮어씀
+    window.autoSaveCurrentSnapshot = function() {
+        if (!globalData || globalData.length <= 1) return;
+        const rows = {};
+        for (let i = 1; i < globalData.length; i++) {
+            const row = globalData[i]; if (!row || !row._calcStartTs) continue;
+            rows[getTaskKey(row)] = { s: row._calcStartTs, e: row._calcPlanTs || null };
+        }
+        const idx = window._scheduleBaselines.findIndex(b => b.id === CURRENT_BASELINE_ID);
+        const snapshot = { id: CURRENT_BASELINE_ID, label: '현재 일정', savedAt: Date.now(), rows: rows };
+        if (idx === -1) window._scheduleBaselines.push(snapshot);
+        else window._scheduleBaselines[idx] = snapshot;
+        persistScheduleBaselines();
+    };
 
     window.loadScheduleBaselines = function() {
         try { window._scheduleBaselines = JSON.parse(localStorage.getItem(BASELINE_STORAGE_KEY) || '[]'); }
@@ -2770,6 +2795,7 @@ ${mailText}`;
                 if (!popup.contains(e.target) && e.target.id !== 'baseline-menu-btn') popup.style.display = 'none';
             });
         }
+        window.autoSaveCurrentSnapshot(); // 📌 버튼 누를 때마다 "현재 일정" 슬롯 최신화
         window.renderBaselineMenu();
         const btn = document.getElementById('baseline-menu-btn');
         const rect = btn.getBoundingClientRect();
@@ -2809,17 +2835,25 @@ ${mailText}`;
         const popup = document.getElementById('baseline-popup');
         if (!popup) return;
         let html = `<div onclick="window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
+        html += `<div style="padding:2px 8px 4px; font-size:10px; color:#adb5bd;">최대 2개까지 골라 비교할 수 있어요 (A: 회색 · B: 청록색)</div>`;
         html += `<div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>`;
 
-        if (window._scheduleBaselines.length === 0) {
+        const q = window._compareQueue || [];
+        const list = window._scheduleBaselines.slice().sort((a, b) => (a.id === CURRENT_BASELINE_ID ? -1 : b.id === CURRENT_BASELINE_ID ? 1 : b.savedAt - a.savedAt));
+
+        if (list.length === 0) {
             html += `<div style="padding:8px; font-size:11px; color:#adb5bd;">저장된 계획이 없습니다</div>`;
         } else {
-            window._scheduleBaselines.forEach(bl => {
-                const isActive = window._activeBaselineId === bl.id;
+            list.forEach(bl => {
+                const role = q.indexOf(bl.id); // -1: 없음, 0: A, 1: B
+                const isPinned = bl.id === CURRENT_BASELINE_ID;
                 const dateStr = new Date(bl.savedAt).toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
-                html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:4px; ${isActive ? 'background:#e7f5ff;' : ''}">
-                    <span onclick="window.setActiveBaseline(${isActive ? "''" : `'${bl.id}'`}); window.renderBaselineMenu();" style="cursor:pointer; font-size:12px; flex:1; ${isActive ? 'font-weight:bold;' : ''}" title="${isActive ? '다시 클릭하면 비교가 꺼집니다' : escapeHtml(bl.label)}">${isActive ? '✅' : '　'} ${escapeHtml(bl.label)} <span style="color:#adb5bd; font-size:10px;">(${dateStr})</span></span>
-                    <span onclick="window.deleteScheduleBaseline('${bl.id}')" title="이 계획 삭제" style="cursor:pointer; color:#e03131; font-size:12px; margin-left:6px;">🗑️</span>
+                const tagStyle = role === 0 ? 'background:#868e96; color:#fff;' : role === 1 ? 'background:#0c8599; color:#fff;' : 'background:#f1f3f5; color:#adb5bd; border:1px solid #dee2e6;';
+                const tag = `<span style="display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; border-radius:50%; font-size:10px; font-weight:bold; margin-right:6px; flex-shrink:0; ${tagStyle}">${role === 0 ? 'A' : role === 1 ? 'B' : ''}</span>`;
+                const delIcon = isPinned ? `<span style="width:12px; margin-left:6px; flex-shrink:0;"></span>` : `<span onclick="window.deleteScheduleBaseline('${bl.id}')" title="이 계획 삭제" style="cursor:pointer; color:#e03131; font-size:12px; margin-left:6px; flex-shrink:0;">🗑️</span>`;
+                html += `<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 8px; border-radius:4px; ${role !== -1 ? 'background:#e7f5ff;' : ''}">
+                    <span onclick="window.toggleCompareSelection('${bl.id}');" style="cursor:pointer; font-size:12px; flex:1; display:flex; align-items:center; ${role !== -1 ? 'font-weight:bold;' : ''}" title="${escapeHtml(bl.label)}">${tag}${isPinned ? '📌 ' : ''}${escapeHtml(bl.label)} <span style="color:#adb5bd; font-size:10px; margin-left:4px;">(${dateStr})</span></span>
+                    ${delIcon}
                 </div>`;
             });
         }
@@ -2845,31 +2879,38 @@ ${mailText}`;
         alert(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일·완료일을 저장했습니다.`);
     };
 
-    window.setActiveBaseline = function(id) {
-        window._activeBaselineId = id || null;
+    window.toggleCompareSelection = function(id) {
+        if (!window._compareQueue) window._compareQueue = [];
+        const idx = window._compareQueue.indexOf(id);
+        if (idx !== -1) {
+            window._compareQueue.splice(idx, 1); // 다시 클릭 → 선택 해제
+        } else {
+            window._compareQueue.push(id);
+            if (window._compareQueue.length > 2) window._compareQueue.shift(); // 3번째 클릭 시 A부터 밀려남
+        }
         renderTable(globalData);
         applyFilters();
+        window.renderBaselineMenu();
     };
 
-    window.getBaselineStartTs = function(row) {
-        if (!window._activeBaselineId || !row) return null;
-        const bl = window._scheduleBaselines.find(b => b.id === window._activeBaselineId);
-        if (!bl) return null;
-        const val = bl.rows[getTaskKey(row)];
-        if (val == null) return null;
-        return (typeof val === 'object') ? (val.s || null) : val; // 구버전(숫자만 저장) 호환
-    };
-
-    window.getBaselineEndTs = function(row) {
-        if (!window._activeBaselineId || !row) return null;
-        const bl = window._scheduleBaselines.find(b => b.id === window._activeBaselineId);
-        if (!bl) return null;
-        const val = bl.rows[getTaskKey(row)];
-        if (val == null || typeof val !== 'object') return null; // 구버전은 완료일 정보 없음
-        return val.e || null;
+    // 1개 선택: 현재(live) vs 그 계획 / 2개 선택: A 계획 vs B 계획 (스냅샷끼리 비교, 현재는 배제)
+    window.getRowCompareInfo = function(row) {
+        const q = window._compareQueue || [];
+        if (!row || q.length === 0) return null;
+        if (q.length === 1) {
+            const bl = getBaselineById(q[0]);
+            const d = getBaselineRowDates(bl, row);
+            if (!bl || !d) return null;
+            return { mode: 'vsCurrent', aLabel: bl.label, aStart: d.s, aEnd: d.e, bLabel: '현재', bStart: row._calcStartTs, bEnd: row._calcPlanTs };
+        }
+        const blA = getBaselineById(q[0]), blB = getBaselineById(q[1]);
+        const dA = getBaselineRowDates(blA, row), dB = getBaselineRowDates(blB, row);
+        if (!blA || !blB || !dA || !dB) return null;
+        return { mode: 'vsPlan', aLabel: blA.label, aStart: dA.s, aEnd: dA.e, bLabel: blB.label, bStart: dB.s, bEnd: dB.e };
     };
 
     window.deleteScheduleBaseline = function(id) {
+        if (id === CURRENT_BASELINE_ID) return; // 📌 고정 슬롯은 삭제 불가
         const bl = window._scheduleBaselines.find(b => b.id === id);
         if (!bl) return;
         if (!confirm(`"${bl.label}" 계획을 삭제할까요? 되돌릴 수 없습니다.`)) return;
@@ -2877,8 +2918,9 @@ ${mailText}`;
         window._scheduleBaselines = window._scheduleBaselines.filter(b => b.id !== id);
         persistScheduleBaselines();
 
-        if (window._activeBaselineId === id) {
-            window._activeBaselineId = null;
+        const qIdx = (window._compareQueue || []).indexOf(id);
+        if (qIdx !== -1) {
+            window._compareQueue.splice(qIdx, 1);
             renderTable(globalData);
             applyFilters();
         }
@@ -4616,12 +4658,15 @@ window.deleteHistoryByDateRange = function() {
                         let tsArg = row._calcStartTs || new Date().getTime();
                         let displayDate = row._calcStartTs ? formatTableDate(row._calcStartTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
                         let startBadge = '';
-                        const baselineStartTs = window.getBaselineStartTs ? window.getBaselineStartTs(row) : null;
-                        if (baselineStartTs && row._calcStartTs) {
-                            const diffDays = workdayShift(baselineStartTs, row._calcStartTs);
+                        const cmpInfoStart = window.getRowCompareInfo ? window.getRowCompareInfo(row) : null;
+                        if (cmpInfoStart && cmpInfoStart.aStart && cmpInfoStart.bStart) {
+                            const diffDays = workdayShift(cmpInfoStart.aStart, cmpInfoStart.bStart);
                             if (diffDays !== 0) {
                                 const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
-                                startBadge = `<span title="계획 대비 시작일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                                const badgeTitle = cmpInfoStart.mode === 'vsPlan'
+                                    ? `${escapeHtml(cmpInfoStart.aLabel)} 대비 ${escapeHtml(cmpInfoStart.bLabel)} 시작일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
+                                    : `계획 대비 시작일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
+                                startBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
                         tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${startBadge}`;
@@ -4630,12 +4675,15 @@ window.deleteHistoryByDateRange = function() {
                         let tsArg = row._calcPlanTs || new Date().getTime();
                         let displayDate = row._calcPlanTs ? formatTableDate(row._calcPlanTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
                         let planBadge = '';
-                        const baselineEndTs = window.getBaselineEndTs ? window.getBaselineEndTs(row) : null;
-                        if (baselineEndTs && row._calcPlanTs) {
-                            const diffDays = workdayShift(baselineEndTs, row._calcPlanTs);
+                        const cmpInfoFinish = window.getRowCompareInfo ? window.getRowCompareInfo(row) : null;
+                        if (cmpInfoFinish && cmpInfoFinish.aEnd && cmpInfoFinish.bEnd) {
+                            const diffDays = workdayShift(cmpInfoFinish.aEnd, cmpInfoFinish.bEnd);
                             if (diffDays !== 0) {
                                 const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
-                                planBadge = `<span title="계획 대비 완료일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
+                                const badgeTitle = cmpInfoFinish.mode === 'vsPlan'
+                                    ? `${escapeHtml(cmpInfoFinish.aLabel)} 대비 ${escapeHtml(cmpInfoFinish.bLabel)} 완료일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
+                                    : `계획 대비 완료일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
+                                planBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
                         tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${planBadge}`;
@@ -4653,14 +4701,17 @@ window.deleteHistoryByDateRange = function() {
                                 : '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 7.75-1.5"></path></svg>';
                             const lockIcon = `<span onclick="window.wrToggleScheduleLock(${i}, event); event.stopPropagation();" title="${isLocked ? '🔒 고정 (클릭하여 자동으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)' : '🔓 자동 (클릭하여 고정으로 전환 · Ctrl/Shift+클릭 시 선택된 행 일괄 적용)'}" style="display:inline-flex; cursor:pointer; margin-left:3px; vertical-align:middle; color:${isLocked ? '#333' : '#adb5bd'};">${lockSvg}</span>`;
                             let baselineBadge = '';
-                            const baselineStartTsForDur = window.getBaselineStartTs ? window.getBaselineStartTs(row) : null;
-                            const baselineEndTsForDur = window.getBaselineEndTs ? window.getBaselineEndTs(row) : null;
-                            if (baselineStartTsForDur && baselineEndTsForDur) {
-                                const baselineDur = countWorkingDays(baselineStartTsForDur, baselineEndTsForDur);
-                                const diffDur = calcDays - baselineDur;
+                            const cmpInfoDur = window.getRowCompareInfo ? window.getRowCompareInfo(row) : null;
+                            if (cmpInfoDur && cmpInfoDur.aStart && cmpInfoDur.aEnd && cmpInfoDur.bStart && cmpInfoDur.bEnd) {
+                                const aDur = countWorkingDays(cmpInfoDur.aStart, cmpInfoDur.aEnd);
+                                const bDur = countWorkingDays(cmpInfoDur.bStart, cmpInfoDur.bEnd);
+                                const diffDur = bDur - aDur;
                                 if (diffDur !== 0) {
                                     const badgeColor = diffDur > 0 ? '#e03131' : '#1971c2';
-                                    baselineBadge = `<span title="계획 대비 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDur > 0 ? '▲' : '▼'}${Math.abs(diffDur)}</span>`;
+                                    const badgeTitle = cmpInfoDur.mode === 'vsPlan'
+                                        ? `${escapeHtml(cmpInfoDur.aLabel)} 대비 ${escapeHtml(cmpInfoDur.bLabel)} 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`
+                                        : `계획 대비 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`;
+                                    baselineBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDur > 0 ? '▲' : '▼'}${Math.abs(diffDur)}</span>`;
                                 }
                             }
                             bodyHtml += `<td class="period-td"${periodAttrs} style="text-align: center; font-weight: ${getFontWeight(row._level)}; color: #e03131; white-space: nowrap; font-size: calc(var(--table-font-size) - 2px);" title="${periodEditable ? '더블클릭하여 소요일 직접 수정 (자동 상태 행은 완료일이 시작일+소요일로 재계산됩니다)' : ''}">${calcDays}${lockIcon}${baselineBadge}</td>`;
@@ -4728,7 +4779,7 @@ window.deleteHistoryByDateRange = function() {
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
-                        tdHtml = createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level, window.getBaselineStartTs ? window.getBaselineStartTs(row) : null);
+                        tdHtml = createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level, window.getRowCompareInfo ? window.getRowCompareInfo(row) : null);
                         tdStyle = `font-weight: ${getFontWeight(row._level)}; position:relative;`;
                         tdAttrs += ` class="chart-td" ondblclick="window.toggleChartExpand()" title="더블클릭: 차트 확장/기본 보기 전환"`;
                     }
@@ -4966,7 +5017,7 @@ window.deleteHistoryByDateRange = function() {
                         let span = noTd.querySelector('.row-num-span');
                         if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++; 
                     } else if (tr.cells.length > 0) { tr.cells[0].textContent = visibleCount++; }
-                    let chartTd = tr.querySelector('.chart-td'); if (chartTd) { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level, window.getBaselineStartTs ? window.getBaselineStartTs(rowData) : null); }
+                    let chartTd = tr.querySelector('.chart-td'); if (chartTd) { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level, window.getRowCompareInfo ? window.getRowCompareInfo(rowData) : null); }
                 } else { tr.style.display = "none"; }
             }
             // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
@@ -5701,7 +5752,7 @@ window.handleAuthClick = function() {
             const rowIdx = parseInt(td.closest('tr')?.dataset.rowIndex);
             if (!rowIdx) return;
             const row = globalData[rowIdx];
-            if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level, window.getBaselineStartTs ? window.getBaselineStartTs(row) : null);
+            if (row) td.innerHTML = window.createStatusChart(row._calcStartTs, row._calcPlanTs, row[colIdx.status], row._level, window.getRowCompareInfo ? window.getRowCompareInfo(row) : null);
         });
 
         // 💡 컬럼 순서가 바뀌었으므로 sticky 왼쪽열 위치/배경을 즉시 재계산 (안 하면 스크롤 시 뒤가 투과되어 보임)
@@ -5763,7 +5814,7 @@ window.handleAuthClick = function() {
 
 
     // 차트 생성 로직
-    window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level, baselineStartTs) {
+    window.createStatusChart = function(rowStartTs, rowPlanTs, statusVal, level, compareInfo) {
     let statusStr = statusVal ? statusVal.toString().toLowerCase() : ""; 
     let isCancel = statusStr.includes('cancel') || statusStr.includes('취소'); 
     let isDrop = statusStr.includes('drop') || statusStr.includes('드랍');
@@ -5813,15 +5864,23 @@ window.handleAuthClick = function() {
         
     let dateRangeLabel = formatTsToYMD(tsStart) + " ~ " + formatTsToYMD(tsEnd);
 
-    // 📐 계획(Baseline) 고스트바 — 계획 당시 시작일 위치에, 현재와 같은 길이로 옅게 겹쳐 표시
-    let ghostBarHtml = '';
-    if (baselineStartTs && baselineStartTs !== tsStart) {
+    // 📐 계획(Baseline) 고스트바 — 1개 비교: 위쪽 회색 1겹(기존과 동일) / 2개 비교: 위쪽=A(회색), 아래쪽=B(청록색)
+    function buildGhostBarHtml(startTs, pos, color, planLabel) {
+        if (!startTs || startTs === tsStart) return '';
         const barLenTs = tsEnd - tsStart;
-        const ghostEndTs = baselineStartTs + barLenTs;
-        const ghostStartPct = Math.max(0, Math.min(100, ((baselineStartTs - viewStartTs) / viewDuration) * 100));
+        const ghostEndTs = startTs + barLenTs;
+        const ghostStartPct = Math.max(0, Math.min(100, ((startTs - viewStartTs) / viewDuration) * 100));
         const ghostEndPct = Math.max(0, Math.min(100, ((ghostEndTs - viewStartTs) / viewDuration) * 100));
         let ghostWidthPct = ghostEndPct - ghostStartPct; if (ghostWidthPct <= 0 && ghostEndPct > 0) ghostWidthPct = 0.5;
-        ghostBarHtml = `<div style="position:absolute; top:0px; height:5px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(120,120,120,0.5), rgba(120,120,120,0.5) 3px, rgba(200,200,200,0.4) 3px, rgba(200,200,200,0.4) 6px); border:1px solid rgba(100,100,100,0.6); border-radius:2px; box-sizing:border-box; z-index:3;" title="계획 시작일: ${formatTsToYMD(baselineStartTs)}"></div>`;
+        const posStyle = pos === 'bottom' ? 'bottom:0px;' : 'top:0px;';
+        return `<div style="position:absolute; ${posStyle} height:5px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, ${color}, ${color} 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px); border:1px solid ${color}; border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일: ${formatTsToYMD(startTs)}"></div>`;
+    }
+    let ghostBarHtml = '';
+    if (compareInfo) {
+        ghostBarHtml += buildGhostBarHtml(compareInfo.aStart, 'top', 'rgba(120,120,120,0.55)', compareInfo.aLabel);
+        if (compareInfo.mode === 'vsPlan') {
+            ghostBarHtml += buildGhostBarHtml(compareInfo.bStart, 'bottom', 'rgba(12,133,153,0.6)', compareInfo.bLabel);
+        }
     }
 
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
