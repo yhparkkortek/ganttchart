@@ -5987,7 +5987,7 @@ window.handleAuthClick = function() {
         const ghostStartPct = Math.max(0, Math.min(100, ((gStart - viewStartTs) / viewDuration) * 100));
         const ghostEndPct = Math.max(0, Math.min(100, ((gEnd - viewStartTs) / viewDuration) * 100));
         let ghostWidthPct = ghostEndPct - ghostStartPct; if (ghostWidthPct <= 0 && ghostEndPct > 0) ghostWidthPct = 0.5;
-        return `<div style="position:absolute; bottom:0px; height:4px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(245,159,0,0.85), rgba(245,159,0,0.85) 3px, rgba(255,255,255,0.35) 3px, rgba(255,255,255,0.35) 6px); border:1px solid rgba(245,159,0,0.9); border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일~완료일: ${formatTsToYMD(gStart)} ~ ${formatTsToYMD(gEnd)}"></div>`;
+        return `<div style="position:absolute; bottom:0px; height:4px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(12,133,153,0.85), rgba(12,133,153,0.85) 3px, rgba(255,255,255,0.35) 3px, rgba(255,255,255,0.35) 6px); border:1px solid rgba(12,133,153,0.9); border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일~완료일: ${formatTsToYMD(gStart)} ~ ${formatTsToYMD(gEnd)}"></div>`;
     }
     let ghostBarHtml = compareInfo ? buildGhostBarHtml(compareInfo.aStart, compareInfo.aEnd, compareInfo.aLabel) : '';
 
