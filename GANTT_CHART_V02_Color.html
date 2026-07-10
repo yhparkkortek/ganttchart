@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=1200, initial-scale=0.35">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gantt Chart</title>
 
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
@@ -28,9 +28,10 @@
         --w-no: 45px;        /* No 열 */
         --w-date: 60px;       /* 시작일, 완료일 열 */
         --w-period: 60px;     /* 소요(일) 열 */
-        --w-wbs: 300px;       /* 개발업무(WBS) 열 */
-        --w-detail: 850px;    /* 업무 상세내용 열 */
-        --w-chart: 400px;     /* 현황(간트 그래프) 열 */
+        --w-wbs: 300px;       /* 개발업무(WBS) 열 — 해상도 무관 고정 기준점 */
+        --w-detail: 850px;    /* 업무 상세내용 열 (QHD 기준) */
+        --w-chart: 400px;     /* 현황(간트 그래프) 열 — 기본보기 */
+        
         --w-default: 81px;    /* 위에 해당 안 되는 나머지 열들 (예: 상태 외 기타) */
         --w-status: 60px;     /* 상태 열 */
 
@@ -68,12 +69,15 @@
         --chart-l4: #d6d6d6;
     }
 
-/* 차트 확장 모드 */
-    table.chart-expanded th.chart-th,
-    table.chart-expanded td.chart-td {
-        width: 1250px !important;
-        min-width: 1250px !important;
+    /* 📐 FHD(1920px 내외) 대응 — WBS까지의 왼쪽 블록(No~WBS)은 기준점 고정, 상세내용/확장차트만 축소
+       상세내용 850→630 (-220), 확장차트는 그만큼 그대로 이어받아 1250→1030 (기본보기·확장보기 전체 폭 항상 동일 유지) */
+    @media (max-width: 1999px) {
+        :root {
+            --w-detail: 630px;
+        }
     }
+
+/* 차트 확장 모드 — 💡 차트 열이 유동이라 상세내용이 숨겨지면 그 폭(detail)을 자동으로 흡수. 고정폭 지정 불필요 */
     table.chart-expanded th.status-th,
     table.chart-expanded td.status-td {
         width: var(--w-status) !important;
@@ -81,7 +85,6 @@
     }
 
     th.chart-th, td.chart-td {
-        max-width: var(--w-chart);
         white-space: nowrap;
     }
     td.chart-td {
@@ -4665,7 +4668,7 @@ window.deleteHistoryByDateRange = function() {
 
             if (idx === colIdx.period) return; // 💡 "소요일"은 완료~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
             if (colStr.includes("상태")) return; // 💡 "상태"는 소요일~개발업무 사이에서 별도로 삽입하므로 원래 자리에서는 건너뜀
-            if (colStr.includes("현황")) { widthClass = "width: var(--w-chart); min-width: 180px; position: relative;"; thClass = "chart-th"; }
+            if (colStr.includes("현황")) { widthClass = "min-width: var(--w-chart); position: relative;"; thClass = "chart-th"; } // 💡 width 미지정 = 남는 폭을 차트 혼자 전부 흡수(다른 열은 지정 px 고정). 최소 400px 보장
             else if (colStr.includes("내용") || colStr.includes("요청") || colStr.includes("답변") || colStr.includes("대응") || colStr.includes("상세")) { widthClass = "width: var(--w-detail); min-width: 150px;"; thClass = "detail-th"; }
             else if (["no", "view", "보고"].includes(colStr)) { widthClass = "width: var(--w-no); min-width: 45px; max-width: var(--w-no);"; }
             else if (colStr.includes("시작") || colStr.includes("완료")) { widthClass = "width: var(--w-date); min-width: 45px; max-width: var(--w-date);"; }
@@ -5874,15 +5877,25 @@ window.handleAuthClick = function() {
 
         // 💡 표 너비 = 보이는 열 너비 합계로 정확히 고정 (table-layout:fixed가 남는 공간을
         //    다른 열들에 나눠 재분배하면서 발생하는 "관계없는 열까지 흔들리는" 현상 방지)
-        requestAnimationFrame(function() {
-            const headRow = table.querySelector('thead tr');
-            if (!headRow) return;
-            let total = 0;
-            headRow.querySelectorAll('th').forEach(function(th) {
-                if (th.offsetWidth > 0) total += th.offsetWidth;
-            });
-            if (total > 0) table.style.width = total + 'px';
-        });
+        requestAnimationFrame(function() { window.recalcTableWidth(); });
+    };
+
+    // 💡 표 인라인 폭 재계산 — 확장/기본 토글 시점 + 창 크기(해상도) 변경 시 둘 다 호출됨.
+    //    clearManualColumnWidths=true면 드래그 리사이저가 박아넣은 인라인 width도 같이 지워서
+    //    CSS 변수(미디어쿼리) 기준값으로 되돌린 뒤 재계산함 (다른 해상도로 창을 옮겼을 때 대응용)
+    // 💡 차트 열이 유일한 유동 열이라 표 폭을 JS로 계산·박제할 필요가 없어짐.
+    //    표는 min-width:100%로 항상 컨테이너를 채우고 남는 폭은 차트가 흡수.
+    //    인라인으로 박제된 값만 청소해서 CSS 지정값으로 되돌림.
+    window.recalcTableWidth = function(clearManualColumnWidths) {
+        const table = document.getElementById('myTable');
+        if (!table) return;
+        const headRow = table.querySelector('thead tr');
+        if (!headRow) return;
+        if (clearManualColumnWidths) {
+            headRow.querySelectorAll('th.chart-th, th.detail-th').forEach(function(th) { th.style.width = ''; });
+            table.querySelectorAll('td.chart-td, td.detail-td').forEach(function(td) { td.style.width = ''; });
+        }
+        table.style.width = '';
     };
 
     // 표 머릿글에 월/년(또는 기본 4분할) 눈금 라벨을 표시 — 확장/기본 모드 공통
@@ -10836,7 +10849,19 @@ async function msCallGemini(apiKey, parsed) {
     // 💡 사용자가 칸에 커서를 올리거나 수정을 종료할 때 즉시 색상을 동기화시키는 장치
     document.addEventListener('focusin', (e) => { if (e.target.tagName === 'TD') window.updateStickyPositions(); });
     document.addEventListener('focusout', (e) => { if (e.target.tagName === 'TD') window.updateStickyPositions(); });
-    window.addEventListener('resize', () => { clearTimeout(window._stickyTimer); window._stickyTimer = setTimeout(window.updateStickyPositions, 50); });
+    window._lastResBreakpoint = window.innerWidth <= 1999 ? 'fhd' : 'qhd'; // 💡 최초 로드 시점 기준값 기록
+    window.addEventListener('resize', () => {
+        clearTimeout(window._stickyTimer);
+        window._stickyTimer = setTimeout(() => {
+            window.updateStickyPositions();
+            // 💡 1999px 경계를 실제로 "넘나들 때만" 드래그 인라인 폭을 리셋 — QHD 안에서 창만 살짝
+            //    리사이즈하는 경우(드래그로 맞춘 폭 유지해야 함)에는 절대 손대지 않음
+            const nowBreakpoint = window.innerWidth <= 1999 ? 'fhd' : 'qhd';
+            const crossed = nowBreakpoint !== window._lastResBreakpoint;
+            window._lastResBreakpoint = nowBreakpoint;
+            if (window.recalcTableWidth) window.recalcTableWidth(crossed);
+        }, 50);
+    });
 
     
 </script>
