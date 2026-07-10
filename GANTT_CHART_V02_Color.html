@@ -5978,6 +5978,7 @@ window.handleAuthClick = function() {
 
     // 📐 계획(Baseline) 고스트바 — 선택한 계획의 시작일~완료일을 "그 자체 값"으로 독립적으로 표시
     //    (현재 막대의 길이와 무관하게, 저장된 과거 시작/종료일만으로 폭을 계산)
+    //    💡 시인성 개선: 진한 앰버(#f59f00) + 불투명도 상향, 메인 막대 아래쪽에 별도 줄로 분리(안 겹침)
     function buildGhostBarHtml(gStart, gEnd, planLabel) {
         if (!gStart) return '';
         if (!gEnd) gEnd = gStart; // 💡 과거 데이터에 완료일이 없으면 하루짜리 마커로 표시
@@ -5986,17 +5987,14 @@ window.handleAuthClick = function() {
         const ghostStartPct = Math.max(0, Math.min(100, ((gStart - viewStartTs) / viewDuration) * 100));
         const ghostEndPct = Math.max(0, Math.min(100, ((gEnd - viewStartTs) / viewDuration) * 100));
         let ghostWidthPct = ghostEndPct - ghostStartPct; if (ghostWidthPct <= 0 && ghostEndPct > 0) ghostWidthPct = 0.5;
-        return `<div style="position:absolute; top:0px; height:5px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(12,133,153,0.55), rgba(12,133,153,0.55) 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px); border:1px solid rgba(12,133,153,0.55); border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일~완료일: ${formatTsToYMD(gStart)} ~ ${formatTsToYMD(gEnd)}"></div>`;
+        return `<div style="position:absolute; bottom:0px; height:4px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(245,159,0,0.85), rgba(245,159,0,0.85) 3px, rgba(255,255,255,0.35) 3px, rgba(255,255,255,0.35) 6px); border:1px solid rgba(245,159,0,0.9); border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일~완료일: ${formatTsToYMD(gStart)} ~ ${formatTsToYMD(gEnd)}"></div>`;
     }
     let ghostBarHtml = compareInfo ? buildGhostBarHtml(compareInfo.aStart, compareInfo.aEnd, compareInfo.aLabel) : '';
 
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
                 <div style="position:relative; height:15px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
                     ${gridLines}${todayLine}${ghostBarHtml}
-                    <div style="position:absolute; top:3px; bottom:3px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:${barOpacity}; box-shadow:0 1px 3px rgba(0,0,0,0.2);" title="${dateRangeLabel}"></div>
-                </div>
-            </div>`;
-    };
+                    <div style="position:absolute; top:1px; height:8px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid
 
     
 </script>
