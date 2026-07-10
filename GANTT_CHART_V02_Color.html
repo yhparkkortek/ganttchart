@@ -4281,7 +4281,22 @@ window.deleteHistoryByDateRange = function() {
             let oldVal = globalData[r][c] || "";
             logChange(r, c, oldVal, str);
             globalData[r][c] = str;
-            if (c === colIdx.start) { globalData[r]._startForced = true; globalData[r]._planForced = false; if (colIdx.plan !== -1) globalData[r][colIdx.plan] = ""; }
+            if (c === colIdx.start) {
+                globalData[r]._startForced = true; globalData[r]._planForced = false;
+                if (colIdx.plan !== -1) {
+                    // 💡 완료일을 무조건 비우면 기간 정보가 없는 행은 완료일=시작일로 붕괴됨.
+                    //    변경 전 소요일(근무일 기준)을 구해서 새 시작일에 그대로 이어붙여 완료일도 같이 밀리게 함.
+                    const oldStartTs = globalData[r]._calcStartTs; const oldPlanTs = globalData[r]._calcPlanTs;
+                    const oldDur = (oldStartTs && oldPlanTs) ? countWorkingDays(oldStartTs, oldPlanTs) : 0;
+                    if (oldDur > 0) {
+                        const newPlanTs = addWorkingDays(selectedTs, oldDur - 1);
+                        const pd = new Date(newPlanTs);
+                        globalData[r][colIdx.plan] = pd.getFullYear() + '-' + String(pd.getMonth()+1).padStart(2,'0') + '-' + String(pd.getDate()).padStart(2,'0');
+                    } else {
+                        globalData[r][colIdx.plan] = ""; // 💡 소요일 정보가 아예 없던 행(신규 행 등)은 기존처럼 자동계산에 맡김
+                    }
+                }
+            }
             if (c === colIdx.plan)  { globalData[r]._planForced = true; globalData[r]._startForced = false; if (colIdx.dur1 !== -1) globalData[r][colIdx.dur1] = ""; if (colIdx.dur2 !== -1) globalData[r][colIdx.dur2] = ""; if (colIdx.dur3 !== -1) globalData[r][colIdx.dur3] = ""; if (colIdx.dur4 !== -1) globalData[r][colIdx.dur4] = ""; if (colIdx.period !== -1) globalData[r][colIdx.period] = ""; }
 
             document.getElementById('calendar-popup').style.display = 'none';
