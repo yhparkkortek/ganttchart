@@ -4727,8 +4727,8 @@ window.deleteHistoryByDateRange = function() {
                             if (diffDays !== 0) {
                                 const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
                                 const badgeTitle = cmpInfoStart.mode === 'vsPlan'
-                                    ? `${escapeHtml(cmpInfoStart.aLabel)} 대비 ${escapeHtml(cmpInfoStart.bLabel)} 시작일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
-                                    : `계획 대비 시작일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
+                                    ? `${escapeHtml(cmpInfoStart.aLabel)}(${formatTsToYMD(cmpInfoStart.aStart)}) 대비 ${escapeHtml(cmpInfoStart.bLabel)} 시작일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
+                                    : `계획(${formatTsToYMD(cmpInfoStart.aStart)}) 대비 시작일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
                                 startBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
@@ -4744,8 +4744,8 @@ window.deleteHistoryByDateRange = function() {
                             if (diffDays !== 0) {
                                 const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
                                 const badgeTitle = cmpInfoFinish.mode === 'vsPlan'
-                                    ? `${escapeHtml(cmpInfoFinish.aLabel)} 대비 ${escapeHtml(cmpInfoFinish.bLabel)} 완료일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
-                                    : `계획 대비 완료일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
+                                    ? `${escapeHtml(cmpInfoFinish.aLabel)}(${formatTsToYMD(cmpInfoFinish.aEnd)}) 대비 ${escapeHtml(cmpInfoFinish.bLabel)} 완료일 ${diffDays > 0 ? diffDays + '근무일 증가' : (-diffDays) + '근무일 단축'}`
+                                    : `계획(${formatTsToYMD(cmpInfoFinish.aEnd)}) 대비 완료일 ${diffDays > 0 ? diffDays + '근무일 지연' : (-diffDays) + '근무일 단축'}`;
                                 planBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDays > 0 ? '▲' : '▼'}${Math.abs(diffDays)}</span>`;
                             }
                         }
@@ -4772,8 +4772,8 @@ window.deleteHistoryByDateRange = function() {
                                 if (diffDur !== 0) {
                                     const badgeColor = diffDur > 0 ? '#e03131' : '#1971c2';
                                     const badgeTitle = cmpInfoDur.mode === 'vsPlan'
-                                        ? `${escapeHtml(cmpInfoDur.aLabel)} 대비 ${escapeHtml(cmpInfoDur.bLabel)} 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`
-                                        : `계획 대비 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`;
+                                        ? `${escapeHtml(cmpInfoDur.aLabel)}(${formatTsToYMD(cmpInfoDur.aStart)}~${formatTsToYMD(cmpInfoDur.aEnd)}) 대비 ${escapeHtml(cmpInfoDur.bLabel)} 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`
+                                        : `계획(${formatTsToYMD(cmpInfoDur.aStart)}~${formatTsToYMD(cmpInfoDur.aEnd)}) 대비 소요일 ${diffDur > 0 ? diffDur + '일 증가' : (-diffDur) + '일 감소'}`;
                                     baselineBadge = `<span title="${badgeTitle}" style="font-size:inherit; color:${badgeColor}; font-weight:bold; margin-left:2px;">${diffDur > 0 ? '▲' : '▼'}${Math.abs(diffDur)}</span>`;
                                 }
                             }
