@@ -5927,17 +5927,19 @@ window.handleAuthClick = function() {
         
     let dateRangeLabel = formatTsToYMD(tsStart) + " ~ " + formatTsToYMD(tsEnd);
 
-    // 📐 계획(Baseline) 고스트바 — 선택한 계획의 시작일 위치에 청록색 1겹으로 표시
-    function buildGhostBarHtml(startTs, planLabel) {
-        if (!startTs || startTs === tsStart) return '';
-        const barLenTs = tsEnd - tsStart;
-        const ghostEndTs = startTs + barLenTs;
-        const ghostStartPct = Math.max(0, Math.min(100, ((startTs - viewStartTs) / viewDuration) * 100));
-        const ghostEndPct = Math.max(0, Math.min(100, ((ghostEndTs - viewStartTs) / viewDuration) * 100));
+    // 📐 계획(Baseline) 고스트바 — 선택한 계획의 시작일~완료일을 "그 자체 값"으로 독립적으로 표시
+    //    (현재 막대의 길이와 무관하게, 저장된 과거 시작/종료일만으로 폭을 계산)
+    function buildGhostBarHtml(gStart, gEnd, planLabel) {
+        if (!gStart) return '';
+        if (!gEnd) gEnd = gStart; // 💡 과거 데이터에 완료일이 없으면 하루짜리 마커로 표시
+        if (gEnd < gStart) gEnd = gStart;
+        if (gStart === tsStart && gEnd === tsEnd) return ''; // 💡 시작·종료가 둘 다 같을 때만 생략 (기간만 달라도 표시되도록)
+        const ghostStartPct = Math.max(0, Math.min(100, ((gStart - viewStartTs) / viewDuration) * 100));
+        const ghostEndPct = Math.max(0, Math.min(100, ((gEnd - viewStartTs) / viewDuration) * 100));
         let ghostWidthPct = ghostEndPct - ghostStartPct; if (ghostWidthPct <= 0 && ghostEndPct > 0) ghostWidthPct = 0.5;
-        return `<div style="position:absolute; top:0px; height:5px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(12,133,153,0.55), rgba(12,133,153,0.55) 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px); border:1px solid rgba(12,133,153,0.55); border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일: ${formatTsToYMD(startTs)}"></div>`;
+        return `<div style="position:absolute; top:0px; height:5px; left:${ghostStartPct}%; width:${ghostWidthPct}%; background:repeating-linear-gradient(45deg, rgba(12,133,153,0.55), rgba(12,133,153,0.55) 3px, rgba(255,255,255,0.3) 3px, rgba(255,255,255,0.3) 6px); border:1px solid rgba(12,133,153,0.55); border-radius:2px; box-sizing:border-box; z-index:3;" title="${escapeHtml(planLabel)} 시작일~완료일: ${formatTsToYMD(gStart)} ~ ${formatTsToYMD(gEnd)}"></div>`;
     }
-    let ghostBarHtml = compareInfo ? buildGhostBarHtml(compareInfo.aStart, compareInfo.aLabel) : '';
+    let ghostBarHtml = compareInfo ? buildGhostBarHtml(compareInfo.aStart, compareInfo.aEnd, compareInfo.aLabel) : '';
 
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
                 <div style="position:relative; height:15px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
