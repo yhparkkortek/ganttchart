@@ -915,6 +915,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 #tab-address .concept-table tbody tr.mc-zebra-b input {
                     background-color: #efefef !important;
                 }
+                #tab-alarm .concept-table tbody tr.mc-zebra-a {
+                    background-color: #ffffff !important;
+                }
+                #tab-alarm .concept-table tbody tr.mc-zebra-b {
+                    background-color: #efefef !important;
+                }
             </style>
             <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
                 <table class="concept-table">
@@ -3455,6 +3461,7 @@ ${mailText}`;
 
         const clone = source.cloneNode(true);
         clone.querySelectorAll('.concept-header-box').forEach(function(el) { el.remove(); }); // 제목/버튼 영역 제외
+        clone.querySelectorAll('[id$="-history-box"]').forEach(function(el) { el.remove(); }); // 변경/수정 이력 확인 박스 제외 (id가 "-history-box"로 끝나는 요소 전부: sum/bs/mc/addr-history-box)
         // 💡 <select>는 인쇄 시 선택된 텍스트가 안 그려지는 브라우저가 많아 일반 텍스트로 치환 (Gantt와 동일 처리)
         clone.querySelectorAll('select').forEach(function(sel) {
             const selectedOption = sel.options[sel.selectedIndex];
@@ -3473,6 +3480,8 @@ ${mailText}`;
         const isAddress = (tabId === 'tab-address');
         const isRowPagedPortrait = isAlarm || isAddress; // 🎯 A4 세로 + 40행/페이지 (여러 페이지로 이어짐)
         const fitOnePage = isSummary || isBriefSpec; // 💡 1페이지 축소 대상 탭
+        // 💡 M.C Table은 "펼침" 상태일 때만 40행/페이지로 여러 장에 걸쳐 인쇄됨 (접힘은 1페이지 고정)
+        const mcExpandedForPrint = isMcTable && !!(window._bmExpanded && window._bmExpanded.mc);
 
         if (isSummary) {
             // 📷 제품 사진 섹션은 인쇄에서 제외
@@ -3491,9 +3500,18 @@ ${mailText}`;
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
-        // 📌 알람/주소록처럼 표 하나가 여러 페이지로 이어지는 탭은 <tfoot>으로 넣어 페이지마다 자동 반복
+        // 📌 알람/주소록/M.C Table(펼침)처럼 표 하나가 여러 페이지로 이어지는 탭은 <tfoot>으로 넣어 페이지마다 자동 반복
         //    (그 외 탭은 기존처럼 맨 끝에 한 번만 — 1페이지로 맞추는 탭이라 반복이 필요 없음)
-        const footerTable = isRowPagedPortrait ? clone.querySelector('table') : null;
+        let footerTable = null;
+        if (isRowPagedPortrait) {
+            footerTable = clone.querySelector('table');
+        } else if (mcExpandedForPrint) {
+            // 💡 일반/비교 표 중 실제로 보이는 쪽의 table을 찾음 (숨겨진 쪽은 높이 0이라 잘못 짚으면 안 됨)
+            const compSectionEl = clone.querySelector('#mc-comparison-section');
+            const isComparisonView = !!(compSectionEl && compSectionEl.style.display !== 'none');
+            const activeSection = isComparisonView ? compSectionEl : (clone.querySelector('#mc-normal-section') || clone);
+            footerTable = activeSection.querySelector('table');
+        }
         if (footerTable) {
             const footerTfoot = document.createElement('tfoot');
             footerTfoot.innerHTML = '<tr><td colspan="100" style="padding-top:2px; border:none;">'
@@ -3574,6 +3592,14 @@ ${mailText}`;
             // 💡 현재 펼치기/접기 상태를 그대로 읽음 (window.mcToggleHiddenUnified가 관리하는 플래그)
             const mcExpanded = !!(window._bmExpanded && window._bmExpanded.mc);
 
+            // 💡 일반 표/비교 표 중 "지금 실제로 보이는" 쪽 판별 — 펼침/접힘 두 분기 모두에서 공통으로 씀
+            //    (숨겨진 쪽은 display:none이라 querySelector가 잘못 짚으면 높이 0으로 계산될 수 있음)
+            const compSectionEl = clone.querySelector('#mc-comparison-section');
+            const isComparisonView = !!(compSectionEl && compSectionEl.style.display !== 'none');
+            const activeSection = isComparisonView
+                ? compSectionEl
+                : (clone.querySelector('#mc-normal-section') || clone);
+
             let scale;
 
             if (mcExpanded) {
@@ -3582,14 +3608,6 @@ ${mailText}`;
 
                 clone.style.zoom = 1;
                 clone.style.width = pageWidthPx + 'px';
-
-                // 💡 일반 표/비교 표 중 "지금 실제로 보이는" 쪽에서만 정확히 측정
-                //    (숨겨진 쪽은 display:none이라 querySelector가 잘못 짚으면 높이 0으로 계산될 수 있음)
-                const compSectionEl = clone.querySelector('#mc-comparison-section');
-                const isComparisonView = !!(compSectionEl && compSectionEl.style.display !== 'none');
-                const activeSection = isComparisonView
-                    ? compSectionEl
-                    : (clone.querySelector('#mc-normal-section') || clone);
 
                 const theadEl = activeSection.querySelector('thead');
                 const rowEl = activeSection.querySelector('tbody tr');
@@ -3616,6 +3634,23 @@ ${mailText}`;
                     width = pageWidthPx / scale;
                 }
                 clone.style.width = width + 'px';
+            }
+
+            // 💡 비교 표는 리비전이 많으면 열 너비 합계가 페이지 폭을 넘는데 table-layout:fixed가
+            //    줄여주지 않아 zoom 축소 후 표가 페이지보다 작게 찍힘 — 펼침/접힘 상태 모두 동일하게,
+            //    zoom 적용 후 정확히 페이지 폭이 되는 목표치(pageWidthPx/scale)에 맞춰 열 너비를 비례 재계산
+            if (isComparisonView) {
+                const compTable = activeSection.querySelector('table');
+                const cols = compTable ? compTable.querySelectorAll('colgroup col') : null;
+                if (cols && cols.length > 0) {
+                    const naturalWidths = Array.from(cols).map(function(c) { return parseFloat(c.style.width) || 0; });
+                    const naturalSum = naturalWidths.reduce(function(a, b) { return a + b; }, 0);
+                    const targetWidth = pageWidthPx / scale;
+                    if (naturalSum > 0) {
+                        const widthScale = targetWidth / naturalSum;
+                        cols.forEach(function(c, i) { c.style.width = (naturalWidths[i] * widthScale) + 'px'; });
+                    }
+                }
             }
 
             clone.style.zoom = scale;
@@ -8060,9 +8095,13 @@ window.updateInboxBadge();
         }
 
         /* 📌 화면용 카드 박스(.concept-section)의 테두리/둥근모서리/배경은 인쇄에서 제거 —
-           알람/주소록만 해당. Summary 등 다른 탭은 개별 섹션 박스가 그대로 인쇄되어야 하므로 제외 */
+           Summary만 제외하고 전부 적용 (Summary는 개별 섹션 박스가 그대로 인쇄되어야 하므로 제외) */
         body.printing-tab-address #tab-print-area .concept-section,
-        body.printing-tab-alarm #tab-print-area .concept-section {
+        body.printing-tab-alarm #tab-print-area .concept-section,
+        body.printing-tab-briefspec #tab-print-area .concept-section,
+        body.printing-tab-mctable #tab-print-area .concept-section,
+        body.printing-tab-calendar #tab-print-area .concept-section,
+        body.printing-tab-weekly #tab-print-area .concept-section {
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
@@ -8076,6 +8115,12 @@ window.updateInboxBadge();
         body.printing-tab-summary #tab-print-area th {
             text-align: center !important;
             vertical-align: middle !important;
+        }
+        /* 📌 화면에서 "사용자 작성 구간" 표시용으로 쓰는 회색 배경(#eceff1, .u-input)은 인쇄에서 제거 —
+           Address/Brief SPEC/M.C Table과 동일한 패턴 */
+        body.printing-tab-summary #tab-print-area input.u-input,
+        body.printing-tab-summary #tab-print-area textarea.u-input {
+            background: transparent !important;
         }
         body.printing-tab-summary {
             page: summaryLandscapePage !important;
@@ -8100,10 +8145,10 @@ window.updateInboxBadge();
         }
         /* 📌 화면에서 "사용자 작성 구간" 표시용으로 쓰는 회색 배경(#eceff1, .u-input)은 인쇄에서 제거 —
            주소록 탭과 동일한 패턴 */
-        body.printing-tab-briefspec #tab-print-area input.u-input,
-        body.printing-tab-briefspec #tab-print-area textarea.u-input,
-        body.printing-tab-mctable #tab-print-area input.u-input,
-        body.printing-tab-mctable #tab-print-area textarea.u-input {
+        body.printing-tab-briefspec #tab-print-area input,
+        body.printing-tab-briefspec #tab-print-area textarea,
+        body.printing-tab-mctable #tab-print-area input,
+        body.printing-tab-mctable #tab-print-area textarea {
             background: transparent !important;
         }
         /* 📌 제브라 줄무늬(한 줄씩 흰색/연회색)는 화면용 선택자(#tab-briefspec/#tab-mctable)라 인쇄 사본엔
@@ -8148,14 +8193,18 @@ window.updateInboxBadge();
             width: 100% !important;
             table-layout: fixed !important;
         }
+        /* 🎯 [M.C Table 탭 전용] 비교 표의 화면용 min-width:900px가 인쇄 시 100% 확장을 방해하므로 무력화 */
+        body.printing-tab-mctable #tab-print-area #mc-comparison-table {
+            min-width: 0 !important;
+        }
         /* 💡 화면용 #tab-mctable 선택자는 인쇄 사본(#tab-print-area)엔 적용 안 되므로 인쇄 전용으로 재선언 */
         body.printing-tab-mctable #tab-print-area th {
             text-align: center !important;
             vertical-align: middle !important;
         }
         /* 🩹 비교 테이블의 TOTAL/영업판가/재료비율 행이 <tfoot>이라 매 페이지 하단에 반복 출력되던 것을
-           일반 행처럼 흐르게 바꿔서 실제 마지막에 한 번만 출력되도록 함 */
-        body.printing-tab-mctable #tab-print-area tfoot {
+           일반 행처럼 흐르게 바꿔서 실제 마지막에 한 번만 출력되도록 함 (저작권 푸터 tfoot은 대상에서 제외) */
+        body.printing-tab-mctable #tab-print-area tfoot.mc-total-tfoot {
             display: table-row-group !important;
         }
 
@@ -8221,6 +8270,26 @@ window.updateInboxBadge();
         body.printing-tab-alarm #tab-print-area th {
             text-align: center !important;
             vertical-align: middle !important;
+        }
+        /* 📌 제브라 줄무늬도 화면용 선택자(#tab-address/#tab-alarm)라 인쇄 사본엔 안 먹으므로 인쇄 전용으로 재선언 */
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-a,
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-a input.u-input,
+        body.printing-tab-alarm #tab-print-area tbody tr.mc-zebra-a {
+            background-color: #ffffff !important;
+        }
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-b,
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-b input.u-input,
+        body.printing-tab-alarm #tab-print-area tbody tr.mc-zebra-b {
+            background-color: #efefef !important;
+        }
+        /* 📌 제브라 줄무늬도 화면용 선택자(#tab-address)라 인쇄 사본엔 안 먹으므로 인쇄 전용으로 재선언 */
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-a,
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-a input.u-input {
+            background-color: #ffffff !important;
+        }
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-b,
+        body.printing-tab-address #tab-print-area tbody tr.mc-zebra-b input.u-input {
+            background-color: #efefef !important;
         }
 
         /* 📌 tfoot(Copyright 푸터) 보호 — 알람/주소록 인쇄 사본에 박스/테두리가 새어들지 않게 차단 + 페이지마다 반복 */
@@ -10755,6 +10824,8 @@ async function msCallGemini(apiKey, parsed) {
         #gantt-print-area tbody tr.status-done.parent-row .no-td .row-num-span { color: rgba(0, 0, 0, 0.2) !important; }
         #gantt-print-area tbody tr.status-delay.parent-row .no-td .row-num-span { color: #e03131 !important; }
         #gantt-print-area tbody tr.status-pending.parent-row .no-td .row-num-span { color: #f08c00 !important; }
+        /* 0-1. 제브라 줄무늬도 #myTable 기준이라 인쇄 사본엔 안 먹으므로 동일하게 재선언 */
+        #gantt-print-area tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
         #gantt-print-area tbody tr.status-done .content-cell-trans,
         #gantt-print-area tbody tr.status-done .content-cell-trans * { color: rgba(0, 0, 0, 0.2) !important; }
         #gantt-print-area tbody tr.status-delay .content-cell-trans,
@@ -12984,7 +13055,7 @@ window.renderAlarmTab = async function() {
     };
 
     tbody.innerHTML = items.map((item, idx) => `
-        <tr style="cursor:pointer; border-bottom:1px solid #eee;"
+        <tr class="${idx % 2 === 1 ? 'mc-zebra-b' : 'mc-zebra-a'}" style="cursor:pointer; border-bottom:1px solid #eee;"
             onmouseover="this.style.background='#f0f8ff'" onmouseout="this.style.background=''"
             onclick="window.openAlarmModal(${idx})">
             <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
@@ -15672,12 +15743,15 @@ window.mcRenderComparisonTable = function() {
     compColgroup += '<col style="width:200px;"></colgroup>';
 
     table.style.tableLayout = 'fixed';
-    table.innerHTML = compColgroup + thead + tbody + '<tfoot>' + totalRow + salesRow + ratioRow + '</tfoot>';
+    table.innerHTML = compColgroup + thead + tbody + '<tfoot class="mc-total-tfoot">' + totalRow + salesRow + ratioRow + '</tfoot>';
 
     // 💡 Note 열은 최소 너비를 보장 (리비전이 많아 칸 합계가 박스를 넘으면 가로 스크롤로 처리)
     const compCols = table.querySelectorAll('colgroup col');
     const compNoteCol = compCols[compCols.length - 1];
-    if (compNoteCol) compNoteCol.style.width = '220px';
+    // 💡 Note 열 너비를 고정 px로 박아두면 table-layout:fixed에서 인쇄 시 표를 100%로 늘려도
+    //    채워줄 auto 열이 없어 오른쪽에 빈 여백이 남음 — 일반 M.C Table과 동일하게 비워서
+    //    "너비 미지정 칸이 남는 공간을 자동으로 채우는" 브라우저 기본 동작을 이용
+    if (compNoteCol) compNoteCol.style.width = '';
     table.style.width = '100%';
 
     // 💡 펼친 상태일 때만 내부 박스(.concept-tab-wrap)를 최대로 — 접힌 상태는 기존 1200px 그대로 유지
