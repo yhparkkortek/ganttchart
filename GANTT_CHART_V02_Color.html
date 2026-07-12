@@ -671,7 +671,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="sb-item" data-tab="calendar" onclick="window.switchTab('calendar')"><span class="sb-ico">📅</span><span class="sb-label">Calendar</span></div>
         <div class="sb-item" data-tab="weekly" onclick="window.switchTab('weekly')"><span class="sb-ico">📋</span><span class="sb-label">Weekly Report</span></div>
         <div class="sb-item" data-tab="alarm" onclick="window.switchTab('alarm')"><span class="sb-ico">🔔</span><span class="sb-label">Alarm</span></div>
-        <div class="sb-item" data-tab="address" onclick="window.switchTab('address')"><span class="sb-ico">📇</span><span class="sb-label">Address</span></div>
+        <div class="sb-item" data-tab="address" onclick="window.switchTab('address')"><span class="sb-ico">🪪</span><span class="sb-label">Address</span></div>
     </div>
 </div>
 
@@ -874,7 +874,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-address" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>📇 Address</h2>
+            <h2>🪪 Address</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button class="concept-add-row-btn" onclick="window.importAddressFromDrive()" style="margin:0;">📂 불러오기</button>
             <div class="btn-group">
@@ -948,7 +948,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 </div>
 
-<!-- 📇 이름 자동완성 드롭다운 (Summary 담당자 칸 전용, 공용 1개) -->
+<!-- 🪪 이름 자동완성 드롭다운 (Summary 담당자 칸 전용, 공용 1개) -->
 <div id="addr-autocomplete-dropdown" style="display:none; position:absolute; z-index:99999; background:#fff; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:220px; overflow-y:auto;"></div>
 
 <div id="tab-summary" class="tab-panel">
@@ -5644,7 +5644,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             XLSX.utils.book_append_sheet(wb, wsProdImg, "제품사진_원본데이터");
         }
 
-        // ── 📇 Address 시트 ──
+        // ── 🪪 Address 시트 ──
         const addrRows = tabData.addressBook || [];
         if (addrRows.length > 0) {
             const addrData = [['이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']];
@@ -13338,7 +13338,7 @@ window.deleteSumHistoryByDateRange = function() {
 })();
 
 // =========================================================
-// 📇 Address Book — CRUD, 다중선택, 정렬
+// 🪪 Address Book — CRUD, 다중선택, 정렬
 // =========================================================
 window._addrSelectedRows = new Set();
 window._addrLastClickedIdx = null;
@@ -13384,7 +13384,7 @@ window.collectAddressData = function() {
 };
 
 // =========================================================
-// 📇 Address Book — 엑셀/CSV 불러오기 · 내보내기
+// 🪪 Address Book — 엑셀/CSV 불러오기 · 내보내기
 // =========================================================
 // 💡 공용 파싱 로직 — 로컬 파일이든 구글 드라이브에서 받아온 버퍼든 동일하게 처리
 window._applyAddressWorkbookBuffer = function(arrayBuffer, sourceLabel) {
@@ -13452,7 +13452,7 @@ window.importAddressFromDrive = async function() {
 
 
 // =========================================================
-// 📇 이름 자동완성 — Address Book 기반, 부서/직함 표시 드롭다운
+// 🪪 이름 자동완성 — Address Book 기반, 부서/직함 표시 드롭다운
 // =========================================================
 function addrShowSuggestions(inputEl, query, emailEl, isMulti) {
     const dd = document.getElementById('addr-autocomplete-dropdown');
@@ -13516,7 +13516,7 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti) {
     });
 };
 
-// 📇 멤버-1/2 (고정 10칸) — 콤마로 여러 명 입력 가능하므로 isMulti=true
+// 🪪 멤버-1/2 (고정 10칸) — 콤마로 여러 명 입력 가능하므로 isMulti=true
 [['sum-pm','sum-pm-email'], ['sum-mech','sum-mech-email'], ['sum-hw','sum-hw-email'],
  ['sum-fw','sum-fw-email'], ['sum-module','sum-module-email'],
  ['sum-tsp','sum-tsp-email'], ['sum-lcm','sum-lcm-email'], ['sum-slimming','sum-slimming-email'],
@@ -13527,7 +13527,7 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti) {
     if (nameEl) window.attachAddressAutocomplete(nameEl, emailEl, true);
 });
 
-// 📇 멤버-3 (자유 추가, 2열 구조 — 두 컬럼 각각에 이벤트 위임 연결)
+// 🪪 멤버-3 (자유 추가, 2열 구조 — 두 컬럼 각각에 이벤트 위임 연결)
 (function() {
     function bindMember3Autocomplete(id) {
         const wrap = document.getElementById(id);
@@ -13634,7 +13634,7 @@ window.collectTabData = function() {
     });
     window.tabData.projectMembers3 = member3Rows;
 
-    // 📇 Address Book도 함께 수집 (드라이브/JSON 저장에 포함)
+    // 🪪 Address Book도 함께 수집 (드라이브/JSON 저장에 포함)
     if (window.collectAddressData) window.collectAddressData();
 
     // Brief SPEC / M.C Table
@@ -13705,7 +13705,7 @@ window.populateTabData = function() {
     // 💡 프로젝트 멤버-3 렌더링
     if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
 
-    // 📇 Address Book 렌더링
+    // 🪪 Address Book 렌더링
     window.tabData.addressBook = td.addressBook || [];
     if (window.renderAddressTable) window.renderAddressTable(); // 내부에서 bmSetupAllRows('addr') 자동 호출됨
 
