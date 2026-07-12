@@ -848,7 +848,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div id="print-header"><h2 id="print-title"></h2><div id="print-date"></div></div>
 
     <div class="container" id="table-container">
-        <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px);">
+        <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px + 44px);">
         <table id="myTable">
             <thead id="table-head"></thead>
             <tbody id="table-body">
@@ -4758,7 +4758,7 @@ window.deleteHistoryByDateRange = function() {
             const displayCell = lang.header[cellKey] || escapeHtml(cell);
             if (thClass === 'chart-th') {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}" ondblclick="window.toggleChartExpand()" title="더블클릭: 차트 확장/기본 보기 전환">
-                    <div class="chart-th-axis" style="position:relative; height:12px; overflow:hidden; margin:0 20px; box-sizing:border-box;"></div>
+                    <div class="chart-th-axis" style="position:relative; height:12px; overflow:visible; margin:0 20px; box-sizing:border-box;"></div>
                 </th>`;
             } else {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
@@ -5996,10 +5996,8 @@ window.handleAuthClick = function() {
         let ticks = pcts.map(pct => ({ pct, lbl: mLbl(viewStartTs + (viewDuration * pct / 100)) }));
 
         ticks.forEach((t, idx) => {
-            // 맨 앞/맨 뒤 라벨은 안쪽으로 정렬해서 잘리지 않게, 중간은 중앙정렬
+            // 💡 모든 라벨(맨 앞/맨 뒤 포함)을 동일하게 중앙 정렬 — 다른 날짜와 같은 계산으로 등간격 유지
             let transform = 'translateX(-50%)';
-            if (idx === 0) transform = 'translateX(0%)';
-            else if (idx === ticks.length - 1) transform = 'translateX(-100%)';
             labelHTML += `<span class="chart-label" style="position:absolute; left:${t.pct}%; transform:${transform}; white-space:nowrap; z-index:5; font-size:var(--chart-label-size); font-weight:bold;">${t.lbl}</span>`;
         });
 
