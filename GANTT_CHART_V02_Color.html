@@ -647,7 +647,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
         </div>
         <div style="position:relative; display:inline-block;">
-            <button id="task-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('task-menu-popup', this)">📥 업무<span id="task-menu-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
+            <button id="task-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('task-menu-popup', this)">📥 <span id="task-menu-label">업무</span><span id="task-menu-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
             <div id="task-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="inbox-btn" class="topbar-menu-item" onclick="window.openTaskInbox()">📦 <span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
                 <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">✉️ 업무 추가</button>
@@ -1698,6 +1698,7 @@ ${mailText}`;
                 document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
                 return;
             }
+            window.closeAllTopbarMenus(); // ✅ 드라이브 파일 목록 팝업 뜨기 전, 열려있던 파일 드롭다운 자동 닫기
             window.showDriveFileModal(files);
             document.getElementById('file-status').textContent = "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.";
         } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
@@ -2786,6 +2787,11 @@ ${mailText}`;
         }
     };
 
+    // ✅ 구글 로그인 완료 / 엑셀 파일 로드 시 열려있는 파일·업무 드롭다운을 자동으로 닫음
+    window.closeAllTopbarMenus = function() {
+        document.querySelectorAll('.topbar-popup').forEach(p => { p.style.display = 'none'; });
+    };
+
     // ═══════════════════════════════════════════════════════
     // 📐 계획(Baseline) 저장 및 비교 — "최초 수립 일정 대비 얼마나 바뀌었는지" 확인용
     //    ⚠️ 참고: localStorage에 전역으로 저장되어, 같은 브라우저에서 다른 프로젝트 파일을 열어도
@@ -3131,17 +3137,19 @@ ${mailText}`;
     const fileInput = document.getElementById('file-input');
     fileInput.addEventListener('change', handleFiles, false);
     window.addEventListener("dragover", function(e) { e.preventDefault(); }, false);
-    window.addEventListener("drop", function(e) { e.preventDefault(); }, false);
+    // ✅ 페이지 어디에 드롭해도(표의 빈 안내 문구 영역 포함) 엑셀 로드가 동작하도록 처리
+    window.addEventListener("drop", function(e) {
+        e.preventDefault();
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            document.getElementById('file-input').value = '';
+            handleFiles({ target: { files: e.dataTransfer.files } });
+        }
+    }, false);
     const dropZone = document.getElementById('app-topbar');
     dropZone.addEventListener('dragenter', function(e) { dropZone.classList.add('drag-over'); });
     dropZone.addEventListener('dragleave', function(e) { if (!dropZone.contains(e.relatedTarget)) dropZone.classList.remove('drag-over'); });
     dropZone.addEventListener('drop', function(e) {
-    e.preventDefault(); dropZone.classList.remove('drag-over');
-        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-            // ✅ 드래그앤드롭도 file-input 초기화 포함
-            document.getElementById('file-input').value = '';
-            handleFiles({ target: { files: e.dataTransfer.files } });
-        }
+        dropZone.classList.remove('drag-over');
     });
 
         function handleFiles(e) {
@@ -3165,6 +3173,7 @@ ${mailText}`;
             window.currentDriveFileId = null;
         }
             
+        window.closeAllTopbarMenus(); // ✅ 엑셀 로드 시작 시 열려있던 파일/업무 드롭다운 자동 닫기
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = []; // 📥 [Phase 2.5] 새 프로젝트 로드 시 원장 초기화
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
         let headerRow = []; let filesProcessed = 0; let totalFiles = files.length;
@@ -4526,10 +4535,15 @@ window.deleteHistoryByDateRange = function() {
                          'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'지연','On going':'진행','Delay':'지연' },
             btnText: '🌐 ENG',
             ui: {
+                'file-menu-btn':  '📁 파일',
+                'task-menu-label':'업무',
+                'schedule-tools-btn': '🛠️ 일정 도구',
+                'baseline-menu-btn':  '📐 계획',
+                'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'file-input-label':'🟩 엑셀 열기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
-                'mail-btn':       '업무 추가',
+                'mail-btn':       '✉️ 업무 추가',
                 'inbox-btn-label': '업무 보관함',
                 'weekly-report-btn': '📅 주간 업무 보고',
                 'drive_save_btn': '💾 저장',
@@ -4563,10 +4577,15 @@ window.deleteHistoryByDateRange = function() {
                          'Progress':'On going','On going':'On going','Done':'Done','Pending':'Pending','On Hold':'Delay','Delay':'Delay' },
             btnText: '🌐 한글',
             ui: {
+                'file-menu-btn':  '📁 File',
+                'task-menu-label':'Task',
+                'schedule-tools-btn': '🛠️ Schedule Tools',
+                'baseline-menu-btn':  '📐 Plan',
+                'admin-pw-change-btn': '🔑 Change Password',
                 'file-input-label':'🟩 Open Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
-                'mail-btn':       'Add Task',
+                'mail-btn':       '✉️ Add Task',
                 'inbox-btn-label': 'Task Inbox',
                 'weekly-report-btn': '📅 Weekly Report',
                 'drive_save_btn': '💾 Save',
@@ -5786,6 +5805,7 @@ window.handleAuthClick = function() {
                 document.getElementById('drive_load_btn').disabled = false;
                 const bkBtn2 = document.getElementById('backup_restore_btn'); if (bkBtn2) bkBtn2.disabled = false;
                 window.isDriveConnected = true; // ✅ 연동 완료 플래그
+                window.closeAllTopbarMenus(); // ✅ 로그인 완료 시 열려있던 파일 드롭다운 자동 닫기
 
                 // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
                 setTimeout(() => {
