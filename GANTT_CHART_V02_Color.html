@@ -3563,11 +3563,14 @@ ${mailText}`;
             clone.style.width = width + 'px';
             clone.style.zoom = scale;
 
-            // 📌 안전 보정: 4회 수렴으로도 여전히 페이지를 넘으면, 실제 렌더링 높이를 다시 재서 한 번 더 줄임
-            const actualH = clone.getBoundingClientRect().height;
-            const trueTargetH = (210 - 20) * 96 / 25.4;
-            if (actualH > trueTargetH) {
-                scale = scale * (trueTargetH / actualH) * 0.98;
+            // 📌 안전 보정: 4회 수렴으로도 여전히 페이지(여유 마진 포함 기준)를 넘으면, 실제 렌더링
+            //    높이를 다시 재서 줄이는 과정을 최대 3회 반복 — 1회만으로는 경계 근처에서 부족해서
+            //    Copyright 푸터가 다음 페이지로 밀려나는 경우가 있었음. 여유 마진(pageHeightPx)도
+            //    계속 유지하도록 기준을 통일함
+            for (let j = 0; j < 3; j++) {
+                const actualH = clone.getBoundingClientRect().height;
+                if (actualH <= pageHeightPx) break;
+                scale = scale * (pageHeightPx / actualH) * 0.98;
                 clone.style.zoom = scale;
             }
 
@@ -3593,7 +3596,6 @@ ${mailText}`;
             const mcExpanded = !!(window._bmExpanded && window._bmExpanded.mc);
 
             // 💡 일반 표/비교 표 중 "지금 실제로 보이는" 쪽 판별 — 펼침/접힘 두 분기 모두에서 공통으로 씀
-            //    (숨겨진 쪽은 display:none이라 querySelector가 잘못 짚으면 높이 0으로 계산될 수 있음)
             const compSectionEl = clone.querySelector('#mc-comparison-section');
             const isComparisonView = !!(compSectionEl && compSectionEl.style.display !== 'none');
             const activeSection = isComparisonView
@@ -3620,7 +3622,6 @@ ${mailText}`;
                 clone.style.width = (pageWidthPx / scale) + 'px';
             } else {
                 // 🔽 접힘: 전체 내용(표 + 견적 수정이력 박스 포함)을 무조건 1페이지에 맞춤
-                //    Summary/Brief SPEC과 동일한 반복 수렴 방식 + 경계선 오차 방지용 여유 마진(4%)
                 const SAFETY = 0.96;
                 const targetHeightPx = pageHeightPx * SAFETY;
 
@@ -3630,28 +3631,36 @@ ${mailText}`;
                     clone.style.zoom = 1;
                     clone.style.width = width + 'px';
                     const h = clone.scrollHeight;
-                    scale = Math.min(999, targetHeightPx / h); // 짧으면 확대도 허용
+                    scale = Math.min(999, targetHeightPx / h);
                     width = pageWidthPx / scale;
                 }
                 clone.style.width = width + 'px';
             }
 
-            // 💡 비교 표는 리비전이 많으면 열 너비 합계가 페이지 폭을 넘는데 table-layout:fixed가
-            //    줄여주지 않아 zoom 축소 후 표가 페이지보다 작게 찍힘 — 펼침/접힘 상태 모두 동일하게,
-            //    zoom 적용 후 정확히 페이지 폭이 되는 목표치(pageWidthPx/scale)에 맞춰 열 너비를 비례 재계산
-            if (isComparisonView) {
-                const compTable = activeSection.querySelector('table');
-                const cols = compTable ? compTable.querySelectorAll('colgroup col') : null;
-                if (cols && cols.length > 0) {
-                    const naturalWidths = Array.from(cols).map(function(c) { return parseFloat(c.style.width) || 0; });
-                    const naturalSum = naturalWidths.reduce(function(a, b) { return a + b; }, 0);
-                    const targetWidth = pageWidthPx / scale;
-                    if (naturalSum > 0) {
-                        const widthScale = targetWidth / naturalSum;
-                        cols.forEach(function(c, i) { c.style.width = (naturalWidths[i] * widthScale) + 'px'; });
-                    }
-                }
-            }
+            // 💡 비교 표뿐 아니라 일반(R1~R5) 표도 열 너비 합계가 페이지 폭과 안 맞으면 동일하게 좁게 찍힘.
+            //    <col>이든 <th>든 너비가 어디서 왔는지 상관없이, 실제 렌더링된 데이터 행(tbody tr)의
+            //    셀 폭을 직접 측정해서 비례 재계산 — 배경색/글자 스타일은 전혀 건드리지 않음
+            (function() {
+                const activeTable = activeSection.querySelector('table');
+                if (!activeTable) return;
+                const cols = activeTable.querySelectorAll('colgroup col');
+                const sampleRow = activeTable.querySelector('tbody tr');
+                if (!cols.length || !sampleRow) return;
+                const cells = sampleRow.querySelectorAll(':scope > td');
+                if (cells.length !== cols.length) return; // 열/셀 개수가 안 맞으면(숨김 열 등) 손대지 않고 건너뜀
+                // 💡 Note 열처럼 <col> 너비가 auto(비워짐)인 칸은 측정 시점에 폭이 0~매우 작게 잡힐 수 있음
+                //    — 최소 기본값(200px)을 보장해서 비례 재계산에서 사라지지 않게 함
+                const MIN_FALLBACK = 200;
+                const naturalWidths = Array.from(cells).map(function(td) {
+                    const w = td.getBoundingClientRect().width;
+                    return (w && w > 10) ? w : MIN_FALLBACK;
+                });
+                const naturalSum = naturalWidths.reduce(function(a, b) { return a + b; }, 0);
+                const targetWidth = pageWidthPx / scale;
+                if (naturalSum <= 0) return;
+                const widthScale = targetWidth / naturalSum;
+                cols.forEach(function(c, i) { c.style.width = (naturalWidths[i] * widthScale) + 'px'; });
+            })();
 
             clone.style.zoom = scale;
 
@@ -8292,10 +8301,11 @@ window.updateInboxBadge();
             background-color: #efefef !important;
         }
 
-        /* 📌 tfoot(Copyright 푸터) 보호 — 알람/주소록 인쇄 사본에 박스/테두리가 새어들지 않게 차단 + 페이지마다 반복 */
-        #tab-print-area tfoot { display: table-footer-group !important; }
-        #tab-print-area tfoot tr,
-        #tab-print-area tfoot td {
+        /* 📌 tfoot(Copyright 푸터) 보호 — 알람/주소록 인쇄 사본에 박스/테두리가 새어들지 않게 차단 + 페이지마다 반복
+           (M.C Table 내부 TOTAL/영업판가/재료비율 tfoot(.mc-total-tfoot)은 자체 배경색이 있으므로 제외) */
+        #tab-print-area tfoot:not(.mc-total-tfoot) { display: table-footer-group !important; }
+        #tab-print-area tfoot:not(.mc-total-tfoot) tr,
+        #tab-print-area tfoot:not(.mc-total-tfoot) td {
             border: none !important;
             border-radius: 0 !important;
             box-shadow: none !important;
