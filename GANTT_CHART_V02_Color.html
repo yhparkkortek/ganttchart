@@ -7442,6 +7442,7 @@ window.updateInboxBadge = function() {
 };
 
 window.openTaskInbox = function() {
+    window.closeAllTopbarMenus(); // ✅ 업무 보관함 열릴 때 업무 드롭다운 자동 닫기
     window.renderTaskInbox();
     document.getElementById('task-inbox-overlay').style.display = 'flex';
     window.bringModalToFront('task-inbox-overlay');
@@ -8942,6 +8943,7 @@ window.switchMailTab = function(tab) {
 // showMailAnalyzer 래핑
 const _origShowMailAnalyzer = window.showMailAnalyzer;
 window.showMailAnalyzer = function() {
+    window.closeAllTopbarMenus(); // ✅ 업무 추가 창 열릴 때 업무 드롭다운 자동 닫기
     _origShowMailAnalyzer();
     // 탭 초기 스타일 강제 설정
     setTimeout(() => {
