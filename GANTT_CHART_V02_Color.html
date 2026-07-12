@@ -829,6 +829,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-gantt" class="tab-panel active">
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
+    <div class="btn-group" id="gantt-filter-btn-group" style="margin-left: 15px; padding-left: 15px; border-left: 2px solid #ddd;">
+        <!-- LEVEL(WBS) / 업무상태 / 개발단계 드롭다운 버튼은 generateFilters()가 여기 채웁니다 -->
+    </div>
     <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
      
         <button id="schedule-tools-btn" class="action-btn" onclick="window.toggleScheduleToolsMenu(event)" title="선택 구간 재계산 · 날짜순 정렬">🛠️ 일정 도구</button>
@@ -6268,18 +6271,22 @@ window.handleAuthClick = function() {
 
 <script>
     // =========================================================
-    // 🎛️ UI 개선: 점선 제거, 필터 위치 재배치, 10글자 물결(~) 제한
+    // 🎛️ UI 개선: 점선 제거, 필터 티어드롭 팝업화, 10글자 물결(~) 제한
     // =========================================================
 
-    // 1. CSS 동적 주입 (날짜 점선 제거 & 필터 가로 배치)
+    // 1. CSS 동적 주입 (날짜 점선 제거 & 필터 드롭다운 스타일)
     document.head.insertAdjacentHTML('beforeend', `
     <style>
         /* 날짜 밑줄 점선 완전히 제거 */
         .date-clickable { border-bottom: none !important; }
         .date-clickable:hover { color: #0056b3; font-weight: bold; border-bottom: none !important; }
 
-        /* 필터 그룹들을 나란히 배치하기 위한 레이아웃 설정 */
-        #dynamic-filters { display: flex; flex-wrap: wrap; gap: 2px 8px; }
+        /* 필터 트리거 버튼(LEVEL/업무상태/개발단계) */
+        #gantt-filter-btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+        .gantt-filter-trigger-btn.filter-active { background-color: #2c5f8a !important; color: #fff !important; }
+        .gantt-filter-popup { min-width: 200px; max-width: 380px; }
+        .gantt-filter-popup .filter-group { display: flex; align-items: center; flex-wrap: wrap; }
+
         .filter-group { display: flex; align-items: center; flex-wrap: wrap; transition: 0.3s; margin-bottom: 0 !important; }
 
         td.no-td, td.date-td, td.status-td { color: #333333 !important; }
@@ -6288,12 +6295,54 @@ window.handleAuthClick = function() {
     </style>
     `);
 
-    // 2. 필터 생성 로직 덮어쓰기
+    // 2. LEVEL(WBS)/업무상태/개발단계 드롭다운 팝업 토글 (일정 도구/계획 버튼과 동일한 패턴)
+    window.toggleGanttFilterPopup = function(colIndex, ev) {
+        if (ev) ev.stopPropagation();
+        document.querySelectorAll('.gantt-filter-popup').forEach(p => {
+            if (p.id !== 'gantt-filter-popup-' + colIndex) p.style.display = 'none';
+        });
+        const popup = document.getElementById('gantt-filter-popup-' + colIndex);
+        const btn = document.getElementById('gantt-filter-trigger-' + colIndex);
+        if (!popup || !btn) return;
+        const willShow = popup.style.display !== 'block';
+        if (willShow) {
+            const rect = btn.getBoundingClientRect();
+            popup.style.left = rect.left + 'px';
+            popup.style.top = (rect.bottom + 4) + 'px';
+        }
+        popup.style.display = willShow ? 'block' : 'none';
+        if (!window._ganttFilterPopupListenerAdded) {
+            window._ganttFilterPopupListenerAdded = true;
+            document.addEventListener('click', function(e) {
+                document.querySelectorAll('.gantt-filter-popup').forEach(p => {
+                    const triggerBtn = document.getElementById(p.dataset.triggerId);
+                    if (!p.contains(e.target) && e.target !== triggerBtn && !(triggerBtn && triggerBtn.contains(e.target))) {
+                        p.style.display = 'none';
+                    }
+                });
+            });
+        }
+    };
+
+    // 트리거 버튼의 "필터 적용중" 강조 상태 갱신
+    window.updateGanttFilterTriggerState = function(colIndex) {
+        const btn = document.getElementById('gantt-filter-trigger-' + colIndex);
+        if (!btn) return;
+        const isAll = currentFilters[colIndex] && currentFilters[colIndex].has('All');
+        btn.classList.toggle('filter-active', !isAll);
+    };
+
+    // 3. 필터 생성 로직 덮어쓰기 — LEVEL(WBS)/업무상태/개발단계를 티어드롭 팝업으로 렌더링
     window.generateFilters = function(data) {
         let savedFilters = {};
         for (let k in currentFilters) { savedFilters[k] = new Set(currentFilters[k]); }
 
-        const filterContainer = document.getElementById('dynamic-filters'); filterContainer.innerHTML = ''; currentFilters = {}; 
+        const triggerGroup = document.getElementById('gantt-filter-btn-group');
+        if (triggerGroup) triggerGroup.innerHTML = '';
+        document.querySelectorAll('.gantt-filter-popup').forEach(p => p.remove()); // 이전 렌더링 팝업 정리
+        const legacyContainer = document.getElementById('dynamic-filters');
+        if (legacyContainer) legacyContainer.innerHTML = ''; // 레거시 박스는 항상 비워서 자동으로 숨김 처리됨
+        currentFilters = {}; 
         existingDevStages = []; let assigneeModelsAll = {}; let assigneeModelsActive = {};
 
         for(let i = 1; i < data.length; i++) {
@@ -6336,17 +6385,11 @@ window.handleAuthClick = function() {
             currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
             let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
             
-            // 개발단계 그룹 강제 줄바꿈
-            if (col.name === '개발단계') {
-                groupDiv.style.width = '100%';
-                groupDiv.style.marginTop = '2px';
-            }
-            
             let label = document.createElement('div'); 
             label.className = 'filter-label'; 
             label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
             if (currentFilters[col.index].has('All')) label.classList.add('active'); 
-            label.onclick = () => window.toggleAllFilter(col.index, groupDiv); 
+            label.onclick = () => { window.toggleAllFilter(col.index, groupDiv); window.updateGanttFilterTriggerState(col.index); };
             groupDiv.appendChild(label);
 
             valuesArray.forEach(val => {
@@ -6366,9 +6409,26 @@ window.handleAuthClick = function() {
                     btn.textContent = statusMap[val] || val; 
                 }
 
-                btn.onclick = (e) => updateFilter(e, col.index, val, groupDiv); groupDiv.appendChild(btn);
+                btn.onclick = (e) => { updateFilter(e, col.index, val, groupDiv); window.updateGanttFilterTriggerState(col.index); };
+                groupDiv.appendChild(btn);
             });
-            filterContainer.appendChild(groupDiv);
+
+            // 트리거 버튼 (평소엔 이 버튼만 보이고, 클릭 시 팝업으로 groupDiv 노출)
+            let triggerBtn = document.createElement('button');
+            triggerBtn.className = 'action-btn gantt-filter-trigger-btn';
+            triggerBtn.id = 'gantt-filter-trigger-' + col.index;
+            triggerBtn.textContent = (LANG[window._currentLang].filterLabel[col.name] || col.name) + ' ▾';
+            triggerBtn.onclick = (e) => window.toggleGanttFilterPopup(col.index, e);
+            if (!currentFilters[col.index].has('All')) triggerBtn.classList.add('filter-active');
+            if (triggerGroup) triggerGroup.appendChild(triggerBtn);
+
+            // 팝업 (항상 DOM에 존재, 평소엔 숨김 — 기존 필터 로직/조회 코드와 호환 유지)
+            let popup = document.createElement('div');
+            popup.className = 'row-action-popup gantt-filter-popup';
+            popup.id = 'gantt-filter-popup-' + col.index;
+            popup.dataset.triggerId = 'gantt-filter-trigger-' + col.index;
+            popup.appendChild(groupDiv);
+            document.body.appendChild(popup);
         });
     };
 </script>
