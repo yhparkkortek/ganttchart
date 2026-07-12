@@ -2582,7 +2582,20 @@ ${mailText}`;
         if (!tbody || tbody._rowSelectDelegationBound) return;
         tbody._rowSelectDelegationBound = true;
         tbody.addEventListener('click', function(ev) {
-            if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) return; // 일반 클릭은 그대로 통과
+            // 💡 일반 클릭(Ctrl/Shift 없음)이고 다중 선택이 남아있는 상태면, 어느 열을 클릭하든
+            //    선택을 해제만 하고 그 열 고유의 클릭 동작(편집 진입·달력 열기 등)은 그대로 진행되게 둠
+            //    (preventDefault/stopPropagation을 걸지 않아서 원래 동작을 막지 않음)
+            if (!(ev.ctrlKey || ev.metaKey || ev.shiftKey)) {
+                if (window._selectedRows && window._selectedRows.size > 0 && !ev.target.closest('.no-td') && !ev.target.closest('#row-action-popup')) {
+                    window._selectedRows.clear();
+                    window._selAnchor = null;
+                    if (window.paintRowSelection) window.paintRowSelection();
+                    const p = document.getElementById('row-action-popup');
+                    if (p) p.style.display = 'none';
+                    window.clearRowHighlight();
+                }
+                return; // 일반 클릭은 선택 해제만 하고 그대로 통과
+            }
             const target = ev.target;
             // 📌 알림 / 🔒 잠금 아이콘은 이미 자체 Ctrl/Shift 선택 로직이 있으므로 건드리지 않음
             const ownOnclick = target.getAttribute && target.getAttribute('onclick');
@@ -4035,8 +4048,9 @@ window.deleteHistoryByDateRange = function() {
         document.getElementById(id).addEventListener('click', fn);
     });
 
-    // 팝업 위치 (달력처럼 No 셀 옆에)
-    let rect = td.getBoundingClientRect();
+    // 📌 상하좌우+- 는 WBS(레벨/순서) 관련 기능이므로, No 셀이 아니라 같은 행의 WBS 셀 옆에 뜨도록 앵커
+    const wbsCellForPopup = td.closest('tr') ? td.closest('tr').querySelector('.wbs-cell') : null;
+    let rect = (wbsCellForPopup || td).getBoundingClientRect();
     popup.style.display = 'block';
     let popupW = popup.offsetWidth;
     let popupH = popup.offsetHeight;
