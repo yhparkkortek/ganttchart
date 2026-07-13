@@ -728,7 +728,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   width:480px; max-width:94vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   z-index:9101; padding:26px 28px 20px; font-family:'맑은 고딕',sans-serif;">
 
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+  <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:move;">
     <h3 style="margin:0; font-size:15px; color:#2c5f8a;">⚙️ 알람 설정</h3>
     <button onclick="window.closeAlarmSettings()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
   </div>
@@ -11112,6 +11112,35 @@ async function msCallGemini(apiKey, parsed) {
 </script>
 
 <script>
+// ─── 알람 설정 모달 드래그 기능 (업무 보관함 등과 동일 패턴) ───
+(function() {
+    let isDragging = false, startX, startY, origLeft, origTop;
+    document.addEventListener('mousedown', function(e) {
+        const handle = document.getElementById('alarm-settings-drag-handle');
+        if (!handle || !handle.contains(e.target)) return;
+        const modal = document.getElementById('alarm-settings-modal');
+        if (!modal) return;
+        isDragging = true;
+        const rect = modal.getBoundingClientRect();
+        origLeft = rect.left; origTop = rect.top;
+        startX = e.clientX; startY = e.clientY;
+        modal.style.transform = 'none';
+        modal.style.left = origLeft + 'px';
+        modal.style.top  = origTop  + 'px';
+        e.preventDefault();
+    });
+    document.addEventListener('mousemove', function(e) {
+        if (!isDragging) return;
+        const modal = document.getElementById('alarm-settings-modal');
+        if (!modal) return;
+        modal.style.left = (origLeft + e.clientX - startX) + 'px';
+        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
+    });
+    document.addEventListener('mouseup', function() { isDragging = false; });
+})();
+</script>
+
+<script>
 // ─── 업무 배분(다른 프로젝트로 전송) 모달 드래그 기능 ───
 (function() {
     let isDragging = false, startX, startY, origLeft, origTop;
@@ -12939,7 +12968,11 @@ window.collectAlarmItems = function() {
         if (!row._알림) return;
 
         // 완료 예정일 (plan 컬럼 = YYYY-MM-DD)
-        const dueRaw = String(row[ci.plan] || '').trim();
+        // 💡 자동(🔓) 모드 행은 plan 셀이 비어있고 _calcPlanTs(계산값)만 갖고 있으므로 폴백 처리
+        let dueRaw = String(row[ci.plan] || '').trim();
+        if ((!dueRaw || dueRaw === '-') && row._calcPlanTs) {
+            dueRaw = formatTsToYMD(row._calcPlanTs);
+        }
         if (!dueRaw || dueRaw === '-') return;
         const dueDate = new Date(dueRaw);
         if (isNaN(dueDate)) return;
