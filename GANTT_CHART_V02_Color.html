@@ -4306,6 +4306,13 @@ window.deleteHistoryByDateRange = function() {
         window.calendarFixedPos = null; renderCalendar(false);
     };
 
+    // 💡 업무 추가(직접입력/파일첨부/메일서버) AI분석 결과의 시작일·완료일 달력 진입점
+    //    selectDateFromCalendar()의 currentCalendarMailField 분기와 짝을 이루는 함수 (기존엔 미정의 상태였음)
+    window.showMailCalendar = function(el, ts, fieldKey) {
+        window.currentCalendarMailField = fieldKey;
+        window.showCalendar(el, ts, null, null);
+    };
+
     window.changeCalendarMonth = function(e, deltaMonth, deltaYear) {
         if (e) e.stopPropagation();
         let d = new Date(window.currentViewYear + deltaYear, window.currentViewMonth + deltaMonth, 1);
