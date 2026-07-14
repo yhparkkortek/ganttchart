@@ -8838,6 +8838,38 @@ window.updateInboxBadge();
 
                 <!-- ── 메일서버 탭 왼쪽 ── -->
                 <div id="mail-tab-server-content" style="display:none; flex-direction:column; flex:1; overflow:hidden; padding:12px;">
+                    <!-- 설치 안내 (접기/펼치기) -->
+                    <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:10px 14px; margin-bottom:10px; flex-shrink:0;">
+                        <div onclick="const b=document.getElementById('ms-install-guide');b.style.display=b.style.display==='none'?'block':'none'"
+                            style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
+                            <span style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+                            <span style="font-size:12px; color:#7a5210;">▼ 펼치기</span>
+                        </div>
+                        <div id="ms-install-guide" style="display:none; margin-top:10px; font-size:12.5px; color:#555; line-height:2.0;">
+                            <b>Step 1.</b> Python 설치
+                            <a href="https://www.python.org/downloads/" target="_blank"
+                                style="margin-left:8px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
+                                python.org 바로가기 →
+                            </a><br>
+                            　　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>
+                            <b>Step 2.</b> 아래 파일 2개 다운로드 후 같은 폴더에 저장<br>
+                            　　
+                            <a href="https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_fetch_server.py"
+                                download="mail_fetch_server.py"
+                                style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
+                                mail_fetch_server.py ↓
+                            </a>
+                            　
+                            <a href="https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start_mail_fetch.bat"
+                                download="start_mail_fetch.bat"
+                                style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
+                                start_mail_fetch.bat ↓
+                            </a><br>
+                            <b>Step 3.</b> <b>start_mail_fetch.bat</b> 더블클릭 → 검은 창 유지<br>
+                            <b>Step 4.</b> 검은 창에 <b>http://127.0.0.1:5001</b> 이 뜨면 준비 완료<br>
+                            <b>Step 5.</b> 앱 사용 중에는 start_mail_fetch.bat 창을 닫지 마세요
+                        </div>
+                    </div>
                     <!-- 접속 정보 -->
                     <div style="padding:10px 0; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
                         <div style="font-size:11px; font-weight:bold; color:#333; margin-bottom:6px; padding:0 12px;">🔐 메일 서버 접속</div>
@@ -10175,7 +10207,7 @@ function mfDirectInsert(task) {
 // 🌐 메일 서버 탭 기능
 // =========================================================
 
-const MS_SERVER_URL = 'https://railway-mail-server-production.up.railway.app';
+const MS_SERVER_URL = 'http://127.0.0.1:5001';
 window._msResults   = [];
 window._msCurrentIdx = -1;
 
