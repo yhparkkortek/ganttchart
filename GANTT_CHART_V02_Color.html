@@ -749,14 +749,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       　　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>
       <b>Step 2.</b> 아래 파일 2개 다운로드 후 같은 폴더에 저장<br>
       　　
-      <a href="https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_server.py"
-        download="mail_server.py"
+      <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_server.py','mail_server.py')"
         style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
         mail_server.py ↓
       </a>
       　
-      <a href="https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start.bat"
-        download="start.bat"
+      <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start.bat','start.bat')"
         style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
         start.bat ↓
       </a><br>
@@ -3151,6 +3149,24 @@ ${mailText}`;
         return true;
     };
 
+    // 📥 GitHub raw 파일 강제 다운로드 (cross-origin에서 download 속성이 무시되는 문제 우회)
+    window.downloadRawFile = async function(url, filename) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const blob = await res.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = blobUrl;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+        } catch (e) {
+            alert(`다운로드 실패: ${e.message}\n\n아래 주소를 새 탭에서 열어 [Ctrl+S]로 저장해주세요:\n${url}`);
+        }
+    };
 
     // =========================================================
     // 🛠️ 파일 업로드 및 유틸리티 로직
@@ -8869,7 +8885,7 @@ window.updateInboxBadge();
                             <b>Step 4.</b> 검은 창에 <b>http://127.0.0.1:5001</b> 이 뜨면 준비 완료<br>
                             <b>Step 5.</b> 앱 사용 중에는 start_mail_fetch.bat 창을 닫지 마세요
                         </div>
-                        
+
                     </div>
                     <!-- 접속 정보 -->
                     <div style="padding:10px 0; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
