@@ -747,18 +747,23 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         python.org 바로가기 →
       </a><br>
       　　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>
-      <b>Step 2.</b> 아래 파일 2개 다운로드 후 같은 폴더에 저장<br>
+      <b>Step 2.</b> 아래 zip 파일 다운로드 후 압축 풀기<br>
       　　
-      <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_server.py','mail_server.py')"
-        style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
-        mail_server.py ↓
-      </a>
-      　
-      <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start.bat','start.bat')"
-        style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
-        start.bat ↓
+      <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_alarm_tools.zip','mail_alarm_tools.zip')"
+        style="padding:1px 6px; background:#555; color:#fff; border-radius:3px; text-decoration:none; font-size:10.5px; white-space:nowrap;">
+        mail_alarm_tools.zip ↓
       </a><br>
-      <b>Step 3.</b> 다운로드 완료 시 화면 하단에 뜨는 <b>start.bat</b>을 클릭 (또는 다운로드 폴더에서 더블클릭) → 검은 창 유지<br>
+      <span style="font-size:10px; color:#999;">　　⚠️ 보안 정책으로 다운로드가 안 되면 →</span>
+      <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_server.py','mail_server.py')"
+        style="padding:0px 5px; background:#fff; color:#555; border:1px solid #999; border-radius:3px; text-decoration:none; font-size:10px; white-space:nowrap;">
+        📋 py 복사
+      </a>
+      <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start.bat','start.bat')"
+        style="padding:0px 5px; background:#fff; color:#555; border:1px solid #999; border-radius:3px; text-decoration:none; font-size:10px; white-space:nowrap;">
+        📋 bat 복사
+      </a><br>
+      <b>Step 3.</b> 압축 푼 폴더 안 <b>start.bat</b> 더블클릭 → 검은 창 유지<br>
+      　　(zip이 막히면: 위 📋로 각각 복사 → 메모장에 붙여넣기 → 파일명 그대로 저장, 두 파일을 같은 폴더에 두고 start.bat 실행)<br>
       <b>Step 4.</b> 아래 SMTP 설정 입력 후 <b>[서버에 저장]</b> 클릭<br>
       <b>Step 5.</b> 앱 사용 중에는 start.bat 창을 닫지 마세요
     </div>
@@ -3165,6 +3170,25 @@ ${mailText}`;
             URL.revokeObjectURL(blobUrl);
         } catch (e) {
             alert(`다운로드 실패: ${e.message}\n\n아래 주소를 새 탭에서 열어 [Ctrl+S]로 저장해주세요:\n${url}`);
+        }
+    };
+
+    // 📋 다운로드가 보안 정책으로 막힐 때 대비 — 클립보드 복사 + 수동 저장 안내
+    window.copyRawFileToClipboard = async function(url, filename) {
+        try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const text = await res.text();
+            await navigator.clipboard.writeText(text);
+            alert(
+                `✅ "${filename}" 내용이 클립보드에 복사되었습니다.\n\n` +
+                `1. 메모장(Notepad) 실행\n` +
+                `2. Ctrl+V로 붙여넣기\n` +
+                `3. [다른 이름으로 저장] → 파일 이름: ${filename}\n` +
+                `   (저장 형식을 "모든 파일"로 선택해야 .txt로 안 바뀝니다)`
+            );
+        } catch (e) {
+            alert(`복사 실패: ${e.message}`);
         }
     };
 
@@ -8870,16 +8894,21 @@ window.updateInboxBadge();
                             　　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>
                             <b>Step 2.</b> 아래 파일 2개 다운로드 후 같은 폴더에 저장<br>
                             　　
-                            <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_fetch_server.py','mail_fetch_server.py')"
-                                style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
-                                mail_fetch_server.py ↓
-                            </a>
-                            　
-                            <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start_mail_fetch.bat','start_mail_fetch.bat')"
-                                style="padding:2px 10px; background:#555; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
-                                start_mail_fetch.bat ↓
+                            <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_fetch_tools.zip','mail_fetch_tools.zip')"
+                                style="padding:1px 6px; background:#555; color:#fff; border-radius:3px; text-decoration:none; font-size:10.5px; white-space:nowrap;">
+                                mail_fetch_tools.zip ↓
                             </a><br>
-                            <b>Step 3.</b> 다운로드 완료 시 화면 하단에 뜨는 <b>start_mail_fetch.bat</b>을 클릭 (또는 다운로드 폴더에서 더블클릭) → 검은 창 유지<br>
+                            <span style="font-size:10px; color:#999;">　　⚠️ 보안 정책으로 다운로드가 안 되면 →</span>
+                            <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/mail_fetch_server.py','mail_fetch_server.py')"
+                                style="padding:0px 5px; background:#fff; color:#555; border:1px solid #999; border-radius:3px; text-decoration:none; font-size:10px; white-space:nowrap;">
+                                📋 py 복사
+                            </a>
+                            <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/start_mail_fetch.bat','start_mail_fetch.bat')"
+                                style="padding:0px 5px; background:#fff; color:#555; border:1px solid #999; border-radius:3px; text-decoration:none; font-size:10px; white-space:nowrap;">
+                                📋 bat 복사
+                            </a><br>
+                            <b>Step 3.</b> 다운로드한 zip 압축 풀기 → 폴더 안 <b>start_mail_fetch.bat</b> 더블클릭 → 검은 창 유지<br>
+                            　　(zip이 막히면: 위 📋로 각각 복사 → 메모장에 붙여넣기 → 파일명 그대로 저장, 두 파일을 같은 폴더에 두고 start_mail_fetch.bat 실행)<br>
                             <b>Step 4.</b> 검은 창에 <b>http://127.0.0.1:5001</b> 이 뜨면 준비 완료<br>
                             <b>Step 5.</b> 앱 사용 중에는 start_mail_fetch.bat 창을 닫지 마세요
                         </div>
