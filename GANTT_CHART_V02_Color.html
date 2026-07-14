@@ -8794,7 +8794,7 @@ window.updateInboxBadge();
                          onclick="document.getElementById('mf-input').click()"
                          ondragover="event.preventDefault(); this.style.background='#e9eef3';"
                          ondragleave="this.style.background='#f8f9fa';"
-                         ondrop="event.preventDefault(); this.style.background='#f8f9fa'; window.mfHandleFiles(event.dataTransfer.files)">
+                         ondrop="event.preventDefault(); event.stopPropagation(); this.style.background='#f8f9fa'; window.mfHandleFiles(event.dataTransfer.files)">
                         <div style="font-size:20px;">📁</div>
                         <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
                         <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
