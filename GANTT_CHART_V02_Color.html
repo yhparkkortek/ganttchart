@@ -6980,7 +6980,7 @@ window.renderMailResult = function(result) {
         let inputType = isDateField
             ? `<div style="display:flex; align-items:center; gap:8px; ${warnStyle} padding:2px 4px; border-radius:4px;">
                 <span class="date-clickable" id="mail-date-${f.key}" 
-                    style="cursor:pointer; font-size:13px; font-weight:bold; color:#0056b3;"
+                    style="cursor:pointer; font-size:13px; font-weight:bold; color:#0056b3; user-select:none; -webkit-user-select:none;"
                     onclick="window.showMailCalendar(this, ${dateTsArg}, '${f.key}')">
                     ${displayDate}
                 </span>
