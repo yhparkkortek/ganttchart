@@ -4603,7 +4603,7 @@ window.deleteHistoryByDateRange = function() {
 
             td.setAttribute('data-raw', encodeURIComponent(newText));
             
-            if ([colIdx.start, colIdx.plan, colIdx.period, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4].includes(colIndex)) {
+            if ([colIdx.start, colIdx.plan, colIdx.period, colIdx.dur1, colIdx.dur2, colIdx.dur3, colIdx.dur4, colIdx.devStage, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4, colIdx.wbs].includes(colIndex)) {
                 window.recalculateSchedules();
             } else { renderTable(globalData); applyFilters(); window.pushUndoSnapshot(); }
         } else { td.innerHTML = td.dataset.displayHtml || oldText; }
@@ -6127,7 +6127,7 @@ window.handleAuthClick = function() {
     let ghostBarHtml = compareInfo ? buildGhostBarHtml(compareInfo.aStart, compareInfo.aEnd, compareInfo.aLabel) : '';
 
     return `<div style="display:flex; flex-direction:column; width:100%; min-width:120px; padding:0 20px; box-sizing:border-box;" title="소요일수: ${durationDays}일">
-                <div style="position:relative; height:15px; background-color:#fafafa; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
+                <div style="position:relative; height:15px; background-color:transparent; border:1px solid #ddd; border-radius:4px; overflow:visible; width:100%; margin-top:0px;">
                     ${gridLines}${todayLine}${ghostBarHtml}
                     <div style="position:absolute; top:1px; height:8px; left:${startPct}%; width:${widthPct}%; ${gradientStyle} border-radius:4px; border:2px solid rgba(0,0,0,0.2); box-sizing:border-box; z-index:2; opacity:${barOpacity}; box-shadow:0 1px 3px rgba(0,0,0,0.2);" title="${dateRangeLabel}"></div>
                 </div>
