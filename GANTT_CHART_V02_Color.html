@@ -13266,12 +13266,19 @@ window.toggleAlarmSent = function(idx) {
     const item = (window._alarmItems || [])[idx];
     if (!item || !Object.keys(item.sentLog).length) return;
     const key = `gantt_alarm_${item.rowId}_hidden`;
-    if (item.sentHidden) {
+    const wasHidden = item.sentHidden;
+    if (wasHidden) {
         localStorage.removeItem(key); // 복원: 다시 "발송됨"으로 표시
     } else {
         localStorage.setItem(key, '1'); // 토글: 임시로 "미발송"으로 표시 (이력은 유지)
     }
     window.renderAlarmTab();
+
+    // 📌 "미발송 처리됨"으로 바꾼 순간(=재발송이 필요하다는 뜻) 바로 체크해서 발송
+    //    (반대로 "발송됨"으로 되돌릴 때는 아무것도 보내지 않음)
+    if (!wasHidden && window.checkAndSendAlarms) {
+        window.checkAndSendAlarms(true);
+    }
 };
 
 // 모달 열기
