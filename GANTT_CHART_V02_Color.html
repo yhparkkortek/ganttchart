@@ -10769,6 +10769,16 @@ const AR = {
 
     selectItem(tabKey, idx) {
         const c = AR.cfg[tabKey];
+
+        // 📌 다른 항목으로 넘어가기 전에, 지금 보고 있던 항목에서 고친 내용(날짜 등)을 먼저 저장
+        //    (안 그러면 "등록" 없이 목록만 이동해도 방금 고친 날짜/내용이 사라짐)
+        const prevIdxForSave = c.getCurIdx();
+        if (prevIdxForSave >= 0 && prevIdxForSave !== idx && window._mailAnalyzedResult) {
+            const prevArr = c.getArr();
+            if (prevArr[prevIdxForSave] && prevArr[prevIdxForSave].task) {
+                prevArr[prevIdxForSave].task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
+            }
+        }
         const r = c.getArr()[idx];
         if (!r) return;
 
