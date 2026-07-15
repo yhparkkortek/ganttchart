@@ -2354,33 +2354,8 @@ ${mailText}`;
                 });
             }
 
-            let chartMinTs = null; let chartMaxTs = null;
-            for (let i = 1; i < globalData.length; i++) {
-                let rStart = globalData[i]._calcStartTs; let rEnd = globalData[i]._calcPlanTs;
-                if (rStart && (chartMinTs === null || rStart < chartMinTs)) chartMinTs = rStart;
-                if (rEnd && (chartMaxTs === null || rEnd > chartMaxTs)) chartMaxTs = rEnd;
-            }
-            // 📌 비교 중인 계획이 있으면 그 계획의 날짜도 축 범위에 포함 — 안 그러면 현재 일정 범위 밖으로
-            //    벗어난 비교 계획의 고스트바가 화면 가장자리에 눌려붙거나 안 보이게 됨
-            if (window._compareTargetId && typeof getBaselineById === 'function') {
-                const cmpBl = getBaselineById(window._compareTargetId);
-                if (cmpBl && cmpBl.rows) {
-                    Object.keys(cmpBl.rows).forEach(function(k) {
-                        const v = cmpBl.rows[k];
-                        const s = (v && typeof v === 'object') ? v.s : v;
-                        const e = (v && typeof v === 'object') ? v.e : null;
-                        if (s && (chartMinTs === null || s < chartMinTs)) chartMinTs = s;
-                        if (s && (chartMaxTs === null || s > chartMaxTs)) chartMaxTs = s;
-                        if (e && (chartMaxTs === null || e > chartMaxTs)) chartMaxTs = e;
-                        if (e && (chartMinTs === null || e < chartMinTs)) chartMinTs = e;
-                    });
-                }
-            }
-            if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
-            if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30); 
-            // 💡 여백 없이 프로젝트 실제 시작일~종료일 그대로를 축 범위로 사용
-            window.ganttViewStartTs = chartMinTs;
-            window.ganttViewDuration = Math.max(chartMaxTs - chartMinTs, 86400000 * 7); // 기간이 너무 짧으면 최소 7일 확보
+            // 💡 축 범위(현재 일정 + 비교 계획 포함) 재계산 — window.recomputeGanttViewRange()로 분리됨
+            window.recomputeGanttViewRange();
 
             renderTable(globalData); applyFilters();
             window.pushUndoSnapshot();
@@ -2845,6 +2820,37 @@ ${mailText}`;
         if (val == null) return null;
         return (typeof val === 'object') ? { s: val.s || null, e: val.e || null } : { s: val, e: null };
     }
+
+    // 📌 차트 축 범위(ganttViewStartTs/Duration) 재계산 — 현재 일정 + (비교 중이면) 비교 계획의
+    //    시작/완료일을 모두 포함해 가장 이르고 가장 늦은 날짜로 넓힘. 일정 재계산 시뿐 아니라
+    //    비교 계획을 선택/해제/삭제할 때도 호출해 축이 항상 최신 상태를 반영하게 함.
+    window.recomputeGanttViewRange = function() {
+        if (!globalData || globalData.length <= 1) return;
+        let chartMinTs = null; let chartMaxTs = null;
+        for (let i = 1; i < globalData.length; i++) {
+            let rStart = globalData[i]._calcStartTs; let rEnd = globalData[i]._calcPlanTs;
+            if (rStart && (chartMinTs === null || rStart < chartMinTs)) chartMinTs = rStart;
+            if (rEnd && (chartMaxTs === null || rEnd > chartMaxTs)) chartMaxTs = rEnd;
+        }
+        if (window._compareTargetId && typeof getBaselineById === 'function') {
+            const cmpBl = getBaselineById(window._compareTargetId);
+            if (cmpBl && cmpBl.rows) {
+                Object.keys(cmpBl.rows).forEach(function(k) {
+                    const v = cmpBl.rows[k];
+                    const s = (v && typeof v === 'object') ? v.s : v;
+                    const e = (v && typeof v === 'object') ? v.e : null;
+                    if (s && (chartMinTs === null || s < chartMinTs)) chartMinTs = s;
+                    if (s && (chartMaxTs === null || s > chartMaxTs)) chartMaxTs = s;
+                    if (e && (chartMaxTs === null || e > chartMaxTs)) chartMaxTs = e;
+                    if (e && (chartMinTs === null || e < chartMinTs)) chartMinTs = e;
+                });
+            }
+        }
+        if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
+        if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30);
+        window.ganttViewStartTs = chartMinTs;
+        window.ganttViewDuration = Math.max(chartMaxTs - chartMinTs, 86400000 * 7);
+    };
     // 📌 "현재 일정" 고정 슬롯 — 계획 버튼 열 때마다 항상 최신 상태로 덮어씀
     window.autoSaveCurrentSnapshot = function() {
         if (!globalData || globalData.length <= 1) return;
@@ -2980,6 +2986,7 @@ ${mailText}`;
 
     window.toggleCompareSelection = function(id) {
         window._compareTargetId = (window._compareTargetId === id) ? null : id; // 다시 클릭하면 해제, 다른 걸 클릭하면 교체
+        window.recomputeGanttViewRange(); // 📌 비교 대상이 바뀌었으니 축 범위도 새로 넓히거나 좁힘
         renderTable(globalData);
         applyFilters();
         window.renderBaselineMenu();
@@ -3011,6 +3018,7 @@ ${mailText}`;
 
         if (window._compareTargetId === id) {
             window._compareTargetId = null;
+            window.recomputeGanttViewRange(); // 📌 비교가 해제됐으니 축 범위를 현재 일정 기준으로 되돌림
             renderTable(globalData);
             applyFilters();
         }
