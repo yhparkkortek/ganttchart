@@ -2354,33 +2354,8 @@ ${mailText}`;
                 });
             }
 
-            let chartMinTs = null; let chartMaxTs = null;
-            for (let i = 1; i < globalData.length; i++) {
-                let rStart = globalData[i]._calcStartTs; let rEnd = globalData[i]._calcPlanTs;
-                if (rStart && (chartMinTs === null || rStart < chartMinTs)) chartMinTs = rStart;
-                if (rEnd && (chartMaxTs === null || rEnd > chartMaxTs)) chartMaxTs = rEnd;
-            }
-            // 📌 비교 중인 계획이 있으면 그 계획의 날짜도 축 범위에 포함 — 안 그러면 현재 일정 범위 밖으로
-            //    벗어난 비교 계획의 고스트바가 화면 가장자리에 눌려붙거나 안 보이게 됨
-            if (window._compareTargetId && typeof getBaselineById === 'function') {
-                const cmpBl = getBaselineById(window._compareTargetId);
-                if (cmpBl && cmpBl.rows) {
-                    Object.keys(cmpBl.rows).forEach(function(k) {
-                        const v = cmpBl.rows[k];
-                        const s = (v && typeof v === 'object') ? v.s : v;
-                        const e = (v && typeof v === 'object') ? v.e : null;
-                        if (s && (chartMinTs === null || s < chartMinTs)) chartMinTs = s;
-                        if (s && (chartMaxTs === null || s > chartMaxTs)) chartMaxTs = s;
-                        if (e && (chartMaxTs === null || e > chartMaxTs)) chartMaxTs = e;
-                        if (e && (chartMinTs === null || e < chartMinTs)) chartMinTs = e;
-                    });
-                }
-            }
-            if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
-            if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30); 
-            // 💡 여백 없이 프로젝트 실제 시작일~종료일 그대로를 축 범위로 사용
-            window.ganttViewStartTs = chartMinTs;
-            window.ganttViewDuration = Math.max(chartMaxTs - chartMinTs, 86400000 * 7); // 기간이 너무 짧으면 최소 7일 확보
+            // 💡 축 범위(현재 일정 + 비교 계획 포함) 재계산 — window.recomputeGanttViewRange()로 분리됨
+            window.recomputeGanttViewRange();
 
             renderTable(globalData); applyFilters();
             window.pushUndoSnapshot();
@@ -2845,6 +2820,37 @@ ${mailText}`;
         if (val == null) return null;
         return (typeof val === 'object') ? { s: val.s || null, e: val.e || null } : { s: val, e: null };
     }
+
+    // 📌 차트 축 범위(ganttViewStartTs/Duration) 재계산 — 현재 일정 + (비교 중이면) 비교 계획의
+    //    시작/완료일을 모두 포함해 가장 이르고 가장 늦은 날짜로 넓힘. 일정 재계산 시뿐 아니라
+    //    비교 계획을 선택/해제/삭제할 때도 호출해 축이 항상 최신 상태를 반영하게 함.
+    window.recomputeGanttViewRange = function() {
+        if (!globalData || globalData.length <= 1) return;
+        let chartMinTs = null; let chartMaxTs = null;
+        for (let i = 1; i < globalData.length; i++) {
+            let rStart = globalData[i]._calcStartTs; let rEnd = globalData[i]._calcPlanTs;
+            if (rStart && (chartMinTs === null || rStart < chartMinTs)) chartMinTs = rStart;
+            if (rEnd && (chartMaxTs === null || rEnd > chartMaxTs)) chartMaxTs = rEnd;
+        }
+        if (window._compareTargetId && typeof getBaselineById === 'function') {
+            const cmpBl = getBaselineById(window._compareTargetId);
+            if (cmpBl && cmpBl.rows) {
+                Object.keys(cmpBl.rows).forEach(function(k) {
+                    const v = cmpBl.rows[k];
+                    const s = (v && typeof v === 'object') ? v.s : v;
+                    const e = (v && typeof v === 'object') ? v.e : null;
+                    if (s && (chartMinTs === null || s < chartMinTs)) chartMinTs = s;
+                    if (s && (chartMaxTs === null || s > chartMaxTs)) chartMaxTs = s;
+                    if (e && (chartMaxTs === null || e > chartMaxTs)) chartMaxTs = e;
+                    if (e && (chartMinTs === null || e < chartMinTs)) chartMinTs = e;
+                });
+            }
+        }
+        if (chartMinTs === null) chartMinTs = new Date().setHours(0,0,0,0);
+        if (chartMaxTs === null) chartMaxTs = chartMinTs + (86400000 * 30);
+        window.ganttViewStartTs = chartMinTs;
+        window.ganttViewDuration = Math.max(chartMaxTs - chartMinTs, 86400000 * 7);
+    };
     // 📌 "현재 일정" 고정 슬롯 — 계획 버튼 열 때마다 항상 최신 상태로 덮어씀
     window.autoSaveCurrentSnapshot = function() {
         if (!globalData || globalData.length <= 1) return;
@@ -2980,6 +2986,7 @@ ${mailText}`;
 
     window.toggleCompareSelection = function(id) {
         window._compareTargetId = (window._compareTargetId === id) ? null : id; // 다시 클릭하면 해제, 다른 걸 클릭하면 교체
+        window.recomputeGanttViewRange(); // 📌 비교 대상이 바뀌었으니 축 범위도 새로 넓히거나 좁힘
         renderTable(globalData);
         applyFilters();
         window.renderBaselineMenu();
@@ -3011,6 +3018,7 @@ ${mailText}`;
 
         if (window._compareTargetId === id) {
             window._compareTargetId = null;
+            window.recomputeGanttViewRange(); // 📌 비교가 해제됐으니 축 범위를 현재 일정 기준으로 되돌림
             renderTable(globalData);
             applyFilters();
         }
@@ -12791,6 +12799,12 @@ const sendAlarmMail = async (to, subject, body) => {
 
 // 알람 대상 행 수집 + 발송
 window.checkAndSendAlarms = async function(isManual) {
+    // 자동 체크(isManual=false)일 때만 ON/OFF 설정을 확인 — 수동 버튼(즉시 발송/일괄 발송)은 항상 동작
+    if (!isManual) {
+        const autoCfg = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+        if (autoCfg.autoSend === false) return; // OFF면 자동 체크(앱 시작/10·13·17시) 발송 안 함
+    }
+
     // 서버 실행 여부 확인
     try {
         const h = await fetch(`${MAIL_SERVER}/health`, { signal: AbortSignal.timeout(2000) });
@@ -12833,13 +12847,16 @@ window.checkAndSendAlarms = async function(isManual) {
     const dDayPlainSafe = window.dDayPlain || ((d) => (d === 0) ? 'D-Day' : (d < 0 ? 'D+' + Math.abs(d) : 'D-' + d));
 
     for (const item of items) {
-        for (const dDay of ALARM_DAYS) {
-            // 정확히 그날(===)이 아니라 그 시점을 지났으면(<=) 대상 — 앱을 며칠 안 열어서
-            // 체크를 놓쳤어도 다음 체크 때 아직 안 보낸 단계를 캐치업해서 발송
-            if (item.diffDays > dDay) continue;
+        // 도달했거나 이미 지난 단계들 (D-7/D-3/D-1 중 diffDays가 그 이하로 내려온 것들)
+        const candidateDDays = ALARM_DAYS.filter(d => item.diffDays <= d);
+        if (!candidateDDays.length) continue;
 
-            // 중복 발송 방지 — 단, "🔄 미발송 처리됨"으로 되돌려놨다면 이미 보냈어도 다시 대상에 포함
+        // "🔄 미발송 처리됨"이면 몇 단계가 걸리든 딱 1건만 — 가장 임박한(가장 작은) 단계로 재발송
+        const dDaysToCheck = item.sentHidden ? [Math.min(...candidateDDays)] : candidateDDays;
+
+        for (const dDay of dDaysToCheck) {
             const key = alarmKey(item.rowId, dDay);
+            // 일반 캐치업은 이미 보낸 단계는 스킵, "미발송 처리"된 경우는 이미 보낸 기록이 있어도 재발송
             if (localStorage.getItem(key) && !item.sentHidden) continue;
 
             const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
@@ -12848,12 +12865,12 @@ window.checkAndSendAlarms = async function(isManual) {
 <div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlainSafe(item.diffDays)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0;">
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
-    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top;">내용</td><td style="padding:6px 12px; white-space:normal;">${window.alarmFormatContent ? window.alarmFormatContent(item.content).replace(/\n/g, '<br>') : item.content}</td></tr>` : ''}
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${item.assignee}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${item.dueStr}</b></td></tr>
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.taskName}</td></tr>
+    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top; border:1px solid #dcdde1;">내용</td><td style="padding:6px 12px; white-space:normal; border:1px solid #dcdde1;">${window.alarmFormatContent ? window.alarmFormatContent(item.content).replace(/\n/g, '<br>') : item.content}</td></tr>` : ''}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">담당자</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c; border:1px solid #dcdde1;"><b>${item.dueStr}</b></td></tr>
   </table>
   <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
@@ -12877,6 +12894,20 @@ window.checkAndSendAlarms = async function(isManual) {
         console.log(`[알람] 자동 발송 ${sentCount}건 완료`);
     }
 };
+
+// 📌 앱 실행 중 매일 10시/13시/17시에도 자동 체크 — 브라우저 탭이 열려 있는 동안만 동작
+//    (앱 시작 시 체크는 DOMContentLoaded의 3초 후 setTimeout이 담당)
+const ALARM_CHECK_HOURS = [10, 13, 17];
+let _lastAutoAlarmHourStamp = null;
+function _autoAlarmHourlyTick() {
+    const now = new Date();
+    if (!ALARM_CHECK_HOURS.includes(now.getHours())) return;
+    const stamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}_${now.getHours()}`;
+    if (stamp === _lastAutoAlarmHourStamp) return; // 같은 시간대에 이미 체크했으면 건너뜀
+    _lastAutoAlarmHourStamp = stamp;
+    if (window.checkAndSendAlarms) window.checkAndSendAlarms(false);
+}
+setInterval(_autoAlarmHourlyTick, 60 * 1000); // 1분마다 현재 시각이 체크 시간대인지 확인
 
 // ══════════════════════════════════════════════════════════════
 // ⚙️ 알람 설정 (SMTP / 자동발송 / CC)
@@ -13322,12 +13353,12 @@ window.sendSingleAlarm = async function(sendAll) {
     const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(dDay)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0;">
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
-    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top;">내용</td><td style="padding:6px 12px; white-space:normal;">${window.alarmFormatContent(item.content).replace(/\n/g, '<br>')}</td></tr>` : ''}
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${item.assignee}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${item.dueStr}</b></td></tr>
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.taskName}</td></tr>
+    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top; border:1px solid #dcdde1;">내용</td><td style="padding:6px 12px; white-space:normal; border:1px solid #dcdde1;">${window.alarmFormatContent(item.content).replace(/\n/g, '<br>')}</td></tr>` : ''}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">담당자</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c; border:1px solid #dcdde1;"><b>${item.dueStr}</b></td></tr>
   </table>
   <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
@@ -13398,12 +13429,12 @@ window.sendAllPendingAlarms = async function() {
         const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(item.diffDays)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0;">
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
-    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">내용</td><td style="padding:6px 12px;">${item.content}</td></tr>` : ''}
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${item.assignee}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${item.dueStr}</b></td></tr>
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.taskName}</td></tr>
+    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">내용</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.content}</td></tr>` : ''}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">담당자</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c; border:1px solid #dcdde1;"><b>${item.dueStr}</b></td></tr>
   </table>
   <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
