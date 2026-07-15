@@ -4105,7 +4105,7 @@ window.deleteHistoryByDateRange = function() {
     let top = rect.top + window.scrollY;
     // 💡 업무명 텍스트에 더 가깝게 — 버튼 크기(33px)의 2배만큼 기존 위치보다 왼쪽(안쪽)으로 당김
     const RAP_BTN_SIZE = 33;
-    let left = rect.right + window.scrollX + 5 - (RAP_BTN_SIZE * 8);
+    let left = rect.right + window.scrollX + 5 - (RAP_BTN_SIZE * 2);
 
     // 화면 밖으로 나가면 왼쪽에 표시
     if (left + popupW > window.innerWidth) left = rect.left + window.scrollX - popupW - 5;
