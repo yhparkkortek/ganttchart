@@ -3496,7 +3496,8 @@ ${mailText}`;
         // 💡 다른 탭들과 동일하게, 계산 전(측정 대상에 포함되는 시점)에 실제 콘텐츠로 삽입
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
-        const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
+        const _pfPm = window.projectMeta || {};
+        const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명, _pfPm.KTK모델명].filter(Boolean).join(' > ');
         // 📌 <tfoot>은 표가 여러 페이지로 나뉠 때 브라우저가 페이지마다 자동으로 반복해줌 (thead와 동일한 원리)
         const ganttFooterTfoot = document.createElement('tfoot');
         ganttFooterTfoot.innerHTML = '<tr><td colspan="100" style="padding-top:4px; margin:0; border:none; border-radius:0; box-shadow:none;">'
@@ -3560,7 +3561,8 @@ ${mailText}`;
         //    반드시 clone "안"에 footer를 넣은 다음, 계산이 일어나기 전에 clone을 printArea에 붙여야 함
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
-        const _pfProjectName = (window.projectMeta && window.projectMeta.프로젝트명) || '';
+        const _pfPm = window.projectMeta || {};
+        const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명, _pfPm.KTK모델명].filter(Boolean).join(' > ');
         // 📌 알람/주소록/M.C Table(펼침)처럼 표 하나가 여러 페이지로 이어지는 탭은 <tfoot>으로 넣어 페이지마다 자동 반복
         //    (그 외 탭은 기존처럼 맨 끝에 한 번만 — 1페이지로 맞추는 탭이라 반복이 필요 없음)
         let footerTable = null;
@@ -5207,9 +5209,9 @@ window.deleteHistoryByDateRange = function() {
             let customer = window.getSummaryCustomer() || "All";
             let model = window.getSummaryModel() || "All";
             let inch = window.getSummaryInch();
-            let assignee = window.getSummaryAssignee() || "All";
+            // 💡 담당자 이름은 화면 표시/파일명(xlsx·json·드라이브 저장·주간보고서 전부 공용) 어디에도 넣지 않음
 
-            const infoStr = inch ? `${customer}_${model}_${inch}_${assignee}` : `${customer}_${model}_${assignee}`; 
+            const infoStr = inch ? `${customer}_${model}_${inch}` : `${customer}_${model}`; 
             const safeInfoStr = infoStr.replace(/\s*>\s*/g, '_').replace(/[\x00-\x1F\x7F"*/:<>?\\|]/g, ''); 
             
             const tableInfoTextElem = document.getElementById('table-info-text'); 
