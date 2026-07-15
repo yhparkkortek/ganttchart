@@ -12872,11 +12872,11 @@ window.checkAndSendAlarms = async function(isManual) {
 <div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDay}일 후(${dueStr})</b>로 다가왔습니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0;">
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${taskName}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${assignee}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${dueStr}</b></td></tr>
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${taskName}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">담당자</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c; border:1px solid #dcdde1;"><b>${dueStr}</b></td></tr>
   </table>
   <p>본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
@@ -13342,12 +13342,12 @@ window.sendSingleAlarm = async function(sendAll) {
     const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(dDay)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0;">
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
-    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top;">내용</td><td style="padding:6px 12px; white-space:normal;">${window.alarmFormatContent(item.content).replace(/\n/g, '<br>')}</td></tr>` : ''}
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${item.assignee}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${item.dueStr}</b></td></tr>
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.taskName}</td></tr>
+    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top; border:1px solid #dcdde1;">내용</td><td style="padding:6px 12px; white-space:normal; border:1px solid #dcdde1;">${window.alarmFormatContent(item.content).replace(/\n/g, '<br>')}</td></tr>` : ''}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">담당자</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c; border:1px solid #dcdde1;"><b>${item.dueStr}</b></td></tr>
   </table>
   <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
@@ -13418,12 +13418,12 @@ window.sendAllPendingAlarms = async function() {
         const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(item.diffDays)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0;">
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">프로젝트</td><td style="padding:6px 12px;">${projTitle}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">업무</td><td style="padding:6px 12px;">${item.taskName}</td></tr>
-    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">내용</td><td style="padding:6px 12px;">${item.content}</td></tr>` : ''}
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">담당자</td><td style="padding:6px 12px;">${item.assignee}</td></tr>
-    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c;"><b>${item.dueStr}</b></td></tr>
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${projTitle}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.taskName}</td></tr>
+    ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">내용</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.content}</td></tr>` : ''}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">담당자</td><td style="padding:6px 12px; border:1px solid #dcdde1;">${item.assignee}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c; border:1px solid #dcdde1;"><b>${item.dueStr}</b></td></tr>
   </table>
   <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
