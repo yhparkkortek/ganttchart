@@ -12852,7 +12852,9 @@ window.checkAndSendAlarms = async function(isManual) {
         const diffDays = Math.round((dueDate - today) / 86400000);
 
         for (const dDay of ALARM_DAYS) {
-            if (diffDays !== dDay) continue;
+            // 💡 정확히 그날(===)이 아니라 그 시점을 지났으면(<=) 대상으로 봄 — 앱을 며칠 안 열어서
+            //    D-7/D-3/D-1 체크를 놓쳤어도, 다음 체크 때 아직 안 보낸 단계를 캐치업해서 발송
+            if (diffDays > dDay) continue;
 
             // 중복 발송 방지
             const key = alarmKey(tr.dataset.id || dueStr, dDay);
@@ -12897,6 +12899,20 @@ window.checkAndSendAlarms = async function(isManual) {
         console.log(`[알람] 자동 발송 ${sentCount}건 완료`);
     }
 };
+
+// 📌 앱 실행 중 매일 10시/13시/17시에도 자동 체크 — 브라우저 탭이 열려 있는 동안만 동작
+//    (앱 시작 시 체크는 기존 DOMContentLoaded의 3초 후 setTimeout이 담당)
+const ALARM_CHECK_HOURS = [10, 13, 17];
+let _lastAutoAlarmHourStamp = null;
+function _autoAlarmHourlyTick() {
+    const now = new Date();
+    if (!ALARM_CHECK_HOURS.includes(now.getHours())) return;
+    const stamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}_${now.getHours()}`;
+    if (stamp === _lastAutoAlarmHourStamp) return; // 같은 시간대에 이미 체크했으면 건너뜀
+    _lastAutoAlarmHourStamp = stamp;
+    if (window.checkAndSendAlarms) window.checkAndSendAlarms(false);
+}
+setInterval(_autoAlarmHourlyTick, 60 * 1000); // 1분마다 현재 시각이 체크 시간대인지 확인
 
 // ══════════════════════════════════════════════════════════════
 // ⚙️ 알람 설정 (SMTP / 자동발송 / CC)
