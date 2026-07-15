@@ -2192,6 +2192,7 @@ ${mailText}`;
                 row._origT2 = curT2; if (colIdx.taskType2 !== -1) row[colIdx.taskType2] = curT2;
                 row._origT3 = curT3; if (colIdx.taskType3 !== -1) row[colIdx.taskType3] = curT3;
                 row._origT4 = curT4; if (colIdx.taskType4 !== -1) row[colIdx.taskType4] = curT4;
+                if (colIdx.wbs !== -1 && colIdx.devStage === -1) row[colIdx.wbs] = curD0; // 💡 단일 WBS 열 모드: 0레벨 그룹명을 하위 행까지 다시 채워서 개발단계 필터가 최신 상태로 갱신되게 함
                 if (colIdx.bogo !== -1) row[colIdx.bogo] = row._level; 
             }
 
