@@ -3497,7 +3497,7 @@ ${mailText}`;
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfPm = window.projectMeta || {};
-        const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명, _pfPm.KTK모델명].filter(Boolean).join(' > ');
+        const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명].filter(Boolean).join(' > ');
         // 📌 <tfoot>은 표가 여러 페이지로 나뉠 때 브라우저가 페이지마다 자동으로 반복해줌 (thead와 동일한 원리)
         const ganttFooterTfoot = document.createElement('tfoot');
         ganttFooterTfoot.innerHTML = '<tr><td colspan="100" style="padding-top:4px; margin:0; border:none; border-radius:0; box-shadow:none;">'
@@ -3562,7 +3562,7 @@ ${mailText}`;
         const _pfNow = new Date();
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfPm = window.projectMeta || {};
-        const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명, _pfPm.KTK모델명].filter(Boolean).join(' > ');
+        const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명].filter(Boolean).join(' > ');
         // 📌 알람/주소록/M.C Table(펼침)처럼 표 하나가 여러 페이지로 이어지는 탭은 <tfoot>으로 넣어 페이지마다 자동 반복
         //    (그 외 탭은 기존처럼 맨 끝에 한 번만 — 1페이지로 맞추는 탭이라 반복이 필요 없음)
         let footerTable = null;
