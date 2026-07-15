@@ -13274,10 +13274,13 @@ window.toggleAlarmSent = function(idx) {
     }
     window.renderAlarmTab();
 
-    // 📌 "미발송 처리됨"으로 바꾼 순간(=재발송이 필요하다는 뜻) 바로 체크해서 발송
-    //    (반대로 "발송됨"으로 되돌릴 때는 아무것도 보내지 않음)
-    if (!wasHidden && window.checkAndSendAlarms) {
-        window.checkAndSendAlarms(true);
+    // 📌 "미발송 처리됨"으로 바꾼 순간 바로 체크해서 발송 — 단, 자동 메일 발송이 OFF면
+    //    이 토글도 "자동" 성격이므로 보내지 않고 플래그만 켜둠 (즉시발송/일괄발송 버튼은 항상 별개로 동작)
+    if (!wasHidden) {
+        const autoCfg = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+        if (autoCfg.autoSend !== false && window.checkAndSendAlarms) {
+            window.checkAndSendAlarms(true);
+        }
     }
 };
 
