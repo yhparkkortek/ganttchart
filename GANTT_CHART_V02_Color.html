@@ -4043,7 +4043,7 @@ window.deleteHistoryByDateRange = function() {
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-           <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(3,33px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
+           <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(2,33px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
     
             <span id="rap-up"    class="rap-btn" title="위로 이동"><i class="ti ti-chevron-up"></i></span>
             <span id="rap-left"  class="rap-btn" title="WBS 레벨 올리기"><i class="ti ti-chevron-left"></i></span>
@@ -4051,7 +4051,6 @@ window.deleteHistoryByDateRange = function() {
             <span id="rap-dn"    class="rap-btn" title="아래로 이동"><i class="ti ti-chevron-down"></i></span>
             <span id="rap-add"   class="rap-btn" title="행 추가"><i class="ti ti-plus"></i></span>
             <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제"><i class="ti ti-minus"></i></span>
-            <span id="rap-lock"  class="rap-btn" title="선택한 행 일괄 고정/자동 전환 (2개 이상 선택 시 적용, 하위 포함)" style="grid-column: 1 / span 3; font-size:15px;">🔒</span>
 
         </div>`;
         document.body.appendChild(popup);
@@ -4106,10 +4105,6 @@ window.deleteHistoryByDateRange = function() {
             popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
         },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
-        'rap-lock':  () => {
-            window.applyScheduleLockToSelected(rowIndex);
-            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
-        },
         'rap-del':   () => {
             if (window._selectedRows && window._selectedRows.size > 1) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
             window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
