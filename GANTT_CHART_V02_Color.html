@@ -2561,6 +2561,12 @@ ${mailText}`;
         if (!tbody || tbody._rowSelectDelegationBound) return;
         tbody._rowSelectDelegationBound = true;
         tbody.addEventListener('click', function(ev) {
+            // 📌 알림 / 🔒 잠금 아이콘은 자체 Ctrl/Shift 선택 & 일괄 적용 로직을 갖고 있으므로,
+            //    Ctrl/Shift 여부와 상관없이 이 위임 핸들러가 선택을 먼저 지우지 않도록 최상단에서 예외 처리
+            const target = ev.target;
+            const ownOnclick = target.getAttribute && target.getAttribute('onclick');
+            if (ownOnclick && (ownOnclick.indexOf('wrToggleAlarm') !== -1 || ownOnclick.indexOf('wrToggleScheduleLock') !== -1)) return;
+
             // 💡 일반 클릭(Ctrl/Shift 없음)이고 다중 선택이 남아있는 상태면, 어느 열을 클릭하든
             //    선택을 해제만 하고 그 열 고유의 클릭 동작(편집 진입·달력 열기 등)은 그대로 진행되게 둠
             //    (preventDefault/stopPropagation을 걸지 않아서 원래 동작을 막지 않음)
@@ -2575,10 +2581,6 @@ ${mailText}`;
                 }
                 return; // 일반 클릭은 선택 해제만 하고 그대로 통과
             }
-            const target = ev.target;
-            // 📌 알림 / 🔒 잠금 아이콘은 이미 자체 Ctrl/Shift 선택 로직이 있으므로 건드리지 않음
-            const ownOnclick = target.getAttribute && target.getAttribute('onclick');
-            if (ownOnclick && (ownOnclick.indexOf('wrToggleAlarm') !== -1 || ownOnclick.indexOf('wrToggleScheduleLock') !== -1)) return;
             // 💡 No열도 WBS 열과 동일하게 공용 위임 로직으로 Ctrl/Shift 다중 선택 처리 (전용 팝업 트리거는 제거됨)
 
             const tr = target.closest('tr[data-row-index]');
@@ -2695,8 +2697,21 @@ ${mailText}`;
         const wasLocked = !!(row._startForced && row._planForced);
         const toLocked = !wasLocked; // 클릭한 행 기준으로 반대 상태로 전환
 
+        if (isBulk) {
+            window._applyScheduleLockToIndices(Array.from(window._selectedRows), toLocked);
+            logChange(rowIndex, -1, '일정 모드', (toLocked ? '일괄 고정' : '일괄 자동') + ` (${window._selectedRows.size}건, 하위 포함)`);
+        } else {
+            window._applyScheduleLockToIndices([rowIndex], toLocked);
+            logChange(rowIndex, -1, '일정 모드', toLocked ? '고정 (하위 포함)' : '자동 (하위 포함)');
+        }
+
+        window.recalculateSchedules();
+    };
+
+    // 💡 행 인덱스 배열에 고정/자동 상태를 일괄 적용 (하위 업무 포함) — 아이콘 일괄클릭/선택버튼 공용
+    window._applyScheduleLockToIndices = function(indices, toLocked) {
         function applyMode(r) {
-            r._scheduleModeManual = true; // 💡 사용자가 직접 토글한 행 — 자동재잠금 로직에서 제외
+            r._scheduleModeManual = true; // 사용자가 직접 토글한 행 — 자동재잠금 로직에서 제외
             if (toLocked) {
                 if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
                 if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
@@ -2707,8 +2722,6 @@ ${mailText}`;
                 r._startForced = false; r._planForced = false;
             }
         }
-
-        // 💡 "업무상태"와 동일한 패턴: 해당 행 + 레벨이 더 깊은 하위 행들 전부에 같은 상태 적용
         function applyModeWithChildren(idx) {
             const r = globalData[idx];
             if (!r) return;
@@ -2721,15 +2734,21 @@ ${mailText}`;
                 applyMode(child);
             }
         }
+        indices.forEach(idx => applyModeWithChildren(idx));
+    };
 
-        if (isBulk) {
-            window._selectedRows.forEach(idx => applyModeWithChildren(idx));
-            logChange(rowIndex, -1, '일정 모드', (toLocked ? '일괄 고정' : '일괄 자동') + ` (${window._selectedRows.size}건, 하위 포함)`);
-        } else {
-            applyModeWithChildren(rowIndex);
-            logChange(rowIndex, -1, '일정 모드', toLocked ? '고정 (하위 포함)' : '자동 (하위 포함)');
-        }
-
+    // 🆕 "선택한 행만" 일괄 고정/자동 전환 — row-action-popup 자물쇠 버튼에서 호출
+    window.applyScheduleLockToSelected = function(fallbackRowIndex) {
+        const indices = (window._selectedRows && window._selectedRows.size >= 2)
+            ? Array.from(window._selectedRows)
+            : [fallbackRowIndex];
+        const allLocked = indices.every(idx => {
+            const r = globalData[idx];
+            return !!(r && r._startForced && r._planForced);
+        });
+        const toLocked = !allLocked;
+        window._applyScheduleLockToIndices(indices, toLocked);
+        logChange(indices[0], -1, '일정 모드', (toLocked ? '선택 일괄 고정' : '선택 일괄 자동') + ` (${indices.length}건, 하위 포함)`);
         window.recalculateSchedules();
     };
 
@@ -4024,7 +4043,7 @@ window.deleteHistoryByDateRange = function() {
         popup.id = 'row-action-popup';
         popup.className = 'row-action-popup';
         popup.innerHTML = `
-           <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(2,33px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
+           <div style="display:grid; grid-template-columns:repeat(3,33px); grid-template-rows:repeat(3,33px); gap:4px; align-items:center; justify-items:center; user-select:none; -webkit-user-select:none;">
     
             <span id="rap-up"    class="rap-btn" title="위로 이동"><i class="ti ti-chevron-up"></i></span>
             <span id="rap-left"  class="rap-btn" title="WBS 레벨 올리기"><i class="ti ti-chevron-left"></i></span>
@@ -4032,6 +4051,7 @@ window.deleteHistoryByDateRange = function() {
             <span id="rap-dn"    class="rap-btn" title="아래로 이동"><i class="ti ti-chevron-down"></i></span>
             <span id="rap-add"   class="rap-btn" title="행 추가"><i class="ti ti-plus"></i></span>
             <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제"><i class="ti ti-minus"></i></span>
+            <span id="rap-lock"  class="rap-btn" title="선택한 행 일괄 고정/자동 전환 (2개 이상 선택 시 적용, 하위 포함)" style="grid-column: 1 / span 3; font-size:15px;">🔒</span>
 
         </div>`;
         document.body.appendChild(popup);
@@ -4086,6 +4106,10 @@ window.deleteHistoryByDateRange = function() {
             popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
         },
         'rap-add':   () => { window.addRow(rowIndex); rowIndex++; popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); },
+        'rap-lock':  () => {
+            window.applyScheduleLockToSelected(rowIndex);
+            popup.dataset.rowIndex = rowIndex; window.paintRowSelection(); window.highlightRow(rowIndex);
+        },
         'rap-del':   () => {
             if (window._selectedRows && window._selectedRows.size > 1) { window.deleteSelectedRows(); popup.style.display='none'; window.clearRowHighlight(); return; }
             window.deleteRow(rowIndex); setTimeout(() => { if(document.querySelector(`tr[data-row-index="${rowIndex}"]`)) { popup.dataset.rowIndex = rowIndex; window.highlightRow(rowIndex); } else { popup.style.display='none'; window.clearRowHighlight(); } }, 20);
