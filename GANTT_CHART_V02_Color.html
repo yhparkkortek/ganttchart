@@ -2564,8 +2564,9 @@ ${mailText}`;
             // 📌 알림 / 🔒 잠금 아이콘은 자체 Ctrl/Shift 선택 & 일괄 적용 로직을 갖고 있으므로,
             //    Ctrl/Shift 여부와 상관없이 이 위임 핸들러가 선택을 먼저 지우지 않도록 최상단에서 예외 처리
             const target = ev.target;
-            const ownOnclick = target.getAttribute && target.getAttribute('onclick');
-            if (ownOnclick && (ownOnclick.indexOf('wrToggleAlarm') !== -1 || ownOnclick.indexOf('wrToggleScheduleLock') !== -1)) return;
+            // 💡 svg/path 등 아이콘 내부 요소를 클릭해도 감지되도록 closest로 조상까지 탐색
+            const lockOrAlarmIcon = target.closest && target.closest('[onclick*="wrToggleAlarm"], [onclick*="wrToggleScheduleLock"]');
+            if (lockOrAlarmIcon) return;
 
             // 💡 일반 클릭(Ctrl/Shift 없음)이고 다중 선택이 남아있는 상태면, 어느 열을 클릭하든
             //    선택을 해제만 하고 그 열 고유의 클릭 동작(편집 진입·달력 열기 등)은 그대로 진행되게 둠
