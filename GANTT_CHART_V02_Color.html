@@ -2699,10 +2699,11 @@ ${mailText}`;
         const toLocked = !wasLocked; // 클릭한 행 기준으로 반대 상태로 전환
 
         if (isBulk) {
-            window._applyScheduleLockToIndices(Array.from(window._selectedRows), toLocked);
-            logChange(rowIndex, -1, '일정 모드', (toLocked ? '일괄 고정' : '일괄 자동') + ` (${window._selectedRows.size}건, 하위 포함)`);
+            // 💡 다중 선택 일괄 적용은 명시적으로 선택한 행에만 적용 (하위 업무 자동 포함 X)
+            window._applyScheduleLockToIndices(Array.from(window._selectedRows), toLocked, false);
+            logChange(rowIndex, -1, '일정 모드', (toLocked ? '일괄 고정' : '일괄 자동') + ` (${window._selectedRows.size}건, 선택 행만)`);
         } else {
-            window._applyScheduleLockToIndices([rowIndex], toLocked);
+            window._applyScheduleLockToIndices([rowIndex], toLocked, true);
             logChange(rowIndex, -1, '일정 모드', toLocked ? '고정 (하위 포함)' : '자동 (하위 포함)');
         }
 
@@ -2710,7 +2711,8 @@ ${mailText}`;
     };
 
     // 💡 행 인덱스 배열에 고정/자동 상태를 일괄 적용 (하위 업무 포함) — 아이콘 일괄클릭/선택버튼 공용
-    window._applyScheduleLockToIndices = function(indices, toLocked) {
+    window._applyScheduleLockToIndices = function(indices, toLocked, withChildren) {
+        if (withChildren === undefined) withChildren = true; // 기본값: 기존 동작(하위 포함) 유지
         function applyMode(r) {
             r._scheduleModeManual = true; // 사용자가 직접 토글한 행 — 자동재잠금 로직에서 제외
             if (toLocked) {
@@ -2727,6 +2729,7 @@ ${mailText}`;
             const r = globalData[idx];
             if (!r) return;
             applyMode(r);
+            if (!withChildren) return; // 💡 다중 선택 일괄 적용 시엔 하위로 번지지 않도록 여기서 멈춤
             const parentLevel = r._level || 0;
             for (let j = idx + 1; j < globalData.length; j++) {
                 const child = globalData[j];
