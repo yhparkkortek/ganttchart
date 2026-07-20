@@ -13474,6 +13474,15 @@ window.collectAlarmItems = function() {
         if (m.name && m.email) nameToEmail[m.name.trim()] = m.email.trim();
     });
 
+    // 💡 Summary에 등록 안 된 이름은 주소록(Address Book)에서 폴백 검색
+    const addressBook = (window.tabData || {}).addressBook || [];
+    const lookupEmail = function(name) {
+        if (!name) return '';
+        if (nameToEmail[name]) return nameToEmail[name];
+        const found = addressBook.find(function(p) { return p.name && p.name.trim() === name; });
+        return found ? (found.email || '') : '';
+    };
+
     // CC 이메일
     const cfg     = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
     const ccMails = (cfg.ccList || []).filter(r => r.email).map(r => r.email).join(',');
@@ -13519,14 +13528,14 @@ window.collectAlarmItems = function() {
             : [];
         // 발신인 + 수신인 전원
         const allPeople  = [...new Set([senderName, ...receiverNames].filter(Boolean))];
-        const toEmails   = [...new Set(allPeople.map(n => nameToEmail[n]).filter(Boolean))];
-        const missingPeople = allPeople.filter(n => !nameToEmail[n]);
+        const toEmails   = [...new Set(allPeople.map(n => lookupEmail(n)).filter(Boolean))];
+        const missingPeople = allPeople.filter(n => !lookupEmail(n));
 
         const assignee       = senderName;
-        const assigneeEmail  = nameToEmail[senderName] || '';
+        const assigneeEmail  = lookupEmail(senderName);
         const receiverStr    = receiverNames.join(', ') || '-';
         // 수신인 이메일만 (표시용)
-        const receiverEmails = [...new Set(receiverNames.map(n => nameToEmail[n]).filter(Boolean))];
+        const receiverEmails = [...new Set(receiverNames.map(n => lookupEmail(n)).filter(Boolean))];
         const receiverEmail  = receiverEmails.join(',');
         // 실제 발송 = 발신인 + 수신인 전원
         const toEmail        = [...new Set([assigneeEmail, ...receiverEmails].filter(Boolean))].join(',');
