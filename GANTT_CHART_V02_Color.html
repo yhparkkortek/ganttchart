@@ -15645,11 +15645,9 @@ window.mcUpdateSalesPriceDetail = function(rev, field, val, el) {
     const oldVal = window.tabData.mcSalesPriceDetail[rev][field] || '';
     if (String(oldVal) === String(val)) return; // 실제 변경 없으면 종료
 
-    const reason = window.promptOptionalReason(`영업판가 (${rev}) 변경`);
-    if (reason === null) { if (el) el.value = oldVal; return; } // 취소 → 입력값 원복, 저장 안 함
-
+    // 💡 즉시 묻지 않고 큐에 쌓음 (다른 필드들과 동일하게 화면 이동 시 1번만 확인)
     window.tabData.mcSalesPriceDetail[rev][field] = val;
-    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val, reason);
+    if (window.mcQueueChange) window.mcQueueChange('영업판가 (' + rev + ')', field, oldVal, val);
     window.mcRefreshTable();
 };
 
@@ -15970,11 +15968,9 @@ window.mcUpdateSalesPriceFromCompare = function(rev, field, val, el) {
     const oldVal = window.tabData.mcSalesPriceDetail[rev][field] || '';
     if (String(oldVal) === String(val)) return; // 실제 변경 없으면 종료
 
-    const reason = window.promptOptionalReason(`영업판가 (${rev}) 변경`);
-    if (reason === null) { if (el) el.value = oldVal; return; } // 취소 → 입력값 원복, 저장 안 함
-
+    // 💡 즉시 묻지 않고 큐에 쌓음
     window.tabData.mcSalesPriceDetail[rev][field] = val;
-    if (window.mcLogChange) window.mcLogChange('영업판가 (' + rev + ')', field, oldVal, val, reason);
+    if (window.mcQueueChange) window.mcQueueChange('영업판가 (' + rev + ')', field, oldVal, val);
     window.mcRenderComparisonTable();
 };
 
