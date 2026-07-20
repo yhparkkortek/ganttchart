@@ -7223,7 +7223,7 @@ window.analyzeMailContent = async function() {
     const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailTextForPrompt, null);
 
     // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
     const MAX_RETRY = 3;
     let lastErr = null;
@@ -10217,7 +10217,7 @@ async function mfCallGemini(apiKey, parsed) {
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date);
 
     const GAS_URL = localStorage.getItem('gas_server_url') || 
-            "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
+            "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
     const MAX_RETRY = 3;
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
@@ -11270,7 +11270,7 @@ window.pasteRetryAsManual    = (idx) => AR.retryAsManual('paste', idx);
 window.pasteBatchInsert      = () => AR.batchInsert('paste');
 
 async function msCallGemini(apiKey, parsed) {
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbw7SwCCLfxq5MevBlEX0YiFVqEcXu96Vmx8DdgYBoKeGZZ5XdNzKF0GkDIJyzaic8DXNg/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
     // 💡 더 이상 엑셀 행에서 찾지 않고 Summary(프로젝트 정보) 값을 그대로 사용
     let assignee = window.getSummaryAssignee();
