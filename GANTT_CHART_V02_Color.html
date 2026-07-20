@@ -14408,7 +14408,7 @@ window.populateTabData = function() {
             }
 
             // 💡 합계 행 생성 함수 — hidePairs에 맞춰 같은 쌍만 출력
-            const renderSummaryRow = function(label, sums, bgColor) {
+            const renderSummaryRow = function(label, sums, bgColor, noteKey) {
                 const valCell = function(v, border) {
                     return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" style="background-color:transparent; font-weight:bold; color:#333; text-align:center;" value="' + fmtCurSummary(v) + '" readonly></td>';
                 };
@@ -14417,7 +14417,9 @@ window.populateTabData = function() {
                 if (!hidePairs.protoA) html += valCell(sums.protoCost, true) + valCell(sums.protoNre);
                 if (!hidePairs.protoB) html += valCell(sums.protoBCost, true) + valCell(sums.protoBNre);
                 if (!hidePairs.mp) html += valCell(sums.mpCost, true) + valCell(sums.mpNre);
-                html += '<td></td></tr>';
+                // 💡 SUBTOTAL/TOTAL 행도 Note 입력 가능하도록 (기존엔 빈 칸이라 입력 자체가 불가능했음)
+                const noteVal = (window.tabData.mcSummaryNotes && window.tabData.mcSummaryNotes[curRev] && window.tabData.mcSummaryNotes[curRev][noteKey]) || '';
+                html += '<td><input type="text" class="u-input" style="background-color:transparent;" value="' + _escTabVal(noteVal) + '" onchange="window.mcUpdateSummaryNote(\'' + curRev + '\', \'' + noteKey + '\', this.value)"></td></tr>';
                 return html;
             };
 
@@ -14522,12 +14524,12 @@ window.populateTabData = function() {
                 const typeWillChange = !!(nextRow && nextType && nextType !== currentType);
 
                 if (currentType && (itemHasNre || typeWillChange || isLastRow)) {
-                    htmlChunks.push(renderSummaryRow(currentType + ' SUBTOTAL', subtotal, '#fff9c4'));
+                    htmlChunks.push(renderSummaryRow(currentType + ' SUBTOTAL', subtotal, '#fff9c4', 'subtotal_' + currentType));
                     subtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
                 }
             });
 
-            htmlChunks.push(renderSummaryRow('TOTAL(M.C)', grandtotal, '#e3f2fd'));
+            htmlChunks.push(renderSummaryRow('TOTAL(M.C)', grandtotal, '#e3f2fd', 'total'));
 
             // 💡 영업판가 행
             const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[curRev]) || {};
@@ -14540,7 +14542,8 @@ window.populateTabData = function() {
             if (!hidePairs.protoA) salesHtml += spCell('protoCost', true) + spCell('protoNre');
             if (!hidePairs.protoB) salesHtml += spCell('protoBCost', true) + spCell('protoBNre');
             if (!hidePairs.mp) salesHtml += spCell('mpCost', true) + spCell('mpNre');
-            salesHtml += '<td></td></tr>';
+            const salesNoteVal = (window.tabData.mcSummaryNotes && window.tabData.mcSummaryNotes[curRev] && window.tabData.mcSummaryNotes[curRev].salesPrice) || '';
+            salesHtml += '<td><input type="text" class="u-input" style="background-color:transparent;" value="' + _escTabVal(salesNoteVal) + '" onchange="window.mcUpdateSummaryNote(\'' + curRev + '\', \'salesPrice\', this.value)"></td></tr>';
             htmlChunks.push(salesHtml);
 
             // 💡 재료비율 행
@@ -14553,7 +14556,8 @@ window.populateTabData = function() {
             if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost, true) + ratioCell('protoNre', grandtotal.protoNre);
             if (!hidePairs.protoB) ratioHtml += ratioCell('protoBCost', grandtotal.protoBCost, true) + ratioCell('protoBNre', grandtotal.protoBNre);
             if (!hidePairs.mp) ratioHtml += ratioCell('mpCost', grandtotal.mpCost, true) + ratioCell('mpNre', grandtotal.mpNre);
-            ratioHtml += '<td></td></tr>';
+            const ratioNoteVal = (window.tabData.mcSummaryNotes && window.tabData.mcSummaryNotes[curRev] && window.tabData.mcSummaryNotes[curRev].ratio) || '';
+            ratioHtml += '<td><input type="text" class="u-input" style="background-color:transparent;" value="' + _escTabVal(ratioNoteVal) + '" onchange="window.mcUpdateSummaryNote(\'' + curRev + '\', \'ratio\', this.value)"></td></tr>';
             htmlChunks.push(ratioHtml);
 
             tbody.innerHTML = htmlChunks.join('');
@@ -15527,6 +15531,7 @@ window.mcRemoveUnit = function(unit) {
 // 선택한 종류의 저장소로 바꿔치기 → 기존의 모든 리비전/영업판가/비교표 코드는 그대로 두고
 // 올바른 종류의 데이터를 자동으로 보게 됨
 window.mcSwitchUnit = function(unit) {
+    if (window.mcFlushChangeReasons) window.mcFlushChangeReasons(); // 💡 종류 이동 전, 쌓인 변경사항 사유를 한 번에 확인
     window.tabData = window.tabData || {};
     window.tabData.mcRevisions = window.tabData.mcRevisions || {};
     window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetail || {};
@@ -15576,6 +15581,7 @@ window.mcCycleRevision = function() {
 
 // 💡 R1~R5 리비전 전환: 현재 화면 내용을 활성 리비전에 저장하고, 선택한 리비전 데이터로 다시 그림
 window.mcSwitchRevision = function(rev) {
+    if (window.mcFlushChangeReasons) window.mcFlushChangeReasons(); // 💡 리비전 이동 전, 쌓인 변경사항 사유를 한 번에 확인
     window.tabData = window.tabData || {};
     window.tabData.mcRevisions = window.tabData.mcRevisions || {};
     const cur = window.tabData.mcActiveRevision || 'R1';
@@ -15697,6 +15703,42 @@ window.mcLogChange = function(rowLabel, field, oldVal, newVal, reason) {
         unit: window.mcActiveUnit || '',  // 💡 2단계부터 사용할 디스플레이 종류(BTN/MAIN/UPR/TPR). 지금은 항상 ''(기본 종류)
         row: rowLabel, field: field, oldVal: oldVal, newVal: newVal, reason: reason || ''
     });
+
+// 💡 SUBTOTAL/TOTAL/영업판가/재료비율 행의 Note 저장 (일반 행과 별도 저장소, 리비전별로 구분)
+window.mcUpdateSummaryNote = function(rev, noteKey, val) {
+    window.tabData = window.tabData || {};
+    window.tabData.mcSummaryNotes = window.tabData.mcSummaryNotes || {};
+    window.tabData.mcSummaryNotes[rev] = window.tabData.mcSummaryNotes[rev] || {};
+    const oldVal = window.tabData.mcSummaryNotes[rev][noteKey] || '';
+    if (oldVal === val) return;
+    window.tabData.mcSummaryNotes[rev][noteKey] = val;
+    if (window.mcQueueChange) window.mcQueueChange(noteKey, 'Note', oldVal, val);
+};
+
+// 💡 M.C Table 변경사항을 즉시 묻지 않고 쌓아뒀다가, 리비전/종류/비교화면 전환 시 한 번에 사유를 물어봄
+window._mcPendingChanges = [];
+
+window.mcQueueChange = function(rowLabel, field, oldVal, newVal) {
+    if (String(oldVal) === String(newVal)) return;
+    window._mcPendingChanges.push({ rowLabel: rowLabel, field: field, oldVal: oldVal, newVal: newVal });
+};
+
+window.mcFlushChangeReasons = function() {
+    if (!window._mcPendingChanges || !window._mcPendingChanges.length) return;
+    const list = window._mcPendingChanges;
+    window._mcPendingChanges = [];
+
+    const label = list.length === 1
+        ? `[${list[0].rowLabel}] ${list[0].field}`
+        : `M.C Table ${list.length}건`;
+    const reasonInput = window.promptOptionalReason(`${label} 변경`);
+    const reason = (reasonInput === null) ? '' : reasonInput; // 취소해도 값은 되돌리지 않고, 사유만 비워서 기록
+
+    list.forEach(function(c) {
+        window.mcLogChange(c.rowLabel, c.field, c.oldVal, c.newVal, reason);
+    });
+};
+
 };
 
 // 💡 수정이력 표 그리기
@@ -15797,10 +15839,8 @@ window.deleteMcHistoryByDateRange = function() {
                 protoCost:'PROTO A Cost', protoNre:'PROTO A NRE', protoBCost:'PROTO B Cost', protoBNre:'PROTO B NRE',
                 mpCost:'MP Cost', mpNre:'MP NRE', note:'Note' };
             const fieldLabel = fieldLabelMap[el.dataset.field] || el.dataset.field;
-            const reason = window.promptOptionalReason(`[${rowLabel}] ${fieldLabel} 변경`);
-            if (reason === null) { el.value = oldVal; return; } // 취소 → 원래 값으로 되돌리고 저장 안 함
-
-            window.mcLogChange(rowLabel, el.dataset.field, oldVal, el.value, reason);
+            // 💡 매번 사유를 묻지 않고, 변경 내역만 쌓아둔 뒤 리비전/비교 화면 이동 시 한 번에 물어봄
+            window.mcQueueChange(rowLabel, fieldLabel, oldVal, el.value);
             el.dataset._histOld = el.value;
         });
     }
@@ -15880,6 +15920,7 @@ window.mcToggleHiddenUnified = function(btnEl) {
 };
 
 window.mcShowComparison = function() {
+    if (window.mcFlushChangeReasons) window.mcFlushChangeReasons(); // 💡 비교화면 진입 전, 쌓인 변경사항 사유를 한 번에 확인
     window.tabData = window.tabData || {};
     window.tabData.mcRevisions = window.tabData.mcRevisions || {};
     const cur = window.tabData.mcActiveRevision || 'R1';
