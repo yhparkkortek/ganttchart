@@ -1661,6 +1661,7 @@ ${mailText}`;
 
             // 💡 드라이브 연동 성공 시 팀 공용 AI 프롬프트 자동 동기화
             if (typeof window.loadPromptFromDrive === 'function') window.loadPromptFromDrive();
+            if (typeof window.loadHolidaysFromDrive === 'function') window.loadHolidaysFromDrive();
 
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
@@ -1709,7 +1710,7 @@ ${mailText}`;
             });
             
             // 💡 업무 보관함 자동 백업 파일(TaskInbox_이름.json)은 프로젝트가 아니므로 목록에서 제외
-            let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_') && f.name !== PROMPT_DRIVE_FILENAME; });
+            let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_') && f.name !== PROMPT_DRIVE_FILENAME && f.name !== HOLIDAY_DRIVE_FILENAME; });
             if (!files || files.length === 0) {
                 alert("팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
                 document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
@@ -1854,6 +1855,73 @@ ${mailText}`;
             }
             return true;
         } catch (err) { console.error('프롬프트 드라이브 저장 실패:', err); return false; }
+    };
+
+    // ─── 🗓️ 팀 공용 휴일 목록 — 드라이브에 JSON으로 저장/동기화 ───
+    const HOLIDAY_DRIVE_FILENAME = 'Holidays_Shared.json';
+
+    window.findHolidayDriveFile = async function(token) {
+        const q = `name='${HOLIDAY_DRIVE_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+    };
+
+    // 💡 드라이브에서 팀 공용 휴일 목록을 받아와 로컬 캐시(localStorage)에 반영 (미연동이면 조용히 종료)
+    window.loadHolidaysFromDrive = async function() {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return null;
+
+            const fileId = await window.findHolidayDriveFile(token);
+            if (!fileId) return null;
+
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (Array.isArray(data)) {
+                localStorage.setItem('gantt_custom_holidays', JSON.stringify(data));
+                if (window.renderCustomHolidayList) window.renderCustomHolidayList();
+                return data;
+            }
+            return null;
+        } catch (err) { console.error('휴일 목록 드라이브 로드 실패:', err); return null; }
+    };
+
+    // 💡 현재 휴일 목록을 드라이브 공용 파일로 업로드 (여러 사람이 등록/삭제한 내용을 공유)
+    window.saveHolidaysToDrive = async function(list) {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return false;
+
+            const fileId = await window.findHolidayDriveFile(token);
+            const body = JSON.stringify(list);
+
+            if (fileId) {
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: body
+                });
+            } else {
+                const boundary = 'holiday_boundary';
+                const metadata = { name: HOLIDAY_DRIVE_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
+                    + "\r\n--" + boundary + "--";
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                    body: multipartBody
+                });
+            }
+            return true;
+        } catch (err) { console.error('휴일 목록 드라이브 저장 실패:', err); return false; }
     };
 
     // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭)
@@ -2220,7 +2288,7 @@ ${mailText}`;
         }).join('');
     };
 
-    window.addCustomHoliday = function() {
+    window.addCustomHoliday = async function() {
         const dateEl = document.getElementById('holiday-add-date');
         const endDateEl = document.getElementById('holiday-add-end-date');
         const nameEl = document.getElementById('holiday-add-name');
@@ -2241,58 +2309,30 @@ ${mailText}`;
         dateEl.value = ''; endDateEl.value = ''; nameEl.value = '';
         window.renderCustomHolidayList();
         if (window.recalculateSchedules) window.recalculateSchedules(); // 💡 등록 즉시 일정에 반영
+
+        // ✅ 팀 공용 드라이브 파일에도 반영
+        if (window.isDriveConnected) {
+            const ok = await window.saveHolidaysToDrive(list);
+            if (!ok) alert('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.');
+        } else {
+            alert('⚠️ 구글 드라이브 미연동 상태라 팀과 공유되지 않습니다.\n[파일 → 🔵 드라이브 연동하기] 후 다시 등록해주세요.');
+        }
     };
 
-    window.removeCustomHoliday = function(idx) {
+    window.removeCustomHoliday = async function(idx) {
         const list = window.getCustomHolidays();
         list.splice(idx, 1);
         window.saveCustomHolidays(list);
         window.renderCustomHolidayList();
         if (window.recalculateSchedules) window.recalculateSchedules();
+
+        if (window.isDriveConnected) {
+            const ok = await window.saveHolidaysToDrive(list);
+            if (!ok) alert('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.');
+        }
     };
 
-    window.exportHolidaysJson = function() {
-        const list = window.getCustomHolidays();
-        const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url; a.download = 'custom_holidays.json';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
-
-    window.importHolidaysJson = function(file) {
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const imported = JSON.parse(e.target.result);
-                if (!Array.isArray(imported)) throw new Error('배열 형식이 아닙니다.');
-                const list = window.getCustomHolidays();
-                let added = 0;
-                imported.forEach(function(h) {
-                    const date = (h && h.date) ? String(h.date).trim() : '';
-                    if (!date) return;
-                    const endDate = (h && h.endDate) ? String(h.endDate).trim() : '';
-                    const dup = list.some(function(x) { return x.date === date && (x.endDate || x.date) === (endDate || date); });
-                    if (dup) return;
-                    const entry = { date: date, name: ((h && h.name) || '').trim() };
-                    if (endDate && endDate !== date) entry.endDate = endDate;
-                    list.push(entry);
-                    added++;
-                });
-                window.saveCustomHolidays(list);
-                window.renderCustomHolidayList();
-                alert('✅ ' + added + '건의 휴일을 불러왔습니다. (중복/형식오류 제외)');
-                if (window.recalculateSchedules) window.recalculateSchedules();
-            } catch (err) {
-                alert('⚠️ JSON 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
-            }
-        };
-        reader.readAsText(file);
-    };
-
-    window.openHolidayManager = function() {
+    window.openHolidayManager = async function() {
         window.closeAllTopbarMenus();
         let modal = document.getElementById('holiday-manager-modal');
         if (!modal) {
@@ -2305,8 +2345,8 @@ ${mailText}`;
                 + '<span style="font-size:15px; font-weight:bold; color:#2c5f8a;">🗓️ 휴일 등록 (추가 휴일)</span>'
                 + '<button onclick="document.getElementById(\'holiday-manager-modal\').style.display=\'none\'" style="border:none; background:none; font-size:18px; cursor:pointer; color:#868e96;">✕</button>'
                 + '</div>'
-                + '<div style="padding:12px 18px; font-size:11px; color:#888; line-height:1.5; border-bottom:1px solid #f1f3f5;">'
-                + '기본 공휴일은 2035년까지 이미 반영되어 있습니다. 여기서는 회사 창립일, 임시공휴일처럼 <b>추가로 쉬는 날</b>을 등록합니다. 등록한 휴일은 이 PC(브라우저)에 저장되며, JSON 파일로 내보내서 다른 PC에서 불러올 수 있습니다.'
+                + '<div id="holiday-sync-notice" style="padding:12px 18px; font-size:11px; color:#888; line-height:1.5; border-bottom:1px solid #f1f3f5;">'
+                + '기본 공휴일은 2035년까지 이미 반영되어 있습니다. 여기서는 회사 창립일, 임시공휴일처럼 추가로 쉬는 날을 등록합니다.'
                 + '</div>'
                 + '<div style="padding:12px 18px; border-bottom:1px solid #f1f3f5;">'
                 + '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">'
@@ -2321,17 +2361,22 @@ ${mailText}`;
                 + '</div>'
                 + '<div id="holiday-list-container" style="flex:1; overflow-y:auto; padding:8px 18px;"></div>'
                 + '<div style="padding:12px 18px; border-top:1px solid #dee2e6; display:flex; gap:8px; justify-content:space-between; align-items:center;">'
-                + '<div style="display:flex; gap:6px;">'
-                + '<label class="action-btn" style="min-width:auto !important; padding:0 10px !important; cursor:pointer; display:inline-flex; align-items:center;">📂 JSON 불러오기'
-                + '<input type="file" accept=".json" style="display:none;" onchange="window.importHolidaysJson(this.files[0])"></label>'
-                + '<button class="action-btn" onclick="window.exportHolidaysJson()" style="min-width:auto !important; padding:0 10px !important;">💾 JSON 내보내기</button>'
-                + '</div>'
+                + '<button class="action-btn" onclick="window.loadHolidaysFromDrive()" style="min-width:auto !important; padding:0 10px !important;">🔄 새로고침</button>'
                 + '<span style="font-size:11px; color:#868e96;" id="holiday-count-label"></span>'
                 + '</div>'
                 + '</div>';
             document.body.appendChild(modal);
         }
         modal.style.display = 'flex';
+
+        const notice = document.getElementById('holiday-sync-notice');
+        if (window.isDriveConnected) {
+            if (notice) notice.textContent = '🔄 팀 공용 휴일 목록을 불러오는 중...';
+            await window.loadHolidaysFromDrive();
+            if (notice) notice.textContent = '☁️ 팀 공용(드라이브) 휴일 목록입니다. 등록/삭제하면 전체 팀과 공유됩니다.';
+        } else if (notice) {
+            notice.textContent = '⚠️ 구글 드라이브 미연동 상태입니다. [파일 → 🔵 드라이브 연동하기]를 먼저 눌러주세요. 지금 등록해도 팀과 공유되지 않습니다.';
+        }
         window.renderCustomHolidayList();
     };
 
