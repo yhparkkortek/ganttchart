@@ -1657,6 +1657,9 @@ ${mailText}`;
             window.googleAccessToken = resp.access_token;
             window.isDriveConnected = true;
 
+            // 💡 드라이브 연동 성공 시 팀 공용 AI 프롬프트 자동 동기화
+            if (typeof window.loadPromptFromDrive === 'function') window.loadPromptFromDrive();
+
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
@@ -1704,7 +1707,7 @@ ${mailText}`;
             });
             
             // 💡 업무 보관함 자동 백업 파일(TaskInbox_이름.json)은 프로젝트가 아니므로 목록에서 제외
-            let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_'); });
+            let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_') && f.name !== PROMPT_DRIVE_FILENAME; });
             if (!files || files.length === 0) {
                 alert("팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
                 document.getElementById('file-status').textContent = "공용 저장소에 프로젝트 파일이 없습니다.";
@@ -1779,6 +1782,77 @@ ${mailText}`;
             }
         } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
+
+    // ─── 🤖 팀 공용 AI 프롬프트 — 드라이브에 JSON으로 저장/동기화 ───
+    const PROMPT_DRIVE_FILENAME = 'AI_Prompt_Shared.json';
+
+    window.findPromptDriveFile = async function(token) {
+        const q = `name='${PROMPT_DRIVE_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+    };
+
+    // 💡 드라이브에서 최신 팀 공용 프롬프트를 받아와 localStorage에 반영 (미연동이면 조용히 종료)
+    window.loadPromptFromDrive = async function() {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return null;
+
+            const fileId = await window.findPromptDriveFile(token);
+            if (!fileId) return null;
+
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data && data.prompt) {
+                localStorage.setItem('gantt_mail_prompt', data.prompt);
+                window._promptDriveMeta = { updatedBy: data.updatedBy || '', updatedAt: data.updatedAt || '' };
+                return data.prompt;
+            }
+            return null;
+        } catch (err) { console.error('프롬프트 드라이브 로드 실패:', err); return null; }
+    };
+
+    // 💡 현재 프롬프트를 드라이브 공용 파일로 업로드 (여러 사람이 이어서 발전시킬 수 있도록)
+    window.savePromptToDrive = async function(text) {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return false;
+
+            const fileId = await window.findPromptDriveFile(token);
+            const payload = {
+                prompt: text,
+                updatedBy: window.currentUserName || localStorage.getItem('gantt_local_user') || '알 수 없음',
+                updatedAt: new Date().toLocaleString('ko-KR')
+            };
+
+            if (fileId) {
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                const boundary = 'prompt_boundary';
+                const metadata = { name: PROMPT_DRIVE_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(payload)
+                    + "\r\n--" + boundary + "--";
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                    body: body
+                });
+            }
+            return true;
+        } catch (err) { console.error('프롬프트 드라이브 저장 실패:', err); return false; }
+    };
 
     // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭)
     window.startNewProject = function() {
@@ -7147,7 +7221,7 @@ window.renderMailResult = function(result) {
         select.value = bestIndex !== -1 ? String(bestIndex) : '-1';
     };
 
-window.editPrompt = function() {
+window.editPrompt = async function() {
     let modal = document.getElementById('prompt-edit-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -7176,7 +7250,16 @@ window.editPrompt = function() {
         document.body.appendChild(modal);
     }
 
-    // ✅ 현재 프롬프트 표시 (저장된 것 or 기본값)
+    modal.style.display = 'flex';
+    const notice = document.getElementById('prompt-edit-notice');
+
+    // ✅ 드라이브 연동 시 열 때마다 팀 공용 최신 프롬프트로 동기화
+    if (window.isDriveConnected) {
+        if (notice) notice.textContent = '🔄 팀 공용 프롬프트를 불러오는 중...';
+        await window.loadPromptFromDrive();
+    }
+
+    // ✅ 현재 프롬프트 표시 (동기화 후 저장된 것 or 기본값)
     const savedPrompt = localStorage.getItem('gantt_mail_prompt');
     document.getElementById('prompt-edit-textarea').value = savedPrompt || window._defaultPromptTemplate || '';
 
@@ -7187,9 +7270,9 @@ window.editPrompt = function() {
     document.getElementById('prompt-unlock-btn').style.display = 'block';
     document.getElementById('prompt-save-btn').style.display = 'none';
     document.getElementById('prompt-reset-btn').style.display = 'none';
-    document.getElementById('prompt-edit-notice').textContent = '💡 현재 사용 중인 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.';
-
-    modal.style.display = 'flex';
+    document.getElementById('prompt-edit-notice').textContent = window.isDriveConnected
+        ? '💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.'
+        : '⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.';
 };
 
 window.unlockPrompt = function() {
@@ -7207,7 +7290,7 @@ window.unlockPrompt = function() {
     document.getElementById('prompt-edit-notice').style.background = '#e7f1ff';
 };
 
-window.savePrompt = function() {
+window.savePrompt = async function() {
     const text = document.getElementById('prompt-edit-textarea').value.trim();
     if (!text) { alert('프롬프트가 비어있습니다.'); return; }
 
@@ -7228,7 +7311,15 @@ window.savePrompt = function() {
 
     localStorage.setItem('gantt_mail_prompt', text);
     document.getElementById('prompt-edit-modal').style.display = 'none';
-    alert('✅ 프롬프트가 저장되었습니다.');
+
+    // ✅ 드라이브 연동 시 팀 공용 파일에도 업로드
+    if (window.isDriveConnected) {
+        const ok = await window.savePromptToDrive(text);
+        alert(ok ? '✅ 프롬프트가 저장되고, 팀 공용(드라이브)에도 반영되었습니다.'
+                  : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. (콘솔 로그 확인)');
+    } else {
+        alert('✅ 프롬프트가 이 PC에 저장되었습니다.\n⚠️ 드라이브 미연동 상태라 팀과 공유되지는 않습니다.');
+    }
 };
 
 window.resetPrompt = function() {
