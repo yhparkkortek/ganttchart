@@ -15703,6 +15703,7 @@ window.mcLogChange = function(rowLabel, field, oldVal, newVal, reason) {
         unit: window.mcActiveUnit || '',  // 💡 2단계부터 사용할 디스플레이 종류(BTN/MAIN/UPR/TPR). 지금은 항상 ''(기본 종류)
         row: rowLabel, field: field, oldVal: oldVal, newVal: newVal, reason: reason || ''
     });
+};
 
 // 💡 SUBTOTAL/TOTAL/영업판가/재료비율 행의 Note 저장 (일반 행과 별도 저장소, 리비전별로 구분)
 window.mcUpdateSummaryNote = function(rev, noteKey, val) {
@@ -15737,8 +15738,6 @@ window.mcFlushChangeReasons = function() {
     list.forEach(function(c) {
         window.mcLogChange(c.rowLabel, c.field, c.oldVal, c.newVal, reason);
     });
-};
-
 };
 
 // 💡 수정이력 표 그리기
