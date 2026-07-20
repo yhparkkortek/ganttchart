@@ -6745,16 +6745,8 @@ window.handleAuthClick = function() {
 // =========================================================
 
 window.showMailAnalyzer = function() {
-    // API 키 로드
-    const savedKey = localStorage.getItem('gemini_api_key');
-    const keyInput = document.getElementById('mail-gemini-key');
-    const keyStatus = document.getElementById('mail-key-status');
-    if (savedKey && keyInput) {
-        keyInput.value = savedKey;
-        if (keyStatus) { keyStatus.textContent = '✅ 저장됨'; keyStatus.style.color = '#28a745'; }
-    } else {
-        if (keyStatus) { keyStatus.textContent = '⚠️ API 키를 입력해주세요'; keyStatus.style.color = '#e67e22'; }
-    }
+    // API 키 로드 (선택된 AI 제공사 기준)
+    window.refreshAiKeyPanel();
 
     // 위치 선택 드롭다운 채우기
         window.populateInsertPosition();
@@ -6807,18 +6799,78 @@ window.closeMailAnalyzer = function(e) {
 window.saveGeminiKey = function() {
     const key = document.getElementById('mail-gemini-key').value.trim();
     if (!key) { alert('API 키를 입력해주세요.'); return; }
-    localStorage.setItem('gemini_api_key', key);
+    const cfg = window.AI_PROVIDERS[window.getActiveAiProvider()] || window.AI_PROVIDERS.gemini;
+    localStorage.setItem(cfg.keyName, key);
     const status = document.getElementById('mail-key-status');
     status.textContent = '✅ API 키가 저장되었습니다.';
     status.style.color = '#28a745';
 };
 
 window.clearGeminiKey = function() {
-    localStorage.removeItem('gemini_api_key');
+    const cfg = window.AI_PROVIDERS[window.getActiveAiProvider()] || window.AI_PROVIDERS.gemini;
+    localStorage.removeItem(cfg.keyName);
     document.getElementById('mail-gemini-key').value = '';
     const status = document.getElementById('mail-key-status');
     status.textContent = '🗑️ API 키가 삭제되었습니다.';
     status.style.color = '#dc3545';
+};
+
+// ─── 🤖 AI 제공사 설정 (Gemini / Groq / Mistral) ───
+window.AI_PROVIDERS = {
+    gemini:  { label: 'Gemini',  keyName: 'gemini_api_key',  model: 'gemini-2.5-flash-lite',
+               placeholder: 'AIza...', guideUrl: 'https://aistudio.google.com/apikey',
+               guideText: '구글 계정으로 로그인 → [Create API key] 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)' },
+    groq:    { label: 'Groq',    keyName: 'groq_api_key',    model: 'llama-3.3-70b-versatile',
+               placeholder: 'gsk_...', guideUrl: 'https://console.groq.com/keys',
+               guideText: 'Groq 계정으로 로그인(이메일/구글) → [Create API Key] 클릭 → 생성된 키(gsk_로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료)' },
+    mistral: { label: 'Mistral', keyName: 'mistral_api_key', model: 'mistral-small-latest',
+               placeholder: '(Mistral API 키)', guideUrl: 'https://console.mistral.ai/api-keys',
+               guideText: 'Mistral 계정으로 로그인 → [API Keys] → [Create new key] 클릭 → 생성된 키를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료, Experiment 요금제)' }
+};
+
+window.getActiveAiProvider = function() {
+    return localStorage.getItem('ai_provider') || 'gemini';
+};
+window.getActiveAiKey = function() {
+    const cfg = window.AI_PROVIDERS[window.getActiveAiProvider()] || window.AI_PROVIDERS.gemini;
+    return localStorage.getItem(cfg.keyName);
+};
+window.getActiveAiModel = function() {
+    const cfg = window.AI_PROVIDERS[window.getActiveAiProvider()] || window.AI_PROVIDERS.gemini;
+    return cfg.model;
+};
+
+window.onAiProviderChange = function() {
+    const sel = document.getElementById('mail-ai-provider');
+    if (!sel) return;
+    localStorage.setItem('ai_provider', sel.value);
+    window.refreshAiKeyPanel();
+};
+
+window.refreshAiKeyPanel = function() {
+    const provider = window.getActiveAiProvider();
+    const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
+    const sel = document.getElementById('mail-ai-provider');
+    if (sel) sel.value = provider;
+
+    const labelEl = document.getElementById('mail-key-label');
+    if (labelEl) labelEl.textContent = `🔑 ${cfg.label} API 키 (개인 키)`;
+    const guideEl = document.getElementById('mail-key-guide');
+    if (guideEl) guideEl.textContent = cfg.guideText;
+    const linkBtn = document.getElementById('mail-key-link-btn');
+    if (linkBtn) linkBtn.setAttribute('onclick', `window.open('${cfg.guideUrl}', '_blank')`);
+
+    const keyInput = document.getElementById('mail-gemini-key');
+    const keyStatus = document.getElementById('mail-key-status');
+    if (keyInput) {
+        keyInput.placeholder = cfg.placeholder;
+        keyInput.value = localStorage.getItem(cfg.keyName) || '';
+    }
+    if (keyStatus) {
+        const savedKey = localStorage.getItem(cfg.keyName);
+        if (savedKey) { keyStatus.textContent = '✅ 저장됨'; keyStatus.style.color = '#28a745'; }
+        else { keyStatus.textContent = '⚠️ API 키를 입력해주세요'; keyStatus.style.color = '#e67e22'; }
+    }
 };
 
 window.populateInsertPosition = function() {
@@ -6847,7 +6899,7 @@ window.populateInsertPosition = function() {
 };
 
 window.analyzeMailContent = async function() {
-    const apiKey = localStorage.getItem('gemini_api_key');
+    const apiKey = window.getActiveAiKey();
     if (!apiKey) { alert('먼저 AI API 키를 입력하고 저장해주세요.'); return; }
 
     const mailText = document.getElementById('mail-content-input').value.trim();
@@ -6906,7 +6958,8 @@ window.analyzeMailContent = async function() {
                 body: JSON.stringify({
                     userApiKey: apiKey,
                     prompt: prompt,
-                    model: 'gemini-2.5-flash-lite'
+                    provider: window.getActiveAiProvider(),
+                    model: window.getActiveAiModel()
                 })
             });
             const data = await res.json();
@@ -8791,21 +8844,30 @@ window.updateInboxBadge();
 
                 <!-- API 키 (공통) -->
                 <div style="padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
+                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                        <span>🤖 AI 선택</span>
+                        <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
+                                style="flex:1; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                            <option value="gemini">Gemini (Google)</option>
+                            <option value="groq">Groq (Llama 등, 무료)</option>
+                            <option value="mistral">Mistral (무료)</option>
+                        </select>
+                    </div>
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
-                        <span>🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(개인 키)</span></span>
+                        <span id="mail-key-label">🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(개인 키)</span></span>
                         <div style="display:flex; gap:6px;">
                             <button onclick="window.clearGeminiCache()" title="같은 메일을 다시 분석해도 캐시된 예전 결과가 아니라 새로 계산하게 함"
                                     style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:4px; cursor:pointer; white-space:nowrap;">
                                 🗑️ 분석 캐시 초기화
                             </button>
-                            <button onclick="window.open('https://aistudio.google.com/apikey', '_blank')"
+                            <button id="mail-key-link-btn" onclick="window.open('https://aistudio.google.com/apikey', '_blank')"
                                     style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap;">
                                 🔗 발급받기
                             </button>
                         </div>
                     </div>
-                    <div style="font-size:10px; color:#888; margin-bottom:5px; line-height:1.4;">
-                        구글 계정으로 로그인 → <b>[Create API key]</b> 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)
+                    <div id="mail-key-guide" style="font-size:10px; color:#888; margin-bottom:5px; line-height:1.4;">
+                        구글 계정으로 로그인 → [Create API key] 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)
                     </div>
                     <div style="display:flex; gap:5px;">
                         <input id="mail-gemini-key" type="password" placeholder="AIza..."
@@ -9550,7 +9612,7 @@ window.mfRemoveFile = function(idx) {
 
 // ─── 파일 1개만 개별 분석 (일괄 분석 버튼과 별개) ─────────────────
 window.mfAnalyzeSingle = async function(idx) {
-    const apiKey = localStorage.getItem('gemini_api_key');
+    const apiKey = window.getActiveAiKey();
     if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
     const f = window._mfFiles && window._mfFiles[idx];
     if (!f) return;
@@ -9868,7 +9930,8 @@ async function mfCallGemini(apiKey, parsed) {
                 body: JSON.stringify({
                     userApiKey: apiKey,
                     prompt: prompt,
-                    model: 'gemini-2.5-flash-lite'
+                    provider: window.getActiveAiProvider(),
+                    model: window.getActiveAiModel()
                 })
             });
             const data = await resp.json();
@@ -9898,7 +9961,7 @@ async function mfCallGemini(apiKey, parsed) {
 
 // ─── 일괄 분석 ───────────────────────────────────────────
 window.mfAnalyze = async function() {
-    const apiKey = localStorage.getItem('gemini_api_key');
+    const apiKey = window.getActiveAiKey();
     if (!apiKey)  { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
     if (!window._mfFiles.length) { alert('파일을 선택해주세요.'); return; }
 
@@ -10298,8 +10361,8 @@ window._msCurrentIdx = -1;
         if (el) el.value = saved;
         if (cb) cb.checked = true;
     }
-    // 저장된 API 키 상태 표시
-    const savedKey = localStorage.getItem('gemini_api_key');
+    // 저장된 API 키 상태 표시 (선택된 AI 제공사 기준)
+    const savedKey = window.getActiveAiKey();
     const keyInput  = document.getElementById('ms-personal-apikey');
     const keyStatus = document.getElementById('ms-key-status');
     if (savedKey && keyInput) {
@@ -10339,8 +10402,8 @@ window.msFetchMail = async function() {
         localStorage.removeItem('ms_saved_userid');
     }
 
-    const apiKey = localStorage.getItem('gemini_api_key');
-    if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
+    const apiKey = window.getActiveAiKey();
+    if (!apiKey) { alert('AI API 키를 먼저 저장해주세요.'); return; }
 
     // UI 초기화
     window._msAnalyzeCancelled = false;
@@ -10929,7 +10992,8 @@ async function msCallGemini(apiKey, parsed) {
                 body: JSON.stringify({
                     userApiKey: apiKey,
                     prompt: prompt,
-                    model: 'gemini-2.5-flash-lite'
+                    provider: window.getActiveAiProvider(),
+                    model: window.getActiveAiModel()
                 })
             });
             const data = await resp.json();
