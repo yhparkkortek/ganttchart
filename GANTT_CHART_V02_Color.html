@@ -651,6 +651,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div id="task-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="inbox-btn" class="topbar-menu-item" onclick="window.openTaskInbox()">📦 <span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
                 <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">✉️ 업무 추가</button>
+                <div class="tb-menu-sep"></div>
+                <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
             </div>
         </div>
         <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="font-weight:bold;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
@@ -2134,7 +2136,7 @@ ${mailText}`;
     // =========================================================
     // 🛠️ 날짜 및 일정(Gantt) 코어 로직
     // =========================================================
-    const KOR_HOLIDAYS = [
+    window.KOR_HOLIDAYS = [
         "2024-01-01", "2024-02-09", "2024-02-12", "2024-03-01", "2024-04-10", "2024-05-05", "2024-05-06", "2024-05-15", "2024-06-06", "2024-08-15", "2024-09-16", "2024-09-17", "2024-09-18", "2024-10-03", "2024-10-09", "2024-12-25",
         "2025-01-01", "2025-01-28", "2025-01-29", "2025-01-30", "2025-03-01", "2025-03-03", "2025-05-05", "2025-05-06", "2025-06-06", "2025-08-15", "2025-10-03", "2025-10-05", "2025-10-06", "2025-10-07", "2025-10-08", "2025-10-09", "2025-12-25",
         "2026-01-01", "2026-02-16", "2026-02-17", "2026-02-18", "2026-03-01", "2026-03-02", "2026-05-05", "2026-05-24", "2026-05-25", "2026-06-06", "2026-08-15", "2026-09-24", "2026-09-25", "2026-09-26", "2026-10-03", "2026-10-09", "2026-12-25",
@@ -2149,6 +2151,19 @@ ${mailText}`;
         "2035-01-01", "2035-02-07", "2035-02-08", "2035-02-09", "2035-03-01", "2035-05-05", "2035-05-07", "2035-05-15", "2035-06-06", "2035-08-15", "2035-09-15", "2035-09-16", "2035-09-17", "2035-09-18", "2035-10-03", "2035-10-09", "2035-12-25"
     ];
 
+    // 💡 기본 공휴일(KOR_HOLIDAYS) + 사용자가 등록한 추가 휴일을 합쳐서 판별
+    window.getCustomHolidays = function() {
+        try { return JSON.parse(localStorage.getItem('gantt_custom_holidays') || '[]'); }
+        catch (e) { return []; }
+    };
+    window.isHoliday = function(dateStr) {
+        if (window.KOR_HOLIDAYS.includes(dateStr)) return true;
+        return window.getCustomHolidays().some(function(h) {
+            const end = h.endDate || h.date;
+            return dateStr >= h.date && dateStr <= end; // "YYYY-MM-DD" 문자열은 그대로 비교해도 날짜 순서와 일치함
+        });
+    };
+
     function addWorkingDays(startDateTs, daysToAdd) {
         let currentDate = new Date(startDateTs); currentDate.setHours(0,0,0,0);
         if (daysToAdd <= 0) return currentDate.getTime(); 
@@ -2156,7 +2171,7 @@ ${mailText}`;
         while (addedDays < daysToAdd) {
             currentDate.setDate(currentDate.getDate() + 1); let dayOfWeek = currentDate.getDay(); 
             let dateStr = currentDate.getFullYear() + "-" + String(currentDate.getMonth() + 1).padStart(2, '0') + "-" + String(currentDate.getDate()).padStart(2, '0');
-            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !KOR_HOLIDAYS.includes(dateStr)) { addedDays++; }
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !window.isHoliday(dateStr)) { addedDays++; }
         }
         return currentDate.getTime();
     }
@@ -2167,11 +2182,158 @@ ${mailText}`;
         if (cur > end) return 0;
         while (cur <= end) {
             let dayOfWeek = cur.getDay(); let dateStr = cur.getFullYear() + "-" + String(cur.getMonth() + 1).padStart(2, '0') + "-" + String(cur.getDate()).padStart(2, '0');
-            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !KOR_HOLIDAYS.includes(dateStr)) { count++; }
+            if (dayOfWeek !== 0 && dayOfWeek !== 6 && !window.isHoliday(dateStr)) { count++; }
             cur.setDate(cur.getDate() + 1);
         }
         return count;
     }
+
+    // ─── 🗓️ 휴일 등록 모달 (KOR_HOLIDAYS 기본값 + 사용자 추가 휴일, JSON 파일로 내보내기/불러오기) ───
+    const _hEsc = function(s) { return (s || '').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); };
+
+    window.saveCustomHolidays = function(list) {
+        list.sort(function(a, b) { return a.date < b.date ? -1 : (a.date > b.date ? 1 : 0); });
+        localStorage.setItem('gantt_custom_holidays', JSON.stringify(list));
+    };
+
+    window._hDayDiff = function(d1, d2) { return Math.round((new Date(d2) - new Date(d1)) / 86400000); };
+
+    window.renderCustomHolidayList = function() {
+        const container = document.getElementById('holiday-list-container');
+        const countLabel = document.getElementById('holiday-count-label');
+        if (!container) return;
+        const list = window.getCustomHolidays();
+        if (countLabel) {
+            const totalDays = list.reduce(function(sum, h) { return sum + window._hDayDiff(h.date, h.endDate || h.date) + 1; }, 0);
+            countLabel.textContent = list.length + '건 (총 ' + totalDays + '일) 등록됨';
+        }
+        if (!list.length) {
+            container.innerHTML = '<div style="text-align:center; color:#adb5bd; padding:20px 0; font-size:12px;">등록된 추가 휴일이 없습니다.</div>';
+            return;
+        }
+        container.innerHTML = list.map(function(h, idx) {
+            const rangeLabel = (h.endDate && h.endDate !== h.date) ? (h.date + ' ~ ' + h.endDate) : h.date;
+            return '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 4px; border-bottom:1px solid #f1f3f5; font-size:12px;">'
+                + '<span><b style="color:#2c5f8a;">' + rangeLabel + '</b> &nbsp; ' + (h.name ? _hEsc(h.name) : '<span style="color:#adb5bd;">(사유 없음)</span>') + '</span>'
+                + '<button onclick="window.removeCustomHoliday(' + idx + ')" style="border:none; background:none; color:#e03131; cursor:pointer; font-size:13px;">🗑️</button>'
+                + '</div>';
+        }).join('');
+    };
+
+    window.addCustomHoliday = function() {
+        const dateEl = document.getElementById('holiday-add-date');
+        const endDateEl = document.getElementById('holiday-add-end-date');
+        const nameEl = document.getElementById('holiday-add-name');
+        const date = dateEl.value;
+        let endDate = endDateEl.value;
+        if (!date) { alert('시작일을 선택해주세요.'); return; }
+        if (endDate && endDate < date) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+        if (!endDate) endDate = date;
+
+        const list = window.getCustomHolidays();
+        const dup = list.some(function(h) { return h.date === date && (h.endDate || h.date) === endDate; });
+        if (dup) { alert('이미 등록된 기간입니다.'); return; }
+
+        const entry = { date: date, name: (nameEl.value || '').trim() };
+        if (endDate !== date) entry.endDate = endDate; // 하루짜리는 기존처럼 endDate 없이 저장 (호환성 유지)
+        list.push(entry);
+        window.saveCustomHolidays(list);
+        dateEl.value = ''; endDateEl.value = ''; nameEl.value = '';
+        window.renderCustomHolidayList();
+        if (window.recalculateSchedules) window.recalculateSchedules(); // 💡 등록 즉시 일정에 반영
+    };
+
+    window.removeCustomHoliday = function(idx) {
+        const list = window.getCustomHolidays();
+        list.splice(idx, 1);
+        window.saveCustomHolidays(list);
+        window.renderCustomHolidayList();
+        if (window.recalculateSchedules) window.recalculateSchedules();
+    };
+
+    window.exportHolidaysJson = function() {
+        const list = window.getCustomHolidays();
+        const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'custom_holidays.json';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    window.importHolidaysJson = function(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const imported = JSON.parse(e.target.result);
+                if (!Array.isArray(imported)) throw new Error('배열 형식이 아닙니다.');
+                const list = window.getCustomHolidays();
+                let added = 0;
+                imported.forEach(function(h) {
+                    const date = (h && h.date) ? String(h.date).trim() : '';
+                    if (!date) return;
+                    const endDate = (h && h.endDate) ? String(h.endDate).trim() : '';
+                    const dup = list.some(function(x) { return x.date === date && (x.endDate || x.date) === (endDate || date); });
+                    if (dup) return;
+                    const entry = { date: date, name: ((h && h.name) || '').trim() };
+                    if (endDate && endDate !== date) entry.endDate = endDate;
+                    list.push(entry);
+                    added++;
+                });
+                window.saveCustomHolidays(list);
+                window.renderCustomHolidayList();
+                alert('✅ ' + added + '건의 휴일을 불러왔습니다. (중복/형식오류 제외)');
+                if (window.recalculateSchedules) window.recalculateSchedules();
+            } catch (err) {
+                alert('⚠️ JSON 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    window.openHolidayManager = function() {
+        window.closeAllTopbarMenus();
+        let modal = document.getElementById('holiday-manager-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'holiday-manager-modal';
+            modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:99999; align-items:center; justify-content:center;';
+            modal.innerHTML =
+                '<div style="background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
+                + '<div style="padding:14px 18px; border-bottom:1px solid #dee2e6; display:flex; justify-content:space-between; align-items:center;">'
+                + '<span style="font-size:15px; font-weight:bold; color:#2c5f8a;">🗓️ 휴일 등록 (추가 휴일)</span>'
+                + '<button onclick="document.getElementById(\'holiday-manager-modal\').style.display=\'none\'" style="border:none; background:none; font-size:18px; cursor:pointer; color:#868e96;">✕</button>'
+                + '</div>'
+                + '<div style="padding:12px 18px; font-size:11px; color:#888; line-height:1.5; border-bottom:1px solid #f1f3f5;">'
+                + '기본 공휴일은 2035년까지 이미 반영되어 있습니다. 여기서는 회사 창립일, 임시공휴일처럼 <b>추가로 쉬는 날</b>을 등록합니다. 등록한 휴일은 이 PC(브라우저)에 저장되며, JSON 파일로 내보내서 다른 PC에서 불러올 수 있습니다.'
+                + '</div>'
+                + '<div style="padding:12px 18px; border-bottom:1px solid #f1f3f5;">'
+                + '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">'
+                + '<input type="date" id="holiday-add-date" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
+                + '<span style="color:#888; font-size:12px;">~</span>'
+                + '<input type="date" id="holiday-add-end-date" title="기간으로 등록할 경우 종료일 (비워두면 하루만 등록)" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
+                + '</div>'
+                + '<div style="display:flex; gap:6px;">'
+                + '<input type="text" id="holiday-add-name" placeholder="사유 (예: 하계휴가)" style="flex:1; min-width:0; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
+                + '<button class="action-btn" onclick="window.addCustomHoliday()" style="min-width:auto !important; padding:0 12px !important;">➕ 추가</button>'
+                + '</div>'
+                + '</div>'
+                + '<div id="holiday-list-container" style="flex:1; overflow-y:auto; padding:8px 18px;"></div>'
+                + '<div style="padding:12px 18px; border-top:1px solid #dee2e6; display:flex; gap:8px; justify-content:space-between; align-items:center;">'
+                + '<div style="display:flex; gap:6px;">'
+                + '<label class="action-btn" style="min-width:auto !important; padding:0 10px !important; cursor:pointer; display:inline-flex; align-items:center;">📂 JSON 불러오기'
+                + '<input type="file" accept=".json" style="display:none;" onchange="window.importHolidaysJson(this.files[0])"></label>'
+                + '<button class="action-btn" onclick="window.exportHolidaysJson()" style="min-width:auto !important; padding:0 10px !important;">💾 JSON 내보내기</button>'
+                + '</div>'
+                + '<span style="font-size:11px; color:#868e96;" id="holiday-count-label"></span>'
+                + '</div>'
+                + '</div>';
+            document.body.appendChild(modal);
+        }
+        modal.style.display = 'flex';
+        window.renderCustomHolidayList();
+    };
 
     // 💡 두 날짜 사이의 "근무일 기준 부호 있는 이동량" — toTs가 fromTs보다 늦으면 양수, 빠르면 음수
     //    (계획 대비 시작/완료/소요 배지를 전부 같은 근무일 기준으로 맞추기 위한 함수)
