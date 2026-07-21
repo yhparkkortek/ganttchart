@@ -5554,7 +5554,7 @@ window.deleteHistoryByDateRange = function() {
             for (let i = 0; i < trs.length; i++) {
                 let tr = trs[i]; let rowIndex = parseInt(tr.dataset.rowIndex, 10); if (isNaN(rowIndex)) continue; 
                 let rowData = globalData[rowIndex]; if (!rowData) continue;
-                let showRow = true; if (rowData._isExplicitZero) showRow = false;
+                let showRow = true;
 
                 if (showRow) {
                     for (let colIndexStr in currentFilters) {
@@ -5645,7 +5645,7 @@ window.deleteHistoryByDateRange = function() {
         let ganttL0Rows = [];
         let rowNumCounter = 1;
         for (let i = 1; i < globalData.length; i++) {
-            let row = globalData[i]; if (!row || row._isExplicitZero) continue;
+            let row = globalData[i]; if (!row) continue;
             const lv = row._level !== undefined ? row._level : 0;
             const prefix = lv > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
             let taskTxt = lv === 0 ? row._origDev : lv === 1 ? row._origT1 : lv === 2 ? row._origT2 : lv === 3 ? row._origT3 : row._origT4;
