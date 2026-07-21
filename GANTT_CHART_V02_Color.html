@@ -794,15 +794,22 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <label>계정</label><input id="as-smtp-user" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="user@kortek.co.kr">
       <label>비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
     </div>
-    <p style="margin:6px 0 0; font-size:11px; color:#999;">🔒 보안상 비밀번호는 이 화면에 저장되지 않습니다 — 다시 열 때마다 빈 칸으로 보이는 게 정상이며, 서버에는 이미 적용되어 있습니다.</p>
+    <p style="margin:6px 0 0; font-size:11px; color:#999;">🔒 이 PC 브라우저에 저장되어 다음에 열 때 자동으로 채워집니다. 공용 PC에서는 사용을 권장하지 않습니다.</p>
     <button onclick="window.saveSmtpConfig()" style="margin-top:10px; padding:5px 14px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12.5px;">💾 서버에 저장 (즉시 적용)</button>
     <span id="as-smtp-save-msg" style="font-size:11.5px; color:#27ae60; margin-left:8px;"></span>
   </div>
 
   <!-- CC 참조인 -->
   <div style="background:#f8f9fa; border-radius:6px; padding:12px 14px; margin-bottom:18px;">
-    <p style="margin:0 0 10px; font-size:13px; font-weight:bold; color:#333;">👥 CC 참조인 <span style="font-weight:normal; font-size:11.5px; color:#888;">(프로젝트별 저장)</span></p>
+    <p style="margin:0 0 10px; font-size:13px; font-weight:bold; color:#333; display:flex; align-items:center; justify-content:space-between;">
+      <span>👥 CC 참조인 <span style="font-weight:normal; font-size:11.5px; color:#888;">(프로젝트별 저장, Summary 멤버 자동 반영)</span></span>
+      <span style="display:flex; gap:4px;">
+        <button type="button" onclick="window.toggleAllCc(true)" style="padding:2px 8px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 ON</button>
+        <button type="button" onclick="window.toggleAllCc(false)" style="padding:2px 8px; border:1px solid #999; color:#999; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 OFF</button>
+      </span>
+    </p>
     <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+    <datalist id="alarm-cc-namelist"></datalist>
     <button onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 참조인 추가</button>
   </div>
 
@@ -932,12 +939,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <thead>
                         <tr>
                             <th style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
-                            <th style="width:15%;">이름</th>
-                            <th style="width:13%;">부서</th>
-                            <th style="width:15%;">직함</th>
-                            <th style="width:24%;">이메일</th>
-                            <th style="width:15%;">휴대폰</th>
-                            <th style="width:15%;">근무처 전화</th>
+                            <th style="width:12%;">이름</th>
+                            <th style="width:12%;">영문 이름</th>
+                            <th style="width:12%;">부서</th>
+                            <th style="width:13%;">직함</th>
+                            <th style="width:21%;">이메일</th>
+                            <th style="width:13%;">휴대폰</th>
+                            <th style="width:14%;">근무처 전화</th>
                         </tr>
                     </thead>
                     <tbody id="address-table-body"></tbody>
@@ -6071,8 +6079,8 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         // ── 🪪 Address 시트 ──
         const addrRows = tabData.addressBook || [];
         if (addrRows.length > 0) {
-            const addrData = [['이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']];
-            addrRows.forEach(function(p) { addrData.push([p.name, p.dept, p.title, p.email, p.mobile, p.phone]); });
+            const addrData = [['이름', '영문 이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']];
+            addrRows.forEach(function(p) { addrData.push([p.name, p.nameEn, p.dept, p.title, p.email, p.mobile, p.phone]); });
             const wsAddr = XLSX.utils.aoa_to_sheet(addrData);
             // 💡 스타일은 공통 applyExcelStyles가 일괄 처리
             wsAddr['!cols'] = [{wch: 14}, {wch: 14}, {wch: 16}, {wch: 26}, {wch: 16}, {wch: 16}];
@@ -9330,7 +9338,7 @@ window.updateInboxBadge();
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px;">
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
-                                <input type="checkbox" id="ms-save-id"> ID 저장
+                                <input type="checkbox" id="ms-save-id"> 로그인정보 저장
                             </label>
                             <button class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                                 📥 메일 가져오기
@@ -10652,12 +10660,17 @@ window._msCurrentIdx = -1;
 
 // ─── 아이디 저장/불러오기 ────────────────────────────────
     (function() {
-    const saved = localStorage.getItem('ms_saved_userid');
+    const saved   = localStorage.getItem('ms_saved_userid');
+    const savedPw = localStorage.getItem('ms_saved_pw');
     if (saved) {
         const el = document.getElementById('ms-userid');
         const cb = document.getElementById('ms-save-id');
         if (el) el.value = saved;
         if (cb) cb.checked = true;
+    }
+    if (savedPw) {
+        const pwEl = document.getElementById('ms-password');
+        if (pwEl) pwEl.value = savedPw;
     }
     // 저장된 API 키 상태 표시 (선택된 AI 제공사 기준)
     const savedKey = window.getActiveAiKey();
@@ -10693,11 +10706,13 @@ window.msFetchMail = async function() {
     if (!userid || !password) { alert('아이디와 비밀번호를 입력해주세요.'); return; }
     if (!startDate || !endDate) { alert('날짜를 선택해주세요.'); return; }
 
-    // 아이디 저장
+    // 로그인정보 저장 (아이디 + 비밀번호)
     if (document.getElementById('ms-save-id').checked) {
         localStorage.setItem('ms_saved_userid', userid);
+        localStorage.setItem('ms_saved_pw', password);
     } else {
         localStorage.removeItem('ms_saved_userid');
+        localStorage.removeItem('ms_saved_pw');
     }
 
     const apiKey = window.getActiveAiKey();
@@ -13181,12 +13196,12 @@ const ALARM_DAYS  = [7, 3, 1];   // 몇 일 전 알람
 const alarmKey = (rowId, dDay) => `gantt_alarm_${rowId}_${dDay}d`;
 
 // 메일 발송
-const sendAlarmMail = async (to, subject, body) => {
+const sendAlarmMail = async (to, subject, body, cc) => {
     try {
         const res = await fetch(`${MAIL_SERVER}/send-mail`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to, subject, body })
+            body: JSON.stringify({ to, cc: cc || '', subject, body })
         });
         return await res.json();
     } catch(e) {
@@ -13275,7 +13290,7 @@ window.checkAndSendAlarms = async function(isManual) {
 
             // 담당자/수신인 이메일이 매칭돼 있으면 그쪽으로, 없으면 프로젝트 전체 멤버에게 발송
             const to     = item.toEmail || allEmails;
-            const result = await sendAlarmMail(to, subject, body);
+            const result = await sendAlarmMail(to, subject, body, item.ccMails);
             if (result.ok) {
                 localStorage.setItem(key, new Date().toISOString());
                 if (item.sentHidden) localStorage.removeItem(`gantt_alarm_${item.rowId}_hidden`); // 재발송했으니 "미발송 처리" 표시 해제
@@ -13321,8 +13336,10 @@ window.loadAlarmSettings = function() {
 // 설정 저장
 window.saveAlarmSettings = function() {
     const ccRows = [...document.querySelectorAll('.alarm-cc-row')].map(row => ({
-        name:  row.querySelector('.cc-name').value.trim(),
-        email: row.querySelector('.cc-email').value.trim(),
+        name:    row.querySelector('.cc-name').value.trim(),
+        email:   row.querySelector('.cc-email').value.trim(),
+        enabled: row.dataset.enabled !== '0',
+        auto:    row.dataset.auto === '1',
     })).filter(r => r.email);
 
     const cfg = window.loadAlarmSettings();
@@ -13367,10 +13384,9 @@ window.saveSmtpConfig = async function() {
     }
     const msgEl = document.getElementById('as-smtp-save-msg');
 
-    // ✅ 서버 연결 성공 여부와 무관하게 host/port/user는 항상 먼저 로컬 저장
-    // (비밀번호는 보안상 로컬에 저장하지 않고 서버에만 전달)
+    // ✅ host/port/user/pass 모두 로컬 저장 — 다음에 열 때 자동으로 채워짐
     const localCfg = window.loadAlarmSettings();
-    localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user };
+    localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user, pass: cfg.pass };
     localStorage.setItem('gantt_alarm_settings', JSON.stringify(localCfg));
 
     try {
@@ -13390,20 +13406,90 @@ window.saveSmtpConfig = async function() {
 };
 
 // CC 행 추가
-window.addAlarmCcRow = function(name='', email='') {
+window.addAlarmCcRow = function(name='', email='', enabled=true, auto=false) {
     const list = document.getElementById('alarm-cc-list');
     if (!list) return;
     const row = document.createElement('div');
     row.className = 'alarm-cc-row';
+    row.dataset.enabled = enabled ? '1' : '0';
+    row.dataset.auto = auto ? '1' : '0';
     row.style.cssText = 'display:flex; gap:6px; align-items:center;';
     row.innerHTML = `
-        <input class="cc-name u-input" placeholder="이름" value="${name}"
+        <input class="cc-name u-input" placeholder="이름" value="${name}" list="alarm-cc-namelist" oninput="window._ccAutofillEmail(this)"
           style="width:90px; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
         <input class="cc-email u-input" placeholder="이메일" value="${email}"
           style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+        ${auto ? '<span title="Summary 프로젝트 멤버에서 자동 등록됨" style="font-size:10px; color:#2c5f8a; background:#eaf2fa; border-radius:3px; padding:2px 5px; white-space:nowrap;">auto</span>' : ''}
+        <button type="button" class="cc-toggle-btn" onclick="window._toggleCcRow(this)" title="발송 ON/OFF"
+          style="border:1px solid ${enabled ? '#27ae60' : '#ccc'}; background:${enabled ? '#27ae60' : '#fff'}; color:${enabled ? '#fff' : '#aaa'}; cursor:pointer; font-size:12px; width:24px; height:24px; border-radius:4px; line-height:1; flex-shrink:0;">✓</button>
         <button onclick="this.parentElement.remove()"
           style="border:none; background:none; color:#e03131; cursor:pointer; font-size:16px; padding:0 4px;">✕</button>`;
     list.appendChild(row);
+};
+
+// 참조인 개별 발송 ON/OFF 토글
+window._toggleCcRow = function(btn) {
+    const row = btn.closest('.alarm-cc-row');
+    const enabled = row.dataset.enabled !== '1';
+    row.dataset.enabled = enabled ? '1' : '0';
+    btn.style.borderColor = enabled ? '#27ae60' : '#ccc';
+    btn.style.background  = enabled ? '#27ae60' : '#fff';
+    btn.style.color       = enabled ? '#fff' : '#aaa';
+};
+
+// 참조인 전체 발송 ON/OFF
+window.toggleAllCc = function(enabled) {
+    document.querySelectorAll('.alarm-cc-row').forEach(row => {
+        row.dataset.enabled = enabled ? '1' : '0';
+        const btn = row.querySelector('.cc-toggle-btn');
+        if (btn) {
+            btn.style.borderColor = enabled ? '#27ae60' : '#ccc';
+            btn.style.background  = enabled ? '#27ae60' : '#fff';
+            btn.style.color       = enabled ? '#fff' : '#aaa';
+        }
+    });
+};
+
+// 💡 이름으로 주소록에서 사람 찾기 — 한글 이름으로 먼저 찾고, 없으면 영문 이름으로 폴백
+window._addrFindByName = function(name) {
+    if (!name) return null;
+    const addressBook = (window.tabData || {}).addressBook || [];
+    let found = addressBook.find(p => p.name && p.name.trim() === name);
+    if (!found) found = addressBook.find(p => p.nameEn && p.nameEn.trim().toLowerCase() === name.toLowerCase());
+    return found || null;
+};
+
+// 💡 Summary 프로젝트 멤버(담당자 10종 + 멤버-3)를 참조인 후보로 변환 — 이메일은 주소록 기준
+window._autoRegisterCcFromMembers = function() {
+    const pm = window.projectMeta || {};
+    const lookup = name => {
+        const found = window._addrFindByName(name);
+        return found ? (found.email || '') : '';
+    };
+    const members = [];
+    ['프로젝트담당자','기구담당자','HW담당자','FW담당자','TSP담당자',
+     'LCM담당자','Slimming담당자','Cutting담당자','Module담당자','Tooling담당자'].forEach(k => {
+        (pm[k] || '').split(/[,，]/).map(n => n.trim()).filter(Boolean).forEach(n => {
+            const email = lookup(n);
+            if (email) members.push({ name: n, email });
+        });
+    });
+    ((window.tabData || {}).projectMembers3 || []).forEach(m => {
+        if (m.name && m.email) members.push({ name: m.name.trim(), email: m.email.trim() });
+    });
+    return members;
+};
+
+// 💡 CC 이름이 주소록과 일치하면 이메일 자동 입력 (한글 없으면 영문 이름으로도 매칭)
+window._ccAutofillEmail = function(nameInput) {
+    const name = nameInput.value.trim();
+    if (!name) return;
+    const found = window._addrFindByName(name);
+    if (found && found.email) {
+        const row = nameInput.closest('.alarm-cc-row');
+        const emailInput = row && row.querySelector('.cc-email');
+        if (emailInput) emailInput.value = found.email;
+    }
 };
 
 // 설정 모달 열기
@@ -13413,12 +13499,38 @@ window.openAlarmSettings = function() {
     document.getElementById('as-smtp-host').value = smtp.host || 'kmail.kortek.co.kr';
     document.getElementById('as-smtp-port').value = smtp.port || 25;
     document.getElementById('as-smtp-user').value = smtp.user || '';
-    document.getElementById('as-smtp-pass').value = '';
+    document.getElementById('as-smtp-pass').value = smtp.pass || '';
     window.refreshAlarmAutoButtons(cfg.autoSend !== false);
+    // 주소록 이름 목록으로 자동완성 datalist 채우기 (한글/영문 이름 모두)
+    const nameList = document.getElementById('alarm-cc-namelist');
+    if (nameList) {
+        const addressBook = (window.tabData || {}).addressBook || [];
+        const opts = [];
+        addressBook.forEach(p => {
+            if (p.name)   opts.push(p.name);
+            if (p.nameEn) opts.push(p.nameEn);
+        });
+        nameList.innerHTML = opts.map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
+    }
+    // Summary 프로젝트 멤버 기준으로 자동 참조인을 매번 새로 계산 (수동으로 추가한 사람은 그대로 유지)
+    const prevList = cfg.ccList || [];
+    const prevEnabledByEmail = {};
+    prevList.forEach(r => { if (r.email) prevEnabledByEmail[r.email] = (r.enabled !== false); });
+
+    const seen = new Set();
+    const autoList = window._autoRegisterCcFromMembers()
+        .filter(m => { if (seen.has(m.email)) return false; seen.add(m.email); return true; })
+        .map(m => ({
+            name: m.name, email: m.email, auto: true,
+            enabled: prevEnabledByEmail.hasOwnProperty(m.email) ? prevEnabledByEmail[m.email] : true,
+        }));
+    const manualList = prevList.filter(r => !r.auto && !seen.has(r.email));
+    const ccList = [...autoList, ...manualList];
+
     const list = document.getElementById('alarm-cc-list');
     if (list) {
         list.innerHTML = '';
-        (cfg.ccList || []).forEach(r => window.addAlarmCcRow(r.name, r.email));
+        ccList.forEach(r => window.addAlarmCcRow(r.name, r.email, r.enabled !== false, !!r.auto));
     }
     document.getElementById('alarm-settings-overlay').style.display = 'block';
     document.getElementById('alarm-settings-modal').style.display  = 'block';
@@ -13457,35 +13569,17 @@ window.collectAlarmItems = function() {
     const gdata  = window.globalData || [];
     const today  = new Date(); today.setHours(0,0,0,0);
 
-    // 담당자명 → 이메일 매핑
-    const nameToEmail = {};
-    ['프로젝트담당자','기구담당자','HW담당자','FW담당자','TSP담당자',
-     'LCM담당자','Slimming담당자','Cutting담당자','Module담당자','Tooling담당자'].forEach(k => {
-        const names  = (pm[k] || '').split(/[,，]/).map(n => n.trim()).filter(Boolean);
-        const emails = (pm[k + '이메일'] || '').split(/[,，]/).map(e => e.trim()).filter(Boolean);
-        names.forEach((name, i) => {
-            // 동일 인덱스 이메일 우선, 없으면 첫 번째 이메일로 폴백
-            const email = emails[i] || emails[0] || '';
-            if (name && email) nameToEmail[name] = email;
-        });
-    });
-    // 💡 프로젝트 멤버-3 (자유 추가 인원)도 이름→이메일 매핑에 포함
-    ((window.tabData || {}).projectMembers3 || []).forEach(m => {
-        if (m.name && m.email) nameToEmail[m.name.trim()] = m.email.trim();
-    });
-
-    // 💡 Summary에 등록 안 된 이름은 주소록(Address Book)에서 폴백 검색
-    const addressBook = (window.tabData || {}).addressBook || [];
+    // 💡 담당자명 → 이메일 매핑은 주소록(Address Book) 기준으로 통일 — 한글 이름 없으면 영문 이름으로 폴백
+    //    (Summary 탭 담당자 이메일 텍스트필드는 더 이상 참조하지 않음 — 이름은 여전히 Summary/업무 내용에서 옴)
     const lookupEmail = function(name) {
         if (!name) return '';
-        if (nameToEmail[name]) return nameToEmail[name];
-        const found = addressBook.find(function(p) { return p.name && p.name.trim() === name; });
+        const found = window._addrFindByName(name);
         return found ? (found.email || '') : '';
     };
 
-    // CC 이메일
+    // CC 이메일 — 알람 설정에 등록된 참조인 중 발송 ON(enabled)인 사람만
     const cfg     = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
-    const ccMails = (cfg.ccList || []).filter(r => r.email).map(r => r.email).join(',');
+    const ccMails = (cfg.ccList || []).filter(r => r.email && r.enabled !== false).map(r => r.email).join(',');
 
     document.querySelectorAll('#table-body tr').forEach(function(tr) {
         // dataset.rowIndex → globalData 인덱스 (1-based, 0번은 헤더)
@@ -13787,7 +13881,7 @@ window.sendSingleAlarm = async function(sendAll) {
         const res = await fetch('http://127.0.0.1:5000/send-mail', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ to: allEmails, subject, body })
+            body: JSON.stringify({ to: allEmails, cc: item.ccMails || '', subject, body })
         });
         const data = await res.json();
         if (data.ok) {
@@ -13826,22 +13920,11 @@ window.sendAllPendingAlarms = async function() {
 
     const pm        = window.projectMeta || {};
     const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
-    const allEmails = [
-        pm.프로젝트담당자이메일, pm.기구담당자이메일,
-        pm.HW담당자이메일, pm.FW담당자이메일, pm.TSP담당자이메일,
-        pm.LCM담당자이메일, pm.Slimming담당자이메일,
-        pm.Cutting담당자이메일, pm.Module담당자이메일, pm.Tooling담당자이메일,
-        ...((window.tabData || {}).projectMembers3 || []).map(m => m.email),
-    ].filter(e => e && e.includes('@')).join(',');
-
-    if (!allEmails) {
-        if (window.bmAlertModal) window.bmAlertModal('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
-        else alert('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
-        return;
-    }
 
     let sentCount = 0;
     for (const item of pending) {
+        // 업무별 발신인/수신인이 없으면 이 건은 건너뜀 (더 이상 Summary 멤버 전체로 대체 발송하지 않음)
+        if (!item.toEmail) continue;
         const subject = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 ${dDayPlain(item.diffDays)}`;
         const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
@@ -13860,7 +13943,7 @@ window.sendAllPendingAlarms = async function() {
             const res = await fetch('http://127.0.0.1:5000/send-mail', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ to: allEmails, subject, body })
+                body: JSON.stringify({ to: item.toEmail, cc: item.ccMails || '', subject, body })
             });
             const data = await res.json();
             if (data.ok) {
@@ -14083,12 +14166,13 @@ window.renderAddressTable = function() {
     if (!tbody) return;
     window.tabData = window.tabData || {};
     let rows = window.tabData.addressBook || [];
-    if (!rows.length) rows = [{ name: '', dept: '', title: '', email: '', mobile: '', phone: '' }]; // bm 팝업 재오픈용 최소 1행 유지
+    if (!rows.length) rows = [{ name: '', nameEn: '', dept: '', title: '', email: '', mobile: '', phone: '' }]; // bm 팝업 재오픈용 최소 1행 유지
 
     tbody.innerHTML = rows.map(function(p) {
         return '<tr>'
             + '<td class="bm-no"></td>'
             + '<td><input class="u-input" data-field="name" value="' + _escTabVal(p.name) + '" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="nameEn" value="' + _escTabVal(p.nameEn) + '" placeholder="예: Hong Gildong" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="dept" value="' + _escTabVal(p.dept) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="title" value="' + _escTabVal(p.title) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="email" value="' + _escTabVal(p.email) + '" onchange="window.collectAddressData()"></td>'
@@ -14113,7 +14197,7 @@ window.collectAddressData = function() {
     const rows = [];
     document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
         const get = function(f) { const el = tr.querySelector('[data-field="' + f + '"]'); return el ? el.value : ''; };
-        rows.push({ name: get('name'), dept: get('dept'), title: get('title'), email: get('email'), mobile: get('mobile'), phone: get('phone') });
+        rows.push({ name: get('name'), nameEn: get('nameEn'), dept: get('dept'), title: get('title'), email: get('email'), mobile: get('mobile'), phone: get('phone') });
     });
     window.tabData.addressBook = rows;
 };
@@ -14136,6 +14220,7 @@ window._applyAddressWorkbookBuffer = function(arrayBuffer, sourceLabel) {
             const last  = pick(row, ['성']);
             return {
                 name:  (last + first) || first,
+                nameEn: pick(row, ['영문이름', '영문 이름', 'English Name', 'EnglishName', 'Name (English)']),
                 dept:  pick(row, ['부서', 'Department']),
                 title: pick(row, ['직함', '직책', 'Title']),
                 email: pick(row, ['전자 메일 주소', '이메일', 'Email', 'E-mail']),
@@ -14908,6 +14993,7 @@ const BM_CONF = {
         rowHtml: function() {
             return '<td class="bm-no"></td>'
                 + '<td><input type="text" class="u-input" data-field="name"></td>'
+                + '<td><input type="text" class="u-input" data-field="nameEn" placeholder="예: Hong Gildong"></td>'
                 + '<td><input type="text" class="u-input" data-field="dept"></td>'
                 + '<td><input type="text" class="u-input" data-field="title"></td>'
                 + '<td><input type="email" class="u-input" data-field="email"></td>'
@@ -14967,7 +15053,7 @@ const BM_CONF = {
             const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
             if (String(oldVal) === String(el.value)) { if (window.collectAddressData) window.collectAddressData(); return; }
 
-            const fieldLabelMap = { name: '이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
+            const fieldLabelMap = { name: '이름', nameEn: '영문 이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
             const fieldLabel = fieldLabelMap[el.dataset.field] || el.dataset.field;
             const reason = window.promptOptionalReason(`[${rowLabel}] ${fieldLabel} 변경`);
             if (reason === null) { el.value = oldVal; return; } // 취소 → 원복, 저장/기록 안 함
@@ -15007,7 +15093,7 @@ window.addrRenderHistoryTable = function() {
     if (!table) return;
     const logs = (window.tabData && window.tabData.addressChangeLog) || [];
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
-    const fieldLabel = { name: '이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
+    const fieldLabel = { name: '이름', nameEn: '영문 이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
     let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">이름</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th><th style="padding:4px 8px;">사유</th></tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
