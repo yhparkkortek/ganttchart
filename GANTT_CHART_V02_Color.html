@@ -29,8 +29,8 @@
         --w-date: 60px;       /* 시작일, 완료일 열 */
         --w-period: 60px;     /* 소요(일) 열 */
         --w-wbs: 350px;       /* 개발업무(WBS) 열 */
-        --w-detail: 850px;    /* 업무 상세내용 열 */
-        --w-chart: 350px;     /* 현황(간트 그래프) 열 */
+        --w-detail: 750px;    /* 업무 상세내용 열 */
+        --w-chart: 450px;     /* 현황(간트 그래프) 열 */
         --w-default: 81px;    /* 위에 해당 안 되는 나머지 열들 (예: 상태 외 기타) */
         --w-status: 60px;     /* 상태 열 */
 
@@ -13264,17 +13264,15 @@ window.checkAndSendAlarms = async function(isManual) {
         const candidateDDays = ALARM_DAYS.filter(d => item.diffDays <= d);
         if (!candidateDDays.length) continue;
 
-        // "🔄 미발송 처리됨"이면 몇 단계가 걸리든 딱 1건만 — 가장 임박한(가장 작은) 단계로 재발송
-        const dDaysToCheck = item.sentHidden ? [Math.min(...candidateDDays)] : candidateDDays;
+        // 🔧 여러 단계(7/3/1)가 한꺼번에 걸려도 오늘 발송은 딱 1건만 — 가장 임박한 단계 기준으로 발송
+        const alreadySent = candidateDDays.every(d => localStorage.getItem(alarmKey(item.rowId, d)));
 
-        for (const dDay of dDaysToCheck) {
-            const key = alarmKey(item.rowId, dDay);
-            // 일반 캐치업은 이미 보낸 단계는 스킵, "미발송 처리"된 경우는 이미 보낸 기록이 있어도 재발송
-            if (localStorage.getItem(key) && !item.sentHidden) continue;
+        // 일반 캐치업은 걸린 단계가 전부 이미 발송됐으면 스킵, "미발송 처리"된 경우는 재발송
+        if (alreadySent && !item.sentHidden) continue;
 
-            const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
-            const subject   = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 ${dDayPlainSafe(item.diffDays)}`;
-            const body      = `
+        const projTitle = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
+        const subject   = `[Gantt 알람] ${projTitle} — "${item.taskName}" 완료일 ${dDayPlainSafe(item.diffDays)}`;
+        const body      = `
 <div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlainSafe(item.diffDays)}일 (${item.dueStr})</b>입니다.</p>
@@ -13288,15 +13286,15 @@ window.checkAndSendAlarms = async function(isManual) {
   <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 알람 시스템에서 자동 발송되었습니다.</p>
 </div>`;
 
-            // 담당자/수신인 이메일이 매칭돼 있으면 그쪽으로, 없으면 프로젝트 전체 멤버에게 발송
-            const to     = item.toEmail || allEmails;
-            const result = await sendAlarmMail(to, subject, body, item.ccMails);
-            if (result.ok) {
-                localStorage.setItem(key, new Date().toISOString());
-                if (item.sentHidden) localStorage.removeItem(`gantt_alarm_${item.rowId}_hidden`); // 재발송했으니 "미발송 처리" 표시 해제
-                sentCount++;
-                console.log(`[알람] 발송 완료: ${item.taskName} (${dDayPlainSafe(item.diffDays)})`);
-            }
+        // 담당자/수신인 이메일이 매칭돼 있으면 그쪽으로, 없으면 프로젝트 전체 멤버에게 발송
+        const to     = item.toEmail || allEmails;
+        const result = await sendAlarmMail(to, subject, body, item.ccMails);
+        if (result.ok) {
+            // 지나쳐온 단계(7/3/1)를 전부 '발송됨'으로 마킹 — 다음 체크에서 또 안 걸리도록
+            candidateDDays.forEach(d => localStorage.setItem(alarmKey(item.rowId, d), new Date().toISOString()));
+            if (item.sentHidden) localStorage.removeItem(`gantt_alarm_${item.rowId}_hidden`); // 재발송했으니 "미발송 처리" 표시 해제
+            sentCount++;
+            console.log(`[알람] 발송 완료: ${item.taskName} (${dDayPlainSafe(item.diffDays)})`);
         }
     }
 
@@ -13795,7 +13793,7 @@ window.openAlarmModal = function(idx) {
     window._alarmCurrentItem = item;
 
     const pm        = window.projectMeta || {};
-    const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
+    const projTitle = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
     const dayKeys   = Object.keys(item.sentLog).filter(k => !isNaN(Number(k))).map(Number).sort((a,b) => a-b);
     const sentParts = dayKeys.map(d => `✓ D-${d}일 전 발송 (${item.sentLog[d].substring(0,16).replace('T',' ')})`);
     if (item.sentLog.manual) sentParts.push(`✓ 즉시 발송 (${item.sentLog.manual.substring(0,16).replace('T',' ')})`);
@@ -13839,7 +13837,7 @@ window.sendSingleAlarm = async function(sendAll) {
     if (!item) return;
 
     const pm        = window.projectMeta || {};
-    const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
+    const projTitle = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
 
     // ALL 모드: 프로젝트 전체 멤버 이메일 (멤버-3 자유 추가 인원 포함)
     const allMemberEmails = [
@@ -13922,7 +13920,7 @@ window.sendAllPendingAlarms = async function() {
     }
 
     const pm        = window.projectMeta || {};
-    const projTitle = [pm.고객사, pm.고객모델명, pm.KTK모델명].filter(Boolean).join(' > ') || '프로젝트';
+    const projTitle = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
 
     let sentCount = 0;
     for (const item of pending) {
