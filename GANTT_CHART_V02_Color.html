@@ -16010,11 +16010,7 @@ window.mcLogChange = function(rowLabel, field, oldVal, newVal, reason) {
 };
 
 // 💡 SUBTOTAL/TOTAL/영업판가/재료비율 행의 Note 저장 (일반 행과 별도 저장소, 리비전별로 구분)
-window.mcUpdateSummaryNote = function(rev, noteKey, val) {
-    window.tabData = window.tabData || {};
-    window.tabData.mcSummaryNotes = window.tabData.mcSummaryNotes || {};
-    window.tabData.mcSummaryNotes[rev] = window.tabData.mcSummaryNotes[rev] || {};
-    const oldVal = window.tabDa// 💡 SUBTOTAL/TOTAL/영업판가/재료비율 행의 Note 저장소를 종류(unit)별로 분리해서 반환
+// 💡 SUBTOTAL/TOTAL/영업판가/재료비율 행의 Note 저장소를 종류(unit)별로 분리해서 반환
 //    - 종류 미지정('')이면 기존 mcSummaryNotes 그대로 사용 (하위 호환)
 //    - 종류가 있으면 mcSummaryNotesByUnit[unit]을 사용
 function _mcSummaryNotesStore() {
@@ -16036,10 +16032,6 @@ window.mcUpdateSummaryNote = function(rev, noteKey, val) {
     const oldVal = store[rev][noteKey] || '';
     if (oldVal === val) return;
     store[rev][noteKey] = val;
-    if (window.mcQueueChange) window.mcQueueChange(noteKey, 'Note', oldVal, val);
-};ta.mcSummaryNotes[rev][noteKey] || '';
-    if (oldVal === val) return;
-    window.tabData.mcSummaryNotes[rev][noteKey] = val;
     if (window.mcQueueChange) window.mcQueueChange(noteKey, 'Note', oldVal, val);
 };
 
