@@ -5779,7 +5779,9 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             if (_mcUnitKey && !_mcHasData) return; // 추가는 됐지만 데이터가 전혀 없는 종류는 시트 생성 안 함
 
             const _mcPrevRevisions = tabData.mcRevisions, _mcPrevSales = tabData.mcSalesPriceDetail;
+            const _mcPrevActiveUnit = window.mcActiveUnit; // 💡 Note 저장소도 이 종류 기준으로 바뀌도록 잠깐 전환
             tabData.mcRevisions = _mcRevSrc; tabData.mcSalesPriceDetail = _mcSalesSrc;
+            window.mcActiveUnit = _mcUnitKey;
             const _mcSuffix = _mcUnitKey ? ('-' + _mcUnitKey) : '';
 
             // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
@@ -5913,6 +5915,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             });
 
             tabData.mcRevisions = _mcPrevRevisions; tabData.mcSalesPriceDetail = _mcPrevSales;
+            window.mcActiveUnit = _mcPrevActiveUnit; // 💡 화면 상태 원복
         });
         function _buildMcSheet(rows, rev, unitLabel) {
             const num = function(v) { const n = parseFloat(String(v === undefined || v === null ? '' : v).replace(/[^0-9.-]+/g, '')); return isNaN(n) ? 0 : n; };
