@@ -655,6 +655,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
             </div>
         </div>
+        <button id="project-select-btn" class="topbar-btn" onclick="window.selectProject()" disabled title="현재 프로젝트를 저장한 뒤, 다른 프로젝트를 불러옵니다">🔃 프로젝트 선택</button>
         <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="font-weight:bold;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
     </div>
     <div id="file-status" style="text-decoration:underline;">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
@@ -1709,6 +1710,18 @@ ${mailText}`;
         } catch (err) { console.error("클라우드 파일 검색 실패:", err); return null; }
     }
 
+    // 💡 "프로젝트 선택": 현재 프로젝트를 먼저 저장한 뒤에만 다른 프로젝트 목록을 연다 (미저장 유실 방지)
+    window.selectProject = async function() {
+        if (!window.isDriveConnected) {
+            alert("🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.");
+            return;
+        }
+        document.getElementById('file-status').textContent = "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...";
+        const saved = await window.saveToGoogleDrive();
+        if (!saved) return; // 저장 실패/필수정보 미입력 시 이동 중단
+        window.loadFromGoogleDrive();
+    }
+
     window.loadFromGoogleDrive = async function() {
         document.getElementById('file-status').textContent = "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
         try {
@@ -1986,7 +1999,7 @@ ${mailText}`;
             if (requiredInfoError) {
                 alert(requiredInfoError);
                 if (window.switchTab) window.switchTab('summary');
-                return;
+                return false;
             }
 
             const hasGanttData = globalData && globalData.length > 1;
@@ -2004,7 +2017,7 @@ ${mailText}`;
                     }))
                 );
             }
-            if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return; }
+            if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
             document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
             
@@ -2039,7 +2052,7 @@ ${mailText}`;
             if (!token) {
                 alert("🔒 구글 인증 토큰을 확보하지 못했습니다.\n상단의 연동 버튼을 다시 클릭하여 로그인을 완료해 주세요.");
                 document.getElementById('file-status').textContent = "❌ 저장 실패: 인증 토큰 유실";
-                return;
+                return false;
             }
 
             let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true';
@@ -2061,6 +2074,7 @@ ${mailText}`;
                 window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
                 alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
                 document.getElementById('file-status').textContent = `🔄 공용 저장소 백업 완료: ${dynamicFileName}`;
+                return true;
             } else {
                 console.error("구글 저장 실패 상세 정보:", file);
                 let errorMsg = "공유 폴더의 '편집자' 권한이 없거나 업로드 중 오류가 발생했습니다.";
@@ -2083,10 +2097,12 @@ ${mailText}`;
                 
                 alert(`❌ 저장 실패\n\n${errorMsg}`);
                 document.getElementById('file-status').textContent = "❌ 클라우드 백업 실패";
+                return false;
             }
         } catch (err) { 
             alert("구글 드라이브 전송 시스템 에러: " + err.message); 
             document.getElementById('file-status').textContent = "❌ 시스템 오류 발생";
+            return false;
         }
     }
 
@@ -4967,7 +4983,8 @@ window.deleteHistoryByDateRange = function() {
             btnText: '🌐 ENG',
             ui: {
                 'file-menu-btn':  '📁 파일',
-                'task-menu-label':'업무',
+                'task-menu-label':'업무 관리',
+                'project-select-btn': '🔃 프로젝트 선택',
                 'schedule-tools-btn': '🛠️ 일정 도구',
                 'baseline-menu-btn':  '📐 계획',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
@@ -5009,7 +5026,8 @@ window.deleteHistoryByDateRange = function() {
             btnText: '🌐 한글',
             ui: {
                 'file-menu-btn':  '📁 File',
-                'task-menu-label':'Task',
+                'task-menu-label':'Task Management',
+                'project-select-btn': '🔃 Select Project',
                 'schedule-tools-btn': '🛠️ Schedule Tools',
                 'baseline-menu-btn':  '📐 Plan',
                 'admin-pw-change-btn': '🔑 Change Password',
@@ -6236,6 +6254,7 @@ window.handleAuthClick = function() {
                 document.getElementById('drive_save_btn').disabled = false;
                 document.getElementById('drive_load_btn').disabled = false;
                 const bkBtn2 = document.getElementById('backup_restore_btn'); if (bkBtn2) bkBtn2.disabled = false;
+                const psBtn = document.getElementById('project-select-btn'); if (psBtn) psBtn.disabled = false;
                 window.isDriveConnected = true; // ✅ 연동 완료 플래그
                 window.closeAllTopbarMenus(); // ✅ 로그인 완료 시 열려있던 파일 드롭다운 자동 닫기
 
