@@ -8219,6 +8219,16 @@ window.mailRightToInbox = function() {
     alert(`📥 "${window._mailAnalyzedResult['업무명'] || '새 업무'}" 업무를 보관함에 담았습니다.\n상단바 [업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`);
 };
 
+// 💡 원본 메일 보기 접기/펼치기 — 헤더와 본문 둘 다 클릭해서 토글 가능
+window.toggleMailOriginal = function() {
+    const b = document.getElementById('mail-original-body');
+    const a = document.getElementById('mail-original-arrow');
+    if (!b || !a) return;
+    const open = b.style.display !== 'none';
+    b.style.display = open ? 'none' : 'block';
+    a.textContent = open ? '▼' : '▲';
+};
+
 // =========================================================
 // 📤 [Phase 2] 드라이브 백그라운드 배분 + 배분 원장(distributions)
 // =========================================================
@@ -9293,6 +9303,10 @@ window.updateInboxBadge();
                             style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
+                    <button class="action-btn" id="paste-batch-inbox-btn" onclick="window.pasteBatchToInbox()"
+                            style="display:none; width:100%; margin:6px 0 0 -1px !important; min-width:auto !important; height:36px !important; background:#fff; color:#e67e22; border-color:#e67e22;">
+                        📥 선택항목 보관함 이동
+                    </button>
                 </div>
 
                 <!-- ── 파일첨부 탭 왼쪽 ── -->
@@ -9345,6 +9359,10 @@ window.updateInboxBadge();
                     <button class="action-btn" id="mf-batch-btn" onclick="window.mfBatchInsert()"
                             style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
+                    </button>
+                    <button class="action-btn" id="mf-batch-inbox-btn" onclick="window.mfBatchToInbox()"
+                            style="display:none; width:100%; margin:6px 0 0 -1px !important; min-width:auto !important; height:36px !important; background:#fff; color:#e67e22; border-color:#e67e22;">
+                        📥 선택항목 보관함 이동
                     </button>
                 </div>
 
@@ -9448,6 +9466,10 @@ window.updateInboxBadge();
                             style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                         ⚡ 선택항목 연속등록
                     </button>
+                    <button class="action-btn" id="ms-batch-inbox-btn" onclick="window.msBatchToInbox()"
+                            style="display:none; width:100%; margin:6px 0 0 -1px !important; min-width:auto !important; height:36px !important; flex-shrink:0; background:#fff; color:#e67e22; border-color:#e67e22;">
+                        📥 선택항목 보관함 이동
+                    </button>
                 </div>
 
             </div><!-- end 왼쪽 패널 -->
@@ -9478,23 +9500,18 @@ window.updateInboxBadge();
 
                     <!-- 원본 메일 접이식 -->
                     <div style="flex-shrink:0; margin-bottom:6px;">
-                        <div onclick="
-                            const b = document.getElementById('mail-original-body');
-                            const a = document.getElementById('mail-original-arrow');
-                            const open = b.style.display !== 'none';
-                            b.style.display = open ? 'none' : 'block';
-                            a.textContent = open ? '▼' : '▲';"
+                        <div onclick="window.toggleMailOriginal()"
                              style="display:flex; justify-content:space-between; align-items:center;
                                     padding:5px 10px; background:#e9ecef; border-radius:6px;
                                     cursor:pointer; font-size:11px; font-weight:bold; color:#555;">
                             <span>📨 원본 메일 보기</span>
                             <span id="mail-original-arrow">▲</span>
                         </div>
-                        <div id="mail-original-body"
+                        <div id="mail-original-body" onclick="window.toggleMailOriginal()"
                              style="display:block; padding:10px; background:#f8f9fa;
                                     border:1px solid #dee2e6; border-radius:0 0 6px 6px;
                                     font-size:12px; color:#333; max-height:320px;
-                                    overflow-y:auto; white-space:pre-wrap; word-break:break-all;">
+                                    overflow-y:auto; white-space:pre-wrap; word-break:break-all; cursor:pointer;">
                         </div>
                     </div>
 
@@ -9888,6 +9905,7 @@ window.mfHandleFiles = function(files) {
     document.getElementById('mf-result-list').style.display  = 'none';
     document.getElementById('mf-list-header').style.display  = 'none';
     document.getElementById('mf-batch-btn').style.display    = 'none';
+    document.getElementById('mf-batch-inbox-btn').style.display = 'none';
     document.getElementById('mail-right-empty').style.display  = 'flex';
     document.getElementById('mail-right-detail').style.display = 'none';
     window._mfCurrentIdx = -1;
@@ -9930,6 +9948,7 @@ window.mfClearFiles = function() {
     document.getElementById('mf-result-list').style.display = 'none';
     document.getElementById('mf-list-header').style.display = 'none';
     document.getElementById('mf-batch-btn').style.display = 'none';
+    document.getElementById('mf-batch-inbox-btn').style.display = 'none';
     document.getElementById('mail-right-empty').style.display = 'flex';
     document.getElementById('mail-right-detail').style.display = 'none';
     document.getElementById('mf-input').value = '';
@@ -9945,6 +9964,7 @@ window.mfClearResults = function() {
     document.getElementById('mf-result-list').style.display = 'none';
     document.getElementById('mf-list-header').style.display = 'none';
     document.getElementById('mf-batch-btn').style.display = 'none';
+    document.getElementById('mf-batch-inbox-btn').style.display = 'none';
     document.getElementById('mail-right-empty').style.display = 'flex';
     document.getElementById('mail-right-detail').style.display = 'none';
 };
@@ -10094,9 +10114,10 @@ function mfParseFile(file) {
                     .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
             }
 
-            // ── 중첩 multipart에서 text/plain 재귀 추출 ──
+            // ── 중첩 multipart에서 text/plain 재귀 추출, 없으면 text/html로 대체 ──
             function extractPlainText(content, boundary) {
                 const parts = content.split(new RegExp('--' + boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+                let htmlFallback = null; // 💡 text/plain을 끝내 못 찾았을 때 대신 쓸 text/html 내용
                 for (const part of parts) {
                     if (!part || part.trim() === '--') continue;
                     const pEnd = part.search(/\r?\n\r?\n/);
@@ -10113,20 +10134,22 @@ function mfParseFile(file) {
                         }
                         continue;
                     }
-                    if (!pHeaderL.includes('text/plain')) continue;
                     const pte = (pHeaderL.match(/content-transfer-encoding:\s*(\S+)/)||[])[1]||'';
                     const pcs = (pHeader.match(/charset="?([^";\s]+)"?/i)||[])[1]||'utf-8';
-                    if (pte.includes('base64')) {
-                        return decodeBase64Body(pBody.trim());
-                    } else if (pte.includes('quoted-printable')) {
-                        const raw = decodeQP(pBody);
-                        try { return new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
-                        catch { return raw; }
-                    } else {
+                    const decodePart = () => {
+                        if (pte.includes('base64')) return decodeBase64Body(pBody.trim());
+                        if (pte.includes('quoted-printable')) {
+                            const raw = decodeQP(pBody);
+                            try { return new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
+                            catch { return raw; }
+                        }
                         return pBody;
-                    }
+                    };
+                    if (pHeaderL.includes('text/plain')) return decodePart();
+                    // 💡 text/html 파트는 일단 저장해두고 계속 찾다가, text/plain이 끝내 없으면 이걸 씀
+                    if (!htmlFallback && pHeaderL.includes('text/html')) htmlFallback = decodePart();
                 }
-                return '';
+                return htmlFallback || '';
             }
 
             if (ext === 'eml') {
@@ -10346,6 +10369,7 @@ window.mfAnalyze = async function() {
     document.getElementById('mf-result-list').style.display = 'none';
     document.getElementById('mf-list-header').style.display = 'none';
     document.getElementById('mf-batch-btn').style.display   = 'none';
+    document.getElementById('mf-batch-inbox-btn').style.display = 'none';
     document.getElementById('mail-right-empty').style.display  = 'flex';
     document.getElementById('mail-right-detail').style.display = 'none';
     window._mfCurrentIdx = -1;
@@ -10486,6 +10510,7 @@ function mfRenderList(results) {
     document.getElementById('mf-list-header').style.display = 'flex';
     list.style.display   = 'block';
     document.getElementById('mf-batch-btn').style.display   = 'block';
+    document.getElementById('mf-batch-inbox-btn').style.display = 'block';
     window.mfSyncCheckAll();
 
     // ✅ innerHTML 렌더링 후 이벤트 직접 연결
@@ -10794,6 +10819,7 @@ window.msFetchMail = async function() {
     document.getElementById('ms-progress').style.display = 'block';
     document.getElementById('ms-result-list').innerHTML = ''; document.getElementById('ms-list-header').style.display = 'none';
     document.getElementById('ms-batch-btn').style.display = 'none';
+    document.getElementById('ms-batch-inbox-btn').style.display = 'none';
     document.getElementById('ms-prog-bar').style.width = '10%';
     document.getElementById('ms-prog-text').textContent = '메일 가져오는 중...';
 
@@ -10880,6 +10906,7 @@ window.msFetchMail = async function() {
         document.getElementById('ms-progress').style.display = 'none';
         document.getElementById('ms-list-header').style.display = 'block';
         document.getElementById('ms-batch-btn').style.display   = 'block';
+        document.getElementById('ms-batch-inbox-btn').style.display = 'block';
 
     } catch(e) {
         document.getElementById('ms-status').textContent = `❌ 오류: ${e.message}`;
@@ -10888,6 +10915,7 @@ window.msFetchMail = async function() {
         if (window._msResults && window._msResults.length) {
             document.getElementById('ms-list-header').style.display = 'block';
             document.getElementById('ms-batch-btn').style.display   = 'block';
+            document.getElementById('ms-batch-inbox-btn').style.display = 'block';
             msRenderList(window._msResults);
         }
     }
@@ -10906,6 +10934,7 @@ window.msClearResults = function() {
     document.getElementById('ms-result-list').style.display = 'none';
     document.getElementById('ms-list-header').style.display = 'none';
     document.getElementById('ms-batch-btn').style.display = 'none';
+    document.getElementById('ms-batch-inbox-btn').style.display = 'none';
     document.getElementById('mail-right-empty').style.display = 'flex';
     document.getElementById('mail-right-detail').style.display = 'none';
 };
@@ -11096,19 +11125,19 @@ const AR = {
         mf: {
             getArr: () => window._mfResults,
             listId: 'mf-result-list', headerId: 'mf-list-header', checkAllId: 'mf-check-all',
-            batchBtnId: 'mf-batch-btn', countId: 'mf-result-count', activeClass: 'mf-active',
+            batchBtnId: 'mf-batch-btn', batchInboxBtnId: 'mf-batch-inbox-btn', countId: 'mf-result-count', activeClass: 'mf-active',
             getCurIdx: () => window._mfCurrentIdx, setCurIdx: (v) => window._mfCurrentIdx = v,
         },
         ms: {
             getArr: () => window._msResults,
             listId: 'ms-result-list', headerId: 'ms-list-header', checkAllId: 'ms-check-all',
-            batchBtnId: 'ms-batch-btn', countId: null, activeClass: 'ms-active',
+            batchBtnId: 'ms-batch-btn', batchInboxBtnId: 'ms-batch-inbox-btn', countId: null, activeClass: 'ms-active',
             getCurIdx: () => window._msCurrentIdx, setCurIdx: (v) => window._msCurrentIdx = v,
         },
         paste: {
             getArr: () => window._pasteResults,
             listId: 'paste-result-list', headerId: 'paste-result-header', checkAllId: 'paste-check-all',
-            batchBtnId: 'paste-batch-btn', countId: 'paste-result-count', activeClass: 'paste-active',
+            batchBtnId: 'paste-batch-btn', batchInboxBtnId: 'paste-batch-inbox-btn', countId: 'paste-result-count', activeClass: 'paste-active',
             getCurIdx: () => window._pasteCurrentIdx, setCurIdx: (v) => window._pasteCurrentIdx = v,
         },
     },
@@ -11119,12 +11148,14 @@ const AR = {
         const list = document.getElementById(c.listId);
         const header = document.getElementById(c.headerId);
         const batchBtn = document.getElementById(c.batchBtnId);
+        const batchInboxBtn = document.getElementById(c.batchInboxBtnId);
         if (!list) return;
 
         if (!arr.length) {
             list.style.display = 'none';
             if (header) header.style.display = 'none';
             if (batchBtn) batchBtn.style.display = 'none';
+            if (batchInboxBtn) batchInboxBtn.style.display = 'none';
             list.innerHTML = '';
             return;
         }
@@ -11166,6 +11197,7 @@ const AR = {
         if (header) header.style.display = 'flex';
         list.style.display = 'block';
         if (batchBtn) batchBtn.style.display = 'block';
+        if (batchInboxBtn) batchInboxBtn.style.display = 'block';
         if (c.countId) { const el = document.getElementById(c.countId); if (el) el.textContent = arr.length; }
         AR.syncCheckAll(tabKey);
 
@@ -11325,6 +11357,34 @@ const AR = {
         window.recalculateSchedules();
         alert(`✅ ${validTargets.length}개 항목이 등록되었습니다!`);
     },
+
+    // 💡 체크한 항목들을 Gantt에 등록하지 않고 "업무 보관함"으로 한 번에 이동
+    batchToInbox(tabKey) {
+        const c = AR.cfg[tabKey];
+        const arr = c.getArr();
+        const validTargets = arr.filter(r => r.selected && r.task && !r.registered);
+        if (!validTargets.length) { alert('보관함으로 옮길 항목을 체크해주세요.'); return; }
+
+        const previewMsg = `📥 총 ${validTargets.length}개 항목을 업무 보관함으로 이동합니다.\n\n[이동할 업무 목록]\n`
+            + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
+        if (!confirm(previewMsg + '\n\n위 내용으로 이동하시겠습니까?')) return;
+
+        let count = 0;
+        for (const r of validTargets) {
+            const idx = arr.indexOf(r);
+            const task = (c.getCurIdx() === idx && window._mailAnalyzedResult) ? window._mailAnalyzedResult : r.task;
+            window.TaskInbox.add(task, { source: '업무 추가(메일분석 일괄)' });
+            r.selected = false;
+            count++;
+        }
+
+        if (window.updateInboxBadge) window.updateInboxBadge();
+        const ov = document.getElementById('task-inbox-overlay');
+        if (ov && ov.style.display === 'flex' && window.renderTaskInbox) window.renderTaskInbox();
+
+        AR.render(tabKey);
+        alert(`📥 ${count}개 업무를 보관함에 담았습니다.\n상단바 [업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`);
+    },
 };
 
 // ── 3탭 기존 함수명은 그대로 유지하되(다른 곳에서 호출하는 이름 그대로), 내부는 전부 AR로 위임 ──
@@ -11336,6 +11396,7 @@ window.mfDeleteItem    = (idx) => AR.deleteItem('mf', idx);
 window.mfSelectItem    = (idx) => AR.selectItem('mf', idx);
 window.mfRetryAsManual = (idx) => AR.retryAsManual('mf', idx);
 window.mfBatchInsert   = () => AR.batchInsert('mf');
+window.mfBatchToInbox  = () => AR.batchToInbox('mf');
 
 window.msRenderList    = () => AR.render('ms');
 window.msSyncCheckAll  = () => AR.syncCheckAll('ms');
@@ -11344,6 +11405,7 @@ window.msDeleteItem    = (idx) => AR.deleteItem('ms', idx);
 window.msSelectItem    = (idx) => AR.selectItem('ms', idx);
 window.msRetryAsManual = (idx) => AR.retryAsManual('ms', idx);
 window.msBatchInsert   = () => AR.batchInsert('ms');
+window.msBatchToInbox  = () => AR.batchToInbox('ms');
 
 window.pasteRenderResultList = () => AR.render('paste');
 window.pasteToggleCheck      = (idx, checked) => AR.toggleCheck('paste', idx, checked);
@@ -11353,6 +11415,7 @@ window.pasteDeleteResult     = (idx) => AR.deleteItem('paste', idx);
 window.pasteSelectItem       = (idx) => AR.selectItem('paste', idx);
 window.pasteRetryAsManual    = (idx) => AR.retryAsManual('paste', idx);
 window.pasteBatchInsert      = () => AR.batchInsert('paste');
+window.pasteBatchToInbox     = () => AR.batchToInbox('paste');
 
 async function msCallGemini(apiKey, parsed) {
     const GAS_URL = "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
