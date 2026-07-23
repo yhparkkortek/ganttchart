@@ -1207,11 +1207,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>
             <button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button class="concept-add-row-btn" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
-            <button id="mc-rev-cycle-btn" class="mc-rev-btn active" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 R1→R2→...→R5 순환"
+            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" title="새 리비전 추가 (R1부터 무제한)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:1.5px dashed #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">➕</button>
+            <button id="mc-rev-cycle-btn" class="mc-rev-btn active" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)"
                 style="padding:6px 10px; min-width:auto; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
                 style="margin-left:4px; padding:6px 10px; min-width:auto; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
+            <button class="concept-add-row-btn" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
             <div class="btn-group"></div>
             <button class="action-btn" onclick="window.printTabSection('tab-mctable')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
@@ -1990,6 +1992,25 @@ ${mailText}`;
         if (window.renderMember3Rows) window.renderMember3Rows([]);
     };
 
+    // 💡 저장 성공처럼 "확인" 없이 넘어가도 되는 알림 — 잠깐 떴다가 자동으로 사라짐
+    window.showToast = function(message, type = 'success') {
+        let toast = document.createElement('div');
+        toast.textContent = message;
+        toast.style.cssText = `
+            position:fixed; bottom:24px; right:24px; z-index:999999;
+            background:${type === 'error' ? '#e03131' : '#2c5f8a'}; color:#fff;
+            padding:12px 18px; border-radius:8px; font-size:13px; line-height:1.5;
+            box-shadow:0 4px 14px rgba(0,0,0,0.25); max-width:340px; white-space:pre-line;
+            opacity:0; transform:translateY(8px); transition:opacity 0.25s, transform 0.25s;
+        `;
+        document.body.appendChild(toast);
+        requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; });
+        setTimeout(() => {
+            toast.style.opacity = '0'; toast.style.transform = 'translateY(8px)';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    };
+
     window.saveToGoogleDrive = async function() {
         try {
             // 💡 저장(=프로젝트 등록/파일 생성) 전에 Summary 탭의 필수 정보가 입력되어 있는지 검증한다.
@@ -2072,7 +2093,7 @@ ${mailText}`;
                 window.currentDriveFileId = file.id; 
                 window.lastSavedLogCount = window.changeLogs.length; 
                 window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
-                alert(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
+                window.showToast(`🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
                 document.getElementById('file-status').textContent = `🔄 공용 저장소 백업 완료: ${dynamicFileName}`;
                 return true;
             } else {
@@ -5804,7 +5825,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             // ── MC Comparison 시트 (R1~R5 비교 + 영업판가 + 재료비율) ──
             if (window.mcBuildComparisonRows) {
                 const compRows = window.mcBuildComparisonRows();
-                const revs = ['R5', 'R4', 'R3', 'R2', 'R1'];
+                const revs = window._mcRevList(tabData.mcRevisions || {}, { onlyWithMoney: true, desc: true });
                 const compSalesPrice = {};
                 revs.forEach(function(rev) {
                     const detail = (tabData.mcSalesPriceDetail && tabData.mcSalesPriceDetail[rev]) || {};
@@ -5924,9 +5945,9 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                     return moneyFields.some(function(f) { return r[f] !== undefined && r[f] !== null && String(r[f]).trim() !== ''; });
                 });
             };
-            ['R1', 'R2', 'R3', 'R4', 'R5'].forEach(function(rev) {
+            window._mcRevList(mcRevisionsForExport).forEach(function(rev) {
                 const rows = mcRevisionsForExport[rev] || (rev === 'R1' && !_mcUnitKey ? tabData.mcTable : null);
-                if (rev !== 'R1' && !_mcHasRealMoney(rows)) return; // R1은 골격 유지용으로 항상 저장, R2~R5는 실제 금액 있을 때만
+                if (rev !== 'R1' && !_mcHasRealMoney(rows)) return; // R1은 골격 유지용으로 항상 저장, 나머지는 실제 금액 있을 때만
                 const sheetName = 'M.C Table' + _mcSuffix + ' ' + rev;
                 XLSX.utils.book_append_sheet(wb, _buildMcSheet(rows, rev, _mcUnitKey), sheetName);
             });
@@ -12331,6 +12352,11 @@ async function msCallGemini(apiKey, parsed) {
             if (ts === null) return;
             if (!revFirstTs[l.rev] || ts < revFirstTs[l.rev]) revFirstTs[l.rev] = ts;
         });
+        // 💡 R1~무제한 대응: 실제 등장한 리비전(수정이력 + 현재 데이터)을 모두 모아 번호순 정렬
+        const _mcAllRevs = Array.from(new Set(
+            Object.keys((window.tabData || {}).mcRevisions || {}).concat(Object.keys(revFirstTs)).concat(['R1'])
+        )).filter(r => /^R\d+$/.test(r)).sort((a, b) => parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10));
+        const _mcAllRevsDesc = _mcAllRevs.slice().reverse();
 
         // 마일스톤 날짜 이전에 등록된 R 중 가장 늦은(최신) R
         // → 해당 시점까지 존재한 견적 중 최신본 참조
@@ -12340,25 +12366,26 @@ async function msCallGemini(apiKey, parsed) {
             if (isNaN(tgt)) return null;
             // 1순위: 마일스톤 날짜 이전 R 중 등록일이 가장 늦은 것
             let best = null, bestTs = -Infinity;
-            ['R1','R2','R3','R4','R5'].forEach(r => {
+            _mcAllRevs.forEach(r => {
                 const ts = revFirstTs[r];
                 if (!ts) return;
-                // 같은 날짜면 번호 큰 R 우선 (R5 > R4 > ... > R1)
+                // 같은 날짜면 번호 큰 R 우선 (숫자 비교라 R10 > R9도 정확히 처리됨)
                 const sameDay = bestTs !== -Infinity && Math.abs(ts - bestTs) < 86400000;
-                if (ts <= tgt && (ts > bestTs || (sameDay && r > best))) {
+                const rNum = parseInt(r.slice(1), 10), bestNum = best ? parseInt(best.slice(1), 10) : -Infinity;
+                if (ts <= tgt && (ts > bestTs || (sameDay && rNum > bestNum))) {
                     bestTs = ts; best = r;
                 }
             });
             // 2순위: 이전 R이 없으면(모두 미래) 가장 번호 큰(최신) R 폴백
             if (!best) {
-                ['R5','R4','R3','R2','R1'].forEach(r => {
+                _mcAllRevsDesc.forEach(r => {
                     if (!best && revFirstTs[r]) best = r;
                 });
             }
             // 3순위: 수정이력이 아예 없는 프로젝트(엑셀/드라이브로 데이터를 통째로 불러온 경우 등)는
             //         시점 판단이 불가능하므로, 실제 데이터가 있는 가장 최신 리비전으로 대체 표시
             if (!best) {
-                ['R5','R4','R3','R2','R1'].forEach(r => {
+                _mcAllRevsDesc.forEach(r => {
                     if (!best) {
                         const rows = ((window.tabData || {}).mcRevisions || {})[r] || [];
                         if (rows.length) best = r;
@@ -12873,7 +12900,7 @@ function _parseMcTableSheetFromWorkbook(workbook) {
     workbook.SheetNames.forEach(function(n) {
         const name = n.trim();
         if (name === 'M.C Table') { entries.push({ unit: '', rev: 'R1', sheetName: n }); return; }
-        const m = name.match(/^M\.C Table(?:-(.+))? (R[1-5])$/);
+        const m = name.match(/^M\.C Table(?:-(.+))? (R\d+)$/);
         if (m) entries.push({ unit: m[1] || '', rev: m[2], sheetName: n });
     });
 
@@ -13058,6 +13085,10 @@ window.parseConceptSheetsFromWorkbook = function(workbook) {
     const e = _parseMcSalesDetailSheetFromWorkbook(workbook);
     const f = _parseMcChangeLogSheetFromWorkbook(workbook);
     const g = _parseProductImagesSheetFromWorkbook(workbook);
+    if (c && window.tabData) {
+        // 💡 엑셀로 불러온 직후에도 "가장 최신(금액 있는) 리비전"을 기본으로 보여줌
+        window.tabData.mcActiveRevision = window._mcLatestRevWithData(window.tabData.mcRevisions);
+    }
     if ((a || b || c || d || e || f || g) && window.populateTabData) window.populateTabData();
 };
 // ── Summary 탭: Gantt chart Level 0 데이터와 연동된 진척 타임라인 (말풍선 + 텍스트) ──
@@ -15763,6 +15794,8 @@ window.mcNormalizeAfterLoad = function() {
     }
 
     if (window.mcRenderUnitTabs) window.mcRenderUnitTabs();
+    // 💡 불러온 직후엔 항상 "이 종류의 가장 최신(금액 있는) 리비전"을 기본으로 보여줌
+    window.tabData.mcActiveRevision = window._mcLatestRevWithData(window.tabData.mcRevisions);
     if (window.populateTabData) window.populateTabData();
     setTimeout(window.mcCheckNeedsNaming, 300);
 };
@@ -15876,6 +15909,8 @@ window.mcSwitchUnit = function(unit) {
     window.tabData.mcSalesPriceDetail = window.tabData.mcSalesPriceDetailByUnit[newKey] || {};
     window.tabData.mcRevisionsByUnit[newKey] = window.tabData.mcRevisions;
     window.tabData.mcSalesPriceDetailByUnit[newKey] = window.tabData.mcSalesPriceDetail;
+    // 💡 종류를 바꾸면 그 종류의 "최신(금액 있는) 리비전"을 기본으로 보여줌
+    window.tabData.mcActiveRevision = window._mcLatestRevWithData(window.tabData.mcRevisions);
 
     // 💡 비교 화면이 열려있으면 일반 화면으로 복귀 후 전환 (mcSwitchRevision과 동일한 처리)
     const compSection = document.getElementById('mc-comparison-section');
@@ -15893,12 +15928,59 @@ window.mcSwitchUnit = function(unit) {
     });
 };
 
-// 💡 R1~R5 순환 버튼 — 누를 때마다 다음 리비전으로 전환 (없으면 처음으로 돌아감)
+// 💡 금액 필드 중 하나라도 값이 있으면 "실제 데이터 있음"으로 간주 (엑셀 저장 로직과 동일 기준)
+window._mcHasRealMoney = function(rows) {
+    if (!rows || !rows.length) return false;
+    const moneyFields = ['protoCost', 'protoNre', 'protoBCost', 'protoBNre', 'mpCost', 'mpNre'];
+    return rows.some(function(r) {
+        return moneyFields.some(function(f) { return r[f] !== undefined && r[f] !== null && String(r[f]).trim() !== ''; });
+    });
+};
+// 💡 R1~무제한(R6, R7…) 대응: 리비전 객체에 실제로 존재하는 R# 키를 전부 모아 번호 순으로 정렬해서 돌려줌
+//    opts.onlyWithMoney: 금액 있는 것만 (R1과 opts.include는 항상 포함) / opts.desc: 내림차순
+window._mcRevList = function(revisionsObj, opts) {
+    opts = opts || {};
+    const keys = new Set(['R1']);
+    Object.keys(revisionsObj || {}).forEach(function(k) { if (/^R\d+$/.test(k)) keys.add(k); });
+    if (opts.include) keys.add(opts.include);
+    let arr = Array.from(keys);
+    if (opts.onlyWithMoney) {
+        arr = arr.filter(function(k) { return k === 'R1' || k === opts.include || window._mcHasRealMoney(revisionsObj[k]); });
+    }
+    arr.sort(function(a, b) { return parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10); });
+    if (opts.desc) arr.reverse();
+    return arr;
+};
+
+// 💡 이 종류(unit)에서 "가장 최근 등록된, 금액 있는" 리비전을 기본값으로 반환 (없으면 R1)
+window._mcLatestRevWithData = function(revisionsObj) {
+    const withData = window._mcRevList(revisionsObj || {}, { onlyWithMoney: true });
+    return withData.length ? withData[withData.length - 1] : 'R1';
+};
+
+// 💡 R1~무제한 순환 버튼 — 금액이 입력된 리비전 + 지금 보고 있는 리비전끼리만 순환.
+//    완전히 새 리비전(빈 데이터)은 ➕ 버튼(mcAddNewRevision)으로 진입 — 값을 넣기 전까진 "지금 보는 중"으로 순환에 임시 포함됨
 window.mcCycleRevision = function() {
-    const order = ['R1', 'R2', 'R3', 'R4', 'R5'];
-    const cur = window.tabData.mcActiveRevision || 'R1';
+    const td = window.tabData || {};
+    td.mcRevisions = td.mcRevisions || {};
+    const cur = td.mcActiveRevision || 'R1';
+    const order = window._mcRevList(td.mcRevisions, { onlyWithMoney: true, include: cur });
     const next = order[(order.indexOf(cur) + 1) % order.length];
     window.mcSwitchRevision(next);
+};
+
+// 💡 "➕ 새 리비전": 지금까지 쓰인 가장 큰 R번호 다음 번호로 이동 (R1~R5든 R37이든 항상 다음 빈 슬롯)
+window.mcAddNewRevision = function() {
+    const td = window.tabData || {};
+    td.mcRevisions = td.mcRevisions || {};
+    let maxN = 0;
+    Object.keys(td.mcRevisions).forEach(function(k) {
+        const m = k.match(/^R(\d+)$/);
+        if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
+    });
+    const curM = (td.mcActiveRevision || 'R1').match(/^R(\d+)$/);
+    if (curM) maxN = Math.max(maxN, parseInt(curM[1], 10));
+    window.mcSwitchRevision('R' + (maxN + 1));
 };
 
 // 💡 R1~R5 리비전 전환: 현재 화면 내용을 활성 리비전에 저장하고, 선택한 리비전 데이터로 다시 그림
@@ -16222,8 +16304,9 @@ function _mcCompareNotesStore() {
 }
 
 window.mcBuildComparisonRows = function() {
-    const revs = ['R5','R4','R3','R2','R1'];
     const td = window.tabData || {};
+    td.mcRevisions = td.mcRevisions || {};
+    const revs = window._mcRevList(td.mcRevisions, { onlyWithMoney: true, include: td.mcActiveRevision, desc: true });
     td.mcRevisions = td.mcRevisions || {};
     const notesStore = _mcCompareNotesStore();
     const order = [];
@@ -16335,7 +16418,8 @@ window.mcUpdateCompareNote = function(key, val) {
 window.mcRenderComparisonTable = function() {
     const table = document.getElementById('mc-comparison-table');
     if (!table) return;
-    const revs = ['R5','R4','R3','R2','R1'];
+    const td0 = window.tabData || {};
+    const revs = window._mcRevList(td0.mcRevisions || {}, { onlyWithMoney: true, include: td0.mcActiveRevision, desc: true });
     const rows = window.mcBuildComparisonRows();
     const td = window.tabData || {};
     td.mcCompare = td.mcCompare || { salesPrice: {} };
