@@ -5182,6 +5182,46 @@ window.deleteHistoryByDateRange = function() {
      };
 
 
+    // 💡 오늘이 진행기간에 걸쳐있는(또는 가장 가까운 다음) 행을, 표 헤더 바로 아래로 스크롤해서 보여줌
+    window.scrollToTodayRow = function() {
+        try {
+            const scrollBox = document.querySelector('#table-container > div');
+            const tbody = document.getElementById('table-body');
+            const thead = document.getElementById('table-head');
+            if (!scrollBox || !tbody || !window.globalData) return;
+
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const todayMs = today.getTime();
+
+            let targetIdx = -1;
+            // 1순위: 오늘이 시작일~완료일 사이에 걸쳐있는(진행 중인) 첫 번째 행
+            for (let i = 1; i < globalData.length; i++) {
+                const r = globalData[i];
+                if (!r || !r._calcStartTs || !r._calcPlanTs) continue;
+                if (r._calcStartTs <= todayMs && todayMs <= r._calcPlanTs) { targetIdx = i; break; }
+            }
+            // 2순위: 진행 중인 업무가 없으면, 오늘 이후 가장 가까운 시작일을 가진 행
+            if (targetIdx === -1) {
+                let bestTs = Infinity;
+                for (let i = 1; i < globalData.length; i++) {
+                    const r = globalData[i];
+                    if (!r || !r._calcStartTs) continue;
+                    if (r._calcStartTs >= todayMs && r._calcStartTs < bestTs) { bestTs = r._calcStartTs; targetIdx = i; }
+                }
+            }
+            if (targetIdx === -1) return; // 해당하는 행이 없으면 맨 위 그대로 둠
+
+            const targetTr = tbody.querySelector(`tr[data-row-index="${targetIdx}"]`);
+            if (!targetTr) return;
+
+            const boxRect = scrollBox.getBoundingClientRect();
+            const trRect = targetTr.getBoundingClientRect();
+            const headerH = thead ? thead.getBoundingClientRect().height : 0;
+            const delta = trRect.top - boxRect.top - headerH;
+            scrollBox.scrollTop += delta;
+        } catch (e) { /* 스크롤 계산에 실패해도 화면 자체엔 영향 없도록 무시 */ }
+    };
+
     function renderTable(data) {
         const thead = document.getElementById('table-head'); const tbody = document.getElementById('table-body');
         if(!data || data.length === 0) { thead.innerHTML = ''; tbody.innerHTML = ''; return; }
@@ -5442,6 +5482,12 @@ window.deleteHistoryByDateRange = function() {
         }
         
         tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
+
+        // 💡 페이지를 새로고침한 뒤 최초 1회만 "오늘" 행으로 스크롤 (편집/필터 등으로 인한 재렌더링 시엔 스크롤 위치를 건드리지 않음)
+        if (!window._didInitialScrollToToday && data && data.length > 1) {
+            window._didInitialScrollToToday = true;
+            setTimeout(window.scrollToTodayRow, 50);
+        }
     }
 
     // 💡 Summary "실적" 표를 Gantt 0레벨 업무(시작일 기준)와 연동
