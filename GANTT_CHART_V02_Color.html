@@ -714,10 +714,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">D-Day</th>
             <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">발송 상태</th>
             <th style="padding:8px 10px; text-align:center; width:13%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">마지막 발송</th>
+            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">일정</th>
           </tr>
         </thead>
         <tbody id="alarm-table-body">
-          <tr><td colspan="10" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
+          <tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
         </tbody>
       </table>
       </div>
@@ -836,6 +837,35 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       onclick="window.sendSingleAlarm(false)">📧 즉시 발송</button>
     <button class="action-btn" onclick="window.closeAlarmModal()"
       style="border-color:#ccc; color:#555; background:#f8f9fa;">닫기</button>
+  </div>
+</div>
+
+<div id="alarm-schedule-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9100;"></div>
+<div id="alarm-schedule-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:380px; max-width:90vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+  z-index:9101; padding:24px 24px 18px; font-family:'맑은 고딕',sans-serif;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+    <h3 id="alarm-schedule-title" style="margin:0; font-size:14.5px; color:#2c5f8a;">⚙️ 알람 일정 설정</h3>
+    <button onclick="window.closeAlarmScheduleModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+  </div>
+  <p style="font-size:11.5px; color:#888; margin:0 0 12px;">이 업무만 아래 체크한 날짜 기준으로 알람이 발송됩니다. (완료 예정일이 지나면 어떤 경우든 발송되지 않습니다)</p>
+  <div style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
+    <label><input type="checkbox" class="alarm-sched-cb" value="14"> D-14 (14일 전)</label>
+    <label><input type="checkbox" class="alarm-sched-cb" value="7"> D-7 (7일 전)</label>
+    <label><input type="checkbox" class="alarm-sched-cb" value="3"> D-3 (3일 전)</label>
+    <label><input type="checkbox" class="alarm-sched-cb" value="1"> D-1 (1일 전)</label>
+    <label><input type="checkbox" class="alarm-sched-cb" value="0"> D-Day (당일)</label>
+  </div>
+  <div style="margin-top:12px;">
+    <label style="font-size:12px; color:#555;">기타(며칠 전, 콤마로 구분)</label>
+    <input id="alarm-schedule-custom" type="text" placeholder="예: 20, 30" class="u-input" style="width:100%; margin-top:4px; box-sizing:border-box;">
+  </div>
+  <div style="margin-top:18px; display:flex; gap:8px; justify-content:space-between;">
+    <button class="action-btn" onclick="window.resetAlarmScheduleForm()" style="border-color:#e67e22; color:#e67e22;">기본값으로</button>
+    <div style="display:flex; gap:8px;">
+      <button class="action-btn" onclick="window.closeAlarmScheduleModal()" style="border-color:#ccc; color:#555; background:#f8f9fa;">취소</button>
+      <button class="action-btn" onclick="window.saveAlarmSchedule()" style="border-color:#2c5f8a; color:#fff; background:#2c5f8a;">저장</button>
+    </div>
   </div>
 </div>
 
@@ -13310,8 +13340,11 @@ window.checkAndSendAlarms = async function(isManual) {
     const dDayPlainSafe = window.dDayPlain || ((d) => (d === 0) ? 'D-Day' : (d < 0 ? 'D+' + Math.abs(d) : 'D-' + d));
 
     for (const item of items) {
-        // 도달했거나 이미 지난 단계들 (D-7/D-3/D-1 중 diffDays가 그 이하로 내려온 것들)
-        const candidateDDays = ALARM_DAYS.filter(d => item.diffDays <= d);
+        // 🚫 완료 예정일이 이미 지났으면(D-Day 다음날부터) 발송 자체를 하지 않음
+        if (item.diffDays < 0) continue;
+
+        // 도달했거나 이미 지난 단계들 (이 업무의 알람 일정 중 diffDays가 그 이하로 내려온 것들)
+        const candidateDDays = item.alarmDays.filter(d => item.diffDays <= d);
         if (!candidateDDays.length) continue;
 
         // 🔧 여러 단계(7/3/1)가 한꺼번에 걸려도 오늘 발송은 딱 1건만 — 가장 임박한 단계 기준으로 발송
@@ -13570,7 +13603,8 @@ window.openAlarmSettings = function() {
         .filter(m => { if (seen.has(m.email)) return false; seen.add(m.email); return true; })
         .map(m => ({
             name: m.name, email: m.email, auto: true,
-            enabled: prevEnabledByEmail.hasOwnProperty(m.email) ? prevEnabledByEmail[m.email] : true,
+            // 💡 자동 등록되는 참조인은 기본 체크 해제(발송 OFF) — 필요 시 사용자가 직접 ✓ 눌러서 켬
+            enabled: prevEnabledByEmail.hasOwnProperty(m.email) ? prevEnabledByEmail[m.email] : false,
         }));
     const manualList = prevList.filter(r => !r.auto && !seen.has(r.email));
     const ccList = [...autoList, ...manualList];
@@ -13685,10 +13719,13 @@ window.collectAlarmItems = function() {
         // 실제 발송 = 발신인 + 수신인 전원
         const toEmail        = [...new Set([assigneeEmail, ...receiverEmails].filter(Boolean))].join(',');
 
+        // 💡 이 업무만 별도로 설정한 알람 일정이 있으면 그걸 쓰고, 없으면 기본값(ALARM_DAYS) 사용
+        const alarmDays = (row._알림일정 && row._알림일정.length) ? row._알림일정.slice() : ALARM_DAYS.slice();
+
         // 발송 이력
         const rowId   = rowIdx + '_' + dueStr;
         const sentLog = {};
-        [7, 3, 1].forEach(d => {
+        alarmDays.forEach(d => {
             const v = localStorage.getItem('gantt_alarm_' + rowId + '_' + d + 'd');
             if (v) sentLog[d] = v;
         });
@@ -13701,13 +13738,13 @@ window.collectAlarmItems = function() {
 
         const statusVal = ci.status >= 0 ? String(row[ci.status] || '').trim() : '';
         items.push({
-            rowId, taskName,
+            rowId, rowIdx, taskName,
             status: statusVal,
             assignee, assigneeEmail,
             receiverStr, receiverEmail,
             missingPeople,
             toEmail,
-            ccMails, dueStr, dueDate, diffDays,
+            ccMails, dueStr, dueDate, diffDays, alarmDays,
             content: contentRaw, sentLog, sentHidden, tr
         });
     });
@@ -13731,7 +13768,7 @@ window.renderAlarmTab = async function() {
 
     const items = window.collectAlarmItems();
     if (!items.length) {
-        tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
         return;
     }
 
@@ -13807,9 +13844,76 @@ window.renderAlarmTab = async function() {
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays, item.sentHidden, idx)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#888;">${lastSent(item.sentLog)}</td>
+            <td style="padding:7px 10px; text-align:center;">
+                <span onclick="event.stopPropagation(); window.openAlarmScheduleModal(${idx});" title="이 업무만 알람 일정을 다르게 설정" style="cursor:pointer; font-size:14px;">${item.alarmDays.length !== 3 || item.alarmDays.slice().sort((a,b)=>a-b).join(',') !== '1,3,7' ? '⚙️<span style="color:#2c5f8a; font-size:9px; vertical-align:top;">●</span>' : '⚙️'}</span>
+            </td>
         </tr>`).join('');
 
     window._alarmItems = items;
+};
+
+// 💡 업무별 커스텀 알람 일정 — 체크박스 상태를 폼에 채움
+window.openAlarmScheduleModal = function(idx) {
+    const item = (window._alarmItems || [])[idx];
+    if (!item) return;
+    window._alarmScheduleItem = item;
+
+    const current = new Set(item.alarmDays.map(Number));
+    document.querySelectorAll('.alarm-sched-cb').forEach(cb => {
+        cb.checked = current.has(Number(cb.value));
+        current.delete(Number(cb.value));
+    });
+    // 프리셋(14/7/3/1/0)에 없는 나머지 숫자는 "기타" 텍스트칸으로
+    document.getElementById('alarm-schedule-custom').value = Array.from(current).sort((a,b) => a-b).join(', ');
+
+    document.getElementById('alarm-schedule-title').textContent = '⚙️ ' + item.taskName + ' — 알람 일정';
+    document.getElementById('alarm-schedule-overlay').style.display = 'block';
+    document.getElementById('alarm-schedule-modal').style.display = 'block';
+};
+
+// 기본값(7/3/1) 체크 상태로 폼만 되돌림 — 저장 버튼을 눌러야 실제 반영됨
+window.resetAlarmScheduleForm = function() {
+    document.querySelectorAll('.alarm-sched-cb').forEach(cb => {
+        cb.checked = ['7', '3', '1'].includes(cb.value);
+    });
+    document.getElementById('alarm-schedule-custom').value = '';
+};
+
+window.closeAlarmScheduleModal = function() {
+    document.getElementById('alarm-schedule-overlay').style.display = 'none';
+    document.getElementById('alarm-schedule-modal').style.display = 'none';
+    window._alarmScheduleItem = null;
+};
+
+// 저장: row._알림일정에 기록 (기본값(7/3/1)과 완전히 같으면 커스텀 설정을 지워서 "기본값 사용" 상태로 되돌림)
+window.saveAlarmSchedule = function() {
+    const item = window._alarmScheduleItem;
+    if (!item) return;
+    const row = (window.globalData || [])[item.rowIdx];
+    if (!row) return;
+
+    const checked = Array.from(document.querySelectorAll('.alarm-sched-cb:checked')).map(cb => Number(cb.value));
+    const customTxt = document.getElementById('alarm-schedule-custom').value || '';
+    const customVals = customTxt.split(/[,，\s]+/).map(s => parseInt(s, 10)).filter(n => !isNaN(n) && n >= 0 && n <= 365);
+
+    const finalDays = Array.from(new Set([...checked, ...customVals])).sort((a, b) => b - a);
+    if (!finalDays.length) {
+        const msg = '최소 1개 이상의 알람 시점을 선택해주세요.';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+        return;
+    }
+
+    const isDefault = finalDays.length === ALARM_DAYS.length && finalDays.slice().sort((a,b)=>a-b).join(',') === ALARM_DAYS.slice().sort((a,b)=>a-b).join(',');
+    if (isDefault) {
+        delete row._알림일정; // 기본값과 같으면 커스텀 설정 자체를 지움
+    } else {
+        row._알림일정 = finalDays;
+    }
+
+    if (window.logChange) window.logChange(item.rowIdx, -1, '알람 일정', isDefault ? '기본값으로 복원' : '커스텀 설정: ' + finalDays.map(d => d === 0 ? 'D-Day' : ('D-' + d)).join(', '));
+
+    window.closeAlarmScheduleModal();
+    window.renderAlarmTab();
 };
 
 // 발송 이력 초기화 (오발송 등 재발송이 필요할 때)
