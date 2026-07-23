@@ -10073,9 +10073,11 @@ window.mfAnalyzeSingle = async function(idx) {
 function mfParseFile(file) {
     return new Promise(resolve => {
         const reader = new FileReader();
+        const ext = file.name.split('.').pop().toLowerCase();
         reader.onload = e => {
-            const text = e.target.result;
-            const ext  = file.name.split('.').pop().toLowerCase();
+            // 💡 .eml은 원본 바이트를 1바이트=1문자로 보존하는 latin1로 읽음 (charset을 알아낸 뒤 정확히 재해석하기 위함)
+            //    .html/.txt는 지금까지 잘 동작하던 UTF-8 읽기를 그대로 유지 (회귀 방지)
+            const text = (ext === 'eml') ? bytesToLatin1String(e.target.result) : e.target.result;
             let subject = file.name.replace(/\.[^.]+$/, '');
             let sender  = '';
             let date    = ''; // ✅ date 변수 선언 추가
@@ -10107,11 +10109,28 @@ function mfParseFile(file) {
             }
 
             // ── Quoted-Printable 디코딩 ───────────────
-            // ── Quoted-Printable 디코딩 ───────────────
             function decodeQP(str) {
                 return str
                     .replace(/=\r?\n/g, '')
                     .replace(/=([0-9A-Fa-f]{2})/g, (_, h) => String.fromCharCode(parseInt(h, 16)));
+            }
+
+            // 💡 charset을 반영해서 본문을 최종 디코딩 (base64/QP/순수 8bit 공통 처리)
+            //    모르는 인코딩이면 원문(latin1) 그대로 반환 — 최소한 ASCII 부분은 안 깨짐
+            function decodeBodyWithCharset(raw, transferEncoding, charset) {
+                const te = (transferEncoding || '').trim().toLowerCase();
+                const cs = charset || 'utf-8';
+                try {
+                    if (te.includes('base64')) return decodeBase64Body(raw.trim());
+                    if (te.includes('quoted-printable')) {
+                        const decoded = decodeQP(raw);
+                        return new TextDecoder(cs).decode(Uint8Array.from(decoded, c => c.charCodeAt(0)));
+                    }
+                    // 인코딩 표기가 없는 순수 7bit/8bit 본문 — 원본 바이트 그대로 읽어왔으므로 charset으로 재해석
+                    return new TextDecoder(cs).decode(Uint8Array.from(raw, c => c.charCodeAt(0)));
+                } catch (e) {
+                    return raw;
+                }
             }
 
             // ── 중첩 multipart에서 text/plain 재귀 추출, 없으면 text/html로 대체 ──
@@ -10136,15 +10155,7 @@ function mfParseFile(file) {
                     }
                     const pte = (pHeaderL.match(/content-transfer-encoding:\s*(\S+)/)||[])[1]||'';
                     const pcs = (pHeader.match(/charset="?([^";\s]+)"?/i)||[])[1]||'utf-8';
-                    const decodePart = () => {
-                        if (pte.includes('base64')) return decodeBase64Body(pBody.trim());
-                        if (pte.includes('quoted-printable')) {
-                            const raw = decodeQP(pBody);
-                            try { return new TextDecoder(pcs).decode(Uint8Array.from(raw, c => c.charCodeAt(0))); }
-                            catch { return raw; }
-                        }
-                        return pBody;
-                    };
+                    const decodePart = () => decodeBodyWithCharset(pBody, pte, pcs);
                     if (pHeaderL.includes('text/plain')) return decodePart();
                     // 💡 text/html 파트는 일단 저장해두고 계속 찾다가, text/plain이 끝내 없으면 이걸 씀
                     if (!htmlFallback && pHeaderL.includes('text/html')) htmlFallback = decodePart();
@@ -10174,18 +10185,15 @@ function mfParseFile(file) {
 
                 const ct = headers['content-type'] || '';
                 const te = (headers['content-transfer-encoding'] || '').trim().toLowerCase();
+                const outerCharset = (ct.match(/charset="?([^";\s]+)"?/i)||[])[1] || 'utf-8';
 
                 if (ct.includes('multipart')) {
                     const bm = ct.match(/boundary="?([^";\r\n]+)"?/i);
                     if (bm) {
                         body = extractPlainText(bodyPart, bm[1].trim());
                     }
-                } else if (te === 'base64') {
-                    body = decodeBase64Body(bodyPart.trim());
-                } else if (te === 'quoted-printable') {
-                    body = decodeQP(bodyPart);
                 } else {
-                    body = bodyPart;
+                    body = decodeBodyWithCharset(bodyPart, te, outerCharset);
                 }
 
                 // HTML 태그 및 숨은 CSS/JS 코드 찌꺼기 완벽 청소
@@ -10232,8 +10240,20 @@ function mfParseFile(file) {
 
             resolve({ subject, sender, date, body: body.substring(0, 6000), fileName: file.name });
         };
-        reader.readAsText(file, 'utf-8');
+        if (ext === 'eml') reader.readAsArrayBuffer(file);
+        else reader.readAsText(file, 'utf-8');
     });
+}
+
+// 💡 바이트 배열 → latin1 문자열 (1바이트=1문자, 정보 손실 없이 나중에 charset별로 재해석 가능)
+function bytesToLatin1String(buf) {
+    const bytes = new Uint8Array(buf);
+    let s = '';
+    const CHUNK = 0x8000; // 한 번에 너무 많이 넘기면 콜스택 초과날 수 있어 청크로 처리
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+        s += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return s;
 }
 
 // 💡 공용: AI가 프롬프트 지시를 따라 스스로 만들어 넣은 [출처] 줄이 있으면 제거 (코드가 만드는 것과 중복 방지)
@@ -11287,11 +11307,18 @@ const AR = {
         if (!r) return;
 
         if (!r.task) {
+            const bodyTooShort = !r.body || r.body.trim().length < 20;
+            const mfHint = (tabKey === 'mf' && bodyTooShort)
+                ? `<div style="font-size:11px; color:#e67e22; margin-top:8px; padding:6px 8px; background:#fff8e6; border-radius:4px;">
+                     💡 본문이 거의 추출되지 않았습니다. 이 메일이 IMAP 계정 메일이라면 상단 [메일서버] 탭에서 다시 시도하면 더 잘 인식될 수 있습니다.
+                   </div>`
+                : '';
             const emptyEl = document.getElementById('mail-right-empty');
             if (emptyEl) emptyEl.innerHTML =
                 `<div style="font-size:32px;">⚠️</div>
                  <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || 'AI 분석 실패')}</div>
                  <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject||'')}</div>
+                 ${mfHint}
                  ${r.body ? `
                  <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
                     <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
