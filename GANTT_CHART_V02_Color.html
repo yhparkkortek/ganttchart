@@ -5376,7 +5376,7 @@ window.deleteHistoryByDateRange = function() {
                             }
                         }
                         tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${planBadge}`;
-                        bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${isDetailCol ? '<div class="detail-td-inner">' + tdHtml + '</div>' : tdHtml}</td>`;
+                        bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시
                             let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
@@ -5476,7 +5476,7 @@ window.deleteHistoryByDateRange = function() {
                     else { tdHtml = linkifyAndEscape(cell.toString().trim()); }
                 }
 
-                bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
+                bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${(cellIndex === colIdx.content || cellIndex === colIdx.answer) ? '<div class="detail-td-inner">' + tdHtml + '</div>' : tdHtml}</td>`;
             }
             bodyHtml += `</tr>`;
         }
