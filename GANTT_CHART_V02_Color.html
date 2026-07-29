@@ -5376,7 +5376,7 @@ window.deleteHistoryByDateRange = function() {
                             }
                         }
                         tdHtml = `<span class="date-clickable" onclick="showCalendar(this, ${tsArg}, ${i}, ${cellIndex}); const _rap=document.getElementById('row-action-popup'); if(_rap) {_rap.style.display='none'; window.clearRowHighlight();} event.stopPropagation();" title="클릭하여 달력으로 날짜 변경">${displayDate}</span>${planBadge}`;
-                        bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${tdHtml}</td>`;
+                        bodyHtml += `<td style="${tdStyle}"${tdAttrs}>${isDetailCol ? '<div class="detail-td-inner">' + tdHtml + '</div>' : tdHtml}</td>`;
                         {
                             // 💡 "소요일" — 엑셀에 실제 기간 열이 있든 없든 항상 완료 다음, 개발업무(WBS) 앞에 표시
                             let calcDays = countWorkingDays(row._calcStartTs, row._calcPlanTs);
@@ -8637,20 +8637,23 @@ window.updateInboxBadge();
     td.detail-td,
     .content-cell-trans { font-size: var(--detail-font-size) !important; }
 
-    /* 💡 업무상세내용/답변 셀 — 기본은 낮은 높이로 접혀있다가, 클릭하면(.detail-td-expanded) 펼쳐짐 */
+    /* 💡 업무상세내용/답변 셀 — 기본은 낮은 높이로 접혀있다가, 클릭하면(.detail-td-expanded) 펼쳐짐
+       ⚠️ <td> 자체는 max-height가 잘 안 먹혀서(테이블 레이아웃 특성), 안쪽 .detail-td-inner div에 건다 */
     td.detail-td {
+        cursor: pointer;
+    }
+    td.detail-td .detail-td-inner {
         max-height: 54px;
         overflow: hidden;
-        cursor: pointer;
         transition: max-height 0.15s ease;
     }
-    td.detail-td.detail-td-expanded {
+    td.detail-td.detail-td-expanded .detail-td-inner {
         max-height: none;
         overflow: visible;
     }
     /* 인쇄할 때는 접힘 상태와 무관하게 항상 전체 내용이 나오도록 */
     @media print {
-        td.detail-td {
+        td.detail-td .detail-td-inner {
             max-height: none !important;
             overflow: visible !important;
         }
