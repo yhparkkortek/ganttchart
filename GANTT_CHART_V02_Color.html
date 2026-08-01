@@ -631,32 +631,39 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="app-topbar">
     <div class="tb-logo-wrap"><img class="tb-logo" src="data:image/png;base64,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" alt="Kortek"></div>
     <div class="tb-btns">
+        <!-- ☁️ Drive — 파일/드라이브/프로젝트 통합 -->
         <div style="position:relative; display:inline-block;">
-            <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this)">📁 파일</button>
+            <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this)">☁️ Drive</button>
             <div id="file-menu-popup" class="topbar-popup" style="display:none;">
-                <label id="file-input-label" class="topbar-menu-item" for="file-input" style="cursor:pointer;">🟩 엑셀 열기</label>
-                <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="display:none;" />
-                <button id="excel-btn" class="topbar-menu-item" onclick="exportToExcel()">🟩 엑셀 저장</button>
-                <div class="tb-menu-sep"></div>
                 <button id="auth_button" class="topbar-menu-item" onclick="handleAuthClick()" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 드라이브 연동하기</button>
                 <button id="drive_load_btn" class="topbar-menu-item" onclick="loadFromGoogleDrive()" disabled>📂 드라이브에서 열기</button>
                 <button id="drive_save_btn" class="topbar-menu-item" onclick="saveToGoogleDrive()" disabled>💾 드라이브에 저장</button>
                 <button id="backup_restore_btn" class="topbar-menu-item" onclick="window.loadBackupList()" disabled title="드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)">🔄 백업 복원</button>
                 <div class="tb-menu-sep"></div>
+                <label id="file-input-label" class="topbar-menu-item" for="file-input" style="cursor:pointer;">🟩 엑셀 열기</label>
+                <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="display:none;" />
+                <button id="excel-btn" class="topbar-menu-item" onclick="exportToExcel()">🟩 엑셀 저장</button>
+                <div class="tb-menu-sep"></div>
+                <button id="project-select-btn" class="topbar-menu-item" onclick="window.selectProject()" disabled title="현재 프로젝트를 저장한 뒤, 다른 프로젝트를 불러옵니다">🔃 프로젝트 선택</button>
+                <button id="new-project-btn" class="topbar-menu-item" onclick="window.startNewProject()" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
+            </div>
+        </div>
+        <!-- 🤖 AI 업무분석 — 직접 버튼 -->
+        <button id="mail-btn" class="topbar-btn" onclick="window.showMailAnalyzer()">🤖 AI 업무분석</button>
+        <!-- 📦 보관함 — 뱃지 직접 표시 -->
+        <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()">
+            📦 업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span>
+        </button>
+        <!-- ⚙️ 설정 — 기타 기능 통합 -->
+        <div style="position:relative; display:inline-block;">
+            <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정 <span id="alarm-status-dot">🟢</span></button>
+            <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
+                <button id="alarm-toggle-btn" class="topbar-menu-item" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
+                <div class="tb-menu-sep"></div>
+                <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
             </div>
         </div>
-        <div style="position:relative; display:inline-block;">
-            <button id="task-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('task-menu-popup', this)">📥 <span id="task-menu-label">업무 관리</span><span id="task-menu-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
-            <div id="task-menu-popup" class="topbar-popup" style="display:none;">
-                <button id="inbox-btn" class="topbar-menu-item" onclick="window.openTaskInbox()">📦 <span id="inbox-btn-label">업무 보관함</span><span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span></button>
-                <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">✉️ 업무 추가</button>
-                <div class="tb-menu-sep"></div>
-                <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
-            </div>
-        </div>
-        <button id="project-select-btn" class="topbar-btn" onclick="window.selectProject()" disabled title="현재 프로젝트를 저장한 뒤, 다른 프로젝트를 불러옵니다">🔃 프로젝트 선택</button>
-        <button id="new-project-btn" class="topbar-btn" onclick="window.startNewProject()" style="font-weight:bold;" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
     </div>
     <div id="file-status" style="text-decoration:underline;">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
@@ -730,25 +737,24 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <!-- ── 알람 설정 모달 ── -->
 <div id="alarm-settings-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9100;"></div>
 <div id="alarm-settings-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  width:480px; max-width:94vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+  width:480px; max-width:94vw; max-height:90vh; overflow-y:auto;
+  background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   z-index:9101; padding:26px 28px 20px; font-family:'맑은 고딕',sans-serif;">
 
-  <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:move;">
+  <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:grab;">
     <h3 style="margin:0; font-size:15px; color:#2c5f8a;">⚙️ 알람 설정</h3>
     <button onclick="window.closeAlarmSettings()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
   </div>
 
-  <!-- ══ 섹션 1: 서버 설정 (기본 접힘) ══ -->
+ <!-- ══ 섹션 1: 서버 연결 (기본 접힘) ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-server')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
-      <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📡 서버 설정</span>
+      <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📡 서버 연결</span>
       <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
     <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
-
-      <!-- 설치 안내 -->
-      <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px; margin-bottom:12px;">
+      <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px;">
         <div onclick="const b=document.getElementById('install-guide');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('span').textContent=b.style.display==='none'?'▼ 펼치기':'▲ 접기'"
              style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
           <span style="font-size:12px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
@@ -771,12 +777,23 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
             style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .bat</a><br>
           <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭 → 검은 창에 <b>http://127.0.0.1:5000</b> ✅<br>
-          <b>Step 4.</b> 아래 SMTP 설정 후 저장 → 앱 사용 중 창 닫지 마세요
+          <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b>
         </div>
       </div>
+    </div>
+  </div>
 
-      <!-- SMTP 설정 -->
-      <p style="margin:0 0 8px; font-size:12.5px; font-weight:bold; color:#333;">📮 SMTP 설정</p>
+  <!-- ══ 섹션 2: 이메일 알람 ══ -->
+  <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
+    <div onclick="window._toggleAlarmSection('sec-email')"
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+      <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📧 이메일 알람</span>
+      <span id="sec-email-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+    </div>
+    <div id="sec-email" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+
+      <!-- 이메일 서버 설정 -->
+      <p style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;">🖥️ 이메일 서버 설정</p>
       <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:8px;">
         <label>서버 주소</label><input id="as-smtp-host" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
         <label>포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="25">
@@ -784,98 +801,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <label>비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
       </div>
       <p style="margin:0 0 8px; font-size:11px; color:#999;">🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장</p>
-      <button onclick="window.saveSmtpConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">💾 SMTP 저장</button>
+      <button onclick="window.saveSmtpConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">💾 저장</button>
       <span id="as-smtp-save-msg" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
 
-      <!-- Telegram 설정 -->
+      <!-- 이메일 수신자 -->
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <p style="margin:0; font-size:12.5px; font-weight:bold; color:#333;">💬 Telegram 설정</p>
-          <span id="tg-status-badge" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
-        </div>
-        <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:10px;">
-          <label>Bot Token</label>
-          <input id="tg-token" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="BotFather에서 발급받은 Token">
-          <label>내 Chat ID</label>
-          <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)">
-        </div>
-        <!-- 버튼: 저장 / 테스트 / Drive 드롭다운 -->
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button onclick="window.saveTelegramConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">💾 저장</button>
-          <button onclick="window.testTelegram()" style="padding:5px 12px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">📨 테스트</button>
-          <!-- Drive 드롭다운 -->
-          <div style="position:relative; display:inline-block;">
-            <button onclick="window._toggleDriveMenu()"
-                    style="padding:5px 12px; border:1px solid #8e44ad; color:#8e44ad; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">
-              ☁️ Drive ▾
-            </button>
-            <div id="tg-drive-menu" style="display:none; position:absolute; left:0; bottom:100%; margin-bottom:2px; background:#fff; border:1px solid #ddd; border-radius:4px; box-shadow:0 -4px 12px rgba(0,0,0,0.12); z-index:9999; min-width:160px;">
-              <div onclick="window.saveAllToDrive(); window._toggleDriveMenu(false)"
-                   style="padding:8px 14px; font-size:12px; cursor:pointer; color:#e67e22; white-space:nowrap;"
-                   onmouseenter="this.style.background='#fff8f0'" onmouseleave="this.style.background=''">
-                ⬆️ 전체 설정 저장
-              </div>
-              <div onclick="window.loadAllFromDrive(); window._toggleDriveMenu(false)"
-                   style="padding:8px 14px; font-size:12px; cursor:pointer; color:#8e44ad; border-top:1px solid #f0f0f0; white-space:nowrap;"
-                   onmouseenter="this.style.background='#fdf5ff'" onmouseleave="this.style.background=''">
-                ⬇️ 전체 설정 불러오기
-              </div>
-            </div>
-          </div>
-        </div>
-        <span id="tg-save-msg" style="display:block; margin-top:6px; font-size:11.5px; color:#27ae60;"></span>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ 섹션 2: 알람 동작 (기본 펼침) ══ -->
-  <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
-    <div onclick="window._toggleAlarmSection('sec-action')"
-         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
-      <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔔 알람 동작</span>
-      <span id="sec-action-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
-    </div>
-    <div id="sec-action" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
-      <div style="display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-size:12.5px; font-weight:bold; color:#333;">자동 메일 발송</span>
-        <div style="display:flex; gap:6px;">
-          <button id="alarm-auto-on-btn"  onclick="window.setAlarmAuto(true)"
-            style="padding:4px 14px; border-radius:4px; border:2px solid #27ae60; cursor:pointer; font-size:12.5px;">ON</button>
-          <button id="alarm-auto-off-btn" onclick="window.setAlarmAuto(false)"
-            style="padding:4px 14px; border-radius:4px; border:2px solid #ccc; cursor:pointer; font-size:12.5px;">OFF</button>
-        </div>
-      </div>
-      <p style="margin:6px 0 0; font-size:11.5px; color:#888;">ON: 앱 시작 시 D-7/3/1 자동 체크 발송 &nbsp;|&nbsp; OFF: 수동 발송만 허용</p>
-    </div>
-  </div>
-
-  <!-- ══ 섹션 3: 수신자 관리 (기본 펼침) ══ -->
-  <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
-    <div onclick="window._toggleAlarmSection('sec-recipients')"
-         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
-      <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">👥 수신자 관리</span>
-      <span id="sec-recipients-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
-    </div>
-    <div id="sec-recipients" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
-
-      <!-- 팀원 Telegram 등록 (단순화: 이름 + Chat ID) -->
-      <p style="margin:0 0 5px; font-size:12.5px; font-weight:bold; color:#444;">💬 팀원 Telegram 등록</p>
-      <p style="margin:0 0 8px; font-size:11px; color:#888;">Bot에게 /start 전송 후 Chat ID를 확인하여 등록하세요.</p>
-      <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:5px; margin-bottom:8px; align-items:center;">
-        <input id="tg-m-name" class="u-input" placeholder="이름 (주소록 자동완성)"
-               list="alarm-cc-namelist" oninput="window._tgAutofillFromAddr(this)"
-               style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-        <input id="tg-m-chatid" class="u-input" placeholder="Chat ID (숫자)"
-               style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-        <button onclick="window.addTgMember()"
-                style="padding:5px 12px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">+ 추가</button>
-      </div>
-      <div id="tg-member-list" style="display:flex; flex-direction:column; gap:4px; max-height:120px; overflow-y:auto; margin-bottom:14px;"></div>
-
-      <!-- CC 참조인 (이메일) -->
-      <div style="padding-top:12px; border-top:1px solid #eee;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <p style="margin:0; font-size:12.5px; font-weight:bold; color:#444;">📧 CC 참조인 <span style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
+          <p style="margin:0; font-size:12px; font-weight:bold; color:#555;">👥 이메일 수신자 <span style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
           <span style="display:flex; gap:4px;">
             <button type="button" onclick="window.toggleAllCc(true)" style="padding:2px 8px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 ON</button>
             <button type="button" onclick="window.toggleAllCc(false)" style="padding:2px 8px; border:1px solid #999; color:#999; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 OFF</button>
@@ -883,7 +815,69 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px;"></div>
         <datalist id="alarm-cc-namelist"></datalist>
-        <button onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 참조인 추가</button>
+        <button onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 수신자 추가</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ 섹션 3: 메신저 알람 ══ -->
+  <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
+    <div onclick="window._toggleAlarmSection('sec-messenger')"
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+      <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">💬 메신저 알람</span>
+      <span id="sec-messenger-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+    </div>
+    <div id="sec-messenger" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+
+      <!-- 메신저 서버 설정 -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+        <p style="margin:0; font-size:12px; font-weight:bold; color:#555;">🖥️ 메신저 서버 설정 <span style="font-weight:normal; font-size:11px; color:#888;">(현재: Telegram)</span></p>
+        <span id="tg-status-badge" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
+      </div>
+      <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:10px;">
+        <label>Bot Token</label>
+        <input id="tg-token" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="BotFather에서 발급받은 Token">
+        <label>내 Chat ID</label>
+        <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)">
+      </div>
+      <div style="display:flex; gap:6px; align-items:center;">
+        <button onclick="window.saveTelegramConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">💾 저장</button>
+        <button onclick="window.testTelegram()" style="padding:5px 12px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">📨 테스트</button>
+        <div style="position:relative; display:inline-block;">
+          <button onclick="window._toggleDriveMenu()"
+                  style="padding:5px 12px; border:1px solid #8e44ad; color:#8e44ad; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">
+            ☁️ Drive ▾
+          </button>
+          <div id="tg-drive-menu" style="display:none; position:absolute; left:0; bottom:100%; margin-bottom:2px; background:#fff; border:1px solid #ddd; border-radius:4px; box-shadow:0 -4px 12px rgba(0,0,0,0.12); z-index:9999; min-width:160px;">
+            <div onclick="window.saveAllToDrive(); window._toggleDriveMenu(false)"
+                 style="padding:8px 14px; font-size:12px; cursor:pointer; color:#e67e22; white-space:nowrap;"
+                 onmouseenter="this.style.background='#fff8f0'" onmouseleave="this.style.background=''">
+              ⬆️ 전체 설정 저장
+            </div>
+            <div onclick="window.loadAllFromDrive(); window._toggleDriveMenu(false)"
+                 style="padding:8px 14px; font-size:12px; cursor:pointer; color:#8e44ad; border-top:1px solid #f0f0f0; white-space:nowrap;"
+                 onmouseenter="this.style.background='#fdf5ff'" onmouseleave="this.style.background=''">
+              ⬇️ 전체 설정 불러오기
+            </div>
+          </div>
+        </div>
+      </div>
+      <span id="tg-save-msg" style="display:block; margin-top:6px; font-size:11.5px; color:#27ae60;"></span>
+
+      <!-- 메신저 수신자 -->
+      <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
+        <p style="margin:0 0 5px; font-size:12px; font-weight:bold; color:#555;">👥 메신저 수신자</p>
+        <p style="margin:0 0 8px; font-size:11px; color:#888;">Bot에게 /start 전송 후 Chat ID를 확인하여 등록하세요.</p>
+        <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:5px; margin-bottom:8px; align-items:center;">
+          <input id="tg-m-name" class="u-input" placeholder="이름 (주소록 자동완성)"
+                 list="alarm-cc-namelist" oninput="window._tgAutofillFromAddr(this)"
+                 style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+          <input id="tg-m-chatid" class="u-input" placeholder="Chat ID (숫자)"
+                 style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+          <button onclick="window.addTgMember()"
+                  style="padding:5px 12px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">+ 추가</button>
+        </div>
+        <div id="tg-member-list" style="display:flex; flex-direction:column; gap:4px; max-height:120px; overflow-y:auto;"></div>
       </div>
     </div>
   </div>
@@ -899,7 +893,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="alarm-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
   width:520px; max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   z-index:9001; padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
-  <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:move;">
+  <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:grab;">
     <h3 id="alarm-modal-title" style="margin:0; font-size:15px; color:#2c5f8a;">알람 상세</h3>
     <button onclick="window.closeAlarmModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
   </div>
@@ -1047,9 +1041,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   z-index:9200; padding:24px 26px 20px; font-family:'맑은 고딕',sans-serif;">
 
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px;">
+  <div id="notice-modal-header"
+       style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:grab; user-select:none;">
     <h3 id="notice-modal-title" style="margin:0; font-size:15px; color:#2c5f8a;">📢 공지 등록</h3>
-    <button onclick="window.closeNoticeModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+    <button onclick="window.closeNoticeModal()"
+            style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;"
+            onmousedown="event.stopPropagation()">✕</button>
   </div>
 
   <!-- 제목 -->
@@ -1160,7 +1157,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             style="padding:7px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">취소</button>
   </div>
 </div>
-<div id="notice-modal-bg" onclick="window.closeNoticeModal()"
+<div id="notice-modal-bg"
      style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:9199;"></div>
 
 <div id="tab-address" class="tab-panel">
@@ -1739,7 +1736,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     display:flex; flex-direction:column;">
             <div id="drive-drag-handle" class="history-header"
                  style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
-                        cursor:move; border-bottom:1.5px solid #2c5f8a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                        cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
                 <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📂 구글 드라이브 프로젝트 불러오기</span>
                 <button onclick="window.closeDriveModal()"
                     style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
@@ -5366,7 +5363,7 @@ window.deleteHistoryByDateRange = function() {
             btnText: '🌐 ENG',
             ui: {
                 'file-menu-btn':  '📁 파일',
-                'task-menu-label':'업무 관리',
+                'mail-btn':'🤖 AI 업무분석',
                 'project-select-btn': '🔃 프로젝트 선택',
                 'schedule-tools-btn': '🛠️ 일정 도구',
                 'baseline-menu-btn':  '📐 계획',
@@ -5375,7 +5372,7 @@ window.deleteHistoryByDateRange = function() {
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
                 'mail-btn':       '✉️ 업무 추가',
-                'inbox-btn-label': '업무 보관함',
+                'inbox-btn':'📦 업무 보관함',
                 'weekly-report-btn': '📅 주간 업무 보고',
                 'drive_save_btn': '💾 저장',
                 'drive_load_btn': '📂 열기',
@@ -5409,7 +5406,7 @@ window.deleteHistoryByDateRange = function() {
             btnText: '🌐 한글',
             ui: {
                 'file-menu-btn':  '📁 File',
-                'task-menu-label':'Task Management',
+                'mail-btn':'🤖 AI Analysis',
                 'project-select-btn': '🔃 Select Project',
                 'schedule-tools-btn': '🛠️ Schedule Tools',
                 'baseline-menu-btn':  '📐 Plan',
@@ -5418,7 +5415,7 @@ window.deleteHistoryByDateRange = function() {
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
                 'mail-btn':       '✉️ Add Task',
-                'inbox-btn-label': 'Task Inbox',
+                'inbox-btn':'📦 Task Inbox',
                 'weekly-report-btn': '📋 Weekly Report',
                 'drive_save_btn': '💾 Save',
                 'drive_load_btn': '📂 Open',
@@ -8435,12 +8432,10 @@ window.bringModalToFront = function(overlayId) {
 
 window.updateInboxBadge = function() {
     const badge = document.getElementById('inbox-badge');
-    const miniBadge = document.getElementById('task-menu-badge');
     if (!badge) return;
     const n = window.TaskInbox.load().filter(it => it.status === '대기').length;
     badge.textContent = n;
     badge.style.display = n > 0 ? 'inline-block' : 'none';
-    if (miniBadge) { miniBadge.textContent = n; miniBadge.style.display = n > 0 ? 'inline-block' : 'none'; }
 };
 
 window.openTaskInbox = function() {
@@ -9487,7 +9482,7 @@ window.updateInboxBadge();
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
-                    cursor:move; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
+                    cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
             <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
                 📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
                 ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
@@ -9523,7 +9518,7 @@ window.updateInboxBadge();
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-dist-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
-                    cursor:move; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
+                    cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
             <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📤 다른 프로젝트로 전송<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
                 전송 직전 대상 파일의 갱신 여부를 확인하며, 다른 사용자가 방금 저장한 경우 최신본을 받아 자동 재시도합니다.<br><br>
                 전송 시 📌 알림이 자동 설정되고, 대상 프로젝트의 수정이력과 배분 원장에 함께 기록됩니다.
@@ -9579,7 +9574,7 @@ window.updateInboxBadge();
 <div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:820px; min-height:520px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
         <!-- 헤더 -->
-       <div id="mail-drag-handle" class="history-header" style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:move; border-bottom:1.5px solid #2c5f8a; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
+       <div id="mail-drag-handle" class="history-header" style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1.5px solid #2c5f8a; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
             <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
             <div style="display:flex; gap:6px; justify-self:center; align-items:center;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
@@ -9764,7 +9759,7 @@ window.updateInboxBadge();
                 </div>
 
                 <!-- ── 메일서버 탭 왼쪽 ── -->
-                <div id="mail-tab-server-content" style="display:none; flex-direction:column; flex:1; overflow:hidden; padding:12px;">
+                <div id="mail-tab-server-content" style="display:none; flex-direction:column; flex:1; overflow-y:auto; padding:12px;">
                     <!-- 설치 안내 (접기/펼치기) -->
                     <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:10px 14px; margin-bottom:10px; flex-shrink:0;">
                         <div onclick="const b=document.getElementById('ms-install-guide');b.style.display=b.style.display==='none'?'block':'none'"
@@ -12148,13 +12143,13 @@ async function msCallGemini(apiKey, parsed) {
 </script>
 
 <script>
-// ─── 업무 보관함 모달 드래그 기능 (업무 추가 창과 동일 패턴) ───
-(function() {
+// ── 공통 드래그 함수 (모든 모달 공유) ────────────────────────
+window._makeDraggable = function(modalId, handleId) {
     let isDragging = false, startX, startY, origLeft, origTop;
     document.addEventListener('mousedown', function(e) {
-        const handle = document.getElementById('inbox-drag-handle');
+        const handle = document.getElementById(handleId);
         if (!handle || !handle.contains(e.target)) return;
-        const modal = document.getElementById('task-inbox-modal');
+        const modal = document.getElementById(modalId);
         if (!modal) return;
         isDragging = true;
         const rect = modal.getBoundingClientRect();
@@ -12163,104 +12158,30 @@ async function msCallGemini(apiKey, parsed) {
         modal.style.transform = 'none';
         modal.style.left = origLeft + 'px';
         modal.style.top  = origTop  + 'px';
+        handle.style.cursor = 'grabbing';
         e.preventDefault();
     });
     document.addEventListener('mousemove', function(e) {
         if (!isDragging) return;
-        const modal = document.getElementById('task-inbox-modal');
+        const modal = document.getElementById(modalId);
         if (!modal) return;
         modal.style.left = (origLeft + e.clientX - startX) + 'px';
         modal.style.top  = (origTop  + e.clientY - startY) + 'px';
     });
-    document.addEventListener('mouseup', function() { isDragging = false; });
-})();
-</script>
+    document.addEventListener('mouseup', function() {
+        if (!isDragging) return;
+        isDragging = false;
+        const handle = document.getElementById(handleId);
+        if (handle) handle.style.cursor = 'grab';
+    });
+};
 
-<script>
-// ─── 알람 설정 모달 드래그 기능 (업무 보관함 등과 동일 패턴) ───
-(function() {
-    let isDragging = false, startX, startY, origLeft, origTop;
-    document.addEventListener('mousedown', function(e) {
-        const handle = document.getElementById('alarm-settings-drag-handle');
-        if (!handle || !handle.contains(e.target)) return;
-        const modal = document.getElementById('alarm-settings-modal');
-        if (!modal) return;
-        isDragging = true;
-        const rect = modal.getBoundingClientRect();
-        origLeft = rect.left; origTop = rect.top;
-        startX = e.clientX; startY = e.clientY;
-        modal.style.transform = 'none';
-        modal.style.left = origLeft + 'px';
-        modal.style.top  = origTop  + 'px';
-        e.preventDefault();
-    });
-    document.addEventListener('mousemove', function(e) {
-        if (!isDragging) return;
-        const modal = document.getElementById('alarm-settings-modal');
-        if (!modal) return;
-        modal.style.left = (origLeft + e.clientX - startX) + 'px';
-        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
-    });
-    document.addEventListener('mouseup', function() { isDragging = false; });
-})();
-</script>
-
-<script>
-// ─── 알람 상세 모달 드래그 기능 (알람 설정 모달과 동일 패턴) ───
-(function() {
-    let isDragging = false, startX, startY, origLeft, origTop;
-    document.addEventListener('mousedown', function(e) {
-        const handle = document.getElementById('alarm-modal-drag-handle');
-        if (!handle || !handle.contains(e.target)) return;
-        const modal = document.getElementById('alarm-modal');
-        if (!modal) return;
-        isDragging = true;
-        const rect = modal.getBoundingClientRect();
-        origLeft = rect.left; origTop = rect.top;
-        startX = e.clientX; startY = e.clientY;
-        modal.style.transform = 'none';
-        modal.style.left = origLeft + 'px';
-        modal.style.top  = origTop  + 'px';
-        e.preventDefault();
-    });
-    document.addEventListener('mousemove', function(e) {
-        if (!isDragging) return;
-        const modal = document.getElementById('alarm-modal');
-        if (!modal) return;
-        modal.style.left = (origLeft + e.clientX - startX) + 'px';
-        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
-    });
-    document.addEventListener('mouseup', function() { isDragging = false; });
-})();
-</script>
-
-<script>
-// ─── 업무 배분(다른 프로젝트로 전송) 모달 드래그 기능 ───
-(function() {
-    let isDragging = false, startX, startY, origLeft, origTop;
-    document.addEventListener('mousedown', function(e) {
-        const handle = document.getElementById('inbox-dist-drag-handle');
-        if (!handle || !handle.contains(e.target)) return;
-        const modal = document.getElementById('inbox-dist-modal');
-        if (!modal) return;
-        isDragging = true;
-        const rect = modal.getBoundingClientRect();
-        origLeft = rect.left; origTop = rect.top;
-        startX = e.clientX; startY = e.clientY;
-        modal.style.transform = 'none';
-        modal.style.left = origLeft + 'px';
-        modal.style.top  = origTop  + 'px';
-        e.preventDefault();
-    });
-    document.addEventListener('mousemove', function(e) {
-        if (!isDragging) return;
-        const modal = document.getElementById('inbox-dist-modal');
-        if (!modal) return;
-        modal.style.left = (origLeft + e.clientX - startX) + 'px';
-        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
-    });
-    document.addEventListener('mouseup', function() { isDragging = false; });
-})();
+// 모달별 드래그 등록
+window._makeDraggable('mail-analyzer-modal', 'mail-drag-handle');
+window._makeDraggable('task-inbox-modal',    'inbox-drag-handle');
+window._makeDraggable('alarm-settings-modal','alarm-settings-drag-handle');
+window._makeDraggable('alarm-modal',         'alarm-modal-drag-handle');
+window._makeDraggable('notice-modal',        'notice-modal-header');
 </script>
 
 <script>
@@ -13942,7 +13863,15 @@ window.setAlarmAuto = function(enabled) {
     window.refreshAlarmAutoButtons(enabled);
 };
 
+// 상단바 설정 버튼 dot + 드롭다운 토글 항목 업데이트
 window.refreshAlarmAutoButtons = function(enabled) {
+    // 상단바 dot
+    const dot  = document.getElementById('alarm-status-dot');
+    if (dot)  dot.textContent = enabled ? '🟢' : '🔴';
+    // 드롭다운 토글 버튼
+    const btn  = document.getElementById('alarm-toggle-btn');
+    if (btn)  btn.textContent = enabled ? '🟢 자동알람 ON' : '🔴 자동알람 OFF';
+    // 모달 내 ON/OFF 버튼 (아직 있을 경우 호환)
     const onBtn  = document.getElementById('alarm-auto-on-btn');
     const offBtn = document.getElementById('alarm-auto-off-btn');
     if (!onBtn || !offBtn) return;
@@ -14520,6 +14449,9 @@ window.closeNoticeModal = function() {
     const m=document.getElementById('notice-modal'); if(m) m.style.display='none';
     const b=document.getElementById('notice-modal-bg'); if(b) b.style.display='none';
 };
+
+// _noticeModalDragStart 제거 → _makeDraggable 공통 함수로 대체됨
+
 window._nmEmailToggle = function(radio) {
     const w = document.getElementById('nm-email-custom-wrap');
     if (w) {
@@ -14876,6 +14808,14 @@ window._ccAutofillEmail = function(nameInput) {
         const emailInput = row && row.querySelector('.cc-email');
         if (emailInput) emailInput.value = found.email;
     }
+};
+
+// 자동알람 토글 (드롭다운에서 직접 호출)
+window.toggleAlarmAuto = function() {
+    const cfg     = window.loadAlarmSettings();
+    const enabled = cfg.autoSend !== false; // 현재 상태
+    window.setAlarmAuto(!enabled);          // 반전
+    window.closeAllTopbarMenus();
 };
 
 // 설정 모달 열기
@@ -16367,7 +16307,7 @@ function _makeFloatingPopupDraggable(popup) {
     if (popup.dataset.dragBound) return;
     popup.dataset.dragBound = '1';
     let isDragging = false, startX, startY, origLeft, origTop;
-    popup.style.cursor = 'move';
+    popup.style.cursor = 'grab';
     popup.addEventListener('mousedown', function(e) {
         if (e.target.closest('.bm-pop-btn') || e.target.closest('.rap-btn')) return; // 버튼 클릭은 드래그 시작 안 함
         isDragging = true;
