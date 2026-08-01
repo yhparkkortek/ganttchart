@@ -695,7 +695,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div class="concept-tab-wrap" style="max-width:1200px; padding:22px 26px;">
     <div class="concept-header-box">
       <h2>🔔 알람 관리</h2>
-      <span id="alarm-server-status" style="margin-left:14px; font-size:12px; color:#999;">확인 중...</span>
+      <span id="tg-status-badge" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
       <div class="btn-group">
         <button class="action-btn" data-i18n="btn-alarm-settings" onclick="window.openAlarmSettings()" style="border-color:#555; color:#555;" title="SMTP·자동발송·참조인 설정">⚙️ 설정</button>
         <button class="action-btn" id="alarm-send-all-btn"
@@ -742,7 +742,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   z-index:9101; padding:26px 28px 20px; font-family:'맑은 고딕',sans-serif;">
 
   <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:grab;">
-    <h3 style="margin:0; font-size:15px; color:#2c5f8a;">⚙️ 알람 설정</h3>
+    <h3 id="as-modal-title" style="margin:0; font-size:15px; color:#2c5f8a;">⚙️ 알람 설정</h3>
     <button onclick="window.closeAlarmSettings()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
   </div>
 
@@ -1364,7 +1364,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
         </div>
         <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
-            <h3>프로젝트 멤버-3 <span style="font-size:11px;color:#999;font-weight:normal;">(자유 추가)</span></h3>
+            <h3><span id="sum-h3-member3">프로젝트 멤버-3</span> <span id="sum-h3-member3-sub" style="font-size:11px;color:#999;font-weight:normal;">(자유 추가)</span></h3>
             <div style="display:flex; gap:50px; flex-wrap:wrap;">
                 <div style="flex:1 1 260px; min-width:260px;">
                     <div id="sum-member3-col-a" class="concept-grid" style="grid-template-columns:140px 1fr 1fr; row-gap:10px; column-gap:12px;"></div>
@@ -2224,7 +2224,7 @@ ${mailText}`;
 
     // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭)
     window.startNewProject = function() {
-        if (!confirm('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)')) return;
+        if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Brief SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
 
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = [];
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
@@ -2445,7 +2445,7 @@ ${mailText}`;
 
     window.executeRestoreBackup = async function(fileId, fileName) {
         window.closeDriveModal();
-        if (!confirm(`[${fileName}] 백업으로 복원하시겠습니까?\n현재 화면의 내용은 사라지고 이 백업 시점으로 되돌아갑니다.\n(공용 드라이브 파일에는 아직 저장되지 않으니, 확인 후 [저장]을 눌러야 반영됩니다)`)) return;
+        if (!confirm(window._t(`[${fileName}] 백업으로 복원하시겠습니까?\n현재 화면의 내용은 사라지고 이 백업 시점으로 되돌아갑니다.\n(공용 드라이브 파일에는 아직 저장되지 않으니, 확인 후 [저장]을 눌러야 반영됩니다)`, `Restore from backup [${fileName}]?\nCurrent content will be replaced.\n(Not saved to Drive yet — press [Save] to apply.)`))) return;
         document.getElementById('file-status').textContent = `🔄 [${fileName}] 백업을 복원하는 중...`;
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
@@ -3698,7 +3698,7 @@ ${mailText}`;
         if (id === CURRENT_BASELINE_ID) return; // 📌 고정 슬롯은 삭제 불가
         const bl = window._scheduleBaselines.find(b => b.id === id);
         if (!bl) return;
-        if (!confirm(`"${bl.label}" 계획을 삭제할까요? 되돌릴 수 없습니다.`)) return;
+        if (!confirm(window._t(`"${bl.label}" 계획을 삭제할까요? 되돌릴 수 없습니다.`, `Delete plan "${bl.label}"? This cannot be undone.`))) return;
         if (!verifyAdminPassword(`🔒 "${bl.label}" 계획을 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)`)) {
             alert('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.');
             return;
@@ -3809,7 +3809,7 @@ ${mailText}`;
         }
         const delIdx = [...expanded].sort((a, b) => a - b);
         if (delIdx.length === 0) return false;
-        if (!confirm(`선택한 ${sel.size}개 행(하위 포함 총 ${delIdx.length}개)을 삭제할까요?`)) return false;
+        if (!confirm(window._t(`선택한 ${sel.size}개 행(하위 포함 총 ${delIdx.length}개)을 삭제할까요?`, `Delete ${sel.size} selected row(s) (${delIdx.length} total including children)?`))) return false;
 
         for (let k = delIdx.length - 1; k >= 0; k--) rows.splice(delIdx[k], 1);  // 뒤에서부터 제거
 
@@ -5545,6 +5545,9 @@ window.deleteHistoryByDateRange = function() {
     };
     window._currentLang = 'ko';
 
+    // 💡 안전장치 팝업 메시지 번역 헬퍼
+    window._t = function(ko, en) { return window._currentLang === 'en' ? en : ko; };
+
     window.toggleLang = function() {
         window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
         const btn = document.getElementById('lang-toggle-btn');
@@ -5659,6 +5662,7 @@ window.deleteHistoryByDateRange = function() {
             'as-tg-add-btn':           { ko:'+ 추가',                             en:'+ Add' },
             'as-modal-save-btn':       { ko:'저장',                               en:'Save' },
             'as-modal-close-btn':      { ko:'닫기',                               en:'Close' },
+            'as-modal-title':          { ko:'⚙️ 알람 설정',                       en:'⚙️ Alarm Settings' },
         };
         Object.entries(_asIdTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
@@ -5727,6 +5731,8 @@ window.deleteHistoryByDateRange = function() {
             'sum-h3-background':  { ko:'추진 배경 및 의의', en:'Background & Significance' },
             'sum-h3-member1':     { ko:'프로젝트 멤버-1',   en:'Project Members-1' },
             'sum-h3-member2':     { ko:'프로젝트 멤버-2',   en:'Project Members-2' },
+            'sum-h3-member3':     { ko:'프로젝트 멤버-3',   en:'Project Members-3' },
+            'sum-h3-member3-sub': { ko:'(자유 추가)',        en:'(Custom)' },
             'sum-add-member3-btn':{ ko:'+ 인원 추가',       en:'+ Add Member' },
             'sum-h3-photo':       { ko:'제품 사진',         en:'Product Photos' },
         };
@@ -5734,6 +5740,15 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+
+        // [Brief SPEC / M.C Table] 접기·펴기 버튼 텍스트 즉시 반영
+        const _bsBtn = document.getElementById('bs-toggle-hidden-btn');
+        if (_bsBtn) _bsBtn.textContent = (window._bmExpanded && window._bmExpanded.bs)
+            ? (_en ? '🔼 Collapse' : '🔼 접기') : (_en ? '🔽 Expand' : '🔽 펼치기');
+        const _mcBtn = document.getElementById('mc-toggle-hidden-btn');
+        if (_mcBtn) _mcBtn.textContent = (window._bmExpanded && window._bmExpanded.mc)
+            ? (_en ? '🔼 Collapse' : '🔼 접기') : (_en ? '🔽 Expand' : '🔽 펼치기');
+
         // sum-level0-timeline 안내문 갱신
         const _sumTl = document.getElementById('sum-level0-timeline');
         if (_sumTl) {
@@ -5778,7 +5793,18 @@ window.deleteHistoryByDateRange = function() {
             'ms-stop-btn':            { ko:'⏹ 중단',                  en:'⏹ Stop' },
             'ms-batch-btn':           { ko:'⚡ 선택항목 연속등록',    en:'⚡ Batch Register' },
             'ms-batch-inbox-btn':     { ko:'📥 선택항목 보관함 이동', en:'📥 Move to Inbox' },
-            'mail-prompt-btn':        { ko:'✏️ 프롬프트',              en:'✏️ Prompt' },
+            'mail-prompt-btn':          { ko:'✏️ 프롬프트',                   en:'✏️ Prompt' },
+            'mail-paste-label':         { ko:'📋 메일 내용 붙여넣기',          en:'📋 Paste Mail Content' },
+            'ms-install-title':         { ko:'📥 처음 사용자 — 설치 안내',     en:'📥 First-time Setup Guide' },
+            'ms-install-arrow':         { ko:'▼ 펼치기',                       en:'▼ Expand' },
+            'ms-server-label':          { ko:'🔐 메일 서버 접속',               en:'🔐 Mail Server Login' },
+            'ms-keyword-label':         { ko:'🔍 키워드 필터',                  en:'🔍 Keyword Filter' },
+            'ms-save-id-label':         { ko:'로그인정보 저장',                 en:'Save Login Info' },
+            'mail-right-empty-title':   { ko:'메일을 분석하면 여기에 결과가 표시됩니다', en:'Analysis results will appear here' },
+            'mail-right-empty-sub':     { ko:'직접 입력하거나 파일/서버에서 메일을 가져오세요', en:'Paste content or import from file / mail server' },
+            'mail-original-label':      { ko:'📨 원본 메일 보기',               en:'📨 View Original Mail' },
+            'mail-right-insert-btn-label': { ko:'✅ 개별 등록',                en:'✅ Register' },
+            'mail-right-inbox-btn-label':  { ko:'📥 보관함',                   en:'📥 Inbox' },
         };
         Object.entries(_mailIdTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
@@ -7818,7 +7844,7 @@ window.showMailAnalyzer = function() {
     if (analyzeBtn) {
         analyzeBtn.style.width = '100%';
         analyzeBtn.disabled = false;
-        analyzeBtn.innerHTML = '🤖 AI 분석';
+        analyzeBtn.innerHTML = window._currentLang === 'en' ? '🤖 AI Analyze' : '🤖 AI 분석';
         analyzeBtn.style.background = '#2c5f8a';
         analyzeBtn.style.borderColor = '#2c5f8a';
     }
@@ -7834,7 +7860,7 @@ if (!window._mailInputListenerBound) {
         if (e.target && e.target.id === 'mail-content-input') {
             const btn = document.getElementById('mail-analyze-btn');
             if (btn && !btn.disabled) {
-                btn.innerHTML = '🤖 AI 분석';
+                btn.innerHTML = window._currentLang === 'en' ? '🤖 AI Analyze' : '🤖 AI 분석';
                 btn.style.background = '#2c5f8a';
                 btn.style.borderColor = '#2c5f8a';
             }
@@ -7972,7 +7998,7 @@ window.analyzeMailContent = async function() {
 
     // 💡 파일첨부 탭 개별 버튼과 동일한 스타일: 버튼 자체가 진행 상태를 표시
     analyzeBtn.disabled = true;
-    analyzeBtn.innerHTML = '⏳ 분석중...';
+    analyzeBtn.innerHTML = window._currentLang === 'en' ? '⏳ Analyzing...' : '⏳ 분석중...';
     analyzeBtn.style.background = '#6c86a3';
     analyzeBtn.style.borderColor = '#6c86a3';
 
@@ -8041,7 +8067,7 @@ window.analyzeMailContent = async function() {
     // 💡 성공/실패 모두 2:1 분리 레이아웃을 유지 (버튼 하나로 다시 합쳐지지 않음)
 
     if (!parsed) {
-        analyzeBtn.innerHTML = '⚠️ 실패(재시도)';
+        analyzeBtn.innerHTML = window._currentLang === 'en' ? '⚠️ Failed (Retry)' : '⚠️ 실패(재시도)';
         analyzeBtn.style.background = '#e03131';
         analyzeBtn.style.borderColor = '#e03131';
         const errDiv = document.getElementById('mail-error');
@@ -8050,7 +8076,7 @@ window.analyzeMailContent = async function() {
         return;
     }
 
-    analyzeBtn.innerHTML = '✅ AI 재분석';
+    analyzeBtn.innerHTML = window._currentLang === 'en' ? '✅ Re-Analyze' : '✅ AI 재분석';
     analyzeBtn.style.background = '#28a745';
     analyzeBtn.style.borderColor = '#28a745';
 
@@ -8068,7 +8094,7 @@ window.mailResetAnalysis = function() {
     // 💡 2:1 분리 레이아웃은 유지, 라벨/색상만 초기 상태로
     const analyzeBtn = document.getElementById('mail-analyze-btn');
     analyzeBtn.disabled = false;
-    analyzeBtn.innerHTML = '🤖 AI 분석';
+    analyzeBtn.innerHTML = window._currentLang === 'en' ? '🤖 AI Analyze' : '🤖 AI 분석';
     analyzeBtn.style.background = '#2c5f8a';
     analyzeBtn.style.borderColor = '#2c5f8a';
     const errDiv = document.getElementById('mail-error');
@@ -8211,11 +8237,11 @@ window.editPrompt = async function() {
         modal.innerHTML = `
             <div style="background:#fff;border-radius:10px;width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
                 <div style="padding:15px 20px;border-bottom:1px solid #dee2e6;font-weight:bold;font-size:15px;background:#f8f9fa;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;">
-                    <span>✏️ AI 분석 프롬프트</span>
+                    <span id="prompt-modal-title">✏️ AI 분석 프롬프트</span>
                     <span style="cursor:pointer;color:#868e96;font-size:18px;" onclick="document.getElementById('prompt-edit-modal').style.display='none'">✖</span>
                 </div>
                 <div id="prompt-edit-notice" style="padding:15px;font-size:12px;color:#6c757d;background:#fff8e1;border-bottom:1px solid #dee2e6;">
-                    💡 현재 사용 중인 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.
+                    <span id="prompt-notice-default">💡 현재 사용 중인 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.</span>
                 </div>
                 <div style="padding:15px;flex:1;overflow-y:auto;">
                     <textarea id="prompt-edit-textarea" readonly style="width:100%;height:400px;font-size:13px;font-family:'Malgun Gothic',monospace;border:1px solid #ced4da;border-radius:6px;padding:10px;box-sizing:border-box;resize:vertical;line-height:1.5;background:#f8f9fa;color:#555;"></textarea>
@@ -8224,14 +8250,27 @@ window.editPrompt = async function() {
                     <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" style="flex:1;padding:10px;background:#e67e22;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;">🔒 수정하기 (비밀번호 필요)</button>
                     <button id="prompt-save-btn" onclick="window.savePrompt()" style="flex:1;padding:10px;background:#0056b3;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;display:none;">💾 저장</button>
                     <button id="prompt-reset-btn" onclick="window.resetPrompt()" style="flex:1;padding:10px;background:#dee2e6;color:#333;border:none;border-radius:6px;font-size:13px;cursor:pointer;display:none;">🔄 기본값으로 초기화</button>
-                    <button onclick="document.getElementById('prompt-edit-modal').style.display='none'" style="flex:1;padding:10px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">✖ 닫기</button>
-                    <button onclick="window.showPromptLogs()" style="flex:1;padding:10px;background:#6f42c1;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🕒 변경 이력</button>
+                    <button id="prompt-close-btn" onclick="document.getElementById('prompt-edit-modal').style.display='none'" style="flex:1;padding:10px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">✖ 닫기</button>
+                    <button id="prompt-log-btn" onclick="window.showPromptLogs()" style="flex:1;padding:10px;background:#6f42c1;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🕒 변경 이력</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
     }
 
     modal.style.display = 'flex';
+
+    // 💡 언어 전환 시 버튼 텍스트 즉시 반영
+    const _pEn = window._currentLang === 'en';
+    const _pTexts = {
+        'prompt-modal-title':  _pEn ? '✏️ AI Analysis Prompt'       : '✏️ AI 분석 프롬프트',
+        'prompt-unlock-btn':   _pEn ? '🔒 Edit (Password Required)'  : '🔒 수정하기 (비밀번호 필요)',
+        'prompt-save-btn':     _pEn ? '💾 Save'                      : '💾 저장',
+        'prompt-reset-btn':    _pEn ? '🔄 Reset to Default'          : '🔄 기본값으로 초기화',
+        'prompt-close-btn':    _pEn ? '✖ Close'                      : '✖ 닫기',
+        'prompt-log-btn':      _pEn ? '🕒 Change History'            : '🕒 변경 이력',
+    };
+    Object.entries(_pTexts).forEach(([id, txt]) => { const el = document.getElementById(id); if (el) el.textContent = txt; });
+
     const notice = document.getElementById('prompt-edit-notice');
 
     // ✅ 드라이브 연동 시 열 때마다 팀 공용 최신 프롬프트로 동기화
@@ -8251,9 +8290,10 @@ window.editPrompt = async function() {
     document.getElementById('prompt-unlock-btn').style.display = 'block';
     document.getElementById('prompt-save-btn').style.display = 'none';
     document.getElementById('prompt-reset-btn').style.display = 'none';
+    const _pnEn = window._currentLang === 'en';
     document.getElementById('prompt-edit-notice').textContent = window.isDriveConnected
-        ? '💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.'
-        : '⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.';
+        ? (_pnEn ? '💡 This is the shared team prompt (Drive). Admin password required to edit.' : '💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.')
+        : (_pnEn ? '⚠️ Google Drive not connected — saved locally only, not shared with team. Admin password required to edit.' : '⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.');
 };
 
 window.unlockPrompt = function() {
@@ -8266,7 +8306,9 @@ window.unlockPrompt = function() {
     document.getElementById('prompt-unlock-btn').style.display = 'none';
     document.getElementById('prompt-save-btn').style.display = 'block';
     document.getElementById('prompt-reset-btn').style.display = 'block';
-    document.getElementById('prompt-edit-notice').textContent = '✏️ 프롬프트를 자유롭게 수정하세요. ${mailText}, ${projectAssignee} 등 변수는 그대로 유지하세요.';
+    document.getElementById('prompt-edit-notice').textContent = window._currentLang === 'en'
+        ? '✏️ Edit freely. Keep variables like ${mailText}, ${projectAssignee} as-is.'
+        : '✏️ 프롬프트를 자유롭게 수정하세요. ${mailText}, ${projectAssignee} 등 변수는 그대로 유지하세요.';
     document.getElementById('prompt-edit-notice').style.color = '#0056b3';
     document.getElementById('prompt-edit-notice').style.background = '#e7f1ff';
 };
@@ -8829,7 +8871,7 @@ window.renderTaskInbox = function() {
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 140px; min-width:140px; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
                 <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap; background:#2c5f8a; color:#fff; flex-shrink:0;">➡️ 현재 프로젝트</button>
                 <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22; flex-shrink:0;">📤 다른 프로젝트</button>
-                <button class="action-btn" onclick="if(confirm('이 업무를 보관함에서 삭제할까요?')){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
+                <button class="action-btn" onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -9982,7 +10024,7 @@ window.updateInboxBadge();
 
                 <!-- ── 직접입력 탭 왼쪽 ── -->
                 <div id="mail-tab-paste-content" style="display:flex; flex-direction:column; flex:1; overflow:hidden; padding:12px;">
-                    <label style="font-size:12px; font-weight:bold; color:#555; margin-bottom:4px;">📋 메일 내용 붙여넣기</label>
+                    <label id="mail-paste-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:4px;">📋 메일 내용 붙여넣기</label>
                     <textarea id="mail-content-input" placeholder="메일 본문을 여기에 붙여넣으세요..."
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
@@ -10084,8 +10126,8 @@ window.updateInboxBadge();
                     <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:10px 14px; margin-bottom:10px; flex-shrink:0;">
                         <div onclick="const b=document.getElementById('ms-install-guide');b.style.display=b.style.display==='none'?'block':'none'"
                             style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
-                            <span style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-                            <span style="font-size:12px; color:#7a5210;">▼ 펼치기</span>
+                            <span id="ms-install-title" style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+                            <span id="ms-install-arrow" style="font-size:12px; color:#7a5210;">▼ 펼치기</span>
                         </div>
                         <div id="ms-install-guide" style="display:none; margin-top:10px; font-size:12.5px; color:#555; line-height:2.2;">
                             <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#1a3a5c;">
@@ -10127,7 +10169,7 @@ window.updateInboxBadge();
                     </div>
                     <!-- 접속 정보 -->
                     <div style="padding:10px 0; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
-                        <div style="font-size:11px; font-weight:bold; color:#333; margin-bottom:6px; padding:0 12px;">🔐 메일 서버 접속</div>
+                        <div id="ms-server-label" style="font-size:11px; font-weight:bold; color:#333; margin-bottom:6px; padding:0 12px;">🔐 메일 서버 접속</div>
                         <div style="display:flex; gap:6px; margin-bottom:6px; padding:0 12px;">
                             <input id="ms-userid" type="text" placeholder="yhpark@kortek.co.kr"
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
@@ -10135,7 +10177,7 @@ window.updateInboxBadge();
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
                         <div style="margin-bottom:6px; padding:0 12px;">
-                            <div style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
+                            <div id="ms-keyword-label" style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
                             <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler (비우면 전체)"
                                    style="width:100%; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; box-sizing:border-box;">
                         </div>
@@ -10147,7 +10189,7 @@ window.updateInboxBadge();
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px;">
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
-                                <input type="checkbox" id="ms-save-id"> 로그인정보 저장
+                                <input type="checkbox" id="ms-save-id"> <span id="ms-save-id-label">로그인정보 저장</span>
                             </label>
                             <button id="ms-fetch-btn" class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                                 📥 메일 가져오기
@@ -10205,8 +10247,8 @@ window.updateInboxBadge();
                      style="flex:1; display:flex; flex-direction:column;
                             align-items:center; justify-content:center; color:#ccc; text-align:center;">
                     <div style="font-size:100px; margin-bottom:12px;">📧</div>
-                    <div style="font-size:14px; font-weight:bold; color:#aaa;">메일을 분석하면 여기에 결과가 표시됩니다</div>
-                    <div style="font-size:12px; margin-top:6px; color:#ccc;">직접 입력하거나 파일/서버에서 메일을 가져오세요</div>
+                    <div id="mail-right-empty-title" style="font-size:14px; font-weight:bold; color:#aaa;">메일을 분석하면 여기에 결과가 표시됩니다</div>
+                    <div id="mail-right-empty-sub" style="font-size:12px; margin-top:6px; color:#ccc;">직접 입력하거나 파일/서버에서 메일을 가져오세요</div>
                 </div>
 
                 <!-- 분석 결과 상세 -->
@@ -10225,7 +10267,7 @@ window.updateInboxBadge();
                              style="display:flex; justify-content:space-between; align-items:center;
                                     padding:5px 10px; background:#e9ecef; border-radius:6px;
                                     cursor:pointer; font-size:11px; font-weight:bold; color:#555;">
-                            <span>📨 원본 메일 보기</span>
+                            <span id="mail-original-label">📨 원본 메일 보기</span>
                             <span id="mail-original-arrow">▲</span>
                         </div>
                         <div id="mail-original-body" onclick="window.toggleMailOriginal()"
@@ -10248,14 +10290,14 @@ window.updateInboxBadge();
                                 style="height:38px; box-sizing:border-box; padding:0 24px; background:#2c5f8a; color:white; border:none;
                                        border-radius:6px; font-size:13px; font-weight:bold;
                                        cursor:pointer; white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
-                            ✅ 개별 등록
+                            <span id="mail-right-insert-btn-label">✅ 개별 등록</span>
                         </button>
                         <button onclick="window.mailRightToInbox()"
                                 style="height:38px; box-sizing:border-box; padding:0 16px; background:#fff; color:#e67e22; border:1px solid #e67e22;
                                        border-radius:6px; font-size:13px; font-weight:bold;
                                        cursor:pointer; white-space:nowrap;"
                                 title="현재 프로젝트가 아닌 업무를 보관함에 담아두고, 나중에 다른 프로젝트에 배치합니다.">
-                            📥 보관함
+                            <span id="mail-right-inbox-btn-label">📥 보관함</span>
                         </button>
                     </div>
                     
@@ -14229,7 +14271,7 @@ window.refreshTgStatus = async function() {
             if (badge) { badge.textContent = '⚠️ 미설정'; badge.style.background = '#fff3cd'; badge.style.color = '#856404'; }
         }
     } catch(e) {
-        if (badge) { badge.textContent = '🔴 서버 미연결'; badge.style.background = '#f8d7da'; badge.style.color = '#721c24'; }
+        if (badge) { badge.textContent = window._currentLang === 'en' ? '🔴 Not Connected' : '🔴 서버 미연결'; badge.style.background = '#f8d7da'; badge.style.color = '#721c24'; }
     }
 };
 setTimeout(window.refreshTgStatus, 1500);
@@ -14588,13 +14630,13 @@ window.loadTgMemberList = async function() {
               <button onclick="window.delTgMember('${m.name}')" style="padding:1px 7px; border:1px solid #e03131; color:#e03131; background:#fff; border-radius:3px; cursor:pointer; font-size:10.5px;">삭제</button>
             </div>`).join('');
     } catch(e) {
-        list.innerHTML = '<div style="font-size:11px; color:#aaa;">서버 미연결</div>';
+        list.innerHTML = '<div style="font-size:11px; color:#aaa;">' + (window._currentLang === 'en' ? 'Not Connected' : '서버 미연결') + '</div>';
     }
 };
 
 // 팀원 삭제
 window.delTgMember = async function(name) {
-    if (!confirm(`${name}을(를) 삭제할까요?`)) return;
+    if (!confirm(window._t(`${name}을(를) 삭제할까요?`, `Delete "${name}"?`))) return;
     try {
         await fetch(`${TG_SERVER}/telegram/members`, {
             method: 'DELETE', headers: {'Content-Type': 'application/json'},
@@ -14725,7 +14767,8 @@ window.openNoticeModal = async function(id) {
     if (emailRows) emailRows.innerHTML = '';
 
     document.getElementById('nm-edit-id').value = id || '';
-    document.getElementById('notice-modal-title').textContent = id ? '📢 공지 수정' : '📢 공지 등록';
+    const _nmEn = window._currentLang === 'en';
+    document.getElementById('notice-modal-title').textContent = id ? (_nmEn ? '📢 Edit Notice' : '📢 공지 수정') : (_nmEn ? '📢 Add Notice' : '📢 공지 등록');
 
     if (id) {
         const n = window._noticeItems.find(x => x.id === id);
@@ -14880,7 +14923,7 @@ window._nmLoadTgSelectList = async function() {
         const d=await r.json();
         if(!d.members||!d.members.length){sel.innerHTML='<span style="font-size:11px;color:#aaa;">등록된 팀원 없음</span>';return;}
         sel.innerHTML=d.members.map(m=>`<label style="display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;background:#f0f4f8;padding:3px 8px;border-radius:12px;"><input type="checkbox" class="nm-tg-sel" value="${m.chat_id}" data-name="${m.name}"> ${m.name}</label>`).join('');
-    } catch(e){sel.innerHTML='<span style="font-size:11px;color:#aaa;">서버 미연결</span>';}
+    } catch(e){sel.innerHTML='<span style="font-size:11px;color:#aaa;">'+(window._currentLang==='en'?'Not Connected':'서버 미연결')+'</span>';}
 };
 window.saveNoticeItem = function() {
     const title    = document.getElementById('nm-title').value.trim();
@@ -14922,7 +14965,7 @@ window.saveNoticeItem = function() {
     window.renderNoticeTab();
 };
 window.deleteNoticeItem = function(id) {
-    if(!confirm('이 공지를 삭제하면 D-day 자동 발송이 중단됩니다. 삭제할까요?')) return;
+    if(!confirm(window._t('이 공지를 삭제하면 D-day 자동 발송이 중단됩니다. 삭제할까요?','Deleting this notice will stop D-day auto-send. Delete anyway?'))) return;
     window._noticeItems=window._noticeItems.filter(x=>x.id!==id);
     [7,3,1,0].forEach(d=>{try{localStorage.removeItem(_noticeAlarmKey(id,d));}catch(e){}});
     window._noticeSave(); window.renderNoticeTab();
@@ -16339,7 +16382,7 @@ window.populateTabData = function() {
         // 💡 아무 행도 없으면 우클릭할 대상 자체가 없어 행 추가가 불가능했음 → 첫 행 추가 버튼 표시
         if (_mcTbodyEl) {
             _mcTbodyEl.innerHTML = '<tr><td colspan="12" style="text-align:center; padding:24px 0;">'
-                + '<button class="action-btn" onclick="window.bmAddFirstRow(\'mc\')" style="min-width:auto; background:#2c5f8a; color:#fff;">➕ 첫 행 추가</button>'
+                + '<button class="action-btn" onclick="window.bmAddFirstRow(\'mc\')" style="min-width:auto; background:#2c5f8a; color:#fff;">➕ ' + (window._currentLang === 'en' ? 'Add First Row' : '첫 행 추가') + '</button>'
                 + '</td></tr>';
         }
     } else {
@@ -17706,7 +17749,7 @@ window.mcClearAllPrices = function() {
         if (priceFields.indexOf(inp.dataset.field) !== -1 && inp.value !== '') count++;
     });
     if (!count) { alert('이미 비어있습니다.'); return; }
-    if (!confirm(`현재 리비전의 금액 ${count}칸을 모두 지우시겠습니까?\n(TYPE/ITEM/GROUP/Note 등 나머지 내용은 그대로 유지됩니다)`)) return;
+    if (!confirm(window._t(`현재 리비전의 금액 ${count}칸을 모두 지우시겠습니까?\n(TYPE/ITEM/GROUP/Note 등 나머지 내용은 그대로 유지됩니다)`, `Clear all ${count} price fields in this revision?\n(TYPE/ITEM/GROUP/Note etc. will be kept)`))) return;
 
     inputs.forEach(function(inp) {
         if (priceFields.indexOf(inp.dataset.field) !== -1) inp.value = '';
