@@ -697,13 +697,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <h2>🔔 알람 관리</h2>
       <span id="alarm-server-status" style="margin-left:14px; font-size:12px; color:#999;">확인 중...</span>
       <div class="btn-group">
-        <button class="action-btn" onclick="window.openAlarmSettings()" style="border-color:#555; color:#555;" title="SMTP·자동발송·참조인 설정">⚙️ 설정</button>
+        <button class="action-btn" data-i18n="btn-alarm-settings" onclick="window.openAlarmSettings()" style="border-color:#555; color:#555;" title="SMTP·자동발송·참조인 설정">⚙️ 설정</button>
         <button class="action-btn" id="alarm-send-all-btn"
           onclick="window.sendAllPendingAlarms()"
           style="border-color:#e67e22; color:#e67e22;"
           title="과거 미발송분 포함 전체 발송">📧 일괄 발송</button>
       </div>
-      <button class="action-btn" onclick="window.printTabSection('tab-alarm')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+      <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-alarm')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
     </div>
 
     <!-- 알람 목록 테이블 -->
@@ -712,17 +712,17 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
         <thead style="position:sticky; top:0; z-index:10;">
           <tr style="background:#f4f6f8;">
-            <th style="padding:8px 10px; text-align:center; width:18%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">업무명</th>
-            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">업무상태</th>
-            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">발신인</th>
-            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">발신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">수신인</th>
-            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">수신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">완료 예정일</th>
+            <th style="padding:8px 10px; text-align:center; width:18%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-task-name">업무명</th>
+            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-status">업무상태</th>
+            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-sender">발신인</th>
+            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-sender-email">발신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-receiver">수신인</th>
+            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-receiver-email">수신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-due-date">완료 예정일</th>
             <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">D-Day</th>
-            <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">발송 상태</th>
-            <th style="padding:8px 10px; text-align:center; width:13%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">마지막 발송</th>
-            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">일정</th>
+            <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-send-status">발송 상태</th>
+            <th style="padding:8px 10px; text-align:center; width:13%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-last-sent">마지막 발송</th>
+            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-schedule">일정</th>
           </tr>
         </thead>
         <tbody id="alarm-table-body">
@@ -969,7 +969,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div id="gantt-history-box" style="margin:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
             <div id="gantt-history-header" onclick="window.ganttToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                 <span id="gantt-history-toggle-icon">▶</span>
-                <span>🕒 변경 이력 확인</span>
+                <span data-i18n="h-history">🕒 변경 이력 확인</span>
             </div>
             <div id="gantt-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
                 <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
@@ -987,12 +987,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-notice" class="tab-panel">
   <div class="concept-tab-wrap" style="max-width:1100px; padding:22px 26px;">
     <div class="concept-header-box">
-      <h2>📢 공지 관리</h2>
-      <span style="font-size:12px; color:#888; margin-left:10px;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
+      <h2 data-i18n="h-notice">📢 공지 관리</h2>
+      <span data-i18n="notice-desc" style="font-size:12px; color:#888; margin-left:10px;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
       <div class="btn-group">
-        <button class="action-btn" onclick="window.openNoticeModal()"
+        <button class="action-btn" data-i18n="btn-notice-add" onclick="window.openNoticeModal()"
                 style="border-color:#27ae60; color:#27ae60;">+ 공지 등록</button>
-        <button class="action-btn" onclick="window.checkAndSendNotices(true)"
+        <button class="action-btn" data-i18n="btn-notice-sendall" onclick="window.checkAndSendNotices(true)"
                 style="border-color:#2c5f8a; color:#2c5f8a;">📢 전체 즉시 발송</button>
       </div>
     </div>
@@ -1002,13 +1002,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
           <tr style="background:#f0f4f8; border-bottom:2px solid #dde3ea;">
-            <th style="padding:10px 12px; text-align:center; width:44px;">상태</th>
-            <th style="padding:10px 12px; text-align:left;">제목</th>
-            <th style="padding:10px 12px; text-align:center; width:100px;">수신 대상</th>
-            <th style="padding:10px 12px; text-align:center; width:100px;">기준일</th>
+            <th style="padding:10px 12px; text-align:center; width:44px;" data-i18n="th-notice-status">상태</th>
+            <th style="padding:10px 12px; text-align:left;" data-i18n="th-notice-title">제목</th>
+            <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-target">수신 대상</th>
+            <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-date">기준일</th>
             <th style="padding:10px 12px; text-align:center; width:90px;">D-day</th>
-            <th style="padding:10px 12px; text-align:center; width:100px;">마지막 발송</th>
-            <th style="padding:10px 12px; text-align:center; width:110px;">액션</th>
+            <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-lastsent">마지막 발송</th>
+            <th style="padding:10px 12px; text-align:center; width:110px;" data-i18n="th-notice-action">액션</th>
           </tr>
         </thead>
         <tbody id="notice-table-body">
@@ -1165,12 +1165,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>🪪 Address</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="concept-add-row-btn" onclick="window.importAddressFromDrive()" style="margin:0;">📂 불러오기</button>
+            <button class="concept-add-row-btn" data-i18n="btn-addr-load" onclick="window.importAddressFromDrive()" style="margin:0;">📂 불러오기</button>
             <div class="btn-group">
-                <button class="action-btn" onclick="window.sortAddressBy('name')">🔤 이름순</button>
-                <button class="action-btn" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
+                <button class="action-btn" data-i18n="btn-sort-name" onclick="window.sortAddressBy('name')">🔤 이름순</button>
+                <button class="action-btn" data-i18n="btn-sort-dept" onclick="window.sortAddressBy('dept')">🏢 부서순</button>
             </div>
-            <button class="action-btn" onclick="window.printTabSection('tab-address')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-address')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <style>
@@ -1213,13 +1213,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <thead>
                         <tr>
                             <th style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
-                            <th style="width:12%;">이름</th>
-                            <th style="width:12%;">영문 이름</th>
-                            <th style="width:12%;">부서</th>
-                            <th style="width:13%;">직함</th>
-                            <th style="width:21%;">이메일</th>
-                            <th style="width:13%;">휴대폰</th>
-                            <th style="width:14%;">근무처 전화</th>
+                            <th style="width:12%;" data-i18n="th-addr-name">이름</th>
+                            <th style="width:12%;" data-i18n="th-addr-name-en">영문 이름</th>
+                            <th style="width:12%;" data-i18n="th-addr-dept">부서</th>
+                            <th style="width:13%;" data-i18n="th-addr-title">직함</th>
+                            <th style="width:21%;" data-i18n="th-addr-email">이메일</th>
+                            <th style="width:13%;" data-i18n="th-addr-mobile">휴대폰</th>
+                            <th style="width:14%;" data-i18n="th-addr-phone">근무처 전화</th>
                         </tr>
                     </thead>
                     <tbody id="address-table-body"></tbody>
@@ -1228,7 +1228,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div id="addr-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
                 <div id="addr-history-header" onclick="window.addrToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                     <span id="addr-history-toggle-icon">▶</span>
-                    변경 이력 확인
+                    <span data-i18n="h-history">변경 이력 확인</span>
                 </div>
                 <div id="addr-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
                     <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
@@ -1251,8 +1251,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📝 Summary</h2>
-            <div class="btn-group"><button type="button" class="action-btn" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
-            <button class="action-btn" onclick="window.printTabSection('tab-summary')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <div class="btn-group"><button type="button" class="action-btn" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
+            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
         <div class="concept-section">
@@ -1395,7 +1395,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div id="sum-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
             <div id="sum-history-header" onclick="window.sumToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                 <span id="sum-history-toggle-icon">▶</span>
-                <span>🕒 변경 이력 확인</span>
+                <span data-i18n="h-history">🕒 변경 이력 확인</span>
             </div>
             <div id="sum-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
                 <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
@@ -1418,7 +1418,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button class="concept-add-row-btn" id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" style="margin:0;">🔽 펼치기</button>
             <div class="btn-group"></div>
-            <button class="action-btn" onclick="window.printTabSection('tab-briefspec')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-briefspec')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <style>
@@ -1449,7 +1449,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div id="bs-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
                 <div id="bs-history-header" onclick="window.bsToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                     <span id="bs-history-toggle-icon">▶</span>
-                    <span>🕒 변경 이력 확인</span>
+                    <span data-i18n="h-history">🕒 변경 이력 확인</span>
                 </div>
                 <div id="bs-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
                     <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
@@ -1486,9 +1486,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
                 style="margin-left:4px; padding:6px 10px; min-width:auto; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button class="concept-add-row-btn" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
+            <button class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
             <div class="btn-group"></div>
-            <button class="action-btn" onclick="window.printTabSection('tab-mctable')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-mctable')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section">
             <div id="mc-normal-section">
@@ -1582,7 +1582,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; justify-content:space-between;">
                     <span style="display:flex; align-items:center; gap:6px;">
                         <span id="mc-history-toggle-icon">▶</span>
-                        <span>📜 견적 수정이력 확인</span>
+                        <span data-i18n="h-mc-history">📜 견적 수정이력 확인</span>
                     </span>
                     <span id="mc-history-lastedit" style="font-size:11px; font-weight:normal; color:#888;"></span>
                 </div>
@@ -1611,13 +1611,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
-                <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(-1)">◀ 이전</button>
+                <button class="action-btn" data-i18n="btn-prev" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(-1)">◀ 이전</button>
                 <span id="cal-header-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:80px; text-align:center;"></span>
-                <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(1)">다음 ▶</button>
-                <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
+                <button class="action-btn" data-i18n="btn-next" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(1)">다음 ▶</button>
+                <button class="action-btn" data-i18n="btn-today" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
             </div>
-            <button class="action-btn" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
-            <button class="action-btn" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
+            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
@@ -1631,19 +1631,19 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📋 Weekly Report</h2>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
-                <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
+                <button class="action-btn" data-i18n="btn-prev-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
                 <span id="wr-week-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:140px; text-align:center;"></span>
-                <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(1)">다음주 ▶</button>
-                <button class="action-btn" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(0)">오늘</button>
+                <button class="action-btn" data-i18n="btn-next-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(1)">다음주 ▶</button>
+                <button class="action-btn" data-i18n="btn-today" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(0)">오늘</button>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
                 <label style="font-size:13px; color:#555; display:flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;">
-                    🎨 PPT 색상
+                    <span data-i18n="lbl-ppt-color">🎨 PPT 색상</span>
                     <input type="color" value="#19c3d6" oninput="window.wrPptBaseColor = this.value.replace('#','')" style="cursor:pointer; width:24px; height:24px; border:none; padding:0; background:none; border-radius:3px; outline:none;" title="PPT 출력시 적용될 메인 테마 색상을 선택하세요">
                 </label>
-                <button class="action-btn" onclick="window.exportWeeklyReportPPT()">📥 PPT 출력</button>
+                <button class="action-btn" data-i18n="btn-ppt-export" data-i18n="btn-ppt-export" onclick="window.exportWeeklyReportPPT()">📥 PPT 출력</button>
             </div>
-            <button class="action-btn" onclick="window.printTabSection('tab-weekly')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button class="action-btn" data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-weekly')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
        <div id="weekly-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);"></div>
     </div>
@@ -1652,7 +1652,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div id="history-overlay" class="modal-overlay" onclick="closeHistoryModal(event)">
         <div class="history-modal" onclick="event.stopPropagation()">
             <div class="history-header">
-                <span>🕒 변경 이력 (Session History)</span>
+                <span data-i18n="h-session-history">🕒 변경 이력 (Session History)</span>
                 <span class="history-close" onclick="closeHistoryModal()">✖</span>
             </div>
             <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 20px; border-bottom:1px solid #e3e6ea; background:#f8f9fa; flex-wrap:wrap; font-size:12px; color:#555;">
@@ -5362,7 +5362,11 @@ window.deleteHistoryByDateRange = function() {
                          'In Progress':'진행','Done':'완료','Pending':'대기','On Hold':'지연','On going':'진행','Delay':'지연' },
             btnText: '🌐 ENG',
             ui: {
-                'file-menu-btn':  '📁 파일',
+                'file-menu-btn':     '☁️ Drive',
+                'settings-menu-btn': '⚙️ 설정',
+                'alarm-toggle-btn':  '🟢 자동알람 ON',
+                'holiday-btn':       '🗓️ 휴일 등록',
+                'alarm-send-all-btn':'📧 일괄 발송',
                 'mail-btn':'🤖 AI 업무분석',
                 'project-select-btn': '🔃 프로젝트 선택',
                 'schedule-tools-btn': '🛠️ 일정 도구',
@@ -5371,7 +5375,6 @@ window.deleteHistoryByDateRange = function() {
                 'file-input-label':'🟩 엑셀 열기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
-                'mail-btn':       '✉️ 업무 추가',
                 'inbox-btn':'📦 업무 보관함',
                 'weekly-report-btn': '📅 주간 업무 보고',
                 'drive_save_btn': '💾 저장',
@@ -5396,6 +5399,54 @@ window.deleteHistoryByDateRange = function() {
                 '개발단계': '개발단계',
             },
             filterAll: '전체 (All)',
+            i18n: {
+                'h-alarm':            '🔔 알람 관리',
+                'h-notice':           '📢 공지 관리',
+                'notice-desc':        'D-day 알람과 별개로 운영되는 반복 공지 시스템',
+                'btn-alarm-settings': '⚙️ 설정',
+                'btn-notice-add':     '+ 공지 등록',
+                'btn-notice-sendall': '📢 전체 즉시 발송',
+                'btn-addr-load':      '📂 불러오기',
+                'btn-sort-name':      '🔤 이름순',
+                'btn-sort-dept':      '🏢 부서순',
+                'btn-sync-gantt':     '🔄 Gantt 실적 연동',
+                'btn-print':          '🖨️ 인쇄 (PDF)',
+                'btn-prev':           '◀ 이전',
+                'btn-next':           '다음 ▶',
+                'btn-today':          '오늘',
+                'btn-prev-week':      '◀ 이전주',
+                'btn-next-week':      '다음주 ▶',
+                'btn-cal-export':     '📤 내보내기/동기화',
+                'lbl-ppt-color':      '🎨 PPT 색상',
+                'btn-ppt-export':     '📥 PPT 출력',
+                'btn-mc-clear-price': '금액삭제',
+                'h-history':          '🕒 변경 이력 확인',
+                'h-mc-history':       '📜 견적 수정이력 확인',
+                'h-session-history':  '🕒 변경 이력 (Session History)',
+                'th-task-name':       '업무명',
+                'th-status':          '업무상태',
+                'th-sender':          '발신인',
+                'th-sender-email':    '발신인 이메일',
+                'th-receiver':        '수신인',
+                'th-receiver-email':  '수신인 이메일',
+                'th-due-date':        '완료 예정일',
+                'th-send-status':     '발송 상태',
+                'th-last-sent':       '마지막 발송',
+                'th-schedule':        '일정',
+                'th-notice-status':   '상태',
+                'th-notice-title':    '제목',
+                'th-notice-target':   '수신 대상',
+                'th-notice-date':     '기준일',
+                'th-notice-lastsent': '마지막 발송',
+                'th-notice-action':   '액션',
+                'th-addr-name':       '이름',
+                'th-addr-name-en':    '영문 이름',
+                'th-addr-dept':       '부서',
+                'th-addr-title':      '직함',
+                'th-addr-email':      '이메일',
+                'th-addr-mobile':     '휴대폰',
+                'th-addr-phone':      '근무처 전화',
+            },
         },
 
         en: {
@@ -5405,7 +5456,11 @@ window.deleteHistoryByDateRange = function() {
                          'Progress':'On going','On going':'On going','Done':'Done','Pending':'Pending','On Hold':'Delay','Delay':'Delay' },
             btnText: '🌐 한글',
             ui: {
-                'file-menu-btn':  '📁 File',
+                'file-menu-btn':     '☁️ Drive',
+                'settings-menu-btn': '⚙️ Settings',
+                'alarm-toggle-btn':  '🟢 Auto Alarm ON',
+                'holiday-btn':       '🗓️ Holiday Setup',
+                'alarm-send-all-btn':'📧 Batch Send',
                 'mail-btn':'🤖 AI Analysis',
                 'project-select-btn': '🔃 Select Project',
                 'schedule-tools-btn': '🛠️ Schedule Tools',
@@ -5414,7 +5469,6 @@ window.deleteHistoryByDateRange = function() {
                 'file-input-label':'🟩 Open Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
-                'mail-btn':       '✉️ Add Task',
                 'inbox-btn':'📦 Task Inbox',
                 'weekly-report-btn': '📋 Weekly Report',
                 'drive_save_btn': '💾 Save',
@@ -5439,6 +5493,54 @@ window.deleteHistoryByDateRange = function() {
                 '개발단계': 'Dev Stage',
             },
             filterAll: 'All',
+            i18n: {
+                'h-alarm':            '🔔 Alarm',
+                'h-notice':           '📢 Notice',
+                'notice-desc':        'Recurring notice system separate from D-day alarms',
+                'btn-alarm-settings': '⚙️ Settings',
+                'btn-notice-add':     '+ Add Notice',
+                'btn-notice-sendall': '📢 Send All Now',
+                'btn-addr-load':      '📂 Load',
+                'btn-sort-name':      '🔤 By Name',
+                'btn-sort-dept':      '🏢 By Dept',
+                'btn-sync-gantt':     '🔄 Sync from Gantt',
+                'btn-print':          '🖨️ Print (PDF)',
+                'btn-prev':           '◀ Prev',
+                'btn-next':           'Next ▶',
+                'btn-today':          'Today',
+                'btn-prev-week':      '◀ Prev Week',
+                'btn-next-week':      'Next Week ▶',
+                'btn-cal-export':     '📤 Export/Sync',
+                'lbl-ppt-color':      '🎨 PPT Color',
+                'btn-ppt-export':     '📥 Export PPT',
+                'btn-mc-clear-price': 'Clear Prices',
+                'h-history':          '🕒 Change History',
+                'h-mc-history':       '📜 Quotation History',
+                'h-session-history':  '🕒 Change History (Session)',
+                'th-task-name':       'Task',
+                'th-status':          'Status',
+                'th-sender':          'Sender',
+                'th-sender-email':    'Sender Email',
+                'th-receiver':        'Receiver',
+                'th-receiver-email':  'Receiver Email',
+                'th-due-date':        'Due Date',
+                'th-send-status':     'Send Status',
+                'th-last-sent':       'Last Sent',
+                'th-schedule':        'Schedule',
+                'th-notice-status':   'Status',
+                'th-notice-title':    'Title',
+                'th-notice-target':   'Recipients',
+                'th-notice-date':     'Base Date',
+                'th-notice-lastsent': 'Last Sent',
+                'th-notice-action':   'Action',
+                'th-addr-name':       'Name',
+                'th-addr-name-en':    'English Name',
+                'th-addr-dept':       'Dept.',
+                'th-addr-title':      'Title',
+                'th-addr-email':      'Email',
+                'th-addr-mobile':     'Mobile',
+                'th-addr-phone':      'Office Phone',
+            },
         },
     };
     window._currentLang = 'ko';
@@ -5456,7 +5558,27 @@ window.deleteHistoryByDateRange = function() {
         const name = window.currentUserName || '';
         Object.entries(uiMap).forEach(([id, text]) => {
             const el = document.getElementById(id) || document.querySelector(`.${id}`);
-            if (el) el.textContent = text.replace('{name}', name);
+            if (!el) return;
+            const t = text.replace('{name}', name);
+            if (id === 'settings-menu-btn') {
+                const dot = document.getElementById('alarm-status-dot');
+                const dotHtml = dot ? dot.outerHTML : '';
+                el.innerHTML = t + ' ' + dotHtml;
+            } else {
+                el.textContent = t;
+            }
+        });
+
+        // alarm-toggle-btn 상태 언어 동기화
+        const cfg  = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+        const isOn = cfg.autoSend !== false;
+        window.refreshAlarmAutoButtons(isOn);
+
+        // data-i18n 속성 기반 번역
+        const i18nMap = LANG[window._currentLang].i18n || {};
+        document.querySelectorAll('[data-i18n]').forEach(el => {
+            const key = el.dataset.i18n;
+            if (i18nMap[key] !== undefined) el.textContent = i18nMap[key];
         });
 
         // 필터 라벨 갱신
@@ -13870,7 +13992,12 @@ window.refreshAlarmAutoButtons = function(enabled) {
     if (dot)  dot.textContent = enabled ? '🟢' : '🔴';
     // 드롭다운 토글 버튼
     const btn  = document.getElementById('alarm-toggle-btn');
-    if (btn)  btn.textContent = enabled ? '🟢 자동알람 ON' : '🔴 자동알람 OFF';
+    if (btn) {
+        const isEn = window._currentLang === 'en';
+        btn.textContent = enabled
+            ? (isEn ? '🟢 Auto Alarm ON'  : '🟢 자동알람 ON')
+            : (isEn ? '🔴 Auto Alarm OFF' : '🔴 자동알람 OFF');
+    }
     // 모달 내 ON/OFF 버튼 (아직 있을 경우 호환)
     const onBtn  = document.getElementById('alarm-auto-on-btn');
     const offBtn = document.getElementById('alarm-auto-off-btn');
@@ -16592,7 +16719,7 @@ try {
 //    저장된 상태가 "펼침"이어도 버튼만 "접힘"처럼 보이는 불일치가 있었음 → 로드 시 동기화
 (function() {
     const btn = document.getElementById('mc-toggle-hidden-btn');
-    if (btn) btn.textContent = window._bmExpanded.mc ? '🔼 접기' : '🔽 펼치기';
+    if (btn) btn.textContent = window._bmExpanded.mc ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
 })();
 
 // "접기" 상태일 때 Model A/B/C 중 전체 데이터가 비어있는 열을 통째로 숨김 (Note 열은 항상 표시)
@@ -16739,7 +16866,7 @@ window.bmToggleHidden = function(key, btnEl) {
     const expand = !window._bmExpanded[key];
     window._bmExpanded[key] = expand;
     try { localStorage.setItem('gantt_' + key + '_expanded', expand ? '1' : '0'); } catch (e) {}
-    if (btnEl) btnEl.textContent = expand ? '🔼 접기' : '🔽 펼치기';
+    if (btnEl) btnEl.textContent = expand ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
 
     if (key === 'mc' && window.mcRefreshTable) {
         // 💡 M.C Table은 "보이는 행 기준으로 TYPE 글자를 어디에 표시할지"가 펼침/접힘 상태에 따라 달라지므로,
@@ -17711,7 +17838,7 @@ window.mcShowComparison = function() {
     document.getElementById('mc-normal-section').style.display = 'none';
     document.getElementById('mc-comparison-section').style.display = 'block';
     const btn = document.getElementById('mc-toggle-hidden-btn');
-    if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? '🔼 접기' : '🔽 펼치기';
+    if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
     const compBtn = document.getElementById('mc-comparison-btn');
     if (compBtn) { compBtn.style.background = '#e67e22'; compBtn.style.color = '#fff'; }
 
@@ -17730,7 +17857,7 @@ window.mcHideComparison = function() {
     document.getElementById('mc-comparison-section').style.display = 'none';
     document.getElementById('mc-normal-section').style.display = '';
     const btn = document.getElementById('mc-toggle-hidden-btn');
-    if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? '🔼 접기' : '🔽 펼치기';
+    if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
     const compBtn = document.getElementById('mc-comparison-btn');
     if (compBtn) { compBtn.style.background = '#fff'; compBtn.style.color = '#e67e22'; }
 };
@@ -17740,7 +17867,7 @@ window.mcToggleCompareExpand = function(btnEl) {
     window._bmExpanded.mc = !window._bmExpanded.mc;
     try { localStorage.setItem('gantt_mc_expanded', window._bmExpanded.mc ? '1' : '0'); } catch (e) {}
     const btn = btnEl || document.getElementById('mc-toggle-hidden-btn');
-    if (btn) btn.textContent = window._bmExpanded.mc ? '🔼 접기' : '🔽 펼치기';
+    if (btn) btn.textContent = window._bmExpanded.mc ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
     window.mcRenderComparisonTable();
 };
 
@@ -18041,7 +18168,7 @@ document.addEventListener('DOMContentLoaded', function() {
     ['bs', 'mc'].forEach(function(key) {
         const btn = document.getElementById(key + '-toggle-hidden-btn');
         if (btn && window._bmExpanded && window._bmExpanded[key]) {
-            btn.textContent = '🔼 접기';
+            btn.textContent = window._currentLang==='en'?'🔼 Collapse':'🔼 접기';
         }
     });
     });
