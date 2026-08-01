@@ -751,7 +751,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div onclick="window._toggleAlarmSection('sec-server')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
       <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📡 서버 연결</span>
-      <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+      <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ Expand</span>
     </div>
     <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px;">
@@ -793,21 +793,21 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div id="sec-email" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
 
       <!-- 이메일 서버 설정 -->
-      <p style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;">🖥️ 이메일 서버 설정</p>
+      <p id="as-email-server-label" style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;">🖥️ 이메일 서버 설정</p>
       <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:8px;">
-        <label>서버 주소</label><input id="as-smtp-host" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
-        <label>포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="25">
-        <label>계정</label><input id="as-smtp-user" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="user@kortek.co.kr">
-        <label>비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
+        <label id="as-lbl-host">서버 주소</label><input id="as-smtp-host" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
+        <label id="as-lbl-port">포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="25">
+        <label id="as-lbl-user">계정</label><input id="as-smtp-user" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="user@kortek.co.kr">
+        <label id="as-lbl-pass">비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
       </div>
-      <p style="margin:0 0 8px; font-size:11px; color:#999;">🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장</p>
-      <button onclick="window.saveSmtpConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">💾 저장</button>
+      <p id="as-smtp-privacy-note" style="margin:0 0 8px; font-size:11px; color:#999;">🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장</p>
+      <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">💾 저장</button>
       <span id="as-smtp-save-msg" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
 
       <!-- 이메일 수신자 -->
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <p style="margin:0; font-size:12px; font-weight:bold; color:#555;">👥 이메일 수신자 <span style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
+          <p style="margin:0; font-size:12px; font-weight:bold; color:#555;"><span id="as-email-recv-label">👥 이메일 수신자</span> <span id="as-email-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
           <span style="display:flex; gap:4px;">
             <button type="button" onclick="window.toggleAllCc(true)" style="padding:2px 8px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 ON</button>
             <button type="button" onclick="window.toggleAllCc(false)" style="padding:2px 8px; border:1px solid #999; color:#999; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 OFF</button>
@@ -815,7 +815,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px;"></div>
         <datalist id="alarm-cc-namelist"></datalist>
-        <button onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 수신자 추가</button>
+        <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 수신자 추가</button>
       </div>
     </div>
   </div>
@@ -831,18 +831,18 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
       <!-- 메신저 서버 설정 -->
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-        <p style="margin:0; font-size:12px; font-weight:bold; color:#555;">🖥️ 메신저 서버 설정 <span style="font-weight:normal; font-size:11px; color:#888;">(현재: Telegram)</span></p>
+        <p style="margin:0; font-size:12px; font-weight:bold; color:#555;"><span id="as-messenger-server-lbl">🖥️ 메신저 서버 설정</span> <span id="as-tg-sub" style="font-weight:normal; font-size:11px; color:#888;">(현재: Telegram)</span></p>
         <span id="tg-status-badge" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
       </div>
       <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:10px;">
-        <label>Bot Token</label>
+        <label id="as-lbl-tgtoken">Bot Token</label>
         <input id="tg-token" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="BotFather에서 발급받은 Token">
-        <label>내 Chat ID</label>
+        <label id="as-lbl-chatid">내 Chat ID</label>
         <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)">
       </div>
       <div style="display:flex; gap:6px; align-items:center;">
-        <button onclick="window.saveTelegramConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">💾 저장</button>
-        <button onclick="window.testTelegram()" style="padding:5px 12px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">📨 테스트</button>
+        <button id="as-tg-save-btn" onclick="window.saveTelegramConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">💾 저장</button>
+        <button id="as-tg-test-btn" onclick="window.testTelegram()" style="padding:5px 12px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">📨 테스트</button>
         <div style="position:relative; display:inline-block;">
           <button onclick="window._toggleDriveMenu()"
                   style="padding:5px 12px; border:1px solid #8e44ad; color:#8e44ad; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">
@@ -866,15 +866,15 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
       <!-- 메신저 수신자 -->
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
-        <p style="margin:0 0 5px; font-size:12px; font-weight:bold; color:#555;">👥 메신저 수신자</p>
-        <p style="margin:0 0 8px; font-size:11px; color:#888;">Bot에게 /start 전송 후 Chat ID를 확인하여 등록하세요.</p>
+        <p id="as-tg-recv-label" style="margin:0 0 5px; font-size:12px; font-weight:bold; color:#555;">👥 메신저 수신자</p>
+        <p id="as-tg-guide-text" style="margin:0 0 8px; font-size:11px; color:#888;">Bot에게 /start 전송 후 Chat ID를 확인하여 등록하세요.</p>
         <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:5px; margin-bottom:8px; align-items:center;">
           <input id="tg-m-name" class="u-input" placeholder="이름 (주소록 자동완성)"
                  list="alarm-cc-namelist" oninput="window._tgAutofillFromAddr(this)"
                  style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
           <input id="tg-m-chatid" class="u-input" placeholder="Chat ID (숫자)"
                  style="padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-          <button onclick="window.addTgMember()"
+          <button id="as-tg-add-btn" onclick="window.addTgMember()"
                   style="padding:5px 12px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">+ 추가</button>
         </div>
         <div id="tg-member-list" style="display:flex; flex-direction:column; gap:4px; max-height:120px; overflow-y:auto;"></div>
@@ -883,8 +883,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   </div>
 
   <div style="display:flex; justify-content:flex-end; gap:8px;">
-    <button onclick="window.saveAlarmSettings()" style="padding:6px 18px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">저장</button>
-    <button onclick="window.closeAlarmSettings()" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">닫기</button>
+    <button id="as-modal-save-btn" onclick="window.saveAlarmSettings()" style="padding:6px 18px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">저장</button>
+    <button id="as-modal-close-btn" onclick="window.closeAlarmSettings()" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">닫기</button>
   </div>
 </div>
 
@@ -1014,7 +1014,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <tbody id="notice-table-body">
           <tr>
             <td colspan="7" style="padding:30px; text-align:center; color:#aaa; font-size:13px;">
-              등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.
+              <span id="notice-empty-msg">등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.</span>
             </td>
           </tr>
         </tbody>
@@ -1025,7 +1025,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div style="background:#fff; border:1px solid #e0e0e0; border-radius:8px; overflow:hidden;">
       <div onclick="const b=document.getElementById('notice-log-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.notice-log-arrow').textContent=b.style.display==='none'?'▶':'▼'"
            style="padding:12px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; background:#f8f9fa;">
-        <span style="font-size:12.5px; font-weight:bold; color:#444;">📋 발송 로그</span>
+        <span id="notice-log-title" style="font-size:12.5px; font-weight:bold; color:#444;">📋 발송 로그</span>
         <span class="notice-log-arrow" style="font-size:11px; color:#888;">▶</span>
       </div>
       <div id="notice-log-body" style="display:none; padding:12px 16px; max-height:200px; overflow-y:auto;">
@@ -1051,14 +1051,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
   <!-- 제목 -->
   <div style="margin-bottom:12px;">
-    <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">제목 *</label>
+    <label id="nm-lbl-title" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">제목 *</label>
     <input id="nm-title" class="u-input" placeholder="공지 제목"
            style="width:100%; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px; box-sizing:border-box;">
   </div>
 
   <!-- 내용 -->
   <div style="margin-bottom:12px;">
-    <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">내용 *</label>
+    <label id="nm-lbl-body" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">내용 *</label>
     <textarea id="nm-body" placeholder="발송할 공지 내용"
               style="width:100%; height:110px; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; resize:vertical; font-family:'맑은 고딕',sans-serif; line-height:1.6;"></textarea>
   </div>
@@ -1066,12 +1066,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <!-- 기준일 + D-day -->
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
     <div>
-      <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">기준일 (D-day 기준) *</label>
+      <label id="nm-lbl-deadline" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">기준일 (D-day 기준) *</label>
       <input id="nm-deadline" type="date" class="u-input"
              style="width:100%; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box;">
     </div>
     <div>
-      <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">알람 시점</label>
+      <label id="nm-lbl-alarm" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">알람 시점</label>
       <div style="display:flex; gap:8px; padding-top:6px; flex-wrap:wrap; align-items:center;">
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
           <input type="checkbox" id="nm-d7" value="7" checked> D-7
@@ -1088,12 +1088,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       </div>
       <!-- 직접 입력 -->
       <div style="display:flex; align-items:center; gap:6px; margin-top:7px;">
-        <span style="font-size:11.5px; color:#666; white-space:nowrap;">직접 입력:</span>
+        <span id="nm-lbl-direct" style="font-size:11.5px; color:#666; white-space:nowrap;">직접 입력:</span>
         <input id="nm-d-custom" type="number" min="1" max="365" placeholder="예: 14"
                style="width:80px; padding:4px 7px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;"
                onkeydown="if(event.key==='Enter'){event.preventDefault();window._nmAddCustomDay();}">
-        <span style="font-size:11.5px; color:#888;">일 전</span>
-        <button type="button" onclick="window._nmAddCustomDay()"
+        <span id="nm-lbl-days-before" style="font-size:11.5px; color:#888;">일 전</span>
+        <button id="nm-lbl-add-btn" type="button" onclick="window._nmAddCustomDay()"
                 style="padding:3px 8px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:3px; font-size:11.5px; cursor:pointer;">+ 추가</button>
       </div>
       <div id="nm-d-custom-tags" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; min-height:4px;"></div>
@@ -1102,20 +1102,20 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
   <!-- 수신 대상 -->
   <div style="background:#f8f9fa; border-radius:6px; padding:12px; margin-bottom:14px;">
-    <p style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#444;">📬 수신 대상</p>
+    <p id="nm-lbl-target" style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#444;">📬 수신 대상</p>
 
     <!-- 이메일 -->
     <div style="margin-bottom:10px;">
-      <p style="margin:0 0 5px; font-size:11.5px; font-weight:bold; color:#666;">📧 이메일</p>
+      <p id="nm-lbl-email" style="margin:0 0 5px; font-size:11.5px; font-weight:bold; color:#666;">📧 이메일</p>
       <div style="display:flex; gap:12px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-email" value="all" checked onchange="window._nmEmailToggle(this)"> 프로젝트 전체
+          <input type="radio" name="nm-email" value="all" checked onchange="window._nmEmailToggle(this)"> <span id="nm-radio-email-all">프로젝트 전체</span>
         </label>
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-email" value="none" onchange="window._nmEmailToggle(this)"> 발송 안 함
+          <input type="radio" name="nm-email" value="none" onchange="window._nmEmailToggle(this)"> <span id="nm-radio-email-none">발송 안 함</span>
         </label>
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-email" value="custom" onchange="window._nmEmailToggle(this)"> 직접 입력
+          <input type="radio" name="nm-email" value="custom" onchange="window._nmEmailToggle(this)"> <span id="nm-radio-email-custom">직접 입력</span>
         </label>
       </div>
       <div id="nm-email-custom-wrap" style="display:none; margin-top:6px;">
@@ -1128,19 +1128,19 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
     <!-- Telegram -->
     <div>
-      <p style="margin:0 0 5px; font-size:11.5px; font-weight:bold; color:#666;">💬 Telegram</p>
+      <p id="nm-lbl-tg" style="margin:0 0 5px; font-size:11.5px; font-weight:bold; color:#666;">💬 Telegram</p>
       <div style="display:flex; gap:12px; flex-wrap:wrap;">
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="ALL" checked onchange="window._nmTgToggle(this)"> 전체
+          <input type="radio" name="nm-tg" value="ALL" checked onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-all">전체</span>
         </label>
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="none" onchange="window._nmTgToggle(this)"> 발송 안 함
+          <input type="radio" name="nm-tg" value="none" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-none">발송 안 함</span>
         </label>
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="role" onchange="window._nmTgToggle(this)"> 역할별
+          <input type="radio" name="nm-tg" value="role" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-role">역할별</span>
         </label>
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="select" onchange="window._nmTgToggle(this)"> 개별 선택
+          <input type="radio" name="nm-tg" value="select" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-select">개별 선택</span>
         </label>
       </div>
       <input id="nm-tg-role" placeholder="역할 입력 (예: PM)"
@@ -1151,9 +1151,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
   <input type="hidden" id="nm-edit-id">
   <div style="display:flex; justify-content:flex-end; gap:8px;">
-    <button onclick="window.saveNoticeItem()"
+    <button id="nm-save-btn" onclick="window.saveNoticeItem()"
             style="padding:7px 20px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">저장</button>
-    <button onclick="window.closeNoticeModal()"
+    <button id="nm-cancel-btn" onclick="window.closeNoticeModal()"
             style="padding:7px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">취소</button>
   </div>
 </div>
@@ -1263,7 +1263,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <table class="concept-table">
                 <thead>
                     <tr>
-                        <th rowspan="2" style="width:60px;">구분</th>
+                        <th id="sum-th-category" rowspan="2" style="width:60px;">구분</th>
                         <th colspan="3">PROTO</th>
                         <th colspan="3">ES</th>
                         <th colspan="3">PP</th>
@@ -1282,7 +1282,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </thead>
                 <tbody>
                     <tr id="sum-milestone-body" style="background:#f4f6f8;">
-                        <td style="font-weight:bold;">계획</td>
+                        <td id="sum-td-plan" style="font-weight:bold;">계획</td>
                         <td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
@@ -1294,7 +1294,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td>
                     </tr>
                     <tr id="sum-milestone-body-actual" style="background:#fff8e6; position:relative; z-index:1;">
-                        <td style="font-weight:bold;">실적</td>
+                        <td id="sum-td-actual" style="font-weight:bold;">실적</td>
                         <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
@@ -1308,42 +1308,42 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </tbody>
             </table>
             <div class="concept-grid" style="margin-top:12px;">
-                <label>개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
+                <label id="sum-lbl-devdays">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
             </div>
         </div>
         <div class="concept-section">
-            <h3 style="margin:0 0 4px 0;">개발 진척 현황</h3>
+            <h3 id="sum-h3-progress" style="margin:0 0 4px 0;">개발 진척 현황</h3>
             <div id="sum-level0-timeline" style="min-height:90px; margin-top:0;">
                 <div style="color:#999; padding:10px 0;">Gantt chart 데이터를 불러오면 0레벨 항목이 타임라인으로 표시됩니다.</div>
             </div>
         </div>
         <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
             <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
-                <h3>프로젝트 개요</h3>
+                <h3 id="sum-h3-overview">프로젝트 개요</h3>
                 <div class="concept-grid">
-                    <label style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="4" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:105px;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발"></textarea>
-                    <label>연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
-                    <label>목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
+                    <label id="sum-lbl-purpose" style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="4" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:105px;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발"></textarea>
+                    <label id="sum-lbl-volume">연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
+                    <label id="sum-lbl-mpdate">목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
-                <h3>프로젝트 정보</h3>
+                <h3 id="sum-h3-info">프로젝트 정보</h3>
                 <div class="concept-grid">
-                    <label>고객사</label><input type="text" id="sum-customer" class="u-input" placeholder="예: LNW">
-                    <label>고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
-                    <label>프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
-                    <label>프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
-                    <label>KTK PN_모델명</label><input type="text" id="sum-ktk-pn-model" class="u-input" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW">
+                    <label id="sum-lbl-customer">고객사</label><input type="text" id="sum-customer" class="u-input" placeholder="예: LNW">
+                    <label id="sum-lbl-cmodel">고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
+                    <label id="sum-lbl-pcode">프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
+                    <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
+                    <label id="sum-lbl-ktkpn">KTK PN_모델명</label><input type="text" id="sum-ktk-pn-model" class="u-input" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW">
                 </div>
             </div>
         </div>
         <div class="concept-section">
-            <h3>추진 배경 및 의의</h3>
+            <h3 id="sum-h3-background">추진 배경 및 의의</h3>
             <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:80px; max-height:220px; overflow-y:auto;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
         </div>
         <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
-                <h3>프로젝트 멤버-1</h3>
+                <h3 id="sum-h3-member1">프로젝트 멤버-1</h3>
                 <div class="concept-grid concept-grid-mem">
                     <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자"><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
                     <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
@@ -1353,7 +1353,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
-                <h3>프로젝트 멤버-2</h3>
+                <h3 id="sum-h3-member2">프로젝트 멤버-2</h3>
                 <div class="concept-grid concept-grid-mem">
                     <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
                     <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
@@ -1373,10 +1373,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <div id="sum-member3-col-b" class="concept-grid" style="grid-template-columns:140px 1fr 1fr; row-gap:10px; column-gap:12px;"></div>
                 </div>
             </div>
-            <button type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
+            <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="product-images-section">
-            <h3>제품 사진 <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
+            <h3><span id="sum-h3-photo">제품 사진</span> <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
             <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;">
                 <div class="prod-img-slot" id="prod-img-slot-0" title="클릭하여 사진 추가">
                     <div class="prod-placeholder">📷<br>사진 1<br>클릭하여 추가</div>
@@ -5600,6 +5600,200 @@ window.deleteHistoryByDateRange = function() {
                 : LANG[window._currentLang].ui['file-status-default'];
         }
 
+        // ── 언어 전환 추가 갱신 ──────────────────────────────────
+        const _tl = window._currentLang;
+        const _en = _tl === 'en';
+
+        // [알람설정 팝업] 섹션 헤더 라벨
+        const _asLabels = {
+            'sec-server':    { ko:'📡 서버 연결',    en:'📡 Server Connection' },
+            'sec-email':     { ko:'📧 이메일 알람',  en:'📧 Email Alarm' },
+            'sec-messenger': { ko:'💬 메신저 알람',  en:'💬 Messenger Alarm' },
+        };
+        Object.entries(_asLabels).forEach(([id, t]) => {
+            const sec = document.getElementById(id);
+            if (!sec) return;
+            const header = sec.previousElementSibling;
+            if (header) {
+                const spanEl = header.querySelector('span:first-child');
+                if (spanEl) spanEl.textContent = _en ? t.en : t.ko;
+            }
+            // 화살표 텍스트 갱신 (현재 펼침/접힘 상태 반영)
+            const arrow = document.getElementById(id + '-arrow');
+            if (arrow) {
+                const isOpen = sec.style.display !== 'none';
+                arrow.textContent = isOpen ? (_en ? '▼ Collapse' : '▼ 접기') : (_en ? '▶ Expand' : '▶ 펼치기');
+            }
+        });
+
+        // [알람설정 팝업] 폼 라벨/버튼
+        const _asModalTexts = {
+            'as-lbl-host':    { ko:'서버 주소',  en:'SMTP Host' },
+            'as-lbl-port':    { ko:'포트',        en:'Port' },
+            'as-lbl-user':    { ko:'계정',        en:'Account' },
+            'as-lbl-pass':    { ko:'비밀번호',    en:'Password' },
+            'as-lbl-tgtoken': { ko:'Bot Token',   en:'Bot Token' },
+            'as-lbl-chatid':  { ko:'내 Chat ID',  en:'My Chat ID' },
+        };
+        Object.entries(_asModalTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+
+        // [알람설정 팝업] 섹션 서브라벨/버튼 텍스트 (id 기반)
+        const _asIdTexts = {
+            'as-email-server-label':   { ko:'🖥️ 이메일 서버 설정',                en:'🖥️ Email Server Settings' },
+            'as-email-recv-label':     { ko:'👥 이메일 수신자',                   en:'👥 Email Recipients' },
+            'as-email-recv-sub':       { ko:'(Summary 멤버 자동 반영)',           en:'(Auto from Summary members)' },
+            'as-all-on-btn':           { ko:'전체 ON',                            en:'All ON' },
+            'as-all-off-btn':          { ko:'전체 OFF',                           en:'All OFF' },
+            'as-smtp-save-btn':        { ko:'💾 저장',                            en:'💾 Save' },
+            'as-smtp-privacy-note':    { ko:'🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장', en:'🔒 Stored in this browser · Not recommended on shared PCs' },
+            'as-add-recv-btn':         { ko:'+ 수신자 추가',                      en:'+ Add Recipient' },
+            'as-messenger-server-lbl': { ko:'🖥️ 메신저 서버 설정',               en:'🖥️ Messenger Server Settings' },
+            'as-tg-sub':               { ko:'(현재: Telegram)',                   en:'(Current: Telegram)' },
+            'as-tg-save-btn':          { ko:'💾 저장',                            en:'💾 Save' },
+            'as-tg-test-btn':          { ko:'📨 테스트',                          en:'📨 Test' },
+            'as-tg-recv-label':        { ko:'👥 메신저 수신자',                   en:'👥 Messenger Recipients' },
+            'as-tg-guide-text':        { ko:'Bot에게 /start 전송 후 Chat ID를 확인하여 등록하세요.', en:'Send /start to the Bot, check your Chat ID, then register.' },
+            'as-tg-add-btn':           { ko:'+ 추가',                             en:'+ Add' },
+            'as-modal-save-btn':       { ko:'저장',                               en:'Save' },
+            'as-modal-close-btn':      { ko:'닫기',                               en:'Close' },
+        };
+        Object.entries(_asIdTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+
+        // [Notice] 발송 로그 제목
+        const _nlTitle = document.getElementById('notice-log-title');
+        if (_nlTitle) _nlTitle.textContent = _en ? '📋 Send Log' : '📋 발송 로그';
+
+        // [Notice 등록 모달] 라벨/버튼 번역
+        const _nmTexts = {
+            'nm-lbl-title':         { ko:'제목 *',               en:'Title *' },
+            'nm-lbl-body':          { ko:'내용 *',               en:'Content *' },
+            'nm-lbl-deadline':      { ko:'기준일 (D-day 기준) *', en:'Base Date (D-day) *' },
+            'nm-lbl-alarm':         { ko:'알람 시점',             en:'Alarm Timing' },
+            'nm-lbl-direct':        { ko:'직접 입력:',            en:'Custom:' },
+            'nm-lbl-days-before':   { ko:'일 전',                en:'days before' },
+            'nm-lbl-add-btn':       { ko:'+ 추가',               en:'+ Add' },
+            'nm-lbl-target':        { ko:'📬 수신 대상',          en:'📬 Recipients' },
+            'nm-lbl-email':         { ko:'📧 이메일',             en:'📧 Email' },
+            'nm-radio-email-all':   { ko:'프로젝트 전체',         en:'All Project' },
+            'nm-radio-email-none':  { ko:'발송 안 함',            en:'Do Not Send' },
+            'nm-radio-email-custom':{ ko:'직접 입력',             en:'Custom' },
+            'nm-lbl-tg':            { ko:'💬 Telegram',           en:'💬 Telegram' },
+            'nm-radio-tg-all':      { ko:'전체',                  en:'All' },
+            'nm-radio-tg-none':     { ko:'발송 안 함',            en:'Do Not Send' },
+            'nm-radio-tg-role':     { ko:'역할별',                en:'By Role' },
+            'nm-radio-tg-select':   { ko:'개별 선택',             en:'Select' },
+            'nm-save-btn':          { ko:'저장',                  en:'Save' },
+            'nm-cancel-btn':        { ko:'취소',                  en:'Cancel' },
+        };
+        Object.entries(_nmTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+        // notice modal title 갱신 (모달 열려있을 때 즉시 반영)
+        const _nmTitle = document.getElementById('notice-modal-title');
+        if (_nmTitle) {
+            const _cur = _nmTitle.textContent;
+            if (_cur.includes('수정') || _cur.includes('Edit')) _nmTitle.textContent = _en ? '📢 Edit Notice' : '📢 공지 수정';
+            else _nmTitle.textContent = _en ? '📢 Add Notice' : '📢 공지 등록';
+        }
+
+        // [Notice 탭] 빈 상태 메시지
+        const _noticeEmpty = document.getElementById('notice-empty-msg');
+        if (_noticeEmpty) _noticeEmpty.textContent = _en ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.';
+
+        // [Summary 탭] 고정 라벨/헤더 번역
+        const _sumTexts = {
+            'sum-th-category':    { ko:'구분',              en:'Category' },
+            'sum-td-plan':        { ko:'계획',              en:'Plan' },
+            'sum-td-actual':      { ko:'실적',              en:'Actual' },
+            'sum-lbl-devdays':    { ko:'개발기간(일)',       en:'Dev Period (days)' },
+            'sum-h3-progress':    { ko:'개발 진척 현황',    en:'Development Progress' },
+            'sum-h3-overview':    { ko:'프로젝트 개요',     en:'Project Overview' },
+            'sum-lbl-purpose':    { ko:'적용 목적',         en:'Purpose' },
+            'sum-lbl-volume':     { ko:'연간 수요량',       en:'Annual Volume' },
+            'sum-lbl-mpdate':     { ko:'목표 양산 일정',    en:'Mass Prod. Schedule' },
+            'sum-h3-info':        { ko:'프로젝트 정보',     en:'Project Info' },
+            'sum-lbl-customer':   { ko:'고객사',            en:'Customer' },
+            'sum-lbl-cmodel':     { ko:'고객 모델명',       en:'Customer Model' },
+            'sum-lbl-pcode':      { ko:'프로젝트 코드',     en:'Project Code' },
+            'sum-lbl-pname':      { ko:'프로젝트 명칭',     en:'Project Name' },
+            'sum-lbl-ktkpn':      { ko:'KTK PN_모델명',     en:'KTK PN_Model' },
+            'sum-h3-background':  { ko:'추진 배경 및 의의', en:'Background & Significance' },
+            'sum-h3-member1':     { ko:'프로젝트 멤버-1',   en:'Project Members-1' },
+            'sum-h3-member2':     { ko:'프로젝트 멤버-2',   en:'Project Members-2' },
+            'sum-add-member3-btn':{ ko:'+ 인원 추가',       en:'+ Add Member' },
+            'sum-h3-photo':       { ko:'제품 사진',         en:'Product Photos' },
+        };
+        Object.entries(_sumTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+        // sum-level0-timeline 안내문 갱신
+        const _sumTl = document.getElementById('sum-level0-timeline');
+        if (_sumTl) {
+            const _tlDiv = _sumTl.querySelector('div[style*="color:#999"]');
+            if (_tlDiv) {
+                if (_tlDiv.textContent.includes('불러오면') || _tlDiv.textContent.includes('Load Gantt'))
+                    _tlDiv.textContent = _en ? 'Load Gantt data to display Level 0 timeline.' : 'Gantt chart 데이터를 불러오면 0레벨 항목이 타임라인으로 표시됩니다.';
+                else if (_tlDiv.textContent.includes('날짜') || _tlDiv.textContent.includes('No date'))
+                    _tlDiv.textContent = _en ? 'No date set on Level 0 items — timeline unavailable.' : '0레벨 항목에 날짜가 없어 타임라인을 표시할 수 없습니다.';
+            }
+        }
+
+        // [캘린더] 재렌더 (년/월/요일 반영)
+        if (window.calRender && document.getElementById('cal-page')) window.calRender();
+
+        // [AI 업무분석 팝업] 탭 버튼 텍스트
+        const _mailTabTexts = {
+            'mail-tab-paste':  { ko:'✏️ 직접 입력', en:'✏️ Direct Input' },
+            'mail-tab-file':   { ko:'📂 파일 첨부', en:'📂 File Attach' },
+            'mail-tab-server': { ko:'🌐 메일 서버', en:'🌐 Mail Server' },
+        };
+        Object.entries(_mailTabTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+
+        // [AI 업무분석 팝업] 주요 고정 텍스트 (id 기반)
+        const _mailIdTexts = {
+            'mail-popup-title':       { ko:'📧 업무 추가',           en:'📧 Add Task' },
+            'mail-ai-section-label':  { ko:'🤖 AI 선택',             en:'🤖 Select AI' },
+            'mail-cache-clear-btn':   { ko:'🗑️ 분석 캐시 초기화',    en:'🗑️ Clear Cache' },
+            'mail-key-link-btn':      { ko:'🔗 발급받기',             en:'🔗 Get Key' },
+            'mail-analyze-btn':       { ko:'🤖 AI 분석',              en:'🤖 AI Analyze' },
+            'mail-reset-btn':         { ko:'⏹ 중단/초기화',           en:'⏹ Stop/Reset' },
+            'paste-batch-btn':        { ko:'⚡ 선택항목 연속등록',    en:'⚡ Batch Register' },
+            'paste-batch-inbox-btn':  { ko:'📥 선택항목 보관함 이동', en:'📥 Move to Inbox' },
+            'mf-clear-btn':           { ko:'🗑️ 전체 비우기',          en:'🗑️ Clear All' },
+            'mf-reset-btn':           { ko:'⏹ 중단/초기화',           en:'⏹ Stop/Reset' },
+            'mf-batch-btn':           { ko:'⚡ 선택항목 연속등록',    en:'⚡ Batch Register' },
+            'mf-batch-inbox-btn':     { ko:'📥 선택항목 보관함 이동', en:'📥 Move to Inbox' },
+            'ms-fetch-btn':           { ko:'📥 메일 가져오기',         en:'📥 Fetch Mails' },
+            'ms-stop-btn':            { ko:'⏹ 중단',                  en:'⏹ Stop' },
+            'ms-batch-btn':           { ko:'⚡ 선택항목 연속등록',    en:'⚡ Batch Register' },
+            'ms-batch-inbox-btn':     { ko:'📥 선택항목 보관함 이동', en:'📥 Move to Inbox' },
+            'mail-prompt-btn':        { ko:'✏️ 프롬프트',              en:'✏️ Prompt' },
+        };
+        Object.entries(_mailIdTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+
+        // [AI 팝업] AI 키 상태/가이드 텍스트 재적용
+        if (window.onAiProviderChange) window.onAiProviderChange(window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini');
+
+        // [Weekly Report] 탭이 열려 있으면 재렌더 (섹션 제목 즉시 반영)
+        if (window.showWeeklyReport) {
+            const _wrTab = document.getElementById('tab-weekly');
+            if (_wrTab && _wrTab.style.display !== 'none') window.showWeeklyReport();
+        }
+
         if (globalData) { 
             renderTable(globalData);
             generateFilters(globalData);
@@ -7676,13 +7870,16 @@ window.clearGeminiKey = function() {
 window.AI_PROVIDERS = {
     gemini:  { label: 'Gemini',  keyName: 'gemini_api_key',  model: 'gemini-2.5-flash-lite',
                placeholder: 'AIza...', guideUrl: 'https://aistudio.google.com/apikey',
-               guideText: '구글 계정으로 로그인 → [Create API key] 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)' },
+               guideText: '구글 계정으로 로그인 → [Create API key] 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)',
+               guideTextEn: 'Sign in with Google → Click [Create API key] → Copy the key (starts with AIza) and paste below. (Free to generate)' },
     groq:    { label: 'Groq',    keyName: 'groq_api_key',    model: 'llama-3.3-70b-versatile',
                placeholder: 'gsk_...', guideUrl: 'https://console.groq.com/keys',
-               guideText: 'Groq 계정으로 로그인(이메일/구글) → [Create API Key] 클릭 → 생성된 키(gsk_로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료)' },
+               guideText: 'Groq 계정으로 로그인(이메일/구글) → [Create API Key] 클릭 → 생성된 키(gsk_로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료)',
+               guideTextEn: 'Sign in to Groq (email/Google) → Click [Create API Key] → Copy the key (starts with gsk_) and paste below. (Free, no card required)' },
     mistral: { label: 'Mistral', keyName: 'mistral_api_key', model: 'mistral-small-latest',
                placeholder: '(Mistral API 키)', guideUrl: 'https://console.mistral.ai/api-keys',
-               guideText: 'Mistral 계정으로 로그인 → [API Keys] → [Create new key] 클릭 → 생성된 키를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료, Experiment 요금제)' }
+               guideText: 'Mistral 계정으로 로그인 → [API Keys] → [Create new key] 클릭 → 생성된 키를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료, Experiment 요금제)',
+               guideTextEn: 'Sign in to Mistral → [API Keys] → [Create new key] → Copy the key and paste below. (Free, Experiment plan, no card required)' }
 };
 
 window.getActiveAiProvider = function() {
@@ -7713,7 +7910,7 @@ window.refreshAiKeyPanel = function() {
     const labelEl = document.getElementById('mail-key-label');
     if (labelEl) labelEl.textContent = `🔑 ${cfg.label} API 키 (개인 키)`;
     const guideEl = document.getElementById('mail-key-guide');
-    if (guideEl) guideEl.textContent = cfg.guideText;
+    if (guideEl) guideEl.textContent = (window._currentLang === 'en' && cfg.guideTextEn) ? cfg.guideTextEn : cfg.guideText;
     const linkBtn = document.getElementById('mail-key-link-btn');
     if (linkBtn) linkBtn.setAttribute('onclick', `window.open('${cfg.guideUrl}', '_blank')`);
 
@@ -7725,8 +7922,9 @@ window.refreshAiKeyPanel = function() {
     }
     if (keyStatus) {
         const savedKey = localStorage.getItem(cfg.keyName);
-        if (savedKey) { keyStatus.textContent = '✅ 저장됨'; keyStatus.style.color = '#28a745'; }
-        else { keyStatus.textContent = '⚠️ API 키를 입력해주세요'; keyStatus.style.color = '#e67e22'; }
+        const _ksEn = window._currentLang === 'en';
+        if (savedKey) { keyStatus.textContent = _ksEn ? '✅ Saved' : '✅ 저장됨'; keyStatus.style.color = '#28a745'; }
+        else { keyStatus.textContent = _ksEn ? '⚠️ Please enter your API key' : '⚠️ API 키를 입력해주세요'; keyStatus.style.color = '#e67e22'; }
     }
 };
 
@@ -9697,7 +9895,7 @@ window.updateInboxBadge();
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:820px; min-height:520px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
         <!-- 헤더 -->
        <div id="mail-drag-handle" class="history-header" style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1.5px solid #2c5f8a; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
-            <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
+            <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
             <div style="display:flex; gap:6px; justify-self:center; align-items:center;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
@@ -9720,7 +9918,7 @@ window.updateInboxBadge();
                     🌐 메일 서버
                 </div>
                 <div style="width:1px; height:20px; background:#dee2e6; margin:0 4px;"></div>
-                <button class="action-btn" onclick="window.editPrompt()" title="3개 탭 공용 AI 분석 프롬프트 수정"
+                <button id="mail-prompt-btn" class="action-btn" onclick="window.editPrompt()" title="3개 탭 공용 AI 분석 프롬프트 수정"
                     style="min-width:auto !important; padding:6px 12px !important; font-size:13px;">
                     ✏️ 프롬프트
                 </button>
@@ -9745,7 +9943,7 @@ window.updateInboxBadge();
                 <!-- API 키 (공통) -->
                 <div style="padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-                        <span>🤖 AI 선택</span>
+                        <span id="mail-ai-section-label">🤖 AI 선택</span>
                         <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
                                 style="flex:1; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                             <option value="gemini">Gemini (Google)</option>
@@ -9756,7 +9954,7 @@ window.updateInboxBadge();
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
                         <span id="mail-key-label">🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(개인 키)</span></span>
                         <div style="display:flex; gap:6px;">
-                            <button onclick="window.clearGeminiCache()" title="같은 메일을 다시 분석해도 캐시된 예전 결과가 아니라 새로 계산하게 함"
+                            <button id="mail-cache-clear-btn" onclick="window.clearGeminiCache()" title="같은 메일을 다시 분석해도 캐시된 예전 결과가 아니라 새로 계산하게 함"
                                     style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:4px; cursor:pointer; white-space:nowrap;">
                                 🗑️ 분석 캐시 초기화
                             </button>
@@ -9794,7 +9992,7 @@ window.updateInboxBadge();
                             🤖 AI 분석
                         </button>
                         <div id="mail-loading" style="display:none;">
-                            <button class="action-btn" onclick="window.mailResetAnalysis()" style="width:100%; min-width:auto !important; padding:0 10px !important; font-size:11px; border-color:#e03131; color:#e03131; margin:0 !important;">⏹ 중단/초기화</button>
+                            <button id="mail-reset-btn" class="action-btn" onclick="window.mailResetAnalysis()" style="width:100%; min-width:auto !important; padding:0 10px !important; font-size:11px; border-color:#e03131; color:#e03131; margin:0 !important;">⏹ 중단/초기화</button>
                         </div>
                     </div>
                     <div id="mail-error" style="display:none; color:#e03131; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-top:6px;"></div>
@@ -9841,7 +10039,7 @@ window.updateInboxBadge();
                     </div>
                     <div id="mf-pending-list" style="display:none; max-height:180px; overflow-y:auto; margin-bottom:8px; border:1px solid #dee2e6; border-radius:6px; flex-shrink:0;"></div>
                     <div id="mf-analyze-group" style="display:none; gap:8px; margin-bottom:8px; flex-shrink:0; justify-content:center;">
-                        <button class="action-btn" onclick="window.mfClearFiles()" style="min-width:130px !important; border-color:#e03131; color:#e03131;">
+                        <button id="mf-clear-btn" class="action-btn" onclick="window.mfClearFiles()" style="min-width:130px !important; border-color:#e03131; color:#e03131;">
                             🗑️ 전체 비우기
                         </button>
                         <button class="action-btn" id="mf-analyze-btn" onclick="window.mfAnalyze()" style="min-width:130px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
@@ -9851,7 +10049,7 @@ window.updateInboxBadge();
                     <div id="mf-progress" style="display:none; margin-bottom:8px; flex-shrink:0;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px;">
                             <div style="font-size:11px; font-weight:bold;">⏳ <span id="mf-prog-text"></span></div>
-                            <button class="action-btn" onclick="window.mfResetAnalysis()" style="min-width:auto !important; padding:2px 8px !important; font-size:10px; border-color:#e03131; color:#e03131;">⏹ 중단/초기화</button>
+                            <button id="mf-reset-btn" class="action-btn" onclick="window.mfResetAnalysis()" style="min-width:auto !important; padding:2px 8px !important; font-size:10px; border-color:#e03131; color:#e03131;">⏹ 중단/초기화</button>
                         </div>
                         <div style="background:#e9ecef; border-radius:4px; height:5px; overflow:hidden;">
                             <div id="mf-prog-bar" style="height:100%; background:#e67e22; transition:width 0.3s; width:0%;"></div>
@@ -9951,7 +10149,7 @@ window.updateInboxBadge();
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
                                 <input type="checkbox" id="ms-save-id"> 로그인정보 저장
                             </label>
-                            <button class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                            <button id="ms-fetch-btn" class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                                 📥 메일 가져오기
                             </button>
                         </div>
@@ -9962,7 +10160,7 @@ window.updateInboxBadge();
                         <div style="padding:0 12px;">
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:3px;">
                             <div style="font-size:11px; font-weight:bold; color:#e67e22;">⏳ <span id="ms-prog-text">메일 가져오는 중...</span></div>
-                            <button class="action-btn" onclick="window.msStopAnalysis()" style="min-width:auto !important; padding:2px 8px !important; font-size:10px; border-color:#e03131; color:#e03131;">⏹ 중단</button>
+                            <button id="ms-stop-btn" class="action-btn" onclick="window.msStopAnalysis()" style="min-width:auto !important; padding:2px 8px !important; font-size:10px; border-color:#e03131; color:#e03131;">⏹ 중단</button>
                         </div>
                         <div style="background:#e9ecef; border-radius:4px; height:5px; overflow:hidden;">
                             <div id="ms-prog-bar" style="height:100%; background:#e67e22; width:0%; transition:width 0.3s;"></div>
@@ -11323,7 +11521,7 @@ window._msCurrentIdx = -1;
             keyStatus.style.color = '#28a745';
         }
     } else if (keyStatus) {
-        keyStatus.textContent = '⚠️ API 키를 입력해주세요';
+        keyStatus.textContent = window._currentLang === 'en' ? '⚠️ Please enter your API key' : '⚠️ API 키를 입력해주세요';
         keyStatus.style.color = '#e67e22';
     }
     // 날짜 기본값: 오늘 기준
@@ -12570,7 +12768,7 @@ window._makeDraggable('notice-modal',        'notice-modal-header');
 
     // ── 신규 컬럼 입력 UI 포함 리스트 렌더 ───────────────
     function wrRenderEditableList(list) {
-        if (list.length === 0) return '<div style="color:#999;">해당 항목 없음</div>';
+        if (list.length === 0) return '<div style="color:#999;">' + (window._currentLang === 'en' ? 'No items.' : '해당 항목 없음') + '</div>';
         return list.map((t) => {
             const rawContent = colIdx.content !== -1 ? (t.row[colIdx.content] || "").toString() : "";
             const assignee = wrExtractAssignee(rawContent);
@@ -12596,7 +12794,8 @@ window._makeDraggable('notice-modal',        'notice-modal-header');
             const assignee = wrExtractAssignee(contentStr);
             rows.push({ task: t.text, issue, fix, assignee, dateLabel: `${wrFormatMD(t.row._calcStartTs)}~${wrFormatMD(t.row._calcPlanTs)}` });
         });
-        if (rows.length === 0) return '<div style="color:#999;">이번 주 문제점/이슈 없음</div>';
+        const _wiEn = window._currentLang === 'en';
+        if (rows.length === 0) return '<div style="color:#999;">' + (_wiEn ? 'No issues this week.' : '이번 주 문제점/이슈 없음') + '</div>';
         const body = rows.map(r => `
             <tr>
                 <td style="padding:8px; border:1px solid #e0e0e0;"><div style="font-weight:bold; font-size:11px; color:#555; margin-bottom:3px;">${escapeHtml(r.task)}</div>${escapeHtml(r.issue)}</td>
@@ -12607,10 +12806,10 @@ window._makeDraggable('notice-modal',        'notice-modal-header');
         return `
             <table style="width:100%; border-collapse:collapse; font-size:12px;">
                 <thead><tr style="background:#f4f6f8;">
-                    <th style="padding:8px; border:1px solid #e0e0e0;">문제점 및 Issue</th>
-                    <th style="padding:8px; border:1px solid #e0e0e0;">대책</th>
-                    <th style="padding:8px; border:1px solid #e0e0e0;">추진일정</th>
-                    <th style="padding:8px; border:1px solid #e0e0e0;">담당자</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0;">${_wiEn ? 'Issues' : '문제점 및 Issue'}</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0;">${_wiEn ? 'Action' : '대책'}</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0;">${_wiEn ? 'Schedule' : '추진일정'}</th>
+                    <th style="padding:8px; border:1px solid #e0e0e0;">${_wiEn ? 'Owner' : '담당자'}</th>
                 </tr></thead>
                 <tbody>${body}</tbody>
             </table>`;
@@ -12643,6 +12842,7 @@ window._makeDraggable('notice-modal',        'notice-modal-header');
 // ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
         const data = window.wrClassifyTasks();
+        const _wrEn = window._currentLang === 'en';
 
         const container = document.getElementById('weekly-report-page');
         if (!container) return;
@@ -12656,23 +12856,23 @@ window._makeDraggable('notice-modal',        'notice-modal-header');
         container.innerHTML = `
             <div style="padding:20px 22px;">
                 <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                    <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">개발 진척 현황</div>
+                    <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Development Progress' : '개발 진척 현황'}</div>
                     <div style="padding:12px;">${wrRenderTimeline()}</div>
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:14px;">
                     <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">주요 실적 (${data.thisWeekNo}W)</div>
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Key Achievements (${data.thisWeekNo}W)` : `주요 실적 (${data.thisWeekNo}W)`}</div>
                         <div style="padding:12px;">${wrRenderEditableList(data.thisList)}</div>
                     </div>
                     <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">추진 계획 (${data.nextWeekNo}W)</div>
+                        <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Upcoming Plans (${data.nextWeekNo}W)` : `추진 계획 (${data.nextWeekNo}W)`}</div>
                         <div style="padding:12px;">${wrRenderEditableList(data.nextList)}</div>
                     </div>
                 </div>
 
                 <div style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
-                    <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">문제점 및 Issue</div>
+                    <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Issues & Actions' : '문제점 및 Issue'}</div>
                     <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                 </div>
             </div>`;
@@ -14411,7 +14611,8 @@ window._toggleAlarmSection = function(id) {
     if (!el) return;
     const open = el.style.display !== 'none';
     el.style.display = open ? 'none' : 'block';
-    if (arrow) arrow.textContent = open ? '▶ 펼치기' : '▼ 접기';
+    const isEn = window._currentLang === 'en';
+    if (arrow) arrow.textContent = open ? (isEn ? '▶ Expand' : '▶ 펼치기') : (isEn ? '▼ Collapse' : '▼ 접기');
 };
 
 // ── Drive 드롭다운 메뉴 토글 ──────────────────────────────────
@@ -14455,7 +14656,8 @@ window.renderNoticeTab = function() {
     const tbody = document.getElementById('notice-table-body');
     if (!tbody) return;
     if (!window._noticeItems.length) {
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:30px;text-align:center;color:#aaa;font-size:13px;">등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.</td></tr>`;
+        const _niEn = window._currentLang === 'en';
+        tbody.innerHTML = `<tr><td colspan="7" style="padding:30px;text-align:center;color:#aaa;font-size:13px;">${_niEn ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.'}</td></tr>`;
         window._noticeRenderLog(); return;
     }
     const today = new Date(); today.setHours(0,0,0,0);
@@ -14498,7 +14700,8 @@ window.renderNoticeTab = function() {
 window._noticeRenderLog = function() {
     const list = document.getElementById('notice-log-list');
     if (!list) return;
-    if (!window._noticeLogs.length) { list.innerHTML='<span style="color:#aaa;">발송 로그가 없습니다.</span>'; return; }
+    const _isEn = window._currentLang === 'en';
+    if (!window._noticeLogs.length) { list.innerHTML='<span style="color:#aaa;">' + (_isEn ? 'No send logs.' : '발송 로그가 없습니다.') + '</span>'; return; }
     list.innerHTML = window._noticeLogs.slice(0,30).map(l =>
         `<div style="padding:5px 0;border-bottom:1px solid #f5f5f5;font-size:12px;">
           <span style="color:#aaa;font-size:11px;">${l.time}</span>
@@ -15130,17 +15333,24 @@ window.renderAlarmTab = async function() {
 
     // 서버 상태 확인
     const statusEl = document.getElementById('alarm-server-status');
+    const _isEn = window._currentLang === 'en';
     try {
         const r = await fetch('http://127.0.0.1:5000/health', { signal: AbortSignal.timeout(2000) });
         const d = await r.json();
-        if (statusEl) statusEl.innerHTML = '<span style="color:#27ae60;">● 메일 서버 연결됨</span>';
+        if (statusEl) statusEl.innerHTML = _isEn
+            ? '<span style="color:#27ae60;">● Mail server connected</span>'
+            : '<span style="color:#27ae60;">● 메일 서버 연결됨</span>';
     } catch(e) {
-        if (statusEl) statusEl.innerHTML = '<span style="color:#e03131;">● 메일 서버 미연결 — kortek_backend.bat을 실행하세요</span>';
+        if (statusEl) statusEl.innerHTML = _isEn
+            ? '<span style="color:#e03131;">● Mail server not connected — Please run kortek_backend.bat</span>'
+            : '<span style="color:#e03131;">● 메일 서버 미연결 — kortek_backend.bat을 실행하세요</span>';
     }
 
     const items = window.collectAlarmItems();
     if (!items.length) {
-        tbody.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
+        tbody.innerHTML = _isEn
+            ? '<tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">📌 No Gantt items with alarm configured.</td></tr>'
+            : '<tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
         return;
     }
 
@@ -16718,8 +16928,10 @@ try {
 // 💡 M.C Table 버튼은 페이지 로드 시 초기 텍스트가 항상 "🔽 펼치기"로 고정돼 있어서,
 //    저장된 상태가 "펼침"이어도 버튼만 "접힘"처럼 보이는 불일치가 있었음 → 로드 시 동기화
 (function() {
-    const btn = document.getElementById('mc-toggle-hidden-btn');
-    if (btn) btn.textContent = window._bmExpanded.mc ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
+    const mcBtn = document.getElementById('mc-toggle-hidden-btn');
+    if (mcBtn) mcBtn.textContent = window._bmExpanded.mc ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
+    const bsBtn = document.getElementById('bs-toggle-hidden-btn');
+    if (bsBtn) bsBtn.textContent = window._bmExpanded.bs ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
 })();
 
 // "접기" 상태일 때 Model A/B/C 중 전체 데이터가 비어있는 열을 통째로 숨김 (Note 열은 항상 표시)
@@ -18500,7 +18712,14 @@ window.calRender = function() {
 
     // 헤더 라벨 업데이트
     const headerLabel = document.getElementById('cal-header-label');
-    if (headerLabel) headerLabel.textContent = baseY + '년 ' + (baseM + 1) + '월';
+    const _calIsEn = window._currentLang === 'en';
+    const _calMonthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const _calWeekdays = _calIsEn
+        ? ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
+        : ['일','월','화','수','목','금','토'];
+    if (headerLabel) headerLabel.textContent = _calIsEn
+        ? _calMonthNames[baseM] + ' ' + baseY
+        : baseY + '년 ' + (baseM + 1) + '월';
 
     // 3개월 렌더링
     let allHtml = '';
@@ -18513,7 +18732,9 @@ window.calRender = function() {
         const startOffset = first.getDay();
         const daysInMonth = new Date(y, m + 1, 0).getDate();
         const totalCells = Math.ceil((startOffset + daysInMonth) / 7) * 7;
-        const monthLabel = y + '년 ' + (m + 1) + '월';
+        const monthLabel = _calIsEn
+            ? _calMonthNames[m] + ' ' + y
+            : y + '년 ' + (m + 1) + '월';
 
         let cellsHtml = '';
         for (let c = 0; c < totalCells; c++) {
@@ -18570,7 +18791,7 @@ window.calRender = function() {
         allHtml += '<div class="cal-month-block">'
             + '<div class="cal-month-title">' + monthLabel + '</div>'
             + '<div class="cal-grid-wrap">'
-            + '<div class="cal-weekday-row"><div>일</div><div>월</div><div>화</div><div>수</div><div>목</div><div>금</div><div>토</div></div>'
+            + '<div class="cal-weekday-row">' + _calWeekdays.map(d => '<div>' + d + '</div>').join('') + '</div>'
             + '<div class="cal-body-row">' + cellsHtml + '</div>'
             + '</div>'
             + '</div>';
