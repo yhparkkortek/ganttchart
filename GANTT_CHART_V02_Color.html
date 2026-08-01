@@ -695,7 +695,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div class="concept-tab-wrap" style="max-width:1200px; padding:22px 26px;">
     <div class="concept-header-box">
       <h2>🔔 알람 관리</h2>
-      <span id="tg-status-badge" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
+      <span id="alarm-server-status" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
       <div class="btn-group">
         <button class="action-btn" data-i18n="btn-alarm-settings" onclick="window.openAlarmSettings()" style="border-color:#555; color:#555;" title="SMTP·자동발송·참조인 설정">⚙️ 설정</button>
         <button class="action-btn" id="alarm-send-all-btn"
@@ -1345,21 +1345,21 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member1">프로젝트 멤버-1</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="PM"><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="M/E"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">                  
-                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자"><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">                  
+                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member2">프로젝트 멤버-2</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
         </div>
@@ -3551,7 +3551,7 @@ ${mailText}`;
             rows[getTaskKey(row)] = { s: row._calcStartTs, e: row._calcPlanTs || null };
         }
         const idx = window._scheduleBaselines.findIndex(b => b.id === CURRENT_BASELINE_ID);
-        const snapshot = { id: CURRENT_BASELINE_ID, label: '현재 일정', savedAt: Date.now(), rows: rows };
+        const snapshot = { id: CURRENT_BASELINE_ID, label: window._currentLang === 'en' ? 'Current Schedule' : '현재 일정', savedAt: Date.now(), rows: rows };
         if (idx === -1) window._scheduleBaselines.push(snapshot);
         else window._scheduleBaselines[idx] = snapshot;
         persistScheduleBaselines();
@@ -3608,10 +3608,11 @@ ${mailText}`;
             popup.className = 'row-action-popup';
             popup.style.minWidth = '230px';
             popup.style.padding = '6px';
+            const _stEn = window._currentLang === 'en';
             popup.innerHTML = `
-                <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.recalcSelectedRange();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">🔓 선택 구간 재계산<div style="font-size:10px; color:#adb5bd; font-weight:normal;">선택한 행의 잠금을 풀고 날짜를 다시 계산 (데이터 변경)</div></div>
+                <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.recalcSelectedRange();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '🔓 Recalc Selected Range' : '🔓 선택 구간 재계산'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Unlock selected rows and recalculate dates (data will change)' : '선택한 행의 잠금을 풀고 날짜를 다시 계산 (데이터 변경)'}</div></div>
                 <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
-                <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.sortRowsByStartDate();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">📅 날짜순 정렬<div style="font-size:10px; color:#adb5bd; font-weight:normal;">날짜는 그대로 두고, 표시 순서만 시작일순 정리</div></div>
+                <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.sortRowsByStartDate();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '📅 Sort by Date' : '📅 날짜순 정렬'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Keep dates as-is, reorder rows by start date' : '날짜는 그대로 두고, 표시 순서만 시작일순 정리'}</div></div>
             `;
             document.body.appendChild(popup);
             document.addEventListener('click', function(e) {
@@ -3628,20 +3629,21 @@ ${mailText}`;
     window.renderBaselineMenu = function() {
         const popup = document.getElementById('baseline-popup');
         if (!popup) return;
-        let html = `<div onclick="event.stopPropagation(); window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ 현재 일정을 새 계획으로 저장</div>`;
-        html += `<div style="padding:2px 8px 4px; font-size:10px; color:#adb5bd;">비교할 계획을 하나 클릭하세요 — 현재 일정과 대조됩니다 (선택됨: 청록색)</div>`;
+        const _blEn = window._currentLang === 'en';
+        let html = `<div onclick="event.stopPropagation(); window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ ${_blEn ? 'Save current schedule as plan' : '현재 일정을 새 계획으로 저장'}</div>`;
+        html += `<div style="padding:2px 8px 4px; font-size:10px; color:#adb5bd;">${_blEn ? 'Click a plan to compare with the current schedule (selected: teal)' : '비교할 계획을 하나 클릭하세요 — 현재 일정과 대조됩니다 (선택됨: 청록색)'}</div>`;
         html += `<div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>`;
 
         const targetId = window._compareTargetId;
         const list = window._scheduleBaselines.slice().sort((a, b) => (a.id === CURRENT_BASELINE_ID ? -1 : b.id === CURRENT_BASELINE_ID ? 1 : b.savedAt - a.savedAt));
 
         if (list.length === 0) {
-            html += `<div style="padding:8px; font-size:11px; color:#adb5bd;">저장된 계획이 없습니다</div>`;
+            html += `<div style="padding:8px; font-size:11px; color:#adb5bd;">${_blEn ? 'No saved plans' : '저장된 계획이 없습니다'}</div>`;
         } else {
             list.forEach(bl => {
-                const isPinned = bl.id === CURRENT_BASELINE_ID; // "현재 일정" — 비교 기준 자체라 선택 대상이 아님
+                const isPinned = bl.id === CURRENT_BASELINE_ID;
                 const isTarget = bl.id === targetId;
-                const dateStr = new Date(bl.savedAt).toLocaleDateString('ko-KR', { month:'2-digit', day:'2-digit' });
+                const dateStr = new Date(bl.savedAt).toLocaleDateString(_blEn ? 'en-US' : 'ko-KR', { month:'2-digit', day:'2-digit' });
                 const dot = isTarget
                     ? `<span style="display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; background:#0c8599; color:#fff; font-size:9px; margin-right:6px; flex-shrink:0;">✓</span>`
                     : `<span style="display:inline-block; width:14px; height:14px; margin-right:6px; flex-shrink:0;"></span>`;
@@ -4666,7 +4668,7 @@ window.deleteHistoryByDateRange = function() {
     window.showHistoryModal = function() {
         let content = document.getElementById('history-content');
         if (!window.changeLogs || window.changeLogs.length === 0) {
-            content.innerHTML = '<div class="history-empty">현재 편집 세션에서 수정된 데이터가 없습니다.</div>';
+            alert(window._t(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일·완료일을 저장했습니다.`, `✅ Saved ${Object.keys(rows).length} start/end dates as plan "${baseline.label}".`));
         } else {
             let html = `
                 <table class="history-table">
@@ -5739,6 +5741,27 @@ window.deleteHistoryByDateRange = function() {
         Object.entries(_sumTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
+        });
+
+        // [변경이력 박스] 시작일/종료일/삭제비밀번호/구간삭제 번역 (6개 탭 공통)
+        document.querySelectorAll('label').forEach(lbl => {
+            const txt = lbl.textContent.trim();
+            if (txt.startsWith('시작일') || txt.startsWith('Start Date') || txt.startsWith('Start')) {
+                const inp = lbl.querySelector('input[type="date"]');
+                if (inp) lbl.childNodes[0].textContent = _en ? 'Start Date ' : '시작일 ';
+            }
+            if (txt.startsWith('종료일') || txt.startsWith('End Date') || txt.startsWith('End')) {
+                const inp = lbl.querySelector('input[type="date"]');
+                if (inp) lbl.childNodes[0].textContent = _en ? 'End Date ' : '종료일 ';
+            }
+        });
+        document.querySelectorAll('input[placeholder="삭제 비밀번호"], input[placeholder="Delete Password"]').forEach(el => {
+            el.placeholder = _en ? 'Delete Password' : '삭제 비밀번호';
+        });
+        document.querySelectorAll('button').forEach(btn => {
+            if (btn.textContent.trim() === '🗑️ 구간 삭제' || btn.textContent.trim() === '구간 삭제' || btn.textContent.trim() === '🗑️ Delete Range' || btn.textContent.trim() === 'Delete Range') {
+                btn.textContent = _en ? (btn.textContent.includes('🗑️') ? '🗑️ Delete Range' : 'Delete Range') : (btn.textContent.includes('🗑️') ? '🗑️ 구간 삭제' : '구간 삭제');
+            }
         });
 
         // [Brief SPEC / M.C Table] 접기·펴기 버튼 텍스트 즉시 반영
@@ -14264,11 +14287,12 @@ window.refreshTgStatus = async function() {
     try {
         const r = await fetch(`${TG_SERVER}/telegram/config`, { signal: AbortSignal.timeout(2000) });
         const d = await r.json();
+        const _tgEn = window._currentLang === 'en';
         if (d.token_set) {
-            if (badge) { badge.textContent = '✅ 연결됨'; badge.style.background = '#d4edda'; badge.style.color = '#155724'; }
+            if (badge) { badge.textContent = _tgEn ? '✅ Connected' : '✅ 연결됨'; badge.style.background = '#d4edda'; badge.style.color = '#155724'; }
             document.getElementById('tg-chatid').value = d.default_chat_id || '';
         } else {
-            if (badge) { badge.textContent = '⚠️ 미설정'; badge.style.background = '#fff3cd'; badge.style.color = '#856404'; }
+            if (badge) { badge.textContent = _tgEn ? '⚠️ Not configured' : '⚠️ 미설정'; badge.style.background = '#fff3cd'; badge.style.color = '#856404'; }
         }
     } catch(e) {
         if (badge) { badge.textContent = window._currentLang === 'en' ? '🔴 Not Connected' : '🔴 서버 미연결'; badge.style.background = '#f8d7da'; badge.style.color = '#721c24'; }
@@ -15824,7 +15848,7 @@ window.sumRenderHistoryTable = function() {
     const table = document.getElementById('sum-history-table');
     if (!table) return;
     const logs = (window.tabData && window.tabData.sumChangeLog) || [];
-    if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
+    if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">' + (window._currentLang === 'en' ? 'No change history.' : '수정 이력이 없습니다.') + '</td></tr>'; return; }
     let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th></tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
