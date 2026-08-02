@@ -5923,6 +5923,7 @@ window.deleteHistoryByDateRange = function() {
             'mail-ai-section-label':  { ko:'🤖 AI 선택',             en:'🤖 Select AI' },
             'mail-cache-clear-btn':   { ko:'🗑️ 분석 캐시 초기화',    en:'🗑️ Clear Cache' },
             'mail-key-link-btn':      { ko:'🔗 발급받기',             en:'🔗 Get Key' },
+            'mail-key-save-btn':      { ko:'💾 저장',                  en:'💾 Save' },
             'mail-analyze-btn':       { ko:'🤖 AI 분석',              en:'🤖 AI Analyze' },
             'mail-reset-btn':         { ko:'⏹ 중단/초기화',           en:'⏹ Stop/Reset' },
             'paste-batch-btn':        { ko:'⚡ 선택항목 연속등록',    en:'⚡ Batch Register' },
@@ -10196,7 +10197,7 @@ window.updateInboxBadge();
                     <div style="display:flex; gap:5px;">
                         <input id="mail-gemini-key" type="password" placeholder="AIza..."
                             style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
-                        <button class="action-btn" onclick="window.saveGeminiKey()" style="min-width:auto !important; padding:0 10px !important;">
+                        <button id="mail-key-save-btn" class="action-btn" onclick="window.saveGeminiKey()" style="min-width:auto !important; padding:0 10px !important;">
                             💾 저장
                         </button>
                         <button class="action-btn" onclick="window.clearGeminiKey()" style="min-width:auto !important; padding:0 8px !important; border-color:#e03131; color:#e03131;">
