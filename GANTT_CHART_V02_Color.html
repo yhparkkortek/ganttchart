@@ -1932,13 +1932,13 @@ ${mailText}`;
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
-                alert(`🎉 구글 드라이브 연동 완료!\n반갑습니다, ${window.currentUserName}님!`);
+                window.showToast(`🎉 ${window._currentLang === 'en' ? 'Google Drive connected! Welcome, ' : '구글 드라이브 연동 완료! 반갑습니다, '}${window.currentUserName}${window._currentLang === 'en' ? '!' : '님!'}`);
                 if (authBtn) authBtn.innerText = `🟢 ${window.currentUserName}`;
                 if (window.TaskInbox && window.TaskInbox.loadFromDrive) window.TaskInbox.loadFromDrive(); // 💡 개인 보관함 드라이브 복원
             } catch(e) {
                 console.error("사용자 정보 추출 실패, 공용 모드로 진입:", e);
                 window.currentUserName = "익명 사용자";
-                alert('구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
+                window.showToast(window._currentLang === 'en' ? '✅ Google Drive connected! Synced with the shared team folder.' : '✅ 구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
                 if (authBtn) authBtn.innerText = "🟢 공용 드라이브 연동됨";
             }
             
@@ -1994,8 +1994,7 @@ ${mailText}`;
             // 💡 업무 보관함 자동 백업 파일(TaskInbox_이름.json)은 프로젝트가 아니므로 목록에서 제외
             let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_') && f.name !== PROMPT_DRIVE_FILENAME && f.name !== HOLIDAY_DRIVE_FILENAME; });
             if (!files || files.length === 0) {
-                alert(_ldEn ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
-                window.showToast(_ldEn ? "No project files in shared storage." : "공용 저장소에 프로젝트 파일이 없습니다.", 'error');
+                window.showToast(_ldEn ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.", 'error');
                 return;
             }
             window.closeAllTopbarMenus(); // ✅ 드라이브 파일 목록 팝업 뜨기 전, 열려있던 파일 드롭다운 자동 닫기
@@ -2252,23 +2251,46 @@ ${mailText}`;
     };
 
     // 💡 저장 성공처럼 "확인" 없이 넘어가도 되는 알림 — 잠깐 떴다가 자동으로 사라짐
-    window.showToast = function(message, type = 'success', duration) {
+    window._toastStack = [];
+    window._toastH = 56; // 토스트 1개 높이 (padding+font 기준)
+
+    window._toastReposition = function() {
+        window._toastStack.forEach(function(el, i) {
+            const bottom = 24 + i * (window._toastH + 8);
+            el.style.bottom = bottom + 'px';
+        });
+    };
+
+    window.showToast = function(message, type, duration) {
+        type = type || 'success';
         const bgMap = { error: '#e03131', info: '#555', warning: '#e67e22', success: '#2c5f8a' };
         const ms = duration || (type === 'error' ? 5000 : type === 'info' ? 2500 : 3000);
-        let toast = document.createElement('div');
+        const toast = document.createElement('div');
         toast.textContent = message;
+        const initBottom = 24 + window._toastStack.length * (window._toastH + 8);
         toast.style.cssText = `
-            position:fixed; bottom:24px; right:24px; z-index:999999;
+            position:fixed; bottom:${initBottom}px; right:24px; z-index:999999;
             background:${bgMap[type] || bgMap.success}; color:#fff;
             padding:12px 18px; border-radius:8px; font-size:13px; line-height:1.5;
             box-shadow:0 4px 14px rgba(0,0,0,0.25); max-width:340px; white-space:pre-line;
-            opacity:0; transform:translateY(8px); transition:opacity 0.25s, transform 0.25s;
+            opacity:0; transform:translateY(8px);
+            transition:opacity 0.25s, transform 0.25s, bottom 0.25s;
         `;
         document.body.appendChild(toast);
-        requestAnimationFrame(() => { toast.style.opacity = '1'; toast.style.transform = 'translateY(0)'; });
-        setTimeout(() => {
-            toast.style.opacity = '0'; toast.style.transform = 'translateY(8px)';
-            setTimeout(() => toast.remove(), 300);
+        window._toastStack.push(toast);
+        requestAnimationFrame(function() {
+            toast.style.opacity = '1';
+            toast.style.transform = 'translateY(0)';
+        });
+        setTimeout(function() {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(8px)';
+            setTimeout(function() {
+                toast.remove();
+                const idx = window._toastStack.indexOf(toast);
+                if (idx !== -1) window._toastStack.splice(idx, 1);
+                window._toastReposition();
+            }, 300);
         }, ms);
     };
 
@@ -2333,8 +2355,7 @@ ${mailText}`;
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
             
             if (!token) {
-                alert("🔒 구글 인증 토큰을 확보하지 못했습니다.\n상단의 연동 버튼을 다시 클릭하여 로그인을 완료해 주세요.");
-                window.showToast(_svEn ? "❌ Save failed: Auth token lost" : "❌ 저장 실패: 인증 토큰 유실", 'error');
+                window.showToast(_svEn ? "🔒 Auth token lost. Please reconnect Google Drive." : "🔒 구글 인증 토큰을 확보하지 못했습니다. 연동 버튼을 다시 클릭해 주세요.", 'error');
                 return false;
             }
 
@@ -2358,7 +2379,6 @@ ${mailText}`;
                 window.showToast(window._currentLang === 'en'
                     ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
                     : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
-                window.showToast(_svEn ? `🔄 Backup complete: ${dynamicFileName}` : `🔄 공용 저장소 백업 완료: ${dynamicFileName}`, 'success', 4000);
                 return true;
             } else {
                 console.error("구글 저장 실패 상세 정보:", file);
@@ -2381,11 +2401,9 @@ ${mailText}`;
                 }
                 
                 alert(_svEn ? `❌ Save failed\n\n${errorMsg}` : `❌ 저장 실패\n\n${errorMsg}`);
-                window.showToast(_svEn ? "❌ Cloud backup failed" : "❌ 클라우드 백업 실패", 'error');
             }
         } catch (err) { 
             alert(_svEn ? "Google Drive system error: " + err.message : "구글 드라이브 전송 시스템 에러: " + err.message); 
-            window.showToast(_svEn ? "❌ System error" : "❌ 시스템 오류 발생", 'error');
             return false;
         }
     }
@@ -2404,8 +2422,7 @@ ${mailText}`;
             });
             let files = response.result.files;
             if (!files || files.length === 0) {
-                alert("아직 저장된 백업이 없습니다. (저장을 한 번 하면 백업이 생성됩니다)");
-                window.showToast(window._currentLang === 'en' ? "No backup files found." : "백업 파일이 없습니다.", 'error');
+                window.showToast(window._currentLang === 'en' ? "No backup files found. Save once to create a backup." : "저장된 백업이 없습니다. 저장을 한 번 하면 백업이 생성됩니다.", 'error');
                 return;
             }
             window.showBackupFileModal(files);
@@ -2453,8 +2470,7 @@ ${mailText}`;
                 window.mcNormalizeAfterLoad();
                 if (window.populateTabData) window.populateTabData();
                 window.recalculateSchedules();
-                alert(`🎉 [${fileName}] 백업으로 복원되었습니다!\n확인 후 [저장] 버튼을 눌러 공용 드라이브에도 반영해주세요.`);
-                window.showToast(window._currentLang === 'en' ? `🔄 Restore complete: ${fileName} (not saved yet)` : `🔄 백업 복원 완료: ${fileName} (아직 저장 전)`);
+                window.showToast(window._currentLang === 'en' ? `🎉 Restored from [${fileName}]. Press [Save] to apply to Drive.` : `🎉 [${fileName}] 백업으로 복원되었습니다! 확인 후 [저장]을 눌러 드라이브에 반영해주세요.`);
             }
         } catch (err) { alert("백업 복원 실패: " + err.message); }
     };
@@ -2740,8 +2756,7 @@ ${mailText}`;
         if (newPw !== confirmPw) { alert('❌ 입력한 두 비밀번호가 서로 다릅니다. 변경이 취소되었습니다.'); return; }
         newPw = newPw.trim();
         if (!setAdminPassword(newPw)) { alert('❌ 비밀번호 저장에 실패했습니다.'); return; }
-        alert('✅ 비밀번호가 변경되었습니다.');
-
+        window.showToast(window._currentLang === 'en' ? '✅ Password changed.' : '✅ 비밀번호가 변경되었습니다.');
         // Drive 연동 상태면 자동 재암호화 + 해시 동기화
         try {
             const tokenObj  = gapi.client.getToken();
@@ -3666,7 +3681,7 @@ ${mailText}`;
         window._scheduleBaselines.push(baseline);
         persistScheduleBaselines();
         window.renderBaselineMenu();
-        alert(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일·완료일을 저장했습니다.`);
+        window.showToast(window._t(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일·완료일을 저장했습니다.`, `✅ Saved ${Object.keys(rows).length} date(s) as plan "${baseline.label}".`));
     };
 
     window.toggleCompareSelection = function(id) {
@@ -10681,7 +10696,7 @@ window.pasteBatchInsert = function() {
 
     pasteRenderResultList();
     window.recalculateSchedules();
-    alert(`✅ ${validTargets.length}개 항목이 등록되었습니다!`);
+    window.showToast(window._currentLang === 'en' ? `✅ ${validTargets.length} task(s) registered!` : `✅ ${validTargets.length}개 항목이 등록되었습니다!`);
 };
 
 // ─── 파일 선택 ───────────────────────────────────────────
@@ -12219,7 +12234,7 @@ const AR = {
         if (ov && ov.style.display === 'flex' && window.renderTaskInbox) window.renderTaskInbox();
 
         AR.render(tabKey);
-        alert(`📥 ${count}개 업무를 보관함에 담았습니다.\n상단바 [업무 보관함]에서 프로젝트별로 배치할 수 있습니다.`);
+                window.showToast(window._currentLang === 'en' ? `📥 ${count} task(s) moved to inbox.` : `📥 ${count}개 업무를 보관함에 담았습니다.`);
     },
 };
 
@@ -14259,8 +14274,7 @@ window.saveAlarmSettings = function() {
     cfg.ccList = ccRows;
     localStorage.setItem('gantt_alarm_settings', JSON.stringify(cfg));
     window.closeAlarmSettings();
-    if (window.bmAlertModal) window.bmAlertModal('설정이 저장되었습니다.');
-    else alert('설정이 저장되었습니다.');
+        window.showToast(window._currentLang === 'en' ? '✅ Settings saved.' : '✅ 설정이 저장되었습니다.');
 };
 
 // 자동발송 ON/OFF
@@ -15717,8 +15731,7 @@ window.sendSingleAlarm = async function(sendAll) {
             item.sentLog['manual'] = new Date().toISOString();
             window.closeAlarmModal();
             window.renderAlarmTab();
-            if (window.bmAlertModal) window.bmAlertModal('발송 완료!');
-            else alert('발송 완료!');
+                        window.showToast(window._currentLang === 'en' ? '✅ Sent!' : '✅ 발송 완료!');
         } else {
             throw new Error(data.error);
         }
