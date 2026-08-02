@@ -185,7 +185,7 @@
 
     .container { height: auto; overflow: visible; border: 1px solid #e3e6ea; border-radius: 6px; position: relative; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
-    #file-status { font-weight: bold; color: #fff; font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0 16px; }
+    #file-status { display: none; }
     #print-header { display: none; }
 
     .chart-label { color: #000; font-weight: bold; font-size: var(--chart-label-size); }
@@ -502,6 +502,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .sum-tl-bubble.below::after { top:-6px; border-bottom-color:#6f42c1; }
 .sum-tl-bubble .sum-tl-date { font-size:10px; color:#888; }
 .cal-month-block { margin-bottom: 32px; }
+.cal-month-block.cal-month-current { background: #f0f7ff; border-radius: 10px; padding: 12px; outline: 2px solid #c5ddf7; outline-offset: -2px; }
+.cal-month-block.cal-month-current .cal-month-title { color: #2c5f8a; font-weight: bold; }
 .cal-month-title { font-size: 15px; font-weight: bold; color: #2c5f8a; margin-bottom: 8px; padding-left: 4px; }
 
 @media print {
@@ -633,10 +635,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="tb-btns">
         <!-- ☁️ Drive — 파일/드라이브/프로젝트 통합 -->
         <div style="position:relative; display:inline-block;">
-            <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this); if(window.isDriveConnected) setTimeout(()=>window.selectProject(true), 150);">📁 프로젝트</button>
+            <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this);">📁 프로젝트</button>
             <div id="file-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="auth_button" class="topbar-menu-item" onclick="handleAuthClick()" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 드라이브 연동하기</button>
-                <button id="drive_load_btn" class="topbar-menu-item" onclick="loadFromGoogleDrive()" disabled>📂 프로젝트 열기</button>
+                <button id="drive_load_btn" class="topbar-menu-item" onclick="window.selectProject()" disabled>📂 프로젝트 열기</button>
                 <button id="drive_save_btn" class="topbar-menu-item" onclick="saveToGoogleDrive()" disabled>💾 프로젝트 저장</button>
                 <button id="backup_restore_btn" class="topbar-menu-item" onclick="window.loadBackupList()" disabled title="드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)">🔄 프로젝트 복원</button>
                 <div class="tb-menu-sep"></div>
@@ -664,7 +666,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
         </div>
     </div>
-    <div id="file-status" style="text-decoration:underline;">파일을 선택하거나 이 영역에 엑셀을 드래그 앤 드롭 하세요. (모든 항목 더블클릭 수정 가능)</div>
+    <div id="file-status" style="display:none;"></div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
 </div>
 
@@ -1966,13 +1968,15 @@ ${mailText}`;
     }
 
     // 💡 "프로젝트 선택": 현재 프로젝트를 먼저 저장한 뒤에만 다른 프로젝트 목록을 연다 (미저장 유실 방지)
-    window.selectProject = async function(fromBtn) {
+    window.selectProject = async function() {
         if (!window.isDriveConnected) {
-            if (!fromBtn) alert(window._t("🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.", "🔒 Please connect Google Drive first."));
+            alert(window._t("🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.", "🔒 Please connect Google Drive first."));
             return;
         }
-        const _isEn = window._currentLang === 'en';
-        document.getElementById('file-status').textContent = _isEn ? "💾 Saving current project before switching..." : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...";
+        window.closeAllTopbarMenus();
+        window.showToast(window._currentLang === 'en'
+            ? "💾 Saving current project before switching..."
+            : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
         const saved = await window.saveToGoogleDrive();
         if (!saved) return;
         window.loadFromGoogleDrive();
@@ -2248,12 +2252,14 @@ ${mailText}`;
     };
 
     // 💡 저장 성공처럼 "확인" 없이 넘어가도 되는 알림 — 잠깐 떴다가 자동으로 사라짐
-    window.showToast = function(message, type = 'success') {
+    window.showToast = function(message, type = 'success', duration) {
+        const bgMap = { error: '#e03131', info: '#555', warning: '#e67e22', success: '#2c5f8a' };
+        const ms = duration || (type === 'error' ? 5000 : type === 'info' ? 2500 : 3000);
         let toast = document.createElement('div');
         toast.textContent = message;
         toast.style.cssText = `
             position:fixed; bottom:24px; right:24px; z-index:999999;
-            background:${type === 'error' ? '#e03131' : '#2c5f8a'}; color:#fff;
+            background:${bgMap[type] || bgMap.success}; color:#fff;
             padding:12px 18px; border-radius:8px; font-size:13px; line-height:1.5;
             box-shadow:0 4px 14px rgba(0,0,0,0.25); max-width:340px; white-space:pre-line;
             opacity:0; transform:translateY(8px); transition:opacity 0.25s, transform 0.25s;
@@ -2263,7 +2269,7 @@ ${mailText}`;
         setTimeout(() => {
             toast.style.opacity = '0'; toast.style.transform = 'translateY(8px)';
             setTimeout(() => toast.remove(), 300);
-        }, 3000);
+        }, ms);
     };
 
     window.saveToGoogleDrive = async function() {
@@ -2295,7 +2301,8 @@ ${mailText}`;
             }
             if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
-            document.getElementById('file-status').textContent = "💾 공용 드라이브에 데이터를 저장하는 중...";
+            const _svEn = window._currentLang === 'en';
+            document.getElementById('file-status').textContent = _svEn ? "💾 Saving data to Google Drive..." : "💾 공용 드라이브에 데이터를 저장하는 중...";
             
             let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
             
@@ -2327,7 +2334,7 @@ ${mailText}`;
             
             if (!token) {
                 alert("🔒 구글 인증 토큰을 확보하지 못했습니다.\n상단의 연동 버튼을 다시 클릭하여 로그인을 완료해 주세요.");
-                document.getElementById('file-status').textContent = "❌ 저장 실패: 인증 토큰 유실";
+                document.getElementById('file-status').textContent = _svEn ? "❌ Save failed: Auth token lost" : "❌ 저장 실패: 인증 토큰 유실";
                 return false;
             }
 
@@ -2351,7 +2358,7 @@ ${mailText}`;
                 window.showToast(window._currentLang === 'en'
                     ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
                     : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
-                document.getElementById('file-status').textContent = `🔄 공용 저장소 백업 완료: ${dynamicFileName}`;
+                document.getElementById('file-status').textContent = _svEn ? `🔄 Backup complete: ${dynamicFileName}` : `🔄 공용 저장소 백업 완료: ${dynamicFileName}`;
                 return true;
             } else {
                 console.error("구글 저장 실패 상세 정보:", file);
@@ -2373,13 +2380,12 @@ ${mailText}`;
                     errorMsg = `구글 드라이브 에러 (${status}): ${file.error.message}`;
                 }
                 
-                alert(`❌ 저장 실패\n\n${errorMsg}`);
-                document.getElementById('file-status').textContent = "❌ 클라우드 백업 실패";
-                return false;
+                alert(_svEn ? `❌ Save failed\n\n${errorMsg}` : `❌ 저장 실패\n\n${errorMsg}`);
+                document.getElementById('file-status').textContent = _svEn ? "❌ Cloud backup failed" : "❌ 클라우드 백업 실패";
             }
         } catch (err) { 
-            alert("구글 드라이브 전송 시스템 에러: " + err.message); 
-            document.getElementById('file-status').textContent = "❌ 시스템 오류 발생";
+            alert(_svEn ? "Google Drive system error: " + err.message : "구글 드라이브 전송 시스템 에러: " + err.message); 
+            document.getElementById('file-status').textContent = _svEn ? "❌ System error" : "❌ 시스템 오류 발생";
             return false;
         }
     }
@@ -2485,6 +2491,11 @@ ${mailText}`;
         let listContainer = document.getElementById('drive-file-list');
         if(!listContainer) return;
         listContainer.innerHTML = '';
+        const _dmEn = window._currentLang === 'en';
+        const _dmTitle = document.getElementById('drive-modal-title');
+        if (_dmTitle) _dmTitle.textContent = _dmEn ? '📂 Open Project from Google Drive' : '📂 구글 드라이브 프로젝트 불러오기';
+        const _dmDesc = document.getElementById('drive-modal-desc');
+        if (_dmDesc) _dmDesc.textContent = _dmEn ? 'Select a project file to open.' : '불러올 프로젝트 파일을 선택해 주세요.';
         files.forEach(file => {
             let d = new Date(file.modifiedTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
             let fileBtn = document.createElement('div');
@@ -7487,7 +7498,7 @@ window.handleAuthClick = function() {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
             if (window.currentDriveFileId && currentLogs > savedLogs) {
-                document.getElementById('file-status').textContent = "⏳ 3분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
+                document.getElementById('file-status').textContent = window._currentLang === 'en' ? "⏳ 3min idle detected — Auto-saving to Google Drive..." : "⏳ 3분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
                 saveToGoogleDrive(); 
             }
         }, 180000); 
@@ -18887,12 +18898,14 @@ window.calRender = function() {
         ? _calMonthNames[baseM] + ' ' + baseY
         : baseY + '년 ' + (baseM + 1) + '월';
 
-    // 3개월 렌더링
+    // 5개월 렌더링 (현재 월 기준 앞 2개월 / 현재 월 / 뒤 2개월)
     let allHtml = '';
-    for (let mi = 0; mi < 3; mi++) {
-        let y = baseY, m = baseM + mi - 1;
+    for (let mi = 0; mi < 5; mi++) {
+        let y = baseY, m = baseM + mi - 2;
         if (m < 0) { m += 12; y--; }
         if (m > 11) { m -= 12; y++; }
+
+        const isCurrentMonth = (y === baseY && m === baseM);
 
         const first = new Date(y, m, 1);
         const startOffset = first.getDay();
@@ -18954,7 +18967,7 @@ window.calRender = function() {
             + '</div>';
         }
 
-        allHtml += '<div class="cal-month-block">'
+        allHtml += '<div class="cal-month-block' + (isCurrentMonth ? ' cal-month-current' : '') + '">'
             + '<div class="cal-month-title">' + monthLabel + '</div>'
             + '<div class="cal-grid-wrap">'
             + '<div class="cal-weekday-row">' + _calWeekdays.map(d => '<div>' + d + '</div>').join('') + '</div>'
