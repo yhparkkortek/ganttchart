@@ -5870,6 +5870,14 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+        // [AI팝업] textarea placeholder 번역
+        const _mcInput = document.getElementById('mail-content-input');
+        if (_mcInput) _mcInput.placeholder = _en ? 'Paste the mail content here...' : '메일 본문을 여기에 붙여넣으세요...';
+
+        const _mfDropLabel = document.getElementById('mf-drop-label');
+        if (_mfDropLabel) _mfDropLabel.textContent = _en ? 'Click or drag files here' : '클릭하거나 파일을 드래그하세요';
+        const _mfDropSub = document.getElementById('mf-drop-sub');
+        if (_mfDropSub) _mfDropSub.textContent = _en ? '.eml / .html / .txt up to 500 files' : '.eml / .html / .txt 최대 500개';
 
         // [업무 보관함 모달] 헤더 번역
         const _ibxTitle = document.getElementById('inbox-modal-title');
@@ -10119,6 +10127,7 @@ window.updateInboxBadge();
                 <div id="mail-tab-paste-content" style="display:flex; flex-direction:column; flex:1; overflow:hidden; padding:12px;">
                     <label id="mail-paste-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:4px;">📋 메일 내용 붙여넣기</label>
                     <textarea id="mail-content-input" placeholder="메일 본문을 여기에 붙여넣으세요..."
+                        data-placeholder-ko="메일 본문을 여기에 붙여넣으세요..." data-placeholder-en="Paste the mail content here..."
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
@@ -10169,8 +10178,8 @@ window.updateInboxBadge();
                          ondragleave="this.style.background='#f8f9fa';"
                          ondrop="event.preventDefault(); event.stopPropagation(); this.style.background='#f8f9fa'; window.mfHandleFiles(event.dataTransfer.files)">
                         <div style="font-size:20px;">📁</div>
-                        <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-                        <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
+                        <div id="mf-drop-label" style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
+                        <div id="mf-drop-sub" style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>
                     </div>
                     <div id="mf-pending-list" style="display:none; max-height:180px; overflow-y:auto; margin-bottom:8px; border:1px solid #dee2e6; border-radius:6px; flex-shrink:0;"></div>
                     <div id="mf-analyze-group" style="display:none; gap:8px; margin-bottom:8px; flex-shrink:0; justify-content:center;">
@@ -10791,10 +10800,11 @@ window.mfClearFiles = function() {
     // 2. 드롭존 화면 원래대로 복구
     const dz = document.getElementById('mf-dropzone');
     if (dz) {
+        const _dzEn = window._currentLang === 'en';
         dz.innerHTML = `
             <div style="font-size:20px;">📁</div>
-            <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-            <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>`;
+            <div style="font-weight:bold; color:#e67e22; font-size:11px; margin-top:2px;">${_dzEn ? 'Click or drag files here' : '클릭하거나 파일을 드래그하세요'}</div>
+            <div style="font-size:10px; color:#aaa;">${_dzEn ? '.eml / .html / .txt up to 500 files' : '.eml / .html / .txt 최대 500개'}</div>`;
     }
         
     // 3. 버튼 및 결과창 숨기기
@@ -10856,8 +10866,8 @@ window.mfRemoveFile = function(idx) {
             ? `<div style="font-size:20px;">📁</div>
                <div style="font-weight:bold; color:#e67e22; font-size:12px; margin-top:3px;">${arr.length}개 선택됨 (클릭하여 추가 변경)</div>`
             : `<div style="font-size:20px;">📁</div>
-               <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">클릭하거나 파일을 드래그하세요</div>
-               <div style="font-size:10px; color:#aaa;">.eml / .html / .txt 최대 500개</div>`;
+               <div style="font-weight:bold; color:#2c5f8a; font-size:11px; margin-top:2px;">${window._currentLang === 'en' ? 'Click or drag files here' : '클릭하거나 파일을 드래그하세요'}</div>
+               <div style="font-size:10px; color:#aaa;">${window._currentLang === 'en' ? '.eml / .html / .txt up to 500 files' : '.eml / .html / .txt 최대 500개'}</div>`;
     }
     mfRenderPendingList();
 };
