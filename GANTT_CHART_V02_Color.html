@@ -633,7 +633,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="tb-btns">
         <!-- ☁️ Drive — 파일/드라이브/프로젝트 통합 -->
         <div style="position:relative; display:inline-block;">
-            <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this); window.selectProject();">📁 프로젝트</button>
+            <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this); if(window.isDriveConnected) setTimeout(()=>window.selectProject(true), 150);">📁 프로젝트</button>
             <div id="file-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="auth_button" class="topbar-menu-item" onclick="handleAuthClick()" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 드라이브 연동하기</button>
                 <button id="drive_load_btn" class="topbar-menu-item" onclick="loadFromGoogleDrive()" disabled>📂 프로젝트 열기</button>
@@ -1967,12 +1967,10 @@ ${mailText}`;
 
     // 💡 "프로젝트 선택": 현재 프로젝트를 먼저 저장한 뒤에만 다른 프로젝트 목록을 연다 (미저장 유실 방지)
     window.selectProject = async function(fromBtn) {
-        // 버튼 직접 클릭(fromBtn=true)이면 드라이브 미연동 시 조용히 드롭다운만 열고 종료
         if (!window.isDriveConnected) {
             if (!fromBtn) alert(window._t("🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.", "🔒 Please connect Google Drive first."));
             return;
         }
-        window.closeAllTopbarMenus();
         const _isEn = window._currentLang === 'en';
         document.getElementById('file-status').textContent = _isEn ? "💾 Saving current project before switching..." : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...";
         const saved = await window.saveToGoogleDrive();
