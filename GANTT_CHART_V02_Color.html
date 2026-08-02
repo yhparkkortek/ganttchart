@@ -816,7 +816,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button id="as-all-off-btn" type="button" onclick="window.toggleAllCc(false)" style="padding:2px 8px; border:1px solid #999; color:#999; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 OFF</button>
           </span>
         </div>
-        <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px;"></div>
+        <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;"></div>
         <datalist id="alarm-cc-namelist"></datalist>
         <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 수신자 추가</button>
       </div>
@@ -869,7 +869,21 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
       <!-- 메신저 수신자 -->
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
-        <p id="as-tg-recv-label" style="margin:0 0 5px; font-size:12px; font-weight:bold; color:#555;">👥 메신저 수신자</p>
+        <p style="margin:0; font-size:12px; font-weight:bold; color:#555;"><span id="as-tg-recv-label">👥 메신저 수신자</span> <span id="as-tg-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
+        <div style="margin-bottom:8px;">
+          <div onclick="const b=document.getElementById('tg-chatid-guide');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('#tg-chatid-guide-arrow').textContent=b.style.display==='none'?(window._currentLang==='en'?'▼ How to get Chat ID':'▼ Chat ID 발급 방법'):(window._currentLang==='en'?'▲ Close':'▲ 닫기')"
+               style="cursor:pointer; font-size:11px; color:#2c5f8a; display:flex; align-items:center; gap:4px;">
+            <span id="tg-chatid-guide-arrow">▼ Chat ID 발급 방법</span>
+          </div>
+          <div id="tg-chatid-guide" style="display:none; margin-top:6px; background:#f8f9fa; border:1px solid #e9ecef; border-radius:5px; padding:8px 10px; font-size:11px; color:#555; line-height:1.9;">
+            <div id="tg-chatid-guide-content">
+              <b>1.</b> Telegram에서 <b>@userinfobot</b> 검색 후 시작<br>
+              <b>2.</b> /start 입력 → 봇이 나의 Chat ID (숫자) 를 알려줌<br>
+              <b>3.</b> 알려준 숫자를 아래 Chat ID 칸에 입력 후 추가<br>
+              <span style="color:#e67e22;">⚠️ Bot Token은 @BotFather에서 생성 — 설정 저장 후 팀원에게 봇 링크를 공유해 /start 전송 요청</span>
+            </div>
+          </div>
+        </div>
         <p id="as-tg-guide-text" style="margin:0 0 8px; font-size:11px; color:#888;">Bot에게 /start 전송 후 Chat ID를 확인하여 등록하세요.</p>
         <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:5px; margin-bottom:8px; align-items:center;">
           <input id="tg-m-name" class="u-input" placeholder="이름 (주소록 자동완성)"
@@ -5674,6 +5688,23 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+
+        // [TG Chat ID 안내] 번역
+        const _tgGuideArrow = document.getElementById('tg-chatid-guide-arrow');
+        if (_tgGuideArrow) {
+            const _tgOpen = document.getElementById('tg-chatid-guide') && document.getElementById('tg-chatid-guide').style.display !== 'none';
+            _tgGuideArrow.textContent = _tgOpen ? (_en ? '▲ Close' : '▲ 닫기') : (_en ? '▼ How to get Chat ID' : '▼ Chat ID 발급 방법');
+        }
+        const _tgGuideContent = document.getElementById('tg-chatid-guide-content');
+        if (_tgGuideContent) _tgGuideContent.innerHTML = _en
+            ? '<b>1.</b> Search <b>@userinfobot</b> in Telegram and start it<br>'
+            + '<b>2.</b> Type /start → the bot will send your Chat ID (a number)<br>'
+            + '<b>3.</b> Enter that number in the Chat ID field below and click Add<br>'
+            + '<span style="color:#e67e22;">⚠️ Bot Token is created via @BotFather — after saving settings, share the bot link with team members and ask them to send /start</span>'
+            : '<b>1.</b> Telegram에서 <b>@userinfobot</b> 검색 후 시작<br>'
+            + '<b>2.</b> /start 입력 → 봇이 나의 Chat ID (숫자) 를 알려줌<br>'
+            + '<b>3.</b> 알려준 숫자를 아래 Chat ID 칸에 입력 후 추가<br>'
+            + '<span style="color:#e67e22;">⚠️ Bot Token은 @BotFather에서 생성 — 설정 저장 후 팀원에게 봇 링크를 공유해 /start 전송 요청</span>';
 
         // [알람설정 설치안내] 제목/화살표/내용 번역
         const _igTitle = document.getElementById('install-guide-title');
@@ -14511,6 +14542,7 @@ window.loadAllFromDrive = async function() {
         const tgResult   = (decData.results || {}).telegram || {};
         window.refreshTgStatus();
         window.loadTgMemberList();
+        window._tgAutoMatchFromSummary();
 
         // SMTP UI 업데이트 (서버에서 로드된 값으로)
         if (mailResult.ok) {
@@ -14683,6 +14715,7 @@ window.loadTgFromDrive = async function() {
 
         window.refreshTgStatus();
         window.loadTgMemberList();
+        window._tgAutoMatchFromSummary();
         if (msg) { msg.style.color='#27ae60'; msg.textContent=`✓ ${decData.message}`; setTimeout(()=>{ if(msg) msg.textContent=''; }, 4000); }
     } catch(e) {
         if (msg) { msg.style.color='#e03131'; msg.textContent='❌ ' + e.message; }
@@ -15025,7 +15058,10 @@ window._nmLoadTgSelectList = async function() {
         const r=await fetch(`${TG_SERVER}/telegram/members`,{signal:AbortSignal.timeout(2000)});
         const d=await r.json();
         if(!d.members||!d.members.length){sel.innerHTML='<span style="font-size:11px;color:#aaa;">등록된 팀원 없음</span>';return;}
-        sel.innerHTML=d.members.map(m=>`<label style="display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;background:#f0f4f8;padding:3px 8px;border-radius:12px;"><input type="checkbox" class="nm-tg-sel" value="${m.chat_id}" data-name="${m.name}"> ${m.name}</label>`).join('');
+        sel.innerHTML=d.members.map(m=>`<label style="display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;background:#f0f4f8;padding:3px 8px;border-radius:12px;" title="Chat ID: ${m.chat_id}${m.roles&&m.roles.length?' | 역할: '+m.roles.join(','):''}">`
+            +`<input type="checkbox" class="nm-tg-sel" value="${m.chat_id}" data-name="${m.name}"> ${m.name}`
+            +(m.roles&&m.roles.length?`<span style="font-size:9px;color:#888;margin-left:2px;">[${m.roles.join(',')}]</span>`:'')
+            +`</label>`).join('');
     } catch(e){sel.innerHTML='<span style="font-size:11px;color:#aaa;">'+(window._currentLang==='en'?'Not Connected':'서버 미연결')+'</span>';}
 };
 window.saveNoticeItem = function() {
@@ -15164,6 +15200,27 @@ window._tgAutofillFromAddr = function(nameInput) {
     if (!person) return;
     const chatIdEl = document.getElementById('tg-m-chatid');
     if (chatIdEl && person.telegramId) chatIdEl.value = person.telegramId;
+};
+
+window._tgAutoMatchFromSummary = function() {
+    const pm = window.projectMeta || {};
+    const memberKeys = ['프로젝트담당자','기구담당자','HW담당자','FW담당자','BLU담당자',
+        'TSP담당자','LCM담당자','Slimming담당자','Cutting담당자','Tooling담당자'];
+    const names = memberKeys.map(k => (pm[k] || '').trim()).filter(Boolean);
+    const addressBook = (window.tabData || {}).addressBook || [];
+    const matched = [];
+    names.forEach(function(name) {
+        name.split(/[,，]/).map(s => s.trim()).filter(Boolean).forEach(function(n) {
+            const p = window._addrFindByName(n);
+            if (p && p.telegramId) matched.push({ name: n, chatId: p.telegramId });
+        });
+    });
+    const subEl = document.getElementById('as-tg-recv-sub');
+    if (subEl) subEl.textContent = matched.length
+        ? (window._currentLang === 'en'
+            ? '(Auto from Summary — ' + matched.length + ' matched)'
+            : '(Summary 멤버 자동 반영 — ' + matched.length + '명 매칭)')
+        : (window._currentLang === 'en' ? '(Summary member auto-sync)' : '(Summary 멤버 자동 반영)');
 };
 
 // Telegram 발송 헬퍼 (알람과 통합)
