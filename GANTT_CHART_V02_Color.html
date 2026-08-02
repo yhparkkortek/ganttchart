@@ -1950,7 +1950,7 @@ ${mailText}`;
             // 연동 성공 직후 프로젝트 리스트 팝업 자동 동기화
             setTimeout(() => {
                 if (typeof window.loadFromGoogleDrive === 'function') {
-                    window.loadFromGoogleDrive(true); // silent: 연동 직후 자동 호출이므로 toast 억제
+                    window.loadFromGoogleDrive();
                 }
             }, 600);
         };
@@ -1982,9 +1982,8 @@ ${mailText}`;
         window.loadFromGoogleDrive();
     }
 
-    window.loadFromGoogleDrive = async function(silent) {
+    window.loadFromGoogleDrive = async function() {
         const _ldEn = window._currentLang === 'en';
-        if (!silent) window.showToast(_ldEn ? "📂 Loading project list from Google Drive..." : "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...", 'info');
         try {
             let response = await gapi.client.drive.files.list({
                 q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
@@ -2218,7 +2217,6 @@ ${mailText}`;
         if (typeof renderTable === 'function') renderTable(globalData);
         if (window.clearAllTabFields) window.clearAllTabFields(); // 💡 Summary/Brief SPEC/M.C Table/Address까지 함께 비움
 
-        window.showToast(window._currentLang === 'en' ? "📌 New project started. Download the template Excel and drag it here." : "📌 새 프로젝트를 시작합니다. 참조 엑셀을 다운로드해서 작성한 뒤 이 영역에 드래그하세요.", 'info');
         document.getElementById('new-project-modal-overlay').style.display = 'flex';
     };
 
@@ -2324,7 +2322,6 @@ ${mailText}`;
             if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
             const _svEn = window._currentLang === 'en';
-            window.showToast(_svEn ? "💾 Saving data to Google Drive..." : "💾 공용 드라이브에 데이터를 저장하는 중...", 'info');
             
             let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
             
@@ -2410,7 +2407,6 @@ ${mailText}`;
 
     // 💡 Backups 폴더의 백업 목록 조회
     window.loadBackupList = async function() {
-        window.showToast(window._currentLang === 'en' ? "🔄 Loading backup list..." : "🔄 백업 목록을 불러오는 중...", 'info');
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -2451,7 +2447,6 @@ ${mailText}`;
     window.executeRestoreBackup = async function(fileId, fileName) {
         window.closeDriveModal();
         if (!confirm(window._t(`[${fileName}] 백업으로 복원하시겠습니까?\n현재 화면의 내용은 사라지고 이 백업 시점으로 되돌아갑니다.\n(공용 드라이브 파일에는 아직 저장되지 않으니, 확인 후 [저장]을 눌러야 반영됩니다)`, `Restore from backup [${fileName}]?\nCurrent content will be replaced.\n(Not saved to Drive yet — press [Save] to apply.)`))) return;
-        window.showToast(window._currentLang === 'en' ? `🔄 Restoring [${fileName}]...` : `🔄 [${fileName}] 백업을 복원하는 중...`, 'info');
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
@@ -2477,7 +2472,6 @@ ${mailText}`;
 
     window.executeLoadFile = async function(fileId, fileName) {
         window.closeDriveModal();
-        window.showToast(window._currentLang === 'en' ? `📂 Loading [${fileName}]...` : `📂 [${fileName}] 데이터를 가져오는 중...`, 'info');
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
@@ -2846,7 +2840,6 @@ ${mailText}`;
     // ════════════════════════════════════════════════════════════
     window.recalculateSchedules = function() {
         if (globalData.length <= 1) return;
-        window.showToast(window._currentLang === 'en' ? "Recalculating schedule..." : "일정을 재계산하는 중입니다...", 'info');
 
         setTimeout(() => {
             let curD0 = "", curT1 = "", curT2 = "", curT3 = "", curT4 = "";
@@ -3951,7 +3944,6 @@ ${mailText}`;
         // 드라이브 연동 유지 시 기존 로그 보존
         window.changeLogs = []; window.lastSavedLogCount = 0;
         
-        window.showToast(window._currentLang === 'en' ? "Analyzing data and computing schedule..." : "데이터를 분석하고 일정을 연산하는 중입니다...", 'info');
 
         for (let i = 0; i < totalFiles; i++) {
             let file = files[i]; let reader = new FileReader();
@@ -7095,7 +7087,7 @@ window.handleAuthClick = function() {
 
                 // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
                 setTimeout(() => {
-                    loadFromGoogleDrive(true); // silent
+                    loadFromGoogleDrive();
                 }, 600);
 
             } catch(e) {
@@ -7521,7 +7513,6 @@ window.handleAuthClick = function() {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
             if (window.currentDriveFileId && currentLogs > savedLogs) {
-                window.showToast(window._currentLang === 'en' ? "⏳ 3min idle — Auto-saving to Google Drive..." : "⏳ 3분 비활동 감지 - 구글 드라이브에 자동 저장 중...", 'info');
                 saveToGoogleDrive(); 
             }
         }, 180000); 
