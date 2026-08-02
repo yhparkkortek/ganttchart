@@ -225,7 +225,7 @@
     .history-body { padding: 0; overflow-y: auto; flex: 1; }
     .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .history-table th, .history-table td { border: 1px solid #e9ecef; padding: 10px; text-align: left; word-break: break-all; }
-    .history-table th { background: #e9ecef; position: sticky; top: 0; box-shadow: 0 1px 1px rgba(0,0,0,0.1); }
+    .history-table th { background: #e9ecef; position: sticky; top: 0; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
     .history-empty { padding: 50px; text-align: center; color: #adb5bd; font-size: 15px; }
     .val-old { color: #dc3545; text-decoration: line-through; }
     .val-new { color: #0f5132; font-weight: bold; }
@@ -1866,7 +1866,7 @@ ${mailText}`;
     var colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
 
     window.currentDriveFileId = null;
-    window.currentUserName = "비로그인 (로컬)"; 
+    window.currentUserName = "비로그인 (로컬)"; // 표시용: 언어별로 auth_button에서 처리 
     window.lastSavedLogCount = 0; 
     window.exportFilenameStr = "GanttChart_All";
     window.ganttViewStartTs = null;
@@ -1904,7 +1904,7 @@ ${mailText}`;
 
         const authBtn = document.getElementById('auth_button');
         if (authBtn) {
-            authBtn.innerText = "🔄 연동 진행 중...";
+            authBtn.innerText = window._currentLang === 'en' ? "🔄 Connecting..." : "🔄 연동 진행 중...";
             authBtn.disabled = true;
         }
 
@@ -1912,7 +1912,7 @@ ${mailText}`;
             if (resp.error !== undefined) { 
                 console.error("구글 인증 실패:", resp.error);
                 if (authBtn) {
-                    authBtn.innerText = "🔵 구글 드라이브 연동하기";
+                    authBtn.innerText = window._currentLang === 'en' ? "🔵 Connect Google Drive" : "🔵 구글 드라이브 연동하기";
                     authBtn.disabled = false;
                 }
                 return; 
@@ -1932,13 +1932,13 @@ ${mailText}`;
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
-                window.showToast(`🎉 ${window._currentLang === 'en' ? 'Google Drive connected! Welcome, ' : '구글 드라이브 연동 완료! 반갑습니다, '}${window.currentUserName}${window._currentLang === 'en' ? '!' : '님!'}`);
+                window.showToast(window._currentLang === 'en' ? `🎉 Google Drive connected! Welcome, ${window.currentUserName}!` : `🎉 구글 드라이브 연동 완료! 반갑습니다, ${window.currentUserName}님!`);
                 if (authBtn) authBtn.innerText = `🟢 ${window.currentUserName}`;
                 if (window.TaskInbox && window.TaskInbox.loadFromDrive) window.TaskInbox.loadFromDrive(); // 💡 개인 보관함 드라이브 복원
             } catch(e) {
                 console.error("사용자 정보 추출 실패, 공용 모드로 진입:", e);
                 window.currentUserName = "익명 사용자";
-                window.showToast(window._currentLang === 'en' ? '✅ Google Drive connected! Synced with the shared team folder.' : '✅ 구글 드라이브 연동 완료! 지정된 팀 공용 폴더와 동기화됩니다.');
+                window.showToast(window._currentLang === 'en' ? '✅ Google Drive connected! Synced with shared team folder.' : '✅ 구글 드라이브 연동 완료! 팀 공용 폴더와 동기화됩니다.');
                 if (authBtn) authBtn.innerText = "🟢 공용 드라이브 연동됨";
             }
             
@@ -1950,7 +1950,7 @@ ${mailText}`;
             // 연동 성공 직후 프로젝트 리스트 팝업 자동 동기화
             setTimeout(() => {
                 if (typeof window.loadFromGoogleDrive === 'function') {
-                    window.loadFromGoogleDrive();
+                    window.loadFromGoogleDrive(true); // silent: 연동 직후 자동 호출이므로 toast 억제
                 }
             }, 600);
         };
@@ -1982,9 +1982,9 @@ ${mailText}`;
         window.loadFromGoogleDrive();
     }
 
-    window.loadFromGoogleDrive = async function() {
+    window.loadFromGoogleDrive = async function(silent) {
         const _ldEn = window._currentLang === 'en';
-        window.showToast(_ldEn ? "📂 Loading project list from Google Drive..." : "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...", 'info');
+        if (!silent) window.showToast(_ldEn ? "📂 Loading project list from Google Drive..." : "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...", 'info');
         try {
             let response = await gapi.client.drive.files.list({
                 q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
@@ -2390,7 +2390,7 @@ ${mailText}`;
                     const authBtn = document.getElementById('auth_button');
                     if (authBtn) {
                         authBtn.disabled = false;
-                        authBtn.innerText = "🔄 재연동 필요 (클릭)";
+                        authBtn.innerText = window._currentLang === 'en' ? "🔄 Reconnect required (click)" : "🔄 재연동 필요 (클릭)";
                         authBtn.style.borderColor = '#e67e22';
                         authBtn.style.color = '#e67e22';
                     }
@@ -2662,6 +2662,7 @@ ${mailText}`;
 
     window.openHolidayManager = async function() {
         window.closeAllTopbarMenus();
+        const _hEn = window._currentLang === 'en';
         let modal = document.getElementById('holiday-manager-modal');
         if (!modal) {
             modal = document.createElement('div');
@@ -2670,26 +2671,26 @@ ${mailText}`;
             modal.innerHTML =
                 '<div style="background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
                 + '<div style="padding:14px 18px; border-bottom:1px solid #dee2e6; display:flex; justify-content:space-between; align-items:center;">'
-                + '<span style="font-size:15px; font-weight:bold; color:#2c5f8a;">🗓️ 휴일 등록 (추가 휴일)</span>'
+                + '<span style="font-size:15px; font-weight:bold; color:#2c5f8a;">' + (_hEn ? '🗓️ Holiday Registration' : '🗓️ 휴일 등록 (추가 휴일)') + '</span>'
                 + '<button onclick="document.getElementById(\'holiday-manager-modal\').style.display=\'none\'" style="border:none; background:none; font-size:18px; cursor:pointer; color:#868e96;">✕</button>'
                 + '</div>'
                 + '<div id="holiday-sync-notice" style="padding:12px 18px; font-size:11px; color:#888; line-height:1.5; border-bottom:1px solid #f1f3f5;">'
-                + '기본 공휴일은 2035년까지 이미 반영되어 있습니다. 여기서는 회사 창립일, 임시공휴일처럼 추가로 쉬는 날을 등록합니다.'
+                + (_hEn ? 'Public holidays through 2035 are already built in. Register additional days off here — company founding day, temporary holidays, etc.' : '기본 공휴일은 2035년까지 이미 반영되어 있습니다. 여기서는 회사 창립일, 임시공휴일처럼 추가로 쉬는 날을 등록합니다.')
                 + '</div>'
                 + '<div style="padding:12px 18px; border-bottom:1px solid #f1f3f5;">'
                 + '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">'
                 + '<input type="date" id="holiday-add-date" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
                 + '<span style="color:#888; font-size:12px;">~</span>'
-                + '<input type="date" id="holiday-add-end-date" title="기간으로 등록할 경우 종료일 (비워두면 하루만 등록)" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
+                + '<input type="date" id="holiday-add-end-date" title="' + (_hEn ? 'End date for range (leave blank for single day)' : '기간으로 등록할 경우 종료일 (비워두면 하루만 등록)') + '" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
                 + '</div>'
                 + '<div style="display:flex; gap:6px;">'
-                + '<input type="text" id="holiday-add-name" placeholder="사유 (예: 하계휴가)" style="flex:1; min-width:0; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
-                + '<button class="action-btn" onclick="window.addCustomHoliday()" style="min-width:auto !important; padding:0 12px !important;">➕ 추가</button>'
+                + '<input type="text" id="holiday-add-name" placeholder="' + (_hEn ? 'Reason (e.g. Summer vacation)' : '사유 (예: 하계휴가)') + '" style="flex:1; min-width:0; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
+                + '<button class="action-btn" onclick="window.addCustomHoliday()" style="min-width:auto !important; padding:0 12px !important;">➕ ' + (_hEn ? 'Add' : '추가') + '</button>'
                 + '</div>'
                 + '</div>'
                 + '<div id="holiday-list-container" style="flex:1; overflow-y:auto; padding:8px 18px;"></div>'
                 + '<div style="padding:12px 18px; border-top:1px solid #dee2e6; display:flex; gap:8px; justify-content:space-between; align-items:center;">'
-                + '<button class="action-btn" onclick="window.loadHolidaysFromDrive()" style="min-width:auto !important; padding:0 10px !important;">🔄 새로고침</button>'
+                + '<button class="action-btn" onclick="window.loadHolidaysFromDrive()" style="min-width:auto !important; padding:0 10px !important;">🔄 ' + (_hEn ? 'Refresh' : '새로고침') + '</button>'
                 + '<span style="font-size:11px; color:#868e96;" id="holiday-count-label"></span>'
                 + '</div>'
                 + '</div>';
@@ -2699,11 +2700,11 @@ ${mailText}`;
 
         const notice = document.getElementById('holiday-sync-notice');
         if (window.isDriveConnected) {
-            if (notice) notice.textContent = '🔄 팀 공용 휴일 목록을 불러오는 중...';
+            if (notice) notice.textContent = _hEn ? '🔄 Loading shared team holiday list...' : '🔄 팀 공용 휴일 목록을 불러오는 중...';
             await window.loadHolidaysFromDrive();
-            if (notice) notice.textContent = '☁️ 팀 공용(드라이브) 휴일 목록입니다. 등록/삭제하면 전체 팀과 공유됩니다.';
+            if (notice) notice.textContent = _hEn ? '☁️ This is the shared team holiday list (Drive). Changes sync with the whole team.' : '☁️ 팀 공용(드라이브) 휴일 목록입니다. 등록/삭제하면 전체 팀과 공유됩니다.';
         } else if (notice) {
-            notice.textContent = '⚠️ 구글 드라이브 미연동 상태입니다. [파일 → 🔵 드라이브 연동하기]를 먼저 눌러주세요. 지금 등록해도 팀과 공유되지 않습니다.';
+            notice.textContent = _hEn ? '⚠️ Google Drive not connected. Changes will not be shared with the team.' : '⚠️ 구글 드라이브 미연동 상태입니다. [파일 → 🔵 드라이브 연동하기]를 먼저 눌러주세요. 지금 등록해도 팀과 공유되지 않습니다.';
         }
         window.renderCustomHolidayList();
     };
@@ -2739,24 +2740,25 @@ ${mailText}`;
             if (pw.toLowerCase() === target) return true;
             let remain = maxTry - i - 1;
             if (remain === 0) break;
-            pw = prompt(`❌ 비밀번호가 틀렸습니다. (대/소문자 구분 없음)\n남은 시도: ${remain}회\n\n비밀번호를 다시 입력하세요.`);
+            pw = prompt(window._currentLang === 'en' ? `❌ Incorrect password. (case-insensitive)\nAttempts remaining: ${remain}\n\nEnter password again.` : `❌ 비밀번호가 틀렸습니다. (대/소문자 구분 없음)\n남은 시도: ${remain}회\n\n비밀번호를 다시 입력하세요.`);
             if (!pw) break;
         }
         return false;
     }
     window.changeAdminPassword = async function() {
         const oldPw = getAdminPassword();
-        if (!verifyAdminPassword('🔑 비밀번호를 변경하려면 현재 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
-            alert('❌ 비밀번호 인증 실패. 변경이 취소되었습니다.');
+        const _cpEn = window._currentLang === 'en';
+        if (!verifyAdminPassword(_cpEn ? '🔑 Enter current admin password to change it.\n(case-insensitive)' : '🔑 비밀번호를 변경하려면 현재 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
+            alert(_cpEn ? '❌ Authentication failed. Change cancelled.' : '❌ 비밀번호 인증 실패. 변경이 취소되었습니다.');
             return;
         }
-        let newPw = prompt('🔑 새 비밀번호를 입력하세요.');
+        let newPw = prompt(_cpEn ? '🔑 Enter new password.' : '🔑 새 비밀번호를 입력하세요.');
         if (!newPw || !newPw.trim()) return;
-        const confirmPw = prompt('🔑 새 비밀번호를 한 번 더 입력하세요. (확인)');
-        if (newPw !== confirmPw) { alert('❌ 입력한 두 비밀번호가 서로 다릅니다. 변경이 취소되었습니다.'); return; }
+        const confirmPw = prompt(_cpEn ? '🔑 Enter new password again. (confirm)' : '🔑 새 비밀번호를 한 번 더 입력하세요. (확인)');
+        if (newPw !== confirmPw) { alert(_cpEn ? '❌ Passwords do not match. Change cancelled.' : '❌ 입력한 두 비밀번호가 서로 다릅니다. 변경이 취소되었습니다.'); return; }
         newPw = newPw.trim();
-        if (!setAdminPassword(newPw)) { alert('❌ 비밀번호 저장에 실패했습니다.'); return; }
-        window.showToast(window._currentLang === 'en' ? '✅ Password changed.' : '✅ 비밀번호가 변경되었습니다.');
+        if (!setAdminPassword(newPw)) { alert(_cpEn ? '❌ Failed to save password.' : '❌ 비밀번호 저장에 실패했습니다.'); return; }
+        window.showToast(_cpEn ? '✅ Password changed.' : '✅ 비밀번호가 변경되었습니다.');
         // Drive 연동 상태면 자동 재암호화 + 해시 동기화
         try {
             const tokenObj  = gapi.client.getToken();
@@ -4108,7 +4110,7 @@ ${mailText}`;
                             localStorage.setItem('gantt_local_user', localName);
                             window.currentUserName = localName;
                             if (authBtn && !authBtn.innerText.includes('🔄')) {
-                                authBtn.innerText = `👤 ${localName} (드라이브 연동하기)`;
+                                authBtn.innerText = `👤 ${localName} (${window._currentLang === 'en' ? 'Connect Drive' : '드라이브 연동하기'})`;
                                 authBtn.style.borderColor = '#28a745';
                                 authBtn.style.color = '#28a745';
                             }
@@ -4681,13 +4683,14 @@ window.deleteHistoryByDateRange = function() {
                 <table class="history-table">
                     <thead>
                         <tr>
-                            <th style="width:13%;">변경 일시</th>
-                            <th style="width:10%;">수정자</th>
-                            <th style="width:8%;">No (행)</th>
-                            <th style="width:11%;">변경 항목</th>
-                            <th style="width:21%;">변경 전 (Old)</th>
-                            <th style="width:21%;">변경 후 (New)</th>
-                            <th style="width:16%;">사유</th>
+                            const _hisEn = window._currentLang === 'en';
+                            <th style="width:13%;">${_hisEn ? 'Date/Time' : '변경 일시'}</th>
+                            <th style="width:10%;">${_hisEn ? 'Editor' : '수정자'}</th>
+                            <th style="width:8%;">${_hisEn ? 'No (Row)' : 'No (행)'}</th>
+                            <th style="width:11%;">${_hisEn ? 'Changed Field' : '변경 항목'}</th>
+                            <th style="width:21%;">${_hisEn ? 'Before (Old)' : '변경 전 (Old)'}</th>
+                            <th style="width:21%;">${_hisEn ? 'After (New)' : '변경 후 (New)'}</th>
+                            <th style="width:16%;">${_hisEn ? 'Reason' : '사유'}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -4697,7 +4700,7 @@ window.deleteHistoryByDateRange = function() {
                 html += `
                     <tr>
                         <td style="color:#6c757d; font-size:11px;">${log.time}</td>
-                        <td style="font-weight:bold; color:#0056b3;">${escapeHtml(log.userName || "알 수 없음")}</td>
+                        <td style="font-weight:bold; color:#0056b3;">${escapeHtml(log.userName || (_hisEn ? "Unknown" : "알 수 없음"))}</td>
                         <td style="font-weight:bold;">${escapeHtml(log.rowName)}</td>
                         <td><span class="badge" style="background:#e7f1ff; color:#0056b3;">${escapeHtml(log.colName)}</span></td>
                         <td class="val-old">${escapeHtml(log.oldVal || "-")}</td>
@@ -5877,6 +5880,12 @@ window.deleteHistoryByDateRange = function() {
             if (_wrTab && _wrTab.style.display !== 'none') window.showWeeklyReport();
         }
 
+        // [알람 탭] 열려있으면 서버상태 포함 재렌더
+        if (window.renderAlarmTab) {
+            const _alTab = document.getElementById('tab-alarm');
+            if (_alTab && _alTab.style.display !== 'none') window.renderAlarmTab();
+        }
+
         if (globalData) { 
             renderTable(globalData);
             generateFilters(globalData);
@@ -6768,7 +6777,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             const mcLatestDate = revChangeLogs.length ? revChangeLogs[revChangeLogs.length - 1].time : '-';
             const _mcUnitTag = unitLabel ? '[' + unitLabel + ']' : '';
             const mcData = [
-                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', _mcUnitTag + 'PROTO A', '', _mcUnitTag + 'PROTO B', '', _mcUnitTag + 'MP', '', '최종수정: ' + mcLatestDate],
+                ['TYPE', 'ITEM', 'GROUP', 'P/N', 'Specification', _mcUnitTag + 'PROTO A', '', _mcUnitTag + 'PROTO B', '', _mcUnitTag + 'MP', '', (window._currentLang === 'en' ? 'Last Modified: ' : '최종수정: ') + mcLatestDate],
                 ['', '', '', '', '', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Cost($)', 'NRE', 'Note'],
             ];
             const valid = (rows || []).filter(function(r) { const t = String(r.type || '').toUpperCase().replace(/\s/g, ''); return t !== 'SUBTOTAL' && t !== 'TOTAL'; });
@@ -7038,7 +7047,7 @@ window.handleAuthClick = function() {
         }
 
         const authBtn = document.getElementById('auth_button');
-        authBtn.innerText = "🔄 연동 진행 중...";
+        authBtn.innerText = window._currentLang === 'en' ? "🔄 Connecting..." : "🔄 연동 진행 중...";
         authBtn.disabled = true;
 
             tokenClient.callback = async (resp) => {
@@ -7047,11 +7056,11 @@ window.handleAuthClick = function() {
                 // ✅ 로컬 이름이 있으면 복원, 없으면 기본값
                 const savedName = localStorage.getItem('gantt_local_user');
                 if (savedName) {
-                    authBtn.innerText = `👤 ${savedName} (드라이브 연동하기)`;
+                    authBtn.innerText = `👤 ${savedName} (${window._currentLang === 'en' ? 'Connect Drive' : '드라이브 연동하기'})`;
                     authBtn.style.borderColor = '#28a745';
                     authBtn.style.color = '#28a745';
                 } else {
-                    authBtn.innerText = "🔵 구글 드라이브 연동하기";
+                    authBtn.innerText = window._currentLang === 'en' ? "🔵 Connect Google Drive" : "🔵 구글 드라이브 연동하기";
                     authBtn.style.borderColor = '#4285F4';
                     authBtn.style.color = '#4285F4';
                 }
@@ -7067,7 +7076,7 @@ window.handleAuthClick = function() {
 
             if (!(window.gapi && gapi.client && gapi.client.drive)) {
                 alert("❌ 브라우저 캐시로 인해 구글 서버 연결이 꼬였습니다.\n키보드의 [Ctrl + F5]를 눌러 '강력 새로고침' 후 다시 시도해 주세요.");
-                authBtn.innerText = "🔵 구글 드라이브 연동하기";
+                authBtn.innerText = window._currentLang === 'en' ? "🔵 Connect Google Drive" : "🔵 구글 드라이브 연동하기";
                 authBtn.disabled = false;
                 return;
             }
@@ -7086,7 +7095,7 @@ window.handleAuthClick = function() {
 
                 // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
                 setTimeout(() => {
-                    loadFromGoogleDrive();
+                    loadFromGoogleDrive(true); // silent
                 }, 600);
 
             } catch(e) {
@@ -12817,7 +12826,7 @@ window._makeDraggable('notice-modal',        'notice-modal-header');
 
     function wrRenderTimeline() {
         const tl = window.wrGetLevel0Timeline();
-        if (tl.items.length === 0) return '<div style="color:#999; padding:10px 0;">0레벨 항목에 날짜가 없어 타임라인을 표시할 수 없습니다.</div>';
+        if (tl.items.length === 0) return '<div style="color:#999; padding:10px 0;">' + (window._currentLang === 'en' ? 'No date set on Level 0 items — timeline unavailable.' : '0레벨 항목에 날짜가 없어 타임라인을 표시할 수 없습니다.') + '</div>';
         const span = Math.max(1, tl.maxTs - tl.minTs);
         const sorted = tl.items.slice().sort(function(a, b) { return a.start - b.start; });
 
@@ -13983,7 +13992,7 @@ window.renderSummaryTimeline = function() {
     }
     const tl = window.wrGetLevel0Timeline();
     if (!tl.items || tl.items.length === 0) {
-        container.innerHTML = '<div style="color:#999; padding:10px 0;">0레벨 항목에 날짜가 없어 타임라인을 표시할 수 없습니다.</div>';
+        container.innerHTML = '<div style="color:#999; padding:10px 0;">' + (window._currentLang === 'en' ? 'No date set on Level 0 items — timeline unavailable.' : '0레벨 항목에 날짜가 없어 타임라인을 표시할 수 없습니다.') + '</div>';
         return;
     }
     const span = Math.max(1, tl.maxTs - tl.minTs);
@@ -15884,10 +15893,18 @@ window.sumRenderHistoryTable = function() {
     if (!table) return;
     const logs = (window.tabData && window.tabData.sumChangeLog) || [];
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">' + (window._currentLang === 'en' ? 'No change history.' : '수정 이력이 없습니다.') + '</td></tr>'; return; }
-    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th></tr></thead><tbody>';
+    const _hisEn = window._currentLang === 'en';
+    let html = '<thead><tr>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Time' : '시간') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Editor' : '수정자') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Item' : '항목') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Field' : '필드') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Before' : '변경 전') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'After' : '변경 후') + '</th>'
+        + '</tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
-            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || (_hisEn ? 'Unknown' : '알 수 없음')) + '</td>'
             + '<td style="padding:4px 8px; font-weight:bold;">' + (log.row || '') + '</td>'
             + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (log.field || '') + '</span></td>'
             + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
@@ -16933,10 +16950,19 @@ window.addrRenderHistoryTable = function() {
     const logs = (window.tabData && window.tabData.addressChangeLog) || [];
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
     const fieldLabel = { name: '이름', nameEn: '영문 이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
-    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">이름</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th><th style="padding:4px 8px;">사유</th></tr></thead><tbody>';
+    const _hisEn = window._currentLang === 'en';
+    let html = '<thead><tr>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Time' : '시간') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Editor' : '수정자') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Name' : '이름') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Field' : '필드') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Before' : '변경 전') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'After' : '변경 후') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Reason' : '사유') + '</th>'
+        + '</tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
-            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || (_hisEn ? 'Unknown' : '알 수 없음')) + '</td>'
             + '<td style="padding:4px 8px; font-weight:bold;">' + (log.row || '') + '</td>'
             + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (fieldLabel[log.field] || log.field) + '</span></td>'
             + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
@@ -17099,10 +17125,19 @@ window.bsRenderHistoryTable = function() {
     const logs = (window.tabData && window.tabData.bsChangeLog) || [];
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
     const fieldLabel = { type: 'TYPE', sub: 'TYPE2', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' };
-    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">TYPE</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th><th style="padding:4px 8px;">사유</th></tr></thead><tbody>';
+    const _hisEn = window._currentLang === 'en';
+    let html = '<thead><tr>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Time' : '시간') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Editor' : '수정자') + '</th>'
+        + '<th style="padding:4px 8px;">TYPE</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Field' : '필드') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Before' : '변경 전') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'After' : '변경 후') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Reason' : '사유') + '</th>'
+        + '</tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
-            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || (_hisEn ? 'Unknown' : '알 수 없음')) + '</td>'
             + '<td style="padding:4px 8px; font-weight:bold;">' + (log.row || '') + '</td>'
             + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (fieldLabel[log.field] || log.field) + '</span></td>'
             + '<td style="padding:4px 8px; color:#c92a2a;">' + (log.oldVal || '-') + '</td>'
@@ -17432,7 +17467,7 @@ function bmAlertModal(message) {
         modal.innerHTML =
             '<div style="background:#fff;border-radius:10px;padding:26px 30px;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">'
             + '<div id="bm-alert-msg" style="font-size:14px;color:#333;margin-bottom:18px;"></div>'
-            + '<button id="bm-alert-ok" style="padding:9px 26px;background:#0056b3;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">확인</button></div>';
+            + '<button id="bm-alert-ok" style="padding:9px 26px;background:#0056b3;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">' + (window._currentLang === 'en' ? 'OK' : '확인') + '</button></div>';
         document.body.appendChild(modal);
     }
     document.getElementById('bm-alert-msg').textContent = message;
@@ -17515,10 +17550,17 @@ window.mcAddUnit = function() {
     const isNaming = !window.mcActiveUnit && hasDefaultData;
 
     ov.dataset.mode = isNaming ? 'name-existing' : 'add-new';
-    if (titleEl) titleEl.textContent = isNaming ? '📌 지금 있는 M.C Table 데이터, 제품구분자를 정해주세요' : '➕ 제품구분자 추가';
+    const _muEn = window._currentLang === 'en';
+    if (titleEl) titleEl.textContent = isNaming
+        ? (_muEn ? '📌 Please name the existing M.C Table data' : '📌 지금 있는 M.C Table 데이터, 제품구분자를 정해주세요')
+        : (_muEn ? '➕ Add Product Category' : '➕ 제품구분자 추가');
     if (descEl) descEl.innerHTML = isNaming
-        ? '지금까지 입력하신 견적(R1~R5)은 그대로 유지되고, <b>이름표만</b> 붙습니다.<br>예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ 취소하시면 우선 "미지정"으로 저장되고, 나중에 언제든 바꾸실 수 있습니다.'
-        : '예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ 위 예시가 아니어도, 이 프로젝트에 맞는 이름을 자유롭게 적으셔도 됩니다.';
+        ? (_muEn
+            ? 'Your existing estimates (R1~R5) will be kept as-is — only a <b>label</b> will be added.<br>e.g.) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ If cancelled, saved as <b>"Unassigned"</b> — you can rename it anytime.'
+            : '지금까지 입력하신 견적(R1~R5)은 그대로 유지되고, <b>이름표만</b> 붙습니다.<br>예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ 취소하시면 우선 \"미지정\"으로 저장되고, 나중에 언제든 바꾸실 수 있습니다.')
+        : (_muEn
+            ? 'e.g.) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ Any name that fits your project is fine.'
+            : '예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>※ 위 예시가 아니어도, 이 프로젝트에 맞는 이름을 자유롭게 적으셔도 됩니다.');
 
     input.value = '';
     ov.style.display = 'flex';
@@ -17534,8 +17576,9 @@ window.mcRenameUnit = function(oldName) {
     if (!ov || !input) return;
     ov.dataset.mode = 'rename';
     ov.dataset.renameTarget = oldName;
-    if (titleEl) titleEl.textContent = '✏️ "' + oldName + '" 이름 바꾸기';
-    if (descEl) descEl.innerHTML = '새 이름을 입력하세요. (기존 견적 데이터는 그대로 유지됩니다)';
+    const _mrEn = window._currentLang === 'en';
+    if (titleEl) titleEl.textContent = _mrEn ? '✏️ Rename "' + oldName + '"' : '✏️ "' + oldName + '" 이름 바꾸기';
+    if (descEl) descEl.innerHTML = _mrEn ? 'Enter a new name. (Existing estimate data will be kept.)' : '새 이름을 입력하세요. (기존 견적 데이터는 그대로 유지됩니다)';
     input.value = oldName;
     ov.style.display = 'flex';
     setTimeout(function() { input.focus(); input.select(); }, 50);
@@ -17956,10 +17999,20 @@ window.mcRenderHistoryTable = function() {
     const fieldLabel = { type:'TYPE', item:'ITEM', group:'GROUP', pn:'P/N', spec:'Specification',
         protoCost:'PROTO A Cost', protoNre:'PROTO A NRE', protoBCost:'PROTO B Cost', protoBNre:'PROTO B NRE',
         mpCost:'MP Cost', mpNre:'MP NRE', note:'Note' };
-    let html = '<thead><tr><th style="padding:4px 8px;">시간</th><th style="padding:4px 8px;">수정자</th><th style="padding:4px 8px;">리비전</th><th style="padding:4px 8px;">항목</th><th style="padding:4px 8px;">필드</th><th style="padding:4px 8px;">변경 전</th><th style="padding:4px 8px;">변경 후</th><th style="padding:4px 8px;">사유</th></tr></thead><tbody>';
+    const _hisEn = window._currentLang === 'en';
+    let html = '<thead><tr>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Time' : '시간') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Editor' : '수정자') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Revision' : '리비전') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Item' : '항목') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Field' : '필드') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Before' : '변경 전') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'After' : '변경 후') + '</th>'
+        + '<th style="padding:4px 8px;">' + (_hisEn ? 'Reason' : '사유') + '</th>'
+        + '</tr></thead><tbody>';
     logs.slice().reverse().forEach(function(log) {
         html += '<tr><td style="padding:4px 8px; color:#6c757d;">' + log.time + '</td>'
-            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || '알 수 없음') + '</td>'
+            + '<td style="padding:4px 8px; font-weight:bold; color:#0056b3;">' + (log.userName || (_hisEn ? 'Unknown' : '알 수 없음')) + '</td>'
             + '<td style="padding:4px 8px; text-align:center;">' + log.rev + '</td>'
             + '<td style="padding:4px 8px; font-weight:bold;">' + log.row + '</td>'
             + '<td style="padding:4px 8px;"><span class="badge" style="background:#e7f1ff; color:#0056b3;">' + (fieldLabel[log.field] || log.field) + '</span></td>'
