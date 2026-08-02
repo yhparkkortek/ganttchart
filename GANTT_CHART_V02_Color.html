@@ -15147,8 +15147,19 @@ window._renderNoticeHistory=window.renderNoticeTab;
 
 // 주소록에서 이름 선택 시 Chat ID 자동입력
 window._tgAutofillFromAddr = function(nameInput) {
-    const name   = nameInput.value.trim();
+    const name = nameInput.value.trim();
     if (!name) return;
+    // datalist가 비어있으면 먼저 채움 (openAlarmSettings를 거치지 않은 경우 대비)
+    const nameList = document.getElementById('alarm-cc-namelist');
+    if (nameList && !nameList.children.length) {
+        const addressBook = (window.tabData || {}).addressBook || [];
+        const opts = [];
+        addressBook.forEach(function(p) {
+            if (p.name)   opts.push(p.name);
+            if (p.nameEn) opts.push(p.nameEn);
+        });
+        nameList.innerHTML = opts.map(function(n) { return '<option value="' + n.replace(/"/g,'&quot;') + '">'; }).join('');
+    }
     const person = window._addrFindByName ? window._addrFindByName(name) : null;
     if (!person) return;
     const chatIdEl = document.getElementById('tg-m-chatid');
