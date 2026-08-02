@@ -225,7 +225,7 @@
     .history-body { padding: 0; overflow-y: auto; flex: 1; }
     .history-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     .history-table th, .history-table td { border: 1px solid #e9ecef; padding: 10px; text-align: left; word-break: break-all; }
-    .history-table th { background: #e9ecef; position: sticky; top: 0; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.15); }
+    .history-table th { background: #e9ecef; position: sticky; top: 0; z-index: 10; box-shadow: 0 2px 6px rgba(0,0,0,0.18); }
     .history-empty { padding: 50px; text-align: center; color: #adb5bd; font-size: 15px; }
     .val-old { color: #dc3545; text-decoration: line-through; }
     .val-new { color: #0f5132; font-weight: bold; }
@@ -972,8 +972,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <span id="gantt-history-toggle-icon">▶</span>
                 <span data-i18n="h-history">🕒 변경 이력 확인</span>
             </div>
-            <div id="gantt-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
-                <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
+            <div id="gantt-history-body" style="display:none; max-height:320px; overflow-y:auto;">
+                <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 15px; margin-bottom:0; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
                     <label>시작일 <input type="date" id="history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
                     <label>종료일 <input type="date" id="history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
                     <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
@@ -1231,7 +1231,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <span id="addr-history-toggle-icon">▶</span>
                     <span data-i18n="h-history">변경 이력 확인</span>
                 </div>
-                <div id="addr-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                <div id="addr-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                     <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
                         <label>시작일 <input type="date" id="addr-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
                         <label>종료일 <input type="date" id="addr-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
@@ -1398,7 +1398,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <span id="sum-history-toggle-icon">▶</span>
                 <span data-i18n="h-history">🕒 변경 이력 확인</span>
             </div>
-            <div id="sum-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+            <div id="sum-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                 <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
                     <label>시작일 <input type="date" id="sum-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
                     <label>종료일 <input type="date" id="sum-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
@@ -1452,7 +1452,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <span id="bs-history-toggle-icon">▶</span>
                     <span data-i18n="h-history">🕒 변경 이력 확인</span>
                 </div>
-                <div id="bs-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                <div id="bs-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                     <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
                         <label>시작일 <input type="date" id="bs-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
                         <label>종료일 <input type="date" id="bs-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
@@ -1469,7 +1469,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-mctable" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
-            <h2>💰 M.C Table<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+            <h2>💰 M.C Table<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="mc-help-tip">
                 📌 <b>ITEM</b> 열에 <b>"etc."</b>(소문자)를 적으면, 그 행이 현재 그룹의 마지막 행이 되어 SUBTOTAL이 계산됩니다.<br><br>
                 📌 <b>NO</b> 열 클릭: 메뉴(행 추가/삭제/이동) · <b>Ctrl/Shift</b> 클릭: 여러 행 선택<br><br>
                 📌 TYPE이 비어있는 행은 바로 위 행의 TYPE을 그대로 이어받은 것으로 간주됩니다 (그룹 구분용).
@@ -1587,7 +1587,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </span>
                     <span id="mc-history-lastedit" style="font-size:11px; font-weight:normal; color:#888;"></span>
                 </div>
-                <div id="mc-history-body" style="display:none; padding:10px 15px; max-height:320px; overflow-y:auto;">
+                <div id="mc-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                     <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
                         <label>시작일 <input type="date" id="mc-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
                         <label>종료일 <input type="date" id="mc-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
@@ -5765,6 +5765,16 @@ window.deleteHistoryByDateRange = function() {
                 btn.textContent = _en ? (btn.textContent.includes('🗑️') ? '🗑️ Delete Range' : 'Delete Range') : (btn.textContent.includes('🗑️') ? '🗑️ 구간 삭제' : '구간 삭제');
             }
         });
+
+        // [M.C Table] ℹ️ 안내문 번역
+        const _mcTip = document.getElementById('mc-help-tip');
+        if (_mcTip) _mcTip.innerHTML = _en
+            ? '📌 Type <b>"etc."</b> (lowercase) in the <b>ITEM</b> column to mark the last row of the current group — SUBTOTAL will be calculated at that point.<br><br>'
+            + '📌 Click <b>NO</b> column: row menu (add/delete/move) · <b>Ctrl/Shift</b> click: multi-select rows<br><br>'
+            + '📌 Rows with an empty TYPE inherit the TYPE from the row above (used for group grouping).'
+            : '📌 <b>ITEM</b> 열에 <b>"etc."</b>(소문자)를 적으면, 그 행이 현재 그룹의 마지막 행이 되어 SUBTOTAL이 계산됩니다.<br><br>'
+            + '📌 <b>NO</b> 열 클릭: 메뉴(행 추가/삭제/이동) · <b>Ctrl/Shift</b> 클릭: 여러 행 선택<br><br>'
+            + '📌 TYPE이 비어있는 행은 바로 위 행의 TYPE을 그대로 이어받은 것으로 간주됩니다 (그룹 구분용).';
 
         // [Brief SPEC / M.C Table] 접기·펴기 버튼 텍스트 즉시 반영
         const _bsBtn = document.getElementById('bs-toggle-hidden-btn');
@@ -16546,7 +16556,7 @@ window.populateTabData = function() {
                 const _mcRevLogs = (td.mcChangeLog || []).filter(function(l) { return l.rev === curRev; });
                 const _mcLatestDate = _mcRevLogs.length ? _mcRevLogs[_mcRevLogs.length - 1].time : '-';
                 const _mcLastEditEl = document.getElementById('mc-history-lastedit');
-                if (_mcLastEditEl) _mcLastEditEl.textContent = '최종수정: ' + _mcLatestDate;
+                if (_mcLastEditEl) _mcLastEditEl.textContent = (window._currentLang === 'en' ? 'Last Modified: ' : '최종수정: ') + _mcLatestDate;
                 let row2 = '<tr>';
                 if (!hidePairs.protoA) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
                 if (!hidePairs.protoB) row2 += '<th style="width:70px; border-left:2px solid #2c5f8a;">Cost($)</th><th style="width:90px;">NRE</th>';
