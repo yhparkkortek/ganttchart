@@ -756,12 +756,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
     <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px;">
-        <div onclick="const b=document.getElementById('install-guide');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('span').textContent=b.style.display==='none'?'▼ 펼치기':'▲ 접기'"
+        <div onclick="const b=document.getElementById('install-guide');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('#install-guide-arrow').textContent=b.style.display==='none'?(window._currentLang==='en'?'▼ Expand':'▼ 펼치기'):(window._currentLang==='en'?'▲ Collapse':'▲ 접기')"
              style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
-          <span style="font-size:12px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-          <span style="font-size:11px; color:#7a5210;">▼ 펼치기</span>
+          <span id="install-guide-title" style="font-size:12px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+          <span id="install-guide-arrow" style="font-size:11px; color:#7a5210;">▼ 펼치기</span>
         </div>
         <div id="install-guide" style="display:none; margin-top:10px; font-size:12px; color:#555; line-height:2.1;">
+          <div id="install-guide-content">
           <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:11.5px; color:#1a3a5c;">
             💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.
           </div>
@@ -779,6 +780,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .bat</a><br>
           <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭 → 검은 창에 <b>http://127.0.0.1:5000</b> ✅<br>
           <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b>
+          </div>
         </div>
       </div>
     </div>
@@ -810,8 +812,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
           <p style="margin:0; font-size:12px; font-weight:bold; color:#555;"><span id="as-email-recv-label">👥 이메일 수신자</span> <span id="as-email-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
           <span style="display:flex; gap:4px;">
-            <button type="button" onclick="window.toggleAllCc(true)" style="padding:2px 8px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 ON</button>
-            <button type="button" onclick="window.toggleAllCc(false)" style="padding:2px 8px; border:1px solid #999; color:#999; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 OFF</button>
+            <button id="as-all-on-btn" type="button" onclick="window.toggleAllCc(true)" style="padding:2px 8px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 ON</button>
+            <button id="as-all-off-btn" type="button" onclick="window.toggleAllCc(false)" style="padding:2px 8px; border:1px solid #999; color:#999; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 OFF</button>
           </span>
         </div>
         <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px;"></div>
@@ -5672,6 +5674,28 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+
+        // [알람설정 설치안내] 제목/화살표/내용 번역
+        const _igTitle = document.getElementById('install-guide-title');
+        if (_igTitle) _igTitle.textContent = _en ? '📥 First-time Setup Guide' : '📥 처음 사용자 — 설치 안내';
+        const _igArrow = document.getElementById('install-guide-arrow');
+        if (_igArrow) {
+            const _igOpen = document.getElementById('install-guide') && document.getElementById('install-guide').style.display !== 'none';
+            _igArrow.textContent = _igOpen ? (_en ? '▲ Collapse' : '▲ 접기') : (_en ? '▼ Expand' : '▼ 펼치기');
+        }
+        const _igContent = document.getElementById('install-guide-content');
+        if (_igContent) _igContent.innerHTML = _en ? `...(영문 내용)...` : `...(한글 내용)...`;
+
+        // [AI팝업 설치안내] ms-install-guide 번역
+        const _msTitle = document.getElementById('ms-install-title');
+        if (_msTitle) _msTitle.textContent = _en ? '📥 First-time Setup Guide' : '📥 처음 사용자 — 설치 안내';
+        const _msArrow = document.getElementById('ms-install-arrow');
+        if (_msArrow) {
+            const _msOpen = document.getElementById('ms-install-guide') && document.getElementById('ms-install-guide').style.display !== 'none';
+            _msArrow.textContent = _msOpen ? (_en ? '▲ Collapse' : '▲ 접기') : (_en ? '▼ Expand' : '▼ 펼치기');
+        }
+        const _msContent = document.getElementById('ms-install-guide-content');
+        if (_msContent) _msContent.innerHTML = _en ? `...(영문 내용)...` : `...(한글 내용)...`;
 
         // [Notice] 발송 로그 제목
         const _nlTitle = document.getElementById('notice-log-title');
