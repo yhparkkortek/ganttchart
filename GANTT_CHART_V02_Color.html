@@ -1984,7 +1984,7 @@ ${mailText}`;
 
     window.loadFromGoogleDrive = async function() {
         const _ldEn = window._currentLang === 'en';
-        document.getElementById('file-status').textContent = _ldEn ? "📂 Loading project list from Google Drive..." : "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...";
+        window.showToast(_ldEn ? "📂 Loading project list from Google Drive..." : "📂 공용 드라이브에서 프로젝트 목록을 불러오는 중...", 'info');
         try {
             let response = await gapi.client.drive.files.list({
                 q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
@@ -1995,12 +1995,12 @@ ${mailText}`;
             let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_') && f.name !== PROMPT_DRIVE_FILENAME && f.name !== HOLIDAY_DRIVE_FILENAME; });
             if (!files || files.length === 0) {
                 alert(_ldEn ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.");
-                document.getElementById('file-status').textContent = _ldEn ? "No project files in shared storage." : "공용 저장소에 프로젝트 파일이 없습니다.";
+                window.showToast(_ldEn ? "No project files in shared storage." : "공용 저장소에 프로젝트 파일이 없습니다.", 'error');
                 return;
             }
             window.closeAllTopbarMenus(); // ✅ 드라이브 파일 목록 팝업 뜨기 전, 열려있던 파일 드롭다운 자동 닫기
             window.showDriveFileModal(files);
-            document.getElementById('file-status').textContent = _ldEn ? "✅ Project list loaded. Please select a file." : "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.";
+            window.showToast(_ldEn ? "✅ Project list loaded. Please select a file." : "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.");
         } catch (err) { alert(_ldEn ? "Failed to load list: insufficient permissions or invalid folder ID." : "목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
 
@@ -2219,7 +2219,7 @@ ${mailText}`;
         if (typeof renderTable === 'function') renderTable(globalData);
         if (window.clearAllTabFields) window.clearAllTabFields(); // 💡 Summary/Brief SPEC/M.C Table/Address까지 함께 비움
 
-        document.getElementById('file-status').textContent = "📌 새 프로젝트를 시작합니다. 참조 엑셀을 다운로드해서 작성한 뒤 이 영역에 드래그하세요.";
+        window.showToast(window._currentLang === 'en' ? "📌 New project started. Download the template Excel and drag it here." : "📌 새 프로젝트를 시작합니다. 참조 엑셀을 다운로드해서 작성한 뒤 이 영역에 드래그하세요.", 'info');
         document.getElementById('new-project-modal-overlay').style.display = 'flex';
     };
 
@@ -2302,7 +2302,7 @@ ${mailText}`;
             if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
             const _svEn = window._currentLang === 'en';
-            document.getElementById('file-status').textContent = _svEn ? "💾 Saving data to Google Drive..." : "💾 공용 드라이브에 데이터를 저장하는 중...";
+            window.showToast(_svEn ? "💾 Saving data to Google Drive..." : "💾 공용 드라이브에 데이터를 저장하는 중...", 'info');
             
             let dynamicFileName = (window.driveSaveFilenameStr || window.exportFilenameStr || "GanttChart_Project") + ".json";
             
@@ -2334,7 +2334,7 @@ ${mailText}`;
             
             if (!token) {
                 alert("🔒 구글 인증 토큰을 확보하지 못했습니다.\n상단의 연동 버튼을 다시 클릭하여 로그인을 완료해 주세요.");
-                document.getElementById('file-status').textContent = _svEn ? "❌ Save failed: Auth token lost" : "❌ 저장 실패: 인증 토큰 유실";
+                window.showToast(_svEn ? "❌ Save failed: Auth token lost" : "❌ 저장 실패: 인증 토큰 유실", 'error');
                 return false;
             }
 
@@ -2358,7 +2358,7 @@ ${mailText}`;
                 window.showToast(window._currentLang === 'en'
                     ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
                     : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
-                document.getElementById('file-status').textContent = _svEn ? `🔄 Backup complete: ${dynamicFileName}` : `🔄 공용 저장소 백업 완료: ${dynamicFileName}`;
+                window.showToast(_svEn ? `🔄 Backup complete: ${dynamicFileName}` : `🔄 공용 저장소 백업 완료: ${dynamicFileName}`, 'success', 4000);
                 return true;
             } else {
                 console.error("구글 저장 실패 상세 정보:", file);
@@ -2381,18 +2381,18 @@ ${mailText}`;
                 }
                 
                 alert(_svEn ? `❌ Save failed\n\n${errorMsg}` : `❌ 저장 실패\n\n${errorMsg}`);
-                document.getElementById('file-status').textContent = _svEn ? "❌ Cloud backup failed" : "❌ 클라우드 백업 실패";
+                window.showToast(_svEn ? "❌ Cloud backup failed" : "❌ 클라우드 백업 실패", 'error');
             }
         } catch (err) { 
             alert(_svEn ? "Google Drive system error: " + err.message : "구글 드라이브 전송 시스템 에러: " + err.message); 
-            document.getElementById('file-status').textContent = _svEn ? "❌ System error" : "❌ 시스템 오류 발생";
+            window.showToast(_svEn ? "❌ System error" : "❌ 시스템 오류 발생", 'error');
             return false;
         }
     }
 
     // 💡 Backups 폴더의 백업 목록 조회
     window.loadBackupList = async function() {
-        document.getElementById('file-status').textContent = "🔄 백업 목록을 불러오는 중...";
+        window.showToast(window._currentLang === 'en' ? "🔄 Loading backup list..." : "🔄 백업 목록을 불러오는 중...", 'info');
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -2405,11 +2405,11 @@ ${mailText}`;
             let files = response.result.files;
             if (!files || files.length === 0) {
                 alert("아직 저장된 백업이 없습니다. (저장을 한 번 하면 백업이 생성됩니다)");
-                document.getElementById('file-status').textContent = "백업 파일이 없습니다.";
+                window.showToast(window._currentLang === 'en' ? "No backup files found." : "백업 파일이 없습니다.", 'error');
                 return;
             }
             window.showBackupFileModal(files);
-            document.getElementById('file-status').textContent = "🔄 백업 목록을 불러왔습니다. 복원할 시점을 선택해 주세요.";
+            window.showToast(window._currentLang === 'en' ? "🔄 Backup list loaded. Select a point to restore." : "🔄 백업 목록을 불러왔습니다. 복원할 시점을 선택해 주세요.");
         } catch (err) { alert("백업 목록 조회 실패: " + err.message); }
     };
 
@@ -2434,7 +2434,7 @@ ${mailText}`;
     window.executeRestoreBackup = async function(fileId, fileName) {
         window.closeDriveModal();
         if (!confirm(window._t(`[${fileName}] 백업으로 복원하시겠습니까?\n현재 화면의 내용은 사라지고 이 백업 시점으로 되돌아갑니다.\n(공용 드라이브 파일에는 아직 저장되지 않으니, 확인 후 [저장]을 눌러야 반영됩니다)`, `Restore from backup [${fileName}]?\nCurrent content will be replaced.\n(Not saved to Drive yet — press [Save] to apply.)`))) return;
-        document.getElementById('file-status').textContent = `🔄 [${fileName}] 백업을 복원하는 중...`;
+        window.showToast(window._currentLang === 'en' ? `🔄 Restoring [${fileName}]...` : `🔄 [${fileName}] 백업을 복원하는 중...`, 'info');
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
@@ -2454,14 +2454,14 @@ ${mailText}`;
                 if (window.populateTabData) window.populateTabData();
                 window.recalculateSchedules();
                 alert(`🎉 [${fileName}] 백업으로 복원되었습니다!\n확인 후 [저장] 버튼을 눌러 공용 드라이브에도 반영해주세요.`);
-                document.getElementById('file-status').textContent = `🔄 백업 복원 완료: ${fileName} (아직 저장 전)`;
+                window.showToast(window._currentLang === 'en' ? `🔄 Restore complete: ${fileName} (not saved yet)` : `🔄 백업 복원 완료: ${fileName} (아직 저장 전)`);
             }
         } catch (err) { alert("백업 복원 실패: " + err.message); }
     };
 
     window.executeLoadFile = async function(fileId, fileName) {
         window.closeDriveModal();
-        document.getElementById('file-status').textContent = `📂 [${fileName}] 데이터를 가져오는 중...`;
+        window.showToast(window._currentLang === 'en' ? `📂 Loading [${fileName}]...` : `📂 [${fileName}] 데이터를 가져오는 중...`, 'info');
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
@@ -2482,7 +2482,7 @@ ${mailText}`;
                 if (window.populateTabData) window.populateTabData();
                 window.currentDriveFileId = fileId;
                 window.recalculateSchedules();
-                document.getElementById('file-status').textContent = `✅ 공용 드라이브 동기화 완료: ${fileName}`;
+                window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
@@ -2829,8 +2829,7 @@ ${mailText}`;
     // ════════════════════════════════════════════════════════════
     window.recalculateSchedules = function() {
         if (globalData.length <= 1) return;
-        let statusEl = document.getElementById('file-status');
-        if (statusEl) statusEl.textContent = "일정을 재계산하는 중입니다...";
+        window.showToast(window._currentLang === 'en' ? "Recalculating schedule..." : "일정을 재계산하는 중입니다...", 'info');
 
         setTimeout(() => {
             let curD0 = "", curT1 = "", curT2 = "", curT3 = "", curT4 = "";
@@ -3021,7 +3020,7 @@ ${mailText}`;
             renderTable(globalData); applyFilters();
             window.pushUndoSnapshot();
             
-            if (statusEl) { statusEl.textContent = "✅ 일정이 업데이트 되었습니다."; }
+            window.showToast(window._currentLang === 'en' ? "✅ Schedule updated." : "✅ 일정이 업데이트 되었습니다.");
 
             if (typeof window.syncRowHighlight === 'function') {
                 window.syncRowHighlight();
@@ -3935,7 +3934,7 @@ ${mailText}`;
         // 드라이브 연동 유지 시 기존 로그 보존
         window.changeLogs = []; window.lastSavedLogCount = 0;
         
-        document.getElementById('file-status').textContent = "데이터를 분석하고 일정을 연산하는 중입니다...";
+        window.showToast(window._currentLang === 'en' ? "Analyzing data and computing schedule..." : "데이터를 분석하고 일정을 연산하는 중입니다...", 'info');
 
         for (let i = 0; i < totalFiles; i++) {
             let file = files[i]; let reader = new FileReader();
@@ -7498,7 +7497,7 @@ window.handleAuthClick = function() {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
             if (window.currentDriveFileId && currentLogs > savedLogs) {
-                document.getElementById('file-status').textContent = window._currentLang === 'en' ? "⏳ 3min idle detected — Auto-saving to Google Drive..." : "⏳ 3분 비활동 감지 - 구글 드라이브에 자동 저장 중...";
+                window.showToast(window._currentLang === 'en' ? "⏳ 3min idle — Auto-saving to Google Drive..." : "⏳ 3분 비활동 감지 - 구글 드라이브에 자동 저장 중...", 'info');
                 saveToGoogleDrive(); 
             }
         }, 180000); 
