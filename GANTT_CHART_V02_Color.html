@@ -5829,7 +5829,28 @@ window.deleteHistoryByDateRange = function() {
             'mail-right-insert-btn-label': { ko:'✅ 개별 등록',                en:'✅ Register' },
             'mail-right-inbox-btn-label':  { ko:'📥 보관함',                   en:'📥 Inbox' },
         };
+
         Object.entries(_mailIdTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+
+        // [업무 보관함 모달] 헤더 번역
+        const _ibxTitle = document.getElementById('inbox-modal-title');
+        if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? 'Task Inbox' : '업무 보관함';
+        const _ibxClearBtn = document.getElementById('inbox-clear-done-btn');
+        if (_ibxClearBtn) _ibxClearBtn.textContent = _en ? '🧹 Clear Done' : '🧹 처리됨 정리';
+
+        // [업무 배분 모달]
+        const _ibxDistTexts = {
+            'inbox-dist-title':        { ko:'📤 다른 프로젝트로 전송',               en:'📤 Send to Another Project' },
+            'inbox-dist-task-label':   { ko:'전송 업무',                              en:'Task' },
+            'inbox-dist-target-label': { ko:'대상',                                   en:'Target' },
+            'inbox-dist-select-label': { ko:'삽입할 개발단계(L0) 구간을 선택하세요.', en:'Select a development stage (L0) to insert into.' },
+            'inbox-dist-exec-label':   { ko:'🚀 전송 실행',                           en:'🚀 Send' },
+            'inbox-dist-auto-label':   { ko:'🎯 다른 프로젝트 자동위치(시작일 기준)', en:'🎯 Auto-position in target project (by start date)' },
+        };
+        Object.entries(_ibxDistTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
@@ -8850,12 +8871,14 @@ window.renderTaskInbox = function() {
         document.body.appendChild(step2);
     }
     const items = window.TaskInbox.load();
+    const _ibEn = window._currentLang === 'en';
     if (items.length === 0) {
-        listEl.innerHTML = '<div style="padding:40px 0; text-align:center; color:#aaa; font-size:13px;">보관함이 비어 있습니다.<br>메일 분석 화면에서 [📥 보관함] 버튼으로 업무를 담아주세요.</div>';
+        listEl.innerHTML = '<div style="padding:40px 0; text-align:center; color:#aaa; font-size:13px;">' + (_ibEn ? 'Inbox is empty.<br>Use the [📥 Inbox] button in the mail analysis screen to add tasks.' : '보관함이 비어 있습니다.<br>메일 분석 화면에서 [📥 보관함] 버튼으로 업무를 담아주세요.') + '</div>';
         return;
     }
     const l0List = window.getCurrentL0List();
     const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;' };
+    const statusLabel = _ibEn ? { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent' } : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨' };
     let html = '';
     items.forEach(function(it) {
         const t = it.task || {};
@@ -8865,11 +8888,11 @@ window.renderTaskInbox = function() {
         const wantName = l0List.some(function(sec) { return sec.name === devStageVal; })
             ? devStageVal
             : window.pickL0SectionByDate(l0List, t['시작일'] || '');
-        const l0Options = ['<option value="__END__">(맨 끝에 추가)</option>']
+        const l0Options = ['<option value="__END__">' + (_ibEn ? '(Append at end)' : '(맨 끝에 추가)') + '</option>']
             .concat(l0List.map(function(sec) {
                 const selAttr = (sec.name === wantName) ? ' selected' : '';
                 const range = window.formatYM(sec.startTs) + '~' + window.formatYM(sec.endTs);
-                return '<option value="' + escapeHtml(sec.name) + '"' + selAttr + '>' + escapeHtml(sec.name) + ' 구간 끝 (' + range + ')</option>';
+                return '<option value="' + escapeHtml(sec.name) + '"' + selAttr + '>' + escapeHtml(sec.name) + (_ibEn ? ' end (' : ' 구간 끝 (') + range + ')</option>';
             })).join('');
         const dateStr = (t['시작일'] || '?') + ' ~ ' + (t['완료일'] || '?');
         const when = it.addedAt ? new Date(it.addedAt).toLocaleString() : '';
@@ -8877,30 +8900,30 @@ window.renderTaskInbox = function() {
         <div style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fff;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <div style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</div>
-                <span style="font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${it.status}</span>
+                <span style="font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
                 ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''} · ${escapeHtml(it.source || '')} · ${when}
-                <a href="javascript:void(0)" onclick="var d=document.getElementById('inbox-detail-${it.uid}'); var open=d.style.display==='none'; d.style.display=open?'block':'none'; this.textContent=open?'▲ 상세 접기':'▼ 상세 보기';" style="margin-left:6px; color:#1971c2; text-decoration:none; font-weight:bold;">▼ 상세 보기</a>
+                <a href="javascript:void(0)" onclick="var d=document.getElementById('inbox-detail-${it.uid}'); var open=d.style.display==='none'; d.style.display=open?'block':'none'; this.textContent=open?(window._currentLang==='en'?'▲ Collapse':'▲ 상세 접기'):(window._currentLang==='en'?'▼ Details':'▼ 상세 보기');" style="margin-left:6px; color:#1971c2; text-decoration:none; font-weight:bold;">${_ibEn ? '▼ Details' : '▼ 상세 보기'}</a>
             </div>
             <div id="inbox-detail-${it.uid}" style="display:none; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
-                <div><b>업무명</b> : ${escapeHtml(t['업무명'] || '')}</div>
-                <div><b>상세내용</b> : <span style="white-space:pre-wrap;">${escapeHtml((t['상세내용'] || '').toString())}</span></div>
-                <div><b>기간</b> : ${escapeHtml(t['시작일'] || '?')} ~ ${escapeHtml(t['완료일'] || '?')} · <b>상태</b> : ${escapeHtml(t['상태'] || '진행')} · <b>WBS레벨</b> : L${escapeHtml(String(t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4))}</div>
-                ${(it.history && it.history.length) ? '<div style="margin-top:4px;"><b>이력</b> : ' + it.history.map(function(h){ return escapeHtml((h.time || '') + ' ' + (h.type || '') + ' → ' + (h.target || '')); }).join('<br>　　　　') + '</div>' : ''}
+                <div><b>${_ibEn ? 'Task' : '업무명'}</b> : ${escapeHtml(t['업무명'] || '')}</div>
+                <div><b>${_ibEn ? 'Detail' : '상세내용'}</b> : <span style="white-space:pre-wrap;">${escapeHtml((t['상세내용'] || '').toString())}</span></div>
+                <div><b>${_ibEn ? 'Period' : '기간'}</b> : ${escapeHtml(t['시작일'] || '?')} ~ ${escapeHtml(t['완료일'] || '?')} · <b>${_ibEn ? 'Status' : '상태'}</b> : ${escapeHtml(t['상태'] || '진행')} · <b>${_ibEn ? 'WBS Level' : 'WBS레벨'}</b> : L${escapeHtml(String(t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4))}</div>
+                ${(it.history && it.history.length) ? '<div style="margin-top:4px;"><b>' + (_ibEn ? 'History' : '이력') + '</b> : ' + it.history.map(function(h){ return escapeHtml((h.time || '') + ' ' + (h.type || '') + ' → ' + (h.target || '')); }).join('<br>　　　　') + '</div>' : ''}
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 140px; min-width:140px; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
-                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap; background:#2c5f8a; color:#fff; flex-shrink:0;">➡️ 현재 프로젝트</button>
-                <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22; flex-shrink:0;">📤 다른 프로젝트</button>
+                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap; background:#2c5f8a; color:#fff; flex-shrink:0;">➡️ ${_ibEn ? 'Current Project' : '현재 프로젝트'}</button>
+                <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22; flex-shrink:0;">📤 ${_ibEn ? 'Other Project' : '다른 프로젝트'}</button>
                 <button class="action-btn" onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="inbox-auto-${it.uid}" checked onchange="window.inboxRecomputePreview('${it.uid}')" style="cursor:pointer;">
-                    🎯 현재 프로젝트 자동위치(시작일 기준)
+                    ${_ibEn ? '🎯 Auto-position in current project (by start date)' : '🎯 현재 프로젝트 자동위치(시작일 기준)'}
                 </label>
                 <span id="inbox-preview-${it.uid}" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
             </div>
@@ -9868,14 +9891,14 @@ window.updateInboxBadge();
         <div id="inbox-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
                     cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
-            <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+            <span id="inbox-modal-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
                 📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
                 ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
                 📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>
                 전송된 업무가 팀원의 동시 저장으로 유실된 경우, '전송됨' 항목을 같은 방법으로 재전송하면 복구됩니다.
             </span></span></span>
             <div style="display:flex; gap:6px; flex-shrink:0;">
-                <button class="action-btn" onclick="window.inboxClearDone()" style="font-size:12px;">🧹 처리됨 정리</button>
+                <button id="inbox-clear-done-btn" class="action-btn" onclick="window.inboxClearDone()" style="font-size:12px;">🧹 처리됨 정리</button>
                 <button onclick="window.closeTaskInbox()"
                     style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
                            color:#2c5f8a; font-size:16px; cursor:pointer;
@@ -9904,7 +9927,7 @@ window.updateInboxBadge();
         <div id="inbox-dist-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
                     cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
-            <span style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📤 다른 프로젝트로 전송<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+            <span id="inbox-dist-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📤 다른 프로젝트로 전송<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
                 전송 직전 대상 파일의 갱신 여부를 확인하며, 다른 사용자가 방금 저장한 경우 최신본을 받아 자동 재시도합니다.<br><br>
                 전송 시 📌 알림이 자동 설정되고, 대상 프로젝트의 수정이력과 배분 원장에 함께 기록됩니다.
             </span></span></span>
@@ -9918,18 +9941,18 @@ window.updateInboxBadge();
                 title="닫기">×</button>
         </div>
         <div style="padding:12px; flex:1; overflow-y:auto; min-height:0; display:flex; flex-direction:column;">
-            <p style="margin:0 0 10px; font-size:12px; color:#888; flex-shrink:0;">전송 업무: <b id="dist-task-name" style="color:#e67e22;"></b></p>
+            <p style="margin:0 0 10px; font-size:12px; color:#888; flex-shrink:0;"><span id="inbox-dist-task-label">전송 업무</span>: <b id="dist-task-name" style="color:#e67e22;"></b></p>
             <div id="dist-file-list" style="flex:1; overflow-y:auto; min-height:100px;"></div>
             <div id="dist-step2" style="display:none; flex-shrink:0; border-top:2px solid #eee; padding-top:10px; margin-top:10px;">
-            <p style="margin:0 0 8px; font-size:12px; color:#555;">대상: <b id="dist-target-name" style="color:#1971c2;"></b> — 삽입할 개발단계(L0) 구간을 선택하세요.</p>
+            <p style="margin:0 0 8px; font-size:12px; color:#555;"><span id="inbox-dist-target-label">대상</span>: <b id="dist-target-name" style="color:#1971c2;"></b> — <span id="inbox-dist-select-label">삽입할 개발단계(L0) 구간을 선택하세요.</span></p>
             <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
                 <select id="dist-l0-select" style="flex:1 1 160px; min-width:160px; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;"></select>
-                <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#2c5f8a; border-color:#2c5f8a; white-space:nowrap; flex-shrink:0;">🚀 전송 실행</button>
+                <button id="dist-exec-btn" class="action-btn" onclick="window.inboxDistExecute(0)" style="font-size:13px; font-weight:bold; color:#fff; background:#2c5f8a; border-color:#2c5f8a; white-space:nowrap; flex-shrink:0;"><span id="inbox-dist-exec-label">🚀 전송 실행</span></button>
             </div>
             <div style="display:flex; align-items:center; gap:6px; margin-top:8px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="dist-auto-position" checked onchange="window.distRecomputePreview()" style="cursor:pointer;">
-                    🎯 다른 프로젝트 자동위치(시작일 기준)
+                    <span id="inbox-dist-auto-label">🎯 다른 프로젝트 자동위치(시작일 기준)</span>
                 </label>
                 <span id="dist-position-preview" style="color:#1971c2; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
             </div>
