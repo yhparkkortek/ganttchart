@@ -19029,6 +19029,7 @@ window.calRender = function() {
             if (key === todayKey) cls += ' cal-today';
             if (dow === 0) cls += ' cal-weekend-sun';
             if (dow === 6) cls += ' cal-weekend-sat';
+            if (dow !== 0 && dow !== 6 && window.isHoliday && window.isHoliday(key)) cls += ' cal-weekend-sun';
 
             const chipCount = dayEvents.length;
         const MAX_CHIPS = chipCount > 5 ? 10 : 5;
