@@ -14456,6 +14456,7 @@ window.refreshTgStatus = async function() {
         if (d.token_set) {
             if (badge) { badge.textContent = _tgEn ? '✅ Connected' : '✅ 연결됨'; badge.style.background = '#d4edda'; badge.style.color = '#155724'; }
             document.getElementById('tg-chatid').value = d.default_chat_id || '';
+            if (d.token) { document.getElementById('tg-token').value = d.token; }
         } else {
             if (badge) { badge.textContent = _tgEn ? '⚠️ Not configured' : '⚠️ 미설정'; badge.style.background = '#fff3cd'; badge.style.color = '#856404'; }
         }
