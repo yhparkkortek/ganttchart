@@ -15798,6 +15798,7 @@ window.openAlarmModal = function(idx) {
     if (!item) return;
     window._alarmCurrentItem = item;
 
+    const _amEn = window._currentLang === 'en';   // ← 여기로 이동
     const pm        = window.projectMeta || {};
     const projTitle = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
     const dayKeys   = Object.keys(item.sentLog).filter(k => !isNaN(Number(k))).map(Number).sort((a,b) => a-b);
