@@ -5921,6 +5921,7 @@ window.deleteHistoryByDateRange = function() {
         const _mailIdTexts = {
             'mail-popup-title':       { ko:'📧 업무 추가',           en:'📧 Add Task' },
             'mail-ai-section-label':  { ko:'🤖 AI 선택',             en:'🤖 Select AI' },
+            'mail-ai-model-label':    { ko:'🔧 모델 선택',            en:'🔧 Model' },
             'mail-cache-clear-btn':   { ko:'🗑️ 분석 캐시 초기화',    en:'🗑️ Clear Cache' },
             'mail-key-link-btn':      { ko:'🔗 발급받기',             en:'🔗 Get Key' },
             'mail-key-save-btn':      { ko:'💾 저장',                  en:'💾 Save' },
@@ -8077,18 +8078,32 @@ window.clearGeminiKey = function() {
 
 // ─── 🤖 AI 제공사 설정 (Gemini / Groq / Mistral) ───
 window.AI_PROVIDERS = {
-    gemini:  { label: 'Gemini',  keyName: 'gemini_api_key',  model: 'gemini-2.5-flash-lite',
+    gemini:  { label: 'Gemini',  keyName: 'gemini_api_key',  defaultModel: 'gemini-2.5-flash-lite',
                placeholder: 'AIza...', guideUrl: 'https://aistudio.google.com/apikey',
                guideText: '구글 계정으로 로그인 → [Create API key] 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)',
-               guideTextEn: 'Sign in with Google → Click [Create API key] → Copy the key (starts with AIza) and paste below. (Free to generate)' },
-    groq:    { label: 'Groq',    keyName: 'groq_api_key',    model: 'llama-3.3-70b-versatile',
+               guideTextEn: 'Sign in with Google → Click [Create API key] → Copy the key (starts with AIza) and paste below. (Free to generate)',
+               models: [
+                   { id: 'gemini-2.5-flash-lite', label: 'Flash Lite',  tier: 'free',         note: '🟢 무료 · 15RPM / 1,000/일' },
+                   { id: 'gemini-2.5-flash',      label: 'Flash',       tier: 'free_limited', note: '🟡 무료(제한) · 10RPM / 250/일' },
+                   { id: 'gemini-2.5-pro',        label: 'Pro',         tier: 'paid',         note: '🔴 유료' },
+               ]},
+    groq:    { label: 'Groq',    keyName: 'groq_api_key',    defaultModel: 'llama-3.3-70b-versatile',
                placeholder: 'gsk_...', guideUrl: 'https://console.groq.com/keys',
                guideText: 'Groq 계정으로 로그인(이메일/구글) → [Create API Key] 클릭 → 생성된 키(gsk_로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료)',
-               guideTextEn: 'Sign in to Groq (email/Google) → Click [Create API Key] → Copy the key (starts with gsk_) and paste below. (Free, no card required)' },
-    mistral: { label: 'Mistral', keyName: 'mistral_api_key', model: 'mistral-small-latest',
+               guideTextEn: 'Sign in to Groq (email/Google) → Click [Create API Key] → Copy the key (starts with gsk_) and paste below. (Free, no card required)',
+               models: [
+                   { id: 'llama-3.3-70b-versatile',          label: 'Llama 3.3 70B',   tier: 'free', note: '🟢 무료' },
+                   { id: 'llama-4-maverick',                  label: 'Llama 4 Maverick', tier: 'free', note: '🟢 무료 · 최신' },
+                   { id: 'deepseek-r1-distill-llama-70b',     label: 'DeepSeek R1',      tier: 'free', note: '🟢 무료 · 추론 강함' },
+               ]},
+    mistral: { label: 'Mistral', keyName: 'mistral_api_key', defaultModel: 'mistral-small-latest',
                placeholder: '(Mistral API 키)', guideUrl: 'https://console.mistral.ai/api-keys',
                guideText: 'Mistral 계정으로 로그인 → [API Keys] → [Create new key] 클릭 → 생성된 키를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료, Experiment 요금제)',
-               guideTextEn: 'Sign in to Mistral → [API Keys] → [Create new key] → Copy the key and paste below. (Free, Experiment plan, no card required)' }
+               guideTextEn: 'Sign in to Mistral → [API Keys] → [Create new key] → Copy the key and paste below. (Free, Experiment plan, no card required)',
+               models: [
+                   { id: 'mistral-small-latest', label: 'Small', tier: 'free', note: '🟢 무료' },
+                   { id: 'mistral-large-latest', label: 'Large', tier: 'paid', note: '🔴 유료 · 품질 ↑' },
+               ]}
 };
 
 window.getActiveAiProvider = function() {
@@ -8099,8 +8114,9 @@ window.getActiveAiKey = function() {
     return localStorage.getItem(cfg.keyName);
 };
 window.getActiveAiModel = function() {
-    const cfg = window.AI_PROVIDERS[window.getActiveAiProvider()] || window.AI_PROVIDERS.gemini;
-    return cfg.model;
+    const provider = window.getActiveAiProvider();
+    const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
+    return localStorage.getItem('ai_model_' + provider) || cfg.defaultModel;
 };
 
 window.onAiProviderChange = function() {
@@ -8108,6 +8124,25 @@ window.onAiProviderChange = function() {
     if (!sel) return;
     localStorage.setItem('ai_provider', sel.value);
     window.refreshAiKeyPanel();
+    window.refreshAiModelDropdown();
+};
+
+window.refreshAiModelDropdown = function() {
+    const provider = window.getActiveAiProvider();
+    const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
+    const modelSel = document.getElementById('mail-ai-model');
+    if (!modelSel) return;
+    const savedModel = localStorage.getItem('ai_model_' + provider) || cfg.defaultModel;
+    modelSel.innerHTML = cfg.models.map(m =>
+        `<option value="${m.id}" ${m.id === savedModel ? 'selected' : ''}>${m.label} — ${m.note}</option>`
+    ).join('');
+};
+
+window.onAiModelChange = function() {
+    const provider = window.getActiveAiProvider();
+    const modelSel = document.getElementById('mail-ai-model');
+    if (!modelSel) return;
+    localStorage.setItem('ai_model_' + provider, modelSel.value);
 };
 
 window.refreshAiKeyPanel = function() {
@@ -10178,6 +10213,12 @@ window.updateInboxBadge();
                             <option value="mistral">Mistral (무료)</option>
                         </select>
                     </div>
+                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                        <span id="mail-ai-model-label">🔧 모델 선택</span>
+                        <select id="mail-ai-model" onchange="window.onAiModelChange()"
+                                style="flex:1; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                        </select>
+                    </div>
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
                         <span id="mail-key-label">🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(개인 키)</span></span>
                         <div style="display:flex; gap:6px;">
@@ -10383,7 +10424,13 @@ window.updateInboxBadge();
                                 📥 메일 가져오기
                             </button>
                         </div>
-                        <div id="ms-status" style="font-size:11px; margin-top:4px; color:#666; padding:0 12px;"></div>
+                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:0 12px; margin-top:4px;">
+                            <div id="ms-status" style="font-size:11px; color:#666; flex:1;"></div>
+                            <button onclick="window.msForceReset()"
+                                style="flex-shrink:0; padding:2px 8px; background:#fff; color:#888; border:1px solid #ccc; border-radius:6px; font-size:10px; cursor:pointer;" title="진행 상태 및 결과 강제 초기화">
+                                🔄 초기화
+                            </button>
+                        </div>
                     </div>
                     <!-- 진행바 -->
                     <div id="ms-progress" style="display:none; padding:8px 0; flex-shrink:0;">
@@ -11785,9 +11832,6 @@ window.msFetchMail = async function() {
         localStorage.removeItem('ms_saved_pw');
     }
 
-    const apiKey = window.getActiveAiKey();
-    if (!apiKey) { alert('AI API 키를 먼저 저장해주세요.'); return; }
-
     // UI 초기화
     window._msAnalyzeCancelled = false;
     document.getElementById('ms-status').textContent   = '📡 서버에 연결 중...';
@@ -11824,6 +11868,25 @@ window.msFetchMail = async function() {
         // 💡 건별로 채워나갈 배열 (중단하더라도 여기까지 담긴 내용은 그대로 표시됨)
         window._msResults = [];
         document.getElementById('ms-list-header').style.display = 'block'; // 0개부터 바로 보여줌
+
+        // 2단계: AI 분석 전 API 키 확인
+        const apiKey = window.getActiveAiKey();
+        if (!apiKey) {
+            document.getElementById('ms-status').textContent = '✅ 메일 수집 완료 (AI 분석 생략 — API 키 미설정)';
+            document.getElementById('ms-progress').style.display = 'none';
+            document.getElementById('ms-list-header').style.display = 'block';
+            document.getElementById('ms-batch-btn').style.display = 'block';
+            document.getElementById('ms-batch-inbox-btn').style.display = 'block';
+            // 수집된 메일을 분석 없이 목록에 표시
+            window._msResults = data.data.map((mail, i) => ({
+                idx: i, fileName: mail.fileName,
+                subject: mail.subject, sender: mail.sender, date: mail.date,
+                body: mail.body, project: null, task: null,
+                selected: false, registered: false, error: 'API키 미설정'
+            }));
+            msRenderList(window._msResults);
+            return;
+        }
 
         // 2단계: 각 메일 AI 분석 (파일첨부 탭과 동일 로직) — 1건씩 완료될 때마다 화면 갱신
         for (let i = 0; i < data.data.length; i++) {
@@ -11899,6 +11962,20 @@ window.msFetchMail = async function() {
 // ─── 메일서버 분석 중단 (지금까지 분석된 내용은 그대로 유지) ─────────
 window.msStopAnalysis = function() {
     window._msAnalyzeCancelled = true;
+};
+
+// ─── 메일서버 강제 초기화 (로딩 멈춤 시 탈출용) ──────────────
+window.msForceReset = function() {
+    window._msAnalyzeCancelled = true;
+    window._msResults = [];
+    document.getElementById('ms-progress').style.display      = 'none';
+    document.getElementById('ms-list-header').style.display   = 'none';
+    document.getElementById('ms-result-list').innerHTML       = '';
+    document.getElementById('ms-result-list').style.display   = 'none';
+    document.getElementById('ms-batch-btn').style.display     = 'none';
+    document.getElementById('ms-batch-inbox-btn').style.display = 'none';
+    document.getElementById('ms-status').textContent          = '🔄 초기화 완료';
+    document.getElementById('ms-prog-bar').style.width        = '0%';
 };
 
 // ─── 메일서버 분석결과 목록 초기화 ─────────────────────────
