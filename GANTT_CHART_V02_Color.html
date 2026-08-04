@@ -8125,6 +8125,9 @@ window.onAiProviderChange = function() {
     localStorage.setItem('ai_provider', sel.value);
     window.refreshAiKeyPanel();
     window.refreshAiModelDropdown();
+    // 모델 행 표시 보장 (provider 변경 시 숨겨진 경우 대비)
+    const modelRow = document.getElementById('mail-ai-model-row');
+    if (modelRow) modelRow.style.display = 'flex';
 };
 
 window.refreshAiModelDropdown = function() {
@@ -8138,11 +8141,30 @@ window.refreshAiModelDropdown = function() {
     ).join('');
 };
 
+// 모델별 추가 안내 (Groq 전용 — Llama/DeepSeek는 Groq API 키로 사용)
+window._MODEL_GUIDE = {
+    'llama-3.3-70b-versatile':      { ko: '💡 Groq API 키로 사용합니다. Llama는 Meta의 오픈소스 모델로 별도 발급 불필요 — Groq 키 하나로 모두 이용 가능합니다.', en: '💡 Uses your Groq API key. Llama is Meta\'s open-source model — no separate key needed.' },
+    'llama-4-maverick':             { ko: '💡 Groq API 키로 사용합니다. Llama 4 Maverick은 최신 경량 모델입니다 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. Llama 4 Maverick is the latest lightweight model.' },
+    'deepseek-r1-distill-llama-70b':{ ko: '💡 Groq API 키로 사용합니다. DeepSeek R1은 추론 특화 모델로 별도 발급 불필요 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. DeepSeek R1 is a reasoning-focused model — no separate key needed.' },
+};
+
 window.onAiModelChange = function() {
     const provider = window.getActiveAiProvider();
     const modelSel = document.getElementById('mail-ai-model');
     if (!modelSel) return;
     localStorage.setItem('ai_model_' + provider, modelSel.value);
+
+    // 모델별 추가 안내 표시
+    const guideEl = document.getElementById('mail-model-guide');
+    if (guideEl) {
+        const g = window._MODEL_GUIDE[modelSel.value];
+        if (g) {
+            guideEl.textContent = (window._currentLang === 'en' && g.en) ? g.en : g.ko;
+            guideEl.style.display = 'block';
+        } else {
+            guideEl.style.display = 'none';
+        }
+    }
 };
 
 window.refreshAiKeyPanel = function() {
@@ -10219,6 +10241,7 @@ window.updateInboxBadge();
                                 style="flex:1; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                         </select>
                     </div>
+                    <div id="mail-model-guide" style="display:none; font-size:10px; color:#555; background:#fffbe6; border:1px solid #ffe066; border-radius:4px; padding:5px 8px; margin-bottom:4px; line-height:1.5;"></div>
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
                         <span id="mail-key-label">🔑 Gemini API 키 <span style="font-weight:normal; color:#888;">(개인 키)</span></span>
                         <div style="display:flex; gap:6px;">
