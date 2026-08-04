@@ -8078,31 +8078,31 @@ window.clearGeminiKey = function() {
 
 // ─── 🤖 AI 제공사 설정 (Gemini / Groq / Mistral) ───
 window.AI_PROVIDERS = {
-    gemini:  { label: 'Gemini',  keyName: 'gemini_api_key',  defaultModel: 'gemini-2.5-flash-lite',
+    gemini:  { label: 'Gemini (Google)',  keyName: 'gemini_api_key',  defaultModel: 'gemini-2.5-flash-lite',
                placeholder: 'AIza...', guideUrl: 'https://aistudio.google.com/apikey',
-               guideText: '구글 계정으로 로그인 → [Create API key] 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)',
-               guideTextEn: 'Sign in with Google → Click [Create API key] → Copy the key (starts with AIza) and paste below. (Free to generate)',
+               guideText: '① aistudio.google.com 접속 → 구글 계정 로그인\n② 좌측 메뉴 [Get API key] → [Create API key] 클릭\n③ 생성된 키(AIza로 시작)를 복사 → 아래 입력란에 붙여넣고 저장\n※ 무료 발급 가능 (카드 등록 불필요)',
+               guideTextEn: '① Go to aistudio.google.com → Sign in with Google\n② Left menu [Get API key] → [Create API key]\n③ Copy the key (starts with AIza) → paste below and save\n※ Free, no card required',
                models: [
-                   { id: 'gemini-2.5-flash-lite', label: 'Flash Lite',  tier: 'free',         note: '🟢 무료 · 15RPM / 1,000/일' },
-                   { id: 'gemini-2.5-flash',      label: 'Flash',       tier: 'free_limited', note: '🟡 무료(제한) · 10RPM / 250/일' },
-                   { id: 'gemini-2.5-pro',        label: 'Pro',         tier: 'paid',         note: '🔴 유료' },
+                   { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', tier: 'free',         note: '🟢 무료 · 15RPM / 1,000/일' },
+                   { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      tier: 'free_limited', note: '🟡 무료(제한) · 10RPM / 250/일' },
+                   { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro',        tier: 'paid',         note: '🔴 유료 · 최고 품질' },
                ]},
-    groq:    { label: 'Groq',    keyName: 'groq_api_key',    defaultModel: 'llama-3.3-70b-versatile',
-               placeholder: 'gsk_...', guideUrl: 'https://console.groq.com/keys',
-               guideText: 'Groq 계정으로 로그인(이메일/구글) → [Create API Key] 클릭 → 생성된 키(gsk_로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료)',
-               guideTextEn: 'Sign in to Groq (email/Google) → Click [Create API Key] → Copy the key (starts with gsk_) and paste below. (Free, no card required)',
+    groq:    { label: 'Groq (Llama · DeepSeek 등, 무료)',    keyName: 'groq_api_key',    defaultModel: 'llama-3.3-70b-versatile',
+               placeholder: 'gsk_로 시작하는 Groq API 키', guideUrl: 'https://console.groq.com/keys',
+               guideText: '💡 Groq는 Llama·DeepSeek 등 오픈소스 모델을 무료로 호스팅하는 플랫폼입니다.\n   키 1개로 아래 모든 모델 사용 가능 — 별도 Llama·DeepSeek 키 불필요\n\n① console.groq.com 접속 → 이메일 또는 구글 계정으로 로그인\n② 좌측 메뉴 [API Keys] → [Create API Key] 클릭\n③ 생성된 키(gsk_로 시작)를 복사 → 아래 입력란에 붙여넣고 저장\n※ 무료 발급 가능 (카드 등록 불필요)',
+               guideTextEn: '💡 Groq is a platform that hosts open-source models (Llama, DeepSeek, etc.) for free.\n   One key covers all models below — no separate Llama/DeepSeek key needed.\n\n① Go to console.groq.com → Sign in with email or Google\n② Left menu [API Keys] → [Create API Key]\n③ Copy the key (starts with gsk_) → paste below and save\n※ Free, no card required',
                models: [
-                   { id: 'llama-3.3-70b-versatile',          label: 'Llama 3.3 70B',   tier: 'free', note: '🟢 무료' },
-                   { id: 'llama-4-maverick',                  label: 'Llama 4 Maverick', tier: 'free', note: '🟢 무료 · 최신' },
-                   { id: 'deepseek-r1-distill-llama-70b',     label: 'DeepSeek R1',      tier: 'free', note: '🟢 무료 · 추론 강함' },
+                   { id: 'llama-3.3-70b-versatile',          label: 'Llama 3.3 70B (Meta)',          tier: 'free', note: '🟢 무료 · 범용 추천' },
+                   { id: 'llama-4-maverick',                  label: 'Llama 4 Maverick (Meta)',        tier: 'free', note: '🟢 무료 · 최신 경량' },
+                   { id: 'deepseek-r1-distill-llama-70b',     label: 'DeepSeek R1 — Groq 호스팅',     tier: 'free', note: '🟢 무료 · 추론 특화' },
                ]},
-    mistral: { label: 'Mistral', keyName: 'mistral_api_key', defaultModel: 'mistral-small-latest',
+    mistral: { label: 'Mistral (프랑스 AI)',  keyName: 'mistral_api_key', defaultModel: 'mistral-small-latest',
                placeholder: '(Mistral API 키)', guideUrl: 'https://console.mistral.ai/api-keys',
-               guideText: 'Mistral 계정으로 로그인 → [API Keys] → [Create new key] 클릭 → 생성된 키를 복사해서 아래에 붙여넣고 저장하세요. (카드 등록 없이 무료, Experiment 요금제)',
-               guideTextEn: 'Sign in to Mistral → [API Keys] → [Create new key] → Copy the key and paste below. (Free, Experiment plan, no card required)',
+               guideText: '① console.mistral.ai 접속 → 계정 로그인\n② 좌측 메뉴 [API Keys] → [Create new key] 클릭\n③ 생성된 키를 복사 → 아래 입력란에 붙여넣고 저장\n※ Experiment 요금제 무료 (카드 등록 불필요)',
+               guideTextEn: '① Go to console.mistral.ai → Sign in\n② Left menu [API Keys] → [Create new key]\n③ Copy the key → paste below and save\n※ Free under Experiment plan, no card required',
                models: [
-                   { id: 'mistral-small-latest', label: 'Small', tier: 'free', note: '🟢 무료' },
-                   { id: 'mistral-large-latest', label: 'Large', tier: 'paid', note: '🔴 유료 · 품질 ↑' },
+                   { id: 'mistral-small-latest', label: 'Mistral Small', tier: 'free', note: '🟢 무료 · 속도 우선' },
+                   { id: 'mistral-large-latest', label: 'Mistral Large', tier: 'paid', note: '🔴 유료 · 품질 우선' },
                ]}
 };
 
@@ -8145,7 +8145,7 @@ window.refreshAiModelDropdown = function() {
 window._MODEL_GUIDE = {
     'llama-3.3-70b-versatile':      { ko: '💡 Groq API 키로 사용합니다. Llama는 Meta의 오픈소스 모델로 별도 발급 불필요 — Groq 키 하나로 모두 이용 가능합니다.', en: '💡 Uses your Groq API key. Llama is Meta\'s open-source model — no separate key needed.' },
     'llama-4-maverick':             { ko: '💡 Groq API 키로 사용합니다. Llama 4 Maverick은 최신 경량 모델입니다 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. Llama 4 Maverick is the latest lightweight model.' },
-    'deepseek-r1-distill-llama-70b':{ ko: '💡 Groq API 키로 사용합니다. DeepSeek R1은 추론 특화 모델로 별도 발급 불필요 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. DeepSeek R1 is a reasoning-focused model — no separate key needed.' },
+    'deepseek-r1-distill-llama-70b':{ ko: '⚠️ 중국 DeepSeek社 서비스가 아닙니다. Groq가 Llama 기반으로 재학습한 추론 특화 버전 — Groq API 키로 사용, 별도 발급 불필요.', en: '⚠️ Not the Chinese DeepSeek service. This is a reasoning-focused version re-trained by Groq on Llama — uses your Groq API key, no separate key needed.' },
 };
 
 window.onAiModelChange = function() {
@@ -10231,8 +10231,8 @@ window.updateInboxBadge();
                         <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
                                 style="flex:1; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                             <option value="gemini">Gemini (Google)</option>
-                            <option value="groq">Groq (Llama 등, 무료)</option>
-                            <option value="mistral">Mistral (무료)</option>
+                            <option value="groq">Groq — Llama · DeepSeek 등 무료</option>
+                            <option value="mistral">Mistral (프랑스 AI, 무료)</option>
                         </select>
                     </div>
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
