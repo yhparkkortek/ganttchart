@@ -8455,7 +8455,12 @@ window.renderMailResult = function(result) {
         result['완료일'] = planStr;
         window._mailAnalyzedResult['완료일'] = planStr;
         const planSpan = document.getElementById('mail-date-완료일');
-        if (planSpan) planSpan.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${planStr}</span>`;
+        if (planSpan) {
+            planSpan.innerHTML = `<span style="color:#0056b3; font-weight:bold;">${planStr}</span>`;
+            // 자동 날짜 설정 시 경고 배경 제거
+            const planDiv = planSpan.closest('div');
+            if (planDiv) { planDiv.style.background = ''; planDiv.style.border = ''; }
+        }
     }
 
     window.autoSetInsertPosition(result['시작일'], hasDate);
