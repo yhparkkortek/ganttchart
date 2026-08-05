@@ -11334,6 +11334,15 @@ window.cleanMailDateForTag = function(dateStr) {
         .trim();
 };
 
+// 💡 RFC 2822 메일 날짜 문자열 → YYYY-MM-DD 변환 (AI 프롬프트용)
+//    변환 실패 시 null 반환 → getSystemPrompt 내에서 todayStr로 폴백
+window.parseMailDateToYMD = function(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return null;
+    return d.toISOString().split('T')[0];
+};
+
 
 // ─── 메일 본문 정제 (AI 입력 토큰 절약 + 품질 향상) ──────────
 function cleanMailBody(raw) {
@@ -11398,8 +11407,9 @@ async function mfCallGemini(apiKey, parsed) {
     let model = window.getSummaryModel();
     let inch = window.getSummaryInch();
     // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
-    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
-    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date);
+    const _mfDateYMD = window.parseMailDateToYMD(parsed.date);
+    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (_mfDateYMD ? '발송일: ' + _mfDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
+    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _mfDateYMD);
 
     const GAS_URL = localStorage.getItem('gas_server_url') || 
             "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
@@ -11679,7 +11689,8 @@ window.mfSelectItem = function(idx) {
              <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
                 <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
                 <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
-                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:12px; width:100%;">✏️ 이 본문으로 직접 입력해서 등록</button>
+                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">✏️ 본문으로 직접 등록</button>
+                <button class="action-btn" onclick="AR.moveToDirectInput('mf', ${idx})" style="margin-top:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
              </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
         document.getElementById('mail-right-empty').style.display = 'flex';
         document.getElementById('mail-right-detail').style.display = 'none';
@@ -12389,6 +12400,24 @@ const AR = {
         AR.selectItem(tabKey, idx);
     },
 
+    moveToDirectInput(tabKey, idx) {
+        const r = AR.cfg[tabKey].getArr()[idx];
+        if (!r || !r.body) return;
+        // 직접 입력 탭으로 전환
+        window.switchMailTab('paste');
+        // 본문 복사
+        const inp = document.getElementById('mail-content-input');
+        if (inp) {
+            inp.value = (r.subject ? r.subject + '\n\n' : '') + r.body;
+            inp.dispatchEvent(new Event('input'));
+        }
+        // 오른쪽 패널 초기화
+        const emptyEl = document.getElementById('mail-right-empty');
+        const detailEl = document.getElementById('mail-right-detail');
+        if (emptyEl) emptyEl.style.display = 'flex';
+        if (detailEl) detailEl.style.display = 'none';
+    },
+
     selectItem(tabKey, idx) {
         const c = AR.cfg[tabKey];
 
@@ -12421,7 +12450,8 @@ const AR = {
                  <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
                     <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
                     <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
-                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:12px; width:100%;">✏️ 이 본문으로 직접 입력해서 등록</button>
+                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">✏️ 본문으로 직접 등록</button>
+                    <button class="action-btn" onclick="AR.moveToDirectInput('${tabKey}', ${idx})" style="margin-top:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
                  </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
             document.getElementById('mail-right-empty').style.display = 'flex';
             document.getElementById('mail-right-detail').style.display = 'none';
@@ -12551,8 +12581,9 @@ async function msCallGemini(apiKey, parsed) {
     let model = window.getSummaryModel();
     let inch = window.getSummaryInch();
 
-    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
-    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date || null);
+    const _msDateYMD = window.parseMailDateToYMD(parsed.date);
+    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
+    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null);
 
     const MAX_RETRY = 3;
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
