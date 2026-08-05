@@ -177,7 +177,11 @@ def extract_body(msg):
         except Exception:
             body = ""
     body = re.sub(r"<[^>]+>", " ", body)
-    body = re.sub(r"\s+", " ", body).strip()
+    # 💡 개행 보존 — 프론트 cleanMailBody의 인용/포워딩 마커가 \n 기준으로 동작하므로
+    #    \s+ 로 뭉개면 체인 절단이 전혀 안 됨. 가로 공백만 정리하고 줄바꿈은 유지.
+    body = body.replace("\r\n", "\n").replace("\r", "\n")
+    body = re.sub(r"[ \t]+", " ", body)
+    body = re.sub(r"\n{3,}", "\n\n", body).strip()
     return body[:2000]
 
 def matches_keyword(subject, body, keyword, keyword_from='', sender='', keyword_body=''):
