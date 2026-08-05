@@ -8292,13 +8292,7 @@ window.analyzeMailContent = async function() {
                 throw new Error(data.message || "구글 서버 응답 오류");
             }
 
-            const provider = window.getActiveAiProvider();
-            let text = '';
-            if (provider === 'gemini') {
-                text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            } else {
-                text = data.result?.choices?.[0]?.message?.content || '';
-            }
+            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             parsed = window.parseGeminiTask(text);
             if (!parsed) throw new Error('JSON 형식을 찾을 수 없습니다.');
             lastErr = null;
@@ -11386,13 +11380,7 @@ async function mfCallGemini(apiKey, parsed) {
             const data = await resp.json();
             console.log('GAS응답status:', data.status, '메시지:', data.message);
             if (data.status !== 'success') throw new Error(data.message);
-            const _prov = window.getActiveAiProvider();
-            let text = '';
-            if (_prov === 'gemini') {
-                text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            } else {
-                text = data.result?.choices?.[0]?.message?.content || '';
-            }
+            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const result = window.parseGeminiTask(text);
             if (result) {
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
@@ -12539,13 +12527,7 @@ async function msCallGemini(apiKey, parsed) {
             });
             const data = await resp.json();
             if (data.status !== 'success') throw new Error(data.message);
-            const _prov2 = window.getActiveAiProvider();
-            let text = '';
-            if (_prov2 === 'gemini') {
-                text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            } else {
-                text = data.result?.choices?.[0]?.message?.content || '';
-            }
+            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const result = window.parseGeminiTask(text);
             if (result) {
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
