@@ -180,12 +180,18 @@ def extract_body(msg):
     body = re.sub(r"\s+", " ", body).strip()
     return body[:2000]
 
-def matches_keyword(subject, body, keyword):
-    if not keyword or not keyword.strip():
-        return True
-    keywords = [k.strip() for k in keyword.strip().lower().split(",") if k.strip()]
-    text = (subject + " " + body[:500]).lower()
-    return any(k in text for k in keywords)
+def matches_keyword(subject, body, keyword, keyword_from='', sender='', keyword_body=''):
+    def check(text, kw):
+        if not kw or not kw.strip():
+            return True
+        keys = [k.strip().lower() for k in kw.split(",") if k.strip()]
+        return any(k in text.lower() for k in keys)
+
+    # 각 필드 독립 AND 조건 — 입력한 필드만 필터링
+    if not check(subject, keyword):       return False
+    if not check(sender,  keyword_from):  return False
+    if not check(body,    keyword_body):  return False
+    return True
 
 
 # ══════════════════════════════════════════════════════════════
@@ -328,7 +334,9 @@ def fetch_mail():
     mail_pw    = req.get('mailPw', '')
     start_date = req.get('startDate', '')
     end_date   = req.get('endDate', '')
-    keyword    = req.get('keyword', '')
+    keyword         = req.get('keyword', '')
+    keyword_from    = req.get('keywordFrom', '')
+    keyword_body    = req.get('keywordBody', '')
     max_count  = req.get('maxCount', 200)
 
     try:
@@ -362,7 +370,7 @@ def fetch_mail():
                 subject = decode_str(msg.get("Subject", ""))
                 sender  = decode_str(msg.get("From", ""))
                 body    = extract_body(msg)
-                if not matches_keyword(subject, body, keyword):
+                if not matches_keyword(subject, body, keyword, keyword_from, sender, keyword_body):
                     continue
                 results.append({
                     "subject":  subject,
