@@ -11689,8 +11689,8 @@ window.mfSelectItem = function(idx) {
              <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
                 <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
                 <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
-                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">✏️ 본문으로 직접 등록</button>
-                <button class="action-btn" onclick="AR.moveToDirectInput('mf', ${idx})" style="margin-top:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
+                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:13px; width:100%;">✏️ 본문으로 직접 등록</button>
+                <button class="action-btn" onclick="AR.moveToDirectInput('mf', ${idx})" style="margin-top:4px; font-size:13px; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
              </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
         document.getElementById('mail-right-empty').style.display = 'flex';
         document.getElementById('mail-right-detail').style.display = 'none';
@@ -11985,6 +11985,7 @@ window.msFetchMail = async function() {
                 const task    = await msCallGemini(apiKey, {
                     subject: mail.subject,
                     sender:  mail.sender,
+                    date:    mail.date,
                     body:    mail.body,
                     fileName: mail.fileName
                 });
@@ -12450,8 +12451,8 @@ const AR = {
                  <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
                     <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
                     <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
-                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%;">✏️ 본문으로 직접 등록</button>
-                    <button class="action-btn" onclick="AR.moveToDirectInput('${tabKey}', ${idx})" style="margin-top:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
+                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:13px; width:100%;">✏️ 본문으로 직접 등록</button>
+                    <button class="action-btn" onclick="AR.moveToDirectInput('${tabKey}', ${idx})" style="margin-top:4px; font-size:13px; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
                  </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
             document.getElementById('mail-right-empty').style.display = 'flex';
             document.getElementById('mail-right-detail').style.display = 'none';
