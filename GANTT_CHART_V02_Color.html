@@ -763,9 +763,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           <span id="install-guide-title" style="font-size:12px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
           <span id="install-guide-arrow" style="font-size:11px; color:#7a5210;">▼ 펼치기</span>
         </div>
-        <div id="install-guide" style="display:none; margin-top:10px; font-size:12px; color:#555; line-height:2.1;">
+        <div id="install-guide" style="display:none; margin-top:10px; font-size:8px; color:#555; line-height:1.8;">
           <div id="install-guide-content">
-          <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:11.5px; color:#1a3a5c;">
+          <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:8px; color:#1a3a5c;">
             💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.
           </div>
           <b>Step 1.</b> Python 설치
@@ -5735,24 +5735,24 @@ window.deleteHistoryByDateRange = function() {
         }
         const _igContent = document.getElementById('install-guide-content');
         if (_igContent) _igContent.innerHTML = _en
-            ? '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:11.5px; color:#1a3a5c;">💡 Mail alarm · Mail receive · Telegram · AI Analysis are all integrated into one <b>KORTEK Backend server</b>.</div>'
-            + '<b>Step 1.</b> Install Python <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:11px;">python.org →</a><br>'
+            ? '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:8px; color:#1a3a5c;">💡 Mail alarm · Mail receive · Telegram · AI Analysis are all integrated into one <b>KORTEK Backend server</b>.</div>'
+            + '<b>Step 1.</b> Install Python <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:7px;">python.org →</a><br>'
             + '&nbsp;&nbsp;Check <b>"Add Python to PATH"</b> (required)<br>'
             + '<b>Step 2.</b> Install KORTEK Backend<br>'
-            + '&nbsp;&nbsp;<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip\',\'KortekBackend.zip\')" style="padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:11px;">⬇️ KortekBackend.zip</a>'
-            + '&nbsp;&nbsp;<span style="font-size:10.5px; color:#999;">If blocked →</span>'
-            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .py</a>'
-            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .bat</a><br>'
+            + '&nbsp;&nbsp;<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip\',\'KortekBackend.zip\')" style="padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:7px;">⬇️ KortekBackend.zip</a>'
+            + '&nbsp;&nbsp;<span style="font-size:7px; color:#999;">If blocked →</span>'
+            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:7px;">📋 .py</a>'
+            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:7px;">📋 .bat</a><br>'
             + '<b>Step 3.</b> Double-click <b>kortek_backend.bat</b> → Black window shows <b>http://127.0.0.1:5000</b> ✅<br>'
             + '<b>Step 4.</b> <b>Do not close the black window</b> while using the app'
-            : '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:11.5px; color:#1a3a5c;">💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.</div>'
-            + '<b>Step 1.</b> Python 설치 <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:11px;">python.org →</a><br>'
+            : '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:8px; color:#1a3a5c;">💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.</div>'
+            + '<b>Step 1.</b> Python 설치 <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:7px;">python.org →</a><br>'
             + '　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>'
             + '<b>Step 2.</b> KORTEK Backend 파일 설치<br>'
-            + '　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip\',\'KortekBackend.zip\')" style="padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:11px;">⬇️ KortekBackend.zip</a>'
-            + '　<span style="font-size:10.5px; color:#999;">막히면 →</span>'
-            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .py</a>'
-            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .bat</a><br>'
+            + '　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip\',\'KortekBackend.zip\')" style="padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:7px;">⬇️ KortekBackend.zip</a>'
+            + '　<span style="font-size:7px; color:#999;">막히면 →</span>'
+            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:7px;">📋 .py</a>'
+            + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:7px;">📋 .bat</a><br>'
             + '<b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭 → 검은 창에 <b>http://127.0.0.1:5000</b> ✅<br>'
             + '<b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b>';
 
@@ -10405,12 +10405,12 @@ window.updateInboxBadge();
                     <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:10px 14px; margin-bottom:10px; flex-shrink:0;">
                         <div onclick="const b=document.getElementById('ms-install-guide');b.style.display=b.style.display==='none'?'block':'none'"
                             style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
-                            <span id="ms-install-title" style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-                            <span id="ms-install-arrow" style="font-size:12px; color:#7a5210;">▼ 펼치기</span>
+                            <span id="ms-install-title" style="font-size:9px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+                            <span id="ms-install-arrow" style="font-size:8px; color:#7a5210;">▼ 펼치기</span>
                         </div>
-                        <div id="ms-install-guide" style="display:none; margin-top:10px; font-size:12.5px; color:#555; line-height:2.2;">
+                        <div id="ms-install-guide" style="display:none; margin-top:10px; font-size:8px; color:#555; line-height:1.8;">
                         <div id="ms-install-guide-content">
-                            <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#1a3a5c;">
+                            <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:8px; color:#1a3a5c;">
                                 💡 메일 수신 · 메일 알람 · Telegram · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
                                 　 <b>kortek_backend.bat</b> 하나만 실행하면 됩니다.
                             </div>
