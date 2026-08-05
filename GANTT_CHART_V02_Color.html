@@ -1822,6 +1822,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
             .replace('${projectModel}', model || "")
             .replace('${projectInch}', inch || "")
             .replace('${todayStr}', todayStr)
+            .replace('${mailDate}', mailDate || todayStr)
             .replace('${mailText}', mailText || "");
     }
 
