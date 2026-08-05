@@ -5110,6 +5110,7 @@ window.deleteHistoryByDateRange = function() {
             }
 
             document.getElementById('calendar-popup').style.display = 'none';
+            var _calOvl = document.getElementById('calendar-bg-overlay'); if (_calOvl) _calOvl.remove();
             window.autoSetInsertPosition(str);
             return;
         }
@@ -5140,6 +5141,7 @@ window.deleteHistoryByDateRange = function() {
             if (c === colIdx.plan)  { globalData[r]._planForced = true; globalData[r]._startForced = false; if (colIdx.dur1 !== -1) globalData[r][colIdx.dur1] = ""; if (colIdx.dur2 !== -1) globalData[r][colIdx.dur2] = ""; if (colIdx.dur3 !== -1) globalData[r][colIdx.dur3] = ""; if (colIdx.dur4 !== -1) globalData[r][colIdx.dur4] = ""; if (colIdx.period !== -1) globalData[r][colIdx.period] = ""; }
 
             document.getElementById('calendar-popup').style.display = 'none';
+            var _calOvl = document.getElementById('calendar-bg-overlay'); if (_calOvl) _calOvl.remove();
             window.recalculateSchedules();
         }
     };
@@ -5158,7 +5160,7 @@ window.deleteHistoryByDateRange = function() {
             <div class="cal-header">
                 <div><span class="cal-nav" onclick="changeCalendarMonth(event, 0, -1)" title="이전 년도">⏪</span><span class="cal-nav" onclick="changeCalendarMonth(event, -1, 0)" title="이전 달">◀</span></div>
                 <span style="margin: 0 10px;">${year}년 ${month + 1}월</span>
-                <div style="display:flex; align-items:center;"><span class="cal-nav" onclick="changeCalendarMonth(event, 1, 0)" title="다음 달">▶</span><span class="cal-nav" onclick="changeCalendarMonth(event, 0, 1)" title="다음 년도">⏩</span><span class="cal-close" onclick="event.stopPropagation(); document.getElementById('calendar-popup').style.display='none'" title="닫기">✖</span></div>
+                <div style="display:flex; align-items:center;"><span class="cal-nav" onclick="changeCalendarMonth(event, 1, 0)" title="다음 달">▶</span><span class="cal-nav" onclick="changeCalendarMonth(event, 0, 1)" title="다음 년도">⏩</span><span class="cal-close" onclick="event.stopPropagation(); document.getElementById('calendar-popup').style.display='none'; var o=document.getElementById('calendar-bg-overlay'); if(o) o.remove();" title="닫기">✖</span></div>
             </div>
             <div class="cal-grid"><div class="cal-day" style="color:#e03131;">일</div><div class="cal-day">월</div><div class="cal-day">화</div><div class="cal-day">수</div><div class="cal-day">목</div><div class="cal-day">금</div><div class="cal-day" style="color:#0056b3;">토</div>
         `;
@@ -5174,6 +5176,21 @@ window.deleteHistoryByDateRange = function() {
         let nextDay = 1; while (cellCount % 7 !== 0) { html += `<div class="cal-date dim">${nextDay++}</div>`; cellCount++; } html += `</div>`;
 
         popup.innerHTML = html; popup.style.display = 'block';
+
+        // 배경 클릭 시 달력 닫기 — 오버레이 방식
+        let calOvl = document.getElementById('calendar-bg-overlay');
+        if (!calOvl) {
+            calOvl = document.createElement('div');
+            calOvl.id = 'calendar-bg-overlay';
+            calOvl.style.cssText = 'position:fixed; inset:0; z-index:999999; background:transparent; cursor:default;';
+            calOvl.addEventListener('click', function() {
+                popup.style.display = 'none';
+                calOvl.remove();
+            });
+            document.body.appendChild(calOvl);
+        }
+        // popup은 오버레이 위에 떠야 함
+        popup.style.zIndex = '1000000';
 
         if (!keepPos && window.currentCalendarTarget) {
             let rect = window.currentCalendarTarget.getBoundingClientRect();
