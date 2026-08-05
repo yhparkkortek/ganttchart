@@ -10236,18 +10236,18 @@ window.updateInboxBadge();
                 <!-- API 키 (공통) -->
                 <div style="padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-                        <span id="mail-ai-section-label">🤖 AI 선택</span>
+                        <span id="mail-ai-section-label" style="white-space:nowrap; width:70px; flex-shrink:0; display:inline-block;">🤖 AI 선택</span>
                         <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
-                                style="width:200px; max-width:200px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px; overflow:hidden; text-overflow:ellipsis;">
+                                style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                             <option value="gemini">Gemini (Google)</option>
                             <option value="groq">Groq — Llama · DeepSeek 등 무료</option>
                             <option value="mistral">Mistral (프랑스 AI, 무료)</option>
                         </select>
                     </div>
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-                        <span id="mail-ai-model-label">🔧 모델 선택</span>
+                        <span id="mail-ai-model-label" style="white-space:nowrap; width:70px; flex-shrink:0; display:inline-block;">🔧 모델 선택</span>
                         <select id="mail-ai-model" onchange="window.onAiModelChange()"
-                                style="width:200px; max-width:200px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px; overflow:hidden; text-overflow:ellipsis;">
+                                style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                         </select>
                     </div>
                     <div id="mail-model-guide" style="display:none; font-size:10px; color:#555; background:#fffbe6; border:1px solid #ffe066; border-radius:4px; padding:5px 8px; margin-bottom:4px; line-height:1.5;"></div>
