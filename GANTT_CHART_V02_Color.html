@@ -11350,7 +11350,7 @@ function cleanMailBody(raw) {
     let s = String(raw);
 
     // 1) 과거 메일 이력(인용/포워딩) 시작 지점 찾기 — 새 요청은 보통 상단
-    onst markers = [
+    const markers = [
         /-{3,}\s*Original Message\s*-{3,}/i,
         /-{3,}\s*Forwarded message\s*-{3,}/i,
         /-{2,}\s*원본\s*메일\s*-{2,}/,
