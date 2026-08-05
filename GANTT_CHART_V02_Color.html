@@ -11350,22 +11350,40 @@ function cleanMailBody(raw) {
     let s = String(raw);
 
     // 1) 과거 메일 이력(인용/포워딩) 시작 지점 찾기 — 새 요청은 보통 상단
-    const markers = [
+    onst markers = [
         /-{3,}\s*Original Message\s*-{3,}/i,
         /-{3,}\s*Forwarded message\s*-{3,}/i,
+        /-{2,}\s*원본\s*메일\s*-{2,}/,
         /_{10,}/,
         /\n\*{0,2}\s*보낸\s*사람\s*:/,
+        /\n\s*보낸\s*날짜\s*:/,
+        /\n\s*발신\s*:/,
+        /\n\s*Sent\s*:\s/i,
         /\n\s*From:\s.+\n\s*(Sent|To|보낸\s*날짜)\s*:/i,
         /\n[^\n]{0,80}\d{4}[.\-/]\s?\d{1,2}[.\-/]\s?\d{1,2}[^\n]{0,40}(작성|wrote)\s*:/i,
         /\nOn\s.+\swrote:/i
     ];
-    let cutIdx = s.length;
-    for (const re of markers) {
-        const m = s.match(re);
-        if (m && m.index < cutIdx) cutIdx = m.index;
-    }
+    const _findCut = (str) => {
+        let idx = str.length;
+        for (const re of markers) {
+            const m = str.match(re);
+            if (m && m.index < idx) idx = m.index;
+        }
+        return idx;
+    };
+    let cutIdx = _findCut(s);
     let head = s.slice(0, cutIdx);
-    if (head.trim().length < 40) head = s;   // 윗부분이 거의 비면 전체 사용(순수 포워딩 대비)
+    // 💡 윗부분에 새 내용이 거의 없는 "순수 포워딩" 대비
+    //    기존엔 원문 전체를 썼으나, 그러면 체인 맨 아래 과거 메일 날짜까지 AI에 노출됨.
+    //    → 가장 최근 인용 메일 1건까지만 사용하도록 제한.
+    if (head.trim().length < 40) {
+        if (cutIdx < s.length) {
+            const rest = s.slice(cutIdx + 1);
+            head = s.slice(0, cutIdx + 1 + _findCut(rest));
+        } else {
+            head = s;
+        }
+    }
     s = head;
 
     // 2) 인용 라인(> ...) 제거
@@ -11433,6 +11451,12 @@ async function mfCallGemini(apiKey, parsed) {
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const result = window.parseGeminiTask(text);
             if (result) {
+                // 💡 [B안] 시작일은 AI 추론 대신 메일 발송일로 확정 (캐시 저장 전에 반영)
+                if (_mfDateYMD) {
+                    result['시작일'] = _mfDateYMD;
+                    const _p = result['완료일'];
+                    if (_p && !String(_p).includes('날짜확인필요') && _p < _mfDateYMD) result['완료일'] = _mfDateYMD;
+                }
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
                 result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
                 const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
@@ -12604,6 +12628,13 @@ async function msCallGemini(apiKey, parsed) {
             let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
             const result = window.parseGeminiTask(text);
             if (result) {
+                // 💡 [B안] 시작일은 AI 추론 대신 메일 발송일로 확정
+                //    (인용/포워딩 체인에 섞인 과거 날짜를 집는 오류 원천 차단. 사용자가 달력에서 수정 가능)
+                if (_msDateYMD) {
+                    result['시작일'] = _msDateYMD;
+                    const _p = result['완료일'];
+                    if (_p && !String(_p).includes('날짜확인필요') && _p < _msDateYMD) result['완료일'] = _msDateYMD;
+                }
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
                 result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
                 const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
