@@ -10715,9 +10715,9 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
             .trim();
         origBody.textContent = `제목: ${subject}\n발신: ${sender||''}\n날짜: ${date||''}\n\n${bodyFormatted}`;
         origBody.style.maxHeight = '600px';
-        origBody.style.display = 'block';
+        origBody.style.display = 'none';
         const arrow = document.getElementById('mail-original-arrow');
-        if (arrow) arrow.textContent = '▲';
+        if (arrow) arrow.textContent = '▼';
     }
     // 분석결과 렌더링
     window._mailAnalyzedResult = JSON.parse(JSON.stringify(task));
