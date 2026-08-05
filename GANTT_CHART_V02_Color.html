@@ -10431,9 +10431,22 @@ window.updateInboxBadge();
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
                         <div style="margin-bottom:6px; padding:0 12px;">
-                            <div id="ms-keyword-label" style="font-size:10px; color:#666; margin-bottom:2px;">🔍 키워드 필터</div>
-                            <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler (비우면 전체)"
-                                   style="width:100%; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                            <div style="font-size:10px; color:#666; margin-bottom:4px; font-weight:bold;">🔍 필터 조건 <span style="font-weight:normal; color:#aaa;">(비우면 전체, 쉼표로 OR 조건)</span></div>
+                            <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                                <span style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">제목</span>
+                                <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler"
+                                       style="flex:1; padding:4px 7px; border:1px solid #ced4da; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
+                            <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
+                                <span style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">발신자</span>
+                                <input id="ms-keyword-from" type="text" placeholder="hong@kortek.co.kr, James"
+                                       style="flex:1; padding:4px 7px; border:1px solid #ced4da; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
+                            <div style="display:flex; align-items:center; gap:4px;">
+                                <span style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">본문</span>
+                                <input id="ms-keyword-body" type="text" placeholder="RFQ, 견적"
+                                       style="flex:1; padding:4px 7px; border:1px solid #ced4da; border-radius:4px; font-size:11px; box-sizing:border-box;">
+                            </div>
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:6px; padding:0 12px;">
                             <input id="ms-start-date" type="date"
@@ -11873,12 +11886,14 @@ window.msFetchMail = async function() {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
-            mailUser:  userid,
-            mailPw:    password,
+            mailUser:     userid,
+            mailPw:       password,
             startDate,
             endDate,
-            keyword:   document.getElementById('ms-keyword')?.value?.trim() || '',
-            maxCount:  500
+            keyword:      document.getElementById('ms-keyword')?.value?.trim() || '',
+            keywordFrom:  document.getElementById('ms-keyword-from')?.value?.trim() || '',
+            keywordBody:  document.getElementById('ms-keyword-body')?.value?.trim() || '',
+            maxCount:     500
             })
         });
         const data = await res.json();
@@ -12509,8 +12524,8 @@ async function msCallGemini(apiKey, parsed) {
     let model = window.getSummaryModel();
     let inch = window.getSummaryInch();
 
-    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 4000);
-    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText);
+    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (parsed.date ? '발송일: ' + parsed.date + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
+    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, parsed.date || null);
 
     const MAX_RETRY = 3;
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
