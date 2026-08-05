@@ -8174,11 +8174,14 @@ window.refreshAiKeyPanel = function() {
     if (sel) sel.value = provider;
 
     const labelEl = document.getElementById('mail-key-label');
-    if (labelEl) labelEl.textContent = `🔑 ${cfg.label} API 키 (개인 키)`;
+    if (labelEl) labelEl.textContent = `🔑 ${cfg.label.split(' ')[0]} API`;
     const guideEl = document.getElementById('mail-key-guide');
-    if (guideEl) guideEl.textContent = (window._currentLang === 'en' && cfg.guideTextEn) ? cfg.guideTextEn : cfg.guideText;
+    if (guideEl) guideEl.style.display = 'none';
     const linkBtn = document.getElementById('mail-key-link-btn');
-    if (linkBtn) linkBtn.setAttribute('onclick', `window.open('${cfg.guideUrl}', '_blank')`);
+    if (linkBtn) {
+        linkBtn.setAttribute('onclick', `window.open('${cfg.guideUrl}', '_blank')`);
+        linkBtn.title = (window._currentLang === 'en' && cfg.guideTextEn) ? cfg.guideTextEn : cfg.guideText;
+    }
 
     const keyInput = document.getElementById('mail-gemini-key');
     const keyStatus = document.getElementById('mail-key-status');
@@ -8289,7 +8292,13 @@ window.analyzeMailContent = async function() {
                 throw new Error(data.message || "구글 서버 응답 오류");
             }
 
-            const text = data.result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const provider = window.getActiveAiProvider();
+            let text = '';
+            if (provider === 'gemini') {
+                text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            } else {
+                text = data.result?.choices?.[0]?.message?.content || '';
+            }
             parsed = window.parseGeminiTask(text);
             if (!parsed) throw new Error('JSON 형식을 찾을 수 없습니다.');
             lastErr = null;
@@ -10229,7 +10238,7 @@ window.updateInboxBadge();
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
                         <span id="mail-ai-section-label">🤖 AI 선택</span>
                         <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
-                                style="flex:1; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                                style="width:200px; max-width:200px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px; overflow:hidden; text-overflow:ellipsis;">
                             <option value="gemini">Gemini (Google)</option>
                             <option value="groq">Groq — Llama · DeepSeek 등 무료</option>
                             <option value="mistral">Mistral (프랑스 AI, 무료)</option>
@@ -10238,7 +10247,7 @@ window.updateInboxBadge();
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
                         <span id="mail-ai-model-label">🔧 모델 선택</span>
                         <select id="mail-ai-model" onchange="window.onAiModelChange()"
-                                style="flex:1; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                                style="width:200px; max-width:200px; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px; overflow:hidden; text-overflow:ellipsis;">
                         </select>
                     </div>
                     <div id="mail-model-guide" style="display:none; font-size:10px; color:#555; background:#fffbe6; border:1px solid #ffe066; border-radius:4px; padding:5px 8px; margin-bottom:4px; line-height:1.5;"></div>
@@ -10250,14 +10259,13 @@ window.updateInboxBadge();
                                 🗑️ 분석 캐시 초기화
                             </button>
                             <button id="mail-key-link-btn" onclick="window.open('https://aistudio.google.com/apikey', '_blank')"
-                                    style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap;">
+                                    style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap;"
+                                    title="">
                                 🔗 발급받기
                             </button>
                         </div>
                     </div>
-                    <div id="mail-key-guide" style="font-size:10px; color:#888; margin-bottom:5px; line-height:1.4;">
-                        구글 계정으로 로그인 → [Create API key] 클릭 → 생성된 키(AIza로 시작)를 복사해서 아래에 붙여넣고 저장하세요. (무료로 발급 가능)
-                    </div>
+                    <div id="mail-key-guide" style="display:none;"></div>
                     <div style="display:flex; gap:5px;">
                         <input id="mail-gemini-key" type="password" placeholder="AIza..."
                             style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
@@ -11378,7 +11386,13 @@ async function mfCallGemini(apiKey, parsed) {
             const data = await resp.json();
             console.log('GAS응답status:', data.status, '메시지:', data.message);
             if (data.status !== 'success') throw new Error(data.message);
-            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const _prov = window.getActiveAiProvider();
+            let text = '';
+            if (_prov === 'gemini') {
+                text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            } else {
+                text = data.result?.choices?.[0]?.message?.content || '';
+            }
             const result = window.parseGeminiTask(text);
             if (result) {
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
@@ -12525,7 +12539,13 @@ async function msCallGemini(apiKey, parsed) {
             });
             const data = await resp.json();
             if (data.status !== 'success') throw new Error(data.message);
-            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            const _prov2 = window.getActiveAiProvider();
+            let text = '';
+            if (_prov2 === 'gemini') {
+                text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            } else {
+                text = data.result?.choices?.[0]?.message?.content || '';
+            }
             const result = window.parseGeminiTask(text);
             if (result) {
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
@@ -14431,7 +14451,7 @@ window.checkAndSendAlarms = async function(isManual) {
 <div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlainSafe(item.diffDays)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1; width:100%; max-width:600px;">
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1; width:100%; max-width:1000px;">
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">${projTitle}</td></tr>
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">${item.taskName}</td></tr>
     ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top; border:1px solid #dcdde1; width:90px; white-space:nowrap;">내용</td><td style="padding:6px 12px; white-space:normal; border:1px solid #dcdde1; word-break:break-word;">${window.alarmFormatContent ? window.alarmFormatContent(item.content).replace(/\n/g, '<br>') : item.content}</td></tr>` : ''}
@@ -15972,7 +15992,7 @@ window.sendSingleAlarm = async function(sendAll) {
     const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(dDay)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1; width:100%; max-width:600px;">
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1; width:100%; max-width:1000px;">
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">${projTitle}</td></tr>
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">${item.taskName}</td></tr>
     ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top; border:1px solid #dcdde1; width:90px; white-space:nowrap;">내용</td><td style="padding:6px 12px; white-space:normal; border:1px solid #dcdde1; word-break:break-word;">${window.alarmFormatContent(item.content).replace(/\n/g, '<br>')}</td></tr>` : ''}
@@ -16036,7 +16056,7 @@ window.sendAllPendingAlarms = async function() {
         const body    = `<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
   <p><b>${item.assignee}님께</b></p>
   <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">${dDayPlain(item.diffDays)}일 (${item.dueStr})</b>입니다.</p>
-  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1; width:100%; max-width:600px;">
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1; width:100%; max-width:1000px;">
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">${projTitle}</td></tr>
     <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">${item.taskName}</td></tr>
     ${item.content ? `<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top; border:1px solid #dcdde1; width:90px; white-space:nowrap;">내용</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">${item.content}</td></tr>` : ''}
