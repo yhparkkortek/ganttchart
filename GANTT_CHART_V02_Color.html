@@ -763,25 +763,41 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           <span id="install-guide-title" style="font-size:12px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
           <span id="install-guide-arrow" style="font-size:11px; color:#7a5210;">▼ 펼치기</span>
         </div>
-        <div id="install-guide" style="display:none; margin-top:10px; font-size:8px; color:#555; line-height:1.8;">
+        <div id="install-guide" style="display:none; margin-top:10px; font-size:12px; color:#555; line-height:1.9;">
           <div id="install-guide-content">
-          <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:5px 8px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:8px; color:#1a3a5c;">
-            💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.
+          <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#1a3a5c;">
+            💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
+            　<b>kortek_backend.bat</b> 하나만 실행하면 됩니다.
+          </div>
+          <div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#7a5210;">
+            🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.
           </div>
           <b>Step 1.</b> Python 설치
           <a href="https://www.python.org/downloads/" target="_blank"
-            style="margin-left:6px; padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:11px;">python.org →</a><br>
-          　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>
+            style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">python.org →</a><br>
+          　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br>
           <b>Step 2.</b> KORTEK Backend 파일 설치<br>
-          　<a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip','KortekBackend.zip')"
-            style="padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:11px;">⬇️ KortekBackend.zip</a>
-          　<span style="font-size:10.5px; color:#999;">막히면 →</span>
-          <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py','kortek_backend.py')"
-            style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .py</a>
-          <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
-            style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:10.5px;">📋 .bat</a><br>
-          <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭 → 검은 창에 <b>http://127.0.0.1:5000</b> ✅<br>
-          <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b>
+          　　<a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip','kortek_backend.zip')"
+            style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>
+          　　→ 압축 풀기 → 폴더 안 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br>
+          　　<span style="font-size:11px; color:#999;">⚠️ 보안 정책으로 다운로드가 안 되면 아래 방법으로 직접 생성하세요 →</span><br>
+          　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py','kortek_backend.py')"
+            style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:11px; white-space:nowrap;">📋 kortek_backend.py 복사</a>
+          &nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
+            style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:11px; white-space:nowrap;">📋 kortek_backend.bat 복사</a>
+          　　<span style="font-size:11px; color:#999;">메모장 붙여넣기 → 파일명 그대로 저장 → 같은 폴더</span><br>
+          <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>
+          　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>
+          　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>
+          　　→ 검은 창은 <b>최소화</b>해두세요 (닫으면 서버 종료됨)<br>
+          <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b><br>
+          　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다.<br>
+          <b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>
+          　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>
+          　　② 키보드 <b>Win + R</b> 누르기 → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>
+          　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>
+          　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>
+          　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅
           </div>
         </div>
       </div>
@@ -5277,8 +5293,25 @@ window.deleteHistoryByDateRange = function() {
             if (el !== td) el.classList.remove('detail-td-expanded');
         });
         td.classList.toggle('detail-td-expanded', !wasExpanded);
+        // WBS 팝업 닫기 (상세내용 클릭 시 stopPropagation으로 외부클릭 감지 안되는 문제 해결)
+        const wbsPopup = document.getElementById('row-action-popup');
+        if (wbsPopup) { wbsPopup.style.display = 'none'; window.clearRowHighlight && window.clearRowHighlight(); }
         if (event) event.stopPropagation();
     };
+    // 상세내용 헤더 클릭 — 전체 펼치기/접기 토글
+    window.toggleAllDetailExpand = function(th) {
+        const allDetail = document.querySelectorAll('td.detail-td');
+        const anyExpanded = document.querySelector('td.detail-td-expanded');
+        const arrow = document.getElementById('detail-th-arrow');
+        if (anyExpanded) {
+            allDetail.forEach(el => el.classList.remove('detail-td-expanded'));
+            if (arrow) arrow.textContent = '▼';
+        } else {
+            allDetail.forEach(el => el.classList.add('detail-td-expanded'));
+            if (arrow) arrow.textContent = '▲';
+        }
+    };
+
     // 상세내용 셀이 아닌 다른 곳을 클릭하면, 펼쳐져 있던 셀을 기본 높이로 되돌림
     document.addEventListener('click', function(e) {
         if (e.target.closest && e.target.closest('td.detail-td')) return;
@@ -5749,12 +5782,12 @@ window.deleteHistoryByDateRange = function() {
             + '<b>Step 1.</b> Python 설치 <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:7px;">python.org →</a><br>'
             + '　설치 시 <b>"Add Python to PATH"</b> 체크 필수<br>'
             + '<b>Step 2.</b> KORTEK Backend 파일 설치<br>'
-            + '　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip\',\'KortekBackend.zip\')" style="padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:7px;">⬇️ KortekBackend.zip</a>'
+            + '　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip\',\'kortek_backend.zip\')" style="padding:1px 8px; background:#2c5f8a; color:#fff; border-radius:3px; text-decoration:none; font-size:7px;">⬇️ kortek_backend.zip</a>'
             + '　<span style="font-size:7px; color:#999;">막히면 →</span>'
             + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:7px;">📋 .py</a>'
             + '<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:0 5px; background:#777; color:#fff; border-radius:3px; font-size:7px;">📋 .bat</a><br>'
-            + '<b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭 → 검은 창에 <b>http://127.0.0.1:5000</b> ✅<br>'
-            + '<b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b>';
+            + '<b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭 → 검은 창 최소화 · <b>http://127.0.0.1:5000</b> ✅<br>'
+            + '<b>Step 4.</b> 검은 창 닫지 마세요 · PC 자동실행: bat 우클릭→바로가기→Win+R→shell:startup→붙여넣기';
 
         // [AI팝업 설치안내] ms-install-guide 번역
         const _msTitle = document.getElementById('ms-install-title');
@@ -5785,17 +5818,52 @@ window.deleteHistoryByDateRange = function() {
             + '<b>Step 1.</b> Python 설치 <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:8px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">python.org 바로가기 →</a><br>'
             + '　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br>'
             + '<b>Step 2.</b> KORTEK Backend 파일 설치<br>'
-            + '　　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip\',\'KortekBackend.zip\')" style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px; white-space:nowrap;">⬇️ KortekBackend.zip 다운로드</a><br>'
+            + '　　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip\',\'kortek_backend.zip\')" style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>'
             + '　　→ 압축 풀기 → 폴더 안 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br>'
             + '<span style="font-size:11px; color:#999;">　　⚠️ 보안 정책으로 다운로드가 안 되면 아래 방법으로 직접 생성하세요 →</span><br>'
             + '　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; text-decoration:none; font-size:11px; white-space:nowrap;">📋 kortek_backend.py 복사</a>'
             + '&nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; text-decoration:none; font-size:11px; white-space:nowrap;">📋 kortek_backend.bat 복사</a>'
             + '　　<span style="font-size:11px; color:#999;">메모장 붙여넣기 → 파일명 그대로 저장 → 같은 폴더</span><br>'
+            + '<div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin:6px 0 4px; border-radius:0 4px 4px 0; font-size:12px; color:#7a5210;">🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 일부 기능이 동작하지 않을 수 있습니다.</div>'
             + '<b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>'
             + '　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>'
             + '　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>'
+            + '　　→ 검은 창은 <b>최소화</b>해두세요 (닫으면 서버 종료됨)<br>'
             + '<b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b><br>'
-            + '　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다';
+            + '　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다.<br>'
+            + '<b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>'
+            + '　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>'
+            + '　　② 키보드 <b>Win + R</b> 누르기 → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>'
+            + '　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>'
+            + '　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>'
+            + '　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅<br>'
+            + '<hr style="border:none; border-top:1px dashed #ddd; margin:10px 0;">'
+            + '<b>Step 5.</b> 📱 Telegram 알람 설정 <span style="font-weight:normal; color:#888; font-size:11px;">(선택 — 알람 기능 사용 시)</span><br>'
+            + '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin:6px 0 8px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">'
+            + '💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>'
+            + '　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호</div>'
+            + '<b>5-1. 텔레그램 앱 설치</b><br>'
+            + '　　<a href="https://telegram.org" target="_blank" style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">telegram.org →</a>　에서 PC · 모바일 설치<br><br>'
+            + '<b>5-2. Bot Token 발급 (@BotFather)</b><br>'
+            + '　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>'
+            + '　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>'
+            + '　　③ 봇 사용자명 입력 (영문, _bot으로 끝나야 함 · 예: kortek_alarm_bot)<br>'
+            + '　　④ BotFather가 <b>Token</b> (긴 문자열)을 발급 → 복사해두기<br>'
+            + '　　⑤ 발급된 봇 링크(t.me/봇이름)를 팀원에게 공유 → 각자 <b>/start</b> 전송 요청<br><br>'
+            + '<b>5-3. Chat ID 확인 (@userinfobot)</b><br>'
+            + '　　① 텔레그램에서 <b>@userinfobot</b> 검색 후 시작<br>'
+            + '　　② <b>/start</b> 입력 → 봇이 나의 <b>Chat ID (숫자)</b> 를 알려줌<br>'
+            + '　　③ 팀원도 동일하게 본인 Chat ID 확인 후 PM에게 전달<br><br>'
+            + '<b>5-4. 앱에서 입력 및 저장</b><br>'
+            + '　　① 알람 탭 → Telegram 섹션 → <b>Bot Token</b> 입력 후 저장<br>'
+            + '　　② <b>메신저 수신자</b> → Chat ID 입력 후 추가<br>'
+            + '　　③ 테스트 버튼으로 수신 확인 ✅';
+            + '<b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>'
+            + '　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>'
+            + '　　② 키보드 <b>Win + R</b> 누르기 → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>'
+            + '　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>'
+            + '　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>'
+            + '　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅';
 
         // [Notice] 발송 로그 제목
         const _nlTitle = document.getElementById('notice-log-title');
@@ -6111,6 +6179,8 @@ window.deleteHistoryByDateRange = function() {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}" ondblclick="window.toggleChartExpand()" title="더블클릭: 차트 확장/기본 보기 전환">
                     <div class="chart-th-axis" style="position:relative; height:12px; overflow:visible; margin:0 20px; box-sizing:border-box;"></div>
                 </th>`;
+            } else if (thClass === 'detail-th') {
+                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass} cursor:pointer;" title="클릭: 상세내용 전체 펼치기/접기" onclick="window.toggleAllDetailExpand(this)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell} <span style="font-size:9px; color:#aaa;" id="detail-th-arrow">▼</span></div></th>`;
             } else {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             }
@@ -10408,42 +10478,64 @@ window.updateInboxBadge();
                             <span id="ms-install-title" style="font-size:9px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
                             <span id="ms-install-arrow" style="font-size:8px; color:#7a5210;">▼ 펼치기</span>
                         </div>
-                        <div id="ms-install-guide" style="display:none; margin-top:10px; font-size:8px; color:#555; line-height:1.8;">
+                        <div id="ms-install-guide" style="display:none; margin-top:10px; font-size:12px; color:#555; line-height:1.9;">
                         <div id="ms-install-guide-content">
-                            <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:8px; color:#1a3a5c;">
+                            <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#1a3a5c;">
                                 💡 메일 수신 · 메일 알람 · Telegram · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
                                 　 <b>kortek_backend.bat</b> 하나만 실행하면 됩니다.
                             </div>
+                            <div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#7a5210;">
+                                🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.
+                            </div>
                             <b>Step 1.</b> Python 설치
                             <a href="https://www.python.org/downloads/" target="_blank"
-                                style="margin-left:8px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">
-                                python.org 바로가기 →
-                            </a><br>
+                                style="margin-left:8px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">python.org 바로가기 →</a><br>
                             　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br>
                             <b>Step 2.</b> KORTEK Backend 파일 설치<br>
-                            　　
-                            <a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/KortekBackend.zip','KortekBackend.zip')"
-                                style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px; white-space:nowrap;">
-                                ⬇️ KortekBackend.zip 다운로드
-                            </a><br>
+                            　　<a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip','kortek_backend.zip')"
+                                style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>
                             　　→ 압축 풀기 → 폴더 안 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br>
                             <span style="font-size:11px; color:#999;">　　⚠️ 보안 정책으로 다운로드가 안 되면 아래 방법으로 직접 생성하세요 →</span><br>
-                            　　
-                            <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py','kortek_backend.py')"
-                                style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; text-decoration:none; font-size:11px; white-space:nowrap;">
-                                📋 kortek_backend.py 복사
-                            </a>
-                            &nbsp;
-                            <a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
-                                style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; text-decoration:none; font-size:11px; white-space:nowrap;">
-                                📋 kortek_backend.bat 복사
-                            </a>
+                            　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py','kortek_backend.py')"
+                                style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; text-decoration:none; font-size:11px; white-space:nowrap;">📋 kortek_backend.py 복사</a>
+                            &nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
+                                style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; text-decoration:none; font-size:11px; white-space:nowrap;">📋 kortek_backend.bat 복사</a>
                             　　<span style="font-size:11px; color:#999;">메모장 붙여넣기 → 파일명 그대로 저장 → 같은 폴더</span><br>
                             <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>
                             　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>
                             　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>
+                            　　→ 검은 창은 <b>최소화</b>해두세요 (닫으면 서버 종료됨)<br>
                             <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b><br>
-                            　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다
+                            　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다.<br>
+                            <b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>
+                            　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>
+                            　　② 키보드 <b>Win + R</b> 누르기 → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>
+                            　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>
+                            　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>
+                            　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅<br>
+                            <hr style="border:none; border-top:1px dashed #ddd; margin:10px 0;">
+                            <b>Step 5.</b> 📱 Telegram 알람 설정 <span style="font-weight:normal; color:#888; font-size:11px;">(선택 — 알람 기능 사용 시)</span><br>
+                            <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin:6px 0 8px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
+                                💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>
+                                　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호
+                            </div>
+                            <b>5-1. 텔레그램 앱 설치</b><br>
+                            　　<a href="https://telegram.org" target="_blank"
+                                style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">telegram.org →</a>　에서 PC · 모바일 설치<br><br>
+                            <b>5-2. Bot Token 발급 (@BotFather)</b><br>
+                            　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>
+                            　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>
+                            　　③ 봇 사용자명 입력 (영문, _bot으로 끝나야 함 · 예: kortek_alarm_bot)<br>
+                            　　④ BotFather가 <b>Token</b> (긴 문자열)을 발급 → 복사해두기<br>
+                            　　⑤ 발급된 봇 링크(t.me/봇이름)를 팀원에게 공유 → 각자 <b>/start</b> 전송 요청<br><br>
+                            <b>5-3. Chat ID 확인 (@userinfobot)</b><br>
+                            　　① 텔레그램에서 <b>@userinfobot</b> 검색 후 시작<br>
+                            　　② <b>/start</b> 입력 → 봇이 나의 <b>Chat ID (숫자)</b> 를 알려줌<br>
+                            　　③ 팀원도 동일하게 본인 Chat ID 확인 후 PM에게 전달<br><br>
+                            <b>5-4. 앱에서 입력 및 저장</b><br>
+                            　　① 알람 탭 → Telegram 섹션 → <b>Bot Token</b> 입력 후 저장<br>
+                            　　② <b>메신저 수신자</b> → Chat ID 입력 후 추가<br>
+                            　　③ 테스트 버튼으로 수신 확인 ✅
                         </div>
                         </div>
 
