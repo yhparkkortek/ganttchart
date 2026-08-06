@@ -219,7 +219,7 @@
     .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; align-items: center; justify-content: center; }
     .history-modal { background: #fff; width: 90%; max-width: 900px; height: 80vh; border-radius: 8px; display: flex; flex-direction: column; box-shadow: 0 10px 30px rgba(0,0,0,0.2); animation: fadeIn 0.2s; }
     @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-    .history-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #dee2e6; font-weight: bold; font-size: 16px; background: #f8f9fa; border-radius: 8px 8px 0 0; }
+    .history-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #ffe08a; font-weight: bold; font-size: 16px; color: #7a5210; background: #fff8e6; border-radius: 8px 8px 0 0; }
     .history-close { cursor: pointer; color: #868e96; font-size: 20px; transition: 0.2s; }
     .history-close:hover { color: #dc3545; transform: scale(1.1); }
     .history-body { padding: 0; overflow-y: auto; flex: 1; }
@@ -738,11 +738,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div>
 
 <!-- ── 알람 설정 모달 ── -->
-<div id="alarm-settings-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9100;"></div>
-<div id="alarm-settings-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+<div id="alarm-settings-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
+<div id="alarm-settings-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
   width:480px; max-width:94vw; max-height:90vh; overflow-y:auto;
   background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
-  z-index:9101; padding:26px 28px 20px; font-family:'맑은 고딕',sans-serif;">
+  padding:26px 28px 20px; font-family:'맑은 고딕',sans-serif;">
 
   <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-26px -28px 18px; padding:14px 20px 12px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="as-modal-title" style="margin:0; font-size:15px; color:#7a5210;">⚙️ 알람 설정</h3>
@@ -762,45 +762,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <button onclick="window.openInstallGuideModal('setup')"
           style="padding:3px 12px; background:#7a5210; color:#fff; border:none; border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap;">📖 안내 보기</button>
       </div>
-      <div id="install-guide" style="display:none;">
-          <div id="install-guide-content">
-          <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#1a3a5c;">
-            💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
-            　<b>kortek_backend.bat</b> 하나만 실행하면 됩니다.
-          </div>
-          <div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#7a5210;">
-            🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.
-          </div>
-          <b>Step 1.</b> Python 설치
-          <a href="https://www.python.org/downloads/" target="_blank"
-            style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px;">python.org →</a><br>
-          　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br>
-          <b>Step 2.</b> KORTEK Backend 파일 설치<br>
-          　　<a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip','kortek_backend.zip')"
-            style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:12px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>
-          　　→ 압축 풀기 → 폴더 안 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br>
-          　　<span style="font-size:11px; color:#999;">⚠️ 보안 정책으로 다운로드가 안 되면 아래 방법으로 직접 생성하세요 →</span><br>
-          　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py','kortek_backend.py')"
-            style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:11px; white-space:nowrap;">📋 kortek_backend.py 복사</a>
-          &nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
-            style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:11px; white-space:nowrap;">📋 kortek_backend.bat 복사</a>
-          　　<span style="font-size:11px; color:#999;">메모장 붙여넣기 → 파일명 그대로 저장 → 같은 폴더</span><br>
-          <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>
-          　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>
-          　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>
-          　　→ 검은 창은 <b>최소화</b>해두세요 (닫으면 서버 종료됨)<br>
-          <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b><br>
-          　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다.<br>
-          <b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>
-          　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>
-          　　② 키보드 <b>Win + R</b> 누르기 → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>
-          　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>
-          　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>
-          　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅
-          </div>
-        </div>
       </div>
-    </div>
+  </div>
 
   <!-- ══ 섹션 2: 이메일 알람 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
@@ -940,7 +903,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div>
 
 <!-- 알람 상세 모달 -->
-<div id="alarm-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000;"></div>
+<div id="alarm-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
 
 <!-- ── 처음 사용자 설치 안내 모달 ── -->
 <div id="install-guide-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
@@ -1033,11 +996,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
   </div>
 </div>
-<div id="alarm-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+<div id="alarm-modal" style="display:none; pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
   width:520px; max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
-  z-index:9001; padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
-  <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:grab;">
-    <h3 id="alarm-modal-title" style="margin:0; font-size:15px; color:#2c5f8a;">알람 상세</h3>
+  padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
+  <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-28px -28px 18px; padding:14px 20px 12px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
+    <h3 id="alarm-modal-title" style="margin:0; font-size:15px; color:#7a5210;">알람 상세</h3>
     <button onclick="window.closeAlarmModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
   </div>
   <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
@@ -1050,12 +1013,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   </div>
 </div>
 
-<div id="alarm-schedule-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9100;"></div>
-<div id="alarm-schedule-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+<div id="alarm-schedule-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
+<div id="alarm-schedule-modal" style="display:none; pointer-events:all; position:fixed; top:10vh; left:50%; transform:translateX(-50%);
   width:380px; max-width:90vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
-  z-index:9101; padding:24px 24px 18px; font-family:'맑은 고딕',sans-serif;">
-  <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
-    <h3 id="alarm-schedule-title" style="margin:0; font-size:14.5px; color:#2c5f8a;">⚙️ 알람 일정 설정</h3>
+  padding:24px 24px 18px; font-family:'맑은 고딕',sans-serif;">
+  <div style="display:flex; align-items:center; justify-content:space-between; margin:-24px -24px 14px; padding:12px 18px 10px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
+    <h3 id="alarm-schedule-title" style="margin:0; font-size:14.5px; color:#7a5210;">⚙️ 알람 일정 설정</h3>
     <button onclick="window.closeAlarmScheduleModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
   </div>
   <p style="font-size:11.5px; color:#888; margin:0 0 12px;">이 업무만 아래 체크한 날짜 기준으로 알람이 발송됩니다. (완료 예정일이 지나면 어떤 경우든 발송되지 않습니다)</p>
@@ -1179,14 +1142,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div>
 
 <!-- ── 공지 등록/수정 모달 ── -->
-<div id="notice-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+<div id="notice-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
   width:520px; max-width:95vw; max-height:90vh; overflow-y:auto;
   background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
-  z-index:9200; padding:24px 26px 20px; font-family:'맑은 고딕',sans-serif;">
+  padding:24px 26px 20px; font-family:'맑은 고딕',sans-serif;">
 
   <div id="notice-modal-header"
-       style="display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; cursor:grab; user-select:none;">
-    <h3 id="notice-modal-title" style="margin:0; font-size:15px; color:#2c5f8a;">📢 공지 등록</h3>
+       style="display:flex; align-items:center; justify-content:space-between; margin:-24px -26px 18px; padding:14px 20px 12px; cursor:grab; user-select:none; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
+    <h3 id="notice-modal-title" style="margin:0; font-size:15px; color:#7a5210;">📢 공지 등록</h3>
     <button onclick="window.closeNoticeModal()"
             style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;"
             onmousedown="event.stopPropagation()">✕</button>
@@ -1300,8 +1263,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             style="padding:7px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">취소</button>
   </div>
 </div>
-<div id="notice-modal-bg"
-     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.3); z-index:9199;"></div>
+<div id="notice-modal-bg" class="modal-overlay"
+     style="display:none; pointer-events:none; background:none;"></div>
 
 <div id="tab-address" class="tab-panel">
     <div class="concept-tab-wrap">
@@ -1792,8 +1755,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 </div>
 
-    <div id="history-overlay" class="modal-overlay" onclick="closeHistoryModal(event)">
-        <div class="history-modal" onclick="event.stopPropagation()">
+    <div id="history-overlay" class="modal-overlay" style="pointer-events:none; background:none;" onclick="closeHistoryModal(event)">
+        <div class="history-modal" onclick="event.stopPropagation()" style="pointer-events:all;">
             <div class="history-header">
                 <span data-i18n="h-session-history">🕒 변경 이력 (Session History)</span>
                 <span class="history-close" onclick="closeHistoryModal()">✖</span>
@@ -1808,8 +1771,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
     </div>
 
-    <div id="cal-day-popup-overlay" class="modal-overlay" onclick="window.closeCalDayPopup(event)">
-        <div class="history-modal" onclick="event.stopPropagation()" style="width:420px; max-width:92vw; height:auto; max-height:70vh;">
+    <div id="cal-day-popup-overlay" class="modal-overlay" style="pointer-events:none; background:none;" onclick="window.closeCalDayPopup(event)">
+        <div class="history-modal" onclick="event.stopPropagation()" style="pointer-events:all; width:420px; max-width:92vw; height:auto; max-height:70vh;">
             <div class="history-header">
                 <span id="cal-day-popup-title">업무 목록</span>
                 <span class="history-close" onclick="window.closeCalDayPopup()">✖</span>
@@ -1818,10 +1781,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
     </div>
 
-    <div id="cal-sync-help-overlay" class="modal-overlay" style="display:none;">
+    <div id="cal-sync-help-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
         <div id="cal-sync-help-modal" class="history-modal" onclick="event.stopPropagation()"
-             style="width:520px; max-width:92vw; height:auto; max-height:80vh;
-                    position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+             style="pointer-events:all; width:520px; max-width:92vw; height:auto; max-height:80vh;
+                    position:fixed; top:8vh; left:50%; transform:translateX(-50%);
                     display:flex; flex-direction:column;">
             <div id="cal-sync-help-drag" class="history-header" style="cursor:grab;">
                 <span id="cal-sync-help-title">🔗 Google 자동 동기화</span>
@@ -1837,8 +1800,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 
 <!-- 📌 새 프로젝트 시작 안내 팝업 -->
-<div id="new-project-modal-overlay" class="modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); align-items:center; justify-content:center; z-index:99998;">
-    <div style="background:#fff; border-radius:12px; padding:32px 36px; max-width:420px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
+<div id="new-project-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
+    <div style="pointer-events:all; background:#fff; border-radius:12px; padding:32px 36px; max-width:420px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
         <div style="font-size:36px; margin-bottom:12px;">📌</div>
         <div style="font-size:14.5px; color:#333; line-height:1.7; margin-bottom:20px;">
             새 프로젝트를 시작합니다.<br>참조 엑셀을 다운로드해서 작성한 뒤<br>화면에 드래그하세요.
@@ -2803,11 +2766,11 @@ ${mailText}`;
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'holiday-manager-modal';
-            modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:99999; align-items:center; justify-content:center;';
+            modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:none; pointer-events:none; z-index:99999; align-items:center; justify-content:center;';
             modal.innerHTML =
-                '<div style="background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
-                + '<div style="padding:14px 18px; border-bottom:1px solid #dee2e6; display:flex; justify-content:space-between; align-items:center;">'
-                + '<span style="font-size:15px; font-weight:bold; color:#2c5f8a;">' + (_hEn ? '🗓️ Holiday Registration' : '🗓️ 휴일 등록 (추가 휴일)') + '</span>'
+                '<div style="pointer-events:all; background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
+                + '<div style="padding:14px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a; display:flex; justify-content:space-between; align-items:center;">'
+                + '<span style="font-size:15px; font-weight:bold; color:#7a5210;">' + (_hEn ? '🗓️ Holiday Registration' : '🗓️ 휴일 등록 (추가 휴일)') + '</span>'
                 + '<button onclick="document.getElementById(\'holiday-manager-modal\').style.display=\'none\'" style="border:none; background:none; font-size:18px; cursor:pointer; color:#868e96;">✕</button>'
                 + '</div>'
                 + '<div id="holiday-sync-notice" style="padding:12px 18px; font-size:11px; color:#888; line-height:1.5; border-bottom:1px solid #f1f3f5;">'
@@ -9257,7 +9220,7 @@ window._bindClickToFront = function(modalId) {
         el.style.zIndex = String(window._topModalZ);
     });
 };
-['alarm-settings-modal', 'install-guide-modal', 'mail-analyzer-modal', 'task-inbox-modal', 'alarm-modal', 'notice-modal'].forEach(window._bindClickToFront);
+['alarm-settings-modal', 'install-guide-modal', 'mail-analyzer-modal', 'task-inbox-modal', 'alarm-modal', 'alarm-schedule-modal', 'notice-modal'].forEach(window._bindClickToFront);
 
 window.updateInboxBadge = function() {
     const badge = document.getElementById('inbox-badge');
@@ -10312,9 +10275,9 @@ window.updateInboxBadge();
                 display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-drag-handle" class="history-header"
-             style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
-                    cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
-            <span id="inbox-modal-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+             style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative;
+                    cursor:grab; border-bottom:1px solid #ffe08a; border-radius:10px 10px 0 0; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
+            <span id="inbox-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
                 📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
                 ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
                 📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>
@@ -10384,8 +10347,8 @@ window.updateInboxBadge();
     </div>
 </div>
 
-<div id="mc-add-unit-overlay" class="modal-overlay" style="display:none;">
-    <div style="background:#fff; border-radius:8px; width:min(360px, 90vw); padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.2);">
+<div id="mc-add-unit-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
+    <div style="pointer-events:all; background:#fff; border-radius:8px; width:min(360px, 90vw); padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.2);">
         <div id="mc-add-unit-title" style="font-size:14px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">➕ 제품구분자 추가</div>
         <div id="mc-add-unit-desc" style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
             예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>
@@ -15440,7 +15403,8 @@ window.openNoticeModal = async function(id) {
     await window._nmLoadTgSelectList();
     window._nmFillAddrList();
     modal.style.display='block';
-    bg.style.display='block';
+    bg.style.display='flex';
+    window.bringModalToFront('notice-modal');
 };
 window.closeNoticeModal = function() {
     const m=document.getElementById('notice-modal'); if(m) m.style.display='none';
@@ -15891,8 +15855,9 @@ window.openAlarmSettings = function() {
         list.innerHTML = '';
         ccList.forEach(r => window.addAlarmCcRow(r.name, r.email, r.enabled !== false, !!r.auto));
     }
-    document.getElementById('alarm-settings-overlay').style.display = 'block';
+    document.getElementById('alarm-settings-overlay').style.display = 'flex';
     document.getElementById('alarm-settings-modal').style.display  = 'block';
+    window.bringModalToFront('alarm-settings-modal');
 };
 
 // 설정 모달 닫기
@@ -16179,8 +16144,9 @@ window.openAlarmScheduleModal = function(idx) {
     document.getElementById('alarm-schedule-custom').value = Array.from(current).sort((a,b) => a-b).join(', ');
 
     document.getElementById('alarm-schedule-title').textContent = '⚙️ ' + item.taskName + (window._currentLang === 'en' ? ' — Alarm Schedule' : ' — 알람 일정');
-    document.getElementById('alarm-schedule-overlay').style.display = 'block';
+    document.getElementById('alarm-schedule-overlay').style.display = 'flex';
     document.getElementById('alarm-schedule-modal').style.display = 'block';
+    window.bringModalToFront('alarm-schedule-modal');
 };
 
 // 기본값(7/3/1) 체크 상태로 폼만 되돌림 — 저장 버튼을 눌러야 실제 반영됨
@@ -16287,8 +16253,9 @@ window.openAlarmModal = function(idx) {
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">발송 이력</td><td style="padding:6px 10px; color:#555; font-size:12px;">${sentHtml}</td></tr>
         </table>`;
 
-    document.getElementById('alarm-modal-overlay').style.display = 'block';
+    document.getElementById('alarm-modal-overlay').style.display = 'flex';
     document.getElementById('alarm-modal').style.display = 'block';
+    window.bringModalToFront('alarm-modal');
 };
 
 // 모달 닫기
