@@ -757,13 +757,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ Expand</span>
     </div>
     <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
-      <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px;">
-        <div onclick="const b=document.getElementById('install-guide');b.style.display=b.style.display==='none'?'block':'none';document.getElementById('install-guide-arrow').textContent=b.style.display==='none'?(window._currentLang==='en'?'▼ Expand':'▼ 펼치기'):(window._currentLang==='en'?'▲ Collapse':'▲ 접기')"
-             style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
-          <span id="install-guide-title" style="font-size:12px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-          <span id="install-guide-arrow" style="font-size:11px; color:#7a5210;">▼ 펼치기</span>
-        </div>
-        <div id="install-guide" style="display:none; margin-top:10px; font-size:12px; color:#555; line-height:1.9;">
+      <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+        <button onclick="window.openInstallGuideModal('setup')"
+          style="padding:3px 12px; background:#7a5210; color:#fff; border:none; border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap;">📖 안내 보기</button>
+      </div>
+      <div id="install-guide" style="display:none;">
           <div id="install-guide-content">
           <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#1a3a5c;">
             💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
@@ -889,16 +888,34 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
         <p style="margin:0; font-size:12px; font-weight:bold; color:#555;"><span id="as-tg-recv-label">👥 메신저 수신자</span> <span id="as-tg-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
         <div style="margin-bottom:8px;">
-          <div onclick="const b=document.getElementById('tg-chatid-guide');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('#tg-chatid-guide-arrow').textContent=b.style.display==='none'?(window._currentLang==='en'?'▼ How to get Chat ID':'▼ Chat ID 발급 방법'):(window._currentLang==='en'?'▲ Close':'▲ 닫기')"
-               style="cursor:pointer; font-size:11px; color:#2c5f8a; display:flex; align-items:center; gap:4px;">
-            <span id="tg-chatid-guide-arrow">▼ Chat ID 발급 방법</span>
+          <div style="font-size:11px; color:#2c5f8a; display:flex; align-items:center; gap:8px;">
+            <span>Telegram 설정 방법</span>
+            <button onclick="window.openInstallGuideModal('telegram')"
+              style="padding:2px 10px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap;">📖 안내 보기</button>
           </div>
           <div id="tg-chatid-guide" style="display:none; margin-top:6px; background:#f8f9fa; border:1px solid #e9ecef; border-radius:5px; padding:8px 10px; font-size:11px; color:#555; line-height:1.9;">
             <div id="tg-chatid-guide-content">
-              <b>1.</b> Telegram에서 <b>@userinfobot</b> 검색 후 시작<br>
-              <b>2.</b> /start 입력 → 봇이 나의 Chat ID (숫자) 를 알려줌<br>
-              <b>3.</b> 알려준 숫자를 아래 Chat ID 칸에 입력 후 추가<br>
-              <span style="color:#e67e22;">⚠️ Bot Token은 @BotFather에서 생성 — 설정 저장 후 팀원에게 봇 링크를 공유해 /start 전송 요청</span>
+              <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
+                💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>
+                　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호
+              </div>
+              <b>5-1. 텔레그램 앱 설치</b><br>
+              　　<a href="https://telegram.org" target="_blank"
+                style="padding:2px 8px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">telegram.org →</a>　에서 PC · 모바일 설치<br><br>
+              <b>5-2. Bot Token 발급 (@BotFather)</b><br>
+              　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>
+              　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>
+              　　③ 봇 사용자명 입력 (영문, _bot으로 끝나야 함 · 예: kortek_alarm_bot)<br>
+              　　④ BotFather가 <b>Token</b> (긴 문자열)을 발급 → 복사해두기<br>
+              　　⑤ 발급된 봇 링크(t.me/봇이름)를 팀원에게 공유 → 각자 <b>/start</b> 전송 요청<br><br>
+              <b>5-3. Chat ID 확인 (@userinfobot)</b><br>
+              　　① 텔레그램에서 <b>@userinfobot</b> 검색 후 시작<br>
+              　　② <b>/start</b> 입력 → 봇이 나의 <b>Chat ID (숫자)</b> 를 알려줌<br>
+              　　③ 팀원도 동일하게 본인 Chat ID 확인 후 PM에게 전달<br><br>
+              <b>5-4. 앱에서 입력 및 저장</b><br>
+              　　① 이 화면 상단 → <b>Bot Token</b> 입력 후 💾 저장<br>
+              　　② <b>메신저 수신자</b> → Chat ID 입력 후 추가<br>
+              　　③ 📨 테스트 버튼으로 수신 확인 ✅
             </div>
           </div>
         </div>
@@ -925,6 +942,95 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 <!-- 알람 상세 모달 -->
 <div id="alarm-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.45); z-index:9000;"></div>
+
+<!-- ── 처음 사용자 설치 안내 모달 ── -->
+<div id="install-guide-modal-overlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:9200;" onclick="if(event.target===this)window.closeInstallGuideModal()"></div>
+<div id="install-guide-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  width:560px; max-width:95vw; max-height:88vh; overflow:hidden;
+  background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.25);
+  z-index:9201; font-family:'맑은 고딕',sans-serif; display:none; flex-direction:column;">
+  <!-- 헤더 -->
+  <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px 12px; border-bottom:1px solid #eee; flex-shrink:0;">
+    <span style="font-size:14px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+    <button onclick="window.closeInstallGuideModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+  </div>
+  <!-- 탭 -->
+  <div style="display:flex; border-bottom:1px solid #eee; flex-shrink:0;">
+    <div id="ig-tab-setup" onclick="window.switchInstallTab('setup')"
+         style="flex:1; padding:10px; text-align:center; font-size:12px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; background:#f8fbff;">
+      ⚙️ 설치 (Step 1~4)
+    </div>
+    <div id="ig-tab-telegram" onclick="window.switchInstallTab('telegram')"
+         style="flex:1; padding:10px; text-align:center; font-size:12px; font-weight:bold; cursor:pointer; color:#888; border-bottom:2px solid transparent; background:#fff;">
+      📱 Telegram (Step 5)
+    </div>
+  </div>
+  <!-- 탭 내용 -->
+  <div style="overflow-y:auto; padding:16px 20px; flex:1; font-size:11px; color:#555; line-height:1.9;">
+    <!-- Setup 탭 -->
+    <div id="ig-content-setup">
+      <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
+        💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
+        　<b>kortek_backend.bat</b> 하나만 실행하면 됩니다.
+      </div>
+      <div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">
+        🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.
+      </div>
+      <b>Step 1.</b> Python 설치
+      <a href="https://www.python.org/downloads/" target="_blank"
+        style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">python.org →</a><br>
+      　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br><br>
+      <b>Step 2.</b> KORTEK Backend 파일 설치<br>
+      　　<a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip','kortek_backend.zip')"
+        style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>
+      　　→ 압축 풀기 → 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br>
+      　　<span style="font-size:10.5px; color:#999;">⚠️ 보안 정책으로 다운로드가 안 되면 →</span><br>
+      　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py','kortek_backend.py')"
+        style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 kortek_backend.py 복사</a>
+      &nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
+        style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 kortek_backend.bat 복사</a>
+      　　<span style="font-size:10.5px; color:#999;">메모장 붙여넣기 → 파일명 그대로 저장 → 같은 폴더</span><br><br>
+      <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>
+      　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>
+      　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>
+      　　→ 검은 창은 <b>최소화</b>해두세요 (닫으면 서버 종료됨)<br><br>
+      <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b><br>
+      　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다.<br><br>
+      <div style="background:#f8f9fa; border:1px solid #e9ecef; border-radius:5px; padding:10px 12px;">
+        <b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>
+        　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>
+        　　② 키보드 <b>Win + R</b> → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>
+        　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>
+        　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>
+        　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅
+      </div>
+    </div>
+    <!-- Telegram 탭 -->
+    <div id="ig-content-telegram" style="display:none;">
+      <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
+        💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>
+        　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호
+      </div>
+      <b>5-1. 텔레그램 앱 설치</b><br>
+      　　<a href="https://telegram.org" target="_blank"
+        style="padding:2px 8px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">telegram.org →</a>　에서 PC · 모바일 설치<br><br>
+      <b>5-2. Bot Token 발급 (@BotFather)</b><br>
+      　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>
+      　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>
+      　　③ 봇 사용자명 입력 (영문, _bot으로 끝나야 함 · 예: kortek_alarm_bot)<br>
+      　　④ BotFather가 <b>Token</b> (긴 문자열)을 발급 → 복사해두기<br>
+      　　⑤ 발급된 봇 링크(t.me/봇이름)를 팀원에게 공유 → 각자 <b>/start</b> 전송 요청<br><br>
+      <b>5-3. Chat ID 확인 (@userinfobot)</b><br>
+      　　① 텔레그램에서 <b>@userinfobot</b> 검색 후 시작<br>
+      　　② <b>/start</b> 입력 → 봇이 나의 <b>Chat ID (숫자)</b> 를 알려줌<br>
+      　　③ 팀원도 동일하게 본인 Chat ID 확인 후 PM에게 전달<br><br>
+      <b>5-4. 앱에서 입력 및 저장</b><br>
+      　　① 알람 설정 → Telegram 섹션 → <b>Bot Token</b> 입력 후 💾 저장<br>
+      　　② <b>메신저 수신자</b> → Chat ID 입력 후 추가<br>
+      　　③ 📨 테스트 버튼으로 수신 확인 ✅
+    </div>
+  </div>
+</div>
 <div id="alarm-modal" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
   width:520px; max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   z-index:9001; padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
@@ -5753,10 +5859,23 @@ window.deleteHistoryByDateRange = function() {
             + '<b>2.</b> Type /start → the bot will send your Chat ID (a number)<br>'
             + '<b>3.</b> Enter that number in the Chat ID field below and click Add<br>'
             + '<span style="color:#e67e22;">⚠️ Bot Token is created via @BotFather — after saving settings, share the bot link with team members and ask them to send /start</span>'
-            : '<b>1.</b> Telegram에서 <b>@userinfobot</b> 검색 후 시작<br>'
-            + '<b>2.</b> /start 입력 → 봇이 나의 Chat ID (숫자) 를 알려줌<br>'
-            + '<b>3.</b> 알려준 숫자를 아래 Chat ID 칸에 입력 후 추가<br>'
-            + '<span style="color:#e67e22;">⚠️ Bot Token은 @BotFather에서 생성 — 설정 저장 후 팀원에게 봇 링크를 공유해 /start 전송 요청</span>';
+            : '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호</div>'
+            + '<b>5-1. 텔레그램 앱 설치</b><br>'
+            + '　　<a href="https://telegram.org" target="_blank" style="padding:2px 8px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">telegram.org →</a>　에서 PC · 모바일 설치<br><br>'
+            + '<b>5-2. Bot Token 발급 (@BotFather)</b><br>'
+            + '　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>'
+            + '　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>'
+            + '　　③ 봇 사용자명 입력 (영문, _bot으로 끝나야 함 · 예: kortek_alarm_bot)<br>'
+            + '　　④ BotFather가 <b>Token</b> (긴 문자열)을 발급 → 복사해두기<br>'
+            + '　　⑤ 발급된 봇 링크(t.me/봇이름)를 팀원에게 공유 → 각자 <b>/start</b> 전송 요청<br><br>'
+            + '<b>5-3. Chat ID 확인 (@userinfobot)</b><br>'
+            + '　　① 텔레그램에서 <b>@userinfobot</b> 검색 후 시작<br>'
+            + '　　② <b>/start</b> 입력 → 봇이 나의 <b>Chat ID (숫자)</b> 를 알려줌<br>'
+            + '　　③ 팀원도 동일하게 본인 Chat ID 확인 후 PM에게 전달<br><br>'
+            + '<b>5-4. 앱에서 입력 및 저장</b><br>'
+            + '　　① 이 화면 상단 → <b>Bot Token</b> 입력 후 💾 저장<br>'
+            + '　　② <b>메신저 수신자</b> → Chat ID 입력 후 추가<br>'
+            + '　　③ 📨 테스트 버튼으로 수신 확인 ✅';
 
         // [알람설정 설치안내] 제목/화살표/내용 번역
         const _igTitle = document.getElementById('install-guide-title');
@@ -10473,12 +10592,12 @@ window.updateInboxBadge();
                 <div id="mail-tab-server-content" style="display:none; flex-direction:column; flex:1; overflow-y:auto; padding:12px;">
                     <!-- 설치 안내 (접기/펼치기) -->
                     <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:10px 14px; margin-bottom:10px; flex-shrink:0;">
-                        <div onclick="const b=document.getElementById('ms-install-guide');b.style.display=b.style.display==='none'?'block':'none'"
-                            style="cursor:pointer; display:flex; align-items:center; justify-content:space-between;">
-                            <span id="ms-install-title" style="font-size:9px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-                            <span id="ms-install-arrow" style="font-size:8px; color:#7a5210;">▼ 펼치기</span>
+                        <div style="display:flex; align-items:center; justify-content:space-between;">
+                            <span id="ms-install-title" style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
+                            <button onclick="window.openInstallGuideModal('setup')"
+                              style="padding:3px 12px; background:#7a5210; color:#fff; border:none; border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap;">📖 안내 보기</button>
                         </div>
-                        <div id="ms-install-guide" style="display:none; margin-top:10px; font-size:12px; color:#555; line-height:1.9;">
+                        <div id="ms-install-guide" style="display:none;">
                         <div id="ms-install-guide-content">
                             <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:8px; border-radius:0 4px 4px 0; font-size:12px; color:#1a3a5c;">
                                 💡 메일 수신 · 메일 알람 · Telegram · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
@@ -15763,6 +15882,29 @@ window.openAlarmSettings = function() {
 };
 
 // 설정 모달 닫기
+window.openInstallGuideModal = function(tab) {
+    document.getElementById('install-guide-modal-overlay').style.display = 'block';
+    const modal = document.getElementById('install-guide-modal');
+    modal.style.display = 'flex';
+    window.switchInstallTab(tab || 'setup');
+};
+window.closeInstallGuideModal = function() {
+    document.getElementById('install-guide-modal-overlay').style.display = 'none';
+    document.getElementById('install-guide-modal').style.display = 'none';
+};
+window.switchInstallTab = function(tab) {
+    const isSetup = tab === 'setup';
+    document.getElementById('ig-content-setup').style.display = isSetup ? 'block' : 'none';
+    document.getElementById('ig-content-telegram').style.display = isSetup ? 'none' : 'block';
+    const tSetup = document.getElementById('ig-tab-setup');
+    const tTg = document.getElementById('ig-tab-telegram');
+    tSetup.style.color = isSetup ? '#2c5f8a' : '#888';
+    tSetup.style.borderBottom = isSetup ? '2px solid #2c5f8a' : '2px solid transparent';
+    tSetup.style.background = isSetup ? '#f8fbff' : '#fff';
+    tTg.style.color = isSetup ? '#888' : '#2c5f8a';
+    tTg.style.borderBottom = isSetup ? '2px solid transparent' : '2px solid #2c5f8a';
+    tTg.style.background = isSetup ? '#fff' : '#f8fbff';
+};
 window.closeAlarmSettings = function() {
     document.getElementById('alarm-settings-overlay').style.display = 'none';
     document.getElementById('alarm-settings-modal').style.display   = 'none';
