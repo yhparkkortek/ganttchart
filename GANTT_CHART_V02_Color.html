@@ -482,6 +482,11 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .concept-grid input.u-input, .concept-grid textarea.u-input {
     background:#eceff1;
 }
+.req-field.req-missing {
+    background:#fff3cd !important;
+    border:1.5px solid #e03131 !important;
+    box-shadow:0 0 0 2px rgba(224,49,49,0.15);
+}
 .concept-table td input.u-input, .concept-table td textarea.u-input {
     background:#eceff1;
 }
@@ -1435,11 +1440,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
                 <h3 id="sum-h3-info">프로젝트 정보</h3>
                 <div class="concept-grid">
-                    <label id="sum-lbl-customer">고객사</label><input type="text" id="sum-customer" class="u-input" placeholder="예: LNW">
-                    <label id="sum-lbl-cmodel">고객 모델명</label><input type="text" id="sum-customer-model" class="u-input" placeholder="예: STELLAR32">
+                    <label id="sum-lbl-customer">고객사 <span style="color:#e03131;">*</span></label><input type="text" id="sum-customer" class="u-input req-field" placeholder="예: LNW" oninput="window._checkRequiredField(this)">
+                    <label id="sum-lbl-cmodel">고객 모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-customer-model" class="u-input req-field" placeholder="예: STELLAR32" oninput="window._checkRequiredField(this)">
                     <label id="sum-lbl-pcode">프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
                     <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
-                    <label id="sum-lbl-ktkpn">KTK PN_모델명</label><input type="text" id="sum-ktk-pn-model" class="u-input" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW">
+                    <label id="sum-lbl-ktkpn">KTK PN_모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-ktk-pn-model" class="u-input req-field" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW" oninput="window._checkRequiredField(this)">
                 </div>
             </div>
         </div>
@@ -1451,7 +1456,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member1">프로젝트 멤버-1</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자"><input type="text" id="sum-pm" class="u-input" placeholder="예: 박용훈"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자 *" readonly style="color:#e03131; font-weight:bold;"><input type="text" id="sum-pm" class="u-input req-field" placeholder="예: 박용훈" oninput="window._checkRequiredField(this)"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
                     <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
                     <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
                     <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">                  
@@ -6655,6 +6660,19 @@ window.deleteHistoryByDateRange = function() {
         if (!String(pm.프로젝트담당자 || '').trim()) missing.push('프로젝트 담당자');
         if (missing.length === 0) return '';
         return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
+    };
+
+    // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자) 빈 값이면 시각적 하이라이트
+    window._checkRequiredField = function(el) {
+        if (!el) return;
+        if (String(el.value || '').trim()) el.classList.remove('req-missing');
+        else el.classList.add('req-missing');
+    };
+    window._checkAllRequiredFields = function() {
+        ['sum-customer', 'sum-customer-model', 'sum-ktk-pn-model', 'sum-pm'].forEach(function(id) {
+            const el = document.getElementById(id);
+            if (el) window._checkRequiredField(el);
+        });
     };
 
     window.updatePrintTitle = function() {
@@ -19174,6 +19192,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabName === 'weekly' && window.showWeeklyReport) window.showWeeklyReport();
         // Summary 탭은 Gantt chart Level 0 데이터와 연동된 타임라인을 매번 다시 그린다
         if (tabName === 'summary' && window.renderSummaryTimeline) window.renderSummaryTimeline();
+        // Summary 탭 진입 시 필수 항목(고객사/모델명/KTK PN/담당자) 미입력 하이라이트 갱신
+        if (tabName === 'summary' && window._checkAllRequiredFields) window._checkAllRequiredFields();
         // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
         if (tabName === 'calendar' && window.calRender) window.calRender();
         // Alarm 탭은 매번 최신 알람 목록을 다시 그린다
