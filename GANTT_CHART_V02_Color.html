@@ -5375,7 +5375,8 @@ window.deleteHistoryByDateRange = function() {
         if (event) event.stopPropagation();
     };
     // 상세내용 헤더 클릭 — 전체 펼치기/접기 토글
-    window.toggleAllDetailExpand = function(th) {
+    window.toggleAllDetailExpand = function(th, event) {
+        if (event) event.stopPropagation();
         const allDetail = document.querySelectorAll('td.detail-td');
         const anyExpanded = document.querySelector('td.detail-td-expanded');
         const arrow = document.getElementById('detail-th-arrow');
@@ -6269,7 +6270,7 @@ window.deleteHistoryByDateRange = function() {
                     <div class="chart-th-axis" style="position:relative; height:12px; overflow:visible; margin:0 20px; box-sizing:border-box;"></div>
                 </th>`;
             } else if (thClass === 'detail-th') {
-                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass} cursor:pointer;" title="클릭: 상세내용 전체 펼치기/접기" onclick="window.toggleAllDetailExpand(this)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell} <span style="font-size:9px; color:#aaa;" id="detail-th-arrow">▼</span></div></th>`;
+                headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass} cursor:pointer;" title="클릭: 상세내용 전체 펼치기/접기" onclick="window.toggleAllDetailExpand(this, event)"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell} <span style="font-size:9px; color:#aaa;" id="detail-th-arrow">▼</span></div></th>`;
             } else {
                 headHtml += `<th class="${thClass}" style="${thStyle} ${widthClass}"><div style="display:inline-block; padding-right:2px; vertical-align: middle;">${displayCell}</div></th>`;
             }
@@ -10948,8 +10949,13 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
     // 메일 정보 헤더
     const info = document.getElementById('mail-right-info');
     if (info) {
+        const _d = date ? new Date(date) : null;
+        const _dateStr = (_d && !isNaN(_d)) 
+            ? (_d.getFullYear() + '-' + String(_d.getMonth()+1).padStart(2,'0') + '-' + String(_d.getDate()).padStart(2,'0')
+               + ' ' + String(_d.getHours()).padStart(2,'0') + ':' + String(_d.getMinutes()).padStart(2,'0'))
+            : (date || '');
         info.innerHTML = `<b>📨 ${escapeHtml(subject)}</b> 
-            <span style="color:#888;">${escapeHtml(sender||'')} ${date?'| '+date:''}</span>
+            <span style="color:#888;">${escapeHtml(sender||'')} ${_dateStr?'| '+_dateStr:''}</span>
             ${project ? ` | <span style="color:#0056b3;font-weight:bold;">${escapeHtml(project)}</span>` : ''}`;
     }
     // 원본 메일
@@ -11545,7 +11551,10 @@ window.parseMailDateToYMD = function(dateStr) {
     if (!dateStr) return null;
     const d = new Date(dateStr);
     if (isNaN(d.getTime())) return null;
-    return d.toISOString().split('T')[0];
+    // 로컬 시간 기준으로 날짜 추출 (UTC 변환 금지)
+    return d.getFullYear() + '-'
+        + String(d.getMonth() + 1).padStart(2, '0') + '-'
+        + String(d.getDate()).padStart(2, '0');
 };
 
 
@@ -11619,8 +11628,9 @@ window.clearGeminiCache = function() {
 async function mfCallGemini(apiKey, parsed) {
     // 동일 메일 캐싱 (제목+발신자+본문 앞 200자 해시)
     // 💡 v2: 출처 태그 로직 추가로 캐시 포맷이 바뀌어서, 예전 캐시가 섞이지 않도록 버전 마커 포함
+    const _ck_d = parsed.date ? (() => { const _d = new Date(parsed.date); return isNaN(_d) ? (parsed.date||'') : (_d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0')+'T'+String(_d.getHours()).padStart(2,'0')+':'+String(_d.getMinutes()).padStart(2,'0')); })() : '';
     const cacheKey = 'gemini_cache_v2_' + btoa(encodeURIComponent(
-        (parsed.subject || '') + (parsed.sender || '') + (parsed.body || '').substring(0, 200)
+        _ck_d + (parsed.subject || '') + (parsed.sender || '') + (parsed.body || '').substring(0, 200)
     ).substring(0, 100));
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) { try { return JSON.parse(cached); } catch(e) {} }
