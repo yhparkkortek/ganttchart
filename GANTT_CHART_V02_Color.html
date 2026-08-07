@@ -14784,7 +14784,8 @@ window.checkAndSendAlarms = async function(isManual) {
                     : [window._addrFindByName(item.assignee)].map(p => p ? p.telegramId : '')
             )].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
-                const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlainSafe(item.diffDays)})`;
+                const _tgContent = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,100) + (item.content.length>100?'…':'') : '';
+                const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlainSafe(item.diffDays)})${_tgContent}`;
                 tgChatIds.forEach(chatId => window.sendTelegramAlarm(tgMsg, { chatId }));
             }
         }
@@ -15549,14 +15550,11 @@ window._nmTgToggle = function(radio) {
 window._nmLoadTgSelectList = async function() {
     const sel=document.getElementById('nm-tg-select'); if(!sel) return;
     try {
-        const r=await fetch(`${TG_SERVER}/telegram/members`,{signal:AbortSignal.timeout(2000)});
-        const d=await r.json();
-        if(!d.members||!d.members.length){sel.innerHTML='<span style="font-size:11px;color:#aaa;">등록된 팀원 없음</span>';return;}
-        sel.innerHTML=d.members.map(m=>`<label style="display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;background:#f0f4f8;padding:3px 8px;border-radius:12px;" title="Chat ID: ${m.chat_id}${m.roles&&m.roles.length?' | 역할: '+m.roles.join(','):''}">`
-            +`<input type="checkbox" class="nm-tg-sel" value="${m.chat_id}" data-name="${m.name}"> ${m.name}`
-            +(m.roles&&m.roles.length?`<span style="font-size:9px;color:#888;margin-left:2px;">[${m.roles.join(',')}]</span>`:'')
-            +`</label>`).join('');
-    } catch(e){sel.innerHTML='<span style="font-size:11px;color:#aaa;">'+(window._currentLang==='en'?'Not Connected':'서버 미연결')+'</span>';}
+        const addrBook = (window.tabData || {}).addressBook || [];
+        const members = addrBook.filter(p => p.telegramId);
+        if(!members.length){sel.innerHTML='<span style="font-size:11px;color:#aaa;">주소록에 텔레그램 ID 등록된 팀원 없음</span>';return;}
+        sel.innerHTML=members.map(m=>`<label style="display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;background:#f0f4f8;padding:3px 8px;border-radius:12px;" title="Chat ID: ${m.telegramId}">` +`<input type="checkbox" class="nm-tg-sel" value="${m.name}" data-name="${m.name}"> ${m.name}` +`</label>`).join('');
+    } catch(e){sel.innerHTML='<span style="font-size:11px;color:#aaa;">오류 발생</span>';}
 };
 window.saveNoticeItem = function() {
     const title    = document.getElementById('nm-title').value.trim();
@@ -15625,11 +15623,29 @@ window.sendNoticeNow = async function(id, skipLog) {
     }
     if(n.tgTarget!=='none'){
         try{
-            let tgParams={};
-            if(n.tgTarget==='ALL') tgParams={to:'ALL'};
-            else if(n.tgTarget==='role') tgParams={role:n.tgValue};
-            else if(n.tgTarget==='select'){const ids=(n.tgValue||'').split(',').filter(Boolean);for(const cid of ids){await fetch(`${TG_SERVER}/send-telegram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:tgMsg,chatId:cid})});}results.push(`💬 Telegram ${ids.length}명 완료`);tgParams=null;}
-            if(tgParams){const r=await fetch(`${TG_SERVER}/send-telegram`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:tgMsg,...tgParams})});const d=await r.json();results.push(d.status==='success'?`💬 Telegram ${d.sent||''}명 완료`:`💬 오류:${d.message}`);}
+            const pm2 = window.projectMeta || {};
+            const projTitle2 = [pm2.고객사, pm2.고객모델명].filter(Boolean).join(' > ') || 'KORTEK Gantt';
+            const tgMsgNew = `📢 [${projTitle2}] ${n.title}\n\n${n.body}\n\n📅 기준일: ${n.deadline} (${dDayStr})`;
+            const addrBook = (window.tabData || {}).addressBook || [];
+            let tgChatIds = [];
+            if(n.tgTarget==='ALL'){
+                tgChatIds = addrBook.map(p=>p.telegramId).filter(Boolean);
+            } else if(n.tgTarget==='select'){
+                const names = (n.tgValue||'').split(',').filter(Boolean);
+                tgChatIds = names.map(name=>{
+                    const p = window._addrFindByName(name.trim());
+                    return p ? p.telegramId : '';
+                }).filter(Boolean);
+            }
+            tgChatIds = [...new Set(tgChatIds)];
+            if(tgChatIds.length && window.sendTelegramAlarm){
+                for(const chatId of tgChatIds){
+                    await window.sendTelegramAlarm(tgMsgNew, {chatId});
+                }
+                results.push(`💬 Telegram ${tgChatIds.length}명 완료`);
+            } else if(!tgChatIds.length){
+                results.push('💬 Telegram 수신자 없음 (주소록 telegramId 확인)');
+            }
         }catch(e){results.push(`💬 오류:${e.message}`);}
     }
     const resultStr=results.join(' | ')||'수신 대상 없음';
@@ -16372,7 +16388,8 @@ window.sendSingleAlarm = async function(sendAll) {
                 (item.allPeople || [item.assignee]).map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
             )].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
-                const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlain(item.diffDays)})`;
+                const _tgContent2 = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,100) + (item.content.length>100?'…':'') : '';
+                const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlain(item.diffDays)})${_tgContent2}`;
                 tgChatIds.forEach(chatId => window.sendTelegramAlarm(tgMsg, { chatId }));
             }
 
