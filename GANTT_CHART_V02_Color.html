@@ -1324,13 +1324,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <thead>
                         <tr>
                             <th style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
-                            <th style="width:12%;" data-i18n="th-addr-name">이름</th>
-                            <th style="width:12%;" data-i18n="th-addr-name-en">영문 이름</th>
-                            <th style="width:12%;" data-i18n="th-addr-dept">부서</th>
-                            <th style="width:13%;" data-i18n="th-addr-title">직함</th>
-                            <th style="width:21%;" data-i18n="th-addr-email">이메일</th>
-                            <th style="width:13%;" data-i18n="th-addr-mobile">휴대폰</th>
-                            <th style="width:14%;" data-i18n="th-addr-phone">근무처 전화</th>
+                            <th style="width:11%;" data-i18n="th-addr-name">이름</th>
+                            <th style="width:11%;" data-i18n="th-addr-name-en">영문 이름</th>
+                            <th style="width:10%;" data-i18n="th-addr-dept">부서</th>
+                            <th style="width:11%;" data-i18n="th-addr-title">직함</th>
+                            <th style="width:19%;" data-i18n="th-addr-email">이메일</th>
+                            <th style="width:11%;" data-i18n="th-addr-mobile">휴대폰</th>
+                            <th style="width:11%;" data-i18n="th-addr-phone">근무처 전화</th>
+                            <th style="width:12%;" data-i18n="th-addr-telegram">텔레그램 ID</th>
                         </tr>
                     </thead>
                     <tbody id="address-table-body"></tbody>
@@ -5595,6 +5596,7 @@ window.deleteHistoryByDateRange = function() {
                 'th-addr-email':      '이메일',
                 'th-addr-mobile':     '휴대폰',
                 'th-addr-phone':      '근무처 전화',
+                'th-addr-telegram':   '텔레그램 ID',
             },
         },
 
@@ -5689,6 +5691,7 @@ window.deleteHistoryByDateRange = function() {
                 'th-addr-email':      'Email',
                 'th-addr-mobile':     'Mobile',
                 'th-addr-phone':      'Office Phone',
+                'th-addr-telegram':   'Telegram ID',
             },
         },
     };
@@ -7243,8 +7246,8 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         // ── 🪪 Address 시트 ──
         const addrRows = tabData.addressBook || [];
         if (addrRows.length > 0) {
-            const addrData = [['이름', '영문 이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화']];
-            addrRows.forEach(function(p) { addrData.push([p.name, p.nameEn, p.dept, p.title, p.email, p.mobile, p.phone]); });
+            const addrData = [['이름', '영문 이름', '부서', '직함', '이메일', '휴대폰', '근무처 전화', '텔레그램 ID']];
+            addrRows.forEach(function(p) { addrData.push([p.name, p.nameEn, p.dept, p.title, p.email, p.mobile, p.phone, p.telegramId || '']); });
             const wsAddr = XLSX.utils.aoa_to_sheet(addrData);
             // 💡 스타일은 공통 applyExcelStyles가 일괄 처리
             wsAddr['!cols'] = [{wch: 14}, {wch: 14}, {wch: 16}, {wch: 26}, {wch: 16}, {wch: 16}];
@@ -16648,6 +16651,7 @@ window.renderAddressTable = function() {
             + '<td><input class="u-input" data-field="email" value="' + _escTabVal(p.email) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="mobile" value="' + _escTabVal(p.mobile) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="phone" value="' + _escTabVal(p.phone) + '" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="telegramId" value="' + _escTabVal(p.telegramId) + '" placeholder="예: 987654321" onchange="window.collectAddressData()"></td>'
             + '</tr>';
     }).join('');
 
@@ -16667,7 +16671,7 @@ window.collectAddressData = function() {
     const rows = [];
     document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
         const get = function(f) { const el = tr.querySelector('[data-field="' + f + '"]'); return el ? el.value : ''; };
-        rows.push({ name: get('name'), nameEn: get('nameEn'), dept: get('dept'), title: get('title'), email: get('email'), mobile: get('mobile'), phone: get('phone') });
+        rows.push({ name: get('name'), nameEn: get('nameEn'), dept: get('dept'), title: get('title'), email: get('email'), mobile: get('mobile'), phone: get('phone'), telegramId: get('telegramId') });
     });
     window.tabData.addressBook = rows;
 };
@@ -17523,7 +17527,7 @@ const BM_CONF = {
             const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
             if (String(oldVal) === String(el.value)) { if (window.collectAddressData) window.collectAddressData(); return; }
 
-            const fieldLabelMap = { name: '이름', nameEn: '영문 이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
+            const fieldLabelMap = { name: '이름', nameEn: '영문 이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화', telegramId: '텔레그램 ID' };
             const fieldLabel = fieldLabelMap[el.dataset.field] || el.dataset.field;
             const reason = window.promptOptionalReason(`[${rowLabel}] ${fieldLabel} 변경`);
             if (reason === null) { el.value = oldVal; return; } // 취소 → 원복, 저장/기록 안 함
@@ -17563,7 +17567,7 @@ window.addrRenderHistoryTable = function() {
     if (!table) return;
     const logs = (window.tabData && window.tabData.addressChangeLog) || [];
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
-    const fieldLabel = { name: '이름', nameEn: '영문 이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화' };
+    const fieldLabel = { name: '이름', nameEn: '영문 이름', dept: '부서', title: '직함', email: '이메일', mobile: '휴대폰', phone: '근무처 전화', telegramId: '텔레그램 ID' };
     const _hisEn = window._currentLang === 'en';
     let html = '<thead><tr>'
         + '<th style="padding:4px 8px;">' + (_hisEn ? 'Time' : '시간') + '</th>'
