@@ -115,7 +115,7 @@
     
     .btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
     .action-btn { padding: 6px 12px; font-size: clamp(10px, 1vw, 13px); font-weight: bold; cursor: pointer; border: 1.5px solid #2c5f8a; background-color: #fff; color: #2c5f8a; border-radius: 6px; transition: 0.2s; height: clamp(24px, 2.5vw, 32px); box-sizing: border-box; display: flex; align-items: center; min-width: 120px; justify-content: center; }
-    .action-btn:hover { background-color: #2c5f8a; color: #fff; }
+    .action-btn:hover { background-color: #2c5f8a !important; color: #fff !important; }
     
     #print-btn:hover { background-color: #2c5f8a !important; color: #fff !important; border-color: #2c5f8a !important; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -458,8 +458,29 @@
 .concept-table th { background:#f4f6f8; font-weight:600; color:#555; }
 .concept-table td input, .concept-table td textarea { border:none; width:100%; font-size:12.5px; padding:2px; font-family:inherit; }
 .concept-add-row-btn {
-    margin-top:8px; padding:6px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;
+    margin-top:8px; padding:6px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:0.2s;
 }
+.concept-add-row-btn:hover { background-color:#2c5f8a !important; color:#fff !important; }
+/* 💡 금액삭제 버튼은 위험(삭제) 액션이라 테두리색(빨강) 기준으로 hover — 위 파란 규칙을 id 특정성으로 덮어씀 */
+#mc-clear-price-btn:hover { background-color:#e03131 !important; color:#fff !important; }
+/* 💡 M.C Table 상단 버튼(R1 리비전, VS 비교, 제품구분자 +/-, 리비전추가 ➕) hover 통일 */
+#mc-add-unit-btn, #mc-remove-unit-btn, #mc-add-rev-btn, #mc-unit-rename-btn { transition:0.2s; border-radius:4px; }
+#mc-add-unit-btn:hover { background-color:#2c5f8a !important; color:#fff !important; }
+#mc-remove-unit-btn:hover { background-color:#e03131 !important; color:#fff !important; }
+#mc-unit-rename-btn:hover { background-color:#555 !important; color:#fff !important; }
+#mc-add-rev-btn:hover { background-color:#2c5f8a !important; color:#fff !important; }
+.mc-rev-btn { transition:0.2s; }
+.mc-rev-btn:hover { background-color:#2c5f8a !important; color:#fff !important; }
+.mc-comparison-btn { transition:0.2s; }
+.mc-comparison-btn:hover { background-color:#e67e22 !important; color:#fff !important; }
+.mc-unit-btn { transition:0.2s; }
+.mc-unit-btn:hover { background-color:#6f42c1 !important; color:#fff !important; }
+/* 💡 Notice 탭 아이콘 버튼(즉시발송/수정/일시정지/삭제) hover 통일 */
+.notice-icon-btn { transition:0.2s; }
+.notice-icon-blue:hover { background-color:#2c5f8a !important; color:#fff !important; }
+.notice-icon-gray:hover { background-color:#888 !important; color:#fff !important; }
+.notice-icon-orange:hover { background-color:#e67e22 !important; color:#fff !important; }
+.notice-icon-red:hover { background-color:#e03131 !important; color:#fff !important; }
 /* Brief SPEC / M.C Table: NO 클릭 팝업 + 묶음 선택 */
 .bm-no { cursor:pointer; text-align:center; user-select:none; }
 .bm-no:hover { background-color:#e9ecef; }
@@ -1555,12 +1576,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" title="새 리비전 추가 (R1부터 무제한)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:1.5px dashed #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">➕</button>
-            <button id="mc-rev-cycle-btn" class="mc-rev-btn active" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)"
-                style="padding:6px 10px; min-width:auto; border:1.5px solid #2c5f8a; background:#2c5f8a; color:#fff; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
+            <button id="mc-rev-cycle-btn" class="mc-rev-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)"
+                style="padding:6px 10px; min-width:auto; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
                 style="margin-left:4px; padding:6px 10px; min-width:auto; border:1.5px solid #e67e22; background:#fff; color:#e67e22; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
+            <button id="mc-clear-price-btn" class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border-color:#e03131; color:#e03131;">금액삭제</button>
             <div class="btn-group"></div>
             <button class="action-btn" data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-mctable')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
@@ -5788,6 +5809,7 @@ window.deleteHistoryByDateRange = function() {
             'as-drive-save-item':      { ko:'⬆️ 전체 설정 저장',                  en:'⬆️ Save all settings' },
             'as-drive-load-item':      { ko:'⬇️ 전체 설정 불러오기',              en:'⬇️ Load all settings' },
             'as-tg-recv-label':        { ko:'👥 메신저 수신자',                   en:'👥 Messenger Recipients' },
+            'as-tg-recv-sub':          { ko:'(Summary 멤버 자동 반영)',           en:'(Auto from Summary members)' },
             'as-tg-addr-guide':        { ko:'📋 텔레그램 ID는 주소록 탭에서 관리합니다.', en:'📋 Telegram IDs are managed in the Address Book tab.' },
             'as-modal-save-btn':       { ko:'저장',                               en:'Save' },
             'as-modal-close-btn':      { ko:'닫기',                               en:'Close' },
@@ -6211,6 +6233,14 @@ window.deleteHistoryByDateRange = function() {
             'ms-install-arrow':         { ko:'▼ 펼치기',                       en:'▼ Expand' },
             'ms-server-label':          { ko:'🔐 메일 서버 접속',               en:'🔐 Mail Server Login' },
             'ms-keyword-label':         { ko:'🔍 키워드 필터',                  en:'🔍 Keyword Filter' },
+            'ms-filter-label':          { ko:'🔍 필터 조건',                    en:'🔍 Filter' },
+            'ms-filter-sub':            { ko:'(비우면 전체, 쉼표로 OR 조건)',    en:'(Leave empty for all, comma = OR)' },
+            'ms-lbl-subject':           { ko:'제목',                            en:'Subject' },
+            'ms-lbl-from':              { ko:'발신자',                          en:'From' },
+            'ms-lbl-body':              { ko:'본문',                            en:'Body' },
+            'ms-force-reset-btn':       { ko:'🔄 초기화',                       en:'🔄 Reset' },
+            'ms-check-all-label':       { ko:'전체선택',                        en:'Select All' },
+            'ms-clear-results-btn':     { ko:'🗑️ 초기화',                       en:'🗑️ Clear' },
             'ms-save-id-label':         { ko:'로그인정보 저장',                 en:'Save Login Info' },
             'mail-right-empty-title':   { ko:'메일을 분석하면 여기에 결과가 표시됩니다', en:'Analysis results will appear here' },
             'mail-right-empty-sub':     { ko:'직접 입력하거나 파일/서버에서 메일을 가져오세요', en:'Paste content or import from file / mail server' },
@@ -6289,6 +6319,9 @@ window.deleteHistoryByDateRange = function() {
 
         // [Telegram 서버 상태 배지] 언어 전환 시 즉시 재조회하여 갱신 (연결됨/미설정/서버 미연결)
         if (window.refreshTgStatus) window.refreshTgStatus();
+
+        // [메신저 수신자 안내문] Summary 매칭 인원수 표시된 경우 언어 갱신
+        if (window._tgAutoMatchFromSummary) window._tgAutoMatchFromSummary();
 
         // [M.C Table / Brief SPEC / 주소록 등] "첫 행 추가" 버튼 등 정적 렌더링 항목 언어 전환 시 갱신
         if (window.populateTabData) window.populateTabData();
@@ -10767,19 +10800,19 @@ window.updateInboxBadge();
                                    style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
                         </div>
                         <div style="margin-bottom:6px; padding:0 12px;">
-                            <div style="font-size:10px; color:#666; margin-bottom:4px; font-weight:bold;">🔍 필터 조건 <span style="font-weight:normal; color:#aaa;">(비우면 전체, 쉼표로 OR 조건)</span></div>
+                            <div style="font-size:10px; color:#666; margin-bottom:4px; font-weight:bold;"><span id="ms-filter-label">🔍 필터 조건</span> <span id="ms-filter-sub" style="font-weight:normal; color:#aaa;">(비우면 전체, 쉼표로 OR 조건)</span></div>
                             <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
-                                <span style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">제목</span>
+                                <span id="ms-lbl-subject" style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">제목</span>
                                 <input id="ms-keyword" type="text" placeholder="STELLAR, Shuffler"
                                        style="flex:1; padding:4px 7px; border:1px solid #ced4da; border-radius:4px; font-size:11px; box-sizing:border-box;">
                             </div>
                             <div style="display:flex; align-items:center; gap:4px; margin-bottom:3px;">
-                                <span style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">발신자</span>
+                                <span id="ms-lbl-from" style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">발신자</span>
                                 <input id="ms-keyword-from" type="text" placeholder="hong@kortek.co.kr, James"
                                        style="flex:1; padding:4px 7px; border:1px solid #ced4da; border-radius:4px; font-size:11px; box-sizing:border-box;">
                             </div>
                             <div style="display:flex; align-items:center; gap:4px;">
-                                <span style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">본문</span>
+                                <span id="ms-lbl-body" style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">본문</span>
                                 <input id="ms-keyword-body" type="text" placeholder="RFQ, 견적"
                                        style="flex:1; padding:4px 7px; border:1px solid #ced4da; border-radius:4px; font-size:11px; box-sizing:border-box;">
                             </div>
@@ -10800,7 +10833,7 @@ window.updateInboxBadge();
                         </div>
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:0 12px; margin-top:4px;">
                             <div id="ms-status" style="font-size:11px; color:#666; flex:1;"></div>
-                            <button onclick="window.msForceReset()"
+                            <button id="ms-force-reset-btn" onclick="window.msForceReset()"
                                 style="flex-shrink:0; padding:2px 8px; background:#fff; color:#888; border:1px solid #ccc; border-radius:6px; font-size:10px; cursor:pointer;" title="진행 상태 및 결과 강제 초기화">
                                 🔄 초기화
                             </button>
@@ -10823,9 +10856,9 @@ window.updateInboxBadge();
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px; width:100%; box-sizing:border-box;">
                             <span style="font-size:11px; font-weight:bold;">📋 수집 <span id="ms-result-count">0</span>개 / 분석 <span id="ms-analyzed-count">0</span>개</span>
                             <label style="font-size:10px; color:#555; cursor:pointer;">
-                                <input type="checkbox" id="ms-check-all" onchange="window.msSelectAll(this.checked)"> 전체선택
+                                <input type="checkbox" id="ms-check-all" onchange="window.msSelectAll(this.checked)"> <span id="ms-check-all-label">전체선택</span>
                             </label>
-                            <button onclick="window.msClearResults()"
+                            <button id="ms-clear-results-btn" onclick="window.msClearResults()"
                                 style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
                                 🗑️ 초기화
                             </button>
@@ -12252,13 +12285,14 @@ window.msFetchMail = async function() {
 
     // UI 초기화
     window._msAnalyzeCancelled = false;
-    document.getElementById('ms-status').textContent   = '📡 서버에 연결 중...';
+    const _msEn0 = window._currentLang === 'en';
+    document.getElementById('ms-status').textContent   = _msEn0 ? '📡 Connecting to server...' : '📡 서버에 연결 중...';
     document.getElementById('ms-progress').style.display = 'block';
     document.getElementById('ms-result-list').innerHTML = ''; document.getElementById('ms-list-header').style.display = 'none';
     document.getElementById('ms-batch-btn').style.display = 'none';
     document.getElementById('ms-batch-inbox-btn').style.display = 'none';
     document.getElementById('ms-prog-bar').style.width = '10%';
-    document.getElementById('ms-prog-text').textContent = '메일 가져오는 중...';
+    document.getElementById('ms-prog-text').textContent = _msEn0 ? 'Fetching mails...' : '메일 가져오는 중...';
 
     try {
         // 1단계: 메일 수집
@@ -12281,8 +12315,8 @@ window.msFetchMail = async function() {
         if (data.status !== 'success') throw new Error(data.message);
 
         document.getElementById('ms-prog-bar').style.width  = '30%';
-        document.getElementById('ms-prog-text').textContent = `${data.count}개 수집 완료 — AI 분석 중...`;
-        document.getElementById('ms-status').textContent    = `✅ ${data.count}개 메일 수집 완료`;
+        document.getElementById('ms-prog-text').textContent = _msEn0 ? `${data.count} collected — AI analyzing...` : `${data.count}개 수집 완료 — AI 분석 중...`;
+        document.getElementById('ms-status').textContent    = _msEn0 ? `✅ ${data.count} mails collected` : `✅ ${data.count}개 메일 수집 완료`;
         document.getElementById('ms-result-count').textContent = data.count;
 
         // 💡 건별로 채워나갈 배열 (중단하더라도 여기까지 담긴 내용은 그대로 표시됨)
@@ -12292,7 +12326,7 @@ window.msFetchMail = async function() {
         // 2단계: AI 분석 전 API 키 확인
         const apiKey = window.getActiveAiKey();
         if (!apiKey) {
-            document.getElementById('ms-status').textContent = '✅ 메일 수집 완료 (AI 분석 생략 — API 키 미설정)';
+            document.getElementById('ms-status').textContent = _msEn0 ? '✅ Mails collected (AI analysis skipped — API key not set)' : '✅ 메일 수집 완료 (AI 분석 생략 — API 키 미설정)';
             document.getElementById('ms-progress').style.display = 'none';
             document.getElementById('ms-list-header').style.display = 'block';
             document.getElementById('ms-batch-btn').style.display = 'block';
@@ -12311,7 +12345,7 @@ window.msFetchMail = async function() {
         // 2단계: 각 메일 AI 분석 (파일첨부 탭과 동일 로직) — 1건씩 완료될 때마다 화면 갱신
         for (let i = 0; i < data.data.length; i++) {
             if (window._msAnalyzeCancelled) {
-                document.getElementById('ms-prog-text').textContent = `⏹ 중단됨 (${i}/${data.data.length}건 분석 완료)`;
+                document.getElementById('ms-prog-text').textContent = _msEn0 ? `⏹ Stopped (${i}/${data.data.length} analyzed)` : `⏹ 중단됨 (${i}/${data.data.length}건 분석 완료)`;
                 break;
             }
 
@@ -12319,7 +12353,7 @@ window.msFetchMail = async function() {
             document.getElementById('ms-prog-bar').style.width =
                 `${30 + Math.round((i / data.data.length) * 65)}%`;
             document.getElementById('ms-prog-text').textContent =
-                `AI 분석 중... ${i+1}/${data.data.length} — ${mail.subject.substring(0,20)}`;
+                (_msEn0 ? `AI analyzing... ${i+1}/${data.data.length} — ${mail.subject.substring(0,20)}` : `AI 분석 중... ${i+1}/${data.data.length} — ${mail.subject.substring(0,20)}`);
 
             let item;
             try {
@@ -12361,14 +12395,14 @@ window.msFetchMail = async function() {
         }
 
         document.getElementById('ms-prog-bar').style.width  = '100%';
-        document.getElementById('ms-prog-text').textContent = window._msAnalyzeCancelled ? '⏹ 중단됨 (아래는 여기까지 분석된 내용)' : '분석 완료!';
+        document.getElementById('ms-prog-text').textContent = window._msAnalyzeCancelled ? (_msEn0 ? '⏹ Stopped (results so far shown below)' : '⏹ 중단됨 (아래는 여기까지 분석된 내용)') : (_msEn0 ? 'Analysis complete!' : '분석 완료!');
         document.getElementById('ms-progress').style.display = 'none';
         document.getElementById('ms-list-header').style.display = 'block';
         document.getElementById('ms-batch-btn').style.display   = 'block';
         document.getElementById('ms-batch-inbox-btn').style.display = 'block';
 
     } catch(e) {
-        document.getElementById('ms-status').textContent = `❌ 오류: ${e.message}`;
+        document.getElementById('ms-status').textContent = (_msEn0 ? `❌ Error: ${e.message}` : `❌ 오류: ${e.message}`);
         document.getElementById('ms-progress').style.display = 'none';
         // 💡 오류가 나도, 그 전까지 수집/분석된 내용이 있으면 화면에 표시
         if (window._msResults && window._msResults.length) {
@@ -12395,7 +12429,7 @@ window.msForceReset = function() {
     document.getElementById('ms-result-list').style.display   = 'none';
     document.getElementById('ms-batch-btn').style.display     = 'none';
     document.getElementById('ms-batch-inbox-btn').style.display = 'none';
-    document.getElementById('ms-status').textContent          = '🔄 초기화 완료';
+    document.getElementById('ms-status').textContent          = (window._currentLang === 'en' ? '🔄 Reset complete' : '🔄 초기화 완료');
     document.getElementById('ms-prog-bar').style.width        = '0%';
 };
 
@@ -15458,10 +15492,10 @@ window.renderNoticeTab = function() {
           <td style="padding:10px 12px;text-align:center;font-size:11.5px;color:#666;">${lastSent}</td>
           <td style="padding:10px 12px;text-align:center;">
             <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
-              <button onclick="window.sendNoticeNow('${n.id}')" title="즉시 발송" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #2c5f8a;color:#2c5f8a;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">✉️</button>
-              <button onclick="window.openNoticeModal('${n.id}')" title="수정" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #888;color:#555;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">✏️</button>
-              <button onclick="window.toggleNoticePause('${n.id}')" title="${n.status==='paused'?'재개':'일시정지'}" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #e67e22;color:#e67e22;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">${n.status==='paused'?'▶':'⏸'}</button>
-              <button onclick="window.deleteNoticeItem('${n.id}')" title="삭제" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #e03131;color:#e03131;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">🗑️</button>
+              <button onclick="window.sendNoticeNow('${n.id}')" title="즉시 발송" class="notice-icon-btn notice-icon-blue" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #2c5f8a;color:#2c5f8a;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">✉️</button>
+              <button onclick="window.openNoticeModal('${n.id}')" title="수정" class="notice-icon-btn notice-icon-gray" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #888;color:#555;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">✏️</button>
+              <button onclick="window.toggleNoticePause('${n.id}')" title="${n.status==='paused'?'재개':'일시정지'}" class="notice-icon-btn notice-icon-orange" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #e67e22;color:#e67e22;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">${n.status==='paused'?'▶':'⏸'}</button>
+              <button onclick="window.deleteNoticeItem('${n.id}')" title="삭제" class="notice-icon-btn notice-icon-red" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #e03131;color:#e03131;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">🗑️</button>
             </div>
           </td>
         </tr>`;
@@ -18275,9 +18309,9 @@ window.mcRenderUnitTabs = function() {
     // 💡 하나의 버튼: 클릭하면 다음 제품구분자로 순환 전환. 옆의 작은 ✏️로 이름변경. (🗑️는 ➕ 옆으로 이동)
     bar.innerHTML =
         '<button class="mc-unit-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
-        + ' style="padding:6px 10px; min-width:auto; border:1.5px solid #6f42c1; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#6f42c1; color:#fff;">'
+        + ' style="padding:6px 10px; min-width:auto; border:1.5px solid #6f42c1; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#fff; color:#6f42c1;">'
         + escapeHtml(cur) + '</button>'
-        + '<span onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="cursor:pointer; padding:2px 4px; font-size:12px;">✏️</span>';
+        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:14px;">✏️</button>';
 };
 
 // 💡 제품구분자 순환 버튼 — 누를 때마다 다음 제품구분자로 전환 (없으면 처음으로 돌아감)
@@ -18511,9 +18545,10 @@ window.mcSwitchUnit = function(unit) {
     document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
         const active = b.dataset.rev === (window.tabData.mcActiveRevision || 'R1');
         b.classList.toggle('active', active);
-        b.style.background = active ? '#2c5f8a' : '#fff';
-        b.style.color = active ? '#fff' : '#2c5f8a';
-        b.style.fontWeight = active ? 'bold' : 'normal';
+        // 💡 항상 outline(흰바탕+파란글씨) 유지 — hover 시에만 채워지도록. 현재 리비전 표시는 라벨 텍스트로 충분.
+        b.style.background = '#fff';
+        b.style.color = '#2c5f8a';
+        b.style.fontWeight = 'bold';
     });
 };
 
