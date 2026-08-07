@@ -16366,9 +16366,19 @@ window.sendSingleAlarm = async function(sendAll) {
             const key = `gantt_alarm_${item.rowId}_manual`;
             localStorage.setItem(key, new Date().toISOString());
             item.sentLog['manual'] = new Date().toISOString();
+
+            // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭
+            const tgChatIds = [...new Set(
+                (item.allPeople || [item.assignee]).map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
+            )].filter(Boolean);
+            if (tgChatIds.length && window.sendTelegramAlarm) {
+                const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlain(item.diffDays)})`;
+                tgChatIds.forEach(chatId => window.sendTelegramAlarm(tgMsg, { chatId }));
+            }
+
             window.closeAlarmModal();
             window.renderAlarmTab();
-                        window.showToast(window._currentLang === 'en' ? '✅ Sent!' : '✅ 발송 완료!');
+            window.showToast(window._currentLang === 'en' ? '✅ Sent!' : '✅ 발송 완료!');
         } else {
             throw new Error(data.error);
         }
