@@ -14776,6 +14776,17 @@ window.checkAndSendAlarms = async function(isManual) {
             if (item.sentHidden) localStorage.removeItem(`gantt_alarm_${item.rowId}_hidden`); // 재발송했으니 "미발송 처리" 표시 해제
             sentCount++;
             console.log(`[알람] 발송 완료: ${item.taskName} (${dDayPlainSafe(item.diffDays)})`);
+
+            // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭
+            const tgChatIds = [...new Set(
+                item.allPeople
+                    ? item.allPeople.map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
+                    : [window._addrFindByName(item.assignee)].map(p => p ? p.telegramId : '')
+            )].filter(Boolean);
+            if (tgChatIds.length && window.sendTelegramAlarm) {
+                const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlainSafe(item.diffDays)})`;
+                tgChatIds.forEach(chatId => window.sendTelegramAlarm(tgMsg, { chatId }));
+            }
         }
     }
 
@@ -16044,7 +16055,7 @@ window.collectAlarmItems = function() {
             assignee, assigneeEmail,
             receiverStr, receiverEmail,
             missingPeople,
-            toEmail,
+            toEmail, allPeople,
             ccMails, dueStr, dueDate, diffDays, alarmDays,
             content: contentRaw, sentLog, sentHidden, tr
         });
