@@ -6325,6 +6325,12 @@ window.deleteHistoryByDateRange = function() {
 
         // [M.C Table / Brief SPEC / 주소록 등] "첫 행 추가" 버튼 등 정적 렌더링 항목 언어 전환 시 갱신
         if (window.populateTabData) window.populateTabData();
+
+        // [업무 추가 팝업 - AI 분석결과 패널] 열려 있는 상태에서 언어 전환 시 갱신
+        const _mrSection = document.getElementById('mail-result-section');
+        if (_mrSection && _mrSection.style.display !== 'none' && window._mailAnalyzedResult && window.renderMailResult) {
+            window.renderMailResult(window._mailAnalyzedResult);
+        }
      };
 
 
@@ -8676,15 +8682,17 @@ window.renderMailResult = function(result) {
         window._mailAnalyzedResult['wbs레벨'] = 4;
     }
 
+    const _isEn = window._currentLang === 'en';
     const fields = [
-        { key: '업무명',   label: '📌 업무명' },
-        { key: '시작일',   label: '📅 시작일' },
-        { key: '완료일',   label: '📅 완료일' },
-        { key: '상태',     label: '🔖 상태',     type: 'select',
-          options: ['진행','대기','완료','보류'] },
-        { key: '개발단계', label: '🏗️ 개발단계', type: 'select',
+        { key: '업무명',   label: _isEn ? '📌 Task Name' : '📌 업무명' },
+        { key: '시작일',   label: _isEn ? '📅 Start Date' : '📅 시작일' },
+        { key: '완료일',   label: _isEn ? '📅 Due Date' : '📅 완료일' },
+        { key: '상태',     label: _isEn ? '🔖 Status' : '🔖 상태',     type: 'select',
+          options: ['진행','대기','완료','보류'],
+          optLabels: { '진행': _isEn ? 'On going' : '진행', '대기': _isEn ? 'Pending' : '대기', '완료': _isEn ? 'Done' : '완료', '보류': _isEn ? 'On Hold' : '보류' } },
+        { key: '개발단계', label: _isEn ? '🏗️ Dev Phase' : '🏗️ 개발단계', type: 'select',
           options: ['','RFI','RFQ','NRE','AWARD','KICK-OFF','DESIGN','SAMPLE','EVT','ES','DVT','PVT','FAI','PP','SOP','MP','EC','RMA','EOL'] },
-        { key: '상세내용', label: '📝 상세내용' },
+        { key: '상세내용', label: _isEn ? '📝 Details' : '📝 상세내용' },
     ];
 
     let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
@@ -8698,7 +8706,7 @@ window.renderMailResult = function(result) {
         const dateTsArg = dateParsed ? dateParsed.ts : new Date().setHours(0,0,0,0);
         const displayDate = (isDateField && dateVal && !dateVal.includes('날짜확인필요'))
             ? dateVal
-            : `<span style="color:#e67e22; font-weight:bold;">📅 날짜를 선택해주세요</span>`;
+            : `<span style="color:#e67e22; font-weight:bold;">📅 ${_isEn ? 'Please select a date' : '날짜를 선택해주세요'}</span>`;
 
         // 💡 여기가 핵심 수정 부분입니다.
         let inputType = isDateField
@@ -8710,15 +8718,15 @@ window.renderMailResult = function(result) {
                 </span>
                </div>`
             : f.type === 'select'
-                ? `<select data-field="${f.key}" style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px;" 
+                ? `<select data-field="${f.key}" style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; box-sizing:border-box;" 
                    onchange="window._mailAnalyzedResult['${f.key}'] = this.value">
-                    ${f.options.map(o => `<option value="${o}" ${result[f.key]===o?'selected':''}>${o||'(미지정)'}</option>`).join('')}
+                    ${f.options.map(o => `<option value="${o}" ${result[f.key]===o?'selected':''}>${(f.optLabels ? f.optLabels[o] : o) || (_isEn ? '(Unspecified)' : '(미지정)')}</option>`).join('')}
                    </select>`
                 : f.key === '상세내용' 
-                    ? `<textarea data-field="${f.key}" style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; min-height:100px;" 
+                    ? `<textarea data-field="${f.key}" style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; min-height:100px; box-sizing:border-box; resize:vertical;" 
                        onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
                     : `<input type="text" value="${escapeHtml(result[f.key] || '')}" data-field="${f.key}" 
-                       style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px;" 
+                       style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; box-sizing:border-box;" 
                        onchange="window._mailAnalyzedResult['${f.key}'] = this.value">`;
 
         html += `<tr>
@@ -8735,13 +8743,13 @@ window.renderMailResult = function(result) {
     }
 
     let levelOptions = [0,1,2,3,4].map(n => 
-        `<option value="${n}" ${currentLevel == n ? 'selected' : ''}>Level ${n} ${['(대분류)','(소분류1)','(소분류2)','(세부업무)','(하위업무)'][n]}</option>`
+        `<option value="${n}" ${currentLevel == n ? 'selected' : ''}>Level ${n} ${_isEn ? ['(Category)','(Sub 1)','(Sub 2)','(Detail Task)','(Sub-task)'][n] : ['(대분류)','(소분류1)','(소분류2)','(세부업무)','(하위업무)'][n]}</option>`
     ).join('');
     
     html += `<tr>
-        <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; white-space:nowrap;">📊 WBS 레벨</td>
+        <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; white-space:nowrap;">${_isEn ? '📊 WBS Level' : '📊 WBS 레벨'}</td>
         <td style="padding:7px 10px; border:1px solid #dee2e6;">
-            <select style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:4px; font-size:13px;" 
+            <select style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:4px; font-size:13px; box-sizing:border-box;" 
                 onchange="window._mailAnalyzedResult['wbs레벨'] = parseInt(this.value)">
                 ${levelOptions}
             </select>
@@ -12055,18 +12063,19 @@ window.mfSelectItem = function(idx) {
 
     // task 없으면 안내 + 확보된 본문(있다면)과 수동 전환 버튼 표시
     if (!r.task) {
+        const _mfEn = window._currentLang === 'en';
         const emptyEl = document.getElementById('mail-right-empty');
         if (emptyEl) emptyEl.innerHTML =
             `<div style="font-size:32px;">⚠️</div>
-             <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || 'AI 분석 실패')}</div>
+             <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || (_mfEn ? 'AI analysis failed' : 'AI 분석 실패'))}</div>
              <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject)}</div>
              ${r.body ? `
-             <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
-                <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
-                <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
-                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:13px; width:100%;">✏️ 본문으로 직접 등록</button>
-                <button class="action-btn" onclick="AR.moveToDirectInput('mf', ${idx})" style="margin-top:4px; font-size:13px; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
-             </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
+             <div style="text-align:left; width:100%; align-self:stretch; box-sizing:border-box; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
+                <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 ${_mfEn ? 'Extracted mail body (kept even if analysis failed)' : '추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)'}</div>
+                <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px; box-sizing:border-box;">${escapeHtml(r.body)}</div>
+                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:13px; width:100%; box-sizing:border-box;">✏️ ${_mfEn ? 'Register as-is (manual)' : '본문으로 직접 등록'}</button>
+                <button class="action-btn" onclick="AR.moveToDirectInput('mf', ${idx})" style="margin-top:4px; font-size:13px; width:100%; box-sizing:border-box; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 ${_mfEn ? 'Move to Direct Input & re-analyze' : '직접 입력 탭으로 이동해서 AI 분석'}</button>
+             </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">${_mfEn ? 'Could not extract body.' : '본문을 추출하지 못했습니다.'}</div>`}`;
         document.getElementById('mail-right-empty').style.display = 'flex';
         document.getElementById('mail-right-detail').style.display = 'none';
         return;
@@ -12811,25 +12820,26 @@ const AR = {
         if (!r) return;
 
         if (!r.task) {
+            const _mfEn2 = window._currentLang === 'en';
             const bodyTooShort = !r.body || r.body.trim().length < 20;
             const mfHint = (tabKey === 'mf' && bodyTooShort)
                 ? `<div style="font-size:11px; color:#e67e22; margin-top:8px; padding:6px 8px; background:#fff8e6; border-radius:4px;">
-                     💡 본문이 거의 추출되지 않았습니다. 이 메일이 IMAP 계정 메일이라면 상단 [메일서버] 탭에서 다시 시도하면 더 잘 인식될 수 있습니다.
+                     💡 ${_mfEn2 ? 'Very little body text was extracted. If this is an IMAP account mail, retrying from the [Mail Server] tab above may recognize it better.' : '본문이 거의 추출되지 않았습니다. 이 메일이 IMAP 계정 메일이라면 상단 [메일서버] 탭에서 다시 시도하면 더 잘 인식될 수 있습니다.'}
                    </div>`
                 : '';
             const emptyEl = document.getElementById('mail-right-empty');
             if (emptyEl) emptyEl.innerHTML =
                 `<div style="font-size:32px;">⚠️</div>
-                 <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || 'AI 분석 실패')}</div>
+                 <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || (_mfEn2 ? 'AI analysis failed' : 'AI 분석 실패'))}</div>
                  <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject||'')}</div>
                  ${mfHint}
                  ${r.body ? `
-                 <div style="text-align:left; width:100%; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
-                    <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)</div>
-                    <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px;">${escapeHtml(r.body)}</div>
-                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:13px; width:100%;">✏️ 본문으로 직접 등록</button>
-                    <button class="action-btn" onclick="AR.moveToDirectInput('${tabKey}', ${idx})" style="margin-top:4px; font-size:13px; width:100%; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 직접 입력 탭으로 이동해서 AI 분석</button>
-                 </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">본문을 추출하지 못했습니다.</div>`}`;
+                 <div style="text-align:left; width:100%; align-self:stretch; box-sizing:border-box; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
+                    <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 ${_mfEn2 ? 'Extracted mail body (kept even if analysis failed)' : '추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)'}</div>
+                    <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px; box-sizing:border-box;">${escapeHtml(r.body)}</div>
+                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:13px; width:100%; box-sizing:border-box;">✏️ ${_mfEn2 ? 'Register as-is (manual)' : '본문으로 직접 등록'}</button>
+                    <button class="action-btn" onclick="AR.moveToDirectInput('${tabKey}', ${idx})" style="margin-top:4px; font-size:13px; width:100%; box-sizing:border-box; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 ${_mfEn2 ? 'Move to Direct Input & re-analyze' : '직접 입력 탭으로 이동해서 AI 분석'}</button>
+                 </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">${_mfEn2 ? 'Could not extract body.' : '본문을 추출하지 못했습니다.'}</div>`}`;
             document.getElementById('mail-right-empty').style.display = 'flex';
             document.getElementById('mail-right-detail').style.display = 'none';
             return;
