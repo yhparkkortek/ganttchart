@@ -10525,7 +10525,7 @@ window.updateInboxBadge();
 </div>
 
 <div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
-    <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:900px; min-height:600px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
+    <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:740px; min-height:600px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
         <!-- 헤더 -->
        <div id="mail-drag-handle" class="history-header" style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1px solid #ffe08a; border-radius:10px 10px 0 0; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
             <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
@@ -10934,7 +10934,7 @@ window.updateInboxBadge();
 
                     <div style="display:flex; gap:8px; align-items:stretch; flex-shrink:0; min-height:38px; margin:8px 0 0 -1px;">
                         <select id="mail-insert-position"
-                                style="flex:1; height:38px; box-sizing:border-box; padding:0 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;">
+                                style="flex:1; min-width:100px; height:38px; box-sizing:border-box; padding:0 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;">
                         </select>
                         <button onclick="window.mailRightInsert()"
                                 style="height:38px; box-sizing:border-box; padding:0 24px; background:#2c5f8a; color:white; border:none;
