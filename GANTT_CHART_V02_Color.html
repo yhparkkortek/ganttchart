@@ -15588,6 +15588,18 @@ window.openNoticeModal = async function(id) {
     }
 
     await window._nmLoadTgSelectList();
+
+    // ✅ 체크박스 DOM 생성 후 → 저장된 select 항목 복원
+    if (id) {
+        const n2 = window._noticeItems.find(x => x.id === id);
+        if (n2 && n2.tgTarget === 'select' && n2.tgValue) {
+            const savedNames = n2.tgValue.split(',').map(s => s.trim()).filter(Boolean);
+            document.querySelectorAll('.nm-tg-sel').forEach(cb => {
+                cb.checked = savedNames.includes(cb.value);
+            });
+        }
+    }
+
     window._nmFillAddrList();
     modal.style.display='block';
     bg.style.display='flex';
