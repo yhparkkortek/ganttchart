@@ -1144,7 +1144,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-date">기준일</th>
             <th style="padding:10px 12px; text-align:center; width:90px;">D-day</th>
             <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-lastsent">마지막 발송</th>
-            <th style="padding:10px 12px; text-align:center; width:110px;" data-i18n="th-notice-action">액션</th>
+            <th style="padding:10px 12px; text-align:center; width:150px;" data-i18n="th-notice-action">액션</th>
           </tr>
         </thead>
         <tbody id="notice-table-body">
@@ -15685,10 +15685,16 @@ window.renderNoticeTab = function() {
         const diffDays = Math.ceil((deadline - today) / 86400000);
         const dDayStr  = diffDays===0?'D-Day':diffDays>0?`D-${diffDays}`:`D+${Math.abs(diffDays)}`;
         const isPast   = diffDays < 0;
-        const statusDot= n.status==='paused'?'⏸':isPast?'✅':'🟢';
+        const isActive = n.status !== 'paused';
+        const statusDot = isPast
+            ? `<span style="font-size:16px;" title="발송 기간 종료">✅</span>`
+            : `<span onclick="window.toggleNoticePause('${n.id}')" style="font-size:16px; cursor:pointer;" title="${isActive ? '🟢 발송 중 — 클릭하여 일시정지' : '🔴 정지됨 — 클릭하여 재개'}">${isActive ? '🟢' : '🔴'}</span>`;
         const lastSent = n.sentLog&&n.sentLog.length ? n.sentLog[n.sentLog.length-1].sentAt.slice(0,10) : '-';
         const rcp = n.recipients || [];
-        const targetLabel = [rcp.some(r=>r.emailOn)?'📧':'', rcp.some(r=>r.tgOn)?'💬':''].filter(Boolean).join(' ')||'-';
+        const chParts = [];
+        if (rcp.some(r=>r.emailOn)) chParts.push('<span title="이메일 발송 포함">📧</span>');
+        if (rcp.some(r=>r.tgOn))    chParts.push('<span title="텔레그램 발송 포함">💬</span>');
+        const targetLabel = chParts.join(' ') || '-';
         const dDaysLabel  = (n.alarmDays||[]).map(d=>`D-${d}`).join(', ');
         const rowBg = i%2===0?'#fff':'#fafafa';
         return `<tr style="background:${rowBg};border-bottom:1px solid #f0f0f0;">
@@ -15705,10 +15711,9 @@ window.renderNoticeTab = function() {
           </td>
           <td style="padding:10px 12px;text-align:center;font-size:11.5px;color:#666;">${lastSent}</td>
           <td style="padding:10px 12px;text-align:center;">
-            <div style="display:flex;gap:4px;justify-content:center;flex-wrap:wrap;">
+            <div style="display:flex;gap:4px;justify-content:center;flex-wrap:nowrap;">
               <button onclick="window.sendNoticeNow('${n.id}')" title="즉시 발송" class="notice-icon-btn notice-icon-blue" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #2c5f8a;color:#2c5f8a;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">📤</button>
               <button onclick="window.openNoticeModal('${n.id}')" title="수정" class="notice-icon-btn notice-icon-gray" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #888;color:#555;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">✏️</button>
-              <button onclick="window.toggleNoticePause('${n.id}')" title="${n.status==='paused'?'재개':'일시정지'}" class="notice-icon-btn notice-icon-orange" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #e67e22;color:#e67e22;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">${n.status==='paused'?'▶':'⏸'}</button>
               <button onclick="window.deleteNoticeItem('${n.id}')" title="삭제" class="notice-icon-btn notice-icon-red" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #e03131;color:#e03131;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">🗑️</button>
             </div>
           </td>
