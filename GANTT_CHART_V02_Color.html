@@ -1210,18 +1210,15 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
     <datalist id="nm-addr-namelist"></datalist>
 
-    <div style="display:flex; align-items:center; gap:5px; margin-bottom:6px; flex-wrap:wrap;">
-      <span style="font-size:10.5px; color:#999; margin-right:2px;">일괄:</span>
-      <button type="button" onclick="window._nmBulkSetChannel('email',true)"
-              style="padding:2px 7px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">📧 전체 ON</button>
-      <button type="button" onclick="window._nmBulkSetChannel('email',false)"
-              style="padding:2px 7px; border:1px solid #ccc; color:#888; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">📧 전체 OFF</button>
-      <button type="button" onclick="window._nmBulkSetChannel('tg',true)"
-              style="padding:2px 7px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">💬 전체 ON</button>
-      <button type="button" onclick="window._nmBulkSetChannel('tg',false)"
-              style="padding:2px 7px; border:1px solid #ccc; color:#888; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">💬 전체 OFF</button>
-      <button type="button" onclick="window._nmBulkRemoveAll()"
-              style="padding:2px 7px; border:1px solid #e03131; color:#e03131; background:#fff; border-radius:3px; font-size:11px; cursor:pointer; margin-left:auto;">✕ 전체 삭제</button>
+    <!-- 액션 버튼(📧/💬/✕) 바로 위에 정렬되는 일괄 토글 헤더 -->
+    <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px;">
+      <span style="flex:1; font-size:10px; color:#bbb;">ALL</span>
+      <button type="button" onclick="window._nmBulkToggleChannel('email')" title="이메일 전체 선택/해제"
+              style="width:28px; height:20px; flex-shrink:0; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
+      <button type="button" onclick="window._nmBulkToggleChannel('tg')" title="텔레그램 전체 선택/해제"
+              style="width:28px; height:20px; flex-shrink:0; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
+      <button type="button" onclick="window._nmBulkRemoveAll()" title="수신자 전체 삭제"
+              style="width:26px; height:20px; flex-shrink:0; border:none; background:none; color:#e03131; cursor:pointer; font-size:13px; padding:0;">✕</button>
     </div>
 
     <div id="nm-recipient-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;"></div>
@@ -15655,15 +15652,18 @@ window._nmToggleChannel = function(btn) {
     window._nmApplyChannelState(btn, btn.dataset.on !== '1');
 };
 
-// 일괄 채널 on/off — type: 'email' | 'tg'
-window._nmBulkSetChannel = function(type, on) {
-    document.querySelectorAll('.nm-rr-' + type + '-btn').forEach(btn => window._nmApplyChannelState(btn, on));
+// 일괄 채널 토글 — 현재 전원 ON이면 전체 OFF, 하나라도 OFF면 전체 ON
+window._nmBulkToggleChannel = function(type) {
+    const btns = document.querySelectorAll('.nm-rr-' + type + '-btn');
+    if (!btns.length) return;
+    const allOn = Array.from(btns).every(b => b.dataset.on === '1');
+    btns.forEach(b => window._nmApplyChannelState(b, !allOn));
 };
 
 // 일괄 삭제
 window._nmBulkRemoveAll = function() {
     const list = document.getElementById('nm-recipient-list');
-    if (list) list.innerHTML = '';
+    if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
 };
 
 // (함수 전체 삭제 — attachAddressAutocomplete의 onPick 콜백으로 대체됨)
