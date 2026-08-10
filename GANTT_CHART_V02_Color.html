@@ -1081,8 +1081,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
             <div id="gantt-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                 <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 15px; margin-bottom:0; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
-                    <label>시작일 <input type="date" id="history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
-                    <label>종료일 <input type="date" id="history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                    <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                    <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                     <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
                     <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteHistoryByDateRange()">🗑️ 구간 삭제</button>
                 </div>
@@ -1175,8 +1175,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
     <div>
       <label id="nm-lbl-deadline" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">기준일 (D-day 기준) *</label>
-      <input id="nm-deadline" type="date" class="u-input"
-             style="width:100%; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box;">
+      <input id="nm-deadline" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
+             style="width:100%; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; cursor:pointer;">
     </div>
     <div>
       <label id="nm-lbl-alarm" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">알람 시점</label>
@@ -1315,8 +1315,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
                 <div id="addr-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                     <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-                        <label>시작일 <input type="date" id="addr-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
-                        <label>종료일 <input type="date" id="addr-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="addr-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                        <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="addr-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                         <input type="password" id="addr-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
                         <button class="action-btn" onclick="window.deleteAddrHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
                     </div>
@@ -1482,8 +1482,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
             <div id="sum-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                 <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-                    <label>시작일 <input type="date" id="sum-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
-                    <label>종료일 <input type="date" id="sum-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                    <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="sum-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                    <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="sum-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                     <input type="password" id="sum-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
                     <button class="action-btn" onclick="window.deleteSumHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
                 </div>
@@ -1536,8 +1536,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
                 <div id="bs-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                     <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-                        <label>시작일 <input type="date" id="bs-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
-                        <label>종료일 <input type="date" id="bs-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="bs-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                        <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="bs-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                         <input type="password" id="bs-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
                         <button class="action-btn" onclick="window.deleteBsHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
                     </div>
@@ -1671,8 +1671,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
                 <div id="mc-history-body" style="display:none; max-height:320px; overflow-y:auto;">
                     <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding-bottom:10px; margin-bottom:10px; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
-                        <label>시작일 <input type="date" id="mc-history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
-                        <label>종료일 <input type="date" id="mc-history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                        <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="mc-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                        <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="mc-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                         <input type="password" id="mc-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
                         <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteMcHistoryByDateRange()">🗑️ 구간 삭제</button>
                     </div>
@@ -1739,8 +1739,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <span class="history-close" onclick="closeHistoryModal()">✖</span>
             </div>
             <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 20px; border-bottom:1px solid #e3e6ea; background:#f8f9fa; flex-wrap:wrap; font-size:12px; color:#555;">
-                <label>시작일 <input type="date" id="history-del-from" class="u-input" style="width:130px; margin-left:4px;"></label>
-                <label>종료일 <input type="date" id="history-del-to" class="u-input" style="width:130px; margin-left:4px;"></label>
+                <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                 <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
                 <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteHistoryByDateRange()">🗑️ 구간 삭제</button>
             </div>
@@ -2809,9 +2809,9 @@ ${mailText}`;
                 + '</div>'
                 + '<div style="padding:12px 18px; border-bottom:1px solid #f1f3f5;">'
                 + '<div style="display:flex; gap:6px; align-items:center; margin-bottom:6px;">'
-                + '<input type="date" id="holiday-add-date" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
+                + '<input type="date" readonly onclick="window.showGenericCalendar(this)" id="holiday-add-date" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; cursor:pointer;">'
                 + '<span style="color:#888; font-size:12px;">~</span>'
-                + '<input type="date" id="holiday-add-end-date" title="' + (_hEn ? 'End date for range (leave blank for single day)' : '기간으로 등록할 경우 종료일 (비워두면 하루만 등록)') + '" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
+                + '<input type="date" readonly onclick="window.showGenericCalendar(this)" id="holiday-add-end-date" title="' + (_hEn ? 'End date for range (leave blank for single day)' : '기간으로 등록할 경우 종료일 (비워두면 하루만 등록)') + '" style="flex:1; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; cursor:pointer;">'
                 + '</div>'
                 + '<div style="display:flex; gap:6px;">'
                 + '<input type="text" id="holiday-add-name" placeholder="' + (_hEn ? 'Reason (e.g. Summer vacation)' : '사유 (예: 하계휴가)') + '" style="flex:1; min-width:0; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">'
@@ -5183,16 +5183,30 @@ window.deleteHistoryByDateRange = function() {
 
     window.showCalendar = function(btn, ts, rowIndex, colIndex) {
         window.currentCalendarTarget = btn; window.currentCalendarTs = Number(ts); window.currentCalendarRow = rowIndex; window.currentCalendarCol = colIndex;
+        // 💡 통합 캘린더 — 이전에 열려있던 다른 모드(메일분석/범용 input)의 잔여 플래그를 항상 초기화
+        window.currentCalendarMailField = null;
+        window.currentCalendarGenericInput = null;
         let d = new Date(window.currentCalendarTs);
         window.currentViewYear = d.getFullYear(); window.currentViewMonth = d.getMonth();
         window.calendarFixedPos = null; renderCalendar(false);
     };
 
     // 💡 업무 추가(직접입력/파일첨부/메일서버) AI분석 결과의 시작일·완료일 달력 진입점
-    //    selectDateFromCalendar()의 currentCalendarMailField 분기와 짝을 이루는 함수 (기존엔 미정의 상태였음)
+    //    selectDateFromCalendar()의 currentCalendarMailField 분기와 짝을 이루는 함수
     window.showMailCalendar = function(el, ts, fieldKey) {
-        window.currentCalendarMailField = fieldKey;
         window.showCalendar(el, ts, null, null);
+        window.currentCalendarMailField = fieldKey; // showCalendar가 초기화한 뒤 다시 지정
+    };
+
+    // 💡 [통합 캘린더] 앱 전체의 <input type="date"> 필드를 이 하나의 팝업으로 통일
+    //    input에 readonly를 걸고(네이티브 달력 차단) 클릭 시 이 함수를 호출하도록 연결하면
+    //    선택한 날짜가 자동으로 그 input의 value에 채워지고 change/input 이벤트도 함께 발생함
+    window.showGenericCalendar = function(inputEl) {
+        if (!inputEl) return;
+        let ts = inputEl.value ? new Date(inputEl.value).getTime() : Date.now();
+        if (isNaN(ts)) ts = Date.now();
+        window.showCalendar(inputEl, ts, null, null);
+        window.currentCalendarGenericInput = inputEl; // showCalendar가 초기화한 뒤 다시 지정
     };
 
     window.changeCalendarMonth = function(e, deltaMonth, deltaYear) {
@@ -5204,7 +5218,19 @@ window.deleteHistoryByDateRange = function() {
 
    window.selectDateFromCalendar = function(y, m, d) {
         let str = y + "-" + String(m+1).padStart(2, '0') + "-" + String(d).padStart(2, '0');
-    
+
+        // ✅ [통합 캘린더] 범용 input 모드인 경우 — 그 input에 값만 채우고 change/input 이벤트 발생
+        if (window.currentCalendarGenericInput) {
+            const el = window.currentCalendarGenericInput;
+            window.currentCalendarGenericInput = null;
+            el.value = str;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            document.getElementById('calendar-popup').style.display = 'none';
+            var _calOvlG = document.getElementById('calendar-bg-overlay'); if (_calOvlG) _calOvlG.remove();
+            return;
+        }
+
         // ✅ 메일 분석 팝업창용 달력인 경우 (중요 수정)
         if (window.currentCalendarMailField) {
             const fieldKey = window.currentCalendarMailField;
@@ -5290,7 +5316,12 @@ window.deleteHistoryByDateRange = function() {
         for (let i = 1; i <= daysInMonth; i++) {
             let isTarget = (year === targetY && month === targetM && i === targetD) ? 'active' : '';
             let isSunday = (cellCount % 7 === 0) ? 'color:#e03131;' : ''; let isSaturday = (cellCount % 7 === 6) ? 'color:#0056b3;' : '';
-            html += `<div class="cal-date ${isTarget}" style="${isTarget ? '' : isSunday + isSaturday}" onclick="selectDateFromCalendar(${year}, ${month}, ${i})">${i}</div>`;
+            // 💡 [통합 캘린더] 공휴일 표시 — 평일이어도 공휴일이면 일요일과 같은 빨간색 + 아래 점(●) 표시
+            let dateStr = year + '-' + String(month + 1).padStart(2, '0') + '-' + String(i).padStart(2, '0');
+            let isHol = (window.isHoliday && window.isHoliday(dateStr));
+            let holStyle = isHol ? 'color:#e03131;' : '';
+            let holDot = isHol ? '<span style="display:block; font-size:8px; line-height:1; margin-top:1px;">●</span>' : '';
+            html += `<div class="cal-date ${isTarget}" style="${isTarget ? '' : (holStyle || isSunday + isSaturday)}" onclick="selectDateFromCalendar(${year}, ${month}, ${i})" title="${isHol ? '공휴일' : ''}">${i}${holDot}</div>`;
             cellCount++;
         }
         let nextDay = 1; while (cellCount % 7 !== 0) { html += `<div class="cal-date dim">${nextDay++}</div>`; cellCount++; } html += `</div>`;
@@ -9657,29 +9688,79 @@ window.inboxOpenDistribute = async function(uid) {
     try {
         const resp = await gapi.client.drive.files.list({
             q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
-            fields: 'files(id, name, modifiedTime)', orderBy: 'modifiedTime desc',
+            fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc',
             corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
         });
-        // 💡 업무 보관함 자동 백업 파일은 전송 대상 프로젝트가 아니므로 제외
-        const files = (resp.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_'); });
+        // 💡 업무 보관함 백업 / AI프롬프트 / 휴일 / 주소록 등 비-프로젝트 파일은 전송 대상에서 제외
+        const files = (resp.result.files || []).filter(function(f) {
+            return !f.name.startsWith('TaskInbox_')
+                && f.name !== PROMPT_DRIVE_FILENAME
+                && f.name !== HOLIDAY_DRIVE_FILENAME
+                && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
+        });
         inlineEl.innerHTML = '';
         if (!files.length) {
             inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#aaa; font-size:12px;">공용 폴더에 프로젝트 파일이 없습니다.</div>';
             return;
         }
+
+        // 💡 담당자(appProperties.pm) 기준 그룹핑 — "프로젝트 불러오기"와 동일한 방식
+        const UNASSIGNED = '미지정';
+        const groups = {};
         files.forEach(function(f) {
-            const d = new Date(f.modifiedTime);
-            const div = document.createElement('div');
-            div.style.cssText = 'padding:8px 10px; border:1px solid #ced4da; border-radius:6px; cursor:pointer; margin-bottom:5px; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
-            div.onmouseover = function() { this.style.background = '#eef6ff'; this.style.borderColor = '#1971c2'; };
-            div.onmouseout  = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
-            div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(f.name) + '</span><span style="color:#999; white-space:nowrap; margin-left:8px; font-size:11px;">' + d.toLocaleString() + '</span>';
-            div.addEventListener('click', function() {
-                document.getElementById('dist-step2').style.display = 'none';
-                window.inboxDistPickFile(f.id, f.name);
-            });
-            inlineEl.appendChild(div);
+            const pmName = (f.appProperties && f.appProperties.pm) ? f.appProperties.pm.trim() : '';
+            const key = pmName || UNASSIGNED;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(f);
         });
+        const groupNames = Object.keys(groups).sort(function(a, b) {
+            if (a === UNASSIGNED) return 1;
+            if (b === UNASSIGNED) return -1;
+            return a.localeCompare(b, 'ko');
+        });
+
+        groupNames.forEach(function(pmName) {
+            const groupFiles = groups[pmName];
+            const groupWrap = document.createElement('div');
+            groupWrap.style.cssText = 'border:1px solid #eee; border-radius:6px; overflow:hidden; margin-bottom:6px;';
+
+            const headerRow = document.createElement('div');
+            headerRow.style.cssText = 'padding:6px 10px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:11.5px; color:#555; user-select:none;';
+            const arrow = document.createElement('span');
+            arrow.textContent = '▾';
+            arrow.style.cssText = 'font-size:10px;';
+            const label = document.createElement('span');
+            label.textContent = pmName + ' (' + groupFiles.length + ')';
+            headerRow.appendChild(arrow); headerRow.appendChild(label);
+
+            const body = document.createElement('div');
+            body.style.cssText = 'display:flex; flex-direction:column; gap:5px; padding:6px;';
+
+            groupFiles.forEach(function(f) {
+                const d = new Date(f.modifiedTime);
+                const div = document.createElement('div');
+                div.style.cssText = 'padding:8px 10px; border:1px solid #ced4da; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
+                div.onmouseover = function() { this.style.background = '#eef6ff'; this.style.borderColor = '#1971c2'; };
+                div.onmouseout  = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+                div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(f.name) + '</span><span style="color:#999; white-space:nowrap; margin-left:8px; font-size:11px;">' + d.toLocaleString() + '</span>';
+                div.addEventListener('click', function() {
+                    document.getElementById('dist-step2').style.display = 'none';
+                    window.inboxDistPickFile(f.id, f.name);
+                });
+                body.appendChild(div);
+            });
+
+            headerRow.onclick = function() {
+                const collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? 'flex' : 'none';
+                arrow.textContent = collapsed ? '▾' : '▸';
+            };
+
+            groupWrap.appendChild(headerRow);
+            groupWrap.appendChild(body);
+            inlineEl.appendChild(groupWrap);
+        });
+
         // 💡 상세 배치 단계(개발단계 선택 + 전송실행)를 팝업이 아니라 이 카드 안으로 이동
         inlineEl.appendChild(document.getElementById('dist-step2'));
     } catch (err) {
@@ -10869,10 +10950,10 @@ window.updateInboxBadge();
                             </div>
                         </div>
                         <div style="display:flex; gap:6px; margin-bottom:6px; padding:0 12px;">
-                            <input id="ms-start-date" type="date"
-                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
-                            <input id="ms-end-date" type="date"
-                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px;">
+                            <input id="ms-start-date" type="date" readonly onclick="window.showGenericCalendar(this)"
+                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; cursor:pointer;">
+                            <input id="ms-end-date" type="date" readonly onclick="window.showGenericCalendar(this)"
+                                   style="flex:1; min-width:0; box-sizing:border-box; padding:6px 8px; border:1px solid #ced4da; border-radius:4px; font-size:12px; cursor:pointer;">
                         </div>
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px;">
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
@@ -17317,12 +17398,10 @@ window.populateTabData = function() {
     setVal('sum-background', sd.background);
     setVal('sum-dev-days', sd.devDays);
     
-    if (sd.milestones) {
-        document.querySelectorAll('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]').forEach(function(inp) {
-            const m = sd.milestones[inp.dataset.stage];
-            if (m && m[inp.dataset.field]) inp.value = m[inp.dataset.field];
-        });
-    }
+    document.querySelectorAll('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]').forEach(function(inp) {
+        const m = sd.milestones && sd.milestones[inp.dataset.stage];
+        inp.value = (m && m[inp.dataset.field]) ? m[inp.dataset.field] : '';
+    });
     
     // Brief SPEC 탭 렌더링
     if (td.briefSpec && td.briefSpec.length) {
@@ -17351,9 +17430,27 @@ window.populateTabData = function() {
             if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
             if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
         }
+    } else {
+        // 💡 이 프로젝트에 Brief SPEC 데이터가 없으면, 이전 프로젝트 표 내용이 남지 않도록 비움
+        const bsTbodyEmpty = document.getElementById('briefspec-body');
+        if (bsTbodyEmpty) {
+            bsTbodyEmpty.innerHTML = '';
+            if (window.bmSetupAllRows) window.bmSetupAllRows('bs');
+        }
     }
 
-    // 💡 제품 사진 복원
+    // 💡 제품 사진 복원 — 슬롯 2개를 항상 먼저 초기화(비움)한 뒤, 있는 것만 채움
+    //    (이전 프로젝트 사진이 빈 슬롯에 남아있던 버그 수정)
+    for (let i = 0; i < 2; i++) {
+        const slot = document.getElementById('prod-img-slot-' + i);
+        if (!slot) continue;
+        const img = slot.querySelector('img.prod-preview');
+        const ph  = slot.querySelector('.prod-placeholder');
+        const del = slot.querySelector('.prod-del-btn');
+        if (img) { img.removeAttribute('src'); img.style.display = 'none'; }
+        if (ph)  ph.style.display = 'block';
+        if (del) del.style.display = 'none';
+    }
     if (td.productImages) {
         td.productImages.forEach(function(entry, i) {
             if (!entry) return;
