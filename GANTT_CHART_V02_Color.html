@@ -15788,16 +15788,23 @@ window.sendNoticeNow = async function(id, skipLog) {
     if(toEmail){
         try{const r=await fetch(`${MAIL_SERVER}/send-mail`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toEmail,subject:`[공지] ${n.title}`,body:emailBody})});const d=await r.json();results.push(d.ok?'📧 메일 완료':`📧 오류:${d.error}`);}catch(e){results.push(`📧 오류:${e.message}`);}
     }
-    const tgChatIds = [...new Set(recipients.filter(r => r.tgOn && r.telegramId).map(r => r.telegramId))];
-    if(tgChatIds.length && window.sendTelegramAlarm){
+    const tgTargets = recipients.filter(r => r.tgOn && r.telegramId);
+    if(tgTargets.length && window.sendTelegramAlarm){
         try{
             const pm2 = window.projectMeta || {};
             const projTitle2 = [pm2.고객사, pm2.고객모델명].filter(Boolean).join(' > ') || 'KORTEK Gantt';
             const tgMsgNew = `📢 [${projTitle2}] ${n.title}\n\n${n.body}\n\n📅 기준일: ${n.deadline} (${dDayStr})`;
-            for(const chatId of tgChatIds){
-                await window.sendTelegramAlarm(tgMsgNew, {chatId});
+            let successCount = 0;
+            const failedNames = [];
+            const seenIds = new Set();
+            for(const r of tgTargets){
+                if (seenIds.has(r.telegramId)) continue;
+                seenIds.add(r.telegramId);
+                const res = await window.sendTelegramAlarm(tgMsgNew, {chatId: r.telegramId});
+                if (res && res.ok) successCount++;
+                else failedNames.push(`${r.name}(${res ? res.errDesc : '오류'})`);
             }
-            results.push(`💬 Telegram ${tgChatIds.length}명 완료`);
+            results.push(`💬 Telegram ${successCount}/${seenIds.size}명 완료` + (failedNames.length ? ` — 실패: ${failedNames.join(', ')}` : ''));
         }catch(e){results.push(`💬 오류:${e.message}`);}
     }
     const resultStr=results.join(' | ')||'수신 대상 없음';
@@ -15888,11 +15895,20 @@ window._tgAutoMatchFromSummary = function() {
 // Telegram 발송 헬퍼 (알람과 통합)
 window.sendTelegramAlarm = async function(message, opts = {}) {
     try {
-        await fetch(`${TG_SERVER}/send-telegram`, {
+        const res = await fetch(`${TG_SERVER}/send-telegram`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ message, ...opts })
         });
-    } catch(e) { console.warn('Telegram 발송 실패:', e.message); }
+        const data = await res.json();
+        // 서버가 200을 줘도 실제 전송(sent)이 0이면 실패로 취급 (예: "chat not found")
+        const ok = res.ok && (data.sent > 0);
+        const errDesc = (data.results && data.results[0] && data.results[0].result && !data.results[0].result.ok)
+            ? data.results[0].result.description : (ok ? '' : '알 수 없는 오류');
+        return { ok, errDesc };
+    } catch(e) {
+        console.warn('Telegram 발송 실패:', e.message);
+        return { ok: false, errDesc: e.message };
+    }
 };
 
 // SMTP 서버에 저장 (즉시 적용)
