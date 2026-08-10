@@ -15566,10 +15566,9 @@ window.openNoticeModal = async function(id) {
             }
 
             // Telegram 복원
-            const tv = n.tgTarget==='ALL'?'ALL':n.tgTarget==='none'?'none':n.tgTarget==='role'?'role':'select';
+            const tv = n.tgTarget==='ALL'?'ALL':n.tgTarget==='none'?'none':'select';
             const tr = document.querySelector(`input[name="nm-tg"][value="${tv}"]`);
             if (tr) { tr.checked=true; window._nmTgToggle(tr); }
-            document.getElementById('nm-tg-role').value = n.tgValue || '';
         }
     } else {
         ['nm-title','nm-body','nm-deadline'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
