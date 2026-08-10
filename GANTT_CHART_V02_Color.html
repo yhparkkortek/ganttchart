@@ -1198,44 +1198,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div style="background:#f8f9fa; border-radius:6px; padding:12px; margin-bottom:14px;">
     <p id="nm-lbl-target" style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#444;">📬 수신 대상</p>
 
-    <!-- 이메일 -->
-    <div style="margin-bottom:10px;">
-      <p id="nm-lbl-email" style="margin:0 0 5px; font-size:11.5px; font-weight:bold; color:#666;">📧 이메일</p>
-      <div style="display:flex; gap:12px; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-email" value="all" checked onchange="window._nmEmailToggle(this)"> <span id="nm-radio-email-all">프로젝트 전체</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-email" value="none" onchange="window._nmEmailToggle(this)"> <span id="nm-radio-email-none">발송 안 함</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-email" value="custom" onchange="window._nmEmailToggle(this)"> <span id="nm-radio-email-custom">직접 입력</span>
-        </label>
-      </div>
-      <div id="nm-email-custom-wrap" style="display:none; margin-top:6px;">
-        <datalist id="nm-addr-namelist"></datalist>
-        <div id="nm-email-rows" style="display:flex; flex-direction:column; gap:4px; margin-bottom:4px;"></div>
-        <button type="button" onclick="window._nmAddEmailRow()"
-                style="padding:3px 10px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:3px; font-size:11.5px; cursor:pointer;">+ 수신자 추가</button>
-      </div>
-    </div>
-
-    <!-- Telegram -->
-    <div>
-      <p id="nm-lbl-tg" style="margin:0 0 5px; font-size:11.5px; font-weight:bold; color:#666;">💬 Telegram</p>
-      <div style="display:flex; gap:12px; flex-wrap:wrap;">
-        <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="ALL" checked onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-all">전체</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="none" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-none">발송 안 함</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="select" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-select">개별 선택</span>
-        </label>
-      </div>
-      <div id="nm-tg-select" style="display:none; margin-top:6px; flex-wrap:wrap; gap:5px;"></div>
-    </div>
+    <datalist id="nm-addr-namelist"></datalist>
+    <div id="nm-recipient-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;"></div>
+    <button type="button" onclick="window._nmAddRecipientRow()"
+            style="padding:3px 10px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:3px; font-size:11.5px; cursor:pointer;">+ 수신자 추가</button>
+    <p style="margin:6px 2px 0; font-size:10.5px; color:#999;">이름 입력 시 주소록에서 이메일/텔레그램 ID 자동완성 · 채널 아이콘 클릭으로 개별 발송 on/off</p>
   </div>
 
   <input type="hidden" id="nm-edit-id">
@@ -15478,7 +15445,8 @@ window.renderNoticeTab = function() {
         const isPast   = diffDays < 0;
         const statusDot= n.status==='paused'?'⏸':isPast?'✅':'🟢';
         const lastSent = n.sentLog&&n.sentLog.length ? n.sentLog[n.sentLog.length-1].sentAt.slice(0,10) : '-';
-        const targetLabel = [n.emailTarget!=='none'?'📧':'', n.tgTarget!=='none'?'💬':''].filter(Boolean).join(' ')||'-';
+        const rcp = n.recipients || [];
+        const targetLabel = [rcp.some(r=>r.emailOn)?'📧':'', rcp.some(r=>r.tgOn)?'💬':''].filter(Boolean).join(' ')||'-';
         const dDaysLabel  = (n.alarmDays||[]).map(d=>`D-${d}`).join(', ');
         const rowBg = i%2===0?'#fff':'#fafafa';
         return `<tr style="background:${rowBg};border-bottom:1px solid #f0f0f0;">
@@ -15530,10 +15498,6 @@ window.openNoticeModal = async function(id) {
     window._nmCustomDays = [];
     window._nmRenderCustomTags();
 
-    // 이메일 행 초기화
-    const emailRows = document.getElementById('nm-email-rows');
-    if (emailRows) emailRows.innerHTML = '';
-
     document.getElementById('nm-edit-id').value = id || '';
     const _nmEn = window._currentLang === 'en';
     document.getElementById('notice-modal-title').textContent = id ? (_nmEn ? '📢 Edit Notice' : '📢 공지 수정') : (_nmEn ? '📢 Add Notice' : '📢 공지 등록');
@@ -15554,46 +15518,14 @@ window.openNoticeModal = async function(id) {
             window._nmCustomDays = (n.alarmDays || []).filter(d => ![7,3,1,0].includes(d));
             window._nmRenderCustomTags();
 
-            // 이메일 복원
-            const er = document.querySelector(`input[name="nm-email"][value="${n.emailTarget||'all'}"]`);
-            if (er) { er.checked = true; window._nmEmailToggle(er); }
-            if (n.emailTarget === 'custom') {
-                // emailList를 행으로 복원
-                (n.emailList || '').split(',').map(e => e.trim()).filter(Boolean).forEach(email => {
-                    const person = window.addressBook?.find(p => p.email === email);
-                    window._nmAddEmailRow(person ? person.name : '', email);
-                });
             }
-
-            // Telegram 복원
-            const tv = n.tgTarget==='ALL'?'ALL':n.tgTarget==='none'?'none':'select';
-            const tr = document.querySelector(`input[name="nm-tg"][value="${tv}"]`);
-            if (tr) { tr.checked=true; window._nmTgToggle(tr); }
-        }
     } else {
         ['nm-title','nm-body','nm-deadline'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
         [7,3,1].forEach(d => { const el=document.getElementById(`nm-d${d}`); if(el) el.checked=true; });
         const d0 = document.getElementById('nm-d0'); if(d0) d0.checked=false;
-        const r = document.querySelector('input[name="nm-email"][value="all"]');
-        if (r) { r.checked=true; window._nmEmailToggle(r); }
-        const t = document.querySelector('input[name="nm-tg"][value="ALL"]');
-        if (t) { t.checked=true; window._nmTgToggle(t); }
     }
 
-    await window._nmLoadTgSelectList();
-
-    // ✅ 체크박스 DOM 생성 후 → 저장된 select 항목 복원
-    if (id) {
-        const n2 = window._noticeItems.find(x => x.id === id);
-        if (n2 && n2.tgTarget === 'select' && n2.tgValue) {
-            const savedNames = n2.tgValue.split(',').map(s => s.trim()).filter(Boolean);
-            document.querySelectorAll('.nm-tg-sel').forEach(cb => {
-                cb.checked = savedNames.includes(cb.value);
-            });
-        }
-    }
-
-    window._nmFillAddrList();
+    window._nmLoadRecipients(id ? window._noticeItems.find(x => x.id === id) : null);
     modal.style.display='block';
     bg.style.display='flex';
     window.bringModalToFront('notice-modal');
@@ -15605,56 +15537,84 @@ window.closeNoticeModal = function() {
 
 // _noticeModalDragStart 제거 → _makeDraggable 공통 함수로 대체됨
 
-window._nmEmailToggle = function(radio) {
-    const w = document.getElementById('nm-email-custom-wrap');
-    if (w) {
-        w.style.display = radio.value === 'custom' ? 'block' : 'none';
-        if (radio.value === 'custom') {
-            // 주소록 datalist 채우기
-            window._nmFillAddrList();
-            // 행이 없으면 하나 추가
-            const rows = document.getElementById('nm-email-rows');
-            if (rows && !rows.children.length) window._nmAddEmailRow();
-        }
-    }
-};
-
 window._nmFillAddrList = function() {
     const dl = document.getElementById('nm-addr-namelist');
-    if (!dl || !window.addressBook) return;
-    dl.innerHTML = window.addressBook.map(p =>
-        `<option value="${p.name}">${p.email ? ' — ' + p.email : ''}</option>
-         ${p.nameEn ? `<option value="${p.nameEn}">${p.email ? ' — ' + p.email : ''}</option>` : ''}`
+    const addrBook = (window.tabData || {}).addressBook || window.addressBook;
+    if (!dl || !addrBook) return;
+    dl.innerHTML = addrBook.map(p =>
+        `<option value="${p.name}"></option>${p.nameEn ? `<option value="${p.nameEn}"></option>` : ''}`
     ).join('');
 };
 
-window._nmAddEmailRow = function(name='', email='') {
-    const rows = document.getElementById('nm-email-rows');
-    if (!rows) return;
-    const div = document.createElement('div');
-    div.className = 'nm-email-row';
-    div.style.cssText = 'display:flex; gap:5px; align-items:center;';
-    div.innerHTML = `
-        <input class="nm-er-name u-input" placeholder="이름 (자동완성)" value="${name}"
-               list="nm-addr-namelist"
-               oninput="window._nmEmailAutofill(this)"
-               style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-        <input class="nm-er-email u-input" placeholder="이메일" value="${email}"
-               style="flex:1.5; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-        <button type="button" onclick="this.closest('.nm-email-row').remove()"
-                style="padding:3px 7px; border:1px solid #e03131; color:#e03131; background:#fff; border-radius:3px; font-size:11px; cursor:pointer; flex-shrink:0;">✕</button>`;
-    rows.appendChild(div);
+// 통합 수신자 행 추가 — 이름 입력 → 이메일/텔레그램 자동완성, 채널별 on/off 토글
+window._nmAddRecipientRow = function(name='', email='', telegramId='', emailOn=true, tgOn=true, auto=false) {
+    const list = document.getElementById('nm-recipient-list');
+    if (!list) return;
+    const row = document.createElement('div');
+    row.className = 'nm-recipient-row';
+    row.dataset.email = email;
+    row.dataset.tg = telegramId;
+    row.style.cssText = 'display:flex; gap:6px; align-items:center; padding:4px 0; border-bottom:1px solid #eee;';
+    row.innerHTML = `
+        <input class="nm-rr-name u-input" placeholder="이름 (자동완성)" value="${name}"
+               list="nm-addr-namelist" oninput="window._nmRecipientAutofill(this)"
+               style="width:88px; flex-shrink:0; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+        ${auto ? '<span style="font-size:10px; color:#2c5f8a; background:#eaf2fa; border-radius:3px; padding:2px 5px; flex-shrink:0; white-space:nowrap;">summary</span>' : ''}
+        <span class="nm-rr-info" style="flex:1; font-size:11.5px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${email || telegramId ? [email, telegramId ? 'TG:'+telegramId : ''].filter(Boolean).join(' · ') : '이름 입력 시 자동완성'}</span>
+        <button type="button" class="nm-rr-email-btn" onclick="window._nmToggleChannel(this,'email')"
+                title="이메일 발송 on/off"
+                style="width:28px; height:26px; flex-shrink:0; border:1px solid ${emailOn?'#27ae60':'#ccc'}; background:${emailOn?'#e8f7ee':'#fff'}; color:${emailOn?'#27ae60':'#aaa'}; border-radius:3px; cursor:pointer; font-size:12px; padding:0;">📧</button>
+        <button type="button" class="nm-rr-tg-btn" onclick="window._nmToggleChannel(this,'tg')"
+                title="텔레그램 발송 on/off"
+                style="width:28px; height:26px; flex-shrink:0; border:1px solid ${tgOn?'#27ae60':'#ccc'}; background:${tgOn?'#e8f7ee':'#fff'}; color:${tgOn?'#27ae60':'#aaa'}; border-radius:3px; cursor:pointer; font-size:12px; padding:0;">💬</button>
+        <button type="button" onclick="this.closest('.nm-recipient-row').remove()"
+                style="border:none; background:none; color:#e03131; cursor:pointer; font-size:15px; padding:0 4px; flex-shrink:0;">✕</button>`;
+    row.querySelector('.nm-rr-email-btn').dataset.on = emailOn ? '1' : '0';
+    row.querySelector('.nm-rr-tg-btn').dataset.on = tgOn ? '1' : '0';
+    list.appendChild(row);
 };
 
-window._nmEmailAutofill = function(nameInput) {
-    const name   = nameInput.value.trim();
+window._nmToggleChannel = function(btn) {
+    const on = btn.dataset.on !== '1';
+    btn.dataset.on = on ? '1' : '0';
+    btn.style.borderColor = on ? '#27ae60' : '#ccc';
+    btn.style.background  = on ? '#e8f7ee' : '#fff';
+    btn.style.color       = on ? '#27ae60' : '#aaa';
+};
+
+// 이름 입력 시 이메일 + 텔레그램ID 동시 자동완성
+window._nmRecipientAutofill = function(nameInput) {
+    const name = nameInput.value.trim();
     if (!name) return;
     const person = window._addrFindByName ? window._addrFindByName(name) : null;
-    if (person && person.email) {
-        const row      = nameInput.closest('.nm-email-row');
-        const emailEl  = row && row.querySelector('.nm-er-email');
-        if (emailEl) emailEl.value = person.email;
+    const row = nameInput.closest('.nm-recipient-row');
+    if (!row) return;
+    const email = person ? (person.email || '') : '';
+    const tg    = person ? (person.telegramId || '') : '';
+    row.dataset.email = email;
+    row.dataset.tg    = tg;
+    const info = row.querySelector('.nm-rr-info');
+    if (info) info.textContent = [email, tg ? 'TG:'+tg : ''].filter(Boolean).join(' · ') || '주소록에 없는 이름';
+};
+
+// Summary 담당자 기준 자동 등록 + 저장된 값 복원 (신규/수정 공통)
+window._nmLoadRecipients = function(n) {
+    const list = document.getElementById('nm-recipient-list');
+    if (!list) return;
+    list.innerHTML = '';
+    window._nmFillAddrList();
+
+    if (n && Array.isArray(n.recipients) && n.recipients.length) {
+        n.recipients.forEach(r => window._nmAddRecipientRow(r.name, r.email, r.telegramId, r.emailOn !== false, r.tgOn !== false, !!r.auto));
+        return;
     }
+    const auto = window._autoRegisterCcFromMembers ? window._autoRegisterCcFromMembers() : [];
+    const seen = new Set();
+    auto.filter(m => { if (seen.has(m.email)) return false; seen.add(m.email); return true; })
+        .forEach(m => {
+            const p = window._addrFindByName ? window._addrFindByName(m.name) : null;
+            window._nmAddRecipientRow(m.name, m.email, p ? (p.telegramId || '') : '', true, !!(p && p.telegramId), true);
+        });
 };
 
 // ── 커스텀 D-day 태그 관리 ────────────────────────────────────
@@ -15692,18 +15652,9 @@ window._nmRemoveCustomDay = function(d) {
     window._nmCustomDays = window._nmCustomDays.filter(x => x !== d);
     window._nmRenderCustomTags();
 };
-window._nmTgToggle = function(radio) {
-    const s=document.getElementById('nm-tg-select'); if(s) s.style.display=radio.value==='select'?'flex':'none';
-};
-window._nmLoadTgSelectList = async function() {
-    const sel=document.getElementById('nm-tg-select'); if(!sel) return;
-    try {
-        const addrBook = (window.tabData || {}).addressBook || [];
-        const members = addrBook.filter(p => p.telegramId);
-        if(!members.length){sel.innerHTML='<span style="font-size:11px;color:#aaa;">주소록에 텔레그램 ID 등록된 팀원 없음</span>';return;}
-        sel.innerHTML=members.map(m=>`<label style="display:flex;align-items:center;gap:3px;font-size:12px;cursor:pointer;background:#f0f4f8;padding:3px 8px;border-radius:12px;" title="Chat ID: ${m.telegramId}">` +`<input type="checkbox" class="nm-tg-sel" value="${m.name}" data-name="${m.name}"> ${m.name}` +`</label>`).join('');
-    } catch(e){sel.innerHTML='<span style="font-size:11px;color:#aaa;">오류 발생</span>';}
-};
+
+(이 두 함수 전체 삭제 — 다음 줄의 함수 여는 괄호까지 포함해서, 이어지는 `};` 도 함께 제거)
+
 window.saveNoticeItem = function() {
     const title    = document.getElementById('nm-title').value.trim();
     const body     = document.getElementById('nm-body').value.trim();
@@ -15714,28 +15665,26 @@ window.saveNoticeItem = function() {
     const presetDays  = [7,3,1,0].filter(d => { const el=document.getElementById(`nm-d${d}`); return el&&el.checked; });
     const alarmDays   = [...new Set([...presetDays, ...(window._nmCustomDays||[])])].sort((a,b)=>b-a);
 
-    // 이메일 수집
-    const emailTarget = document.querySelector('input[name="nm-email"]:checked')?.value || 'all';
-    let emailList = '';
-    if (emailTarget === 'custom') {
-        const rows = document.querySelectorAll('.nm-email-row');
-        emailList  = [...rows].map(r => r.querySelector('.nm-er-email')?.value.trim()).filter(Boolean).join(',');
-    }
-
-    // Telegram 수집
-    const tgRad    = document.querySelector('input[name="nm-tg"]:checked');
-    const tgTarget = tgRad ? (tgRad.value==='ALL'?'ALL':tgRad.value) : 'none';
-    const tgValue  = tgTarget==='role'   ? (document.getElementById('nm-tg-role')?.value.trim()||'') :
-                     tgTarget==='select' ? [...document.querySelectorAll('.nm-tg-sel:checked')].map(c=>c.value).join(',') : '';
+    // 수신자 수집 (이름/이메일/텔레그램ID + 채널별 on/off)
+    const recipients = [...document.querySelectorAll('.nm-recipient-row')].map(row => {
+        const name = row.querySelector('.nm-rr-name')?.value.trim() || '';
+        return {
+            name,
+            email: row.dataset.email || '',
+            telegramId: row.dataset.tg || '',
+            emailOn: row.querySelector('.nm-rr-email-btn')?.dataset.on === '1',
+            tgOn: row.querySelector('.nm-rr-tg-btn')?.dataset.on === '1'
+        };
+    }).filter(r => r.name && (r.emailOn || r.tgOn));
 
     const editId = document.getElementById('nm-edit-id').value;
     if (editId) {
         const idx = window._noticeItems.findIndex(x => x.id === editId);
-        if (idx >= 0) window._noticeItems[idx] = { ...window._noticeItems[idx], title, body, deadline, alarmDays, emailTarget, emailList, tgTarget, tgValue };
+        if (idx >= 0) window._noticeItems[idx] = { ...window._noticeItems[idx], title, body, deadline, alarmDays, recipients };
     } else {
         window._noticeItems.push({
             id: 'notice_' + Date.now(), title, body, deadline, alarmDays,
-            emailTarget, emailList, tgTarget, tgValue,
+            recipients,
             status: 'active', sentLog: [], createdAt: new Date().toISOString().slice(0,10)
         });
     }
@@ -15765,35 +15714,21 @@ window.sendNoticeNow = async function(id, skipLog) {
     const tgMsg=`📢 <b>${n.title}</b>\n\n${n.body}\n\n📅 기준일: ${n.deadline} (${dDayStr})\n<i>KORTEK Gantt PM 공지</i>`;
     const emailBody=`<div style="font-family:'맑은 고딕',sans-serif;font-size:14px;color:#333;"><p><b>📢 ${n.title}</b></p><hr style="border:none;border-top:1px solid #eee;margin:10px 0;"><p style="white-space:pre-wrap;">${n.body.replace(/</g,'&lt;')}</p><p style="margin-top:12px;color:#666;font-size:12px;">📅 기준일: ${n.deadline} (${dDayStr})</p><p style="color:#aaa;font-size:11px;">KORTEK Gantt PM 공지 발송</p></div>`;
     let results=[];
-    if(n.emailTarget!=='none'){
-        const toEmail=n.emailTarget==='custom'?n.emailList:allEmails;
-        if(toEmail){try{const r=await fetch(`${MAIL_SERVER}/send-mail`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toEmail,subject:`[공지] ${n.title}`,body:emailBody})});const d=await r.json();results.push(d.ok?'📧 메일 완료':`📧 오류:${d.error}`);}catch(e){results.push(`📧 오류:${e.message}`);}}
+    const recipients = n.recipients || [];
+    const toEmail = recipients.filter(r => r.emailOn && r.email).map(r => r.email).join(',');
+    if(toEmail){
+        try{const r=await fetch(`${MAIL_SERVER}/send-mail`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toEmail,subject:`[공지] ${n.title}`,body:emailBody})});const d=await r.json();results.push(d.ok?'📧 메일 완료':`📧 오류:${d.error}`);}catch(e){results.push(`📧 오류:${e.message}`);}
     }
-    if(n.tgTarget!=='none'){
+    const tgChatIds = [...new Set(recipients.filter(r => r.tgOn && r.telegramId).map(r => r.telegramId))];
+    if(tgChatIds.length && window.sendTelegramAlarm){
         try{
             const pm2 = window.projectMeta || {};
             const projTitle2 = [pm2.고객사, pm2.고객모델명].filter(Boolean).join(' > ') || 'KORTEK Gantt';
             const tgMsgNew = `📢 [${projTitle2}] ${n.title}\n\n${n.body}\n\n📅 기준일: ${n.deadline} (${dDayStr})`;
-            const addrBook = (window.tabData || {}).addressBook || [];
-            let tgChatIds = [];
-            if(n.tgTarget==='ALL'){
-                tgChatIds = addrBook.map(p=>p.telegramId).filter(Boolean);
-            } else if(n.tgTarget==='select'){
-                const names = (n.tgValue||'').split(',').filter(Boolean);
-                tgChatIds = names.map(name=>{
-                    const p = window._addrFindByName(name.trim());
-                    return p ? p.telegramId : '';
-                }).filter(Boolean);
+            for(const chatId of tgChatIds){
+                await window.sendTelegramAlarm(tgMsgNew, {chatId});
             }
-            tgChatIds = [...new Set(tgChatIds)];
-            if(tgChatIds.length && window.sendTelegramAlarm){
-                for(const chatId of tgChatIds){
-                    await window.sendTelegramAlarm(tgMsgNew, {chatId});
-                }
-                results.push(`💬 Telegram ${tgChatIds.length}명 완료`);
-            } else if(!tgChatIds.length){
-                results.push('💬 Telegram 수신자 없음 (주소록 telegramId 확인)');
-            }
+            results.push(`💬 Telegram ${tgChatIds.length}명 완료`);
         }catch(e){results.push(`💬 오류:${e.message}`);}
     }
     const resultStr=results.join(' | ')||'수신 대상 없음';
