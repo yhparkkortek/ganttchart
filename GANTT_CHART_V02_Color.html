@@ -710,8 +710,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="sb-item active" data-tab="gantt" onclick="window.switchTab('gantt')"><span class="sb-ico">📊</span><span class="sb-label">Gantt chart</span></div>
         <div class="sb-item" data-tab="calendar" onclick="window.switchTab('calendar')"><span class="sb-ico">📅</span><span class="sb-label">Calendar</span></div>
         <div class="sb-item" data-tab="weekly" onclick="window.switchTab('weekly')"><span class="sb-ico">📋</span><span class="sb-label">Weekly Report</span></div>
-        <div class="sb-item" data-tab="alarm" onclick="window.switchTab('alarm')"><span class="sb-ico">🔔</span><span class="sb-label">Alarm</span></div>
-        <div class="sb-item" data-tab="notice" onclick="window.switchTab('notice')"><span class="sb-ico">📢</span><span class="sb-label">Notice</span></div>
+        <div class="sb-item" data-tab="alarm" onclick="window.switchTab('alarm')"><span class="sb-ico">🔔</span><span class="sb-label">Alarm/Notice</span></div>
         <div class="sb-item" data-tab="address" onclick="window.switchTab('address')"><span class="sb-ico">🪪</span><span class="sb-label">Address</span></div>
     </div>
 </div>
@@ -723,6 +722,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
      ══════════════════════════════════════════════ -->
 <div id="tab-alarm" class="tab-panel">
   <div class="concept-tab-wrap" style="max-width:1200px; padding:22px 26px;">
+
+    <!-- 알람/공지 뷰 토글 타이틀 -->
+    <div style="display:flex; gap:18px; margin-bottom:14px; border-bottom:2px solid #eee;">
+      <span id="av-tab-alarm" onclick="window._switchAlarmView('alarm')"
+            style="padding:6px 4px 10px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; margin-bottom:-2px; user-select:none;">🔔 Alarm</span>
+      <span id="av-tab-notice" onclick="window._switchAlarmView('notice')"
+            style="padding:6px 4px 10px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; margin-bottom:-2px; user-select:none;">📢 Notice</span>
+    </div>
+
+    <div id="alarm-view-alarm">
     <div class="concept-header-box">
       <h2 data-i18n="h-alarm">🔔 알람 관리</h2>
       <span id="alarm-server-status" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
@@ -759,6 +768,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </tbody>
       </table>
       </div>
+    </div>
     </div>
   </div>
 </div>
@@ -1078,7 +1088,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 </div> <!-- /#tab-gantt -->
 
-<div id="tab-notice" class="tab-panel">
+<div id="tab-notice" style="display:none;">
   <div class="concept-tab-wrap" style="max-width:1100px; padding:22px 26px;">
     <div class="concept-header-box">
       <h2 data-i18n="h-notice">📢 공지 관리</h2>
@@ -19307,17 +19317,39 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabName === 'summary' && window._checkAllRequiredFields) window._checkAllRequiredFields();
         // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
         if (tabName === 'calendar' && window.calRender) window.calRender();
-        // Alarm 탭은 매번 최신 알람 목록을 다시 그린다
-        if (tabName === 'alarm' && window.renderAlarmTab) window.renderAlarmTab();
-        // Notice 탭은 발송 이력을 다시 그린다
-        // Notice 탭은 공지 목록을 다시 그린다
-        if (tabName === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
+        // Alarm/Notice 탭 진입 시 마지막으로 보던 뷰(알람/공지)를 복원해서 그린다
+        if (tabName === 'alarm') {
+            let savedView = 'alarm';
+            try { savedView = localStorage.getItem('gantt_alarm_view') || 'alarm'; } catch(e) {}
+            window._switchAlarmView(savedView);
+        } else {
+            // 다른 탭으로 이동하면 Notice 뷰가 화면에 남아있지 않도록 숨김
+            const noticeSec = document.getElementById('tab-notice');
+            if (noticeSec) noticeSec.style.display = 'none';
+        }
+    };
+
+    window._alarmView = window._alarmView || 'alarm';
+    window._switchAlarmView = function(view) {
+        window._alarmView = view;
+        const alarmSec  = document.getElementById('alarm-view-alarm');
+        const noticeSec = document.getElementById('tab-notice');
+        const tabAlarm  = document.getElementById('av-tab-alarm');
+        const tabNotice = document.getElementById('av-tab-notice');
+        if (alarmSec)  alarmSec.style.display  = view === 'alarm'  ? 'block' : 'none';
+        if (noticeSec) noticeSec.style.display = view === 'notice' ? 'block' : 'none';
+        if (tabAlarm)  { tabAlarm.style.color = view === 'alarm' ? '#2c5f8a' : '#999'; tabAlarm.style.borderBottomColor = view === 'alarm' ? '#2c5f8a' : 'transparent'; }
+        if (tabNotice) { tabNotice.style.color = view === 'notice' ? '#2c5f8a' : '#999'; tabNotice.style.borderBottomColor = view === 'notice' ? '#2c5f8a' : 'transparent'; }
+        if (view === 'alarm'  && window.renderAlarmTab)  window.renderAlarmTab();
+        if (view === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
+        try { localStorage.setItem('gantt_alarm_view', view); } catch(e) {}
     };
 
     // 새로고침해도 마지막 상태 복원
     try {
         if (localStorage.getItem('gantt_sidebar_collapsed') === '1') applySidebarState(true);
-        const lastTab = localStorage.getItem('gantt_active_tab');
+        let lastTab = localStorage.getItem('gantt_active_tab');
+        if (lastTab === 'notice') { lastTab = 'alarm'; try { localStorage.setItem('gantt_alarm_view', 'notice'); } catch(e) {} }
         if (lastTab && document.getElementById('tab-' + lastTab)) window.switchTab(lastTab);
     } catch(e) {}
 })();
