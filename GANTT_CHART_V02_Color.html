@@ -686,12 +686,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <!-- ⚙️ 설정 — 기타 기능 통합 -->
         <div style="position:relative; display:inline-block;">
             <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정 <span id="alarm-status-dot">🟢</span></button>
-            <span style="width:1px; height:18px; background:#dee2e6; margin:0 4px; flex-shrink:0;"></span>
+            <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
             <span id="current-project-filename" onclick="window.selectProject()"
                   title="클릭하면 저장 후 다른 프로젝트를 열 수 있습니다"
-                  style="font-size:12px; color:#555; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:4px 6px; border-radius:4px; transition:0.15s;"
-                  onmouseover="this.style.background='#f0f4f8'; this.style.color='#2c5f8a';"
-                  onmouseout="this.style.background='transparent'; this.style.color='#555';">📄 (저장된 프로젝트 없음)</span>
+                  style="display:none; font-size:14px; color:#fff; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center;"
+                  onmouseover="this.style.background='rgba(255,255,255,0.18)';"
+                  onmouseout="this.style.background='transparent';"></span>
             <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="alarm-toggle-btn" class="topbar-menu-item" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>
@@ -2105,11 +2105,19 @@ ${mailText}`;
         window.loadFromGoogleDrive();
     }
 
-    // 💡 상단바 현재 프로젝트 파일명 표시 갱신
+    // 💡 상단바 현재 프로젝트 파일명 표시 갱신 — 로드된 파일이 없으면 아예 숨김
     window.updateCurrentFileLabel = function() {
-        const el = document.getElementById('current-project-filename');
+        const el  = document.getElementById('current-project-filename');
+        const sep = document.getElementById('current-file-sep');
         if (!el) return;
-        el.textContent = window.currentDriveFileName ? ('📄 ' + window.currentDriveFileName) : '📄 (저장된 프로젝트 없음)';
+        if (window.currentDriveFileName) {
+            el.textContent = '📄 ' + window.currentDriveFileName;
+            el.style.display = 'inline-flex';
+            if (sep) sep.style.display = 'block';
+        } else {
+            el.style.display = 'none';
+            if (sep) sep.style.display = 'none';
+        }
     };
 
     window.loadFromGoogleDrive = async function() {
