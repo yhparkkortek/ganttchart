@@ -1781,16 +1781,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     min-width:480px; min-height:280px; resize:both; overflow:hidden;
                     display:flex; flex-direction:column;">
             <div id="drive-drag-handle" class="history-header"
-                 style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
-                        cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                <span id="drive-modal-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📂 구글 드라이브 프로젝트 불러오기</span>
+                 style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative;
+                        cursor:grab; border-bottom:1.5px solid #ffe08a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <span id="drive-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">📂 구글 드라이브 프로젝트 불러오기</span>
                 <button onclick="window.closeDriveModal()"
-                    style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
-                           color:#2c5f8a; font-size:16px; cursor:pointer;
+                    style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+                           color:#7a5210; font-size:16px; cursor:pointer;
                            width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                    onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';"
-                    onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';"
+                    onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
+                    onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
                     title="닫기">×</button>
             </div>
             <div class="history-body" style="padding: 20px; overflow-y:auto; flex:1;">
@@ -2053,7 +2053,7 @@ ${mailText}`;
         try {
             let response = await gapi.client.drive.files.list({
                 q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
-                fields: 'files(id, name, modifiedTime)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
+                fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             
             // 💡 업무 보관함 자동 백업 파일(TaskInbox_이름.json)은 프로젝트가 아니므로 목록에서 제외
@@ -2408,7 +2408,7 @@ ${mailText}`;
 
             let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [] };
             let boundary = 'foo_bar_baz';
-            let metadata = { name: dynamicFileName, mimeType: 'application/json' };
+            let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '' } };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
 
             let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
@@ -2572,16 +2572,63 @@ ${mailText}`;
         if (_dmTitle) _dmTitle.textContent = _dmEn ? '📂 Open Project from Google Drive' : '📂 구글 드라이브 프로젝트 불러오기';
         const _dmDesc = document.getElementById('drive-modal-desc');
         if (_dmDesc) _dmDesc.textContent = _dmEn ? 'Select a project file to open.' : '불러올 프로젝트 파일을 선택해 주세요.';
+
+        // 담당자(appProperties.pm) 기준 그룹핑 — 없으면 "미지정"
+        const UNASSIGNED = _dmEn ? 'Unassigned' : '미지정';
+        const groups = {};
         files.forEach(file => {
-            let d = new Date(file.modifiedTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-            let fileBtn = document.createElement('div');
-            fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
-            fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
-            fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
-            fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
-            fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
-            listContainer.appendChild(fileBtn);
+            const pm = (file.appProperties && file.appProperties.pm) ? file.appProperties.pm.trim() : '';
+            const key = pm || UNASSIGNED;
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(file);
         });
+        // 담당자 이름순 정렬, 미지정은 항상 맨 뒤
+        const groupNames = Object.keys(groups).sort((a, b) => {
+            if (a === UNASSIGNED) return 1;
+            if (b === UNASSIGNED) return -1;
+            return a.localeCompare(b, 'ko');
+        });
+
+        groupNames.forEach((pmName, gi) => {
+            const groupFiles = groups[pmName];
+            const groupWrap = document.createElement('div');
+            groupWrap.style.cssText = 'border:1px solid #eee; border-radius:8px; overflow:hidden;';
+
+            const headerRow = document.createElement('div');
+            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none;';
+            const arrow = document.createElement('span');
+            arrow.textContent = '▾';
+            arrow.style.cssText = 'font-size:11px; transition:0.15s;';
+            headerRow.appendChild(arrow);
+            const label = document.createElement('span');
+            label.textContent = `${pmName} (${groupFiles.length})`;
+            headerRow.appendChild(label);
+
+            const body = document.createElement('div');
+            body.style.cssText = 'display:flex; flex-direction:column; gap:8px; padding:10px;';
+
+            groupFiles.forEach(file => {
+                let d = new Date(file.modifiedTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+                let fileBtn = document.createElement('div');
+                fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
+                fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
+                fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+                fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
+                fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
+                body.appendChild(fileBtn);
+            });
+
+            headerRow.onclick = function() {
+                const collapsed = body.style.display === 'none';
+                body.style.display = collapsed ? 'flex' : 'none';
+                arrow.textContent = collapsed ? '▾' : '▸';
+            };
+
+            groupWrap.appendChild(headerRow);
+            groupWrap.appendChild(body);
+            listContainer.appendChild(groupWrap);
+        });
+
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
     }
     
@@ -2729,8 +2776,8 @@ ${mailText}`;
             modal.id = 'holiday-manager-modal';
             modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:none; pointer-events:none; z-index:99999; align-items:center; justify-content:center;';
             modal.innerHTML =
-                '<div style="pointer-events:all; background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
-                + '<div style="padding:14px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a; display:flex; justify-content:space-between; align-items:center;">'
+                '<div id="holiday-modal-box" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
+                + '<div id="holiday-drag-handle" style="padding:14px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a; display:flex; justify-content:space-between; align-items:center;">'
                 + '<span style="font-size:15px; font-weight:bold; color:#7a5210;">' + (_hEn ? '🗓️ Holiday Registration' : '🗓️ 휴일 등록 (추가 휴일)') + '</span>'
                 + '<button onclick="document.getElementById(\'holiday-manager-modal\').style.display=\'none\'" style="border:none; background:none; font-size:18px; cursor:pointer; color:#868e96;">✕</button>'
                 + '</div>'
@@ -2755,6 +2802,7 @@ ${mailText}`;
                 + '</div>'
                 + '</div>';
             document.body.appendChild(modal);
+            window._makeDraggable('holiday-modal-box', 'holiday-drag-handle');
         }
         modal.style.display = 'flex';
 
