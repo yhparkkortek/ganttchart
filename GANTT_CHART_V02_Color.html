@@ -1231,15 +1231,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           <input type="radio" name="nm-tg" value="none" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-none">발송 안 함</span>
         </label>
         <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
-          <input type="radio" name="nm-tg" value="role" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-role">역할별</span>
-        </label>
-        <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
           <input type="radio" name="nm-tg" value="select" onchange="window._nmTgToggle(this)"> <span id="nm-radio-tg-select">개별 선택</span>
         </label>
       </div>
-      <input id="nm-tg-role" placeholder="역할 입력 (예: PM)"
-             style="display:none; width:100%; margin-top:5px; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-      <div id="nm-tg-select" style="display:none; margin-top:6px; display:none; flex-wrap:wrap; gap:5px;"></div>
+      <div id="nm-tg-select" style="display:none; margin-top:6px; flex-wrap:wrap; gap:5px;"></div>
     </div>
   </div>
 
@@ -6091,7 +6086,6 @@ window.deleteHistoryByDateRange = function() {
             'nm-lbl-tg':            { ko:'💬 Telegram',           en:'💬 Telegram' },
             'nm-radio-tg-all':      { ko:'전체',                  en:'All' },
             'nm-radio-tg-none':     { ko:'발송 안 함',            en:'Do Not Send' },
-            'nm-radio-tg-role':     { ko:'역할별',                en:'By Role' },
             'nm-radio-tg-select':   { ko:'개별 선택',             en:'Select' },
             'nm-save-btn':          { ko:'저장',                  en:'Save' },
             'nm-cancel-btn':        { ko:'취소',                  en:'Cancel' },
@@ -15700,7 +15694,6 @@ window._nmRemoveCustomDay = function(d) {
     window._nmRenderCustomTags();
 };
 window._nmTgToggle = function(radio) {
-    const r=document.getElementById('nm-tg-role');   if(r) r.style.display=radio.value==='role'?'block':'none';
     const s=document.getElementById('nm-tg-select'); if(s) s.style.display=radio.value==='select'?'flex':'none';
 };
 window._nmLoadTgSelectList = async function() {
