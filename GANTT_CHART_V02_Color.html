@@ -782,7 +782,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
   <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-26px -28px 18px; padding:14px 20px 12px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="as-modal-title" style="margin:0; font-size:15px; color:#7a5210;">⚙️ 알람 설정</h3>
-    <button onclick="window.closeAlarmSettings()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+    <button onclick="window.closeAlarmSettings()"
+        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+               color:#7a5210; font-size:16px; cursor:pointer;
+               width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+               display:flex; align-items:center; justify-content:center; transition:0.15s;"
+        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
+        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        title="닫기">×</button>
   </div>
 
  <!-- ══ 섹션 1: 서버 연결 (기본 접힘) ══ -->
@@ -915,7 +922,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
               padding:14px 20px 12px; border-bottom:1px solid #eee; flex-shrink:0;
               cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0;">
     <span id="install-guide-title2" style="font-size:14px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-    <button onclick="window.closeInstallGuideModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+    <button onclick="window.closeInstallGuideModal()"
+        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+               color:#7a5210; font-size:16px; cursor:pointer;
+               width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+               display:flex; align-items:center; justify-content:center; transition:0.15s;"
+        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
+        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        title="닫기">×</button>
   </div>
   <!-- 탭 -->
   <div style="display:flex; border-bottom:1px solid #eee; flex-shrink:0;">
@@ -1003,7 +1017,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
   <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-28px -28px 18px; padding:14px 20px 12px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="alarm-modal-title" style="margin:0; font-size:15px; color:#7a5210;">알람 상세</h3>
-    <button onclick="window.closeAlarmModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+    <button onclick="window.closeAlarmModal()"
+        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+               color:#7a5210; font-size:16px; cursor:pointer;
+               width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+               display:flex; align-items:center; justify-content:center; transition:0.15s;"
+        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
+        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        title="닫기">×</button>
   </div>
   <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
   <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
@@ -1021,7 +1042,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   padding:24px 24px 18px; font-family:'맑은 고딕',sans-serif;">
   <div style="display:flex; align-items:center; justify-content:space-between; margin:-24px -24px 14px; padding:12px 18px 10px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="alarm-schedule-title" style="margin:0; font-size:14.5px; color:#7a5210;">⚙️ 알람 일정 설정</h3>
-    <button onclick="window.closeAlarmScheduleModal()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;">✕</button>
+    <button onclick="window.closeAlarmScheduleModal()"
+        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+               color:#7a5210; font-size:16px; cursor:pointer;
+               width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+               display:flex; align-items:center; justify-content:center; transition:0.15s;"
+        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
+        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        title="닫기">×</button>
   </div>
   <p style="font-size:11.5px; color:#888; margin:0 0 12px;">이 업무만 아래 체크한 날짜 기준으로 알람이 발송됩니다. (완료 예정일이 지나면 어떤 경우든 발송되지 않습니다)</p>
   <div style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
@@ -8889,7 +8917,14 @@ window.editPrompt = async function() {
             <div id="prompt-edit-modal-box" style="pointer-events:all;position:fixed;background:#fff;border-radius:10px;width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
                 <div id="prompt-drag-handle" style="padding:15px 20px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:15px;background:#fff8e6;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
                     <span id="prompt-modal-title" style="color:#7a5210;">✏️ AI 분석 프롬프트</span>
-                    <span style="cursor:pointer;color:#7a5210;font-size:18px;" onclick="document.getElementById('prompt-edit-modal').style.display='none'">✖</span>
+                    <button onclick="document.getElementById('prompt-edit-modal').style.display='none'"
+                        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+                               color:#7a5210; font-size:16px; cursor:pointer;
+                               width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+                               display:flex; align-items:center; justify-content:center; transition:0.15s;"
+                        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
+                        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+                        title="닫기">×</button>
                 </div>
                 <div id="prompt-edit-notice" style="padding:15px;font-size:12px;color:#495057;background:#eef3f8;border-bottom:1px solid #dee2e6;">
                     <span id="prompt-notice-default">💡 현재 사용 중인 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.</span>
@@ -9014,8 +9049,16 @@ window.showPromptLogs = function() {
         logModal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
         logModal.innerHTML = `
             <div style="background:#fff;border-radius:10px;width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-                <div style="padding:15px 20px;border-bottom:1px solid #dee2e6;font-weight:bold;font-size:15px;background:#6f42c1;color:white;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;">
+                <div style="padding:15px 20px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:15px;background:#fff8e6;color:#7a5210;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;">
                     <span>🕒 프롬프트 변경 이력</span>
+                    <button onclick="document.getElementById('prompt-log-modal').style.display='none'"
+                        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+                               color:#7a5210; font-size:16px; cursor:pointer;
+                               width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+                               display:flex; align-items:center; justify-content:center; transition:0.15s;"
+                        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
+                        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+                        title="닫기">×</button>
                     <span style="cursor:pointer;font-size:18px;" onclick="document.getElementById('prompt-log-modal').style.display='none'">✖</span>
                 </div>
                 <div id="prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
@@ -11875,6 +11918,16 @@ function cleanMailBody(raw) {
     s = s.replace(/\bdata:[^\s]+/g, ' ')
          .replace(/[A-Za-z0-9+/]{200,}={0,2}/g, ' ')
          .replace(/https?:\/\/\S{80,}/g, ' ');
+
+    // 5) 수신/참조/발신 등 헤더 라인 제거 — 발신자는 별도 파라미터로 이미 AI에 전달되므로 본문에서는 불필요
+    s = s.split('\n').filter(l => !/^\s*(수신|참조|발신|received|Cc|To)\s*[:：]/i.test(l)).join('\n');
+
+    // 6) 기밀유지 문구(Confidentiality Statement 등 법무 상용구) 이후는 전부 잘라냄 — 항상 뒤쪽에 붙는 상용구라 뒷내용 손실 없음
+    const confIdx = s.search(/Confidentiality\s*Statement|기밀\s*유지|부정경쟁방지/i);
+    if (confIdx > -1) s = s.slice(0, confIdx);
+
+    // 7) 장식용 구분선(*,-,= 반복) 제거 — 정보 없이 글자수만 차지
+    s = s.split('\n').filter(l => !/^[*\-=_]{5,}\s*$/.test(l.trim())).join('\n');
 
     // 4) 공백 정리
     s = s.replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim();
