@@ -1209,6 +1209,21 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <p id="nm-lbl-target" style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#444;">📬 수신 대상</p>
 
     <datalist id="nm-addr-namelist"></datalist>
+
+    <div style="display:flex; align-items:center; gap:5px; margin-bottom:6px; flex-wrap:wrap;">
+      <span style="font-size:10.5px; color:#999; margin-right:2px;">일괄:</span>
+      <button type="button" onclick="window._nmBulkSetChannel('email',true)"
+              style="padding:2px 7px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">📧 전체 ON</button>
+      <button type="button" onclick="window._nmBulkSetChannel('email',false)"
+              style="padding:2px 7px; border:1px solid #ccc; color:#888; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">📧 전체 OFF</button>
+      <button type="button" onclick="window._nmBulkSetChannel('tg',true)"
+              style="padding:2px 7px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">💬 전체 ON</button>
+      <button type="button" onclick="window._nmBulkSetChannel('tg',false)"
+              style="padding:2px 7px; border:1px solid #ccc; color:#888; background:#fff; border-radius:3px; font-size:11px; cursor:pointer;">💬 전체 OFF</button>
+      <button type="button" onclick="window._nmBulkRemoveAll()"
+              style="padding:2px 7px; border:1px solid #e03131; color:#e03131; background:#fff; border-radius:3px; font-size:11px; cursor:pointer; margin-left:auto;">✕ 전체 삭제</button>
+    </div>
+
     <div id="nm-recipient-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;"></div>
     <button type="button" onclick="window._nmAddRecipientRow()"
             style="padding:3px 10px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:3px; font-size:11.5px; cursor:pointer;">+ 수신자 추가</button>
@@ -15629,12 +15644,26 @@ window._nmAddRecipientRow = function(name='', email='', telegramId='', emailOn=t
     });
 };
 
-window._nmToggleChannel = function(btn) {
-    const on = btn.dataset.on !== '1';
+window._nmApplyChannelState = function(btn, on) {
     btn.dataset.on = on ? '1' : '0';
     btn.style.borderColor = on ? '#27ae60' : '#ccc';
     btn.style.background  = on ? '#e8f7ee' : '#fff';
     btn.style.color       = on ? '#27ae60' : '#aaa';
+};
+
+window._nmToggleChannel = function(btn) {
+    window._nmApplyChannelState(btn, btn.dataset.on !== '1');
+};
+
+// 일괄 채널 on/off — type: 'email' | 'tg'
+window._nmBulkSetChannel = function(type, on) {
+    document.querySelectorAll('.nm-rr-' + type + '-btn').forEach(btn => window._nmApplyChannelState(btn, on));
+};
+
+// 일괄 삭제
+window._nmBulkRemoveAll = function() {
+    const list = document.getElementById('nm-recipient-list');
+    if (list) list.innerHTML = '';
 };
 
 // (함수 전체 삭제 — attachAddressAutocomplete의 onPick 콜백으로 대체됨)
