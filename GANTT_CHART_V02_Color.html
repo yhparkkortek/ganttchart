@@ -2017,6 +2017,13 @@ ${mailText}`;
                 window.showToast(window._currentLang === 'en' ? `🎉 Google Drive connected! Welcome, ${window.currentUserName}!` : `🎉 구글 드라이브 연동 완료! 반갑습니다, ${window.currentUserName}님!`);
                 if (authBtn) authBtn.innerText = `🟢 ${window.currentUserName}`;
                 if (window.TaskInbox && window.TaskInbox.loadFromDrive) window.TaskInbox.loadFromDrive(); // 💡 개인 보관함 드라이브 복원
+                if (window.AddressBook && window.AddressBook.loadFromDrive) {
+                    window.tabData = window.tabData || {};
+                    window.tabData.addressBook = window.AddressBook.load(); // 로컬 캐시 즉시 반영
+                    window.AddressBook.loadFromDrive().then(function(list) {
+                        if (list) { window.tabData.addressBook = list; if (window.renderAddressTable) window.renderAddressTable(); }
+                    }); // 💡 공용 주소록 드라이브 최신본 복원
+                }
             } catch(e) {
                 console.error("사용자 정보 추출 실패, 공용 모드로 진입:", e);
                 window.currentUserName = "익명 사용자";
@@ -11804,6 +11811,19 @@ window.clearGeminiCache = function() {
     alert(count > 0 ? `🗑️ 분석 캐시 ${count}건을 초기화했습니다.\n다음 분석부터는 새로 계산됩니다.` : '초기화할 캐시가 없습니다.');
 };
 
+// 💡 완료일이 AI 분석/파일첨부 등 어떤 경로로 와도 공통 적용되는 기본값 로직
+//    시작일은 있는데 완료일을 못 찾았으면 시작일+1일로 잠정 채움 (사용자가 나중에 달력에서 수정 가능)
+window._applyDefaultDueDate = function(result) {
+    if (!result) return result;
+    const hasStart = result['시작일'] && !String(result['시작일']).includes('날짜확인필요');
+    const needsDue = !result['완료일'] || String(result['완료일']).includes('날짜확인필요');
+    if (hasStart && needsDue) {
+        const planDate = new Date(new Date(result['시작일']).getTime() + 1 * 24 * 60 * 60 * 1000);
+        result['완료일'] = planDate.getFullYear() + '-' + String(planDate.getMonth()+1).padStart(2,'0') + '-' + String(planDate.getDate()).padStart(2,'0');
+    }
+    return result;
+};
+
 async function mfCallGemini(apiKey, parsed) {
     // 동일 메일 캐싱 (제목+발신자+본문 앞 200자 해시)
     // 💡 v2: 출처 태그 로직 추가로 캐시 포맷이 바뀌어서, 예전 캐시가 섞이지 않도록 버전 마커 포함
@@ -11851,6 +11871,8 @@ async function mfCallGemini(apiKey, parsed) {
                     const _p = result['완료일'];
                     if (_p && !String(_p).includes('날짜확인필요') && _p < _mfDateYMD) result['완료일'] = _mfDateYMD;
                 }
+                // 💡 완료일을 못 찾았으면 시작일+1일로 기본값 채움 (일괄분석에서 항목을 안 열어봐도 적용됨)
+                window._applyDefaultDueDate(result);
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
                 result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
                 const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
@@ -12942,8 +12964,17 @@ const AR = {
         const validTargets = arr.filter(r => r.selected && r.task && !r.registered);
         if (!validTargets.length) { alert('보관함으로 옮길 항목을 체크해주세요.'); return; }
 
-        const previewMsg = `📥 총 ${validTargets.length}개 항목을 업무 보관함으로 이동합니다.\n\n[이동할 업무 목록]\n`
-            + validTargets.map(r => '• ' + (r.task['업무명']||'새업무')).join('\n');
+        // 💡 날짜 미확정 항목이 섞여 있으면 미리 알려줌 — "다른 프로젝트 전송" 시점까지 기다리지 않게
+        const incomplete = validTargets.filter(r =>
+            (r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요')
+        );
+        let previewMsg = `📥 총 ${validTargets.length}개 항목을 업무 보관함으로 이동합니다.\n\n[이동할 업무 목록]\n`
+            + validTargets.map(r => '• ' + (r.task['업무명']||'새업무') + (
+                ((r.task['시작일']||'').includes('날짜확인필요') || (r.task['완료일']||'').includes('날짜확인필요')) ? ' ⚠️날짜확인필요' : ''
+              )).join('\n');
+        if (incomplete.length) {
+            previewMsg += `\n\n⚠️ ${incomplete.length}개 항목은 시작일/완료일이 미확정 상태입니다.\n보관함에는 담을 수 있지만, "다른 프로젝트로 전송" 시에는 날짜를 먼저 확정해야 합니다.`;
+        }
         if (!confirm(previewMsg + '\n\n위 내용으로 이동하시겠습니까?')) return;
 
         let count = 0;
@@ -13032,6 +13063,8 @@ async function msCallGemini(apiKey, parsed) {
                     const _p = result['완료일'];
                     if (_p && !String(_p).includes('날짜확인필요') && _p < _msDateYMD) result['완료일'] = _msDateYMD;
                 }
+                // 💡 완료일을 못 찾았으면 시작일+1일로 기본값 채움
+                window._applyDefaultDueDate(result);
                 // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
                 result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
                 const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
@@ -16880,6 +16913,56 @@ window.sortAddressBy = function(field) {
     window.renderAddressTable();
 };
 
+// 🪪 공용 주소록(Address Book) — 프로젝트와 무관하게 팀 전체가 공유하는 단일 소스
+window.AddressBook = {
+    KEY: 'gantt_address_book_shared',
+    FILE_NAME: 'AddressBook_Shared.json',
+    _driveFileId: null,
+    _syncTimer: null,
+    load: function() {
+        try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
+    },
+    save: function(list, skipSync) {
+        localStorage.setItem(this.KEY, JSON.stringify(list));
+        if (!skipSync) this.scheduleDriveSync(list);
+    },
+    scheduleDriveSync: function(list) {
+        const self = this;
+        if (self._syncTimer) clearTimeout(self._syncTimer);
+        self._syncTimer = setTimeout(function() { self.syncToDrive(list); }, 3000);
+    },
+    syncToDrive: async function(list) {
+        const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return; // 비로그인: localStorage 단독 동작
+        try {
+            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(this.FILE_NAME);
+            const boundary = 'addr_sync_boundary';
+            const metadata = { name: this.FILE_NAME, mimeType: 'application/json' };
+            if (!this._driveFileId) metadata.parents = [SHARED_FOLDER_ID];
+            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ addressBook: list, savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
+            const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
+            const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
+            const file = await resp.json();
+            if (file && file.id) this._driveFileId = file.id;
+        } catch(e) { console.warn('AddressBook Drive 동기화 실패:', e.message); }
+    },
+    loadFromDrive: async function() {
+        const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return null; // 비로그인: 로컬 캐시만 사용
+        try {
+            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(this.FILE_NAME);
+            if (!this._driveFileId) return null;
+            const response = await gapi.client.drive.files.get({ fileId: this._driveFileId, alt: 'media', supportsAllDrives: true });
+            const data = response.result;
+            const list = (data && data.addressBook) || [];
+            this.save(list, true); // 로컬 캐시만 갱신 (방금 받은 걸 다시 올릴 필요 없음)
+            return list;
+        } catch(e) { console.warn('AddressBook Drive 조회 실패:', e.message); return null; }
+    }
+};
+
 window.collectAddressData = function() {
     window.tabData = window.tabData || {};
     const rows = [];
@@ -16888,6 +16971,7 @@ window.collectAddressData = function() {
         rows.push({ name: get('name'), nameEn: get('nameEn'), dept: get('dept'), title: get('title'), email: get('email'), mobile: get('mobile'), phone: get('phone'), telegramId: get('telegramId') });
     });
     window.tabData.addressBook = rows;
+    window.AddressBook.save(rows); // 💡 프로젝트와 무관한 공용 저장소에도 반영 (3초 디바운스 후 Drive 동기화)
 };
 
 // =========================================================
@@ -17169,7 +17253,7 @@ window.populateTabData = function() {
     td.mcActiveRevision = td.mcActiveRevision || 'R1';
     const sd = td.summary || {};
     const pm = window.projectMeta || {};
-    const setVal = function(id, val) { const el = document.getElementById(id); if (el && val) el.value = val; };
+    const setVal = function(id, val) { const el = document.getElementById(id); if (el) el.value = val || ''; };
     
     // Summary 탭 데이터 매핑
     setVal('sum-project-code', pm.프로젝트코드);
@@ -17215,9 +17299,16 @@ window.populateTabData = function() {
     // 💡 프로젝트 멤버-3 렌더링
     if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
 
-    // 🪪 Address Book 렌더링
-    window.tabData.addressBook = td.addressBook || [];
-    if (window.renderAddressTable) window.renderAddressTable(); // 내부에서 bmSetupAllRows('addr') 자동 호출됨
+    // 🪪 Address Book — 프로젝트 파일 안의 값은 더 이상 쓰지 않고, 공용 저장소를 단일 소스로 사용
+    //    (로컬 캐시로 즉시 렌더 → 백그라운드에서 Drive 최신본으로 갱신)
+    window.tabData.addressBook = window.AddressBook.load();
+    if (window.renderAddressTable) window.renderAddressTable();
+    window.AddressBook.loadFromDrive().then(function(list) {
+        if (list) {
+            window.tabData.addressBook = list;
+            if (window.renderAddressTable) window.renderAddressTable();
+        }
+    });
 
     setVal('sum-purpose', sd.purpose);
     setVal('sum-volume', sd.volume);
