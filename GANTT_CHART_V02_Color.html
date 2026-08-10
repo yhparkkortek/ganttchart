@@ -824,13 +824,17 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
       <!-- 이메일 수신자 -->
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
-        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-          <p style="margin:0; font-size:12px; font-weight:bold; color:#555;"><span id="as-email-recv-label">👥 이메일 수신자</span> <span id="as-email-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
-          <span style="display:flex; gap:4px;">
-            <button id="as-all-on-btn" type="button" onclick="window.toggleAllCc(true)" style="padding:2px 8px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 ON</button>
-            <button id="as-all-off-btn" type="button" onclick="window.toggleAllCc(false)" style="padding:2px 8px; border:1px solid #999; color:#999; background:#fff; border-radius:4px; cursor:pointer; font-size:11px;">전체 OFF</button>
-          </span>
+        <p style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;"><span id="as-email-recv-label">👥 이메일 수신자</span> <span id="as-email-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
+
+        <!-- 데이터 행과 동일한 grid 정의를 공유하는 일괄 제어 헤더 -->
+        <div style="display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center; margin-bottom:4px;">
+          <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
+          <button type="button" onclick="window.toggleAllCc()" title="전체 발송 선택/해제"
+                  style="width:24px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:4px; cursor:pointer; font-size:11px; padding:0;">✓</button>
+          <button type="button" onclick="window._ccBulkRemoveAll()" title="수신자 전체 삭제"
+                  style="width:26px; height:20px; border:none; background:none; color:#e03131; cursor:pointer; font-size:13px; padding:0;">✕</button>
         </div>
+
         <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;"></div>
         <datalist id="alarm-cc-namelist"></datalist>
         <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 수신자 추가</button>
@@ -15953,17 +15957,17 @@ window.addAlarmCcRow = function(name='', email='', enabled=true, auto=false) {
     row.className = 'alarm-cc-row';
     row.dataset.enabled = enabled ? '1' : '0';
     row.dataset.auto = auto ? '1' : '0';
-    row.style.cssText = 'display:flex; gap:6px; align-items:center;';
+    row.style.cssText = 'display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center;';
     row.innerHTML = `
         <input class="cc-name u-input" placeholder="이름" value="${name}"
-          style="width:90px; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+          style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
         <input class="cc-email u-input" placeholder="이메일" value="${email}"
-          style="flex:1; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
-        ${auto ? '<span title="Summary 프로젝트 멤버에서 자동 등록됨" style="font-size:10px; color:#2c5f8a; background:#eaf2fa; border-radius:3px; padding:2px 5px; white-space:nowrap;">auto</span>' : ''}
+          style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+        <span title="Summary 프로젝트 멤버에서 자동 등록됨" style="font-size:10px; color:#2c5f8a; background:${auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${auto ? 'visible' : 'hidden'};">auto</span>
         <button type="button" class="cc-toggle-btn" onclick="window._toggleCcRow(this)" title="발송 ON/OFF"
-          style="border:1px solid ${enabled ? '#27ae60' : '#ccc'}; background:${enabled ? '#27ae60' : '#fff'}; color:${enabled ? '#fff' : '#aaa'}; cursor:pointer; font-size:12px; width:24px; height:24px; border-radius:4px; line-height:1; flex-shrink:0;">✓</button>
+          style="border:1px solid ${enabled ? '#27ae60' : '#ccc'}; background:${enabled ? '#27ae60' : '#fff'}; color:${enabled ? '#fff' : '#aaa'}; cursor:pointer; font-size:12px; width:24px; height:24px; border-radius:4px; line-height:1;">✓</button>
         <button onclick="this.parentElement.remove()"
-          style="border:none; background:none; color:#e03131; cursor:pointer; font-size:16px; padding:0 4px;">✕</button>`;
+          style="width:26px; height:24px; border:none; background:none; color:#e03131; cursor:pointer; font-size:15px; padding:0;">✕</button>`;
     list.appendChild(row);
 
     window.attachAddressAutocomplete(row.querySelector('.cc-name'), row.querySelector('.cc-email'), false);
@@ -15980,8 +15984,14 @@ window._toggleCcRow = function(btn) {
 };
 
 // 참조인 전체 발송 ON/OFF
+// 인자 없이 호출하면 현재 상태를 보고 전체 on/off를 자동 판단 (공지관리 방식과 동일)
 window.toggleAllCc = function(enabled) {
-    document.querySelectorAll('.alarm-cc-row').forEach(row => {
+    const rows = document.querySelectorAll('.alarm-cc-row');
+    if (enabled === undefined) {
+        const allOn = Array.from(rows).every(row => row.dataset.enabled === '1');
+        enabled = !allOn;
+    }
+    rows.forEach(row => {
         row.dataset.enabled = enabled ? '1' : '0';
         const btn = row.querySelector('.cc-toggle-btn');
         if (btn) {
@@ -15990,6 +16000,12 @@ window.toggleAllCc = function(enabled) {
             btn.style.color       = enabled ? '#fff' : '#aaa';
         }
     });
+};
+
+// 수신자 전체 삭제
+window._ccBulkRemoveAll = function() {
+    const list = document.getElementById('alarm-cc-list');
+    if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
 };
 
 // 💡 이름으로 주소록에서 사람 찾기 — 한글 이름으로 먼저 찾고, 없으면 영문 이름으로 폴백
