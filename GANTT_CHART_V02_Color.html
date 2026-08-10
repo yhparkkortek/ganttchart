@@ -15537,8 +15537,6 @@ window.closeNoticeModal = function() {
 
 // _noticeModalDragStart 제거 → _makeDraggable 공통 함수로 대체됨
 
-(함수 전체 삭제 — 드롭다운 방식은 datalist 불필요, window.tabData.addressBook을 매 입력마다 실시간 조회)
-
 // 통합 수신자 행 추가 — 이름 입력 → 이메일/텔레그램 자동완성, 채널별 on/off 토글
 window._nmAddRecipientRow = function(name='', email='', telegramId='', emailOn=true, tgOn=true, auto=false) {
     const list = document.getElementById('nm-recipient-list');
@@ -15581,7 +15579,7 @@ window._nmToggleChannel = function(btn) {
     btn.style.color       = on ? '#27ae60' : '#aaa';
 };
 
-(함수 전체 삭제 — attachAddressAutocomplete의 onPick 콜백으로 대체됨)
+// (함수 전체 삭제 — attachAddressAutocomplete의 onPick 콜백으로 대체됨)
 
 // Summary 담당자 기준 자동 등록 + 저장된 값 복원 (신규/수정 공통)
 window._nmLoadRecipients = function(n) {
