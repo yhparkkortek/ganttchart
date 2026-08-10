@@ -12105,11 +12105,11 @@ window.mfSelectItem = function(idx) {
              <div style="font-size:13px; font-weight:bold; color:#dc3545; margin-top:8px;">${escapeHtml(r.error || (_mfEn ? 'AI analysis failed' : 'AI 분석 실패'))}</div>
              <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject)}</div>
              ${r.body ? `
-             <div style="text-align:left; width:100%; align-self:stretch; box-sizing:border-box; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
-                <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 ${_mfEn ? 'Extracted mail body (kept even if analysis failed)' : '추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)'}</div>
-                <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px; box-sizing:border-box;">${escapeHtml(r.body)}</div>
-                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:13px; width:100%; box-sizing:border-box;">✏️ ${_mfEn ? 'Register as-is (manual)' : '본문으로 직접 등록'}</button>
-                <button class="action-btn" onclick="AR.moveToDirectInput('mf', ${idx})" style="margin-top:4px; font-size:13px; width:100%; box-sizing:border-box; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 ${_mfEn ? 'Move to Direct Input & re-analyze' : '직접 입력 탭으로 이동해서 AI 분석'}</button>
+             <div style="text-align:left; width:100%; align-self:stretch; box-sizing:border-box; margin-top:14px; padding-top:10px; border-top:1px solid #eee; display:flex; flex-direction:column; flex:1; min-height:0;">
+                <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px; flex-shrink:0;">📄 ${_mfEn ? 'Extracted mail body (kept even if analysis failed)' : '추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)'}</div>
+                <div style="flex:1; min-height:80px; max-height:45vh; overflow-y:auto; overflow-x:hidden; font-size:11px; color:#666; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px; box-sizing:border-box;">${escapeHtml(r.body)}</div>
+                <button class="action-btn" onclick="window.mfRetryAsManual(${idx})" style="margin-top:8px; font-size:13px; width:100%; box-sizing:border-box; flex-shrink:0;">✏️ ${_mfEn ? 'Register as-is (manual)' : '본문으로 직접 등록'}</button>
+                <button class="action-btn" onclick="AR.moveToDirectInput('mf', ${idx})" style="margin-top:4px; font-size:13px; width:100%; box-sizing:border-box; background:#fff; color:#2c5f8a; border-color:#2c5f8a; flex-shrink:0;">🔄 ${_mfEn ? 'Move to Direct Input & re-analyze' : '직접 입력 탭으로 이동해서 AI 분석'}</button>
              </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">${_mfEn ? 'Could not extract body.' : '본문을 추출하지 못했습니다.'}</div>`}`;
         document.getElementById('mail-right-empty').style.display = 'flex';
         document.getElementById('mail-right-detail').style.display = 'none';
@@ -12869,11 +12869,11 @@ const AR = {
                  <div style="font-size:11px; color:#aaa; margin-top:4px;">${escapeHtml(r.subject||'')}</div>
                  ${mfHint}
                  ${r.body ? `
-                 <div style="text-align:left; width:100%; align-self:stretch; box-sizing:border-box; margin-top:14px; padding-top:10px; border-top:1px solid #eee;">
-                    <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">📄 ${_mfEn2 ? 'Extracted mail body (kept even if analysis failed)' : '추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)'}</div>
-                    <div style="max-height:180px; overflow-y:auto; font-size:11px; color:#666; white-space:pre-wrap; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px; box-sizing:border-box;">${escapeHtml(r.body)}</div>
-                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:13px; width:100%; box-sizing:border-box;">✏️ ${_mfEn2 ? 'Register as-is (manual)' : '본문으로 직접 등록'}</button>
-                    <button class="action-btn" onclick="AR.moveToDirectInput('${tabKey}', ${idx})" style="margin-top:4px; font-size:13px; width:100%; box-sizing:border-box; background:#fff; color:#2c5f8a; border-color:#2c5f8a;">🔄 ${_mfEn2 ? 'Move to Direct Input & re-analyze' : '직접 입력 탭으로 이동해서 AI 분석'}</button>
+                 <div style="text-align:left; width:100%; align-self:stretch; box-sizing:border-box; margin-top:14px; padding-top:10px; border-top:1px solid #eee; display:flex; flex-direction:column; flex:1; min-height:0;">
+                    <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px; flex-shrink:0;">📄 ${_mfEn2 ? 'Extracted mail body (kept even if analysis failed)' : '추출된 메일 본문 (분석 실패 시에도 원문은 보존됩니다)'}</div>
+                    <div style="flex:1; min-height:80px; max-height:45vh; overflow-y:auto; overflow-x:hidden; font-size:11px; color:#666; white-space:pre-wrap; overflow-wrap:break-word; word-break:break-word; background:#f8f9fa; border:1px solid #eee; border-radius:6px; padding:8px; box-sizing:border-box;">${escapeHtml(r.body)}</div>
+                    <button class="action-btn" onclick="AR.retryAsManual('${tabKey}', ${idx})" style="margin-top:8px; font-size:13px; width:100%; box-sizing:border-box; flex-shrink:0;">✏️ ${_mfEn2 ? 'Register as-is (manual)' : '본문으로 직접 등록'}</button>
+                    <button class="action-btn" onclick="AR.moveToDirectInput('${tabKey}', ${idx})" style="margin-top:4px; font-size:13px; width:100%; box-sizing:border-box; background:#fff; color:#2c5f8a; border-color:#2c5f8a; flex-shrink:0;">🔄 ${_mfEn2 ? 'Move to Direct Input & re-analyze' : '직접 입력 탭으로 이동해서 AI 분석'}</button>
                  </div>` : `<div style="font-size:11px; color:#bbb; margin-top:10px;">${_mfEn2 ? 'Could not extract body.' : '본문을 추출하지 못했습니다.'}</div>`}`;
             document.getElementById('mail-right-empty').style.display = 'flex';
             document.getElementById('mail-right-detail').style.display = 'none';
