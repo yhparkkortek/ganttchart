@@ -686,12 +686,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <!-- ⚙️ 설정 — 기타 기능 통합 -->
         <div style="position:relative; display:inline-block;">
             <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정 <span id="alarm-status-dot">🟢</span></button>
-            <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
-            <span id="current-project-filename" onclick="window.selectProject()"
-                  title="클릭하면 저장 후 다른 프로젝트를 열 수 있습니다"
-                  style="display:none; font-size:14px; color:#fff; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center;"
-                  onmouseover="this.style.background='rgba(255,255,255,0.18)';"
-                  onmouseout="this.style.background='transparent';"></span>
             <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="alarm-toggle-btn" class="topbar-menu-item" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>
@@ -700,6 +694,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
             </div>
         </div>
+        <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
+        <span id="current-project-filename" onclick="window.selectProject()"
+              title="클릭하면 저장 후 다른 프로젝트를 열 수 있습니다"
+              style="display:none; flex-shrink:0; font-size:14px; color:#fff; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center;"
+              onmouseover="this.style.background='rgba(255,255,255,0.18)';"
+              onmouseout="this.style.background='transparent';"></span>
     </div>
     <div id="file-status" style="display:none;"></div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
