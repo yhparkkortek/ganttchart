@@ -9191,7 +9191,7 @@ window.submitImproveComment = function() {
 window.triggerPromptImprove = async function(mode, instantComment) {
     const _en = window._currentLang === 'en';
     const currentPrompt = localStorage.getItem('gantt_mail_prompt') || window._defaultPromptTemplate || '';
-    const apiKey = localStorage.getItem('gemini_api_key') || localStorage.getItem('groq_api_key') || '';
+    const apiKey = window.getActiveAiKey(); // 💡 선택된 provider(Gemini/Groq/Mistral)에 맞는 키를 정식 헬퍼로 조회
     const GAS_URL = localStorage.getItem('gas_server_url') ||
         'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
 
