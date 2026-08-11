@@ -9067,6 +9067,20 @@ window.unlockPrompt = function() {
     document.getElementById('prompt-edit-notice').style.background = '#e7f1ff';
 };
 
+// 💡 전체 텍스트 버전 스냅샷 저장 (복원용) — 최대 20개, 초과분은 오래된 것부터 삭제
+window.savePromptVersionSnapshot = function(promptText, note) {
+    window._promptVersion = (window._promptVersion || 1);
+    let versions = JSON.parse(localStorage.getItem('gantt_prompt_versions') || '[]');
+    versions.push({
+        version: window._promptVersion,
+        time: new Date().toLocaleString('ko-KR'),
+        userName: (window.currentUserName || localStorage.getItem('gantt_local_user') || '알 수 없음') + (note ? ' (' + note + ')' : ''),
+        prompt: promptText
+    });
+    if (versions.length > 20) versions = versions.slice(-20);
+    localStorage.setItem('gantt_prompt_versions', JSON.stringify(versions));
+};
+
 window.savePrompt = async function() {
     const text = document.getElementById('prompt-edit-textarea').value.trim();
     if (!text) { alert('프롬프트가 비어있습니다.'); return; }
@@ -9084,6 +9098,11 @@ window.savePrompt = async function() {
         // 최대 20개 유지
         if (promptLogs.length > 20) promptLogs = promptLogs.slice(-20);
         localStorage.setItem('gantt_prompt_logs', JSON.stringify(promptLogs));
+
+        // 💡 버전 증가 + 전체 텍스트 스냅샷 저장 (복원 가능하도록)
+        window._promptVersion = (window._promptVersion || 1) + 1;
+        localStorage.setItem('gantt_prompt_version', String(window._promptVersion));
+        window.savePromptVersionSnapshot(text, '수동 저장 v' + window._promptVersion);
     }
 
     localStorage.setItem('gantt_mail_prompt', text);
@@ -9100,9 +9119,13 @@ window.savePrompt = async function() {
 };
 
 window.resetPrompt = function() {
+    // 💡 리셋도 되돌릴 수 있도록, 리셋 전 현재 프롬프트를 스냅샷으로 남김
+    const current = localStorage.getItem('gantt_mail_prompt');
+    if (current) window.savePromptVersionSnapshot(current, '기본값 초기화 전 백업');
+
     localStorage.removeItem('gantt_mail_prompt');
     document.getElementById('prompt-edit-textarea').value = window._defaultPromptTemplate || '';
-    alert('✅ 기본 프롬프트로 초기화되었습니다.');
+    alert('✅ 기본 프롬프트로 초기화되었습니다.\n(초기화 전 프롬프트는 "변경 이력"에서 복원할 수 있습니다)');
 };
 
 // ── 💡 [Phase2/3] 프롬프트 피드백 로그 ──────────────────────────────
@@ -9312,58 +9335,6 @@ window.renderPromptDiffHtml = function(oldText, newText) {
     return html || `<div style="color:#adb5bd; padding:8px;">${window._currentLang === 'en' ? 'No differences.' : '변경사항이 없습니다.'}</div>`;
 };
 
-// ── 💡 라인 단위 diff 계산 (LCS 알고리즘) ────────────────────────────
-window._simpleLineDiff = function(oldText, newText) {
-    const oldLines = (oldText || '').split('\n');
-    const newLines = (newText || '').split('\n');
-    const n = oldLines.length, m = newLines.length;
-    const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
-    for (let i = n - 1; i >= 0; i--) {
-        for (let j = m - 1; j >= 0; j--) {
-            dp[i][j] = oldLines[i] === newLines[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
-        }
-    }
-    let i = 0, j = 0;
-    const result = [];
-    while (i < n && j < m) {
-        if (oldLines[i] === newLines[j]) { result.push({ type: 'same', line: oldLines[i] }); i++; j++; }
-        else if (dp[i+1][j] >= dp[i][j+1]) { result.push({ type: 'del', line: oldLines[i] }); i++; }
-        else { result.push({ type: 'add', line: newLines[j] }); j++; }
-    }
-    while (i < n) { result.push({ type: 'del', line: oldLines[i] }); i++; }
-    while (j < m) { result.push({ type: 'add', line: newLines[j] }); j++; }
-    return result;
-};
-
-// ── 💡 diff 결과를 HTML로 렌더 (동일 라인 3줄 이상 연속되면 접어서 표시) ──
-window.renderPromptDiffHtml = function(oldText, newText) {
-    const diff = window._simpleLineDiff(oldText, newText);
-    let html = '';
-    let sameBuf = [];
-    const flushSame = function() {
-        if (!sameBuf.length) return;
-        if (sameBuf.length > 3) {
-            html += `<div style="color:#adb5bd; font-size:11px; padding:2px 8px;">… ${sameBuf.length}${window._currentLang === 'en' ? ' unchanged lines' : '줄 동일'} …</div>`;
-        } else {
-            sameBuf.forEach(function(l) {
-                html += `<div style="color:#868e96; padding:1px 8px; white-space:pre-wrap;">${escapeHtml(l) || '&nbsp;'}</div>`;
-            });
-        }
-        sameBuf = [];
-    };
-    diff.forEach(function(d) {
-        if (d.type === 'same') { sameBuf.push(d.line); return; }
-        flushSame();
-        if (d.type === 'del') {
-            html += `<div style="background:#ffe3e3; color:#c92a2a; padding:1px 8px; white-space:pre-wrap; text-decoration:line-through;">- ${escapeHtml(d.line) || '&nbsp;'}</div>`;
-        } else {
-            html += `<div style="background:#d3f9d8; color:#2b8a3e; padding:1px 8px; white-space:pre-wrap;">+ ${escapeHtml(d.line) || '&nbsp;'}</div>`;
-        }
-    });
-    flushSame();
-    return html || `<div style="color:#adb5bd; padding:8px;">${window._currentLang === 'en' ? 'No differences.' : '변경사항이 없습니다.'}</div>`;
-};
-
 // ── 💡 개선 결과 미리보기 모달 ──────────────────────────────────────────
 window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids, originalPrompt, isTruncated) {
     const _en = window._currentLang === 'en';
@@ -9411,6 +9382,14 @@ window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids, 
         : '⚠️ AI 응답이 중간에 잘렸을 수 있습니다 (종료 마커 없음). 채택 전 아래 프롬프트 끝부분을 꼭 확인하세요.';
     warnBar.style.display = isTruncated ? 'block' : 'none';
 
+    document.getElementById('improve-diff-view').innerHTML = window.renderPromptDiffHtml(originalPrompt || '', improvedPrompt);
+    document.getElementById('improve-analysis-text').textContent = analysis;
+    document.getElementById('improve-prompt-textarea').value = improvedPrompt;
+    modal._targetUids = targetUids || [];
+    modal.style.display = 'block';
+    window.bringModalToFront('prompt-improve-modal');
+};
+
 // ── 💡 개선 프롬프트 채택 ───────────────────────────────────────────────
 window.applyImprovedPrompt = async function() {
     const _en = window._currentLang === 'en';
@@ -9433,6 +9412,9 @@ window.applyImprovedPrompt = async function() {
     if (promptLogs.length > 20) promptLogs = promptLogs.slice(-20);
     localStorage.setItem('gantt_prompt_logs', JSON.stringify(promptLogs));
     localStorage.setItem('gantt_mail_prompt', text);
+
+    // 💡 전체 텍스트 버전 스냅샷 저장 (복원 가능하도록)
+    window.savePromptVersionSnapshot(text, 'AI개선 채택 v' + window._promptVersion);
 
     // improved: true 마킹
     const modal = document.getElementById('prompt-improve-modal');
@@ -9460,6 +9442,7 @@ window.applyImprovedPrompt = async function() {
 
 window.showPromptLogs = function() {
     let logs = JSON.parse(localStorage.getItem('gantt_prompt_logs') || '[]');
+    let versions = JSON.parse(localStorage.getItem('gantt_prompt_versions') || '[]');
     if (logs.length === 0) { alert('프롬프트 변경 이력이 없습니다.'); return; }
 
     let logModal = document.getElementById('prompt-log-modal');
@@ -9468,7 +9451,7 @@ window.showPromptLogs = function() {
         logModal.id = 'prompt-log-modal';
         logModal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
         logModal.innerHTML = `
-            <div style="background:#fff;border-radius:10px;width:90%;max-width:700px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+            <div style="background:#fff;border-radius:10px;width:90%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
                 <div style="padding:15px 20px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:15px;background:#fff8e6;color:#7a5210;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;">
                     <span>🕒 프롬프트 변경 이력</span>
                     <button onclick="document.getElementById('prompt-log-modal').style.display='none'"
@@ -9491,13 +9474,19 @@ window.showPromptLogs = function() {
     }
 
     let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
-    html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th></tr>';
-    [...logs].reverse().forEach(log => {
+    html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
+    [...logs].reverse().forEach((log, revIdx) => {
+        // 💡 시간 문자열로 versions 배열에서 대응하는 전체 텍스트 스냅샷 매칭 (없으면 복원 버튼 비활성)
+        const matched = versions.find(v => v.time === log.time);
+        const restoreBtn = matched
+            ? `<button onclick="window.restorePromptVersion(${matched.version})" style="font-size:11px; padding:4px 8px; background:#0ca678; color:#fff; border:none; border-radius:4px; cursor:pointer; white-space:nowrap;">🔄 복원</button>`
+            : `<span style="font-size:10px; color:#ccc;">-</span>`;
         html += `<tr>
             <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;color:#6c757d;">${log.time}</td>
             <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;font-weight:bold;color:#0056b3;">${log.userName}</td>
             <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#dc3545;word-break:break-all;">${log.oldPrompt}</td>
             <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#0f5132;word-break:break-all;">${log.newPrompt}</td>
+            <td style="padding:8px;border:1px solid #dee2e6;text-align:center;">${restoreBtn}</td>
         </tr>`;
     });
     html += '</table>';
@@ -9506,8 +9495,28 @@ window.showPromptLogs = function() {
     logModal.style.display = 'flex';
 };
 
+// 💡 특정 버전으로 복원 — 즉시 저장하지 않고 편집창에 불러와서 검토 후 저장하도록 유도
+window.restorePromptVersion = function(version) {
+    const versions = JSON.parse(localStorage.getItem('gantt_prompt_versions') || '[]');
+    const target = versions.find(v => v.version === version);
+    if (!target) { alert('해당 버전을 찾을 수 없습니다.'); return; }
+
+    document.getElementById('prompt-log-modal').style.display = 'none';
+
+    const textarea = document.getElementById('prompt-edit-textarea');
+    if (textarea) textarea.value = target.prompt;
+    // 편집 잠금 상태였다면 저장 버튼 노출 (unlockPrompt와 동일 효과)
+    const saveBtn = document.getElementById('prompt-save-btn');
+    const unlockBtn = document.getElementById('prompt-unlock-btn');
+    if (saveBtn) saveBtn.style.display = 'block';
+    if (unlockBtn) unlockBtn.style.display = 'none';
+
+    alert('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 저장] 버튼을 눌러야 최종 반영됩니다.');
+};
+
 window.clearPromptLogs = function() {
     localStorage.removeItem('gantt_prompt_logs');
+    localStorage.removeItem('gantt_prompt_versions');
     document.getElementById('prompt-log-modal').style.display = 'none';
     alert('✅ 이력이 삭제되었습니다.');
 };
