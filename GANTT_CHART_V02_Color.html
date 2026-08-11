@@ -8866,7 +8866,7 @@ window.renderMailResult = function(result) {
                    </select>`
                 : f.key === '상세내용' 
                     ? `<textarea data-field="${f.key}" style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; min-height:100px; box-sizing:border-box; resize:vertical;" 
-                       onchange="window._mailAnalyzedResult['${f.key}'] = this.value; window.onDetailEdited(this.value)">${escapeHtml(result[f.key] || '')}</textarea>`
+                       onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
                     : `<input type="text" value="${escapeHtml(result[f.key] || '')}" data-field="${f.key}" 
                        style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; box-sizing:border-box;" 
                        onchange="window._mailAnalyzedResult['${f.key}'] = this.value">`;
@@ -8899,16 +8899,26 @@ window.renderMailResult = function(result) {
     </tr>`;
     const _fbEn = window._currentLang === 'en';
     html += `<tr>
-        <td colspan="2" style="padding:8px 10px; border:1px solid #dee2e6; background:#f8f9fa; text-align:right;">
-            <span style="font-size:11px; color:#888; margin-right:8px;">${_fbEn ? 'Was this analysis helpful?' : 'AI 분석 결과가 도움이 되었나요?'}</span>
-            <button onclick="window.saveFeedbackLog('good')"
-                style="font-size:12px; padding:3px 12px; border:1px solid #28a745; background:#fff; color:#28a745; border-radius:5px; cursor:pointer; margin-right:4px;">
-                👍 ${_fbEn ? 'Good' : '좋음'}
-            </button>
-            <button onclick="window.saveFeedbackLog('bad')"
-                style="font-size:12px; padding:3px 12px; border:1px solid #e03131; background:#fff; color:#e03131; border-radius:5px; cursor:pointer;">
-                👎 ${_fbEn ? 'Bad' : '나쁨'}
-            </button>
+        <td colspan="2" style="padding:8px 10px; border:1px solid #dee2e6; background:#f8f9fa;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; color:#888;">${_fbEn ? 'Was this analysis helpful?' : 'AI 분석 결과가 도움이 되었나요?'}</span>
+                <div>
+                    <button onclick="window.saveFeedbackLog('good')" id="fb-good-btn"
+                        style="font-size:12px; padding:3px 12px; border:1px solid #28a745; background:#fff; color:#28a745; border-radius:5px; cursor:pointer; margin-right:4px;">
+                        👍 ${_fbEn ? 'Good' : '좋음'}
+                    </button>
+                    <button onclick="window.saveFeedbackLog('bad')" id="fb-bad-btn"
+                        style="font-size:12px; padding:3px 12px; border:1px solid #e03131; background:#fff; color:#e03131; border-radius:5px; cursor:pointer;">
+                        👎 ${_fbEn ? 'Bad' : '나쁨'}
+                    </button>
+                </div>
+            </div>
+            <div id="fb-improve-trigger-row" style="display:none; margin-top:8px; text-align:right;">
+                <button onclick="window.openImproveCommentModal()"
+                    style="font-size:12px; padding:5px 14px; border:none; background:#0ca678; color:#fff; border-radius:5px; cursor:pointer; font-weight:bold;">
+                    💡 ${_fbEn ? 'Request AI improvement based on this edit' : '수정사항 반영해서 AI 개선 요청'}
+                </button>
+            </div>
         </td>
     </tr>`;
     html += '</table>';
@@ -9095,56 +9105,86 @@ window.resetPrompt = function() {
     alert('✅ 기본 프롬프트로 초기화되었습니다.');
 };
 
-// ── 💡 [Phase2] 프롬프트 피드백 로그 저장 ──────────────────────────────
+// ── 💡 [Phase2/3] 프롬프트 피드백 로그 ──────────────────────────────
 const _PF_KEY = 'gantt_prompt_feedback';
 window._promptVersion = parseInt(localStorage.getItem('gantt_prompt_version') || '1', 10);
+window._lastFeedbackUid = null; // 방금 저장한 fb 항목 uid (개선 요청 시 코멘트 채워넣을 대상)
 
-window.saveFeedbackLog = function(rating, userComment, userResult) {
+window.saveFeedbackLog = function(rating) {
     if (!window._mailAnalyzedResult) return;
     const log = JSON.parse(localStorage.getItem(_PF_KEY) || '[]');
+    const uid = 'fb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
     log.unshift({
-        uid: 'fb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        uid: uid,
         date: new Date().toISOString(),
         promptVersion: window._promptVersion,
         mailRaw: window._mailParsedRaw || null,
         aiResult: window._aiResultSnapshot ? JSON.parse(JSON.stringify(window._aiResultSnapshot)) : null,
-        userResult: userResult ? JSON.parse(JSON.stringify(userResult)) : null,
-        userComment: userComment || '',
-        rating: rating,   // 'good' | 'bad'
+        userResult: JSON.parse(JSON.stringify(window._mailAnalyzedResult)),
+        userComment: '',
+        rating: rating,
         improved: false
     });
-    if (log.length > 200) log.splice(200); // 최대 200건 보관
+    if (log.length > 200) log.splice(200);
     localStorage.setItem(_PF_KEY, JSON.stringify(log));
+
+    const _en = window._currentLang === 'en';
+    const goodBtn = document.getElementById('fb-good-btn');
+    const badBtn  = document.getElementById('fb-bad-btn');
+    const triggerRow = document.getElementById('fb-improve-trigger-row');
+
     if (rating === 'good') {
-        window.showToast(window._currentLang === 'en' ? '👍 Feedback saved.' : '👍 피드백이 저장되었습니다.');
+        window._lastFeedbackUid = null;
+        if (triggerRow) triggerRow.style.display = 'none';
+        if (goodBtn) { goodBtn.style.background = '#28a745'; goodBtn.style.color = '#fff'; }
+        if (badBtn)  { badBtn.style.background = '#fff'; badBtn.style.color = '#e03131'; }
+        if (window.showToast) window.showToast(_en ? '👍 Feedback saved.' : '👍 피드백이 저장되었습니다.');
+    } else {
+        window._lastFeedbackUid = uid;
+        if (triggerRow) triggerRow.style.display = 'block'; // 💡 나쁨 선택 시에만 개선요청 버튼 노출
+        if (badBtn)  { badBtn.style.background = '#e03131'; badBtn.style.color = '#fff'; }
+        if (goodBtn) { goodBtn.style.background = '#fff'; goodBtn.style.color = '#28a745'; }
     }
 };
 
-// ── 💡 상세내용 수정 감지 → 코멘트 팝업 → 즉시 개선 트리거 ─────────────
-window._detailEditTimer = null;
-window.onDetailEdited = function(newVal) {
-    // 디바운스 300ms — 타이핑 중에는 반응하지 않음
-    clearTimeout(window._detailEditTimer);
-    window._detailEditTimer = setTimeout(function() {
-        const snap = window._aiResultSnapshot;
-        if (!snap) return;
-        const original = snap['상세내용'] || '';
-        if (newVal.trim() === original.trim()) return; // 변경 없음
-        // 코멘트 팝업
-        const _en = window._currentLang === 'en';
-        const comment = prompt(
-            (_en
-                ? '✏️ You edited the AI result.\nWhat was the problem? (one line)\n(Press Cancel to skip improvement)'
-                : '✏️ AI 결과를 수정했습니다.\n어떤 부분이 문제였나요? (한 줄 입력)\n(취소하면 개선 요청 없이 피드백만 저장됩니다)')
-        );
-        if (comment === null) {
-            // 취소 → 피드백만 저장 (개선 요청 없음)
-            window.saveFeedbackLog('bad', '', window._mailAnalyzedResult);
-            return;
-        }
-        window.saveFeedbackLog('bad', comment, window._mailAnalyzedResult);
-        window.triggerPromptImprove('instant', comment);
-    }, 300);
+// ── 💡 개선 요청 코멘트 입력 모달 ───────────────────────────────────
+window.openImproveCommentModal = function() {
+    const _en = window._currentLang === 'en';
+    let modal = document.getElementById('improve-comment-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'improve-comment-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); padding:18px;">
+            <div style="font-weight:bold; font-size:14px; margin-bottom:10px; color:#333;">✏️ <span id="improve-comment-title"></span></div>
+            <textarea id="improve-comment-input" placeholder="${_en ? 'e.g. Extracted the wrong date from the forwarding chain (optional)' : '예: 포워딩 체인에서 날짜를 잘못 추출함 (선택 입력)'}"
+                style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+            <div style="display:flex; gap:8px; margin-top:12px;">
+                <button onclick="window.submitImproveComment()" style="flex:1; padding:9px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🤖 ${_en ? 'Request' : '요청'}</button>
+                <button onclick="document.getElementById('improve-comment-modal').style.display='none'" style="flex:1; padding:9px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">✖ ${_en ? 'Cancel' : '취소'}</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._bindClickToFront('improve-comment-modal');
+    }
+    document.getElementById('improve-comment-title').textContent =
+        _en ? 'What was the problem?' : '어떤 부분이 문제였나요?';
+    document.getElementById('improve-comment-input').value = '';
+    modal.style.display = 'block';
+    if (window.bringModalToFront) window.bringModalToFront('improve-comment-modal');
+};
+
+window.submitImproveComment = function() {
+    const comment = document.getElementById('improve-comment-input').value.trim();
+    document.getElementById('improve-comment-modal').style.display = 'none';
+
+    if (window._lastFeedbackUid) {
+        const log = JSON.parse(localStorage.getItem(_PF_KEY) || '[]');
+        const it = log.find(function(x) { return x.uid === window._lastFeedbackUid; });
+        if (it) { it.userComment = comment; localStorage.setItem(_PF_KEY, JSON.stringify(log)); }
+    }
+    window.triggerPromptImprove('instant', comment);
 };
 
 // ── 💡 Gemini 프롬프트 개선 요청 (즉시 1건 / 배치 N건) ─────────────────
@@ -9164,7 +9204,8 @@ window.triggerPromptImprove = async function(mode, instantComment) {
         const cur  = window._mailAnalyzedResult;
         const raw  = window._mailParsedRaw;
         if (!snap || !cur) { alert(_en ? 'No analysis result found.' : '분석 결과가 없습니다.'); return; }
-        casesText = `[케이스 1]\n메일원문:\n${raw ? raw.body2000 : '(없음)'}\n\nAI 원본 결과:\n상세내용: ${snap['상세내용'] || ''}\n\n사용자 수정 결과:\n상세내용: ${cur['상세내용'] || ''}\n\n사용자 코멘트: ${instantComment || ''}`;
+        casesText = `[케이스 1]\n메일원문:\n${raw ? raw.body2000 : '(없음)'}\n\nAI 원본 결과:\n상세내용: ${snap['상세내용'] || ''}\n\n사용자 수정 결과:\n상세내용: ${cur['상세내용'] || ''}\n\n사용자 코멘트: ${instantComment || '(없음)'}`;
+        targetUids = window._lastFeedbackUid ? [window._lastFeedbackUid] : [];
     } else {
         // 배치 모드: improved:false 케이스 최대 10건
         const log = JSON.parse(localStorage.getItem(_PF_KEY) || '[]');
