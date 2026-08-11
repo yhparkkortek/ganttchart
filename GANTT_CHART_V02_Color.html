@@ -9187,7 +9187,6 @@ window.submitImproveComment = function() {
     window.triggerPromptImprove('instant', comment);
 };
 
-// ── 💡 Gemini 프롬프트 개선 요청 (즉시 1건 / 배치 N건) ─────────────────
 window.triggerPromptImprove = async function(mode, instantComment) {
     const _en = window._currentLang === 'en';
     const currentPrompt = localStorage.getItem('gantt_mail_prompt') || window._defaultPromptTemplate || '';
@@ -9221,11 +9220,11 @@ window.triggerPromptImprove = async function(mode, instantComment) {
             const raw  = fb.mailRaw || {};
             // 10건 초과 방지용 — mailRaw는 5건까지만 포함
             const bodyPart = (i < 5 && raw.body2000) ? `메일원문:\n${raw.body2000}\n\n` : '';
-            return `[케이스 ${i+1}] (${fb.date ? fb.date.slice(0,10) : ''})\n${bodyPart}AI 원본 상세내용: ${snap['상세내용'] || ''}\n사용자 수정 상세내용: ${cur['상세내용'] || ''}\n사용자 코멘트: ${fb.userComment || ''}`;
+            return `[케이스 ${i+1}] (${fb.date ? fb.date.slice(0,10) : ''})\n${bodyPart}AI 원본 상세내용: ${snap['상세내용'] || ''}\n사용자 수정 상세내용: ${cur['상세내용'] || ''}\n사용자 코멘트: ${fb.userComment || '(없음)'}`;
         }).join('\n\n---\n\n');
     }
 
-    // 💡 JSON 대신 구분자 방식 사용 — 프롬프트 원문의 줄바꿈/따옴표가 많아 JSON 이스케이프가 깨지는 문제 방지
+    // 💡 JSON 대신 구분자 방식 — 프롬프트 원문의 줄바꿈/따옴표로 인한 이스케이프 깨짐 방지
     const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 메일 분석 프롬프트와, 이 프롬프트로 분석했을 때 사용자가 수정한 실패 케이스입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n\n반드시 아래 형식 그대로만 응답하세요. JSON이나 코드블록(\`\`\`)은 절대 사용하지 마세요.\n\n===ANALYSIS===\n(여기에 문제점 분석을 3줄 이내로 작성)\n===PROMPT===\n(여기에 개선된 프롬프트 전문을 기존과 동일한 형식으로 작성)\n===END===`;
 
     window.showToast(_en ? '🤖 Requesting AI improvement...' : '🤖 AI 개선 요청 중...');
@@ -9244,25 +9243,129 @@ window.triggerPromptImprove = async function(mode, instantComment) {
         if (data.status !== 'success') throw new Error(data.message);
         const text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-        // 💡 구분자 기반 파싱 (JSON.parse 대신 — 이스케이프/truncation에 강함)
         const cleaned = text.replace(/```[a-z]*|```/gi, '').trim();
         const analysisMatch = cleaned.match(/===ANALYSIS===([\s\S]*?)===PROMPT===/);
         const promptMatch   = cleaned.match(/===PROMPT===([\s\S]*?)(===END===|$)/);
-
         const analysis = analysisMatch ? analysisMatch[1].trim() : '';
         const improvedPrompt = promptMatch ? promptMatch[1].trim() : '';
+        const isTruncated = !/===END===/.test(cleaned); // 💡 종료 마커 없으면 잘림 의심
 
         if (!improvedPrompt) {
             throw new Error(_en ? 'Could not parse AI response (format mismatch).' : 'AI 응답 형식을 해석하지 못했습니다.');
         }
-        window.showImprovePreviewModal(analysis, improvedPrompt, targetUids);
+        // 💡 원본 프롬프트를 같이 넘겨서 미리보기에서 변경사항 비교(diff) 가능하게 함
+        window.showImprovePreviewModal(analysis, improvedPrompt, targetUids, currentPrompt, isTruncated);
     } catch(e) {
         alert((_en ? '❌ AI improvement failed: ' : '❌ AI 개선 요청 실패: ') + e.message);
     }
 };
 
+// ── 💡 라인 단위 diff 계산 (LCS 알고리즘) ────────────────────────────
+window._simpleLineDiff = function(oldText, newText) {
+    const oldLines = (oldText || '').split('\n');
+    const newLines = (newText || '').split('\n');
+    const n = oldLines.length, m = newLines.length;
+    const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) {
+        for (let j = m - 1; j >= 0; j--) {
+            dp[i][j] = oldLines[i] === newLines[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+        }
+    }
+    let i = 0, j = 0;
+    const result = [];
+    while (i < n && j < m) {
+        if (oldLines[i] === newLines[j]) { result.push({ type: 'same', line: oldLines[i] }); i++; j++; }
+        else if (dp[i+1][j] >= dp[i][j+1]) { result.push({ type: 'del', line: oldLines[i] }); i++; }
+        else { result.push({ type: 'add', line: newLines[j] }); j++; }
+    }
+    while (i < n) { result.push({ type: 'del', line: oldLines[i] }); i++; }
+    while (j < m) { result.push({ type: 'add', line: newLines[j] }); j++; }
+    return result;
+};
+
+// ── 💡 diff 결과를 HTML로 렌더 (동일 라인 3줄 이상 연속되면 접어서 표시) ──
+window.renderPromptDiffHtml = function(oldText, newText) {
+    const diff = window._simpleLineDiff(oldText, newText);
+    let html = '';
+    let sameBuf = [];
+    const flushSame = function() {
+        if (!sameBuf.length) return;
+        if (sameBuf.length > 3) {
+            html += `<div style="color:#adb5bd; font-size:11px; padding:2px 8px;">… ${sameBuf.length}${window._currentLang === 'en' ? ' unchanged lines' : '줄 동일'} …</div>`;
+        } else {
+            sameBuf.forEach(function(l) {
+                html += `<div style="color:#868e96; padding:1px 8px; white-space:pre-wrap;">${escapeHtml(l) || '&nbsp;'}</div>`;
+            });
+        }
+        sameBuf = [];
+    };
+    diff.forEach(function(d) {
+        if (d.type === 'same') { sameBuf.push(d.line); return; }
+        flushSame();
+        if (d.type === 'del') {
+            html += `<div style="background:#ffe3e3; color:#c92a2a; padding:1px 8px; white-space:pre-wrap; text-decoration:line-through;">- ${escapeHtml(d.line) || '&nbsp;'}</div>`;
+        } else {
+            html += `<div style="background:#d3f9d8; color:#2b8a3e; padding:1px 8px; white-space:pre-wrap;">+ ${escapeHtml(d.line) || '&nbsp;'}</div>`;
+        }
+    });
+    flushSame();
+    return html || `<div style="color:#adb5bd; padding:8px;">${window._currentLang === 'en' ? 'No differences.' : '변경사항이 없습니다.'}</div>`;
+};
+
+// ── 💡 라인 단위 diff 계산 (LCS 알고리즘) ────────────────────────────
+window._simpleLineDiff = function(oldText, newText) {
+    const oldLines = (oldText || '').split('\n');
+    const newLines = (newText || '').split('\n');
+    const n = oldLines.length, m = newLines.length;
+    const dp = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) {
+        for (let j = m - 1; j >= 0; j--) {
+            dp[i][j] = oldLines[i] === newLines[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+        }
+    }
+    let i = 0, j = 0;
+    const result = [];
+    while (i < n && j < m) {
+        if (oldLines[i] === newLines[j]) { result.push({ type: 'same', line: oldLines[i] }); i++; j++; }
+        else if (dp[i+1][j] >= dp[i][j+1]) { result.push({ type: 'del', line: oldLines[i] }); i++; }
+        else { result.push({ type: 'add', line: newLines[j] }); j++; }
+    }
+    while (i < n) { result.push({ type: 'del', line: oldLines[i] }); i++; }
+    while (j < m) { result.push({ type: 'add', line: newLines[j] }); j++; }
+    return result;
+};
+
+// ── 💡 diff 결과를 HTML로 렌더 (동일 라인 3줄 이상 연속되면 접어서 표시) ──
+window.renderPromptDiffHtml = function(oldText, newText) {
+    const diff = window._simpleLineDiff(oldText, newText);
+    let html = '';
+    let sameBuf = [];
+    const flushSame = function() {
+        if (!sameBuf.length) return;
+        if (sameBuf.length > 3) {
+            html += `<div style="color:#adb5bd; font-size:11px; padding:2px 8px;">… ${sameBuf.length}${window._currentLang === 'en' ? ' unchanged lines' : '줄 동일'} …</div>`;
+        } else {
+            sameBuf.forEach(function(l) {
+                html += `<div style="color:#868e96; padding:1px 8px; white-space:pre-wrap;">${escapeHtml(l) || '&nbsp;'}</div>`;
+            });
+        }
+        sameBuf = [];
+    };
+    diff.forEach(function(d) {
+        if (d.type === 'same') { sameBuf.push(d.line); return; }
+        flushSame();
+        if (d.type === 'del') {
+            html += `<div style="background:#ffe3e3; color:#c92a2a; padding:1px 8px; white-space:pre-wrap; text-decoration:line-through;">- ${escapeHtml(d.line) || '&nbsp;'}</div>`;
+        } else {
+            html += `<div style="background:#d3f9d8; color:#2b8a3e; padding:1px 8px; white-space:pre-wrap;">+ ${escapeHtml(d.line) || '&nbsp;'}</div>`;
+        }
+    });
+    flushSame();
+    return html || `<div style="color:#adb5bd; padding:8px;">${window._currentLang === 'en' ? 'No differences.' : '변경사항이 없습니다.'}</div>`;
+};
+
 // ── 💡 개선 결과 미리보기 모달 ──────────────────────────────────────────
-window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids) {
+window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids, originalPrompt, isTruncated) {
     const _en = window._currentLang === 'en';
     let modal = document.getElementById('prompt-improve-modal');
     if (!modal) {
@@ -9270,19 +9373,26 @@ window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids) 
         modal.id = 'prompt-improve-modal';
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
         modal.innerHTML = `
-        <div id="prompt-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:720px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%);">
+        <div id="prompt-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%);">
             <div id="prompt-improve-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>🤖 ${_en ? 'AI Prompt Improvement Suggestion' : 'AI 프롬프트 개선 제안'}</span>
-                <button onclick="document.getElementById('prompt-improve-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                <button onclick="document.getElementById('prompt-improve-modal').style.display='none'" style="background:none; border:none; font-size:18px; cursor:pointer; color:#7a5210;">✕</button>
             </div>
+            <div id="improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
                 <div>
                     <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">🔍 ${_en ? 'Problem Analysis' : '문제점 분석'}</div>
                     <div id="improve-analysis-text" style="font-size:12px; color:#333; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; padding:10px; white-space:pre-wrap; line-height:1.6;"></div>
                 </div>
+                <div>
+                    <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">🔀 ${_en ? 'Changes vs Original' : '변경사항 (원본 대비)'}
+                        <span style="font-weight:normal; color:#999;">(${_en ? 'red = removed, green = added' : '빨강=삭제, 초록=추가'})</span>
+                    </div>
+                    <div id="improve-diff-view" style="max-height:220px; overflow-y:auto; font-size:11.5px; font-family:'Malgun Gothic',monospace; border:1px solid #e6e9ef; border-radius:6px; line-height:1.5; background:#fff;"></div>
+                </div>
                 <div style="flex:1; display:flex; flex-direction:column;">
                     <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">✏️ ${_en ? 'Improved Prompt (editable)' : '개선된 프롬프트 (수정 가능)'}</div>
-                    <textarea id="improve-prompt-textarea" style="flex:1; min-height:280px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:vertical; line-height:1.6;"></textarea>
+                    <textarea id="improve-prompt-textarea" style="flex:1; min-height:200px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:vertical; line-height:1.6;"></textarea>
                 </div>
             </div>
             <div style="padding:12px 16px; display:flex; gap:8px; border-top:1px solid #eee;">
@@ -9294,12 +9404,12 @@ window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids) 
         window._makeDraggable('prompt-improve-box', 'prompt-improve-drag');
         window._bindClickToFront('prompt-improve-modal');
     }
-    document.getElementById('improve-analysis-text').textContent = analysis;
-    document.getElementById('improve-prompt-textarea').value = improvedPrompt;
-    modal._targetUids = targetUids || [];
-    modal.style.display = 'block';
-    window.bringModalToFront('prompt-improve-modal');
-};
+    const _en2 = window._currentLang === 'en';
+    const warnBar = document.getElementById('improve-truncate-warning');
+    warnBar.textContent = _en2
+        ? '⚠️ The AI response may have been cut off (no end marker found). Please check the end of the prompt below before adopting.'
+        : '⚠️ AI 응답이 중간에 잘렸을 수 있습니다 (종료 마커 없음). 채택 전 아래 프롬프트 끝부분을 꼭 확인하세요.';
+    warnBar.style.display = isTruncated ? 'block' : 'none';
 
 // ── 💡 개선 프롬프트 채택 ───────────────────────────────────────────────
 window.applyImprovedPrompt = async function() {
