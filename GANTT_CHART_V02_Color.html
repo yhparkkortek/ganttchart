@@ -1975,6 +1975,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
 ${mailText}`;
 };
 
+    window._mailParsedRaw = null; // 💡 현재 분석 중인 메일의 파싱 원문 보관 (2000자 + 메타)
     var globalData = []; 
     var filterColumns = []; 
     var currentFilters = {}; 
@@ -9445,7 +9446,8 @@ window.TaskInbox = {
             source: (meta && meta.source) || '메일분석',
             addedAt: new Date().toISOString(),
             status: '대기',            // 대기 | 배치됨 (Phase2에서 '전송됨' 추가)
-            history: []
+            history: [],
+            mailRaw: (meta && meta.mailRaw) ? meta.mailRaw : null  // 💡 파싱 원문 보관 (없으면 null)
         });
         this.save(list);
     },
@@ -9602,6 +9604,7 @@ window.renderTaskInbox = function() {
                 <div><b>${_ibEn ? 'Detail' : '상세내용'}</b> : <span style="white-space:pre-wrap;">${escapeHtml((t['상세내용'] || '').toString())}</span></div>
                 <div><b>${_ibEn ? 'Period' : '기간'}</b> : ${escapeHtml(t['시작일'] || '?')} ~ ${escapeHtml(t['완료일'] || '?')} · <b>${_ibEn ? 'Status' : '상태'}</b> : ${escapeHtml(t['상태'] || '진행')} · <b>${_ibEn ? 'WBS Level' : 'WBS레벨'}</b> : L${escapeHtml(String(t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4))}</div>
                 ${(it.history && it.history.length) ? '<div style="margin-top:4px;"><b>' + (_ibEn ? 'History' : '이력') + '</b> : ' + it.history.map(function(h){ return escapeHtml((h.time || '') + ' ' + (h.type || '') + ' → ' + (h.target || '')); }).join('<br>　　　　') + '</div>' : ''}
+                ${it.mailRaw ? `<div style="margin-top:6px;"><button onclick="window.showInboxMailRaw('${it.uid}')" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer;">📧 ${_ibEn ? 'View Mail Source' : '원문 보기'}</button></div>` : ''}
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
@@ -9622,6 +9625,41 @@ window.renderTaskInbox = function() {
     });
     listEl.innerHTML = html;
     items.forEach(function(it) { window.inboxRecomputePreview(it.uid); }); // 초기 미리보기 계산
+};
+
+window.showInboxMailRaw = function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it || !it.mailRaw) return;
+    const r = it.mailRaw;
+    const _en = window._currentLang === 'en';
+    let modal = document.getElementById('inbox-mailraw-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'inbox-mailraw-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:680px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%);">
+            <div id="inbox-mailraw-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                <span id="inbox-mailraw-title">📧 메일 원문</span>
+                <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="background:none; border:none; font-size:18px; cursor:pointer; color:#7a5210;">✕</button>
+            </div>
+            <div id="inbox-mailraw-meta" style="padding:8px 16px; font-size:11.5px; color:#555; background:#fafafa; border-bottom:1px solid #eee;"></div>
+            <textarea id="inbox-mailraw-body" readonly style="flex:1; margin:12px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; line-height:1.6; background:#f8f9fa; color:#333;"></textarea>
+            <div style="padding:10px 16px; text-align:right; border-top:1px solid #eee;">
+                <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="padding:7px 18px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ ${_en ? 'Close' : '닫기'}</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('inbox-mailraw-box', 'inbox-mailraw-drag');
+        window._bindClickToFront('inbox-mailraw-modal');
+    }
+    const _en2 = window._currentLang === 'en';
+    document.getElementById('inbox-mailraw-title').textContent = '📧 ' + (_en2 ? 'Mail Source' : '메일 원문');
+    document.getElementById('inbox-mailraw-meta').innerHTML =
+        `<b>${_en2 ? 'Subject' : '제목'}</b>: ${escapeHtml(r.subject || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Sender' : '발신'}</b>: ${escapeHtml(r.sender || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Date' : '날짜'}</b>: ${escapeHtml(r.date || '-')}`;
+    document.getElementById('inbox-mailraw-body').value = r.body2000 || '';
+    modal.style.display = 'block';
+    window.bringModalToFront('inbox-mailraw-modal');
 };
 
 window.inboxRecomputePreview = function(uid) {
@@ -9679,7 +9717,7 @@ window.inboxClearDone = function() {
 
 window.mailRightToInbox = function() {
     if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
-    window.TaskInbox.add(window._mailAnalyzedResult, { source: '업무 추가(메일분석)' });
+    window.TaskInbox.add(window._mailAnalyzedResult, { source: '업무 추가(메일분석)', mailRaw: window._mailParsedRaw || null });
     // 💡 상단바 배지 카운트 즉시 갱신
     if (window.updateInboxBadge) window.updateInboxBadge();
     // 💡 업무 보관함이 지금 열려있다면(둘 다 열어둔 상태), 그 자리에서 바로 목록도 갱신
@@ -11357,7 +11395,7 @@ window.pasteClearResults = function() {
 
 function pasteAddResult(task, mailText) {
     const idx = window._pasteResults.length;
-    window._pasteResults.push({ idx, task, mailText, selected: !!task, registered: false });
+    window._pasteResults.push({ idx, task, mailText, mailRaw: window._mailParsedRaw || null, selected: !!task, registered: false });
     pasteRenderResultList();
 }
 
@@ -12005,6 +12043,8 @@ async function mfCallGemini(apiKey, parsed) {
     // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
     const _mfDateYMD = window.parseMailDateToYMD(parsed.date);
     const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (_mfDateYMD ? '발송일: ' + _mfDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
+    // 💡 파싱 원문 전역 보관 (보관함 저장 시 mailRaw로 첨부됨)
+    window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', date: parsed.date || '', body2000: mailText };
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _mfDateYMD);
 
     const GAS_URL = localStorage.getItem('gas_server_url') || 
@@ -13145,7 +13185,8 @@ const AR = {
         for (const r of validTargets) {
             const idx = arr.indexOf(r);
             const task = (c.getCurIdx() === idx && window._mailAnalyzedResult) ? window._mailAnalyzedResult : r.task;
-            window.TaskInbox.add(task, { source: '업무 추가(메일분석 일괄)' });
+            const _batchRaw = (r.mailRaw) ? r.mailRaw : ((c.getCurIdx() === idx && window._mailParsedRaw) ? window._mailParsedRaw : null);
+            window.TaskInbox.add(task, { source: '업무 추가(메일분석 일괄)', mailRaw: _batchRaw });
             r.selected = false;
             count++;
         }
@@ -13200,6 +13241,8 @@ async function msCallGemini(apiKey, parsed) {
 
     const _msDateYMD = window.parseMailDateToYMD(parsed.date);
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
+    // 💡 파싱 원문 전역 보관
+    window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', date: parsed.date || '', body2000: mailText };
     const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null);
 
     const MAX_RETRY = 3;
