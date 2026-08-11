@@ -9003,7 +9003,7 @@ window.editPrompt = async function() {
                     <button id="prompt-reset-btn" onclick="window.resetPrompt()" style="flex:1;min-width:0;padding:8px 4px;background:#dee2e6;color:#333;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;">🔄 초기화</button>
                     <button id="prompt-close-btn" onclick="document.getElementById('prompt-edit-modal').style.display='none'" style="flex:0.8;min-width:0;padding:8px 4px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">✖ 닫기</button>
                     <button id="prompt-log-btn" onclick="window.showPromptLogs()" style="flex:0.9;min-width:0;padding:8px 4px;background:#6f42c1;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">🕒 이력</button>
-                    <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" style="flex:1;min-width:0;padding:8px 4px;background:#0ca678;color:white;border:none;border-radius:6px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;">🤖 AI개선</button>
+                    <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" title="쌓인 👎 피드백 케이스를 모아 한번에 프롬프트 개선" style="flex:1;min-width:0;padding:8px 4px;background:#0ca678;color:white;border:none;border-radius:6px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;">🤖 일괄개선</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -9021,7 +9021,7 @@ window.editPrompt = async function() {
         'prompt-reset-btn':    _pEn ? '🔄 Reset'                     : '🔄 초기화',
         'prompt-close-btn':    _pEn ? '✖ Close'                      : '✖ 닫기',
         'prompt-log-btn':      _pEn ? '🕒 History'                   : '🕒 이력',
-        'prompt-ai-improve-btn': _pEn ? '🤖 AI Improve'              : '🤖 AI개선',
+        'prompt-ai-improve-btn': _pEn ? '🤖 Batch Improve'           : '🤖 일괄개선',
     };
     Object.entries(_pTexts).forEach(([id, txt]) => { const el = document.getElementById(id); if (el) el.textContent = txt; });
 
