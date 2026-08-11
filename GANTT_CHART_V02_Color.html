@@ -11756,7 +11756,7 @@ window.pasteBatchInsert = function() {
     for (let i = window._pasteResults.length - 1; i >= 0; i--) {
         const r = window._pasteResults[i];
         if (r.selected && r.task && !r.registered) {
-            if (mfDirectInsert(r.task)) {
+            if (mfDirectInsert(r.task, r.mailRaw)) {
                 r.registered = true;
                 r.selected = false;
             }
@@ -12593,7 +12593,7 @@ window.mfSelectItem = function(idx) {
     // 공통 오른쪽 패널 표시
     mailShowRightDetail(r.subject, r.sender, r.date||'', r.body||'', r.project, r.task, () => {
         r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
-        if (!mfDirectInsert(r.task)) return;
+        if (!mfDirectInsert(r.task, r.mailRaw || window._mailParsedRaw)) return;
         window._mfResults.splice(idx, 1);
         mfRenderList(window._mfResults);
         document.getElementById('mail-right-empty').style.display = 'flex';
@@ -12652,7 +12652,7 @@ window.mfBatchInsert = async function() {
                 r.task = window._mailAnalyzedResult;
             }
             
-            if (mfDirectInsert(r.task)) {
+            if (mfDirectInsert(r.task, r.mailRaw)) {
                 r.registered = true;
                 r.selected = false;
             }
@@ -13053,7 +13053,7 @@ window.msSelectItem = function(idx) {
     // 공통 오른쪽 패널 표시
     mailShowRightDetail(r.subject, r.sender, r.date||'', r.body||'', r.project, r.task, () => {
         r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
-        if (!mfDirectInsert(r.task, r.mailRaw)) return;
+        if (!mfDirectInsert(r.task, r.mailRaw || window._mailParsedRaw)) return;
         r.registered = true;
         const item = document.getElementById(`mf-list-item-${idx}`);
         if (item) {
@@ -13068,7 +13068,7 @@ window.msSelectItem = function(idx) {
         }
         window._mfResults[idx].selected = false;
         window._msCurrentIdx = -1;
-        mfDirectInsert(r.task);
+        mfDirectInsert(r.task, r.mailRaw);
         window.recalculateSchedules();
     });
 };
@@ -13101,7 +13101,7 @@ window.msBatchInsert = async function() {
         const r = window._msResults[i];
         if (validTargets.includes(r)) {
             try {
-                if (mfDirectInsert(r.task)) {
+                if (mfDirectInsert(r.task, r.mailRaw)) {
                     r.registered = true;
                     r.selected = false;
                 }
@@ -13358,7 +13358,7 @@ const AR = {
 
         mailShowRightDetail(r.subject||'직접입력', r.sender||'', r.date||'', r.body||r.mailText||'', r.project, r.task, () => {
             if (window._mailAnalyzedResult) r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
-            if (!mfDirectInsert(r.task)) return;
+            if (!mfDirectInsert(r.task, r.mailRaw || window._mailParsedRaw)) return;
             r.registered = true;
             r.selected = false;
             c.setCurIdx(-1);
@@ -13392,7 +13392,7 @@ const AR = {
             const r = arr[i];
             if (r.selected && r.task && !r.registered) {
                 if (c.getCurIdx() === i && window._mailAnalyzedResult) r.task = window._mailAnalyzedResult;
-                if (mfDirectInsert(r.task)) { r.registered = true; r.selected = false; }
+                if (mfDirectInsert(r.task, r.mailRaw || window._mailParsedRaw)) { r.registered = true; r.selected = false; }
             }
         }
 
