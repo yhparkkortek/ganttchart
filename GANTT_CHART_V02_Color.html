@@ -1975,7 +1975,8 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
 ${mailText}`;
 };
 
-    window._mailParsedRaw = null; // 💡 현재 분석 중인 메일의 파싱 원문 보관 (2000자 + 메타)
+    window._mailParsedRaw = null;    // 💡 현재 분석 중인 메일의 파싱 원문 보관 (2000자 + 메타)
+    window._aiResultSnapshot = null; // 💡 AI가 뽑은 원본 결과 스냅샷 (수정 전 비교용)
     var globalData = []; 
     var filterColumns = []; 
     var currentFilters = {}; 
@@ -2251,7 +2252,8 @@ ${mailText}`;
             const payload = {
                 prompt: text,
                 updatedBy: window.currentUserName || localStorage.getItem('gantt_local_user') || '알 수 없음',
-                updatedAt: new Date().toLocaleString('ko-KR')
+                updatedAt: new Date().toLocaleString('ko-KR'),
+                version: (window._promptVersion || 1)  // 💡 버전 번호 (채택 시 증가)
             };
 
             if (fileId) {
@@ -8791,6 +8793,7 @@ window.analyzeMailContent = async function() {
     analyzeBtn.style.borderColor = '#28a745';
 
     window._mailAnalyzedResult = parsed;
+    window._aiResultSnapshot = JSON.parse(JSON.stringify(parsed)); // 💡 AI 원본 스냅샷 (수정 감지용)
     // 💡 파일첨부/메일서버와 동일하게: 자동으로 오른쪽 패널 열지 않고, 목록에만 추가
     //    (미리보기는 목록에서 항목을 클릭했을 때만 표시됨)
     const mailInput = document.getElementById('mail-content-input');
@@ -8863,7 +8866,7 @@ window.renderMailResult = function(result) {
                    </select>`
                 : f.key === '상세내용' 
                     ? `<textarea data-field="${f.key}" style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; min-height:100px; box-sizing:border-box; resize:vertical;" 
-                       onchange="window._mailAnalyzedResult['${f.key}'] = this.value">${escapeHtml(result[f.key] || '')}</textarea>`
+                       onchange="window._mailAnalyzedResult['${f.key}'] = this.value; window.onDetailEdited(this.value)">${escapeHtml(result[f.key] || '')}</textarea>`
                     : `<input type="text" value="${escapeHtml(result[f.key] || '')}" data-field="${f.key}" 
                        style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:5px; font-size:13px; box-sizing:border-box;" 
                        onchange="window._mailAnalyzedResult['${f.key}'] = this.value">`;
@@ -8892,6 +8895,20 @@ window.renderMailResult = function(result) {
                 onchange="window._mailAnalyzedResult['wbs레벨'] = parseInt(this.value)">
                 ${levelOptions}
             </select>
+        </td>
+    </tr>`;
+    const _fbEn = window._currentLang === 'en';
+    html += `<tr>
+        <td colspan="2" style="padding:8px 10px; border:1px solid #dee2e6; background:#f8f9fa; text-align:right;">
+            <span style="font-size:11px; color:#888; margin-right:8px;">${_fbEn ? 'Was this analysis helpful?' : 'AI 분석 결과가 도움이 되었나요?'}</span>
+            <button onclick="window.saveFeedbackLog('good')"
+                style="font-size:12px; padding:3px 12px; border:1px solid #28a745; background:#fff; color:#28a745; border-radius:5px; cursor:pointer; margin-right:4px;">
+                👍 ${_fbEn ? 'Good' : '좋음'}
+            </button>
+            <button onclick="window.saveFeedbackLog('bad')"
+                style="font-size:12px; padding:3px 12px; border:1px solid #e03131; background:#fff; color:#e03131; border-radius:5px; cursor:pointer;">
+                👎 ${_fbEn ? 'Bad' : '나쁨'}
+            </button>
         </td>
     </tr>`;
     html += '</table>';
@@ -8976,6 +8993,7 @@ window.editPrompt = async function() {
                     <button id="prompt-reset-btn" onclick="window.resetPrompt()" style="flex:1;padding:10px;background:#dee2e6;color:#333;border:none;border-radius:6px;font-size:13px;cursor:pointer;display:none;">🔄 기본값으로 초기화</button>
                     <button id="prompt-close-btn" onclick="document.getElementById('prompt-edit-modal').style.display='none'" style="flex:1;padding:10px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">✖ 닫기</button>
                     <button id="prompt-log-btn" onclick="window.showPromptLogs()" style="flex:1;padding:10px;background:#6f42c1;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🕒 변경 이력</button>
+                    <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" style="flex:1;padding:10px;background:#0ca678;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;">🤖 AI 개선</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -8993,6 +9011,7 @@ window.editPrompt = async function() {
         'prompt-reset-btn':    _pEn ? '🔄 Reset to Default'          : '🔄 기본값으로 초기화',
         'prompt-close-btn':    _pEn ? '✖ Close'                      : '✖ 닫기',
         'prompt-log-btn':      _pEn ? '🕒 Change History'            : '🕒 변경 이력',
+        'prompt-ai-improve-btn': _pEn ? '🤖 AI Improve'              : '🤖 AI 개선',
     };
     Object.entries(_pTexts).forEach(([id, txt]) => { const el = document.getElementById(id); if (el) el.textContent = txt; });
 
@@ -9074,6 +9093,207 @@ window.resetPrompt = function() {
     localStorage.removeItem('gantt_mail_prompt');
     document.getElementById('prompt-edit-textarea').value = window._defaultPromptTemplate || '';
     alert('✅ 기본 프롬프트로 초기화되었습니다.');
+};
+
+// ── 💡 [Phase2] 프롬프트 피드백 로그 저장 ──────────────────────────────
+const _PF_KEY = 'gantt_prompt_feedback';
+window._promptVersion = parseInt(localStorage.getItem('gantt_prompt_version') || '1', 10);
+
+window.saveFeedbackLog = function(rating, userComment, userResult) {
+    if (!window._mailAnalyzedResult) return;
+    const log = JSON.parse(localStorage.getItem(_PF_KEY) || '[]');
+    log.unshift({
+        uid: 'fb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        date: new Date().toISOString(),
+        promptVersion: window._promptVersion,
+        mailRaw: window._mailParsedRaw || null,
+        aiResult: window._aiResultSnapshot ? JSON.parse(JSON.stringify(window._aiResultSnapshot)) : null,
+        userResult: userResult ? JSON.parse(JSON.stringify(userResult)) : null,
+        userComment: userComment || '',
+        rating: rating,   // 'good' | 'bad'
+        improved: false
+    });
+    if (log.length > 200) log.splice(200); // 최대 200건 보관
+    localStorage.setItem(_PF_KEY, JSON.stringify(log));
+    if (rating === 'good') {
+        window.showToast(window._currentLang === 'en' ? '👍 Feedback saved.' : '👍 피드백이 저장되었습니다.');
+    }
+};
+
+// ── 💡 상세내용 수정 감지 → 코멘트 팝업 → 즉시 개선 트리거 ─────────────
+window._detailEditTimer = null;
+window.onDetailEdited = function(newVal) {
+    // 디바운스 300ms — 타이핑 중에는 반응하지 않음
+    clearTimeout(window._detailEditTimer);
+    window._detailEditTimer = setTimeout(function() {
+        const snap = window._aiResultSnapshot;
+        if (!snap) return;
+        const original = snap['상세내용'] || '';
+        if (newVal.trim() === original.trim()) return; // 변경 없음
+        // 코멘트 팝업
+        const _en = window._currentLang === 'en';
+        const comment = prompt(
+            (_en
+                ? '✏️ You edited the AI result.\nWhat was the problem? (one line)\n(Press Cancel to skip improvement)'
+                : '✏️ AI 결과를 수정했습니다.\n어떤 부분이 문제였나요? (한 줄 입력)\n(취소하면 개선 요청 없이 피드백만 저장됩니다)')
+        );
+        if (comment === null) {
+            // 취소 → 피드백만 저장 (개선 요청 없음)
+            window.saveFeedbackLog('bad', '', window._mailAnalyzedResult);
+            return;
+        }
+        window.saveFeedbackLog('bad', comment, window._mailAnalyzedResult);
+        window.triggerPromptImprove('instant', comment);
+    }, 300);
+};
+
+// ── 💡 Gemini 프롬프트 개선 요청 (즉시 1건 / 배치 N건) ─────────────────
+window.triggerPromptImprove = async function(mode, instantComment) {
+    const _en = window._currentLang === 'en';
+    const currentPrompt = localStorage.getItem('gantt_mail_prompt') || window._defaultPromptTemplate || '';
+    const apiKey = localStorage.getItem('gemini_api_key') || localStorage.getItem('groq_api_key') || '';
+    const GAS_URL = localStorage.getItem('gas_server_url') ||
+        'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
+
+    let casesText = '';
+    let targetUids = [];
+
+    if (mode === 'instant') {
+        // 즉시 모드: 현재 분석 케이스 1건
+        const snap = window._aiResultSnapshot;
+        const cur  = window._mailAnalyzedResult;
+        const raw  = window._mailParsedRaw;
+        if (!snap || !cur) { alert(_en ? 'No analysis result found.' : '분석 결과가 없습니다.'); return; }
+        casesText = `[케이스 1]\n메일원문:\n${raw ? raw.body2000 : '(없음)'}\n\nAI 원본 결과:\n상세내용: ${snap['상세내용'] || ''}\n\n사용자 수정 결과:\n상세내용: ${cur['상세내용'] || ''}\n\n사용자 코멘트: ${instantComment || ''}`;
+    } else {
+        // 배치 모드: improved:false 케이스 최대 10건
+        const log = JSON.parse(localStorage.getItem(_PF_KEY) || '[]');
+        const pending = log.filter(function(x) { return x.rating === 'bad' && !x.improved; }).slice(0, 10);
+        targetUids = pending.map(function(x) { return x.uid; });
+        if (!pending.length) {
+            alert(_en ? '⚠️ No pending feedback cases to improve.' : '⚠️ 개선할 피드백 케이스가 없습니다.\n먼저 분석 결과에서 👎 버튼을 눌러 케이스를 쌓아주세요.');
+            return;
+        }
+        casesText = pending.map(function(fb, i) {
+            const snap = fb.aiResult || {};
+            const cur  = fb.userResult || {};
+            const raw  = fb.mailRaw || {};
+            // 10건 초과 방지용 — mailRaw는 5건까지만 포함
+            const bodyPart = (i < 5 && raw.body2000) ? `메일원문:\n${raw.body2000}\n\n` : '';
+            return `[케이스 ${i+1}] (${fb.date ? fb.date.slice(0,10) : ''})\n${bodyPart}AI 원본 상세내용: ${snap['상세내용'] || ''}\n사용자 수정 상세내용: ${cur['상세내용'] || ''}\n사용자 코멘트: ${fb.userComment || ''}`;
+        }).join('\n\n---\n\n');
+    }
+
+    const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 메일 분석 프롬프트와, 이 프롬프트로 분석했을 때 사용자가 수정한 실패 케이스입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n반드시 아래 JSON 형식으로만 응답하세요:\n{\n  "analysis": "문제점 분석 (3줄 이내)",\n  "improvedPrompt": "개선된 프롬프트 전문 (기존과 동일한 형식 유지)"\n}`;
+
+    window.showToast(_en ? '🤖 Requesting AI improvement...' : '🤖 AI 개선 요청 중...');
+    try {
+        const resp = await fetch(GAS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({
+                userApiKey: apiKey,
+                prompt: improvePrompt,
+                provider: window.getActiveAiProvider(),
+                model: window.getActiveAiModel()
+            })
+        });
+        const data = await resp.json();
+        if (data.status !== 'success') throw new Error(data.message);
+        const text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const cleaned = text.replace(/```json|```/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        window.showImprovePreviewModal(parsed.analysis || '', parsed.improvedPrompt || '', targetUids);
+    } catch(e) {
+        alert((_en ? '❌ AI improvement failed: ' : '❌ AI 개선 요청 실패: ') + e.message);
+    }
+};
+
+// ── 💡 개선 결과 미리보기 모달 ──────────────────────────────────────────
+window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids) {
+    const _en = window._currentLang === 'en';
+    let modal = document.getElementById('prompt-improve-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'prompt-improve-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="prompt-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:720px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%);">
+            <div id="prompt-improve-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                <span>🤖 ${_en ? 'AI Prompt Improvement Suggestion' : 'AI 프롬프트 개선 제안'}</span>
+                <button onclick="document.getElementById('prompt-improve-modal').style.display='none'" style="background:none; border:none; font-size:18px; cursor:pointer; color:#7a5210;">✕</button>
+            </div>
+            <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+                <div>
+                    <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">🔍 ${_en ? 'Problem Analysis' : '문제점 분석'}</div>
+                    <div id="improve-analysis-text" style="font-size:12px; color:#333; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; padding:10px; white-space:pre-wrap; line-height:1.6;"></div>
+                </div>
+                <div style="flex:1; display:flex; flex-direction:column;">
+                    <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">✏️ ${_en ? 'Improved Prompt (editable)' : '개선된 프롬프트 (수정 가능)'}</div>
+                    <textarea id="improve-prompt-textarea" style="flex:1; min-height:280px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:vertical; line-height:1.6;"></textarea>
+                </div>
+            </div>
+            <div style="padding:12px 16px; display:flex; gap:8px; border-top:1px solid #eee;">
+                <button onclick="window.applyImprovedPrompt()" style="flex:1; padding:10px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">✅ ${_en ? 'Adopt' : '채택'}</button>
+                <button onclick="document.getElementById('prompt-improve-modal').style.display='none'" style="flex:1; padding:10px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">❌ ${_en ? 'Discard' : '무시'}</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('prompt-improve-box', 'prompt-improve-drag');
+        window._bindClickToFront('prompt-improve-modal');
+    }
+    document.getElementById('improve-analysis-text').textContent = analysis;
+    document.getElementById('improve-prompt-textarea').value = improvedPrompt;
+    modal._targetUids = targetUids || [];
+    modal.style.display = 'block';
+    window.bringModalToFront('prompt-improve-modal');
+};
+
+// ── 💡 개선 프롬프트 채택 ───────────────────────────────────────────────
+window.applyImprovedPrompt = async function() {
+    const _en = window._currentLang === 'en';
+    const text = document.getElementById('improve-prompt-textarea').value.trim();
+    if (!text) { alert(_en ? 'Prompt is empty.' : '프롬프트가 비어있습니다.'); return; }
+
+    // 버전 증가
+    window._promptVersion = (window._promptVersion || 1) + 1;
+    localStorage.setItem('gantt_prompt_version', String(window._promptVersion));
+
+    // 기존 savePrompt 로직 재사용 (로그 + localStorage + Drive)
+    const oldPrompt = localStorage.getItem('gantt_mail_prompt') || '';
+    let promptLogs = JSON.parse(localStorage.getItem('gantt_prompt_logs') || '[]');
+    promptLogs.push({
+        time: new Date().toLocaleString('ko-KR'),
+        userName: (window.currentUserName || '알 수 없음') + ' (AI개선 채택 v' + window._promptVersion + ')',
+        oldPrompt: oldPrompt.substring(0, 200) + (oldPrompt.length > 200 ? '...' : ''),
+        newPrompt: text.substring(0, 200) + (text.length > 200 ? '...' : '')
+    });
+    if (promptLogs.length > 20) promptLogs = promptLogs.slice(-20);
+    localStorage.setItem('gantt_prompt_logs', JSON.stringify(promptLogs));
+    localStorage.setItem('gantt_mail_prompt', text);
+
+    // improved: true 마킹
+    const modal = document.getElementById('prompt-improve-modal');
+    const uids = (modal && modal._targetUids) || [];
+    if (uids.length) {
+        const log = JSON.parse(localStorage.getItem(_PF_KEY) || '[]');
+        uids.forEach(function(uid) {
+            const it = log.find(function(x) { return x.uid === uid; });
+            if (it) it.improved = true;
+        });
+        localStorage.setItem(_PF_KEY, JSON.stringify(log));
+    }
+
+    // Drive 저장
+    if (window.isDriveConnected && window.savePromptToDrive) {
+        const ok = await window.savePromptToDrive(text);
+        alert(ok
+            ? (_en ? '✅ Improved prompt adopted & saved to Drive. (v' + window._promptVersion + ')' : '✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._promptVersion + ')')
+            : (_en ? '⚠️ Adopted locally, but Drive upload failed.' : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다.'));
+    } else {
+        alert(_en ? '✅ Improved prompt adopted. (v' + window._promptVersion + ')' : '✅ 개선된 프롬프트가 채택되었습니다. (v' + window._promptVersion + ')');
+    }
+    modal.style.display = 'none';
 };
 
 window.showPromptLogs = function() {
