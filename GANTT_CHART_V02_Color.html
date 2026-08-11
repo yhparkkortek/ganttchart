@@ -11603,7 +11603,12 @@ window.showMailAnalyzer = function() {
 };
 
 // ─── 공통 오른쪽 패널 표시 함수 ────────────────────────────
-function mailShowRightDetail(subject, sender, date, body, project, task, onInsert) {
+function mailShowRightDetail(subject, sender, date, body, project, task, onInsert, mailRaw) {
+    // 💡 개선요청 기능용: AI 원본 스냅샷 + 파싱원문 세팅 (누락되면 "분석 결과가 없습니다" 오류남)
+    window._aiResultSnapshot = task ? JSON.parse(JSON.stringify(task)) : null;
+    window._mailParsedRaw = mailRaw || null;
+    window._lastFeedbackUid = null; // 새 항목 열 때는 이전 항목의 피드백 uid 초기화
+
     // 메일 정보 헤더
     const info = document.getElementById('mail-right-info');
     if (info) {
@@ -11734,7 +11739,7 @@ function pasteRenderResultList() {
                 pasteRenderResultList();
                 document.getElementById('mail-right-empty').style.display  = 'flex';
                 document.getElementById('mail-right-detail').style.display = 'none';
-            });
+            }, r.mailRaw);
         });
 
         const cb = row.querySelector('input[type=checkbox]');
@@ -12641,7 +12646,7 @@ window.mfSelectItem = function(idx) {
         document.getElementById('mail-right-detail').style.display = 'none';
         window._mfCurrentIdx = -1;
         window.recalculateSchedules();
-    });
+    }, r.mailRaw);
 };
 
 // ✅ AI 분석 실패 항목을, 추출된 본문을 상세내용에 채운 "빈 업무" 상태로 전환해 수동 입력 흐름으로 넘김
@@ -13111,7 +13116,7 @@ window.msSelectItem = function(idx) {
         window._msCurrentIdx = -1;
         mfDirectInsert(r.task, r.mailRaw);
         window.recalculateSchedules();
-    });
+    }, r.mailRaw);
 };
 
 // msRightInsert → mailRightInsert 으로 통합
@@ -13407,7 +13412,7 @@ const AR = {
             document.getElementById('mail-right-empty').style.display = 'flex';
             document.getElementById('mail-right-detail').style.display = 'none';
             window.recalculateSchedules();
-        });
+        }, r.mailRaw);
     },
 
     batchInsert(tabKey) {
