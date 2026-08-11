@@ -5434,6 +5434,13 @@ window.deleteHistoryByDateRange = function() {
         return safeText.replace(/\n/g, '<br>');
     }  // ← 이 닫는 괄호가 빠져있음
 
+    function injectMailRawBtn(html, row, rowIndex) {
+        if (!row._mailRaw) return html;
+        const _en = window._currentLang === 'en';
+        const btn = `<button onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
+        return html.replace(/(<b>\[출처\]<\/b>[\s\S]*?)(<br>|$)/, function(m, p1, p2) { return p1 + btn + p2; });
+    }
+
     function parseDateValue(value) {
         if (value === "" || value === null || value === undefined) return null;
         let y, m, d;
@@ -6747,9 +6754,10 @@ window.deleteHistoryByDateRange = function() {
                         if (transMode > 0) {
                             let safeText = encodeURIComponent(cellText).replace(/'/g, "%27").replace(/\\/g, "\\\\");
                             let displayHtml = linkifyAndEscape(cellText);
+                            if (cellIndex === colIdx.content) displayHtml = injectMailRawBtn(displayHtml, row, i);
                             tdStyle += " position: relative; padding-left: 22px;";
                             tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans"`;
-                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText); }
+                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
@@ -9124,7 +9132,7 @@ window.clearPromptLogs = function() {
         
 // ✅ [공용] 분석 결과(r) → 간트 행 객체 생성 (개별 등록 / 보관함 배치 / 타 프로젝트 배분 공용)
 //    gd/ci 생략 시 현재 프로젝트(globalData/colIdx) 기준으로 동작
-window.buildMailTaskRow = function(r, gd, ci) {
+window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     gd = gd || globalData;
     ci = ci || colIdx;
     const wbsLevel = parseInt(r['wbs레벨'] ?? 4);
@@ -9173,6 +9181,7 @@ window.buildMailTaskRow = function(r, gd, ci) {
     else if (wbsLevel === 4 && ci.dur4 !== -1) newRow[ci.dur4] = "1";
     else if (ci.period !== -1) newRow[ci.period] = "1";
 
+    newRow._mailRaw = mailRaw || null;
     return { row: newRow, taskName: taskName };
 };
 
@@ -9408,7 +9417,7 @@ window.insertMailTask = function() {
     }
 
     const insertAfter = parseInt(document.getElementById('mail-insert-position').value);
-    const built = window.buildMailTaskRow(r);
+    const built = window.buildMailTaskRow(r, undefined, undefined, window._mailParsedRaw);
 
     const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
     globalData.splice(pos, 0, built.row);
@@ -9627,10 +9636,8 @@ window.renderTaskInbox = function() {
     items.forEach(function(it) { window.inboxRecomputePreview(it.uid); }); // 초기 미리보기 계산
 };
 
-window.showInboxMailRaw = function(uid) {
-    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
-    if (!it || !it.mailRaw) return;
-    const r = it.mailRaw;
+window.showMailRawModal = function(r) {
+    if (!r) return;
     const _en = window._currentLang === 'en';
     let modal = document.getElementById('inbox-mailraw-modal');
     if (!modal) {
@@ -9638,13 +9645,13 @@ window.showInboxMailRaw = function(uid) {
         modal.id = 'inbox-mailraw-modal';
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
-        <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:680px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%);">
+        <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:680px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:260px;">
             <div id="inbox-mailraw-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span id="inbox-mailraw-title">📧 메일 원문</span>
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="background:none; border:none; font-size:18px; cursor:pointer; color:#7a5210;">✕</button>
             </div>
             <div id="inbox-mailraw-meta" style="padding:8px 16px; font-size:11.5px; color:#555; background:#fafafa; border-bottom:1px solid #eee;"></div>
-            <textarea id="inbox-mailraw-body" readonly style="flex:1; margin:12px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; line-height:1.6; background:#f8f9fa; color:#333;"></textarea>
+            <textarea id="inbox-mailraw-body" readonly style="flex:1; margin:12px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; overflow:auto; line-height:1.6; background:#f8f9fa; color:#333;"></textarea>
             <div style="padding:10px 16px; text-align:right; border-top:1px solid #eee;">
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="padding:7px 18px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ ${_en ? 'Close' : '닫기'}</button>
             </div>
@@ -9660,6 +9667,18 @@ window.showInboxMailRaw = function(uid) {
     document.getElementById('inbox-mailraw-body').value = r.body2000 || '';
     modal.style.display = 'block';
     window.bringModalToFront('inbox-mailraw-modal');
+};
+
+window.showInboxMailRaw = function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it || !it.mailRaw) return;
+    window.showMailRawModal(it.mailRaw);
+};
+
+window.showGanttMailRaw = function(rowIndex) {
+    const row = globalData[rowIndex];
+    if (!row || !row._mailRaw) return;
+    window.showMailRawModal(row._mailRaw);
 };
 
 window.inboxRecomputePreview = function(uid) {
@@ -9687,7 +9706,7 @@ window.inboxPlaceToCurrent = function(uid) {
     const chosenL0 = sel ? sel.value : '__END__';
     const useAuto = autoEl ? autoEl.checked : true;
 
-    const built = window.buildMailTaskRow(r);
+    const built = window.buildMailTaskRow(r, undefined, undefined, it.mailRaw);
     const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, r['시작일'], useAuto);
     const pos = posInfo.pos;
     if (chosenL0 !== '__END__' && colIdx.devStage !== -1) {
@@ -12426,7 +12445,7 @@ window.mfBatchInsert = async function() {
 };
 
 // 날짜체크 없이 직접 삽입
-function mfDirectInsert(task) {
+function mfDirectInsert(task, mailRaw) {
     if (!globalData || globalData.length <= 1) { 
         alert('먼저 Gantt Chart 파일을 불러와주세요.'); 
         return false; 
@@ -12481,6 +12500,7 @@ function mfDirectInsert(task) {
     const insertSelect = document.getElementById('mail-insert-position');
     const insertAfter = insertSelect ? parseInt(insertSelect.value) : -1;
     const pos = insertAfter === -1 ? globalData.length : insertAfter + 1;
+    newRow._mailRaw = mailRaw || null;
     globalData.splice(pos, 0, newRow);
     logChange(pos,-1,'없음',`메일파일 등록: ${taskName}`);
     return true;
@@ -12813,7 +12833,7 @@ window.msSelectItem = function(idx) {
     // 공통 오른쪽 패널 표시
     mailShowRightDetail(r.subject, r.sender, r.date||'', r.body||'', r.project, r.task, () => {
         r.task = JSON.parse(JSON.stringify(window._mailAnalyzedResult));
-        if (!mfDirectInsert(r.task)) return;
+        if (!mfDirectInsert(r.task, r.mailRaw)) return;
         r.registered = true;
         const item = document.getElementById(`mf-list-item-${idx}`);
         if (item) {
