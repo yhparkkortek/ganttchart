@@ -8998,12 +8998,12 @@ window.editPrompt = async function() {
                     <textarea id="prompt-edit-textarea" readonly style="width:100%;height:400px;font-size:13px;font-family:'Malgun Gothic',monospace;border:1px solid #ced4da;border-radius:6px;padding:10px;box-sizing:border-box;resize:vertical;line-height:1.5;background:#f8f9fa;color:#555;"></textarea>
                 </div>
                 <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:10px;">
-                    <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" style="flex:1;padding:10px;background:#e67e22;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;">🔒 수정하기 (비밀번호 필요)</button>
-                    <button id="prompt-save-btn" onclick="window.savePrompt()" style="flex:1;padding:10px;background:#0056b3;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;display:none;">💾 저장</button>
-                    <button id="prompt-reset-btn" onclick="window.resetPrompt()" style="flex:1;padding:10px;background:#dee2e6;color:#333;border:none;border-radius:6px;font-size:13px;cursor:pointer;display:none;">🔄 기본값으로 초기화</button>
-                    <button id="prompt-close-btn" onclick="document.getElementById('prompt-edit-modal').style.display='none'" style="flex:1;padding:10px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">✖ 닫기</button>
-                    <button id="prompt-log-btn" onclick="window.showPromptLogs()" style="flex:1;padding:10px;background:#6f42c1;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🕒 변경 이력</button>
-                    <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" style="flex:1;padding:10px;background:#0ca678;color:white;border:none;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;">🤖 AI 개선</button>
+                    <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" title="비밀번호 필요" style="flex:1.3;min-width:0;padding:8px 4px;background:#e67e22;color:white;border:none;border-radius:6px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🔒 수정하기</button>
+                    <button id="prompt-save-btn" onclick="window.savePrompt()" style="flex:0.8;min-width:0;padding:8px 4px;background:#0056b3;color:white;border:none;border-radius:6px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;display:none;">💾 저장</button>
+                    <button id="prompt-reset-btn" onclick="window.resetPrompt()" style="flex:1;min-width:0;padding:8px 4px;background:#dee2e6;color:#333;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:none;">🔄 초기화</button>
+                    <button id="prompt-close-btn" onclick="document.getElementById('prompt-edit-modal').style.display='none'" style="flex:0.8;min-width:0;padding:8px 4px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">✖ 닫기</button>
+                    <button id="prompt-log-btn" onclick="window.showPromptLogs()" style="flex:0.9;min-width:0;padding:8px 4px;background:#6f42c1;color:white;border:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;">🕒 이력</button>
+                    <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" style="flex:1;min-width:0;padding:8px 4px;background:#0ca678;color:white;border:none;border-radius:6px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;">🤖 AI개선</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -9016,12 +9016,12 @@ window.editPrompt = async function() {
     const _pEn = window._currentLang === 'en';
     const _pTexts = {
         'prompt-modal-title':  _pEn ? '✏️ AI Analysis Prompt'       : '✏️ AI 분석 프롬프트',
-        'prompt-unlock-btn':   _pEn ? '🔒 Edit (Password Required)'  : '🔒 수정하기 (비밀번호 필요)',
+        'prompt-unlock-btn':   _pEn ? '🔒 Edit'                      : '🔒 수정하기',
         'prompt-save-btn':     _pEn ? '💾 Save'                      : '💾 저장',
-        'prompt-reset-btn':    _pEn ? '🔄 Reset to Default'          : '🔄 기본값으로 초기화',
+        'prompt-reset-btn':    _pEn ? '🔄 Reset'                     : '🔄 초기화',
         'prompt-close-btn':    _pEn ? '✖ Close'                      : '✖ 닫기',
-        'prompt-log-btn':      _pEn ? '🕒 Change History'            : '🕒 변경 이력',
-        'prompt-ai-improve-btn': _pEn ? '🤖 AI Improve'              : '🤖 AI 개선',
+        'prompt-log-btn':      _pEn ? '🕒 History'                   : '🕒 이력',
+        'prompt-ai-improve-btn': _pEn ? '🤖 AI Improve'              : '🤖 AI개선',
     };
     Object.entries(_pTexts).forEach(([id, txt]) => { const el = document.getElementById(id); if (el) el.textContent = txt; });
 
@@ -9355,7 +9355,7 @@ window.renderPromptDiffHtml = function(oldText, newText) {
 };
 
 // ── 💡 개선 결과 미리보기 모달 ──────────────────────────────────────────
-window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids, originalPrompt, isTruncated) {
+window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids, originalPrompt, isTruncated, structIssues) {
     const _en = window._currentLang === 'en';
     let modal = document.getElementById('prompt-improve-modal');
     if (!modal) {
@@ -9497,7 +9497,7 @@ window.showPromptLogs = function() {
                     <span style="cursor:pointer;font-size:18px;" onclick="document.getElementById('prompt-log-modal').style.display='none'">✖</span>
                 </div>
                 <div id="prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
-                <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:10px;">
+                <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">
                     <button onclick="window.clearPromptLogs()" style="flex:1;padding:10px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">🗑️ 이력 삭제</button>
                     <button onclick="document.getElementById('prompt-log-modal').style.display='none'" style="flex:1;padding:10px;background:#6c757d;color:white;border:none;border-radius:6px;font-size:13px;cursor:pointer;">✖ 닫기</button>
                 </div>
