@@ -9225,7 +9225,8 @@ window.triggerPromptImprove = async function(mode, instantComment) {
         }).join('\n\n---\n\n');
     }
 
-    const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 메일 분석 프롬프트와, 이 프롬프트로 분석했을 때 사용자가 수정한 실패 케이스입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n반드시 아래 JSON 형식으로만 응답하세요:\n{\n  "analysis": "문제점 분석 (3줄 이내)",\n  "improvedPrompt": "개선된 프롬프트 전문 (기존과 동일한 형식 유지)"\n}`;
+    // 💡 JSON 대신 구분자 방식 사용 — 프롬프트 원문의 줄바꿈/따옴표가 많아 JSON 이스케이프가 깨지는 문제 방지
+    const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 메일 분석 프롬프트와, 이 프롬프트로 분석했을 때 사용자가 수정한 실패 케이스입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n\n반드시 아래 형식 그대로만 응답하세요. JSON이나 코드블록(\`\`\`)은 절대 사용하지 마세요.\n\n===ANALYSIS===\n(여기에 문제점 분석을 3줄 이내로 작성)\n===PROMPT===\n(여기에 개선된 프롬프트 전문을 기존과 동일한 형식으로 작성)\n===END===`;
 
     window.showToast(_en ? '🤖 Requesting AI improvement...' : '🤖 AI 개선 요청 중...');
     try {
@@ -9242,9 +9243,19 @@ window.triggerPromptImprove = async function(mode, instantComment) {
         const data = await resp.json();
         if (data.status !== 'success') throw new Error(data.message);
         const text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-        const cleaned = text.replace(/```json|```/g, '').trim();
-        const parsed = JSON.parse(cleaned);
-        window.showImprovePreviewModal(parsed.analysis || '', parsed.improvedPrompt || '', targetUids);
+
+        // 💡 구분자 기반 파싱 (JSON.parse 대신 — 이스케이프/truncation에 강함)
+        const cleaned = text.replace(/```[a-z]*|```/gi, '').trim();
+        const analysisMatch = cleaned.match(/===ANALYSIS===([\s\S]*?)===PROMPT===/);
+        const promptMatch   = cleaned.match(/===PROMPT===([\s\S]*?)(===END===|$)/);
+
+        const analysis = analysisMatch ? analysisMatch[1].trim() : '';
+        const improvedPrompt = promptMatch ? promptMatch[1].trim() : '';
+
+        if (!improvedPrompt) {
+            throw new Error(_en ? 'Could not parse AI response (format mismatch).' : 'AI 응답 형식을 해석하지 못했습니다.');
+        }
+        window.showImprovePreviewModal(analysis, improvedPrompt, targetUids);
     } catch(e) {
         alert((_en ? '❌ AI improvement failed: ' : '❌ AI 개선 요청 실패: ') + e.message);
     }
