@@ -2014,6 +2014,16 @@ ${mailText}`;
         gisInited = true;
     }
 
+    window._silentRefreshTimer = null;
+    window.startSilentTokenRefresh = function() {
+        if (window._silentRefreshTimer) return;
+        window._silentRefreshTimer = setInterval(() => {
+            if (tokenClient && window.isDriveConnected) {
+                tokenClient.requestAccessToken({ prompt: '' });
+            }
+        }, 45 * 60 * 1000);
+    }
+
     window.handleAuthClick = function() {
         if (!tokenClient) {
             alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
@@ -2040,6 +2050,7 @@ ${mailText}`;
             gapi.client.setToken(resp);
             window.googleAccessToken = resp.access_token;
             window.isDriveConnected = true;
+            window.startSilentTokenRefresh();
 
             // 💡 드라이브 연동 성공 시 팀 공용 AI 프롬프트 자동 동기화
             if (typeof window.loadPromptFromDrive === 'function') window.loadPromptFromDrive();
