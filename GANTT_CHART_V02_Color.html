@@ -2401,7 +2401,10 @@ ${mailText}`;
     // 현재 열려 있는 프로젝트의 인덱스 항목 생성 (모델/고객사/담당자/인치 4필드 + 커스텀 키워드)
     window.buildProjectIndexEntry = function(driveFileId, dynamicFileName) {
         const pm = window.projectMeta || {};
-        const baseFields = [pm.모델명, pm.고객모델명, pm.고객사, pm.인치, pm.프로젝트명].filter(Boolean);
+        // 💡 고객사명은 매칭 키워드에서 제외 — 한 고객사가 여러 프로젝트를 가진 경우
+        //    (예: LNW의 STELLAR32/OBSIDIAN) 전부 후보로 묶여버려 변별력이 없음.
+        //    customer 필드 자체는 화면 표시용으로만 남기고, keywords 배열엔 안 넣음.
+        const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].filter(Boolean);
         const customKeywords = window._parseMailKeywords(pm.메일키워드);
         const keywords = Array.from(new Set(baseFields.concat(customKeywords)));
         return {
@@ -13480,15 +13483,21 @@ window._autoMailFetchTick = async function() {
 
             // 💡 [메일 자동처리] 프로젝트가 매칭됐고 AI 추출까지 성공한 건만 개인 TaskInbox로 자동 이동
             //    (미분류는 프로젝트를 모르니 보관함에 넣지 않고 로컬 큐에만 남김 — 검토 큐 UI에서 노출 예정)
+            //    💡 fileName 기준 중복 체크 — 큐가 초기화돼도(캐시삭제 등) 같은 메일이 보관함에 재등록되지 않도록
             if (item.task && projectTag && window.TaskInbox) {
-                const candidateNames = projectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
-                const sourceLabel = projectTag.status === 'ambiguous'
-                    ? `메일자동분석(후보 다수: ${candidateNames})`
-                    : `메일자동분석(${candidateNames})`;
-                window.TaskInbox.add(item.task, {
-                    source: sourceLabel,
-                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body, fileName: mail.fileName }
+                const alreadyInInbox = window.TaskInbox.load().some(function(it) {
+                    return it.mailRaw && it.mailRaw.fileName === mail.fileName;
                 });
+                if (!alreadyInInbox) {
+                    const candidateNames = projectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
+                    const sourceLabel = projectTag.status === 'ambiguous'
+                        ? `메일자동분석(후보 다수: ${candidateNames})`
+                        : `메일자동분석(${candidateNames})`;
+                    window.TaskInbox.add(item.task, {
+                        source: sourceLabel,
+                        mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body, fileName: mail.fileName }
+                    });
+                }
             }
 
             window._msResults.push(item);
