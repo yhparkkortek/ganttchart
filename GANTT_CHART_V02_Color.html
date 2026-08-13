@@ -9208,6 +9208,8 @@ window.editPrompt = async function() {
                 </div>
                 <div style="padding:15px;flex:1;overflow-y:auto;">
                     <textarea id="prompt-edit-textarea" readonly style="width:100%;height:400px;font-size:13px;font-family:'Malgun Gothic',monospace;border:1px solid #ced4da;border-radius:6px;padding:10px;box-sizing:border-box;resize:vertical;line-height:1.5;background:#f8f9fa;color:#555;"></textarea>
+                    <input id="prompt-save-memo" type="text" maxlength="40" placeholder="💬 이번 저장 메모 (선택, 예: 우선순위 점수 필드 추가 v1)"
+                        style="display:none; width:100%; margin-top:8px; padding:7px 10px; border:1px solid #ced4da; border-radius:6px; font-size:12px; box-sizing:border-box;">
                 </div>
                 <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:10px;">
                     <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" title="비밀번호 필요" style="flex:1.3;min-width:0;padding:8px 4px;background:#e67e22;color:white;border:none;border-radius:6px;font-size:12px;font-weight:bold;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">🔒 수정하기</button>
@@ -9271,6 +9273,8 @@ window.unlockPrompt = function() {
     document.getElementById('prompt-edit-textarea').style.color = '#333';
     document.getElementById('prompt-unlock-btn').style.display = 'none';
     document.getElementById('prompt-save-btn').style.display = 'block';
+    const memoEl = document.getElementById('prompt-save-memo');
+    if (memoEl) memoEl.style.display = 'block';
     document.getElementById('prompt-reset-btn').style.display = 'block';
     document.getElementById('prompt-edit-notice').textContent = window._currentLang === 'en'
         ? '✏️ Edit freely. Keep variables like ${mailText}, ${projectAssignee} as-is.'
@@ -9314,7 +9318,10 @@ window.savePrompt = async function() {
         // 💡 버전 증가 + 전체 텍스트 스냅샷 저장 (복원 가능하도록)
         window._promptVersion = (window._promptVersion || 1) + 1;
         localStorage.setItem('gantt_prompt_version', String(window._promptVersion));
-        window.savePromptVersionSnapshot(text, '수동 저장 v' + window._promptVersion);
+        const memoEl = document.getElementById('prompt-save-memo');
+        const memo = memoEl && memoEl.value.trim() ? ': ' + memoEl.value.trim() : '';
+        window.savePromptVersionSnapshot(text, '수동 저장 v' + window._promptVersion + memo);
+        if (memoEl) memoEl.value = ''; // 다음 저장을 위해 비워둠
     }
 
     localStorage.setItem('gantt_mail_prompt', text);
