@@ -11640,6 +11640,16 @@ window.updateInboxBadge();
                                 📥 메일 가져오기
                             </button>
                         </div>
+                        <div style="display:flex; gap:6px; padding:0 12px; margin-top:6px;">
+                            <button id="ms-unmatched-badge-btn" onclick="window.msShowUnmatchedModal()"
+                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left;">
+                                📭 미분류 <span id="ms-unmatched-count">0</span>건
+                            </button>
+                            <button id="ms-newsender-badge-btn" onclick="window.msShowNewSenderModal()"
+                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left;">
+                                👤 신규발신자 <span id="ms-newsender-count">0</span>건
+                            </button>
+                        </div>
                         <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:0 12px; margin-top:4px;">
                             <div id="ms-status" style="font-size:11px; color:#666; flex:1;"></div>
                             <button id="ms-force-reset-btn" onclick="window.msForceReset()"
@@ -13524,6 +13534,7 @@ window._autoMailFetchTick = async function() {
 
         window._msSaveQueueToStorage();
         if (typeof msRenderList === 'function') msRenderList(window._msResults);
+        if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); // 💡 [B/C] 배지 숫자 갱신
         localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
 
         if (addedCount > 0 && window.showToast) {
@@ -13540,6 +13551,56 @@ window._autoMailFetchTick = async function() {
         console.warn('[메일 자동처리] 자동 수집 실패:', e.message);
         // 실패해도 last_fetch_at은 갱신하지 않음 → 다음 틱에서 같은 구간 재시도
     }
+};
+
+// ─── [메일 자동처리 B/C] 미분류·신규발신자 배지 갱신 + 읽기전용 검토 모달 ──
+window._msRefreshQueueBadges = function() {
+    const unmatchedCount = (window._msResults || []).filter(r => !r.project).length;
+    const newSenderCount = (JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')).length;
+    const uEl = document.getElementById('ms-unmatched-count');
+    const nEl = document.getElementById('ms-newsender-count');
+    if (uEl) uEl.textContent = unmatchedCount;
+    if (nEl) nEl.textContent = newSenderCount;
+};
+
+window._msRenderQueueModal = function(title, rows) {
+    const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const body = rows.length
+        ? rows.map(r => `
+            <div style="padding:8px 10px; border-bottom:1px solid #eee;">
+                <div style="font-size:12px; font-weight:bold;">${esc(r.subject)}</div>
+                <div style="font-size:11px; color:#777; margin-top:2px;">${esc(r.sender)} · ${esc(r.date)}</div>
+                ${r.hint ? `<div style="font-size:11px; color:#e67e22; margin-top:2px;">💡 ${esc(r.hint)}</div>` : ''}
+            </div>`).join('')
+        : '<div style="padding:20px; text-align:center; color:#999; font-size:12px;">대기 중인 항목이 없습니다</div>';
+
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:9999; display:flex; align-items:center; justify-content:center;';
+    modal.innerHTML = `
+        <div style="background:#fff; border-radius:8px; width:420px; max-width:90vw; max-height:80vh; display:flex; flex-direction:column;">
+            <div style="padding:12px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+                <b style="font-size:13px;">${esc(title)} (${rows.length}건)</b>
+                <button onclick="this.closest('div[style*=fixed]').remove()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#999;">✕</button>
+            </div>
+            <div style="overflow-y:auto; flex:1;">${body}</div>
+        </div>`;
+    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
+    document.body.appendChild(modal);
+};
+
+window.msShowUnmatchedModal = function() {
+    const rows = (window._msResults || [])
+        .filter(r => !r.project)
+        .map(r => ({ subject: r.subject, sender: r.sender, date: r.date,
+                      hint: '등록된 프로젝트 키워드와 불일치 — Summary 탭 "메일 매칭 키워드" 확인 필요' }));
+    window._msRenderQueueModal('📭 미분류 메일', rows);
+};
+
+window.msShowNewSenderModal = function() {
+    const list = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
+    const rows = list.map(r => ({ subject: r.subject, sender: r.sender, date: r.date,
+                      hint: '주소록에 없는 발신자 도메인 — 정상 거래처면 주소록에 추가 필요' }));
+    window._msRenderQueueModal('👤 신규발신자 메일', rows);
 };
 
 // ─── [메일 자동처리 ①] 스케줄러 — 1분마다 체크, 설정된 주기(기본 30분) 경과 시에만 실행 ──
@@ -15937,6 +15998,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.refreshMailIntervalSelect) window.refreshMailIntervalSelect();
     if (window._msLoadQueueFromStorage) window._msLoadQueueFromStorage();
     if (window._startMailAutoScheduler) window._startMailAutoScheduler();
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
 });
 
 function _escTabVal(v) { return (v === undefined || v === null) ? '' : String(v).replace(/"/g, '&quot;'); }
