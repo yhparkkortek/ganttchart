@@ -11642,11 +11642,15 @@ window.updateInboxBadge();
                         </div>
                         <div style="display:flex; gap:6px; padding:0 12px; margin-top:6px;">
                             <button id="ms-unmatched-badge-btn" onclick="window.msShowUnmatchedModal()"
-                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left;">
+                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left; transition:0.15s;"
+                                onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff'; this.style.borderColor='#2c5f8a';"
+                                onmouseout="this.style.background='#fff'; this.style.color='#555'; this.style.borderColor='#ccc';">
                                 📭 미분류 <span id="ms-unmatched-count">0</span>건
                             </button>
                             <button id="ms-newsender-badge-btn" onclick="window.msShowNewSenderModal()"
-                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left;">
+                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left; transition:0.15s;"
+                                onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff'; this.style.borderColor='#2c5f8a';"
+                                onmouseout="this.style.background='#fff'; this.style.color='#555'; this.style.borderColor='#ccc';">
                                 👤 신규발신자 <span id="ms-newsender-count">0</span>건
                             </button>
                         </div>
@@ -13563,44 +13567,109 @@ window._msRefreshQueueBadges = function() {
     if (nEl) nEl.textContent = newSenderCount;
 };
 
-window._msRenderQueueModal = function(title, rows) {
-    const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const body = rows.length
-        ? rows.map(r => `
-            <div style="padding:8px 10px; border-bottom:1px solid #eee;">
-                <div style="font-size:12px; font-weight:bold;">${esc(r.subject)}</div>
-                <div style="font-size:11px; color:#777; margin-top:2px;">${esc(r.sender)} · ${esc(r.date)}</div>
-                ${r.hint ? `<div style="font-size:11px; color:#e67e22; margin-top:2px;">💡 ${esc(r.hint)}</div>` : ''}
-            </div>`).join('')
-        : '<div style="padding:20px; text-align:center; color:#999; font-size:12px;">대기 중인 항목이 없습니다</div>';
+const _msQEsc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-    const modal = document.createElement('div');
-    modal.style.cssText = 'position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:9999; display:flex; align-items:center; justify-content:center;';
-    modal.innerHTML = `
-        <div style="background:#fff; border-radius:8px; width:420px; max-width:90vw; max-height:80vh; display:flex; flex-direction:column;">
-            <div style="padding:12px 16px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
-                <b style="font-size:13px;">${esc(title)} (${rows.length}건)</b>
-                <button onclick="this.closest('div[style*=fixed]').remove()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#999;">✕</button>
+// 💡 타입별 데이터 소스 — 'unmatched'는 세션큐+로컬스토리지, 'newsender'는 로컬스토리지 전용
+window._msQueueGetRows = function(type) {
+    if (type === 'unmatched') {
+        return (window._msResults || []).filter(r => !r.project);
+    }
+    return JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
+};
+
+window._msQueueDeleteOne = function(type, fileName) {
+    if (type === 'unmatched') {
+        window._msResults = (window._msResults || []).filter(r => r.fileName !== fileName);
+        window._msSaveQueueToStorage();
+    } else {
+        const list = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')
+            .filter(r => r.fileName !== fileName);
+        localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, JSON.stringify(list));
+    }
+};
+
+window._msQueueDeleteAll = function(type) {
+    if (type === 'unmatched') {
+        window._msResults = (window._msResults || []).filter(r => r.project); // 미분류만 제거, 매칭된 건 유지
+        window._msSaveQueueToStorage();
+    } else {
+        localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, '[]');
+    }
+};
+
+window._msRenderQueueModal = function(type, title) {
+    const rows = window._msQueueGetRows(type);
+    const hint = type === 'unmatched'
+        ? '등록된 프로젝트 키워드와 불일치 — Summary 탭 "메일 매칭 키워드" 확인 필요'
+        : '주소록에 없는 발신자 도메인 — 정상 거래처면 주소록에 추가 필요';
+
+    const bodyHtml = rows.length
+        ? rows.map(r => `
+            <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+                <div style="min-width:0; flex:1;">
+                    <div style="font-size:12px; font-weight:bold; overflow-wrap:break-word;">${_msQEsc(r.subject)}</div>
+                    <div style="font-size:11px; color:#777; margin-top:2px;">${_msQEsc(r.sender)} · ${_msQEsc(r.date)}</div>
+                    <div style="font-size:11px; color:#e67e22; margin-top:2px;">💡 ${hint}</div>
+                </div>
+                <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
+                    title="삭제" style="flex-shrink:0; background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>
+            </div>`).join('')
+        : '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">대기 중인 항목이 없습니다</div>';
+
+    let modal = document.getElementById('ms-queue-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ms-queue-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="ms-queue-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:480px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:200px;">
+            <div id="ms-queue-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                <span id="ms-queue-title">📭 미분류 메일</span>
+                <button onclick="document.getElementById('ms-queue-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
-            <div style="overflow-y:auto; flex:1;">${body}</div>
+            <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
+            <div style="padding:10px 16px; display:flex; justify-content:space-between; border-top:1px solid #eee;">
+                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;">🗑 일괄삭제</button>
+                <button onclick="document.getElementById('ms-queue-modal').style.display='none'" style="padding:7px 18px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ 닫기</button>
+            </div>
         </div>`;
-    modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
-    document.body.appendChild(modal);
+        document.body.appendChild(modal);
+        window._makeDraggable('ms-queue-box', 'ms-queue-drag');
+        window._bindClickToFront('ms-queue-modal');
+        // 💡 삭제 버튼은 이벤트 위임으로 처리 — data-filename 속성 사용, onclick 문자열 조립 안 함(따옴표 깨짐 방지)
+        document.getElementById('ms-queue-body').addEventListener('click', function(e) {
+            const btn = e.target.closest('.ms-queue-del-btn');
+            if (!btn) return;
+            window._msQueueRemoveRow(window._msQueueCurrentType, btn.dataset.filename);
+        });
+    }
+
+    window._msQueueCurrentType = type;
+    document.getElementById('ms-queue-title').textContent = title + ' (' + rows.length + '건)';
+    document.getElementById('ms-queue-body').innerHTML = bodyHtml;
+    modal.style.display = 'block';
+};
+
+window._msQueueRemoveRow = function(type, fileName) {
+    window._msQueueDeleteOne(type, fileName);
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    window._msRenderQueueModal(type, document.getElementById('ms-queue-title').textContent.replace(/\s*\(\d+건\)$/, ''));
+};
+
+window._msQueueClearAll = function() {
+    const type = window._msQueueCurrentType;
+    if (!confirm('대기 중인 항목을 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+    window._msQueueDeleteAll(type);
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    window._msRenderQueueModal(type, document.getElementById('ms-queue-title').textContent.replace(/\s*\(\d+건\)$/, ''));
 };
 
 window.msShowUnmatchedModal = function() {
-    const rows = (window._msResults || [])
-        .filter(r => !r.project)
-        .map(r => ({ subject: r.subject, sender: r.sender, date: r.date,
-                      hint: '등록된 프로젝트 키워드와 불일치 — Summary 탭 "메일 매칭 키워드" 확인 필요' }));
-    window._msRenderQueueModal('📭 미분류 메일', rows);
+    window._msRenderQueueModal('unmatched', '📭 미분류 메일');
 };
 
 window.msShowNewSenderModal = function() {
-    const list = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
-    const rows = list.map(r => ({ subject: r.subject, sender: r.sender, date: r.date,
-                      hint: '주소록에 없는 발신자 도메인 — 정상 거래처면 주소록에 추가 필요' }));
-    window._msRenderQueueModal('👤 신규발신자 메일', rows);
+    window._msRenderQueueModal('newsender', '👤 신규발신자 메일');
 };
 
 // ─── [메일 자동처리 ①] 스케줄러 — 1분마다 체크, 설정된 주기(기본 30분) 경과 시에만 실행 ──
