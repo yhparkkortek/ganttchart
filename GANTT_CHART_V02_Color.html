@@ -13472,11 +13472,25 @@ window._autoMailFetchTick = async function() {
                     item = {
                         idx: window._msResults.length, fileName: mail.fileName,
                         subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
-                        project: null, task: null, selected: false, registered: false, error: e.message
+                        project: projectTag, task: null, selected: false, registered: false, error: e.message
                     };
                 }
                 await new Promise(r => setTimeout(r, 4000)); // 기존 수동 흐름과 동일한 API 호출 간격
             }
+
+            // 💡 [메일 자동처리] 프로젝트가 매칭됐고 AI 추출까지 성공한 건만 개인 TaskInbox로 자동 이동
+            //    (미분류는 프로젝트를 모르니 보관함에 넣지 않고 로컬 큐에만 남김 — 검토 큐 UI에서 노출 예정)
+            if (item.task && projectTag && window.TaskInbox) {
+                const candidateNames = projectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
+                const sourceLabel = projectTag.status === 'ambiguous'
+                    ? `메일자동분석(후보 다수: ${candidateNames})`
+                    : `메일자동분석(${candidateNames})`;
+                window.TaskInbox.add(item.task, {
+                    source: sourceLabel,
+                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body, fileName: mail.fileName }
+                });
+            }
+
             window._msResults.push(item);
             addedCount++;
         }
