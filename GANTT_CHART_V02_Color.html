@@ -13628,9 +13628,8 @@ window._msRenderQueueModal = function(type, title) {
                 <button onclick="document.getElementById('ms-queue-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
-            <div style="padding:10px 16px; display:flex; justify-content:space-between; border-top:1px solid #eee;">
-                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;">🗑 일괄삭제</button>
-                <button onclick="document.getElementById('ms-queue-modal').style.display='none'" style="padding:7px 18px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ 닫기</button>
+            <div style="padding:10px 16px; border-top:1px solid #eee;">
+                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="width:100%; padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;">🗑 일괄삭제</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -13648,6 +13647,7 @@ window._msRenderQueueModal = function(type, title) {
     document.getElementById('ms-queue-title').textContent = title + ' (' + rows.length + '건)';
     document.getElementById('ms-queue-body').innerHTML = bodyHtml;
     modal.style.display = 'block';
+    window.bringModalToFront('ms-queue-modal'); // 💡 열 때 즉시 맨 앞으로 (클릭 안 해도)
 };
 
 window._msQueueRemoveRow = function(type, fileName) {
