@@ -176,8 +176,13 @@ def extract_body(msg):
             body = msg.get_payload(decode=True).decode(charset, errors="replace")
         except Exception:
             body = ""
-    body = re.sub(r"<[^>]+>", " ", body)
-    body = re.sub(r"\s+", " ", body).strip()
+    # 💡 <br>/<p>/<div> 등 줄바꿈 성격의 태그는 개행으로 치환 후 나머지 태그 제거 — 원문 가독성 보존
+    body = re.sub(r"(?i)<br\s*/?>", "\n", body)
+    body = re.sub(r"(?i)</p\s*>|</div\s*>", "\n", body)
+    body = re.sub(r"<[^>]+>", "", body)
+    body = re.sub(r"[ \t]+", " ", body)      # 공백·탭만 압축 (줄바꿈은 보존)
+    body = re.sub(r"\n{3,}", "\n\n", body)    # 3줄 이상 연속 빈줄은 2줄로 제한
+    body = body.strip()
     return body[:2000]
 
 def matches_keyword(subject, body, keyword, keyword_from='', sender='', keyword_body=''):
