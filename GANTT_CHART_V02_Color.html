@@ -13500,6 +13500,62 @@ window._msMatchProjects = function(mail, projectList) {
     );
 };
 
+// ─── [메일 자동처리 ④] 우선순위 점수 — 규칙(직급/외부고객/긴급키워드/커스텀키워드/수신방식/중요도헤더) + AI(마감임박도/업무영향도) ──
+const MS_INTERNAL_DOMAIN = 'kortek.co.kr';
+const MS_CUSTOM_KEYWORD_SCORE = 7;
+
+window._msFindSenderTitle = function(senderStr) {
+    const email = window._msParseSenderEmail(senderStr);
+    const ab = (window.tabData || {}).addressBook || [];
+    const found = ab.find(p => (p.email || '').toLowerCase() === email);
+    return found ? (found.title || found.직함 || '') : '';
+};
+
+window._msComputeRuleScore = function(mail, priorityConfig, customKeywords) {
+    let score = 0;
+    const breakdown = {};
+
+    const title = window._msFindSenderTitle(mail.sender);
+    if (title && priorityConfig.titleScores[title]) {
+        breakdown.title = priorityConfig.titleScores[title];
+        score += breakdown.title;
+    }
+
+    const fromEmail = window._msParseSenderEmail(mail.sender);
+    const domain = fromEmail.split('@')[1] || '';
+    if (domain && domain !== MS_INTERNAL_DOMAIN) {
+        breakdown.external = priorityConfig.externalCustomerScore;
+        score += breakdown.external;
+    }
+
+    const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
+    let urgentScore = 0;
+    (priorityConfig.urgentKeywords || []).forEach(kw => {
+        if (kw.word && haystack.includes(String(kw.word).toLowerCase())) urgentScore += (kw.score || 0);
+    });
+    if (urgentScore) { breakdown.urgentKeywords = urgentScore; score += urgentScore; }
+
+    if (customKeywords && customKeywords.length && customKeywords.some(kw => haystack.includes(String(kw).toLowerCase()))) {
+        breakdown.customKeyword = MS_CUSTOM_KEYWORD_SCORE;
+        score += MS_CUSTOM_KEYWORD_SCORE;
+    }
+
+    if (mail.isToMe) { breakdown.recipient = priorityConfig.toMeScore; score += priorityConfig.toMeScore; }
+    else if (mail.isCcMe) { breakdown.recipient = priorityConfig.ccMeScore; score += priorityConfig.ccMeScore; }
+
+    if (mail.importance) { breakdown.importanceHeader = priorityConfig.importanceHighScore; score += priorityConfig.importanceHighScore; }
+
+    return { score, breakdown };
+};
+
+window._msComputeTotalScore = function(mail, task, priorityConfig, customKeywords) {
+    const rule = window._msComputeRuleScore(mail, priorityConfig, customKeywords);
+    const deadline = task && task.마감일임박도 ? parseInt(task.마감일임박도, 10) || 0 : 0;
+    const impact = task && task.업무영향도 ? parseInt(task.업무영향도, 10) || 0 : 0;
+    const total = Math.max(0, Math.min(100, rule.score + deadline + impact));
+    return { total, breakdown: Object.assign({}, rule.breakdown, { deadline, impact }) };
+};
+
 // ─── [메일 자동처리 ①] 자동 수집 틱 — 저장된 계정으로 백그라운드 수집, 기존 큐에 append만 ──
 window._autoMailFetchTick = async function() {
     const savedUser = localStorage.getItem('ms_saved_userid');
@@ -13569,6 +13625,8 @@ window._autoMailFetchTick = async function() {
 
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         const projectList = await window._msLoadProjectIndex(); // 💡 Stage 1: 매칭용 인덱스 1회 로드
+        const priorityConfig = await window.loadPriorityConfig(); // 💡 [④] 우선순위 점수 설정 로드
+        const myCustomKeywords = window._parseMailKeywords((window.projectMeta || {}).중요키워드);
         let addedCount = 0;
 
         for (const mail of newMails) {
@@ -13615,10 +13673,13 @@ window._autoMailFetchTick = async function() {
                     return it.mailRaw && it.mailRaw.fileName === mail.fileName;
                 });
                 if (!alreadyInInbox) {
+                    // 💡 [④] 우선순위 점수 계산 — 라벨 맨 앞에 등급 표시
+                    const scoreResult = window._msComputeTotalScore(mail, item.task, priorityConfig, myCustomKeywords);
+                    const grade = scoreResult.total >= priorityConfig.cutline ? '🔴' : (scoreResult.total >= priorityConfig.cutline * 0.6 ? '🟡' : '⚪');
                     const candidateNames = projectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
                     const sourceLabel = projectTag.status === 'ambiguous'
-                        ? `메일자동분석(후보 다수: ${candidateNames})`
-                        : `메일자동분석(${candidateNames})`;
+                        ? `${grade}${scoreResult.total}점 메일자동분석(후보 다수: ${candidateNames})`
+                        : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})`;
                     window.TaskInbox.add(item.task, {
                         source: sourceLabel,
                         mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName }
