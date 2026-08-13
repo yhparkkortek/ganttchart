@@ -13365,9 +13365,27 @@ window._msLoadProjectIndex = async function() {
 // 💡 3자 미만 키워드(예: 인치값 "32" 단독)는 오탐 위험이 커서 매칭 대상에서 제외
 const MS_MIN_KEYWORD_LEN = 3;
 
+// 대소문자·앞뒤공백만 관대하게 비교 (완전히 다른 이름/오타는 여기서 못 잡음 — Summary 탭 안내문으로 예방)
+window._msNamesMatch = function(a, b) {
+    return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
+};
+
+// 💡 [담당자 필터] currentUserName과 assignee가 일치하는 프로젝트만 매칭 대상으로 좁힘
+//    0건이면 콘솔 경고만 남기고 정상 진행 (에러 아님 — 미분류 큐로는 그대로 쌓임)
+window._msFilterMyProjects = function(projectList) {
+    const me = window.currentUserName || '';
+    const mine = projectList.filter(p => window._msNamesMatch(p.assignee, me));
+    if (mine.length === 0) {
+        console.warn(`⚠️ [메일 자동처리] 담당자 필터 결과 0건 — currentUserName("${me}")과 일치하는 프로젝트 없음. ` +
+            `Summary 탭 "프로젝트 담당자" 입력값 확인 필요. (전체 등록 프로젝트: ${projectList.length}개)`);
+    }
+    return mine;
+};
+
 window._msMatchProjects = function(mail, projectList) {
     const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
-    return projectList.filter(p =>
+    const myProjects = window._msFilterMyProjects(projectList); // 💡 담당 프로젝트만 후보로 좁힘
+    return myProjects.filter(p =>
         Array.isArray(p.keywords) && p.keywords.some(kw =>
             kw && String(kw).length >= MS_MIN_KEYWORD_LEN && haystack.includes(String(kw).toLowerCase())
         )
