@@ -701,6 +701,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <option value="60">60분</option>
                     </select>
                 </div>
+                <button id="priority-config-menu-btn" class="topbar-menu-item" onclick="window.openPriorityConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="직급별 점수·긴급키워드·커트라인 설정">⭐ 우선순위 점수 설정</button>
+                <button id="auto-register-toggle-btn" class="topbar-menu-item" onclick="window.toggleAutoRegister()" style="font-weight:bold;" title="커트라인 이상 메일을 사람 확인 없이 Gantt에 자동 등록 + 알림 자동설정">⚪ 완전자동(Gantt 자동배치) OFF</button>
                 <div class="tb-menu-sep"></div>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
@@ -13507,6 +13509,114 @@ window._msMatchProjects = function(mail, projectList) {
     );
 };
 
+// ─── [⑥] 우선순위 점수 설정 UI ──
+window.openPriorityConfigModal = async function() {
+    const cfg = await window.loadPriorityConfig();
+    let modal = document.getElementById('priority-config-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'priority-config-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="priority-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:520px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
+            <div id="priority-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                <span>⭐ 우선순위 점수 설정</span>
+                <button onclick="document.getElementById('priority-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div style="overflow-y:auto; flex:1; padding:14px 18px;">
+                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">👤 직급별 점수</div>
+                <div id="pc-title-rows" style="margin-bottom:14px;"></div>
+                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🚨 긴급 키워드 사전</div>
+                <div id="pc-keyword-rows" style="margin-bottom:6px;"></div>
+                <button onclick="window._pcAddKeywordRow('', 5)" style="padding:4px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-bottom:14px;">+ 키워드 추가</button>
+                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin:10px 0 6px;">⚙️ 기타 점수</div>
+                <div style="display:grid; grid-template-columns:1fr 60px; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:14px;">
+                    <span>외부(고객사) 발신 가산</span><input id="pc-external" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+                    <span>To(직접수신) 가산</span><input id="pc-tome" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+                    <span>Cc(참조) 가산</span><input id="pc-ccme" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+                    <span>중요도 헤더(Outlook 높음) 가산</span><input id="pc-importance" type="number" style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🎯 커트라인 (이 점수 이상 🔴 긴급)</div>
+                <input id="pc-cutline" type="number" min="0" max="100" style="width:80px; padding:5px 8px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
+            </div>
+            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
+                <button onclick="window._pcSave()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 저장</button>
+                <button onclick="document.getElementById('priority-config-modal').style.display='none'" style="flex:1; padding:8px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ 닫기</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('priority-config-box', 'priority-config-drag');
+        window._bindClickToFront('priority-config-modal');
+    }
+
+    window._pcCurrentConfig = cfg;
+    window._pcRenderTitleRows(cfg.titleScores);
+    window._pcRenderKeywordRows(cfg.urgentKeywords);
+    document.getElementById('pc-external').value = cfg.externalCustomerScore;
+    document.getElementById('pc-tome').value = cfg.toMeScore;
+    document.getElementById('pc-ccme').value = cfg.ccMeScore;
+    document.getElementById('pc-importance').value = cfg.importanceHighScore;
+    document.getElementById('pc-cutline').value = cfg.cutline;
+
+    modal.style.display = 'block';
+    window.bringModalToFront('priority-config-modal');
+};
+
+window._pcRenderTitleRows = function(titleScores) {
+    const box = document.getElementById('pc-title-rows');
+    box.innerHTML = Object.keys(titleScores).map(title => `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px;">
+            <span style="flex:1;">${title}</span>
+            <input class="pc-title-score" data-title="${title}" type="number" value="${titleScores[title]}"
+                style="width:60px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+        </div>`).join('');
+};
+
+window._pcAddKeywordRow = function(word, score) {
+    const box = document.getElementById('pc-keyword-rows');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
+    row.innerHTML = `
+        <input class="pc-kw-word" type="text" value="${word}" placeholder="키워드"
+            style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+        <input class="pc-kw-score" type="number" value="${score}"
+            style="width:55px; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+        <button onclick="this.parentElement.remove()" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px;">🗑</button>`;
+    box.appendChild(row);
+};
+
+window._pcRenderKeywordRows = function(urgentKeywords) {
+    document.getElementById('pc-keyword-rows').innerHTML = '';
+    (urgentKeywords || []).forEach(kw => window._pcAddKeywordRow(kw.word, kw.score));
+};
+
+window._pcSave = async function() {
+    const titleScores = {};
+    document.querySelectorAll('.pc-title-score').forEach(el => {
+        titleScores[el.dataset.title] = parseInt(el.value, 10) || 0;
+    });
+    const urgentKeywords = [];
+    document.querySelectorAll('#pc-keyword-rows > div').forEach(row => {
+        const word = row.querySelector('.pc-kw-word').value.trim();
+        const score = parseInt(row.querySelector('.pc-kw-score').value, 10) || 0;
+        if (word) urgentKeywords.push({ word, score });
+    });
+    const newConfig = {
+        titleScores,
+        urgentKeywords,
+        externalCustomerScore: parseInt(document.getElementById('pc-external').value, 10) || 0,
+        toMeScore: parseInt(document.getElementById('pc-tome').value, 10) || 0,
+        ccMeScore: parseInt(document.getElementById('pc-ccme').value, 10) || 0,
+        importanceHighScore: parseInt(document.getElementById('pc-importance').value, 10) || 0,
+        cutline: Math.max(0, Math.min(100, parseInt(document.getElementById('pc-cutline').value, 10) || 50))
+    };
+    const ok = await window.savePriorityConfig(newConfig);
+    if (window.showToast) {
+        window.showToast(ok ? '✅ 우선순위 점수 설정이 저장되었습니다.' : '⚠️ 저장 실패 (콘솔 확인)', ok ? 'info' : 'error');
+    }
+    if (ok) document.getElementById('priority-config-modal').style.display = 'none';
+};
+
 // ─── [메일 자동처리 ④] 우선순위 점수 — 규칙(직급/외부고객/긴급키워드/커스텀키워드/수신방식/중요도헤더) + AI(마감임박도/업무영향도) ──
 const MS_INTERNAL_DOMAIN = 'kortek.co.kr';
 const MS_CUSTOM_KEYWORD_SCORE = 7;
@@ -13561,6 +13671,85 @@ window._msComputeTotalScore = function(mail, task, priorityConfig, customKeyword
     const impact = task && task.업무영향도 ? parseInt(task.업무영향도, 10) || 0 : 0;
     const total = Math.max(0, Math.min(100, rule.score + deadline + impact));
     return { total, breakdown: Object.assign({}, rule.breakdown, { deadline, impact }) };
+};
+
+// ─── [완전자동] 커트라인 이상 → Gantt 자동배치 + 알림 자동설정 ──
+//    기존 "다른 프로젝트로 전송"(inboxDistExecute) 로직을 헤드리스로 재구성 — DOM 의존 없음
+window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileName, mailRaw, attempt) {
+    try {
+        const tokenObj = gapi.client.getToken();
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return { ok: false, reason: 'no_token' };
+
+        const metaResp    = await gapi.client.drive.files.get({ fileId: driveFileId, fields: 'modifiedTime', supportsAllDrives: true });
+        const contentResp = await gapi.client.drive.files.get({ fileId: driveFileId, alt: 'media', supportsAllDrives: true });
+        const saveData = contentResp.result;
+        if (!saveData || !saveData.globalData || !saveData.colIdx) return { ok: false, reason: 'bad_structure' };
+
+        const rows = saveData.globalData.map(function(obj) {
+            let row = obj.data;
+            for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
+            return row;
+        });
+        window.computeCalcDatesForRows(rows.slice(1), saveData.colIdx);
+
+        const l0s = window.buildL0SectionInfo(rows, saveData.colIdx);
+        const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
+
+        const built = window.buildMailTaskRow(task, rows, saveData.colIdx, mailRaw);
+        built.row._알림 = true; // 💡 커트라인 이상 → 자동알람(D-7/3/1) 대상으로 설정
+
+        const posInfo = window.computeL0InsertPos(rows, saveData.colIdx, chosenL0, task['시작일'], true);
+        const pos = posInfo.pos;
+        if (chosenL0 !== '__END__' && saveData.colIdx.devStage !== -1) {
+            built.row[saveData.colIdx.devStage] = chosenL0;
+        }
+        rows.splice(pos, 0, built.row);
+
+        const nowIso = new Date().toISOString();
+        const userName = window.currentUserName || '비로그인 (로컬)';
+        saveData.distributions = saveData.distributions || [];
+        const distUid = 'd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+        saveData.distributions.push({
+            uid: distUid, inboxUid: uid,
+            task: JSON.parse(JSON.stringify(task)),
+            taskName: built.taskName, targetL0: chosenL0,
+            insertedAt: nowIso, by: userName, source: '메일자동처리(커트라인)', processed: false
+        });
+        saveData.changeLogs = saveData.changeLogs || [];
+        saveData.changeLogs.push({
+            time: new Date().toLocaleString('ko-KR'), userName: userName,
+            rowName: pos, colName: '행 조작', oldVal: '없음',
+            newVal: `메일 자동처리(커트라인)로 자동 배치: ${built.taskName}`
+        });
+
+        saveData.globalData = rows.map(function(row) {
+            let o = { data: Array.from(row) };
+            for (let k in row) { if (k.startsWith('_')) o[k] = row[k]; }
+            return o;
+        });
+
+        // 💡 충돌 검사 — PATCH 직전 재확인, 충돌 시 1회만 재시도
+        const checkResp = await gapi.client.drive.files.get({ fileId: driveFileId, fields: 'modifiedTime', supportsAllDrives: true });
+        if (checkResp.result.modifiedTime !== metaResp.result.modifiedTime) {
+            if ((attempt || 0) >= 1) return { ok: false, reason: 'conflict_retry_exhausted' };
+            return await window._msAutoRegisterToProject(uid, task, driveFileId, fileName, mailRaw, (attempt || 0) + 1);
+        }
+
+        const boundary = 'ms_auto_register_boundary';
+        const metadata = { name: fileName, mimeType: 'application/json' };
+        const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                   + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
+                   + "\r\n--" + boundary + "--";
+        const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + driveFileId + '?uploadType=multipart&supportsAllDrives=true', {
+            method: 'PATCH',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
+            body: body
+        });
+        const file = await resp.json();
+        if (resp.ok && file && file.id) return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0 };
+        return { ok: false, reason: 'upload_failed' };
+    } catch (e) { return { ok: false, reason: e.message }; }
 };
 
 // ─── [메일 자동처리 ①] 자동 수집 틱 — 저장된 계정으로 백그라운드 수집, 기존 큐에 append만 ──
@@ -13687,10 +13876,30 @@ window._autoMailFetchTick = async function() {
                     const sourceLabel = projectTag.status === 'ambiguous'
                         ? `${grade}${scoreResult.total}점 메일자동분석(후보 다수: ${candidateNames})`
                         : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})`;
-                    window.TaskInbox.add(item.task, {
-                        source: sourceLabel,
-                        mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName }
-                    });
+                    const mailRawObj = { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName };
+                    window.TaskInbox.add(item.task, { source: sourceLabel, mailRaw: mailRawObj });
+                    const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 항상 맨 앞이 방금 추가한 항목
+
+                    // 💡 [완전자동] 커트라인 이상 + 매칭 확정(단일 후보) + 날짜 확정된 경우만 자동배치
+                    const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
+                        && !String(item.task['완료일'] || '').includes('날짜확인필요');
+                    if (window.isAutoRegisterEnabled && window.isAutoRegisterEnabled()
+                        && projectTag.status === 'matched' && scoreResult.total >= priorityConfig.cutline && hasValidDate) {
+                        const target = projectTag.candidates[0];
+                        window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj)
+                            .then(function(result) {
+                                if (result.ok) {
+                                    window.TaskInbox.setStatus(newUid, '자동배치됨', {
+                                        type: '메일자동처리(커트라인)', target: target.file_name, at: new Date().toISOString()
+                                    });
+                                    if (window.showToast) {
+                                        window.showToast(`🎯 "${item.task['업무명']}" 자동배치 완료 → ${target.file_name} (${result.label})`, 'info');
+                                    }
+                                } else {
+                                    console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태 유지:', result.reason);
+                                }
+                            });
+                    }
                 }
             }
 
@@ -16257,6 +16466,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.refreshMailIntervalSelect) window.refreshMailIntervalSelect();
     if (window._msLoadQueueFromStorage) window._msLoadQueueFromStorage();
     if (window._startMailAutoScheduler) window._startMailAutoScheduler();
+    if (window.refreshAutoRegisterButton) window.refreshAutoRegisterButton();
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
 });
 
@@ -17513,6 +17723,30 @@ window.toggleMailAutoProcess = function() {
     const enabled = window.isMailAutoProcessEnabled();
     localStorage.setItem('mail_auto_process', enabled ? '0' : '1');
     window.refreshMailProcessButton();
+    window.closeAllTopbarMenus();
+};
+
+// 💡 [완전자동] 기본값 OFF — 켜기 전엔 지금까지처럼 TaskInbox 대기(반자동)만 동작
+window.isAutoRegisterEnabled = function() {
+    return localStorage.getItem('mail_auto_register') === '1'; // 기본값 OFF
+};
+
+window.refreshAutoRegisterButton = function() {
+    const btn = document.getElementById('auto-register-toggle-btn');
+    if (!btn) return;
+    const enabled = window.isAutoRegisterEnabled();
+    btn.textContent = enabled ? '🔴 완전자동(Gantt 자동배치) ON — 주의' : '⚪ 완전자동(Gantt 자동배치) OFF';
+    btn.style.color = enabled ? '#e03131' : '#555';
+};
+
+window.toggleAutoRegister = function() {
+    const enabled = window.isAutoRegisterEnabled();
+    if (!enabled) {
+        const ok = confirm('⚠️ 완전자동을 켜면 커트라인 이상 메일이 사람 확인 없이 Gantt에 자동 등록되고 알림까지 자동 설정됩니다.\n\n신뢰성이 충분히 검증된 후 켜는 것을 권장합니다. 계속할까요?');
+        if (!ok) return;
+    }
+    localStorage.setItem('mail_auto_register', enabled ? '0' : '1');
+    window.refreshAutoRegisterButton();
     window.closeAllTopbarMenus();
 };
 
