@@ -180,9 +180,11 @@ def extract_body(msg):
     body = re.sub(r"(?i)<br\s*/?>", "\n", body)
     body = re.sub(r"(?i)</p\s*>|</div\s*>", "\n", body)
     body = re.sub(r"<[^>]+>", "", body)
-    body = re.sub(r"[ \t]+", " ", body)      # 공백·탭만 압축 (줄바꿈은 보존)
-    body = re.sub(r"\n{3,}", "\n\n", body)    # 3줄 이상 연속 빈줄은 2줄로 제한
-    body = body.strip()
+    body = re.sub(r"[ \t]+", " ", body)          # 공백·탭만 압축 (줄바꿈은 보존)
+    # 💡 국내 메일 특유의 "문장. \n \n다음문장." 패턴 — 스페이스만 있는 빈 줄까지 전부 제거해 간격을 촘촘하게
+    lines = [ln.strip() for ln in body.split("\n")]
+    lines = [ln for ln in lines if ln]
+    body = "\n".join(lines)
     return body[:2000]
 
 def matches_keyword(subject, body, keyword, keyword_from='', sender='', keyword_body=''):
