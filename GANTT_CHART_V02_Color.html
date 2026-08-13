@@ -11735,6 +11735,13 @@ window.updateInboxBadge();
                             </button>
                         </div>
                         <div style="display:flex; gap:6px; padding:0 12px; margin-top:6px;">
+                            <button id="ms-test-refetch-btn" onclick="window.msForceRefetchForTest()"
+                                title="테스트용 — 캐시 초기화 후 즉시 재수집합니다. AI 호출이 다시 발생할 수 있습니다."
+                                style="flex-shrink:0; padding:4px 8px; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:6px; font-size:11px; cursor:pointer; white-space:nowrap;">
+                                🧪 테스트 재수집
+                            </button>
+                        </div>
+                        <div style="display:flex; gap:6px; padding:0 12px; margin-top:6px;">
                             <button id="ms-unmatched-badge-btn" onclick="window.msShowUnmatchedModal()"
                                 style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left; transition:0.15s;"
                                 onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff'; this.style.borderColor='#2c5f8a';"
@@ -13821,6 +13828,33 @@ window._msQueueClearAll = function() {
 
 window.msShowUnmatchedModal = function() {
     window._msRenderQueueModal('unmatched', '📭 미분류 메일');
+};
+
+// 💡 [테스트용] 캐시 초기화 후 즉시 재수집 — 그동안 콘솔에서 반복 실행하던 스크립트를 버튼화
+window.msForceRefetchForTest = async function() {
+    const ok = confirm('⚠️ 테스트 재수집\n\n마지막 수집 기록을 초기화하고 즉시 다시 수집합니다.\nAI 분석이 다시 돌아 API 호출 비용이 발생할 수 있습니다.\n\n계속할까요?');
+    if (!ok) return;
+
+    const btn = document.getElementById('ms-test-refetch-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ 수집 중...'; }
+
+    try {
+        localStorage.removeItem(MS_LAST_AUTO_FETCH_KEY);
+        localStorage.removeItem(MS_QUEUE_STORAGE_KEY);
+        window._msResults = [];
+        const listEl = document.getElementById('ms-result-list');
+        if (listEl) listEl.innerHTML = '';
+        window._projectIndexCache = { data: null, at: 0 };
+
+        await window._autoMailFetchTick();
+
+        if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+        if (window.showToast) {
+            window.showToast(window._currentLang === 'en' ? '✅ Test refetch complete' : '✅ 테스트 재수집 완료', 'info');
+        }
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🧪 테스트 재수집'; }
+    }
 };
 
 window.msShowNewSenderModal = function() {
