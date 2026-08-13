@@ -13359,10 +13359,15 @@ window._msLoadProjectIndex = async function() {
 };
 
 // 메일 제목+본문과 각 프로젝트 keywords 배열 대조 → 매칭된 프로젝트 배열 반환 (0개/1개/N개)
+// 💡 3자 미만 키워드(예: 인치값 "32" 단독)는 오탐 위험이 커서 매칭 대상에서 제외
+const MS_MIN_KEYWORD_LEN = 3;
+
 window._msMatchProjects = function(mail, projectList) {
     const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
     return projectList.filter(p =>
-        Array.isArray(p.keywords) && p.keywords.some(kw => kw && haystack.includes(String(kw).toLowerCase()))
+        Array.isArray(p.keywords) && p.keywords.some(kw =>
+            kw && String(kw).length >= MS_MIN_KEYWORD_LEN && haystack.includes(String(kw).toLowerCase())
+        )
     );
 };
 
