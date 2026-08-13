@@ -690,6 +690,18 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button id="alarm-toggle-btn" class="topbar-menu-item" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>
                 <div class="tb-menu-sep"></div>
+                <button id="mail-process-toggle-btn" class="topbar-menu-item" onclick="window.toggleMailAutoProcess()" style="font-weight:bold;" title="메일 수집·분석은 계속 진행되고, Gantt 등록·알람 발송만 승인 대기 상태가 됩니다">🟢 메일 자동처리 ON</button>
+                <div class="topbar-menu-item" style="display:flex; align-items:center; gap:6px; font-size:11px; color:#555;">
+                    <span id="mail-interval-label">⏱️ 수집 주기</span>
+                    <select id="mail-process-interval" onchange="window.onMailIntervalChange()"
+                            style="flex:1; padding:2px 4px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
+                        <option value="10">10분</option>
+                        <option value="15">15분</option>
+                        <option value="30" selected>30분</option>
+                        <option value="60">60분</option>
+                    </select>
+                </div>
+                <div class="tb-menu-sep"></div>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
             </div>
@@ -1451,6 +1463,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <label id="sum-lbl-pcode">프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
                     <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
                     <label id="sum-lbl-ktkpn">KTK PN_모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-ktk-pn-model" class="u-input req-field" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW" oninput="window._checkRequiredField(this)">
+                    <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)">🔖 메일 매칭 키워드</label><input type="text" id="sum-mail-keywords" class="u-input" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)">
                 </div>
             </div>
         </div>
@@ -2356,6 +2369,99 @@ ${mailText}`;
         } catch (err) { console.error('휴일 목록 드라이브 저장 실패:', err); return false; }
     };
 
+    // ============================================================
+    // 💡 project_index.json — 메일 자동처리 파이프라인용 경량 프로젝트 인덱스
+    //    각 프로젝트 저장 시(saveToGoogleDrive 성공 직후) 이 인덱스에 해당 프로젝트
+    //    항목만 upsert 한다. Flask 백엔드가 이 파일 하나만 읽어서 메일↔프로젝트를
+    //    매칭하므로, 매칭 때마다 전체 프로젝트 파일을 열 필요가 없다.
+    //    (사전 협의: ① 저장 시 자동 갱신 A안 채택, Flask 쪽 일 1회 보정 스캔은 백엔드 작업)
+    // ============================================================
+    const PROJECT_INDEX_FILENAME = 'project_index.json';
+
+    window.findProjectIndexFile = async function(token) {
+        const q = `name='${PROJECT_INDEX_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+    };
+
+    // 쉼표로 구분된 메일키워드 문자열 → 정제된 배열 (공백 제거, 빈 항목 제거, 중복 제거)
+    window._parseMailKeywords = function(raw) {
+        if (!raw) return [];
+        const seen = new Set();
+        raw.split(',').forEach(function(s) {
+            const v = s.trim();
+            if (v) seen.add(v);
+        });
+        return Array.from(seen);
+    };
+
+    // 현재 열려 있는 프로젝트의 인덱스 항목 생성 (모델/고객사/담당자/인치 4필드 + 커스텀 키워드)
+    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName) {
+        const pm = window.projectMeta || {};
+        const baseFields = [pm.모델명, pm.고객모델명, pm.고객사, pm.인치, pm.프로젝트명].filter(Boolean);
+        const customKeywords = window._parseMailKeywords(pm.메일키워드);
+        const keywords = Array.from(new Set(baseFields.concat(customKeywords)));
+        return {
+            drive_file_id: driveFileId,
+            file_name: dynamicFileName,
+            model: pm.모델명 || pm.고객모델명 || '',
+            customer: pm.고객사 || '',
+            assignee: pm.프로젝트담당자 || '',
+            inch: pm.인치 || '',
+            keywords: keywords,          // Stage 1 AI 매칭에 사용할 전체 키워드 (4필드 + 커스텀)
+            updated_at: new Date().toISOString()
+        };
+    };
+
+    // project_index.json을 통째로 읽어와서 해당 프로젝트 항목만 upsert 후 다시 통째로 저장
+    // (프로젝트 수가 많지 않은 전제 — 수백 개 넘어가면 서버 사이드 부분갱신 방식으로 전환 필요)
+    window.updateProjectIndexEntry = async function(driveFileId, dynamicFileName) {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token || !driveFileId) return false;
+
+            const indexFileId = await window.findProjectIndexFile(token);
+            let indexData = { projects: [] };
+            if (indexFileId) {
+                const res = await fetch(`https://www.googleapis.com/drive/v3/files/${indexFileId}?alt=media&supportsAllDrives=true`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const loaded = await res.json();
+                if (loaded && Array.isArray(loaded.projects)) indexData = loaded;
+            }
+
+            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName);
+            const idx = indexData.projects.findIndex(function(p) { return p.drive_file_id === driveFileId; });
+            if (idx === -1) indexData.projects.push(entry);
+            else indexData.projects[idx] = entry;
+
+            const body = JSON.stringify(indexData);
+            if (indexFileId) {
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${indexFileId}?uploadType=media&supportsAllDrives=true`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: body
+                });
+            } else {
+                const boundary = 'proj_index_boundary';
+                const metadata = { name: PROJECT_INDEX_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
+                    + "\r\n--" + boundary + "--";
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                    body: multipartBody
+                });
+            }
+            return true;
+        } catch (err) { console.error('project_index.json 갱신 실패 (메일 자동처리 매칭에 영향 — 저장 자체는 정상 완료됨):', err); return false; }
+    };
+
     // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭)
     window.startNewProject = function() {
         if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Brief SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
@@ -2527,6 +2633,7 @@ ${mailText}`;
                 window.currentDriveFileId = file.id; 
                 window.lastSavedLogCount = window.changeLogs.length; 
                 window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
+                window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
                 window.showToast(window._currentLang === 'en'
                     ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
                     : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
@@ -5866,6 +5973,9 @@ window.deleteHistoryByDateRange = function() {
         const isOn = cfg.autoSend !== false;
         window.refreshAlarmAutoButtons(isOn);
 
+        // mail-process-toggle-btn 상태 언어 동기화
+        if (window.refreshMailProcessButton) window.refreshMailProcessButton();
+
         // data-i18n 속성 기반 번역
         const i18nMap = LANG[window._currentLang].i18n || {};
         document.querySelectorAll('[data-i18n]').forEach(el => {
@@ -6280,6 +6390,7 @@ window.deleteHistoryByDateRange = function() {
             'sum-lbl-pcode':      { ko:'프로젝트 코드',     en:'Project Code' },
             'sum-lbl-pname':      { ko:'프로젝트 명칭',     en:'Project Name' },
             'sum-lbl-ktkpn':      { ko:'KTK PN_모델명',     en:'KTK PN_Model' },
+            'sum-lbl-mailkw':     { ko:'🔖 메일 매칭 키워드', en:'🔖 Mail Match Keywords' },
             'sum-h3-background':  { ko:'추진 배경 및 의의', en:'Background & Significance' },
             'sum-h3-member1':     { ko:'프로젝트 멤버-1',   en:'Project Members-1' },
             'sum-h3-member2':     { ko:'프로젝트 멤버-2',   en:'Project Members-2' },
@@ -12952,6 +13063,30 @@ const MS_SERVER_URL = 'http://127.0.0.1:5000';
 window._msResults   = [];
 window._msCurrentIdx = -1;
 
+// 💡 [메일 자동처리 ①] 자동수집 전용 큐 영속성 — 새로고침해도 검토 대기 목록 유지
+const MS_QUEUE_STORAGE_KEY     = 'ms_pending_queue';
+const MS_LAST_AUTO_FETCH_KEY   = 'ms_last_auto_fetch_at';
+
+window._msSaveQueueToStorage = function() {
+    try {
+        // task/AI분석 실패 없이 원문만 있는 것도 포함, 최대 300건만 보관(용량 방어)
+        const trimmed = (window._msResults || []).slice(-300);
+        localStorage.setItem(MS_QUEUE_STORAGE_KEY, JSON.stringify(trimmed));
+    } catch(e) { console.warn('큐 저장 실패:', e); }
+};
+
+window._msLoadQueueFromStorage = function() {
+    try {
+        const raw = localStorage.getItem(MS_QUEUE_STORAGE_KEY);
+        if (!raw) return;
+        const saved = JSON.parse(raw);
+        if (Array.isArray(saved) && saved.length) {
+            window._msResults = saved;
+            if (typeof msRenderList === 'function') msRenderList(window._msResults);
+        }
+    } catch(e) { console.warn('큐 복원 실패:', e); }
+};
+
 // ─── 아이디 저장/불러오기 ────────────────────────────────
     (function() {
     const saved   = localStorage.getItem('ms_saved_userid');
@@ -13141,6 +13276,234 @@ window.msFetchMail = async function() {
             msRenderList(window._msResults);
         }
     }
+};
+
+// ─── [메일 자동처리 ②] Stage 0 룰 필터 — AI 호출 전 걸러내기 ──
+const MS_AUTO_SUBJECT_KW = [
+    'automatic reply', 'auto reply', 'auto-reply', 'out of office',
+    '부재중', '자동회신', '[광고]', '[ad]', 'unsubscribe', 'do not reply'
+];
+const MS_NOREPLY_PATTERNS = ['noreply', 'no-reply', 'donotreply', 'mailer-daemon', 'postmaster'];
+const MS_NEW_SENDER_QUEUE_KEY = 'ms_new_sender_queue';
+
+window._msParseSenderEmail = function(senderStr) {
+    const m = String(senderStr || '').match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+    return m ? m[0].toLowerCase() : '';
+};
+
+window._msGetWhitelistDomains = function() {
+    const ab = (window.tabData || {}).addressBook || [];
+    const domains = new Set();
+    ab.forEach(p => {
+        const email = (p.email || '').toLowerCase();
+        const at = email.indexOf('@');
+        if (at !== -1) domains.add(email.slice(at + 1));
+    });
+    return domains;
+};
+
+// 반환: {action:'discard'|'new_sender'|'pass', reason:string}
+window._msStage0Filter = function(mail) {
+    const subject = (mail.subject || '').toLowerCase();
+    for (const kw of MS_AUTO_SUBJECT_KW) {
+        if (subject.includes(kw)) return { action: 'discard', reason: 'subject_kw:' + kw };
+    }
+
+    const fromEmail = window._msParseSenderEmail(mail.sender);
+    for (const p of MS_NOREPLY_PATTERNS) {
+        if (fromEmail.includes(p)) return { action: 'discard', reason: 'noreply:' + p };
+    }
+
+    const domain = fromEmail.split('@')[1] || '';
+    const whitelist = window._msGetWhitelistDomains();
+    // 💡 whitelist가 비어있을 때(주소록 미입력 또는 tabData 로딩 타이밍 이슈)도
+    //    "통과"가 아니라 "신규발신자 보류"로 처리 — 안전한 기본값(fail-safe)
+    if (!domain || !whitelist.has(domain)) {
+        return { action: 'new_sender', reason: whitelist.size === 0 ? 'whitelist_empty' : 'unknown_domain:' + domain };
+    }
+
+    return { action: 'pass', reason: 'ok' };
+};
+
+window._msSaveNewSenderQueue = function(list) {
+    try {
+        const existing = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
+        const merged = existing.concat(list).slice(-200); // 최대 200건 보관
+        localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, JSON.stringify(merged));
+    } catch(e) { console.warn('신규 발신자 큐 저장 실패:', e); }
+};
+
+// ─── [메일 자동처리 ③] Stage 1 프로젝트 매칭 — project_index.json 대조 ──
+const PROJECT_INDEX_FETCH_CACHE_MS = 5 * 60 * 1000; // 5분 캐시 — 자동틱마다 매번 Drive 조회 안 하도록
+window._projectIndexCache = { data: null, at: 0 };
+
+window._msLoadProjectIndex = async function() {
+    const now = Date.now();
+    if (window._projectIndexCache.data && (now - window._projectIndexCache.at) < PROJECT_INDEX_FETCH_CACHE_MS) {
+        return window._projectIndexCache.data;
+    }
+    try {
+        const tokenObj = gapi.client.getToken();
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token || !window.findProjectIndexFile) return [];
+        const indexFileId = await window.findProjectIndexFile(token);
+        if (!indexFileId) return [];
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${indexFileId}?alt=media&supportsAllDrives=true`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        const projects = (data && Array.isArray(data.projects)) ? data.projects : [];
+        window._projectIndexCache = { data: projects, at: now };
+        return projects;
+    } catch(e) { console.warn('project_index.json 로드 실패:', e); return []; }
+};
+
+// 메일 제목+본문과 각 프로젝트 keywords 배열 대조 → 매칭된 프로젝트 배열 반환 (0개/1개/N개)
+window._msMatchProjects = function(mail, projectList) {
+    const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
+    return projectList.filter(p =>
+        Array.isArray(p.keywords) && p.keywords.some(kw => kw && haystack.includes(String(kw).toLowerCase()))
+    );
+};
+
+// ─── [메일 자동처리 ①] 자동 수집 틱 — 저장된 계정으로 백그라운드 수집, 기존 큐에 append만 ──
+window._autoMailFetchTick = async function() {
+    const savedUser = localStorage.getItem('ms_saved_userid');
+    const savedPwB64 = localStorage.getItem('ms_saved_pw');
+    if (!savedUser || !savedPwB64) return; // 저장된 로그인 정보 없으면 자동수집 불가 → 조용히 스킵
+
+    let password = '';
+    try { password = decodeURIComponent(escape(atob(savedPwB64))); }
+    catch(e) { password = savedPwB64; }
+
+    // 마지막 자동수집 시각 이후 ~ 오늘까지 (없으면 오늘 하루만)
+    const lastAt = localStorage.getItem(MS_LAST_AUTO_FETCH_KEY);
+    const fmt = d => d.toISOString().split('T')[0];
+    const startDate = lastAt ? fmt(new Date(lastAt)) : fmt(new Date());
+    const endDate    = fmt(new Date());
+
+    try {
+        const res = await fetch(`${MS_SERVER_URL}/fetch-mail`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                mailUser: savedUser, mailPw: password,
+                startDate, endDate,
+                keyword: '', keywordFrom: '', keywordBody: '',
+                maxCount: 500
+            })
+        });
+        const data = await res.json();
+        if (data.status !== 'success' || !data.data || !data.data.length) {
+            localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
+            return;
+        }
+
+        // 💡 fileName 기준 중복 제거 — 같은 날 여러 번 돌아도 이미 큐에 있는 메일은 재수집 안 함
+        window._msResults = window._msResults || [];
+        const existingNames = new Set(window._msResults.map(r => r.fileName));
+        const dedupedMails = data.data.filter(m => !existingNames.has(m.fileName));
+        if (!dedupedMails.length) {
+            localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
+            return;
+        }
+
+        // 💡 [메일 자동처리 ②] Stage 0 필터 — discard(폐기)/new_sender(보류)/pass(AI분석 진행)
+        const newMails = [];
+        const newSenderBatch = [];
+        let discardCount = 0;
+        dedupedMails.forEach(mail => {
+            const verdict = window._msStage0Filter(mail);
+            if (verdict.action === 'discard') { discardCount++; return; }
+            if (verdict.action === 'new_sender') {
+                newSenderBatch.push(Object.assign({ filteredReason: verdict.reason }, mail));
+                return;
+            }
+            newMails.push(mail);
+        });
+        if (newSenderBatch.length) window._msSaveNewSenderQueue(newSenderBatch);
+
+        if (!newMails.length) {
+            localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
+            if ((discardCount || newSenderBatch.length) && window.showToast) {
+                window.showToast(window._currentLang === 'en'
+                    ? `🧹 Filtered out: ${discardCount} discarded, ${newSenderBatch.length} new-sender held`
+                    : `🧹 필터링: 폐기 ${discardCount}건, 신규발신자 보류 ${newSenderBatch.length}건`, 'info');
+            }
+            return;
+        }
+
+        const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        const projectList = await window._msLoadProjectIndex(); // 💡 Stage 1: 매칭용 인덱스 1회 로드
+        let addedCount = 0;
+
+        for (const mail of newMails) {
+            // 💡 Stage 1: 프로젝트 매칭 — 0개(미분류)/1개(확정)/N개(후보) 그대로 태깅만, 등록은 안 함
+            const matched = window._msMatchProjects(mail, projectList);
+            const projectTag = matched.length === 0 ? null
+                : matched.length === 1 ? { status: 'matched', candidates: matched }
+                : { status: 'ambiguous', candidates: matched };
+
+            let item;
+            if (!apiKey) {
+                item = {
+                    idx: window._msResults.length, fileName: mail.fileName,
+                    subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
+                    project: projectTag, task: null, selected: false, registered: false, error: 'API키 미설정'
+                };
+            } else {
+                try {
+                    const task = await msCallGemini(apiKey, {
+                        subject: mail.subject, sender: mail.sender, date: mail.date,
+                        body: mail.body, fileName: mail.fileName
+                    });
+                    item = {
+                        idx: window._msResults.length, fileName: mail.fileName,
+                        subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
+                        project: projectTag, task, selected: !!task, registered: false,
+                        error: !task ? 'AI분석실패' : null
+                    };
+                } catch(e) {
+                    item = {
+                        idx: window._msResults.length, fileName: mail.fileName,
+                        subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
+                        project: null, task: null, selected: false, registered: false, error: e.message
+                    };
+                }
+                await new Promise(r => setTimeout(r, 4000)); // 기존 수동 흐름과 동일한 API 호출 간격
+            }
+            window._msResults.push(item);
+            addedCount++;
+        }
+
+        window._msSaveQueueToStorage();
+        if (typeof msRenderList === 'function') msRenderList(window._msResults);
+        localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
+
+        if (addedCount > 0 && window.showToast) {
+            const filterNote = (discardCount || newSenderBatch.length)
+                ? (window._currentLang === 'en'
+                    ? ` (filtered: ${discardCount} discarded, ${newSenderBatch.length} new-sender)`
+                    : ` (필터링: 폐기 ${discardCount} / 신규발신자 ${newSenderBatch.length})`)
+                : '';
+            window.showToast(window._currentLang === 'en'
+                ? `📬 ${addedCount} new mail(s) auto-collected — pending review${filterNote}`
+                : `📬 신규 메일 ${addedCount}건 자동수집·분석 완료 — 검토 대기${filterNote}`, 'info');
+        }
+    } catch(e) {
+        console.warn('[메일 자동처리] 자동 수집 실패:', e.message);
+        // 실패해도 last_fetch_at은 갱신하지 않음 → 다음 틱에서 같은 구간 재시도
+    }
+};
+
+// ─── [메일 자동처리 ①] 스케줄러 — 1분마다 체크, 설정된 주기(기본 30분) 경과 시에만 실행 ──
+window._startMailAutoScheduler = function() {
+    setInterval(function() {
+        const intervalMin = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
+        const lastAt = localStorage.getItem(MS_LAST_AUTO_FETCH_KEY);
+        const elapsedMin = lastAt ? (Date.now() - new Date(lastAt).getTime()) / 60000 : Infinity;
+        if (elapsedMin >= intervalMin) window._autoMailFetchTick();
+    }, 60 * 1000);
 };
 
 // ─── 메일서버 분석 중단 (지금까지 분석된 내용은 그대로 유지) ─────────
@@ -14136,10 +14499,11 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         프로젝트담당자: "",
         HW담당자: "",
         Module담당자: "",
-        TSP담당자: ""
+        TSP담당자: "",
+        메일키워드: ""   // 💡 신규: 메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어, 쉼표 구분
     };
     // 💡 기존에 저장된 파일에는 위 키들이 없을 수 있으므로 누락 시 빈 값으로 보강
-    ['고객사', '모델명', '인치', '고객모델명', 'KTKPN', 'KTK모델명', '프로젝트담당자', 'HW담당자', 'Module담당자', 'TSP담당자'].forEach(function(k) {
+    ['고객사', '모델명', '인치', '고객모델명', 'KTKPN', 'KTK모델명', '프로젝트담당자', 'HW담당자', 'Module담당자', 'TSP담당자', '메일키워드'].forEach(function(k) {
         if (window.projectMeta[k] === undefined) window.projectMeta[k] = "";
     });
 
@@ -15523,6 +15887,10 @@ window.sumTlBringToFront = function(idx, containerId) {
 document.addEventListener('DOMContentLoaded', function() {
     if (window.renderSummaryTimeline) window.renderSummaryTimeline();
     if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
+    if (window.refreshMailProcessButton) window.refreshMailProcessButton();
+    if (window.refreshMailIntervalSelect) window.refreshMailIntervalSelect();
+    if (window._msLoadQueueFromStorage) window._msLoadQueueFromStorage();
+    if (window._startMailAutoScheduler) window._startMailAutoScheduler();
 });
 
 function _escTabVal(v) { return (v === undefined || v === null) ? '' : String(v).replace(/"/g, '&quot;'); }
@@ -16755,6 +17123,50 @@ window.toggleAlarmAuto = function() {
     window.closeAllTopbarMenus();
 };
 
+// 💡 메일 자동처리 토글 (반자동 스위치)
+//    ON  : 수집→분석→점수→Gantt등록→알람까지 전체 파이프라인 자동 진행
+//    OFF : 수집·분석·점수는 계속 진행하되, Gantt 등록·알람 발송은 검토 큐에서 사용자 승인 필요
+//    ※ 자동알람(alarm-toggle-btn)과는 별개 스위치입니다 — 자동알람은 "알림을 보낼지 말지",
+//       메일 자동처리는 "메일 파이프라인 전체를 자동으로 굴릴지"를 결정합니다.
+window.isMailAutoProcessEnabled = function() {
+    return localStorage.getItem('mail_auto_process') !== '0'; // 기본값 ON
+};
+
+window.refreshMailProcessButton = function() {
+    const btn = document.getElementById('mail-process-toggle-btn');
+    if (!btn) return;
+    const enabled = window.isMailAutoProcessEnabled();
+    const isEn = window._currentLang === 'en';
+    btn.textContent = enabled
+        ? (isEn ? '🟢 Mail Auto-Process ON'  : '🟢 메일 자동처리 ON')
+        : (isEn ? '🟡 Mail Auto-Process OFF (Review required)' : '🟡 메일 자동처리 OFF (승인 대기)');
+};
+
+window.toggleMailAutoProcess = function() {
+    const enabled = window.isMailAutoProcessEnabled();
+    localStorage.setItem('mail_auto_process', enabled ? '0' : '1');
+    window.refreshMailProcessButton();
+    window.closeAllTopbarMenus();
+};
+
+// 💡 수집 주기 (분). 기본값 30분 — POP3 서버 로그인 부하 고려한 보수적 시작값.
+//    ①번 자동 트리거 구현 시 이 값을 setInterval 주기로 사용 예정 (지금은 저장만 함)
+window.getMailAutoInterval = function() {
+    return parseInt(localStorage.getItem('mail_auto_process_interval_min'), 10) || 30;
+};
+
+window.onMailIntervalChange = function() {
+    const sel = document.getElementById('mail-process-interval');
+    if (!sel) return;
+    localStorage.setItem('mail_auto_process_interval_min', sel.value);
+};
+
+window.refreshMailIntervalSelect = function() {
+    const sel = document.getElementById('mail-process-interval');
+    if (!sel) return;
+    sel.value = String(window.getMailAutoInterval());
+};
+
 // 설정 모달 열기
 window.openAlarmSettings = function() {
     const cfg  = window.loadAlarmSettings();
@@ -17854,6 +18266,7 @@ window.collectTabData = function() {
         pm.KTK모델명 = us === -1 ? '' : ktkVal.slice(us + 1);
     }
     bind('sum-pm', '프로젝트담당자');
+    bind('sum-mail-keywords', '메일키워드');
     bind('sum-mech', '기구담당자');
     bind('sum-hw', 'HW담당자');
     bind('sum-fw', 'FW담당자');
@@ -17937,6 +18350,7 @@ window.populateTabData = function() {
     // 💡 KTK PN / KTK 모델명을 하나의 필드로 합쳐서 표시 (예: 502574_MVD>KTS320DPS01,LNW)
     setVal('sum-ktk-pn-model', [pm.KTKPN || '', pm.KTK모델명 || ''].filter(Boolean).join('_'));
     setVal('sum-pm', pm.프로젝트담당자);
+    setVal('sum-mail-keywords', pm.메일키워드);
     setVal('sum-mech', pm.기구담당자);
     setVal('sum-hw', pm.HW담당자);
     setVal('sum-fw', pm.FW담당자);
