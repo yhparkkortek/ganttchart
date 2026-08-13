@@ -13513,7 +13513,7 @@ window._autoMailFetchTick = async function() {
                         : `메일자동분석(${candidateNames})`;
                     window.TaskInbox.add(item.task, {
                         source: sourceLabel,
-                        mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body, fileName: mail.fileName }
+                        mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName }
                     });
                 }
             }
