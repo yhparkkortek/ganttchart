@@ -1464,6 +1464,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
                     <label id="sum-lbl-ktkpn">KTK PN_모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-ktk-pn-model" class="u-input req-field" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW" oninput="window._checkRequiredField(this)">
                     <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)">🔖 메일 매칭 키워드</label><input type="text" id="sum-mail-keywords" class="u-input" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)">
+                    <label id="sum-lbl-importantkw" title="이 키워드가 포함된 메일은 우선순위 점수에 가산됩니다. 쉼표로 구분 (예: 리콜, 특허, 계약해지)">⭐ 중요 키워드</label><input type="text" id="sum-important-keywords" class="u-input" placeholder="예: 리콜, 특허, 계약해지 (쉼표로 구분)">
                 </div>
             </div>
         </div>
@@ -2377,6 +2378,85 @@ ${mailText}`;
     //    (사전 협의: ① 저장 시 자동 갱신 A안 채택, Flask 쪽 일 1회 보정 스캔은 백엔드 작업)
     // ============================================================
     const PROJECT_INDEX_FILENAME = 'project_index.json';
+    const PRIORITY_CONFIG_FILENAME = 'PriorityScore_Shared.json';
+
+    // 💡 [우선순위 점수] 회사 전체 공유 설정 — 직함별 점수, 긴급키워드 사전, 커트라인
+    //    Holidays_Shared.json과 동일한 find/create 패턴
+    window._priorityConfigDefault = function() {
+        return {
+            titleScores: {
+                '회장': 10, '이사': 10, '본부장/법인장': 10, '본부장': 10, '연구소장': 10,
+                '총괄팀장': 8, '팀장': 8, '파트장': 8, '섹션리더': 8,
+                '책임매니저': 5, '매니저': 5, '조장': 5, '감사': 5,
+                '사원': 3
+            },
+            externalCustomerScore: 10,   // 발신자 도메인이 kortek.co.kr이 아니면 가산
+            urgentKeywords: [
+                { word: '긴급', score: 8 },
+                { word: '중요', score: 6 },
+                { word: '공지', score: 4 },
+                { word: '알림', score: 3 }
+            ],
+            toMeScore: 10,     // 내가 To(직접수신)
+            ccMeScore: 3,      // 내가 Cc(참조)
+            importanceHighScore: 5,  // 발신자가 Outlook 등에서 '중요! 높음'으로 표시
+            cutline: 50        // 💡 이 점수 이상이면 우선순위 높음으로 표시 — PM이 UI에서 직접 조정
+        };
+    };
+
+    window.findPriorityConfigFile = async function(token) {
+        const q = `name='${PRIORITY_CONFIG_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+    };
+
+    window.loadPriorityConfig = async function() {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return window._priorityConfigDefault();
+            const fileId = await window.findPriorityConfigFile(token);
+            if (!fileId) return window._priorityConfigDefault();
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            // 누락 필드는 기본값으로 보강 (신규 필드 추가돼도 기존 저장 파일과 호환)
+            return Object.assign(window._priorityConfigDefault(), data);
+        } catch(e) { console.warn('PriorityScore_Shared.json 로드 실패, 기본값 사용:', e); return window._priorityConfigDefault(); }
+    };
+
+    window.savePriorityConfig = async function(config) {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return false;
+            const fileId = await window.findPriorityConfigFile(token);
+            const body = JSON.stringify(config);
+            if (fileId) {
+                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: body
+                });
+            } else {
+                const boundary = 'priority_config_boundary';
+                const metadata = { name: PRIORITY_CONFIG_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
+                    + "\r\n--" + boundary + "--";
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
+                    body: multipartBody
+                });
+            }
+            return true;
+        } catch(e) { console.error('PriorityScore_Shared.json 저장 실패:', e); return false; }
+    };
 
     window.findProjectIndexFile = async function(token) {
         const q = `name='${PROJECT_INDEX_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
@@ -6394,6 +6474,7 @@ window.deleteHistoryByDateRange = function() {
             'sum-lbl-pname':      { ko:'프로젝트 명칭',     en:'Project Name' },
             'sum-lbl-ktkpn':      { ko:'KTK PN_모델명',     en:'KTK PN_Model' },
             'sum-lbl-mailkw':     { ko:'🔖 메일 매칭 키워드', en:'🔖 Mail Match Keywords' },
+            'sum-lbl-importantkw':{ ko:'⭐ 중요 키워드',      en:'⭐ Priority Keywords' },
             'sum-h3-background':  { ko:'추진 배경 및 의의', en:'Background & Significance' },
             'sum-h3-member1':     { ko:'프로젝트 멤버-1',   en:'Project Members-1' },
             'sum-h3-member2':     { ko:'프로젝트 멤버-2',   en:'Project Members-2' },
@@ -14676,10 +14757,11 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         HW담당자: "",
         Module담당자: "",
         TSP담당자: "",
-        메일키워드: ""   // 💡 신규: 메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어, 쉼표 구분
+        메일키워드: "",   // 💡 신규: 메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어, 쉼표 구분
+        중요키워드: ""    // 💡 신규: 이 키워드 포함 메일은 우선순위 점수 가산, 쉼표 구분
     };
     // 💡 기존에 저장된 파일에는 위 키들이 없을 수 있으므로 누락 시 빈 값으로 보강
-    ['고객사', '모델명', '인치', '고객모델명', 'KTKPN', 'KTK모델명', '프로젝트담당자', 'HW담당자', 'Module담당자', 'TSP담당자', '메일키워드'].forEach(function(k) {
+    ['고객사', '모델명', '인치', '고객모델명', 'KTKPN', 'KTK모델명', '프로젝트담당자', 'HW담당자', 'Module담당자', 'TSP담당자', '메일키워드', '중요키워드'].forEach(function(k) {
         if (window.projectMeta[k] === undefined) window.projectMeta[k] = "";
     });
 
@@ -18444,6 +18526,7 @@ window.collectTabData = function() {
     }
     bind('sum-pm', '프로젝트담당자');
     bind('sum-mail-keywords', '메일키워드');
+    bind('sum-important-keywords', '중요키워드');
     bind('sum-mech', '기구담당자');
     bind('sum-hw', 'HW담당자');
     bind('sum-fw', 'FW담당자');
@@ -18528,6 +18611,7 @@ window.populateTabData = function() {
     setVal('sum-ktk-pn-model', [pm.KTKPN || '', pm.KTK모델명 || ''].filter(Boolean).join('_'));
     setVal('sum-pm', pm.프로젝트담당자);
     setVal('sum-mail-keywords', pm.메일키워드);
+    setVal('sum-important-keywords', pm.중요키워드);
     setVal('sum-mech', pm.기구담당자);
     setVal('sum-hw', pm.HW담당자);
     setVal('sum-fw', pm.FW담당자);
