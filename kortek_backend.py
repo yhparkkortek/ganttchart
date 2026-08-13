@@ -379,12 +379,27 @@ def fetch_mail():
                 body    = extract_body(msg)
                 if not matches_keyword(subject, body, keyword, keyword_from, sender, keyword_body):
                     continue
+
+                # 💡 [우선순위 점수] 발신자가 명시한 중요도 헤더 — Outlook 등에서 "높음"으로 보낸 메일에 붙음
+                importance_raw = (msg.get("Importance", "") or msg.get("X-Priority", "")).strip().lower()
+                importance_high = importance_raw in ("high", "1", "1 (highest)", "2 (high)")
+
+                # 💡 [우선순위 점수] 내가 To(직접수신)인지 Cc(참조)인지 — mail_user 계정 기준으로 판별
+                to_header = decode_str(msg.get("To", "")).lower()
+                cc_header = decode_str(msg.get("Cc", "")).lower()
+                my_addr   = mail_user.lower()
+                is_to_me  = my_addr in to_header
+                is_cc_me  = (not is_to_me) and (my_addr in cc_header)
+
                 results.append({
-                    "subject":  subject,
-                    "sender":   sender,
-                    "date":     msg_dt.strftime("%Y-%m-%d %H:%M"),
-                    "body":     body,
-                    "fileName": f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml"
+                    "subject":    subject,
+                    "sender":     sender,
+                    "date":       msg_dt.strftime("%Y-%m-%d %H:%M"),
+                    "body":       body,
+                    "fileName":   f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml",
+                    "importance": importance_high,   # true/false
+                    "isToMe":     is_to_me,           # true/false
+                    "isCcMe":     is_cc_me            # true/false
                 })
             except Exception:
                 continue
