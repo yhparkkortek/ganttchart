@@ -14100,9 +14100,9 @@ window.openMailAutoConfigModal = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
-            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #f5c8a8; font-weight:bold; font-size:14px; background:#fff0e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a3a00;">
+            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>⚙️ 메일 자동배치 설정</span>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a3a00; border-radius:6px; color:#7a3a00; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
             <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
 
@@ -14280,7 +14280,7 @@ window.openMailAutoConfigModal = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
-            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #f0a070; font-weight:bold; font-size:14px; background:#ffcba4; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a3a00;">
+            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #f5c8a8; font-weight:bold; font-size:14px; background:#fff0e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a3a00;">
                 <span>⚙️ 메일 자동배치 설정</span>
                 <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a3a00; border-radius:6px; color:#7a3a00; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
@@ -14289,7 +14289,7 @@ window.openMailAutoConfigModal = async function() {
                 <!-- 그룹1: 수집 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">⏱️ 수집 설정</div>
-                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:8px;">
                         <span style="flex:1;">수집 주기</span>
                         <select id="mac-interval" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                             <option value="10">10분</option>
@@ -14297,6 +14297,10 @@ window.openMailAutoConfigModal = async function() {
                             <option value="30">30분</option>
                             <option value="60">60분</option>
                         </select>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                        <span style="flex:1;">📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
+                        <input id="mac-cutline" type="number" min="0" max="100" style="width:60px; padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                     </div>
                 </div>
 
@@ -14310,25 +14314,18 @@ window.openMailAutoConfigModal = async function() {
                 <!-- 그룹3: 우선순위 점수 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
-                    <div style="display:grid; grid-template-columns:1fr 55px; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:10px;">
+                    <div style="display:grid; grid-template-columns:1fr 55px; gap:6px 10px; align-items:center; font-size:12px;">
                         <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                         <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                         <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                         <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                     </div>
-                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
-                        <span style="flex:1; font-weight:bold; color:#c92a2a;">🎯 긴급 커트라인</span>
-                        <input id="mac-cutline" type="number" min="0" max="100" style="width:60px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:13px;">
-                    </div>
                 </div>
 
-                <!-- 그룹4: 직급별 점수 + 긴급키워드 -->
+                <!-- 그룹4: 직급별 점수 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
-                    <div id="mac-title-rows" style="margin-bottom:12px;"></div>
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🚨 긴급 키워드 사전</div>
-                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
-                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:4px;">+ 키워드 추가</button>
+                    <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
                 </div>
 
                 <!-- 그룹5: 미분류/신규발신자 열람 -->
