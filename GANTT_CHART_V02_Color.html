@@ -13838,7 +13838,7 @@ window._autoMailFetchTick = async function() {
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         const projectList = await window._msLoadProjectIndex(); // 💡 Stage 1: 매칭용 인덱스 1회 로드
         const priorityConfig = await window.loadPriorityConfig(); // 💡 [④] 우선순위 점수 설정 로드
-        const myCustomKeywords = window._parseMailKeywords((window.projectMeta || {}).중요키워드);
+        const myCustomKeywords = window._parseMailKeywords(localStorage.getItem('mail_global_important_kw') || '');
         let addedCount = 0;
 
         for (const mail of newMails) {
@@ -14106,6 +14106,349 @@ window.msForceRefetchForTest = async function() {
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = '🧪 테스트 재수집'; }
     }
+};
+
+// ─── 메일 자동배치 설정 모달 ──────────────────────────────────────────
+window.openMailAutoConfigModal = async function() {
+    const cfg = await window.loadPriorityConfig();
+    let modal = document.getElementById('mail-auto-config-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'mail-auto-config-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
+            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #c3d9f0; font-weight:bold; font-size:14px; background:#e8f4fd; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1a4f7a;">
+                <span>⚙️ 메일 자동배치 설정</span>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #1a4f7a; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
+
+                <!-- 그룹1: 수집 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">⏱️ 수집 설정</div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                        <span style="flex:1;">수집 주기</span>
+                        <select id="mac-interval" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                            <option value="10">10분</option>
+                            <option value="15">15분</option>
+                            <option value="30">30분</option>
+                            <option value="60">60분</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 그룹2: 중요 키워드 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">⭐ 중요 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(쉼표 구분 — 포함 시 우선순위 가산)</span></div>
+                    <input type="text" id="mac-important-kw" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="예: 리콜, 특허, 계약해지">
+                </div>
+
+                <!-- 그룹3: 우선순위 점수 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
+                    <div style="display:grid; grid-template-columns:1fr 55px; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:10px;">
+                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                        <span style="flex:1; font-weight:bold; color:#c92a2a;">🎯 긴급 커트라인</span>
+                        <input id="mac-cutline" type="number" min="0" max="100" style="width:60px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:13px;">
+                    </div>
+                </div>
+
+                <!-- 그룹4: 직급별 점수 + 긴급키워드 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
+                    <div id="mac-title-rows" style="margin-bottom:12px;"></div>
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🚨 긴급 키워드 사전</div>
+                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
+                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:4px;">+ 키워드 추가</button>
+                </div>
+
+                <!-- 그룹5: 초기화 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">🗑️ 큐 초기화</div>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="window._macClearQueue('unmatched')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">📭 미분류 초기화</button>
+                        <button onclick="window._macClearQueue('newsender')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">👤 신규발신자 초기화</button>
+                    </div>
+                </div>
+
+            </div>
+            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
+                <button onclick="window._macSave()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 저장</button>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="flex:1; padding:8px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ 닫기</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('mail-auto-config-box', 'mail-auto-config-drag');
+        window._bindClickToFront('mail-auto-config-modal');
+    }
+
+    // 값 채우기
+    document.getElementById('mac-interval').value = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
+    document.getElementById('mac-important-kw').value = (document.getElementById('sum-important-keywords') || {}).value || '';
+    document.getElementById('mac-external').value   = cfg.externalCustomerScore;
+    document.getElementById('mac-tome').value       = cfg.toMeScore;
+    document.getElementById('mac-ccme').value       = cfg.ccMeScore;
+    document.getElementById('mac-importance').value = cfg.importanceHighScore;
+    document.getElementById('mac-cutline').value    = cfg.cutline;
+    window._macRenderTitleRows(cfg.titleScores);
+    window._macRenderKeywordRows(cfg.urgentKeywords);
+
+    modal.style.display = 'block';
+    window.bringModalToFront('mail-auto-config-modal');
+};
+
+window._macRenderTitleRows = function(titleScores) {
+    document.getElementById('mac-title-rows').innerHTML =
+        Object.keys(titleScores).map(t => `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px;">
+            <span style="flex:1;">${t}</span>
+            <input class="mac-title-score" data-title="${t}" type="number" value="${titleScores[t]}"
+                style="width:55px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+        </div>`).join('');
+};
+
+window._macAddKeywordRow = function(word, score) {
+    const box = document.getElementById('mac-keyword-rows');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
+    row.innerHTML = `
+        <input class="mac-kw-word" type="text" value="${word}" placeholder="키워드"
+            style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+        <input class="mac-kw-score" type="number" value="${score}"
+            style="width:50px; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+        <button onclick="this.parentElement.remove()" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px;">🗑</button>`;
+    box.appendChild(row);
+};
+
+window._macRenderKeywordRows = function(kws) {
+    document.getElementById('mac-keyword-rows').innerHTML = '';
+    (kws || []).forEach(k => window._macAddKeywordRow(k.word, k.score));
+};
+
+window._macClearQueue = function(type) {
+    if (!confirm(`${type === 'unmatched' ? '미분류' : '신규발신자'} 큐를 초기화할까요?`)) return;
+    if (type === 'unmatched') {
+        window._msResults = (window._msResults || []).filter(r => r.project);
+    } else {
+        localStorage.removeItem(window.MS_NEW_SENDER_QUEUE_KEY || 'ms_new_sender_queue');
+    }
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    if (window.showToast) window.showToast(`✅ ${type === 'unmatched' ? '미분류' : '신규발신자'} 초기화 완료`, 'info');
+};
+
+window._macSave = async function() {
+    // 수집 주기
+    const sel = document.getElementById('mac-interval');
+    if (sel) {
+        localStorage.setItem('mail_auto_process_interval_min', sel.value);
+        const orig = document.getElementById('mail-process-interval');
+        if (orig) orig.value = sel.value;
+    }
+    // 중요 키워드 → localStorage 전역 저장
+    const kwEl = document.getElementById('mac-important-kw');
+    if (kwEl) localStorage.setItem('mail_global_important_kw', kwEl.value);
+
+    // 우선순위 점수
+    const titleScores = {};
+    document.querySelectorAll('.mac-title-score').forEach(el => {
+        titleScores[el.dataset.title] = parseInt(el.value, 10) || 0;
+    });
+    const urgentKeywords = [];
+    document.querySelectorAll('#mac-keyword-rows > div').forEach(row => {
+        const word = row.querySelector('.mac-kw-word').value.trim();
+        const score = parseInt(row.querySelector('.mac-kw-score').value, 10) || 0;
+        if (word) urgentKeywords.push({ word, score });
+    });
+    const newConfig = {
+        titleScores,
+        urgentKeywords,
+        externalCustomerScore: parseInt(document.getElementById('mac-external').value, 10) || 0,
+        toMeScore:             parseInt(document.getElementById('mac-tome').value, 10) || 0,
+        ccMeScore:             parseInt(document.getElementById('mac-ccme').value, 10) || 0,
+        importanceHighScore:   parseInt(document.getElementById('mac-importance').value, 10) || 0,
+        cutline: Math.max(0, Math.min(100, parseInt(document.getElementById('mac-cutline').value, 10) || 50))
+    };
+    const ok = await window.savePriorityConfig(newConfig);
+    if (window.showToast) window.showToast(ok ? '✅ 저장 완료' : '⚠️ 저장 실패 (콘솔 확인)', ok ? 'info' : 'error');
+    if (ok) document.getElementById('mail-auto-config-modal').style.display = 'none';
+};
+
+// ─── 메일 자동배치 설정 모달 ──────────────────────────────────────────
+window.openMailAutoConfigModal = async function() {
+    const cfg = await window.loadPriorityConfig();
+    let modal = document.getElementById('mail-auto-config-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'mail-auto-config-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
+            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #c3d9f0; font-weight:bold; font-size:14px; background:#e8f4fd; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1a4f7a;">
+                <span>⚙️ 메일 자동배치 설정</span>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #1a4f7a; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
+
+                <!-- 그룹1: 수집 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">⏱️ 수집 설정</div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                        <span style="flex:1;">수집 주기</span>
+                        <select id="mac-interval" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                            <option value="10">10분</option>
+                            <option value="15">15분</option>
+                            <option value="30">30분</option>
+                            <option value="60">60분</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 그룹2: 중요 키워드 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">⭐ 중요 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(쉼표 구분 — 포함 시 우선순위 가산)</span></div>
+                    <input type="text" id="mac-important-kw" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="예: 리콜, 특허, 계약해지">
+                </div>
+
+                <!-- 그룹3: 우선순위 점수 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
+                    <div style="display:grid; grid-template-columns:1fr 55px; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:10px;">
+                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                        <span style="flex:1; font-weight:bold; color:#c92a2a;">🎯 긴급 커트라인</span>
+                        <input id="mac-cutline" type="number" min="0" max="100" style="width:60px; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:13px;">
+                    </div>
+                </div>
+
+                <!-- 그룹4: 직급별 점수 + 긴급키워드 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
+                    <div id="mac-title-rows" style="margin-bottom:12px;"></div>
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🚨 긴급 키워드 사전</div>
+                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
+                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:4px;">+ 키워드 추가</button>
+                </div>
+
+                <!-- 그룹5: 초기화 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">🗑️ 큐 초기화</div>
+                    <div style="display:flex; gap:8px;">
+                        <button onclick="window._macClearQueue('unmatched')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">📭 미분류 초기화</button>
+                        <button onclick="window._macClearQueue('newsender')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">👤 신규발신자 초기화</button>
+                    </div>
+                </div>
+
+            </div>
+            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
+                <button onclick="window._macSave()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 저장</button>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="flex:1; padding:8px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ 닫기</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('mail-auto-config-box', 'mail-auto-config-drag');
+        window._bindClickToFront('mail-auto-config-modal');
+    }
+
+    // 값 채우기
+    document.getElementById('mac-interval').value = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
+    document.getElementById('mac-important-kw').value = localStorage.getItem('mail_global_important_kw') || '';
+    document.getElementById('mac-external').value   = cfg.externalCustomerScore;
+    document.getElementById('mac-tome').value       = cfg.toMeScore;
+    document.getElementById('mac-ccme').value       = cfg.ccMeScore;
+    document.getElementById('mac-importance').value = cfg.importanceHighScore;
+    document.getElementById('mac-cutline').value    = cfg.cutline;
+    window._macRenderTitleRows(cfg.titleScores);
+    window._macRenderKeywordRows(cfg.urgentKeywords);
+
+    modal.style.display = 'block';
+    window.bringModalToFront('mail-auto-config-modal');
+};
+
+window._macRenderTitleRows = function(titleScores) {
+    document.getElementById('mac-title-rows').innerHTML =
+        Object.keys(titleScores).map(t => `
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px;">
+            <span style="flex:1;">${t}</span>
+            <input class="mac-title-score" data-title="${t}" type="number" value="${titleScores[t]}"
+                style="width:55px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+        </div>`).join('');
+};
+
+window._macAddKeywordRow = function(word, score) {
+    const box = document.getElementById('mac-keyword-rows');
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
+    row.innerHTML = `
+        <input class="mac-kw-word" type="text" value="${word}" placeholder="키워드"
+            style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+        <input class="mac-kw-score" type="number" value="${score}"
+            style="width:50px; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+        <button onclick="this.parentElement.remove()" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px;">🗑</button>`;
+    box.appendChild(row);
+};
+
+window._macRenderKeywordRows = function(kws) {
+    document.getElementById('mac-keyword-rows').innerHTML = '';
+    (kws || []).forEach(k => window._macAddKeywordRow(k.word, k.score));
+};
+
+window._macClearQueue = function(type) {
+    if (!confirm(`${type === 'unmatched' ? '미분류' : '신규발신자'} 큐를 초기화할까요?`)) return;
+    if (type === 'unmatched') {
+        window._msResults = (window._msResults || []).filter(r => r.project);
+    } else {
+        localStorage.removeItem(window.MS_NEW_SENDER_QUEUE_KEY || 'ms_new_sender_queue');
+    }
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    if (window.showToast) window.showToast(`✅ ${type === 'unmatched' ? '미분류' : '신규발신자'} 초기화 완료`, 'info');
+};
+
+window._macSave = async function() {
+    // 수집 주기
+    const sel = document.getElementById('mac-interval');
+    if (sel) {
+        localStorage.setItem('mail_auto_process_interval_min', sel.value);
+        const orig = document.getElementById('mail-process-interval');
+        if (orig) orig.value = sel.value;
+    }
+    // 중요 키워드 → sum-important-keywords 동기화
+    const kwEl = document.getElementById('mac-important-kw');
+    const origKw = document.getElementById('sum-important-keywords');
+    if (kwEl && origKw) origKw.value = kwEl.value;
+
+    // 우선순위 점수
+    const titleScores = {};
+    document.querySelectorAll('.mac-title-score').forEach(el => {
+        titleScores[el.dataset.title] = parseInt(el.value, 10) || 0;
+    });
+    const urgentKeywords = [];
+    document.querySelectorAll('#mac-keyword-rows > div').forEach(row => {
+        const word = row.querySelector('.mac-kw-word').value.trim();
+        const score = parseInt(row.querySelector('.mac-kw-score').value, 10) || 0;
+        if (word) urgentKeywords.push({ word, score });
+    });
+    const newConfig = {
+        titleScores,
+        urgentKeywords,
+        externalCustomerScore: parseInt(document.getElementById('mac-external').value, 10) || 0,
+        toMeScore:             parseInt(document.getElementById('mac-tome').value, 10) || 0,
+        ccMeScore:             parseInt(document.getElementById('mac-ccme').value, 10) || 0,
+        importanceHighScore:   parseInt(document.getElementById('mac-importance').value, 10) || 0,
+        cutline: Math.max(0, Math.min(100, parseInt(document.getElementById('mac-cutline').value, 10) || 50))
+    };
+    const ok = await window.savePriorityConfig(newConfig);
+    if (window.showToast) window.showToast(ok ? '✅ 저장 완료' : '⚠️ 저장 실패 (콘솔 확인)', ok ? 'info' : 'error');
+    if (ok) document.getElementById('mail-auto-config-modal').style.display = 'none';
 };
 
 window.msShowNewSenderModal = function() {
@@ -15136,11 +15479,10 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         HW담당자: "",
         Module담당자: "",
         TSP담당자: "",
-        메일키워드: "",   // 💡 신규: 메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어, 쉼표 구분
-        중요키워드: ""    // 💡 신규: 이 키워드 포함 메일은 우선순위 점수 가산, 쉼표 구분
+        메일키워드: ""    // 💡 신규: 메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어, 쉼표 구분
     };
     // 💡 기존에 저장된 파일에는 위 키들이 없을 수 있으므로 누락 시 빈 값으로 보강
-    ['고객사', '모델명', '인치', '고객모델명', 'KTKPN', 'KTK모델명', '프로젝트담당자', 'HW담당자', 'Module담당자', 'TSP담당자', '메일키워드', '중요키워드'].forEach(function(k) {
+    ['고객사', '모델명', '인치', '고객모델명', 'KTKPN', 'KTK모델명', '프로젝트담당자', 'HW담당자', 'Module담당자', 'TSP담당자', '메일키워드'].forEach(function(k) {
         if (window.projectMeta[k] === undefined) window.projectMeta[k] = "";
     });
 
@@ -16524,7 +16866,7 @@ window.sumTlBringToFront = function(idx, containerId) {
 document.addEventListener('DOMContentLoaded', function() {
     if (window.renderSummaryTimeline) window.renderSummaryTimeline();
     if (window.bsRefreshColumnVisibility) window.bsRefreshColumnVisibility();
-    if (window.refreshMailProcessButton) window.refreshMailProcessButton();
+    if (window.refreshMailModeButton) window.refreshMailModeButton();
     if (window.refreshMailIntervalSelect) window.refreshMailIntervalSelect();
     if (window._msLoadQueueFromStorage) window._msLoadQueueFromStorage();
     if (window._startMailAutoScheduler) window._startMailAutoScheduler();
@@ -18927,7 +19269,6 @@ window.collectTabData = function() {
     }
     bind('sum-pm', '프로젝트담당자');
     bind('sum-mail-keywords', '메일키워드');
-    bind('sum-important-keywords', '중요키워드');
     bind('sum-mech', '기구담당자');
     bind('sum-hw', 'HW담당자');
     bind('sum-fw', 'FW담당자');
@@ -19012,7 +19353,6 @@ window.populateTabData = function() {
     setVal('sum-ktk-pn-model', [pm.KTKPN || '', pm.KTK모델명 || ''].filter(Boolean).join('_'));
     setVal('sum-pm', pm.프로젝트담당자);
     setVal('sum-mail-keywords', pm.메일키워드);
-    setVal('sum-important-keywords', pm.중요키워드);
     setVal('sum-mech', pm.기구담당자);
     setVal('sum-hw', pm.HW담당자);
     setVal('sum-fw', pm.FW담당자);
