@@ -14109,16 +14109,16 @@ window.openMailAutoConfigModal = async function() {
                 <!-- 그룹1: 수집 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">⏱️ 수집 설정</div>
-                    <div style="display:grid; grid-template-columns:1fr 70px; gap:8px 10px; align-items:center; font-size:12px;">
+                    <div style="display:grid; grid-template-columns:1fr 64px; gap:8px 10px; align-items:center; font-size:12px;">
                         <span>수집 주기</span>
-                        <select id="mac-interval" style="width:70px; padding:3px 4px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                        <select id="mac-interval" style="width:100%; padding:3px 4px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
                             <option value="10">10분</option>
                             <option value="15">15분</option>
                             <option value="30">30분</option>
                             <option value="60">60분</option>
                         </select>
                         <span>📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
-                        <input id="mac-cutline" type="number" min="0" max="100" style="width:70px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                        <input id="mac-cutline" type="number" min="0" max="100" style="width:64px; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                     </div>
                 </div>
 
@@ -14132,11 +14132,11 @@ window.openMailAutoConfigModal = async function() {
                 <!-- 그룹3: 우선순위 점수 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
-                    <div style="display:grid; grid-template-columns:1fr 70px; gap:6px 10px; align-items:center; font-size:12px;">
-                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:70px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
-                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:70px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
-                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:70px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
-                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:70px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
+                    <div style="display:grid; grid-template-columns:1fr 64px; gap:6px 10px; align-items:center; font-size:12px;">
+                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                     </div>
                 </div>
 
@@ -14194,8 +14194,7 @@ window._macRenderTitleRows = function(titleScores) {
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px;">
             <span style="flex:1; color:#444; line-height:1.4;">${t}</span>
             <input class="mac-title-score" data-title="${t}" type="number" value="${titleScores[t]}"
-                style="width:46px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:13px; font-weight:bold; text-align:center;">
-            <span style="font-size:11px; color:#888;">점</span>
+                style="width:64px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center; box-sizing:border-box;">
         </div>`).join('');
 };
 
@@ -14207,7 +14206,7 @@ window._macAddKeywordRow = function(word, score) {
         <input class="mac-kw-word" type="text" value="${word}" placeholder="키워드"
             style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
         <input class="mac-kw-score" type="number" value="${score}"
-            style="width:50px; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+            style="width:64px; min-width:0; box-sizing:border-box; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
         <button onclick="this.parentElement.remove()" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px;">🗑</button>`;
     box.appendChild(row);
 };
@@ -14295,7 +14294,7 @@ window.openMailAutoConfigModal = async function() {
                     </div>
                     <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
                         <span style="flex:1;">📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
-                        <input id="mac-cutline" type="number" min="0" max="100" style="width:60px; padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <input id="mac-cutline" type="number" min="0" max="100" style="width:64px; min-width:0; box-sizing:border-box; padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                     </div>
                 </div>
 
@@ -14309,11 +14308,11 @@ window.openMailAutoConfigModal = async function() {
                 <!-- 그룹3: 우선순위 점수 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
-                    <div style="display:grid; grid-template-columns:1fr 55px; gap:6px 10px; align-items:center; font-size:12px;">
-                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                    <div style="display:grid; grid-template-columns:1fr 64px; gap:6px 10px; align-items:center; font-size:12px;">
+                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                     </div>
                 </div>
 
@@ -14371,7 +14370,7 @@ window._macRenderTitleRows = function(titleScores) {
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px;">
             <span style="flex:1;">${t}</span>
             <input class="mac-title-score" data-title="${t}" type="number" value="${titleScores[t]}"
-                style="width:55px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+                style="width:64px; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center;">
         </div>`).join('');
 };
 
@@ -14383,7 +14382,7 @@ window._macAddKeywordRow = function(word, score) {
         <input class="mac-kw-word" type="text" value="${word}" placeholder="키워드"
             style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
         <input class="mac-kw-score" type="number" value="${score}"
-            style="width:50px; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+            style="width:64px; min-width:0; box-sizing:border-box; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
         <button onclick="this.parentElement.remove()" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px;">🗑</button>`;
     box.appendChild(row);
 };
