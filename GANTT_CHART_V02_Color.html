@@ -685,7 +685,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </button>
         <!-- ⚙️ 설정 — 기타 기능 통합 -->
         <div style="position:relative; display:inline-block;">
-            <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정 <span id="alarm-status-dot">🟢</span></button>
+            <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정</button>
             <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="alarm-toggle-btn" class="topbar-menu-item" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>
@@ -2381,10 +2381,9 @@ ${mailText}`;
     window._priorityConfigDefault = function() {
         return {
             titleScores: {
-                '회장': 10, '이사': 10, '본부장/법인장': 10, '본부장': 10, '연구소장': 10,
-                '총괄팀장': 8, '팀장': 8, '파트장': 8, '섹션리더': 8,
-                '책임매니저': 5, '매니저': 5, '조장': 5, '감사': 5,
-                '사원': 3
+                '경영진 (회장·이사·본부장·연구소장)': 10,
+                '관리직 (팀장·파트장·섹션리더·감사)': 8,
+                '실무직 (매니저·조장·사원)': 5
             },
             externalCustomerScore: 10,   // 발신자 도메인이 kortek.co.kr이 아니면 가산
             urgentKeywords: [
@@ -2421,7 +2420,22 @@ ${mailText}`;
             });
             const data = await res.json();
             // 누락 필드는 기본값으로 보강 (신규 필드 추가돼도 기존 저장 파일과 호환)
-            return Object.assign(window._priorityConfigDefault(), data);
+            const merged = Object.assign(window._priorityConfigDefault(), data);
+            // 💡 1회성 마이그레이션 — localStorage 중요 키워드 → urgentKeywords로 이전
+            const legacyKw = localStorage.getItem('mail_global_important_kw');
+            if (legacyKw) {
+                const legacyList = legacyKw.split(',').map(s => s.trim()).filter(Boolean);
+                const existing = (merged.urgentKeywords || []).map(k => k.word.toLowerCase());
+                legacyList.forEach(word => {
+                    if (!existing.includes(word.toLowerCase())) {
+                        merged.urgentKeywords.push({ word, score: 7 });
+                    }
+                });
+                localStorage.removeItem('mail_global_important_kw');
+                window.savePriorityConfig(merged); // fire-and-forget
+                console.log(`💡 중요 키워드 마이그레이션 완료: ${legacyList.join(', ')}`);
+            }
+            return merged;
         } catch(e) { console.warn('PriorityScore_Shared.json 로드 실패, 기본값 사용:', e); return window._priorityConfigDefault(); }
     };
 
@@ -6038,13 +6052,7 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id) || document.querySelector(`.${id}`);
             if (!el) return;
             const t = text.replace('{name}', name);
-            if (id === 'settings-menu-btn') {
-                const dot = document.getElementById('alarm-status-dot');
-                const dotHtml = dot ? dot.outerHTML : '';
-                el.innerHTML = t + ' ' + dotHtml;
-            } else {
-                el.textContent = t;
-            }
+            el.textContent = t;
         });
 
         // alarm-toggle-btn 상태 언어 동기화
@@ -13603,7 +13611,7 @@ window._msFindSenderTitle = function(senderStr) {
     return found ? (found.title || found.직함 || '') : '';
 };
 
-window._msComputeRuleScore = function(mail, priorityConfig, customKeywords) {
+window._msComputeRuleScore = function(mail, priorityConfig) {
     let score = 0;
     const breakdown = {};
 
@@ -13627,11 +13635,6 @@ window._msComputeRuleScore = function(mail, priorityConfig, customKeywords) {
     });
     if (urgentScore) { breakdown.urgentKeywords = urgentScore; score += urgentScore; }
 
-    if (customKeywords && customKeywords.length && customKeywords.some(kw => haystack.includes(String(kw).toLowerCase()))) {
-        breakdown.customKeyword = MS_CUSTOM_KEYWORD_SCORE;
-        score += MS_CUSTOM_KEYWORD_SCORE;
-    }
-
     if (mail.isToMe) { breakdown.recipient = priorityConfig.toMeScore; score += priorityConfig.toMeScore; }
     else if (mail.isCcMe) { breakdown.recipient = priorityConfig.ccMeScore; score += priorityConfig.ccMeScore; }
 
@@ -13640,8 +13643,8 @@ window._msComputeRuleScore = function(mail, priorityConfig, customKeywords) {
     return { score, breakdown };
 };
 
-window._msComputeTotalScore = function(mail, task, priorityConfig, customKeywords) {
-    const rule = window._msComputeRuleScore(mail, priorityConfig, customKeywords);
+window._msComputeTotalScore = function(mail, task, priorityConfig) {
+    const rule = window._msComputeRuleScore(mail, priorityConfig);
     const deadline = task && task.마감일임박도 ? parseInt(task.마감일임박도, 10) || 0 : 0;
     const impact = task && task.업무영향도 ? parseInt(task.업무영향도, 10) || 0 : 0;
     const total = Math.max(0, Math.min(100, rule.score + deadline + impact));
@@ -13818,7 +13821,6 @@ window._autoMailFetchTick = async function() {
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         const projectList = await window._msLoadProjectIndex(); // 💡 Stage 1: 매칭용 인덱스 1회 로드
         const priorityConfig = await window.loadPriorityConfig(); // 💡 [④] 우선순위 점수 설정 로드
-        const myCustomKeywords = window._parseMailKeywords(localStorage.getItem('mail_global_important_kw') || '');
         let addedCount = 0;
 
         for (const mail of newMails) {
@@ -13886,7 +13888,7 @@ window._autoMailFetchTick = async function() {
                 });
                 if (!alreadyInInbox) {
                     // 💡 [④] 우선순위 점수 계산 — 라벨 맨 앞에 등급 표시
-                    const scoreResult = window._msComputeTotalScore(mail, item.task, priorityConfig, myCustomKeywords);
+                    const scoreResult = window._msComputeTotalScore(mail, item.task, priorityConfig);
                     const grade = scoreResult.total >= priorityConfig.cutline ? '🔴' : (scoreResult.total >= priorityConfig.cutline * 0.6 ? '🟡' : '⚪');
                     const candidateNames = finalProjectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
                     const aiResolvedTag = finalProjectTag !== projectTag ? ' [AI확정]' : '';
@@ -14098,7 +14100,7 @@ window.openMailAutoConfigModal = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
-            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #f0a070; font-weight:bold; font-size:14px; background:#ffcba4; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a3a00;">
+            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #f5c8a8; font-weight:bold; font-size:14px; background:#fff0e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a3a00;">
                 <span>⚙️ 메일 자동배치 설정</span>
                 <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a3a00; border-radius:6px; color:#7a3a00; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
@@ -14195,10 +14197,11 @@ window.openMailAutoConfigModal = async function() {
 window._macRenderTitleRows = function(titleScores) {
     document.getElementById('mac-title-rows').innerHTML =
         Object.keys(titleScores).map(t => `
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px; font-size:12px;">
-            <span style="flex:1;">${t}</span>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px;">
+            <span style="flex:1; color:#444; line-height:1.4;">${t}</span>
             <input class="mac-title-score" data-title="${t}" type="number" value="${titleScores[t]}"
-                style="width:55px; padding:3px 5px; border:1px solid #ccc; border-radius:4px;">
+                style="width:46px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:13px; font-weight:bold; text-align:center;">
+            <span style="font-size:11px; color:#888;">점</span>
         </div>`).join('');
 };
 
@@ -14298,10 +14301,11 @@ window.openMailAutoConfigModal = async function() {
                     </div>
                 </div>
 
-                <!-- 그룹2: 중요 키워드 -->
+                <!-- 그룹2: 점수 가산 키워드 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">⭐ 중요 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(쉼표 구분 — 포함 시 우선순위 가산)</span></div>
-                    <input type="text" id="mac-important-kw" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="예: 리콜, 특허, 계약해지">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">🚨 점수 가산 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(키워드별 점수 지정)</span></div>
+                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
+                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:2px;">+ 키워드 추가</button>
                 </div>
 
                 <!-- 그룹3: 우선순위 점수 -->
@@ -14328,12 +14332,20 @@ window.openMailAutoConfigModal = async function() {
                     <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:4px;">+ 키워드 추가</button>
                 </div>
 
-                <!-- 그룹5: 초기화 -->
+                <!-- 그룹5: 미분류/신규발신자 열람 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">🗑️ 큐 초기화</div>
-                    <div style="display:flex; gap:8px;">
-                        <button onclick="window._macClearQueue('unmatched')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">📭 미분류 초기화</button>
-                        <button onclick="window._macClearQueue('newsender')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">👤 신규발신자 초기화</button>
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자</div>
+                    <div style="display:flex; gap:8px; margin-bottom:10px;">
+                        <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; text-align:center;">
+                            📭 미분류<br><span id="ms-unmatched-count" style="font-size:15px;">0</span>건
+                        </button>
+                        <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; text-align:center;">
+                            👤 신규발신자<br><span id="ms-newsender-count" style="font-size:15px;">0</span>건
+                        </button>
+                    </div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <button onclick="window._macClearQueue('unmatched')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
+                        <button onclick="window._macClearQueue('newsender')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
                     </div>
                 </div>
 
@@ -14410,9 +14422,6 @@ window._macSave = async function() {
         const orig = document.getElementById('mail-process-interval');
         if (orig) orig.value = sel.value;
     }
-    // 중요 키워드 → localStorage 전역 저장
-    const kwEl = document.getElementById('mac-important-kw');
-    if (kwEl) localStorage.setItem('mail_global_important_kw', kwEl.value);
 
     // 우선순위 점수
     const titleScores = {};
@@ -17073,9 +17082,6 @@ window.setAlarmAuto = function(enabled) {
 
 // 상단바 설정 버튼 dot + 드롭다운 토글 항목 업데이트
 window.refreshAlarmAutoButtons = function(enabled) {
-    // 상단바 dot
-    const dot  = document.getElementById('alarm-status-dot');
-    if (dot)  dot.textContent = enabled ? '🟢' : '🔴';
     // 드롭다운 토글 버튼
     const btn  = document.getElementById('alarm-toggle-btn');
     if (btn) {
