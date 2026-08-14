@@ -8928,7 +8928,7 @@ window.analyzeMailContent = async function() {
     analyzeBtn.style.background = '#6c86a3';
     analyzeBtn.style.borderColor = '#6c86a3';
 
-    // ✅ 프로젝트 정보 함수 내부에서 직접 수집
+    // ✅ 프로젝트 정보 — 기존 엑셀 행 스캔은 폴백으로 유지, 우선은 Stage1 매칭 결과 사용
     let projectAssignee = "";
     let projectCustomer = "";
     let projectModel = "";
@@ -8946,6 +8946,20 @@ window.analyzeMailContent = async function() {
 
     // 💡 파일 첨부 탭과 동일하게, Gemini로 보내는 본문은 2000자로 제한 (응답 잘림/실패 방지)
     const mailTextForPrompt = mailText.substring(0, 2000);
+
+    // 💡 [B안 통일화] Stage1 매칭으로 실제 어느 프로젝트 얘기인지 확인 → 단일 확정되면 그 프로젝트 정보로 덮어씀
+    //    (매칭 안 되면 위에서 구한 현재 프로젝트 정보를 그대로 폴백으로 사용 — 최종 등록은 사람이 직접 프로젝트 골라서 하므로
+    //     여기선 AI 배경정보 정확도만 개선하는 목적)
+    try {
+        const { contextOverride } = await window._msResolveMatchAndContext({ subject: '', body: mailTextForPrompt });
+        if (contextOverride) {
+            if (contextOverride.model) projectModel = contextOverride.model;
+            if (contextOverride.customer) projectCustomer = contextOverride.customer;
+            if (contextOverride.assignee) projectAssignee = contextOverride.assignee;
+            if (contextOverride.inch) projectInch = contextOverride.inch;
+        }
+    } catch (e) { console.warn('붙여넣기 분석 - 프로젝트 매칭 실패, 기존 방식으로 폴백:', e.message); }
+
     const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailTextForPrompt, null);
 
     // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
@@ -12725,64 +12739,20 @@ async function mfCallGemini(apiKey, parsed) {
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) { try { return JSON.parse(cached); } catch(e) {} }
 
-    let assignee = window.getSummaryAssignee();
-    let customer = window.getSummaryCustomer();
-    let model = window.getSummaryModel();
-    let inch = window.getSummaryInch();
-    // ✅ 중복된 코드를 모두 지우고 공용 프롬프트 생성기(getSystemPrompt)로 단 2줄로 대체합니다.
-    const _mfDateYMD = window.parseMailDateToYMD(parsed.date);
-    const mailText = parsed.subject + '\n' + (parsed.sender ? '발신자: ' + parsed.sender + '\n' : '') + (_mfDateYMD ? '발송일: ' + _mfDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
-    // 💡 파싱 원문 전역 보관 (보관함 저장 시 mailRaw로 첨부됨)
-    window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', date: parsed.date || '', body2000: mailText };
-    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _mfDateYMD);
-
-    const GAS_URL = localStorage.getItem('gas_server_url') || 
-            "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
-
-    const MAX_RETRY = 3;
-    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-        try {
-            const resp = await fetch(GAS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-                body: JSON.stringify({
-                    userApiKey: apiKey,
-                    prompt: prompt,
-                    provider: window.getActiveAiProvider(),
-                    model: window.getActiveAiModel()
-                })
-            });
-            const data = await resp.json();
-            console.log('GAS응답status:', data.status, '메시지:', data.message);
-            if (data.status !== 'success') throw new Error(data.message);
-            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const result = window.parseGeminiTask(text);
-            if (result) {
-                // 💡 [B안] 시작일은 AI 추론 대신 메일 발송일로 확정 (캐시 저장 전에 반영)
-                if (_mfDateYMD) {
-                    result['시작일'] = _mfDateYMD;
-                    const _p = result['완료일'];
-                    if (_p && !String(_p).includes('날짜확인필요') && _p < _mfDateYMD) result['완료일'] = _mfDateYMD;
-                }
-                // 💡 완료일을 못 찾았으면 시작일+1일로 기본값 채움 (일괄분석에서 항목을 안 열어봐도 적용됨)
-                window._applyDefaultDueDate(result);
-                // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
-                result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
-                const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
-                result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
-                try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
-            }
-            return result;
-        } catch (err) {
-            if (attempt < MAX_RETRY) {
-                console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
-                await new Promise(r => setTimeout(r, 3000));
-            } else {
-                console.error(`Gemini 분석 최종 실패 (${MAX_RETRY}회 시도)`, err.message);
-                return null;
-            }
-        }
+    // 💡 [B안 통일화] 자체 프롬프트 생성/GAS 호출 로직 전부 제거. Stage1 매칭 먼저 하고,
+    //    msCallGemini(자동파이프라인과 동일 함수)에 위임 — 프로젝트 배경정보가 메일마다 올바르게 반영됨
+    const { candidatesForAI, contextOverride } = await window._msResolveMatchAndContext({
+        subject: parsed.subject, body: parsed.body
+    });
+    const result = await msCallGemini(apiKey, parsed, candidatesForAI, contextOverride);
+    if (result) {
+        // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
+        result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
+        const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
+        result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
+        try { sessionStorage.setItem(cacheKey, JSON.stringify(result)); } catch(e) {}
     }
+    return result;
 }
 
 // ─── 일괄 분석 ───────────────────────────────────────────
@@ -13489,6 +13459,24 @@ window._msNamesMatch = function(a, b) {
 
 // 💡 [담당자 필터] currentUserName과 assignee가 일치하는 프로젝트만 매칭 대상으로 좁힘
 //    0건이면 콘솔 경고만 남기고 정상 진행 (에러 아님 — 미분류 큐로는 그대로 쌓임)
+// 💡 [B안 통일화] 어디서 호출하든(자동/일괄/단건) 동일한 매칭 로직으로 프로젝트를 확정하고,
+//    AI 프롬프트에 넣을 배경정보(모델/고객사/담당자/인치)까지 함께 결정하는 공용 함수
+window._msResolveMatchAndContext = async function(mail) {
+    const projectList = await window._msLoadProjectIndex();
+    const matched = window._msMatchProjects(mail, projectList);
+    const projectTag = matched.length === 0 ? null
+        : matched.length === 1 ? { status: 'matched', candidates: matched }
+        : { status: 'ambiguous', candidates: matched };
+
+    const candidatesForAI = projectTag && projectTag.status === 'ambiguous' ? projectTag.candidates : null;
+    const contextOverride = (projectTag && projectTag.status === 'matched')
+        ? { model: projectTag.candidates[0].model, customer: projectTag.candidates[0].customer,
+            assignee: projectTag.candidates[0].assignee, inch: projectTag.candidates[0].inch }
+        : null;
+
+    return { projectTag, candidatesForAI, contextOverride };
+};
+
 window._msFilterMyProjects = function(projectList) {
     const me = window.currentUserName || '';
     const mine = projectList.filter(p => window._msNamesMatch(p.assignee, me));
@@ -13888,15 +13876,22 @@ window._autoMailFetchTick = async function() {
             } else {
                 try {
                     const candidatesForAI = projectTag && projectTag.status === 'ambiguous' ? projectTag.candidates : null;
+                    // 💡 [B안 통일화] 단일 확정(matched)이면 그 프로젝트 정보를 AI 배경정보로 사용
+                    //    — 지금까지 여기서만 빠져있어서 "지금 열린 프로젝트"가 계속 섞이던 원인이었음
+                    const contextOverride = (projectTag && projectTag.status === 'matched')
+                        ? { model: projectTag.candidates[0].model, customer: projectTag.candidates[0].customer,
+                            assignee: projectTag.candidates[0].assignee, inch: projectTag.candidates[0].inch }
+                        : null;
                     const task = await msCallGemini(apiKey, {
                         subject: mail.subject, sender: mail.sender, date: mail.date,
                         body: mail.body, fileName: mail.fileName
-                    }, candidatesForAI);
+                    }, candidatesForAI, contextOverride);
 
                     // 💡 AI가 신뢰도 "상"으로 후보 중 하나를 콕 찍었으면 → matched로 자동 승격
                     let resolvedProjectTag = projectTag;
-                    if (task && candidatesForAI && task['매칭신뢰도'] === '상' && task['주매칭프로젝트']) {
-                        const picked = candidatesForAI.find(c => c.model === task['주매칭프로젝트'] || c.customer === task['주매칭프로젝트']);
+                    if (task && candidatesForAI && task['매칭신뢰도'] === '상' && task['주매칭프로젝트번호']) {
+                        const pickedIdx = parseInt(task['주매칭프로젝트번호'], 10);
+                        const picked = (pickedIdx >= 1 && pickedIdx <= candidatesForAI.length) ? candidatesForAI[pickedIdx - 1] : null;
                         if (picked) {
                             resolvedProjectTag = { status: 'matched', candidates: [picked] };
                             console.log(`[메일 자동처리] AI 맥락판단으로 후보 확정: "${mail.subject.substring(0,30)}" → ${picked.model} (신뢰도 상)`);
@@ -14691,14 +14686,14 @@ window.pasteRetryAsManual    = (idx) => AR.retryAsManual('paste', idx);
 window.pasteBatchInsert      = () => AR.batchInsert('paste');
 window.pasteBatchToInbox     = () => AR.batchToInbox('paste');
 
-async function msCallGemini(apiKey, parsed, candidateProjects) {
+async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOverride) {
     const GAS_URL = localStorage.getItem("gas_server_url") || "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
-    // 💡 더 이상 엑셀 행에서 찾지 않고 Summary(프로젝트 정보) 값을 그대로 사용
-    let assignee = window.getSummaryAssignee();
-    let customer = window.getSummaryCustomer();
-    let model = window.getSummaryModel();
-    let inch = window.getSummaryInch();
+    // 💡 [B안 통일화] 매칭된 프로젝트 정보가 있으면 그걸 우선 사용, 없으면 기존처럼 현재 열린 프로젝트 기준
+    let assignee = (projectContextOverride && projectContextOverride.assignee) || window.getSummaryAssignee();
+    let customer = (projectContextOverride && projectContextOverride.customer) || window.getSummaryCustomer();
+    let model = (projectContextOverride && projectContextOverride.model) || window.getSummaryModel();
+    let inch = (projectContextOverride && projectContextOverride.inch) || window.getSummaryInch();
 
     const _msDateYMD = window.parseMailDateToYMD(parsed.date);
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
@@ -14710,14 +14705,19 @@ async function msCallGemini(apiKey, parsed, candidateProjects) {
     //    주제 프로젝트가 후보 중 뭔지" 맥락으로 판단시킴. 확신 없으면(신뢰도 낮음/복수) 그대로
     //    사람 확인으로 넘김 — 오탐 방지를 위해 "상" 신뢰도일 때만 자동확정에 사용(호출부에서 처리)
     if (candidateProjects && candidateProjects.length > 1) {
-        const names = candidateProjects.map(c => c.model || c.customer).join(', ');
+        // 💡 [버그 수정] 후보 프로젝트명이 서로 같을 수 있어(예: SHUFFLER 3인치/4.3인치 둘 다 "SHUFFLER")
+        //    이름이 아니라 "번호"로 답하게 해서 확실히 구별함. 인치 정보도 같이 제공.
+        const numbered = candidateProjects.map((c, i) =>
+            `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''} [파일: ${c.file_name}]`
+        ).join('\n');
         prompt += `\n\n--- 추가 판단 요청 (키워드 매칭으로 아래 프로젝트들이 후보로 걸림) ---\n` +
-            `후보 프로젝트: ${names}\n` +
+            `후보 프로젝트 목록:\n${numbered}\n` +
             `이 메일이 단순히 언급만 하는 게 아니라, 실제로 다루는 "핵심 주제"가 후보 중 하나로 명확한지 판단하세요.\n` +
-            `- 핵심 주제가 명확하면: 해당 프로젝트명을 그대로 아래 필드에 적으세요.\n` +
-            `- 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: "복수"라고 적으세요.\n` +
+            `※ 후보 중 이름이 같은 것들은 인치(크기)로 구별하세요.\n` +
+            `- 핵심 주제가 명확하면: 해당 후보의 번호를 아래 필드에 적으세요.\n` +
+            `- 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: 0으로 적으세요.\n` +
             `위 JSON에 아래 두 필드를 추가로 포함해서 응답하세요:\n` +
-            `"주매칭프로젝트": "${names.split(',')[0].trim()} 또는 다른 후보명 또는 복수",\n` +
+            `"주매칭프로젝트번호": 1 (해당 번호, 애매하면 0),\n` +
             `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)"`;
     }
 
