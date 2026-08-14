@@ -14361,7 +14361,6 @@ window.openMailAutoConfigModal = async function() {
 
     // 값 채우기
     document.getElementById('mac-interval').value = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
-    document.getElementById('mac-important-kw').value = localStorage.getItem('mail_global_important_kw') || '';
     document.getElementById('mac-external').value   = cfg.externalCustomerScore;
     document.getElementById('mac-tome').value       = cfg.toMeScore;
     document.getElementById('mac-ccme').value       = cfg.ccMeScore;
