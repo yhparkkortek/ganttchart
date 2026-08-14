@@ -13502,11 +13502,26 @@ window._msFilterMyProjects = function(projectList) {
 window._msMatchProjects = function(mail, projectList) {
     const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
     const myProjects = window._msFilterMyProjects(projectList); // 💡 담당 프로젝트만 후보로 좁힘
-    return myProjects.filter(p =>
-        Array.isArray(p.keywords) && p.keywords.some(kw =>
-            kw && String(kw).length >= MS_MIN_KEYWORD_LEN && haystack.includes(String(kw).toLowerCase())
-        )
-    );
+
+    // 1차: 키워드 매칭 + 프로젝트별 매칭된 키워드 중 가장 긴(구체적인) 것 기록
+    const scored = myProjects
+        .map(p => {
+            const matched = (p.keywords || []).filter(kw =>
+                kw && String(kw).length >= MS_MIN_KEYWORD_LEN && haystack.includes(String(kw).toLowerCase())
+            );
+            const maxLen = matched.reduce((m, kw) => Math.max(m, String(kw).length), 0);
+            return { project: p, matched, maxLen };
+        })
+        .filter(s => s.matched.length > 0);
+
+    if (scored.length <= 1) return scored.map(s => s.project);
+
+    // 💡 [구체적 키워드 우선] 여러 프로젝트가 후보에 걸렸을 때, 가장 긴(구체적) 키워드로 매칭된
+    //    후보만 남기고, 짧은/공용 키워드만 걸린 후보는 제외 — "SHUFFLER"(공용) 때문에
+    //    "SHUFFLER 4.3"(구체적)까지 같이 ambiguous 되던 문제 해결
+    const globalMax = Math.max(...scored.map(s => s.maxLen));
+    const filtered = scored.filter(s => s.maxLen === globalMax);
+    return filtered.map(s => s.project);
 };
 
 // ─── [⑥] 우선순위 점수 설정 UI ──
@@ -13675,8 +13690,29 @@ window._msComputeTotalScore = function(mail, task, priorityConfig, customKeyword
 
 // ─── [완전자동] 커트라인 이상 → Gantt 자동배치 + 알림 자동설정 ──
 //    기존 "다른 프로젝트로 전송"(inboxDistExecute) 로직을 헤드리스로 재구성 — DOM 의존 없음
-window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileName, mailRaw, attempt) {
+window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileName, mailRaw, attempt, setAlarm) {
     try {
+        // 💡 지금 브라우저에 열려있는 바로 그 프로젝트면, Drive 직접쓰기 대신 화면(globalData)에 바로 꽂고
+        //    즉시 저장 — 헤드리스로 Drive만 건드리면 화면이 예전 상태로 남아있다가, 사용자가 저장할 때
+        //    방금 자동배치한 내용이 통째로 덮어써져서 사라지는 심각한 문제가 생김
+        if (driveFileId === window.currentDriveFileId && globalData && globalData.length) {
+            try {
+                const l0s = window.buildL0SectionInfo(globalData, colIdx);
+                const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
+                const built = window.buildMailTaskRow(task, undefined, undefined, mailRaw);
+                if (setAlarm) built.row._알림 = true;
+                const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, task['시작일'], true);
+                const pos = posInfo.pos;
+                if (chosenL0 !== '__END__' && colIdx.devStage !== -1) built.row[colIdx.devStage] = chosenL0;
+                globalData.splice(pos, 0, built.row);
+                logChange(pos, -1, "없음", `메일 자동처리(완전자동)로 배치: ${built.taskName}`);
+                window.recalculateSchedules();
+                if (window.renderGantt) window.renderGantt();
+                await window.saveToGoogleDrive(); // 💡 화면에 즉시 반영 + 곧바로 Drive 저장까지
+                return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0 };
+            } catch (e) { return { ok: false, reason: 'current_project_insert_failed: ' + e.message }; }
+        }
+
         const tokenObj = gapi.client.getToken();
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return { ok: false, reason: 'no_token' };
@@ -13697,7 +13733,7 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
 
         const built = window.buildMailTaskRow(task, rows, saveData.colIdx, mailRaw);
-        built.row._알림 = true; // 💡 커트라인 이상 → 자동알람(D-7/3/1) 대상으로 설정
+        if (setAlarm) built.row._알림 = true; // 💡 커트라인 이상일 때만 자동알람(D-7/3/1) 대상으로 설정
 
         const posInfo = window.computeL0InsertPos(rows, saveData.colIdx, chosenL0, task['시작일'], true);
         const pos = posInfo.pos;
@@ -13733,7 +13769,7 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         const checkResp = await gapi.client.drive.files.get({ fileId: driveFileId, fields: 'modifiedTime', supportsAllDrives: true });
         if (checkResp.result.modifiedTime !== metaResp.result.modifiedTime) {
             if ((attempt || 0) >= 1) return { ok: false, reason: 'conflict_retry_exhausted' };
-            return await window._msAutoRegisterToProject(uid, task, driveFileId, fileName, mailRaw, (attempt || 0) + 1);
+            return await window._msAutoRegisterToProject(uid, task, driveFileId, fileName, mailRaw, (attempt || 0) + 1, setAlarm);
         }
 
         const boundary = 'ms_auto_register_boundary';
@@ -13880,13 +13916,14 @@ window._autoMailFetchTick = async function() {
                     window.TaskInbox.add(item.task, { source: sourceLabel, mailRaw: mailRawObj });
                     const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 항상 맨 앞이 방금 추가한 항목
 
-                    // 💡 [완전자동] 커트라인 이상 + 매칭 확정(단일 후보) + 날짜 확정된 경우만 자동배치
+                    // 💡 [완전자동] 매칭 확정(단일 후보) + 날짜 확정 → 무조건 배치. 커트라인 이상이면 추가로 알림도 켬
                     const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
                         && !String(item.task['완료일'] || '').includes('날짜확인필요');
                     if (window.isAutoRegisterEnabled && window.isAutoRegisterEnabled()
-                        && projectTag.status === 'matched' && scoreResult.total >= priorityConfig.cutline && hasValidDate) {
+                        && projectTag.status === 'matched' && hasValidDate) {
                         const target = projectTag.candidates[0];
-                        window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj)
+                        const setAlarm = scoreResult.total >= priorityConfig.cutline; // 💡 배치는 무조건, 알림만 커트라인으로 결정
+                        window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj, 0, setAlarm)
                             .then(function(result) {
                                 if (result.ok) {
                                     window.TaskInbox.setStatus(newUid, '자동배치됨', {
