@@ -13499,15 +13499,25 @@ window._msFilterMyProjects = function(projectList) {
     return mine;
 };
 
+// 💡 [버그B 수정] 키워드를 공백 기준 토큰으로 쪼개서, 순서 상관없이 토큰이 전부 들어있으면 매칭
+//    예: 키워드 "4.3\" Shuffler" ↔ 본문 "Shuffler Display 4.3\"" → 어순 달라도 매칭됨
+window._msKeywordMatches = function(haystack, kw) {
+    const tokens = String(kw).toLowerCase().split(/\s+/).filter(Boolean);
+    if (!tokens.length) return false;
+    return tokens.every(t => haystack.includes(t));
+};
+
 window._msMatchProjects = function(mail, projectList) {
     const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
-    const myProjects = window._msFilterMyProjects(projectList); // 💡 담당 프로젝트만 후보로 좁힘
+    // 💡 [버그A 수정] 담당자 필터를 여기서 제거 — 전체 프로젝트 대상으로 후보를 추림.
+    //    "내 프로젝트가 아니면 후보에서 빠지는" 문제를 근본적으로 없앰.
+    //    자동배치(완전자동) 시점에만 "내 담당인지"를 별도로 체크함(_autoMailFetchTick 참고)
 
     // 1차: 키워드 매칭 + 프로젝트별 매칭된 키워드 중 가장 긴(구체적인) 것 기록
-    const scored = myProjects
+    const scored = projectList
         .map(p => {
             const matched = (p.keywords || []).filter(kw =>
-                kw && String(kw).length >= MS_MIN_KEYWORD_LEN && haystack.includes(String(kw).toLowerCase())
+                kw && String(kw).length >= MS_MIN_KEYWORD_LEN && window._msKeywordMatches(haystack, kw)
             );
             const maxLen = matched.reduce((m, kw) => Math.max(m, String(kw).length), 0);
             return { project: p, matched, maxLen };
@@ -13933,8 +13943,12 @@ window._autoMailFetchTick = async function() {
                     // 💡 [완전자동] 매칭 확정(단일 후보) + 날짜 확정 → 무조건 배치. 커트라인 이상이면 추가로 알림도 켬
                     const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
                         && !String(item.task['완료일'] || '').includes('날짜확인필요');
+                    // 💡 [버그A 수정] 확정된 프로젝트가 "내 담당"일 때만 자동배치. 남의 프로젝트로
+                    //    확정돼도 TaskInbox엔 정상적으로 뜨고, 사람이 "다른 프로젝트로 전송"으로 넘기면 됨
+                    const isMineFn = window._msNamesMatch;
                     if (window.isAutoRegisterEnabled && window.isAutoRegisterEnabled()
-                        && finalProjectTag.status === 'matched' && hasValidDate) {
+                        && finalProjectTag.status === 'matched' && hasValidDate
+                        && isMineFn(finalProjectTag.candidates[0].assignee, window.currentUserName)) {
                         const target = finalProjectTag.candidates[0];
                         const setAlarm = scoreResult.total >= priorityConfig.cutline; // 💡 배치는 무조건, 알림만 커트라인으로 결정
                         window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj, 0, setAlarm)
