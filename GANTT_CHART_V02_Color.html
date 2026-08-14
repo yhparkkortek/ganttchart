@@ -687,6 +687,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div style="position:relative; display:inline-block;">
             <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정 <span id="alarm-status-dot">🟢</span></button>
             <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
+                <div style="background:#ffcba4; color:#7a3a00; font-size:11px; font-weight:bold; padding:5px 10px; margin-bottom:4px; border-radius:4px 4px 0 0; border-bottom:1px solid #f0a070; letter-spacing:0.3px;">⚙️ 설정</div>
                 <button id="alarm-toggle-btn" class="topbar-menu-item" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>
                 <div class="tb-menu-sep"></div>
@@ -11273,7 +11274,16 @@ window.updateInboxBadge();
     .topbar-popup {
         position: absolute; top: calc(100% + 4px); left: 0; z-index: 500;
         background: #fff; border: 1px solid #dee2e6; border-radius: 6px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 6px; min-width: 200px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15); padding: 0; min-width: 200px;
+        overflow: hidden;
+    }
+    .topbar-popup::before {
+        content: '⚙️ 설정'; display: block;
+        background: #ffcba4; color: #7a3a00; font-size: 11.5px; font-weight: bold;
+        padding: 6px 12px; border-bottom: 1px solid #f0a070; letter-spacing: 0.3px;
+    }
+    .topbar-popup-inner {
+        padding: 6px;
     }
     .topbar-menu-item {
         display: block; width: 100%; text-align: left; box-sizing: border-box;
@@ -11739,26 +11749,8 @@ window.updateInboxBadge();
                                 📥 메일 가져오기
                             </button>
                         </div>
-                        <div style="display:flex; gap:6px; padding:0 12px; margin-top:6px;">
-                            <button id="ms-unmatched-badge-btn" onclick="window.msShowUnmatchedModal()"
-                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left; transition:0.15s;"
-                                onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff'; this.style.borderColor='#2c5f8a';"
-                                onmouseout="this.style.background='#fff'; this.style.color='#555'; this.style.borderColor='#ccc';">
-                                📭 미분류 <span id="ms-unmatched-count">0</span>건
-                            </button>
-                            <button id="ms-newsender-badge-btn" onclick="window.msShowNewSenderModal()"
-                                style="flex:1; padding:4px 8px; background:#fff; color:#555; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; text-align:left; transition:0.15s;"
-                                onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff'; this.style.borderColor='#2c5f8a';"
-                                onmouseout="this.style.background='#fff'; this.style.color='#555'; this.style.borderColor='#ccc';">
-                                👤 신규발신자 <span id="ms-newsender-count">0</span>건
-                            </button>
-                        </div>
-                        <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; padding:0 12px; margin-top:4px;">
+                        <div style="display:flex; align-items:center; padding:0 12px; margin-top:4px;">
                             <div id="ms-status" style="font-size:11px; color:#666; flex:1;"></div>
-                            <button id="ms-force-reset-btn" onclick="window.msForceReset()"
-                                style="flex-shrink:0; padding:2px 8px; background:#fff; color:#888; border:1px solid #ccc; border-radius:6px; font-size:10px; cursor:pointer;" title="진행 상태 및 결과 강제 초기화">
-                                🔄 초기화
-                            </button>
                         </div>
                     </div>
                     <!-- 진행바 -->
@@ -14168,12 +14160,20 @@ window.openMailAutoConfigModal = async function() {
                     <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:4px;">+ 키워드 추가</button>
                 </div>
 
-                <!-- 그룹5: 초기화 -->
+                <!-- 그룹5: 이력 확인 + 초기화 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">🗑️ 큐 초기화</div>
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자</div>
+                    <div style="display:flex; gap:8px; margin-bottom:8px;">
+                        <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; cursor:pointer;">
+                            📭 미분류 <span id="ms-unmatched-count">0</span>건
+                        </button>
+                        <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; cursor:pointer;">
+                            👤 신규발신자 <span id="ms-newsender-count">0</span>건
+                        </button>
+                    </div>
                     <div style="display:flex; gap:8px;">
-                        <button onclick="window._macClearQueue('unmatched')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">📭 미분류 초기화</button>
-                        <button onclick="window._macClearQueue('newsender')" style="flex:1; padding:6px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">👤 신규발신자 초기화</button>
+                        <button onclick="window._macClearQueue('unmatched')" style="flex:1; padding:5px; background:#fff; color:#888; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">🗑 미분류 초기화</button>
+                        <button onclick="window._macClearQueue('newsender')" style="flex:1; padding:5px; background:#fff; color:#888; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">🗑 신규발신자 초기화</button>
                     </div>
                 </div>
 
@@ -18134,10 +18134,9 @@ window.refreshMailModeButton = function() {
 
 window.toggleMailMode = function() {
     const cur = window.getMailMode();
-    const next = cur === 'full' ? 'semi' : cur === 'semi' ? 'off' : 'semi';
+    const next = cur === 'full' ? 'semi' : cur === 'semi' ? 'off' : 'full';
     localStorage.setItem('mail_mode', next);
     window.refreshMailModeButton();
-    window.closeAllTopbarMenus();
     // D안: OFF → ON 전환 시 즉시 1회 수집 (테스트 재수집 대체)
     if (cur === 'off' && next !== 'off') {
         if (window._autoMailFetchTick) {
