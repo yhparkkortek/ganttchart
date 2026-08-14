@@ -13994,7 +13994,7 @@ window._msQueueDeleteAll = function(type) {
 window._msRenderQueueModal = function(type, title) {
     const rows = window._msQueueGetRows(type);
     const hint = type === 'unmatched'
-        ? '등록된 프로젝트 키워드와 불일치 — Summary 탭 "메일 매칭 키워드" 확인 필요'
+        ? '등록된 프로젝트 키워드와 불일치 — Summary 탭 "메일 키워드" 확인 필요'
         : '주소록에 없는 발신자 도메인 — 정상 거래처면 주소록에 추가 필요';
 
     const bodyHtml = rows.length
