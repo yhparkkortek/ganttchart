@@ -690,19 +690,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button id="alarm-toggle-btn" class="topbar-menu-item" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>
                 <div class="tb-menu-sep"></div>
-                <button id="mail-process-toggle-btn" class="topbar-menu-item" onclick="window.toggleMailAutoProcess()" style="font-weight:bold;" title="메일 수집·분석은 계속 진행되고, Gantt 등록·알람 발송만 승인 대기 상태가 됩니다">🟢 메일 자동처리 ON</button>
-                <div class="topbar-menu-item" style="display:flex; align-items:center; gap:6px; font-size:11px; color:#555;">
-                    <span id="mail-interval-label">⏱️ 수집 주기</span>
-                    <select id="mail-process-interval" onchange="window.onMailIntervalChange()"
-                            style="flex:1; padding:2px 4px; border:1px solid #ddd; border-radius:4px; font-size:11px;">
-                        <option value="10">10분</option>
-                        <option value="15">15분</option>
-                        <option value="30" selected>30분</option>
-                        <option value="60">60분</option>
-                    </select>
-                </div>
-                <button id="priority-config-menu-btn" class="topbar-menu-item" onclick="window.openPriorityConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="직급별 점수·긴급키워드·커트라인 설정">⭐ 우선순위 점수 설정</button>
-                <button id="auto-register-toggle-btn" class="topbar-menu-item" onclick="window.toggleAutoRegister()" style="font-weight:bold;" title="커트라인 이상 메일을 사람 확인 없이 Gantt에 자동 등록 + 알림 자동설정">⚪ 완전자동(Gantt 자동배치) OFF</button>
+                <button id="mail-mode-toggle-btn" class="topbar-menu-item" onclick="window.toggleMailMode()" style="font-weight:bold; color:#b85c00;">🟠 메일 반자동 (보관함)</button>
+                <button id="mail-auto-config-menu-btn" class="topbar-menu-item" onclick="window.openMailAutoConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="수집주기·우선순위점수·중요키워드·초기화">📬 메일 자동배치 설정</button>
                 <div class="tb-menu-sep"></div>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
@@ -10303,7 +10292,7 @@ window.showMailRawModal = function(r) {
         modal.id = 'inbox-mailraw-modal';
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
-        <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:2040px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:260px;">
+        <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:60%; max-width:1360px; max-height:160vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:520px;">
             <div id="inbox-mailraw-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span id="inbox-mailraw-title">📧 메일 원문</span>
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
@@ -11748,13 +11737,6 @@ window.updateInboxBadge();
                             </label>
                             <button id="ms-fetch-btn" class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
                                 📥 메일 가져오기
-                            </button>
-                        </div>
-                        <div style="display:flex; gap:6px; padding:0 12px; margin-top:6px;">
-                            <button id="ms-test-refetch-btn" onclick="window.msForceRefetchForTest()"
-                                title="테스트용 — 캐시 초기화 후 즉시 재수집합니다. AI 호출이 다시 발생할 수 있습니다."
-                                style="flex-shrink:0; padding:4px 8px; background:#fff3cd; color:#856404; border:1px solid #ffc107; border-radius:6px; font-size:11px; cursor:pointer; white-space:nowrap;">
-                                🧪 테스트 재수집
                             </button>
                         </div>
                         <div style="display:flex; gap:6px; padding:0 12px; margin-top:6px;">
@@ -17780,55 +17762,52 @@ window.toggleAlarmAuto = function() {
     window.closeAllTopbarMenus();
 };
 
-// 💡 메일 자동처리 토글 (반자동 스위치)
-//    ON  : 수집→분석→점수→Gantt등록→알람까지 전체 파이프라인 자동 진행
-//    OFF : 수집·분석·점수는 계속 진행하되, Gantt 등록·알람 발송은 검토 큐에서 사용자 승인 필요
-//    ※ 자동알람(alarm-toggle-btn)과는 별개 스위치입니다 — 자동알람은 "알림을 보낼지 말지",
-//       메일 자동처리는 "메일 파이프라인 전체를 자동으로 굴릴지"를 결정합니다.
-window.isMailAutoProcessEnabled = function() {
-    return localStorage.getItem('mail_auto_process') !== '0'; // 기본값 ON
+// 💡 메일 자동배치 3단계 토글 — 'full'(완전자동·녹색) / 'semi'(반자동·주황) / 'off'(꺼짐·빨강)
+//    full : 수집→분석→점수→Gantt자동등록→알람 전체 자동
+//    semi : 수집→분석→점수→TaskInbox 대기 (사람 확인 후 등록)
+//    off  : 아무것도 안 함
+window.getMailMode = function() {
+    return localStorage.getItem('mail_mode') || 'semi'; // 기본값 반자동
 };
+// 하위 호환 래퍼 — 기존 참조 코드(_autoMailFetchTick 등) 수정 불필요
+window.isMailAutoProcessEnabled = function() { return window.getMailMode() !== 'off'; };
+window.isAutoRegisterEnabled    = function() { return window.getMailMode() === 'full'; };
 
-window.refreshMailProcessButton = function() {
-    const btn = document.getElementById('mail-process-toggle-btn');
+window.refreshMailModeButton = function() {
+    const btn = document.getElementById('mail-mode-toggle-btn');
     if (!btn) return;
-    const enabled = window.isMailAutoProcessEnabled();
+    const mode = window.getMailMode();
     const isEn = window._currentLang === 'en';
-    btn.textContent = enabled
-        ? (isEn ? '🟢 Mail Auto-Process ON'  : '🟢 메일 자동처리 ON')
-        : (isEn ? '🟡 Mail Auto-Process OFF (Review required)' : '🟡 메일 자동처리 OFF (승인 대기)');
-};
-
-window.toggleMailAutoProcess = function() {
-    const enabled = window.isMailAutoProcessEnabled();
-    localStorage.setItem('mail_auto_process', enabled ? '0' : '1');
-    window.refreshMailProcessButton();
-    window.closeAllTopbarMenus();
-};
-
-// 💡 [완전자동] 기본값 OFF — 켜기 전엔 지금까지처럼 TaskInbox 대기(반자동)만 동작
-window.isAutoRegisterEnabled = function() {
-    return localStorage.getItem('mail_auto_register') === '1'; // 기본값 OFF
-};
-
-window.refreshAutoRegisterButton = function() {
-    const btn = document.getElementById('auto-register-toggle-btn');
-    if (!btn) return;
-    const enabled = window.isAutoRegisterEnabled();
-    btn.textContent = enabled ? '🔴 완전자동(Gantt 자동배치) ON — 주의' : '⚪ 완전자동(Gantt 자동배치) OFF';
-    btn.style.color = enabled ? '#e03131' : '#555';
-};
-
-window.toggleAutoRegister = function() {
-    const enabled = window.isAutoRegisterEnabled();
-    if (!enabled) {
-        const ok = confirm('⚠️ 완전자동을 켜면 커트라인 이상 메일이 사람 확인 없이 Gantt에 자동 등록되고 알림까지 자동 설정됩니다.\n\n신뢰성이 충분히 검증된 후 켜는 것을 권장합니다. 계속할까요?');
-        if (!ok) return;
+    if (mode === 'full') {
+        btn.textContent = isEn ? '🟢 Mail Auto (Gantt)' : '🟢 메일 완전자동 (Gantt)';
+        btn.style.color = '#2f7a2f';
+    } else if (mode === 'semi') {
+        btn.textContent = isEn ? '🟠 Mail Semi-Auto (Inbox)' : '🟠 메일 반자동 (보관함)';
+        btn.style.color = '#b85c00';
+    } else {
+        btn.textContent = isEn ? '🔴 Mail Auto OFF' : '🔴 메일 자동배치 OFF';
+        btn.style.color = '#c92a2a';
     }
-    localStorage.setItem('mail_auto_register', enabled ? '0' : '1');
-    window.refreshAutoRegisterButton();
-    window.closeAllTopbarMenus();
 };
+
+window.toggleMailMode = function() {
+    const cur = window.getMailMode();
+    const next = cur === 'full' ? 'semi' : cur === 'semi' ? 'off' : 'semi';
+    localStorage.setItem('mail_mode', next);
+    window.refreshMailModeButton();
+    window.closeAllTopbarMenus();
+    // D안: OFF → ON 전환 시 즉시 1회 수집 (테스트 재수집 대체)
+    if (cur === 'off' && next !== 'off') {
+        if (window._autoMailFetchTick) {
+            localStorage.removeItem(window.MS_LAST_AUTO_FETCH_KEY || 'ms_last_auto_fetch');
+            window._autoMailFetchTick();
+            if (window.showToast) window.showToast('📬 메일 자동배치 ON — 즉시 수집 시작', 'info');
+        }
+    }
+};
+// 구버전 함수명 폴백
+window.refreshMailProcessButton  = window.refreshMailModeButton;
+window.refreshAutoRegisterButton = window.refreshMailModeButton;
 
 // 💡 수집 주기 (분). 기본값 30분 — POP3 서버 로그인 부하 고려한 보수적 시작값.
 //    ①번 자동 트리거 구현 시 이 값을 setInterval 주기로 사용 예정 (지금은 저장만 함)
