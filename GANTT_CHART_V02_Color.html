@@ -1456,7 +1456,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
                     <label id="sum-lbl-ktkpn">KTK PN_모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-ktk-pn-model" class="u-input req-field" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW" oninput="window._checkRequiredField(this)">
                     <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)">🔖 메일 매칭 키워드</label><input type="text" id="sum-mail-keywords" class="u-input" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)">
-                    <label id="sum-lbl-importantkw" title="이 키워드가 포함된 메일은 우선순위 점수에 가산됩니다. 쉼표로 구분 (예: 리콜, 특허, 계약해지)">⭐ 중요 키워드</label><input type="text" id="sum-important-keywords" class="u-input" placeholder="예: 리콜, 특허, 계약해지 (쉼표로 구분)">
                 </div>
             </div>
         </div>
@@ -6472,7 +6471,6 @@ window.deleteHistoryByDateRange = function() {
             'sum-lbl-pname':      { ko:'프로젝트 명칭',     en:'Project Name' },
             'sum-lbl-ktkpn':      { ko:'KTK PN_모델명',     en:'KTK PN_Model' },
             'sum-lbl-mailkw':     { ko:'🔖 메일 매칭 키워드', en:'🔖 Mail Match Keywords' },
-            'sum-lbl-importantkw':{ ko:'⭐ 중요 키워드',      en:'⭐ Priority Keywords' },
             'sum-h3-background':  { ko:'추진 배경 및 의의', en:'Background & Significance' },
             'sum-h3-member1':     { ko:'프로젝트 멤버-1',   en:'Project Members-1' },
             'sum-h3-member2':     { ko:'프로젝트 멤버-2',   en:'Project Members-2' },
@@ -14103,7 +14101,7 @@ window.openMailAutoConfigModal = async function() {
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
             <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #c3d9f0; font-weight:bold; font-size:14px; background:#e8f4fd; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1a4f7a;">
                 <span>⚙️ 메일 자동배치 설정</span>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #1a4f7a; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a3a00; border-radius:6px; color:#7a3a00; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
             <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
 
@@ -14121,10 +14119,14 @@ window.openMailAutoConfigModal = async function() {
                     </div>
                 </div>
 
-                <!-- 그룹2: 중요 키워드 -->
+                <!-- 그룹2: 점수 가산 키워드 (중요키워드 + 긴급키워드 사전 통합) -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">⭐ 중요 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(쉼표 구분 — 포함 시 우선순위 가산)</span></div>
-                    <input type="text" id="mac-important-kw" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px;" placeholder="예: 리콜, 특허, 계약해지">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">🚨 점수 가산 키워드</div>
+                    <div style="font-size:11px; color:#555; margin-bottom:4px;">⭐ 중요 키워드 <span style="color:#aaa;">(전역 공용 — 쉼표 구분)</span></div>
+                    <input type="text" id="mac-important-kw" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-bottom:10px;" placeholder="예: 리콜, 특허, 계약해지">
+                    <div style="font-size:11px; color:#555; margin-bottom:4px;">🚨 긴급 키워드 사전 <span style="color:#aaa;">(키워드별 점수 지정)</span></div>
+                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
+                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:2px;">+ 키워드 추가</button>
                 </div>
 
                 <!-- 그룹3: 우선순위 점수 -->
@@ -14142,29 +14144,26 @@ window.openMailAutoConfigModal = async function() {
                     </div>
                 </div>
 
-                <!-- 그룹4: 직급별 점수 + 긴급키워드 -->
+                <!-- 그룹4: 직급별 점수 (스크롤) -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
-                    <div id="mac-title-rows" style="margin-bottom:12px;"></div>
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">🚨 긴급 키워드 사전</div>
-                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
-                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:4px;">+ 키워드 추가</button>
+                    <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
                 </div>
 
-                <!-- 그룹5: 이력 확인 + 초기화 -->
+                <!-- 그룹5: 미분류/신규발신자 열람 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자</div>
-                    <div style="display:flex; gap:8px; margin-bottom:8px;">
-                        <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; cursor:pointer;">
-                            📭 미분류 <span id="ms-unmatched-count">0</span>건
+                    <div style="display:flex; gap:8px; margin-bottom:10px;">
+                        <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            📭 미분류<br><span id="ms-unmatched-count" style="font-size:15px;">0</span>건
                         </button>
-                        <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; cursor:pointer;">
-                            👤 신규발신자 <span id="ms-newsender-count">0</span>건
+                        <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
+                            👤 신규발신자<br><span id="ms-newsender-count" style="font-size:15px;">0</span>건
                         </button>
                     </div>
-                    <div style="display:flex; gap:8px;">
-                        <button onclick="window._macClearQueue('unmatched')" style="flex:1; padding:5px; background:#fff; color:#888; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">🗑 미분류 초기화</button>
-                        <button onclick="window._macClearQueue('newsender')" style="flex:1; padding:5px; background:#fff; color:#888; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">🗑 신규발신자 초기화</button>
+                    <div style="display:flex; gap:8px; justify-content:flex-end;">
+                        <button onclick="window._macClearQueue('unmatched')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
+                        <button onclick="window._macClearQueue('newsender')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
                     </div>
                 </div>
 
@@ -14181,7 +14180,7 @@ window.openMailAutoConfigModal = async function() {
 
     // 값 채우기
     document.getElementById('mac-interval').value = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
-    document.getElementById('mac-important-kw').value = (document.getElementById('sum-important-keywords') || {}).value || '';
+    document.getElementById('mac-important-kw').value = localStorage.getItem('mail_global_important_kw') || '';
     document.getElementById('mac-external').value   = cfg.externalCustomerScore;
     document.getElementById('mac-tome').value       = cfg.toMeScore;
     document.getElementById('mac-ccme').value       = cfg.ccMeScore;
@@ -14280,7 +14279,7 @@ window.openMailAutoConfigModal = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
-            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #c3d9f0; font-weight:bold; font-size:14px; background:#e8f4fd; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1a4f7a;">
+            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #f0a070; font-weight:bold; font-size:14px; background:#ffcba4; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a3a00;">
                 <span>⚙️ 메일 자동배치 설정</span>
                 <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #1a4f7a; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
