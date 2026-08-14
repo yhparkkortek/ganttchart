@@ -13877,14 +13877,26 @@ window._autoMailFetchTick = async function() {
                 };
             } else {
                 try {
+                    const candidatesForAI = projectTag && projectTag.status === 'ambiguous' ? projectTag.candidates : null;
                     const task = await msCallGemini(apiKey, {
                         subject: mail.subject, sender: mail.sender, date: mail.date,
                         body: mail.body, fileName: mail.fileName
-                    });
+                    }, candidatesForAI);
+
+                    // 💡 AI가 신뢰도 "상"으로 후보 중 하나를 콕 찍었으면 → matched로 자동 승격
+                    let resolvedProjectTag = projectTag;
+                    if (task && candidatesForAI && task['매칭신뢰도'] === '상' && task['주매칭프로젝트']) {
+                        const picked = candidatesForAI.find(c => c.model === task['주매칭프로젝트'] || c.customer === task['주매칭프로젝트']);
+                        if (picked) {
+                            resolvedProjectTag = { status: 'matched', candidates: [picked] };
+                            console.log(`[메일 자동처리] AI 맥락판단으로 후보 확정: "${mail.subject.substring(0,30)}" → ${picked.model} (신뢰도 상)`);
+                        }
+                    }
+
                     item = {
                         idx: window._msResults.length, fileName: mail.fileName,
                         subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
-                        project: projectTag, task, selected: !!task, registered: false,
+                        project: resolvedProjectTag, task, selected: !!task, registered: false,
                         error: !task ? 'AI분석실패' : null
                     };
                 } catch(e) {
@@ -13900,7 +13912,8 @@ window._autoMailFetchTick = async function() {
             // 💡 [메일 자동처리] 프로젝트가 매칭됐고 AI 추출까지 성공한 건만 개인 TaskInbox로 자동 이동
             //    (미분류는 프로젝트를 모르니 보관함에 넣지 않고 로컬 큐에만 남김 — 검토 큐 UI에서 노출 예정)
             //    💡 fileName 기준 중복 체크 — 큐가 초기화돼도(캐시삭제 등) 같은 메일이 보관함에 재등록되지 않도록
-            if (item.task && projectTag && window.TaskInbox) {
+            const finalProjectTag = item.project; // 💡 [구체적 키워드 우선 매칭 v2] AI 맥락판단으로 재확정됐을 수 있으니 item.project 기준
+            if (item.task && finalProjectTag && window.TaskInbox) {
                 const alreadyInInbox = window.TaskInbox.load().some(function(it) {
                     return it.mailRaw && it.mailRaw.fileName === mail.fileName;
                 });
@@ -13908,10 +13921,11 @@ window._autoMailFetchTick = async function() {
                     // 💡 [④] 우선순위 점수 계산 — 라벨 맨 앞에 등급 표시
                     const scoreResult = window._msComputeTotalScore(mail, item.task, priorityConfig, myCustomKeywords);
                     const grade = scoreResult.total >= priorityConfig.cutline ? '🔴' : (scoreResult.total >= priorityConfig.cutline * 0.6 ? '🟡' : '⚪');
-                    const candidateNames = projectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
-                    const sourceLabel = projectTag.status === 'ambiguous'
+                    const candidateNames = finalProjectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
+                    const aiResolvedTag = finalProjectTag !== projectTag ? ' [AI확정]' : '';
+                    const sourceLabel = finalProjectTag.status === 'ambiguous'
                         ? `${grade}${scoreResult.total}점 메일자동분석(후보 다수: ${candidateNames})`
-                        : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})`;
+                        : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})${aiResolvedTag}`;
                     const mailRawObj = { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName };
                     window.TaskInbox.add(item.task, { source: sourceLabel, mailRaw: mailRawObj });
                     const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 항상 맨 앞이 방금 추가한 항목
@@ -13920,8 +13934,8 @@ window._autoMailFetchTick = async function() {
                     const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
                         && !String(item.task['완료일'] || '').includes('날짜확인필요');
                     if (window.isAutoRegisterEnabled && window.isAutoRegisterEnabled()
-                        && projectTag.status === 'matched' && hasValidDate) {
-                        const target = projectTag.candidates[0];
+                        && finalProjectTag.status === 'matched' && hasValidDate) {
+                        const target = finalProjectTag.candidates[0];
                         const setAlarm = scoreResult.total >= priorityConfig.cutline; // 💡 배치는 무조건, 알림만 커트라인으로 결정
                         window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj, 0, setAlarm)
                             .then(function(result) {
@@ -14663,7 +14677,7 @@ window.pasteRetryAsManual    = (idx) => AR.retryAsManual('paste', idx);
 window.pasteBatchInsert      = () => AR.batchInsert('paste');
 window.pasteBatchToInbox     = () => AR.batchToInbox('paste');
 
-async function msCallGemini(apiKey, parsed) {
+async function msCallGemini(apiKey, parsed, candidateProjects) {
     const GAS_URL = localStorage.getItem("gas_server_url") || "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
     // 💡 더 이상 엑셀 행에서 찾지 않고 Summary(프로젝트 정보) 값을 그대로 사용
@@ -14676,7 +14690,22 @@ async function msCallGemini(apiKey, parsed) {
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
     // 💡 파싱 원문 전역 보관
     window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', date: parsed.date || '', body2000: mailText };
-    const prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null);
+    let prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null);
+
+    // 💡 [구체적 키워드 우선 매칭 v2] 키워드로 후보가 2개 이상 걸린 경우, AI에게 "이 메일의 핵심
+    //    주제 프로젝트가 후보 중 뭔지" 맥락으로 판단시킴. 확신 없으면(신뢰도 낮음/복수) 그대로
+    //    사람 확인으로 넘김 — 오탐 방지를 위해 "상" 신뢰도일 때만 자동확정에 사용(호출부에서 처리)
+    if (candidateProjects && candidateProjects.length > 1) {
+        const names = candidateProjects.map(c => c.model || c.customer).join(', ');
+        prompt += `\n\n--- 추가 판단 요청 (키워드 매칭으로 아래 프로젝트들이 후보로 걸림) ---\n` +
+            `후보 프로젝트: ${names}\n` +
+            `이 메일이 단순히 언급만 하는 게 아니라, 실제로 다루는 "핵심 주제"가 후보 중 하나로 명확한지 판단하세요.\n` +
+            `- 핵심 주제가 명확하면: 해당 프로젝트명을 그대로 아래 필드에 적으세요.\n` +
+            `- 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: "복수"라고 적으세요.\n` +
+            `위 JSON에 아래 두 필드를 추가로 포함해서 응답하세요:\n` +
+            `"주매칭프로젝트": "${names.split(',')[0].trim()} 또는 다른 후보명 또는 복수",\n` +
+            `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)"`;
+    }
 
     const MAX_RETRY = 3;
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
