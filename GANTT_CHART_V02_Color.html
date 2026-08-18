@@ -10294,7 +10294,7 @@ window.renderTaskInbox = function() {
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 140px; min-width:140px; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
                 <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap; background:#2c5f8a; color:#fff; flex-shrink:0;">➡️ ${_ibEn ? 'Current Project' : '현재 프로젝트'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button class="action-btn" onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="font-size:12px; white-space:nowrap; background:#2f9e44; color:#fff; flex-shrink:0;">✅ ${_ibEn ? 'Send to matched' : '매칭 프로젝트로 전송'}</button>`
+                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="font-size:11px; white-space:nowrap; padding:0 8px; height:29px; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer; flex-shrink:0; box-sizing:border-box;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
                     : ''}
                 <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22; flex-shrink:0;">📤 ${_ibEn ? 'Other Project' : '다른 프로젝트'}</button>
                 <button class="action-btn" onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
@@ -12452,6 +12452,11 @@ window.mfAnalyzeSingle = async function(idx) {
     document.getElementById('mf-result-count').textContent = window._mfResults.length;
     mfRenderList(window._mfResults);
 
+    // 💡 [완전자동] mail_mode='full'이면 TaskInbox 대기 없이 바로 Gantt 등록 시도
+    window._msTryFullAutoRegister(result,
+        { subject: result.subject, sender: result.sender, date: result.date, body2000: result.body, fileName: f.name },
+        () => mfRenderList(window._mfResults));
+
     // 💡 완료 후 버튼 상태 복구 + 완료 표시 (성공/실패 색상 구분)
     //    이 시점에 idx 위치의 파일이 이미 제외/변경됐을 수 있으므로 요소 존재만 확인 후 갱신
     const btnAfter = document.getElementById(`mf-pending-analyze-${idx}`);
@@ -12884,6 +12889,13 @@ window.mfAnalyze = async function() {
     document.getElementById('mf-progress').style.display  = 'none';
     document.getElementById('mf-result-count').textContent = results.length;
     mfRenderList(results);
+
+    // 💡 [완전자동] mail_mode='full'이면 TaskInbox 대기 없이 바로 Gantt 등록 시도 (건별)
+    results.forEach(function(r) {
+        window._msTryFullAutoRegister(r,
+            { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName },
+            () => mfRenderList(window._mfResults));
+    });
 };
 
 // ─── 파일 일괄 분석 강제 중단/초기화 ─────────────────────────
@@ -13440,6 +13452,11 @@ window.msFetchMail = async function() {
             document.getElementById('ms-analyzed-count').textContent = analyzedSoFar;
             msRenderList(window._msResults);
 
+            // 💡 [완전자동] mail_mode='full'이면 TaskInbox 대기 없이 바로 Gantt 등록 시도
+            window._msTryFullAutoRegister(item,
+                { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName },
+                () => msRenderList(window._msResults));
+
             if (i < data.data.length - 1 && !window._msAnalyzeCancelled) await new Promise(r => setTimeout(r, 4000));
         }
 
@@ -13890,6 +13907,41 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         if (resp.ok && file && file.id) return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0 };
         return { ok: false, reason: 'upload_failed' };
     } catch (e) { return { ok: false, reason: e.message }; }
+};
+
+// 💡 [완전자동] mail_mode='full'이면 메일서버/파일첨부 탭(수동 분석)도 자동틱과 동일 기준으로
+//    TaskInbox 대기 없이 바로 Gantt에 등록 — 매칭 확정(단일후보) + 내 담당 + 날짜확정일 때만.
+//    (그 외엔 기존처럼 TaskInbox '대기'로 쌓여서, 사람이 [✅매칭전송]/[📤다른 프로젝트]로 직접 처리)
+//    반환: true면 완전자동 처리를 "시도"함(성공여부는 비동기), false면 조건 미충족으로 건너뜀
+window._msTryFullAutoRegister = function(item, mailRawObj, onDone) {
+    if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) return false;
+    if (!item || !item.task || !item._projectTag || item._projectTag.status !== 'matched') return false;
+    const target = (item._projectTag.candidates || [])[0];
+    if (!target || !target.drive_file_id) return false;
+    const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
+        && !String(item.task['완료일'] || '').includes('날짜확인필요');
+    if (!hasValidDate) return false;
+    if (!window._msNamesMatch(target.assignee, window.currentUserName)) return false;
+
+    const srcLabel = `${item._scoreGrade || ''}${item._score != null ? item._score + '점 ' : ''}메일분석(${item.project || target.model || ''})`;
+    window.TaskInbox.add(item.task, {
+        source: srcLabel, mailRaw: mailRawObj,
+        matchedProject: item._projectTag, alarmWorthy: !!item._alarmWorthy
+    });
+    const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 항상 맨 앞이 방금 추가한 항목
+    window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj, 0, !!item._alarmWorthy)
+        .then(function(result) {
+            if (result.ok) {
+                window.TaskInbox.setStatus(newUid, '자동배치됨', { type: '메일완전자동', target: target.file_name, at: new Date().toISOString() });
+                item.registered = true;
+                item.selected = false;
+                if (window.showToast) window.showToast(`🎯 "${item.task['업무명'] || ''}" 완전자동 배치 완료 → ${target.file_name} (${result.label || ''})`, 'info');
+            } else {
+                console.warn('[메일 완전자동] 등록 실패, TaskInbox 대기 상태로 유지:', result.reason);
+            }
+            if (onDone) onDone();
+        });
+    return true;
 };
 
 // ─── [메일 자동처리 ①] 자동 수집 틱 — 저장된 계정으로 백그라운드 수집, 기존 큐에 append만 ──
