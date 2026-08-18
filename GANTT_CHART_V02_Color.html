@@ -436,10 +436,19 @@
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
-/* 📑 [멀티시트] 시트탭 바가 차지한 높이(약 49px)만큼, 그 바가 보일 때만 간트 표 스크롤 영역을 줄여서
-   전체 콘텐츠가 다시 화면(#app-main) 안에 들어오게 함 — 안 줄이면 "변경 이력 확인"이 아래로 밀려나서
-   페이지 스크롤이 새로 생기고, 그 상태로 스크롤하면 sticky인 시트탭 바 밑으로 필터바가 파고듦 */
-body.has-multi-sheet-bar #gantt-table-scroll { max-height: calc(70vh + 110px + 44px - 53px) !important; }
+/* 📑 [멀티시트] 시트탭 바가 차지한 높이(약 49px)만큼, 그 바가 보일 때만 각 탭의 내부 스크롤 영역을 줄여서
+   전체 콘텐츠가 다시 화면(#app-main) 안에 들어오게 함 — 안 줄이면 탭 하단 콘텐츠가 화면 밖으로 밀려나서
+   페이지 스크롤이 새로 생기고, 그 상태로 스크롤하면 sticky인 시트탭 바 밑으로 다른 요소가 파고듦.
+   (Gantt만 겪는 문제가 아니라, 탭마다 똑같은 calc(70vh/100vh ± Npx) 패턴을 각자 갖고 있어서 전부 대상) */
+body.has-multi-sheet-bar #gantt-table-scroll     { max-height: calc(70vh + 110px + 44px - 53px) !important; }
+body.has-multi-sheet-bar #addr-table-scroll,
+body.has-multi-sheet-bar #briefspec-table-scroll,
+body.has-multi-sheet-bar #mctable-table-scroll,
+body.has-multi-sheet-bar #mctable-compare-scroll { max-height: calc(70vh + 160px - 53px) !important; }
+body.has-multi-sheet-bar #alarm-table-scroll     { max-height: calc(100vh - 280px - 53px) !important; }
+body.has-multi-sheet-bar #summary-table-scroll,
+body.has-multi-sheet-bar #calendar-table-scroll,
+body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160px - 53px) !important; }
 
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
@@ -740,19 +749,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-alarm" class="tab-panel">
   <div class="concept-tab-wrap" style="max-width:1200px; padding:22px 26px;">
 
-    <!-- 알람/공지 뷰 토글 — 다른 탭들과 통일감 있게 concept-header-box 라운드 박스 안 버튼으로 -->
-    <div class="concept-header-box" style="margin-bottom:14px;">
-      <div class="btn-group" style="margin-left:0;">
-        <button id="av-tab-alarm" class="action-btn" onclick="window._switchAlarmView('alarm')"
-              style="background:#2c5f8a; color:#fff; border-color:#2c5f8a; min-width:auto;">🔔 Alarm</button>
-        <button id="av-tab-notice" class="action-btn" onclick="window._switchAlarmView('notice')"
-              style="background:#fff; color:#2c5f8a; border-color:#2c5f8a; min-width:auto;">📢 Notice</button>
-      </div>
-    </div>
-
     <div id="alarm-view-alarm">
-    <div class="concept-header-box">
-      <h2 data-i18n="h-alarm">🔔 알람 관리</h2>
+    <div class="concept-header-box" id="alarm-header-box">
+      <!-- 💡 [멀티시트 UI 통일] 알람/공지 토글 — 두 뷰 모두 같은 한 줄짜리 헤더박스를 쓰도록,
+           이 토글 요소를 _switchAlarmView()가 활성 뷰의 헤더박스 맨 앞으로 옮겨 씀 -->
+      <div id="alarm-view-toggle" style="display:flex; align-items:center; gap:14px; padding-right:14px; margin-right:14px; border-right:1px solid #e3e6ea; flex-shrink:0; align-self:stretch;">
+        <span id="av-tab-alarm" onclick="window._switchAlarmView('alarm')"
+              style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🔔 Alarm</span>
+        <span id="av-tab-notice" onclick="window._switchAlarmView('notice')"
+              style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">📢 Notice</span>
+      </div>
       <span id="alarm-server-status" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
       <div class="btn-group">
         <button class="action-btn" id="alarm-send-all-btn"
@@ -765,7 +771,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
     <!-- 알람 목록 테이블 -->
     <div class="concept-section" style="padding:0; overflow:hidden;">
-      <div style="overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 280px);">
+      <div id="alarm-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 280px);">
       <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
         <thead style="position:sticky; top:0; z-index:10;">
           <tr style="background:#f4f6f8;">
@@ -1141,9 +1147,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 <div id="tab-notice" style="display:none;">
   <div class="concept-tab-wrap" style="max-width:1100px; padding:22px 26px;">
-    <div class="concept-header-box">
-      <h2 data-i18n="h-notice">📢 공지 관리</h2>
-      <span data-i18n="notice-desc" style="font-size:12px; color:#888; margin-left:10px;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
+    <div class="concept-header-box" id="notice-header-box">
+      <span data-i18n="notice-desc" style="font-size:12px; color:#888;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
       <div class="btn-group">
         <button class="action-btn" data-i18n="btn-notice-add" onclick="window.openNoticeModal()"
                 style="border-color:#27ae60; color:#27ae60;">+ 공지 등록</button>
@@ -1344,7 +1349,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     background-color: #efefef !important;
                 }
             </style>
-            <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+            <div id="addr-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
                 <table class="concept-table">
                     <thead>
                         <tr>
@@ -1391,7 +1396,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div class="btn-group"><button type="button" class="action-btn" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
             <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
-        <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
+        <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
         <div class="concept-section">
             <style>
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
@@ -1563,7 +1568,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #briefspec-body input[data-field="modelA"], #briefspec-body input[data-field="modelB"], #briefspec-body input[data-field="modelC"] { text-align: center !important; }
             </style>
-            <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+            <div id="briefspec-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
             <table class="concept-table">
                 <thead>
                     <tr>
@@ -1630,7 +1635,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div class="concept-section">
             <div id="mc-normal-section">
-            <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+            <div id="mctable-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
             <style>
                 /* M.C Table 탭 내의 표 머릿글(th) 중앙 정렬 강제 적용 */
                 #tab-mctable .concept-table th {
@@ -1736,7 +1741,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
             </div>
             <div id="mc-comparison-section" style="display:none;">
-                <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+                <div id="mctable-compare-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
                     <table class="concept-table" id="mc-comparison-table" style="min-width:900px;"></table>
                 </div>
             </div>
@@ -1757,7 +1762,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button class="action-btn" data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
             <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
-        <div style="overflow-y:auto; max-height:calc(100vh - 160px);">
+        <div id="calendar-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
         </div>
     </div>
@@ -2900,6 +2905,14 @@ ${mailText}`;
         window.recalculateSchedules();
         if (typeof renderTable === 'function') renderTable(globalData);
         window.renderSheetTabsBar();
+        // 💡 [멀티시트] 알람 탭은 collectAlarmItems()가 매번 새로 훑는 캐시성 뷰라, 시트를 전환해도
+        //    자동으로 안 다시 그려서 "이전 시트의 알람 목록이 그대로 남는" 버그가 있었음 — 지금 알람 탭이
+        //    열려있으면(Alarm/Notice 어느 쪽이든) 새 시트 기준으로 즉시 다시 그림
+        const tabAlarmEl = document.getElementById('tab-alarm');
+        if (tabAlarmEl && tabAlarmEl.classList.contains('active')) {
+            if (window._alarmView === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
+            else if (window.renderAlarmTab) window.renderAlarmTab();
+        }
     };
 
     // fileId 기준으로 이미 열려있는 시트 찾기
@@ -3049,6 +3062,21 @@ ${mailText}`;
             headerRow.appendChild(arrow);
             const label = document.createElement('span');
             label.textContent = `${pmName} (${groupFiles.length})`;
+            // 💡 [멀티시트] 담당자 이름을 클릭하면 그 담당자의 프로젝트를 전부 시트로 한 번에 열기
+            if (pmName !== UNASSIGNED) {
+                label.style.cssText = 'text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;';
+                label.title = _dmEn ? `Open all ${groupFiles.length} project(s) for ${pmName} at once` : `[${pmName}] 담당 프로젝트 ${groupFiles.length}개를 한 번에 엽니다`;
+                label.onclick = async function(e) {
+                    e.stopPropagation(); // 화살표(접기/펴기) 클릭과 안 겹치게
+                    const msg = _dmEn ? `Open all ${groupFiles.length} project(s) for [${pmName}] as separate sheets?` : `[${pmName}] 담당 프로젝트 ${groupFiles.length}개를 전부 새 시트로 여시겠습니까?`;
+                    if (!confirm(msg)) return;
+                    window.closeDriveModal();
+                    for (const file of groupFiles) {
+                        await window.executeLoadFile(file.id, file.name);
+                    }
+                    if (window.showToast) window.showToast((_dmEn ? `✅ Opened ${groupFiles.length} project(s) for ` : `✅ [${pmName}] 프로젝트 ${groupFiles.length}개 열기 완료`) + (_dmEn ? pmName : ''), 'info');
+                };
+            }
             headerRow.appendChild(label);
 
             const body = document.createElement('div');
@@ -22095,9 +22123,14 @@ document.addEventListener('DOMContentLoaded', function() {
         const tabNotice = document.getElementById('av-tab-notice');
         if (alarmSec)  alarmSec.style.display  = view === 'alarm'  ? 'block' : 'none';
         if (noticeSec) noticeSec.style.display = view === 'notice' ? 'block' : 'none';
-        // 💡 다른 탭들의 .action-btn/.btn.active 관례와 동일하게 — 활성:채운 파랑, 비활성:흰 배경+파란 테두리
-        if (tabAlarm)  { tabAlarm.style.background  = view === 'alarm'  ? '#2c5f8a' : '#fff'; tabAlarm.style.color  = view === 'alarm'  ? '#fff' : '#2c5f8a'; }
-        if (tabNotice) { tabNotice.style.background = view === 'notice' ? '#2c5f8a' : '#fff'; tabNotice.style.color = view === 'notice' ? '#fff' : '#2c5f8a'; }
+        // 💡 [멀티시트 UI 통일] 알람/공지 토글을 지금 보이는 뷰의 헤더박스 맨 앞으로 옮겨서,
+        //    두 뷰 모두 "토글 | 상태·설명  ...버튼들" 한 줄짜리 통합 헤더로 보이게 함
+        const toggleEl = document.getElementById('alarm-view-toggle');
+        const targetBox = document.getElementById(view === 'alarm' ? 'alarm-header-box' : 'notice-header-box');
+        if (toggleEl && targetBox && targetBox.firstElementChild !== toggleEl) targetBox.insertBefore(toggleEl, targetBox.firstChild);
+        // 밑줄 탭 스타일 — 활성:파란 글자+밑줄, 비활성:회색 글자+투명 밑줄
+        if (tabAlarm)  { tabAlarm.style.color  = view === 'alarm'  ? '#2c5f8a' : '#999'; tabAlarm.style.borderBottomColor  = view === 'alarm'  ? '#2c5f8a' : 'transparent'; }
+        if (tabNotice) { tabNotice.style.color = view === 'notice' ? '#2c5f8a' : '#999'; tabNotice.style.borderBottomColor = view === 'notice' ? '#2c5f8a' : 'transparent'; }
         if (view === 'alarm'  && window.renderAlarmTab)  window.renderAlarmTab();
         if (view === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
         try { localStorage.setItem('gantt_alarm_view', view); } catch(e) {}
