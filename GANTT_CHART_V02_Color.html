@@ -2601,6 +2601,8 @@ ${mailText}`;
         window.changeLogs = []; window.lastSavedLogCount = 0;
         window.currentDriveFileId = null; window.currentDriveFileName = null;
         window.projectMeta = {}; window.tabData = {};
+        window._compareTargetId = null;
+        if (window.loadScheduleBaselines) window.loadScheduleBaselines(); // 💡 [버그 수정] 프로젝트별 계획 분리
 
         if (typeof renderTable === 'function') renderTable(globalData);
         if (window.clearAllTabFields) window.clearAllTabFields(); // 💡 Summary/Brief SPEC/M.C Table/Address까지 함께 비움
@@ -2898,6 +2900,10 @@ ${mailText}`;
         window.projectDistributions = snap.projectDistributions;
         window.changeLogs = snap.changeLogs; window.lastSavedLogCount = snap.lastSavedLogCount;
         window.currentDriveFileId = snap.currentDriveFileId; window.currentDriveFileName = snap.currentDriveFileName;
+        // 💡 [버그 수정] 계획(Baseline)은 프로젝트별로 분리 저장되므로, 시트를 전환하면 그 시트(프로젝트) 것으로 다시 로드
+        //    (예전엔 브라우저 전체에 계획 목록이 하나뿐이라, 시트를 바꿔도 같은 계획이 그대로 보였음)
+        window._compareTargetId = null;
+        if (window.loadScheduleBaselines) window.loadScheduleBaselines();
 
         window.mcNormalizeAfterLoad();
         if (window.populateTabData) window.populateTabData();
@@ -3018,6 +3024,9 @@ ${mailText}`;
                 window.updateCurrentFileLabel();
                 window.recalculateSchedules();
                 window.renderSheetTabsBar(); // 💡 [멀티시트]
+                // 💡 [버그 수정] 계획(Baseline)은 프로젝트별로 분리 저장되므로, 프로젝트가 바뀌면 그 프로젝트 것으로 다시 로드
+                window._compareTargetId = null;
+                if (window.loadScheduleBaselines) window.loadScheduleBaselines();
                 window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
@@ -4086,12 +4095,15 @@ ${mailText}`;
     // ═══════════════════════════════════════════════════════
     // ═══════════════════════════════════════════════════════
     // 📐 계획(Baseline) 저장 및 비교 — "최초 수립 일정 대비 얼마나 바뀌었는지" 확인용
-    //    ⚠️ 참고: localStorage에 전역으로 저장되어, 같은 브라우저에서 다른 프로젝트 파일을 열어도
-    //    계획 목록이 공유됩니다.
+    //    ⚠️ [버그 수정 완료] 예전엔 localStorage에 전역 고정 키로 저장돼서, 같은 브라우저에서 어떤 프로젝트를
+    //    열든 계획 목록이 공유되는 문제가 있었음 — 지금은 프로젝트(드라이브 파일 ID)별로 키를 분리함.
     //    ⚠️ 참고: 행 매칭은 "0레벨 소속 그룹명 + 레벨 + 업무명" 조합으로 하므로, 같은 0레벨 그룹
     //    "안"에서 완전히 동일한 업무명이 반복되는 경우까지는 구분하지 못합니다.
     // ═══════════════════════════════════════════════════════
-    const BASELINE_STORAGE_KEY = 'gantt_schedule_baselines';
+    // 💡 [버그 수정] 예전엔 이 키가 프로젝트 구분 없이 고정 문자열이라, 브라우저 하나에서 어떤 프로젝트를 열든
+    //    전부 같은 계획(Baseline) 목록을 공유했음 — 멀티시트로 여러 프로젝트를 동시에 열면서 바로 드러남.
+    //    프로젝트(드라이브 파일 ID)별로 키를 분리.
+    function _baselineStorageKey() { return 'gantt_schedule_baselines_' + (window.currentDriveFileId || 'local'); }
     const CURRENT_BASELINE_ID = 'bl_current'; // 📌 "현재 일정" 고정 슬롯 id
 
     window._scheduleBaselines = [];
@@ -4152,14 +4164,25 @@ ${mailText}`;
         persistScheduleBaselines();
     };
 
+    const BASELINE_LEGACY_KEY = 'gantt_schedule_baselines'; // 💡 프로젝트 분리 전 예전 단일 키 (마이그레이션용, 삭제하지 않음)
     window.loadScheduleBaselines = function() {
-        try { window._scheduleBaselines = JSON.parse(localStorage.getItem(BASELINE_STORAGE_KEY) || '[]'); }
+        try {
+            const key = _baselineStorageKey();
+            let raw = localStorage.getItem(key);
+            if (!raw) {
+                // 💡 이 프로젝트 전용 키에 아직 데이터가 없으면, 예전 전역 키에 남아있던 계획을 1회성으로 물려받음
+                //    (지우진 않음 — 다른 프로젝트도 처음 열 때 똑같이 이 기록을 이어받게 하기 위함)
+                const legacy = localStorage.getItem(BASELINE_LEGACY_KEY);
+                if (legacy && legacy !== '[]') raw = legacy;
+            }
+            window._scheduleBaselines = JSON.parse(raw || '[]');
+        }
         catch(e) { window._scheduleBaselines = []; }
     };
     window.loadScheduleBaselines();
 
     function persistScheduleBaselines() {
-        try { localStorage.setItem(BASELINE_STORAGE_KEY, JSON.stringify(window._scheduleBaselines)); } catch(e) {}
+        try { localStorage.setItem(_baselineStorageKey(), JSON.stringify(window._scheduleBaselines)); } catch(e) {}
     }
 
     function getTaskKey(row) {
@@ -10466,7 +10489,7 @@ window.renderTaskInbox = function() {
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 auto; min-width:48px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 0 68px; width:68px; min-width:0; padding:0 2px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
                 <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:0 0 90px; width:90px; font-size:10.5px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
                     ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:0 0 90px; width:90px; font-size:10.5px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
