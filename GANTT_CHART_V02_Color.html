@@ -284,7 +284,7 @@
     }
     #myTable tbody tr.status-pending .content-cell-trans,
     #myTable tbody tr.status-pending .content-cell-trans * {
-        color: #2f9e44 !important;
+        color: #f08c00 !important;
     }
     /* 번역 결과물(.trans-result)은 행 상태색보다 항상 파란색이 우선 — [대괄호] bold 태그 포함 전체 */
     #myTable tbody tr .content-cell-trans .trans-result,
@@ -308,12 +308,12 @@
         color: #e03131 !important;
     }
 
-    /* 💡 업무 상태가 "대기(Pending)"인 행 — 글자색 초록 */
+    /* 💡 업무 상태가 "대기(Pending)"인 행 — 글자색 주황 */
     #myTable tbody tr.status-pending td {
-        color: #2f9e44 !important;
+        color: #f08c00 !important;
     }
     #myTable tbody tr.status-pending.parent-row .no-td .row-num-span {
-        color: #2f9e44 !important;
+        color: #f08c00 !important;
     }
 
     /* 알림 켜진 행 표시 (전체 행에 옅은 푸른 배경 + 좌측 강조선) — 지브라(줄무늬) 행보다 우선 적용되도록 tbody까지 포함해 우선순위 보강 */
@@ -435,6 +435,11 @@
 
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
+
+/* 📑 [멀티시트] 시트탭 바가 차지한 높이(약 49px)만큼, 그 바가 보일 때만 간트 표 스크롤 영역을 줄여서
+   전체 콘텐츠가 다시 화면(#app-main) 안에 들어오게 함 — 안 줄이면 "변경 이력 확인"이 아래로 밀려나서
+   페이지 스크롤이 새로 생기고, 그 상태로 스크롤하면 sticky인 시트탭 바 밑으로 필터바가 파고듦 */
+body.has-multi-sheet-bar #gantt-table-scroll { max-height: calc(70vh + 110px + 44px - 53px) !important; }
 
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
@@ -727,7 +732,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="app-main">
 
 <!-- 📑 [멀티시트] 어느 내부 탭(Gantt/Summary/알람 등)을 보고 있든 항상 보임 — 동시에 열린 프로젝트가 2개 이상일 때만 표시 -->
-<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 8px 0 8px; overflow-x:auto; background:#dee2e6;"></div>
+<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 8px 0 8px; margin-bottom:2px; overflow-x:auto; background:#dee2e6;"></div>
 
 <!-- ══════════════════════════════════════════════
      Alarm 탭 패널
@@ -1106,7 +1111,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div id="print-header"><h2 id="print-title"></h2><div id="print-date"></div></div>
 
     <div class="container" id="table-container">
-        <div style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px + 44px);">
+        <div id="gantt-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px + 44px);">
         <table id="myTable">
             <thead id="table-head"></thead>
             <tbody id="table-body">
@@ -2949,7 +2954,9 @@ ${mailText}`;
     window.renderSheetTabsBar = function() {
         const bar = document.getElementById('sheet-tabs-bar');
         if (!bar) return;
-        if (window._sheets.length <= 1) { bar.style.display = 'none'; return; }
+        const multi = window._sheets.length > 1;
+        document.body.classList.toggle('has-multi-sheet-bar', multi); // 💡 간트 표 높이를 그만큼 줄이기 위한 훅
+        if (!multi) { bar.style.display = 'none'; return; }
         bar.style.display = 'flex';
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
@@ -7069,7 +7076,7 @@ window.deleteHistoryByDateRange = function() {
                                 style=\"border:none; background:transparent; font-size:var(--table-font-size); font-weight:${row._level === 0 ? 'bold' : 'normal'}; color:inherit; white-space:nowrap;
                                        -webkit-appearance:none; -moz-appearance:none; appearance:none;\">
                                 ${lang.status.map((s, idx) => {
-                                    const optColor = ['', 'rgba(0,0,0,0.45)', '#2f9e44', '#e03131'][idx] || '';
+                                    const optColor = ['', 'rgba(0,0,0,0.45)', '#f08c00', '#e03131'][idx] || '';
                                     const colorAttr = optColor ? ` style=\"color:${optColor};\"` : '';
                                     return `<option value=\"${s}\" ${statusVal===s?'selected':''}${colorAttr}>${s}</option>`;
                                 }).join('')}
@@ -10429,12 +10436,12 @@ window.renderTaskInbox = function() {
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 90px; min-width:80px; padding:0 5px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
-                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:1.2 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 8px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current' : '현재'}</button>
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0.5 1 55px; min-width:48px; max-width:75px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
+                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:1.4 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:1.2 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 8px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
+                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:1.4 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
                     : ''}
-                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:1.2 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 8px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other' : '다른'}</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:1.4 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
                 <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
