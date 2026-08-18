@@ -132,7 +132,7 @@
     .btn.active { background-color: #2c5f8a; color: white; border-color: #2c5f8a; font-weight: bold; box-shadow: 0 0 5px rgba(44,95,138,0.4); }
     .filter-group .btn[data-value="완료"] { color: rgba(0,0,0,0.4); }
     .filter-group .btn[data-value="지연"] { color: #e03131; }
-    .filter-group .btn[data-value="대기"] { color: #2f9e44; }
+    .filter-group .btn[data-value="대기"] { color: #f08c00; }
     .filter-group .btn.active[data-value] { color: #fff !important; }
     .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
     .btn.dimmed:hover { opacity: 0.8; background-color: #e2e6ea; color: #333; border: 1px solid #ccc; }
@@ -6948,7 +6948,9 @@ window.deleteHistoryByDateRange = function() {
                         let taskTxt = "";
                         if (row._level === 0) taskTxt = row._origDev; else if (row._level === 1) taskTxt = row._origT1; else if (row._level === 2) taskTxt = row._origT2; else if (row._level === 3) taskTxt = row._origT3; else if (row._level === 4) taskTxt = row._origT4;
                         if (taskTxt === undefined || taskTxt === null) taskTxt = "";
-                        let prefix = row._level > 0 ? (row._isLastChild ? '└ ' : '├ ') : '';
+                        let prefix = row._level > 0
+                            ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
+                            : '';
                         let indentEm = (row._level || 0) * 1.2;
                         let wbsStyle = `text-align: left; padding-left: calc(${indentEm}em + 5px) !important; font-weight: ${row._level === 0 ? 'bold' : 'normal'}; color: inherit; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;`;
                         let wbsColIdx = (row._level === 0) ? colIdx.devStage : (row._level === 1 ? colIdx.taskType1 : (row._level === 2 ? colIdx.taskType2 : (row._level === 3 ? colIdx.taskType3 : colIdx.taskType4)));
@@ -10296,13 +10298,13 @@ window.renderTaskInbox = function() {
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 80px; min-width:70px; max-width:120px; padding:0 5px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
-                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:0 0 auto; font-size:12px; white-space:nowrap; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current' : '현재'}</button>
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 90px; min-width:80px; padding:0 5px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
+                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:1.2 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 8px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current' : '현재'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:0 0 auto; font-size:12px; white-space:nowrap; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
+                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:1.2 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 8px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
                     : ''}
-                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:0 0 auto; font-size:12px; white-space:nowrap; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other' : '다른'}</button>
-                <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:13px; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:1.2 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 8px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other' : '다른'}</button>
+                <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -13418,6 +13420,7 @@ window.msFetchMail = async function() {
                     selected: false, registered: false, error: 'API키 미설정'
                 };
             });
+            if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); // 💡 미분류 배지 갱신
             msRenderList(window._msResults);
             return;
         }
@@ -13515,6 +13518,7 @@ window.msFetchMail = async function() {
         document.getElementById('ms-list-header').style.display = 'block';
         document.getElementById('ms-batch-btn').style.display   = 'block';
         document.getElementById('ms-batch-inbox-btn').style.display = 'block';
+        if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); // 💡 미분류 배지 갱신
 
     } catch(e) {
         document.getElementById('ms-status').textContent = (_msEn0 ? `❌ Error: ${e.message}` : `❌ 오류: ${e.message}`);
@@ -13525,6 +13529,7 @@ window.msFetchMail = async function() {
             document.getElementById('ms-batch-btn').style.display   = 'block';
             document.getElementById('ms-batch-inbox-btn').style.display = 'block';
             msRenderList(window._msResults);
+            if (window._msRefreshQueueBadges) window._msRefreshQueueBadges(); // 💡 미분류 배지 갱신
         }
     }
 };
@@ -14434,6 +14439,10 @@ window.openMailAutoConfigModal = async function() {
     document.getElementById('mac-cutline').value    = cfg.cutline;
     window._macRenderTitleRows(cfg.titleScores);
     window._macRenderKeywordRows(cfg.urgentKeywords);
+    // 💡 미분류/신규발신자 배지는 최초 생성 시 "0"으로 박혀있고, 그 뒤로는 메일 수집이 이 모달이
+    //    열려있는 동안에만 우연히 갱신됐음(수동 "메일 가져오기"는 이 함수를 아예 모름) — 모달을 열 때마다
+    //    항상 현재 값으로 다시 채움
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
 
     modal.style.display = 'block';
     window.bringModalToFront('mail-auto-config-modal');
@@ -14610,6 +14619,10 @@ window.openMailAutoConfigModal = async function() {
     document.getElementById('mac-cutline').value    = cfg.cutline;
     window._macRenderTitleRows(cfg.titleScores);
     window._macRenderKeywordRows(cfg.urgentKeywords);
+    // 💡 미분류/신규발신자 배지는 최초 생성 시 "0"으로 박혀있고, 그 뒤로는 메일 수집이 이 모달이
+    //    열려있는 동안에만 우연히 갱신됐음(수동 "메일 가져오기"는 이 함수를 아예 모름) — 모달을 열 때마다
+    //    항상 현재 값으로 다시 채움
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
 
     modal.style.display = 'block';
     window.bringModalToFront('mail-auto-config-modal');
