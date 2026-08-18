@@ -726,6 +726,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 <div id="app-main">
 
+<!-- 📑 [멀티시트] 어느 내부 탭(Gantt/Summary/알람 등)을 보고 있든 항상 보임 — 동시에 열린 프로젝트가 2개 이상일 때만 표시 -->
+<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 8px 0 8px; overflow-x:auto; background:#dee2e6;"></div>
+
 <!-- ══════════════════════════════════════════════
      Alarm 탭 패널
      ══════════════════════════════════════════════ -->
@@ -1082,8 +1085,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div>
 
 <div id="tab-gantt" class="tab-panel active">
-    <!-- 📑 [멀티시트] 동시에 열린 프로젝트가 2개 이상일 때만 보임 -->
-    <div id="sheet-tabs-bar" style="display:none; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 8px 0 8px; overflow-x:auto; background:#dee2e6;"></div>
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
     <div class="btn-group" id="gantt-filter-btn-group" style="margin-left: 15px; padding-left: 15px; border-left: 2px solid #ddd;">
@@ -17418,6 +17419,28 @@ window.checkAndSendAlarms = async function(isManual) {
     }
 };
 
+// 💡 [멀티시트] checkAndSendAlarms()는 화면(DOM)에 실제로 렌더링된 행을 기준으로 훑기 때문에
+//    "지금 활성화된 시트" 하나만 체크할 수 있음 — 열려있는 시트 전부를 잠깐씩 전환해가며 순서대로
+//    체크하고, 끝나면 원래 보던 시트로 되돌려놓는다. (자동/백그라운드 체크 전용 — 수동 버튼은 지금 보는
+//    화면만 체크하는 게 자연스러워서 그대로 둠)
+window._checkAndSendAlarmsAllSheets = async function(isManual) {
+    if (!window._sheets || window._sheets.length <= 1) {
+        return window.checkAndSendAlarms(isManual); // 시트가 0~1개면 지금 로직 그대로
+    }
+    const originalKey = window._activeSheetKey;
+    window._commitActiveSheet(); // 지금 보는 시트도 최신 편집내용까지 포함해서 체크되도록
+    const keys = window._sheets.map(function(s) { return s.key; });
+    for (const key of keys) {
+        if (key !== window._activeSheetKey) {
+            window.switchToSheet(key);
+            await new Promise(function(r) { setTimeout(r, 200); }); // 전환 후 렌더 완료 대기
+        }
+        try { await window.checkAndSendAlarms(isManual); }
+        catch (e) { console.warn('[알람][멀티시트] 체크 실패:', key, e.message); }
+    }
+    if (originalKey && originalKey !== window._activeSheetKey) window.switchToSheet(originalKey);
+};
+
 // 📌 앱 실행 중 매일 10시/13시/17시에도 자동 체크 — 브라우저 탭이 열려 있는 동안만 동작
 //    (앱 시작 시 체크는 DOMContentLoaded의 3초 후 setTimeout이 담당)
 const ALARM_CHECK_HOURS = [10, 13, 17];
@@ -17428,7 +17451,7 @@ function _autoAlarmHourlyTick() {
     const stamp = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}_${now.getHours()}`;
     if (stamp === _lastAutoAlarmHourStamp) return; // 같은 시간대에 이미 체크했으면 건너뜀
     _lastAutoAlarmHourStamp = stamp;
-    if (window.checkAndSendAlarms) window.checkAndSendAlarms(false);
+    if (window._checkAndSendAlarmsAllSheets) window._checkAndSendAlarmsAllSheets(false);
 }
 setInterval(_autoAlarmHourlyTick, 60 * 1000); // 1분마다 현재 시각이 체크 시간대인지 확인
 
@@ -21946,8 +21969,8 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.populateTabData) window.populateTabData();
     if (window.bmSetupAllRows) { window.bmSetupAllRows('bs'); window.bmSetupAllRows('mc'); }
     if (window.initProductImageSlots) window.initProductImageSlots();
-    // 자동 알람 체크 (3초 후 — 화면 렌더링 완료 후 실행)
-    setTimeout(() => { if (window.checkAndSendAlarms) window.checkAndSendAlarms(false); }, 3000);
+    // 자동 알람 체크 (3초 후 — 화면 렌더링 완료 후 실행) — [멀티시트] 열려있는 시트 전부 순회
+    setTimeout(() => { if (window._checkAndSendAlarmsAllSheets) window._checkAndSendAlarmsAllSheets(false); }, 3000);
     // 💡 저장된 펼치기 상태에 맞춰 버튼 텍스트 동기화
     ['bs', 'mc'].forEach(function(key) {
         const btn = document.getElementById(key + '-toggle-hidden-btn');
