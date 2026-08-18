@@ -1082,6 +1082,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 </div>
 
 <div id="tab-gantt" class="tab-panel active">
+    <!-- 📑 [멀티시트] 동시에 열린 프로젝트가 2개 이상일 때만 보임 -->
+    <div id="sheet-tabs-bar" style="display:none; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 8px 0 8px; overflow-x:auto; background:#dee2e6;"></div>
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
     <div class="btn-group" id="gantt-filter-btn-group" style="margin-left: 15px; padding-left: 15px; border-left: 2px solid #ddd;">
@@ -2572,20 +2574,27 @@ ${mailText}`;
         } catch (err) { console.error('project_index.json 갱신 실패 (메일 자동처리 매칭에 영향 — 저장 자체는 정상 완료됨):', err); return false; }
     };
 
-    // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭)
-    window.startNewProject = function() {
-        if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Brief SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
-
+    // 💡 화면/데이터를 빈 상태로 초기화 (확인창 없이) — startNewProject과 [멀티시트] 마지막 시트를 닫았을 때 공용으로 사용
+    window._resetToBlankNoConfirm = function(skipModal) {
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = [];
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
         window.changeLogs = []; window.lastSavedLogCount = 0;
-        window.currentDriveFileId = null;
+        window.currentDriveFileId = null; window.currentDriveFileName = null;
         window.projectMeta = {}; window.tabData = {};
 
         if (typeof renderTable === 'function') renderTable(globalData);
         if (window.clearAllTabFields) window.clearAllTabFields(); // 💡 Summary/Brief SPEC/M.C Table/Address까지 함께 비움
+        window.updateCurrentFileLabel();
+        window.renderSheetTabsBar();
+        if (!skipModal) document.getElementById('new-project-modal-overlay').style.display = 'flex';
+    };
 
-        document.getElementById('new-project-modal-overlay').style.display = 'flex';
+    // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭) — [멀티시트] 새 빈 시트로 추가
+    window.startNewProject = function() {
+        if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Brief SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
+
+        window._openAsNewSheet('new_' + Date.now(), null, null);
+        window._resetToBlankNoConfirm();
     };
 
     // 💡 Summary/Brief SPEC/M.C Table/Address 탭 필드를 전부 비움 (populateTabData는 "채우기"만 하고
@@ -2841,12 +2850,125 @@ ${mailText}`;
         } catch (err) { alert("백업 복원 실패: " + err.message); }
     };
 
+    // ═══════════════════════════════════════════════════════════
+    // 📑 [멀티 시트] 여러 프로젝트를 엑셀 워크북 시트처럼 한 탭에서 동시에 열어두기
+    //    구조: 실제 편집/렌더링 로직(수천 곳)은 지금처럼 전역 변수(globalData/colIdx/...)를
+    //    그대로 쓰고, "시트 전환"은 그 전역 변수 묶음을 통째로 저장했다가 다시 꽂아넣는 방식.
+    //    → 기존 코드는 단 한 줄도 안 건드리고, 로드/전환 시점만 감싸서 다중 시트를 흉내냄.
+    // ═══════════════════════════════════════════════════════════
+    window._sheets = window._sheets || [];       // [{ key, fileId, fileName, snapshot }]
+    window._activeSheetKey = window._activeSheetKey || null;
+
+    // 현재 화면에 떠 있는 전역 상태를 통째로 캡처 (참조만 저장 — 시트 전환 중엔 해당 시트가 "비활성"이라 아무도 안 건드림)
+    window._snapshotCurrentSheet = function() {
+        return {
+            globalData, colIdx, filterColumns, currentFilters, existingDevStages,
+            projectMeta: window.projectMeta, tabData: window.tabData,
+            projectDistributions: window.projectDistributions,
+            changeLogs: window.changeLogs, lastSavedLogCount: window.lastSavedLogCount,
+            currentDriveFileId: window.currentDriveFileId, currentDriveFileName: window.currentDriveFileName,
+        };
+    };
+
+    // 스냅샷을 전역 변수에 다시 꽂아넣고 화면을 그 시점으로 되돌림 (executeLoadFile 성공 시 하던 일과 동일)
+    window._restoreSheetSnapshot = function(snap) {
+        globalData = snap.globalData; colIdx = snap.colIdx; filterColumns = snap.filterColumns;
+        currentFilters = snap.currentFilters; existingDevStages = snap.existingDevStages;
+        window.projectMeta = snap.projectMeta; window.tabData = snap.tabData;
+        window.projectDistributions = snap.projectDistributions;
+        window.changeLogs = snap.changeLogs; window.lastSavedLogCount = snap.lastSavedLogCount;
+        window.currentDriveFileId = snap.currentDriveFileId; window.currentDriveFileName = snap.currentDriveFileName;
+
+        window.mcNormalizeAfterLoad();
+        if (window.populateTabData) window.populateTabData();
+        window.updateCurrentFileLabel();
+        window.recalculateSchedules();
+        if (typeof renderTable === 'function') renderTable(globalData);
+        window.renderSheetTabsBar();
+    };
+
+    // fileId 기준으로 이미 열려있는 시트 찾기
+    window._findSheetByFileId = function(fileId) {
+        return window._sheets.find(function(s) { return s.fileId === fileId; });
+    };
+
+    // 지금 활성 시트가 있으면 현재 화면 상태를 그 시트 슬롯에 저장(전환 전 항상 호출)
+    window._commitActiveSheet = function() {
+        if (!window._activeSheetKey) return;
+        const cur = window._sheets.find(function(s) { return s.key === window._activeSheetKey; });
+        if (cur) { cur.snapshot = window._snapshotCurrentSheet(); cur.fileName = window.currentDriveFileName || cur.fileName; }
+    };
+
+    // key로 시트 전환
+    window.switchToSheet = function(key) {
+        if (key === window._activeSheetKey) return;
+        window._commitActiveSheet();
+        const target = window._sheets.find(function(s) { return s.key === key; });
+        if (!target) return;
+        window._activeSheetKey = key;
+        window._restoreSheetSnapshot(target.snapshot);
+    };
+
+    // 시트 닫기 — 저장 여부는 묻지 않음(원본은 Drive에 있으므로 "닫기"는 안전한 조작). 활성 시트를 닫으면 이웃 시트로 전환
+    window.closeSheet = function(key) {
+        const idx = window._sheets.findIndex(function(s) { return s.key === key; });
+        if (idx === -1) return;
+        const wasActive = (key === window._activeSheetKey);
+        window._sheets.splice(idx, 1);
+        if (wasActive) {
+            if (window._sheets.length) {
+                const next = window._sheets[Math.min(idx, window._sheets.length - 1)];
+                window._activeSheetKey = null; // commit 스킵(닫은 시트는 저장 안 함)
+                window._activeSheetKey = next.key;
+                window._restoreSheetSnapshot(next.snapshot);
+            } else {
+                window._activeSheetKey = null;
+                window._resetToBlankNoConfirm(true); // 💡 마지막 시트를 닫음 — 안내 모달 없이 빈 화면으로
+            }
+        } else {
+            window.renderSheetTabsBar();
+        }
+    };
+
+    // 새 시트를 등록하고 그 시트로 전환 (프로젝트 로드/신규생성 시 호출)
+    window._openAsNewSheet = function(key, fileId, fileName) {
+        window._commitActiveSheet();
+        window._sheets.push({ key, fileId, fileName, snapshot: null });
+        window._activeSheetKey = key;
+    };
+
+    // 탭 바 렌더링
+    window.renderSheetTabsBar = function() {
+        const bar = document.getElementById('sheet-tabs-bar');
+        if (!bar) return;
+        if (window._sheets.length <= 1) { bar.style.display = 'none'; return; }
+        bar.style.display = 'flex';
+        bar.innerHTML = window._sheets.map(function(s) {
+            const active = s.key === window._activeSheetKey;
+            const label = s.fileName || '(새 프로젝트)';
+            return `<div onclick="window.switchToSheet('${s.key}')"
+                title="${escapeHtml(label)}"
+                style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:160px;
+                       background:${active ? '#fff' : '#e9ecef'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
+                       border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:${active ? '1px solid #fff' : '1px solid #ced4da'}; margin-bottom:-1px;">
+                <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px;">📄 ${escapeHtml(label)}</span>
+                <span onclick="event.stopPropagation(); if(confirm('이 시트를 닫을까요? (저장 안 한 변경사항은 사라집니다 — Drive 원본은 그대로 있습니다)')) window.closeSheet('${s.key}');"
+                    style="color:#999; font-size:13px; line-height:1;">✕</span>
+            </div>`;
+        }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
+                style="display:flex; align-items:center; justify-content:center; width:28px; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
+    };
+
     window.executeLoadFile = async function(fileId, fileName) {
         window.closeDriveModal();
+        // 💡 [멀티시트] 이미 열려있는 프로젝트면 다시 안 받아오고 그 시트로 전환만
+        const already = window._findSheetByFileId(fileId);
+        if (already && already.snapshot) { window.switchToSheet(already.key); return; }
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
             if (saveData && saveData.globalData) {
+                window._openAsNewSheet(fileId, fileId, fileName); // 💡 [멀티시트] 지금 보던 시트를 저장하고 새 시트로 등록
                 globalData = saveData.globalData.map(obj => {
                     let row = obj.data;
                     for (let key in obj) { if (key !== 'data') row[key] = obj[key]; }
@@ -2865,6 +2987,7 @@ ${mailText}`;
                 window.currentDriveFileName = fileName;
                 window.updateCurrentFileLabel();
                 window.recalculateSchedules();
+                window.renderSheetTabsBar(); // 💡 [멀티시트]
                 window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
