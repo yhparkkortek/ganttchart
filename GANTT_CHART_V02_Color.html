@@ -18606,7 +18606,11 @@ window.collectAlarmItems = function() {
         const alarmDays = (row._알림일정 && row._알림일정.length) ? row._알림일정.slice() : ALARM_DAYS.slice();
 
         // 발송 이력
-        const rowId   = rowIdx + '_' + dueStr;
+        // 💡 [멀티탭 대비] rowId에 프로젝트 식별자가 없으면, 서로 다른 프로젝트의 같은 행번호+마감일이
+        //    우연히 겹칠 때 localStorage 발송기록이 프로젝트 간에 충돌해서 한쪽이 조용히 스킵될 수 있음
+        //    (여러 프로젝트를 각자 탭에 열어두고 동시에 알람을 돌리는 구성에서 특히 위험)
+        const projKey = window.currentDriveFileId || window.currentDriveFileName || 'local';
+        const rowId   = projKey + '_' + rowIdx + '_' + dueStr;
         const sentLog = {};
         alarmDays.forEach(d => {
             const v = localStorage.getItem('gantt_alarm_' + rowId + '_' + d + 'd');
