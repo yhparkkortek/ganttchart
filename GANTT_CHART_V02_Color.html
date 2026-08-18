@@ -2160,8 +2160,16 @@ ${mailText}`;
                 fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             
-            // 💡 업무 보관함 자동 백업 파일(TaskInbox_이름.json)은 프로젝트가 아니므로 목록에서 제외
-            let files = (response.result.files || []).filter(function(f) { return !f.name.startsWith('TaskInbox_') && f.name !== PROMPT_DRIVE_FILENAME && f.name !== HOLIDAY_DRIVE_FILENAME; });
+            // 💡 프로젝트 파일이 아닌 공유설정/인덱스/백업류는 목록에서 제외 (project_index.json·PriorityScore_Shared.json 등이
+            //    "미지정" 그룹에 새 게시로 잘못 뜨던 문제 수정)
+            let files = (response.result.files || []).filter(function(f) {
+                return !f.name.startsWith('TaskInbox_')
+                    && f.name !== PROMPT_DRIVE_FILENAME
+                    && f.name !== HOLIDAY_DRIVE_FILENAME
+                    && f.name !== PRIORITY_CONFIG_FILENAME
+                    && f.name !== PROJECT_INDEX_FILENAME
+                    && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
+            });
             if (!files || files.length === 0) {
                 window.showToast(_ldEn ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.", 'error');
                 return;
@@ -10118,7 +10126,11 @@ window.TaskInbox = {
             addedAt: new Date().toISOString(),
             status: '대기',            // 대기 | 배치됨 (Phase2에서 '전송됨' 추가)
             history: [],
-            mailRaw: (meta && meta.mailRaw) ? meta.mailRaw : null  // 💡 파싱 원문 보관 (없으면 null)
+            mailRaw: (meta && meta.mailRaw) ? meta.mailRaw : null,  // 💡 파싱 원문 보관 (없으면 null)
+            // 💡 [매칭/점수 통일화] Stage1 매칭결과를 소스 라벨(텍스트)뿐 아니라 구조화 데이터로도 보관
+            //    — 이게 없으면 "다른 프로젝트로 전송" 버튼이 매칭결과를 몰라서 매번 전체 목록을 새로 뒤져야 함
+            matchedProject: (meta && meta.matchedProject) ? meta.matchedProject : null,
+            alarmWorthy: !!(meta && meta.alarmWorthy)
         });
         this.save(list);
     },
@@ -10281,6 +10293,9 @@ window.renderTaskInbox = function() {
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 140px; min-width:140px; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
                 <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap; background:#2c5f8a; color:#fff; flex-shrink:0;">➡️ ${_ibEn ? 'Current Project' : '현재 프로젝트'}</button>
+                ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
+                    ? `<button class="action-btn" onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="font-size:12px; white-space:nowrap; background:#2f9e44; color:#fff; flex-shrink:0;">✅ ${_ibEn ? 'Send to matched' : '매칭 프로젝트로 전송'}</button>`
+                    : ''}
                 <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22; flex-shrink:0;">📤 ${_ibEn ? 'Other Project' : '다른 프로젝트'}</button>
                 <button class="action-btn" onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
             </div>
@@ -10296,6 +10311,38 @@ window.renderTaskInbox = function() {
     });
     listEl.innerHTML = html;
     items.forEach(function(it) { window.inboxRecomputePreview(it.uid); }); // 초기 미리보기 계산
+};
+
+// 💡 [매칭/점수 통일화] Stage1이 단일 프로젝트로 확정한 항목은 "다른 프로젝트" 모달로 전체 목록을
+//    다시 뒤질 필요 없이, 이미 알고 있는 drive_file_id로 바로 전송 — _msAutoRegisterToProject(자동틱과 동일 로직) 재사용
+window.inboxQuickRegisterMatched = async function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const mp = it.matchedProject;
+    if (!mp || mp.status !== 'matched' || !mp.candidates || !mp.candidates[0] || !mp.candidates[0].drive_file_id) {
+        alert('매칭된 프로젝트 정보가 없습니다. [📤 다른 프로젝트]로 직접 선택해주세요.');
+        return;
+    }
+    const target = mp.candidates[0];
+    if ((it.task['시작일'] || '').includes('날짜확인필요') || (it.task['완료일'] || '').includes('날짜확인필요')) {
+        alert('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 다시 시도해주세요.');
+        return;
+    }
+    if (!confirm(`"${it.task['업무명'] || '새 업무'}" 업무를 매칭된 프로젝트\n[${target.file_name}]\n로 바로 전송할까요?`)) return;
+
+    const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+    const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+    if (!token) { alert('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
+
+    const result = await window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
+    if (result.ok) {
+        window.TaskInbox.setStatus(uid, '배치됨', { type: '매칭프로젝트 즉시전송', target: target.file_name, at: new Date().toISOString() });
+        window.renderTaskInbox();
+        const msg = `✅ "${it.task['업무명'] || '새 업무'}" → ${target.file_name} 전송 완료 (${result.label || ''})`;
+        if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
+    } else {
+        alert('❌ 전송 실패: ' + (result.reason || '알 수 없는 오류'));
+    }
 };
 
 window.showMailRawModal = function(r) {
@@ -10482,11 +10529,13 @@ window.inboxOpenDistribute = async function(uid) {
             fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc',
             corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
         });
-        // 💡 업무 보관함 백업 / AI프롬프트 / 휴일 / 주소록 등 비-프로젝트 파일은 전송 대상에서 제외
+        // 💡 업무 보관함 백업 / AI프롬프트 / 휴일 / 주소록 / 우선순위설정 / 프로젝트인덱스 등 비-프로젝트 파일은 전송 대상에서 제외
         const files = (resp.result.files || []).filter(function(f) {
             return !f.name.startsWith('TaskInbox_')
                 && f.name !== PROMPT_DRIVE_FILENAME
                 && f.name !== HOLIDAY_DRIVE_FILENAME
+                && f.name !== PRIORITY_CONFIG_FILENAME
+                && f.name !== PROJECT_INDEX_FILENAME
                 && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
         });
         inlineEl.innerHTML = '';
@@ -13988,7 +14037,11 @@ window._autoMailFetchTick = async function() {
                         ? `${grade}${scoreResult.total}점 메일자동분석(후보 다수: ${candidateNames})`
                         : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})${aiResolvedTag}`;
                     const mailRawObj = { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName };
-                    window.TaskInbox.add(item.task, { source: sourceLabel, mailRaw: mailRawObj });
+                    window.TaskInbox.add(item.task, {
+                        source: sourceLabel, mailRaw: mailRawObj,
+                        matchedProject: finalProjectTag,
+                        alarmWorthy: scoreResult.total >= priorityConfig.cutline
+                    });
                     const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 항상 맨 앞이 방금 추가한 항목
 
                     // 💡 [완전자동] 매칭 확정(단일 후보) + 날짜 확정 → 무조건 배치. 커트라인 이상이면 추가로 알림도 켬
@@ -15052,7 +15105,11 @@ const AR = {
             const _srcLabel = (typeof r._score === 'number')
                 ? `${r._scoreGrade || ''}${r._score}점 메일분석(${r.project || '미분류'})`
                 : '업무 추가(메일분석 일괄)';
-            window.TaskInbox.add(task, { source: _srcLabel, mailRaw: _batchRaw });
+            window.TaskInbox.add(task, {
+                source: _srcLabel, mailRaw: _batchRaw,
+                matchedProject: r._projectTag || null,
+                alarmWorthy: !!r._alarmWorthy
+            });
             r.selected = false;
             count++;
         }
