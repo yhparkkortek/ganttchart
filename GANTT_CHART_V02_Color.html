@@ -740,12 +740,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-alarm" class="tab-panel">
   <div class="concept-tab-wrap" style="max-width:1200px; padding:22px 26px;">
 
-    <!-- 알람/공지 뷰 토글 타이틀 -->
-    <div style="display:flex; gap:18px; margin-bottom:14px; border-bottom:2px solid #eee;">
-      <span id="av-tab-alarm" onclick="window._switchAlarmView('alarm')"
-            style="padding:6px 4px 10px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; margin-bottom:-2px; user-select:none;">🔔 Alarm</span>
-      <span id="av-tab-notice" onclick="window._switchAlarmView('notice')"
-            style="padding:6px 4px 10px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; margin-bottom:-2px; user-select:none;">📢 Notice</span>
+    <!-- 알람/공지 뷰 토글 — 다른 탭들과 통일감 있게 concept-header-box 라운드 박스 안 버튼으로 -->
+    <div class="concept-header-box" style="margin-bottom:14px;">
+      <div class="btn-group" style="margin-left:0;">
+        <button id="av-tab-alarm" class="action-btn" onclick="window._switchAlarmView('alarm')"
+              style="background:#2c5f8a; color:#fff; border-color:#2c5f8a; min-width:auto;">🔔 Alarm</button>
+        <button id="av-tab-notice" class="action-btn" onclick="window._switchAlarmView('notice')"
+              style="background:#fff; color:#2c5f8a; border-color:#2c5f8a; min-width:auto;">📢 Notice</button>
+      </div>
     </div>
 
     <div id="alarm-view-alarm">
@@ -22093,8 +22095,9 @@ document.addEventListener('DOMContentLoaded', function() {
         const tabNotice = document.getElementById('av-tab-notice');
         if (alarmSec)  alarmSec.style.display  = view === 'alarm'  ? 'block' : 'none';
         if (noticeSec) noticeSec.style.display = view === 'notice' ? 'block' : 'none';
-        if (tabAlarm)  { tabAlarm.style.color = view === 'alarm' ? '#2c5f8a' : '#999'; tabAlarm.style.borderBottomColor = view === 'alarm' ? '#2c5f8a' : 'transparent'; }
-        if (tabNotice) { tabNotice.style.color = view === 'notice' ? '#2c5f8a' : '#999'; tabNotice.style.borderBottomColor = view === 'notice' ? '#2c5f8a' : 'transparent'; }
+        // 💡 다른 탭들의 .action-btn/.btn.active 관례와 동일하게 — 활성:채운 파랑, 비활성:흰 배경+파란 테두리
+        if (tabAlarm)  { tabAlarm.style.background  = view === 'alarm'  ? '#2c5f8a' : '#fff'; tabAlarm.style.color  = view === 'alarm'  ? '#fff' : '#2c5f8a'; }
+        if (tabNotice) { tabNotice.style.background = view === 'notice' ? '#2c5f8a' : '#fff'; tabNotice.style.color = view === 'notice' ? '#fff' : '#2c5f8a'; }
         if (view === 'alarm'  && window.renderAlarmTab)  window.renderAlarmTab();
         if (view === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
         try { localStorage.setItem('gantt_alarm_view', view); } catch(e) {}
