@@ -10490,7 +10490,7 @@ window.renderTaskInbox = function() {
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 0 68px; width:68px; min-width:0; padding:0 2px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 auto; min-width:48px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
                 <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:0 0 90px; width:90px; font-size:10.5px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
                     ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:0 0 90px; width:90px; font-size:10.5px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
@@ -11635,8 +11635,8 @@ window.updateInboxBadge();
 <div id="task-inbox-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
     <div class="history-modal" id="task-inbox-modal" onclick="event.stopPropagation()"
          style="pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-                width:min(640px, 92vw); height:auto; max-width:96vw; max-height:92vh;
-                min-width:480px; min-height:280px; resize:both; overflow:hidden;
+                width:min(704px, 92vw); height:auto; max-width:96vw; max-height:92vh;
+                min-width:528px; min-height:280px; resize:both; overflow:hidden;
                 display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
         <div id="inbox-drag-handle" class="history-header"
