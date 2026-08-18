@@ -10116,6 +10116,11 @@ window.TaskInbox = {
         localStorage.setItem(this.KEY, JSON.stringify(list));
         window.updateInboxBadge();
         if (!skipSync) this.scheduleDriveSync(); // 💡 저장할 때마다 드라이브 자동 동기화 (3초 디바운스)
+        // 💡 [실시간 반영] add/remove/setStatus 등 어디서 저장이 일어나든, 업무 보관함 모달이 지금 열려있으면
+        //    그 자리에서 바로 다시 그려줌 — 예전엔 batchToInbox 한 곳에서만 이 처리를 해서, 완전자동 등록이나
+        //    자동틱처럼 다른 경로로 담긴 항목은 모달을 닫았다 다시 열어야만 보였음
+        const ov = document.getElementById('task-inbox-overlay');
+        if (ov && ov.style.display === 'flex' && window.renderTaskInbox) window.renderTaskInbox();
     },
     add: function(task, meta) {
         const list = this.load();
@@ -10290,14 +10295,14 @@ window.renderTaskInbox = function() {
                 ${it.mailRaw ? `<div style="margin-top:6px;"><button onclick="window.showInboxMailRaw('${it.uid}')" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer;">📧 ${_ibEn ? 'View Mail Source' : '원문 보기'}</button></div>` : ''}
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
-            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 140px; min-width:140px; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
-                <button class="action-btn" onclick="window.inboxPlaceToCurrent('${it.uid}')" style="font-size:12px; white-space:nowrap; background:#2c5f8a; color:#fff; flex-shrink:0;">➡️ ${_ibEn ? 'Current Project' : '현재 프로젝트'}</button>
+            <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; align-items:center;">
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 70px; min-width:60px; max-width:110px; padding:0 4px; height:29px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
+                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:0 0 auto; font-size:11px; white-space:nowrap; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current' : '현재'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="font-size:11px; white-space:nowrap; padding:0 8px; height:29px; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer; flex-shrink:0; box-sizing:border-box;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
+                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:0 0 auto; font-size:11px; white-space:nowrap; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
                     : ''}
-                <button class="action-btn" onclick="window.inboxOpenDistribute('${it.uid}')" style="font-size:12px; white-space:nowrap; color:#e67e22; border-color:#e67e22; flex-shrink:0;">📤 ${_ibEn ? 'Other Project' : '다른 프로젝트'}</button>
-                <button class="action-btn" onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="font-size:12px; color:#e03131; border-color:#e03131; flex-shrink:0;">🗑</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:0 0 auto; font-size:11px; white-space:nowrap; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other' : '다른'}</button>
+                <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:12px; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -13914,15 +13919,21 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
 //    (그 외엔 기존처럼 TaskInbox '대기'로 쌓여서, 사람이 [✅매칭전송]/[📤다른 프로젝트]로 직접 처리)
 //    반환: true면 완전자동 처리를 "시도"함(성공여부는 비동기), false면 조건 미충족으로 건너뜀
 window._msTryFullAutoRegister = function(item, mailRawObj, onDone) {
-    if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) return false;
-    if (!item || !item.task || !item._projectTag || item._projectTag.status !== 'matched') return false;
+    const taskName = (item && item.task && item.task['업무명']) || '(제목없음)';
+    const skip = function(reason) { console.info(`[메일 완전자동] 건너뜀 (${reason}): "${taskName}"`); return false; };
+
+    if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) return skip('완전자동 모드 아님');
+    if (!item || !item.task) return skip('AI 분석 결과 없음');
+    if (!item._projectTag || item._projectTag.status !== 'matched') return skip(`매칭 미확정(status=${item._projectTag ? item._projectTag.status : '없음'})`);
     const target = (item._projectTag.candidates || [])[0];
-    if (!target || !target.drive_file_id) return false;
+    if (!target || !target.drive_file_id) return skip('매칭 후보에 drive_file_id 없음');
     const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
         && !String(item.task['완료일'] || '').includes('날짜확인필요');
-    if (!hasValidDate) return false;
-    if (!window._msNamesMatch(target.assignee, window.currentUserName)) return false;
+    if (!hasValidDate) return skip('날짜확인필요 상태');
+    // 💡 [정책 변경] 완전자동은 "내 담당" 여부와 무관하게, 매칭이 단일 확정되면 그 프로젝트로 바로 배치한다.
+    //    TaskInbox(업무 보관함)는 매칭 자체가 안 된(프로젝트 미등록/미분류) 업무만 남기는 용도로 좁힌다.
 
+    console.info(`[메일 완전자동] 등록 시도: "${taskName}" → ${target.file_name} (담당: ${target.assignee || '?'})`);
     const srcLabel = `${item._scoreGrade || ''}${item._score != null ? item._score + '점 ' : ''}메일분석(${item.project || target.model || ''})`;
     window.TaskInbox.add(item.task, {
         source: srcLabel, mailRaw: mailRawObj,
@@ -13935,9 +13946,10 @@ window._msTryFullAutoRegister = function(item, mailRawObj, onDone) {
                 window.TaskInbox.setStatus(newUid, '자동배치됨', { type: '메일완전자동', target: target.file_name, at: new Date().toISOString() });
                 item.registered = true;
                 item.selected = false;
-                if (window.showToast) window.showToast(`🎯 "${item.task['업무명'] || ''}" 완전자동 배치 완료 → ${target.file_name} (${result.label || ''})`, 'info');
+                if (window.showToast) window.showToast(`🎯 "${taskName}" 완전자동 배치 완료 → ${target.file_name} (${result.label || ''})`, 'info');
             } else {
                 console.warn('[메일 완전자동] 등록 실패, TaskInbox 대기 상태로 유지:', result.reason);
+                if (window.showToast) window.showToast(`⚠️ "${taskName}" 완전자동 등록 실패 (${result.reason || '알 수 없는 오류'}) — 보관함에서 [✅매칭전송]으로 직접 처리해주세요.`, 'error');
             }
             if (onDone) onDone();
         });
