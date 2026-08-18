@@ -10295,14 +10295,14 @@ window.renderTaskInbox = function() {
                 ${it.mailRaw ? `<div style="margin-top:6px;"><button onclick="window.showInboxMailRaw('${it.uid}')" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer;">📧 ${_ibEn ? 'View Mail Source' : '원문 보기'}</button></div>` : ''}
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
-            <div style="display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 70px; min-width:60px; max-width:110px; padding:0 4px; height:29px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
-                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:0 0 auto; font-size:11px; white-space:nowrap; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current' : '현재'}</button>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 80px; min-width:70px; max-width:120px; padding:0 5px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:12px; background:#fff;">${l0Options}</select>
+                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:0 0 auto; font-size:12px; white-space:nowrap; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current' : '현재'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:0 0 auto; font-size:11px; white-space:nowrap; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
+                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:0 0 auto; font-size:12px; white-space:nowrap; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send' : '매칭전송'}</button>`
                     : ''}
-                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:0 0 auto; font-size:11px; white-space:nowrap; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other' : '다른'}</button>
-                <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:12px; padding:0 8px; height:29px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:0 0 auto; font-size:12px; white-space:nowrap; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other' : '다른'}</button>
+                <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:13px; padding:0 10px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -10348,6 +10348,49 @@ window.inboxQuickRegisterMatched = async function(uid) {
     } else {
         alert('❌ 전송 실패: ' + (result.reason || '알 수 없는 오류'));
     }
+};
+
+// 💡 [완전자동 백필] 완전자동 기능이 생기기 전부터 쌓여있던 '대기' 항목들은 그때는 자동전송 대상이 아니었으므로
+//    새로 분석되는 메일과 달리 저절로 넘어가지 않는다 — 매칭 확정 + 날짜 확정된 기존 대기 항목을 한 번에 훑어서 전송
+window.inboxBatchRegisterMatched = async function() {
+    const targets = window.TaskInbox.load().filter(function(it) {
+        return it.status === '대기' && it.matchedProject && it.matchedProject.status === 'matched'
+            && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id
+            && !String((it.task || {})['시작일'] || '').includes('날짜확인필요')
+            && !String((it.task || {})['완료일'] || '').includes('날짜확인필요');
+    });
+    if (!targets.length) {
+        alert('일괄전송할 항목이 없습니다.\n(매칭이 단일 확정 + 날짜 확정된 "대기" 항목만 대상 — 후보 다수/미매칭/날짜미확정 건은 여전히 직접 처리해야 합니다.)');
+        return;
+    }
+    if (!confirm(`매칭 확정된 대기 항목 ${targets.length}건을 지금 각자 매칭된 프로젝트로 전송할까요?`)) return;
+
+    const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+    const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+    if (!token) { alert('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
+
+    let okCount = 0; const fails = [];
+    for (const it of targets) {
+        const target = it.matchedProject.candidates[0];
+        try {
+            const result = await window._msAutoRegisterToProject(it.uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
+            if (result.ok) {
+                window.TaskInbox.setStatus(it.uid, '자동배치됨', { type: '일괄전송', target: target.file_name, at: new Date().toISOString() });
+                okCount++;
+            } else {
+                fails.push(`${it.task['업무명'] || '(제목없음)'}: ${result.reason || '알수없음'}`);
+            }
+        } catch (e) {
+            fails.push(`${it.task['업무명'] || '(제목없음)'}: ${e.message}`);
+        }
+    }
+    window.renderTaskInbox();
+    let msg = `✅ ${okCount}건 전송 완료`;
+    if (fails.length) {
+        msg += `\n❌ ${fails.length}건 실패:\n` + fails.slice(0, 5).join('\n') + (fails.length > 5 ? `\n...외 ${fails.length - 5}건` : '');
+        console.warn('[업무 보관함] 일괄전송 실패 목록:', fails);
+    }
+    alert(msg);
 };
 
 window.showMailRawModal = function(r) {
@@ -11412,6 +11455,7 @@ window.updateInboxBadge();
                 전송된 업무가 팀원의 동시 저장으로 유실된 경우, '전송됨' 항목을 같은 방법으로 재전송하면 복구됩니다.
             </span></span></span>
             <div style="display:flex; gap:6px; flex-shrink:0;">
+                <button id="inbox-batch-register-btn" class="action-btn" onclick="window.inboxBatchRegisterMatched()" style="font-size:12px; color:#2f9e44; border-color:#2f9e44;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
                 <button id="inbox-clear-done-btn" class="action-btn" onclick="window.inboxClearDone()" style="font-size:12px;">🧹 처리됨 정리</button>
                 <button onclick="window.closeTaskInbox()"
                     style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
