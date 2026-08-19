@@ -741,7 +741,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="app-main">
 
 <!-- 📑 [멀티시트] 어느 내부 탭(Gantt/Summary/알람 등)을 보고 있든 항상 보임 — 동시에 열린 프로젝트가 2개 이상일 때만 표시 -->
-<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 7px 0 7px; margin-bottom:2px; overflow-x:auto; background:#fff;"></div>
+<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 5px 0 5px; margin-bottom:2px; overflow-x:auto; background:#fff;"></div>
 
 <!-- ══════════════════════════════════════════════
      Alarm 탭 패널
@@ -16206,7 +16206,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         if (wrWeekLabel) wrWeekLabel.textContent = `${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)`;
 
         container.innerHTML = `
-            <div style="padding:20px 22px;">
+            <div style="padding:13px 15px;">
                 <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Development Progress' : '개발 진척 현황'}</div>
                     <div style="padding:12px;">${wrRenderTimeline()}</div>
