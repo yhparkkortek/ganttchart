@@ -1975,6 +1975,8 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
 - 시작일: 메일 하단에 섞여 있는 과거 포워딩(Fwd/RE) 날짜에 현혹되지 마세요. **현재 새로 요청하는 업무의 실제 시작일**을 유추하되, 본문에 명시되지 않았다면 위에 명시된 '메일 발송일'을 반드시 시작일로 사용하세요. 간트차트에 이미 등록된 다른 업무의 날짜를 절대 참조하지 마세요. 반드시 "YYYY-MM-DD" 형식으로 출력하며 알 수 없으면 "날짜확인필요"- 완료일: 마감일이 명시된 경우만 추출 (규칙은 시작일과 동일), 없으면 "날짜확인필요"
 - 상태: 진행/대기/완료/보류 중 하나
 - 개발단계: RFI/RFQ/NRE/AWARD/KICK-OFF/DESIGN/SAMPLE/EVT/ES/DVT/PVT/FAI/PP/SOP/MP/EC/RMA/EOL 중 해당하는 단계 (불명확하면 빈값)
+- 담당구분: 이 업무를 실제로 처리해야 할 담당 영역을 아래 목록 중 가장 적합한 하나로 판단 (기술 키워드·요청 내용 기준. 두 영역에 걸치면 더 핵심적인 쪽 하나만 선택. 애매하면 "미분류"):
+  PM(일정·전반 총괄, 견적, 계약, 프로젝트 전반 이슈) / 기구(하우징·구조·기구설계·금형·조립) / HW(회로·보드·부품 하드웨어) / FW(펌웨어·소프트웨어·제어로직) / BLU(백라이트유닛·디스플레이 모듈) / TSP(터치스크린패널·터치) / LCM(LCM 패널 자체 사양·회전·구조) / Slimming(두께·슬리밍) / Cutting(절단·가공) / Tooling(금형·툴링) / 영업(가격·발주·영업) / CS(고객 클레임·AS) / FA(현장기술지원·설치) / 미분류(위 어디에도 명확히 속하지 않음)
 - 상세내용: 아래 형식으로 600자 이내 작성 (기존 대비 약 2배 더 상세하게, 배경·수량·모델명·수치 등 구체적 사실을 최대한 포함), 반드시 줄바꿈(\n)으로 구분
   * [발신자→수신자] 판별 가이드 (★문맥 분석 필수★):
     - 인사말(Hi, Regards)이나 서명이 없을 수 있으므로, 문장의 주어·목적어 등 문맥을 분석해 발신자/수신자를 정확히 식별하세요.
@@ -2016,6 +2018,7 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
   "완료일": "",
   "상태": "",
   "개발단계": "",
+  "담당구분": "미분류",
   "상세내용": "",
   "wbs레벨": 4,
   "마감일임박도": 0,
@@ -10036,7 +10039,11 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     for (let i = 1; i < gd.length; i++) {
         if (gd[i]) { refRow = gd[i]; break; }
     }
-    if (ci.assignee !== -1) newRow[ci.assignee] = refRow ? (refRow[ci.assignee] || "") : "";
+    // 💡 [담당구분] AI가 판정한 담당구분(예: LCM)이 있고 Summary에 해당 담당자가 등록돼 있으면
+    //    그 담당자로 배정 — 없으면 기존처럼 대상 프로젝트의 기존 행(refRow) 담당자를 그대로 승계
+    const _catAssignee = window._msResolveCategoryAssignee ? window._msResolveCategoryAssignee(r['담당구분']) : null;
+    if (ci.assignee !== -1) newRow[ci.assignee] = _catAssignee ? _catAssignee.name : (refRow ? (refRow[ci.assignee] || "") : "");
+    newRow._담당구분 = r['담당구분'] || '';
     if (ci.customer !== -1) newRow[ci.customer] = refRow ? (refRow[ci.customer] || "") : "";
     if (ci.model !== -1) newRow[ci.model] = refRow ? (refRow[ci.model] || "") : "";
     if (ci.inch !== -1) newRow[ci.inch] = refRow ? (refRow[ci.inch] || "") : "";
@@ -10488,6 +10495,16 @@ window.renderTaskInbox = function() {
             })).join('');
         const dateStr = (t['시작일'] || '?') + ' ~ ' + (t['완료일'] || '?');
         const when = it.addedAt ? new Date(it.addedAt).toLocaleString() : '';
+        // 💡 [담당구분] 매칭된 프로젝트가 지금 열려있는 시트와 같을 때만 실제 담당자명까지 붙임
+        //    (다른 프로젝트로 매칭된 항목은 그 프로젝트의 Summary 정보가 메모리에 없어 이름을 알 수 없음)
+        const catVal = (t['담당구분'] || '').trim();
+        let assigneeBadge = '';
+        if (catVal && catVal !== '미분류') {
+            const isCurProj = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0]
+                && it.matchedProject.candidates[0].drive_file_id === window.currentDriveFileId;
+            const resolved = isCurProj && window._msResolveCategoryAssignee ? window._msResolveCategoryAssignee(catVal) : null;
+            assigneeBadge = ' · 담당: ' + escapeHtml(catVal) + (resolved && resolved.name ? ' (' + escapeHtml(resolved.name) + ')' : '');
+        }
         html += `
         <div style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fff;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
@@ -10498,7 +10515,7 @@ window.renderTaskInbox = function() {
                 <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
-                ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''} · ${escapeHtml(it.source || '')} · ${when}
+                ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(it.source || '')} · ${when}
             </div>
             <div id="inbox-detail-${it.uid}" style="display:none; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
                 <div><b>${_ibEn ? 'Task' : '업무명'}</b> : ${escapeHtml(t['업무명'] || '')}</div>
@@ -13889,6 +13906,39 @@ window._msScoreGrade = function(total, cutline) {
     return total >= cutline ? '🔴' : (total >= cutline * 0.6 ? '🟡' : '⚪');
 };
 
+// 💡 [업무 담당구분] AI가 메일 분석 시 판정한 담당구분(예: "LCM")을 Summary 탭에 이미 등록된
+//    프로젝트 멤버 필드로 매핑해서 실제 담당자 이름/이메일을 찾아준다.
+//    - 고정 구분(PM/기구/HW/FW/BLU/TSP/LCM/Slimming/Cutting/Tooling)은 projectMeta 필드로 바로 매핑
+//    - 자유 구분(영업/CS/FA 등)은 Summary "프로젝트 멤버-3(자유추가)"에서 역할명에 해당 키워드가
+//      포함된 행을 찾아 사용 (자유추가는 역할명이 사람마다 다르게 입력되므로 키워드 포함 매칭)
+window._MS_CATEGORY_FIELD_MAP = {
+    'PM':       { name: '프로젝트담당자', email: '프로젝트담당자이메일' },
+    '기구':     { name: '기구담당자',     email: '기구담당자이메일' },
+    'HW':       { name: 'HW담당자',       email: 'HW담당자이메일' },
+    'FW':       { name: 'FW담당자',       email: 'FW담당자이메일' },
+    'BLU':      { name: 'Module담당자',   email: 'Module담당자이메일' },
+    'TSP':      { name: 'TSP담당자',      email: 'TSP담당자이메일' },
+    'LCM':      { name: 'LCM담당자',      email: 'LCM담당자이메일' },
+    'Slimming': { name: 'Slimming담당자', email: 'Slimming담당자이메일' },
+    'Cutting':  { name: 'Cutting담당자',  email: 'Cutting담당자이메일' },
+    'Tooling':  { name: 'Tooling담당자',  email: 'Tooling담당자이메일' }
+};
+window._msResolveCategoryAssignee = function(category) {
+    const cat = (category || '').toString().trim();
+    if (!cat || cat === '미분류') return null;
+    const pm = window.projectMeta || {};
+    const fixed = window._MS_CATEGORY_FIELD_MAP[cat];
+    if (fixed) {
+        const name = (pm[fixed.name] || '').toString().trim();
+        if (name) return { category: cat, name: name, email: (pm[fixed.email] || '').toString().trim() };
+    }
+    // 자유추가 멤버(프로젝트 멤버-3)에서 역할명 키워드로 검색
+    const members3 = (window.tabData && window.tabData.projectMembers3) || [];
+    const hit = members3.find(function(m) { return m && m.role && m.role.indexOf(cat) !== -1 && m.name; });
+    if (hit) return { category: cat, name: hit.name.toString().trim(), email: (hit.email || '').toString().trim() };
+    return null;
+};
+
 window._msFilterMyProjects = function(projectList) {
     const me = window.currentUserName || '';
     const mine = projectList.filter(p => window._msNamesMatch(p.assignee, me));
@@ -15213,6 +15263,14 @@ const AR = {
                         ${typeof r._score === 'number'
                             ? `<span title="우선순위 점수" style="background:#fff3cd; color:#856404; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r._scoreGrade||''}${r._score}점</span>`
                             : ''}
+                        ${(function() {
+                            const cat = r.task && (r.task['담당구분'] || '').trim();
+                            if (!cat || cat === '미분류') return '';
+                            const isCurProj = r._projectTag && r._projectTag.candidates && r._projectTag.candidates[0]
+                                && r._projectTag.candidates[0].drive_file_id === window.currentDriveFileId;
+                            const resolved = isCurProj && window._msResolveCategoryAssignee ? window._msResolveCategoryAssignee(cat) : null;
+                            return `<span title="담당구분" style="background:#f1ebff; color:#6f42c1; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">👤${escapeHtml(cat)}${resolved && resolved.name ? ' ('+escapeHtml(resolved.name)+')' : ''}</span>`;
+                        })()}
                         ${r.task && r.task['시작일']
                             ? `<span style="font-size:10px; color:#888;">${r.task['시작일'].includes('날짜확인필요') ? '⚠️날짜필요' : r.task['시작일']}</span>`
                             : ''}
