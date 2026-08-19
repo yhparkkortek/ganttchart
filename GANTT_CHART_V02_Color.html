@@ -2929,6 +2929,13 @@ ${mailText}`;
             if (window._alarmView === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
             else if (window.renderAlarmTab) window.renderAlarmTab();
         }
+        // 💡 [멀티시트 버그 수정] Calendar/Weekly Report도 알람 탭처럼 매번 새로 훑어 그리는 캐시성 뷰라,
+        //    시트를 전환해도 자동으로 안 다시 그려서 "이전 시트의 일정이 그대로 남는" 버그가 있었음
+        //    (switchTab()이 탭 진입 시 하는 갱신과 동일 — 지금 그 탭이 열려있으면 새 시트 기준으로 즉시 다시 그림)
+        const tabCalEl = document.getElementById('tab-calendar');
+        if (tabCalEl && tabCalEl.classList.contains('active') && window.calRender) window.calRender();
+        const tabWeeklyEl = document.getElementById('tab-weekly');
+        if (tabWeeklyEl && tabWeeklyEl.classList.contains('active') && window.showWeeklyReport) window.showWeeklyReport();
     };
 
     // fileId 기준으로 이미 열려있는 시트 찾기
@@ -16211,7 +16218,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         if (wrWeekLabel) wrWeekLabel.textContent = `${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)`;
 
         container.innerHTML = `
-            <div style="padding:13px 15px;">
+            <div>
                 <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Development Progress' : '개발 진척 현황'}</div>
                     <div style="padding:12px;">${wrRenderTimeline()}</div>
