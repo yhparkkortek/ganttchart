@@ -741,7 +741,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="app-main">
 
 <!-- 📑 [멀티시트] 어느 내부 탭(Gantt/Summary/알람 등)을 보고 있든 항상 보임 — 동시에 열린 프로젝트가 2개 이상일 때만 표시 -->
-<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 8px 0 8px; margin-bottom:2px; overflow-x:auto; background:#fff;"></div>
+<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 15px 0 15px; margin-bottom:2px; overflow-x:auto; background:#fff;"></div>
 
 <!-- ══════════════════════════════════════════════
      Alarm 탭 패널
@@ -1100,11 +1100,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="tab-gantt" class="tab-panel active">
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
-    <div class="btn-group" id="gantt-filter-btn-group" style="margin-left: 15px; padding-left: 15px; border-left: 2px solid #ddd;">
+    <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+    <div class="btn-group" id="gantt-filter-btn-group">
         <!-- LEVEL(WBS) / 업무상태 / 개발단계 드롭다운 버튼은 generateFilters()가 여기 채웁니다 -->
     </div>
-    <div class="btn-group" style="margin-left: auto; margin-right: 15px; border-right: 2px solid #ddd; padding-right: 15px;">
-     
+    <div class="btn-group" style="margin-left: auto;">
+        <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
         <button id="schedule-tools-btn" class="action-btn" onclick="window.toggleScheduleToolsMenu(event)" title="선택 구간 재계산 · 날짜순 정렬">🛠️ 일정 도구</button>
         <button id="baseline-menu-btn" class="action-btn" onclick="window.toggleBaselineMenu(event)" title="계획(기준선) 저장 · 비교 · 삭제">📐 계획</button>
         </div>
@@ -1393,6 +1394,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📝 Summary</h2>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group"><button type="button" class="action-btn" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()">🔄 Gantt 실적 연동</button></div>
             <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
@@ -1753,16 +1755,20 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
-            <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <div class="btn-group"></div>
+            <button class="action-btn" data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
+            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+        </div>
+        <div id="calendar-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
+            <!-- 💡 [페이지 통일화] 년/월 이동 컨트롤을 헤더박스 밖으로 빼서 달력 본문(라운드박스) 안, 스크롤 영역 맨 위에 고정 배치 —
+                 다른 탭들처럼 헤더박스는 제목+버튼만 남기고, 달력 고유 컨트롤은 달력 쪽에 속하게 함 -->
+            <div style="display:flex; justify-content:center; align-items:center; gap:3px; padding:8px 0; position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #eee;">
                 <button class="action-btn" data-i18n="btn-prev" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(-1)">◀ 이전</button>
                 <span id="cal-header-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:80px; text-align:center;"></span>
                 <button class="action-btn" data-i18n="btn-next" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(1)">다음 ▶</button>
                 <button class="action-btn" data-i18n="btn-today" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
             </div>
-            <button class="action-btn" data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
-            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
-        </div>
-        <div id="calendar-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
         </div>
     </div>
@@ -2985,8 +2991,8 @@ ${mailText}`;
             return `<div onclick="window.switchToSheet('${s.key}')"
                 title="${escapeHtml(label)}"
                 style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:160px;
-                       background:${active ? '#fff' : '#e9ecef'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
-                       border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:${active ? '1px solid #fff' : '1px solid #ced4da'}; margin-bottom:-1px;">
+                       background:${active ? '#ffe8d6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
+                       border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:1px solid #fff; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); if(confirm('이 시트를 닫을까요? (저장 안 한 변경사항은 사라집니다 — Drive 원본은 그대로 있습니다)')) window.closeSheet('${s.key}');"
                     style="color:#999; font-size:13px; line-height:1;">✕</span>
