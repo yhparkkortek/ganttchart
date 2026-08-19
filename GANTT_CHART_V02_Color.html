@@ -10495,10 +10495,10 @@ window.renderTaskInbox = function() {
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
                     ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:0 0 90px; width:90px; font-size:10.5px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
                     : ''}
-                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:0 0 90px; width:90px; font-size:10.5px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#fff; color:#e67e22; cursor:pointer;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:0 0 90px; width:90px; font-size:10.5px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#e67e22; color:#fff; cursor:pointer;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
                 <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
             </div>
-            <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px;"></div>
+            <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
                 <label style="display:flex; align-items:center; gap:4px; cursor:pointer; white-space:nowrap;">
                     <input type="checkbox" id="inbox-auto-${it.uid}" checked onchange="window.inboxRecomputePreview('${it.uid}')" style="cursor:pointer;">
@@ -11662,11 +11662,13 @@ window.updateInboxBadge();
                     title="닫기">×</button>
             </div>
         </div>
-        <div style="padding:12px; flex:1; overflow-y:auto; min-height:120px;">
-            <div id="inbox-list"></div>
-            <!-- 💡 [UX 개선] 설정 모달에 있던 것을 업무 보관함 하단으로 이동 — 분류 못한 메일/신규 발신자를
-                 확인하는 것도 결국 업무 보관함 정리 작업의 일부라 여기 있는 게 자연스러움 -->
-            <div style="margin-top:16px; border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+        <!-- 💡 [UX 개선] 아래 "미분류/신규발신자" 구간은 고정하고, 업무 목록(#inbox-list)만 자체 스크롤 -->
+        <div style="flex:1; min-height:120px; display:flex; flex-direction:column; overflow:hidden;">
+            <div style="padding:12px; flex:1; overflow-y:auto;">
+                <div id="inbox-list"></div>
+            </div>
+            <!-- 분류 못한 메일/신규 발신자 확인도 결국 업무 보관함 정리 작업의 일부라 여기 있는 게 자연스러움 -->
+            <div style="flex-shrink:0; padding:12px; border-top:1px solid #eee; border:1px solid #dee2e6; border-radius:8px; margin:0 12px 12px 12px; padding:12px 14px;">
                 <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자</div>
                 <div style="display:flex; gap:8px; margin-bottom:10px;">
                     <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; text-align:center;">
