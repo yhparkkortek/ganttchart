@@ -13794,8 +13794,12 @@ window._msParseSenderEmail = function(senderStr) {
     return m ? m[0].toLowerCase() : '';
 };
 
+// 💡 [버그 수정] 예전엔 "지금 열려있는 시트"의 tabData.addressBook(프로젝트 파일에 박혀있는
+//    스냅샷 — 마지막 저장 시점 이후로 갱신 안 됨)만 봐서, 다른 프로젝트/최근에 주소록에 추가된
+//    사람의 도메인이 반영 안 돼 "신규발신자"로 오탐되는 경우가 많았음. 주소록은 프로젝트와
+//    무관한 공용 단일 소스(window.AddressBook)이므로 그걸 기준으로 삼는다.
 window._msGetWhitelistDomains = function() {
-    const ab = (window.tabData || {}).addressBook || [];
+    const ab = (window.AddressBook && window.AddressBook.load) ? window.AddressBook.load() : ((window.tabData || {}).addressBook || []);
     const domains = new Set();
     ab.forEach(p => {
         const email = (p.email || '').toLowerCase();
@@ -14564,8 +14568,9 @@ window._msRenderQueueModal = function(type, title) {
                 <button onclick="document.getElementById('ms-queue-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
-            <div style="padding:10px 16px; border-top:1px solid #eee;">
-                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="width:100%; padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;">🗑 일괄삭제</button>
+            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
+                <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" style="flex:1.3; padding:7px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;"></button>
+                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="flex:1; padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;">🗑 일괄삭제</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -14586,8 +14591,15 @@ window._msRenderQueueModal = function(type, title) {
     window._msQueueCurrentType = type;
     document.getElementById('ms-queue-title').textContent = title + ' (' + rows.length + '건)';
     document.getElementById('ms-queue-body').innerHTML = bodyHtml;
+    const suggestBtn = document.getElementById('ms-queue-suggest-btn');
+    if (suggestBtn) suggestBtn.textContent = type === 'unmatched' ? '🔑 키워드 제안' : '📇 주소록 제안';
     modal.style.display = 'block';
     window.bringModalToFront('ms-queue-modal'); // 💡 열 때 즉시 맨 앞으로 (클릭 안 해도)
+};
+
+window._msQueueSuggestClick = function() {
+    if (window._msQueueCurrentType === 'unmatched') window._msShowKeywordSuggestModal();
+    else window._msShowAddressSuggestModal();
 };
 
 window._msQueueRemoveRow = function(type, fileName) {
@@ -14602,6 +14614,312 @@ window._msQueueClearAll = function() {
     window._msQueueDeleteAll(type);
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
     window._msRenderQueueModal(type, document.getElementById('ms-queue-title').textContent.replace(/\s*\(\d+건\)$/, ''));
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// 💡 [미분류 → 키워드 제안] 지금 열려있는(멀티시트) 프로젝트들의 model/customer 조각이
+//    미분류 메일 본문에 등장하는데 project_index.json의 keywords엔 없는 경우를 찾아서 제안.
+//    실제 반영은 project_index.json의 해당 항목 keywords 배열에 append (승인 없이 자동으로
+//    project_index.json 전체를 rebuild하지 않음 — Summary "메일키워드" 필드에도 함께 반영해서
+//    나중에 그 프로젝트를 저장해도 유실되지 않게 함)
+// ═══════════════════════════════════════════════════════════════════
+window._msSuggestKeywordsForUnmatched = async function() {
+    const unmatched = (window._msResults || []).filter(r => !r.project);
+    if (!unmatched.length) return [];
+    const projectList = await window._msLoadProjectIndex();
+    const openIds = new Set((window._sheets || []).map(s => s.fileId));
+    const openProjects = projectList.filter(p => openIds.has(p.drive_file_id));
+    if (!openProjects.length) return [];
+
+    const suggestions = [];
+    unmatched.forEach(function(mail) {
+        const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
+        openProjects.forEach(function(p) {
+            const existingKw = new Set((p.keywords || []).map(k => String(k).toLowerCase()));
+            const candidates = [];
+            if (p.customer) candidates.push(p.customer);
+            if (p.model) {
+                candidates.push(p.model);
+                p.model.split(/[\s\/]+/).forEach(function(w) { if (w) candidates.push(w); });
+            }
+            candidates.forEach(function(cand) {
+                const c = String(cand).trim();
+                if (c.length < MS_MIN_KEYWORD_LEN || existingKw.has(c.toLowerCase())) return;
+                if (window._msKeywordMatches(haystack, c)) {
+                    suggestions.push({ subject: mail.subject, driveFileId: p.drive_file_id, projectLabel: (p.model || p.customer), keyword: c });
+                }
+            });
+        });
+    });
+    // 같은 (프로젝트,키워드) 제안이 메일마다 중복되니 1건으로 합치고 매칭건수만 카운트
+    const dedupMap = new Map();
+    suggestions.forEach(function(s) {
+        const key = s.driveFileId + '|' + s.keyword.toLowerCase();
+        if (!dedupMap.has(key)) dedupMap.set(key, Object.assign({ count: 0, sampleSubject: s.subject }, s));
+        dedupMap.get(key).count++;
+    });
+    return Array.from(dedupMap.values());
+};
+
+// project_index.json의 특정 프로젝트 항목 keywords 배열에 1개 append (전체 rebuild 아님 — 수동 추가분 보존)
+window._msAppendProjectKeyword = async function(driveFileId, keyword) {
+    try {
+        const tokenObj = gapi.client.getToken();
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token || !driveFileId || !keyword) return false;
+        const indexFileId = await window.findProjectIndexFile(token);
+        if (!indexFileId) return false;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${indexFileId}?alt=media&supportsAllDrives=true`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (!data || !Array.isArray(data.projects)) return false;
+        const entry = data.projects.find(function(p) { return p.drive_file_id === driveFileId; });
+        if (!entry) return false;
+        entry.keywords = entry.keywords || [];
+        if (!entry.keywords.some(function(k) { return String(k).toLowerCase() === keyword.toLowerCase(); })) entry.keywords.push(keyword);
+        entry.updated_at = new Date().toISOString();
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${indexFileId}?uploadType=media&supportsAllDrives=true`, {
+            method: 'PATCH',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        window._projectIndexCache = { data: null, at: 0 }; // 캐시 무효화 — 다음 매칭부터 바로 반영
+
+        // 열려있는 시트 중 해당 프로젝트가 있으면 "메일키워드" 필드에도 반영 — 나중에 그 프로젝트를
+        // Summary에서 저장해도(→ updateProjectIndexEntry가 projectMeta로 rebuild) 방금 추가한 키워드가 안 사라지게
+        (window._sheets || []).forEach(function(s) {
+            const pm = s.fileId === driveFileId ? (s.snapshot && s.snapshot.projectMeta) : null;
+            if (!pm) return;
+            const existing = window._parseMailKeywords(pm.메일키워드);
+            if (!existing.some(function(k) { return k.toLowerCase() === keyword.toLowerCase(); })) {
+                existing.push(keyword);
+                pm.메일키워드 = existing.join(', ');
+            }
+        });
+        if (window.currentDriveFileId === driveFileId && window.projectMeta) {
+            const existing = window._parseMailKeywords(window.projectMeta.메일키워드);
+            if (!existing.some(function(k) { return k.toLowerCase() === keyword.toLowerCase(); })) {
+                existing.push(keyword);
+                window.projectMeta.메일키워드 = existing.join(', ');
+                const el = document.getElementById('sum-mail-keywords');
+                if (el) el.value = window.projectMeta.메일키워드;
+            }
+        }
+        return true;
+    } catch (e) { console.warn('project_index.json 키워드 추가 실패:', e.message); return false; }
+};
+
+// 키워드 추가 후, 지금 미분류로 쌓여있는 메일들을 즉시 재매칭 — 방금 추가한 키워드로 걸리면 바로 이동
+window._msRecheckUnmatched = async function() {
+    window._projectIndexCache = { data: null, at: 0 };
+    const projectList = await window._msLoadProjectIndex();
+    let movedCount = 0;
+    (window._msResults || []).forEach(function(r) {
+        if (r.project) return;
+        const matched = window._msMatchProjects({ subject: r.subject, body: r.body }, projectList);
+        if (matched.length) {
+            r.project = matched.length === 1 ? { status: 'matched', candidates: matched } : { status: 'ambiguous', candidates: matched };
+            movedCount++;
+        }
+    });
+    if (movedCount) {
+        window._msSaveQueueToStorage();
+        if (typeof msRenderList === 'function') msRenderList(window._msResults);
+    }
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    return movedCount;
+};
+
+window._msShowKeywordSuggestModal = async function() {
+    let modal = document.getElementById('ms-kwsuggest-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ms-kwsuggest-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="ms-kwsuggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:520px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
+            <div id="ms-kwsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                <span id="ms-kwsuggest-title">🔑 키워드 제안</span>
+                <button onclick="document.getElementById('ms-kwsuggest-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div id="ms-kwsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
+            <div style="padding:10px 16px; border-top:1px solid #eee;">
+                <button id="ms-kwsuggest-all-btn" onclick="window._msApplyAllKeywordSuggestions()" style="width:100%; padding:7px 14px; background:#2f9e44; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ 전체 추가</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('ms-kwsuggest-box', 'ms-kwsuggest-drag');
+        window._bindClickToFront('ms-kwsuggest-modal');
+    }
+    modal.style.display = 'block';
+    window.bringModalToFront('ms-kwsuggest-modal');
+    const body = document.getElementById('ms-kwsuggest-body');
+    body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">⏳ 열려있는 프로젝트 대비 분석 중...</div>';
+    window._msKwSuggestions = await window._msSuggestKeywordsForUnmatched();
+    window._msRenderKeywordSuggestList();
+};
+
+window._msRenderKeywordSuggestList = function() {
+    const body = document.getElementById('ms-kwsuggest-body');
+    const title = document.getElementById('ms-kwsuggest-title');
+    const list = window._msKwSuggestions || [];
+    if (title) title.textContent = `🔑 키워드 제안 (${list.length}건)`;
+    if (!list.length) {
+        body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">제안할 키워드가 없습니다.<br>(열려있는 프로젝트와 겹치는 미분류 메일이 없거나, 이미 다 등록돼 있습니다)</div>';
+        return;
+    }
+    body.innerHTML = list.map(function(s, i) {
+        return `
+        <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="min-width:0; flex:1;">
+                <div style="font-size:12px;"><b style="color:#0056b3;">${_msQEsc(s.projectLabel)}</b> ← <span style="background:#fff3cd; color:#856404; padding:1px 5px; border-radius:3px; font-weight:bold;">${_msQEsc(s.keyword)}</span></div>
+                <div style="font-size:10.5px; color:#999; margin-top:2px; overflow-wrap:break-word;">${_msQEsc(s.count)}건 매칭 · 예: ${_msQEsc(s.sampleSubject)}</div>
+            </div>
+            <button data-idx="${i}" class="ms-kwsuggest-add-btn" style="flex-shrink:0; padding:5px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">➕ 추가</button>
+        </div>`;
+    }).join('');
+    body.querySelectorAll('.ms-kwsuggest-add-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { window._msApplyOneKeywordSuggestion(Number(btn.dataset.idx)); });
+    });
+};
+
+window._msApplyOneKeywordSuggestion = async function(idx) {
+    const s = (window._msKwSuggestions || [])[idx];
+    if (!s) return;
+    const ok = await window._msAppendProjectKeyword(s.driveFileId, s.keyword);
+    if (ok) {
+        window._msKwSuggestions = window._msKwSuggestions.filter(function(_, i) { return i !== idx; });
+        const moved = await window._msRecheckUnmatched();
+        if (window.showToast) window.showToast(`✅ "${s.keyword}" → ${s.projectLabel}에 추가됨` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''), 'info');
+        window._msRenderKeywordSuggestList();
+    } else if (window.showToast) {
+        window.showToast('❌ 키워드 추가 실패 — 콘솔 확인', 'error');
+    }
+};
+
+window._msApplyAllKeywordSuggestions = async function() {
+    const list = window._msKwSuggestions || [];
+    if (!list.length) return;
+    if (!confirm(`${list.length}건의 키워드를 전부 각 프로젝트에 추가할까요?`)) return;
+    let okCount = 0;
+    for (const s of list.slice()) {
+        const ok = await window._msAppendProjectKeyword(s.driveFileId, s.keyword);
+        if (ok) okCount++;
+    }
+    const moved = await window._msRecheckUnmatched();
+    window._msKwSuggestions = [];
+    window._msRenderKeywordSuggestList();
+    if (window.showToast) window.showToast(`✅ 키워드 ${okCount}건 추가 완료` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''), 'info');
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// 💡 [신규발신자 → 주소록 일괄추가] 큐에 쌓인 신규발신자를 이메일 기준으로 정리(중복제거)해서
+//    공용 주소록(window.AddressBook)에 일괄 등록 — 등록되면 다음부터 화이트리스트에 자동 포함됨
+// ═══════════════════════════════════════════════════════════════════
+window._msSuggestAddressEntries = function() {
+    const queue = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
+    const existingEmails = new Set((window.AddressBook.load() || []).map(function(p) { return (p.email || '').toLowerCase(); }));
+    const seen = new Map();
+    queue.forEach(function(r) {
+        const email = window._msParseSenderEmail(r.sender);
+        if (!email || existingEmails.has(email) || seen.has(email)) return;
+        let name = String(r.sender || '').replace(/<.*?>/, '').replace(/["']/g, '').trim();
+        if (!name || name.toLowerCase() === email) name = email.split('@')[0];
+        seen.set(email, { name: name, email: email, sampleSubject: r.subject });
+    });
+    return Array.from(seen.values());
+};
+
+window._msAddToAddressBook = function(entries) {
+    const list = window.AddressBook.load();
+    const existingEmails = new Set(list.map(function(p) { return (p.email || '').toLowerCase(); }));
+    let added = 0;
+    entries.forEach(function(e) {
+        if (existingEmails.has(e.email.toLowerCase())) return;
+        list.push({ name: e.name, nameEn: '', dept: '', title: '', email: e.email, mobile: '', phone: '', telegramId: '' });
+        existingEmails.add(e.email.toLowerCase());
+        added++;
+    });
+    window.AddressBook.save(list); // 3초 디바운스 후 공용 Drive 파일에 동기화
+    window.tabData = window.tabData || {};
+    window.tabData.addressBook = list;
+    if (window.renderAddressTable) window.renderAddressTable();
+    const addedEmails = new Set(entries.map(function(e) { return e.email.toLowerCase(); }));
+    const remaining = (JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]'))
+        .filter(function(r) { return !addedEmails.has(window._msParseSenderEmail(r.sender)); });
+    localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, JSON.stringify(remaining));
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    return added;
+};
+
+window._msShowAddressSuggestModal = function() {
+    let modal = document.getElementById('ms-addrsuggest-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ms-addrsuggest-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="ms-addrsuggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:520px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
+            <div id="ms-addrsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                <span id="ms-addrsuggest-title">📇 주소록 추가 제안</span>
+                <button onclick="document.getElementById('ms-addrsuggest-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div id="ms-addrsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
+            <div style="padding:10px 16px; border-top:1px solid #eee;">
+                <button id="ms-addrsuggest-all-btn" onclick="window._msApplyAllAddressSuggestions()" style="width:100%; padding:7px 14px; background:#2f9e44; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">✅ 전체 주소록에 추가</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('ms-addrsuggest-box', 'ms-addrsuggest-drag');
+        window._bindClickToFront('ms-addrsuggest-modal');
+    }
+    modal.style.display = 'block';
+    window.bringModalToFront('ms-addrsuggest-modal');
+    window._msAddrSuggestions = window._msSuggestAddressEntries();
+    window._msRenderAddressSuggestList();
+};
+
+window._msRenderAddressSuggestList = function() {
+    const body = document.getElementById('ms-addrsuggest-body');
+    const title = document.getElementById('ms-addrsuggest-title');
+    const list = window._msAddrSuggestions || [];
+    if (title) title.textContent = `📇 주소록 추가 제안 (${list.length}건)`;
+    if (!list.length) {
+        body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">추가할 신규 발신자가 없습니다.<br>(이미 주소록에 있거나, 대기 중인 신규발신자가 없습니다)</div>';
+        return;
+    }
+    body.innerHTML = list.map(function(e, i) {
+        return `
+        <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:8px;">
+            <div style="min-width:0; flex:1;">
+                <div style="font-size:12px; font-weight:bold;">${_msQEsc(e.name)}</div>
+                <div style="font-size:11px; color:#777; margin-top:1px;">${_msQEsc(e.email)}</div>
+                <div style="font-size:10.5px; color:#999; margin-top:2px; overflow-wrap:break-word;">예: ${_msQEsc(e.sampleSubject)}</div>
+            </div>
+            <button data-idx="${i}" class="ms-addrsuggest-add-btn" style="flex-shrink:0; padding:5px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">➕ 추가</button>
+        </div>`;
+    }).join('');
+    body.querySelectorAll('.ms-addrsuggest-add-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const idx = Number(btn.dataset.idx);
+            const e = window._msAddrSuggestions[idx];
+            window._msAddToAddressBook([e]);
+            window._msAddrSuggestions = window._msAddrSuggestions.filter(function(_, i) { return i !== idx; });
+            window._msRenderAddressSuggestList();
+            if (window.showToast) window.showToast(`✅ "${e.name}" 주소록에 추가됨`, 'info');
+        });
+    });
+};
+
+window._msApplyAllAddressSuggestions = function() {
+    const list = window._msAddrSuggestions || [];
+    if (!list.length) return;
+    if (!confirm(`${list.length}명을 전부 주소록에 추가할까요?`)) return;
+    const added = window._msAddToAddressBook(list);
+    window._msAddrSuggestions = [];
+    window._msRenderAddressSuggestList();
+    if (window.showToast) window.showToast(`✅ 주소록에 ${added}명 추가 완료`, 'info');
 };
 
 window.msShowUnmatchedModal = function() {
