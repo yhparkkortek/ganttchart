@@ -433,6 +433,11 @@
 }
 #app-main.sb-collapsed { margin-left: var(--sb-w-collapsed); }
 
+/* 💡 [멀티시트] 시트탭이 많아 가로 스크롤이 걸리면 네이티브 스크롤바가 그 아래 세로 공간을
+   추가로 차지해서 "상단 여백이 유독 넓어 보이는" 원인이 됨 — 스크롤 기능은 유지하되 바만 숨김 */
+#sheet-tabs-bar { scrollbar-width: none; -ms-overflow-style: none; }
+#sheet-tabs-bar::-webkit-scrollbar { display: none; height: 0; }
+
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
 
