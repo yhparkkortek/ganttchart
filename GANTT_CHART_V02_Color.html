@@ -741,7 +741,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="app-main">
 
 <!-- 📑 [멀티시트] 어느 내부 탭(Gantt/Summary/알람 등)을 보고 있든 항상 보임 — 동시에 열린 프로젝트가 2개 이상일 때만 표시 -->
-<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 15px 0 15px; margin-bottom:2px; overflow-x:auto; background:#fff;"></div>
+<div id="sheet-tabs-bar" style="display:none; position:sticky; top:0; z-index:50; flex-shrink:0; align-items:flex-end; gap:3px; padding:4px 7px 0 7px; margin-bottom:2px; overflow-x:auto; background:#fff;"></div>
 
 <!-- ══════════════════════════════════════════════
      Alarm 탭 패널
@@ -753,11 +753,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-header-box" id="alarm-header-box">
       <!-- 💡 [멀티시트 UI 통일] 알람/공지 토글 — 두 뷰 모두 같은 한 줄짜리 헤더박스를 쓰도록,
            이 토글 요소를 _switchAlarmView()가 활성 뷰의 헤더박스 맨 앞으로 옮겨 씀 -->
-      <div id="alarm-view-toggle" style="display:flex; align-items:center; gap:14px; padding-right:14px; margin-right:14px; border-right:1px solid #e3e6ea; flex-shrink:0; align-self:stretch;">
+      <div id="alarm-view-toggle" style="display:flex; align-items:center; gap:14px; flex-shrink:0;">
         <span id="av-tab-alarm" onclick="window._switchAlarmView('alarm')"
               style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🔔 Alarm</span>
         <span id="av-tab-notice" onclick="window._switchAlarmView('notice')"
               style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">📢 Notice</span>
+        <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px 0 0;"></span>
       </div>
       <span id="alarm-server-status" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
       <div class="btn-group">
@@ -1756,19 +1757,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <div class="btn-group"></div>
-            <button class="action-btn" data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
-            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
-        </div>
-        <div id="calendar-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
-            <!-- 💡 [페이지 통일화] 년/월 이동 컨트롤을 헤더박스 밖으로 빼서 달력 본문(라운드박스) 안, 스크롤 영역 맨 위에 고정 배치 —
-                 다른 탭들처럼 헤더박스는 제목+버튼만 남기고, 달력 고유 컨트롤은 달력 쪽에 속하게 함 -->
-            <div style="display:flex; justify-content:center; align-items:center; gap:3px; padding:8px 0; position:sticky; top:0; z-index:5; background:#fff; border-bottom:1px solid #eee;">
+            <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
                 <button class="action-btn" data-i18n="btn-prev" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(-1)">◀ 이전</button>
                 <span id="cal-header-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:80px; text-align:center;"></span>
                 <button class="action-btn" data-i18n="btn-next" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(1)">다음 ▶</button>
                 <button class="action-btn" data-i18n="btn-today" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
             </div>
+            <button class="action-btn" data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
+            <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+        </div>
+        <div id="calendar-table-scroll" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px);">
             <div id="cal-page"></div>
         </div>
     </div>
@@ -1779,6 +1777,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Weekly Report</h2>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
                 <button class="action-btn" data-i18n="btn-prev-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
                 <span id="wr-week-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:140px; text-align:center;"></span>
@@ -2991,7 +2990,7 @@ ${mailText}`;
             return `<div onclick="window.switchToSheet('${s.key}')"
                 title="${escapeHtml(label)}"
                 style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:160px;
-                       background:${active ? '#ffe8d6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
+                       background:${active ? '#fff8e6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:1px solid #fff; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); if(confirm('이 시트를 닫을까요? (저장 안 한 변경사항은 사라집니다 — Drive 원본은 그대로 있습니다)')) window.closeSheet('${s.key}');"
@@ -10498,12 +10497,12 @@ window.renderTaskInbox = function() {
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
-                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:1 1 auto; min-width:48px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
-                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:1.4 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
+                <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 1 100px; min-width:60px; max-width:120px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
+                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:1.4 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
+                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
                     : ''}
-                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:1.4 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#e67e22; color:#fff; cursor:pointer;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#e67e22; color:#fff; cursor:pointer;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
                 <button onclick="if(confirm(window._t('이 업무를 보관함에서 삭제할까요?','Remove this task from the inbox?'))){window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();}" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
