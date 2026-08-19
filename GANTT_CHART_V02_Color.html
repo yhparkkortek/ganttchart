@@ -10474,12 +10474,14 @@ window.renderTaskInbox = function() {
         html += `
         <div style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fff;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
-                <div style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</div>
-                <span style="font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
+                <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
+                    <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</span>
+                    <a href="javascript:void(0)" onclick="var d=document.getElementById('inbox-detail-${it.uid}'); var open=d.style.display==='none'; d.style.display=open?'block':'none'; this.textContent=open?(window._currentLang==='en'?'▲ Collapse':'▲ 상세 접기'):(window._currentLang==='en'?'▼ Details':'▼ 상세 보기');" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${_ibEn ? '▼ Details' : '▼ 상세 보기'}</a>
+                </div>
+                <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
                 ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''} · ${escapeHtml(it.source || '')} · ${when}
-                <a href="javascript:void(0)" onclick="var d=document.getElementById('inbox-detail-${it.uid}'); var open=d.style.display==='none'; d.style.display=open?'block':'none'; this.textContent=open?(window._currentLang==='en'?'▲ Collapse':'▲ 상세 접기'):(window._currentLang==='en'?'▼ Details':'▼ 상세 보기');" style="margin-left:6px; color:#1971c2; text-decoration:none; font-weight:bold;">${_ibEn ? '▼ Details' : '▼ 상세 보기'}</a>
             </div>
             <div id="inbox-detail-${it.uid}" style="display:none; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
                 <div><b>${_ibEn ? 'Task' : '업무명'}</b> : ${escapeHtml(t['업무명'] || '')}</div>
