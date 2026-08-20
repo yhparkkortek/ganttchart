@@ -6801,7 +6801,7 @@ window.deleteHistoryByDateRange = function() {
 
         // [AI 업무분석 팝업] 주요 고정 텍스트 (id 기반)
         const _mailIdTexts = {
-            'mail-popup-title':       { ko:'📧 업무 추가',           en:'📧 Add Task' },
+            'mail-popup-title':       { ko:'📧 AI 업무 분석',        en:'📧 AI Task Analysis' },
             'mail-ai-section-label':  { ko:'🤖 AI 선택',             en:'🤖 Select AI' },
             'mail-ai-model-label':    { ko:'🔧 모델 선택',            en:'🔧 Model' },
             'mail-cache-clear-btn':   { ko:'🗑️ 분석 캐시 초기화',    en:'🗑️ Clear Cache' },
@@ -11805,7 +11805,7 @@ window.updateInboxBadge();
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:740px; min-height:600px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
         <!-- 헤더 -->
        <div id="mail-drag-handle" class="history-header" style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1px solid #ffe08a; border-radius:10px 10px 0 0; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
-            <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 업무 추가</span>
+            <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 AI 업무 분석</span>
             <div style="display:flex; gap:6px; justify-self:center; align-items:center;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
@@ -14388,7 +14388,8 @@ window._autoMailFetchTick = async function() {
                 item = {
                     idx: window._msResults.length, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
-                    project: projectTag, task: null, selected: false, registered: false, error: 'API키 미설정'
+                    project: window._msProjectTagLabel(projectTag), _projectTag: projectTag,
+                    task: null, selected: false, registered: false, error: 'API키 미설정'
                 };
             } else {
                 try {
@@ -14418,14 +14419,16 @@ window._autoMailFetchTick = async function() {
                     item = {
                         idx: window._msResults.length, fileName: mail.fileName,
                         subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
-                        project: resolvedProjectTag, task, selected: !!task, registered: false,
+                        project: window._msProjectTagLabel(resolvedProjectTag), _projectTag: resolvedProjectTag,
+                        task, selected: !!task, registered: false,
                         error: !task ? 'AI분석실패' : null
                     };
                 } catch(e) {
                     item = {
                         idx: window._msResults.length, fileName: mail.fileName,
                         subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
-                        project: projectTag, task: null, selected: false, registered: false, error: e.message
+                        project: window._msProjectTagLabel(projectTag), _projectTag: projectTag,
+                        task: null, selected: false, registered: false, error: e.message
                     };
                 }
                 await new Promise(r => setTimeout(r, 4000)); // 기존 수동 흐름과 동일한 API 호출 간격
@@ -14434,7 +14437,7 @@ window._autoMailFetchTick = async function() {
             // 💡 [메일 자동처리] 프로젝트가 매칭됐고 AI 추출까지 성공한 건만 개인 TaskInbox로 자동 이동
             //    (미분류는 프로젝트를 모르니 보관함에 넣지 않고 로컬 큐에만 남김 — 검토 큐 UI에서 노출 예정)
             //    💡 fileName 기준 중복 체크 — 큐가 초기화돼도(캐시삭제 등) 같은 메일이 보관함에 재등록되지 않도록
-            const finalProjectTag = item.project; // 💡 [구체적 키워드 우선 매칭 v2] AI 맥락판단으로 재확정됐을 수 있으니 item.project 기준
+            const finalProjectTag = item._projectTag; // 💡 [구체적 키워드 우선 매칭 v2] AI 맥락판단으로 재확정됐을 수 있으니 item._projectTag 기준 (item.project는 표시용 문자열)
             if (item.task && finalProjectTag && window.TaskInbox) {
                 const alreadyInInbox = window.TaskInbox.load().some(function(it) {
                     return it.mailRaw && it.mailRaw.fileName === mail.fileName;
@@ -14827,7 +14830,9 @@ window._msRecheckUnmatched = async function() {
         if (r.project) return;
         const matched = window._msMatchProjects({ subject: r.subject, body: r.body }, projectList);
         if (matched.length) {
-            r.project = matched.length === 1 ? { status: 'matched', candidates: matched } : { status: 'ambiguous', candidates: matched };
+            const tag = matched.length === 1 ? { status: 'matched', candidates: matched } : { status: 'ambiguous', candidates: matched };
+            r.project = window._msProjectTagLabel(tag); // 💡 화면 표시용 문자열 — 객체를 그대로 넣으면 "[object Object]"로 렌더됨
+            r._projectTag = tag;
             movedCount++;
         }
     });
