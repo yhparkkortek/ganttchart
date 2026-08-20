@@ -799,7 +799,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           style="border-color:#e67e22; color:#e67e22;"
           title="과거 미발송분 포함 전체 발송">📧 일괄 발송</button>
       </div>
-      <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection('tab-alarm')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+      <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
     </div>
 
     <!-- 알람 목록 테이블 -->
@@ -4944,8 +4944,9 @@ ${mailText}`;
         const isCalendar = (tabId === 'tab-calendar');
         const isWeekly = (tabId === 'tab-weekly');
         const isAlarm = (tabId === 'tab-alarm');
+        const isNotice = (tabId === 'tab-notice');
         const isAddress = (tabId === 'tab-address');
-        const isRowPagedPortrait = isAlarm || isAddress; // 🎯 A4 세로 + 40행/페이지 (여러 페이지로 이어짐)
+        const isRowPagedPortrait = isAlarm || isNotice || isAddress; // 🎯 A4 세로 + 40행/페이지 (여러 페이지로 이어짐)
         const fitOnePage = isSummary || isBriefSpec || isWeekly; // 💡 1페이지 축소 대상 탭
 
         if (isSummary) {
@@ -4985,6 +4986,7 @@ ${mailText}`;
             const activeSection = isComparisonView ? compSectionEl : (clone.querySelector('#mc-normal-section') || clone);
             footerTable = activeSection.querySelector('table');
         }
+        let fixedFooterDiv = null;
         if (footerTable) {
             const footerTfoot = document.createElement('tfoot');
             footerTfoot.innerHTML = '<tr><td colspan="100" style="padding-top:2px; border:none;">'
@@ -4993,31 +4995,21 @@ ${mailText}`;
                 + '</td></tr>';
             footerTable.appendChild(footerTfoot);
         } else if (!isCalendar) {
-            // 💡 [범용 반복 푸터] 진짜 <table>이 없는 탭(Summary/Weekly 등)도 tfoot 반복 효과를 보게,
-            //    지금까지 만든 clone의 모든 내용을 가짜 테이블 1개(1행 1칸) 안으로 옮겨 감싸고, 그
-            //    테이블의 tfoot에 푸터를 넣는다 — div를 맨 끝에 한 번만 붙이던 예전 방식보다 훨씬 안전
-            const wrapTable = document.createElement('table');
-            wrapTable.style.cssText = 'width:100%; border-collapse:collapse;';
-            const wrapTd = document.createElement('td');
-            wrapTd.style.cssText = 'padding:0; border:none;';
-            while (clone.firstChild) wrapTd.appendChild(clone.firstChild);
-            const wrapTr = document.createElement('tr');
-            wrapTr.appendChild(wrapTd);
-            const wrapTbody = document.createElement('tbody');
-            wrapTbody.appendChild(wrapTr);
-            wrapTable.appendChild(wrapTbody);
-            const footerTfoot2 = document.createElement('tfoot');
-            footerTfoot2.innerHTML = '<tr><td style="padding-top:2px; border:none;">'
-                + '<div style="display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:13px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">'
-                + '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
-                + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
-                + '</div>'
-                + '</td></tr>';
-            wrapTable.appendChild(footerTfoot2);
-            clone.appendChild(wrapTable);
+            // 💡 [범용 반복 푸터 v2] 표가 없는 탭(Summary/Weekly 등)은 가짜 테이블로 감싸도 행이 1개뿐이라
+            //    tfoot이 페이지마다 반복될 계기 자체가 없었음(표 안이 그냥 거대한 통짜 셀 하나라 페이지네이션이
+            //    안 걸림) — 그래서 여전히 중간에 끼는 문제가 재현됨. 대신 Chrome은 인쇄 시 position:fixed
+            //    요소를 매 페이지 하단에 자동으로 반복해서 그려주므로, 그 성질을 그대로 이용한다
+            //    (clone 안이 아니라 printArea의 형제로 붙임 — clone 안에 넣으면 fitOnePage 축소계산에
+            //    끼어들어 배율에 영향을 주므로, 페이지 하단에 고정 오버레이되는 요소는 분리해두는 게 맞음)
+            fixedFooterDiv = document.createElement('div');
+            fixedFooterDiv.className = 'print-fixed-footer';
+            fixedFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif;';
+            fixedFooterDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+                + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
         }
 
         printArea.appendChild(clone);
+        if (fixedFooterDiv) printArea.appendChild(fixedFooterDiv);
         document.body.classList.add('tab-printing-mode');
 
         if (isSummary) document.body.classList.add('printing-tab-summary');
@@ -5222,7 +5214,7 @@ ${mailText}`;
         }
 
         if (isRowPagedPortrait) {
-            document.body.classList.add(isAlarm ? 'printing-tab-alarm' : 'printing-tab-address');
+            document.body.classList.add(isAlarm ? 'printing-tab-alarm' : isNotice ? 'printing-tab-notice' : 'printing-tab-address');
 
             // 📐 A4 세로 표준 여백 기준 페이지 폭/높이(px)
             const pageWidthPx  = (210 - 20) * 96 / 25.4;
@@ -11283,16 +11275,25 @@ window.updateInboxBadge();
             margin: 0 !important;
             padding: 0 !important;
         }
+        /* 💡 [범용 반복 푸터] 표가 없는 탭(Summary/Weekly)의 카피라이트 푸터 — position:fixed는 인쇄 시
+           Chrome이 매 페이지 하단에 반복해서 그려주므로, 몇 페이지가 되든 항상 페이지 맨 아래에 나옴 */
+        .print-fixed-footer {
+            position: fixed !important;
+            left: 10mm !important;
+            right: 10mm !important;
+            bottom: 6mm !important;
+            width: auto !important;
+        }
         
         /* 💡 Summary는 JS에서 계산한 scale로 이미 크기를 맞추므로, 폰트 10px 강제(이중 축소) 대상에서 제외 */
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-address) #tab-print-area table,
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-address) #tab-print-area .concept-table {
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-notice):not(.printing-tab-address) #tab-print-area table,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-notice):not(.printing-tab-address) #tab-print-area .concept-table {
             width: 100% !important; font-size: 10px !important; table-layout: auto !important;
         }
         
                 
         /* 절대좌표 밀림 및 겹침 현상 방지 (Summary는 JS가 계산한 width 보정값을 써야 하므로 width 강제 제외) */
-        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-address) #tab-print-area > .concept-tab-wrap,
+        body.tab-printing-mode:not(.printing-tab-summary):not(.printing-tab-briefspec):not(.printing-tab-mctable):not(.printing-tab-calendar):not(.printing-tab-weekly):not(.printing-tab-alarm):not(.printing-tab-notice):not(.printing-tab-address) #tab-print-area > .concept-tab-wrap,
         body.tab-printing-mode #tab-print-area > .concept-tab-wrap > * {
             position: relative !important;
             display: block !important;
