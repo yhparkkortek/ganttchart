@@ -549,8 +549,10 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .sum-tl-bubble.below::after { top:-6px; border-bottom-color:#6f42c1; }
 .sum-tl-bubble .sum-tl-date { font-size:10px; color:#888; }
 /* 💡 [통일화] 예전엔 현재 월만 살구색 외곽박스가 있고 나머지 4개월은 박스가 없어서 페이지 구조가
-   달마다 들쭉날쭉했음 — 이제 전부 외곽박스로 통일하고, 현재 월만 살구색, 나머지는 옅은 하늘색으로 구분 */
-.cal-month-block { margin-bottom: 32px; background: #e7f3ff; border-radius: 10px; padding: 12px; outline: 2px solid #a5c8f0; outline-offset: -2px; }
+   달마다 들쭉날쭉했음 — 이제 전부 외곽박스로 통일하고, 현재 월/주만 살구색, 나머지는 옅은 회색으로 구분.
+   (하늘색을 썼다가 살구색과 구분이 잘 안 돼서 회색으로 변경 — 흰색은 페이지 배경과 같아서 박스 테두리가
+   거의 안 보이므로 제외) */
+.cal-month-block { margin-bottom: 32px; background: #fafafa; border-radius: 10px; padding: 12px; outline: 2px solid #e3e6ea; outline-offset: -2px; }
 .cal-month-block.cal-month-current { background: #fff8e6; outline: 2px solid #ffe08a; }
 .cal-month-block.cal-month-current .cal-month-title { color: #7a5210; font-weight: bold; }
 .cal-month-title { font-size: 15px; font-weight: bold; color: #2c5f8a; margin-bottom: 8px; padding-left: 4px; }
@@ -666,11 +668,24 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .cal-event-chip.chip-pending { background:#fff4e6; color:#c96a00; border-left-color:#e67e22; }
 .cal-event-chip.cal-alarm-on { background:#fff3cd; border-left-color:#e67e22; color:#7a5210; }
 .cal-event-chip.cal-selected { background:#2c5f8a !important; color:#fff !important; border-left-color:#1c3f5c !important; font-weight:bold; }
-/* 기간 막대 — 빨간색 화살표 */
-.cal-dur-bar { position:absolute; left:0; right:0; top:20px; height:3px; background:rgba(220,53,69,0.6); z-index:1; pointer-events:none; }
+/* 💡 [기간 막대 개선] 예전엔 얇고(3px) 반투명해서 눈에 잘 안 띄었음 — 두껍고(6px) 진한 알약모양
+   막대 + 시작/종료일엔 작은 원형 마커를 찍어서 "여기서 시작/여기서 끝"이 한눈에 보이게 함.
+   월(96px)/주(420px, 확대 셀) 모드 모두 day-num 아래 적당한 위치에 오도록 top값을 분리 */
+.cal-dur-bar { position:absolute; left:0; right:0; top:22px; height:6px; background:#e03131; border-radius:3px; z-index:1; pointer-events:none; box-shadow:0 1px 3px rgba(224,49,49,0.45); }
 .cal-dur-bar.cal-dur-start { left:50%; border-radius:3px 0 0 3px; }
 .cal-dur-bar.cal-dur-end { right:50%; border-radius:0 3px 3px 0; }
 .cal-dur-bar.cal-dur-single { left:20%; right:20%; border-radius:3px; }
+.cal-dur-bar.cal-dur-start::before,
+.cal-dur-bar.cal-dur-single::before {
+    content:''; position:absolute; left:0; top:50%; width:10px; height:10px; background:#e03131;
+    border:2px solid #fff; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 1px 2px rgba(0,0,0,0.3);
+}
+.cal-dur-bar.cal-dur-end::after,
+.cal-dur-bar.cal-dur-single::after {
+    content:''; position:absolute; right:0; top:50%; width:10px; height:10px; background:#e03131;
+    border:2px solid #fff; border-radius:50%; transform:translate(50%,-50%); box-shadow:0 1px 2px rgba(0,0,0,0.3);
+}
+.cal-day-cell-tall .cal-dur-bar { top:34px; height:8px; }
 .cal-day-popup-item { padding:8px 10px; border:1px solid #e3e6ea; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; }
 .cal-day-popup-item:hover { border-color:#2c5f8a; }
 .cal-day-popup-item.cal-alarm-on { background:#fff3cd; border-color:#ffe08a; }
@@ -22861,6 +22876,11 @@ window.calGoToday = function() {
 window.calSelectEvent = function(idx) {
     window.calState.selectedIdx = (window.calState.selectedIdx === idx) ? null : idx;
     window.calRender();
+    // 💡 업무(칩)를 클릭하면 기간 라인 표시 + 상세내용 팝업까지 함께 — 날짜 숫자 클릭(목록 팝업)은 그대로 둠
+    if (window.calState.selectedIdx !== null) {
+        const ev = calBuildEvents().find(function(e) { return e.idx === idx; });
+        if (ev) window.calShowDayPopup(calTsToKey(ev.end), idx);
+    }
 };
 
 window.calShowDayPopup = function(dateKey, targetIdx) {
@@ -23204,27 +23224,40 @@ window.calRender = function() {
     if (btnWeek) btnWeek.classList.toggle('cal-view-btn-active', isWeekMode);
 
     if (isWeekMode) {
-        const weekStart = new Date(window.calState.weekStart || calGetWeekStart(new Date()));
-        const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
-        if (headerLabel) headerLabel.textContent = _calIsEn
-            ? _calMonthNames[weekStart.getMonth()] + ' ' + weekStart.getDate() + ' - '
-              + (weekStart.getMonth() !== weekEnd.getMonth() ? _calMonthNames[weekEnd.getMonth()] + ' ' : '') + weekEnd.getDate() + ', ' + weekEnd.getFullYear()
-            : weekStart.getFullYear() + '년 ' + (weekStart.getMonth() + 1) + '월 ' + weekStart.getDate() + '일 ~ '
-              + (weekStart.getMonth() !== weekEnd.getMonth() ? (weekEnd.getMonth() + 1) + '월 ' : '') + weekEnd.getDate() + '일';
+        const anchorWeekStart = new Date(window.calState.weekStart || calGetWeekStart(new Date()));
+        const fmtWeekLabel = function(ws) {
+            const we = new Date(ws); we.setDate(we.getDate() + 6);
+            return _calIsEn
+                ? _calMonthNames[ws.getMonth()] + ' ' + ws.getDate() + ' - '
+                  + (ws.getMonth() !== we.getMonth() ? _calMonthNames[we.getMonth()] + ' ' : '') + we.getDate() + ', ' + we.getFullYear()
+                : ws.getFullYear() + '년 ' + (ws.getMonth() + 1) + '월 ' + ws.getDate() + '일 ~ '
+                  + (ws.getMonth() !== we.getMonth() ? (we.getMonth() + 1) + '월 ' : '') + we.getDate() + '일';
+        };
+        if (headerLabel) headerLabel.textContent = fmtWeekLabel(anchorWeekStart);
 
-        let cellsHtml = '';
-        for (let c = 0; c < 7; c++) {
-            const cellDate = new Date(weekStart);
-            cellDate.setDate(cellDate.getDate() + c);
-            cellsHtml += calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, { tall: true });
+        // 4주 렌더링 (현재 주 기준 앞 1주 / 현재 주 / 뒤 2주) — 월 5개월 보기와 동일한 컨셉
+        let allWeekHtml = '';
+        for (let wi = 0; wi < 4; wi++) {
+            const ws = new Date(anchorWeekStart);
+            ws.setDate(ws.getDate() + (wi - 1) * 7);
+            const isCurrentWeek = (wi === 1);
+
+            let cellsHtml = '';
+            for (let c = 0; c < 7; c++) {
+                const cellDate = new Date(ws);
+                cellDate.setDate(cellDate.getDate() + c);
+                cellsHtml += calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, { tall: true });
+            }
+
+            allWeekHtml += '<div class="cal-month-block cal-week-block' + (isCurrentWeek ? ' cal-month-current' : '') + '">'
+                + '<div class="cal-month-title">' + fmtWeekLabel(ws) + '</div>'
+                + '<div class="cal-grid-wrap">'
+                + '<div class="cal-weekday-row">' + _calWeekdays.map(d => '<div>' + d + '</div>').join('') + '</div>'
+                + '<div class="cal-body-row">' + cellsHtml + '</div>'
+                + '</div>'
+                + '</div>';
         }
-
-        container.innerHTML = '<div class="cal-month-block cal-month-current cal-week-block">'
-            + '<div class="cal-grid-wrap">'
-            + '<div class="cal-weekday-row">' + _calWeekdays.map(d => '<div>' + d + '</div>').join('') + '</div>'
-            + '<div class="cal-body-row">' + cellsHtml + '</div>'
-            + '</div>'
-            + '</div>';
+        container.innerHTML = allWeekHtml;
         return;
     }
 
