@@ -9157,6 +9157,68 @@ window.getActiveAiModel = function() {
     return saved || cfg.defaultModel;
 };
 
+// 💡 [2026-08-20] [자동 모델 페일오버] AI 제공사가 예고 없이 특정 모델을 사용중단시켜도
+//    AI 분석 기능 전체가 죽지 않도록 하는 공용 네트워크 호출 헬퍼. 붙여넣기분석/AI프롬프트개선/
+//    메일자동처리(ms) 3곳이 전부 이걸 거친다 — 한 곳만 고치면 전체에 적용됨.
+//    - "모델이 사용중단/존재하지 않음" 유형 에러를 감지하면, 3초 대기 재시도 없이 같은 provider의
+//      다음 후보 모델로 즉시 전환해서 재시도한다.
+//    - 전환해서 성공하면 그 모델을 localStorage에 새 기본값으로 저장 — 다음 호출부터는 바로 그 모델 사용
+//      (사람이 코드를 고치기 전까지 매번 실패→전환을 반복하지 않도록 자가치유).
+//    - 그 외 에러(키 오류/네트워크 일시 오류 등)는 같은 모델로 기존처럼 짧게 재시도.
+window._AI_MODEL_DEPRECATED_RE = /does not exist|no longer available|decommissioned|not found|deprecated/i;
+
+window.callAiBackend = async function(apiKey, prompt, opts) {
+    opts = opts || {};
+    const provider = window.getActiveAiProvider();
+    const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
+    const GAS_URL = localStorage.getItem('gas_server_url') ||
+        'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
+
+    const activeModel = window.getActiveAiModel();
+    // 시도 순서: 현재 활성 모델 → 나머지 후보 모델(같은 provider, 중복 제거)
+    const candidates = [activeModel].concat((cfg.models || []).map(m => m.id).filter(id => id !== activeModel));
+
+    const maxRetryPerModel = opts.maxRetryPerModel || 2;
+    const retryDelayMs = opts.retryDelayMs != null ? opts.retryDelayMs : 3000;
+    let lastErr = null;
+
+    for (let ci = 0; ci < candidates.length; ci++) {
+        const model = candidates[ci];
+        let isDeprecated = false;
+        for (let attempt = 1; attempt <= maxRetryPerModel; attempt++) {
+            if (opts.isCancelled && opts.isCancelled()) return { ok: false, error: new Error('사용자가 중단함') };
+            try {
+                const res = await fetch(GAS_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ userApiKey: apiKey, prompt, provider, model })
+                });
+                const data = await res.json();
+                if (data.status !== 'success') throw new Error(data.message || '구글 서버 응답 오류');
+                if (model !== activeModel) {
+                    console.warn(`[AI 모델 자동전환] "${activeModel}" 실패 → "${model}"로 전환 성공. 기본값을 갱신합니다.`);
+                    localStorage.setItem('ai_model_' + provider, model);
+                    if (window.showToast) {
+                        window.showToast(`⚠️ AI 모델("${activeModel}")이 사용 중단되어 "${model}"로 자동 전환했습니다.`);
+                    }
+                }
+                return { ok: true, data, modelUsed: model, switched: model !== activeModel };
+            } catch (err) {
+                lastErr = err;
+                isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
+                if (isDeprecated) break; // 이 모델은 재시도해도 소용없음 → 바로 다음 후보 모델로
+                if (attempt < maxRetryPerModel && !(opts.isCancelled && opts.isCancelled())) {
+                    await new Promise(r => setTimeout(r, retryDelayMs));
+                }
+            }
+        }
+        // 💡 모델 자체가 죽은 게 아니라 키 오류/네트워크 등 다른 이유로 실패했다면,
+        //    다른 모델로 바꿔봐야 소용없으므로 후보를 계속 순회하지 않고 여기서 바로 실패 처리
+        if (!isDeprecated) return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
+    }
+    return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
+};
+
 window.onAiProviderChange = function() {
     const sel = document.getElementById('mail-ai-provider');
     if (!sel) return;
@@ -9317,45 +9379,18 @@ window.analyzeMailContent = async function() {
 
     const prompt = window.getSystemPrompt(projectAssignee, projectCustomer, projectModel, projectInch, mailTextForPrompt, null);
 
-    // ✅ 방금 배포한 구글 앱스 스크립트(GAS) URL로 전송
-    const GAS_URL = localStorage.getItem("gas_server_url") || "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
-
-    const MAX_RETRY = 3;
+    // ✅ 공용 헬퍼(모델 사용중단 자동 페일오버 포함)로 구글 앱스 스크립트(GAS)에 전송
     let lastErr = null;
     let parsed = null;
 
     window._mailAnalyzeCancelled = false;
-    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-        if (window._mailAnalyzeCancelled) { parsed = null; lastErr = new Error('사용자가 중단함'); break; }
-        try {
-            const res = await fetch(GAS_URL, {
-                method: 'POST',
-                headers: { 'Content-Type': 'text/plain' },
-                body: JSON.stringify({
-                    userApiKey: apiKey,
-                    prompt: prompt,
-                    provider: window.getActiveAiProvider(),
-                    model: window.getActiveAiModel()
-                })
-            });
-            const data = await res.json();
-
-            if (data.status !== 'success') {
-                throw new Error(data.message || "구글 서버 응답 오류");
-            }
-
-            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            parsed = window.parseGeminiTask(text);
-            if (!parsed) throw new Error('JSON 형식을 찾을 수 없습니다.');
-            lastErr = null;
-            break;
-        } catch (err) {
-            lastErr = err;
-            if (attempt < MAX_RETRY && !window._mailAnalyzeCancelled) {
-                console.warn(`AI 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
-                await new Promise(r => setTimeout(r, 3000));
-            }
-        }
+    const callResult = await window.callAiBackend(apiKey, prompt, { isCancelled: () => window._mailAnalyzeCancelled });
+    if (callResult.ok) {
+        const text = callResult.data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        parsed = window.parseGeminiTask(text);
+        if (!parsed) lastErr = new Error('JSON 형식을 찾을 수 없습니다.');
+    } else {
+        lastErr = callResult.error;
     }
 
     analyzeBtn.disabled = false;
@@ -9818,9 +9853,6 @@ window.triggerPromptImprove = async function(mode, instantComment) {
     const _en = window._currentLang === 'en';
     const currentPrompt = localStorage.getItem('gantt_mail_prompt') || window._defaultPromptTemplate || '';
     const apiKey = window.getActiveAiKey(); // 💡 선택된 provider(Gemini/Groq/Mistral)에 맞는 키를 정식 헬퍼로 조회
-    const GAS_URL = localStorage.getItem('gas_server_url') ||
-        'https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec';
-
     let casesText = '';
     let targetUids = [];
 
@@ -9859,18 +9891,9 @@ window.triggerPromptImprove = async function(mode, instantComment) {
 
     window.showToast(_en ? '🤖 Requesting AI improvement...' : '🤖 AI 개선 요청 중...');
     try {
-        const resp = await fetch(GAS_URL, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({
-                userApiKey: apiKey,
-                prompt: improvePrompt,
-                provider: window.getActiveAiProvider(),
-                model: window.getActiveAiModel()
-            })
-        });
-        const data = await resp.json();
-        if (data.status !== 'success') throw new Error(data.message);
+        const callResult = await window.callAiBackend(apiKey, improvePrompt);
+        if (!callResult.ok) throw callResult.error;
+        const data = callResult.data;
         const text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
         const cleaned = text.replace(/```[a-z]*|```/gi, '').trim();
@@ -16251,50 +16274,30 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
             `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)"`;
     }
 
-    const MAX_RETRY = 3;
-    for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-        try {
-            const resp = await fetch(GAS_URL, {
-                method: 'POST',
-                headers: {'Content-Type': 'text/plain'},
-                body: JSON.stringify({
-                    userApiKey: apiKey,
-                    prompt: prompt,
-                    provider: window.getActiveAiProvider(),
-                    model: window.getActiveAiModel()
-                })
-            });
-            const data = await resp.json();
-            if (data.status !== 'success') throw new Error(data.message);
-            let text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-            const result = window.parseGeminiTask(text);
-            if (result) {
-                // 💡 [B안] 시작일은 AI 추론 대신 메일 발송일로 확정
-                //    (인용/포워딩 체인에 섞인 과거 날짜를 집는 오류 원천 차단. 사용자가 달력에서 수정 가능)
-                if (_msDateYMD) {
-                    result['시작일'] = _msDateYMD;
-                    const _p = result['완료일'];
-                    if (_p && !String(_p).includes('날짜확인필요') && _p < _msDateYMD) result['완료일'] = _msDateYMD;
-                }
-                // 💡 완료일을 못 찾았으면 시작일+1일로 기본값 채움
-                window._applyDefaultDueDate(result);
-                // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
-                result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
-                const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
-                result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
-            }
-            return result;
-                } catch(err) {
-                if (attempt < MAX_RETRY) {
-                    console.warn(`Gemini 분석 실패 (${attempt}/${MAX_RETRY}회), 3초 후 재시도...`, err.message);
-                    await new Promise(r => setTimeout(r, 3000));
-                } else {
-                    console.error(`Gemini 분석 최종 실패 (${MAX_RETRY}회 시도)`, err.message);
-                    return null;
-                }
-            }
-        }
+    const callResult = await window.callAiBackend(apiKey, prompt);
+    if (!callResult.ok) {
+        console.error(`Gemini 분석 최종 실패`, callResult.error && callResult.error.message);
+        return null;
     }
+    let text = callResult.data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const result = window.parseGeminiTask(text);
+    if (result) {
+        // 💡 [B안] 시작일은 AI 추론 대신 메일 발송일로 확정
+        //    (인용/포워딩 체인에 섞인 과거 날짜를 집는 오류 원천 차단. 사용자가 달력에서 수정 가능)
+        if (_msDateYMD) {
+            result['시작일'] = _msDateYMD;
+            const _p = result['완료일'];
+            if (_p && !String(_p).includes('날짜확인필요') && _p < _msDateYMD) result['완료일'] = _msDateYMD;
+        }
+        // 💡 완료일을 못 찾았으면 시작일+1일로 기본값 채움
+        window._applyDefaultDueDate(result);
+        // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
+        result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
+        const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
+        result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
+    }
+    return result;
+}
 </script>
 
 <style>
