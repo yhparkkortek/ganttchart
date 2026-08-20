@@ -548,8 +548,10 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .sum-tl-bubble.above::after { bottom:-6px; border-top-color:#6f42c1; }
 .sum-tl-bubble.below::after { top:-6px; border-bottom-color:#6f42c1; }
 .sum-tl-bubble .sum-tl-date { font-size:10px; color:#888; }
-.cal-month-block { margin-bottom: 32px; }
-.cal-month-block.cal-month-current { background: #fff8e6; border-radius: 10px; padding: 12px; outline: 2px solid #ffe08a; outline-offset: -2px; }
+/* 💡 [통일화] 예전엔 현재 월만 살구색 외곽박스가 있고 나머지 4개월은 박스가 없어서 페이지 구조가
+   달마다 들쭉날쭉했음 — 이제 전부 외곽박스로 통일하고, 현재 월만 살구색, 나머지는 옅은 하늘색으로 구분 */
+.cal-month-block { margin-bottom: 32px; background: #e7f3ff; border-radius: 10px; padding: 12px; outline: 2px solid #a5c8f0; outline-offset: -2px; }
+.cal-month-block.cal-month-current { background: #fff8e6; outline: 2px solid #ffe08a; }
 .cal-month-block.cal-month-current .cal-month-title { color: #7a5210; font-weight: bold; }
 .cal-month-title { font-size: 15px; font-weight: bold; color: #2c5f8a; margin-bottom: 8px; padding-left: 4px; }
 
@@ -633,14 +635,16 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .cal-weekday-row > div:first-child { color:#e03131; }
 .cal-weekday-row > div:last-child { color:#1971c2; }
 .cal-body-row { display:grid; grid-template-columns:repeat(7,1fr); }
-.cal-day-cell { border-right:1px solid #eee; border-bottom:1px solid #eee; min-height:96px; padding:4px; box-sizing:border-box; position:relative; cursor:pointer; }
-.cal-day-cell:hover { background:#fafcfe; }
+.cal-day-cell { border-right:1px solid #eee; border-bottom:1px solid #eee; min-height:96px; padding:4px; box-sizing:border-box; position:relative; cursor:pointer; transition:background 0.12s; }
 .cal-day-cell.cal-other-month { background:#fafafa; color:#bbb; }
 .cal-day-cell.cal-today { background:#eef6fb; }
 .cal-day-num { font-size:12px; font-weight:600; color:#333; display:inline-block; padding:1px 6px; border-radius:10px; }
 .cal-day-cell.cal-today .cal-day-num { background:#2c5f8a; color:#fff; }
 .cal-day-cell.cal-weekend-sat .cal-day-num { color:#1971c2; }
 .cal-day-cell.cal-weekend-sun .cal-day-num { color:#e03131; }
+/* 💡 [클릭영역 확대] 예전엔 숫자(.cal-day-num)만 클릭 가능해서 맞춰 누르기 어려웠음 — 이제 셀 전체가
+   클릭 영역이라 호버도 셀 전체에 항상 보이게(다른 배경색 규칙보다 우선하도록 !important) */
+.cal-day-cell:hover { background:#fff8e6 !important; }
 .cal-chips-grid { display:grid; gap:1px 2px; margin-top:2px; }
 .cal-chips-grid.chips-single { grid-template-columns:1fr; }
 .cal-chips-grid.chips-double { grid-template-columns:1fr 1fr; }
@@ -4885,7 +4889,7 @@ ${mailText}`;
         const isAlarm = (tabId === 'tab-alarm');
         const isAddress = (tabId === 'tab-address');
         const isRowPagedPortrait = isAlarm || isAddress; // 🎯 A4 세로 + 40행/페이지 (여러 페이지로 이어짐)
-        const fitOnePage = isSummary || isBriefSpec; // 💡 1페이지 축소 대상 탭
+        const fitOnePage = isSummary || isBriefSpec || isWeekly; // 💡 1페이지 축소 대상 탭
         // 💡 M.C Table은 "펼침" 상태일 때만 40행/페이지로 여러 장에 걸쳐 인쇄됨 (접힘은 1페이지 고정)
         const mcExpandedForPrint = isMcTable && !!(window._bmExpanded && window._bmExpanded.mc);
 
@@ -4907,10 +4911,15 @@ ${mailText}`;
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfPm = window.projectMeta || {};
         const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명].filter(Boolean).join(' > ');
-        // 📌 알람/주소록/M.C Table(펼침)처럼 표 하나가 여러 페이지로 이어지는 탭은 <tfoot>으로 넣어 페이지마다 자동 반복
-        //    (그 외 탭은 기존처럼 맨 끝에 한 번만 — 1페이지로 맞추는 탭이라 반복이 필요 없음)
+        // 📌 알람/주소록/M.C Table(펼침)/Brief SPEC처럼 표 하나짜리 탭은 <tfoot>으로 넣어 페이지마다 자동 반복.
+        //    💡 [버그 수정] Brief SPEC(및 원래 Summary/Weekly도 동일)은 "1페이지에 맞추기" 축소 계산이
+        //    실측 오차로 완벽하게 안 맞아 내용이 2페이지로 넘어갈 때가 있는데, 그동안 푸터를 맨 끝에 "한 번만"
+        //    넣다 보니 1페이지가 끝나는 지점(=표 중간)에서 잘려서 푸터가 화면 중앙 근처에 끼어 보이는
+        //    버그가 있었음. 표가 하나뿐인 Brief SPEC은 tfoot으로 바꿔서 페이지가 몇 장이 되든 항상 그
+        //    페이지 맨 아래에 자동으로 반복되게 함 (Summary/Weekly는 표 하나로 안 끝나는 구조라 tfoot을
+        //    못 씀 — 대신 아래 1페이지 맞춤 계산의 안전마진을 키워서 애초에 넘치지 않게 함)
         let footerTable = null;
-        if (isRowPagedPortrait) {
+        if (isRowPagedPortrait || isBriefSpec) {
             footerTable = clone.querySelector('table');
         } else if (mcExpandedForPrint) {
             // 💡 일반/비교 표 중 실제로 보이는 쪽의 table을 찾음 (숨겨진 쪽은 높이 0이라 잘못 짚으면 안 됨)
@@ -4939,22 +4948,27 @@ ${mailText}`;
 
         if (isSummary) document.body.classList.add('printing-tab-summary');
         if (isBriefSpec) document.body.classList.add('printing-tab-briefspec');
+        if (isWeekly) document.body.classList.add('printing-tab-weekly');
 
         if (fitOnePage) {
-            // 📐 탭별 방향에 맞는 표준 여백 기준 페이지 폭/높이(px)
-            // Summary = A4 세로, Brief SPEC = A4 가로
+            // 📐 탭별 실제 @page 방향에 맞는 표준 여백 기준 페이지 폭/높이(px)
+            //    Summary/Brief SPEC = A4 가로(summaryLandscapePage/briefspecLandscapePage),
+            //    Weekly Report = A4 세로(weeklyPortraitPage) — 💡 [버그 수정] 예전엔 Weekly도
+            //    가로 치수를 그대로 썼는데, 실제 @page는 세로라 폭 기준이 어긋나 있었음
             // 💡 SAFETY: 실측과 실제 인쇄 렌더링 간의 미세한 오차로 경계선에서 다음 페이지로
-            //    넘어가는 것을 막기 위한 여유 마진 (4%)
-            const SAFETY = 0.96;
-            const pageWidthPx  = (297 - 20) * 96 / 25.4 * SAFETY;
-            const pageHeightPx = (210 - 20) * 96 / 25.4 * SAFETY;
+            //    넘어가는 것을 막기 위한 여유 마진 (6% — 예전 4%에서 확대, 표 하나로 안 끝나는
+            //    Summary/Weekly는 tfoot 반복 푸터를 못 써서 애초에 안 넘치는 게 더 중요함)
+            const SAFETY = 0.94;
+            const pageLongMm = 297 - 20, pageShortMm = 210 - 20; // 10mm 여백 기준
+            const pageWidthPx  = (isWeekly ? pageShortMm : pageLongMm) * 96 / 25.4 * SAFETY;
+            const pageHeightPx = (isWeekly ? pageLongMm : pageShortMm) * 96 / 25.4 * SAFETY;
 
             printArea.style.position = 'fixed';
             printArea.style.left = '-99999px';
             printArea.style.top = '0';
             printArea.style.display = 'block';
 
-            // 💡 Brief SPEC은 내용이 페이지보다 짧을 때도 확대해서 페이지를 꽉 채움 (Summary는 기존처럼 1배율 상한 유지)
+            // 💡 Brief SPEC은 내용이 페이지보다 짧을 때도 확대해서 페이지를 꽉 채움 (Summary/Weekly는 1배율 상한 유지)
             const maxScale = isBriefSpec ? 999 : 1;
 
             let width = pageWidthPx;
@@ -4971,10 +4985,10 @@ ${mailText}`;
             clone.style.zoom = scale;
 
             // 📌 안전 보정: 4회 수렴으로도 여전히 페이지(여유 마진 포함 기준)를 넘으면, 실제 렌더링
-            //    높이를 다시 재서 줄이는 과정을 최대 3회 반복 — 1회만으로는 경계 근처에서 부족해서
-            //    Copyright 푸터가 다음 페이지로 밀려나는 경우가 있었음. 여유 마진(pageHeightPx)도
-            //    계속 유지하도록 기준을 통일함
-            for (let j = 0; j < 3; j++) {
+            //    높이를 다시 재서 줄이는 과정을 최대 5회 반복(예전 3회에서 확대) — 1~3회만으로는 경계
+            //    근처에서 부족해서 Copyright 푸터가 다음 페이지로 밀려나는 경우가 있었음. 여유 마진
+            //    (pageHeightPx)도 계속 유지하도록 기준을 통일함
+            for (let j = 0; j < 5; j++) {
                 const actualH = clone.getBoundingClientRect().height;
                 if (actualH <= pageHeightPx) break;
                 scale = scale * (pageHeightPx / actualH) * 0.98;
@@ -5131,19 +5145,6 @@ ${mailText}`;
             printArea.style.left = '';
             printArea.style.top = '';
             printArea.style.display = '';
-        }
-
-        if (isWeekly) {
-            // 💡 내용량에 따라 배율이 달라지지 않도록, 실측 기반 동적 계산을 쓰지 않고
-            //    고정된 배율 하나만 항상 적용 — 내용이 적어도 절대 자연 크기(확대처럼 보임)로 돌아가지 않음
-            document.body.classList.add('printing-tab-weekly');
-
-            const FIXED_SCALE = 0.82; // 🎯 스크린샷2 수준의 밀도가 나오도록 맞춘 고정 배율 (필요시 이 값만 조정)
-            const pageWidthPx = (210 - 20) * 96 / 25.4; // A4 세로 실측 가로폭
-
-            clone.style.transformOrigin = 'top left';
-            clone.style.zoom = FIXED_SCALE;
-            clone.style.width = (pageWidthPx / FIXED_SCALE) + 'px';
         }
 
         if (isRowPagedPortrait) {
@@ -23166,9 +23167,9 @@ window.calRender = function() {
                 }
             }
 
-            cellsHtml += '<div class="' + cls + '">'
+            cellsHtml += '<div class="' + cls + '" onclick="window.calShowDayPopup(\'' + key + '\');">'
             + barHtml
-            + '<span class="cal-day-num" onclick="event.stopPropagation(); window.calShowDayPopup(\'' + key + '\');" style="cursor:pointer;">' + cellDate.getDate() + '</span>'
+            + '<span class="cal-day-num">' + cellDate.getDate() + '</span>'
             + chipsHtml + moreHtml
             + '</div>';
         }
