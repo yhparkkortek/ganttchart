@@ -14623,21 +14623,49 @@ window._msQueueClearAll = function() {
 //    project_index.json 전체를 rebuild하지 않음 — Summary "메일키워드" 필드에도 함께 반영해서
 //    나중에 그 프로젝트를 저장해도 유실되지 않게 함)
 // ═══════════════════════════════════════════════════════════════════
+// 💡 제목에서 "모델코드처럼 보이는" 패턴을 뽑아내는 로컬 휴리스틱 (AI 호출 없음):
+//    - 소수점 규격 표기 (4.3, 31.5, 32.0", 31.5MVD)
+//    - 영문+숫자 조합 코드 (STELLAR32, S32, KTS320DPS01)
+//    - 대문자 3자+ 제품라인명 (OBSIDIAN, SHUFFLER)
+window._MS_SUSPICIOUS_PATTERNS = [
+    /\b\d{1,3}\.\d{1,2}\s*(?:"|인치|MVD)?/g,
+    /\b[A-Z][A-Z0-9\-]{1,}[0-9]\b/g,
+    /\b[A-Z]{3,}\b/g
+];
+window._msExtractSuspiciousTokens = function(subject) {
+    const s = String(subject || '');
+    const found = new Set();
+    window._MS_SUSPICIOUS_PATTERNS.forEach(function(re) {
+        (s.match(re) || []).forEach(function(t) {
+            const trimmed = t.trim();
+            if (trimmed.length >= MS_MIN_KEYWORD_LEN) found.add(trimmed);
+        });
+    });
+    return Array.from(found);
+};
+
 window._msSuggestKeywordsForUnmatched = async function() {
     const unmatched = (window._msResults || []).filter(r => !r.project);
     if (!unmatched.length) return [];
     const projectList = await window._msLoadProjectIndex();
     const openIds = new Set((window._sheets || []).map(s => s.fileId));
     const openProjects = projectList.filter(p => openIds.has(p.drive_file_id));
+    window._msKwOpenProjects = openProjects; // 제안 목록의 프로젝트 선택 드롭다운에서 재사용
     if (!openProjects.length) return [];
+    // 💡 전체 프로젝트(열려있지 않은 것 포함)의 고객사명은 "제목분석" 후보에서도 미리 제외 —
+    //    LNW처럼 여러 프로젝트가 공유하는 고객사명을 키워드로 넣으면 확실히 오매칭을 유발함
+    const knownCustomers = new Set(projectList.map(p => (p.customer || '').toLowerCase()).filter(Boolean));
 
     const suggestions = [];
     unmatched.forEach(function(mail) {
         const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
+
+        // ① 확실한 제안 — 열려있는 프로젝트의 모델명 조각이 메일에 등장.
+        //    💡 고객사명(customer)은 후보에서 제외 — 한 고객사가 여러 프로젝트를 갖는 경우가
+        //    흔해서(project_index.json 빌드 규칙과 동일 이유) 키워드로 쓰면 프로젝트 간 오매칭 유발
         openProjects.forEach(function(p) {
             const existingKw = new Set((p.keywords || []).map(k => String(k).toLowerCase()));
             const candidates = [];
-            if (p.customer) candidates.push(p.customer);
             if (p.model) {
                 candidates.push(p.model);
                 p.model.split(/[\s\/]+/).forEach(function(w) { if (w) candidates.push(w); });
@@ -14646,19 +14674,33 @@ window._msSuggestKeywordsForUnmatched = async function() {
                 const c = String(cand).trim();
                 if (c.length < MS_MIN_KEYWORD_LEN || existingKw.has(c.toLowerCase())) return;
                 if (window._msKeywordMatches(haystack, c)) {
-                    suggestions.push({ subject: mail.subject, driveFileId: p.drive_file_id, projectLabel: (p.model || p.customer), keyword: c });
+                    suggestions.push({ subject: mail.subject, driveFileId: p.drive_file_id, projectLabel: (p.model || p.customer), keyword: c, certain: true });
                 }
             });
         });
+
+        // ② 의심 후보 — 제목을 패턴 분석해서 모델코드처럼 보이는 토큰을 추가로 뽑음.
+        //    어느 프로젝트 것인지는 자동으로 확신할 수 없어서 대상 프로젝트는 검토 화면에서 직접 선택
+        window._msExtractSuspiciousTokens(mail.subject).forEach(function(tok) {
+            if (knownCustomers.has(tok.toLowerCase())) return; // 고객사명은 후보에서 제외
+            const alreadyRegistered = openProjects.some(function(p) {
+                return (p.keywords || []).some(function(k) { return String(k).toLowerCase() === tok.toLowerCase(); });
+            });
+            if (alreadyRegistered) return;
+            suggestions.push({ subject: mail.subject, driveFileId: null, projectLabel: null, keyword: tok, certain: false });
+        });
     });
-    // 같은 (프로젝트,키워드) 제안이 메일마다 중복되니 1건으로 합치고 매칭건수만 카운트
+
+    // 같은 (프로젝트 or 미지정, 키워드) 제안이 메일마다 중복되니 1건으로 합치고 매칭건수만 카운트
     const dedupMap = new Map();
     suggestions.forEach(function(s) {
-        const key = s.driveFileId + '|' + s.keyword.toLowerCase();
+        const key = (s.driveFileId || '?') + '|' + s.keyword.toLowerCase();
         if (!dedupMap.has(key)) dedupMap.set(key, Object.assign({ count: 0, sampleSubject: s.subject }, s));
         dedupMap.get(key).count++;
     });
-    return Array.from(dedupMap.values());
+    const list = Array.from(dedupMap.values());
+    list.sort(function(a, b) { return (b.certain ? 1 : 0) - (a.certain ? 1 : 0); }); // 확실한 제안을 위로
+    return list;
 };
 
 // project_index.json의 특정 프로젝트 항목 keywords 배열에 1개 append (전체 rebuild 아님 — 수동 추가분 보존)
@@ -14764,34 +14806,68 @@ window._msRenderKeywordSuggestList = function() {
     const body = document.getElementById('ms-kwsuggest-body');
     const title = document.getElementById('ms-kwsuggest-title');
     const list = window._msKwSuggestions || [];
+    const openProjects = window._msKwOpenProjects || [];
     if (title) title.textContent = `🔑 키워드 제안 (${list.length}건)`;
     if (!list.length) {
         body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">제안할 키워드가 없습니다.<br>(열려있는 프로젝트와 겹치는 미분류 메일이 없거나, 이미 다 등록돼 있습니다)</div>';
         return;
     }
+    const projOptions = openProjects.map(function(p) {
+        return `<option value="${p.drive_file_id}">${_msQEsc(p.model || p.customer)}</option>`;
+    }).join('');
     body.innerHTML = list.map(function(s, i) {
+        const targetHtml = s.certain
+            ? `→ <b style="color:#0056b3;">${_msQEsc(s.projectLabel)}</b>`
+            : `→ <select class="ms-kwsuggest-proj-select" data-idx="${i}" style="font-size:11px; padding:1px 4px; border:1px solid #ccc; border-radius:4px; max-width:150px;">
+                   <option value="">프로젝트 선택...</option>${projOptions}
+               </select>`;
         return `
         <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <div style="min-width:0; flex:1;">
-                <div style="font-size:12px;"><b style="color:#0056b3;">${_msQEsc(s.projectLabel)}</b> ← <span style="background:#fff3cd; color:#856404; padding:1px 5px; border-radius:3px; font-weight:bold;">${_msQEsc(s.keyword)}</span></div>
-                <div style="font-size:10.5px; color:#999; margin-top:2px; overflow-wrap:break-word;">${_msQEsc(s.count)}건 매칭 · 예: ${_msQEsc(s.sampleSubject)}</div>
+                <div style="font-size:12px; display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
+                    <span title="${s.certain ? '열려있는 프로젝트 모델명 조각과 일치' : '제목 패턴 분석으로 추출 — 대상 프로젝트를 직접 선택하세요'}"
+                        style="background:${s.certain ? '#d4edda' : '#ffe8cc'}; color:${s.certain ? '#2f9e44' : '#c9640a'}; padding:1px 5px; border-radius:3px; font-size:9.5px; font-weight:bold; white-space:nowrap;">${s.certain ? '확실' : '제목분석'}</span>
+                    <span style="background:#fff3cd; color:#856404; padding:1px 5px; border-radius:3px; font-weight:bold;">${_msQEsc(s.keyword)}</span>
+                    ${targetHtml}
+                </div>
+                <div style="font-size:10.5px; color:#999; margin-top:2px; overflow-wrap:break-word;">${_msQEsc(s.count)}건 · 예: ${_msQEsc(s.sampleSubject)}</div>
             </div>
-            <button data-idx="${i}" class="ms-kwsuggest-add-btn" style="flex-shrink:0; padding:5px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">➕ 추가</button>
+            <div style="flex-shrink:0; display:flex; gap:4px;">
+                <button data-idx="${i}" class="ms-kwsuggest-add-btn" style="padding:5px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">➕ 추가</button>
+                <button data-idx="${i}" class="ms-kwsuggest-del-btn" title="이 제안 무시" style="padding:5px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:11px; cursor:pointer;">🗑</button>
+            </div>
         </div>`;
     }).join('');
     body.querySelectorAll('.ms-kwsuggest-add-btn').forEach(function(btn) {
         btn.addEventListener('click', function() { window._msApplyOneKeywordSuggestion(Number(btn.dataset.idx)); });
     });
+    body.querySelectorAll('.ms-kwsuggest-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() { window._msDismissKeywordSuggestion(Number(btn.dataset.idx)); });
+    });
+};
+
+window._msDismissKeywordSuggestion = function(idx) {
+    window._msKwSuggestions = (window._msKwSuggestions || []).filter(function(_, i) { return i !== idx; });
+    window._msRenderKeywordSuggestList();
 };
 
 window._msApplyOneKeywordSuggestion = async function(idx) {
     const s = (window._msKwSuggestions || [])[idx];
     if (!s) return;
-    const ok = await window._msAppendProjectKeyword(s.driveFileId, s.keyword);
+    let driveFileId = s.driveFileId;
+    let projectLabel = s.projectLabel;
+    if (!s.certain) {
+        const sel = document.querySelector('.ms-kwsuggest-proj-select[data-idx="' + idx + '"]');
+        driveFileId = sel ? sel.value : '';
+        if (!driveFileId) { alert('먼저 대상 프로젝트를 선택해주세요.'); return; }
+        const p = (window._msKwOpenProjects || []).find(function(pp) { return pp.drive_file_id === driveFileId; });
+        projectLabel = p ? (p.model || p.customer) : driveFileId;
+    }
+    const ok = await window._msAppendProjectKeyword(driveFileId, s.keyword);
     if (ok) {
         window._msKwSuggestions = window._msKwSuggestions.filter(function(_, i) { return i !== idx; });
         const moved = await window._msRecheckUnmatched();
-        if (window.showToast) window.showToast(`✅ "${s.keyword}" → ${s.projectLabel}에 추가됨` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''), 'info');
+        if (window.showToast) window.showToast(`✅ "${s.keyword}" → ${projectLabel}에 추가됨` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''), 'info');
         window._msRenderKeywordSuggestList();
     } else if (window.showToast) {
         window.showToast('❌ 키워드 추가 실패 — 콘솔 확인', 'error');
@@ -14801,14 +14877,23 @@ window._msApplyOneKeywordSuggestion = async function(idx) {
 window._msApplyAllKeywordSuggestions = async function() {
     const list = window._msKwSuggestions || [];
     if (!list.length) return;
-    if (!confirm(`${list.length}건의 키워드를 전부 각 프로젝트에 추가할까요?`)) return;
+    // 💡 "제목분석" 후보는 대상 프로젝트를 미리 선택해둔 것만 일괄 적용 대상에 포함 — 안 고른 건 건너뜀
+    const applicable = list.map(function(s, i) {
+        if (s.certain) return { i: i, driveFileId: s.driveFileId, keyword: s.keyword };
+        const sel = document.querySelector('.ms-kwsuggest-proj-select[data-idx="' + i + '"]');
+        return sel && sel.value ? { i: i, driveFileId: sel.value, keyword: s.keyword } : null;
+    }).filter(Boolean);
+    const skipped = list.length - applicable.length;
+    if (!applicable.length) { alert('적용할 항목이 없습니다. "제목분석" 후보는 먼저 대상 프로젝트를 선택해주세요.'); return; }
+    if (!confirm(`${applicable.length}건의 키워드를 추가할까요?` + (skipped ? ` (프로젝트 미선택 ${skipped}건은 건너뜁니다)` : ''))) return;
     let okCount = 0;
-    for (const s of list.slice()) {
+    for (const s of applicable) {
         const ok = await window._msAppendProjectKeyword(s.driveFileId, s.keyword);
         if (ok) okCount++;
     }
+    const appliedIdx = new Set(applicable.map(function(a) { return a.i; }));
     const moved = await window._msRecheckUnmatched();
-    window._msKwSuggestions = [];
+    window._msKwSuggestions = list.filter(function(_, i) { return !appliedIdx.has(i); });
     window._msRenderKeywordSuggestList();
     if (window.showToast) window.showToast(`✅ 키워드 ${okCount}건 추가 완료` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''), 'info');
 };
