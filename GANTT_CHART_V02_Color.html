@@ -1212,7 +1212,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
        style="display:flex; align-items:center; justify-content:space-between; margin:-24px -26px 18px; padding:14px 20px 12px; cursor:grab; user-select:none; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="notice-modal-title" style="margin:0; font-size:15px; color:#7a5210;">📢 공지 등록</h3>
     <button onclick="window.closeNoticeModal()"
-            style="background:none; border:none; font-size:20px; cursor:pointer; color:#888;"
+            style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
+            onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
             onmousedown="event.stopPropagation()">✕</button>
   </div>
 
@@ -9840,7 +9841,7 @@ window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids, 
         <div id="prompt-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%);">
             <div id="prompt-improve-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>🤖 ${_en ? 'AI Prompt Improvement Suggestion' : 'AI 프롬프트 개선 제안'}</span>
-                <button onclick="document.getElementById('prompt-improve-modal').style.display='none'" style="background:none; border:none; font-size:18px; cursor:pointer; color:#7a5210;">✕</button>
+                <button onclick="document.getElementById('prompt-improve-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div id="improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
             <div id="improve-struct-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#ffe3e3; border:1px solid #e03131; border-radius:6px; font-size:12px; color:#c92a2a;"></div>
@@ -14014,7 +14015,7 @@ window.openPriorityConfigModal = async function() {
         <div id="priority-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:520px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
             <div id="priority-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>⭐ 우선순위 점수 설정</span>
-                <button onclick="document.getElementById('priority-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('priority-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div style="overflow-y:auto; flex:1; padding:14px 18px;">
                 <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">👤 직급별 점수</div>
@@ -14637,25 +14638,65 @@ window._msQueueClearAll = function() {
 //    project_index.json 전체를 rebuild하지 않음 — Summary "메일키워드" 필드에도 함께 반영해서
 //    나중에 그 프로젝트를 저장해도 유실되지 않게 함)
 // ═══════════════════════════════════════════════════════════════════
-// 💡 제목에서 "모델코드처럼 보이는" 패턴을 뽑아내는 로컬 휴리스틱 (AI 호출 없음):
+// 💡 "모델코드처럼 보이는" 패턴을 뽑아내는 로컬 휴리스틱 (AI 호출 없음, 글자수 하한은 기존
+//    매칭 로직과 동일하게 MS_MIN_KEYWORD_LEN=3 그대로 사용):
 //    - 소수점 규격 표기 (4.3, 31.5, 32.0", 31.5MVD)
 //    - 영문+숫자 조합 코드 (STELLAR32, S32, KTS320DPS01)
-//    - 대문자 3자+ 제품라인명 (OBSIDIAN, SHUFFLER)
+//    - 대문자 3자+ 제품라인명 (OBSIDIAN, SHUFFLER — 전부 대문자로만 쓰인 경우)
+//    - Title Case 단어 (Obsidian, Shuffler처럼 첫 글자만 대문자인 실제 표기 — 흔한 인사말/상투어는
+//      스톱워드로 제외). 예전엔 전부 대문자 패턴만 잡아서 "Obsidian"처럼 자주 쓰이는 실제 표기를 놓쳤음
+window._MS_KW_STOPWORDS = new Set([
+    'Hi','Hello','Dear','Regards','Thanks','Thank','Please','Best','Kind','Sincerely',
+    'From','Subject','Date','To','Cc','Re','Fwd','Fw','The','This','That','With','For',
+    'And','Are','Was','Were','You','Your','We','Our','Team','Email','Mail','Meeting',
+    'Update','Review','Request','Attached','File','Files','Report','Today','Tomorrow',
+    'Yesterday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday',
+    'January','February','March','April','May','June','July','August','September',
+    'October','November','December','Project','Info','Information',
+    'Sample','Samples','Regarding','Check','Spec','Specs','Sheet','Follow','Kindly',
+    'Confirm','Details','Comments','Comment','Question','Questions','Issue','Issues',
+    'Status','Progress','Schedule','Timeline','Reminder','Feedback','Action','Items',
+    'Item','Result','Results','Summary','Overview','Note','Notes','Draft','Final',
+    'Version','New','Old','Next','Last','First','Second','Week','Weekly','Monthly'
+]);
 window._MS_SUSPICIOUS_PATTERNS = [
     /\b\d{1,3}\.\d{1,2}\s*(?:"|인치|MVD)?/g,
     /\b[A-Z][A-Z0-9\-]{1,}[0-9]\b/g,
-    /\b[A-Z]{3,}\b/g
+    /\b[A-Z]{3,}\b/g,
+    /\b[A-Z][a-z]{2,}\b/g
 ];
-window._msExtractSuspiciousTokens = function(subject) {
-    const s = String(subject || '');
+window._msExtractSuspiciousTokens = function(text) {
+    const s = String(text || '');
     const found = new Set();
     window._MS_SUSPICIOUS_PATTERNS.forEach(function(re) {
         (s.match(re) || []).forEach(function(t) {
             const trimmed = t.trim();
-            if (trimmed.length >= MS_MIN_KEYWORD_LEN) found.add(trimmed);
+            if (trimmed.length < MS_MIN_KEYWORD_LEN || window._MS_KW_STOPWORDS.has(trimmed)) return;
+            found.add(trimmed);
         });
     });
     return Array.from(found);
+};
+
+// 💡 [추천] "의심 후보" 키워드가 있는 메일 안에서, 열려있는 프로젝트들 중 어느 프로젝트의
+//    기존 키워드/모델명 조각이 가장 많이 같이 등장하는지(co-occurrence)로 대상 프로젝트를 추정.
+//    확신 있는 신호가 하나도 없으면 null(추천 안 함 — 검토 화면에서 사람이 직접 골라야 함)
+window._msRecommendProjectFor = function(mail, openProjects, excludeToken) {
+    const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
+    let best = null, bestScore = 0;
+    openProjects.forEach(function(p) {
+        let score = 0;
+        const frags = [];
+        if (p.model) { frags.push(p.model); p.model.split(/[\s\/]+/).forEach(function(w) { if (w) frags.push(w); }); }
+        (p.keywords || []).forEach(function(k) { frags.push(k); });
+        frags.forEach(function(f) {
+            const ff = String(f).trim();
+            if (!ff || ff.length < MS_MIN_KEYWORD_LEN || ff.toLowerCase() === excludeToken.toLowerCase()) return;
+            if (window._msKeywordMatches(haystack, ff)) score++;
+        });
+        if (score > bestScore) { bestScore = score; best = p; }
+    });
+    return best;
 };
 
 window._msSuggestKeywordsForUnmatched = async function() {
@@ -14673,6 +14714,7 @@ window._msSuggestKeywordsForUnmatched = async function() {
     const suggestions = [];
     unmatched.forEach(function(mail) {
         const haystack = ((mail.subject || '') + ' ' + (mail.body || '')).toLowerCase();
+        const certainKeywordsThisMail = new Set(); // 💡 ①에서 이미 확실히 처리된 건 ②에서 중복 제안 안 함
 
         // ① 확실한 제안 — 열려있는 프로젝트의 모델명 조각이 메일에 등장.
         //    💡 고객사명(customer)은 후보에서 제외 — 한 고객사가 여러 프로젝트를 갖는 경우가
@@ -14689,19 +14731,29 @@ window._msSuggestKeywordsForUnmatched = async function() {
                 if (c.length < MS_MIN_KEYWORD_LEN || existingKw.has(c.toLowerCase())) return;
                 if (window._msKeywordMatches(haystack, c)) {
                     suggestions.push({ subject: mail.subject, driveFileId: p.drive_file_id, projectLabel: (p.model || p.customer), keyword: c, certain: true });
+                    certainKeywordsThisMail.add(c.toLowerCase());
                 }
             });
         });
 
-        // ② 의심 후보 — 제목을 패턴 분석해서 모델코드처럼 보이는 토큰을 추가로 뽑음.
-        //    어느 프로젝트 것인지는 자동으로 확신할 수 없어서 대상 프로젝트는 검토 화면에서 직접 선택
-        window._msExtractSuspiciousTokens(mail.subject).forEach(function(tok) {
+        // ② 의심 후보 — 제목 + 본문 앞부분을 패턴 분석해서 모델코드처럼 보이는 토큰을 추가로 뽑음
+        //    (예전엔 제목만 봐서 놓치는 게 많았음 — 본문 앞 500자까지 확대, 너무 길면 인용된 옛
+        //    메일 스레드까지 섞여 노이즈가 커지니 일부러 제한). 확실하게 어느 프로젝트 것인지는
+        //    모르니, 같은 메일에 같이 등장하는 다른 신호로 "추천"만 하고 최종 선택은 검토 화면에서
+        const scanText = (mail.subject || '') + ' ' + (mail.body || '').substring(0, 500);
+        window._msExtractSuspiciousTokens(scanText).forEach(function(tok) {
+            if (certainKeywordsThisMail.has(tok.toLowerCase())) return; // ①과 대소문자만 다른 중복 방지
             if (knownCustomers.has(tok.toLowerCase())) return; // 고객사명은 후보에서 제외
             const alreadyRegistered = openProjects.some(function(p) {
                 return (p.keywords || []).some(function(k) { return String(k).toLowerCase() === tok.toLowerCase(); });
             });
             if (alreadyRegistered) return;
-            suggestions.push({ subject: mail.subject, driveFileId: null, projectLabel: null, keyword: tok, certain: false });
+            const rec = window._msRecommendProjectFor(mail, openProjects, tok);
+            suggestions.push({
+                subject: mail.subject, driveFileId: null, projectLabel: null, keyword: tok, certain: false,
+                recommendedFileId: rec ? rec.drive_file_id : null,
+                recommendedLabel: rec ? (rec.model || rec.customer) : null
+            });
         });
     });
 
@@ -14797,7 +14849,7 @@ window._msShowKeywordSuggestModal = async function() {
         <div id="ms-kwsuggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:520px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
             <div id="ms-kwsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span id="ms-kwsuggest-title">🔑 키워드 제안</span>
-                <button onclick="document.getElementById('ms-kwsuggest-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('ms-kwsuggest-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div id="ms-kwsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee;">
@@ -14826,21 +14878,24 @@ window._msRenderKeywordSuggestList = function() {
         body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">제안할 키워드가 없습니다.<br>(열려있는 프로젝트와 겹치는 미분류 메일이 없거나, 이미 다 등록돼 있습니다)</div>';
         return;
     }
-    const projOptions = openProjects.map(function(p) {
-        return `<option value="${p.drive_file_id}">${_msQEsc(p.model || p.customer)}</option>`;
-    }).join('');
     body.innerHTML = list.map(function(s, i) {
+        // 💡 [추천] 같이 등장한 다른 신호로 대상 프로젝트를 추정했으면 드롭다운에 미리 선택해둠 —
+        //    사람은 "확인만" 하면 되고, 추천이 틀렸으면 직접 바꾸면 됨
+        const projOptions = openProjects.map(function(p) {
+            const sel = (!s.certain && s.recommendedFileId === p.drive_file_id) ? ' selected' : '';
+            return `<option value="${p.drive_file_id}"${sel}>${_msQEsc(p.model || p.customer)}</option>`;
+        }).join('');
         const targetHtml = s.certain
             ? `→ <b style="color:#0056b3;">${_msQEsc(s.projectLabel)}</b>`
             : `→ <select class="ms-kwsuggest-proj-select" data-idx="${i}" style="font-size:11px; padding:1px 4px; border:1px solid #ccc; border-radius:4px; max-width:150px;">
-                   <option value="">프로젝트 선택...</option>${projOptions}
-               </select>`;
+                   <option value=""${s.recommendedFileId ? '' : ' selected'}>프로젝트 선택...</option>${projOptions}
+               </select>${s.recommendedFileId ? ` <span style="font-size:9.5px; color:#2f9e44; font-weight:bold;">✓추천: ${_msQEsc(s.recommendedLabel)}</span>` : ''}`;
         return `
         <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; gap:8px;">
             <div style="min-width:0; flex:1;">
                 <div style="font-size:12px; display:flex; align-items:center; gap:5px; flex-wrap:wrap;">
-                    <span title="${s.certain ? '열려있는 프로젝트 모델명 조각과 일치' : '제목 패턴 분석으로 추출 — 대상 프로젝트를 직접 선택하세요'}"
-                        style="background:${s.certain ? '#d4edda' : '#ffe8cc'}; color:${s.certain ? '#2f9e44' : '#c9640a'}; padding:1px 5px; border-radius:3px; font-size:9.5px; font-weight:bold; white-space:nowrap;">${s.certain ? '확실' : '제목분석'}</span>
+                    <span title="${s.certain ? '열려있는 프로젝트 모델명 조각과 일치' : '제목·본문 패턴 분석으로 추출 — 추천된 프로젝트를 확인하고 필요하면 바꾸세요'}"
+                        style="background:${s.certain ? '#d4edda' : '#ffe8cc'}; color:${s.certain ? '#2f9e44' : '#c9640a'}; padding:1px 5px; border-radius:3px; font-size:9.5px; font-weight:bold; white-space:nowrap;">${s.certain ? '확실' : '제목·본문분석'}</span>
                     <span style="background:#fff3cd; color:#856404; padding:1px 5px; border-radius:3px; font-weight:bold;">${_msQEsc(s.keyword)}</span>
                     ${targetHtml}
                 </div>
@@ -14962,7 +15017,7 @@ window._msShowAddressSuggestModal = function() {
         <div id="ms-addrsuggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:520px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
             <div id="ms-addrsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span id="ms-addrsuggest-title">📇 주소록 추가 제안</span>
-                <button onclick="document.getElementById('ms-addrsuggest-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('ms-addrsuggest-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div id="ms-addrsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee;">
@@ -14996,7 +15051,10 @@ window._msRenderAddressSuggestList = function() {
                 <div style="font-size:11px; color:#777; margin-top:1px;">${_msQEsc(e.email)}</div>
                 <div style="font-size:10.5px; color:#999; margin-top:2px; overflow-wrap:break-word;">예: ${_msQEsc(e.sampleSubject)}</div>
             </div>
-            <button data-idx="${i}" class="ms-addrsuggest-add-btn" style="flex-shrink:0; padding:5px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">➕ 추가</button>
+            <div style="flex-shrink:0; display:flex; gap:4px;">
+                <button data-idx="${i}" class="ms-addrsuggest-add-btn" style="padding:5px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">➕ 추가</button>
+                <button data-idx="${i}" class="ms-addrsuggest-del-btn" title="이 제안 무시" style="padding:5px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:11px; cursor:pointer;">🗑</button>
+            </div>
         </div>`;
     }).join('');
     body.querySelectorAll('.ms-addrsuggest-add-btn').forEach(function(btn) {
@@ -15007,6 +15065,13 @@ window._msRenderAddressSuggestList = function() {
             window._msAddrSuggestions = window._msAddrSuggestions.filter(function(_, i) { return i !== idx; });
             window._msRenderAddressSuggestList();
             if (window.showToast) window.showToast(`✅ "${e.name}" 주소록에 추가됨`, 'info');
+        });
+    });
+    body.querySelectorAll('.ms-addrsuggest-del-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            const idx = Number(btn.dataset.idx);
+            window._msAddrSuggestions = window._msAddrSuggestions.filter(function(_, i) { return i !== idx; });
+            window._msRenderAddressSuggestList();
         });
     });
 };
@@ -15064,7 +15129,7 @@ window.openMailAutoConfigModal = async function() {
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
             <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>⚙️ 메일 자동배치 설정</span>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
 
@@ -15242,7 +15307,7 @@ window.openMailAutoConfigModal = async function() {
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
             <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span>⚙️ 메일 자동배치 설정</span>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
 
