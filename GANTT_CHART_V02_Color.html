@@ -9097,23 +9097,29 @@ window.clearGeminiKey = function() {
 
 // ─── 🤖 AI 제공사 설정 (Gemini / Groq / Mistral) ───
 window.AI_PROVIDERS = {
-    gemini:  { label: 'Gemini (Google)',  keyName: 'gemini_api_key',  defaultModel: 'gemini-2.5-flash-lite',
+    gemini:  { label: 'Gemini (Google)',  keyName: 'gemini_api_key',  defaultModel: 'gemini-3.5-flash-lite',
                placeholder: 'AIza...', guideUrl: 'https://aistudio.google.com/apikey',
                guideText: '① aistudio.google.com 접속 → 구글 계정 로그인\n② 좌측 메뉴 [Get API key] → [Create API key] 클릭\n③ 생성된 키(AIza로 시작)를 복사 → 아래 입력란에 붙여넣고 저장\n※ 무료 발급 가능 (카드 등록 불필요)',
                guideTextEn: '① Go to aistudio.google.com → Sign in with Google\n② Left menu [Get API key] → [Create API key]\n③ Copy the key (starts with AIza) → paste below and save\n※ Free, no card required',
+               // 💡 [2026-08-20] gemini-2.5-flash-lite가 "신규 사용자"에게 차단되는 게 확인되어(기존 사용자만 유예)
+               //    3.x 세대로 전면 교체. 무료 등급 RPM/일일 한도 숫자는 구버전 값을 그대로 옮긴 추정치이므로
+               //    실제 한도가 다르면 aistudio.google.com에서 재확인 필요.
                models: [
-                   { id: 'gemini-2.5-flash-lite', label: 'Gemini 2.5 Flash Lite', tier: 'free',         note: '🟢 무료 · 15RPM / 1,000/일' },
-                   { id: 'gemini-2.5-flash',      label: 'Gemini 2.5 Flash',      tier: 'free_limited', note: '🟡 무료(제한) · 10RPM / 250/일' },
+                   { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', tier: 'free',         note: '🟢 무료 · 가장 빠름' },
+                   { id: 'gemini-3.5-flash',      label: 'Gemini 3.5 Flash',      tier: 'free_limited', note: '🟡 무료(제한) · 균형' },
                    { id: 'gemini-2.5-pro',        label: 'Gemini 2.5 Pro',        tier: 'paid',         note: '🔴 유료 · 최고 품질' },
                ]},
-    groq:    { label: 'Groq (Llama · DeepSeek 등, 무료)',    keyName: 'groq_api_key',    defaultModel: 'llama-3.3-70b-versatile',
+    groq:    { label: 'Groq (오픈모델 무료 호스팅)',    keyName: 'groq_api_key',    defaultModel: 'openai/gpt-oss-120b',
                placeholder: 'gsk_로 시작하는 Groq API 키', guideUrl: 'https://console.groq.com/keys',
-               guideText: '💡 Groq는 Llama·DeepSeek 등 오픈소스 모델을 무료로 호스팅하는 플랫폼입니다.\n   키 1개로 아래 모든 모델 사용 가능 — 별도 Llama·DeepSeek 키 불필요\n\n① console.groq.com 접속 → 이메일 또는 구글 계정으로 로그인\n② 좌측 메뉴 [API Keys] → [Create API Key] 클릭\n③ 생성된 키(gsk_로 시작)를 복사 → 아래 입력란에 붙여넣고 저장\n※ 무료 발급 가능 (카드 등록 불필요)',
-               guideTextEn: '💡 Groq is a platform that hosts open-source models (Llama, DeepSeek, etc.) for free.\n   One key covers all models below — no separate Llama/DeepSeek key needed.\n\n① Go to console.groq.com → Sign in with email or Google\n② Left menu [API Keys] → [Create API Key]\n③ Copy the key (starts with gsk_) → paste below and save\n※ Free, no card required',
+               guideText: '💡 Groq는 오픈소스 모델을 무료로 호스팅하는 플랫폼입니다.\n   키 1개로 아래 모든 모델 사용 가능\n\n① console.groq.com 접속 → 이메일 또는 구글 계정으로 로그인\n② 좌측 메뉴 [API Keys] → [Create API Key] 클릭\n③ 생성된 키(gsk_로 시작)를 복사 → 아래 입력란에 붙여넣고 저장\n※ 무료 발급 가능 (카드 등록 불필요)',
+               guideTextEn: '💡 Groq is a platform that hosts open-source models for free.\n   One key covers all models below.\n\n① Go to console.groq.com → Sign in with email or Google\n② Left menu [API Keys] → [Create API Key]\n③ Copy the key (starts with gsk_) → paste below and save\n※ Free, no card required',
+               // 💡 [2026-08-20] 기존 llama-3.3-70b-versatile / llama-4-maverick / deepseek-r1-distill-llama-70b가
+               //    Groq 공식 지원 모델 목록(console.groq.com/docs/models)에서 전부 빠짐(사용중단) → 현재 목록으로 교체.
+               //    Groq 모델 라인업은 자주 바뀌므로 또 실패하면 위 문서에서 최신 model ID 재확인 필요.
                models: [
-                   { id: 'llama-3.3-70b-versatile',          label: 'Llama 3.3 70B (Meta)',          tier: 'free', note: '🟢 무료 · 범용 추천' },
-                   { id: 'llama-4-maverick',                  label: 'Llama 4 Maverick (Meta)',        tier: 'free', note: '🟢 무료 · 최신 경량' },
-                   { id: 'deepseek-r1-distill-llama-70b',     label: 'DeepSeek R1 — Groq 호스팅',     tier: 'free', note: '🟢 무료 · 추론 특화' },
+                   { id: 'openai/gpt-oss-120b',  label: 'GPT-OSS 120B (OpenAI 오픈모델)', tier: 'free', note: '🟢 무료 · 범용 추천' },
+                   { id: 'openai/gpt-oss-20b',   label: 'GPT-OSS 20B (경량)',              tier: 'free', note: '🟢 무료 · 빠름' },
+                   { id: 'groq/compound',        label: 'Groq Compound (도구 연동 에이전트)', tier: 'free', note: '🟢 무료 · 웹검색 등 도구 사용' },
                ]},
     mistral: { label: 'Mistral (프랑스 AI)',  keyName: 'mistral_api_key', defaultModel: 'mistral-small-latest',
                placeholder: '(Mistral API 키)', guideUrl: 'https://console.mistral.ai/api-keys',
@@ -9132,10 +9138,23 @@ window.getActiveAiKey = function() {
     const cfg = window.AI_PROVIDERS[window.getActiveAiProvider()] || window.AI_PROVIDERS.gemini;
     return localStorage.getItem(cfg.keyName);
 };
+// 💡 [2026-08-20] 예전에 저장해둔 모델 선택값이 그 사이 제공사 쪽에서 사용중단된 경우를 대비한 목록.
+//    getActiveAiModel()이 이 목록에 걸리면 저장값을 무시하고 현재 defaultModel로 자동 교체(+localStorage 갱신)해서,
+//    "예전에 한 번 저장해둔 사용자"가 계속 같은 오류를 겪는 걸 막는다.
+window._AI_DEPRECATED_MODEL_IDS = [
+    'gemini-2.5-flash-lite', 'gemini-2.5-flash',
+    'llama-3.3-70b-versatile', 'llama-4-maverick', 'deepseek-r1-distill-llama-70b'
+];
 window.getActiveAiModel = function() {
     const provider = window.getActiveAiProvider();
     const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
-    return localStorage.getItem('ai_model_' + provider) || cfg.defaultModel;
+    const saved = localStorage.getItem('ai_model_' + provider);
+    if (saved && window._AI_DEPRECATED_MODEL_IDS.indexOf(saved) !== -1) {
+        console.warn(`[AI 모델] 저장된 모델("${saved}")이 사용중단되어 기본값("${cfg.defaultModel}")으로 자동 교체합니다.`);
+        localStorage.setItem('ai_model_' + provider, cfg.defaultModel);
+        return cfg.defaultModel;
+    }
+    return saved || cfg.defaultModel;
 };
 
 window.onAiProviderChange = function() {
@@ -9154,17 +9173,17 @@ window.refreshAiModelDropdown = function() {
     const cfg = window.AI_PROVIDERS[provider] || window.AI_PROVIDERS.gemini;
     const modelSel = document.getElementById('mail-ai-model');
     if (!modelSel) return;
-    const savedModel = localStorage.getItem('ai_model_' + provider) || cfg.defaultModel;
+    const savedModel = window.getActiveAiModel(); // 💡 사용중단 모델 자동교체 로직을 타도록 직접 localStorage 대신 이 헬퍼 사용
     modelSel.innerHTML = cfg.models.map(m =>
         `<option value="${m.id}" ${m.id === savedModel ? 'selected' : ''}>${m.label} — ${m.note}</option>`
     ).join('');
 };
 
-// 모델별 추가 안내 (Groq 전용 — Llama/DeepSeek는 Groq API 키로 사용)
+// 모델별 추가 안내 (Groq 전용 — OpenAI 오픈모델(gpt-oss)은 Groq API 키로 사용)
 window._MODEL_GUIDE = {
-    'llama-3.3-70b-versatile':      { ko: '💡 Groq API 키로 사용합니다. Llama는 Meta의 오픈소스 모델로 별도 발급 불필요 — Groq 키 하나로 모두 이용 가능합니다.', en: '💡 Uses your Groq API key. Llama is Meta\'s open-source model — no separate key needed.' },
-    'llama-4-maverick':             { ko: '💡 Groq API 키로 사용합니다. Llama 4 Maverick은 최신 경량 모델입니다 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. Llama 4 Maverick is the latest lightweight model.' },
-    'deepseek-r1-distill-llama-70b':{ ko: '⚠️ 중국 DeepSeek社 서비스가 아닙니다. Groq가 Llama 기반으로 재학습한 추론 특화 버전 — Groq API 키로 사용, 별도 발급 불필요.', en: '⚠️ Not the Chinese DeepSeek service. This is a reasoning-focused version re-trained by Groq on Llama — uses your Groq API key, no separate key needed.' },
+    'openai/gpt-oss-120b': { ko: '💡 Groq API 키로 사용합니다. OpenAI가 공개한 오픈소스 모델로 별도 발급 불필요 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. An open-weight model released by OpenAI — no separate key needed.' },
+    'openai/gpt-oss-20b':   { ko: '💡 Groq API 키로 사용합니다. 120B의 경량 버전으로 속도가 더 빠릅니다 — Groq 키 하나로 이용 가능합니다.', en: '💡 Uses your Groq API key. A lighter, faster variant of the 120B model.' },
+    'groq/compound':        { ko: '💡 Groq API 키로 사용합니다. 웹검색 등 도구를 자동으로 함께 사용하는 에이전트형 시스템입니다.', en: '💡 Uses your Groq API key. An agentic system that can auto-use tools like web search.' },
 };
 
 window.onAiModelChange = function() {
