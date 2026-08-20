@@ -2573,8 +2573,13 @@ ${mailText}`;
     };
 
     // 현재 열려 있는 프로젝트의 인덱스 항목 생성 (모델/고객사/담당자/인치 4필드 + 커스텀 키워드)
-    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName) {
-        const pm = window.projectMeta || {};
+    // 💡 [긴급 버그 수정] pmOverride를 안 넘기면 window.projectMeta(전역, 실시간)를 읽는데, 이 함수의
+    //    호출부(updateProjectIndexEntry)에 await가 여러 번 있어서 그 사이 다른 프로젝트로 시트가
+    //    전환되면 "옛 프로젝트의 driveFileId"에 "이미 바뀐 새 프로젝트의 projectMeta"가 합쳐져
+    //    project_index.json에 저장되는 사고가 실제로 있었음(파일명↔모델명이 서로 안 맞는 항목들로 확인됨).
+    //    호출부에서 await 전에 미리 캡처한 스냅샷을 pmOverride로 넘겨서 이 드리프트를 원천 차단한다.
+    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride) {
+        const pm = pmOverride || window.projectMeta || {};
         // 💡 고객사명은 매칭 키워드에서 제외 — 한 고객사가 여러 프로젝트를 가진 경우
         //    (예: LNW의 STELLAR32/OBSIDIAN) 전부 후보로 묶여버려 변별력이 없음.
         //    customer 필드 자체는 화면 표시용으로만 남기고, keywords 배열엔 안 넣음.
@@ -2596,6 +2601,10 @@ ${mailText}`;
     // project_index.json을 통째로 읽어와서 해당 프로젝트 항목만 upsert 후 다시 통째로 저장
     // (프로젝트 수가 많지 않은 전제 — 수백 개 넘어가면 서버 사이드 부분갱신 방식으로 전환 필요)
     window.updateProjectIndexEntry = async function(driveFileId, dynamicFileName) {
+        // 💡 [긴급 버그 수정] await 시작 전에 지금 이 저장이 실제로 속한 projectMeta를 즉시 스냅샷.
+        //    아래 await들(findProjectIndexFile/fetch) 도중 다른 시트로 전환돼도 이 스냅샷은 안 바뀌므로,
+        //    엉뚱한 프로젝트의 최신 정보가 이 driveFileId 밑에 섞여 들어가는 사고를 막는다.
+        const pmSnapshot = Object.assign({}, window.projectMeta || {});
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -2611,7 +2620,7 @@ ${mailText}`;
                 if (loaded && Array.isArray(loaded.projects)) indexData = loaded;
             }
 
-            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName);
+            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot);
             const idx = indexData.projects.findIndex(function(p) { return p.drive_file_id === driveFileId; });
             if (idx === -1) indexData.projects.push(entry);
             else indexData.projects[idx] = entry;
