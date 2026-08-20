@@ -3064,25 +3064,43 @@ ${mailText}`;
         });
     };
 
-    // 시트 닫기 — 저장 여부는 묻지 않음(원본은 Drive에 있으므로 "닫기"는 안전한 조작). 활성 시트를 닫으면 이웃 시트로 전환
+    // 💡 [2026-08-20] "닫을지 확인" 창 제거 + 닫기 전 저장하도록 변경(사용자 요청).
+    //    닫으려는 시트가 지금 활성 시트(=화면에 보이는 내용)면 저장 안 한 변경사항이 있는지 확인 후 저장.
+    //    비활성 탭은 switchToSheetWithSave에서 전환 시점에 이미 저장됐어야 하므로 별도 저장 불필요.
+    //    저장+닫기를 한 대기열(_runSerialized)로 묶어서 다른 저장 작업과 겹치는 사고를 막음
+    //    (switchToSheetWithSave와 동일 패턴 — raw 저장 함수를 직접 호출, 공개 saveToGoogleDrive()는
+    //    같은 대기열에 재진입하면 데드락 나므로 사용 안 함).
     window.closeSheet = function(key) {
-        const idx = window._sheets.findIndex(function(s) { return s.key === key; });
-        if (idx === -1) return;
-        const wasActive = (key === window._activeSheetKey);
-        window._sheets.splice(idx, 1);
-        if (wasActive) {
-            if (window._sheets.length) {
-                const next = window._sheets[Math.min(idx, window._sheets.length - 1)];
-                window._activeSheetKey = null; // commit 스킵(닫은 시트는 저장 안 함)
-                window._activeSheetKey = next.key;
-                window._restoreSheetSnapshot(next.snapshot);
-            } else {
-                window._activeSheetKey = null;
-                window._resetToBlankNoConfirm(true); // 💡 마지막 시트를 닫음 — 안내 모달 없이 빈 화면으로
+        return window._runSerialized(async function() {
+            const idx = window._sheets.findIndex(function(s) { return s.key === key; });
+            if (idx === -1) return;
+            const wasActive = (key === window._activeSheetKey);
+
+            if (wasActive) {
+                const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
+                const savedLogs = window.lastSavedLogCount || 0;
+                const hasUnsavedChanges = !!window.currentDriveFileId && currentLogs > savedLogs;
+                if (hasUnsavedChanges) {
+                    if (window.showToast) window.showToast('💾 저장 후 닫는 중...', 'info');
+                    await window._saveToGoogleDriveRaw();
+                }
             }
-        } else {
-            window.renderSheetTabsBar();
-        }
+
+            window._sheets.splice(idx, 1);
+            if (wasActive) {
+                if (window._sheets.length) {
+                    const next = window._sheets[Math.min(idx, window._sheets.length - 1)];
+                    window._activeSheetKey = null; // commit 스킵(닫은 시트는 방금 저장했으니 다시 커밋할 필요 없음)
+                    window._activeSheetKey = next.key;
+                    window._restoreSheetSnapshot(next.snapshot);
+                } else {
+                    window._activeSheetKey = null;
+                    window._resetToBlankNoConfirm(true); // 💡 마지막 시트를 닫음 — 안내 모달 없이 빈 화면으로
+                }
+            } else {
+                window.renderSheetTabsBar();
+            }
+        });
     };
 
     // 새 시트를 등록하고 그 시트로 전환 (프로젝트 로드/신규생성 시 호출)
@@ -3109,7 +3127,7 @@ ${mailText}`;
                        background:${active ? '#fff8e6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:1px solid #fff; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px;">📄 ${escapeHtml(label)}</span>
-                <span onclick="event.stopPropagation(); if(confirm('이 시트를 닫을까요? (저장 안 한 변경사항은 사라집니다 — Drive 원본은 그대로 있습니다)')) window.closeSheet('${s.key}');"
+                <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
                     style="color:#999; font-size:13px; line-height:1;">✕</span>
             </div>`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
