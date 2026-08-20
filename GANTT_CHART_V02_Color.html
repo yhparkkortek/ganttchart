@@ -14808,7 +14808,7 @@ window._msExtractSuspiciousTokens = function(text) {
     window._MS_SUSPICIOUS_PATTERNS.forEach(function(re) {
         (s.match(re) || []).forEach(function(t) {
             const trimmed = t.trim();
-            if (trimmed.length < MS_MIN_KEYWORD_LEN || window._MS_KW_STOPWORDS.has(trimmed)) return;
+            if (trimmed.length < MS_MIN_KEYWORD_LEN || window._MS_KW_STOPWORDS.has(trimmed.toLowerCase())) return;
             if (window._MS_DOC_ID_PATTERN.test(trimmed)) return; // 행정 문서번호(예: OW-20260814-013) 제외
             found.add(trimmed);
         });
