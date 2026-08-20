@@ -1979,9 +1979,9 @@ if (!localStorage.getItem('gantt_popup_done')) {
 
 // 🌟 프롬프트를 통합 관리하는 전용 함수
 window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mailDate) {
-    const todayStr = new Date().toISOString().split('T')[0];
     const savedPrompt = localStorage.getItem('gantt_mail_prompt');
     if (savedPrompt) {
+        const todayStr = new Date().toISOString().split('T')[0];
         return savedPrompt
             .replace('${projectAssignee}', assignee || "")
             .replace('${projectCustomer}', customer || "")
@@ -1991,7 +1991,17 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
             .replace('${mailDate}', mailDate || todayStr)
             .replace('${mailText}', mailText || "");
     }
+    return window._msBuildDefaultPrompt(assignee, customer, model, inch, mailText, mailDate);
+};
 
+// 💡 [2026-08-20][버그 수정] 예전엔 이 코드 기본 프롬프트가 getSystemPrompt() 안에만 있었고,
+//    "🔄 초기화" 버튼이 참조하는 window._defaultPromptTemplate도 getSystemPrompt()를 호출해서
+//    만들었음 — 근데 그 함수는 localStorage에 저장된 프롬프트가 있으면 그걸 먼저 반환하므로,
+//    "초기화"를 눌러도 진짜 코드 기본값이 아니라 이미 저장돼 있던(구버전/팀공용 드라이브에서
+//    동기화된) 프롬프트를 다시 저장하는 자기순환 버그가 있었음. → 코드 기본 프롬프트를 이 별도
+//    함수로 분리해서, localStorage 상태와 무관하게 항상 "진짜 코드 기본값"을 얻을 수 있게 함.
+window._msBuildDefaultPrompt = function(assignee, customer, model, inch, mailText, mailDate) {
+    const todayStr = new Date().toISOString().split('T')[0];
     return `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
 
 프로젝트 정보 (⚠️ 이 메일이 어느 프로젝트로 분류됐는지 참고용 배경정보일 뿐, 이 메일의 실제 내용이라고 확신할 수 없습니다.
@@ -9031,8 +9041,10 @@ window.showMailAnalyzer = function() {
     // 위치 선택 드롭다운 채우기
         window.populateInsertPosition();
     // ✅ 기본 프롬프트 미리 설정
+    // 💡 [버그 수정] getSystemPrompt()가 아니라 _msBuildDefaultPrompt()를 직접 호출 — localStorage에
+    //    저장된(오염됐을 수 있는) 프롬프트를 거치지 않고 항상 진짜 코드 기본값을 담도록 함
         if (!window._defaultPromptTemplate) {
-        window._defaultPromptTemplate = window.getSystemPrompt('${projectAssignee}', '${projectCustomer}', '${projectModel}', '${projectInch}', '${mailText}').replace(new Date().toISOString().split('T')[0], '${todayStr}');
+        window._defaultPromptTemplate = window._msBuildDefaultPrompt('${projectAssignee}', '${projectCustomer}', '${projectModel}', '${projectInch}', '${mailText}').replace(new Date().toISOString().split('T')[0], '${todayStr}');
     }
 
     // 초기화
@@ -9853,7 +9865,7 @@ window.submitImproveComment = function() {
 
 // 💡 다운스트림 코드가 의존하는 필수 구조 요소가 개선된 프롬프트에도 살아있는지 검사
 window.validatePromptStructure = function(promptText) {
-    const requiredJsonKeys = ['업무명', '시작일', '완료일', '상태', '개발단계', '상세내용', 'wbs레벨'];
+    const requiredJsonKeys = ['업무명', '시작일', '완료일', '상태', '개발단계', '담당구분', '상세내용', 'wbs레벨'];
     const requiredTags = ['[핵심내용]', '[To do]', '[출처]'];
     const missing = [];
     requiredJsonKeys.forEach(function(k) {
@@ -9901,7 +9913,7 @@ window.triggerPromptImprove = async function(mode, instantComment) {
 
     // 💡 JSON 대신 구분자 방식 — 프롬프트 원문의 줄바꿈/따옴표로 인한 이스케이프 깨짐 방지
     // 💡 이 구조(JSON 키/브래킷 태그/enum)는 다른 코드가 직접 파싱하므로 AI가 절대 바꾸면 안 됨
-    const PROTECTED_STRUCTURE_RULE = `\n\n🔒 절대 변경 금지 규칙 (반드시 준수):\n프롬프트 내용을 개선하되, 아래 구조적 요소는 절대 이름/형식을 바꾸지 마세요. 이 값들은 다른 프로그램 코드가 그대로 파싱하고 있어서, 조금이라도 바뀌면 시스템이 깨집니다.\n1. 최종 JSON 응답의 키 이름은 정확히 이 7개만 사용: "업무명","시작일","완료일","상태","개발단계","상세내용","wbs레벨" (키 이름 변경/추가/삭제 금지)\n2. "상태" 값은 반드시 진행/대기/완료/보류 중 하나\n3. "상세내용" 안의 대괄호 태그는 정확히 이 이름 그대로 사용: [핵심내용] [To do] [출처] [문제점] [대책] (태그명 변경 금지, 새 태그 추가는 가능하나 기존 태그명은 유지)\n4. 날짜 형식은 반드시 "YYYY-MM-DD" 또는 "날짜확인필요"\n표현/설명/추출 로직 등 나머지 부분은 자유롭게 개선해도 됩니다.`;
+    const PROTECTED_STRUCTURE_RULE = `\n\n🔒 절대 변경 금지 규칙 (반드시 준수):\n프롬프트 내용을 개선하되, 아래 구조적 요소는 절대 이름/형식을 바꾸지 마세요. 이 값들은 다른 프로그램 코드가 그대로 파싱하고 있어서, 조금이라도 바뀌면 시스템이 깨집니다.\n1. 최종 JSON 응답의 키 이름은 정확히 이 8개만 사용: "업무명","시작일","완료일","상태","개발단계","담당구분","상세내용","wbs레벨" (키 이름 변경/추가/삭제 금지)\n2. "상태" 값은 반드시 진행/대기/완료/보류 중 하나\n3. "담당구분" 값은 반드시 PM/기구/HW/FW/BLU/TSP/LCM/Slimming/Cutting/Tooling/영업/CS/FA/미분류 중 하나 (이 목록 자체는 자유롭게 다듬어도 되지만, 필드 자체를 삭제하면 안 됨)\n4. "상세내용" 안의 대괄호 태그는 정확히 이 이름 그대로 사용: [핵심내용] [To do] [출처] [문제점] [대책] (태그명 변경 금지, 새 태그 추가는 가능하나 기존 태그명은 유지)\n5. 날짜 형식은 반드시 "YYYY-MM-DD" 또는 "날짜확인필요"\n표현/설명/추출 로직 등 나머지 부분은 자유롭게 개선해도 됩니다.`;
 
     const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 메일 분석 프롬프트와, 이 프롬프트로 분석했을 때 사용자가 수정한 실패 케이스입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}${PROTECTED_STRUCTURE_RULE}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n\n반드시 아래 형식 그대로만 응답하세요. JSON이나 코드블록(\`\`\`)은 절대 사용하지 마세요.\n\n===ANALYSIS===\n(여기에 문제점 분석을 3줄 이내로 작성)\n===PROMPT===\n(여기에 개선된 프롬프트 전문을 기존과 동일한 형식으로 작성)\n===END===`;
 
