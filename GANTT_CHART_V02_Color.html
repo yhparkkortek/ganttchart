@@ -4921,8 +4921,6 @@ ${mailText}`;
         const isAddress = (tabId === 'tab-address');
         const isRowPagedPortrait = isAlarm || isAddress; // 🎯 A4 세로 + 40행/페이지 (여러 페이지로 이어짐)
         const fitOnePage = isSummary || isBriefSpec || isWeekly; // 💡 1페이지 축소 대상 탭
-        // 💡 M.C Table은 "펼침" 상태일 때만 40행/페이지로 여러 장에 걸쳐 인쇄됨 (접힘은 1페이지 고정)
-        const mcExpandedForPrint = isMcTable && !!(window._bmExpanded && window._bmExpanded.mc);
 
         if (isSummary) {
             // 📷 제품 사진 섹션은 인쇄에서 제외
@@ -4942,17 +4940,19 @@ ${mailText}`;
         const _pfDateStr = _pfNow.getFullYear() + '-' + String(_pfNow.getMonth()+1).padStart(2,'0') + '-' + String(_pfNow.getDate()).padStart(2,'0');
         const _pfPm = window.projectMeta || {};
         const _pfProjectName = [_pfPm.고객사, _pfPm.고객모델명].filter(Boolean).join(' > ');
-        // 📌 알람/주소록/M.C Table(펼침)/Brief SPEC처럼 표 하나짜리 탭은 <tfoot>으로 넣어 페이지마다 자동 반복.
-        //    💡 [버그 수정] Brief SPEC(및 원래 Summary/Weekly도 동일)은 "1페이지에 맞추기" 축소 계산이
-        //    실측 오차로 완벽하게 안 맞아 내용이 2페이지로 넘어갈 때가 있는데, 그동안 푸터를 맨 끝에 "한 번만"
-        //    넣다 보니 1페이지가 끝나는 지점(=표 중간)에서 잘려서 푸터가 화면 중앙 근처에 끼어 보이는
-        //    버그가 있었음. 표가 하나뿐인 Brief SPEC은 tfoot으로 바꿔서 페이지가 몇 장이 되든 항상 그
-        //    페이지 맨 아래에 자동으로 반복되게 함 (Summary/Weekly는 표 하나로 안 끝나는 구조라 tfoot을
-        //    못 씀 — 대신 아래 1페이지 맞춤 계산의 안전마진을 키워서 애초에 넘치지 않게 함)
+        // 📌 알람/주소록/Brief SPEC/M.C Table처럼 표 하나짜리 탭은 <tfoot>으로 넣어 페이지마다 자동 반복.
+        //    💡 [버그 수정] "1페이지에 맞추기" 축소 계산이 실측 오차로 완벽하게 안 맞아 내용이 2페이지로
+        //    넘어갈 때가 있는데, 그동안 푸터를 맨 끝에 "한 번만" 넣다 보니 1페이지가 끝나는 지점(=표 중간)
+        //    에서 잘려서 푸터가 화면 중앙 근처에 끼어 보이는 버그가 있었음.
+        //    - M.C Table: 예전엔 "펼침" 상태일 때만 tfoot을 썼는데, 접힘 상태도 표 하나라 똑같이 넘칠 수
+        //      있어서 상태와 무관하게 항상 tfoot 사용하도록 수정.
+        //    - Summary/Weekly: 표 하나로 안 끝나는(여러 섹션 div) 구조라 진짜 <table>이 없음 → 전체를
+        //      가짜 테이블 1개로 감싸서 그 tfoot에 푸터를 넣음(아래 else 분기) — 표가 있든 없든 페이지가
+        //      몇 장이 되든 항상 그 페이지 맨 아래에 반복되는 걸 보장.
         let footerTable = null;
         if (isRowPagedPortrait || isBriefSpec) {
             footerTable = clone.querySelector('table');
-        } else if (mcExpandedForPrint) {
+        } else if (isMcTable) {
             // 💡 일반/비교 표 중 실제로 보이는 쪽의 table을 찾음 (숨겨진 쪽은 높이 0이라 잘못 짚으면 안 됨)
             const compSectionEl = clone.querySelector('#mc-comparison-section');
             const isComparisonView = !!(compSectionEl && compSectionEl.style.display !== 'none');
@@ -4967,11 +4967,28 @@ ${mailText}`;
                 + '</td></tr>';
             footerTable.appendChild(footerTfoot);
         } else if (!isCalendar) {
-            const footerDiv = document.createElement('div');
-            footerDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; margin-top:2px; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif; page-break-inside:avoid; break-inside:avoid;';
-            footerDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
-                + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
-            clone.appendChild(footerDiv);
+            // 💡 [범용 반복 푸터] 진짜 <table>이 없는 탭(Summary/Weekly 등)도 tfoot 반복 효과를 보게,
+            //    지금까지 만든 clone의 모든 내용을 가짜 테이블 1개(1행 1칸) 안으로 옮겨 감싸고, 그
+            //    테이블의 tfoot에 푸터를 넣는다 — div를 맨 끝에 한 번만 붙이던 예전 방식보다 훨씬 안전
+            const wrapTable = document.createElement('table');
+            wrapTable.style.cssText = 'width:100%; border-collapse:collapse;';
+            const wrapTd = document.createElement('td');
+            wrapTd.style.cssText = 'padding:0; border:none;';
+            while (clone.firstChild) wrapTd.appendChild(clone.firstChild);
+            const wrapTr = document.createElement('tr');
+            wrapTr.appendChild(wrapTd);
+            const wrapTbody = document.createElement('tbody');
+            wrapTbody.appendChild(wrapTr);
+            wrapTable.appendChild(wrapTbody);
+            const footerTfoot2 = document.createElement('tfoot');
+            footerTfoot2.innerHTML = '<tr><td style="padding-top:2px; border:none;">'
+                + '<div style="display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:13px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">'
+                + '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+                + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
+                + '</div>'
+                + '</td></tr>';
+            wrapTable.appendChild(footerTfoot2);
+            clone.appendChild(wrapTable);
         }
 
         printArea.appendChild(clone);
