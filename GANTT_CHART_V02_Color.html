@@ -11876,19 +11876,25 @@ window.updateInboxBadge();
                 <div id="inbox-list"></div>
             </div>
             <!-- 분류 못한 메일/신규 발신자 확인도 결국 업무 보관함 정리 작업의 일부라 여기 있는 게 자연스러움 -->
+            <!-- 💡 [버그 수정] 아래 배지 id가 설정 모달(⚙️ 메일 자동배치 설정)의 동일 id와 중복돼서
+                 document.getElementById가 항상 먼저 나온 쪽만 갱신하고 있었음 — "-2" 접미사로 분리 -->
             <div style="flex-shrink:0; padding:12px; border-top:1px solid #eee; border:1px solid #dee2e6; border-radius:8px; margin:0 12px 12px 12px; padding:12px 14px;">
-                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자</div>
-                <div style="display:flex; gap:8px; margin-bottom:10px;">
-                    <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; text-align:center;">
-                        📭 미분류<br><span id="ms-unmatched-count" style="font-size:15px;">0</span>건
+                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
+                <div style="display:flex; gap:6px; margin-bottom:10px;">
+                    <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
+                        📭 미분류<br><span id="ms-unmatched-count-2" style="font-size:15px;">0</span>건
                     </button>
-                    <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; text-align:center;">
-                        👤 신규발신자<br><span id="ms-newsender-count" style="font-size:15px;">0</span>건
+                    <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
+                        👤 신규발신자<br><span id="ms-newsender-count-2" style="font-size:15px;">0</span>건
+                    </button>
+                    <button onclick="window.msShowDiscardedModal()" style="flex:1; padding:10px 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
+                        🗑 자동폐기<br><span id="ms-discarded-count-2" style="font-size:15px;">0</span>건
                     </button>
                 </div>
-                <div style="display:flex; gap:8px; justify-content:flex-end;">
-                    <button onclick="window._macClearQueue('unmatched')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
-                    <button onclick="window._macClearQueue('newsender')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
+                <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+                    <button onclick="window._macClearQueue('unmatched')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
+                    <button onclick="window._macClearQueue('newsender')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
+                    <button onclick="window._macClearQueue('discarded')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 자동폐기 초기화</button>
                 </div>
             </div>
         </div>
@@ -13259,17 +13265,14 @@ async function mfCallGemini(apiKey, parsed) {
 
     // 💡 [B안 통일화] 자체 프롬프트 생성/GAS 호출 로직 전부 제거. Stage1 매칭 먼저 하고,
     //    msCallGemini(자동파이프라인과 동일 함수)에 위임 — 프로젝트 배경정보가 메일마다 올바르게 반영됨
-    let { projectTag, candidatesForAI, contextOverride } = await window._msResolveMatchAndContext({
+    let { candidatesForAI, contextOverride } = await window._msResolveMatchAndContext({
         subject: parsed.subject, body: parsed.body
     });
     const result = await msCallGemini(apiKey, parsed, candidatesForAI, contextOverride);
+    let projectTag = null;
     if (result) {
-        // 💡 AI가 신뢰도 "상"으로 후보 중 하나를 콕 찍었으면 → matched로 자동 승격 (자동틱/메일서버 탭과 동일 로직)
-        if (candidatesForAI && result['매칭신뢰도'] === '상' && result['주매칭프로젝트번호']) {
-            const pickedIdx = parseInt(result['주매칭프로젝트번호'], 10);
-            const picked = (pickedIdx >= 1 && pickedIdx <= candidatesForAI.length) ? candidatesForAI[pickedIdx - 1] : null;
-            if (picked) projectTag = { status: 'matched', candidates: [picked] };
-        }
+        // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 확정 (ms/자동틱과 동일 공용 헬퍼)
+        projectTag = window._msResolveAiProjectMatch(result, candidatesForAI);
         // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
         result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
         const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
@@ -13869,17 +13872,8 @@ window.msFetchMail = async function() {
 
             let item;
             try {
-                // 💡 [매칭/점수 통일화] Stage 1 키워드 매칭 → AI에게 정확한 프로젝트 배경정보(담당자/모델/인치) 전달
-                //    (예전엔 여기서 매칭을 안 해서, AI가 "지금 화면에 열린 다른 프로젝트" 정보를 배경으로 받는 문제가 있었음)
-                const matched    = window._msMatchProjects(mail, projectList);
-                let projectTag   = matched.length === 0 ? null
-                    : matched.length === 1 ? { status: 'matched', candidates: matched }
-                    : { status: 'ambiguous', candidates: matched };
-                const candidatesForAI = projectTag && projectTag.status === 'ambiguous' ? projectTag.candidates : null;
-                const contextOverride = (projectTag && projectTag.status === 'matched')
-                    ? { model: projectTag.candidates[0].model, customer: projectTag.candidates[0].customer,
-                        assignee: projectTag.candidates[0].assignee, inch: projectTag.candidates[0].inch }
-                    : null;
+                // 💡 [AI 직접 매칭] 키워드 사전매칭 없이, 활성 프로젝트 전체를 후보로 AI에게 넘겨 판단시킴
+                const candidatesForAI = projectList.length ? projectList : null;
 
                 const task = await msCallGemini(apiKey, {
                     subject: mail.subject,
@@ -13887,14 +13881,10 @@ window.msFetchMail = async function() {
                     date:    mail.date,
                     body:    mail.body,
                     fileName: mail.fileName
-                }, candidatesForAI, contextOverride);
+                }, candidatesForAI, null);
 
-                // 💡 AI가 신뢰도 "상"으로 후보 중 하나를 콕 찍었으면 → matched로 자동 승격 (자동틱과 동일 로직)
-                if (task && candidatesForAI && task['매칭신뢰도'] === '상' && task['주매칭프로젝트번호']) {
-                    const pickedIdx = parseInt(task['주매칭프로젝트번호'], 10);
-                    const picked = (pickedIdx >= 1 && pickedIdx <= candidatesForAI.length) ? candidatesForAI[pickedIdx - 1] : null;
-                    if (picked) projectTag = { status: 'matched', candidates: [picked] };
-                }
+                // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 확정 (mf/자동틱과 동일 공용 헬퍼)
+                const projectTag = window._msResolveAiProjectMatch(task, candidatesForAI);
 
                 // 💡 [매칭/점수 통일화] 규칙점수(직급/외부/긴급키워드/수신방식/중요도) + AI점수(마감임박도/업무영향도) 합산
                 const scoreResult = task ? window._msComputeTotalScore(mail, task, priorityConfig) : null;
@@ -13961,12 +13951,42 @@ window.msFetchMail = async function() {
 };
 
 // ─── [메일 자동처리 ②] Stage 0 룰 필터 — AI 호출 전 걸러내기 ──
-const MS_AUTO_SUBJECT_KW = [
+// 💡 [2026-08-20] 하드코딩 상수는 "최초 기본값"으로만 쓰고, 실제 판정은 localStorage에 저장된
+//    규칙(사용자가 📬 미분류/신규발신자 UI에서 추가·삭제 가능)을 우선 사용하도록 변경.
+const MS_AUTO_SUBJECT_KW_DEFAULT = [
     'automatic reply', 'auto reply', 'auto-reply', 'out of office',
     '부재중', '자동회신', '[광고]', '[ad]', 'unsubscribe', 'do not reply'
 ];
-const MS_NOREPLY_PATTERNS = ['noreply', 'no-reply', 'donotreply', 'mailer-daemon', 'postmaster'];
+const MS_NOREPLY_PATTERNS_DEFAULT = ['noreply', 'no-reply', 'donotreply', 'mailer-daemon', 'postmaster'];
 const MS_NEW_SENDER_QUEUE_KEY = 'ms_new_sender_queue';
+const MS_DISCARD_QUEUE_KEY = 'ms_discard_queue';
+const MS_FILTER_RULES_KEY = 'ms_filter_rules';
+
+// 💡 관리 가능한 필터 규칙 3종: 제목 키워드 차단 / 발신자 패턴 차단(noreply류) / 발신자 도메인 완전차단(신규 추가)
+window._msGetFilterRules = function() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(MS_FILTER_RULES_KEY) || 'null');
+        if (saved && Array.isArray(saved.subjectKeywords) && Array.isArray(saved.noreplyPatterns) && Array.isArray(saved.blockedDomains)) {
+            return saved;
+        }
+    } catch(e) {}
+    return { subjectKeywords: MS_AUTO_SUBJECT_KW_DEFAULT.slice(), noreplyPatterns: MS_NOREPLY_PATTERNS_DEFAULT.slice(), blockedDomains: [] };
+};
+window._msSaveFilterRules = function(rules) {
+    localStorage.setItem(MS_FILTER_RULES_KEY, JSON.stringify(rules));
+};
+// 💡 [자동 등록] 검토 큐(폐기/신규발신자)에서 "이 조건으로 앞으로도 자동 걸러줘" 클릭 시 호출 —
+//    type: 'subjectKeywords'|'noreplyPatterns'|'blockedDomains'
+window._msAddFilterRule = function(type, value) {
+    const v = String(value || '').trim();
+    if (!v) return false;
+    const rules = window._msGetFilterRules();
+    const listLower = rules[type].map(x => x.toLowerCase());
+    if (listLower.includes(v.toLowerCase())) return false; // 중복
+    rules[type].push(v);
+    window._msSaveFilterRules(rules);
+    return true;
+};
 
 window._msParseSenderEmail = function(senderStr) {
     const m = String(senderStr || '').match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
@@ -13990,17 +14010,23 @@ window._msGetWhitelistDomains = function() {
 
 // 반환: {action:'discard'|'new_sender'|'pass', reason:string}
 window._msStage0Filter = function(mail) {
+    const rules = window._msGetFilterRules();
     const subject = (mail.subject || '').toLowerCase();
-    for (const kw of MS_AUTO_SUBJECT_KW) {
-        if (subject.includes(kw)) return { action: 'discard', reason: 'subject_kw:' + kw };
+    for (const kw of rules.subjectKeywords) {
+        if (subject.includes(kw.toLowerCase())) return { action: 'discard', reason: 'subject_kw:' + kw };
     }
 
     const fromEmail = window._msParseSenderEmail(mail.sender);
-    for (const p of MS_NOREPLY_PATTERNS) {
-        if (fromEmail.includes(p)) return { action: 'discard', reason: 'noreply:' + p };
+    for (const p of rules.noreplyPatterns) {
+        if (fromEmail.includes(p.toLowerCase())) return { action: 'discard', reason: 'noreply:' + p };
     }
 
     const domain = fromEmail.split('@')[1] || '';
+    // 💡 [신규] 사용자가 직접 등록한 도메인 완전차단 목록 — 신규발신자 검토 후 "이 도메인 영구차단" 클릭으로 쌓임
+    if (domain && rules.blockedDomains.some(d => d.toLowerCase() === domain)) {
+        return { action: 'discard', reason: 'blocked_domain:' + domain };
+    }
+
     const whitelist = window._msGetWhitelistDomains();
     // 💡 whitelist가 비어있을 때(주소록 미입력 또는 tabData 로딩 타이밍 이슈)도
     //    "통과"가 아니라 "신규발신자 보류"로 처리 — 안전한 기본값(fail-safe)
@@ -14018,6 +14044,16 @@ window._msSaveNewSenderQueue = function(list) {
         const merged = list.concat(existing).slice(0, 200);
         localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, JSON.stringify(merged));
     } catch(e) { console.warn('신규 발신자 큐 저장 실패:', e); }
+};
+
+// 💡 [신규] Stage0에서 'discard'(자동폐기) 판정된 메일도 조용히 버리지 않고 로그로 남겨서
+//    나중에 "혹시 잘못 걸러진 게 있는지" 검토할 수 있게 함 (기존엔 카운트만 하고 내용은 사라졌음)
+window._msSaveDiscardQueue = function(list) {
+    try {
+        const existing = JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]');
+        const merged = list.concat(existing).slice(0, 200);
+        localStorage.setItem(MS_DISCARD_QUEUE_KEY, JSON.stringify(merged));
+    } catch(e) { console.warn('자동폐기 큐 저장 실패:', e); }
 };
 
 // ─── [메일 자동처리 ③] Stage 1 프로젝트 매칭 — project_index.json 대조 ──
@@ -14054,24 +14090,34 @@ window._msNamesMatch = function(a, b) {
     return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase();
 };
 
-// 💡 [담당자 필터] currentUserName과 assignee가 일치하는 프로젝트만 매칭 대상으로 좁힘
-//    0건이면 콘솔 경고만 남기고 정상 진행 (에러 아님 — 미분류 큐로는 그대로 쌓임)
-// 💡 [B안 통일화] 어디서 호출하든(자동/일괄/단건) 동일한 매칭 로직으로 프로젝트를 확정하고,
-//    AI 프롬프트에 넣을 배경정보(모델/고객사/담당자/인치)까지 함께 결정하는 공용 함수
+// 💡 [2026-08-20][AI 직접 매칭 v3] 예전엔 키워드 사전매칭으로 프로젝트를 먼저 좁혀놓고 AI에겐
+//    후보가 2개 이상일 때만 판단을 맡겼음 — project_index.json 키워드 목록이 실제 업무 언어를
+//    못 따라가면(노후화) AI가 좋은 배경정보 없이 시작하는 구조적 병목이었음.
+//    → 키워드 사전 게이트를 없애고, 활성 프로젝트 전체(보통 20~30개 수준, 프롬프트에 다 넣어도
+//      토큰 부담 적음)를 매번 AI에게 후보로 주고 AI가 직접 판단(+신뢰도)하게 통일.
+//    최종 판정은 window._msResolveAiProjectMatch(task, candidatesForAI)에서 신뢰도 기준으로 확정.
+// 💡 [B안 통일화] 어디서 호출하든(자동/일괄/단건) 동일한 로직으로 AI 프롬프트에 넣을 후보 목록을 결정하는 공용 함수
 window._msResolveMatchAndContext = async function(mail) {
     const projectList = await window._msLoadProjectIndex();
-    const matched = window._msMatchProjects(mail, projectList);
-    const projectTag = matched.length === 0 ? null
-        : matched.length === 1 ? { status: 'matched', candidates: matched }
-        : { status: 'ambiguous', candidates: matched };
+    const candidatesForAI = projectList.length ? projectList : null;
+    // 💡 사전에 확정된 매칭이 없으므로 배경정보(contextOverride)도 항상 null —
+    //    AI가 후보 목록을 보고 스스로 판단한 뒤, 결과(매칭신뢰도)로 사후 확정한다.
+    return { projectTag: null, candidatesForAI, contextOverride: null };
+};
 
-    const candidatesForAI = projectTag && projectTag.status === 'ambiguous' ? projectTag.candidates : null;
-    const contextOverride = (projectTag && projectTag.status === 'matched')
-        ? { model: projectTag.candidates[0].model, customer: projectTag.candidates[0].customer,
-            assignee: projectTag.candidates[0].assignee, inch: projectTag.candidates[0].inch }
-        : null;
-
-    return { projectTag, candidatesForAI, contextOverride };
+// 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 projectTag를 확정하는 공용 헬퍼.
+//    신뢰도 "상"만 자동배치급 matched로 승격하고, 그 외(중/하)는 사람 확인이 필요한 ambiguous로 남긴다.
+//    (ms/mf/자동틱 3곳의 중복 로직을 여기로 통일 — 한 곳만 고치면 전체에 적용됨)
+window._msResolveAiProjectMatch = function(task, candidatesForAI) {
+    if (!task || !candidatesForAI || !candidatesForAI.length) return null;
+    const conf = task['매칭신뢰도'];
+    const pickedIdx = parseInt(task['주매칭프로젝트번호'], 10);
+    if (!conf || !pickedIdx) return null;
+    const picked = (pickedIdx >= 1 && pickedIdx <= candidatesForAI.length) ? candidatesForAI[pickedIdx - 1] : null;
+    if (!picked) return null;
+    return conf === '상'
+        ? { status: 'matched', candidates: [picked] }
+        : { status: 'ambiguous', candidates: [picked] };
 };
 
 // 💡 [매칭/점수 통일화] projectTag({status,candidates}) → 리스트 배지에 쓸 표시용 문자열
@@ -14514,10 +14560,10 @@ window._autoMailFetchTick = async function() {
         // 💡 [메일 자동처리 ②] Stage 0 필터 — discard(폐기)/new_sender(보류)/pass(AI분석 진행)
         const newMails = [];
         const newSenderBatch = [];
-        let discardCount = 0;
+        const discardBatch = []; // 💡 [신규] 폐기도 카운트만 하지 않고 로그로 남겨 검토 가능하게 함
         dedupedMails.forEach(mail => {
             const verdict = window._msStage0Filter(mail);
-            if (verdict.action === 'discard') { discardCount++; return; }
+            if (verdict.action === 'discard') { discardBatch.push(Object.assign({ filteredReason: verdict.reason }, mail)); return; }
             if (verdict.action === 'new_sender') {
                 newSenderBatch.push(Object.assign({ filteredReason: verdict.reason }, mail));
                 return;
@@ -14525,6 +14571,8 @@ window._autoMailFetchTick = async function() {
             newMails.push(mail);
         });
         if (newSenderBatch.length) window._msSaveNewSenderQueue(newSenderBatch);
+        if (discardBatch.length) window._msSaveDiscardQueue(discardBatch);
+        const discardCount = discardBatch.length;
 
         if (!newMails.length) {
             localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
@@ -14542,43 +14590,28 @@ window._autoMailFetchTick = async function() {
         let addedCount = 0;
 
         for (const mail of newMails) {
-            // 💡 Stage 1: 프로젝트 매칭 — 0개(미분류)/1개(확정)/N개(후보) 그대로 태깅만, 등록은 안 함
-            const matched = window._msMatchProjects(mail, projectList);
-            const projectTag = matched.length === 0 ? null
-                : matched.length === 1 ? { status: 'matched', candidates: matched }
-                : { status: 'ambiguous', candidates: matched };
+            // 💡 [AI 직접 매칭] 키워드 사전매칭 없이, 활성 프로젝트 전체를 후보로 AI에게 넘겨 판단시킴
+            const candidatesForAI = projectList.length ? projectList : null;
 
             let item;
             if (!apiKey) {
                 item = {
                     idx: window._msResults.length, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
-                    project: window._msProjectTagLabel(projectTag), _projectTag: projectTag,
+                    project: null, _projectTag: null,
                     task: null, selected: false, registered: false, error: 'API키 미설정'
                 };
             } else {
                 try {
-                    const candidatesForAI = projectTag && projectTag.status === 'ambiguous' ? projectTag.candidates : null;
-                    // 💡 [B안 통일화] 단일 확정(matched)이면 그 프로젝트 정보를 AI 배경정보로 사용
-                    //    — 지금까지 여기서만 빠져있어서 "지금 열린 프로젝트"가 계속 섞이던 원인이었음
-                    const contextOverride = (projectTag && projectTag.status === 'matched')
-                        ? { model: projectTag.candidates[0].model, customer: projectTag.candidates[0].customer,
-                            assignee: projectTag.candidates[0].assignee, inch: projectTag.candidates[0].inch }
-                        : null;
                     const task = await msCallGemini(apiKey, {
                         subject: mail.subject, sender: mail.sender, date: mail.date,
                         body: mail.body, fileName: mail.fileName
-                    }, candidatesForAI, contextOverride);
+                    }, candidatesForAI, null);
 
-                    // 💡 AI가 신뢰도 "상"으로 후보 중 하나를 콕 찍었으면 → matched로 자동 승격
-                    let resolvedProjectTag = projectTag;
-                    if (task && candidatesForAI && task['매칭신뢰도'] === '상' && task['주매칭프로젝트번호']) {
-                        const pickedIdx = parseInt(task['주매칭프로젝트번호'], 10);
-                        const picked = (pickedIdx >= 1 && pickedIdx <= candidatesForAI.length) ? candidatesForAI[pickedIdx - 1] : null;
-                        if (picked) {
-                            resolvedProjectTag = { status: 'matched', candidates: [picked] };
-                            console.log(`[메일 자동처리] AI 맥락판단으로 후보 확정: "${mail.subject.substring(0,30)}" → ${picked.model} (신뢰도 상)`);
-                        }
+                    // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 확정 (ms/mf와 동일 공용 헬퍼)
+                    const resolvedProjectTag = window._msResolveAiProjectMatch(task, candidatesForAI);
+                    if (resolvedProjectTag && resolvedProjectTag.status === 'matched') {
+                        console.log(`[메일 자동처리] AI 맥락판단으로 프로젝트 확정: "${mail.subject.substring(0,30)}" → ${resolvedProjectTag.candidates[0].model} (신뢰도 상)`);
                     }
 
                     item = {
@@ -14592,7 +14625,7 @@ window._autoMailFetchTick = async function() {
                     item = {
                         idx: window._msResults.length, fileName: mail.fileName,
                         subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
-                        project: window._msProjectTagLabel(projectTag), _projectTag: projectTag,
+                        project: null, _projectTag: null,
                         task: null, selected: false, registered: false, error: e.message
                     };
                 }
@@ -14602,7 +14635,7 @@ window._autoMailFetchTick = async function() {
             // 💡 [메일 자동처리] 프로젝트가 매칭됐고 AI 추출까지 성공한 건만 개인 TaskInbox로 자동 이동
             //    (미분류는 프로젝트를 모르니 보관함에 넣지 않고 로컬 큐에만 남김 — 검토 큐 UI에서 노출 예정)
             //    💡 fileName 기준 중복 체크 — 큐가 초기화돼도(캐시삭제 등) 같은 메일이 보관함에 재등록되지 않도록
-            const finalProjectTag = item._projectTag; // 💡 [구체적 키워드 우선 매칭 v2] AI 맥락판단으로 재확정됐을 수 있으니 item._projectTag 기준 (item.project는 표시용 문자열)
+            const finalProjectTag = item._projectTag;
             if (item.task && finalProjectTag && window.TaskInbox) {
                 const alreadyInInbox = window.TaskInbox.load().some(function(it) {
                     return it.mailRaw && it.mailRaw.fileName === mail.fileName;
@@ -14612,10 +14645,9 @@ window._autoMailFetchTick = async function() {
                     const scoreResult = window._msComputeTotalScore(mail, item.task, priorityConfig);
                     const grade = scoreResult.total >= priorityConfig.cutline ? '🔴' : (scoreResult.total >= priorityConfig.cutline * 0.6 ? '🟡' : '⚪');
                     const candidateNames = finalProjectTag.candidates.map(function(c) { return c.model || c.customer; }).join(', ');
-                    const aiResolvedTag = finalProjectTag !== projectTag ? ' [AI확정]' : '';
                     const sourceLabel = finalProjectTag.status === 'ambiguous'
-                        ? `${grade}${scoreResult.total}점 메일자동분석(후보 다수: ${candidateNames})`
-                        : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})${aiResolvedTag}`;
+                        ? `${grade}${scoreResult.total}점 메일자동분석(AI판단 후보: ${candidateNames})`
+                        : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})`;
                     const mailRawObj = { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName };
                     window.TaskInbox.add(item.task, {
                         source: sourceLabel, mailRaw: mailRawObj,
@@ -14679,18 +14711,29 @@ window._autoMailFetchTick = async function() {
 window._msRefreshQueueBadges = function() {
     const unmatchedCount = (window._msResults || []).filter(r => !r.project).length;
     const newSenderCount = (JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')).length;
-    const uEl = document.getElementById('ms-unmatched-count');
-    const nEl = document.getElementById('ms-newsender-count');
-    if (uEl) uEl.textContent = unmatchedCount;
-    if (nEl) nEl.textContent = newSenderCount;
+    const discardedCount = (JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]')).length;
+    // 💡 [버그 수정] 이 배지들이 화면에 2벌(⚙️ 설정 모달 + 📥 업무 보관함 모달) 존재하는데
+    //    id가 중복돼서 하나만 갱신되고 있었음 — 두 번째 사본은 "-2" 접미사로 분리해서 같이 갱신
+    ['ms-unmatched-count', 'ms-unmatched-count-2'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = unmatchedCount;
+    });
+    ['ms-newsender-count', 'ms-newsender-count-2'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = newSenderCount;
+    });
+    ['ms-discarded-count', 'ms-discarded-count-2'].forEach(id => {
+        const el = document.getElementById(id); if (el) el.textContent = discardedCount;
+    });
 };
 
 const _msQEsc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-// 💡 타입별 데이터 소스 — 'unmatched'는 세션큐+로컬스토리지, 'newsender'는 로컬스토리지 전용
+// 💡 타입별 데이터 소스 — 'unmatched'는 세션큐+로컬스토리지, 'newsender'/'discarded'는 로컬스토리지 전용
 window._msQueueGetRows = function(type) {
     if (type === 'unmatched') {
         return (window._msResults || []).filter(r => !r.project);
+    }
+    if (type === 'discarded') {
+        return JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]');
     }
     return JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
 };
@@ -14700,9 +14743,9 @@ window._msQueueDeleteOne = function(type, fileName) {
         window._msResults = (window._msResults || []).filter(r => r.fileName !== fileName);
         window._msSaveQueueToStorage();
     } else {
-        const list = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')
-            .filter(r => r.fileName !== fileName);
-        localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, JSON.stringify(list));
+        const key = type === 'discarded' ? MS_DISCARD_QUEUE_KEY : MS_NEW_SENDER_QUEUE_KEY;
+        const list = JSON.parse(localStorage.getItem(key) || '[]').filter(r => r.fileName !== fileName);
+        localStorage.setItem(key, JSON.stringify(list));
     }
 };
 
@@ -14711,32 +14754,50 @@ window._msQueueDeleteAll = function(type) {
         window._msResults = (window._msResults || []).filter(r => r.project); // 미분류만 제거, 매칭된 건 유지
         window._msSaveQueueToStorage();
     } else {
-        localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, '[]');
+        localStorage.setItem(type === 'discarded' ? MS_DISCARD_QUEUE_KEY : MS_NEW_SENDER_QUEUE_KEY, '[]');
     }
+};
+
+// 💡 filteredReason(예: 'subject_kw:[광고]', 'unknown_domain:xxx.com')을 사람이 읽을 문구로 변환
+window._msQueueRowHint = function(type, r) {
+    const reason = r.filteredReason || '';
+    if (reason.startsWith('subject_kw:')) return `제목 키워드 "${reason.slice(11)}" 규칙에 걸려 자동폐기됨`;
+    if (reason.startsWith('noreply:')) return `발신자 패턴 "${reason.slice(8)}" 규칙에 걸려 자동폐기됨`;
+    if (reason.startsWith('blocked_domain:')) return `차단 등록된 도메인(${reason.slice(15)})이라 자동폐기됨`;
+    if (reason.startsWith('unknown_domain:')) return `주소록에 없는 발신자 도메인(${reason.slice(15)}) — 정상 거래처면 주소록에 추가 필요`;
+    if (reason === 'whitelist_empty') return '주소록이 비어있어 전부 신규발신자로 분류됨';
+    return type === 'unmatched' ? '등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음)' : '';
 };
 
 window._msRenderQueueModal = function(type, title) {
     const rows = window._msQueueGetRows(type);
-    const hint = type === 'unmatched'
-        ? '등록된 프로젝트 키워드와 불일치 — Summary 탭 "메일 키워드" 확인 필요'
-        : '주소록에 없는 발신자 도메인 — 정상 거래처면 주소록에 추가 필요';
 
     window._msQueueRows = rows; // 💡 "원문 보기" 클릭 시 참조용 (onclick 문자열에 본문을 직접 못 넣으니 인덱스로 조회)
     const bodyHtml = rows.length
-        ? rows.map((r, i) => `
+        ? rows.map((r, i) => {
+            // 💡 [자동 등록] 신규발신자 큐에서만 "이 도메인 영구차단" 버튼 제공 — 검토 후 확정된 스팸이면
+            //    한 번의 클릭으로 자동폐기 필터 규칙에 등록(다음부터는 조용히 걸러짐, AI 호출도 안 됨)
+            const domain = (window._msParseSenderEmail(r.sender) || '').split('@')[1] || '';
+            const ruleBtn = (type === 'newsender' && domain)
+                ? `<button class="ms-queue-rule-btn" data-idx="${i}" data-domain="${_msQEsc(domain)}"
+                        title="이 발신자 도메인을 자동폐기 규칙에 영구 등록" style="background:#fff; border:1px solid #7a5210; color:#7a5210; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;">🚫</button>`
+                : '';
+            return `
             <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
                 <div style="min-width:0; flex:1;">
                     <div style="font-size:12px; font-weight:bold; overflow-wrap:break-word;">${_msQEsc(r.subject)}</div>
                     <div style="font-size:11px; color:#777; margin-top:2px;">${_msQEsc(r.sender)} · ${_msQEsc(r.date)}</div>
-                    <div style="font-size:11px; color:#e67e22; margin-top:2px;">💡 ${hint}</div>
+                    <div style="font-size:11px; color:#e67e22; margin-top:2px;">💡 ${window._msQueueRowHint(type, r)}</div>
                 </div>
                 <div style="flex-shrink:0; display:flex; gap:4px;">
                     <button class="ms-queue-view-btn" data-idx="${i}"
                         title="원문 보기" style="background:#fff; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;">📧</button>
+                    ${ruleBtn}
                     <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
                         title="삭제" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>
                 </div>
-            </div>`).join('')
+            </div>`;
+        }).join('')
         : '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">대기 중인 항목이 없습니다</div>';
 
     let modal = document.getElementById('ms-queue-modal');
@@ -14767,6 +14828,18 @@ window._msRenderQueueModal = function(type, title) {
             if (viewBtn) {
                 const r = window._msQueueRows && window._msQueueRows[Number(viewBtn.dataset.idx)];
                 if (r && window.showMailRawModal) window.showMailRawModal({ subject: r.subject, sender: r.sender, date: r.date, body2000: r.body });
+                return;
+            }
+            // 💡 [자동 등록] 신규발신자 검토 중 "이 도메인 영구차단" — 필터 규칙에 추가 + 큐에서도 제거
+            const ruleBtn = e.target.closest('.ms-queue-rule-btn');
+            if (ruleBtn) {
+                const domain = ruleBtn.dataset.domain;
+                if (!domain) return;
+                if (!confirm(`"${domain}" 도메인을 자동폐기 규칙에 영구 등록할까요?\n앞으로 이 도메인에서 오는 메일은 AI 분석 없이 조용히 폐기됩니다.`)) return;
+                window._msAddFilterRule('blockedDomains', domain);
+                const r = window._msQueueRows && window._msQueueRows[Number(ruleBtn.dataset.idx)];
+                if (r) window._msQueueRemoveRow(window._msQueueCurrentType, r.fileName);
+                if (window.showToast) window.showToast(`🚫 "${domain}" 도메인 자동폐기 규칙에 등록됨`, 'info');
             }
         });
     }
@@ -14775,7 +14848,11 @@ window._msRenderQueueModal = function(type, title) {
     document.getElementById('ms-queue-title').textContent = title + ' (' + rows.length + '건)';
     document.getElementById('ms-queue-body').innerHTML = bodyHtml;
     const suggestBtn = document.getElementById('ms-queue-suggest-btn');
-    if (suggestBtn) suggestBtn.textContent = type === 'unmatched' ? '🔑 키워드 제안' : '📇 주소록 제안';
+    if (suggestBtn) {
+        // 💡 '자동폐기' 큐는 제안 기능이 없으므로(이미 규칙에 걸려서 폐기된 것) 버튼 자체를 숨김
+        suggestBtn.style.display = type === 'discarded' ? 'none' : '';
+        suggestBtn.textContent = type === 'unmatched' ? '🔑 키워드 제안' : '📇 주소록 제안';
+    }
     modal.style.display = 'block';
     window.bringModalToFront('ms-queue-modal'); // 💡 열 때 즉시 맨 앞으로 (클릭 안 해도)
 };
@@ -15334,184 +15411,11 @@ window.msForceRefetchForTest = async function() {
 };
 
 // ─── 메일 자동배치 설정 모달 ──────────────────────────────────────────
-window.openMailAutoConfigModal = async function() {
-    const cfg = await window.loadPriorityConfig();
-    let modal = document.getElementById('mail-auto-config-modal');
-    if (!modal) {
-        modal = document.createElement('div');
-        modal.id = 'mail-auto-config-modal';
-        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
-        modal.innerHTML = `
-        <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:540px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
-            <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
-                <span>⚙️ 메일 자동배치 설정</span>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
-            </div>
-            <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
-
-                <!-- 그룹1: 수집 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">⏱️ 수집 설정</div>
-                    <div style="display:grid; grid-template-columns:1fr 64px; gap:8px 10px; align-items:center; font-size:12px;">
-                        <span>수집 주기</span>
-                        <select id="mac-interval" style="width:100%; padding:3px 4px; border:1px solid #ccc; border-radius:4px; font-size:12px; box-sizing:border-box;">
-                            <option value="10">10분</option>
-                            <option value="15">15분</option>
-                            <option value="30">30분</option>
-                            <option value="60">60분</option>
-                        </select>
-                        <span>📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
-                        <input id="mac-cutline" type="number" min="0" max="100" style="width:64px; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                    </div>
-                </div>
-
-                <!-- 그룹2: 점수 가산 키워드 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">🚨 점수 가산 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(키워드별 점수 지정)</span></div>
-                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
-                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:2px;">+ 키워드 추가</button>
-                </div>
-
-                <!-- 그룹3: 우선순위 점수 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
-                    <div style="display:grid; grid-template-columns:1fr 64px; gap:6px 10px; align-items:center; font-size:12px;">
-                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                    </div>
-                </div>
-
-                <!-- 그룹4: 직급별 점수 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
-                    <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
-                </div>
-
-                <!-- 그룹5: 미분류/신규발신자 열람 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자</div>
-                    <div style="display:flex; gap:8px; margin-bottom:10px;">
-                        <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
-                            📭 미분류<br><span id="ms-unmatched-count" style="font-size:15px;">0</span>건
-                        </button>
-                        <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 6px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">
-                            👤 신규발신자<br><span id="ms-newsender-count" style="font-size:15px;">0</span>건
-                        </button>
-                    </div>
-                    <div style="display:flex; gap:8px; justify-content:flex-end;">
-                        <button onclick="window._macClearQueue('unmatched')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
-                        <button onclick="window._macClearQueue('newsender')" style="padding:3px 10px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
-                    </div>
-                </div>
-
-            </div>
-            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
-                <button onclick="window._macSave()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 저장</button>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="flex:1; padding:8px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ 닫기</button>
-            </div>
-        </div>`;
-        document.body.appendChild(modal);
-        window._makeDraggable('mail-auto-config-box', 'mail-auto-config-drag');
-        window._bindClickToFront('mail-auto-config-modal');
-    }
-
-    // 값 채우기
-    document.getElementById('mac-interval').value = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
-    document.getElementById('mac-external').value   = cfg.externalCustomerScore;
-    document.getElementById('mac-tome').value       = cfg.toMeScore;
-    document.getElementById('mac-ccme').value       = cfg.ccMeScore;
-    document.getElementById('mac-importance').value = cfg.importanceHighScore;
-    document.getElementById('mac-cutline').value    = cfg.cutline;
-    window._macRenderTitleRows(cfg.titleScores);
-    window._macRenderKeywordRows(cfg.urgentKeywords);
-    // 💡 미분류/신규발신자 배지는 최초 생성 시 "0"으로 박혀있고, 그 뒤로는 메일 수집이 이 모달이
-    //    열려있는 동안에만 우연히 갱신됐음(수동 "메일 가져오기"는 이 함수를 아예 모름) — 모달을 열 때마다
-    //    항상 현재 값으로 다시 채움
-    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
-
-    modal.style.display = 'block';
-    window.bringModalToFront('mail-auto-config-modal');
-};
-
-window._macRenderTitleRows = function(titleScores) {
-    document.getElementById('mac-title-rows').innerHTML =
-        Object.keys(titleScores).map(t => `
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; font-size:12px;">
-            <span style="flex:1; color:#444; line-height:1.4;">${t}</span>
-            <input class="mac-title-score" data-title="${t}" type="number" value="${titleScores[t]}"
-                style="width:64px; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center; box-sizing:border-box;">
-        </div>`).join('');
-};
-
-window._macAddKeywordRow = function(word, score) {
-    const box = document.getElementById('mac-keyword-rows');
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
-    row.innerHTML = `
-        <input class="mac-kw-word" type="text" value="${word}" placeholder="키워드"
-            style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-        <input class="mac-kw-score" type="number" value="${score}"
-            style="width:64px; min-width:0; box-sizing:border-box; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-        <button onclick="this.parentElement.remove()" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:24px; height:24px; cursor:pointer; font-size:11px;">🗑</button>`;
-    box.appendChild(row);
-};
-
-window._macRenderKeywordRows = function(kws) {
-    document.getElementById('mac-keyword-rows').innerHTML = '';
-    (kws || []).forEach(k => window._macAddKeywordRow(k.word, k.score));
-};
-
-window._macClearQueue = function(type) {
-    if (!confirm(`${type === 'unmatched' ? '미분류' : '신규발신자'} 큐를 초기화할까요?`)) return;
-    if (type === 'unmatched') {
-        window._msResults = (window._msResults || []).filter(r => r.project);
-    } else {
-        localStorage.removeItem(window.MS_NEW_SENDER_QUEUE_KEY || 'ms_new_sender_queue');
-    }
-    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
-    if (window.showToast) window.showToast(`✅ ${type === 'unmatched' ? '미분류' : '신규발신자'} 초기화 완료`, 'info');
-};
-
-window._macSave = async function() {
-    // 수집 주기
-    const sel = document.getElementById('mac-interval');
-    if (sel) {
-        localStorage.setItem('mail_auto_process_interval_min', sel.value);
-        const orig = document.getElementById('mail-process-interval');
-        if (orig) orig.value = sel.value;
-    }
-    // 중요 키워드 → localStorage 전역 저장
-    const kwEl = document.getElementById('mac-important-kw');
-    if (kwEl) localStorage.setItem('mail_global_important_kw', kwEl.value);
-
-    // 우선순위 점수
-    const titleScores = {};
-    document.querySelectorAll('.mac-title-score').forEach(el => {
-        titleScores[el.dataset.title] = parseInt(el.value, 10) || 0;
-    });
-    const urgentKeywords = [];
-    document.querySelectorAll('#mac-keyword-rows > div').forEach(row => {
-        const word = row.querySelector('.mac-kw-word').value.trim();
-        const score = parseInt(row.querySelector('.mac-kw-score').value, 10) || 0;
-        if (word) urgentKeywords.push({ word, score });
-    });
-    const newConfig = {
-        titleScores,
-        urgentKeywords,
-        externalCustomerScore: parseInt(document.getElementById('mac-external').value, 10) || 0,
-        toMeScore:             parseInt(document.getElementById('mac-tome').value, 10) || 0,
-        ccMeScore:             parseInt(document.getElementById('mac-ccme').value, 10) || 0,
-        importanceHighScore:   parseInt(document.getElementById('mac-importance').value, 10) || 0,
-        cutline: Math.max(0, Math.min(100, parseInt(document.getElementById('mac-cutline').value, 10) || 50))
-    };
-    const ok = await window.savePriorityConfig(newConfig);
-    if (window.showToast) window.showToast(ok ? '✅ 저장 완료' : '⚠️ 저장 실패 (콘솔 확인)', ok ? 'info' : 'error');
-    if (ok) document.getElementById('mail-auto-config-modal').style.display = 'none';
-};
-
-// ─── 메일 자동배치 설정 모달 ──────────────────────────────────────────
+// 💡 [2026-08-20] 이 함수(및 아래 _macRenderTitleRows/_macAddKeywordRow/_macRenderKeywordRows/
+//    _macClearQueue/_macSave)가 통째로 중복 정의돼 있던 걸 발견해서 정리함. 이전 사본에는
+//    "그룹5: 미분류/신규발신자" 섹션이 있었는데, 마지막 정의(=실제로 실행되는 쪽)엔 빠져 있어서
+//    설정 모달에서 그 버튼들이 아예 안 보이는 상태였음 — 죽은 사본을 지우면서 그룹5(+신규 그룹6)를
+//    살아있는 쪽에 이식.
 window.openMailAutoConfigModal = async function() {
     const cfg = await window.loadPriorityConfig();
     let modal = document.getElementById('mail-auto-config-modal');
@@ -15569,6 +15473,60 @@ window.openMailAutoConfigModal = async function() {
                     <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
                 </div>
 
+                <!-- 그룹5: 미분류/신규발신자/자동폐기 열람 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
+                    <div style="display:flex; gap:6px; margin-bottom:10px;">
+                        <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+                            📭 미분류<br><span id="ms-unmatched-count" style="font-size:15px;">0</span>건
+                        </button>
+                        <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+                            👤 신규발신자<br><span id="ms-newsender-count" style="font-size:15px;">0</span>건
+                        </button>
+                        <button onclick="window.msShowDiscardedModal()" style="flex:1; padding:10px 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
+                            🗑 자동폐기<br><span id="ms-discarded-count" style="font-size:15px;">0</span>건
+                        </button>
+                    </div>
+                    <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+                        <button onclick="window._macClearQueue('unmatched')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
+                        <button onclick="window._macClearQueue('newsender')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
+                        <button onclick="window._macClearQueue('discarded')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 자동폐기 초기화</button>
+                    </div>
+                </div>
+
+                <!-- 그룹6: [신규] 스팸/광고 자동폐기 필터 규칙 관리 -->
+                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
+                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">🚫 자동폐기 필터 규칙</div>
+                    <div style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
+
+                    <div style="margin-bottom:10px;">
+                        <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">제목 키워드</div>
+                        <div id="mac-filter-subject-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
+                        <div style="display:flex; gap:4px;">
+                            <input id="mac-filter-subject-input" type="text" placeholder="예: [광고]" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                            <button onclick="window._macAddFilterRuleFromInput('subjectKeywords','mac-filter-subject-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                        </div>
+                    </div>
+
+                    <div style="margin-bottom:10px;">
+                        <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 패턴 (noreply 등)</div>
+                        <div id="mac-filter-noreply-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
+                        <div style="display:flex; gap:4px;">
+                            <input id="mac-filter-noreply-input" type="text" placeholder="예: noreply" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                            <button onclick="window._macAddFilterRuleFromInput('noreplyPatterns','mac-filter-noreply-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 도메인 완전차단</div>
+                        <div id="mac-filter-domain-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
+                        <div style="display:flex; gap:4px;">
+                            <input id="mac-filter-domain-input" type="text" placeholder="예: spam-mailer.com" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                            <button onclick="window._macAddFilterRuleFromInput('blockedDomains','mac-filter-domain-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                        </div>
+                    </div>
+                </div>
+
             </div>
             <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
                 <button onclick="window._macSave()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 저장</button>
@@ -15589,10 +15547,11 @@ window.openMailAutoConfigModal = async function() {
     document.getElementById('mac-cutline').value    = cfg.cutline;
     window._macRenderTitleRows(cfg.titleScores);
     window._macRenderKeywordRows(cfg.urgentKeywords);
-    // 💡 미분류/신규발신자 배지는 최초 생성 시 "0"으로 박혀있고, 그 뒤로는 메일 수집이 이 모달이
+    // 💡 미분류/신규발신자/자동폐기 배지는 최초 생성 시 "0"으로 박혀있고, 그 뒤로는 메일 수집이 이 모달이
     //    열려있는 동안에만 우연히 갱신됐음(수동 "메일 가져오기"는 이 함수를 아예 모름) — 모달을 열 때마다
     //    항상 현재 값으로 다시 채움
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    if (window._macRenderFilterRules) window._macRenderFilterRules();
 
     modal.style.display = 'block';
     window.bringModalToFront('mail-auto-config-modal');
@@ -15627,14 +15586,53 @@ window._macRenderKeywordRows = function(kws) {
 };
 
 window._macClearQueue = function(type) {
-    if (!confirm(`${type === 'unmatched' ? '미분류' : '신규발신자'} 큐를 초기화할까요?`)) return;
+    const label = type === 'unmatched' ? '미분류' : type === 'discarded' ? '자동폐기' : '신규발신자';
+    if (!confirm(`${label} 큐를 초기화할까요?`)) return;
     if (type === 'unmatched') {
         window._msResults = (window._msResults || []).filter(r => r.project);
+        window._msSaveQueueToStorage();
+    } else if (type === 'discarded') {
+        localStorage.removeItem('ms_discard_queue');
     } else {
-        localStorage.removeItem(window.MS_NEW_SENDER_QUEUE_KEY || 'ms_new_sender_queue');
+        localStorage.removeItem('ms_new_sender_queue');
     }
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
-    if (window.showToast) window.showToast(`✅ ${type === 'unmatched' ? '미분류' : '신규발신자'} 초기화 완료`, 'info');
+    if (window.showToast) window.showToast(`✅ ${label} 초기화 완료`, 'info');
+};
+
+// 💡 [신규] 필터 규칙 3종(제목키워드/발신자패턴/도메인차단)을 칩 형태로 렌더링 + 개별 삭제
+window._macRenderFilterRules = function() {
+    const rules = window._msGetFilterRules();
+    const renderChips = (containerId, type, list) => {
+        const box = document.getElementById(containerId);
+        if (!box) return;
+        box.innerHTML = list.length ? list.map((v, i) => `
+            <span style="display:inline-flex; align-items:center; gap:2px; background:#f1f3f5; border:1px solid #dee2e6; border-radius:12px; padding:2px 4px 2px 8px; font-size:11px;">
+                ${_msQEsc(v)}
+                <button onclick="window._macRemoveFilterRule('${type}', ${i})" title="삭제" style="background:none; border:none; color:#e03131; cursor:pointer; font-size:13px; line-height:1; padding:0 4px;">×</button>
+            </span>`).join('') : '<span style="font-size:10.5px; color:#bbb;">등록된 규칙 없음(기본값 사용 안 함)</span>';
+    };
+    renderChips('mac-filter-subject-rows', 'subjectKeywords', rules.subjectKeywords);
+    renderChips('mac-filter-noreply-rows', 'noreplyPatterns', rules.noreplyPatterns);
+    renderChips('mac-filter-domain-rows', 'blockedDomains', rules.blockedDomains);
+};
+
+window._macAddFilterRuleFromInput = function(type, inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const v = input.value.trim();
+    if (!v) return;
+    const added = window._msAddFilterRule(type, v);
+    input.value = '';
+    window._macRenderFilterRules();
+    if (window.showToast) window.showToast(added ? `✅ 규칙 추가됨: ${v}` : `이미 등록된 규칙입니다`, added ? 'info' : 'error');
+};
+
+window._macRemoveFilterRule = function(type, idx) {
+    const rules = window._msGetFilterRules();
+    rules[type].splice(idx, 1);
+    window._msSaveFilterRules(rules);
+    window._macRenderFilterRules();
 };
 
 window._macSave = async function() {
@@ -15673,6 +15671,10 @@ window._macSave = async function() {
 
 window.msShowNewSenderModal = function() {
     window._msRenderQueueModal('newsender', '👤 신규발신자 메일');
+};
+
+window.msShowDiscardedModal = function() {
+    window._msRenderQueueModal('discarded', '🗑 자동폐기 메일');
 };
 
 // ─── [메일 자동처리 ①] 스케줄러 — 1분마다 체크, 설정된 주기(기본 30분) 경과 시에만 실행 ──
@@ -16265,23 +16267,26 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', date: parsed.date || '', body2000: mailText };
     let prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null);
 
-    // 💡 [구체적 키워드 우선 매칭 v2] 키워드로 후보가 2개 이상 걸린 경우, AI에게 "이 메일의 핵심
-    //    주제 프로젝트가 후보 중 뭔지" 맥락으로 판단시킴. 확신 없으면(신뢰도 낮음/복수) 그대로
-    //    사람 확인으로 넘김 — 오탐 방지를 위해 "상" 신뢰도일 때만 자동확정에 사용(호출부에서 처리)
-    if (candidateProjects && candidateProjects.length > 1) {
+    // 💡 [2026-08-20][AI 직접 매칭 v3] 예전엔 키워드 사전매칭으로 후보가 2개 이상 걸릴 때만 AI에게
+    //    맥락 판단을 맡겼음 — project_index.json 키워드 목록이 노후화되면 AI가 애초에 이 판단 기회조차
+    //    못 받는 구조적 병목이었음. → 이제 활성 프로젝트 전체를 항상 후보로 주고 AI가 직접 판단(+신뢰도).
+    //    오탐 방지를 위해 "상" 신뢰도일 때만 자동확정에 사용(호출부에서 처리), 그 외엔 사람 확인으로 넘김.
+    if (candidateProjects && candidateProjects.length > 0) {
         // 💡 [버그 수정] 후보 프로젝트명이 서로 같을 수 있어(예: SHUFFLER 3인치/4.3인치 둘 다 "SHUFFLER")
-        //    이름이 아니라 "번호"로 답하게 해서 확실히 구별함. 인치 정보도 같이 제공.
+        //    이름이 아니라 "번호"로 답하게 해서 확실히 구별함. 인치 정보 + 등록된 키워드도 참고용으로 같이 제공
+        //    (키워드는 더 이상 매칭 게이트가 아니라, AI 판단을 돕는 힌트일 뿐 — 없어도 다른 근거로 고를 수 있음).
         const numbered = candidateProjects.map((c, i) =>
-            `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''} [파일: ${c.file_name}]`
+            `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''} [파일: ${c.file_name}]`
         ).join('\n');
-        prompt += `\n\n--- 추가 판단 요청 (키워드 매칭으로 아래 프로젝트들이 후보로 걸림) ---\n` +
+        prompt += `\n\n--- 프로젝트 매칭 판단 요청 (현재 등록된 활성 프로젝트 전체 목록) ---\n` +
             `후보 프로젝트 목록:\n${numbered}\n` +
-            `이 메일이 단순히 언급만 하는 게 아니라, 실제로 다루는 "핵심 주제"가 후보 중 하나로 명확한지 판단하세요.\n` +
+            `이 메일이 실제로 다루는 "핵심 주제"가 위 목록 중 하나로 명확한지 판단하세요. 목록의 "참고 키워드"는 힌트일 뿐이니,\n` +
+            `본문 맥락상 명백히 그 프로젝트 얘기면 키워드가 없어도 선택하세요. 반대로 키워드가 우연히 겹쳐도 실제 핵심 주제가 아니면 고르지 마세요.\n` +
             `※ 후보 중 이름이 같은 것들은 인치(크기)로 구별하세요.\n` +
             `- 핵심 주제가 명확하면: 해당 후보의 번호를 아래 필드에 적으세요.\n` +
-            `- 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: 0으로 적으세요.\n` +
+            `- 목록 어디에도 해당 안 되거나(신규/미등록 프로젝트), 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: 0으로 적으세요.\n` +
             `위 JSON에 아래 두 필드를 추가로 포함해서 응답하세요:\n` +
-            `"주매칭프로젝트번호": 1 (해당 번호, 애매하면 0),\n` +
+            `"주매칭프로젝트번호": 1 (해당 번호, 애매하거나 목록에 없으면 0),\n` +
             `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)"`;
     }
 
