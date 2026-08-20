@@ -9128,6 +9128,16 @@ window.AI_PROVIDERS = {
                models: [
                    { id: 'mistral-small-latest', label: 'Mistral Small', tier: 'free', note: '🟢 무료 · 속도 우선' },
                    { id: 'mistral-large-latest', label: 'Mistral Large', tier: 'paid', note: '🔴 유료 · 품질 우선' },
+               ]},
+    openai:  { label: 'OpenAI (GPT)',  keyName: 'openai_api_key', defaultModel: 'gpt-5.6-luna',
+               placeholder: 'sk-로 시작하는 OpenAI API 키', guideUrl: 'https://platform.openai.com/api-keys',
+               // 💡 다른 3곳(Gemini/Groq/Mistral)과 달리 OpenAI는 무료 등급이 없음 — 반드시 결제수단(카드) 등록 필요.
+               guideText: '⚠️ 다른 AI와 달리 무료 등급이 없습니다 — 카드 등록(결제수단 연결) 후 사용량만큼 과금됩니다.\n\n① platform.openai.com/api-keys 접속 → OpenAI 계정 로그인(없으면 가입)\n② 좌측 메뉴 [Billing]에서 카드 등록 (결제수단 미등록 시 키가 있어도 호출 실패)\n③ [+ Create new secret key] 클릭 → 생성된 키(sk-로 시작)를 복사\n④ 아래 입력란에 붙여넣고 저장\n※ 신규 가입 시 소액 무료 크레딧이 한시적으로 제공될 수 있으나, 소진 후에는 카드로 과금됩니다.',
+               guideTextEn: '⚠️ Unlike the other providers, OpenAI has no free tier — you must add a payment method; usage is billed.\n\n① Go to platform.openai.com/api-keys → Sign in (or sign up)\n② Left menu [Billing] → add a card (calls fail without a payment method, even with a valid key)\n③ Click [+ Create new secret key] → copy the key (starts with sk-)\n④ Paste below and save\n※ New accounts may get a small temporary free credit, but billing applies afterward.',
+               models: [
+                   { id: 'gpt-5.6-luna',  label: 'GPT-5.6 Luna',  tier: 'paid', note: '🟡 저비용 · 대량처리용' },
+                   { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', tier: 'paid', note: '🟠 균형 · 비용대비 성능' },
+                   { id: 'gpt-5.6-sol',   label: 'GPT-5.6 Sol',   tier: 'paid', note: '🔴 최고 품질 · 고비용' },
                ]}
 };
 
@@ -12004,8 +12014,9 @@ window.updateInboxBadge();
                         <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
                                 style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                             <option value="gemini">Gemini (Google)</option>
-                            <option value="groq">Groq — Llama · DeepSeek 등 무료</option>
+                            <option value="groq">Groq — 오픈모델 무료 호스팅</option>
                             <option value="mistral">Mistral (프랑스 AI, 무료)</option>
+                            <option value="openai">OpenAI (GPT, 유료·카드등록 필요)</option>
                         </select>
                     </div>
                     <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
