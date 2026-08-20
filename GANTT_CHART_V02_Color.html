@@ -14757,6 +14757,9 @@ window._msQueueClearAll = function() {
 //    - 대문자 3자+ 제품라인명 (OBSIDIAN, SHUFFLER — 전부 대문자로만 쓰인 경우)
 //    - Title Case 단어 (Obsidian, Shuffler처럼 첫 글자만 대문자인 실제 표기 — 흔한 인사말/상투어는
 //      스톱워드로 제외). 예전엔 전부 대문자 패턴만 잡아서 "Obsidian"처럼 자주 쓰이는 실제 표기를 놓쳤음
+// 💡 대소문자를 섞어 적든(Design/DESIGN) 상관없이 걸러지도록, 목록은 소문자로 저장하고 조회할 때도
+//    소문자로 비교한다(예전엔 대소문자가 정확히 일치할 때만 걸러져서 "PROTO"는 막아도 "Proto"는
+//    새고, 그 반대도 마찬가지인 허점이 있었음).
 window._MS_KW_STOPWORDS = new Set([
     'Hi','Hello','Dear','Regards','Thanks','Thank','Please','Best','Kind','Sincerely',
     'From','Subject','Date','To','Cc','Re','Fwd','Fw','The','This','That','With','For',
@@ -14769,8 +14772,30 @@ window._MS_KW_STOPWORDS = new Set([
     'Confirm','Details','Comments','Comment','Question','Questions','Issue','Issues',
     'Status','Progress','Schedule','Timeline','Reminder','Feedback','Action','Items',
     'Item','Result','Results','Summary','Overview','Note','Notes','Draft','Final',
-    'Version','New','Old','Next','Last','First','Second','Week','Weekly','Monthly'
-]);
+    'Version','New','Old','Next','Last','First','Second','Week','Weekly','Monthly',
+    // 💡 [노이즈 제거] 회사 서명란/주소 블록 — 거의 모든 메일 하단에 반복돼서 "매우 자주 등장하는
+    //    키워드"처럼 보이지만 실제로는 특정 프로젝트와 아무 상관 없는 상투어
+    'Kortek','Corp','Corporation','Venture','Town','Yeonsu','Incheon','Korea','Seoul','Songdo',
+    'Tel','Fax','Phone','Mobile','Home','Website','Address','Center','Confidentiality',
+    'Statement','Sent','Original','Message','Disclaimer','Copyright','Rights','Reserved',
+    // 💡 직급/호칭 — 사람 이름과 함께 자주 등장하지만 프로젝트 식별과 무관
+    'Manager','Senior','Director','Leader','Head','Engineer','Chief','President','Staff',
+    'Sales','Marketing','Department','Division','Group','Representative','Executive',
+    // 💡 개발단계(WBS L0) 용어 — 모든 프로젝트가 공통으로 쓰는 범용 단계명이라 특정 프로젝트를
+    //    식별하지 못함 (getSystemPrompt의 개발단계 목록과 동일)
+    'Proto','RFI','RFQ','NRE','Award','Kick','Off','Design','EVT','ES','DVT','PVT','FAI',
+    'PP','SOP','MP','EC','RMA','EOL',
+    // 💡 전자제품 업계 범용 스펙/부품 용어 — 특정 프로젝트가 아니라 업계 전체에서 공용으로 쓰임
+    'Panel','Touch','Glass','Black','White','Blue','Red','Green','Yellow','Size','Type',
+    'Price','Color','Gamut','Resolution','Frequency','Interface','Board','Cable','Bracket',
+    'Cover','Base','Source','Contents','Model','Code','Vendor','Production','Technology',
+    'Curved','Maker','Remark','Slim','Driving','Luminance','Contrast','Ratio','Application',
+    'Expected','LED','PCB','BOM','CAD','USB','LCM','OSD','LGD','BOE','REV','Tool','Firmware',
+    'Bezel','Scaler','Dir','Anthony'
+].map(function(w) { return w.toLowerCase(); }));
+// 💡 [노이즈 제거] 승인시스템 문서번호 패턴(예: OW-20260814-013, PE-20260818-038)처럼 날짜가 박힌
+//    사무행정 문서 ID는 프로젝트 키워드가 아니라 그 자체로 걸러야 함
+window._MS_DOC_ID_PATTERN = /^[A-Z]{1,3}-\d{8}-\d{2,4}$/;
 window._MS_SUSPICIOUS_PATTERNS = [
     /\b\d{1,3}\.\d{1,2}\s*(?:"|인치|MVD)?/g,
     /\b[A-Z][A-Z0-9\-]{1,}[0-9]\b/g,
@@ -14784,6 +14809,7 @@ window._msExtractSuspiciousTokens = function(text) {
         (s.match(re) || []).forEach(function(t) {
             const trimmed = t.trim();
             if (trimmed.length < MS_MIN_KEYWORD_LEN || window._MS_KW_STOPWORDS.has(trimmed)) return;
+            if (window._MS_DOC_ID_PATTERN.test(trimmed)) return; // 행정 문서번호(예: OW-20260814-013) 제외
             found.add(trimmed);
         });
     });
@@ -14822,6 +14848,17 @@ window._msSuggestKeywordsForUnmatched = async function() {
     // 💡 전체 프로젝트(열려있지 않은 것 포함)의 고객사명은 "제목분석" 후보에서도 미리 제외 —
     //    LNW처럼 여러 프로젝트가 공유하는 고객사명을 키워드로 넣으면 확실히 오매칭을 유발함
     const knownCustomers = new Set(projectList.map(p => (p.customer || '').toLowerCase()).filter(Boolean));
+    // 💡 [노이즈 제거] 주소록에 등록된 사람 이름 조각(성/이름 낱말)은 제품 키워드가 아니라 발신자/수신자
+    //    이름일 뿐이므로 후보에서 제외 — "Jun","Leader","Anthony"처럼 사람 이름이 회의 스레드에서
+    //    프로젝트 키워드와 같이 등장했다는 이유만으로 추천되던 문제를 막음
+    const knownNameTokens = new Set();
+    ((window.AddressBook && window.AddressBook.load) ? window.AddressBook.load() : []).forEach(function(p) {
+        [p.name, p.nameEn].forEach(function(n) {
+            String(n || '').split(/[\s,]+/).forEach(function(part) {
+                if (part) knownNameTokens.add(part.toLowerCase());
+            });
+        });
+    });
 
     const suggestions = [];
     unmatched.forEach(function(mail) {
@@ -14856,15 +14893,20 @@ window._msSuggestKeywordsForUnmatched = async function() {
         window._msExtractSuspiciousTokens(scanText).forEach(function(tok) {
             if (certainKeywordsThisMail.has(tok.toLowerCase())) return; // ①과 대소문자만 다른 중복 방지
             if (knownCustomers.has(tok.toLowerCase())) return; // 고객사명은 후보에서 제외
+            if (knownNameTokens.has(tok.toLowerCase())) return; // 주소록에 있는 사람 이름은 제외
             const alreadyRegistered = openProjects.some(function(p) {
                 return (p.keywords || []).some(function(k) { return String(k).toLowerCase() === tok.toLowerCase(); });
             });
             if (alreadyRegistered) return;
+            // 💡 [핵심 노이즈 제거] 열려있는 어떤 프로젝트와도 같이 등장하는 다른 신호가 하나도 없으면
+            //    아예 제안하지 않음 — 회사 서명란(Kortek/Incheon/Korea 등)이나 완전히 무관한 다른
+            //    업체 얘기(Cosmic Upright, CSOT 패널문의 등)가 후보로 쏟아지던 근본 원인이었음
             const rec = window._msRecommendProjectFor(mail, openProjects, tok);
+            if (!rec) return;
             suggestions.push({
                 subject: mail.subject, driveFileId: null, projectLabel: null, keyword: tok, certain: false,
-                recommendedFileId: rec ? rec.drive_file_id : null,
-                recommendedLabel: rec ? (rec.model || rec.customer) : null
+                recommendedFileId: rec.drive_file_id,
+                recommendedLabel: (rec.model || rec.customer)
             });
         });
     });
@@ -14876,7 +14918,11 @@ window._msSuggestKeywordsForUnmatched = async function() {
         if (!dedupMap.has(key)) dedupMap.set(key, Object.assign({ count: 0, sampleSubject: s.subject }, s));
         dedupMap.get(key).count++;
     });
-    const list = Array.from(dedupMap.values());
+    // 💡 [노이즈 제거] 서로 무관한 메일 10건 넘게 걸리는 단어는 특정 프로젝트를 식별하는 고유 키워드가
+    //    아니라 서명란/상투어일 가능성이 매우 높음(진짜 프로젝트 용어는 그 프로젝트 관련 메일 몇 건에만
+    //    집중적으로 등장함) — 안전망으로 제외. "확실한" 제안(모델명 조각)은 원래도 근거가 확실해 그대로 둠
+    const MAX_SUGGESTION_COUNT = 10;
+    const list = Array.from(dedupMap.values()).filter(function(s) { return s.certain || s.count <= MAX_SUGGESTION_COUNT; });
     list.sort(function(a, b) { return (b.certain ? 1 : 0) - (a.certain ? 1 : 0); }); // 확실한 제안을 위로
     return list;
 };
