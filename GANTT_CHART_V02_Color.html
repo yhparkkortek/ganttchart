@@ -10801,7 +10801,7 @@ window.showMailRawModal = function(r) {
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div id="inbox-mailraw-meta" style="padding:8px 16px; font-size:11.5px; color:#555; background:#fafafa; border-bottom:1px solid #eee;"></div>
-            <textarea id="inbox-mailraw-body" readonly style="flex:1; margin:12px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; overflow:auto; line-height:1.6; background:#f8f9fa; color:#333;"></textarea>
+            <textarea id="inbox-mailraw-body" readonly wrap="off" style="flex:1; margin:12px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; white-space:pre; tab-size:4; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; overflow:auto; line-height:1.5; background:#f8f9fa; color:#333;"></textarea>
             <div style="padding:10px 16px; text-align:right; border-top:1px solid #eee;">
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="padding:7px 18px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ ${_en ? 'Close' : '닫기'}</button>
             </div>
@@ -15473,28 +15473,10 @@ window.openMailAutoConfigModal = async function() {
                     <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
                 </div>
 
-                <!-- 그룹5: 미분류/신규발신자/자동폐기 열람 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
-                    <div style="display:flex; gap:6px; margin-bottom:10px;">
-                        <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
-                            📭 미분류<br><span id="ms-unmatched-count" style="font-size:15px;">0</span>건
-                        </button>
-                        <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
-                            👤 신규발신자<br><span id="ms-newsender-count" style="font-size:15px;">0</span>건
-                        </button>
-                        <button onclick="window.msShowDiscardedModal()" style="flex:1; padding:10px 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer;">
-                            🗑 자동폐기<br><span id="ms-discarded-count" style="font-size:15px;">0</span>건
-                        </button>
-                    </div>
-                    <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
-                        <button onclick="window._macClearQueue('unmatched')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
-                        <button onclick="window._macClearQueue('newsender')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
-                        <button onclick="window._macClearQueue('discarded')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 자동폐기 초기화</button>
-                    </div>
-                </div>
+                <!-- 💡 [2026-08-20] "미분류/신규발신자/자동폐기 열람" 그룹은 업무 보관함 모달에도 동일하게
+                     있어서(중복) 사용자 요청으로 여기서는 제거 — 그 큐들은 업무 보관함 쪽에서만 연다. -->
 
-                <!-- 그룹6: [신규] 스팸/광고 자동폐기 필터 규칙 관리 -->
+                <!-- 그룹5: 스팸/광고 자동폐기 필터 규칙 관리 -->
                 <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
                     <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">🚫 자동폐기 필터 규칙</div>
                     <div style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
@@ -15547,10 +15529,7 @@ window.openMailAutoConfigModal = async function() {
     document.getElementById('mac-cutline').value    = cfg.cutline;
     window._macRenderTitleRows(cfg.titleScores);
     window._macRenderKeywordRows(cfg.urgentKeywords);
-    // 💡 미분류/신규발신자/자동폐기 배지는 최초 생성 시 "0"으로 박혀있고, 그 뒤로는 메일 수집이 이 모달이
-    //    열려있는 동안에만 우연히 갱신됐음(수동 "메일 가져오기"는 이 함수를 아예 모름) — 모달을 열 때마다
-    //    항상 현재 값으로 다시 채움
-    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    // 💡 미분류/신규발신자/자동폐기 큐 열람은 업무 보관함 모달에만 있음(중복 제거) — 이 모달에선 필터 규칙만 갱신
     if (window._macRenderFilterRules) window._macRenderFilterRules();
 
     modal.style.display = 'block';
