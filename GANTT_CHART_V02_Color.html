@@ -4199,7 +4199,12 @@ ${mailText}`;
     // 💡 [버그 수정] 예전엔 이 키가 프로젝트 구분 없이 고정 문자열이라, 브라우저 하나에서 어떤 프로젝트를 열든
     //    전부 같은 계획(Baseline) 목록을 공유했음 — 멀티시트로 여러 프로젝트를 동시에 열면서 바로 드러남.
     //    프로젝트(드라이브 파일 ID)별로 키를 분리.
-    function _baselineStorageKey() { return 'gantt_schedule_baselines_' + (window.currentDriveFileId || 'local'); }
+    //    💡 [추가 버그 수정] Drive에 아직 저장 안 한 새 프로젝트는 currentDriveFileId가 없어서 전부
+    //    "local" 하나로 뭉쳐졌음 — 멀티시트로 새 프로젝트 여러 개를 동시에 열면 서로 계획이 섞임.
+    //    이 경우 세션 한정으로나마 구분되도록 지금 열려있는 시트의 고유 key를 대신 사용.
+    function _baselineStorageKey() {
+        return 'gantt_schedule_baselines_' + (window.currentDriveFileId || ('session_' + (window._activeSheetKey || 'local')));
+    }
     const CURRENT_BASELINE_ID = 'bl_current'; // 📌 "현재 일정" 고정 슬롯 id
 
     window._scheduleBaselines = [];
@@ -4260,17 +4265,16 @@ ${mailText}`;
         persistScheduleBaselines();
     };
 
-    const BASELINE_LEGACY_KEY = 'gantt_schedule_baselines'; // 💡 프로젝트 분리 전 예전 단일 키 (마이그레이션용, 삭제하지 않음)
+    // 💡 [버그 수정] 예전엔 "이 프로젝트 전용 키가 비어있으면 옛 전역 계획을 물려받는다"는 마이그레이션이
+    //    있었는데, 주석엔 "1회성"이라 적혀있었지만 실제로는 조건(!raw)에 걸릴 때마다 — 즉 계획을 아직 한
+    //    번도 저장 안 한 "모든" 새 프로젝트를 열 때마다 — 매번 실행됐음. 그 결과 서로 전혀 무관한 여러
+    //    프로젝트가 전부 똑같은 옛 계획을 자기 것인 양 보여주는 게 "이상하게 관리된다"고 느끼신 원인이었음.
+    //    프로젝트 분리 전 데이터가 어느 프로젝트 것인지 지금은 알 방법이 없으므로, 더 이상 자동으로
+    //    물려주지 않음 — 각 프로젝트는 스스로 계획을 저장하기 전까진 빈 목록에서 시작한다.
     window.loadScheduleBaselines = function() {
         try {
             const key = _baselineStorageKey();
-            let raw = localStorage.getItem(key);
-            if (!raw) {
-                // 💡 이 프로젝트 전용 키에 아직 데이터가 없으면, 예전 전역 키에 남아있던 계획을 1회성으로 물려받음
-                //    (지우진 않음 — 다른 프로젝트도 처음 열 때 똑같이 이 기록을 이어받게 하기 위함)
-                const legacy = localStorage.getItem(BASELINE_LEGACY_KEY);
-                if (legacy && legacy !== '[]') raw = legacy;
-            }
+            const raw = localStorage.getItem(key);
             window._scheduleBaselines = JSON.parse(raw || '[]');
         }
         catch(e) { window._scheduleBaselines = []; }
@@ -4402,11 +4406,15 @@ ${mailText}`;
     };
 
     // 선택한 계획 하나 vs 현재(live) — 그 이상도 이하도 아님
+    // 💡 [기능 추가] 계획 저장 이후 새로 추가된 WBS 행은 계획에 매칭되는 항목이 없어 그동안 아무 표시도
+    //    없이 조용히 넘어갔음 — "이게 원래 있던 업무인지 새로 생긴 업무인지" 구분이 안 됐던 부분이라,
+    //    비교 중일 때 매칭이 안 되면 isNew 플래그를 따로 내려서 호출부에서 신규 배지를 띄울 수 있게 함
     window.getRowCompareInfo = function(row) {
         if (!row || !window._compareTargetId) return null;
         const bl = getBaselineById(window._compareTargetId);
+        if (!bl) return null;
         const d = getBaselineRowDates(bl, row);
-        if (!bl || !d) return null;
+        if (!d) return { isNew: true, aLabel: bl.label };
         return { mode: 'vsCurrent', aLabel: bl.label, aStart: d.s, aEnd: d.e, bLabel: '현재', bStart: row._calcStartTs, bEnd: row._calcPlanTs };
     };
 
@@ -5983,7 +5991,11 @@ window.deleteHistoryByDateRange = function() {
 
     function formatTableDate(ts) {
         if (!ts) return ""; let d = new Date(ts); if (isNaN(d.getTime())) return "";
-        return String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+        const mmdd = String(d.getMonth() + 1).padStart(2, '0') + '/' + String(d.getDate()).padStart(2, '0');
+        // 💡 연도 표시가 없으면 연말~연초에 걸친 일정에서 어느 날짜가 더 빠른지 헷갈림 —
+        //    작은 글씨(2자리 연도)로 옆에 붙여서 표는 여전히 빽빽하지 않게 유지
+        const yy = String(d.getFullYear()).slice(-2);
+        return mmdd + `<span style="font-size:9px; color:#999; margin-left:1px;">'${yy}</span>`;
     }
 
     function formatTsToYMD(ts) {
@@ -7161,7 +7173,9 @@ window.deleteHistoryByDateRange = function() {
                         let displayDate = row._calcStartTs ? formatTableDate(row._calcStartTs) : "<span style='color:#ced4da; font-size:11px;'>+ Date</span>";
                         let startBadge = '';
                         const cmpInfoStart = window.getRowCompareInfo ? window.getRowCompareInfo(row) : null;
-                        if (cmpInfoStart && cmpInfoStart.aStart && cmpInfoStart.bStart) {
+                        if (cmpInfoStart && cmpInfoStart.isNew) {
+                            startBadge = `<span title="${escapeHtml(cmpInfoStart.aLabel)} 계획 저장 이후 새로 추가된 업무 — 비교할 계획 데이터가 없습니다" style="font-size:9px; color:#fff; background:#2f9e44; font-weight:bold; margin-left:2px; padding:0 3px; border-radius:3px;">🆕신규</span>`;
+                        } else if (cmpInfoStart && cmpInfoStart.aStart && cmpInfoStart.bStart) {
                             const diffDays = workdayShift(cmpInfoStart.aStart, cmpInfoStart.bStart);
                             if (diffDays !== 0) {
                                 const badgeColor = diffDays > 0 ? '#e03131' : '#1971c2';
