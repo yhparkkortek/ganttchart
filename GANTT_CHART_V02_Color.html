@@ -1870,7 +1870,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div id="drive-drag-handle" class="history-header"
                  style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative;
                         cursor:grab; border-bottom:1.5px solid #ffe08a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
-                <span id="drive-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">📂 구글 드라이브 프로젝트 불러오기</span>
+                <span id="drive-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">📂 프로젝트 불러오기</span>
                 <button onclick="window.closeDriveModal()"
                     style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
                            color:#7a5210; font-size:16px; cursor:pointer;
@@ -3073,7 +3073,7 @@ ${mailText}`;
         listContainer.innerHTML = '';
         const _dmEn = window._currentLang === 'en';
         const _dmTitle = document.getElementById('drive-modal-title');
-        if (_dmTitle) _dmTitle.textContent = _dmEn ? '📂 Open Project from Google Drive' : '📂 구글 드라이브 프로젝트 불러오기';
+        if (_dmTitle) _dmTitle.textContent = _dmEn ? '📂 Open Project' : '📂 프로젝트 불러오기';
         const _dmDesc = document.getElementById('drive-modal-desc');
         if (_dmDesc) _dmDesc.textContent = _dmEn ? 'Select a project file to open.' : '불러올 프로젝트 파일을 선택해 주세요.';
 
@@ -3101,7 +3101,7 @@ ${mailText}`;
             const headerRow = document.createElement('div');
             headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none;';
             const arrow = document.createElement('span');
-            arrow.textContent = '▾';
+            arrow.textContent = '▸'; // 💡 기본은 접힌 상태 — 담당자 이름만 먼저 보이게
             arrow.style.cssText = 'font-size:11px; transition:0.15s;';
             headerRow.appendChild(arrow);
             const label = document.createElement('span');
@@ -3124,7 +3124,7 @@ ${mailText}`;
             headerRow.appendChild(label);
 
             const body = document.createElement('div');
-            body.style.cssText = 'display:flex; flex-direction:column; gap:8px; padding:10px;';
+            body.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:10px;'; // 💡 기본 접힘
 
             groupFiles.forEach(file => {
                 let d = new Date(file.modifiedTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
