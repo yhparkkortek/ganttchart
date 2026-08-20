@@ -12529,7 +12529,8 @@ window.pasteClearResults = function() {
 
 function pasteAddResult(task, mailText) {
     const idx = window._pasteResults.length;
-    window._pasteResults.push({ idx, task, mailText, mailRaw: window._mailParsedRaw || null, selected: !!task, registered: false });
+    // 💡 [최신 항목 상단 표시] 예전엔 push라 아래로만 쌓였음 — 방금 분석한 게 위로 오도록 unshift
+    window._pasteResults.unshift({ idx, task, mailText, mailRaw: window._mailParsedRaw || null, selected: !!task, registered: false });
     pasteRenderResultList();
 }
 
@@ -12816,7 +12817,7 @@ window.mfAnalyzeSingle = async function(idx) {
             idx: window._mfResults.length, fileName: f.name, subject: f.name, sender:'', date:'', body:'',
             project:null, task:null, selected:false, registered:false, error: '파일 읽기 실패: ' + e.message
         };
-        window._mfResults.push(result);
+        window._mfResults.unshift(result); // 💡 [최신 항목 상단 표시]
         document.getElementById('mf-result-count').textContent = window._mfResults.length;
         mfRenderList(window._mfResults);
         const btnAfter = document.getElementById(`mf-pending-analyze-${idx}`);
@@ -12851,7 +12852,7 @@ window.mfAnalyzeSingle = async function(idx) {
             project:null, task:null, selected:false, registered:false, error: e.message
         };
     }
-    window._mfResults.push(result);
+    window._mfResults.unshift(result); // 💡 [최신 항목 상단 표시]
     document.getElementById('mf-result-count').textContent = window._mfResults.length;
     mfRenderList(window._mfResults);
 
@@ -13287,7 +13288,8 @@ window.mfAnalyze = async function() {
 
     const startIdx = window._mfResults.length;
     results.forEach((r, i) => { r.idx = startIdx + i; });
-    window._mfResults = [...window._mfResults, ...results];
+    // 💡 [최신 항목 상단 표시] 방금 분석한 배치를 기존 목록 위(앞)에 붙임
+    window._mfResults = [...results, ...window._mfResults];
     document.getElementById('mf-analyze-btn').disabled   = false;
     document.getElementById('mf-progress').style.display  = 'none';
     document.getElementById('mf-result-count').textContent = results.length;
@@ -13851,7 +13853,8 @@ window.msFetchMail = async function() {
             }
 
             // 💡 1건 끝날 때마다 바로 목록에 반영 (진행상황 실시간 확인)
-            window._msResults.push(item);
+            // 💡 [최신 항목 상단 표시]
+            window._msResults.unshift(item);
             const analyzedSoFar = window._msResults.filter(r => r.task).length;
             document.getElementById('ms-analyzed-count').textContent = analyzedSoFar;
             msRenderList(window._msResults);
@@ -13940,7 +13943,8 @@ window._msStage0Filter = function(mail) {
 window._msSaveNewSenderQueue = function(list) {
     try {
         const existing = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
-        const merged = existing.concat(list).slice(-200); // 최대 200건 보관
+        // 💡 [최신 항목 상단 표시] 새로 들어온 걸 앞에 두고, 200건 넘으면 뒤(오래된 것)부터 잘라냄
+        const merged = list.concat(existing).slice(0, 200);
         localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, JSON.stringify(merged));
     } catch(e) { console.warn('신규 발신자 큐 저장 실패:', e); }
 };
@@ -14575,7 +14579,7 @@ window._autoMailFetchTick = async function() {
                 }
             }
 
-            window._msResults.push(item);
+            window._msResults.unshift(item); // 💡 [최신 항목 상단 표시]
             addedCount++;
         }
 
