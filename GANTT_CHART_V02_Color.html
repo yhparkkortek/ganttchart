@@ -2953,7 +2953,8 @@ ${mailText}`;
         if (cur) { cur.snapshot = window._snapshotCurrentSheet(); cur.fileName = window.currentDriveFileName || cur.fileName; }
     };
 
-    // key로 시트 전환
+    // key로 시트 전환 (메모리 스냅샷만 — Drive 저장 없음. 배경 알람체크가 시트를 빠르게
+    // 훑고 지나가려고 내부적으로 쓰는 저수준 함수라 여기서 저장까지 하면 안 됨)
     window.switchToSheet = function(key) {
         if (key === window._activeSheetKey) return;
         window._commitActiveSheet();
@@ -2961,6 +2962,19 @@ ${mailText}`;
         if (!target) return;
         window._activeSheetKey = key;
         window._restoreSheetSnapshot(target.snapshot);
+    };
+
+    // 💡 [사용자 전환] 사람이 직접 다른 프로젝트 시트로 넘어갈 때 쓰는 진입점 — 지금 보던 시트를
+    //    먼저 Google Drive에 저장한 뒤에 전환한다(메모리 스냅샷만으론 새로고침/종료 시 유실 위험).
+    window.switchToSheetWithSave = async function(key) {
+        if (key === window._activeSheetKey) return;
+        const hasSavableData = window.currentDriveFileId || (typeof globalData !== 'undefined' && globalData && globalData.length > 1);
+        if (hasSavableData && window.saveToGoogleDrive) {
+            if (window.showToast) window.showToast('💾 저장 중...', 'info');
+            const ok = await window.saveToGoogleDrive();
+            if (!ok && !confirm('저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)')) return;
+        }
+        window.switchToSheet(key);
     };
 
     // 시트 닫기 — 저장 여부는 묻지 않음(원본은 Drive에 있으므로 "닫기"는 안전한 조작). 활성 시트를 닫으면 이웃 시트로 전환
@@ -3002,7 +3016,7 @@ ${mailText}`;
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
             const label = s.fileName || '(새 프로젝트)';
-            return `<div onclick="window.switchToSheet('${s.key}')"
+            return `<div onclick="window.switchToSheetWithSave('${s.key}')"
                 title="${escapeHtml(label)}"
                 style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:160px;
                        background:${active ? '#fff8e6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
@@ -3019,7 +3033,7 @@ ${mailText}`;
         window.closeDriveModal();
         // 💡 [멀티시트] 이미 열려있는 프로젝트면 다시 안 받아오고 그 시트로 전환만
         const already = window._findSheetByFileId(fileId);
-        if (already && already.snapshot) { window.switchToSheet(already.key); return; }
+        if (already && already.snapshot) { await window.switchToSheetWithSave(already.key); return; }
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
