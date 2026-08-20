@@ -9412,7 +9412,7 @@ window.analyzeMailContent = async function() {
         analyzeBtn.style.borderColor = '#e03131';
         const errDiv = document.getElementById('mail-error');
         errDiv.style.display = 'block';
-        errDiv.textContent = '❌ 분석 실패: ' + (lastErr ? lastErr.message : '알 수 없는 오류') + ` (${MAX_RETRY}회 재시도 후에도 실패)`;
+        errDiv.textContent = '❌ 분석 실패: ' + (lastErr ? lastErr.message : '알 수 없는 오류') + ' (재시도 후에도 실패)';
         return;
     }
 
