@@ -645,6 +645,14 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 /* 💡 [클릭영역 확대] 예전엔 숫자(.cal-day-num)만 클릭 가능해서 맞춰 누르기 어려웠음 — 이제 셀 전체가
    클릭 영역이라 호버도 셀 전체에 항상 보이게(다른 배경색 규칙보다 우선하도록 !important) */
 .cal-day-cell:hover { background:#fff8e6 !important; }
+/* 💡 [주 단위 보기] 하루를 크게 펼쳐서 업무 칩이 "+N개 더보기"로 안 잘리고 다 보이게 */
+.cal-day-cell-tall { min-height:420px; padding:8px; }
+.cal-day-cell-tall .cal-day-num { font-size:15px; }
+.cal-day-cell-tall .cal-chips-grid { margin-top:6px; }
+.cal-view-toggle { display:flex; gap:0; border:1.5px solid #2c5f8a; border-radius:6px; overflow:hidden; flex-shrink:0; }
+.cal-view-btn { padding:0 12px; height:31px; border:none; background:#fff; color:#2c5f8a; font-size:12.5px; font-weight:bold; cursor:pointer; }
+.cal-view-btn + .cal-view-btn { border-left:1.5px solid #2c5f8a; }
+.cal-view-btn.cal-view-btn-active { background:#2c5f8a; color:#fff; }
 .cal-chips-grid { display:grid; gap:1px 2px; margin-top:2px; }
 .cal-chips-grid.chips-single { grid-template-columns:1fr; }
 .cal-chips-grid.chips-double { grid-template-columns:1fr 1fr; }
@@ -1767,10 +1775,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
-                <button class="action-btn" data-i18n="btn-prev" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(-1)">◀ 이전</button>
+            <div class="btn-group" style="flex:1; justify-content:center; gap:6px;">
+                <div class="cal-view-toggle">
+                    <button type="button" id="cal-view-month-btn" class="cal-view-btn cal-view-btn-active" onclick="window.calSetViewMode('month')">월</button>
+                    <button type="button" id="cal-view-week-btn" class="cal-view-btn" onclick="window.calSetViewMode('week')">주</button>
+                </div>
+                <button class="action-btn" data-i18n="btn-prev" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangePeriod(-1)">◀ 이전</button>
                 <span id="cal-header-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:80px; text-align:center;"></span>
-                <button class="action-btn" data-i18n="btn-next" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangeMonth(1)">다음 ▶</button>
+                <button class="action-btn" data-i18n="btn-next" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calChangePeriod(1)">다음 ▶</button>
                 <button class="action-btn" data-i18n="btn-today" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.calGoToday()">오늘</button>
             </div>
             <button class="action-btn" data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
@@ -22754,7 +22766,14 @@ document.addEventListener('DOMContentLoaded', function() {
 // 3) Gantt의 🔔 알림(_알림) 표시와 동기화
 // 4) Google Calendar 연동: .ics 파일로 내보내기 (구글 캘린더에서 가져오기로 바로 추가 가능)
 // ════════════════════════════════════════════════════
-window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null };
+window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null, viewMode: 'month', weekStart: null };
+
+// 💡 [주 단위 보기] 날짜가 속한 주의 일요일 자정 타임스탬프
+function calGetWeekStart(d) {
+    const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    dt.setDate(dt.getDate() - dt.getDay());
+    return dt.getTime();
+}
 
 function calStatusCls(status) {
     if (!status) return '';
@@ -22807,9 +22826,32 @@ window.calChangeMonth = function(delta) {
     window.calState.selectedIdx = null;
     window.calRender();
 };
+// 💡 [주 단위 보기] "◀ 이전"/"다음 ▶" 버튼 공용 진입점 — 월 모드면 한 달씩, 주 모드면 한 주씩 이동
+window.calChangePeriod = function(delta) {
+    if (window.calState.viewMode === 'week') {
+        const d = new Date(window.calState.weekStart || calGetWeekStart(new Date()));
+        d.setDate(d.getDate() + delta * 7);
+        window.calState.weekStart = d.getTime();
+        window.calState.selectedIdx = null;
+        window.calRender();
+    } else {
+        window.calChangeMonth(delta);
+    }
+};
+window.calSetViewMode = function(mode) {
+    if (window.calState.viewMode === mode) return;
+    window.calState.viewMode = mode;
+    if (mode === 'week' && !window.calState.weekStart) {
+        window.calState.weekStart = calGetWeekStart(new Date(window.calState.year, window.calState.month, 1));
+    }
+    window.calState.selectedIdx = null;
+    window.calRender();
+};
 window.calGoToday = function() {
     const t = new Date();
-    window.calState.year = t.getFullYear(); window.calState.month = t.getMonth(); window.calState.selectedIdx = null;
+    window.calState.year = t.getFullYear(); window.calState.month = t.getMonth();
+    window.calState.weekStart = calGetWeekStart(t);
+    window.calState.selectedIdx = null;
     window.calRender();
 };
 window.calSelectEvent = function(idx) {
@@ -23080,6 +23122,56 @@ window._calSyncHelpRender = function() {
     }
 };
 
+// 💡 [주/월 공용] 셀 1개(하루) HTML 생성 — opts.otherMonth: 월 모드에서 흐리게, opts.tall: 주 모드 확대 셀
+function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
+    opts = opts || {};
+    const key = calDateKey(cellDate);
+    const dow = cellDate.getDay();
+    const dayEvents = (eventsByDay[key] || []).slice().sort(function(a, b) { return a.end - b.end; });
+
+    let cls = 'cal-day-cell';
+    if (opts.otherMonth) cls += ' cal-other-month';
+    if (key === todayKey) cls += ' cal-today';
+    if (dow === 0) cls += ' cal-weekend-sun';
+    if (dow === 6) cls += ' cal-weekend-sat';
+    if (dow !== 0 && dow !== 6 && window.isHoliday && window.isHoliday(key)) cls += ' cal-weekend-sun';
+    if (opts.tall) cls += ' cal-day-cell-tall';
+
+    const chipCount = dayEvents.length;
+    const MAX_CHIPS = opts.tall ? 40 : (chipCount > 5 ? 10 : 5);
+    const shown = dayEvents.slice(0, MAX_CHIPS);
+    const gridCls = chipCount > 5 ? 'chips-double' : 'chips-single';
+
+    const chipsHtml = '<div class="cal-chips-grid ' + gridCls + '">'
+        + shown.map(function(ev) {
+            const isSel = (window.calState.selectedIdx === ev.idx);
+            let chipCls = 'cal-event-chip' + calStatusCls(ev.status);
+            if (ev.alarm) chipCls += ' cal-alarm-on';
+            if (isSel) chipCls += ' cal-selected';
+            const bell = ev.alarm ? '📌' : '';
+            return '<div class="' + chipCls + '" title="' + escapeHtml(ev.name) + '" onclick="event.stopPropagation(); window.calSelectEvent(' + ev.idx + ');">' + bell + escapeHtml(ev.name) + '</div>';
+        }).join('')
+        + '</div>';
+
+    let barHtml = '';
+    if (selectedEvent) {
+        const sk = calTsToKey(selectedEvent.start), ek = calTsToKey(selectedEvent.end);
+        if (key >= sk && key <= ek) {
+            let barCls = 'cal-dur-bar';
+            if (sk === ek) barCls += ' cal-dur-single';
+            else if (key === sk) barCls += ' cal-dur-start';
+            else if (key === ek) barCls += ' cal-dur-end';
+            barHtml = '<div class="' + barCls + '"></div>';
+        }
+    }
+
+    return '<div class="' + cls + '" onclick="window.calShowDayPopup(\'' + key + '\');">'
+        + barHtml
+        + '<span class="cal-day-num">' + cellDate.getDate() + '</span>'
+        + chipsHtml
+        + '</div>';
+}
+
 window.calRender = function() {
     const container = document.getElementById('cal-page');
     if (!container) return;
@@ -23093,13 +23185,45 @@ window.calRender = function() {
     const todayKey = calDateKey(new Date());
     const selectedEvent = (window.calState.selectedIdx !== null) ? events.find(function(ev) { return ev.idx === window.calState.selectedIdx; }) : null;
 
-    // 헤더 라벨 업데이트
     const headerLabel = document.getElementById('cal-header-label');
     const _calIsEn = window._currentLang === 'en';
     const _calMonthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const _calWeekdays = _calIsEn
         ? ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']
         : ['일','월','화','수','목','금','토'];
+
+    // 💡 [주 단위 보기] 뷰 토글 버튼(월/주) 활성 상태 갱신
+    const btnMonth = document.getElementById('cal-view-month-btn');
+    const btnWeek = document.getElementById('cal-view-week-btn');
+    const isWeekMode = window.calState.viewMode === 'week';
+    if (btnMonth) btnMonth.classList.toggle('cal-view-btn-active', !isWeekMode);
+    if (btnWeek) btnWeek.classList.toggle('cal-view-btn-active', isWeekMode);
+
+    if (isWeekMode) {
+        const weekStart = new Date(window.calState.weekStart || calGetWeekStart(new Date()));
+        const weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 6);
+        if (headerLabel) headerLabel.textContent = _calIsEn
+            ? _calMonthNames[weekStart.getMonth()] + ' ' + weekStart.getDate() + ' - '
+              + (weekStart.getMonth() !== weekEnd.getMonth() ? _calMonthNames[weekEnd.getMonth()] + ' ' : '') + weekEnd.getDate() + ', ' + weekEnd.getFullYear()
+            : weekStart.getFullYear() + '년 ' + (weekStart.getMonth() + 1) + '월 ' + weekStart.getDate() + '일 ~ '
+              + (weekStart.getMonth() !== weekEnd.getMonth() ? (weekEnd.getMonth() + 1) + '월 ' : '') + weekEnd.getDate() + '일';
+
+        let cellsHtml = '';
+        for (let c = 0; c < 7; c++) {
+            const cellDate = new Date(weekStart);
+            cellDate.setDate(cellDate.getDate() + c);
+            cellsHtml += calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, { tall: true });
+        }
+
+        container.innerHTML = '<div class="cal-month-block cal-month-current cal-week-block">'
+            + '<div class="cal-grid-wrap">'
+            + '<div class="cal-weekday-row">' + _calWeekdays.map(d => '<div>' + d + '</div>').join('') + '</div>'
+            + '<div class="cal-body-row">' + cellsHtml + '</div>'
+            + '</div>'
+            + '</div>';
+        return;
+    }
+
     if (headerLabel) headerLabel.textContent = _calIsEn
         ? _calMonthNames[baseM] + ' ' + baseY
         : baseY + '년 ' + (baseM + 1) + '월';
@@ -23126,52 +23250,7 @@ window.calRender = function() {
             const dayNum = c - startOffset + 1;
             const cellDate = new Date(y, m, dayNum);
             const otherMonth = (dayNum < 1 || dayNum > daysInMonth);
-            const key = calDateKey(cellDate);
-            const dow = cellDate.getDay();
-            const dayEvents = (eventsByDay[key] || []).slice().sort(function(a, b) { return a.end - b.end; });
-
-            let cls = 'cal-day-cell';
-            if (otherMonth) cls += ' cal-other-month';
-            if (key === todayKey) cls += ' cal-today';
-            if (dow === 0) cls += ' cal-weekend-sun';
-            if (dow === 6) cls += ' cal-weekend-sat';
-            if (dow !== 0 && dow !== 6 && window.isHoliday && window.isHoliday(key)) cls += ' cal-weekend-sun';
-
-            const chipCount = dayEvents.length;
-        const MAX_CHIPS = chipCount > 5 ? 10 : 5;
-        const shown = dayEvents.slice(0, MAX_CHIPS);
-        const gridCls = chipCount > 5 ? 'chips-double' : 'chips-single';
-
-        const chipsHtml = '<div class="cal-chips-grid ' + gridCls + '">'
-            + shown.map(function(ev) {
-                const isSel = (window.calState.selectedIdx === ev.idx);
-                let chipCls = 'cal-event-chip' + calStatusCls(ev.status);
-                if (ev.alarm) chipCls += ' cal-alarm-on';
-                if (isSel) chipCls += ' cal-selected';
-                const bell = ev.alarm ? '📌' : '';
-                return '<div class="' + chipCls + '" title="' + escapeHtml(ev.name) + '" onclick="event.stopPropagation(); window.calSelectEvent(' + ev.idx + ');">' + bell + escapeHtml(ev.name) + '</div>';
-            }).join('')
-            + '</div>';
-
-        const moreHtml = '';
-
-            let barHtml = '';
-            if (selectedEvent) {
-                const sk = calTsToKey(selectedEvent.start), ek = calTsToKey(selectedEvent.end);
-                if (key >= sk && key <= ek) {
-                    let barCls = 'cal-dur-bar';
-                    if (sk === ek) barCls += ' cal-dur-single';
-                    else if (key === sk) barCls += ' cal-dur-start';
-                    else if (key === ek) barCls += ' cal-dur-end';
-                    barHtml = '<div class="' + barCls + '"></div>';
-                }
-            }
-
-            cellsHtml += '<div class="' + cls + '" onclick="window.calShowDayPopup(\'' + key + '\');">'
-            + barHtml
-            + '<span class="cal-day-num">' + cellDate.getDate() + '</span>'
-            + chipsHtml + moreHtml
-            + '</div>';
+            cellsHtml += calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, { otherMonth: otherMonth });
         }
 
         allHtml += '<div class="cal-month-block' + (isCurrentMonth ? ' cal-month-current' : '') + '">'
@@ -23183,7 +23262,7 @@ window.calRender = function() {
             + '</div>';
     }
 
-    container.innerHTML = container.innerHTML = allHtml;
+    container.innerHTML = allHtml;
 };
 </script>
 
