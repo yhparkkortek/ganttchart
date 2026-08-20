@@ -9505,11 +9505,17 @@ window.renderMailResult = function(result) {
         </tr>`;
     });
 
-    // ✅ WBS 레벨 선택 (기본값을 4로 강제 설정)
+    // ✅ WBS 레벨 선택
+    // 💡 [2026-08-20] 예전엔 값이 없으면 무조건 4로 강제 고정했었음 — AI의 판단 기준이 약해서
+    //    어차피 3/4에 몰리는데, 그마저도 여기서 한 번 더 4로 덮어써서 사실상 항상 L4였음.
+    //    → "업무명이 표에 이미 있는 L1~L3 제목과 같으면 L4(하위 붙이기), 완전히 새 제목이면
+    //    L3(새 세부업무)"로 실제 데이터 기반 추정으로 교체. 단, 사용자가 드롭다운에서 직접
+    //    고른 값(_wbsLevelUserSet)이거나 AI가 0~2(대분류~소분류2)로 판단한 경우는 그대로 존중.
     let currentLevel = result['wbs레벨'];
-    if (currentLevel === undefined || currentLevel === null || currentLevel === '') {
-        currentLevel = 4; // 💡 값이 없으면 무조건 4(하위업무)로 고정
-        window._mailAnalyzedResult['wbs레벨'] = 4; // 데이터에도 즉시 반영
+    const _wbsUserSet = !!result['_wbsLevelUserSet'];
+    if (!_wbsUserSet && (currentLevel === undefined || currentLevel === null || currentLevel === '' || currentLevel >= 3)) {
+        currentLevel = window._msGuessWbsLevel ? window._msGuessWbsLevel(result['업무명'], globalData) : 4;
+        window._mailAnalyzedResult['wbs레벨'] = currentLevel; // 데이터에도 즉시 반영 (사용자가 안 건드리면 이 값으로 등록됨)
     }
 
     let levelOptions = [0,1,2,3,4].map(n => 
@@ -9520,7 +9526,7 @@ window.renderMailResult = function(result) {
         <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; white-space:nowrap;">${_isEn ? '📊 WBS Level' : '📊 WBS 레벨'}</td>
         <td style="padding:7px 10px; border:1px solid #dee2e6;">
             <select style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:4px; font-size:13px; box-sizing:border-box;" 
-                onchange="window._mailAnalyzedResult['wbs레벨'] = parseInt(this.value)">
+                onchange="window._mailAnalyzedResult['wbs레벨'] = parseInt(this.value); window._mailAnalyzedResult['_wbsLevelUserSet'] = true;">
                 ${levelOptions}
             </select>
         </td>
@@ -10176,12 +10182,36 @@ window.clearPromptLogs = function() {
     alert('✅ 이력이 삭제되었습니다.');
 };
         
+// 💡 [2026-08-20][WBS 레벨 추정] AI의 wbs레벨 판단은 프롬프트에 뚜렷한 기준이 없어 3/4에만 몰리는
+//    문제가 있었음 → "업무명이 대상 시트에 이미 있는 L1~L3 제목과 같으면 L4(그 밑 하위업무로),
+//    완전히 새 제목이면 L3(새 세부업무)"로, AI 추측 대신 실제 시트 데이터를 근거로 판정.
+//    recalculateSchedules()가 _origT1~T3를 각 행까지 forward-fill 해두므로, 레벨 상관없이 모든 행을
+//    훑으면 "현재 존재하는 L1~L3 제목 전체"를 얻을 수 있음.
+window._msGuessWbsLevel = function(taskName, gd) {
+    const norm = s => String(s || '').replace(/\s+/g, '').replace(/[＊*]?AI📧$/, '').toLowerCase();
+    const target = norm(taskName);
+    if (!target || !gd) return 3;
+    for (let i = 1; i < gd.length; i++) {
+        const row = gd[i];
+        if (!row) continue;
+        if (norm(row._origT1) === target || norm(row._origT2) === target || norm(row._origT3) === target) {
+            return 4; // 기존 제목과 일치 → 그 아래 하위업무로
+        }
+    }
+    return 3; // 완전히 새 제목 → 새 세부업무로
+};
+
 // ✅ [공용] 분석 결과(r) → 간트 행 객체 생성 (개별 등록 / 보관함 배치 / 타 프로젝트 배분 공용)
 //    gd/ci 생략 시 현재 프로젝트(globalData/colIdx) 기준으로 동작
 window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     gd = gd || globalData;
     ci = ci || colIdx;
-    const wbsLevel = parseInt(r['wbs레벨'] ?? 4);
+    // 💡 사용자가 미리보기에서 드롭다운으로 직접 고른 값이거나(_wbsLevelUserSet) AI가 0~2(대분류~
+    //    소분류2)로 판단한 경우는 그대로 존중. 그 외(3/4/미지정)는 실제 시트 기준으로 재추정.
+    const _aiWbsLevel = parseInt(r['wbs레벨'] ?? 4);
+    const wbsLevel = (r['_wbsLevelUserSet'] || _aiWbsLevel <= 2)
+        ? _aiWbsLevel
+        : (window._msGuessWbsLevel ? window._msGuessWbsLevel(r['업무명'], gd) : _aiWbsLevel);
 
     let newRow = new Array(gd[0].length).fill("");
     newRow._level = wbsLevel;
