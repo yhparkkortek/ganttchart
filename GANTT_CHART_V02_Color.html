@@ -2981,13 +2981,17 @@ ${mailText}`;
         window._restoreSheetSnapshot(target.snapshot);
     };
 
-    // 💡 [사용자 전환] 사람이 직접 다른 프로젝트 시트로 넘어갈 때 쓰는 진입점 — 지금 보던 시트를
-    //    먼저 Google Drive에 저장한 뒤에 전환한다(메모리 스냅샷만으론 새로고침/종료 시 유실 위험).
+    // 💡 [사용자 전환] 사람이 직접 다른 프로젝트 시트로 넘어갈 때 쓰는 진입점 — 지금 보던 시트에
+    //    "저장 안 한 변경사항"이 있을 때만 Google Drive에 먼저 저장한 뒤 전환한다.
+    //    💡 [속도 개선] 예전엔 매번 무조건 저장해서 전환이 느렸음 — 3분 자동저장/창닫기 경고와
+    //    똑같은 기준(changeLogs.length가 마지막 저장 시점보다 늘었는지)으로 "진짜 변경됐을 때만" 저장
     window.switchToSheetWithSave = async function(key) {
         if (key === window._activeSheetKey) return;
-        const hasSavableData = window.currentDriveFileId || (typeof globalData !== 'undefined' && globalData && globalData.length > 1);
-        if (hasSavableData && window.saveToGoogleDrive) {
-            if (window.showToast) window.showToast('💾 저장 중...', 'info');
+        const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
+        const savedLogs = window.lastSavedLogCount || 0;
+        const hasUnsavedChanges = !!window.currentDriveFileId && currentLogs > savedLogs;
+        if (hasUnsavedChanges && window.saveToGoogleDrive) {
+            if (window.showToast) window.showToast('💾 변경사항 저장 중...', 'info');
             const ok = await window.saveToGoogleDrive();
             if (!ok && !confirm('저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)')) return;
         }
