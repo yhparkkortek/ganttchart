@@ -1555,21 +1555,36 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="major-materials-section">
-            <h3><span id="sum-h3-materials">주요 자재</span> <span style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용)</span></h3>
-            <div style="overflow-x:auto;">
-                <table style="width:100%; border-collapse:collapse; font-size:12px;">
-                    <thead>
-                        <tr style="background:#f8f9fa;">
-                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:150px;">구분</th>
-                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">KTK PN</th>
-                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">Description</th>
-                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:90px;">Cost($)</th>
-                            <th style="padding:5px 6px; border:1px solid #e9ecef; width:56px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">분석용</th>
-                            <th style="padding:5px 6px; border:1px solid #e9ecef; width:28px;"></th>
-                        </tr>
-                    </thead>
-                    <tbody id="sum-materials-rows"></tbody>
-                </table>
+            <h3><span id="sum-h3-materials">주요 자재</span> <span style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용 · 체크박스는 &quot;분석용&quot;, 그 옆 － 버튼은 자유추가 행 삭제)</span></h3>
+            <div style="display:flex; gap:16px; flex-wrap:wrap;">
+                <div style="flex:1 1 320px; min-width:280px; overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:#f8f9fa;">
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:120px;">구분</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">KTK PN</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">Description</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:70px;">Cost($)</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; width:24px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sum-materials-rows-a"></tbody>
+                    </table>
+                </div>
+                <div style="flex:1 1 320px; min-width:280px; overflow-x:auto;">
+                    <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                        <thead>
+                            <tr style="background:#f8f9fa;">
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:120px;">구분</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">KTK PN</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">Description</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:70px;">Cost($)</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; width:24px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sum-materials-rows-b"></tbody>
+                    </table>
+                </div>
             </div>
             <button id="sum-add-material-btn" type="button" onclick="window.addMaterialRow()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 자재 추가</button>
         </div>
@@ -20167,7 +20182,7 @@ window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIMMING/CUTTING','TOUCH / GLASS','
 //    미저장 편집내용이 날아가지 않도록 collectTabData() 전체를 부르지 않고 이 테이블만 직접 읽음)
 window.collectMaterialRows = function() {
     const map = {};
-    document.querySelectorAll('#sum-materials-rows [data-idx]').forEach(function(el) {
+    document.querySelectorAll('#sum-materials-rows-a [data-idx], #sum-materials-rows-b [data-idx]').forEach(function(el) {
         const i = Number(el.dataset.idx);
         map[i] = map[i] || {};
         map[i][el.dataset.field] = (el.type === 'checkbox') ? el.checked : el.value;
@@ -20191,8 +20206,9 @@ window.collectMaterialRows = function() {
 };
 
 window.renderMaterialRows = function(rows) {
-    const tbody = document.getElementById('sum-materials-rows');
-    if (!tbody) return;
+    const tbodyA = document.getElementById('sum-materials-rows-a');
+    const tbodyB = document.getElementById('sum-materials-rows-b');
+    if (!tbodyA || !tbodyB) return;
     window.tabData = window.tabData || {};
     rows = rows || [];
 
@@ -20212,21 +20228,26 @@ window.renderMaterialRows = function(rows) {
     const allRows = fixedRows.concat(extraRows);
     window.tabData.projectMaterials = allRows.map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: r.useForAnalysis }; });
 
-    tbody.innerHTML = allRows.map(function(r, idx) {
+    // 💡 [2열 배치] 프로젝트 멤버-1/2와 같은 느낌으로 좌우 분할. 고정 13개는 절반씩(7/6) 나누고,
+    //    자유추가 행은 전부 오른쪽 열 밑에 이어붙임.
+    const splitAt = Math.ceil(window.MATERIAL_FIXED_CATEGORIES.length / 2); // 7
+    const rowHtml = function(r, idx) {
         const catCell = r.locked
             ? '<td style="padding:4px 6px; border:1px solid #e9ecef; background:#f8f9fa; font-weight:bold; white-space:nowrap;">' + escapeHtml(r.category) + '</td>'
             : '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="구분명" style="border:none; width:100%; box-sizing:border-box;"></td>';
-        const delCell = r.locked
-            ? '<td style="border:1px solid #e9ecef;"></td>'
-            : '<td style="border:1px solid #e9ecef; text-align:center;"><button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="이 행 삭제" style="border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:12px; width:20px; height:20px; line-height:1;">－</button></td>';
+        // 💡 [버그 수정] 예전엔 "분석용 체크박스"와 "삭제 버튼"이 별도 열이라, 고정 행(13개 전부)에선
+        //    삭제 버튼이 없어 마지막 열이 항상 빈 칸으로 보였음 — 한 열에 같이 넣어서 해결.
+        const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="이 행 삭제" style="border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:16px; height:16px; line-height:1; padding:0; margin-left:2px;">－</button>';
         return '<tr>' + catCell
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" placeholder="예: 198454" style="border:none; width:100%; box-sizing:border-box;"></td>'
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="예: MV315QHM-N41" style="border:none; width:100%; box-sizing:border-box;"></td>'
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" placeholder="예: $97" style="border:none; width:100%; box-sizing:border-box;"></td>'
-            + '<td style="border:1px solid #e9ecef; text-align:center;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)"></td>'
-            + delCell
+            + '<td style="border:1px solid #e9ecef; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)">' + delBtn + '</td>'
             + '</tr>';
-    }).join('');
+    };
+
+    tbodyA.innerHTML = allRows.slice(0, splitAt).map(function(r, i) { return rowHtml(r, i); }).join('');
+    tbodyB.innerHTML = allRows.slice(splitAt).map(function(r, i) { return rowHtml(r, i + splitAt); }).join('');
 };
 
 window.addMaterialRow = function() {
