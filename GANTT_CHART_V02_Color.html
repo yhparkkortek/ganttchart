@@ -1823,6 +1823,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
+            <div class="cal-level-filter-wrap" style="position:relative; display:inline-block; margin-left:8px;">
+                <button type="button" class="action-btn" onclick="window.calToggleLevelDropdown(event)" style="min-width:auto !important; padding:0 10px !important; margin:0 !important;">LEVEL(WBS) ▾</button>
+                <div id="cal-level-filter-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:50; background:#fff; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:8px 12px; margin-top:4px; white-space:nowrap;">
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="대분류"><input type="checkbox" onchange="window.calToggleLevel(0)"> L0</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류1"><input type="checkbox" onchange="window.calToggleLevel(1)"> L1</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류2"><input type="checkbox" onchange="window.calToggleLevel(2)"> L2</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="세부업무"><input type="checkbox" checked onchange="window.calToggleLevel(3)"> L3</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="하위업무"><input type="checkbox" checked onchange="window.calToggleLevel(4)"> L4</label>
+                </div>
+            </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:6px;">
                 <div class="cal-view-toggle">
@@ -1848,6 +1858,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Weekly Report</h2>
+            <div class="wr-level-filter-wrap" style="position:relative; display:inline-block; margin-left:8px;">
+                <button type="button" class="action-btn" onclick="window.wrToggleLevelDropdown(event)" style="min-width:auto !important; padding:0 10px !important; margin:0 !important;">LEVEL(WBS) ▾</button>
+                <div id="wr-level-filter-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:50; background:#fff; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:8px 12px; margin-top:4px; white-space:nowrap;">
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="대분류"><input type="checkbox" onchange="window.wrToggleLevel(0)"> L0</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류1"><input type="checkbox" onchange="window.wrToggleLevel(1)"> L1</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류2"><input type="checkbox" onchange="window.wrToggleLevel(2)"> L2</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="세부업무"><input type="checkbox" checked onchange="window.wrToggleLevel(3)"> L3</label>
+                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="하위업무"><input type="checkbox" checked onchange="window.wrToggleLevel(4)"> L4</label>
+                </div>
+            </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
                 <button class="action-btn" data-i18n="btn-prev-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
@@ -16908,6 +16928,24 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
     // ── 이번주/다음주 분류 ────────────────────────────────
     window.wrBaseDate = window.wrBaseDate || new Date();   // 주차 이동의 기준 날짜 (기본값: 오늘)
 
+    // 💡 [2026-08-21][WBS 레벨 필터] Weekly Report에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
+    window.wrState = window.wrState || { levelFilter: [3, 4] };
+    window.wrToggleLevelDropdown = function(e) {
+        if (e) e.stopPropagation();
+        const dd = document.getElementById('wr-level-filter-dropdown');
+        if (dd) dd.style.display = (dd.style.display === 'none' || !dd.style.display) ? 'block' : 'none';
+    };
+    window.wrToggleLevel = function(level) {
+        const arr = window.wrState.levelFilter;
+        const idx = arr.indexOf(level);
+        if (idx === -1) arr.push(level); else arr.splice(idx, 1);
+        if (window.showWeeklyReport) window.showWeeklyReport();
+    };
+    document.addEventListener('click', function(e) {
+        const dd = document.getElementById('wr-level-filter-dropdown');
+        if (dd && dd.style.display === 'block' && !e.target.closest('.wr-level-filter-wrap')) dd.style.display = 'none';
+    });
+
     window.wrClassifyTasks = function() {
         const thisWeek = wrGetWeekRange(window.wrBaseDate);
         const nextWeekBase = new Date(window.wrBaseDate); nextWeekBase.setDate(nextWeekBase.getDate() + 7);
@@ -16925,6 +16963,8 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
             const nextLevel = (nextRow && typeof nextRow._level === 'number') ? nextRow._level : -1;
             const isLeaf = !(nextRow && nextLevel > myLevel);
             if (!isLeaf) continue;
+            // 💡 [WBS 레벨 필터] 선택한 레벨(기본 L3/L4)에 해당하는 업무만 주간보고서에 표시
+            if (window.wrState.levelFilter && window.wrState.levelFilter.indexOf(myLevel) === -1) continue;
             const s = row._calcStartTs, e = row._calcPlanTs;
             const name = wrTaskName(row);
             if (!name) continue;
@@ -23211,7 +23251,24 @@ document.addEventListener('DOMContentLoaded', function() {
 // 3) Gantt의 🔔 알림(_알림) 표시와 동기화
 // 4) Google Calendar 연동: .ics 파일로 내보내기 (구글 캘린더에서 가져오기로 바로 추가 가능)
 // ════════════════════════════════════════════════════
-window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null, viewMode: 'month', weekStart: null };
+window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null, viewMode: 'month', weekStart: null, levelFilter: [3, 4] };
+
+// 💡 [2026-08-21][WBS 레벨 필터] 캘린더에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
+window.calToggleLevelDropdown = function(e) {
+    if (e) e.stopPropagation();
+    const dd = document.getElementById('cal-level-filter-dropdown');
+    if (dd) dd.style.display = (dd.style.display === 'none' || !dd.style.display) ? 'block' : 'none';
+};
+window.calToggleLevel = function(level) {
+    const arr = window.calState.levelFilter;
+    const idx = arr.indexOf(level);
+    if (idx === -1) arr.push(level); else arr.splice(idx, 1);
+    window.calRender();
+};
+document.addEventListener('click', function(e) {
+    const dd = document.getElementById('cal-level-filter-dropdown');
+    if (dd && dd.style.display === 'block' && !e.target.closest('.cal-level-filter-wrap')) dd.style.display = 'none';
+});
 
 // 💡 [주 단위 보기] 날짜가 속한 주의 일요일 자정 타임스탬프
 function calGetWeekStart(d) {
@@ -23239,6 +23296,8 @@ function calBuildEvents() {
         const nextLevel = (nextRow && typeof nextRow._level === 'number') ? nextRow._level : -1;
         const isLeaf = !(nextRow && nextLevel > myLevel);
         if (!isLeaf) continue;
+        // 💡 [WBS 레벨 필터] 선택한 레벨(기본 L3/L4)에 해당하는 업무만 캘린더에 표시
+        if (window.calState.levelFilter && window.calState.levelFilter.indexOf(myLevel) === -1) continue;
         const name = (typeof wrTaskName === 'function') ? wrTaskName(row) : '';
         if (!name) continue;
         const s = row._calcStartTs;
@@ -23300,10 +23359,14 @@ window.calGoToday = function() {
     window.calRender();
 };
 window.calSelectEvent = function(idx) {
-    window.calState.selectedIdx = (window.calState.selectedIdx === idx) ? null : idx;
+    // 💡 [2026-08-21] 같은 업무를 다시 클릭하면(=선택 해제) 팝업도 같이 닫히도록 함
+    const wasSelected = (window.calState.selectedIdx === idx);
+    window.calState.selectedIdx = wasSelected ? null : idx;
     window.calRender();
-    // 💡 업무(칩)를 클릭하면 기간 라인 표시 + 상세내용 팝업까지 함께 — 날짜 숫자 클릭(목록 팝업)은 그대로 둠
-    if (window.calState.selectedIdx !== null) {
+    if (wasSelected) {
+        window.closeCalDayPopup();
+    } else {
+        // 💡 업무(칩)를 클릭하면 기간 라인 표시 + 상세내용 팝업까지 함께 — 날짜 숫자 클릭(목록 팝업)은 그대로 둠
         const ev = calBuildEvents().find(function(e) { return e.idx === idx; });
         if (ev) window.calShowDayPopup(calTsToKey(ev.end), idx);
     }
