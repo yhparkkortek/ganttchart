@@ -1554,6 +1554,25 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
             <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
         </div>
+        <div class="concept-section" id="major-materials-section">
+            <h3><span id="sum-h3-materials">주요 자재</span> <span style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용)</span></h3>
+            <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:12px;">
+                    <thead>
+                        <tr style="background:#f8f9fa;">
+                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:150px;">구분</th>
+                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">KTK PN</th>
+                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">Description</th>
+                            <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:90px;">Cost($)</th>
+                            <th style="padding:5px 6px; border:1px solid #e9ecef; width:56px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">분석용</th>
+                            <th style="padding:5px 6px; border:1px solid #e9ecef; width:28px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="sum-materials-rows"></tbody>
+                </table>
+            </div>
+            <button id="sum-add-material-btn" type="button" onclick="window.addMaterialRow()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 자재 추가</button>
+        </div>
         <div class="concept-section" id="product-images-section">
             <h3><span id="sum-h3-photo">제품 사진</span> <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
             <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;">
@@ -2002,6 +2021,29 @@ window.getSystemPrompt = function(assignee, customer, model, inch, mailText, mai
 //    함수로 분리해서, localStorage 상태와 무관하게 항상 "진짜 코드 기본값"을 얻을 수 있게 함.
 window._msBuildDefaultPrompt = function(assignee, customer, model, inch, mailText, mailDate) {
     const todayStr = new Date().toISOString().split('T')[0];
+    // 💡 [2026-08-20][주요 자재 목록] Summary에 등록된 자재(PN/설명/단가)를 배경정보로 제공 —
+    //    메일 본문에 실제 언급된 자재/PN을 정확히 식별하도록 돕는 참고용. 인치와 동일하게, 본문에
+    //    없는 자재를 임의로 끌어다 쓰지 않도록 강하게 경고. 현재 열려있는 프로젝트 기준이라
+    //    다른 프로젝트로 매칭된 메일에는 반영되지 않을 수 있음(담당자/모델명 등과 동일한 한계).
+    //    💡 [분석용/참고용 분리] 자재는 여러 프로젝트가 공용으로 쓰는 경우가 흔함(POWER/METAL/MOLD 등) —
+    //    "분석용" 체크된 것만 "이 프로젝트가 맞다"는 확증 신호로 쓰게 하고, 나머지는 상세내용을
+    //    정확히 쓰는 데만 참고하되 프로젝트 확증에는 쓰지 말라고 명시적으로 구분해서 지시.
+    const materialLines = (function() {
+        const mats = (window.tabData && window.tabData.projectMaterials) || [];
+        const filled = mats.filter(function(m) { return m && (m.ktkPn || m.description || m.cost); });
+        if (!filled.length) return '';
+        const fmt = function(m) { return `  · ${m.category}: ${m.ktkPn || '(PN 미기재)'} / ${m.description || ''} / ${m.cost || ''}`; };
+        const trusted = filled.filter(function(m) { return m.useForAnalysis; });
+        const refOnly = filled.filter(function(m) { return !m.useForAnalysis; });
+        let out = '';
+        if (trusted.length) {
+            out += '\n- 주요 자재(신뢰 가능 — 이 PN/자재가 메일 본문에 언급되면 이 프로젝트 얘기라는 강한 신호로 사용 가능):\n' + trusted.map(fmt).join('\n');
+        }
+        if (refOnly.length) {
+            out += '\n- 주요 자재(참고용 — 여러 프로젝트가 공용으로 쓸 수 있는 부품이므로, 언급돼도 "이 프로젝트"라는 확증으로 쓰지 마세요. 상세내용을 정확히 서술하는 데만 참고):\n' + refOnly.map(fmt).join('\n');
+        }
+        return out;
+    })();
     return `당신은 전자제품 개발 프로젝트 관리자입니다. 아래 이메일을 분석하여 간트차트 업무 항목을 JSON으로 추출해주세요.
 
 프로젝트 정보 (⚠️ 이 메일이 어느 프로젝트로 분류됐는지 참고용 배경정보일 뿐, 이 메일의 실제 내용이라고 확신할 수 없습니다.
@@ -2010,7 +2052,7 @@ window._msBuildDefaultPrompt = function(assignee, customer, model, inch, mailTex
 - 프로젝트 담당자: ${assignee || ""}
 - 고객사: ${customer || ""}
 - 모델명: ${model || ""}
-- 인치(참고용, 본문에 없으면 절대 언급 금지): ${inch || ""}
+- 인치(참고용, 본문에 없으면 절대 언급 금지): ${inch || ""}${materialLines}
 - 오늘 날짜(기준일): ${todayStr}
 - 메일 발송일: ${mailDate || todayStr}
 
@@ -2594,14 +2636,20 @@ ${mailText}`;
     //    전환되면 "옛 프로젝트의 driveFileId"에 "이미 바뀐 새 프로젝트의 projectMeta"가 합쳐져
     //    project_index.json에 저장되는 사고가 실제로 있었음(파일명↔모델명이 서로 안 맞는 항목들로 확인됨).
     //    호출부에서 await 전에 미리 캡처한 스냅샷을 pmOverride로 넘겨서 이 드리프트를 원천 차단한다.
-    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride) {
+    window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride) {
         const pm = pmOverride || window.projectMeta || {};
         // 💡 고객사명은 매칭 키워드에서 제외 — 한 고객사가 여러 프로젝트를 가진 경우
         //    (예: LNW의 STELLAR32/OBSIDIAN) 전부 후보로 묶여버려 변별력이 없음.
         //    customer 필드 자체는 화면 표시용으로만 남기고, keywords 배열엔 안 넣음.
         const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].filter(Boolean);
         const customKeywords = window._parseMailKeywords(pm.메일키워드);
-        const keywords = Array.from(new Set(baseFields.concat(customKeywords)));
+        // 💡 [2026-08-20] "분석용" 체크된 주요 자재의 PN/설명도 매칭 키워드로 편입 — 공용 부품은
+        //    체크 안 하는 게 원칙이므로, 여기 들어오는 건 이 프로젝트를 특정할 만한 것들만 남음.
+        const materials = materialsOverride || (window.tabData && window.tabData.projectMaterials) || [];
+        const materialKeywords = materials
+            .filter(function(m) { return m && m.useForAnalysis; })
+            .flatMap(function(m) { return [m.ktkPn, m.description].filter(Boolean); });
+        const keywords = Array.from(new Set(baseFields.concat(customKeywords).concat(materialKeywords)));
         return {
             drive_file_id: driveFileId,
             file_name: dynamicFileName,
@@ -2621,6 +2669,8 @@ ${mailText}`;
         //    아래 await들(findProjectIndexFile/fetch) 도중 다른 시트로 전환돼도 이 스냅샷은 안 바뀌므로,
         //    엉뚱한 프로젝트의 최신 정보가 이 driveFileId 밑에 섞여 들어가는 사고를 막는다.
         const pmSnapshot = Object.assign({}, window.projectMeta || {});
+        // 💡 주요 자재 목록도 같은 이유로 await 전에 스냅샷 — 그 사이 다른 시트로 전환돼도 안전하게
+        const materialsSnapshot = ((window.tabData && window.tabData.projectMaterials) || []).slice();
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -2636,7 +2686,7 @@ ${mailText}`;
                 if (loaded && Array.isArray(loaded.projects)) indexData = loaded;
             }
 
-            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot);
+            const entry = window.buildProjectIndexEntry(driveFileId, dynamicFileName, pmSnapshot, materialsSnapshot);
             const idx = indexData.projects.findIndex(function(p) { return p.drive_file_id === driveFileId; });
             if (idx === -1) indexData.projects.push(entry);
             else indexData.projects[idx] = entry;
@@ -20104,6 +20154,96 @@ window.deleteMember3Row = function(idx) {
     window.renderMember3Rows(current);
 };
 
+// 💡 [2026-08-20] 주요 자재 목록 — 고정 13개 구분(항상 존재·삭제불가) + 자유추가 행.
+//    메일 분석 시 AI 배경정보로 함께 제공(_msBuildDefaultPrompt 참고)해서, 메일 본문에 실제
+//    언급된 자재/PN을 상세내용에 정확히 반영하도록 돕는 용도.
+//    💡 [분석용 체크] 자재는 여러 프로젝트가 공용으로 쓰는 경우가 흔해서(POWER/METAL/MOLD 등),
+//    전부 "이 프로젝트 확증 신호"로 AI에게 주면 오매칭 위험이 있음 → PN이 겹칠 확률이 낮은 PANEL만
+//    기본으로 체크해서 "분석용"(신뢰 가능한 식별 신호)으로, 나머지는 기본 미체크(참고용만)로 시작.
+//    체크 여부는 프로젝트마다 사용자가 직접 조정 가능.
+window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIMMING/CUTTING','TOUCH / GLASS','TOUCH CTRL','AD BOARD','CONVERTER','BLU','POWER','METAL','MOLD','DIE CAST','PACKING','ETC'];
+
+// 💡 화면 DOM에서 현재 입력 중인 값을 그대로 읽어 배열로 재구성 (add/delete 시 다른 행의
+//    미저장 편집내용이 날아가지 않도록 collectTabData() 전체를 부르지 않고 이 테이블만 직접 읽음)
+window.collectMaterialRows = function() {
+    const map = {};
+    document.querySelectorAll('#sum-materials-rows [data-idx]').forEach(function(el) {
+        const i = Number(el.dataset.idx);
+        map[i] = map[i] || {};
+        map[i][el.dataset.field] = (el.type === 'checkbox') ? el.checked : el.value;
+    });
+    const fixedCount = window.MATERIAL_FIXED_CATEGORIES.length;
+    const idxs = Object.keys(map).map(Number);
+    const maxIdx = idxs.length ? Math.max(fixedCount - 1, Math.max.apply(null, idxs)) : fixedCount - 1;
+    const result = [];
+    for (let i = 0; i <= maxIdx; i++) {
+        const r = map[i] || {};
+        const isFixed = i < fixedCount;
+        const category = isFixed ? window.MATERIAL_FIXED_CATEGORIES[i] : (r.category || '');
+        const ktkPn = r.ktkPn || '', description = r.description || '', cost = r.cost || '';
+        const useForAnalysis = !!r.useForAnalysis;
+        // 고정 행은 항상 유지, 자유추가 행은 완전히 빈 채로 남으면 저장 시 자동 정리
+        if (isFixed || category || ktkPn || description || cost) {
+            result.push({ category: category, ktkPn: ktkPn, description: description, cost: cost, useForAnalysis: useForAnalysis });
+        }
+    }
+    return result;
+};
+
+window.renderMaterialRows = function(rows) {
+    const tbody = document.getElementById('sum-materials-rows');
+    if (!tbody) return;
+    window.tabData = window.tabData || {};
+    rows = rows || [];
+
+    // 고정 13개: 저장된 데이터에서 구분명으로 값을 이어받고(순서는 항상 고정 목록 순), 없으면 빈 값.
+    // useForAnalysis: 저장된 값이 있으면 그대로, 없으면(=신규 프로젝트) PANEL만 기본 체크
+    const fixedRows = window.MATERIAL_FIXED_CATEGORIES.map(function(cat) {
+        const found = rows.find(function(r) { return r.category === cat; });
+        const defaultChecked = cat === 'PANEL';
+        return {
+            category: cat, ktkPn: found ? (found.ktkPn || '') : '', description: found ? (found.description || '') : '', cost: found ? (found.cost || '') : '',
+            useForAnalysis: found ? !!found.useForAnalysis : defaultChecked, locked: true
+        };
+    });
+    // 자유추가: 고정 목록에 없는 구분명을 가진 행
+    const extraRows = rows.filter(function(r) { return window.MATERIAL_FIXED_CATEGORIES.indexOf(r.category) === -1; })
+        .map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: !!r.useForAnalysis, locked: false }; });
+    const allRows = fixedRows.concat(extraRows);
+    window.tabData.projectMaterials = allRows.map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: r.useForAnalysis }; });
+
+    tbody.innerHTML = allRows.map(function(r, idx) {
+        const catCell = r.locked
+            ? '<td style="padding:4px 6px; border:1px solid #e9ecef; background:#f8f9fa; font-weight:bold; white-space:nowrap;">' + escapeHtml(r.category) + '</td>'
+            : '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="구분명" style="border:none; width:100%; box-sizing:border-box;"></td>';
+        const delCell = r.locked
+            ? '<td style="border:1px solid #e9ecef;"></td>'
+            : '<td style="border:1px solid #e9ecef; text-align:center;"><button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="이 행 삭제" style="border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:12px; width:20px; height:20px; line-height:1;">－</button></td>';
+        return '<tr>' + catCell
+            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" placeholder="예: 198454" style="border:none; width:100%; box-sizing:border-box;"></td>'
+            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="예: MV315QHM-N41" style="border:none; width:100%; box-sizing:border-box;"></td>'
+            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" placeholder="예: $97" style="border:none; width:100%; box-sizing:border-box;"></td>'
+            + '<td style="border:1px solid #e9ecef; text-align:center;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)"></td>'
+            + delCell
+            + '</tr>';
+    }).join('');
+};
+
+window.addMaterialRow = function() {
+    const current = window.collectMaterialRows(); // 지금 화면에 입력 중인 값 보존
+    current.push({ category: '', ktkPn: '', description: '', cost: '', useForAnalysis: false });
+    window.tabData.projectMaterials = current;
+    window.renderMaterialRows(current);
+};
+
+window.deleteMaterialRow = function(idx) {
+    if (idx < window.MATERIAL_FIXED_CATEGORIES.length) return; // 고정 구분은 삭제 불가(안전장치)
+    const current = window.collectMaterialRows();
+    current.splice(idx, 1);
+    window.tabData.projectMaterials = current;
+    window.renderMaterialRows(current);
+};
+
 // ── Summary 탭 변경이력 (토글/기록/렌더링/삭제) — Brief SPEC/M.C Table과 동일 패턴 ──
 window.sumToggleHistoryBox = function() {
     const body = document.getElementById('sum-history-body');
@@ -20629,6 +20769,9 @@ window.collectTabData = function() {
     });
     window.tabData.projectMembers3 = member3Rows;
 
+    // 💡 주요 자재 목록 수집 (고정 13개 + 자유추가)
+    if (window.collectMaterialRows) window.tabData.projectMaterials = window.collectMaterialRows();
+
     // 🪪 Address Book도 함께 수집 (드라이브/JSON 저장에 포함)
     if (window.collectAddressData) window.collectAddressData();
 
@@ -20700,6 +20843,9 @@ window.populateTabData = function() {
 
     // 💡 프로젝트 멤버-3 렌더링
     if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
+
+    // 💡 주요 자재 목록 렌더링 (없으면 고정 13개 구분만 빈 값으로 표시됨)
+    if (window.renderMaterialRows) window.renderMaterialRows(td.projectMaterials || []);
 
     // 🪪 Address Book — 프로젝트 파일 안의 값은 더 이상 쓰지 않고, 공용 저장소를 단일 소스로 사용
     //    (로컬 캐시로 즉시 렌더 → 백그라운드에서 Drive 최신본으로 갱신)
