@@ -13333,7 +13333,15 @@ function cleanMailBody(raw) {
     s = head;
 
     // 2) 인용 라인(> ...) 제거
-    s = s.split('\n').filter(l => !/^\s*>/.test(l)).join('\n');
+    // 💡 [2026-08-21][버그 수정] 일부 메일 클라이언트(Outlook 등)는 회신 시 새로 쓴 내용까지 본문 전체를
+    //    ">"로 감싸서 렌더링함 — 이 경우 아래 filter()가 본문을 통째로 삭제해서 AI에 빈 본문만 전달되는
+    //    사고가 실제로 있었음(예: 제목엔 오타, 본문엔 정상 기재된 프로젝트명이 이 단계에서 사라짐).
+    //    → 인용줄 제거 후 남는 내용이 거의 없으면(=사실상 이게 본문 전부라는 뜻) 통째로 버리지 말고
+    //    ">" 표시만 벗겨내서 실제 내용은 보존한다.
+    const _withoutQuoteLines = s.split('\n').filter(l => !/^\s*>/.test(l)).join('\n');
+    s = (_withoutQuoteLines.trim().length < 40)
+        ? s.split('\n').map(l => l.replace(/^\s*>+\s?/, '')).join('\n')
+        : _withoutQuoteLines;
 
     // 3) base64 덩어리·초장문 URL·data URI 노이즈 제거
     s = s.replace(/\bdata:[^\s]+/g, ' ')
