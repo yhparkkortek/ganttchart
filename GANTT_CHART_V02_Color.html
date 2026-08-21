@@ -2414,6 +2414,67 @@ ${mailText}`;
         return window._backupFolderId;
     };
 
+    // ═══════════════════════════════════════════════════════════
+    // 📁 [Drive 폴더 정리] 공용 폴더 루트에 흩어져 있던 설정/백업류 파일을 하위 폴더로 정리.
+    //    프로젝트 *.json 파일은 지금처럼 그대로 루트에 둔다(파일 탐색기에서 바로 보이게).
+    //    - _App_Config/     : AddressBook_Shared.json, PriorityScore_Shared.json, Holidays_Shared.json,
+    //                         AI_Prompt_Shared.json, project_index.json, MailFilterRules_Shared.json
+    //    - TaskInbox_Backups/ : TaskInbox_<이름>.json (개인별 업무 보관함 백업)
+    //    - Backups/ (기존 유지) : mail_secure.enc, telegram_secure.enc, gantt_pw_sync.json
+    // ═══════════════════════════════════════════════════════════
+    window._namedFolderIdCache = window._namedFolderIdCache || {};
+    // 💡 getOrCreateBackupFolder와 동일한 find-or-create 패턴의 범용 버전 — 폴더 이름만 바꿔가며 재사용
+    window._getOrCreateNamedFolder = async function(token, folderName) {
+        if (window._namedFolderIdCache[folderName]) return window._namedFolderIdCache[folderName];
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const listData = await listRes.json();
+        if (listData.files && listData.files.length > 0) {
+            window._namedFolderIdCache[folderName] = listData.files[0].id;
+            return window._namedFolderIdCache[folderName];
+        }
+        const createRes = await fetch(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [SHARED_FOLDER_ID] })
+        });
+        const created = await createRes.json();
+        window._namedFolderIdCache[folderName] = created.id;
+        return window._namedFolderIdCache[folderName];
+    };
+    window.getOrCreateConfigFolder    = function(token) { return window._getOrCreateNamedFolder(token, '_App_Config'); };
+    window.getOrCreateTaskInboxFolder = function(token) { return window._getOrCreateNamedFolder(token, 'TaskInbox_Backups'); };
+
+    // 💡 [마이그레이션 포함 조회] 이미 팀이 루트에 저장해둔 기존 설정 파일을 "새로 만든 것처럼" 못 찾아서
+    //    빈 기본값으로 초기화되는 사고를 막기 위해: 새 하위 폴더에서 먼저 찾고, 없으면 예전 위치(루트)에서
+    //    찾아 그 파일을 하위 폴더로 실제로 옮긴다(복제가 아니라 이동 — 되돌리기 쉬움, 데이터 유실 없음).
+    window._findOrMigrateFile = async function(token, fileName, targetFolderId) {
+        const qSub = `name='${fileName}' and trashed=false and '${targetFolderId}' in parents`;
+        const subRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qSub)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const subData = await subRes.json();
+        if (subData.files && subData.files.length > 0) return subData.files[0].id;
+
+        const qRoot = `name='${fileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const rootRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qRoot)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const rootData = await rootRes.json();
+        if (!rootData.files || !rootData.files.length) return null; // 어디에도 없음 — 신규 파일
+
+        const oldId = rootData.files[0].id;
+        try {
+            await fetch(`https://www.googleapis.com/drive/v3/files/${oldId}?addParents=${targetFolderId}&removeParents=${SHARED_FOLDER_ID}&supportsAllDrives=true`, {
+                method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
+            });
+            console.info(`💡 [Drive 폴더 정리] "${fileName}"을(를) 루트에서 하위 폴더로 이동했습니다.`);
+        } catch (e) { console.warn('Drive 파일 폴더 이동 실패(루트에 그대로 둠):', fileName, e.message); }
+        return oldId;
+    };
+
     // 💡 저장 시마다 드라이브 Backups 폴더에 타임스탬프 백업 파일 생성 + 7일 지난 백업 자동 삭제
     window.backupToDrive = async function(saveData, baseName) {
         try {
@@ -2460,12 +2521,8 @@ ${mailText}`;
     const PROMPT_DRIVE_FILENAME = 'AI_Prompt_Shared.json';
 
     window.findPromptDriveFile = async function(token) {
-        const q = `name='${PROMPT_DRIVE_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+        const folderId = await window.getOrCreateConfigFolder(token);
+        return window._findOrMigrateFile(token, PROMPT_DRIVE_FILENAME, folderId);
     };
 
     // 💡 드라이브에서 최신 팀 공용 프롬프트를 받아와 localStorage에 반영 (미연동이면 조용히 종료)
@@ -2513,8 +2570,9 @@ ${mailText}`;
                     body: JSON.stringify(payload)
                 });
             } else {
+                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'prompt_boundary';
-                const metadata = { name: PROMPT_DRIVE_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const metadata = { name: PROMPT_DRIVE_FILENAME, mimeType: 'application/json', parents: [folderId] };
                 const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(payload)
                     + "\r\n--" + boundary + "--";
@@ -2532,12 +2590,8 @@ ${mailText}`;
     const HOLIDAY_DRIVE_FILENAME = 'Holidays_Shared.json';
 
     window.findHolidayDriveFile = async function(token) {
-        const q = `name='${HOLIDAY_DRIVE_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+        const folderId = await window.getOrCreateConfigFolder(token);
+        return window._findOrMigrateFile(token, HOLIDAY_DRIVE_FILENAME, folderId);
     };
 
     // 💡 드라이브에서 팀 공용 휴일 목록을 받아와 로컬 캐시(localStorage)에 반영 (미연동이면 조용히 종료)
@@ -2580,8 +2634,9 @@ ${mailText}`;
                     body: body
                 });
             } else {
+                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'holiday_boundary';
-                const metadata = { name: HOLIDAY_DRIVE_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const metadata = { name: HOLIDAY_DRIVE_FILENAME, mimeType: 'application/json', parents: [folderId] };
                 const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
                     + "\r\n--" + boundary + "--";
@@ -2629,12 +2684,8 @@ ${mailText}`;
     };
 
     window.findPriorityConfigFile = async function(token) {
-        const q = `name='${PRIORITY_CONFIG_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+        const folderId = await window.getOrCreateConfigFolder(token);
+        return window._findOrMigrateFile(token, PRIORITY_CONFIG_FILENAME, folderId);
     };
 
     window.loadPriorityConfig = async function() {
@@ -2682,8 +2733,9 @@ ${mailText}`;
                     body: body
                 });
             } else {
+                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'priority_config_boundary';
-                const metadata = { name: PRIORITY_CONFIG_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const metadata = { name: PRIORITY_CONFIG_FILENAME, mimeType: 'application/json', parents: [folderId] };
                 const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
                     + "\r\n--" + boundary + "--";
@@ -2698,12 +2750,8 @@ ${mailText}`;
     };
 
     window.findProjectIndexFile = async function(token) {
-        const q = `name='${PROJECT_INDEX_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        return (data.files && data.files.length > 0) ? data.files[0].id : null;
+        const folderId = await window.getOrCreateConfigFolder(token);
+        return window._findOrMigrateFile(token, PROJECT_INDEX_FILENAME, folderId);
     };
 
     // 쉼표로 구분된 메일키워드 문자열 → 정제된 배열 (공백 제거, 빈 항목 제거, 중복 제거)
@@ -2786,8 +2834,9 @@ ${mailText}`;
                     body: body
                 });
             } else {
+                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'proj_index_boundary';
-                const metadata = { name: PROJECT_INDEX_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
+                const metadata = { name: PROJECT_INDEX_FILENAME, mimeType: 'application/json', parents: [folderId] };
                 const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
                     + "\r\n--" + boundary + "--";
@@ -10778,10 +10827,11 @@ window.TaskInbox = {
         const fname = this._fileName(); const token = this._token();
         if (!fname || !token) return; // 비로그인: localStorage 단독 동작
         try {
-            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(fname);
+            const folderId = await window.getOrCreateTaskInboxFolder(token);
+            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
             const boundary = 'inbox_sync_boundary';
             const metadata = { name: fname, mimeType: 'application/json' };
-            if (!this._driveFileId) metadata.parents = [SHARED_FOLDER_ID];
+            if (!this._driveFileId) metadata.parents = [folderId];
             const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ inbox: this.load(), savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
             const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
@@ -10793,7 +10843,8 @@ window.TaskInbox = {
         const fname = this._fileName(); const token = this._token();
         if (!fname || !token) return;
         try {
-            this._driveFileId = await window.findSaveFile(fname);
+            const folderId = await window.getOrCreateTaskInboxFolder(token);
+            this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
             if (!this._driveFileId) { this.scheduleDriveSync(); return; } // 첫 사용: 로컬 내용을 드라이브로 업로드
             const resp = await fetch('https://www.googleapis.com/drive/v3/files/' + this._driveFileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
             if (!resp.ok) return;
@@ -14280,10 +14331,11 @@ window._msSyncFilterRulesToDrive = async function(rules) {
         const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return; // 비로그인: localStorage 단독 동작 (다음 Drive 연동 시 자동 병합됨)
-        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window.findSaveFile(MS_FILTER_RULES_DRIVE_FILENAME);
+        const folderId = await window.getOrCreateConfigFolder(token);
+        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window._findOrMigrateFile(token, MS_FILTER_RULES_DRIVE_FILENAME, folderId);
         const boundary = 'ms_filter_rules_boundary';
         const metadata = { name: MS_FILTER_RULES_DRIVE_FILENAME, mimeType: 'application/json' };
-        if (!window._msFilterRulesDriveFileId) metadata.parents = [SHARED_FOLDER_ID];
+        if (!window._msFilterRulesDriveFileId) metadata.parents = [folderId];
         const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                    + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(rules)
                    + "\r\n--" + boundary + "--";
@@ -14301,7 +14353,8 @@ window.loadFilterRulesFromDrive = async function() {
         const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return null;
-        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window.findSaveFile(MS_FILTER_RULES_DRIVE_FILENAME);
+        const folderId = await window.getOrCreateConfigFolder(token);
+        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window._findOrMigrateFile(token, MS_FILTER_RULES_DRIVE_FILENAME, folderId);
         if (!window._msFilterRulesDriveFileId) return null;
         const response = await gapi.client.drive.files.get({ fileId: window._msFilterRulesDriveFileId, alt: 'media', supportsAllDrives: true });
         const remote = response.result;
@@ -20960,10 +21013,11 @@ window.AddressBook = {
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return; // 비로그인: localStorage 단독 동작
         try {
-            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(this.FILE_NAME);
+            const folderId = await window.getOrCreateConfigFolder(token);
+            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
             const boundary = 'addr_sync_boundary';
             const metadata = { name: this.FILE_NAME, mimeType: 'application/json' };
-            if (!this._driveFileId) metadata.parents = [SHARED_FOLDER_ID];
+            if (!this._driveFileId) metadata.parents = [folderId];
             const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ addressBook: list, savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
             const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
@@ -20976,7 +21030,8 @@ window.AddressBook = {
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return null; // 비로그인: 로컬 캐시만 사용
         try {
-            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(this.FILE_NAME);
+            const folderId = await window.getOrCreateConfigFolder(token);
+            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
             if (!this._driveFileId) return null;
             const response = await gapi.client.drive.files.get({ fileId: this._driveFileId, alt: 'media', supportsAllDrives: true });
             const data = response.result;
