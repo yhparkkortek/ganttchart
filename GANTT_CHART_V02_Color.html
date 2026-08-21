@@ -16369,11 +16369,18 @@ window.pasteBatchToInbox     = () => AR.batchToInbox('paste');
 async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOverride) {
     const GAS_URL = localStorage.getItem("gas_server_url") || "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
-    // 💡 [B안 통일화] 매칭된 프로젝트 정보가 있으면 그걸 우선 사용, 없으면 기존처럼 현재 열린 프로젝트 기준
-    let assignee = (projectContextOverride && projectContextOverride.assignee) || window.getSummaryAssignee();
-    let customer = (projectContextOverride && projectContextOverride.customer) || window.getSummaryCustomer();
-    let model = (projectContextOverride && projectContextOverride.model) || window.getSummaryModel();
-    let inch = (projectContextOverride && projectContextOverride.inch) || window.getSummaryInch();
+    // 💡 [2026-08-21][긴급 버그 수정] 예전엔 매칭된 프로젝트 정보가 없으면 "현재 열린 프로젝트" 기준으로
+    //    폴백했음 — Phase A(AI 직접매칭) 도입 이후 ms/mf/paste/자동틱 4곳 전부 projectContextOverride를
+    //    항상 null로 넘기게 바뀌었는데, 이 폴백은 그대로 남아있어서 **매번** "지금 화면에 열려있는 아무
+    //    프로젝트"의 담당자/고객사/모델명/인치가 배경정보로 새 들어가는 사고가 실제로 있었음
+    //    (예: STELLAR32를 열어둔 채 자동수집이 돌면, LNW의 전혀 다른 프로젝트 메일도 "고객사: LNW,
+    //    모델명: STELLAR32"라는 배경정보를 받아 AI가 STELLAR32로 오매칭 — 실제 재현 확인됨).
+    //    Phase A는 애초에 "특정 프로젝트로 미리 단정 짓지 않고 전체 후보 중에서 공정하게 고르게" 하는
+    //    설계라, 이 폴백 자체가 설계 취지를 정면으로 훼손함 → 폴백 제거, 매칭 정보 없으면 그냥 빈 값.
+    let assignee = (projectContextOverride && projectContextOverride.assignee) || '';
+    let customer = (projectContextOverride && projectContextOverride.customer) || '';
+    let model = (projectContextOverride && projectContextOverride.model) || '';
+    let inch = (projectContextOverride && projectContextOverride.inch) || '';
 
     const _msDateYMD = window.parseMailDateToYMD(parsed.date);
     const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, 2000);
