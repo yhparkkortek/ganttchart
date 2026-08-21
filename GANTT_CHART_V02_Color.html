@@ -11436,11 +11436,21 @@ window.updateInboxBadge();
         cursor: pointer;
     }
     td.detail-td .detail-td-inner {
+        /* 💡 [2026-08-21] 예전엔 max-height:16px 고정값 하나로만 잘랐는데, 이 값이 실제 줄 높이(line-height)와
+           정확히 안 맞아떨어지면 다음 줄 글자의 위쪽 일부가 살짝 삐져나와 보이는 문제가 있었음(인쇄 시 특히
+           zoom 축소와 겹쳐서 더 두드러짐). → 줄 단위로 정확히 잘라내는 line-clamp 방식으로 교체해서,
+           항상 딱 1줄까지만 깔끔하게 보이고 다음 줄은 아예 안 보이도록 함(중간에 걸치는 일 없음).
+           max-height는 line-clamp 미지원 브라우저를 위한 폴백으로만 남겨둠. */
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
         max-height: 16px;
         overflow: hidden;
         transition: max-height 0.15s ease;
     }
     td.detail-td.detail-td-expanded .detail-td-inner {
+        display: block;
+        -webkit-line-clamp: unset;
         max-height: none;
         overflow: visible;
     }
