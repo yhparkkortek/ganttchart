@@ -2143,12 +2143,32 @@ ${mailText}`;
     var colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1 };
 
     window.currentDriveFileId = null;
-    window.currentUserName = "비로그인 (로컬)"; // 표시용: 언어별로 auth_button에서 처리 
-    window.lastSavedLogCount = 0; 
+    window.currentUserName = "비로그인 (로컬)"; // 표시용: 언어별로 auth_button에서 처리
+    window.lastSavedLogCount = 0;
     window.exportFilenameStr = "GanttChart_All";
     window.ganttViewStartTs = null;
     window.ganttViewDuration = null;
-    window.changeLogs = []; 
+    window.changeLogs = [];
+
+    // 💡 [2026-08-21][버그 수정] "저장 필요 여부" 판단이 지금까지 changeLogs(Gantt 표 행 편집)만 봐서,
+    //    프로젝트 파일에 같이 저장되는 다른 탭(Summary/Brief SPEC/M.C Table) 편집은 시트 전환/3분
+    //    자동저장/창닫기 경고 셋 다 못 잡아냈음(예: 주요자재만 채우고 바로 다른 시트로 넘어가면 저장
+    //    없이 그냥 넘어가버림). 아래 3개 탭 안의 입력 변화를 이 플래그로 따로 추적해서, 위 세 안전장치가
+    //    changeLogs와 함께 같이 참고하게 함.
+    //    💡 [범위 근거] collectTabData()가 실제로 window.tabData(프로젝트 파일에 저장됨)에 담는 건
+    //    Summary(+주요자재/멤버)/Brief SPEC/M.C Table 3개뿐 — 주소록(#tab-address)은 프로젝트 파일이
+    //    아니라 별도 공용 저장소를 쓰고, 알람(#tab-alarm)은 프로젝트와 무관한 localStorage 전용
+    //    개인설정이라 둘 다 이 감시 대상에서 제외. 캘린더/주간보고서 탭은 Gantt 데이터를 그대로
+    //    보여주기만 하는 뷰라 별도 입력 필드가 없음.
+    window._nonGanttDirty = false;
+    window._markNonGanttDirty = function() { window._nonGanttDirty = true; };
+    const _NON_GANTT_DIRTY_SELECTORS = '#tab-summary, #tab-briefspec, #tab-mctable';
+    document.addEventListener('input', function(e) {
+        if (e.target && e.target.closest && e.target.closest(_NON_GANTT_DIRTY_SELECTORS)) window._markNonGanttDirty();
+    });
+    document.addEventListener('change', function(e) {
+        if (e.target && e.target.closest && e.target.closest(_NON_GANTT_DIRTY_SELECTORS)) window._markNonGanttDirty();
+    });
 
     const CLIENT_ID = '107026313229-jh5qm0pbkhe505gt3pvgbpbjurg1v0ej.apps.googleusercontent.com';
     const API_KEY = 'AIzaSyCYavFb6m88K8T7rhKQwnfv5ygpwG9ah48';
@@ -2920,8 +2940,9 @@ ${mailText}`;
             window.updateCurrentFileLabel();
 
             if (response.ok && file && file.id) {
-                window.currentDriveFileId = file.id; 
-                window.lastSavedLogCount = window.changeLogs.length; 
+                window.currentDriveFileId = file.id;
+                window.lastSavedLogCount = window.changeLogs.length;
+                window._nonGanttDirty = false; // 💡 Summary 탭(주요자재 등) 편집도 저장됐으니 함께 리셋
                 window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
                 window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
                 window.showToast(window._currentLang === 'en'
@@ -3119,7 +3140,8 @@ ${mailText}`;
             if (key === window._activeSheetKey) return;
             const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             const savedLogs = window.lastSavedLogCount || 0;
-            const hasUnsavedChanges = !!window.currentDriveFileId && currentLogs > savedLogs;
+            // 💡 Gantt 표 편집(changeLogs) 뿐 아니라 Summary 탭(주요자재 등) 편집도 같이 확인
+            const hasUnsavedChanges = !!window.currentDriveFileId && (currentLogs > savedLogs || window._nonGanttDirty);
             if (hasUnsavedChanges) {
                 if (window.showToast) window.showToast('💾 변경사항 저장 중...', 'info');
                 const ok = await window._saveToGoogleDriveRaw();
@@ -3144,7 +3166,7 @@ ${mailText}`;
             if (wasActive) {
                 const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
                 const savedLogs = window.lastSavedLogCount || 0;
-                const hasUnsavedChanges = !!window.currentDriveFileId && currentLogs > savedLogs;
+                const hasUnsavedChanges = !!window.currentDriveFileId && (currentLogs > savedLogs || window._nonGanttDirty);
                 if (hasUnsavedChanges) {
                     if (window.showToast) window.showToast('💾 저장 후 닫는 중...', 'info');
                     await window._saveToGoogleDriveRaw();
@@ -3215,7 +3237,8 @@ ${mailText}`;
                     return row;
                 });
                 window.changeLogs = saveData.changeLogs || [];
-                window.lastSavedLogCount = window.changeLogs.length; 
+                window.lastSavedLogCount = window.changeLogs.length;
+                window._nonGanttDirty = false; // 💡 방금 로드한 프로젝트는 아직 아무것도 안 건드렸으니 깨끗한 상태로 시작
                 colIdx = saveData.colIdx || colIdx;
                 filterColumns = saveData.filterColumns || filterColumns;
                 window.projectMeta = saveData.projectMeta || window.projectMeta || {};
@@ -8751,10 +8774,11 @@ window.handleAuthClick = function() {
         inactivityTimer = setTimeout(() => {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
-            if (window.currentDriveFileId && currentLogs > savedLogs) {
-                saveToGoogleDrive(); 
+            // 💡 Gantt 표 편집뿐 아니라 Summary/Brief SPEC/M.C Table 편집도 같이 확인
+            if (window.currentDriveFileId && (currentLogs > savedLogs || window._nonGanttDirty)) {
+                saveToGoogleDrive();
             }
-        }, 180000); 
+        }, 180000);
     }
     ['mousemove', 'keydown', 'click', 'scroll', 'wheel'].forEach(evt => window.addEventListener(evt, resetInactivityTimer));
     resetInactivityTimer();
@@ -8772,9 +8796,10 @@ window.handleAuthClick = function() {
     window.addEventListener('beforeunload', function (e) {
         let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
         let savedLogs = window.lastSavedLogCount || 0;
-        if (currentLogs > savedLogs) {
+        // 💡 Gantt 표 편집뿐 아니라 Summary/Brief SPEC/M.C Table 편집도 같이 확인
+        if (currentLogs > savedLogs || window._nonGanttDirty) {
             e.preventDefault();
-            e.returnValue = ''; 
+            e.returnValue = '';
             return '';
         }
     });
