@@ -1839,15 +1839,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
-            <div class="cal-level-filter-wrap" style="position:relative; display:inline-block;">
-                <button type="button" class="action-btn" onclick="window.calToggleLevelDropdown(event)">LEVEL(WBS) ▾</button>
-                <div id="cal-level-filter-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:50; background:#fff; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:8px 12px; margin-top:4px; white-space:nowrap;">
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="대분류"><input type="checkbox" onchange="window.calToggleLevel(0)"> L0</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류1"><input type="checkbox" onchange="window.calToggleLevel(1)"> L1</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류2"><input type="checkbox" onchange="window.calToggleLevel(2)"> L2</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="세부업무"><input type="checkbox" checked onchange="window.calToggleLevel(3)"> L3</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="하위업무"><input type="checkbox" checked onchange="window.calToggleLevel(4)"> L4</label>
-                </div>
+            <div class="filter-group" id="cal-level-filter-group" style="margin-left:8px;">
+                <div class="filter-label" id="cal-level-all-label" onclick="window.calToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
+                <button type="button" class="btn" data-level="0" onclick="window.calToggleLevel(0)" title="대분류">0</button>
+                <button type="button" class="btn" data-level="1" onclick="window.calToggleLevel(1)" title="소분류1">1</button>
+                <button type="button" class="btn" data-level="2" onclick="window.calToggleLevel(2)" title="소분류2">2</button>
+                <button type="button" class="btn active" data-level="3" onclick="window.calToggleLevel(3)" title="세부업무">3</button>
+                <button type="button" class="btn active" data-level="4" onclick="window.calToggleLevel(4)" title="하위업무">4</button>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:6px;">
@@ -1874,15 +1872,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Weekly Report</h2>
-            <div class="wr-level-filter-wrap" style="position:relative; display:inline-block;">
-                <button type="button" class="action-btn" onclick="window.wrToggleLevelDropdown(event)">LEVEL(WBS) ▾</button>
-                <div id="wr-level-filter-dropdown" style="display:none; position:absolute; top:100%; left:0; z-index:50; background:#fff; border:1px solid #ccc; border-radius:6px; box-shadow:0 4px 12px rgba(0,0,0,0.15); padding:8px 12px; margin-top:4px; white-space:nowrap;">
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="대분류"><input type="checkbox" onchange="window.wrToggleLevel(0)"> L0</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류1"><input type="checkbox" onchange="window.wrToggleLevel(1)"> L1</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="소분류2"><input type="checkbox" onchange="window.wrToggleLevel(2)"> L2</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="세부업무"><input type="checkbox" checked onchange="window.wrToggleLevel(3)"> L3</label>
-                    <label style="display:flex; align-items:center; gap:5px; padding:2px 0; font-size:12px; cursor:pointer;" title="하위업무"><input type="checkbox" checked onchange="window.wrToggleLevel(4)"> L4</label>
-                </div>
+            <div class="filter-group" id="wr-level-filter-group" style="margin-left:8px;">
+                <div class="filter-label" id="wr-level-all-label" onclick="window.wrToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
+                <button type="button" class="btn" data-level="0" onclick="window.wrToggleLevel(0)" title="대분류">0</button>
+                <button type="button" class="btn" data-level="1" onclick="window.wrToggleLevel(1)" title="소분류1">1</button>
+                <button type="button" class="btn" data-level="2" onclick="window.wrToggleLevel(2)" title="소분류2">2</button>
+                <button type="button" class="btn active" data-level="3" onclick="window.wrToggleLevel(3)" title="세부업무">3</button>
+                <button type="button" class="btn active" data-level="4" onclick="window.wrToggleLevel(4)" title="하위업무">4</button>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
@@ -3171,7 +3167,7 @@ ${mailText}`;
     //    같은 대기열(_runSerialized)에 넣는다 — 이렇게 해야 "저장이 끝나고 전환하기 직전"에 다른
     //    저장(3분 자동저장 등)이 끼어들어 서로 다른 시점의 데이터가 뒤섞이는 사고를 막을 수 있음.
     //    (공개 saveToGoogleDrive()는 안 부르고 raw를 직접 호출 — 같은 대기열에 재진입하면 데드락 남)
-    window.switchToSheetWithSave = function(key) {
+    window.switchToSheetWithSave = function(key, silent) {
         return window._runSerialized(async function() {
             if (key === window._activeSheetKey) return;
             const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
@@ -3179,7 +3175,7 @@ ${mailText}`;
             // 💡 Gantt 표 편집(changeLogs) 뿐 아니라 Summary 탭(주요자재 등) 편집도 같이 확인
             const hasUnsavedChanges = !!window.currentDriveFileId && (currentLogs > savedLogs || window._nonGanttDirty);
             if (hasUnsavedChanges) {
-                if (window.showToast) window.showToast('💾 변경사항 저장 중...', 'info');
+                if (!silent && window.showToast) window.showToast('💾 변경사항 저장 중...', 'info');
                 const ok = await window._saveToGoogleDriveRaw();
                 if (!ok && !confirm('저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)')) return;
             }
@@ -3257,11 +3253,13 @@ ${mailText}`;
                 style="display:flex; align-items:center; justify-content:center; width:28px; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
     };
 
-    window.executeLoadFile = async function(fileId, fileName) {
+    // 💡 silent=true면 개별 "로드 완료" 토스트를 생략 — 담당자 이름 클릭으로 여러 프로젝트를 한 번에 열 때
+    //    파일마다 토스트가 쌓이는 걸 막고, 호출한 쪽에서 요약 토스트 하나만 띄우도록 함
+    window.executeLoadFile = async function(fileId, fileName, silent) {
         window.closeDriveModal();
         // 💡 [멀티시트] 이미 열려있는 프로젝트면 다시 안 받아오고 그 시트로 전환만
         const already = window._findSheetByFileId(fileId);
-        if (already && already.snapshot) { await window.switchToSheetWithSave(already.key); return; }
+        if (already && already.snapshot) { await window.switchToSheetWithSave(already.key, silent); return; }
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
@@ -3290,7 +3288,7 @@ ${mailText}`;
                 // 💡 [버그 수정] 계획(Baseline)은 프로젝트별로 분리 저장되므로, 프로젝트가 바뀌면 그 프로젝트 것으로 다시 로드
                 window._compareTargetId = null;
                 if (window.loadScheduleBaselines) window.loadScheduleBaselines();
-                window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
+                if (!silent) window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
@@ -3343,8 +3341,9 @@ ${mailText}`;
                     const msg = _dmEn ? `Open all ${groupFiles.length} project(s) for [${pmName}] as separate sheets?` : `[${pmName}] 담당 프로젝트 ${groupFiles.length}개를 전부 새 시트로 여시겠습니까?`;
                     if (!confirm(msg)) return;
                     window.closeDriveModal();
+                    // 💡 여러 프로젝트를 한 번에 열 때는 파일별 개별 토스트를 생략(silent)하고, 끝나면 요약 토스트 하나만 표시
                     for (const file of groupFiles) {
-                        await window.executeLoadFile(file.id, file.name);
+                        await window.executeLoadFile(file.id, file.name, true);
                     }
                     if (window.showToast) window.showToast((_dmEn ? `✅ Opened ${groupFiles.length} project(s) for ` : `✅ [${pmName}] 프로젝트 ${groupFiles.length}개 열기 완료`) + (_dmEn ? pmName : ''), 'info');
                 };
@@ -16946,21 +16945,36 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
 
     // 💡 [2026-08-21][WBS 레벨 필터] Weekly Report에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
     window.wrState = window.wrState || { levelFilter: [3, 4] };
-    window.wrToggleLevelDropdown = function(e) {
-        if (e) e.stopPropagation();
-        const dd = document.getElementById('wr-level-filter-dropdown');
-        if (dd) dd.style.display = (dd.style.display === 'none' || !dd.style.display) ? 'block' : 'none';
+    // (Gantt 차트 상단의 LEVEL(WBS) 필터와 동일한 filter-group/filter-label/btn 스타일을 그대로 사용)
+    window.wrSyncLevelFilterUI = function() {
+        const group = document.getElementById('wr-level-filter-group');
+        if (!group) return;
+        const arr = window.wrState.levelFilter || [];
+        group.querySelectorAll('.btn[data-level]').forEach(function(btn) {
+            btn.classList.toggle('active', arr.indexOf(Number(btn.dataset.level)) !== -1);
+        });
+        const label = document.getElementById('wr-level-all-label');
+        if (label) label.classList.toggle('active', arr.length === 5);
     };
     window.wrToggleLevel = function(level) {
         const arr = window.wrState.levelFilter;
         const idx = arr.indexOf(level);
         if (idx === -1) arr.push(level); else arr.splice(idx, 1);
+        window.wrSyncLevelFilterUI();
         if (window.showWeeklyReport) window.showWeeklyReport();
     };
-    document.addEventListener('click', function(e) {
-        const dd = document.getElementById('wr-level-filter-dropdown');
-        if (dd && dd.style.display === 'block' && !e.target.closest('.wr-level-filter-wrap')) dd.style.display = 'none';
-    });
+    // LEVEL(WBS) 라벨 클릭 — 전체(0~4) 선택 ↔ 직전 선택 상태 토글 (Gantt 필터 라벨과 동일한 동작)
+    window.wrToggleLevelAll = function() {
+        const cur = window.wrState.levelFilter || [];
+        if (cur.length === 5) {
+            window.wrState.levelFilter = (window._wrLevelFilterPrev && window._wrLevelFilterPrev.length) ? window._wrLevelFilterPrev.slice() : [3, 4];
+        } else {
+            window._wrLevelFilterPrev = cur.slice();
+            window.wrState.levelFilter = [0, 1, 2, 3, 4];
+        }
+        window.wrSyncLevelFilterUI();
+        if (window.showWeeklyReport) window.showWeeklyReport();
+    };
 
     window.wrClassifyTasks = function() {
         const thisWeek = wrGetWeekRange(window.wrBaseDate);
@@ -23334,21 +23348,36 @@ document.addEventListener('DOMContentLoaded', function() {
 window.calState = window.calState || { year: new Date().getFullYear(), month: new Date().getMonth(), selectedIdx: null, viewMode: 'month', weekStart: null, levelFilter: [3, 4] };
 
 // 💡 [2026-08-21][WBS 레벨 필터] 캘린더에 표시할 업무를 L0~L4 중 선택한 레벨로만 좁힘. 기본값 L3/L4.
-window.calToggleLevelDropdown = function(e) {
-    if (e) e.stopPropagation();
-    const dd = document.getElementById('cal-level-filter-dropdown');
-    if (dd) dd.style.display = (dd.style.display === 'none' || !dd.style.display) ? 'block' : 'none';
+//    (Gantt 차트 상단의 LEVEL(WBS) 필터와 동일한 filter-group/filter-label/btn 스타일을 그대로 사용)
+window.calSyncLevelFilterUI = function() {
+    const group = document.getElementById('cal-level-filter-group');
+    if (!group) return;
+    const arr = window.calState.levelFilter || [];
+    group.querySelectorAll('.btn[data-level]').forEach(function(btn) {
+        btn.classList.toggle('active', arr.indexOf(Number(btn.dataset.level)) !== -1);
+    });
+    const label = document.getElementById('cal-level-all-label');
+    if (label) label.classList.toggle('active', arr.length === 5);
 };
 window.calToggleLevel = function(level) {
     const arr = window.calState.levelFilter;
     const idx = arr.indexOf(level);
     if (idx === -1) arr.push(level); else arr.splice(idx, 1);
+    window.calSyncLevelFilterUI();
     window.calRender();
 };
-document.addEventListener('click', function(e) {
-    const dd = document.getElementById('cal-level-filter-dropdown');
-    if (dd && dd.style.display === 'block' && !e.target.closest('.cal-level-filter-wrap')) dd.style.display = 'none';
-});
+// LEVEL(WBS) 라벨 클릭 — 전체(0~4) 선택 ↔ 직전 선택 상태 토글 (Gantt 필터 라벨과 동일한 동작)
+window.calToggleLevelAll = function() {
+    const cur = window.calState.levelFilter || [];
+    if (cur.length === 5) {
+        window.calState.levelFilter = (window._calLevelFilterPrev && window._calLevelFilterPrev.length) ? window._calLevelFilterPrev.slice() : [3, 4];
+    } else {
+        window._calLevelFilterPrev = cur.slice();
+        window.calState.levelFilter = [0, 1, 2, 3, 4];
+    }
+    window.calSyncLevelFilterUI();
+    window.calRender();
+};
 
 // 💡 [주 단위 보기] 날짜가 속한 주의 일요일 자정 타임스탬프
 function calGetWeekStart(d) {
