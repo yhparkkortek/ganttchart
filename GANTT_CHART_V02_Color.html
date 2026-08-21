@@ -2379,6 +2379,7 @@ ${mailText}`;
                     && f.name !== HOLIDAY_DRIVE_FILENAME
                     && f.name !== PRIORITY_CONFIG_FILENAME
                     && f.name !== PROJECT_INDEX_FILENAME
+                    && f.name !== MS_FILTER_RULES_DRIVE_FILENAME
                     && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
             });
             if (!files || files.length === 0) {
@@ -3345,6 +3346,27 @@ ${mailText}`;
             if (b === UNASSIGNED) return -1;
             return a.localeCompare(b, 'ko');
         });
+
+        // 💡 [멀티시트] 담당자별 "한 번에 열기"와 동일한 방식으로, 목록 전체(모든 담당자)를 한 번에 여는 버튼.
+        //    executeLoadFile(..., true)를 그대로 재사용 — 이미 열려있는 시트는 다시 안 받아오고 전환만 됨.
+        if (files.length > 1) {
+            const allBar = document.createElement('div');
+            allBar.style.cssText = 'padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#2c5f8a; background:#f4f8fc; transition:0.15s;';
+            allBar.textContent = _dmEn ? `🗂️ Open all ${files.length} project(s) at once` : `🗂️ 전체 프로젝트 ${files.length}개 한 번에 열기`;
+            allBar.onmouseover = function() { this.style.background = '#e7f0fa'; };
+            allBar.onmouseout  = function() { this.style.background = '#f4f8fc'; };
+            allBar.onclick = async function() {
+                const msg = _dmEn ? `Open all ${files.length} project(s) as separate sheets?` : `전체 프로젝트 ${files.length}개를 모두 새 시트로 여시겠습니까?`;
+                if (!confirm(msg)) return;
+                window.closeDriveModal();
+                // 💡 담당자별 열기와 동일하게, 여러 개를 한 번에 열 때는 파일별 토스트를 생략(silent)하고 끝나면 요약 토스트만 표시
+                for (const file of files) {
+                    await window.executeLoadFile(file.id, file.name, true);
+                }
+                if (window.showToast) window.showToast(_dmEn ? `✅ Opened all ${files.length} project(s)` : `✅ 전체 프로젝트 ${files.length}개 열기 완료`, 'info');
+            };
+            listContainer.appendChild(allBar);
+        }
 
         groupNames.forEach((pmName, gi) => {
             const groupFiles = groups[pmName];
@@ -11205,6 +11227,7 @@ window.inboxOpenDistribute = async function(uid) {
                 && f.name !== HOLIDAY_DRIVE_FILENAME
                 && f.name !== PRIORITY_CONFIG_FILENAME
                 && f.name !== PROJECT_INDEX_FILENAME
+                && f.name !== MS_FILTER_RULES_DRIVE_FILENAME
                 && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
         });
         inlineEl.innerHTML = '';
