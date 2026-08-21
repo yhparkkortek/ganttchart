@@ -449,6 +449,12 @@
    추가로 차지해서 "상단 여백이 유독 넓어 보이는" 원인이 됨 — 스크롤 기능은 유지하되 바만 숨김 */
 #sheet-tabs-bar { scrollbar-width: none; -ms-overflow-style: none; }
 #sheet-tabs-bar::-webkit-scrollbar { display: none; height: 0; }
+/* 💡 [버그 수정] 시트탭 바는 #app-main의 전체 폭을 그대로 쓰는데, 그 아래 각 탭의 실제 내용(Summary/
+   Gantt 표 등)은 전부 .concept-tab-wrap(max-width:1100~1200px)에 담겨 있어 큰 모니터에서는 폭이
+   좁습니다. 탭 바가 아래 콘텐츠 박스보다 더 넓게 뻗어나가 정렬이 안 맞아 보였던 원인 — 탭 바도
+   똑같이 1200px로 캡을 씌워서, 창이 아무리 넓어져도(=전체 창 상태) 아래 타이틀 박스 폭을 넘지 않게 함.
+   (자동 축소 계산은 bar.clientWidth를 그대로 읽으므로, 이 CSS 캡만으로 별도 JS 수정 없이 반영됨) */
+#sheet-tabs-bar { max-width: 1200px; }
 
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
