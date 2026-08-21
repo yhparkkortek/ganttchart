@@ -9037,7 +9037,12 @@ window.handleAuthClick = function() {
 
         const triggerGroup = document.getElementById('gantt-filter-btn-group');
         if (triggerGroup) triggerGroup.innerHTML = '';
-        document.querySelectorAll('.gantt-filter-popup').forEach(p => p.remove()); // 이전 렌더링 팝업 정리
+        // 💡 [버그 수정] 예전엔 .gantt-filter-popup 전체를 지웠는데, Calendar/Weekly Report의 WBS 필터
+        //    팝업도 같은 클래스를 공유하고 있어서(바깥클릭-닫기 로직 재사용 목적) 이 함수가 실행될 때마다
+        //    (프로젝트 로드/데이터 변경 시마다) 그 팝업들까지 DOM에서 통째로 사라져 버렸음 — 그 뒤로는
+        //    트리거 버튼을 눌러도 팝업을 못 찾아 조용히 아무 반응이 없던 원인. Gantt가 자체적으로
+        //    새로 만드는 팝업(gantt-filter-popup-dynamic)만 지우도록 범위를 좁힘.
+        document.querySelectorAll('.gantt-filter-popup-dynamic').forEach(p => p.remove()); // 이전 렌더링 팝업 정리
         const legacyContainer = document.getElementById('dynamic-filters');
         if (legacyContainer) legacyContainer.innerHTML = ''; // 레거시 박스는 항상 비워서 자동으로 숨김 처리됨
         currentFilters = {}; 
@@ -9122,7 +9127,10 @@ window.handleAuthClick = function() {
 
             // 팝업 (항상 DOM에 존재, 평소엔 숨김 — 기존 필터 로직/조회 코드와 호환 유지)
             let popup = document.createElement('div');
-            popup.className = 'row-action-popup gantt-filter-popup';
+            // 💡 [버그 수정] gantt-filter-popup-dynamic 마커를 따로 둬서, 아래 "이전 렌더링 팝업 정리"가
+            //    Gantt가 매번 새로 만드는 이 팝업들만 지우고 Calendar/Weekly Report의 정적 WBS 팝업(같은
+            //    gantt-filter-popup 클래스를 공유해서 바깥클릭-닫기 로직을 재사용함)은 건드리지 않게 한다.
+            popup.className = 'row-action-popup gantt-filter-popup gantt-filter-popup-dynamic';
             popup.id = 'gantt-filter-popup-' + col.index;
             popup.dataset.triggerId = 'gantt-filter-trigger-' + col.index;
             popup.appendChild(groupDiv);
