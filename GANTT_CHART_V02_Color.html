@@ -14736,6 +14736,14 @@ window._msTryFullAutoRegister = function(item, mailRawObj, onDone) {
 
 // ─── [메일 자동처리 ①] 자동 수집 틱 — 저장된 계정으로 백그라운드 수집, 기존 큐에 append만 ──
 window._autoMailFetchTick = async function() {
+    // 💡 [중복 메일 버그 수정] 메일 1건당 AI 분석에 4초+ 걸려 신규 메일이 많으면 한 틱 실행 시간이
+    //    스케줄러 점검 주기(60초, _startMailAutoScheduler)보다 길어질 수 있음. 마지막 수집시각(MS_LAST_AUTO_FETCH_KEY)은
+    //    틱이 "끝날 때"만 갱신되므로, 이전 틱이 아직 안 끝난 상태에서 스케줄러가 또 틱을 실행시키면
+    //    두 틱이 같은 신규 메일을 각자 중복 없다고 판단해 미분류 큐(_msResults)에 동시에 쌓는다.
+    //    → 재진입 가드로 이전 틱이 실행 중이면 새 틱을 건너뛴다.
+    if (window._msAutoTickRunning) return;
+    window._msAutoTickRunning = true;
+    try {
     const savedUser = localStorage.getItem('ms_saved_userid');
     const savedPwB64 = localStorage.getItem('ms_saved_pw');
     if (!savedUser || !savedPwB64) return; // 저장된 로그인 정보 없으면 자동수집 불가 → 조용히 스킵
@@ -14923,6 +14931,9 @@ window._autoMailFetchTick = async function() {
     } catch(e) {
         console.warn('[메일 자동처리] 자동 수집 실패:', e.message);
         // 실패해도 last_fetch_at은 갱신하지 않음 → 다음 틱에서 같은 구간 재시도
+    }
+    } finally {
+        window._msAutoTickRunning = false; // 다음 스케줄러 틱이 다시 실행될 수 있도록 항상 해제
     }
 };
 
