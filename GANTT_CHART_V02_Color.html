@@ -2334,11 +2334,17 @@ ${mailText}`;
             return;
         }
         window.closeAllTopbarMenus();
-        window.showToast(window._currentLang === 'en'
-            ? "💾 Saving current project before switching..."
-            : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
-        const saved = await window.saveToGoogleDrive();
-        if (!saved) return;
+        // 💡 [버그 수정] 빈/기본 시트에서 "프로젝트 열기"를 눌러도, 저장할 실제 내용이 없으면 굳이
+        //    저장을 시도하지 않는다. 예전엔 여기서 항상 저장을 먼저 시도했는데, 빈 시트는 필수 정보
+        //    검증에 걸려 저장이 실패(false 반환)하고 그대로 return돼서 — 프로젝트 목록조차 못 여는
+        //    문제가 있었다. (Summary가 실제로 채워진 프로젝트는 지금처럼 그대로 먼저 저장하고 전환됨)
+        if (window._hasUnsavedProjectData && window._hasUnsavedProjectData()) {
+            window.showToast(window._currentLang === 'en'
+                ? "💾 Saving current project before switching..."
+                : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
+            const saved = await window.saveToGoogleDrive();
+            if (!saved) return;
+        }
         window.loadFromGoogleDrive();
     }
 
@@ -2905,34 +2911,42 @@ ${mailText}`;
         return next;
     };
 
+    // 💡 [버그 수정] "프로젝트 열기"가 시트 전환 전에 현재 작업을 자동 저장하려다가, 빈/기본 시트에서도
+    //    "필수 정보 입력" 검증부터 걸려서 프로젝트 목록 자체를 못 여는 문제가 있었음(아래 selectProject 참고).
+    //    저장할 실제 내용이 있는지부터 판단하는 로직을 별도 함수로 빼서 저장 전에 미리 확인할 수 있게 한다.
+    window._hasUnsavedProjectData = function() {
+        const hasGanttData = globalData && globalData.length > 1;
+        if (hasGanttData) return true;
+        const td = window.collectTabData ? window.collectTabData() : (window.tabData || {});
+        const pm = window.projectMeta || {};
+        return !!(
+            (td.briefSpec && td.briefSpec.length) ||
+            (td.mcTable && td.mcTable.length) ||
+            Object.keys(pm).some(function(k) { return pm[k] && String(pm[k]).trim(); }) ||
+            (td.summary && Object.keys(td.summary).some(function(k) {
+                const v = td.summary[k];
+                return k !== 'milestones' && v && String(v).trim();
+            }))
+        );
+    };
+
     window._saveToGoogleDriveRaw = async function() {
         try {
+            if (window.collectTabData) window.collectTabData();
+
+            // 💡 저장할 실제 내용이 없으면(빈 기본 시트) 필수 정보 검증까지 갈 필요도 없이 바로 종료 —
+            //    예전엔 이 체크가 필수 정보 검증 "뒤"에 있어서, 빈 시트인데도 "필수 정보를 입력하세요"라는
+            //    엉뚱한 알림부터 뜨는 문제가 있었다(순서를 앞으로 당김).
+            if (!window._hasUnsavedProjectData()) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
+
             // 💡 저장(=프로젝트 등록/파일 생성) 전에 Summary 탭의 필수 정보가 입력되어 있는지 검증한다.
             //    비어 있으면 "All_All_All" 같은 의미 없는 파일명으로 저장되므로 여기서 막는다.
-            if (window.collectTabData) window.collectTabData();
             const requiredInfoError = window.validateRequiredProjectInfo ? window.validateRequiredProjectInfo() : '';
             if (requiredInfoError) {
                 alert(requiredInfoError);
                 if (window.switchTab) window.switchTab('summary');
                 return false;
             }
-
-            const hasGanttData = globalData && globalData.length > 1;
-            let hasConceptData = false;
-            if (!hasGanttData) {
-                const td = window.collectTabData ? window.collectTabData() : (window.tabData || {});
-                const pm = window.projectMeta || {};
-                hasConceptData = !!(
-                    (td.briefSpec && td.briefSpec.length) ||
-                    (td.mcTable && td.mcTable.length) ||
-                    Object.keys(pm).some(function(k) { return pm[k] && String(pm[k]).trim(); }) ||
-                    (td.summary && Object.keys(td.summary).some(function(k) {
-                        const v = td.summary[k];
-                        return k !== 'milestones' && v && String(v).trim();
-                    }))
-                );
-            }
-            if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
             const _svEn = window._currentLang === 'en';
             
