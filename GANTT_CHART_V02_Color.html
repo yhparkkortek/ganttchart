@@ -14193,6 +14193,7 @@ window._msGetFilterRules = function() {
 };
 window._msSaveFilterRules = function(rules) {
     localStorage.setItem(MS_FILTER_RULES_KEY, JSON.stringify(rules));
+    window._msScheduleFilterRulesDriveSync(rules); // 💡 회사/집 등 다른 PC에서도 같은 규칙이 적용되도록 팀 공용 Drive에도 반영
 };
 // 💡 [자동 등록] 검토 큐(폐기/신규발신자)에서 "이 조건으로 앞으로도 자동 걸러줘" 클릭 시 호출 —
 //    type: 'subjectKeywords'|'noreplyPatterns'|'blockedDomains'
@@ -14205,6 +14206,70 @@ window._msAddFilterRule = function(type, value) {
     rules[type].push(v);
     window._msSaveFilterRules(rules);
     return true;
+};
+
+// ═══════════════════════════════════════════════════════════
+// ☁️ [자동폐기 필터 규칙 — 팀 공용 Drive 동기화]
+//    이전엔 localStorage에만 저장돼 "회사 PC에서 차단 도메인 등록해도 집 PC엔 없음" 문제가 있었음.
+//    AddressBook과 동일한 패턴: localStorage를 빠른 로컬 캐시로 계속 쓰되(동기 호출부 변경 불필요),
+//    저장할 때마다 디바운스로 Drive에도 올리고, Drive 연동 시점에 팀 최신본과 로컬을 합쳐서 복원.
+// ═══════════════════════════════════════════════════════════
+const MS_FILTER_RULES_DRIVE_FILENAME = 'MailFilterRules_Shared.json';
+window._msFilterRulesDriveFileId = null;
+window._msFilterRulesSyncTimer = null;
+
+window._msScheduleFilterRulesDriveSync = function(rules) {
+    if (window._msFilterRulesSyncTimer) clearTimeout(window._msFilterRulesSyncTimer);
+    window._msFilterRulesSyncTimer = setTimeout(function() { window._msSyncFilterRulesToDrive(rules); }, 3000);
+};
+
+window._msSyncFilterRulesToDrive = async function(rules) {
+    try {
+        const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return; // 비로그인: localStorage 단독 동작 (다음 Drive 연동 시 자동 병합됨)
+        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window.findSaveFile(MS_FILTER_RULES_DRIVE_FILENAME);
+        const boundary = 'ms_filter_rules_boundary';
+        const metadata = { name: MS_FILTER_RULES_DRIVE_FILENAME, mimeType: 'application/json' };
+        if (!window._msFilterRulesDriveFileId) metadata.parents = [SHARED_FOLDER_ID];
+        const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                   + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(rules)
+                   + "\r\n--" + boundary + "--";
+        const url = 'https://www.googleapis.com/upload/drive/v3/files' + (window._msFilterRulesDriveFileId ? '/' + window._msFilterRulesDriveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
+        const resp = await fetch(url, { method: window._msFilterRulesDriveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
+        const file = await resp.json();
+        if (file && file.id) window._msFilterRulesDriveFileId = file.id;
+    } catch(e) { console.warn('자동폐기 필터 규칙 Drive 동기화 실패:', e.message); }
+};
+
+// 💡 Drive 연동 후 호출 — 팀 공용 규칙과 로컬 규칙을 합집합으로 병합해 로컬 캐시 갱신
+//    (다른 PC에서 등록한 규칙도 반영되고, 이 PC에서만 등록했던 규칙도 유실되지 않음)
+window.loadFilterRulesFromDrive = async function() {
+    try {
+        const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return null;
+        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window.findSaveFile(MS_FILTER_RULES_DRIVE_FILENAME);
+        if (!window._msFilterRulesDriveFileId) return null;
+        const response = await gapi.client.drive.files.get({ fileId: window._msFilterRulesDriveFileId, alt: 'media', supportsAllDrives: true });
+        const remote = response.result;
+        if (!remote || !Array.isArray(remote.subjectKeywords)) return null;
+
+        const local = window._msGetFilterRules();
+        const mergeUnique = function(a, b) {
+            const seen = new Set(a.map(function(x) { return x.toLowerCase(); }));
+            const out = a.slice();
+            b.forEach(function(x) { if (!seen.has(x.toLowerCase())) { seen.add(x.toLowerCase()); out.push(x); } });
+            return out;
+        };
+        const merged = {
+            subjectKeywords: mergeUnique(remote.subjectKeywords || [], local.subjectKeywords || []),
+            noreplyPatterns: mergeUnique(remote.noreplyPatterns || [], local.noreplyPatterns || []),
+            blockedDomains:  mergeUnique(remote.blockedDomains  || [], local.blockedDomains  || [])
+        };
+        localStorage.setItem(MS_FILTER_RULES_KEY, JSON.stringify(merged)); // 💡 직접 저장 — _msSaveFilterRules를 쓰면 다시 Drive 업로드가 예약되어 불필요한 왕복이 생김
+        return merged;
+    } catch(e) { console.warn('자동폐기 필터 규칙 Drive 조회 실패:', e.message); return null; }
 };
 
 window._msParseSenderEmail = function(senderStr) {
@@ -21093,6 +21158,8 @@ window.populateTabData = function() {
             if (window.renderAddressTable) window.renderAddressTable();
         }
     });
+    // 💡 자동폐기 필터 규칙(제목 키워드/노리플라이 패턴/차단 도메인)도 팀 공용 Drive 최신본으로 병합 복원
+    if (window.loadFilterRulesFromDrive) window.loadFilterRulesFromDrive();
 
     setVal('sum-purpose', sd.purpose);
     setVal('sum-volume', sd.volume);
