@@ -5,6 +5,18 @@
 <meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Gantt Chart</title>
 
+<script>
+    // 💡 [Drive 연동 레이스컨디션 방지] 이 문서가 워낙 커서(1MB+) 브라우저가
+    //    아래쪽의 진짜 gapiLoaded/gisLoaded 정의(2000~8000행대)까지 파싱하기 전에
+    //    구글 api.js/gsi client 스크립트 로드가 먼저 끝나버리는 경우가 실무에서 흔함.
+    //    그러면 onload="gapiLoaded()" 호출 시점에 함수가 아직 없어 ReferenceError가 나고
+    //    gapi.client가 영영 초기화되지 않아 Drive 저장/불러오기가 모두 조용히 실패함.
+    //    → 진짜 정의가 나타나기 전엔 "로드 완료됨" 사실만 기록해두는 임시 스텁을 먼저 심어둔다.
+    window._gapiReady = false;
+    window._gisReady  = false;
+    window.gapiLoaded = function() { window._gapiReady = true; };
+    window.gisLoaded  = function() { window._gisReady  = true; };
+</script>
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
@@ -2214,7 +2226,8 @@ ${mailText}`;
     // 🛠️ 구글 드라이브 연동 로직 (인증 토큰 배달 사고 및 먹통 해결 버전)
     // =========================================================
     window.gapiLoaded = function() { gapi.load('client', window.intializeGapiClient); }
-    
+    if (window._gapiReady) window.gapiLoaded(); // 스크립트가 이 정의보다 먼저 로드 완료된 경우 즉시 실행
+
     window.intializeGapiClient = async function() {
         await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
         gapiInited = true;
@@ -8320,13 +8333,14 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
 
     // 2) GIS 초기화 (문제의 원인이었던 '세션 자동 복구' 로직 완전 제거)
     window.gisLoaded = function() {
-        tokenClient = google.accounts.oauth2.initTokenClient({ 
-            client_id: CLIENT_ID, 
-            scope: SCOPES, 
-            callback: '' 
+        tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: ''
         });
         gisInited = true;
     };
+    if (window._gisReady) window.gisLoaded(); // 스크립트가 이 정의보다 먼저 로드 완료된 경우 즉시 실행
 
     // 3) 버튼 클릭 핸들러 (캐시 꼬임 시 방어 로직 추가) + 동기화 이후 바로 드라이브에서 불러오기 팝업 이동
 window.handleAuthClick = function() {
