@@ -1562,9 +1562,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <thead>
                             <tr style="background:#f8f9fa;">
                                 <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:120px;">구분</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">KTK PN</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:56px;">KTK PN</th>
                                 <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">Description</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:70px;">Cost($)</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:50px;">Cost($)</th>
                                 <th style="padding:5px 6px; border:1px solid #e9ecef; width:24px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
                             </tr>
                         </thead>
@@ -1576,9 +1576,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <thead>
                             <tr style="background:#f8f9fa;">
                                 <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:120px;">구분</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">KTK PN</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:56px;">KTK PN</th>
                                 <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left;">Description</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:70px;">Cost($)</th>
+                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:left; width:50px;">Cost($)</th>
                                 <th style="padding:5px 6px; border:1px solid #e9ecef; width:24px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
                             </tr>
                         </thead>
@@ -20176,7 +20176,9 @@ window.deleteMember3Row = function(idx) {
 //    전부 "이 프로젝트 확증 신호"로 AI에게 주면 오매칭 위험이 있음 → PN이 겹칠 확률이 낮은 PANEL만
 //    기본으로 체크해서 "분석용"(신뢰 가능한 식별 신호)으로, 나머지는 기본 미체크(참고용만)로 시작.
 //    체크 여부는 프로젝트마다 사용자가 직접 조정 가능.
-window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIMMING/CUTTING','TOUCH / GLASS','TOUCH CTRL','AD BOARD','CONVERTER','BLU','POWER','METAL','MOLD','DIE CAST','PACKING','ETC'];
+window.MATERIAL_FIXED_CATEGORIES = ['PANEL','SLIM/CUT','TOUCH / GLASS','TOUCH CTRL','AD BOARD','CONVERTER','BLU','POWER','METAL','MOLD','DIE CAST','PACKING','ETC'];
+// 💡 구분명 변경(SLIMMING/CUTTING → SLIM/CUT) 이전에 이미 저장된 데이터도 그대로 이어받기 위한 별칭
+window._MATERIAL_CATEGORY_ALIASES = { 'SLIM/CUT': ['SLIMMING/CUTTING'] };
 
 // 💡 화면 DOM에서 현재 입력 중인 값을 그대로 읽어 배열로 재구성 (add/delete 시 다른 행의
 //    미저장 편집내용이 날아가지 않도록 collectTabData() 전체를 부르지 않고 이 테이블만 직접 읽음)
@@ -20215,15 +20217,17 @@ window.renderMaterialRows = function(rows) {
     // 고정 13개: 저장된 데이터에서 구분명으로 값을 이어받고(순서는 항상 고정 목록 순), 없으면 빈 값.
     // useForAnalysis: 저장된 값이 있으면 그대로, 없으면(=신규 프로젝트) PANEL만 기본 체크
     const fixedRows = window.MATERIAL_FIXED_CATEGORIES.map(function(cat) {
-        const found = rows.find(function(r) { return r.category === cat; });
+        const aliases = window._MATERIAL_CATEGORY_ALIASES[cat] || [];
+        const found = rows.find(function(r) { return r.category === cat || aliases.indexOf(r.category) !== -1; });
         const defaultChecked = cat === 'PANEL';
         return {
             category: cat, ktkPn: found ? (found.ktkPn || '') : '', description: found ? (found.description || '') : '', cost: found ? (found.cost || '') : '',
             useForAnalysis: found ? !!found.useForAnalysis : defaultChecked, locked: true
         };
     });
-    // 자유추가: 고정 목록에 없는 구분명을 가진 행
-    const extraRows = rows.filter(function(r) { return window.MATERIAL_FIXED_CATEGORIES.indexOf(r.category) === -1; })
+    // 자유추가: 고정 목록에도, 별칭에도 없는 구분명을 가진 행
+    const allAliasNames = Object.keys(window._MATERIAL_CATEGORY_ALIASES).reduce(function(acc, k) { return acc.concat(window._MATERIAL_CATEGORY_ALIASES[k]); }, []);
+    const extraRows = rows.filter(function(r) { return window.MATERIAL_FIXED_CATEGORIES.indexOf(r.category) === -1 && allAliasNames.indexOf(r.category) === -1; })
         .map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: !!r.useForAnalysis, locked: false }; });
     const allRows = fixedRows.concat(extraRows);
     window.tabData.projectMaterials = allRows.map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: r.useForAnalysis }; });
@@ -20239,9 +20243,9 @@ window.renderMaterialRows = function(rows) {
         //    삭제 버튼이 없어 마지막 열이 항상 빈 칸으로 보였음 — 한 열에 같이 넣어서 해결.
         const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="이 행 삭제" style="border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:16px; height:16px; line-height:1; padding:0; margin-left:2px;">－</button>';
         return '<tr>' + catCell
-            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" placeholder="예: 198454" style="border:none; width:100%; box-sizing:border-box;"></td>'
+            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box;"></td>'
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="예: MV315QHM-N41" style="border:none; width:100%; box-sizing:border-box;"></td>'
-            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" placeholder="예: $97" style="border:none; width:100%; box-sizing:border-box;"></td>'
+            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box;"></td>'
             + '<td style="border:1px solid #e9ecef; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)">' + delBtn + '</td>'
             + '</tr>';
     };
