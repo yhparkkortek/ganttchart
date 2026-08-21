@@ -3310,24 +3310,39 @@ ${mailText}`;
     window.renderSheetTabsBar = function() {
         const bar = document.getElementById('sheet-tabs-bar');
         if (!bar) return;
-        const multi = window._sheets.length > 1;
+        const count = window._sheets.length;
+        const multi = count > 1;
         document.body.classList.toggle('has-multi-sheet-bar', multi); // 💡 간트 표 높이를 그만큼 줄이기 위한 훅
         if (!multi) { bar.style.display = 'none'; return; }
         bar.style.display = 'flex';
+
+        // 💡 [자동 크기조정] 7개까지는 기존 고정 크기(160px) 그대로. 8개부터는 시트탭 줄(bar)이
+        //    실제 쓸 수 있는 폭(#app-main 폭, 사이드바 접힘 상태 반영)을 넘지 않도록 탭 폭을 균등 축소한다.
+        //    스크롤바를 일부러 숨겨놔서(위 CSS 주석 참고) 넘치면 뒤 탭이 안 보이는지도 모르는 문제였음.
+        //    70px 밑으로는 글자가 안 보일 정도로 뭉개지므로 그 아래론 줄이지 않고(그 다음부턴 가로 스크롤 허용).
+        const DEFAULT_TAB_W = 160, MIN_TAB_W = 70, ADD_BTN_W = 28, GAP = 3;
+        let tabW = DEFAULT_TAB_W;
+        if (count > 7) {
+            const available = bar.clientWidth || (bar.parentElement && bar.parentElement.clientWidth) || (DEFAULT_TAB_W * 7);
+            const usable = available - ADD_BTN_W - GAP * (count + 1);
+            tabW = Math.max(MIN_TAB_W, Math.min(DEFAULT_TAB_W, Math.floor(usable / count)));
+        }
+        const labelW = Math.max(30, tabW - 40); // 패딩+닫기버튼+gap 몫만큼 라벨 폭에서 뺌(기존 160/120 비율과 동일)
+
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
             const label = s.fileName || '(새 프로젝트)';
             return `<div onclick="window.switchToSheetWithSave('${s.key}')"
                 title="${escapeHtml(label)}"
-                style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:160px;
+                style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px;
                        background:${active ? '#fff8e6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:1px solid #fff; margin-bottom:-1px;">
-                <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px;">📄 ${escapeHtml(label)}</span>
+                <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
-                    style="color:#999; font-size:13px; line-height:1;">✕</span>
+                    style="color:#999; font-size:13px; line-height:1; flex-shrink:0;">✕</span>
             </div>`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
-                style="display:flex; align-items:center; justify-content:center; width:28px; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
+                style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
     };
 
     // 💡 silent=true면 개별 "로드 완료" 토스트를 생략 — 담당자 이름 클릭으로 여러 프로젝트를 한 번에 열 때
