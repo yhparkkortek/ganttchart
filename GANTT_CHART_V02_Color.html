@@ -19675,12 +19675,56 @@ window._ccBulkRemoveAll = function() {
     if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
 };
 
-// 💡 이름으로 주소록에서 사람 찾기 — 한글 이름으로 먼저 찾고, 없으면 영문 이름으로 폴백
+// 💡 [버그 수정] 메일 본문에서 AI가 이름을 "있는 그대로" 추출하다 보니 "윤재권 팀장님"처럼
+//    직함/존칭이 붙어 나오는 경우가 매우 흔한데, 주소록엔 "윤재권"처럼 직함 없이 등록돼 있어
+//    문자열이 정확히 일치하지 않으면 이메일을 아예 못 찾던 문제 — 흔한 직함/존칭 접미사를
+//    떼어내고 재시도하는 폴백을 추가한다. (앞에 붙는 "팀장 윤재권" 형태나, 영문 Mr./Manager 등도 함께 처리)
+const ADDR_KO_TITLE_WORDS = [
+    '회장','부회장','사장','부사장','대표','전무','상무','이사','감사',
+    '본부장','소장','센터장','실장','팀장','파트장','그룹장','랩장',
+    '수석','책임','선임','주임','매니저','대리','과장','차장','부장','사원','연구원'
+];
+const ADDR_EN_TITLE_WORDS = ['mr','mrs','ms','miss','dr','prof','manager','director','leader','president','vp','ceo','cto','coo'];
+
+// 이름 뒤(또는 앞)에 붙은 흔한 직함/존칭을 반복적으로 떼어낸 결과를 돌려줌 (원본과 다를 때만 폴백 매칭에 사용)
+window._addrStripTitleSuffix = function(name) {
+    let n = String(name || '').trim();
+    let changed = true;
+    while (changed) {
+        changed = false;
+        const before = n;
+        n = n.replace(/\s*(님|씨)\s*$/u, '').trim(); // 끝의 "님"/"씨" 제거
+        for (const t of ADDR_KO_TITLE_WORDS) {
+            if (n.endsWith(t) && n.length > t.length) { n = n.slice(0, -t.length).trim(); break; }
+            if (n.startsWith(t) && n.length > t.length) { n = n.slice(t.length).trim(); break; } // "팀장 윤재권" 형태
+        }
+        for (const t of ADDR_EN_TITLE_WORDS) {
+            const reSuf = new RegExp('[.,]?\\s*' + t + '\\.?$', 'i');
+            const rePre = new RegExp('^' + t + '\\.?\\s*', 'i');
+            if (reSuf.test(n)) { n = n.replace(reSuf, '').trim(); break; }
+            if (rePre.test(n)) { n = n.replace(rePre, '').trim(); break; }
+        }
+        if (n !== before) changed = true;
+    }
+    return n;
+};
+
+// 💡 이름으로 주소록에서 사람 찾기 — 한글 이름으로 먼저 찾고, 없으면 영문 이름으로 폴백.
+//    정확히 일치하는 게 없으면 직함/존칭을 뗀 이름으로 한 번 더 시도.
 window._addrFindByName = function(name) {
     if (!name) return null;
     const addressBook = (window.tabData || {}).addressBook || [];
-    let found = addressBook.find(p => p.name && p.name.trim() === name);
-    if (!found) found = addressBook.find(p => p.nameEn && p.nameEn.trim().toLowerCase() === name.toLowerCase());
+    const tryExact = function(n) {
+        if (!n) return null;
+        let found = addressBook.find(p => p.name && p.name.trim() === n);
+        if (!found) found = addressBook.find(p => p.nameEn && p.nameEn.trim().toLowerCase() === n.toLowerCase());
+        return found || null;
+    };
+    const trimmed = String(name).trim();
+    let found = tryExact(trimmed);
+    if (found) return found;
+    const stripped = window._addrStripTitleSuffix(trimmed);
+    if (stripped && stripped !== trimmed) found = tryExact(stripped);
     return found || null;
 };
 
