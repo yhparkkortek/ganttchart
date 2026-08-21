@@ -1874,11 +1874,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
+            <!-- 💡 [경계선 위치 변경] 타이틀과 LEVEL(WBS) 사이로 이동 -->
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
                  body 하단의 gantt-filter-popup-cal-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
-            <button type="button" id="gantt-filter-trigger-cal-wbs" class="action-btn gantt-filter-trigger-btn" style="margin-left:8px;" onclick="window.toggleGanttFilterPopup('cal-wbs', event)">LEVEL(WBS) ▾</button>
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <div class="btn-group" style="flex:1; justify-content:center; gap:6px;">
+            <button type="button" id="gantt-filter-trigger-cal-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('cal-wbs', event)">LEVEL(WBS) ▾</button>
+            <div class="btn-group" style="flex:1; justify-content:center; gap:6px; margin-left:8px;">
                 <div class="cal-view-toggle">
                     <button type="button" id="cal-view-month-btn" class="cal-view-btn cal-view-btn-active" onclick="window.calSetViewMode('month')">월</button>
                     <button type="button" id="cal-view-week-btn" class="cal-view-btn" onclick="window.calSetViewMode('week')">주</button>
@@ -1902,11 +1903,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Weekly Report</h2>
+            <!-- 💡 [경계선 위치 변경] 타이틀과 LEVEL(WBS) 사이로 이동 -->
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
                  body 하단의 gantt-filter-popup-wr-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
-            <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" style="margin-left:8px;" onclick="window.toggleGanttFilterPopup('wr-wbs', event)">LEVEL(WBS) ▾</button>
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
+            <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('wr-wbs', event)">LEVEL(WBS) ▾</button>
+            <div class="btn-group" style="flex:1; justify-content:center; gap:3px; margin-left:8px;">
                 <button class="action-btn" data-i18n="btn-prev-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
                 <span id="wr-week-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:140px; text-align:center;"></span>
                 <button class="action-btn" data-i18n="btn-next-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(1)">다음주 ▶</button>
@@ -2437,27 +2439,41 @@ ${mailText}`;
     // ═══════════════════════════════════════════════════════════
     window._namedFolderIdCache = window._namedFolderIdCache || {};
     // 💡 getOrCreateBackupFolder와 동일한 find-or-create 패턴의 범용 버전 — 폴더 이름만 바꿔가며 재사용
-    window._getOrCreateNamedFolder = async function(token, folderName) {
-        if (window._namedFolderIdCache[folderName]) return window._namedFolderIdCache[folderName];
-        const q = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-        const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const listData = await listRes.json();
-        if (listData.files && listData.files.length > 0) {
-            window._namedFolderIdCache[folderName] = listData.files[0].id;
+    // 💡 [버그 수정] 실사용 중 Drive 연동 직후 주소록/우선순위점수/휴일/AI프롬프트/프로젝트인덱스/필터규칙
+    //    등 여러 기능이 거의 동시에 각자 "_App_Config 폴더 있나? 없으면 만들기"를 시도하면서, 아직 아무도
+    //    생성을 못 끝낸 그 찰나(수백ms)에 서로 "없다"고 판단해 같은 이름의 폴더를 중복 생성하는 사고가
+    //    실제로 발생함(_App_Config 폴더가 2개 생김). 이미 진행 중인 생성 작업이 있으면 새로 조회/생성하지
+    //    않고 그 결과를 그대로 기다리게 해서(in-flight 프라미스 공유) 경합을 없앤다.
+    window._namedFolderPromiseCache = window._namedFolderPromiseCache || {};
+    window._getOrCreateNamedFolder = function(token, folderName) {
+        if (window._namedFolderIdCache[folderName]) return Promise.resolve(window._namedFolderIdCache[folderName]);
+        if (window._namedFolderPromiseCache[folderName]) return window._namedFolderPromiseCache[folderName];
+
+        const p = (async () => {
+            const q = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+            const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const listData = await listRes.json();
+            if (listData.files && listData.files.length > 0) {
+                window._namedFolderIdCache[folderName] = listData.files[0].id;
+                return window._namedFolderIdCache[folderName];
+            }
+            const createRes = await fetch(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [SHARED_FOLDER_ID] })
+            });
+            const created = await createRes.json();
+            window._namedFolderIdCache[folderName] = created.id;
             return window._namedFolderIdCache[folderName];
-        }
-        const createRes = await fetch(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [SHARED_FOLDER_ID] })
-        });
-        const created = await createRes.json();
-        window._namedFolderIdCache[folderName] = created.id;
-        return window._namedFolderIdCache[folderName];
+        })();
+
+        window._namedFolderPromiseCache[folderName] = p;
+        p.finally(() => { delete window._namedFolderPromiseCache[folderName]; });
+        return p;
     };
-    window.getOrCreateConfigFolder    = function(token) { return window._getOrCreateNamedFolder(token, '_App_Config'); };
+    window.getOrCreateConfigFolder    = function(token) { return window._getOrCreateNamedFolder(token, 'App_Config'); };
     window.getOrCreateTaskInboxFolder = function(token) { return window._getOrCreateNamedFolder(token, 'TaskInbox_Backups'); };
 
     // 💡 [마이그레이션 포함 조회] 이미 팀이 루트에 저장해둔 기존 설정 파일을 "새로 만든 것처럼" 못 찾아서
@@ -3357,6 +3373,18 @@ ${mailText}`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
                 style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
     };
+
+    // 💡 [버그 수정] 탭 폭 자동조정은 지금까지 시트가 새로 열리거나 닫힐 때만 재계산됐음 — 브라우저
+    //    창 크기를 바꾸거나 사이드바를 접었다 펴면(사이드바 토글은 resize 이벤트가 아니라 CSS margin만
+    //    바뀌는 거라 원래는 감지가 안 됨 — 다행히 toggleSidebar()가 전환 후 일부러
+    //    window.dispatchEvent(new Event('resize'))를 쏴주고 있어서 그걸 재사용) 사용 가능한 폭이 바뀌어도
+    //    탭이 예전 폭 그대로 굳어 있어서, 다시 넘치거나 반대로 불필요하게 좁은 채로 남아있었음.
+    let _sheetTabsResizeTimer = null;
+    window.addEventListener('resize', function() {
+        if (!window._sheets || window._sheets.length <= 1) return;
+        clearTimeout(_sheetTabsResizeTimer);
+        _sheetTabsResizeTimer = setTimeout(function() { window.renderSheetTabsBar(); }, 150);
+    });
 
     // 💡 silent=true면 개별 "로드 완료" 토스트를 생략 — 담당자 이름 클릭으로 여러 프로젝트를 한 번에 열 때
     //    파일마다 토스트가 쌓이는 걸 막고, 호출한 쪽에서 요약 토스트 하나만 띄우도록 함
@@ -8982,6 +9010,11 @@ window.handleAuthClick = function() {
         /* 필터 트리거 버튼(LEVEL/업무상태/개발단계) */
         #gantt-filter-btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
         .gantt-filter-trigger-btn.filter-active { background-color: #2c5f8a !important; color: #fff !important; }
+        /* 💡 [버그 수정] .action-btn:hover가 filter-active와 완전히 같은 색이라, 필터가 걸려있는(기본상태)
+           트리거 버튼은 마우스를 올려도 시각적으로 아무 변화가 없어 "호버가 안 먹는다"고 느껴졌음.
+           (필터 없는 상태의 hover는 .action-btn:hover가 그대로 처리하므로 건드리지 않음)
+           active 상태에서도 hover 시 알아볼 수 있게 더 진한 색으로 구분한다. */
+        .gantt-filter-trigger-btn.filter-active:hover { background-color: #1e4a6e !important; color: #fff !important; }
         .gantt-filter-popup { min-width: 200px; max-width: 380px; }
         .gantt-filter-popup .filter-group { display: flex; align-items: center; flex-wrap: wrap; }
 
