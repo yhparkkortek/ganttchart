@@ -3374,17 +3374,34 @@ ${mailText}`;
                 style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
     };
 
-    // 💡 [버그 수정] 탭 폭 자동조정은 지금까지 시트가 새로 열리거나 닫힐 때만 재계산됐음 — 브라우저
-    //    창 크기를 바꾸거나 사이드바를 접었다 펴면(사이드바 토글은 resize 이벤트가 아니라 CSS margin만
-    //    바뀌는 거라 원래는 감지가 안 됨 — 다행히 toggleSidebar()가 전환 후 일부러
-    //    window.dispatchEvent(new Event('resize'))를 쏴주고 있어서 그걸 재사용) 사용 가능한 폭이 바뀌어도
-    //    탭이 예전 폭 그대로 굳어 있어서, 다시 넘치거나 반대로 불필요하게 좁은 채로 남아있었음.
+    // 💡 [버그 수정 v2] 탭 폭 자동조정은 지금까지 시트가 새로 열리거나 닫힐 때, 그리고(직전 수정으로)
+    //    window resize 이벤트가 발생할 때만 재계산됐음. 그런데 resize 이벤트는 "브라우저 창 자체의
+    //    크기"가 바뀔 때만 발동하고, 사이드바 접기/펴기 같은 순수 CSS 레이아웃 변화(margin-left만 바뀜)는
+    //    원래 resize를 발생시키지 않는다(toggleSidebar()가 예외적으로 수동 dispatch해줘서 그 경우만
+    //    우연히 됐던 것 — 그 외 폭이 바뀌는 다른 모든 경우, 예를 들어 초기 레이아웃이 뒤늦게 자리잡는
+    //    경우 등은 여전히 못 잡았음). → window resize 대신, 탭 바 자신의 "실제 렌더링 폭"을
+    //    ResizeObserver로 직접 감시해서 원인과 무관하게 폭이 바뀌면 항상 재계산하도록 바꾼다.
     let _sheetTabsResizeTimer = null;
-    window.addEventListener('resize', function() {
+    window._lastSheetTabsBarWidth = null;
+    window._scheduleSheetTabsResize = function() {
         if (!window._sheets || window._sheets.length <= 1) return;
         clearTimeout(_sheetTabsResizeTimer);
         _sheetTabsResizeTimer = setTimeout(function() { window.renderSheetTabsBar(); }, 150);
-    });
+    };
+    window.addEventListener('resize', window._scheduleSheetTabsResize); // 창 크기 변경 — 추가 안전망으로 계속 유지
+    if (window.ResizeObserver) {
+        const _sheetTabsBarEl = document.getElementById('sheet-tabs-bar');
+        if (_sheetTabsBarEl) {
+            new ResizeObserver(function(entries) {
+                const w = Math.round(entries[0].contentRect.width);
+                // 💡 폭이 실제로 안 바뀌었으면 무시 — renderSheetTabsBar() 자신이 내용을 다시 그리면서
+                //    (높이 등) 아주 미세하게 박스가 흔들려 이 옵저버를 스스로 재호출하는 걸 막기 위함
+                if (w === window._lastSheetTabsBarWidth) return;
+                window._lastSheetTabsBarWidth = w;
+                window._scheduleSheetTabsResize();
+            }).observe(_sheetTabsBarEl);
+        }
+    }
 
     // 💡 silent=true면 개별 "로드 완료" 토스트를 생략 — 담당자 이름 클릭으로 여러 프로젝트를 한 번에 열 때
     //    파일마다 토스트가 쌓이는 걸 막고, 호출한 쪽에서 요약 토스트 하나만 띄우도록 함
@@ -17306,9 +17323,10 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         });
         const label = document.getElementById('wr-level-all-label');
         if (label) label.classList.toggle('active', arr.length === 5);
-        // 💡 [드롭다운화] Gantt 트리거 버튼과 동일하게, 전체(5개 레벨) 선택이 아니면 필터 적용중으로 강조
-        const trigger = document.getElementById('gantt-filter-trigger-wr-wbs');
-        if (trigger) trigger.classList.toggle('filter-active', arr.length !== 5);
+        // 💡 [수정] Weekly Report는 기본값 자체가 "전체(All)"가 아니라 L3/L4라서, Gantt와 같은 기준으로
+        //    "전체가 아니면 강조"를 적용하면 평소에도 계속 파란 배경으로 보여 Gantt WBS 버튼(평소엔
+        //    흰 바탕, 마우스 올릴 때만 파란 바탕)과 다르게 보였음 — 강조 없이 항상 기본 action-btn
+        //    모양(흰 바탕/파란 글씨 → 호버 시 파란 바탕/흰 글씨)만 쓰도록 되돌림.
     };
     window.wrToggleLevel = function(level) {
         const arr = window.wrState.levelFilter;
@@ -23761,9 +23779,10 @@ window.calSyncLevelFilterUI = function() {
     });
     const label = document.getElementById('cal-level-all-label');
     if (label) label.classList.toggle('active', arr.length === 5);
-    // 💡 [드롭다운화] Gantt 트리거 버튼과 동일하게, 전체(5개 레벨) 선택이 아니면 필터 적용중으로 강조
-    const trigger = document.getElementById('gantt-filter-trigger-cal-wbs');
-    if (trigger) trigger.classList.toggle('filter-active', arr.length !== 5);
+    // 💡 [수정] Calendar는 기본값 자체가 "전체(All)"가 아니라 L3/L4라서, Gantt와 같은 기준으로
+    //    "전체가 아니면 강조"를 적용하면 평소에도 계속 파란 배경으로 보여 Gantt WBS 버튼(평소엔
+    //    흰 바탕, 마우스 올릴 때만 파란 바탕)과 다르게 보였음 — 강조 없이 항상 기본 action-btn
+    //    모양(흰 바탕/파란 글씨 → 호버 시 파란 바탕/흰 글씨)만 쓰도록 되돌림.
 };
 window.calToggleLevel = function(level) {
     const arr = window.calState.levelFilter;
