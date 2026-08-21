@@ -782,6 +782,29 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 </div>
 
+<!-- 💡 [드롭다운화] Calendar/Weekly Report의 LEVEL(WBS) 필터 팝업 — Gantt 차트의 gantt-filter-popup과 동일한
+     방식(position:fixed)이라 클리핑 없이 항상 트리거 버튼 바로 아래에 뜨도록 body 최상위에 둠 -->
+<div id="gantt-filter-popup-cal-wbs" class="row-action-popup gantt-filter-popup" data-trigger-id="gantt-filter-trigger-cal-wbs">
+    <div class="filter-group" id="cal-level-filter-group">
+        <div class="filter-label" id="cal-level-all-label" onclick="window.calToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
+        <button type="button" class="btn" data-level="0" onclick="window.calToggleLevel(0)" title="대분류">0</button>
+        <button type="button" class="btn" data-level="1" onclick="window.calToggleLevel(1)" title="소분류1">1</button>
+        <button type="button" class="btn" data-level="2" onclick="window.calToggleLevel(2)" title="소분류2">2</button>
+        <button type="button" class="btn active" data-level="3" onclick="window.calToggleLevel(3)" title="세부업무">3</button>
+        <button type="button" class="btn active" data-level="4" onclick="window.calToggleLevel(4)" title="하위업무">4</button>
+    </div>
+</div>
+<div id="gantt-filter-popup-wr-wbs" class="row-action-popup gantt-filter-popup" data-trigger-id="gantt-filter-trigger-wr-wbs">
+    <div class="filter-group" id="wr-level-filter-group">
+        <div class="filter-label" id="wr-level-all-label" onclick="window.wrToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
+        <button type="button" class="btn" data-level="0" onclick="window.wrToggleLevel(0)" title="대분류">0</button>
+        <button type="button" class="btn" data-level="1" onclick="window.wrToggleLevel(1)" title="소분류1">1</button>
+        <button type="button" class="btn" data-level="2" onclick="window.wrToggleLevel(2)" title="소분류2">2</button>
+        <button type="button" class="btn active" data-level="3" onclick="window.wrToggleLevel(3)" title="세부업무">3</button>
+        <button type="button" class="btn active" data-level="4" onclick="window.wrToggleLevel(4)" title="하위업무">4</button>
+    </div>
+</div>
+
 <div id="app-main">
 
 <!-- 📑 [멀티시트] 어느 내부 탭(Gantt/Summary/알람 등)을 보고 있든 항상 보임 — 동시에 열린 프로젝트가 2개 이상일 때만 표시 -->
@@ -1851,14 +1874,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
-            <div class="filter-group" id="cal-level-filter-group" style="margin-left:8px;">
-                <div class="filter-label" id="cal-level-all-label" onclick="window.calToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
-                <button type="button" class="btn" data-level="0" onclick="window.calToggleLevel(0)" title="대분류">0</button>
-                <button type="button" class="btn" data-level="1" onclick="window.calToggleLevel(1)" title="소분류1">1</button>
-                <button type="button" class="btn" data-level="2" onclick="window.calToggleLevel(2)" title="소분류2">2</button>
-                <button type="button" class="btn active" data-level="3" onclick="window.calToggleLevel(3)" title="세부업무">3</button>
-                <button type="button" class="btn active" data-level="4" onclick="window.calToggleLevel(4)" title="하위업무">4</button>
-            </div>
+            <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
+                 body 하단의 gantt-filter-popup-cal-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
+            <button type="button" id="gantt-filter-trigger-cal-wbs" class="action-btn gantt-filter-trigger-btn" style="margin-left:8px;" onclick="window.toggleGanttFilterPopup('cal-wbs', event)">LEVEL(WBS) ▾</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:6px;">
                 <div class="cal-view-toggle">
@@ -1884,14 +1902,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Weekly Report</h2>
-            <div class="filter-group" id="wr-level-filter-group" style="margin-left:8px;">
-                <div class="filter-label" id="wr-level-all-label" onclick="window.wrToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
-                <button type="button" class="btn" data-level="0" onclick="window.wrToggleLevel(0)" title="대분류">0</button>
-                <button type="button" class="btn" data-level="1" onclick="window.wrToggleLevel(1)" title="소분류1">1</button>
-                <button type="button" class="btn" data-level="2" onclick="window.wrToggleLevel(2)" title="소분류2">2</button>
-                <button type="button" class="btn active" data-level="3" onclick="window.wrToggleLevel(3)" title="세부업무">3</button>
-                <button type="button" class="btn active" data-level="4" onclick="window.wrToggleLevel(4)" title="하위업무">4</button>
-            </div>
+            <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
+                 body 하단의 gantt-filter-popup-wr-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
+            <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" style="margin-left:8px;" onclick="window.toggleGanttFilterPopup('wr-wbs', event)">LEVEL(WBS) ▾</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
                 <button class="action-btn" data-i18n="btn-prev-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
@@ -17252,6 +17265,9 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         });
         const label = document.getElementById('wr-level-all-label');
         if (label) label.classList.toggle('active', arr.length === 5);
+        // 💡 [드롭다운화] Gantt 트리거 버튼과 동일하게, 전체(5개 레벨) 선택이 아니면 필터 적용중으로 강조
+        const trigger = document.getElementById('gantt-filter-trigger-wr-wbs');
+        if (trigger) trigger.classList.toggle('filter-active', arr.length !== 5);
     };
     window.wrToggleLevel = function(level) {
         const arr = window.wrState.levelFilter;
@@ -17469,6 +17485,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
 
 // ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
+        window.wrSyncLevelFilterUI(); // 💡 [드롭다운화] 탭을 열 때마다 트리거 버튼 강조 상태를 현재 필터와 맞춤
         const data = window.wrClassifyTasks();
         const _wrEn = window._currentLang === 'en';
 
@@ -23703,6 +23720,9 @@ window.calSyncLevelFilterUI = function() {
     });
     const label = document.getElementById('cal-level-all-label');
     if (label) label.classList.toggle('active', arr.length === 5);
+    // 💡 [드롭다운화] Gantt 트리거 버튼과 동일하게, 전체(5개 레벨) 선택이 아니면 필터 적용중으로 강조
+    const trigger = document.getElementById('gantt-filter-trigger-cal-wbs');
+    if (trigger) trigger.classList.toggle('filter-active', arr.length !== 5);
 };
 window.calToggleLevel = function(level) {
     const arr = window.calState.levelFilter;
@@ -24140,6 +24160,7 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
 }
 
 window.calRender = function() {
+    window.calSyncLevelFilterUI(); // 💡 [드롭다운화] 탭을 열 때마다 트리거 버튼 강조 상태를 현재 필터와 맞춤
     const container = document.getElementById('cal-page');
     if (!container) return;
     const baseY = window.calState.year, baseM = window.calState.month;
