@@ -1494,6 +1494,19 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <style>
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #sum-milestone-body td, #sum-milestone-body input, #sum-milestone-body-actual td, #sum-milestone-body-actual input { text-align: center !important; }
+                /* 💡 [버그 수정] 이 표는 헤더가 2행(rowspan="구분" + colspan 그룹명 / 하위 Start·End·DR)인데,
+                   전역 `th { position:sticky; top:0 }` 규칙이 th 하나하나에 개별로 걸리면서 1행/2행이
+                   전부 top:0에서 경합해 스크롤 시 2행이 1행 밑으로 들어가며 병합 셀과 어긋났음.
+                   M.C Table/Address 탭과 동일하게, thead 전체를 하나의 sticky 단위로 고정해서 해결
+                   (M.C Table 쪽 주석 참고: "표 전체가 separate 방식이라 sticky 헤더가 충돌 없이 정상 동작함"). */
+                #tab-summary .concept-table thead {
+                    position: sticky !important;
+                    top: 0 !important;
+                    z-index: 16;
+                }
+                #tab-summary .concept-table thead th {
+                    background-color: #f4f6f8 !important;
+                }
             </style>
             <table class="concept-table">
                 <thead>
@@ -1694,6 +1707,18 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <style>
                 #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #briefspec-body input[data-field="modelA"], #briefspec-body input[data-field="modelB"], #briefspec-body input[data-field="modelC"] { text-align: center !important; }
+                /* 💡 [버그 수정] Summary 탭과 동일한 원인 — 2행 헤더(rowspan NO/TYPE/TYPE2/Note + colspan
+                   Description 하위 Model A/B/C)인데 전역 `th { position:sticky; top:0 }`가 각 th에
+                   개별로 걸려 스크롤 시 2행이 1행 밑으로 들어가며 병합 셀과 어긋났음. M.C Table과 동일하게
+                   thead 전체를 하나의 sticky 단위로 고정해서 해결. */
+                #tab-briefspec .concept-table thead {
+                    position: sticky !important;
+                    top: 0 !important;
+                    z-index: 16;
+                }
+                #tab-briefspec .concept-table thead th {
+                    background-color: #f4f6f8 !important;
+                }
             </style>
             <div id="briefspec-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
             <table class="concept-table">
