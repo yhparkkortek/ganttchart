@@ -5477,7 +5477,15 @@ ${mailText}`;
             //    끼어들어 배율에 영향을 주므로, 페이지 하단에 고정 오버레이되는 요소는 분리해두는 게 맞음)
             fixedFooterDiv = document.createElement('div');
             fixedFooterDiv.className = 'print-fixed-footer';
-            fixedFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif;';
+            // 💡 [버그 수정] Summary는 콘텐츠를 JS가 계산한 배율로 1페이지에 꽉 차게 축소하는데(SAFETY=0.94),
+            //    그 스케일 계산은 clone 내부 콘텐츠 높이만 재고 clone "밖"에 별도로 얹는 이 고정 푸터의
+            //    높이는 전혀 고려하지 않는다 — 그래서 13px 크기의 푸터가 페이지 맨 아래(6mm)에서 위로
+            //    차지하는 높이만큼 마지막 박스(주요자재)와 겹치거나 바짝 붙어 보였다. 다른 탭 인쇄 푸터가
+            //    쓰는 더 작은 크기(Gantt=8px, 표 기반 탭들의 소형 폰트 기준=10px)를 참고해 Summary만
+            //    9px로 줄여 푸터가 차지하는 높이를 낮추고 주요자재 박스 아래로 여유 있게 붙도록 함
+            //    (Weekly Report는 이 고정 푸터를 함께 쓰지만 요청 대상이 아니므로 13px 그대로 유지).
+            const footerFontPx = isSummary ? 9 : 13;
+            fixedFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:' + footerFontPx + 'px; line-height:1.2; color:#000; font-family:"Malgun Gothic",sans-serif;';
             fixedFooterDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
                 + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
         }
