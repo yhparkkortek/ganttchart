@@ -959,6 +959,22 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
   </div>
 
+  <!-- ══ 섹션 4: 외부 도메인 발송 허용 ══ -->
+  <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
+    <div onclick="window._toggleAlarmSection('sec-domain')"
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+      <span id="sec-domain-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🌐 외부 도메인 발송 허용</span>
+      <span id="sec-domain-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+    </div>
+    <div id="sec-domain" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+      <p style="margin:0 0 10px; font-size:11px; color:#888; line-height:1.5;">
+        📌 <b>@kortek.co.kr</b>은 항상 발송됩니다. 그 외 도메인은 기본적으로 <b style="color:#e03131;">차단</b>되며,
+        체크한 도메인만 메일/메신저 알람이 발송됩니다.<br>(안정화 전까지 외부인에게 알람이 나가는 것을 막기 위한 안전장치)
+      </p>
+      <div id="alarm-domain-list" style="display:flex; flex-direction:column; gap:5px; max-height:140px; overflow-y:auto; padding-right:2px;"></div>
+    </div>
+  </div>
+
   <div style="display:flex; justify-content:flex-end; gap:8px;">
     <button id="as-modal-save-btn" onclick="window.saveAlarmSettings()" style="padding:6px 18px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">저장</button>
     <button id="as-modal-close-btn" onclick="window.closeAlarmSettings()" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">닫기</button>
@@ -18427,10 +18443,10 @@ window.checkAndSendAlarms = async function(isManual) {
             sentCount++;
             console.log(`[알람] 발송 완료: ${item.taskName} (${dDayPlainSafe(item.diffDays)})`);
 
-            // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭
+            // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭 (🌐 외부 도메인 차단된 사람은 제외)
             const tgChatIds = [...new Set(
-                item.allPeople
-                    ? item.allPeople.map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
+                item.allowedPeople
+                    ? item.allowedPeople.map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
                     : [window._addrFindByName(item.assignee)].map(p => p ? p.telegramId : '')
             )].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
@@ -18501,6 +18517,56 @@ window.loadAlarmSettings = function() {
     } catch(e) { return {}; }
 };
 
+// 🌐 외부 도메인 발송 허용 — 주소록(Address Book)에 등록된 이메일 도메인 중 @kortek.co.kr 이외 도메인 목록/인원수 추출
+//    (자동알람 설정 모달의 "외부 도메인 발송 허용" 섹션에서 사용)
+window.KORTEK_INTERNAL_DOMAIN = 'kortek.co.kr';
+window.getAddressBookExternalDomains = function() {
+    const addressBook = (window.tabData || {}).addressBook || [];
+    const counts = {};
+    addressBook.forEach(function(p) {
+        const email = String((p && p.email) || '').trim().toLowerCase();
+        const m = email.match(/@([^@\s]+)$/);
+        if (!m) return;
+        const domain = m[1];
+        if (domain === window.KORTEK_INTERNAL_DOMAIN) return;
+        counts[domain] = (counts[domain] || 0) + 1;
+    });
+    return Object.keys(counts).sort().map(function(d) { return { domain: d, count: counts[d] }; });
+};
+
+// 이메일이 알람 발송 허용 대상인지 — @kortek.co.kr은 항상 허용, 그 외 도메인은 설정에서 체크된 것만 허용.
+//    (안정화 전까지 외부인에게 알림 메일/메신저가 나가는 걸 막기 위한 기본 안전장치 — 기본값: 외부 전체 차단)
+window._isAlarmDomainAllowed = function(email) {
+    if (!email) return false;
+    const m = String(email).trim().toLowerCase().match(/@([^@\s]+)$/);
+    if (!m) return false;
+    if (m[1] === window.KORTEK_INTERNAL_DOMAIN) return true;
+    const cfg = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+    const allowed = cfg.allowedExternalDomains || [];
+    return allowed.indexOf(m[1]) !== -1;
+};
+
+// 외부 도메인 체크박스 목록 렌더링
+window.renderAlarmDomainList = function() {
+    const wrap = document.getElementById('alarm-domain-list');
+    if (!wrap) return;
+    const domains = window.getAddressBookExternalDomains();
+    const cfg = window.loadAlarmSettings();
+    const allowed = new Set(cfg.allowedExternalDomains || []);
+    if (!domains.length) {
+        wrap.innerHTML = '<span style="font-size:11.5px; color:#aaa;">주소록에 @kortek.co.kr 이외 도메인이 없습니다.</span>';
+        return;
+    }
+    wrap.innerHTML = domains.map(function(d) {
+        const checked = allowed.has(d.domain) ? 'checked' : '';
+        return `<label class="alarm-domain-row" style="display:flex; align-items:center; gap:8px; font-size:12px; padding:4px 6px; border-radius:4px; cursor:pointer;" onmouseover="this.style.background='#f7f9fb'" onmouseout="this.style.background=''">
+            <input type="checkbox" class="alarm-domain-cb" value="${d.domain}" ${checked} style="cursor:pointer;">
+            <span style="flex:1;">@${d.domain}</span>
+            <span style="color:#999; font-size:10.5px;">${d.count}명</span>
+        </label>`;
+    }).join('');
+};
+
 // 설정 저장
 window.saveAlarmSettings = function() {
     const ccRows = [...document.querySelectorAll('.alarm-cc-row')].map(row => ({
@@ -18512,6 +18578,7 @@ window.saveAlarmSettings = function() {
 
     const cfg = window.loadAlarmSettings();
     cfg.ccList = ccRows;
+    cfg.allowedExternalDomains = [...document.querySelectorAll('.alarm-domain-cb:checked')].map(cb => cb.value);
     localStorage.setItem('gantt_alarm_settings', JSON.stringify(cfg));
     window.closeAlarmSettings();
         window.showToast(window._currentLang === 'en' ? '✅ Settings saved.' : '✅ 설정이 저장되었습니다.');
@@ -19649,6 +19716,7 @@ window.openAlarmSettings = function() {
         list.innerHTML = '';
         ccList.forEach(r => window.addAlarmCcRow(r.name, r.email, r.enabled !== false, !!r.auto));
     }
+    window.renderAlarmDomainList();
     document.getElementById('alarm-settings-overlay').style.display = 'flex';
     document.getElementById('alarm-settings-modal').style.display  = 'block';
     window.bringModalToFront('alarm-settings-modal');
@@ -19726,9 +19794,9 @@ window.collectAlarmItems = function() {
         return found ? (found.email || '') : '';
     };
 
-    // CC 이메일 — 알람 설정에 등록된 참조인 중 발송 ON(enabled)인 사람만
+    // CC 이메일 — 알람 설정에 등록된 참조인 중 발송 ON(enabled)이고, 🌐 외부 도메인 발송 허용 대상인 사람만
     const cfg     = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
-    const ccMails = (cfg.ccList || []).filter(r => r.email && r.enabled !== false).map(r => r.email).join(',');
+    const ccMails = (cfg.ccList || []).filter(r => r.email && r.enabled !== false && window._isAlarmDomainAllowed(r.email)).map(r => r.email).join(',');
 
     document.querySelectorAll('#table-body tr').forEach(function(tr) {
         // dataset.rowIndex → globalData 인덱스 (1-based, 0번은 헤더)
@@ -19777,11 +19845,18 @@ window.collectAlarmItems = function() {
         const assignee       = senderName;
         const assigneeEmail  = lookupEmail(senderName);
         const receiverStr    = receiverNames.join(', ') || '-';
-        // 수신인 이메일만 (표시용)
+        // 수신인 이메일만 (표시용) — 화면 표시는 도메인 차단과 무관하게 실제 등록된 이메일을 그대로 보여줌
         const receiverEmails = [...new Set(receiverNames.map(n => lookupEmail(n)).filter(Boolean))];
         const receiverEmail  = receiverEmails.join(',');
-        // 실제 발송 = 발신인 + 수신인 전원
-        const toEmail        = [...new Set([assigneeEmail, ...receiverEmails].filter(Boolean))].join(',');
+        // 🌐 외부 도메인 발송 게이트 — @kortek.co.kr 이외 도메인은 알람 설정에서 허용 체크한 도메인만 실제 발송 대상
+        const blockedByDomain = [...new Set([assigneeEmail, ...receiverEmails].filter(e => e && !window._isAlarmDomainAllowed(e)))];
+        // 실제 발송 = 발신인 + 수신인 전원 중 발송 허용된 이메일만
+        const toEmail        = [...new Set([assigneeEmail, ...receiverEmails].filter(e => e && window._isAlarmDomainAllowed(e)))].join(',');
+        // 텔레그램 발송 대상 — 이메일이 등록돼 있는데 도메인이 차단 상태면 제외, 이메일 미등록이면 판단 불가로 허용
+        const allowedPeople  = allPeople.filter(function(n) {
+            const em = lookupEmail(n);
+            return !em || window._isAlarmDomainAllowed(em);
+        });
 
         // 💡 이 업무만 별도로 설정한 알람 일정이 있으면 그걸 쓰고, 없으면 기본값(ALARM_DAYS) 사용
         const alarmDays = (row._알림일정 && row._알림일정.length) ? row._알림일정.slice() : ALARM_DAYS.slice();
@@ -19810,8 +19885,8 @@ window.collectAlarmItems = function() {
             status: statusVal,
             assignee, assigneeEmail,
             receiverStr, receiverEmail,
-            missingPeople,
-            toEmail, allPeople,
+            missingPeople, blockedByDomain,
+            toEmail, allPeople, allowedPeople,
             ccMails, dueStr, dueDate, diffDays, alarmDays,
             content: contentRaw, sentLog, sentHidden, tr
         });
@@ -19895,14 +19970,17 @@ window.renderAlarmTab = async function() {
         if (names.length <= 1) return `<span style="white-space:nowrap;">${names[0] || '-'}</span>`;
         return `<span title="${names.join('\n')}" style="cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;">${names[0]} 외 ${names.length-1}명</span>`;
     };
-    const emailCell2 = (email, missing) => {
+    // 🌐 도메인 차단으로 인해 실제 발송에서 제외된 이메일이 있으면 배지로 표시
+    const domainBadge = (blocked) => (blocked && blocked.length)
+        ? `<span title="🌐 외부 도메인 차단됨(알람 설정에서 허용 가능): ${blocked.join(', ')}" style="margin-left:4px; font-size:10px; color:#e67e22; cursor:help;">🌐🚫</span>` : '';
+    const emailCell2 = (email, missing, blocked) => {
         if (!email) {
             if (missing && missing.length) return `<span style="color:#e03131; font-size:11px; white-space:nowrap;" title="${missing.join('\n')} 이메일 미등록">미등록 ⚠</span>`;
             return `<span style="color:#e03131; font-size:11px; white-space:nowrap;">미입력</span>`;
         }
         const emails = email.split(',').map(e => e.trim()).filter(Boolean);
-        if (emails.length <= 1) return `<span style="font-size:11px; white-space:nowrap;">${emails[0]}</span>`;
-        return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;" title="${emails.join('\n')}">${emails[0]} 외 ${emails.length-1}</span>`;
+        if (emails.length <= 1) return `<span style="font-size:11px; white-space:nowrap;">${emails[0]}</span>${domainBadge(blocked)}`;
+        return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;" title="${emails.join('\n')}">${emails[0]} 외 ${emails.length-1}</span>${domainBadge(blocked)}`;
     };
 
     tbody.innerHTML = items.map((item, idx) => `
@@ -19912,9 +19990,9 @@ window.renderAlarmTab = async function() {
             <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.status || '-'}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.assignee)}</td>
-            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.assigneeEmail, item.missingPeople)}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.receiverStr)}</td>
-            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.receiverEmail, item.missingPeople)}</td>
+            <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.receiverEmail, item.missingPeople, item.blockedByDomain)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.dueStr}</td>
             <td style="padding:7px 10px; text-align:center;">${dDayLabel(item.diffDays)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${sentStatus(item.sentLog, item.diffDays, item.sentHidden, idx)}</td>
@@ -20035,8 +20113,9 @@ window.openAlarmModal = function(idx) {
     // 업무내용 줄바꿈: 날짜 이후, [섹션키워드] 이전에 개행
     const formattedContent = item.content ? window.alarmFormatContent(item.content) : '';
 
+    const _isBlockedEmail = (email) => (item.blockedByDomain || []).some(b => (email || '').split(',').map(e=>e.trim()).includes(b));
     const emailWarn = (email, name) => email
-        ? `<span style="color:#27ae60;">${email}</span>`
+        ? `<span style="color:#27ae60;">${email}</span>${_isBlockedEmail(email) ? ' <span title="🌐 외부 도메인 차단됨 — 실제 알람은 발송되지 않습니다 (알람 설정에서 허용 가능)" style="font-size:10px; color:#e67e22; cursor:help;">🌐🚫 차단</span>' : ''}`
         : `<span style="color:#e03131;">미등록 — Summary 탭에 <b>${name}</b> 이메일을 입력해 주세요</span>`;
     document.getElementById('alarm-modal-title').textContent = '🔔 ' + item.taskName;
     document.getElementById('alarm-modal-body').innerHTML = `
@@ -20079,7 +20158,8 @@ window.sendSingleAlarm = async function(sendAll) {
         pm.Cutting담당자이메일, pm.Module담당자이메일, pm.Tooling담당자이메일,
         ...((window.tabData || {}).projectMembers3 || []).map(m => m.email),
     ].flatMap(e => (e || '').split(/[,，]/).map(x => x.trim()))
-     .filter(e => e && e.includes('@'));
+     .filter(e => e && e.includes('@'))
+     .filter(window._isAlarmDomainAllowed); // 🌐 외부 도메인 차단
 
     // 일반 모드: 발신인 + 수신인만
     const allEmails = sendAll
@@ -20123,9 +20203,9 @@ window.sendSingleAlarm = async function(sendAll) {
             localStorage.setItem(key, new Date().toISOString());
             item.sentLog['manual'] = new Date().toISOString();
 
-            // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭
+            // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭 (🌐 외부 도메인 차단된 사람은 제외)
             const tgChatIds = [...new Set(
-                (item.allPeople || [item.assignee]).map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
+                (item.allowedPeople || item.allPeople || [item.assignee]).map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
             )].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
                 const _tgContent2 = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,100) + (item.content.length>100?'…':'') : '';
