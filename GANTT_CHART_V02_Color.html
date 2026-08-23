@@ -8270,9 +8270,13 @@ window.deleteHistoryByDateRange = function() {
         //    프로젝트 포함)들까지 저장이 막혀버렸다("프로젝트 열기"가 전환 전 자동저장을 시도하다 여기
         //    걸려서 프로젝트 목록조차 못 여는 것처럼 보이는 문제로 이어짐). 드라이브에 아직 파일이 없는
         //    (=currentDriveFileId가 없는) 진짜 신규 등록 때만 요구하도록 범위를 좁힌다.
-        if (!window.currentDriveFileId) {
+        //    💡 [추가 수정] 그것만으론 부족했다 — PROTO Start는 "Gantt 일정에 앵커로 쓰일 때"만 의미가
+        //    있는데, 아직 Gantt WBS를 하나도 안 불러온 채(Summary만 먼저 채우는 흔한 순서) 저장하려 하면
+        //    앵커로 쓸 일정 자체가 없는데도 요구하고 있었다. 실제로 앵커링할 Gantt 데이터
+        //    (globalData.length > 1)가 있을 때만 요구하도록 조건을 하나 더 좁힌다.
+        if (!window.currentDriveFileId && globalData && globalData.length > 1) {
             const protoStartMs = (((window.tabData || {}).summary || {}).milestones || {})['기획Start'];
-            if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일 — 신규 프로젝트만 필수)');
+            if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일 — Gantt 데이터가 있는 신규 프로젝트만 필수)');
         }
         if (missing.length === 0) return '';
         return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성 및 일정 자동계산에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
