@@ -2012,7 +2012,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div style="font-size:14.5px; color:#333; line-height:1.7; margin-bottom:20px;">
             새 프로젝트를 시작합니다.<br>참조 엑셀을 다운로드해서 작성한 뒤<br>화면에 드래그하세요.
         </div>
-        <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; padding:10px 22px; background:#2c5f8a; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px;">📥 참조 엑셀 다운로드</a>
+        <button id="new-project-auto-import-btn" class="action-btn" onclick="window.autoImportReferenceExcel()" title="구글 드라이브에 연동되어 있으면, 참조 엑셀을 자동으로 가져와 바로 화면에 반영합니다" style="padding:10px 22px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer;">🚀 자동으로 가져오기</button>
+        <div style="font-size:11px; color:#999; margin-top:14px; margin-bottom:6px;">— 또는 직접 다운로드해서 작성하려면 —</div>
+        <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; padding:8px 18px; background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px; text-decoration:none; font-weight:bold; font-size:12.5px;">📥 참조 엑셀 다운로드</a>
         <div style="display:flex; justify-content:center; margin-top:16px;">
             <button class="action-btn" onclick="document.getElementById('new-project-modal-overlay').style.display='none';">확인</button>
         </div>
@@ -2953,6 +2955,60 @@ ${mailText}`;
 
         window._openAsNewSheet('new_' + Date.now(), null, null);
         window._resetToBlankNoConfirm();
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // 🚀 [새 프로젝트 자동 시작] "참조 엑셀 다운로드 → 작성 → 화면에 드래그"를 수동으로 하는 기존 방식은
+    //    그대로 두고, 구글 드라이브 연동이 이미 되어 있는 사용자는 참조 엑셀을 바로 가져와 화면에
+    //    반영할 수 있게 한다. (다운로드/재업로드 왕복 없이, 이미 화면에 있는 handleFiles() 가져오기
+    //    파이프라인을 그대로 재사용 — 드래그로 불러온 것과 완전히 동일하게 처리됨)
+    // ═══════════════════════════════════════════════════════════
+    window.REFERENCE_SHEET_ID = '1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T';
+    window.autoImportReferenceExcel = async function() {
+        const btn = document.getElementById('new-project-auto-import-btn');
+        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+
+        // 💡 구글 드라이브 미연동 상태면 자동 가져오기가 불가능 — 연동을 제안하고, 원치 않으면
+        //    기존처럼 아래 "참조 엑셀 다운로드" 링크로 수동 진행하면 됨(이 버튼은 아무것도 건드리지 않음)
+        if (!token) {
+            if (confirm(window._t(
+                '자동으로 가져오려면 먼저 구글 드라이브 연동이 필요합니다.\n지금 연동하시겠습니까? (연동 후 이 버튼을 다시 눌러주세요)',
+                'Connecting Google Drive is required to auto-import.\nConnect now? (After connecting, click this button again.)'
+            ))) {
+                if (window.handleAuthClick) window.handleAuthClick();
+            }
+            return;
+        }
+
+        if (btn) { btn.disabled = true; btn.textContent = window._t('⏳ 가져오는 중...', '⏳ Importing...'); }
+        try {
+            // 💡 참조 파일은 "구글 시트"라 원본 그대로는 못 받고 xlsx로 변환(export)해서 받아야 함.
+            //    docs.google.com/.../export 링크(수동 다운로드용)는 브라우저 직접 이동만 되고 CORS 때문에
+            //    fetch()로는 못 읽으므로, 이미 연동된 OAuth 토큰으로 Drive REST API를 직접 호출한다.
+            const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+            const url = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}/export?mimeType=${encodeURIComponent(mimeType)}`;
+            const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+            const blob = await resp.blob();
+            const file = new File([blob], '참조_엑셀.xlsx', { type: mimeType });
+
+            document.getElementById('new-project-modal-overlay').style.display = 'none';
+            // 💡 드래그로 불러올 때와 동일한 진입점 — 컬럼 매핑/레벨 판별/초기 잠금 등 기존 로직을 100% 재사용
+            handleFiles({ target: { files: [file] } });
+            if (window.showToast) window.showToast(window._t(
+                '📥 참조 엑셀을 자동으로 불러왔습니다. 내용을 채워서 진행해주세요.',
+                '📥 Reference Excel imported automatically. Fill it in to continue.'
+            ));
+        } catch (err) {
+            console.error('참조 엑셀 자동 가져오기 실패:', err);
+            alert(window._t(
+                '⚠️ 참조 엑셀을 자동으로 가져오지 못했습니다.\n(' + err.message + ')\n\n아래 "참조 엑셀 다운로드" 링크로 수동 진행해주세요.',
+                '⚠️ Failed to auto-import the reference Excel.\n(' + err.message + ')\n\nPlease use the "Download Reference Excel" link below instead.'
+            ));
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = window._t('🚀 자동으로 가져오기', '🚀 Auto Import'); }
+        }
     };
 
     // 💡 Summary/Brief SPEC/M.C Table/Address 탭 필드를 전부 비움 (populateTabData는 "채우기"만 하고
