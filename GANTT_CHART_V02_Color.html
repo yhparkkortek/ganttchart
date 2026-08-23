@@ -3703,6 +3703,103 @@ ${mailText}`;
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════
+    // 🩺 [진단] "느린 게 정말 구글 드라이브 문제인가?"를 객관적으로 판별하는 도구.
+    //    콘솔에서 diagnoseDriveSpeed() 실행 — 프로젝트를 하나 연 상태에서 호출.
+    //    메타 조회(순수 왕복 지연) · 전체 다운로드 반복(속도제한 편차) · 비-구글 대조군(내 인터넷
+    //    자체가 느린 건지 구글만 느린 건지)까지 함께 재서 자동으로 판정 문구를 찍어준다.
+    window.diagnoseDriveSpeed = async function(rounds) {
+        rounds = rounds || 3;
+        const fileId = window.currentDriveFileId;
+        if (!fileId) { console.log('%c⚠️ 먼저 프로젝트를 하나 열고 실행해주세요.', 'color:#e03131;font-weight:bold'); return; }
+        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) { console.log('%c⚠️ 구글 드라이브 연동 후 실행해주세요.', 'color:#e03131;font-weight:bold'); return; }
+
+        console.log('%c🩺 드라이브 속도 진단 시작 — 잠시만 기다려주세요...', 'color:#2c5f8a;font-weight:bold');
+
+        let fname = '', sizeKB = null;
+        try {
+            const m = await gapi.client.drive.files.get({ fileId: fileId, fields: 'name,size', supportsAllDrives: true });
+            fname = m.result.name || '';
+            if (m.result.size) sizeKB = Math.round(Number(m.result.size) / 1024);
+        } catch (e) {}
+
+        // ① 메타 조회 = 거의 데이터 없는 요청 → 순수 왕복 지연
+        const metaMs = [];
+        for (let i = 0; i < rounds; i++) {
+            const t = performance.now();
+            try { await gapi.client.drive.files.get({ fileId: fileId, fields: 'id', supportsAllDrives: true }); metaMs.push(Math.round(performance.now() - t)); }
+            catch (e) { metaMs.push('ERR ' + (e && e.status ? e.status : '')); }
+        }
+
+        // ② 파일 전체 다운로드 = 대역폭 + 속도제한 확인
+        const contentRuns = [];
+        let rateLimited = false;
+        for (let i = 0; i < rounds; i++) {
+            const t = performance.now();
+            try {
+                const r = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
+                if (!r.ok) {
+                    if (r.status === 429 || r.status === 403) rateLimited = true;
+                    let why = '';
+                    try { const j = await r.json(); why = (j && j.error && j.error.message) || ''; } catch (e2) {}
+                    contentRuns.push({ ms: Math.round(performance.now() - t), kb: 0, err: 'HTTP ' + r.status + (why ? ' — ' + why : '') });
+                    continue;
+                }
+                const txt = await r.text();
+                const ms = Math.round(performance.now() - t);
+                const kb = Math.round(txt.length / 1024);
+                contentRuns.push({ ms: ms, kb: kb, kbps: Math.round(kb / Math.max(ms, 1) * 1000) });
+            } catch (e) { contentRuns.push({ ms: Math.round(performance.now() - t), kb: 0, err: String(e && e.message) }); }
+        }
+
+        // ④ 대조군: 구글이 아닌 곳(이 페이지 자체)에서 비슷한 크기 받아보기
+        const ctrlRuns = [];
+        for (let i = 0; i < 2; i++) {
+            const t = performance.now();
+            try {
+                const r = await fetch(location.pathname + '?nocache=' + Date.now(), { cache: 'no-store' });
+                const txt = await r.text();
+                const ms = Math.round(performance.now() - t);
+                const kb = Math.round(txt.length / 1024);
+                ctrlRuns.push({ ms: ms, kb: kb, kbps: Math.round(kb / Math.max(ms, 1) * 1000) });
+            } catch (e) { ctrlRuns.push({ err: String(e && e.message) }); }
+        }
+
+        const okRuns = contentRuns.filter(function(r) { return !r.err; });
+        const avg = function(a) { return a.length ? Math.round(a.reduce(function(s, v) { return s + v; }, 0) / a.length) : 0; };
+        const driveKbps = avg(okRuns.map(function(r) { return r.kbps; }));
+        const ctrlOk = ctrlRuns.filter(function(r) { return !r.err; });
+        const ctrlKbps = avg(ctrlOk.map(function(r) { return r.kbps; }));
+        const numericMeta = metaMs.filter(function(v) { return typeof v === 'number'; });
+        const metaAvg = avg(numericMeta);
+        const msList = okRuns.map(function(r) { return r.ms; });
+        const spread = msList.length > 1 ? Math.max.apply(null, msList) - Math.min.apply(null, msList) : 0;
+
+        console.log('%c━━━━━━━━━━ 🩺 드라이브 속도 진단 결과 ━━━━━━━━━━', 'color:#2c5f8a;font-weight:bold');
+        console.log('대상 파일       : ' + fname + (sizeKB !== null ? ' (' + sizeKB + 'KB)' : ''));
+        console.log('① 메타 조회     : ' + metaMs.join(' / ') + ' ms   ← 데이터 거의 없는 요청');
+        console.log('② 전체 다운로드 : ' + contentRuns.map(function(r) { return r.err ? r.err : r.ms + 'ms(' + r.kb + 'KB, ' + r.kbps + 'KB/s)'; }).join(' / '));
+        console.log('③ 반복 편차     : ' + spread + 'ms   ← 크면 속도제한 신호');
+        console.log('④ 대조군(비구글): ' + ctrlRuns.map(function(r) { return r.err ? r.err : r.ms + 'ms(' + r.kb + 'KB, ' + r.kbps + 'KB/s)'; }).join(' / '));
+        console.log('%c─────────────────── 판정 ───────────────────', 'color:#2c5f8a;font-weight:bold');
+
+        const verdict = [];
+        if (rateLimited) verdict.push('🚨 구글이 속도제한(HTTP 403/429)을 응답했습니다 → 구글 드라이브 문제 확정');
+        if (metaAvg > 2000) verdict.push('🚨 데이터가 거의 없는 메타 요청조차 평균 ' + metaAvg + 'ms → 파일 크기와 무관한 구글/네트워크 응답 지연');
+        if (spread > 5000) verdict.push('🚨 같은 파일인데 실행마다 ' + spread + 'ms나 차이 → 크기 문제가 아니라 구글 쪽 변동(속도제한 유력)');
+        if (ctrlKbps > 0 && driveKbps > 0 && ctrlKbps > driveKbps * 5) verdict.push('🚨 내 인터넷은 ' + ctrlKbps + 'KB/s인데 드라이브만 ' + driveKbps + 'KB/s → 인터넷이 아니라 구글 드라이브가 느림');
+        if (ctrlKbps > 0 && driveKbps > 0 && ctrlKbps < driveKbps * 1.5) verdict.push('ℹ️ 드라이브(' + driveKbps + 'KB/s)와 일반 다운로드(' + ctrlKbps + 'KB/s) 속도가 비슷 → 구글이 아니라 현재 네트워크 전반이 느림');
+        if (sizeKB !== null && sizeKB > 1000) verdict.push('⚠️ 파일이 ' + sizeKB + 'KB로 큽니다 → 크기 자체도 지연에 기여(수정이력 누적 등 정리 필요)');
+        if (!verdict.length) verdict.push('✅ 지금은 정상 범위입니다. 느릴 때 다시 실행해서 비교해주세요.');
+        verdict.forEach(function(v) { console.log(v); });
+        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color:#2c5f8a;font-weight:bold');
+
+        return { file: fname, sizeKB: sizeKB, metaMs: metaMs, content: contentRuns, control: ctrlRuns, driveKbps: driveKbps, controlKbps: ctrlKbps, rateLimited: rateLimited };
+    };
+
+
     // 💡 silent=true면 개별 "로드 완료" 토스트를 생략 — 담당자 이름 클릭으로 여러 프로젝트를 한 번에 열 때
     //    파일마다 토스트가 쌓이는 걸 막고, 호출한 쪽에서 요약 토스트 하나만 띄우도록 함
     window.executeLoadFile = async function(fileId, fileName, silent) {
