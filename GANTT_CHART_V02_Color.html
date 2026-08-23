@@ -592,6 +592,9 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 #sum-milestone-body .u-input, #sum-milestone-body-actual .u-input { text-align: center !important; }
 #sum-milestone-body .u-input { background: #f4f6f8 !important; }
 #sum-milestone-body-actual .u-input { background: #fff8e6 !important; }
+/* 💡 위 두 규칙(ID+클래스)이 .req-field.req-missing(클래스만)보다 명시도가 높아 미입력 경고 배경(연노랑)을
+   가려버리므로, PROTO Start 같은 필수 마일스톤 칸에서도 경고 배경이 그대로 보이도록 별도로 덮어씀 */
+#sum-milestone-body .req-field.req-missing { background: #fff3cd !important; }
 
 /* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
 .sum-tl-bubble.above::after, .sum-tl-bubble.below::after { border-color: transparent !important; border-width: 0 !important; }
@@ -1517,7 +1520,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <th colspan="3">PP</th>
                     </tr>
                     <tr id="sum-milestone-head">
-                        <th>Start</th>
+                        <th>Start <span style="color:#e03131;" title="필수 입력 — 새 프로젝트 등록 시 Gantt Chart의 시작일 기준(anchor)으로 사용되어 전체 일정이 자동 계산됩니다">*</span></th>
                         <th>End</th>
                         <th>DR</th>
                         <th>Start</th>
@@ -1531,7 +1534,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <tbody>
                     <tr id="sum-milestone-body" style="background:#f4f6f8;">
                         <td id="sum-td-plan" style="font-weight:bold;">계획</td>
-                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다" oninput="window._checkRequiredField(this)"></td>
                         <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
                         <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD"></td>
@@ -3088,13 +3091,21 @@ ${mailText}`;
             // 📥 [Phase 2.5] 저장 직전, 내가 파일을 연 이후 도착한 배분 업무를 원격 원장에서 찾아 자동 병합
             if (fileId) { await window.mergeRemoteDistributions(fileId); }
 
+            // 🆕 [새 프로젝트 최초 등록] 드라이브에 아직 없던(=fileId가 없는) 프로젝트를 처음 등록하는 순간,
+            //    Summary 탭 PROTO Start(계획) 날짜를 Gantt Chart 시작일 기준(anchor)으로 반영해 전체 일정을
+            //    자동 계산하고, 그 결과를 "최초 계획"으로 저장한다. 이미 계획이 하나라도 있으면(=재등록/이후
+            //    저장) 건드리지 않고 딱 1회, 최초 등록 시점에만 실행됨.
+            if (!fileId && (!window._scheduleBaselines || window._scheduleBaselines.length === 0) && window._registerNewProjectInitialPlan) {
+                window._registerNewProjectInitialPlan();
+            }
+
             let serializedGlobalData = globalData.map(row => {
                 let obj = { data: Array.from(row) };
                 for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
                 return obj;
             });
 
-            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [] };
+            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselines || [] };
             let boundary = 'foo_bar_baz';
             let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '' } };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
@@ -3295,6 +3306,13 @@ ${mailText}`;
                 window.updateCurrentFileLabel();
                 window.recalculateSchedules();
                 window.renderSheetTabsBar();
+                window._compareTargetId = null;
+                if (saveData.scheduleBaselines && saveData.scheduleBaselines.length) {
+                    window._scheduleBaselines = saveData.scheduleBaselines;
+                    if (typeof persistScheduleBaselines === 'function') persistScheduleBaselines();
+                } else if (window.loadScheduleBaselines) {
+                    window.loadScheduleBaselines();
+                }
 
                 const msg = existingFileId
                     ? window._t(`🎉 [${fileName}] 백업으로 복원되었습니다 (원본: ${origName}). 확인 후 [저장]을 누르면 그 프로젝트에 반영됩니다.`, `🎉 Restored from [${fileName}] (original: ${origName}). Press [Save] to apply to that project.`)
@@ -3562,7 +3580,14 @@ ${mailText}`;
                 window.renderSheetTabsBar(); // 💡 [멀티시트]
                 // 💡 [버그 수정] 계획(Baseline)은 프로젝트별로 분리 저장되므로, 프로젝트가 바뀌면 그 프로젝트 것으로 다시 로드
                 window._compareTargetId = null;
-                if (window.loadScheduleBaselines) window.loadScheduleBaselines();
+                // 🆕 계획(Baseline)은 이제 드라이브 JSON에도 함께 저장됨 — 있으면 그걸 그대로 신뢰(팀 공용),
+                //    없으면(예: 이 기능 이전에 저장된 옛 파일) 이 브라우저의 localStorage 기록으로 대체
+                if (saveData.scheduleBaselines && saveData.scheduleBaselines.length) {
+                    window._scheduleBaselines = saveData.scheduleBaselines;
+                    if (typeof persistScheduleBaselines === 'function') persistScheduleBaselines();
+                } else if (window.loadScheduleBaselines) {
+                    window.loadScheduleBaselines();
+                }
                 console.info(`[프로젝트 열기 계측] "${fileName}" 화면 렌더링: ${Math.round(performance.now() - _tRender0)}ms`);
                 if (!silent) window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
             }
@@ -4753,6 +4778,83 @@ ${mailText}`;
         const txt = row._level === 0 ? row._origDev : row._level === 1 ? row._origT1 : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4;
         return (row._l0Group || '') + '::' + (row._level || 0) + '::' + (txt || '').toString().trim();
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // 🆕 [새 프로젝트 최초 등록] Summary "PROTO Start(계획)" 날짜를 Gantt 시작일 기준(anchor)으로 삼아
+    //    전체 일정을 다시 계산하고, 그 결과를 "최초 계획"으로 자동 저장한다 (_saveToGoogleDriveRaw에서
+    //    "드라이브에 아직 없는 새 프로젝트를 처음 등록"할 때 1회만 호출됨).
+    //    ⚠️ 주의: 엑셀을 드래그해서 불러오면 900ms 뒤 모든 행이 "오늘" 기준 계산일로 자동 잠금(고정)된다
+    //    (5298번째 줄 부근 "[초기 잠금]" 참고). 이 함수는 그 잠금을 풀고 PROTO Start 기준으로 다시 계산·
+    //    재잠금한다 — 즉, 이 시점 이전에 사용자가 특정 행의 날짜를 수동으로 조정해 두었다면 그 수동
+    //    조정분은 여기서 덮어써진다. "새 프로젝트를 막 등록하는 시점"에서만 쓰이도록 저장 로직에서
+    //    가드(파일이 아직 없고, 계획이 하나도 없을 때만)를 걸어두었다.
+    // ═══════════════════════════════════════════════════════════
+    window._reanchorScheduleAndLock = function(anchorTs) {
+        if (!globalData || globalData.length <= 1 || colIdx.start === -1) return false;
+
+        // 1) 기존 잠금(수동 고정) 해제 — 새 앵커 기준으로 전체가 다시 계산되도록
+        for (let i = 1; i < globalData.length; i++) {
+            const r = globalData[i]; if (!r) continue;
+            r._startForced = false; r._planForced = false; r._scheduleModeManual = false;
+        }
+
+        // 2) 0레벨(최상위) 첫 행의 시작일 셀을 PROTO Start로 지정 → 전체 일정의 기준(anchor)이 됨
+        let firstL0 = null;
+        for (let i = 1; i < globalData.length; i++) {
+            if (globalData[i] && globalData[i]._level === 0) { firstL0 = globalData[i]; break; }
+        }
+        if (!firstL0) return false;
+        firstL0[colIdx.start] = formatTsToYMD(anchorTs);
+
+        // 3) 순수 계산(DOM 미접촉) — 전체 행의 _calcStartTs/_calcPlanTs를 채움 (recalculateSchedules()의
+        //    핵심 로직만 뽑아낸 computeCalcDatesForRows 재사용)
+        if (window.computeCalcDatesForRows) window.computeCalcDatesForRows(globalData.slice(1), colIdx);
+
+        // 4) 계산 결과를 실제 셀에 기록하고 다시 잠금 — 엑셀 최초 로드 시의 "초기 잠금"과 동일한 방식
+        for (let i = 1; i < globalData.length; i++) {
+            const r = globalData[i]; if (!r || !r._calcStartTs) continue;
+            if (colIdx.start !== -1) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
+            if (colIdx.plan !== -1 && r._calcPlanTs) r[colIdx.plan] = formatTsToYMD(r._calcPlanTs);
+            r._startForced = true; r._planForced = true; r._scheduleModeManual = true;
+        }
+        return true;
+    };
+
+    window._registerNewProjectInitialPlan = function() {
+        try {
+            if (!globalData || globalData.length <= 1) return; // Gantt 데이터가 아직 없으면 손댈 것이 없음
+            const dateEl = document.getElementById('sum-ms-plan-protostart');
+            const raw = dateEl ? String(dateEl.value || '').trim() : '';
+            if (!raw) return;
+            const parsed = parseDateValue(raw);
+            if (!parsed) return;
+
+            const applied = window._reanchorScheduleAndLock(parsed.ts);
+            if (!applied) return;
+
+            const rows = {};
+            for (let i = 1; i < globalData.length; i++) {
+                const row = globalData[i]; if (!row || !row._calcStartTs) continue;
+                rows[getTaskKey(row)] = { s: row._calcStartTs, e: row._calcPlanTs || null };
+            }
+            if (Object.keys(rows).length === 0) return;
+
+            const label = window._currentLang === 'en' ? 'Initial Plan (Kickoff)' : '최초 계획 (킥오프)';
+            const baseline = { id: 'bl_' + Date.now(), label: label, savedAt: Date.now(), rows: rows };
+            window._scheduleBaselines.push(baseline);
+            persistScheduleBaselines();
+            if (window.renderBaselineMenu) window.renderBaselineMenu();
+
+            if (typeof renderTable === 'function') renderTable(globalData);
+            if (typeof applyFilters === 'function') applyFilters();
+            if (window.recomputeGanttViewRange) window.recomputeGanttViewRange();
+
+            window.showToast(window._t(
+                `📐 PROTO Start(${raw}) 기준으로 전체 일정을 계산하고 "${label}"으로 저장했습니다.`,
+                `📐 Calculated the schedule from PROTO Start (${raw}) and saved it as "${label}".`
+            ));
+        } catch (e) { console.error('최초 계획 자동 저장 실패:', e); }
+    };
 
     // 📐 계획 메뉴 팝업 — 저장/비교선택/삭제를 버튼 하나로 통합
     window.toggleBaselineMenu = function(ev) {
@@ -7951,18 +8053,21 @@ window.deleteHistoryByDateRange = function() {
         if (!String(pm.고객모델명 || '').trim()) missing.push('고객 모델명');
         if (!String(pm.KTK모델명 || '').trim()) missing.push('KTK PN_모델명');
         if (!String(pm.프로젝트담당자 || '').trim()) missing.push('프로젝트 담당자');
+        // 💡 첫 번째 표(계획/실적)의 "계획" 행 PROTO Start — 새 프로젝트 등록 시 Gantt 시작일 기준(anchor)으로 쓰이므로 필수
+        const protoStartMs = (((window.tabData || {}).summary || {}).milestones || {})['기획Start'];
+        if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일)');
         if (missing.length === 0) return '';
-        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
+        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성 및 일정 자동계산에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
     };
 
-    // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자) 빈 값이면 시각적 하이라이트
+    // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자/PROTO Start) 빈 값이면 시각적 하이라이트
     window._checkRequiredField = function(el) {
         if (!el) return;
         if (String(el.value || '').trim()) el.classList.remove('req-missing');
         else el.classList.add('req-missing');
     };
     window._checkAllRequiredFields = function() {
-        ['sum-customer', 'sum-customer-model', 'sum-ktk-pn-model', 'sum-pm'].forEach(function(id) {
+        ['sum-customer', 'sum-customer-model', 'sum-ktk-pn-model', 'sum-pm', 'sum-ms-plan-protostart'].forEach(function(id) {
             const el = document.getElementById(id);
             if (el) window._checkRequiredField(el);
         });
