@@ -2950,7 +2950,14 @@ ${mailText}`;
     };
 
     // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭) — [멀티시트] 새 빈 시트로 추가
+    //    🔒 새 프로젝트 생성 자체를 관리자 비밀번호로 보호 — 계획 삭제/비밀번호 변경 등과 동일한
+    //    verifyAdminPassword() 패턴을 재사용한다. 상단바 "➕ 새 프로젝트" 버튼과 드라이브 모달의
+    //    "➕ 새 프로젝트 등록" 버튼이 전부 이 함수 하나를 호출하므로, 여기 한 곳만 막으면 두 진입점 모두 보호됨.
     window.startNewProject = function() {
+        if (!verifyAdminPassword(window._t('🔒 새 프로젝트를 생성하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to create a new project.\n(case-insensitive)'))) {
+            alert(window._t('❌ 비밀번호 인증 실패. 새 프로젝트 생성이 취소되었습니다.', '❌ Authentication failed. New project creation cancelled.'));
+            return;
+        }
         if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Brief SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
 
         window._openAsNewSheet('new_' + Date.now(), null, null);
