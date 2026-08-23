@@ -3655,9 +3655,12 @@ ${mailText}`;
         const bar = document.getElementById('sheet-tabs-bar');
         if (!bar) return;
         const count = window._sheets.length;
-        const multi = count > 1;
-        document.body.classList.toggle('has-multi-sheet-bar', multi); // 💡 간트 표 높이를 그만큼 줄이기 위한 훅
-        if (!multi) { bar.style.display = 'none'; return; }
+        // 💡 [UI 수정] 예전엔 시트가 2개 이상일 때만(count > 1) 탭 바를 보여줘서, 프로젝트가 딱 하나만
+        //    열려 있을 땐 지금 무슨 파일을 열어둔 건지 탭으로 확인할 방법이 없었다. 1개만 열려 있어도
+        //    보이도록 기준을 낮춘다(count >= 1) — 0개(아직 아무 것도 안 연 초기 화면)일 때만 숨김.
+        const showBar = count >= 1;
+        document.body.classList.toggle('has-multi-sheet-bar', showBar); // 💡 간트 표 높이를 그만큼 줄이기 위한 훅
+        if (!showBar) { bar.style.display = 'none'; return; }
         bar.style.display = 'flex';
 
         // 💡 [자동 크기조정] 7개까지는 기존 고정 크기(160px) 그대로. 8개부터는 시트탭 줄(bar)이
