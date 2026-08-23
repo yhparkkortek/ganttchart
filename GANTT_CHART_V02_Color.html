@@ -12168,8 +12168,20 @@ window.inboxDistPickFile = async function(fileId, fileName) {
     if (!ctx) return;
     document.getElementById('dist-step2').style.display = 'none';
     try {
-        const metaResp    = await gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true });
-        const contentResp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
+        // 💡 [성능] metadata/content 두 호출을 순차 await 하면 alt=media 지연이 그대로 두 번 더해짐 —
+        //    서로 독립적인 호출이므로 병렬로 보내 대기 시간을 절반 가까이 줄임
+        const [metaResp, contentResp] = await Promise.all([
+            gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true }),
+            gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true })
+        ]);
+        // 💡 [버그 수정] alt=media는 수 초~수십 초 걸릴 수 있는데, 그동안 사용자가 패널을 닫거나
+        //    (closeInboxDist → window._distCtx = null) 다른 업무의 "다른 프로젝트 선택"을 열면
+        //    (inboxOpenDistribute → window._distCtx = 새 객체) window._distCtx가 이 요청을 시작할
+        //    때와 달라진다. 그 상태로 그대로 진행하면 inboxDistFillL0Select()가 null이거나
+        //    엉뚱한 업무의 window._distCtx를 읽어 "Cannot read properties of null (reading 'saveData')"
+        //    로 크래시하거나, 최악의 경우 다른 업무의 ctx에 이 파일 데이터를 덮어씀 — 응답이 온 시점에
+        //    여전히 같은 요청인지(참조가 동일한지) 확인해서 아니면 조용히 무시
+        if (window._distCtx !== ctx) return;
         const saveData = contentResp.result;
         if (!saveData || !saveData.globalData || !saveData.colIdx) {
             alert('⚠️ 대상 파일에 간트 데이터가 없거나 구조를 해석할 수 없습니다.');
@@ -12189,7 +12201,10 @@ window.inboxDistPickFile = async function(fileId, fileName) {
         window.inboxDistFillL0Select(undefined);
         document.getElementById('dist-target-name').textContent = fileName;
         document.getElementById('dist-step2').style.display = 'block';
-    } catch (err) { alert('대상 프로젝트 로드 실패: ' + err.message); }
+    } catch (err) {
+        if (window._distCtx !== ctx) return; // 이미 패널을 닫고 나간 뒤라면 에러 알림도 띄우지 않음
+        alert('대상 프로젝트 로드 실패: ' + err.message);
+    }
 };
 
 // 대상 프로젝트의 L0 목록으로 드롭다운 구성 (preferred 값 우선 선택)
@@ -12223,9 +12238,15 @@ window.distRecomputePreview = function() {
 // 충돌 감지 시 최신본 재확보
 window.inboxDistReload = async function(prevL0) {
     const ctx = window._distCtx;
+    if (!ctx) return false;
     try {
-        const metaResp    = await gapi.client.drive.files.get({ fileId: ctx.fileId, fields: 'modifiedTime', supportsAllDrives: true });
-        const contentResp = await gapi.client.drive.files.get({ fileId: ctx.fileId, alt: 'media', supportsAllDrives: true });
+        // 💡 [성능] inboxDistPickFile과 동일하게 병렬 호출
+        const [metaResp, contentResp] = await Promise.all([
+            gapi.client.drive.files.get({ fileId: ctx.fileId, fields: 'modifiedTime', supportsAllDrives: true }),
+            gapi.client.drive.files.get({ fileId: ctx.fileId, alt: 'media', supportsAllDrives: true })
+        ]);
+        // 💡 대기 중 패널이 닫히거나 다른 업무로 전환됐으면 중단 (동일한 크래시 방지 목적)
+        if (window._distCtx !== ctx) return false;
         const saveData = contentResp.result;
         if (!saveData || !saveData.globalData || !saveData.colIdx) { alert('⚠️ 최신본 구조를 해석할 수 없습니다.'); return false; }
         ctx.saveData = saveData;
@@ -12244,7 +12265,10 @@ window.inboxDistReload = async function(prevL0) {
             return false;
         }
         return true;
-    } catch (err) { alert('최신본 확보 실패: ' + err.message); return false; }
+    } catch (err) {
+        if (window._distCtx !== ctx) return false;
+        alert('최신본 확보 실패: ' + err.message); return false;
+    }
 };
 
 // 전송 실행 (attempt: 충돌 자동 재시도 횟수)
