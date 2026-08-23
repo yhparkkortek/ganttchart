@@ -2838,9 +2838,17 @@ ${mailText}`;
         } catch(e) { console.error('PriorityScore_Shared.json 저장 실패:', e); return false; }
     };
 
+    // 💡 [성능 수정] AddressBook._driveFileId/폴더 캐시와 동일한 이유 — 이 파일 ID는 세션 중 바뀌지 않는데,
+    //    캐시가 없어서 저장(updateProjectIndexEntry)할 때마다 매번 files.list 조회(최대 2번, 루트 이동
+    //    마이그레이션까지 겹치면 3번)를 새로 하고 있었다. "저장 한 번에 API를 몇 번이나 두드리냐"는
+    //    질문의 답 중 하나 — 이 조회만 캐싱해도 저장마다 1~2콜이 줄어든다.
+    window._projectIndexFileId = null;
     window.findProjectIndexFile = async function(token) {
+        if (window._projectIndexFileId) return window._projectIndexFileId;
         const folderId = await window.getOrCreateConfigFolder(token);
-        return window._findOrMigrateFile(token, PROJECT_INDEX_FILENAME, folderId);
+        const id = await window._findOrMigrateFile(token, PROJECT_INDEX_FILENAME, folderId);
+        if (id) window._projectIndexFileId = id;
+        return id;
     };
 
     // 쉼표로 구분된 메일키워드 문자열 → 정제된 배열 (공백 제거, 빈 항목 제거, 중복 제거)
@@ -2929,11 +2937,13 @@ ${mailText}`;
                 const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
                     + "\r\n--" + boundary + "--";
-                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
                     body: multipartBody
                 });
+                const created = await createRes.json();
+                if (created && created.id) window._projectIndexFileId = created.id; // 💡 방금 만든 파일 ID를 캐시에 반영
             }
             return true;
         } catch (err) { console.error('project_index.json 갱신 실패 (메일 자동처리 매칭에 영향 — 저장 자체는 정상 완료됨):', err); return false; }
