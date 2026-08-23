@@ -3144,7 +3144,13 @@ ${mailText}`;
         return !!(
             (td.briefSpec && td.briefSpec.length) ||
             (td.mcTable && td.mcTable.length) ||
-            Object.keys(pm).some(function(k) { return pm[k] && String(pm[k]).trim(); }) ||
+            // 💡 [버그 수정] pm.memberLabels(담당자 "라벨" 텍스트 — 기본값이라도 항상 채워져 있음, 예:
+            //    "프로젝트 담당자")가 객체라서 String(pm[k])가 "[object Object]"로 항상 참(truthy)이 되어,
+            //    아무것도 입력한 적 없는 완전히 빈 화면(구글 드라이브 연동 직후, 또는 모든 시트를 닫은
+            //    직후)에서도 "저장할 데이터가 있다"로 잘못 판정되고 있었다. 그 결과 "프로젝트 열기"·
+            //    "저장" 버튼이 빈 화면인데도 매번 "새 프로젝트 등록" 취급을 하며 필수 항목(PROTO Start 등)을
+            //    요구했다. 실제 사용자가 입력한 "문자열" 값만 데이터로 인정하도록 좁힌다.
+            Object.keys(pm).some(function(k) { const v = pm[k]; return typeof v === 'string' && v.trim(); }) ||
             (td.summary && Object.keys(td.summary).some(function(k) {
                 const v = td.summary[k];
                 return k !== 'milestones' && v && String(v).trim();
