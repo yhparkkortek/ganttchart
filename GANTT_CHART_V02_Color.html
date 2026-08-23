@@ -2954,19 +2954,14 @@ ${mailText}`;
     };
 
     // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭) — [멀티시트] 새 빈 시트로 추가
-    //    🔒 새 프로젝트 생성 자체를 관리자 비밀번호로 보호 — 계획 삭제/비밀번호 변경 등과 동일한
-    //    verifyAdminPassword() 패턴을 재사용한다. 상단바 "➕ 새 프로젝트" 버튼과 드라이브 모달의
-    //    "➕ 새 프로젝트 등록" 버튼이 전부 이 함수 하나를 호출하므로, 여기 한 곳만 막으면 두 진입점 모두 보호됨.
+    //    🔒 [설계 변경] 비밀번호 보호를 "이 버튼을 눌렀을 때"가 아니라, 실제로 새 드라이브 파일이
+    //    "생성되는 순간"(_saveToGoogleDriveRaw, !fileId일 때)으로 옮겼다. 예전엔 이 버튼에만 걸려있어서,
+    //    버튼을 거치지 않고 그냥 초기/빈 상태(프로젝트 아무것도 없거나 전부 닫은 상태)에서 곧바로
+    //    타이핑하거나 엑셀을 드래그해 저장하면 비밀번호 확인 없이 새 프로젝트가 등록되는 구멍이 있었다.
+    //    "새 프로젝트 만들기"라는 화면 초기화 자체는 아직 아무것도 만든 게 아니므로(저장 전까지는
+    //    로컬 뷰만 비우는 것) 여기서는 더 이상 비밀번호를 묻지 않고, 실제로 등록(첫 저장)될 때 막는다.
     window.startNewProject = function() {
-        if (!verifyAdminPassword(window._t('🔒 새 프로젝트를 생성하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to create a new project.\n(case-insensitive)'))) {
-            alert(window._t('❌ 비밀번호 인증 실패. 새 프로젝트 생성이 취소되었습니다.', '❌ Authentication failed. New project creation cancelled.'));
-            return;
-        }
         if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Brief SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
-
-        // 💡 [버그 수정] 여기서 이미 비밀번호를 확인했으니, 바로 이어서 참조 엑셀을 드래그/자동가져오기 할 때
-        //    handleFiles()가 "드라이브 연동 중" 비밀번호를 또 묻지 않도록 1회성 플래그를 켜둔다.
-        window._newProjectAuthorized = true;
 
         window._openAsNewSheet('new_' + Date.now(), null, null);
         window._resetToBlankNoConfirm();
@@ -3193,6 +3188,17 @@ ${mailText}`;
                 window.currentDriveFileId = await window.findSaveFile(dynamicFileName);
             }
             let fileId = window.currentDriveFileId;
+
+            // 🔒 [새 프로젝트 생성 보호] 드라이브에 아직 없는(=fileId가 없는) 프로젝트를 처음 등록(파일 생성)
+            //    하는 바로 이 순간에만 관리자 비밀번호를 확인한다. "➕ 새 프로젝트" 버튼을 거쳤든, 그냥 빈
+            //    화면에서 곧바로 입력/드래그해서 저장했든 — 실제로 새 파일이 만들어지는 지점 하나만 지키면
+            //    진입 경로에 상관없이 항상 막힌다(예전엔 버튼에만 걸려있어서 버튼을 안 거치면 그냥 통과됐음).
+            if (!fileId) {
+                if (!verifyAdminPassword(window._t('🔒 새 프로젝트를 등록하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to register a new project.\n(case-insensitive)'))) {
+                    alert(window._t('❌ 비밀번호 인증 실패. 새 프로젝트 등록이 취소되었습니다.', '❌ Authentication failed. New project registration cancelled.'));
+                    return false;
+                }
+            }
 
             // 📥 [Phase 2.5] 저장 직전, 내가 파일을 연 이후 도착한 배분 업무를 원격 원장에서 찾아 자동 병합
             if (fileId) { await window.mergeRemoteDistributions(fileId); }
@@ -5363,16 +5369,18 @@ ${mailText}`;
         function handleFiles(e) {
         const files = e.target.files; if (!files || files.length === 0) return;
 
-        // ✅ 구글 드라이브 연동 상태에서 엑셀 로드 시 비밀번호 확인
-        // 💡 [버그 수정] "새 프로젝트" 버튼이 이미 관리자 비밀번호를 한 번 확인하는데(window.startNewProject),
-        //    바로 이어서 참조 엑셀을 드래그/자동가져오기 하면 이 체크에 또 걸려서 같은 흐름 안에서 비밀번호를
-        //    두 번 묻는 것처럼 보였다. window._newProjectAuthorized(새 프로젝트 시작 시 인증 성공하면 1회
-        //    켜지는 플래그)가 있으면 이번 한 번은 건너뛴다 — 단, 이미 열려있는 "다른" 프로젝트 위에 실수로
-        //    엑셀을 드래그해 덮어쓰는 것까지 막던 원래 보호 목적은 그대로 유지(그 경우엔 플래그가 꺼져 있음).
-            if (window.currentDriveFileId || (window.isDriveConnected && !window._newProjectAuthorized)) {
+        // ✅ 이미 로드된 프로젝트(파일 연결됨) 또는 화면에 이미 실제 Gantt 데이터가 있는 상태에서
+        //    엑셀을 드래그하면 "그 내용을 덮어쓰는" 것이므로 비밀번호로 막는다.
+        //    💡 [버그 수정] 예전엔 조건이 `window.isDriveConnected`만 봐서, 프로젝트가 하나도 안 열려있는
+        //    "완전히 빈 화면"(구글 연동은 돼있지만 아무 파일도 안 불러온 상태)에서도 매번 비밀번호를
+        //    물었다 — 빈 화면은 애초에 "덮어쓸" 내용이 없으므로 막을 이유가 없다. 실제로 덮어써질 데이터가
+        //    있을 때(파일이 연결돼 있거나, 화면에 이미 Gantt 행이 있을 때)만 확인하도록 좁힌다.
+        //    (새 프로젝트 등록 자체의 비밀번호 보호는 여기가 아니라 실제 신규 파일 생성 시점인
+        //    _saveToGoogleDriveRaw에서 한다 — 진입 경로(버튼/드래그 등)에 상관없이 항상 걸리도록)
+            if (window.currentDriveFileId || (window.isDriveConnected && globalData && globalData.length > 1)) {
             const success = verifyAdminPassword(
-                "🔒 구글 드라이브 연동 중입니다.\n\n" +
-                "엑셀 파일로 드라이브 데이터를 덮어쓰려면\n관리자 비밀번호를 입력하세요.\n\n" +
+                "🔒 이미 열려있는 프로젝트 데이터가 있습니다.\n\n" +
+                "엑셀 파일로 덮어쓰려면\n관리자 비밀번호를 입력하세요.\n\n" +
                 "(취소 시 엑셀 로드가 중단됩니다)"
             );
             if (!success) {
@@ -5384,8 +5392,7 @@ ${mailText}`;
         } else if (!window.isDriveConnected) {
             window.currentDriveFileId = null;
         }
-        window._newProjectAuthorized = false; // 1회성 소모 — 다음 드래그부터는 다시 정상적으로 확인
-            
+
         window.closeAllTopbarMenus(); // ✅ 엑셀 로드 시작 시 열려있던 파일/업무 드롭다운 자동 닫기
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = []; // 📥 [Phase 2.5] 새 프로젝트 로드 시 원장 초기화
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
