@@ -6745,6 +6745,10 @@ window.deleteHistoryByDateRange = function() {
         } catch (e) { } return false;
     }
 
+    // 💡 [버그 수정] 헤더로 "전체 펼치기"를 켜둔 상태인지 재렌더링을 넘나들며 기억하는 플래그.
+    //    renderTable()이 매번 여기 값을 보고 펼침 class를 다시 적용한다(위 renderTable 참고).
+    window._allDetailExpanded = false;
+
     // 💡 업무상세내용/답변 셀 접기·펼치기 — 클릭한 셀만 펼치고, 이전에 펼쳐져 있던 다른 셀은 자동으로 접힘
     window.toggleDetailExpand = function(td, event) {
         const wasExpanded = td.classList.contains('detail-td-expanded');
@@ -6752,6 +6756,11 @@ window.deleteHistoryByDateRange = function() {
             if (el !== td) el.classList.remove('detail-td-expanded');
         });
         td.classList.toggle('detail-td-expanded', !wasExpanded);
+        // 💡 개별 셀을 직접 조작했으니 "전체 펼치기" 모드는 해제 — 안 그러면 다음 재렌더링 때
+        //    (다른 행들은 다시 접혀있는데) 전체 펼치기 플래그가 되살아나 다시 전부 펼쳐버림
+        window._allDetailExpanded = false;
+        const arrow = document.getElementById('detail-th-arrow');
+        if (arrow) arrow.textContent = '▼';
         // WBS 팝업 닫기 (상세내용 클릭 시 stopPropagation으로 외부클릭 감지 안되는 문제 해결)
         const wbsPopup = document.getElementById('row-action-popup');
         if (wbsPopup) { wbsPopup.style.display = 'none'; window.clearRowHighlight && window.clearRowHighlight(); }
@@ -6766,14 +6775,20 @@ window.deleteHistoryByDateRange = function() {
         if (anyExpanded) {
             allDetail.forEach(el => el.classList.remove('detail-td-expanded'));
             if (arrow) arrow.textContent = '▼';
+            window._allDetailExpanded = false;
         } else {
             allDetail.forEach(el => el.classList.add('detail-td-expanded'));
             if (arrow) arrow.textContent = '▲';
+            window._allDetailExpanded = true;
         }
     };
 
     // 상세내용 셀이 아닌 다른 곳을 클릭하면, 펼쳐져 있던 셀을 기본 높이로 되돌림
+    // 💡 [버그 수정] "전체 펼치기" 모드일 때는 예외 — WBS 이동/+-/삭제 등 버튼은 전부 이 detail-td
+    //    바깥에 있어서, 이 리스너가 없으면 그 버튼을 누르는 순간(=바깥 클릭) 전체 펼치기가 곧바로
+    //    풀려버렸다. 전체 펼치기는 헤더를 다시 눌러야만 꺼지도록 명시적인 동안 유지.
     document.addEventListener('click', function(e) {
+        if (window._allDetailExpanded) return;
         if (e.target.closest && e.target.closest('td.detail-td')) return;
         document.querySelectorAll('td.detail-td-expanded').forEach(el => el.classList.remove('detail-td-expanded'));
     });
@@ -8037,6 +8052,17 @@ window.deleteHistoryByDateRange = function() {
         }
         
         tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
+
+        // 💡 [버그 수정] "상세내용 헤더 클릭 → 전체 펼치기"는 DOM class(detail-td-expanded)로만 표시돼서,
+        //    WBS 상하좌우/+-/삭제 등 다른 액션이 renderTable()을 다시 부르며 thead/tbody를 통째로 새로
+        //    그릴 때마다(바로 위 tbody.innerHTML 대입, 헤더도 위에서 매번 새로 그려짐) 상태가 사라져
+        //    매번 다시 헤더를 클릭해야 했다. 전체 펼치기 여부를 window._allDetailExpanded에 별도로
+        //    저장해두고, 렌더링될 때마다 여기서 다시 적용해 재렌더링을 넘나들며 유지되게 한다.
+        if (window._allDetailExpanded) {
+            document.querySelectorAll('td.detail-td').forEach(el => el.classList.add('detail-td-expanded'));
+            const arrowEl = document.getElementById('detail-th-arrow');
+            if (arrowEl) arrowEl.textContent = '▲';
+        }
 
         // 💡 페이지를 새로고침한 뒤 최초 1회만 "오늘" 행으로 스크롤 (편집/필터 등으로 인한 재렌더링 시엔 스크롤 위치를 건드리지 않음)
         if (!window._didInitialScrollToToday && data && data.length > 1) {
