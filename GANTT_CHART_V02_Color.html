@@ -3233,8 +3233,10 @@ ${mailText}`;
                 return false;
             }
 
-            let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true';
-            
+            // 💡 [성능 수정] fields=id,modifiedTime을 붙여서 저장 응답에 modifiedTime을 함께 받는다 —
+            //    mergeRemoteDistributions()가 "마지막으로 내가 저장한 시점" 캐시로 쓰기 위함(별도 호출 불필요).
+            let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime';
+
             let response = await fetch(url, {
                 method: fileId ? 'PATCH' : 'POST',
                 headers: {
@@ -3252,6 +3254,9 @@ ${mailText}`;
                 window.currentDriveFileId = file.id;
                 window.lastSavedLogCount = window.changeLogs.length;
                 window._nonGanttDirty = false; // 💡 Summary 탭(주요자재 등) 편집도 저장됐으니 함께 리셋
+                // 💡 [성능 수정] 방금 내가 저장한 시점을 캐시해둬서, 다음 저장 때 mergeRemoteDistributions가
+                //    "그 사이 아무도 안 건드렸으면" 무거운 전체 다운로드를 건너뛸 수 있게 한다.
+                if (file.modifiedTime) { window._distMergeModifiedTime = window._distMergeModifiedTime || {}; window._distMergeModifiedTime[file.id] = file.modifiedTime; }
                 window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
                 window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
                 window.showToast(window._currentLang === 'en'
@@ -12104,8 +12109,22 @@ window.inboxDistExecute = async function(attempt) {
 // 📥 [Phase 2.5] 저장 시 배분 원장 자동 병합
 //    낡은 사본으로 저장해도 "내가 연 이후 배분된 업무"가 유실되지 않도록 방어
 // =========================================================
+// 💡 [성능 수정] 이 함수가 저장할 때마다 프로젝트 파일 전체를 통째로 다시 다운로드하고 있었다
+//    (실측: 같은 파일을 "프로젝트 열기"로 받을 때 1초 남짓 걸리던 게, 저장 직전엔 이 중복 다운로드
+//    까지 겹쳐서 "프로젝트 열기" 버튼의 "전환 전 저장" 단계가 3~4초, 응답이 느릴 땐 47초까지도
+//    걸렸다). 배분 원장(distributions)에 새 항목이 왔는지 확인하려고 매번 파일 전체를 받을 필요는
+//    없다 — 가벼운 modifiedTime만 먼저 확인해서, 마지막으로 내가 저장(또는 확인)한 이후 파일이 실제로
+//    바뀐 적이 없으면(=다른 사람이 그 사이 배분한 적이 없으면) 무거운 전체 다운로드를 건너뛴다.
+//    (이 코드베이스의 다른 곳 — 업무 보관함 배분 충돌 감지 등 — 에서 이미 쓰던 modifiedTime 선확인
+//    패턴과 동일)
+window._distMergeModifiedTime = window._distMergeModifiedTime || {};
 window.mergeRemoteDistributions = async function(fileId) {
     try {
+        const metaResp = await gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true });
+        const remoteModifiedTime = metaResp.result.modifiedTime;
+        if (window._distMergeModifiedTime[fileId] === remoteModifiedTime) return; // 마지막 확인 이후 파일이 안 바뀜 → 전체 다운로드 생략
+        window._distMergeModifiedTime[fileId] = remoteModifiedTime;
+
         const resp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
         const remote = resp.result || {};
         const remoteDists = remote.distributions || [];
