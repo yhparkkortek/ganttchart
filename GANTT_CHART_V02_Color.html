@@ -1534,27 +1534,27 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <tbody>
                     <tr id="sum-milestone-body" style="background:#f4f6f8;">
                         <td id="sum-td-plan" style="font-weight:bold;">계획</td>
-                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다" oninput="window._checkRequiredField(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (클릭하여 달력에서 선택)" readonly onclick="window.showGenericCalendar(this)" oninput="window._checkRequiredField(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
                     </tr>
                     <tr id="sum-milestone-body-actual" style="background:#fff8e6; position:relative; z-index:1;">
                         <td id="sum-td-actual" style="font-weight:bold;">실적</td>
-                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
                     </tr>
                 </tbody>
             </table>
@@ -4903,13 +4903,22 @@ ${mailText}`;
     window._reanchorScheduleAndLock = function(anchorTs) {
         if (!globalData || globalData.length <= 1 || colIdx.start === -1) return false;
 
-        // 1) 기존 잠금(수동 고정) 해제 — 새 앵커 기준으로 전체가 다시 계산되도록
+        // 1) 기존 잠금(수동 고정) 해제 + 예전 시작/완료일 셀 텍스트를 전부 비움.
+        //    💡 [버그 수정] _startForced/_planForced만 풀어서는 부족했다 — computeCalcDatesForRows는
+        //    "0레벨 행은 잠금 여부와 무관하게 자기 셀의 날짜를 무조건 명시적 기준으로 쓴다"(row._level===0
+        //    조건이 _startForced보다 우선 적용됨). 그래서 ES/PP 등 두 번째 이후 0레벨 구간은 플래그를
+        //    풀어도 "초기 잠금" 때 찍힌 옛(오늘 기준) 날짜가 셀에 그대로 남아있어 그 구간만 자동계산에서
+        //    빠지고, PROTO Start 앵커가 거기까지 이어지지 않는 문제가 있었다. 첫 0레벨 앵커 행 하나만
+        //    남기고 모든 행의 시작/완료 셀을 비워서, 진짜로 "처음부터 끝까지" 순수 소요일 기준으로
+        //    다시 계산되게 한다(비운 셀은 바로 아래 4번 단계에서 계산 결과로 다시 채워짐).
         for (let i = 1; i < globalData.length; i++) {
             const r = globalData[i]; if (!r) continue;
             r._startForced = false; r._planForced = false; r._scheduleModeManual = false;
+            if (colIdx.start !== -1) r[colIdx.start] = '';
+            if (colIdx.plan !== -1) r[colIdx.plan] = '';
         }
 
-        // 2) 0레벨(최상위) 첫 행의 시작일 셀을 PROTO Start로 지정 → 전체 일정의 기준(anchor)이 됨
+        // 2) 0레벨(최상위) 첫 행의 시작일 셀만 PROTO Start로 지정 → 전체 일정의 유일한 기준(anchor)이 됨
         let firstL0 = null;
         for (let i = 1; i < globalData.length; i++) {
             if (globalData[i] && globalData[i]._level === 0) { firstL0 = globalData[i]; break; }
@@ -4951,7 +4960,10 @@ ${mailText}`;
             if (Object.keys(rows).length === 0) return;
 
             const label = window._currentLang === 'en' ? 'Initial Plan (Kickoff)' : '최초 계획 (킥오프)';
-            const baseline = { id: 'bl_' + Date.now(), label: label, savedAt: Date.now(), rows: rows };
+            // 💡 isInitialPlan: true — "이게 최초 킥오프 계획이다"를 라벨 문자열 매칭이 아니라 명시적 플래그로
+            //    표시. Gantt 실적 연동 버튼(syncSummaryActualsFromGantt)이 이 값을 찾아 계획(Plan) 행을
+            //    되살리는 데 씀 — 사용자가 나중에 이 계획 이름을 바꾸거나 다른 계획을 더 저장해도 흔들리지 않음.
+            const baseline = { id: 'bl_' + Date.now(), label: label, savedAt: Date.now(), rows: rows, isInitialPlan: true };
             window._scheduleBaselines.push(baseline);
             persistScheduleBaselines();
             if (window.renderBaselineMenu) window.renderBaselineMenu();
@@ -4965,6 +4977,28 @@ ${mailText}`;
                 `📐 Calculated the schedule from PROTO Start (${raw}) and saved it as "${label}".`
             ));
         } catch (e) { console.error('최초 계획 자동 저장 실패:', e); }
+    };
+
+    // 🆕 저장된 baseline 중 "최초 킥오프 계획"을 찾아 반환 (없으면 null — 이 기능 이전에 등록된 옛 프로젝트 등)
+    window._getInitialKickoffBaseline = function() {
+        return (window._scheduleBaselines || []).find(function(b) { return b && b.isInitialPlan; }) || null;
+    };
+
+    // 🆕 baseline의 rows(키: "그룹::레벨::업무명")에서 0레벨 항목만 뽑아 {name, startTs} 목록으로 변환.
+    //    syncSummaryActualsFromGantt()가 "실적"은 현재 Gantt로, "계획"은 이 baseline으로 동일한 방식으로 계산한다.
+    window._level0RowsFromBaseline = function(bl) {
+        if (!bl || !bl.rows) return [];
+        const out = [];
+        Object.keys(bl.rows).forEach(function(key) {
+            const parts = key.split('::');
+            if (parts.length < 3) return;
+            if (parts[1] !== '0') return; // 레벨0만
+            const val = bl.rows[key];
+            const s = (val && typeof val === 'object') ? val.s : val;
+            if (!s) return;
+            out.push({ name: parts.slice(2).join('::').trim(), startTs: s });
+        });
+        return out;
     };
 
     // 📐 계획 메뉴 팝업 — 저장/비교선택/삭제를 버튼 하나로 통합
@@ -8011,7 +8045,42 @@ window.deleteHistoryByDateRange = function() {
         }
     }
 
-    // 💡 Summary "실적" 표를 Gantt 0레벨 업무(시작일 기준)와 연동
+    // 💡 [공용] 0레벨 업무 목록({name, startTs})에서 PROTO/ES/PP 9개 마일스톤 날짜를 계산.
+    //    실적(현재 Gantt 기준)과 계획(최초 킥오프 baseline 기준) 양쪽에서 동일한 규칙으로 재사용.
+    function deriveMilestoneDatesFromLevel0(level0Rows) {
+        if (!level0Rows || level0Rows.length === 0) return null;
+        const findByName = function(name) {
+            return level0Rows.find(r => r.name === name) || level0Rows.find(r => r.name.includes(name));
+        };
+        const firstStart = level0Rows.reduce((min, r) => (r.startTs < min ? r.startTs : min), level0Rows[0].startTs);
+        const protoDR = findByName('PROTO DR');
+        const dvr = findByName('DVR');
+        const pra = findByName('PRA');
+        if (!protoDR || !dvr || !pra) {
+            return { error: true, missing: [!protoDR && 'PROTO DR', !dvr && 'DVR', !pra && 'PRA'].filter(Boolean) };
+        }
+
+        const DAY = 86400000;
+        const addDays = function(ts, days) { return ts + days * DAY; };
+        const addMonths = function(ts, months) { const d = new Date(ts); d.setMonth(d.getMonth() + months); return d.getTime(); };
+
+        return {
+            '기획Start': firstStart,
+            '기획Finish': addDays(protoDR.startTs, -14),
+            'ProtoDR': protoDR.startTs,
+            'ESStart': addDays(protoDR.startTs, 14),
+            'ESEnd': addDays(dvr.startTs, -14),
+            'DVR': dvr.startTs,
+            'PPStart': addDays(dvr.startTs, 14),
+            'PPEnd': addMonths(pra.startTs, -1),
+            'PRA': pra.startTs,
+        };
+    }
+
+    // 💡 Summary "실적" 표를 Gantt 0레벨 업무(시작일 기준)와 연동.
+    //    🆕 저장된 "최초 계획(킥오프)" baseline이 있으면, 같은 방식으로 "계획" 행도 함께 되살려 채운다 —
+    //    그래야 이 표에서 계획 대비 실적을 바로 비교할 수 있다(계획 행이 그동안 비어있거나 최초 PROTO
+    //    Start 한 칸만 있고 나머지 8칸은 안 채워져 있던 문제를 여기서 함께 해결).
     window.syncSummaryActualsFromGantt = function() {
         if (!globalData || globalData.length < 2) { alert('Gantt 데이터가 없습니다.'); return; }
         const level0Rows = [];
@@ -8023,42 +8092,37 @@ window.deleteHistoryByDateRange = function() {
         }
         if (level0Rows.length === 0) { alert('시작일이 있는 0레벨 업무를 찾을 수 없습니다.'); return; }
 
-        const findByName = function(name) {
-            return level0Rows.find(r => r.name === name) || level0Rows.find(r => r.name.includes(name));
-        };
-
-        const firstStart = level0Rows.reduce((min, r) => (r.startTs < min ? r.startTs : min), level0Rows[0].startTs);
-        const protoDR = findByName('PROTO DR');
-        const dvr = findByName('DVR');
-        const pra = findByName('PRA');
-
-        if (!protoDR) { alert('0레벨 업무 중 "PROTO DR"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
-        if (!dvr) { alert('0레벨 업무 중 "DVR"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
-        if (!pra) { alert('0레벨 업무 중 "PRA"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
-
-        const DAY = 86400000;
-        const addDays = function(ts, days) { return ts + days * DAY; };
-        const addMonths = function(ts, months) { const d = new Date(ts); d.setMonth(d.getMonth() + months); return d.getTime(); };
-
-        const result = {
-            '기획Start': firstStart,
-            '기획Finish': addDays(protoDR.startTs, -14),
-            'ProtoDR': protoDR.startTs,
-            'ESStart': addDays(protoDR.startTs, 14),
-            'ESEnd': addDays(dvr.startTs, -14),
-            'DVR': dvr.startTs,
-            'PPStart': addDays(dvr.startTs, 14),
-            'PPEnd': addMonths(pra.startTs, -1),
-            'PRA': pra.startTs,
-        };
+        const result = deriveMilestoneDatesFromLevel0(level0Rows);
+        if (!result || result.error) {
+            alert('0레벨 업무 중 "' + (result ? result.missing.join('", "') : '') + '"을(를) 찾을 수 없습니다. 업무명을 확인해주세요.');
+            return;
+        }
 
         Object.keys(result).forEach(function(stage) {
             const inp = document.querySelector('#sum-milestone-body-actual input[data-stage="' + stage + '"]');
             if (inp) inp.value = formatTsToYMD(result[stage]);
         });
 
+        // 🆕 계획(Plan) 행 — "최초 계획(킥오프)"이 저장되어 있으면 동일한 규칙으로 계산해 함께 반영
+        let planSynced = false;
+        const kickoffBl = window._getInitialKickoffBaseline ? window._getInitialKickoffBaseline() : null;
+        if (kickoffBl) {
+            const blLevel0Rows = window._level0RowsFromBaseline ? window._level0RowsFromBaseline(kickoffBl) : [];
+            const planResult = deriveMilestoneDatesFromLevel0(blLevel0Rows);
+            if (planResult && !planResult.error) {
+                Object.keys(planResult).forEach(function(stage) {
+                    const inp = document.querySelector('#sum-milestone-body input[data-stage="' + stage + '"]');
+                    if (inp) inp.value = formatTsToYMD(planResult[stage]);
+                });
+                planSynced = true;
+            }
+        }
+
         if (window.collectTabData) window.collectTabData();
-        alert('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.');
+        if (window._checkAllRequiredFields) window._checkAllRequiredFields();
+        alert('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.' + (planSynced
+            ? '\n(저장된 "최초 계획(킥오프)" 기준으로 계획 일정도 함께 반영했습니다)'
+            : '\n(저장된 "최초 계획(킥오프)"이 없어 계획 일정은 그대로 두었습니다 — 신규 프로젝트 등록 시에만 자동 저장됩니다)'));
     };
 
     function toggleTranslation(btn, encodedText, transMode) {
