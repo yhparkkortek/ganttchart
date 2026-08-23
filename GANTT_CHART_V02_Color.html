@@ -3207,6 +3207,11 @@ ${mailText}`;
     window._saveToGoogleDriveRaw = async function(opts) {
         opts = opts || {};
         window._lastSaveBlockReason = '';
+        // 💡 [성능 수정] "저장" 버튼엔 3분 자동저장과 달리 변경 여부 확인이 전혀 없어서, 아무것도 안
+        //    바꾸고 그냥 다시 눌러도(예: 불안해서 여러 번 누르는 경우) 매번 백업 파일을 통째로 새로
+        //    만들고 있었다 — 이 함수가 changeLogs/lastSavedLogCount를 갱신하기 "전"인 지금 시점의
+        //    상태를 미리 캡처해서, 성공 후 실제로 바뀐 게 있었는지 판단하는 데 쓴다.
+        const _preSaveHadChanges = ((window.changeLogs ? window.changeLogs.length : 0) > (window.lastSavedLogCount || 0)) || !!window._nonGanttDirty;
         try {
             if (window.collectTabData) window.collectTabData();
 
@@ -3327,8 +3332,23 @@ ${mailText}`;
                 // 💡 [성능 수정] 방금 내가 저장한 시점을 캐시해둬서, 다음 저장 때 mergeRemoteDistributions가
                 //    "그 사이 아무도 안 건드렸으면" 무거운 전체 다운로드를 건너뛸 수 있게 한다.
                 if (file.modifiedTime) { window._distMergeModifiedTime = window._distMergeModifiedTime || {}; window._distMergeModifiedTime[file.id] = file.modifiedTime; }
-                window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
-                window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
+                // 💡 [성능 수정] 실제로 바뀐 내용이 있었을 때(또는 방금 처음 만든 새 파일일 때, !fileId)만
+                //    백업을 만든다 — 변경 없이 저장 버튼만 다시 누른 경우까지 전체 데이터를 통째로 한 번
+                //    더 업로드할 필요는 없다. (Backups 폴더는 실수 복구용이라, 내용이 같은 백업이 계속
+                //    쌓이는 건 용량/API 호출만 낭비하고 복구에는 도움이 안 됨)
+                if (_preSaveHadChanges || !fileId) {
+                    window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
+                } else {
+                    console.info('[저장 계측] 변경사항 없음 — 백업 생략');
+                }
+                // 💡 [성능 수정] 백업과 동일한 이유 — 바뀐 게 없으면 담당자/주요자재 등 인덱스에 들어가는
+                //    내용도 지난 저장 때와 같을 수밖에 없다. 변경 없이 재저장할 때마다 공용 인덱스 파일을
+                //    통째로 내려받고 다시 올릴 필요는 없다.
+                if (_preSaveHadChanges || !fileId) {
+                    window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
+                } else {
+                    console.info('[저장 계측] 변경사항 없음 — project_index.json 갱신 생략');
+                }
                 window.showToast(window._currentLang === 'en'
                     ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
                     : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
