@@ -6668,9 +6668,20 @@ window.deleteHistoryByDateRange = function() {
         if (window.calendarFixedPos) { popup.style.top  = window.calendarFixedPos.top  + 'px'; popup.style.left = window.calendarFixedPos.left + 'px'; }
     };
 
+    // 💡 [버그 수정] 달력을 "여는" click과 "바깥 클릭이라 닫는" 이 리스너가 같은 이벤트 버블링 한 번에
+    //    같이 실행됐다. showGenericCalendar(input)로 여는 경우(input의 onclick → 통합 캘린더 오픈)
+    //    이 click 이벤트가 그대로 document까지 버블링되는데, 그 트리거였던 input 자신은 .date-clickable
+    //    클래스가 없어(그건 메인 Gantt 표 셀 전용) "바깥 클릭"으로 오인되어 열리자마자 곧바로 닫혔다 —
+    //    즉 팝업이 화면에 그려지기도 전에 block→none으로 바뀌어 "달력이 아예 안 뜨는" 것처럼 보였다.
+    //    (Summary 마일스톤 날짜칸뿐 아니라 히스토리 삭제범위·공휴일 등록 등 showGenericCalendar를 쓰는
+    //    모든 기존 필드가 똑같이 영향받고 있었음 — 재현 테스트로 확인)
+    //    지금 막 이 팝업을 연 그 input(currentCalendarGenericInput) 클릭은 "바깥 클릭"에서 제외한다.
     document.addEventListener('click', function(e) {
         const popup = document.getElementById('calendar-popup');
-        if (popup && popup.style.display === 'block') { if (!popup.contains(e.target) && !e.target.closest('.date-clickable')) popup.style.display = 'none'; }
+        if (popup && popup.style.display === 'block') {
+            const isCalendarTriggerInput = window.currentCalendarGenericInput && e.target === window.currentCalendarGenericInput;
+            if (!popup.contains(e.target) && !e.target.closest('.date-clickable') && !isCalendarTriggerInput) popup.style.display = 'none';
+        }
         if (!e.target.closest('.no-td')) document.querySelectorAll('.row-actions.show').forEach(el => el.classList.remove('show'));
     });
 
