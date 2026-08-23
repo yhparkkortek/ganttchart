@@ -2982,16 +2982,45 @@ ${mailText}`;
         }
 
         if (btn) { btn.disabled = true; btn.textContent = window._t('⏳ 가져오는 중...', '⏳ Importing...'); }
+
+        // 💡 응답 실패 시 Drive가 돌려준 실제 오류 메시지(권한 없음/파일 없음 등)까지 최대한 뽑아냄 —
+        //    "HTTP 403"만으로는 원인 파악이 안 돼서, 이 앱의 다른 Drive 호출부(주소록 불러오기 등)와
+        //    동일하게 error.message까지 붙여서 보여준다.
+        async function describeFailure(resp) {
+            let detail = '';
+            try { const j = await resp.json(); detail = (j && j.error && j.error.message) || ''; } catch (e) {}
+            return 'HTTP ' + resp.status + (detail ? ' - ' + detail : '');
+        }
+
         try {
-            // 💡 참조 파일은 "구글 시트"라 원본 그대로는 못 받고 xlsx로 변환(export)해서 받아야 함.
+            const authHeader = { 'Authorization': `Bearer ${token}` };
+            let blob = null; let lastErr = '';
+
+            // 1차: 참조 파일이 "구글 시트"(네이티브 문서)라고 가정하고 xlsx로 변환(export)해서 받는다.
             //    docs.google.com/.../export 링크(수동 다운로드용)는 브라우저 직접 이동만 되고 CORS 때문에
             //    fetch()로는 못 읽으므로, 이미 연동된 OAuth 토큰으로 Drive REST API를 직접 호출한다.
-            const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-            const url = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}/export?mimeType=${encodeURIComponent(mimeType)}`;
-            const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!resp.ok) throw new Error('HTTP ' + resp.status);
-            const blob = await resp.blob();
-            const file = new File([blob], '참조_엑셀.xlsx', { type: mimeType });
+            try {
+                const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+                const exportUrl = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}/export?mimeType=${encodeURIComponent(mimeType)}`;
+                const resp1 = await fetch(exportUrl, { headers: authHeader });
+                if (resp1.ok) blob = await resp1.blob();
+                else lastErr = await describeFailure(resp1);
+            } catch (e) { lastErr = e.message; }
+
+            // 2차 폴백: 만약 참조 파일이 실제로는 이미 업로드된 xlsx 원본이라면(구글 시트가 아니라면)
+            //    export가 아니라 원본 그대로 받는 alt=media가 맞다 — 이 앱의 주소록 불러오기와 동일 패턴.
+            if (!blob) {
+                try {
+                    const mediaUrl = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}?alt=media&supportsAllDrives=true`;
+                    const resp2 = await fetch(mediaUrl, { headers: authHeader });
+                    if (resp2.ok) blob = await resp2.blob();
+                    else lastErr += ' / ' + await describeFailure(resp2);
+                } catch (e) { lastErr += ' / ' + e.message; }
+            }
+
+            if (!blob) throw new Error(lastErr || '알 수 없는 오류');
+
+            const file = new File([blob], '참조_엑셀.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 
             document.getElementById('new-project-modal-overlay').style.display = 'none';
             // 💡 드래그로 불러올 때와 동일한 진입점 — 컬럼 매핑/레벨 판별/초기 잠금 등 기존 로직을 100% 재사용
@@ -8109,24 +8138,37 @@ window.deleteHistoryByDateRange = function() {
         if (!String(pm.고객모델명 || '').trim()) missing.push('고객 모델명');
         if (!String(pm.KTK모델명 || '').trim()) missing.push('KTK PN_모델명');
         if (!String(pm.프로젝트담당자 || '').trim()) missing.push('프로젝트 담당자');
-        // 💡 첫 번째 표(계획/실적)의 "계획" 행 PROTO Start — 새 프로젝트 등록 시 Gantt 시작일 기준(anchor)으로 쓰이므로 필수
-        const protoStartMs = (((window.tabData || {}).summary || {}).milestones || {})['기획Start'];
-        if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일)');
+        // 💡 [버그 수정] PROTO Start는 "새 프로젝트를 처음 등록할 때"만 필수여야 하는데, 모든 저장에
+        //    걸리게 해뒀더니 — 이미 등록된 기존 프로젝트(PROTO Start를 입력한 적 없는 대부분의 과거
+        //    프로젝트 포함)들까지 저장이 막혀버렸다("프로젝트 열기"가 전환 전 자동저장을 시도하다 여기
+        //    걸려서 프로젝트 목록조차 못 여는 것처럼 보이는 문제로 이어짐). 드라이브에 아직 파일이 없는
+        //    (=currentDriveFileId가 없는) 진짜 신규 등록 때만 요구하도록 범위를 좁힌다.
+        if (!window.currentDriveFileId) {
+            const protoStartMs = (((window.tabData || {}).summary || {}).milestones || {})['기획Start'];
+            if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일 — 신규 프로젝트만 필수)');
+        }
         if (missing.length === 0) return '';
         return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성 및 일정 자동계산에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
     };
 
-    // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자/PROTO Start) 빈 값이면 시각적 하이라이트
+    // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자, 신규 프로젝트는 PROTO Start도) 빈 값이면 시각적 하이라이트
     window._checkRequiredField = function(el) {
         if (!el) return;
         if (String(el.value || '').trim()) el.classList.remove('req-missing');
         else el.classList.add('req-missing');
     };
     window._checkAllRequiredFields = function() {
-        ['sum-customer', 'sum-customer-model', 'sum-ktk-pn-model', 'sum-pm', 'sum-ms-plan-protostart'].forEach(function(id) {
+        ['sum-customer', 'sum-customer-model', 'sum-ktk-pn-model', 'sum-pm'].forEach(function(id) {
             const el = document.getElementById(id);
             if (el) window._checkRequiredField(el);
         });
+        // 💡 PROTO Start는 신규 프로젝트(아직 드라이브에 없는 파일) 등록 시에만 필수 — 이미 등록된
+        //    기존 프로젝트를 열었을 때는 빨간 경고를 띄우지 않는다 (validateRequiredProjectInfo와 동일 기준)
+        const protoEl = document.getElementById('sum-ms-plan-protostart');
+        if (protoEl) {
+            if (window.currentDriveFileId) protoEl.classList.remove('req-missing');
+            else window._checkRequiredField(protoEl);
+        }
     };
 
     window.updatePrintTitle = function() {
