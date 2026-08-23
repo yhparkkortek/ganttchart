@@ -3708,8 +3708,11 @@ ${mailText}`;
         // 💡 [멀티시트] 담당자별 "한 번에 열기"와 동일한 방식으로, 목록 전체(모든 담당자)를 한 번에 여는 버튼.
         //    executeLoadFile(..., true)를 그대로 재사용 — 이미 열려있는 시트는 다시 안 받아오고 전환만 됨.
         if (files.length > 1) {
+            const topActionsRow = document.createElement('div');
+            topActionsRow.style.cssText = 'display:flex; gap:8px; align-items:stretch;';
+
             const allBar = document.createElement('div');
-            allBar.style.cssText = 'padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#2c5f8a; background:#f4f8fc; transition:0.15s;';
+            allBar.style.cssText = 'flex:2 1 0; padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#2c5f8a; background:#f4f8fc; transition:0.15s;';
             allBar.textContent = _dmEn ? `🗂️ Open all ${files.length} project(s) at once` : `🗂️ 전체 프로젝트 ${files.length}개 한 번에 열기`;
             allBar.onmouseover = function() { this.style.background = '#e7f0fa'; };
             allBar.onmouseout  = function() { this.style.background = '#f4f8fc'; };
@@ -3723,7 +3726,23 @@ ${mailText}`;
                 }
                 if (window.showToast) window.showToast(_dmEn ? `✅ Opened all ${files.length} project(s)` : `✅ 전체 프로젝트 ${files.length}개 열기 완료`, 'info');
             };
-            listContainer.appendChild(allBar);
+            topActionsRow.appendChild(allBar);
+
+            // 💡 목록에서 기존 프로젝트를 고르지 않고, 곧바로 "새 프로젝트 시작" 흐름으로 갈 수 있는 지름길.
+            //    새 기능을 따로 만들지 않고 기존 startNewProject()(확인창 → 초기화 → 참조 엑셀 안내 팝업)를
+            //    그대로 재사용한다 — 새 프로젝트 버튼과 동작이 100% 동일하게 유지됨.
+            const newProjectBar = document.createElement('div');
+            newProjectBar.style.cssText = 'flex:1 1 0; padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#fff; background:#2c5f8a; transition:0.15s;';
+            newProjectBar.textContent = _dmEn ? '➕ New Project' : '➕ 새 프로젝트 등록';
+            newProjectBar.onmouseover = function() { this.style.background = '#244d70'; };
+            newProjectBar.onmouseout  = function() { this.style.background = '#2c5f8a'; };
+            newProjectBar.onclick = function() {
+                window.closeDriveModal();
+                window.startNewProject();
+            };
+            topActionsRow.appendChild(newProjectBar);
+
+            listContainer.appendChild(topActionsRow);
         }
 
         groupNames.forEach((pmName, gi) => {
