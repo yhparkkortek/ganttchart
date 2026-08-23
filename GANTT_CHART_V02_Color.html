@@ -2400,19 +2400,22 @@ ${mailText}`;
             // 💡 [진단용 계측] "프로젝트 열기가 느리다"는 신고가 반복돼서, 다음에 또 느려질 때 정확히
             //    어느 단계(전환 전 저장 vs 목록 조회 vs 파일 열기)가 느린지 바로 알 수 있게 시간을 잰다.
             const _t0 = performance.now();
-            const saved = await window.saveToGoogleDrive();
+            // 💡 [UX 수정] 저장이 막혀도 여기서 alert을 띄우지 않게 하고(suppressAlert), 사유만 받아온다.
+            //    예전엔 ①저장 실패 안내 alert + ②"그래도 목록을 여시겠습니까?" confirm — 모달이 두 번
+            //    연달아 떴고, 두 번째에서 취소하면 프로젝트 목록 자체를 못 열었다.
+            const saved = await window.saveToGoogleDrive({ suppressAlert: true });
             const _saveMs = Math.round(performance.now() - _t0);
             console.info(`[프로젝트 열기 계측] 전환 전 저장(saveToGoogleDrive): ${_saveMs}ms`);
             if (_saveMs > 3000) console.warn(`[프로젝트 열기 계측] ⚠️ 전환 전 저장이 ${_saveMs}ms나 걸림 — Drive 응답 지연 또는 병합 처리가 원인일 수 있음`);
-            // 💡 [버그 수정 v2] 이전 수정은 "빈 시트"만 다뤘는데, 실제로는 이미 실질적인 내용이 있는
-            //    기존 프로젝트도 필수 정보(고객사/고객 모델명/KTK PN_모델명/프로젝트 담당자) 중 하나가
-            //    비어 있으면 저장이 실패(false)했고, 그러면 여기서 그대로 return돼서 "프로젝트 열기"
-            //    자체가 막혀버렸다 — 다른 프로젝트를 구경만 하려 해도 지금 프로젝트의 필수 정보부터
-            //    채워야만 하는 상황. switchToSheetWithSave(멀티시트 전환)와 동일하게, 저장 실패 시에도
-            //    확인 후 그대로 진행할 수 있는 탈출구를 열어준다.
-            if (!saved && !confirm(window._currentLang === 'en'
-                ? 'Failed to save the current project (see the alert above for details). Open the project list anyway?\n(Current screen content is kept in memory only, not saved)'
-                : '현재 프로젝트 저장에 실패했습니다(위 안내 참고). 그래도 프로젝트 목록을 여시겠습니까?\n(지금 화면 내용은 저장되지 않고 메모리에만 임시 보관됩니다)')) return;
+            // 💡 저장이 막힌 경우(필수정보 미입력 / 새 프로젝트 비밀번호 미입력 등)에도 프로젝트 목록은
+            //    항상 열어준다 — 저장된 다른 프로젝트를 여는 것 자체는 막을 이유가 없고, 지금 화면 내용은
+            //    멀티시트 탭에 그대로 남아 있어 유실되지 않는다. 안내는 사유와 함께 "한 번만" 표시.
+            if (!saved) {
+                const _why = window._lastSaveBlockReason || '';
+                alert(window._currentLang === 'en'
+                    ? (_why ? _why + '\n\n' : '') + '→ Skipping the save and opening the project list.\n(Current screen content stays in its sheet tab — nothing is lost.)'
+                    : (_why ? _why + '\n\n' : '') + '→ 저장은 건너뛰고 프로젝트 목록을 엽니다.\n(지금 화면 내용은 시트 탭에 그대로 남아 있어 사라지지 않습니다)');
+            }
         }
         const _t1 = performance.now();
         window.loadFromGoogleDrive().then(function() {
@@ -3188,7 +3191,12 @@ ${mailText}`;
         );
     };
 
-    window._saveToGoogleDriveRaw = async function() {
+    // 💡 opts.suppressAlert: 저장이 막힌 경우(필수정보 미입력/비밀번호 실패) 여기서 직접 alert을 띄우지 않고
+    //    사유만 window._lastSaveBlockReason에 담아 돌려준다. "프로젝트 열기" 전 자동저장처럼, 호출한 쪽이
+    //    자기 안내와 합쳐서 모달을 "한 번만" 띄우고 싶을 때 사용 (모달이 두 번 겹쳐 뜨던 문제 해결).
+    window._saveToGoogleDriveRaw = async function(opts) {
+        opts = opts || {};
+        window._lastSaveBlockReason = '';
         try {
             if (window.collectTabData) window.collectTabData();
 
@@ -3201,8 +3209,11 @@ ${mailText}`;
             //    비어 있으면 "All_All_All" 같은 의미 없는 파일명으로 저장되므로 여기서 막는다.
             const requiredInfoError = window.validateRequiredProjectInfo ? window.validateRequiredProjectInfo() : '';
             if (requiredInfoError) {
-                alert(requiredInfoError);
-                if (window.switchTab) window.switchTab('summary');
+                window._lastSaveBlockReason = requiredInfoError;
+                if (!opts.suppressAlert) {
+                    alert(requiredInfoError);
+                    if (window.switchTab) window.switchTab('summary');
+                }
                 return false;
             }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
@@ -3222,7 +3233,9 @@ ${mailText}`;
             //    진입 경로에 상관없이 항상 막힌다(예전엔 버튼에만 걸려있어서 버튼을 안 거치면 그냥 통과됐음).
             if (!fileId) {
                 if (!verifyAdminPassword(window._t('🔒 새 프로젝트를 등록하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to register a new project.\n(case-insensitive)'))) {
-                    alert(window._t('❌ 비밀번호 인증 실패. 새 프로젝트 등록이 취소되었습니다.', '❌ Authentication failed. New project registration cancelled.'));
+                    const _pwFail = window._t('❌ 비밀번호 인증 실패. 새 프로젝트 등록이 취소되었습니다.', '❌ Authentication failed. New project registration cancelled.');
+                    window._lastSaveBlockReason = _pwFail;
+                    if (!opts.suppressAlert) alert(_pwFail);
                     return false;
                 }
             }
@@ -3320,8 +3333,8 @@ ${mailText}`;
 
     // 💡 공개 진입점 — 실제로는 항상 대기열을 거쳐서, 다른 저장/시트전환 작업과 절대 안 겹치게 함
     //    (3분 자동저장 타이머 등 기존 호출부는 전부 그대로 이 이름을 부르므로 별도 수정 불필요)
-    window.saveToGoogleDrive = function() {
-        return window._runSerialized(window._saveToGoogleDriveRaw);
+    window.saveToGoogleDrive = function(opts) {
+        return window._runSerialized(function() { return window._saveToGoogleDriveRaw(opts); });
     };
 
     // 💡 Backups 폴더의 백업 목록 조회
@@ -8328,7 +8341,8 @@ window.deleteHistoryByDateRange = function() {
             if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일 — Gantt 데이터가 있는 신규 프로젝트만 필수)');
         }
         if (missing.length === 0) return '';
-        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성 및 일정 자동계산에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
+        // 💡 [UX] 빈 줄을 줄여 한눈에 들어오게 — 예전엔 문단마다 \n\n이 들어가 모달이 불필요하게 길었다.
+        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n(Summary 탭에서 입력 · 파일명 생성과 일정 자동계산에 필요)\n\n· ' + missing.join('\n· ');
     };
 
     // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자, 신규 프로젝트는 PROTO Start도) 빈 값이면 시각적 하이라이트
