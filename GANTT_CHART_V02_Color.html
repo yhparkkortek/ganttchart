@@ -595,6 +595,10 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 /* 💡 위 두 규칙(ID+클래스)이 .req-field.req-missing(클래스만)보다 명시도가 높아 미입력 경고 배경(연노랑)을
    가려버리므로, PROTO Start 같은 필수 마일스톤 칸에서도 경고 배경이 그대로 보이도록 별도로 덮어씀 */
 #sum-milestone-body .req-field.req-missing { background: #fff3cd !important; }
+/* 💡 마일스톤 날짜칸 — 직접 입력 + 옆의 📅 아이콘(달력) 둘 다 쓸 수 있도록, input을 살짝 줄여서
+   아이콘이 같은 줄에 들어갈 자리를 남겨둔다(td의 display를 안 건드려서 표 컬럼 정렬에 영향 없음) */
+#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { width: calc(100% - 16px); box-sizing: border-box; }
+.ms-cal-btn { display: inline-block; width: 13px; cursor: pointer; font-size: 11px; vertical-align: middle; }
 
 /* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
 .sum-tl-bubble.above::after, .sum-tl-bubble.below::after { border-color: transparent !important; border-width: 0 !important; }
@@ -1534,27 +1538,27 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <tbody>
                     <tr id="sum-milestone-body" style="background:#f4f6f8;">
                         <td id="sum-td-plan" style="font-weight:bold;">계획</td>
-                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (클릭하여 달력에서 선택)" readonly onclick="window.showGenericCalendar(this)" oninput="window._checkRequiredField(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (직접 입력하거나, 달력 아이콘을 눌러 선택)" oninput="window._checkRequiredField(this)"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
                     </tr>
                     <tr id="sum-milestone-body-actual" style="background:#fff8e6; position:relative; z-index:1;">
                         <td id="sum-td-actual" style="font-weight:bold;">실적</td>
-                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD" readonly onclick="window.showGenericCalendar(this)" style="cursor:pointer;"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
                     </tr>
                 </tbody>
             </table>
@@ -6685,8 +6689,11 @@ window.deleteHistoryByDateRange = function() {
     document.addEventListener('click', function(e) {
         const popup = document.getElementById('calendar-popup');
         if (popup && popup.style.display === 'block') {
+            // 💡 트리거가 input 자신인 경우(showGenericCalendar(this))뿐 아니라, Summary 마일스톤 날짜칸의
+            //    "📅 아이콘"처럼 별도 요소를 눌러 여는 경우도 있다 — 그 아이콘(.ms-cal-btn) 클릭도 함께 제외.
             const isCalendarTriggerInput = window.currentCalendarGenericInput && e.target === window.currentCalendarGenericInput;
-            if (!popup.contains(e.target) && !e.target.closest('.date-clickable') && !isCalendarTriggerInput) popup.style.display = 'none';
+            const isCalendarTriggerIcon = e.target.closest && e.target.closest('.ms-cal-btn');
+            if (!popup.contains(e.target) && !e.target.closest('.date-clickable') && !isCalendarTriggerInput && !isCalendarTriggerIcon) popup.style.display = 'none';
         }
         if (!e.target.closest('.no-td')) document.querySelectorAll('.row-actions.show').forEach(el => el.classList.remove('show'));
     });
