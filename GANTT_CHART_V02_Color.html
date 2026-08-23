@@ -12837,9 +12837,19 @@ window.updateInboxBadge();
             ※ 위 예시가 아니어도, 이 프로젝트에 맞는 이름을 자유롭게 적으셔도 됩니다.<br>
             ※ 취소하시면 우선 <b>"미지정"</b>으로 저장되고, 나중에 언제든 이름만 바꾸실 수 있습니다.
         </div>
-        <input id="mc-add-unit-input" type="text" placeholder="예: BTN"
+        <input id="mc-add-unit-input" type="text" placeholder="예: BTN" list="mc-unit-options" autocomplete="off"
                onkeydown="if(event.key==='Enter') window.mcAddUnitConfirm()"
                style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; margin-bottom:14px;">
+        <!-- 💡 드롭다운(자동완성)으로 자주 쓰는 제품구분자를 바로 고를 수 있으면서도, datalist라 목록에
+             없는 이름도 그대로 자유롭게 직접 입력 가능 (mcAddUnitConfirm 등 기존 로직은 손댈 필요 없음) -->
+        <datalist id="mc-unit-options">
+            <option value="BTN">BTN (Button Deck)</option>
+            <option value="MVD">MVD</option>
+            <option value="TVD">TVD</option>
+            <option value="TPR">TPR (Topper)</option>
+            <option value="PTD">PTD</option>
+            <option value="SUB">SUB</option>
+        </datalist>
         <div style="display:flex; gap:8px; justify-content:flex-end;">
             <button class="action-btn" onclick="window.mcAddUnitCancel()" style="min-width:auto;">취소</button>
             <button class="action-btn" onclick="window.mcAddUnitConfirm()" style="min-width:auto; background:#2c5f8a; color:#fff;">추가</button>
