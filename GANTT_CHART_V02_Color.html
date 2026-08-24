@@ -7119,8 +7119,14 @@ window.deleteHistoryByDateRange = function() {
     //    구버전의 원래 불편함도 같이 없앤다.
     window.toggleDetailExpand = function(td, event) {
         if (event) event.stopPropagation();
+        // 💡 [2026-08-24 버그 수정] 위 stopPropagation 때문에 document의 "바깥 클릭 시 팝업 닫기"
+        //    리스너(toggleRowActions 안)가 이 클릭을 못 보게 됨 — 그래서 WBS 상하좌우+- 팝업을 열어둔
+        //    채로 상세내용 셀을 클릭하면 팝업이 안 닫히는 사고가 있었다(재도입 때 이 처리가 누락됨).
+        //    여기서 직접 닫아줘서 다른 곳 클릭했을 때와 동일하게 동작하도록 한다.
+        const wbsPopup = document.getElementById('row-action-popup');
+        if (wbsPopup && wbsPopup.style.display !== 'none') { wbsPopup.style.display = 'none'; window.clearRowHighlight(); }
         const sel = window.getSelection();
-        if (sel && sel.toString().length > 0 && td.contains(sel.anchorNode)) return; // 텍스트 선택 중이면 토글 생략
+        if (sel && sel.toString().length > 0 && td.contains(sel.anchorNode)) return; // 텍스트 선택 중이면 펼치기/접기 토글은 생략
         td.classList.toggle('detail-td-expanded');
     };
     // 상세내용 헤더 클릭 — 전체 펼치기/접기 토글 (개별 셀 상태와 무관하게 항상 "전부"를 한 방향으로 맞춤)
