@@ -15390,8 +15390,12 @@ window._msStage0Filter = function(mail) {
 window._msSaveNewSenderQueue = function(list) {
     try {
         const existing = JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]');
+        // 💡 [2026-08-24 방어선] fileName 기준으로 이미 있는 건 건너뛴다 — 호출부의 중복제거가 뚫려도
+        //    여기서 한 번 더 막아서 같은 메일이 큐에 여러 번 쌓이는 사고를 방지.
+        const existingNames = new Set(existing.map(r => r.fileName));
+        const freshOnly = list.filter(function(r) { return !existingNames.has(r.fileName); });
         // 💡 [최신 항목 상단 표시] 새로 들어온 걸 앞에 두고, 200건 넘으면 뒤(오래된 것)부터 잘라냄
-        const merged = list.concat(existing).slice(0, 200);
+        const merged = freshOnly.concat(existing).slice(0, 200);
         localStorage.setItem(MS_NEW_SENDER_QUEUE_KEY, JSON.stringify(merged));
     } catch(e) { console.warn('신규 발신자 큐 저장 실패:', e); }
 };
@@ -15401,7 +15405,12 @@ window._msSaveNewSenderQueue = function(list) {
 window._msSaveDiscardQueue = function(list) {
     try {
         const existing = JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]');
-        const merged = list.concat(existing).slice(0, 200);
+        // 💡 [2026-08-24 방어선] fileName 기준으로 이미 있는 건 건너뛴다 — 백엔드가 날짜 단위로만 필터링해서
+        //    같은 날 안에서 자동틱이 돌 때마다 이미 폐기한 메일을 다시 만나 또 쌓는 사고가 있었음(원인은
+        //    _autoMailFetchTick의 중복확인 범위를 넓혀 고쳤지만, 여기서도 한 번 더 막아 이중 방어).
+        const existingNames = new Set(existing.map(r => r.fileName));
+        const freshOnly = list.filter(function(r) { return !existingNames.has(r.fileName); });
+        const merged = freshOnly.concat(existing).slice(0, 200);
         localStorage.setItem(MS_DISCARD_QUEUE_KEY, JSON.stringify(merged));
     } catch(e) { console.warn('자동폐기 큐 저장 실패:', e); }
 };
@@ -15955,9 +15964,20 @@ window._autoMailFetchTick = async function() {
             return;
         }
 
-        // 💡 fileName 기준 중복 제거 — 같은 날 여러 번 돌아도 이미 큐에 있는 메일은 재수집 안 함
+        // 💡 [2026-08-24 버그 수정] fileName 기준 중복 제거 — 백엔드 /fetch-mail이 날짜(day) 단위로만
+        //    필터링해서(시:분:초 없음), 하루 안에서는 자동틱이 돌 때마다 그날 메일 전체를 매번 다시
+        //    받아온다. 이전엔 _msResults(매칭/미분류 큐)만 "이미 처리함" 판정 기준으로 써서, 폐기(discard)나
+        //    신규발신자(new_sender)로 분류된 메일은 여기 안 들어가므로 다음 틱에서 "처음 보는 메일"로
+        //    오인돼 Stage0 필터를 다시 타고 또 폐기 큐에 쌓이는 사고가 있었음(같은 메일이 규칙에 반복해서
+        //    걸리며 계속 늘어남). 세 큐(미분류/매칭·폐기·신규발신자) 전부를 "이미 처리한 메일" 판정에 포함한다.
         window._msResults = window._msResults || [];
-        const existingNames = new Set(window._msResults.map(r => r.fileName));
+        const discardedNames = (JSON.parse(localStorage.getItem(MS_DISCARD_QUEUE_KEY) || '[]')).map(r => r.fileName);
+        const newSenderNames = (JSON.parse(localStorage.getItem(MS_NEW_SENDER_QUEUE_KEY) || '[]')).map(r => r.fileName);
+        const existingNames = new Set([
+            ...window._msResults.map(r => r.fileName),
+            ...discardedNames,
+            ...newSenderNames
+        ]);
         const dedupedMails = data.data.filter(m => !existingNames.has(m.fileName));
         if (!dedupedMails.length) {
             localStorage.setItem(MS_LAST_AUTO_FETCH_KEY, new Date().toISOString());
