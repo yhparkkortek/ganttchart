@@ -7044,12 +7044,23 @@ window.deleteHistoryByDateRange = function() {
     //    renderTable()이 매번 여기 값을 보고 펼침 class를 다시 적용한다(위 renderTable 참고).
     window._allDetailExpanded = false;
 
-    // 💡 [기능 변경] 예전엔 상세내용 셀을 클릭하면 그 셀만 펼치고 다른 곳 클릭하면 접히는 "개별 클릭
-    //    토글"이 있었는데, 이게 오히려 불편했다 — 셀 안 텍스트를 클릭/드래그해서 읽으려는 것뿐인데
-    //    그 클릭 때문에 "전체 펼치기" 모드가 풀리거나 다른 행이 접혀버렸다. 이제 펼침/접힘은 오직
-    //    아래 헤더 토글(window.toggleAllDetailExpand) 하나로만 제어되고, 셀을 클릭하는 것 자체는
-    //    (더블클릭 편집 제외) 아무 것도 접거나 펼치지 않는다.
-    // 상세내용 헤더 클릭 — 전체 펼치기/접기 토글 (펼침 상태를 켜고 끄는 유일한 진입점)
+    // 💡 [2026-08-24 재도입] 개별 셀 클릭 = 그 셀만 접기/펼치기, 헤더 클릭 = 전체 접기/펼치기(기준 재정립).
+    //    예전 버전(제거 전)의 진짜 문제는 "개별 클릭 자체"가 아니라 두 가지였다:
+    //    ① 셀을 하나 클릭하면 이전에 펼쳐져 있던 "다른" 셀들이 전부 자동으로 접혔음(한 번에 하나만
+    //       펼침 유지) — 여러 행을 나란히 펼쳐두고 비교하고 싶을 때 불편했다.
+    //    ② 개별 클릭이 window._allDetailExpanded(전체 펼치기 플래그)를 무조건 false로 되돌려서,
+    //       "전체 펼치기"를 켜둔 상태에서 셀 하나만 눌러도 다른 모든 행이 통째로 접혀버렸다.
+    //    이번엔 개별 토글이 "그 셀 하나만" 건드리고 다른 셀·전체 플래그는 전혀 손대지 않는다 —
+    //    헤더와 개별 셀은 완전히 독립된 두 개의 스위치. 추가로, 텍스트를 드래그해서 선택하려던
+    //    클릭(=드래그 후 선택 영역이 남아있는 클릭)은 토글에서 제외해 "읽으려고 클릭했는데 접힌다"는
+    //    구버전의 원래 불편함도 같이 없앤다.
+    window.toggleDetailExpand = function(td, event) {
+        if (event) event.stopPropagation();
+        const sel = window.getSelection();
+        if (sel && sel.toString().length > 0 && td.contains(sel.anchorNode)) return; // 텍스트 선택 중이면 토글 생략
+        td.classList.toggle('detail-td-expanded');
+    };
+    // 상세내용 헤더 클릭 — 전체 펼치기/접기 토글 (개별 셀 상태와 무관하게 항상 "전부"를 한 방향으로 맞춤)
     window.toggleAllDetailExpand = function(th, event) {
         if (event) event.stopPropagation();
         const allDetail = document.querySelectorAll('td.detail-td');
@@ -7067,6 +7078,9 @@ window.deleteHistoryByDateRange = function() {
 
     window.makeEditable = function(td) {
         if(td.getAttribute('contenteditable') === 'true') return;
+        // 💡 [2026-08-24] 편집 시작 전 "개별 클릭으로 이미 펼쳐둔 상태였는지"를 기억해둔다 — 안 그러면
+        //    편집 끝나고 blurCell에서 무조건 접어버려서, 일부러 펼쳐놓고 고치던 칸이 편집 후 도로 접혀버림.
+        td.dataset._wasExpanded = td.classList.contains('detail-td-expanded') ? '1' : '0';
         td.classList.add('detail-td-expanded'); // 💡 편집 중엔 접혀서 잘리지 않도록 자동으로 펼침
         td.dataset.displayHtml = td.innerHTML; td.setAttribute('contenteditable', 'true');
         let raw = td.getAttribute('data-raw'); if (raw) td.innerText = decodeURIComponent(raw); else td.innerText = "";
@@ -7088,8 +7102,10 @@ window.deleteHistoryByDateRange = function() {
 
     window.blurCell = function(td, rowIndex, colIndex) {
         td.removeAttribute('contenteditable');
-        // 💡 편집 종료 시 기본 높이로 복귀 — 단, "전체 펼치기" 모드 중이었다면 이 칸만 쏙 접히지 않도록 유지
-        if (!window._allDetailExpanded) td.classList.remove('detail-td-expanded');
+        // 💡 편집 종료 시 기본 높이로 복귀 — 단, "전체 펼치기" 모드 중이었거나(_allDetailExpanded),
+        //    편집 시작 전에 이미 개별 클릭으로 펼쳐둔 칸이었다면(_wasExpanded) 접지 않고 그대로 유지.
+        if (!window._allDetailExpanded && td.dataset._wasExpanded !== '1') td.classList.remove('detail-td-expanded');
+        delete td.dataset._wasExpanded;
         let newText = td.innerText.trim(); let rawAttr = td.getAttribute('data-raw'); let oldText = rawAttr ? decodeURIComponent(rawAttr).trim() : "";
         
         if (newText !== oldText) {
@@ -8146,9 +8162,10 @@ window.deleteHistoryByDateRange = function() {
                     const isDateCol = (cellIndex === colIdx.start || cellIndex === colIdx.plan);
                     const dateHint = isDateCol ? " · 날짜를 지우면 자동계산, 입력하면 고정되어 다른 행이 바뀌어도 안 움직임" : "";
                     const isDetailCol = (cellIndex === colIdx.content || cellIndex === colIdx.answer);
-                    // 💡 셀 클릭으로 개별 펼치기/접기 하던 것 제거 — 펼침은 이제 상세내용 헤더에서만 전체 제어(window.toggleAllDetailExpand)
-                    const detailHint = isDetailCol ? " · 펼치기/접기는 헤더 클릭 · Enter는 편집 완료, 줄바꿈은 Shift+Enter" : "";
-                    tdAttrs += ` ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능${dateHint}${detailHint}"`;
+                    // 💡 [2026-08-24] 개별 셀 클릭 = 그 셀만 펼치기/접기(window.toggleDetailExpand), 헤더 클릭 = 전체 펼치기/접기
+                    const detailHint = isDetailCol ? " · 클릭: 이 칸만 펼치기/접기 · 헤더 클릭: 전체 펼치기/접기 · Enter는 편집 완료, 줄바꿈은 Shift+Enter" : "";
+                    const detailClickAttr = isDetailCol ? ` onclick="window.toggleDetailExpand(this, event)"` : "";
+                    tdAttrs += `${detailClickAttr} ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능${dateHint}${detailHint}"`;
                 }
 
                 let tdStyle = ""; let tdHtml = '';
