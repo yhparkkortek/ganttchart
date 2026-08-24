@@ -185,7 +185,9 @@ def extract_body(msg):
     lines = [ln.strip() for ln in body.split("\n")]
     lines = [ln for ln in lines if ln]
     body = "\n".join(lines)
-    return body[:2000]
+    # 💡 [2026-08-24] "원문 보기"용 저장 한도. AI 분석 입력은 프론트(msCallGemini)에서 이 값과 무관하게
+    #    항상 별도로 2000자로 다시 잘라 쓰므로, 여기를 늘려도 AI 분석에는 영향 없음 — 저장/표시용 한도만 확장.
+    return body[:15000]
 
 def matches_keyword(subject, body, keyword, keyword_from='', sender='', keyword_body=''):
     def check(text, kw):
