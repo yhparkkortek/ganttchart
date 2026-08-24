@@ -9971,10 +9971,19 @@ window.handleAuthClick = function() {
             else if (col.name === '업무상태') { valuesArray = ['진행', '완료', '대기', '지연']; }
             else { valuesArray.sort(); }
 
-            currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
-            let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index; 
-            
-            let label = document.createElement('div'); 
+            // 💡 [2026-08-24] LEVEL(WBS) 필터만, 저장된 선택이 없는 첫 상태(기본값)에서 'All'(전체 우회
+            //    모드 — 숫자 버튼이 하나도 active로 안 보임) 대신 "개별 항목 전체 선택" 상태로 시작하도록
+            //    바꿨다. window.toggleAllFilter가 이미 'All' ↔ "숫자 전부 active" 두 표현을 서로 변환해주는
+            //    토글이라(아래쪽 toggleAllFilter 정의 참고), 여기서는 그중 "숫자 전부 active" 쪽을 기본값
+            //    으로 삼기만 하면 된다 — 필터링 결과(전체 표시)는 동일하고, 0/1/2/3/4 버튼이 처음부터 전부
+            //    선택된 것처럼 보이게 됨. 다른 필터(업무상태/개발단계)와 Calendar/Weekly Report의 별도
+            //    WBS 팝업(cal-wbs/wr-wbs)은 이 generateFilters()와 무관한 코드라 영향 없음 — Gantt
+            //    차트 페이지 전용 변경.
+            currentFilters[col.index] = savedFilters[col.index]
+                || (col.name === 'LEVEL(WBS)' ? new Set(valuesArray) : new Set(['All']));
+            let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index;
+
+            let label = document.createElement('div');
             label.className = 'filter-label'; 
             label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
             if (currentFilters[col.index].has('All')) label.classList.add('active'); 
