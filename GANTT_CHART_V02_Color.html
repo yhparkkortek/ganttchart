@@ -6881,7 +6881,10 @@ ${recentLogs}
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'ps-improve-comment-modal';
-            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.35); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);';
+            // 💡 [2026-08-24] 처음엔 backdrop-filter:blur(3px)를 넣었는데, 개선 요청 코멘트를 쓰려면
+            //    뒤에 있는 리포트/분석 결과 내용을 보면서 참고해야 하는데 블러 때문에 안 읽혀서 제거함
+            //    (배경 톤만 살짝 남기고 흐림 효과는 뺌 — 뒤 내용이 그대로 읽힘).
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.22);';
             modal.onclick = function() { modal.style.display = 'none'; }; // 배경 클릭 시 닫기
             modal.innerHTML = `
             <div id="ps-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); overflow:hidden;">
@@ -11787,7 +11790,10 @@ window.openImproveCommentModal = function() {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'improve-comment-modal';
-        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.35); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);';
+        // 💡 [2026-08-24] 처음엔 backdrop-filter:blur(3px)를 넣었는데, 개선 요청 코멘트를 쓰려면
+        //    뒤에 있는 분석 결과 내용을 보면서 참고해야 하는데 블러 때문에 안 읽혀서 제거함
+        //    (배경 톤만 살짝 남기고 흐림 효과는 뺌 — 뒤 내용이 그대로 읽힘).
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.22);';
         modal.onclick = function() { modal.style.display = 'none'; }; // 배경 클릭 시 닫기
         modal.innerHTML = `
         <div id="improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); overflow:hidden;">
