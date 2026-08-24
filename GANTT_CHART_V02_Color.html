@@ -272,6 +272,21 @@
         border-right: 2px solid #e67e22 !important;
     }
 
+    /* 💡 [2026-08-24] WBS 2번째 클릭 — 하위(자식) 행 하이라이트. 본인 행(위 highlighted-row, 테두리+15% 톤)
+       보다 확실히 옅게: 테두리 없이 배경 톤만 살짝(4%) 줘서 "이건 부모가 아니라 딸려온 하위 행"임을
+       은근하게 구분한다. 과하지 않게 하라는 요청대로 강조 요소(테두리/굵기)는 전부 뺐다. */
+    tr.highlighted-row-child td {
+        position: relative !important;
+    }
+    tr.highlighted-row-child td::after {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-color: rgba(230, 126, 34, 0.05) !important;
+        pointer-events: none;
+        z-index: 4;
+    }
+
     /* 다중 선택된 행 표시 (전체 열 옅은 빨강, 글자는 위에 또렷하게) */
     #myTable tr.multi-selected td {
         background-color: #ffcccc !important;
@@ -4765,10 +4780,31 @@ ${mailText}`;
         }
     };
 
+    // 💡 [2026-08-24] WBS 두 번째 클릭 — 부모의 하위(자식) 행들만 옅게 하이라이트. 본인 행(highlighted-row)
+    //    보다 확실히 연한 별도 클래스(highlighted-row-child)를 써서, "이건 하위라서 연하게 표시된 것"임을
+    //    구분할 수 있게 한다. 하위 판정은 moveSelectedRows와 동일한 방식(플랫 배열에서 자기보다 level이
+    //    더 깊은 연속 구간)을 재사용.
+    window.highlightRowChildren = function(rowIndex) {
+        document.querySelectorAll('tr.highlighted-row-child').forEach(tr => tr.classList.remove('highlighted-row-child'));
+        const rows = globalData;
+        if (!rows || !rows[rowIndex]) return;
+        const lvOf = (r) => (r && typeof r._level === 'number') ? r._level : 4;
+        const L = lvOf(rows[rowIndex]);
+        for (let j = rowIndex + 1; j < rows.length; j++) {
+            if (lvOf(rows[j]) <= L) break;
+            const tr = document.querySelector(`tr[data-row-index="${j}"]`);
+            if (tr) tr.classList.add('highlighted-row-child');
+        }
+    };
+
     window.clearRowHighlight = function() {
         document.querySelectorAll('tr.highlighted-row').forEach(tr => {
             tr.classList.remove('highlighted-row');
         });
+        document.querySelectorAll('tr.highlighted-row-child').forEach(tr => tr.classList.remove('highlighted-row-child'));
+        // 💡 하이라이트가 어디서든(외부클릭 닫기/행삭제 정리 등) 지워지면, WBS 클릭 사이클도 함께 리셋해서
+        //    다음에 같은 행을 클릭했을 때 엉뚱한 단계(2/3)부터 이어지지 않고 항상 1단계(선택)부터 시작하게 함.
+        window._rowClickCycle = { index: null, step: 0 };
     };
 
     window.syncRowHighlight = function() {
@@ -5448,7 +5484,29 @@ ${mailText}`;
         }
         // 일반 클릭: 묶음 선택 해제, 단일 메뉴
         sel.clear(); window._selAnchor = i;
-        window.toggleRowActions(td, i);
+
+        // 💡 [2026-08-24] WBS 1→2→3 클릭 사이클: 1클릭=행 선택(기존), 2클릭=하위행까지 옅게 하이라이트(신규),
+        //    3클릭=전체 해제. ondblclick="makeEditable(this)"(텍스트 수정)와 절대 안 겹치게 하기 위해
+        //    ev.detail(브라우저가 세는 연속 클릭 횟수)이 2 이상이면 — 즉 "빠르게 두 번 눌러서 브라우저가
+        //    진짜 더블클릭으로 인식한 클릭"이면 — 이 사이클은 아예 건드리지 않고 그대로 둔다. 그 직후
+        //    ondblclick이 정상적으로 발동해 수정모드로 들어간다(기존 동작 100% 유지). 반대로 천천히
+        //    따로따로 누른 단독 클릭(매번 ev.detail===1, 브라우저가 더블클릭으로 안 묶어서 dblclick
+        //    자체가 안 뜸)만 이 사이클을 한 단계씩 진행시킨다 — 그래서 두 클릭 방식이 절대 충돌하지 않음.
+        if (ev && ev.detail >= 2) { window.paintRowSelection(); return; }
+
+        if (!window._rowClickCycle) window._rowClickCycle = { index: null, step: 0 };
+        const nextStep = (window._rowClickCycle.index === i) ? (window._rowClickCycle.step % 3) + 1 : 1;
+
+        if (nextStep === 3) {
+            const p = document.getElementById('row-action-popup'); if (p) p.style.display = 'none';
+            window.clearRowHighlight(); // 내부에서 _rowClickCycle도 {index:null, step:0}으로 리셋됨
+        } else {
+            forceOpenRowActions(td, i); // 항상 '열기'로 동작 + highlightRow(i)로 본인 행 하이라이트(내부에서 이전 하이라이트 정리)
+            if (nextStep === 2) window.highlightRowChildren(i);
+            // 💡 forceOpenRowActions 내부의 clearRowHighlight()가 방금 사이클을 리셋했을 수 있으므로,
+            //    최종 사이클 상태는 모든 하이라이트 처리가 끝난 뒤 여기서 마지막에 확정해서 덮어쓴다.
+            window._rowClickCycle = { index: i, step: nextStep };
+        }
         window.paintRowSelection();
     };
 
