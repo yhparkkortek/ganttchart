@@ -1223,6 +1223,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
 
         <div class="btn-group">
+            <button id="ai-summary-btn" class="action-btn" onclick="window.openAiProjectSummaryModal()" style="border-color:#d35400; color:#d35400;" title="지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다">🤖 AI 요약</button>
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
@@ -4612,6 +4613,16 @@ ${mailText}`;
             if (typeof window.syncRowHighlight === 'function') {
                 window.syncRowHighlight();
             }
+
+            // 💡 [2026-08-24 버그 수정] Summary "개발 진척 현황" 타임라인은 예전엔 Summary 탭에 "들어올
+            //    때"만 다시 그려져서, 이미 Summary 탭을 보고 있는 중에 다른 경로(메일 완전자동 배치,
+            //    셀 편집, 선택 구간 재계산 등)로 일정이 바뀌면 화면이 갱신 안 된 채로 남아있었다 —
+            //    Alarm/Calendar 탭이 시트 전환 시 이미 하던 "지금 보이는 탭이면 즉시 다시 그림" 패턴을
+            //    여기(모든 일정 변경이 결국 거쳐가는 recalculateSchedules)에도 적용해 실시간으로 맞춘다.
+            const tabSummaryEl = document.getElementById('tab-summary');
+            if (tabSummaryEl && tabSummaryEl.classList.contains('active') && window.renderSummaryTimeline) {
+                window.renderSummaryTimeline();
+            }
         }, 10);
     };
 
@@ -6350,8 +6361,283 @@ ${mailText}`;
             const ganttPrintArea = document.getElementById('gantt-print-area');
             if (ganttPrintArea) ganttPrintArea.innerHTML = '';
             document.body.classList.remove('gantt-printing-mode');
+
+            // 💡 AI 프로젝트 요약 인쇄 전용 사본도 함께 정리
+            const aiSummaryPrintArea = document.getElementById('ai-summary-print-area');
+            if (aiSummaryPrintArea) aiSummaryPrintArea.innerHTML = '';
+            document.body.classList.remove('ai-summary-printing-mode');
         }, 1000);
     });
+
+    // ═══════════════════════════════════════════════════════════
+    // 🤖 [2026-08-24 신규] AI 프로젝트 요약 리포트 — Gantt 현황(통계+지연/임박 업무+최근 변경이력)을
+    //    압축해서 AI에게 넘기고, 신호등 총평/주요 리스크/담당자별 액션추천을 받아 리포트로 보여준다.
+    //    메일 분석과 동일한 AI 키/제공사(window.getActiveAiKey/callAiBackend)를 그대로 재사용.
+    //    "🔄 다시 생성" 버튼을 눌러야만 새로 호출(자동 재호출 없음) — 결과는 projectMeta에 캐싱해서
+    //    프로젝트 저장 시 함께 보관되고, 다음에 열었을 때도 마지막 생성 결과가 그대로 남아있다.
+    // ═══════════════════════════════════════════════════════════
+
+    // 💡 Gantt 원본 전체를 던지지 않고, AI가 판단하기 좋은 형태로 통계+목록만 추려서 압축
+    window._buildProjectSummaryData = function() {
+        const pm = window.projectMeta || {};
+        const rows = (typeof globalData !== 'undefined' && globalData) ? globalData.slice(1).filter(function(r) { return r && r._level !== undefined; }) : [];
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const koMap = (typeof LANG !== 'undefined' && LANG.ko && LANG.ko.statusMap) ? LANG.ko.statusMap : {};
+
+        const normStatus = function(raw) {
+            const s = (raw || '').toString().trim();
+            if (!s) return '(미지정)';
+            const key = Object.keys(koMap).find(function(k) { return k.toLowerCase() === s.toLowerCase(); });
+            return key ? koMap[key] : s;
+        };
+        const taskLabel = function(row) {
+            if (row._level === 0) return row._origDev || '';
+            if (row._level === 1) return row._origT1 || '';
+            if (row._level === 2) return row._origT2 || '';
+            if (row._level === 3) return row._origT3 || '';
+            return row._origT4 || '';
+        };
+
+        const counts = { 완료: 0, 진행: 0, 대기: 0, 지연: 0 };
+        const delayed = [];
+        const dueSoon = [];
+
+        rows.forEach(function(row) {
+            const st = normStatus(colIdx.status !== -1 ? row[colIdx.status] : '');
+            if (counts[st] !== undefined) counts[st]++; else counts.대기++; // 알 수 없는 상태값은 대기로 편입(집계 누락 방지)
+
+            if (st === '완료') return;
+            const planRaw = (colIdx.plan !== -1 && row[colIdx.plan]) ? row[colIdx.plan] : (row._calcPlanTs ? formatTsToYMD(row._calcPlanTs) : '');
+            if (!planRaw) return;
+            const planDate = new Date(planRaw);
+            if (isNaN(planDate)) return;
+            planDate.setHours(0, 0, 0, 0);
+            const diffDays = Math.round((planDate - today) / 86400000);
+            const label = taskLabel(row) || '(제목없음)';
+            const assignee = (colIdx.assignee !== -1 && row[colIdx.assignee]) ? row[colIdx.assignee] : '미지정';
+            if (diffDays < 0) {
+                delayed.push({ task: label, assignee: assignee, dueDate: planRaw, overdueDays: -diffDays });
+            } else if (diffDays <= 7) {
+                dueSoon.push({ task: label, assignee: assignee, dueDate: planRaw, dDay: diffDays });
+            }
+        });
+
+        delayed.sort(function(a, b) { return b.overdueDays - a.overdueDays; });
+        dueSoon.sort(function(a, b) { return a.dDay - b.dDay; });
+
+        const recentLogs = (window.changeLogs || []).slice(-15).reverse().map(function(l) {
+            return `${l.time} ${l.userName} — ${l.rowName}/${l.colName}: ${l.oldVal} → ${l.newVal}`;
+        });
+
+        return {
+            project: { customer: pm.고객사 || '', model: pm.고객모델명 || '', pm: pm.프로젝트담당자 || '' },
+            totalTasks: rows.length,
+            counts: counts,
+            delayed: delayed.slice(0, 15),
+            dueSoon: dueSoon.slice(0, 15),
+            recentLogs: recentLogs
+        };
+    };
+
+    // 💡 위 데이터를 AI 프롬프트로 변환 — 파싱 안정성을 위해 구조화된 JSON으로만 답하도록 명시적으로 요청
+    window._buildProjectSummaryPrompt = function(d) {
+        const delayedText = d.delayed.length
+            ? d.delayed.map(function(x) { return `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, ${x.overdueDays}일 지연)`; }).join('\n')
+            : '(없음)';
+        const dueSoonText = d.dueSoon.length
+            ? d.dueSoon.map(function(x) { return `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, D-${x.dDay})`; }).join('\n')
+            : '(없음)';
+        const logsText = d.recentLogs.length ? d.recentLogs.join('\n') : '(없음)';
+
+        return `당신은 프로젝트 관리 보조 AI입니다. 아래 Gantt 프로젝트 현황 데이터를 보고, 실무자가 한눈에 파악할 수 있는 간단한 프로젝트 분석 보고서를 작성하세요.
+
+[프로젝트] ${d.project.customer} ${d.project.model} (PM: ${d.project.pm || '미지정'})
+[전체 업무 수] ${d.totalTasks}건 — 완료 ${d.counts.완료} / 진행 ${d.counts.진행} / 대기 ${d.counts.대기} / 지연 ${d.counts.지연}
+
+[지연 업무 목록]
+${delayedText}
+
+[임박 마감(D-7 이내) 목록]
+${dueSoonText}
+
+[최근 변경 이력]
+${logsText}
+
+다음 JSON 형식으로만 답하세요 (다른 텍스트 없이 JSON만):
+{
+  "신호등": "🟢 또는 🟡 또는 🔴 (전체 지연 비율과 심각도 기준으로 판단)",
+  "총평": "한 문장 총평",
+  "리스크": ["리스크1 (왜 위험한지 포함)", "리스크2", "리스크3"],
+  "액션추천": ["담당자명: 추천 행동", "담당자명: 추천 행동"]
+}
+리스크/액션추천은 최대 5개씩, 근거가 부족하면 빈 배열([])로 두세요.`;
+    };
+
+    // 💡 실제 생성 실행 — 결과는 projectMeta.aiSummaryReport에 캐싱(프로젝트 저장 시 함께 보관됨)
+    window.generateAiProjectSummary = async function() {
+        const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        if (!apiKey) { alert('먼저 [🤖 AI 업무분석] 팝업에서 AI API 키를 입력하고 저장해주세요.'); return; }
+
+        const btn = document.getElementById('ai-summary-generate-btn');
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ 생성 중...'; }
+
+        try {
+            const data = window._buildProjectSummaryData();
+            const prompt = window._buildProjectSummaryPrompt(data);
+            const result = await window.callAiBackend(apiKey, prompt, {});
+            if (!result.ok) throw result.error || new Error('알 수 없는 오류');
+
+            const text = (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
+                && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
+                && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '';
+            const match = text.match(/\{[\s\S]*\}/);
+            if (!match) throw new Error('AI 응답에서 JSON을 찾을 수 없습니다.');
+            const parsed = JSON.parse(match[0]);
+
+            window.projectMeta = window.projectMeta || {};
+            window.projectMeta.aiSummaryReport = {
+                신호등: parsed.신호등 || '🟡',
+                총평: parsed.총평 || '',
+                리스크: Array.isArray(parsed.리스크) ? parsed.리스크 : [],
+                액션추천: Array.isArray(parsed.액션추천) ? parsed.액션추천 : [],
+                generatedAt: new Date().toISOString(),
+                dataSnapshot: data // 재생성 없이도 통계 숫자를 그대로 다시 보여줄 수 있게 같이 보관
+            };
+            window._renderAiProjectSummaryBody();
+            if (window.showToast) window.showToast('🤖 AI 프로젝트 요약을 생성했습니다.', 'info');
+        } catch (e) {
+            alert('⚠️ AI 요약 생성 실패: ' + (e && e.message ? e.message : e));
+        } finally {
+            if (btn) { btn.disabled = false; btn.textContent = '🔄 다시 생성'; }
+        }
+    };
+
+    window._renderAiProjectSummaryBody = function() {
+        const body = document.getElementById('ai-summary-body');
+        if (!body) return;
+        const r = (window.projectMeta || {}).aiSummaryReport;
+        if (!r) {
+            body.innerHTML = '<div style="padding:36px 10px; text-align:center; color:#999; font-size:12px;">아직 생성한 요약이 없습니다.<br>아래 [🔄 다시 생성] 버튼을 눌러 AI 요약을 만들어보세요.</div>';
+            return;
+        }
+        const d = r.dataSnapshot || { counts: {} };
+        const genDate = new Date(r.generatedAt);
+        const genStr = isNaN(genDate) ? '' : `${genDate.getFullYear()}-${String(genDate.getMonth() + 1).padStart(2, '0')}-${String(genDate.getDate()).padStart(2, '0')} ${String(genDate.getHours()).padStart(2, '0')}:${String(genDate.getMinutes()).padStart(2, '0')}`;
+
+        const riskHtml = (r.리스크 && r.리스크.length)
+            ? '<ul style="margin:0; padding-left:18px;">' + r.리스크.map(function(x) { return `<li style="margin-bottom:4px;">${escapeHtml(x)}</li>`; }).join('') + '</ul>'
+            : '<div style="color:#999; font-size:12px;">특별한 리스크가 감지되지 않았습니다.</div>';
+        const actionHtml = (r.액션추천 && r.액션추천.length)
+            ? '<ul style="margin:0; padding-left:18px;">' + r.액션추천.map(function(x) { return `<li style="margin-bottom:4px;">${escapeHtml(x)}</li>`; }).join('') + '</ul>'
+            : '<div style="color:#999; font-size:12px;">추천 액션이 없습니다.</div>';
+
+        body.innerHTML = `
+        <div id="ai-summary-report-content">
+            <div style="font-size:11px; color:#999; margin-bottom:12px;">생성 시각: ${genStr}</div>
+            <div style="display:flex; align-items:center; gap:10px; padding:14px; background:#f8f9fa; border-radius:8px; margin-bottom:14px;">
+                <span style="font-size:28px;">${r.신호등 || '🟡'}</span>
+                <span style="font-size:13px; font-weight:bold; color:#333;">${escapeHtml(r.총평 || '')}</span>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; text-align:center; font-size:12px;">
+                <div style="padding:8px; background:#e7f6ec; border-radius:6px;"><b style="font-size:16px; color:#2f9e44;">${d.counts.완료 || 0}</b><br>완료</div>
+                <div style="padding:8px; background:#eef3f7; border-radius:6px;"><b style="font-size:16px; color:#1971c2;">${d.counts.진행 || 0}</b><br>진행</div>
+                <div style="padding:8px; background:#fff8e6; border-radius:6px;"><b style="font-size:16px; color:#b85c00;">${d.counts.대기 || 0}</b><br>대기</div>
+                <div style="padding:8px; background:#ffe3e3; border-radius:6px;"><b style="font-size:16px; color:#e03131;">${d.counts.지연 || 0}</b><br>지연</div>
+            </div>
+            <div style="margin-bottom:14px;">
+                <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">⚠️ 주요 리스크</div>
+                ${riskHtml}
+            </div>
+            <div>
+                <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">✅ 담당자별 액션 추천</div>
+                ${actionHtml}
+            </div>
+        </div>`;
+    };
+
+    window.openAiProjectSummaryModal = function() {
+        let modal = document.getElementById('ai-summary-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ai-summary-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+            modal.innerHTML = `
+            <div id="ai-summary-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:560px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:360px;">
+                <div id="ai-summary-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                    <span>🤖 AI 프로젝트 요약</span>
+                    <button onclick="document.getElementById('ai-summary-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                </div>
+                <div id="ai-summary-body" style="overflow-y:auto; flex:1; padding:16px 18px;"></div>
+                <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
+                    <button id="ai-summary-generate-btn" onclick="window.generateAiProjectSummary()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">🔄 다시 생성</button>
+                    <button onclick="window.printAiProjectSummary()" style="padding:8px 14px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">🖨️ PDF</button>
+                    <button onclick="window.exportAiProjectSummaryPPT()" style="padding:8px 14px; background:#fff; color:#d35400; border:1px solid #d35400; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">📊 PPT</button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            window._makeDraggable('ai-summary-box', 'ai-summary-drag');
+            window._bindClickToFront('ai-summary-modal');
+        }
+        window._renderAiProjectSummaryBody();
+        modal.style.display = 'block';
+        window.bringModalToFront('ai-summary-modal');
+    };
+
+    // 💡 [PDF] 리포트 카드만 별도 인쇄영역(#ai-summary-print-area)에 복제해서 window.print() —
+    //    Gantt 표 전용 인쇄 규칙(zoom 0.7 등)과 안 섞이도록 별도 영역/모드 클래스 사용
+    window.printAiProjectSummary = function() {
+        const content = document.getElementById('ai-summary-report-content');
+        if (!content) { alert('먼저 [🔄 다시 생성]으로 리포트를 만들어주세요.'); return; }
+        let printArea = document.getElementById('ai-summary-print-area');
+        if (!printArea) { printArea = document.createElement('div'); printArea.id = 'ai-summary-print-area'; document.body.appendChild(printArea); }
+        const pm = window.projectMeta || {};
+        const title = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
+        printArea.innerHTML = `<div style="padding:10px; font-family:'맑은 고딕',sans-serif; color:#333;">
+            <h2 style="margin:0 0 4px; color:#2c5f8a;">🤖 AI 프로젝트 요약 — ${escapeHtml(title)}</h2>
+            <div>${content.innerHTML}</div>
+        </div>`;
+        document.body.classList.add('ai-summary-printing-mode');
+        window.print();
+    };
+
+    // 💡 [PPT] 신호등/총평/통계/리스크/액션추천을 2슬라이드짜리 PowerPoint로 — Weekly Report PPT 내보내기와
+    //    동일 라이브러리(PptxGenJS, 이미 로드돼 있음) 재사용, 색상/여백은 이 리포트 전용으로 단순화
+    window.exportAiProjectSummaryPPT = function() {
+        if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+        const r = (window.projectMeta || {}).aiSummaryReport;
+        if (!r) { alert('먼저 [🔄 다시 생성]으로 리포트를 만들어주세요.'); return; }
+        const d = r.dataSnapshot || { counts: {}, project: {} };
+        const pm = window.projectMeta || {};
+        const title = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
+
+        const pptx = new PptxGenJS();
+        pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
+        pptx.layout = 'WIDE';
+        const SKY = '2C5F8A';
+
+        const slide = pptx.addSlide();
+        slide.addText(`🤖 AI 프로젝트 요약 — ${title}`, { x: 0.4, y: 0.3, w: 12.5, h: 0.6, fontSize: 22, bold: true, color: SKY });
+        slide.addText(`${r.신호등 || ''}  ${r.총평 || ''}`, { x: 0.4, y: 1.0, w: 12.5, h: 0.6, fontSize: 16, bold: true, color: '333333' });
+
+        const statLabels = ['완료', '진행', '대기', '지연'];
+        const statColors = ['2F9E44', '1971C2', 'B85C00', 'E03131'];
+        statLabels.forEach(function(label, i) {
+            slide.addShape(pptx.ShapeType.roundRect, { x: 0.4 + i * 3.1, y: 1.8, w: 2.9, h: 1.0, fill: { color: 'F5F5F5' }, line: { color: 'DDDDDD', width: 0.5 } });
+            slide.addText(String((d.counts && d.counts[label]) || 0), { x: 0.4 + i * 3.1, y: 1.85, w: 2.9, h: 0.55, align: 'center', fontSize: 24, bold: true, color: statColors[i] });
+            slide.addText(label, { x: 0.4 + i * 3.1, y: 2.4, w: 2.9, h: 0.35, align: 'center', fontSize: 12, color: '666666' });
+        });
+
+        slide.addText('⚠️ 주요 리스크', { x: 0.4, y: 3.1, w: 6.0, h: 0.4, fontSize: 14, bold: true, color: SKY });
+        slide.addText((r.리스크 && r.리스크.length ? r.리스크 : ['특별한 리스크 없음']).map(function(x) { return { text: x, options: { bullet: true, breakLine: true, fontSize: 11 } }; }),
+            { x: 0.4, y: 3.5, w: 6.0, h: 3.3, valign: 'top' });
+
+        slide.addText('✅ 담당자별 액션 추천', { x: 6.9, y: 3.1, w: 6.0, h: 0.4, fontSize: 14, bold: true, color: SKY });
+        slide.addText((r.액션추천 && r.액션추천.length ? r.액션추천 : ['추천 액션 없음']).map(function(x) { return { text: x, options: { bullet: true, breakLine: true, fontSize: 11 } }; }),
+            { x: 6.9, y: 3.5, w: 6.0, h: 3.3, valign: 'top' });
+
+        const fileBase = 'AI프로젝트요약_' + title.replace(/[\\\/:*?"<>|]/g, '');
+        pptx.writeFile({ fileName: `${fileBase}.pptx` });
+    };
 
     function logChange(rowIndex, colIndex, oldVal, newVal, reason) {
         if (!globalData || globalData.length === 0) return;
@@ -18024,14 +18310,31 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
             line-height: 1.1 !important;
         }
 
-        /* 2. 인쇄 영역 이외 숨김 처리 */
-        body > :not(#gantt-print-area) {
+        /* 2. 인쇄 영역 이외 숨김 처리 — 💡 [2026-08-24] AI 프로젝트 요약 인쇄 영역도 함께 예외 처리 */
+        body > :not(#gantt-print-area):not(#ai-summary-print-area) {
             display: none !important;
         }
-        
+
         #gantt-print-area {
             display: block !important;
             width: 100%;
+        }
+
+        /* 💡 [2026-08-24 신규] AI 프로젝트 요약 리포트 전용 인쇄 스타일 — Gantt 표 전용 규칙(zoom 0.7 등)과
+           섞이지 않도록 별도 영역/블록으로 분리 */
+        #ai-summary-print-area {
+            display: none;
+            width: 100%;
+        }
+        body.ai-summary-printing-mode #ai-summary-print-area {
+            display: block !important;
+        }
+        body.ai-summary-printing-mode {
+            page: aiSummaryPortraitPage;
+        }
+        @page aiSummaryPortraitPage {
+            size: A4 portrait;
+            margin: 15mm;
         }
 
         /* 3. 여백 최소화 및 가로 모드 (진짜 Gantt 인쇄일 때만 적용되도록 범위를 정확히 좁힘) */
