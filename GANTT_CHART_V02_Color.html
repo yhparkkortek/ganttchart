@@ -21932,6 +21932,14 @@ window.AddressBook = {
     FILE_NAME: 'AddressBook_Shared.json',
     _driveFileId: null,
     _syncTimer: null,
+    // 💡 [2026-08-24 사고 방지] 마지막으로 Drive에서 확인된(=진짜 존재가 확인된) "내용이 채워진" 인원 수.
+    //    프로젝트 자동저장(collectTabData)이 Address 탭을 보지도 않은 채 collectAddressData()를 얼결에
+    //    호출해서, 아직 Drive에서 못 받아온 빈/오래된 로컬 캐시로 팀 공용 주소록 전체를 덮어쓰는 사고가
+    //    실제로 발생했음(365명 → 빈 배열로 반복 붕괴). syncToDrive()에서 이 값과 비교해 스킵 여부를 판단.
+    _lastKnownServerCount: 0,
+    _meaningfulCount: function(list) {
+        return (list || []).filter(function(p) { return p && (String(p.name||'').trim() || String(p.email||'').trim()); }).length;
+    },
     load: function() {
         try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
     },
@@ -21948,6 +21956,15 @@ window.AddressBook = {
         const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return; // 비로그인: localStorage 단독 동작
+        // 💡 [사고 방지 가드] 이전에 Drive에서 5명 넘게 확인된 적이 있는데, 지금 올리려는 목록엔
+        //    이름/이메일이 채워진 사람이 한 명도 없다면 → 실수로 빈 상태를 덮어쓰려는 상황일 가능성이
+        //    매우 높으므로 동기화를 건너뛴다. 정상적으로 소수 인원만 쓰는 팀은 5명 미만이라 이 가드에
+        //    걸리지 않고, 의도적으로 많은 인원을 정리해서 줄이는 경우도 "채워진 사람 0명"이 아니면 통과함.
+        const meaningful = this._meaningfulCount(list);
+        if (this._lastKnownServerCount > 5 && meaningful === 0) {
+            console.warn(`[AddressBook 안전장치] Drive 동기화 스킵 — 이전엔 ${this._lastKnownServerCount}명이 있었는데 지금 수집된 목록은 전부 빈 값입니다. 실수로 덮어쓰는 사고를 막기 위해 건너뜁니다.`);
+            return;
+        }
         try {
             const folderId = await window.getOrCreateConfigFolder(token);
             if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
@@ -21959,6 +21976,7 @@ window.AddressBook = {
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
             const file = await resp.json();
             if (file && file.id) this._driveFileId = file.id;
+            if (resp.ok) this._lastKnownServerCount = meaningful; // 성공적으로 반영된 값으로 기준선 갱신
         } catch(e) { console.warn('AddressBook Drive 동기화 실패:', e.message); }
     },
     loadFromDrive: async function() {
@@ -21972,6 +21990,7 @@ window.AddressBook = {
             const response = await gapi.client.drive.files.get({ fileId: this._driveFileId, alt: 'media', supportsAllDrives: true });
             const data = response.result;
             const list = (data && data.addressBook) || [];
+            this._lastKnownServerCount = Math.max(this._lastKnownServerCount, this._meaningfulCount(list)); // 💡 방금 Drive에서 실제로 확인한 인원 수를 기준선으로 기록
             this.save(list, true); // 로컬 캐시만 갱신 (방금 받은 걸 다시 올릴 필요 없음)
             return list;
         } catch(e) { console.warn('AddressBook Drive 조회 실패:', e.message); return null; }
