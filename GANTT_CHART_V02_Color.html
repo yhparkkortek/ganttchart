@@ -3063,27 +3063,31 @@ ${mailText}`;
         }
     };
 
+    // 💡 [2026-08-24] 멤버-1,2 담당자 라벨(sum-*-label)의 기본 텍스트 — clearAllTabFields(새 프로젝트
+    //    시작)와 populateTabData(시트 전환/프로젝트 로드) 양쪽에서 공유하는 단일 출처. 예전엔 각자
+    //    따로 관리돼서, 시트 전환 시 이 기본값을 몰라 빈 값이면 그냥 건너뛰거나(→ 이전 시트의 라벨이
+    //    그대로 남는 사고) 무조건 지워버리는(→ 매번 빈칸이 되는 사고) 문제가 있었음.
+    window.DEFAULT_MEMBER_LABELS = {
+        'sum-pm-label': '프로젝트 담당자',
+        'sum-mech-label': '기구 담당자',
+        'sum-hw-label': 'H/W 담당자',
+        'sum-fw-label': 'F/W 담당자',
+        'sum-module-label': 'BLU 담당자',
+        'sum-tsp-label': 'TSP 담당자',
+        'sum-lcm-label': 'LCM 담당자',
+        'sum-slimming-label': 'Slimming 담당자',
+        'sum-cutting-label': 'Cutting 담당자',
+        'sum-tooling-label': 'Tooling 담당자'
+    };
     // 💡 Summary/Brief SPEC/M.C Table/Address 탭 필드를 전부 비움 (populateTabData는 "채우기"만 하고
     //    비어있는 값은 건너뛰기 때문에, 새 프로젝트 시작 시 기존 값이 그대로 남는 문제를 방지)
     window.clearAllTabFields = function() {
         document.querySelectorAll('#tab-summary input, #tab-summary textarea').forEach(function(el) { el.value = ''; });
         // 💡 프로젝트 멤버-1,2의 담당자 라벨(sum-*-label)은 자유롭게 수정할 수 있지만,
         //    새 프로젝트를 시작할 때는 항상 아래 기본 라벨로 복원되어야 한다.
-        var defaultMemberLabels = {
-            'sum-pm-label': '프로젝트 담당자',
-            'sum-mech-label': '기구 담당자',
-            'sum-hw-label': 'H/W 담당자',
-            'sum-fw-label': 'F/W 담당자',
-            'sum-module-label': 'BLU 담당자',
-            'sum-tsp-label': 'TSP 담당자',
-            'sum-lcm-label': 'LCM 담당자',
-            'sum-slimming-label': 'Slimming 담당자',
-            'sum-cutting-label': 'Cutting 담당자',
-            'sum-tooling-label': 'Tooling 담당자'
-        };
-        Object.keys(defaultMemberLabels).forEach(function(id) {
+        Object.keys(window.DEFAULT_MEMBER_LABELS).forEach(function(id) {
             var el = document.getElementById(id);
-            if (el) el.value = defaultMemberLabels[id];
+            if (el) el.value = window.DEFAULT_MEMBER_LABELS[id];
         });
         ['briefspec-body', 'address-table-body', 'mctable-body'].forEach(function(id) {
             const el = document.getElementById(id); if (el) el.innerHTML = '';
@@ -7945,9 +7949,6 @@ window.deleteHistoryByDateRange = function() {
         // [업무 보관함 모달] 헤더 번역
         const _ibxTitle = document.getElementById('inbox-modal-title');
         if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? 'Task Inbox' : '업무 보관함';
-        const _ibxClearBtn = document.getElementById('inbox-clear-done-btn');
-        if (_ibxClearBtn) _ibxClearBtn.textContent = _en ? '🧹 Clear Done' : '🧹 처리됨 정리';
-
         // [업무 배분 모달]
         const _ibxDistTexts = {
             'inbox-dist-title':        { ko:'📤 다른 프로젝트로 전송',               en:'📤 Send to Another Project' },
@@ -12024,20 +12025,11 @@ window.inboxPlaceToCurrent = function(uid) {
     alert(`✅ "${built.taskName}" 업무가 배치되었습니다.\n(${posInfo.previewLabel})`);
 };
 
-window.inboxClearDone = function() {
-    const list = window.TaskInbox.load();
-    const remain = list.filter(function(it) { return it.status === '대기'; });
-    if (remain.length === list.length) { alert('정리할 처리 완료 항목이 없습니다.'); return; }
-        // 💡 필요하면 재전송 가능하고, 실제 데이터는 지워지지 않아 확인창 없이 바로 진행
-    window.TaskInbox.save(remain);
-    window.renderTaskInbox();
-};
-
 // ─── 💡 [처리됨 정리 토글] 처리됨(대기 아닌 상태) 항목을 어떻게 다룰지 두 모드 ─────────────────
-//    - keep(처리됨 보관, 기본값): 지금까지 동작 그대로 — 처리돼도 목록에 남고, 사람이 [🧹 처리됨 정리]로
-//      직접 훑어보고 지운다. 완전자동이 아직 안정화되기 전 결과를 검증하는 TEST 용도.
+//    - keep(처리됨 보관, 기본값): 지금까지 동작 그대로 — 처리돼도 목록에 남고, 사람이 각 행의 🗑로
+//      직접 훑어보고 지운다.
 //    - auto(처리됨 자동삭제): TaskInbox.setStatus()로 상태가 "대기"가 아닌 값(배치됨/자동배치됨/전송됨 등)으로
-//      바뀌는 그 순간 바로 목록에서 제거 — 정리 버튼을 기다릴 필요 없이 처리 즉시 사라짐.
+//      바뀌는 그 순간 바로 목록에서 제거 — 직접 지울 필요 없이 처리 즉시 사라짐.
 window.getInboxCleanupMode = function() {
     return localStorage.getItem('inbox_cleanup_mode') || 'keep'; // 기본값: 보관(기존 동작 유지)
 };
@@ -12048,7 +12040,7 @@ window.toggleInboxCleanupMode = function() {
     if (window.showToast) {
         window.showToast(next === 'auto'
             ? '🟢 처리됨 자동삭제 모드 — 앞으로 처리된 업무는 즉시 보관함에서 사라집니다.'
-            : '🟠 처리됨 보관 모드 — 처리된 업무가 보관함에 남고, [🧹 처리됨 정리]로 직접 지워야 합니다.', 'info');
+            : '🟠 처리됨 보관 모드 — 처리된 업무가 보관함에 남습니다. 각 행의 🗑로 직접 지워주세요.', 'info');
     }
 };
 window.refreshInboxCleanupModeButton = function() {
@@ -12062,10 +12054,10 @@ window.refreshInboxCleanupModeButton = function() {
         btn.title = isEn ? 'Processed tasks are removed from the inbox immediately once handled.'
                           : '자동배치/전송 등으로 처리된 업무를 처리 즉시 보관함에서 자동으로 지웁니다.';
     } else {
-        btn.textContent = isEn ? '🟠 Keep Done (Test)' : '🟠 처리됨 보관 (TEST)';
+        btn.textContent = isEn ? '🟠 Keep Done' : '🟠 처리됨 보관';
         btn.style.color = '#b85c00'; btn.style.borderColor = '#b85c00';
-        btn.title = isEn ? 'Processed tasks stay in the inbox until you review and clear them with [Clear Done]. Use while verifying full-auto results.'
-                          : '처리된 업무를 보관함에 남겨두고 [🧹 처리됨 정리]로 직접 확인 후 삭제합니다. 완전자동이 안정화되기 전 결과를 검증하는 TEST 모드로 사용하세요.';
+        btn.title = isEn ? 'Processed tasks stay in the inbox until you delete them yourself (🗑 per row).'
+                          : '처리된 업무를 보관함에 남겨두고, 각 행의 🗑로 직접 확인 후 삭제합니다.';
     }
 };
 
@@ -13122,7 +13114,6 @@ window.updateInboxBadge();
             </span></span></span>
             <div style="display:flex; gap:6px; flex-shrink:0;">
                 <button id="inbox-batch-register-btn" class="action-btn" onclick="window.inboxBatchRegisterMatched()" style="font-size:12px; color:#2f9e44; border-color:#2f9e44;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
-                <button id="inbox-clear-done-btn" class="action-btn" onclick="window.inboxClearDone()" style="font-size:12px;">🧹 처리됨 정리</button>
                 <button id="inbox-cleanup-mode-btn" class="action-btn" onclick="window.toggleInboxCleanupMode()" style="font-size:12px;"></button>
                 <button onclick="window.closeTaskInbox()"
                     style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
@@ -22420,18 +22411,25 @@ window.populateTabData = function() {
     setVal('sum-module-email', pm.Module담당자이메일);
     setVal('sum-tooling-email', pm.Tooling담당자이메일);
 
-    // 💡 멤버-1,2 담당업무 라벨 복원 (사용자가 바꾼 적 없으면 기본 텍스트 그대로 유지)
+    // 💡 [2026-08-24 버그 수정] 멤버-1,2 담당업무 라벨 복원 — "사용자가 바꾼 적 없으면 기본 텍스트
+    //    그대로 유지"가 의도였는데, setVal이 무조건 el.value = val || ''로 덮어써서 저장된 라벨이
+    //    없는 프로젝트(새 프로젝트/참조 엑셀 자동 가져오기 등 pm.memberLabels가 비어있는 경우)마다
+    //    매번 빈칸으로 지워지고 있었다. 저장된 라벨이 있으면 그걸 쓰고, 없으면 공용 기본값
+    //    (window.DEFAULT_MEMBER_LABELS)으로 복원한다 — 그냥 안 건드리고 두면(=이전에 활성화됐던
+    //    다른 시트의 라벨이 DOM에 남아있으므로) 시트를 전환했을 때 엉뚱한 이전 프로젝트의 라벨이
+    //    그대로 보이는 사고가 나므로, 반드시 "저장값 or 기본값" 둘 중 하나로 매번 명시적으로 채운다.
+    const setLabelVal = function(id, val) { const el = document.getElementById(id); if (el) el.value = val || window.DEFAULT_MEMBER_LABELS[id] || ''; };
     const ml = pm.memberLabels || {};
-    setVal('sum-pm-label', ml.프로젝트담당자);
-    setVal('sum-mech-label', ml.기구담당자);
-    setVal('sum-hw-label', ml.HW담당자);
-    setVal('sum-fw-label', ml.FW담당자);
-    setVal('sum-module-label', ml.Module담당자);
-    setVal('sum-tsp-label', ml.TSP담당자);
-    setVal('sum-lcm-label', ml.LCM담당자);
-    setVal('sum-slimming-label', ml.Slimming담당자);
-    setVal('sum-cutting-label', ml.Cutting담당자);
-    setVal('sum-tooling-label', ml.Tooling담당자);
+    setLabelVal('sum-pm-label', ml.프로젝트담당자);
+    setLabelVal('sum-mech-label', ml.기구담당자);
+    setLabelVal('sum-hw-label', ml.HW담당자);
+    setLabelVal('sum-fw-label', ml.FW담당자);
+    setLabelVal('sum-module-label', ml.Module담당자);
+    setLabelVal('sum-tsp-label', ml.TSP담당자);
+    setLabelVal('sum-lcm-label', ml.LCM담당자);
+    setLabelVal('sum-slimming-label', ml.Slimming담당자);
+    setLabelVal('sum-cutting-label', ml.Cutting담당자);
+    setLabelVal('sum-tooling-label', ml.Tooling담당자);
 
     // 💡 프로젝트 멤버-3 렌더링
     if (window.renderMember3Rows) window.renderMember3Rows(td.projectMembers3 || []);
