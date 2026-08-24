@@ -5,18 +5,6 @@
 <meta name="viewport" content="width=1200, initial-scale=0.35">
 <title>Gantt Chart</title>
 
-<script>
-    // 💡 [Drive 연동 레이스컨디션 방지] 이 문서가 워낙 커서(1MB+) 브라우저가
-    //    아래쪽의 진짜 gapiLoaded/gisLoaded 정의(2000~8000행대)까지 파싱하기 전에
-    //    구글 api.js/gsi client 스크립트 로드가 먼저 끝나버리는 경우가 실무에서 흔함.
-    //    그러면 onload="gapiLoaded()" 호출 시점에 함수가 아직 없어 ReferenceError가 나고
-    //    gapi.client가 영영 초기화되지 않아 Drive 저장/불러오기가 모두 조용히 실패함.
-    //    → 진짜 정의가 나타나기 전엔 "로드 완료됨" 사실만 기록해두는 임시 스텁을 먼저 심어둔다.
-    window._gapiReady = false;
-    window._gisReady  = false;
-    window.gapiLoaded = function() { window._gapiReady = true; };
-    window.gisLoaded  = function() { window._gisReady  = true; };
-</script>
 <script async defer src="https://apis.google.com/js/api.js" onload="gapiLoaded()"></script>
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
@@ -449,12 +437,6 @@
    추가로 차지해서 "상단 여백이 유독 넓어 보이는" 원인이 됨 — 스크롤 기능은 유지하되 바만 숨김 */
 #sheet-tabs-bar { scrollbar-width: none; -ms-overflow-style: none; }
 #sheet-tabs-bar::-webkit-scrollbar { display: none; height: 0; }
-/* 💡 [버그 수정] 시트탭 바는 #app-main의 전체 폭을 그대로 쓰는데, 그 아래 각 탭의 실제 내용(Summary/
-   Gantt 표 등)은 전부 .concept-tab-wrap(max-width:1100~1200px)에 담겨 있어 큰 모니터에서는 폭이
-   좁습니다. 탭 바가 아래 콘텐츠 박스보다 더 넓게 뻗어나가 정렬이 안 맞아 보였던 원인 — 탭 바도
-   똑같이 1200px로 캡을 씌워서, 창이 아무리 넓어져도(=전체 창 상태) 아래 타이틀 박스 폭을 넘지 않게 함.
-   (자동 축소 계산은 bar.clientWidth를 그대로 읽으므로, 이 CSS 캡만으로 별도 JS 수정 없이 반영됨) */
-#sheet-tabs-bar { max-width: 1200px; }
 
 .tab-panel { display: none; }
 .tab-panel.active { display: block; }
@@ -592,13 +574,6 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 #sum-milestone-body .u-input, #sum-milestone-body-actual .u-input { text-align: center !important; }
 #sum-milestone-body .u-input { background: #f4f6f8 !important; }
 #sum-milestone-body-actual .u-input { background: #fff8e6 !important; }
-/* 💡 위 두 규칙(ID+클래스)이 .req-field.req-missing(클래스만)보다 명시도가 높아 미입력 경고 배경(연노랑)을
-   가려버리므로, PROTO Start 같은 필수 마일스톤 칸에서도 경고 배경이 그대로 보이도록 별도로 덮어씀 */
-#sum-milestone-body .req-field.req-missing { background: #fff3cd !important; }
-/* 💡 마일스톤 날짜칸 — 직접 입력 + 옆의 📅 아이콘(달력) 둘 다 쓸 수 있도록, input을 살짝 줄여서
-   아이콘이 같은 줄에 들어갈 자리를 남겨둔다(td의 display를 안 건드려서 표 컬럼 정렬에 영향 없음) */
-#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { width: calc(100% - 16px); box-sizing: border-box; }
-.ms-cal-btn { display: inline-block; width: 13px; cursor: pointer; font-size: 11px; vertical-align: middle; }
 
 /* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
 .sum-tl-bubble.above::after, .sum-tl-bubble.below::after { border-color: transparent !important; border-width: 0 !important; }
@@ -792,29 +767,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="sb-item" data-tab="weekly" onclick="window.switchTab('weekly')"><span class="sb-ico">📋</span><span class="sb-label">Weekly Report</span></div>
         <div class="sb-item" data-tab="alarm" onclick="window.switchTab('alarm')"><span class="sb-ico">🔔</span><span class="sb-label">Alarm/Notice</span></div>
         <div class="sb-item" data-tab="address" onclick="window.switchTab('address')"><span class="sb-ico">🪪</span><span class="sb-label">Address</span></div>
-    </div>
-</div>
-
-<!-- 💡 [드롭다운화] Calendar/Weekly Report의 LEVEL(WBS) 필터 팝업 — Gantt 차트의 gantt-filter-popup과 동일한
-     방식(position:fixed)이라 클리핑 없이 항상 트리거 버튼 바로 아래에 뜨도록 body 최상위에 둠 -->
-<div id="gantt-filter-popup-cal-wbs" class="row-action-popup gantt-filter-popup" data-trigger-id="gantt-filter-trigger-cal-wbs">
-    <div class="filter-group" id="cal-level-filter-group">
-        <div class="filter-label" id="cal-level-all-label" onclick="window.calToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
-        <button type="button" class="btn" data-level="0" onclick="window.calToggleLevel(0)" title="대분류">0</button>
-        <button type="button" class="btn" data-level="1" onclick="window.calToggleLevel(1)" title="소분류1">1</button>
-        <button type="button" class="btn" data-level="2" onclick="window.calToggleLevel(2)" title="소분류2">2</button>
-        <button type="button" class="btn active" data-level="3" onclick="window.calToggleLevel(3)" title="세부업무">3</button>
-        <button type="button" class="btn active" data-level="4" onclick="window.calToggleLevel(4)" title="하위업무">4</button>
-    </div>
-</div>
-<div id="gantt-filter-popup-wr-wbs" class="row-action-popup gantt-filter-popup" data-trigger-id="gantt-filter-trigger-wr-wbs">
-    <div class="filter-group" id="wr-level-filter-group">
-        <div class="filter-label" id="wr-level-all-label" onclick="window.wrToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
-        <button type="button" class="btn" data-level="0" onclick="window.wrToggleLevel(0)" title="대분류">0</button>
-        <button type="button" class="btn" data-level="1" onclick="window.wrToggleLevel(1)" title="소분류1">1</button>
-        <button type="button" class="btn" data-level="2" onclick="window.wrToggleLevel(2)" title="소분류2">2</button>
-        <button type="button" class="btn active" data-level="3" onclick="window.wrToggleLevel(3)" title="세부업무">3</button>
-        <button type="button" class="btn active" data-level="4" onclick="window.wrToggleLevel(4)" title="하위업무">4</button>
     </div>
 </div>
 
@@ -1501,19 +1453,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <style>
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #sum-milestone-body td, #sum-milestone-body input, #sum-milestone-body-actual td, #sum-milestone-body-actual input { text-align: center !important; }
-                /* 💡 [버그 수정] 이 표는 헤더가 2행(rowspan="구분" + colspan 그룹명 / 하위 Start·End·DR)인데,
-                   전역 `th { position:sticky; top:0 }` 규칙이 th 하나하나에 개별로 걸리면서 1행/2행이
-                   전부 top:0에서 경합해 스크롤 시 2행이 1행 밑으로 들어가며 병합 셀과 어긋났음.
-                   M.C Table/Address 탭과 동일하게, thead 전체를 하나의 sticky 단위로 고정해서 해결
-                   (M.C Table 쪽 주석 참고: "표 전체가 separate 방식이라 sticky 헤더가 충돌 없이 정상 동작함"). */
-                #tab-summary .concept-table thead {
-                    position: sticky !important;
-                    top: 0 !important;
-                    z-index: 16;
-                }
-                #tab-summary .concept-table thead th {
-                    background-color: #f4f6f8 !important;
-                }
             </style>
             <table class="concept-table">
                 <thead>
@@ -1524,7 +1463,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <th colspan="3">PP</th>
                     </tr>
                     <tr id="sum-milestone-head">
-                        <th>Start <span style="color:#e03131;" title="필수 입력 — 새 프로젝트 등록 시 Gantt Chart의 시작일 기준(anchor)으로 사용되어 전체 일정이 자동 계산됩니다">*</span></th>
+                        <th>Start</th>
                         <th>End</th>
                         <th>DR</th>
                         <th>Start</th>
@@ -1538,27 +1477,27 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <tbody>
                     <tr id="sum-milestone-body" style="background:#f4f6f8;">
                         <td id="sum-td-plan" style="font-weight:bold;">계획</td>
-                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (직접 입력하거나, 달력 아이콘을 눌러 선택)" oninput="window._checkRequiredField(this)"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"></td>
                     </tr>
                     <tr id="sum-milestone-body-actual" style="background:#fff8e6; position:relative; z-index:1;">
                         <td id="sum-td-actual" style="font-weight:bold;">실적</td>
-                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD"></td>
                     </tr>
                 </tbody>
             </table>
@@ -1714,18 +1653,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <style>
                 #tab-briefspec .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #briefspec-body input[data-field="modelA"], #briefspec-body input[data-field="modelB"], #briefspec-body input[data-field="modelC"] { text-align: center !important; }
-                /* 💡 [버그 수정] Summary 탭과 동일한 원인 — 2행 헤더(rowspan NO/TYPE/TYPE2/Note + colspan
-                   Description 하위 Model A/B/C)인데 전역 `th { position:sticky; top:0 }`가 각 th에
-                   개별로 걸려 스크롤 시 2행이 1행 밑으로 들어가며 병합 셀과 어긋났음. M.C Table과 동일하게
-                   thead 전체를 하나의 sticky 단위로 고정해서 해결. */
-                #tab-briefspec .concept-table thead {
-                    position: sticky !important;
-                    top: 0 !important;
-                    z-index: 16;
-                }
-                #tab-briefspec .concept-table thead th {
-                    background-color: #f4f6f8 !important;
-                }
             </style>
             <div id="briefspec-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
             <table class="concept-table">
@@ -1912,12 +1839,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📅 Calendar</h2>
-            <!-- 💡 [경계선 위치 변경] 타이틀과 LEVEL(WBS) 사이로 이동 -->
+            <div class="filter-group" id="cal-level-filter-group" style="margin-left:8px;">
+                <div class="filter-label" id="cal-level-all-label" onclick="window.calToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
+                <button type="button" class="btn" data-level="0" onclick="window.calToggleLevel(0)" title="대분류">0</button>
+                <button type="button" class="btn" data-level="1" onclick="window.calToggleLevel(1)" title="소분류1">1</button>
+                <button type="button" class="btn" data-level="2" onclick="window.calToggleLevel(2)" title="소분류2">2</button>
+                <button type="button" class="btn active" data-level="3" onclick="window.calToggleLevel(3)" title="세부업무">3</button>
+                <button type="button" class="btn active" data-level="4" onclick="window.calToggleLevel(4)" title="하위업무">4</button>
+            </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
-                 body 하단의 gantt-filter-popup-cal-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
-            <button type="button" id="gantt-filter-trigger-cal-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('cal-wbs', event)">LEVEL(WBS) ▾</button>
-            <div class="btn-group" style="flex:1; justify-content:center; gap:6px; margin-left:8px;">
+            <div class="btn-group" style="flex:1; justify-content:center; gap:6px;">
                 <div class="cal-view-toggle">
                     <button type="button" id="cal-view-month-btn" class="cal-view-btn cal-view-btn-active" onclick="window.calSetViewMode('month')">월</button>
                     <button type="button" id="cal-view-week-btn" class="cal-view-btn" onclick="window.calSetViewMode('week')">주</button>
@@ -1941,12 +1872,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box">
             <h2>📋 Weekly Report</h2>
-            <!-- 💡 [경계선 위치 변경] 타이틀과 LEVEL(WBS) 사이로 이동 -->
+            <div class="filter-group" id="wr-level-filter-group" style="margin-left:8px;">
+                <div class="filter-label" id="wr-level-all-label" onclick="window.wrToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
+                <button type="button" class="btn" data-level="0" onclick="window.wrToggleLevel(0)" title="대분류">0</button>
+                <button type="button" class="btn" data-level="1" onclick="window.wrToggleLevel(1)" title="소분류1">1</button>
+                <button type="button" class="btn" data-level="2" onclick="window.wrToggleLevel(2)" title="소분류2">2</button>
+                <button type="button" class="btn active" data-level="3" onclick="window.wrToggleLevel(3)" title="세부업무">3</button>
+                <button type="button" class="btn active" data-level="4" onclick="window.wrToggleLevel(4)" title="하위업무">4</button>
+            </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
-                 body 하단의 gantt-filter-popup-wr-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
-            <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('wr-wbs', event)">LEVEL(WBS) ▾</button>
-            <div class="btn-group" style="flex:1; justify-content:center; gap:3px; margin-left:8px;">
+            <div class="btn-group" style="flex:1; justify-content:center; gap:3px;">
                 <button class="action-btn" data-i18n="btn-prev-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
                 <span id="wr-week-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:140px; text-align:center;"></span>
                 <button class="action-btn" data-i18n="btn-next-week" style="min-width:auto !important; padding:0 8px !important; margin:0 !important;" onclick="window.wrShiftWeek(1)">다음주 ▶</button>
@@ -2013,14 +1948,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <div id="new-project-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
     <div style="pointer-events:all; background:#fff; border-radius:12px; padding:32px 36px; max-width:420px; text-align:center; box-shadow:0 10px 40px rgba(0,0,0,0.3);">
         <div style="font-size:36px; margin-bottom:12px;">📌</div>
-        <div style="font-size:14.5px; color:#333; line-height:1.7; margin-bottom:22px;">
+        <div style="font-size:14.5px; color:#333; line-height:1.7; margin-bottom:20px;">
             새 프로젝트를 시작합니다.<br>참조 엑셀을 다운로드해서 작성한 뒤<br>화면에 드래그하세요.
         </div>
-        <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
-            <button id="new-project-auto-import-btn" onclick="window.autoImportReferenceExcel()" title="구글 드라이브에 연동되어 있으면, 참조 엑셀을 자동으로 가져와 바로 화면에 반영합니다" style="width:240px; box-sizing:border-box; padding:10px 0; background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:0.15s;" onmouseover="this.style.background='#fff'; this.style.color='#2c5f8a';" onmouseout="this.style.background='#2c5f8a'; this.style.color='#fff';">🚀 자동으로 가져오기</button>
-            <div style="font-size:11px; color:#999; margin:2px 0;">— 또는 직접 다운로드해서 작성하려면 —</div>
-            <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; width:240px; box-sizing:border-box; padding:10px 0; background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px; text-align:center; transition:0.15s;" onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';">📥 참조 엑셀 다운로드</a>
-            <button onclick="document.getElementById('new-project-modal-overlay').style.display='none';" style="width:240px; box-sizing:border-box; padding:10px 0; margin-top:6px; background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:0.15s;" onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';">확인</button>
+        <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; padding:10px 22px; background:#2c5f8a; color:#fff; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px;">📥 참조 엑셀 다운로드</a>
+        <div style="display:flex; justify-content:center; margin-top:16px;">
+            <button class="action-btn" onclick="document.getElementById('new-project-modal-overlay').style.display='none';">확인</button>
         </div>
     </div>
 </div>
@@ -2281,8 +2214,7 @@ ${mailText}`;
     // 🛠️ 구글 드라이브 연동 로직 (인증 토큰 배달 사고 및 먹통 해결 버전)
     // =========================================================
     window.gapiLoaded = function() { gapi.load('client', window.intializeGapiClient); }
-    if (window._gapiReady) window.gapiLoaded(); // 스크립트가 이 정의보다 먼저 로드 완료된 경우 즉시 실행
-
+    
     window.intializeGapiClient = async function() {
         await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
         gapiInited = true;
@@ -2389,38 +2321,12 @@ ${mailText}`;
             return;
         }
         window.closeAllTopbarMenus();
-        // 💡 [버그 수정] 빈/기본 시트에서 "프로젝트 열기"를 눌러도, 저장할 실제 내용이 없으면 굳이
-        //    저장을 시도하지 않는다. 예전엔 여기서 항상 저장을 먼저 시도했는데, 빈 시트는 필수 정보
-        //    검증에 걸려 저장이 실패(false 반환)하고 그대로 return돼서 — 프로젝트 목록조차 못 여는
-        //    문제가 있었다. (Summary가 실제로 채워진 프로젝트는 지금처럼 그대로 먼저 저장하고 전환됨)
-        if (window._hasUnsavedProjectData && window._hasUnsavedProjectData()) {
-            window.showToast(window._currentLang === 'en'
-                ? "💾 Saving current project before switching..."
-                : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
-            // 💡 [진단용 계측] "프로젝트 열기가 느리다"는 신고가 반복돼서, 다음에 또 느려질 때 정확히
-            //    어느 단계(전환 전 저장 vs 목록 조회 vs 파일 열기)가 느린지 바로 알 수 있게 시간을 잰다.
-            const _t0 = performance.now();
-            // 💡 [UX 수정] 저장이 막혀도 여기서 alert을 띄우지 않게 하고(suppressAlert), 사유만 받아온다.
-            //    예전엔 ①저장 실패 안내 alert + ②"그래도 목록을 여시겠습니까?" confirm — 모달이 두 번
-            //    연달아 떴고, 두 번째에서 취소하면 프로젝트 목록 자체를 못 열었다.
-            const saved = await window.saveToGoogleDrive({ suppressAlert: true });
-            const _saveMs = Math.round(performance.now() - _t0);
-            console.info(`[프로젝트 열기 계측] 전환 전 저장(saveToGoogleDrive): ${_saveMs}ms`);
-            if (_saveMs > 3000) console.warn(`[프로젝트 열기 계측] ⚠️ 전환 전 저장이 ${_saveMs}ms나 걸림 — Drive 응답 지연 또는 병합 처리가 원인일 수 있음`);
-            // 💡 저장이 막힌 경우(필수정보 미입력 / 새 프로젝트 비밀번호 미입력 등)에도 프로젝트 목록은
-            //    항상 열어준다 — 저장된 다른 프로젝트를 여는 것 자체는 막을 이유가 없고, 지금 화면 내용은
-            //    멀티시트 탭에 그대로 남아 있어 유실되지 않는다. 안내는 사유와 함께 "한 번만" 표시.
-            if (!saved) {
-                const _why = window._lastSaveBlockReason || '';
-                alert(window._currentLang === 'en'
-                    ? (_why ? _why + '\n\n' : '') + '→ Skipping the save and opening the project list.\n(Current screen content stays in its sheet tab — nothing is lost.)'
-                    : (_why ? _why + '\n\n' : '') + '→ 저장은 건너뛰고 프로젝트 목록을 엽니다.\n(지금 화면 내용은 시트 탭에 그대로 남아 있어 사라지지 않습니다)');
-            }
-        }
-        const _t1 = performance.now();
-        window.loadFromGoogleDrive().then(function() {
-            console.info(`[프로젝트 열기 계측] 목록 조회(loadFromGoogleDrive): ${Math.round(performance.now() - _t1)}ms`);
-        });
+        window.showToast(window._currentLang === 'en'
+            ? "💾 Saving current project before switching..."
+            : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
+        const saved = await window.saveToGoogleDrive();
+        if (!saved) return;
+        window.loadFromGoogleDrive();
     }
 
     // 💡 상단바 현재 프로젝트 파일명 표시 갱신 — 로드된 파일이 없으면 아예 숨김
@@ -2454,7 +2360,6 @@ ${mailText}`;
                     && f.name !== HOLIDAY_DRIVE_FILENAME
                     && f.name !== PRIORITY_CONFIG_FILENAME
                     && f.name !== PROJECT_INDEX_FILENAME
-                    && f.name !== MS_FILTER_RULES_DRIVE_FILENAME
                     && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
             });
             if (!files || files.length === 0) {
@@ -2487,81 +2392,6 @@ ${mailText}`;
         const created = await createRes.json();
         window._backupFolderId = created.id;
         return window._backupFolderId;
-    };
-
-    // ═══════════════════════════════════════════════════════════
-    // 📁 [Drive 폴더 정리] 공용 폴더 루트에 흩어져 있던 설정/백업류 파일을 하위 폴더로 정리.
-    //    프로젝트 *.json 파일은 지금처럼 그대로 루트에 둔다(파일 탐색기에서 바로 보이게).
-    //    - _App_Config/     : AddressBook_Shared.json, PriorityScore_Shared.json, Holidays_Shared.json,
-    //                         AI_Prompt_Shared.json, project_index.json, MailFilterRules_Shared.json
-    //    - TaskInbox_Backups/ : TaskInbox_<이름>.json (개인별 업무 보관함 백업)
-    //    - Backups/ (기존 유지) : mail_secure.enc, telegram_secure.enc, gantt_pw_sync.json
-    // ═══════════════════════════════════════════════════════════
-    window._namedFolderIdCache = window._namedFolderIdCache || {};
-    // 💡 getOrCreateBackupFolder와 동일한 find-or-create 패턴의 범용 버전 — 폴더 이름만 바꿔가며 재사용
-    // 💡 [버그 수정] 실사용 중 Drive 연동 직후 주소록/우선순위점수/휴일/AI프롬프트/프로젝트인덱스/필터규칙
-    //    등 여러 기능이 거의 동시에 각자 "_App_Config 폴더 있나? 없으면 만들기"를 시도하면서, 아직 아무도
-    //    생성을 못 끝낸 그 찰나(수백ms)에 서로 "없다"고 판단해 같은 이름의 폴더를 중복 생성하는 사고가
-    //    실제로 발생함(_App_Config 폴더가 2개 생김). 이미 진행 중인 생성 작업이 있으면 새로 조회/생성하지
-    //    않고 그 결과를 그대로 기다리게 해서(in-flight 프라미스 공유) 경합을 없앤다.
-    window._namedFolderPromiseCache = window._namedFolderPromiseCache || {};
-    window._getOrCreateNamedFolder = function(token, folderName) {
-        if (window._namedFolderIdCache[folderName]) return Promise.resolve(window._namedFolderIdCache[folderName]);
-        if (window._namedFolderPromiseCache[folderName]) return window._namedFolderPromiseCache[folderName];
-
-        const p = (async () => {
-            const q = `mimeType='application/vnd.google-apps.folder' and name='${folderName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-            const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const listData = await listRes.json();
-            if (listData.files && listData.files.length > 0) {
-                window._namedFolderIdCache[folderName] = listData.files[0].id;
-                return window._namedFolderIdCache[folderName];
-            }
-            const createRes = await fetch(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: folderName, mimeType: 'application/vnd.google-apps.folder', parents: [SHARED_FOLDER_ID] })
-            });
-            const created = await createRes.json();
-            window._namedFolderIdCache[folderName] = created.id;
-            return window._namedFolderIdCache[folderName];
-        })();
-
-        window._namedFolderPromiseCache[folderName] = p;
-        p.finally(() => { delete window._namedFolderPromiseCache[folderName]; });
-        return p;
-    };
-    window.getOrCreateConfigFolder    = function(token) { return window._getOrCreateNamedFolder(token, 'App_Config'); };
-    window.getOrCreateTaskInboxFolder = function(token) { return window._getOrCreateNamedFolder(token, 'TaskInbox_Backups'); };
-
-    // 💡 [마이그레이션 포함 조회] 이미 팀이 루트에 저장해둔 기존 설정 파일을 "새로 만든 것처럼" 못 찾아서
-    //    빈 기본값으로 초기화되는 사고를 막기 위해: 새 하위 폴더에서 먼저 찾고, 없으면 예전 위치(루트)에서
-    //    찾아 그 파일을 하위 폴더로 실제로 옮긴다(복제가 아니라 이동 — 되돌리기 쉬움, 데이터 유실 없음).
-    window._findOrMigrateFile = async function(token, fileName, targetFolderId) {
-        const qSub = `name='${fileName}' and trashed=false and '${targetFolderId}' in parents`;
-        const subRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qSub)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const subData = await subRes.json();
-        if (subData.files && subData.files.length > 0) return subData.files[0].id;
-
-        const qRoot = `name='${fileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
-        const rootRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(qRoot)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const rootData = await rootRes.json();
-        if (!rootData.files || !rootData.files.length) return null; // 어디에도 없음 — 신규 파일
-
-        const oldId = rootData.files[0].id;
-        try {
-            await fetch(`https://www.googleapis.com/drive/v3/files/${oldId}?addParents=${targetFolderId}&removeParents=${SHARED_FOLDER_ID}&supportsAllDrives=true`, {
-                method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
-            });
-            console.info(`💡 [Drive 폴더 정리] "${fileName}"을(를) 루트에서 하위 폴더로 이동했습니다.`);
-        } catch (e) { console.warn('Drive 파일 폴더 이동 실패(루트에 그대로 둠):', fileName, e.message); }
-        return oldId;
     };
 
     // 💡 저장 시마다 드라이브 Backups 폴더에 타임스탬프 백업 파일 생성 + 7일 지난 백업 자동 삭제
@@ -2610,8 +2440,12 @@ ${mailText}`;
     const PROMPT_DRIVE_FILENAME = 'AI_Prompt_Shared.json';
 
     window.findPromptDriveFile = async function(token) {
-        const folderId = await window.getOrCreateConfigFolder(token);
-        return window._findOrMigrateFile(token, PROMPT_DRIVE_FILENAME, folderId);
+        const q = `name='${PROMPT_DRIVE_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
     };
 
     // 💡 드라이브에서 최신 팀 공용 프롬프트를 받아와 localStorage에 반영 (미연동이면 조용히 종료)
@@ -2659,9 +2493,8 @@ ${mailText}`;
                     body: JSON.stringify(payload)
                 });
             } else {
-                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'prompt_boundary';
-                const metadata = { name: PROMPT_DRIVE_FILENAME, mimeType: 'application/json', parents: [folderId] };
+                const metadata = { name: PROMPT_DRIVE_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
                 const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(payload)
                     + "\r\n--" + boundary + "--";
@@ -2679,8 +2512,12 @@ ${mailText}`;
     const HOLIDAY_DRIVE_FILENAME = 'Holidays_Shared.json';
 
     window.findHolidayDriveFile = async function(token) {
-        const folderId = await window.getOrCreateConfigFolder(token);
-        return window._findOrMigrateFile(token, HOLIDAY_DRIVE_FILENAME, folderId);
+        const q = `name='${HOLIDAY_DRIVE_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
     };
 
     // 💡 드라이브에서 팀 공용 휴일 목록을 받아와 로컬 캐시(localStorage)에 반영 (미연동이면 조용히 종료)
@@ -2723,9 +2560,8 @@ ${mailText}`;
                     body: body
                 });
             } else {
-                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'holiday_boundary';
-                const metadata = { name: HOLIDAY_DRIVE_FILENAME, mimeType: 'application/json', parents: [folderId] };
+                const metadata = { name: HOLIDAY_DRIVE_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
                 const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
                     + "\r\n--" + boundary + "--";
@@ -2773,8 +2609,12 @@ ${mailText}`;
     };
 
     window.findPriorityConfigFile = async function(token) {
-        const folderId = await window.getOrCreateConfigFolder(token);
-        return window._findOrMigrateFile(token, PRIORITY_CONFIG_FILENAME, folderId);
+        const q = `name='${PRIORITY_CONFIG_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
     };
 
     window.loadPriorityConfig = async function() {
@@ -2822,9 +2662,8 @@ ${mailText}`;
                     body: body
                 });
             } else {
-                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'priority_config_boundary';
-                const metadata = { name: PRIORITY_CONFIG_FILENAME, mimeType: 'application/json', parents: [folderId] };
+                const metadata = { name: PRIORITY_CONFIG_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
                 const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
                     + "\r\n--" + boundary + "--";
@@ -2838,17 +2677,13 @@ ${mailText}`;
         } catch(e) { console.error('PriorityScore_Shared.json 저장 실패:', e); return false; }
     };
 
-    // 💡 [성능 수정] AddressBook._driveFileId/폴더 캐시와 동일한 이유 — 이 파일 ID는 세션 중 바뀌지 않는데,
-    //    캐시가 없어서 저장(updateProjectIndexEntry)할 때마다 매번 files.list 조회(최대 2번, 루트 이동
-    //    마이그레이션까지 겹치면 3번)를 새로 하고 있었다. "저장 한 번에 API를 몇 번이나 두드리냐"는
-    //    질문의 답 중 하나 — 이 조회만 캐싱해도 저장마다 1~2콜이 줄어든다.
-    window._projectIndexFileId = null;
     window.findProjectIndexFile = async function(token) {
-        if (window._projectIndexFileId) return window._projectIndexFileId;
-        const folderId = await window.getOrCreateConfigFolder(token);
-        const id = await window._findOrMigrateFile(token, PROJECT_INDEX_FILENAME, folderId);
-        if (id) window._projectIndexFileId = id;
-        return id;
+        const q = `name='${PROJECT_INDEX_FILENAME}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)&orderBy=modifiedTime%20desc`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data.files && data.files.length > 0) ? data.files[0].id : null;
     };
 
     // 쉼표로 구분된 메일키워드 문자열 → 정제된 배열 (공백 제거, 빈 항목 제거, 중복 제거)
@@ -2931,19 +2766,16 @@ ${mailText}`;
                     body: body
                 });
             } else {
-                const folderId = await window.getOrCreateConfigFolder(token);
                 const boundary = 'proj_index_boundary';
-                const metadata = { name: PROJECT_INDEX_FILENAME, mimeType: 'application/json', parents: [folderId] };
+                const metadata = { name: PROJECT_INDEX_FILENAME, mimeType: 'application/json', parents: [SHARED_FOLDER_ID] };
                 const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body
                     + "\r\n--" + boundary + "--";
-                const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', {
+                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
                     body: multipartBody
                 });
-                const created = await createRes.json();
-                if (created && created.id) window._projectIndexFileId = created.id; // 💡 방금 만든 파일 ID를 캐시에 반영
             }
             return true;
         } catch (err) { console.error('project_index.json 갱신 실패 (메일 자동처리 매칭에 영향 — 저장 자체는 정상 완료됨):', err); return false; }
@@ -2967,100 +2799,11 @@ ${mailText}`;
     };
 
     // 💡 새 프로젝트 시작: 현재 화면/데이터를 완전히 초기화 (Gantt + 다른 모든 탭) — [멀티시트] 새 빈 시트로 추가
-    //    🔒 [설계 변경] 비밀번호 보호를 "이 버튼을 눌렀을 때"가 아니라, 실제로 새 드라이브 파일이
-    //    "생성되는 순간"(_saveToGoogleDriveRaw, !fileId일 때)으로 옮겼다. 예전엔 이 버튼에만 걸려있어서,
-    //    버튼을 거치지 않고 그냥 초기/빈 상태(프로젝트 아무것도 없거나 전부 닫은 상태)에서 곧바로
-    //    타이핑하거나 엑셀을 드래그해 저장하면 비밀번호 확인 없이 새 프로젝트가 등록되는 구멍이 있었다.
-    //    "새 프로젝트 만들기"라는 화면 초기화 자체는 아직 아무것도 만든 게 아니므로(저장 전까지는
-    //    로컬 뷰만 비우는 것) 여기서는 더 이상 비밀번호를 묻지 않고, 실제로 등록(첫 저장)될 때 막는다.
     window.startNewProject = function() {
         if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Brief SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Brief SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
 
         window._openAsNewSheet('new_' + Date.now(), null, null);
         window._resetToBlankNoConfirm();
-    };
-
-    // ═══════════════════════════════════════════════════════════
-    // 🚀 [새 프로젝트 자동 시작] "참조 엑셀 다운로드 → 작성 → 화면에 드래그"를 수동으로 하는 기존 방식은
-    //    그대로 두고, 구글 드라이브 연동이 이미 되어 있는 사용자는 참조 엑셀을 바로 가져와 화면에
-    //    반영할 수 있게 한다. (다운로드/재업로드 왕복 없이, 이미 화면에 있는 handleFiles() 가져오기
-    //    파이프라인을 그대로 재사용 — 드래그로 불러온 것과 완전히 동일하게 처리됨)
-    // ═══════════════════════════════════════════════════════════
-    window.REFERENCE_SHEET_ID = '1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T';
-    window.autoImportReferenceExcel = async function() {
-        const btn = document.getElementById('new-project-auto-import-btn');
-        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
-        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-
-        // 💡 구글 드라이브 미연동 상태면 자동 가져오기가 불가능 — 연동을 제안하고, 원치 않으면
-        //    기존처럼 아래 "참조 엑셀 다운로드" 링크로 수동 진행하면 됨(이 버튼은 아무것도 건드리지 않음)
-        if (!token) {
-            if (confirm(window._t(
-                '자동으로 가져오려면 먼저 구글 드라이브 연동이 필요합니다.\n지금 연동하시겠습니까? (연동 후 이 버튼을 다시 눌러주세요)',
-                'Connecting Google Drive is required to auto-import.\nConnect now? (After connecting, click this button again.)'
-            ))) {
-                if (window.handleAuthClick) window.handleAuthClick();
-            }
-            return;
-        }
-
-        if (btn) { btn.disabled = true; btn.textContent = window._t('⏳ 가져오는 중...', '⏳ Importing...'); }
-
-        // 💡 응답 실패 시 Drive가 돌려준 실제 오류 메시지(권한 없음/파일 없음 등)까지 최대한 뽑아냄 —
-        //    "HTTP 403"만으로는 원인 파악이 안 돼서, 이 앱의 다른 Drive 호출부(주소록 불러오기 등)와
-        //    동일하게 error.message까지 붙여서 보여준다.
-        async function describeFailure(resp) {
-            let detail = '';
-            try { const j = await resp.json(); detail = (j && j.error && j.error.message) || ''; } catch (e) {}
-            return 'HTTP ' + resp.status + (detail ? ' - ' + detail : '');
-        }
-
-        try {
-            const authHeader = { 'Authorization': `Bearer ${token}` };
-            let blob = null; let lastErr = '';
-
-            // 1차: 참조 파일이 "구글 시트"(네이티브 문서)라고 가정하고 xlsx로 변환(export)해서 받는다.
-            //    docs.google.com/.../export 링크(수동 다운로드용)는 브라우저 직접 이동만 되고 CORS 때문에
-            //    fetch()로는 못 읽으므로, 이미 연동된 OAuth 토큰으로 Drive REST API를 직접 호출한다.
-            try {
-                const mimeType = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-                const exportUrl = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}/export?mimeType=${encodeURIComponent(mimeType)}`;
-                const resp1 = await fetch(exportUrl, { headers: authHeader });
-                if (resp1.ok) blob = await resp1.blob();
-                else lastErr = await describeFailure(resp1);
-            } catch (e) { lastErr = e.message; }
-
-            // 2차 폴백: 만약 참조 파일이 실제로는 이미 업로드된 xlsx 원본이라면(구글 시트가 아니라면)
-            //    export가 아니라 원본 그대로 받는 alt=media가 맞다 — 이 앱의 주소록 불러오기와 동일 패턴.
-            if (!blob) {
-                try {
-                    const mediaUrl = `https://www.googleapis.com/drive/v3/files/${window.REFERENCE_SHEET_ID}?alt=media&supportsAllDrives=true`;
-                    const resp2 = await fetch(mediaUrl, { headers: authHeader });
-                    if (resp2.ok) blob = await resp2.blob();
-                    else lastErr += ' / ' + await describeFailure(resp2);
-                } catch (e) { lastErr += ' / ' + e.message; }
-            }
-
-            if (!blob) throw new Error(lastErr || '알 수 없는 오류');
-
-            const file = new File([blob], '참조_엑셀.xlsx', { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-
-            document.getElementById('new-project-modal-overlay').style.display = 'none';
-            // 💡 드래그로 불러올 때와 동일한 진입점 — 컬럼 매핑/레벨 판별/초기 잠금 등 기존 로직을 100% 재사용
-            handleFiles({ target: { files: [file] } });
-            if (window.showToast) window.showToast(window._t(
-                '📥 참조 엑셀을 자동으로 불러왔습니다. 내용을 채워서 진행해주세요.',
-                '📥 Reference Excel imported automatically. Fill it in to continue.'
-            ));
-        } catch (err) {
-            console.error('참조 엑셀 자동 가져오기 실패:', err);
-            alert(window._t(
-                '⚠️ 참조 엑셀을 자동으로 가져오지 못했습니다.\n(' + err.message + ')\n\n아래 "참조 엑셀 다운로드" 링크로 수동 진행해주세요.',
-                '⚠️ Failed to auto-import the reference Excel.\n(' + err.message + ')\n\nPlease use the "Download Reference Excel" link below instead.'
-            ));
-        } finally {
-            if (btn) { btn.disabled = false; btn.textContent = window._t('🚀 자동으로 가져오기', '🚀 Auto Import'); }
-        }
     };
 
     // 💡 Summary/Brief SPEC/M.C Table/Address 탭 필드를 전부 비움 (populateTabData는 "채우기"만 하고
@@ -3149,88 +2892,34 @@ ${mailText}`;
         return next;
     };
 
-    // 💡 [버그 수정] "프로젝트 열기"가 시트 전환 전에 현재 작업을 자동 저장하려다가, 빈/기본 시트에서도
-    //    "필수 정보 입력" 검증부터 걸려서 프로젝트 목록 자체를 못 여는 문제가 있었음(아래 selectProject 참고).
-    //    저장할 실제 내용이 있는지부터 판단하는 로직을 별도 함수로 빼서 저장 전에 미리 확인할 수 있게 한다.
-    window._hasUnsavedProjectData = function() {
-        const hasGanttData = globalData && globalData.length > 1;
-        if (hasGanttData) return true;
-        const td = window.collectTabData ? window.collectTabData() : (window.tabData || {});
-        const pm = window.projectMeta || {};
-        // 💡 [버그 수정] Brief SPEC / M.C Table은 화면에 "빈 입력 행"이 기본으로 깔려 있는데,
-        //    _readRowsFromTbody()가 내용 유무와 무관하게 <tr>이 있으면 무조건 담기 때문에, 아무것도
-        //    입력하지 않은 초기 화면에서도 mcTable.length === 1({category:""} 한 줄)이 되어 "저장할
-        //    데이터가 있다"로 잘못 판정됐다(실측 확인). 그래서 프로젝트를 하나도 안 연 none 페이지에서
-        //    "프로젝트 열기"·"저장"을 누르면 곧바로 필수항목 안내가 떴다.
-        //    → 행의 "존재"가 아니라 실제로 채워진 "내용"이 하나라도 있는지로 판단한다.
-        const _rowsHaveContent = function(rows) {
-            return !!(rows && rows.some(function(r) {
-                return r && Object.keys(r).some(function(k) {
-                    const v = r[k];
-                    return v !== null && v !== undefined && String(v).trim() !== '';
-                });
-            }));
-        };
-        // 💡 [빈틈 보완] td.mcTable은 mcRevisions['R1']의 별칭일 뿐이라, R2~R5에서 작업했거나
-        //    제품구분자(mcRevisionsByUnit)별로 작업한 내용은 여기에 안 잡혔다. 모든 리비전·모든
-        //    제품구분자를 훑어서 하나라도 내용이 있으면 "저장할 데이터 있음"으로 본다.
-        const _anyMcContent = function() {
-            const buckets = [];
-            if (td.mcRevisions) buckets.push(td.mcRevisions);
-            const byUnit = td.mcRevisionsByUnit || {};
-            Object.keys(byUnit).forEach(function(u) { if (byUnit[u]) buckets.push(byUnit[u]); });
-            return buckets.some(function(revMap) {
-                return Object.keys(revMap).some(function(rev) { return _rowsHaveContent(revMap[rev]); });
-            });
-        };
-        return !!(
-            _rowsHaveContent(td.briefSpec) ||
-            _rowsHaveContent(td.mcTable) ||
-            _anyMcContent() ||
-            // 💡 [버그 수정] pm.memberLabels(담당자 "라벨" 텍스트 — 기본값이라도 항상 채워져 있음, 예:
-            //    "프로젝트 담당자")가 객체라서 String(pm[k])가 "[object Object]"로 항상 참(truthy)이 되어,
-            //    아무것도 입력한 적 없는 완전히 빈 화면(구글 드라이브 연동 직후, 또는 모든 시트를 닫은
-            //    직후)에서도 "저장할 데이터가 있다"로 잘못 판정되고 있었다. 그 결과 "프로젝트 열기"·
-            //    "저장" 버튼이 빈 화면인데도 매번 "새 프로젝트 등록" 취급을 하며 필수 항목(PROTO Start 등)을
-            //    요구했다. 실제 사용자가 입력한 "문자열" 값만 데이터로 인정하도록 좁힌다.
-            Object.keys(pm).some(function(k) { const v = pm[k]; return typeof v === 'string' && v.trim(); }) ||
-            (td.summary && Object.keys(td.summary).some(function(k) {
-                const v = td.summary[k];
-                return k !== 'milestones' && v && String(v).trim();
-            }))
-        );
-    };
-
-    // 💡 opts.suppressAlert: 저장이 막힌 경우(필수정보 미입력/비밀번호 실패) 여기서 직접 alert을 띄우지 않고
-    //    사유만 window._lastSaveBlockReason에 담아 돌려준다. "프로젝트 열기" 전 자동저장처럼, 호출한 쪽이
-    //    자기 안내와 합쳐서 모달을 "한 번만" 띄우고 싶을 때 사용 (모달이 두 번 겹쳐 뜨던 문제 해결).
-    window._saveToGoogleDriveRaw = async function(opts) {
-        opts = opts || {};
-        window._lastSaveBlockReason = '';
-        // 💡 [성능 수정] "저장" 버튼엔 3분 자동저장과 달리 변경 여부 확인이 전혀 없어서, 아무것도 안
-        //    바꾸고 그냥 다시 눌러도(예: 불안해서 여러 번 누르는 경우) 매번 백업 파일을 통째로 새로
-        //    만들고 있었다 — 이 함수가 changeLogs/lastSavedLogCount를 갱신하기 "전"인 지금 시점의
-        //    상태를 미리 캡처해서, 성공 후 실제로 바뀐 게 있었는지 판단하는 데 쓴다.
-        const _preSaveHadChanges = ((window.changeLogs ? window.changeLogs.length : 0) > (window.lastSavedLogCount || 0)) || !!window._nonGanttDirty;
+    window._saveToGoogleDriveRaw = async function() {
         try {
-            if (window.collectTabData) window.collectTabData();
-
-            // 💡 저장할 실제 내용이 없으면(빈 기본 시트) 필수 정보 검증까지 갈 필요도 없이 바로 종료 —
-            //    예전엔 이 체크가 필수 정보 검증 "뒤"에 있어서, 빈 시트인데도 "필수 정보를 입력하세요"라는
-            //    엉뚱한 알림부터 뜨는 문제가 있었다(순서를 앞으로 당김).
-            if (!window._hasUnsavedProjectData()) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
-
             // 💡 저장(=프로젝트 등록/파일 생성) 전에 Summary 탭의 필수 정보가 입력되어 있는지 검증한다.
             //    비어 있으면 "All_All_All" 같은 의미 없는 파일명으로 저장되므로 여기서 막는다.
+            if (window.collectTabData) window.collectTabData();
             const requiredInfoError = window.validateRequiredProjectInfo ? window.validateRequiredProjectInfo() : '';
             if (requiredInfoError) {
-                window._lastSaveBlockReason = requiredInfoError;
-                if (!opts.suppressAlert) {
-                    alert(requiredInfoError);
-                    if (window.switchTab) window.switchTab('summary');
-                }
+                alert(requiredInfoError);
+                if (window.switchTab) window.switchTab('summary');
                 return false;
             }
+
+            const hasGanttData = globalData && globalData.length > 1;
+            let hasConceptData = false;
+            if (!hasGanttData) {
+                const td = window.collectTabData ? window.collectTabData() : (window.tabData || {});
+                const pm = window.projectMeta || {};
+                hasConceptData = !!(
+                    (td.briefSpec && td.briefSpec.length) ||
+                    (td.mcTable && td.mcTable.length) ||
+                    Object.keys(pm).some(function(k) { return pm[k] && String(pm[k]).trim(); }) ||
+                    (td.summary && Object.keys(td.summary).some(function(k) {
+                        const v = td.summary[k];
+                        return k !== 'milestones' && v && String(v).trim();
+                    }))
+                );
+            }
+            if (!hasGanttData && !hasConceptData) { alert("저장할 데이터가 존재하지 않습니다."); return false; }
             if (typeof updatePrintTitle === 'function') updatePrintTitle(); 
             const _svEn = window._currentLang === 'en';
             
@@ -3242,29 +2931,8 @@ ${mailText}`;
             }
             let fileId = window.currentDriveFileId;
 
-            // 🔒 [새 프로젝트 생성 보호] 드라이브에 아직 없는(=fileId가 없는) 프로젝트를 처음 등록(파일 생성)
-            //    하는 바로 이 순간에만 관리자 비밀번호를 확인한다. "➕ 새 프로젝트" 버튼을 거쳤든, 그냥 빈
-            //    화면에서 곧바로 입력/드래그해서 저장했든 — 실제로 새 파일이 만들어지는 지점 하나만 지키면
-            //    진입 경로에 상관없이 항상 막힌다(예전엔 버튼에만 걸려있어서 버튼을 안 거치면 그냥 통과됐음).
-            if (!fileId) {
-                if (!verifyAdminPassword(window._t('🔒 새 프로젝트를 등록하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to register a new project.\n(case-insensitive)'))) {
-                    const _pwFail = window._t('❌ 비밀번호 인증 실패. 새 프로젝트 등록이 취소되었습니다.', '❌ Authentication failed. New project registration cancelled.');
-                    window._lastSaveBlockReason = _pwFail;
-                    if (!opts.suppressAlert) alert(_pwFail);
-                    return false;
-                }
-            }
-
             // 📥 [Phase 2.5] 저장 직전, 내가 파일을 연 이후 도착한 배분 업무를 원격 원장에서 찾아 자동 병합
             if (fileId) { await window.mergeRemoteDistributions(fileId); }
-
-            // 🆕 [새 프로젝트 최초 등록] 드라이브에 아직 없던(=fileId가 없는) 프로젝트를 처음 등록하는 순간,
-            //    Summary 탭 PROTO Start(계획) 날짜를 Gantt Chart 시작일 기준(anchor)으로 반영해 전체 일정을
-            //    자동 계산하고, 그 결과를 "최초 계획"으로 저장한다. 이미 계획이 하나라도 있으면(=재등록/이후
-            //    저장) 건드리지 않고 딱 1회, 최초 등록 시점에만 실행됨.
-            if (!fileId && (!window._scheduleBaselines || window._scheduleBaselines.length === 0) && window._registerNewProjectInitialPlan) {
-                window._registerNewProjectInitialPlan();
-            }
 
             let serializedGlobalData = globalData.map(row => {
                 let obj = { data: Array.from(row) };
@@ -3272,7 +2940,7 @@ ${mailText}`;
                 return obj;
             });
 
-            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || []) };
+            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [] };
             let boundary = 'foo_bar_baz';
             let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '' } };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
@@ -3288,13 +2956,8 @@ ${mailText}`;
                 return false;
             }
 
-            // 💡 [성능 수정] fields=id,modifiedTime을 붙여서 저장 응답에 modifiedTime을 함께 받는다 —
-            //    mergeRemoteDistributions()가 "마지막으로 내가 저장한 시점" 캐시로 쓰기 위함(별도 호출 불필요).
-            let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true&fields=id,modifiedTime';
-
-            // 💡 [진단용 계측] "저장이 느리다"의 원인이 업로드 자체인지(=구글/네트워크), 아니면 그 앞단
-            //    처리인지 바로 구분할 수 있게 업로드 구간과 전송 크기를 따로 잰다.
-            const _tUp0 = performance.now();
+            let url = 'https://www.googleapis.com/upload/drive/v3/files' + (fileId ? '/' + fileId : '') + '?uploadType=multipart&supportsAllDrives=true';
+            
             let response = await fetch(url, {
                 method: fileId ? 'PATCH' : 'POST',
                 headers: {
@@ -3303,10 +2966,6 @@ ${mailText}`;
                 },
                 body: multipartRequestBody
             });
-            const _upMs = Math.round(performance.now() - _tUp0);
-            const _upKB = Math.round(multipartRequestBody.length / 1024);
-            console.info(`[저장 계측] 업로드: ${_upMs}ms · 전송크기: ${_upKB}KB (${(_upKB / Math.max(_upMs,1) * 1000 / 1024).toFixed(1)}MB/s)`);
-            if (_upMs > 3000) console.warn(`[저장 계측] ⚠️ 업로드에만 ${_upMs}ms — 전송크기(${_upKB}KB) 대비 느리면 구글/네트워크 지연입니다.`);
 
             let file = await response.json();
             window.currentDriveFileName = dynamicFileName;
@@ -3316,39 +2975,8 @@ ${mailText}`;
                 window.currentDriveFileId = file.id;
                 window.lastSavedLogCount = window.changeLogs.length;
                 window._nonGanttDirty = false; // 💡 Summary 탭(주요자재 등) 편집도 저장됐으니 함께 리셋
-                // 💡 [버그 수정] 새 프로젝트를 처음 저장하면 currentDriveFileId/Name은 바로 갱신되는데,
-                //    시트 탭 바가 읽는 window._sheets 배열의 해당 항목(fileId/fileName)은 안 바뀌었다 —
-                //    그 배열은 "다른 시트로 전환할 때"(_commitActiveSheet)만 동기화돼서, 저장 직후엔 탭이
-                //    여전히 "(새 프로젝트)"로 보이고 다른 시트로 갔다 와야만(그 전환 순간에) 파일명으로
-                //    바뀌었다. 저장 성공 시점에 지금 활성 시트 항목을 직접 갱신하고 탭 바를 다시 그린다.
-                const _activeSheet = window._sheets && window._activeSheetKey
-                    ? window._sheets.find(function(s) { return s.key === window._activeSheetKey; })
-                    : null;
-                if (_activeSheet) {
-                    _activeSheet.fileId = file.id;
-                    _activeSheet.fileName = dynamicFileName;
-                    if (window.renderSheetTabsBar) window.renderSheetTabsBar();
-                }
-                // 💡 [성능 수정] 방금 내가 저장한 시점을 캐시해둬서, 다음 저장 때 mergeRemoteDistributions가
-                //    "그 사이 아무도 안 건드렸으면" 무거운 전체 다운로드를 건너뛸 수 있게 한다.
-                if (file.modifiedTime) { window._distMergeModifiedTime = window._distMergeModifiedTime || {}; window._distMergeModifiedTime[file.id] = file.modifiedTime; }
-                // 💡 [성능 수정] 실제로 바뀐 내용이 있었을 때(또는 방금 처음 만든 새 파일일 때, !fileId)만
-                //    백업을 만든다 — 변경 없이 저장 버튼만 다시 누른 경우까지 전체 데이터를 통째로 한 번
-                //    더 업로드할 필요는 없다. (Backups 폴더는 실수 복구용이라, 내용이 같은 백업이 계속
-                //    쌓이는 건 용량/API 호출만 낭비하고 복구에는 도움이 안 됨)
-                if (_preSaveHadChanges || !fileId) {
-                    window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
-                } else {
-                    console.info('[저장 계측] 변경사항 없음 — 백업 생략');
-                }
-                // 💡 [성능 수정] 백업과 동일한 이유 — 바뀐 게 없으면 담당자/주요자재 등 인덱스에 들어가는
-                //    내용도 지난 저장 때와 같을 수밖에 없다. 변경 없이 재저장할 때마다 공용 인덱스 파일을
-                //    통째로 내려받고 다시 올릴 필요는 없다.
-                if (_preSaveHadChanges || !fileId) {
-                    window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
-                } else {
-                    console.info('[저장 계측] 변경사항 없음 — project_index.json 갱신 생략');
-                }
+                window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
+                window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
                 window.showToast(window._currentLang === 'en'
                     ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`
                     : `🎉 팀 공용 폴더에 [${dynamicFileName}] 파일로 안전하게 저장되었습니다!`);
@@ -3383,8 +3011,8 @@ ${mailText}`;
 
     // 💡 공개 진입점 — 실제로는 항상 대기열을 거쳐서, 다른 저장/시트전환 작업과 절대 안 겹치게 함
     //    (3분 자동저장 타이머 등 기존 호출부는 전부 그대로 이 이름을 부르므로 별도 수정 불필요)
-    window.saveToGoogleDrive = function(opts) {
-        return window._runSerialized(function() { return window._saveToGoogleDriveRaw(opts); });
+    window.saveToGoogleDrive = function() {
+        return window._runSerialized(window._saveToGoogleDriveRaw);
     };
 
     // 💡 Backups 폴더의 백업 목록 조회
@@ -3408,99 +3036,37 @@ ${mailText}`;
         } catch (err) { alert("백업 목록 조회 실패: " + err.message); }
     };
 
-    // 💡 백업 파일명(백업_<원본이름>_<YYYYMMDD>_<HHMM>.json)에서 원본 프로젝트 파일명을 복원
-    window._backupOrigFileName = function(backupFileName) {
-        return backupFileName.replace(/^백업_/, '').replace(/_\d{8}_\d{4}\.json$/i, '') + '.json';
-    };
-
-    // 💡 [버그 수정] 예전엔 Backups 폴더 안의 "모든 프로젝트" 백업이 한 줄로 뒤섞여서 나왔음 —
-    //    원본 프로젝트 이름별로 그룹핑해서(프로젝트 열기 모달의 담당자 그룹핑과 동일한 패턴) 원하는
-    //    프로젝트의 백업만 펼쳐서 찾을 수 있게 함.
+    // 💡 선택한 백업으로 복원 (기존 열기 모달을 재사용, createdTime 기준으로 표시)
     window.showBackupFileModal = function(files) {
         let listContainer = document.getElementById('drive-file-list');
         if (!listContainer) return;
         listContainer.innerHTML = '';
-
-        const groups = {};
         files.forEach(function(file) {
-            const origName = window._backupOrigFileName(file.name);
-            (groups[origName] = groups[origName] || []).push(file);
+            let d = new Date(file.createdTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+            let fileBtn = document.createElement('div');
+            fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
+            fileBtn.onmouseover = function() { this.style.background = '#fff3e0'; this.style.borderColor = '#ff9800'; };
+            fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+            fileBtn.onclick = function() { window.executeRestoreBackup(file.id, file.name); };
+            fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">🗄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
+            listContainer.appendChild(fileBtn);
         });
-        const groupNames = Object.keys(groups).sort(function(a, b) { return a.localeCompare(b, 'ko'); });
-
-        groupNames.forEach(function(origName) {
-            const groupFiles = groups[origName];
-            const groupWrap = document.createElement('div');
-            groupWrap.style.cssText = 'border:1px solid #eee; border-radius:8px; overflow:hidden;';
-
-            const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none;';
-            const arrow = document.createElement('span');
-            arrow.textContent = '▸';
-            arrow.style.cssText = 'font-size:11px; transition:0.15s;';
-            const label = document.createElement('span');
-            label.textContent = `📄 ${origName} (${groupFiles.length})`;
-            headerRow.appendChild(arrow);
-            headerRow.appendChild(label);
-
-            const body = document.createElement('div');
-            body.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:10px;';
-
-            groupFiles.forEach(function(file) {
-                let d = new Date(file.createdTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-                let fileBtn = document.createElement('div');
-                fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
-                fileBtn.onmouseover = function() { this.style.background = '#fff3e0'; this.style.borderColor = '#ff9800'; };
-                fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
-                fileBtn.onclick = function() { window.executeRestoreBackup(file.id, file.name); };
-                fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">🗄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
-                body.appendChild(fileBtn);
-            });
-
-            headerRow.onclick = function() {
-                const collapsed = body.style.display === 'none';
-                body.style.display = collapsed ? 'flex' : 'none';
-                arrow.textContent = collapsed ? '▾' : '▸';
-            };
-
-            groupWrap.appendChild(headerRow);
-            groupWrap.appendChild(body);
-            listContainer.appendChild(groupWrap);
-        });
-
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
     };
 
     window.executeRestoreBackup = async function(fileId, fileName) {
         window.closeDriveModal();
-        if (!confirm(window._t(`[${fileName}] 백업으로 복원하시겠습니까?\n새 시트로 열리며, 확인 후 [저장]을 눌러야 드라이브에 반영됩니다.`, `Restore from backup [${fileName}]?\nOpens as a new sheet — press [Save] afterward to apply to Drive.`))) return;
+        if (!confirm(window._t(`[${fileName}] 백업으로 복원하시겠습니까?\n현재 화면의 내용은 사라지고 이 백업 시점으로 되돌아갑니다.\n(공용 드라이브 파일에는 아직 저장되지 않으니, 확인 후 [저장]을 눌러야 반영됩니다)`, `Restore from backup [${fileName}]?\nCurrent content will be replaced.\n(Not saved to Drive yet — press [Save] to apply.)`))) return;
         try {
-            const tokenObj = gapi.client.getToken();
-            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
             let saveData = response.result;
             if (saveData && saveData.globalData) {
-                // 💡 [버그 수정] 예전엔 currentDriveFileId를 그대로 둔 채 지금 화면 위에 복원 데이터만
-                //    덮어썼음 — "저장"을 누르면 그 순간 열려있던 "다른" 프로젝트의 Drive 파일에 이
-                //    백업 내용이 통째로 덮어써질 위험이 있었다(AMUSNET 사고의 유력한 원인). 이제는:
-                //    ① 항상 새 시트로 열어서 지금 보던 화면은 그대로 보존하고,
-                //    ② 백업의 원본 파일명으로 "지금 살아있는" 파일을 찾아 있으면 그 파일로, 없으면
-                //       (원본이 삭제된 경우 등) 새 파일로 저장되도록 currentDriveFileId를 정확히 맞춘다.
-                const origName = window._backupOrigFileName(fileName);
-                let existingFileId = null;
-                try { existingFileId = token ? await window.findSaveFile(origName) : null; } catch (e) {}
-
-                const sheetKey = 'restore_' + fileId;
-                window._openAsNewSheet(sheetKey, existingFileId, origName);
-
                 globalData = saveData.globalData.map(function(obj) {
                     let row = obj.data;
                     for (let key in obj) { if (key !== 'data') row[key] = obj[key]; }
                     return row;
                 });
                 window.changeLogs = saveData.changeLogs || [];
-                window.lastSavedLogCount = 0; // 복원본은 아직 Drive에 저장 안 된 상태이므로 "변경사항 있음"으로 취급
-                window._nonGanttDirty = true;
                 colIdx = saveData.colIdx || colIdx;
                 filterColumns = saveData.filterColumns || filterColumns;
                 window.projectMeta = saveData.projectMeta || window.projectMeta || {};
@@ -3508,23 +3074,8 @@ ${mailText}`;
                 window.projectDistributions = saveData.distributions || [];
                 window.mcNormalizeAfterLoad();
                 if (window.populateTabData) window.populateTabData();
-                window.currentDriveFileId = existingFileId; // 있으면 그 파일로 갱신 저장, 없으면(null) 저장 시 새 파일 생성
-                window.currentDriveFileName = origName;
-                window.updateCurrentFileLabel();
                 window.recalculateSchedules();
-                window.renderSheetTabsBar();
-                window._compareTargetId = null;
-                if (saveData.scheduleBaselines && saveData.scheduleBaselines.length) {
-                    window._scheduleBaselines = saveData.scheduleBaselines;
-                    if (typeof persistScheduleBaselines === 'function') persistScheduleBaselines();
-                } else if (window.loadScheduleBaselines) {
-                    window.loadScheduleBaselines();
-                }
-
-                const msg = existingFileId
-                    ? window._t(`🎉 [${fileName}] 백업으로 복원되었습니다 (원본: ${origName}). 확인 후 [저장]을 누르면 그 프로젝트에 반영됩니다.`, `🎉 Restored from [${fileName}] (original: ${origName}). Press [Save] to apply to that project.`)
-                    : window._t(`🎉 [${fileName}] 백업으로 복원되었습니다. 원본 "${origName}"이 지금 존재하지 않아 [저장] 시 새 파일로 생성됩니다.`, `🎉 Restored from [${fileName}]. Original "${origName}" no longer exists — [Save] will create a new file.`);
-                window.showToast(msg);
+                window.showToast(window._currentLang === 'en' ? `🎉 Restored from [${fileName}]. Press [Save] to apply to Drive.` : `🎉 [${fileName}] 백업으로 복원되었습니다! 확인 후 [저장]을 눌러 드라이브에 반영해주세요.`);
             }
         } catch (err) { alert("백업 복원 실패: " + err.message); }
     };
@@ -3621,21 +3172,12 @@ ${mailText}`;
             if (key === window._activeSheetKey) return;
             const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             const savedLogs = window.lastSavedLogCount || 0;
-            // 💡 [버그 수정] "저장할 변경사항이 있는지"를 currentDriveFileId 존재 여부로도 같이 걸었었다.
-            //    그런데 아직 한 번도 저장한 적 없는 "새 프로젝트"는 fileId가 없어서 이 조건이 항상 거짓이
-            //    되어, 다른 시트로 전환할 때 저장 시도 자체를 건너뛰고 조용히 넘어갔다 — 새 프로젝트에
-            //    쏟은 작업이 아무 경고도 없이 사라질 수 있는 유실 지점이었다(어제 버전부터 있던 문제,
-            //    오늘 손댄 코드는 아니지만 마침 오늘 다룬 영역이라 같이 발견됨). fileId 유무와 무관하게
-            //    실제로 바뀐 게 있으면 저장을 시도한다 — 필수정보/비밀번호로 막히면(suppressAlert) 그
-            //    사유를 담아 확인창 한 번으로 안내(모달 중복 방지 패턴은 selectProject와 동일).
-            const hasUnsavedChanges = currentLogs > savedLogs || window._nonGanttDirty;
+            // 💡 Gantt 표 편집(changeLogs) 뿐 아니라 Summary 탭(주요자재 등) 편집도 같이 확인
+            const hasUnsavedChanges = !!window.currentDriveFileId && (currentLogs > savedLogs || window._nonGanttDirty);
             if (hasUnsavedChanges) {
                 if (!silent && window.showToast) window.showToast('💾 변경사항 저장 중...', 'info');
-                const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
-                if (!ok) {
-                    const _why = window._lastSaveBlockReason || '';
-                    if (!confirm((_why ? _why + '\n\n' : '') + '저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)')) return;
-                }
+                const ok = await window._saveToGoogleDriveRaw();
+                if (!ok && !confirm('저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)')) return;
             }
             window.switchToSheet(key);
         });
@@ -3656,16 +3198,10 @@ ${mailText}`;
             if (wasActive) {
                 const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
                 const savedLogs = window.lastSavedLogCount || 0;
-                // 💡 [버그 수정] switchToSheetWithSave와 동일한 문제 — currentDriveFileId 없는(=아직
-                //    한 번도 저장 안 한) 새 프로젝트는 이 탭을 "✕"로 닫아도 저장 시도 없이 그대로 사라졌다.
-                const hasUnsavedChanges = currentLogs > savedLogs || window._nonGanttDirty;
+                const hasUnsavedChanges = !!window.currentDriveFileId && (currentLogs > savedLogs || window._nonGanttDirty);
                 if (hasUnsavedChanges) {
                     if (window.showToast) window.showToast('💾 저장 후 닫는 중...', 'info');
-                    const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
-                    if (!ok) {
-                        const _why = window._lastSaveBlockReason || '';
-                        if (!confirm((_why ? _why + '\n\n' : '') + '저장에 실패했습니다. 그래도 이 시트를 닫을까요?\n(저장하지 않은 변경사항은 사라집니다)')) return;
-                    }
+                    await window._saveToGoogleDriveRaw();
                 }
             }
 
@@ -3697,196 +3233,35 @@ ${mailText}`;
     window.renderSheetTabsBar = function() {
         const bar = document.getElementById('sheet-tabs-bar');
         if (!bar) return;
-        const count = window._sheets.length;
-        // 💡 [UI 수정] 예전엔 시트가 2개 이상일 때만(count > 1) 탭 바를 보여줘서, 프로젝트가 딱 하나만
-        //    열려 있을 땐 지금 무슨 파일을 열어둔 건지 탭으로 확인할 방법이 없었다. 1개만 열려 있어도
-        //    보이도록 기준을 낮춘다(count >= 1) — 0개(아직 아무 것도 안 연 초기 화면)일 때만 숨김.
-        const showBar = count >= 1;
-        document.body.classList.toggle('has-multi-sheet-bar', showBar); // 💡 간트 표 높이를 그만큼 줄이기 위한 훅
-        if (!showBar) { bar.style.display = 'none'; return; }
+        const multi = window._sheets.length > 1;
+        document.body.classList.toggle('has-multi-sheet-bar', multi); // 💡 간트 표 높이를 그만큼 줄이기 위한 훅
+        if (!multi) { bar.style.display = 'none'; return; }
         bar.style.display = 'flex';
-
-        // 💡 [자동 크기조정] 7개까지는 기존 고정 크기(160px) 그대로. 8개부터는 시트탭 줄(bar)이
-        //    실제 쓸 수 있는 폭(#app-main 폭, 사이드바 접힘 상태 반영)을 넘지 않도록 탭 폭을 균등 축소한다.
-        //    스크롤바를 일부러 숨겨놔서(위 CSS 주석 참고) 넘치면 뒤 탭이 안 보이는지도 모르는 문제였음.
-        //    70px 밑으로는 글자가 안 보일 정도로 뭉개지므로 그 아래론 줄이지 않고(그 다음부턴 가로 스크롤 허용).
-        const DEFAULT_TAB_W = 160, MIN_TAB_W = 70, ADD_BTN_W = 28, GAP = 3;
-        let tabW = DEFAULT_TAB_W;
-        if (count > 7) {
-            const available = bar.clientWidth || (bar.parentElement && bar.parentElement.clientWidth) || (DEFAULT_TAB_W * 7);
-            const usable = available - ADD_BTN_W - GAP * (count + 1);
-            tabW = Math.max(MIN_TAB_W, Math.min(DEFAULT_TAB_W, Math.floor(usable / count)));
-        }
-        const labelW = Math.max(30, tabW - 40); // 패딩+닫기버튼+gap 몫만큼 라벨 폭에서 뺌(기존 160/120 비율과 동일)
-
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
             const label = s.fileName || '(새 프로젝트)';
             return `<div onclick="window.switchToSheetWithSave('${s.key}')"
                 title="${escapeHtml(label)}"
-                style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px;
+                style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:160px;
                        background:${active ? '#fff8e6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:1px solid #fff; margin-bottom:-1px;">
-                <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
+                <span style="overflow:hidden; text-overflow:ellipsis; max-width:120px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
-                    style="color:#999; font-size:13px; line-height:1; flex-shrink:0;">✕</span>
+                    style="color:#999; font-size:13px; line-height:1;">✕</span>
             </div>`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
-                style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
+                style="display:flex; align-items:center; justify-content:center; width:28px; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
     };
-
-    // 💡 [버그 수정 v2] 탭 폭 자동조정은 지금까지 시트가 새로 열리거나 닫힐 때, 그리고(직전 수정으로)
-    //    window resize 이벤트가 발생할 때만 재계산됐음. 그런데 resize 이벤트는 "브라우저 창 자체의
-    //    크기"가 바뀔 때만 발동하고, 사이드바 접기/펴기 같은 순수 CSS 레이아웃 변화(margin-left만 바뀜)는
-    //    원래 resize를 발생시키지 않는다(toggleSidebar()가 예외적으로 수동 dispatch해줘서 그 경우만
-    //    우연히 됐던 것 — 그 외 폭이 바뀌는 다른 모든 경우, 예를 들어 초기 레이아웃이 뒤늦게 자리잡는
-    //    경우 등은 여전히 못 잡았음). → window resize 대신, 탭 바 자신의 "실제 렌더링 폭"을
-    //    ResizeObserver로 직접 감시해서 원인과 무관하게 폭이 바뀌면 항상 재계산하도록 바꾼다.
-    let _sheetTabsResizeTimer = null;
-    window._lastSheetTabsBarWidth = null;
-    window._scheduleSheetTabsResize = function() {
-        if (!window._sheets || window._sheets.length <= 1) return;
-        clearTimeout(_sheetTabsResizeTimer);
-        _sheetTabsResizeTimer = setTimeout(function() { window.renderSheetTabsBar(); }, 150);
-    };
-    window.addEventListener('resize', window._scheduleSheetTabsResize); // 창 크기 변경 — 추가 안전망으로 계속 유지
-    if (window.ResizeObserver) {
-        const _sheetTabsBarEl = document.getElementById('sheet-tabs-bar');
-        if (_sheetTabsBarEl) {
-            new ResizeObserver(function(entries) {
-                const w = Math.round(entries[0].contentRect.width);
-                // 💡 폭이 실제로 안 바뀌었으면 무시 — renderSheetTabsBar() 자신이 내용을 다시 그리면서
-                //    (높이 등) 아주 미세하게 박스가 흔들려 이 옵저버를 스스로 재호출하는 걸 막기 위함
-                if (w === window._lastSheetTabsBarWidth) return;
-                window._lastSheetTabsBarWidth = w;
-                window._scheduleSheetTabsResize();
-            }).observe(_sheetTabsBarEl);
-        }
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // 🩺 [진단] "느린 게 정말 구글 드라이브 문제인가?"를 객관적으로 판별하는 도구.
-    //    콘솔에서 diagnoseDriveSpeed() 실행 — 프로젝트를 하나 연 상태에서 호출.
-    //    메타 조회(순수 왕복 지연) · 전체 다운로드 반복(속도제한 편차) · 비-구글 대조군(내 인터넷
-    //    자체가 느린 건지 구글만 느린 건지)까지 함께 재서 자동으로 판정 문구를 찍어준다.
-    window.diagnoseDriveSpeed = async function(rounds) {
-        rounds = rounds || 3;
-        const fileId = window.currentDriveFileId;
-        if (!fileId) { console.log('%c⚠️ 먼저 프로젝트를 하나 열고 실행해주세요.', 'color:#e03131;font-weight:bold'); return; }
-        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
-        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!token) { console.log('%c⚠️ 구글 드라이브 연동 후 실행해주세요.', 'color:#e03131;font-weight:bold'); return; }
-
-        console.log('%c🩺 드라이브 속도 진단 시작 — 잠시만 기다려주세요...', 'color:#2c5f8a;font-weight:bold');
-
-        let fname = '', sizeKB = null;
-        try {
-            const m = await gapi.client.drive.files.get({ fileId: fileId, fields: 'name,size', supportsAllDrives: true });
-            fname = m.result.name || '';
-            if (m.result.size) sizeKB = Math.round(Number(m.result.size) / 1024);
-        } catch (e) {}
-
-        // ① 메타 조회 = 거의 데이터 없는 요청 → 순수 왕복 지연
-        const metaMs = [];
-        for (let i = 0; i < rounds; i++) {
-            const t = performance.now();
-            try { await gapi.client.drive.files.get({ fileId: fileId, fields: 'id', supportsAllDrives: true }); metaMs.push(Math.round(performance.now() - t)); }
-            catch (e) { metaMs.push('ERR ' + (e && e.status ? e.status : '')); }
-        }
-
-        // ② 파일 전체 다운로드 = 대역폭 + 속도제한 확인
-        const contentRuns = [];
-        let rateLimited = false;
-        for (let i = 0; i < rounds; i++) {
-            const t = performance.now();
-            try {
-                const r = await fetch('https://www.googleapis.com/drive/v3/files/' + fileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
-                if (!r.ok) {
-                    if (r.status === 429 || r.status === 403) rateLimited = true;
-                    let why = '';
-                    try { const j = await r.json(); why = (j && j.error && j.error.message) || ''; } catch (e2) {}
-                    contentRuns.push({ ms: Math.round(performance.now() - t), kb: 0, err: 'HTTP ' + r.status + (why ? ' — ' + why : '') });
-                    continue;
-                }
-                const txt = await r.text();
-                const ms = Math.round(performance.now() - t);
-                const kb = Math.round(txt.length / 1024);
-                contentRuns.push({ ms: ms, kb: kb, kbps: Math.round(kb / Math.max(ms, 1) * 1000) });
-            } catch (e) { contentRuns.push({ ms: Math.round(performance.now() - t), kb: 0, err: String(e && e.message) }); }
-        }
-
-        // ④ 대조군: 구글이 아닌 곳(이 페이지 자체)에서 비슷한 크기 받아보기
-        const ctrlRuns = [];
-        for (let i = 0; i < 2; i++) {
-            const t = performance.now();
-            try {
-                const r = await fetch(location.pathname + '?nocache=' + Date.now(), { cache: 'no-store' });
-                const txt = await r.text();
-                const ms = Math.round(performance.now() - t);
-                const kb = Math.round(txt.length / 1024);
-                ctrlRuns.push({ ms: ms, kb: kb, kbps: Math.round(kb / Math.max(ms, 1) * 1000) });
-            } catch (e) { ctrlRuns.push({ err: String(e && e.message) }); }
-        }
-
-        const okRuns = contentRuns.filter(function(r) { return !r.err; });
-        const avg = function(a) { return a.length ? Math.round(a.reduce(function(s, v) { return s + v; }, 0) / a.length) : 0; };
-        const driveKbps = avg(okRuns.map(function(r) { return r.kbps; }));
-        const ctrlOk = ctrlRuns.filter(function(r) { return !r.err; });
-        const ctrlKbps = avg(ctrlOk.map(function(r) { return r.kbps; }));
-        const numericMeta = metaMs.filter(function(v) { return typeof v === 'number'; });
-        const metaAvg = avg(numericMeta);
-        const msList = okRuns.map(function(r) { return r.ms; });
-        const spread = msList.length > 1 ? Math.max.apply(null, msList) - Math.min.apply(null, msList) : 0;
-
-        console.log('%c━━━━━━━━━━ 🩺 드라이브 속도 진단 결과 ━━━━━━━━━━', 'color:#2c5f8a;font-weight:bold');
-        console.log('대상 파일       : ' + fname + (sizeKB !== null ? ' (' + sizeKB + 'KB)' : ''));
-        console.log('① 메타 조회     : ' + metaMs.join(' / ') + ' ms   ← 데이터 거의 없는 요청');
-        console.log('② 전체 다운로드 : ' + contentRuns.map(function(r) { return r.err ? r.err : r.ms + 'ms(' + r.kb + 'KB, ' + r.kbps + 'KB/s)'; }).join(' / '));
-        console.log('③ 반복 편차     : ' + spread + 'ms   ← 크면 속도제한 신호');
-        console.log('④ 대조군(비구글): ' + ctrlRuns.map(function(r) { return r.err ? r.err : r.ms + 'ms(' + r.kb + 'KB, ' + r.kbps + 'KB/s)'; }).join(' / '));
-        console.log('%c─────────────────── 판정 ───────────────────', 'color:#2c5f8a;font-weight:bold');
-
-        const verdict = [];
-        if (rateLimited) verdict.push('🚨 구글이 속도제한(HTTP 403/429)을 응답했습니다 → 구글 드라이브 문제 확정');
-        if (metaAvg > 2000) verdict.push('🚨 데이터가 거의 없는 메타 요청조차 평균 ' + metaAvg + 'ms → 파일 크기와 무관한 구글/네트워크 응답 지연');
-        if (spread > 5000) verdict.push('🚨 같은 파일인데 실행마다 ' + spread + 'ms나 차이 → 크기 문제가 아니라 구글 쪽 변동(속도제한 유력)');
-        if (ctrlKbps > 0 && driveKbps > 0 && ctrlKbps > driveKbps * 5) verdict.push('🚨 내 인터넷은 ' + ctrlKbps + 'KB/s인데 드라이브만 ' + driveKbps + 'KB/s → 인터넷이 아니라 구글 드라이브가 느림');
-        if (ctrlKbps > 0 && driveKbps > 0 && ctrlKbps < driveKbps * 1.5) verdict.push('ℹ️ 드라이브(' + driveKbps + 'KB/s)와 일반 다운로드(' + ctrlKbps + 'KB/s) 속도가 비슷 → 구글이 아니라 현재 네트워크 전반이 느림');
-        if (sizeKB !== null && sizeKB > 1000) verdict.push('⚠️ 파일이 ' + sizeKB + 'KB로 큽니다 → 크기 자체도 지연에 기여(수정이력 누적 등 정리 필요)');
-        if (!verdict.length) verdict.push('✅ 지금은 정상 범위입니다. 느릴 때 다시 실행해서 비교해주세요.');
-        verdict.forEach(function(v) { console.log(v); });
-        console.log('%c━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━', 'color:#2c5f8a;font-weight:bold');
-
-        return { file: fname, sizeKB: sizeKB, metaMs: metaMs, content: contentRuns, control: ctrlRuns, driveKbps: driveKbps, controlKbps: ctrlKbps, rateLimited: rateLimited };
-    };
-
 
     // 💡 silent=true면 개별 "로드 완료" 토스트를 생략 — 담당자 이름 클릭으로 여러 프로젝트를 한 번에 열 때
     //    파일마다 토스트가 쌓이는 걸 막고, 호출한 쪽에서 요약 토스트 하나만 띄우도록 함
     window.executeLoadFile = async function(fileId, fileName, silent) {
         window.closeDriveModal();
         // 💡 [멀티시트] 이미 열려있는 프로젝트면 다시 안 받아오고 그 시트로 전환만
-        // 💡 [버그 수정] 예전 조건은 `already.snapshot`이 있어야만 재다운로드를 건너뛰었다. 그런데 스냅샷은
-        //    "그 시트에서 다른 시트로 넘어갈 때" 비로소 채워지므로, 지금 보고 있는(활성) 시트는 항상
-        //    snapshot === null 이다. 그래서 같은 프로젝트를 한 번 더 열라고 하면 이 검사를 통과해버려
-        //    똑같은 파일을 통째로 다시 받았다("전체 프로젝트 한 번에 열기"에서 모든 파일이 정확히 2번씩
-        //    다운로드되던 원인 — 실측 로그로 확인). 이미 열려 있으면 어떤 상태든 다시 받지 않는다.
         const already = window._findSheetByFileId(fileId);
-        if (already) {
-            if (already.key === window._activeSheetKey) return;                 // 지금 보고 있는 바로 그 프로젝트
-            if (already.snapshot) { await window.switchToSheetWithSave(already.key, silent); return; }
-        }
-        // 💡 [진단용 계측] "프로젝트가 늦게 열린다"는 신고가 반복돼서, 실제 Drive 파일 다운로드 자체가
-        //    느린 건지(=구글 쪽 지연) 그 이후 화면 렌더링이 느린 건지 구분할 수 있게 시간을 잰다.
-        const _tFetch0 = performance.now();
+        if (already && already.snapshot) { await window.switchToSheetWithSave(already.key, silent); return; }
         try {
             let response = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
-            const _fetchMs = Math.round(performance.now() - _tFetch0);
-            // 💡 fileId도 같이 남긴다 — 같은 이름의 파일이 드라이브에 중복 생성된 경우(서로 다른 id)와
-            //    같은 파일을 두 번 받는 경우를 로그만 보고 구분할 수 있게.
-            console.info(`[프로젝트 열기 계측] "${fileName}" (id:${String(fileId).slice(-6)}) Drive 다운로드: ${_fetchMs}ms`);
-            if (_fetchMs > 3000) console.warn(`[프로젝트 열기 계측] ⚠️ Drive 다운로드가 ${_fetchMs}ms나 걸림 — 파일 크기 또는 구글 쪽 응답 지연 가능성`);
-            const _tRender0 = performance.now();
             let saveData = response.result;
             if (saveData && saveData.globalData) {
                 window._openAsNewSheet(fileId, fileId, fileName); // 💡 [멀티시트] 지금 보던 시트를 저장하고 새 시트로 등록
@@ -3912,21 +3287,7 @@ ${mailText}`;
                 window.renderSheetTabsBar(); // 💡 [멀티시트]
                 // 💡 [버그 수정] 계획(Baseline)은 프로젝트별로 분리 저장되므로, 프로젝트가 바뀌면 그 프로젝트 것으로 다시 로드
                 window._compareTargetId = null;
-                // 🆕 계획(Baseline)은 이제 드라이브 JSON에도 함께 저장됨 — 있으면 그걸 그대로 신뢰(팀 공용),
-                //    없으면(예: 이 기능 이전에 저장된 옛 파일) 이 브라우저의 localStorage 기록으로 대체
-                if (saveData.scheduleBaselines && saveData.scheduleBaselines.length) {
-                    window._scheduleBaselines = saveData.scheduleBaselines;
-                    if (typeof persistScheduleBaselines === 'function') persistScheduleBaselines();
-                } else if (window.loadScheduleBaselines) {
-                    window.loadScheduleBaselines();
-                }
-                // 💡 [성능] 방금 이 파일의 내용을 통째로 받아왔으므로, 우리 메모리 상태 == 그 시점 원격 상태다.
-                //    그 시점의 modifiedTime(목록 조회 때 이미 받아둔 값)을 배분 병합 캐시 기준으로 심어두면,
-                //    파일을 연 직후 첫 저장에서 불필요한 전체 재다운로드를 건너뛸 수 있다.
-                //    (목록 조회 이후 누가 수정했다면 값이 달라 캐시 미스 → 정상적으로 다시 받아오므로 안전)
-                const _seedMt = (window._driveListModifiedTimes || {})[fileId];
-                if (_seedMt) { window._distMergeModifiedTime = window._distMergeModifiedTime || {}; window._distMergeModifiedTime[fileId] = _seedMt; }
-                console.info(`[프로젝트 열기 계측] "${fileName}" 화면 렌더링: ${Math.round(performance.now() - _tRender0)}ms`);
+                if (window.loadScheduleBaselines) window.loadScheduleBaselines();
                 if (!silent) window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
@@ -3941,14 +3302,6 @@ ${mailText}`;
         if (_dmTitle) _dmTitle.textContent = _dmEn ? '📂 Open Project' : '📂 프로젝트 불러오기';
         const _dmDesc = document.getElementById('drive-modal-desc');
         if (_dmDesc) _dmDesc.textContent = _dmEn ? 'Select a project file to open.' : '불러올 프로젝트 파일을 선택해 주세요.';
-
-        // 💡 [성능] 목록 조회 응답에는 이미 modifiedTime이 들어있다(fields=files(id,name,modifiedTime,...)).
-        //    이걸 기억해뒀다가 프로젝트를 열 때 배분 병합 캐시의 기준값으로 삼는다 — 안 그러면 파일을 연
-        //    직후 첫 저장에서 캐시가 항상 비어 있어(저장할 때만 채워졌음) "메타 조회 + 전체 다운로드"로
-        //    왕복이 오히려 한 번 더 늘었다. 하필 "프로젝트 열기"가 곧바로 저장을 한 번 하기 때문에,
-        //    지금 느리다고 하신 바로 그 경로에서 매번 손해를 보고 있었다.
-        window._driveListModifiedTimes = window._driveListModifiedTimes || {};
-        files.forEach(function(f) { if (f && f.id && f.modifiedTime) window._driveListModifiedTimes[f.id] = f.modifiedTime; });
 
         // 담당자(appProperties.pm) 기준 그룹핑 — 없으면 "미지정"
         const UNASSIGNED = _dmEn ? 'Unassigned' : '미지정';
@@ -3965,53 +3318,6 @@ ${mailText}`;
             if (b === UNASSIGNED) return -1;
             return a.localeCompare(b, 'ko');
         });
-
-        // 💡 [멀티시트] 담당자별 "한 번에 열기"와 동일한 방식으로, 목록 전체(모든 담당자)를 한 번에 여는 버튼.
-        //    executeLoadFile(..., true)를 그대로 재사용 — 이미 열려있는 시트는 다시 안 받아오고 전환만 됨.
-        if (files.length > 1) {
-            const topActionsRow = document.createElement('div');
-            topActionsRow.style.cssText = 'display:flex; gap:8px; align-items:stretch;';
-
-            const allBar = document.createElement('div');
-            allBar.style.cssText = 'flex:2 1 0; padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#2c5f8a; background:#f4f8fc; transition:0.15s;';
-            allBar.textContent = _dmEn ? `🗂️ Open all ${files.length} project(s) at once` : `🗂️ 전체 프로젝트 ${files.length}개 한 번에 열기`;
-            allBar.onmouseover = function() { this.style.background = '#e7f0fa'; };
-            allBar.onmouseout  = function() { this.style.background = '#f4f8fc'; };
-            allBar.onclick = async function() {
-                const msg = _dmEn ? `Open all ${files.length} project(s) as separate sheets?` : `전체 프로젝트 ${files.length}개를 모두 새 시트로 여시겠습니까?`;
-                if (!confirm(msg)) return;
-                window.closeDriveModal();
-                // 💡 [성능] 같은 파일이 목록에 두 번 들어와도 두 번 받지 않도록 id 기준으로 중복 제거.
-                //    프로젝트 하나를 여는 데 파일 전체를 통째로 받으므로(1개당 1~2초), 중복 한 번이 그대로 낭비가 된다.
-                const _seen = {};
-                const _uniqueFiles = files.filter(function(f) {
-                    if (!f || !f.id || _seen[f.id]) return false;
-                    _seen[f.id] = true; return true;
-                });
-                // 💡 담당자별 열기와 동일하게, 여러 개를 한 번에 열 때는 파일별 토스트를 생략(silent)하고 끝나면 요약 토스트만 표시
-                for (const file of _uniqueFiles) {
-                    await window.executeLoadFile(file.id, file.name, true);
-                }
-                if (window.showToast) window.showToast(_dmEn ? `✅ Opened all ${files.length} project(s)` : `✅ 전체 프로젝트 ${files.length}개 열기 완료`, 'info');
-            };
-            topActionsRow.appendChild(allBar);
-
-            // 💡 목록에서 기존 프로젝트를 고르지 않고, 곧바로 "새 프로젝트 시작" 흐름으로 갈 수 있는 지름길.
-            //    새 기능을 따로 만들지 않고 기존 startNewProject()(확인창 → 초기화 → 참조 엑셀 안내 팝업)를
-            //    그대로 재사용한다 — 새 프로젝트 버튼과 동작이 100% 동일하게 유지됨.
-            const newProjectBar = document.createElement('div');
-            newProjectBar.style.cssText = 'flex:1 1 0; padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#fff; background:#2c5f8a; transition:0.15s;';
-            newProjectBar.textContent = _dmEn ? '➕ New Project' : '➕ 새 프로젝트 등록';
-            newProjectBar.onmouseover = function() { this.style.background = '#244d70'; };
-            newProjectBar.onmouseout  = function() { this.style.background = '#2c5f8a'; };
-            newProjectBar.onclick = function() {
-                window.closeDriveModal();
-                window.startNewProject();
-            };
-            topActionsRow.appendChild(newProjectBar);
-
-            listContainer.appendChild(topActionsRow);
-        }
 
         groupNames.forEach((pmName, gi) => {
             const groupFiles = groups[pmName];
@@ -5125,16 +4431,6 @@ ${mailText}`;
         persistScheduleBaselines();
     };
 
-    // 💡 [성능 수정] 드라이브 파일에 넣을 계획(Baseline) 목록만 골라냄.
-    //    "현재 일정"(bl_current) 슬롯은 계획 메뉴를 열 때마다 지금 globalData에서 그대로 다시 만들어내는
-    //    파생 데이터라(위 autoSaveCurrentSnapshot 참고), 드라이브에 같이 저장하면 이미 globalData에 들어있는
-    //    전체 일정 날짜를 통째로 한 벌 더 복사해 넣는 셈이다. 실측(500행 기준) baseline 1개가 약 41KB로,
-    //    저장 시 본저장+백업 2회 업로드 + 열 때 다운로드까지 매번 이 무게를 그대로 짊어졌다.
-    //    → 파생 슬롯은 빼고, 사람이 실제로 저장한 계획(최초 킥오프 포함)만 팀 공용으로 남긴다.
-    window._scheduleBaselinesForSave = function() {
-        return (window._scheduleBaselines || []).filter(function(b) { return b && b.id !== CURRENT_BASELINE_ID; });
-    };
-
     // 💡 [버그 수정] 예전엔 "이 프로젝트 전용 키가 비어있으면 옛 전역 계획을 물려받는다"는 마이그레이션이
     //    있었는데, 주석엔 "1회성"이라 적혀있었지만 실제로는 조건(!raw)에 걸릴 때마다 — 즉 계획을 아직 한
     //    번도 저장 안 한 "모든" 새 프로젝트를 열 때마다 — 매번 실행됐음. 그 결과 서로 전혀 무관한 여러
@@ -5160,117 +4456,6 @@ ${mailText}`;
         const txt = row._level === 0 ? row._origDev : row._level === 1 ? row._origT1 : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4;
         return (row._l0Group || '') + '::' + (row._level || 0) + '::' + (txt || '').toString().trim();
     }
-
-    // ═══════════════════════════════════════════════════════════
-    // 🆕 [새 프로젝트 최초 등록] Summary "PROTO Start(계획)" 날짜를 Gantt 시작일 기준(anchor)으로 삼아
-    //    전체 일정을 다시 계산하고, 그 결과를 "최초 계획"으로 자동 저장한다 (_saveToGoogleDriveRaw에서
-    //    "드라이브에 아직 없는 새 프로젝트를 처음 등록"할 때 1회만 호출됨).
-    //    ⚠️ 주의: 엑셀을 드래그해서 불러오면 900ms 뒤 모든 행이 "오늘" 기준 계산일로 자동 잠금(고정)된다
-    //    (5298번째 줄 부근 "[초기 잠금]" 참고). 이 함수는 그 잠금을 풀고 PROTO Start 기준으로 다시 계산·
-    //    재잠금한다 — 즉, 이 시점 이전에 사용자가 특정 행의 날짜를 수동으로 조정해 두었다면 그 수동
-    //    조정분은 여기서 덮어써진다. "새 프로젝트를 막 등록하는 시점"에서만 쓰이도록 저장 로직에서
-    //    가드(파일이 아직 없고, 계획이 하나도 없을 때만)를 걸어두었다.
-    // ═══════════════════════════════════════════════════════════
-    window._reanchorScheduleAndLock = function(anchorTs) {
-        if (!globalData || globalData.length <= 1 || colIdx.start === -1) return false;
-
-        // 1) 기존 잠금(수동 고정) 해제 + 예전 시작/완료일 셀 텍스트를 전부 비움.
-        //    💡 [버그 수정] _startForced/_planForced만 풀어서는 부족했다 — computeCalcDatesForRows는
-        //    "0레벨 행은 잠금 여부와 무관하게 자기 셀의 날짜를 무조건 명시적 기준으로 쓴다"(row._level===0
-        //    조건이 _startForced보다 우선 적용됨). 그래서 ES/PP 등 두 번째 이후 0레벨 구간은 플래그를
-        //    풀어도 "초기 잠금" 때 찍힌 옛(오늘 기준) 날짜가 셀에 그대로 남아있어 그 구간만 자동계산에서
-        //    빠지고, PROTO Start 앵커가 거기까지 이어지지 않는 문제가 있었다. 첫 0레벨 앵커 행 하나만
-        //    남기고 모든 행의 시작/완료 셀을 비워서, 진짜로 "처음부터 끝까지" 순수 소요일 기준으로
-        //    다시 계산되게 한다(비운 셀은 바로 아래 4번 단계에서 계산 결과로 다시 채워짐).
-        for (let i = 1; i < globalData.length; i++) {
-            const r = globalData[i]; if (!r) continue;
-            r._startForced = false; r._planForced = false; r._scheduleModeManual = false;
-            if (colIdx.start !== -1) r[colIdx.start] = '';
-            if (colIdx.plan !== -1) r[colIdx.plan] = '';
-        }
-
-        // 2) 0레벨(최상위) 첫 행의 시작일 셀만 PROTO Start로 지정 → 전체 일정의 유일한 기준(anchor)이 됨
-        let firstL0 = null;
-        for (let i = 1; i < globalData.length; i++) {
-            if (globalData[i] && globalData[i]._level === 0) { firstL0 = globalData[i]; break; }
-        }
-        if (!firstL0) return false;
-        firstL0[colIdx.start] = formatTsToYMD(anchorTs);
-
-        // 3) 순수 계산(DOM 미접촉) — 전체 행의 _calcStartTs/_calcPlanTs를 채움 (recalculateSchedules()의
-        //    핵심 로직만 뽑아낸 computeCalcDatesForRows 재사용)
-        if (window.computeCalcDatesForRows) window.computeCalcDatesForRows(globalData.slice(1), colIdx);
-
-        // 4) 계산 결과를 실제 셀에 기록하고 다시 잠금 — 엑셀 최초 로드 시의 "초기 잠금"과 동일한 방식
-        for (let i = 1; i < globalData.length; i++) {
-            const r = globalData[i]; if (!r || !r._calcStartTs) continue;
-            if (colIdx.start !== -1) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
-            if (colIdx.plan !== -1 && r._calcPlanTs) r[colIdx.plan] = formatTsToYMD(r._calcPlanTs);
-            r._startForced = true; r._planForced = true; r._scheduleModeManual = true;
-        }
-        return true;
-    };
-
-    window._registerNewProjectInitialPlan = function() {
-        try {
-            if (!globalData || globalData.length <= 1) return; // Gantt 데이터가 아직 없으면 손댈 것이 없음
-            const dateEl = document.getElementById('sum-ms-plan-protostart');
-            const raw = dateEl ? String(dateEl.value || '').trim() : '';
-            if (!raw) return;
-            const parsed = parseDateValue(raw);
-            if (!parsed) return;
-
-            const applied = window._reanchorScheduleAndLock(parsed.ts);
-            if (!applied) return;
-
-            const rows = {};
-            for (let i = 1; i < globalData.length; i++) {
-                const row = globalData[i]; if (!row || !row._calcStartTs) continue;
-                rows[getTaskKey(row)] = { s: row._calcStartTs, e: row._calcPlanTs || null };
-            }
-            if (Object.keys(rows).length === 0) return;
-
-            const label = window._currentLang === 'en' ? 'Initial Plan (Kickoff)' : '최초 계획 (킥오프)';
-            // 💡 isInitialPlan: true — "이게 최초 킥오프 계획이다"를 라벨 문자열 매칭이 아니라 명시적 플래그로
-            //    표시. Gantt 실적 연동 버튼(syncSummaryActualsFromGantt)이 이 값을 찾아 계획(Plan) 행을
-            //    되살리는 데 씀 — 사용자가 나중에 이 계획 이름을 바꾸거나 다른 계획을 더 저장해도 흔들리지 않음.
-            const baseline = { id: 'bl_' + Date.now(), label: label, savedAt: Date.now(), rows: rows, isInitialPlan: true };
-            window._scheduleBaselines.push(baseline);
-            persistScheduleBaselines();
-            if (window.renderBaselineMenu) window.renderBaselineMenu();
-
-            if (typeof renderTable === 'function') renderTable(globalData);
-            if (typeof applyFilters === 'function') applyFilters();
-            if (window.recomputeGanttViewRange) window.recomputeGanttViewRange();
-
-            window.showToast(window._t(
-                `📐 PROTO Start(${raw}) 기준으로 전체 일정을 계산하고 "${label}"으로 저장했습니다.`,
-                `📐 Calculated the schedule from PROTO Start (${raw}) and saved it as "${label}".`
-            ));
-        } catch (e) { console.error('최초 계획 자동 저장 실패:', e); }
-    };
-
-    // 🆕 저장된 baseline 중 "최초 킥오프 계획"을 찾아 반환 (없으면 null — 이 기능 이전에 등록된 옛 프로젝트 등)
-    window._getInitialKickoffBaseline = function() {
-        return (window._scheduleBaselines || []).find(function(b) { return b && b.isInitialPlan; }) || null;
-    };
-
-    // 🆕 baseline의 rows(키: "그룹::레벨::업무명")에서 0레벨 항목만 뽑아 {name, startTs} 목록으로 변환.
-    //    syncSummaryActualsFromGantt()가 "실적"은 현재 Gantt로, "계획"은 이 baseline으로 동일한 방식으로 계산한다.
-    window._level0RowsFromBaseline = function(bl) {
-        if (!bl || !bl.rows) return [];
-        const out = [];
-        Object.keys(bl.rows).forEach(function(key) {
-            const parts = key.split('::');
-            if (parts.length < 3) return;
-            if (parts[1] !== '0') return; // 레벨0만
-            const val = bl.rows[key];
-            const s = (val && typeof val === 'object') ? val.s : val;
-            if (!s) return;
-            out.push({ name: parts.slice(2).join('::').trim(), startTs: s });
-        });
-        return out;
-    };
 
     // 📐 계획 메뉴 팝업 — 저장/비교선택/삭제를 버튼 하나로 통합
     window.toggleBaselineMenu = function(ev) {
@@ -5619,19 +4804,13 @@ ${mailText}`;
 
         function handleFiles(e) {
         const files = e.target.files; if (!files || files.length === 0) return;
-
-        // ✅ 이미 로드된 프로젝트(파일 연결됨) 또는 화면에 이미 실제 Gantt 데이터가 있는 상태에서
-        //    엑셀을 드래그하면 "그 내용을 덮어쓰는" 것이므로 비밀번호로 막는다.
-        //    💡 [버그 수정] 예전엔 조건이 `window.isDriveConnected`만 봐서, 프로젝트가 하나도 안 열려있는
-        //    "완전히 빈 화면"(구글 연동은 돼있지만 아무 파일도 안 불러온 상태)에서도 매번 비밀번호를
-        //    물었다 — 빈 화면은 애초에 "덮어쓸" 내용이 없으므로 막을 이유가 없다. 실제로 덮어써질 데이터가
-        //    있을 때(파일이 연결돼 있거나, 화면에 이미 Gantt 행이 있을 때)만 확인하도록 좁힌다.
-        //    (새 프로젝트 등록 자체의 비밀번호 보호는 여기가 아니라 실제 신규 파일 생성 시점인
-        //    _saveToGoogleDriveRaw에서 한다 — 진입 경로(버튼/드래그 등)에 상관없이 항상 걸리도록)
-            if (window.currentDriveFileId || (window.isDriveConnected && globalData && globalData.length > 1)) {
+    
+        // ✅ 구글 드라이브 연동 상태에서 엑셀 로드 시 비밀번호 확인
+        
+            if (window.currentDriveFileId || window.isDriveConnected) {
             const success = verifyAdminPassword(
-                "🔒 이미 열려있는 프로젝트 데이터가 있습니다.\n\n" +
-                "엑셀 파일로 덮어쓰려면\n관리자 비밀번호를 입력하세요.\n\n" +
+                "🔒 구글 드라이브 연동 중입니다.\n\n" +
+                "엑셀 파일로 드라이브 데이터를 덮어쓰려면\n관리자 비밀번호를 입력하세요.\n\n" +
                 "(취소 시 엑셀 로드가 중단됩니다)"
             );
             if (!success) {
@@ -5640,10 +4819,10 @@ ${mailText}`;
                 return;
             }
             // 연동 유지 (currentDriveFileId 그대로)
-        } else if (!window.isDriveConnected) {
+        } else {
             window.currentDriveFileId = null;
         }
-
+            
         window.closeAllTopbarMenus(); // ✅ 엑셀 로드 시작 시 열려있던 파일/업무 드롭다운 자동 닫기
         globalData = []; existingDevStages = []; filterColumns = []; currentFilters = {}; window.projectDistributions = []; // 📥 [Phase 2.5] 새 프로젝트 로드 시 원장 초기화
         colIdx = { no: -1, bogo: -1, start: -1, plan: -1, period: -1, dur1: -1, dur2: -1, dur3: -1, dur4: -1, assignee: -1, taskType1: -1, taskType2: -1, taskType3: -1, taskType4: -1, status: -1, customer: -1, model: -1, inch: -1, devStage: -1, content: -1, answer: -1, chart: -1, wbs: -1 };
@@ -5942,10 +5121,7 @@ ${mailText}`;
         const isNotice = (tabId === 'tab-notice');
         const isAddress = (tabId === 'tab-address');
         const isRowPagedPortrait = isAlarm || isNotice || isAddress; // 🎯 A4 세로 + 40행/페이지 (여러 페이지로 이어짐)
-        // 💡 [버그 수정] Weekly Report는 원래 여기 포함돼서 무조건 1페이지로 욱여넣었는데, 업무가 많으면
-        //    글자가 안 보일 정도로 축소되거나 억지로 잘렸다. "적당한 위치에서 페이지가 나뉘길" 원하므로
-        //    1페이지 강제축소 대상에서 빼고, 대신 wr-print-block 단위로 자연스럽게 여러 페이지로 흐르게 함.
-        const fitOnePage = isSummary || isBriefSpec; // 💡 1페이지 축소 대상 탭
+        const fitOnePage = isSummary || isBriefSpec || isWeekly; // 💡 1페이지 축소 대상 탭
 
         if (isSummary) {
             // 📷 제품 사진 섹션은 인쇄에서 제외
@@ -6001,15 +5177,7 @@ ${mailText}`;
             //    끼어들어 배율에 영향을 주므로, 페이지 하단에 고정 오버레이되는 요소는 분리해두는 게 맞음)
             fixedFooterDiv = document.createElement('div');
             fixedFooterDiv.className = 'print-fixed-footer';
-            // 💡 [버그 수정] Summary는 콘텐츠를 JS가 계산한 배율로 1페이지에 꽉 차게 축소하는데(SAFETY=0.94),
-            //    그 스케일 계산은 clone 내부 콘텐츠 높이만 재고 clone "밖"에 별도로 얹는 이 고정 푸터의
-            //    높이는 전혀 고려하지 않는다 — 그래서 13px 크기의 푸터가 페이지 맨 아래(6mm)에서 위로
-            //    차지하는 높이만큼 마지막 박스(주요자재)와 겹치거나 바짝 붙어 보였다. 다른 탭 인쇄 푸터가
-            //    쓰는 더 작은 크기(Gantt=8px, 표 기반 탭들의 소형 폰트 기준=10px)를 참고해 Summary만
-            //    9px로 줄여 푸터가 차지하는 높이를 낮추고 주요자재 박스 아래로 여유 있게 붙도록 함
-            //    (Weekly Report는 이 고정 푸터를 함께 쓰지만 요청 대상이 아니므로 13px 그대로 유지).
-            const footerFontPx = isSummary ? 9 : 13;
-            fixedFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:' + footerFontPx + 'px; line-height:1.2; color:#000; font-family:"Malgun Gothic",sans-serif;';
+            fixedFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:13px; color:#000; font-family:"Malgun Gothic",sans-serif;';
             fixedFooterDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
                 + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
         }
@@ -6024,20 +5192,16 @@ ${mailText}`;
 
         if (fitOnePage) {
             // 📐 탭별 실제 @page 방향에 맞는 표준 여백 기준 페이지 폭/높이(px)
-            //    Brief SPEC = A4 가로(briefspecLandscapePage),
-            //    Summary/Weekly Report = A4 세로(summaryPortraitPage/weeklyPortraitPage)
+            //    Summary/Brief SPEC = A4 가로(summaryLandscapePage/briefspecLandscapePage),
+            //    Weekly Report = A4 세로(weeklyPortraitPage) — 💡 [버그 수정] 예전엔 Weekly도
+            //    가로 치수를 그대로 썼는데, 실제 @page는 세로라 폭 기준이 어긋나 있었음
             // 💡 SAFETY: 실측과 실제 인쇄 렌더링 간의 미세한 오차로 경계선에서 다음 페이지로
             //    넘어가는 것을 막기 위한 여유 마진 (6% — 예전 4%에서 확대, 표 하나로 안 끝나는
             //    Summary/Weekly는 tfoot 반복 푸터를 못 써서 애초에 안 넘치는 게 더 중요함)
-            // 💡 [버그 수정] Brief SPEC "펼치기" 상태는 숨겨진 행까지 다 나와 행 수가 많아지는데,
-            //    이 측정은 화면(screen) CSS 기준이라 인쇄 전용(@media print) 셀 여백 축소 규칙이
-            //    반영 안 된 상태로 배율을 계산한다 — 그 오차를 흡수하도록 마진을 더 크게 잡음(10%).
-            const bsExpanded = isBriefSpec && window._bmExpanded && window._bmExpanded.bs;
-            const SAFETY = bsExpanded ? 0.90 : 0.94;
+            const SAFETY = 0.94;
             const pageLongMm = 297 - 20, pageShortMm = 210 - 20; // 10mm 여백 기준
-            const isPortraitTab = isWeekly || isSummary;
-            const pageWidthPx  = (isPortraitTab ? pageShortMm : pageLongMm) * 96 / 25.4 * SAFETY;
-            const pageHeightPx = (isPortraitTab ? pageLongMm : pageShortMm) * 96 / 25.4 * SAFETY;
+            const pageWidthPx  = (isWeekly ? pageShortMm : pageLongMm) * 96 / 25.4 * SAFETY;
+            const pageHeightPx = (isWeekly ? pageLongMm : pageShortMm) * 96 / 25.4 * SAFETY;
 
             printArea.style.position = 'fixed';
             printArea.style.left = '-99999px';
@@ -6945,23 +6109,9 @@ window.deleteHistoryByDateRange = function() {
         if (window.calendarFixedPos) { popup.style.top  = window.calendarFixedPos.top  + 'px'; popup.style.left = window.calendarFixedPos.left + 'px'; }
     };
 
-    // 💡 [버그 수정] 달력을 "여는" click과 "바깥 클릭이라 닫는" 이 리스너가 같은 이벤트 버블링 한 번에
-    //    같이 실행됐다. showGenericCalendar(input)로 여는 경우(input의 onclick → 통합 캘린더 오픈)
-    //    이 click 이벤트가 그대로 document까지 버블링되는데, 그 트리거였던 input 자신은 .date-clickable
-    //    클래스가 없어(그건 메인 Gantt 표 셀 전용) "바깥 클릭"으로 오인되어 열리자마자 곧바로 닫혔다 —
-    //    즉 팝업이 화면에 그려지기도 전에 block→none으로 바뀌어 "달력이 아예 안 뜨는" 것처럼 보였다.
-    //    (Summary 마일스톤 날짜칸뿐 아니라 히스토리 삭제범위·공휴일 등록 등 showGenericCalendar를 쓰는
-    //    모든 기존 필드가 똑같이 영향받고 있었음 — 재현 테스트로 확인)
-    //    지금 막 이 팝업을 연 그 input(currentCalendarGenericInput) 클릭은 "바깥 클릭"에서 제외한다.
     document.addEventListener('click', function(e) {
         const popup = document.getElementById('calendar-popup');
-        if (popup && popup.style.display === 'block') {
-            // 💡 트리거가 input 자신인 경우(showGenericCalendar(this))뿐 아니라, Summary 마일스톤 날짜칸의
-            //    "📅 아이콘"처럼 별도 요소를 눌러 여는 경우도 있다 — 그 아이콘(.ms-cal-btn) 클릭도 함께 제외.
-            const isCalendarTriggerInput = window.currentCalendarGenericInput && e.target === window.currentCalendarGenericInput;
-            const isCalendarTriggerIcon = e.target.closest && e.target.closest('.ms-cal-btn');
-            if (!popup.contains(e.target) && !e.target.closest('.date-clickable') && !isCalendarTriggerInput && !isCalendarTriggerIcon) popup.style.display = 'none';
-        }
+        if (popup && popup.style.display === 'block') { if (!popup.contains(e.target) && !e.target.closest('.date-clickable')) popup.style.display = 'none'; }
         if (!e.target.closest('.no-td')) document.querySelectorAll('.row-actions.show').forEach(el => el.classList.remove('show'));
     });
 
@@ -7036,30 +6186,38 @@ window.deleteHistoryByDateRange = function() {
         } catch (e) { } return false;
     }
 
-    // 💡 [버그 수정] 헤더로 "전체 펼치기"를 켜둔 상태인지 재렌더링을 넘나들며 기억하는 플래그.
-    //    renderTable()이 매번 여기 값을 보고 펼침 class를 다시 적용한다(위 renderTable 참고).
-    window._allDetailExpanded = false;
-
-    // 💡 [기능 변경] 예전엔 상세내용 셀을 클릭하면 그 셀만 펼치고 다른 곳 클릭하면 접히는 "개별 클릭
-    //    토글"이 있었는데, 이게 오히려 불편했다 — 셀 안 텍스트를 클릭/드래그해서 읽으려는 것뿐인데
-    //    그 클릭 때문에 "전체 펼치기" 모드가 풀리거나 다른 행이 접혀버렸다. 이제 펼침/접힘은 오직
-    //    아래 헤더 토글(window.toggleAllDetailExpand) 하나로만 제어되고, 셀을 클릭하는 것 자체는
-    //    (더블클릭 편집 제외) 아무 것도 접거나 펼치지 않는다.
-    // 상세내용 헤더 클릭 — 전체 펼치기/접기 토글 (펼침 상태를 켜고 끄는 유일한 진입점)
+    // 💡 업무상세내용/답변 셀 접기·펼치기 — 클릭한 셀만 펼치고, 이전에 펼쳐져 있던 다른 셀은 자동으로 접힘
+    window.toggleDetailExpand = function(td, event) {
+        const wasExpanded = td.classList.contains('detail-td-expanded');
+        document.querySelectorAll('td.detail-td-expanded').forEach(el => {
+            if (el !== td) el.classList.remove('detail-td-expanded');
+        });
+        td.classList.toggle('detail-td-expanded', !wasExpanded);
+        // WBS 팝업 닫기 (상세내용 클릭 시 stopPropagation으로 외부클릭 감지 안되는 문제 해결)
+        const wbsPopup = document.getElementById('row-action-popup');
+        if (wbsPopup) { wbsPopup.style.display = 'none'; window.clearRowHighlight && window.clearRowHighlight(); }
+        if (event) event.stopPropagation();
+    };
+    // 상세내용 헤더 클릭 — 전체 펼치기/접기 토글
     window.toggleAllDetailExpand = function(th, event) {
         if (event) event.stopPropagation();
         const allDetail = document.querySelectorAll('td.detail-td');
+        const anyExpanded = document.querySelector('td.detail-td-expanded');
         const arrow = document.getElementById('detail-th-arrow');
-        if (window._allDetailExpanded) {
+        if (anyExpanded) {
             allDetail.forEach(el => el.classList.remove('detail-td-expanded'));
             if (arrow) arrow.textContent = '▼';
-            window._allDetailExpanded = false;
         } else {
             allDetail.forEach(el => el.classList.add('detail-td-expanded'));
             if (arrow) arrow.textContent = '▲';
-            window._allDetailExpanded = true;
         }
     };
+
+    // 상세내용 셀이 아닌 다른 곳을 클릭하면, 펼쳐져 있던 셀을 기본 높이로 되돌림
+    document.addEventListener('click', function(e) {
+        if (e.target.closest && e.target.closest('td.detail-td')) return;
+        document.querySelectorAll('td.detail-td-expanded').forEach(el => el.classList.remove('detail-td-expanded'));
+    });
 
     window.makeEditable = function(td) {
         if(td.getAttribute('contenteditable') === 'true') return;
@@ -7084,8 +6242,7 @@ window.deleteHistoryByDateRange = function() {
 
     window.blurCell = function(td, rowIndex, colIndex) {
         td.removeAttribute('contenteditable');
-        // 💡 편집 종료 시 기본 높이로 복귀 — 단, "전체 펼치기" 모드 중이었다면 이 칸만 쏙 접히지 않도록 유지
-        if (!window._allDetailExpanded) td.classList.remove('detail-td-expanded');
+        td.classList.remove('detail-td-expanded'); // 💡 편집 종료 시 기본 높이로 복귀
         let newText = td.innerText.trim(); let rawAttr = td.getAttribute('data-raw'); let oldText = rawAttr ? decodeURIComponent(rawAttr).trim() : "";
         
         if (newText !== oldText) {
@@ -8145,9 +7302,9 @@ window.deleteHistoryByDateRange = function() {
                     const isDateCol = (cellIndex === colIdx.start || cellIndex === colIdx.plan);
                     const dateHint = isDateCol ? " · 날짜를 지우면 자동계산, 입력하면 고정되어 다른 행이 바뀌어도 안 움직임" : "";
                     const isDetailCol = (cellIndex === colIdx.content || cellIndex === colIdx.answer);
-                    // 💡 셀 클릭으로 개별 펼치기/접기 하던 것 제거 — 펼침은 이제 상세내용 헤더에서만 전체 제어(window.toggleAllDetailExpand)
-                    const detailHint = isDetailCol ? " · 펼치기/접기는 헤더 클릭 · Enter는 편집 완료, 줄바꿈은 Shift+Enter" : "";
-                    tdAttrs += ` ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능${dateHint}${detailHint}"`;
+                    const detailHint = isDetailCol ? " · 클릭하여 펼쳐보기 · Enter는 편집 완료, 줄바꿈은 Shift+Enter" : "";
+                    const detailClickAttr = isDetailCol ? ` onclick="window.toggleDetailExpand(this, event)"` : "";
+                    tdAttrs += `${detailClickAttr} ondblclick="makeEditable(this)" onblur="blurCell(this, ${i}, ${cellIndex})" title="더블클릭하여 텍스트 수정 가능${dateHint}${detailHint}"`;
                 }
 
                 let tdStyle = ""; let tdHtml = '';
@@ -8322,17 +7479,6 @@ window.deleteHistoryByDateRange = function() {
         
         tbody.innerHTML = bodyHtml; initColumnResizers(); if (window.paintRowSelection) window.paintRowSelection();
 
-        // 💡 [버그 수정] "상세내용 헤더 클릭 → 전체 펼치기"는 DOM class(detail-td-expanded)로만 표시돼서,
-        //    WBS 상하좌우/+-/삭제 등 다른 액션이 renderTable()을 다시 부르며 thead/tbody를 통째로 새로
-        //    그릴 때마다(바로 위 tbody.innerHTML 대입, 헤더도 위에서 매번 새로 그려짐) 상태가 사라져
-        //    매번 다시 헤더를 클릭해야 했다. 전체 펼치기 여부를 window._allDetailExpanded에 별도로
-        //    저장해두고, 렌더링될 때마다 여기서 다시 적용해 재렌더링을 넘나들며 유지되게 한다.
-        if (window._allDetailExpanded) {
-            document.querySelectorAll('td.detail-td').forEach(el => el.classList.add('detail-td-expanded'));
-            const arrowEl = document.getElementById('detail-th-arrow');
-            if (arrowEl) arrowEl.textContent = '▲';
-        }
-
         // 💡 페이지를 새로고침한 뒤 최초 1회만 "오늘" 행으로 스크롤 (편집/필터 등으로 인한 재렌더링 시엔 스크롤 위치를 건드리지 않음)
         if (!window._didInitialScrollToToday && data && data.length > 1) {
             window._didInitialScrollToToday = true;
@@ -8340,42 +7486,7 @@ window.deleteHistoryByDateRange = function() {
         }
     }
 
-    // 💡 [공용] 0레벨 업무 목록({name, startTs})에서 PROTO/ES/PP 9개 마일스톤 날짜를 계산.
-    //    실적(현재 Gantt 기준)과 계획(최초 킥오프 baseline 기준) 양쪽에서 동일한 규칙으로 재사용.
-    function deriveMilestoneDatesFromLevel0(level0Rows) {
-        if (!level0Rows || level0Rows.length === 0) return null;
-        const findByName = function(name) {
-            return level0Rows.find(r => r.name === name) || level0Rows.find(r => r.name.includes(name));
-        };
-        const firstStart = level0Rows.reduce((min, r) => (r.startTs < min ? r.startTs : min), level0Rows[0].startTs);
-        const protoDR = findByName('PROTO DR');
-        const dvr = findByName('DVR');
-        const pra = findByName('PRA');
-        if (!protoDR || !dvr || !pra) {
-            return { error: true, missing: [!protoDR && 'PROTO DR', !dvr && 'DVR', !pra && 'PRA'].filter(Boolean) };
-        }
-
-        const DAY = 86400000;
-        const addDays = function(ts, days) { return ts + days * DAY; };
-        const addMonths = function(ts, months) { const d = new Date(ts); d.setMonth(d.getMonth() + months); return d.getTime(); };
-
-        return {
-            '기획Start': firstStart,
-            '기획Finish': addDays(protoDR.startTs, -14),
-            'ProtoDR': protoDR.startTs,
-            'ESStart': addDays(protoDR.startTs, 14),
-            'ESEnd': addDays(dvr.startTs, -14),
-            'DVR': dvr.startTs,
-            'PPStart': addDays(dvr.startTs, 14),
-            'PPEnd': addMonths(pra.startTs, -1),
-            'PRA': pra.startTs,
-        };
-    }
-
-    // 💡 Summary "실적" 표를 Gantt 0레벨 업무(시작일 기준)와 연동.
-    //    🆕 저장된 "최초 계획(킥오프)" baseline이 있으면, 같은 방식으로 "계획" 행도 함께 되살려 채운다 —
-    //    그래야 이 표에서 계획 대비 실적을 바로 비교할 수 있다(계획 행이 그동안 비어있거나 최초 PROTO
-    //    Start 한 칸만 있고 나머지 8칸은 안 채워져 있던 문제를 여기서 함께 해결).
+    // 💡 Summary "실적" 표를 Gantt 0레벨 업무(시작일 기준)와 연동
     window.syncSummaryActualsFromGantt = function() {
         if (!globalData || globalData.length < 2) { alert('Gantt 데이터가 없습니다.'); return; }
         const level0Rows = [];
@@ -8387,37 +7498,42 @@ window.deleteHistoryByDateRange = function() {
         }
         if (level0Rows.length === 0) { alert('시작일이 있는 0레벨 업무를 찾을 수 없습니다.'); return; }
 
-        const result = deriveMilestoneDatesFromLevel0(level0Rows);
-        if (!result || result.error) {
-            alert('0레벨 업무 중 "' + (result ? result.missing.join('", "') : '') + '"을(를) 찾을 수 없습니다. 업무명을 확인해주세요.');
-            return;
-        }
+        const findByName = function(name) {
+            return level0Rows.find(r => r.name === name) || level0Rows.find(r => r.name.includes(name));
+        };
+
+        const firstStart = level0Rows.reduce((min, r) => (r.startTs < min ? r.startTs : min), level0Rows[0].startTs);
+        const protoDR = findByName('PROTO DR');
+        const dvr = findByName('DVR');
+        const pra = findByName('PRA');
+
+        if (!protoDR) { alert('0레벨 업무 중 "PROTO DR"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
+        if (!dvr) { alert('0레벨 업무 중 "DVR"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
+        if (!pra) { alert('0레벨 업무 중 "PRA"을 찾을 수 없습니다. 업무명을 확인해주세요.'); return; }
+
+        const DAY = 86400000;
+        const addDays = function(ts, days) { return ts + days * DAY; };
+        const addMonths = function(ts, months) { const d = new Date(ts); d.setMonth(d.getMonth() + months); return d.getTime(); };
+
+        const result = {
+            '기획Start': firstStart,
+            '기획Finish': addDays(protoDR.startTs, -14),
+            'ProtoDR': protoDR.startTs,
+            'ESStart': addDays(protoDR.startTs, 14),
+            'ESEnd': addDays(dvr.startTs, -14),
+            'DVR': dvr.startTs,
+            'PPStart': addDays(dvr.startTs, 14),
+            'PPEnd': addMonths(pra.startTs, -1),
+            'PRA': pra.startTs,
+        };
 
         Object.keys(result).forEach(function(stage) {
             const inp = document.querySelector('#sum-milestone-body-actual input[data-stage="' + stage + '"]');
             if (inp) inp.value = formatTsToYMD(result[stage]);
         });
 
-        // 🆕 계획(Plan) 행 — "최초 계획(킥오프)"이 저장되어 있으면 동일한 규칙으로 계산해 함께 반영
-        let planSynced = false;
-        const kickoffBl = window._getInitialKickoffBaseline ? window._getInitialKickoffBaseline() : null;
-        if (kickoffBl) {
-            const blLevel0Rows = window._level0RowsFromBaseline ? window._level0RowsFromBaseline(kickoffBl) : [];
-            const planResult = deriveMilestoneDatesFromLevel0(blLevel0Rows);
-            if (planResult && !planResult.error) {
-                Object.keys(planResult).forEach(function(stage) {
-                    const inp = document.querySelector('#sum-milestone-body input[data-stage="' + stage + '"]');
-                    if (inp) inp.value = formatTsToYMD(planResult[stage]);
-                });
-                planSynced = true;
-            }
-        }
-
         if (window.collectTabData) window.collectTabData();
-        if (window._checkAllRequiredFields) window._checkAllRequiredFields();
-        alert('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.' + (planSynced
-            ? '\n(저장된 "최초 계획(킥오프)" 기준으로 계획 일정도 함께 반영했습니다)'
-            : '\n(저장된 "최초 계획(킥오프)"이 없어 계획 일정은 그대로 두었습니다 — 신규 프로젝트 등록 시에만 자동 저장됩니다)'));
+        alert('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.');
     };
 
     function toggleTranslation(btn, encodedText, transMode) {
@@ -8523,25 +7639,11 @@ window.deleteHistoryByDateRange = function() {
         if (!String(pm.고객모델명 || '').trim()) missing.push('고객 모델명');
         if (!String(pm.KTK모델명 || '').trim()) missing.push('KTK PN_모델명');
         if (!String(pm.프로젝트담당자 || '').trim()) missing.push('프로젝트 담당자');
-        // 💡 [버그 수정] PROTO Start는 "새 프로젝트를 처음 등록할 때"만 필수여야 하는데, 모든 저장에
-        //    걸리게 해뒀더니 — 이미 등록된 기존 프로젝트(PROTO Start를 입력한 적 없는 대부분의 과거
-        //    프로젝트 포함)들까지 저장이 막혀버렸다("프로젝트 열기"가 전환 전 자동저장을 시도하다 여기
-        //    걸려서 프로젝트 목록조차 못 여는 것처럼 보이는 문제로 이어짐). 드라이브에 아직 파일이 없는
-        //    (=currentDriveFileId가 없는) 진짜 신규 등록 때만 요구하도록 범위를 좁힌다.
-        //    💡 [추가 수정] 그것만으론 부족했다 — PROTO Start는 "Gantt 일정에 앵커로 쓰일 때"만 의미가
-        //    있는데, 아직 Gantt WBS를 하나도 안 불러온 채(Summary만 먼저 채우는 흔한 순서) 저장하려 하면
-        //    앵커로 쓸 일정 자체가 없는데도 요구하고 있었다. 실제로 앵커링할 Gantt 데이터
-        //    (globalData.length > 1)가 있을 때만 요구하도록 조건을 하나 더 좁힌다.
-        if (!window.currentDriveFileId && globalData && globalData.length > 1) {
-            const protoStartMs = (((window.tabData || {}).summary || {}).milestones || {})['기획Start'];
-            if (!protoStartMs || !String(protoStartMs.date || '').trim()) missing.push('PROTO Start (첫 표 "계획" 행의 시작일 · 프로젝트 시작일 — Gantt 데이터가 있는 신규 프로젝트만 필수)');
-        }
         if (missing.length === 0) return '';
-        // 💡 [UX] 빈 줄을 줄여 한눈에 들어오게 — 예전엔 문단마다 \n\n이 들어가 모달이 불필요하게 길었다.
-        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n(Summary 탭에서 입력 · 파일명 생성과 일정 자동계산에 필요)\n\n· ' + missing.join('\n· ');
+        return '⚠️ 필수 정보가 비어 있어 저장할 수 없습니다.\n\n(아래 항목은 파일명 생성에 반드시 필요합니다)\n\nSummary 탭에서 다음 항목을 입력한 후 다시 저장해주세요:\n\n· ' + missing.join('\n· ');
     };
 
-    // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자, 신규 프로젝트는 PROTO Start도) 빈 값이면 시각적 하이라이트
+    // 💡 필수 항목(고객사/고객모델명/KTK PN_모델명/프로젝트담당자) 빈 값이면 시각적 하이라이트
     window._checkRequiredField = function(el) {
         if (!el) return;
         if (String(el.value || '').trim()) el.classList.remove('req-missing');
@@ -8552,13 +7654,6 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) window._checkRequiredField(el);
         });
-        // 💡 PROTO Start는 신규 프로젝트(아직 드라이브에 없는 파일) 등록 시에만 필수 — 이미 등록된
-        //    기존 프로젝트를 열었을 때는 빨간 경고를 띄우지 않는다 (validateRequiredProjectInfo와 동일 기준)
-        const protoEl = document.getElementById('sum-ms-plan-protostart');
-        if (protoEl) {
-            if (window.currentDriveFileId) protoEl.classList.remove('req-missing');
-            else window._checkRequiredField(protoEl);
-        }
     };
 
     window.updatePrintTitle = function() {
@@ -9225,14 +8320,13 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
 
     // 2) GIS 초기화 (문제의 원인이었던 '세션 자동 복구' 로직 완전 제거)
     window.gisLoaded = function() {
-        tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: ''
+        tokenClient = google.accounts.oauth2.initTokenClient({ 
+            client_id: CLIENT_ID, 
+            scope: SCOPES, 
+            callback: '' 
         });
         gisInited = true;
     };
-    if (window._gisReady) window.gisLoaded(); // 스크립트가 이 정의보다 먼저 로드 완료된 경우 즉시 실행
 
     // 3) 버튼 클릭 핸들러 (캐시 꼬임 시 방어 로직 추가) + 동기화 이후 바로 드라이브에서 불러오기 팝업 이동
 window.handleAuthClick = function() {
@@ -9716,16 +8810,8 @@ window.handleAuthClick = function() {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
             // 💡 Gantt 표 편집뿐 아니라 Summary/Brief SPEC/M.C Table 편집도 같이 확인
-            const hasChanges = currentLogs > savedLogs || window._nonGanttDirty;
-            if (!hasChanges) return;
-            if (window.currentDriveFileId) {
+            if (window.currentDriveFileId && (currentLogs > savedLogs || window._nonGanttDirty)) {
                 saveToGoogleDrive();
-            } else if (window.showToast) {
-                // 💡 [버그 수정] 아직 한 번도 저장 안 한 "새 프로젝트"는 자동저장을 그대로 걸면 3분 타이머가
-                //    느닷없이 관리자 비밀번호 입력창(prompt)을 띄우게 되어 당황스럽다. 대신 조용한 알림으로
-                //    "저장 안 됐다"는 사실만 계속 상기시킨다 — 예전엔 이 경우 자동저장도, 알림도 전혀 없이
-                //    조용히 넘어가서 작업 내용이 사라져도 알아챌 방법이 없었다.
-                window.showToast(window._t('💾 아직 저장 안 된 새 프로젝트 작업이 있습니다 — 수동으로 저장해주세요', '💾 You have unsaved work on a new project — please save manually'), 'warning', 6000);
             }
         }, 180000);
     }
@@ -9746,20 +8832,7 @@ window.handleAuthClick = function() {
         let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
         let savedLogs = window.lastSavedLogCount || 0;
         // 💡 Gantt 표 편집뿐 아니라 Summary/Brief SPEC/M.C Table 편집도 같이 확인
-        let hasUnsaved = currentLogs > savedLogs || window._nonGanttDirty;
-        // 💡 [버그 수정] 지금 활성 시트만 확인했는데, [멀티시트]로 백그라운드에 잠들어있는 다른 시트
-        //    (특히 fileId가 없어 어디서도 자동저장되지 않는 "새 프로젝트")에 저장 안 한 변경사항이 있어도
-        //    감지하지 못했다 — 그 상태로 탭/창을 닫으면 경고 없이 그대로 사라졌다. 백그라운드 시트의
-        //    스냅샷(전환 시점에 캡처된 changeLogs)까지 함께 확인한다.
-        if (!hasUnsaved && window._sheets) {
-            hasUnsaved = window._sheets.some(function(s) {
-                if (!s || s.key === window._activeSheetKey || !s.snapshot) return false;
-                const sLogs = s.snapshot.changeLogs ? s.snapshot.changeLogs.length : 0;
-                const sSaved = s.snapshot.lastSavedLogCount || 0;
-                return sLogs > sSaved;
-            });
-        }
-        if (hasUnsaved) {
+        if (currentLogs > savedLogs || window._nonGanttDirty) {
             e.preventDefault();
             e.returnValue = '';
             return '';
@@ -9782,11 +8855,6 @@ window.handleAuthClick = function() {
         /* 필터 트리거 버튼(LEVEL/업무상태/개발단계) */
         #gantt-filter-btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
         .gantt-filter-trigger-btn.filter-active { background-color: #2c5f8a !important; color: #fff !important; }
-        /* 💡 [버그 수정] .action-btn:hover가 filter-active와 완전히 같은 색이라, 필터가 걸려있는(기본상태)
-           트리거 버튼은 마우스를 올려도 시각적으로 아무 변화가 없어 "호버가 안 먹는다"고 느껴졌음.
-           (필터 없는 상태의 hover는 .action-btn:hover가 그대로 처리하므로 건드리지 않음)
-           active 상태에서도 hover 시 알아볼 수 있게 더 진한 색으로 구분한다. */
-        .gantt-filter-trigger-btn.filter-active:hover { background-color: #1e4a6e !important; color: #fff !important; }
         .gantt-filter-popup { min-width: 200px; max-width: 380px; }
         .gantt-filter-popup .filter-group { display: flex; align-items: center; flex-wrap: wrap; }
 
@@ -9842,12 +8910,7 @@ window.handleAuthClick = function() {
 
         const triggerGroup = document.getElementById('gantt-filter-btn-group');
         if (triggerGroup) triggerGroup.innerHTML = '';
-        // 💡 [버그 수정] 예전엔 .gantt-filter-popup 전체를 지웠는데, Calendar/Weekly Report의 WBS 필터
-        //    팝업도 같은 클래스를 공유하고 있어서(바깥클릭-닫기 로직 재사용 목적) 이 함수가 실행될 때마다
-        //    (프로젝트 로드/데이터 변경 시마다) 그 팝업들까지 DOM에서 통째로 사라져 버렸음 — 그 뒤로는
-        //    트리거 버튼을 눌러도 팝업을 못 찾아 조용히 아무 반응이 없던 원인. Gantt가 자체적으로
-        //    새로 만드는 팝업(gantt-filter-popup-dynamic)만 지우도록 범위를 좁힘.
-        document.querySelectorAll('.gantt-filter-popup-dynamic').forEach(p => p.remove()); // 이전 렌더링 팝업 정리
+        document.querySelectorAll('.gantt-filter-popup').forEach(p => p.remove()); // 이전 렌더링 팝업 정리
         const legacyContainer = document.getElementById('dynamic-filters');
         if (legacyContainer) legacyContainer.innerHTML = ''; // 레거시 박스는 항상 비워서 자동으로 숨김 처리됨
         currentFilters = {}; 
@@ -9932,10 +8995,7 @@ window.handleAuthClick = function() {
 
             // 팝업 (항상 DOM에 존재, 평소엔 숨김 — 기존 필터 로직/조회 코드와 호환 유지)
             let popup = document.createElement('div');
-            // 💡 [버그 수정] gantt-filter-popup-dynamic 마커를 따로 둬서, 아래 "이전 렌더링 팝업 정리"가
-            //    Gantt가 매번 새로 만드는 이 팝업들만 지우고 Calendar/Weekly Report의 정적 WBS 팝업(같은
-            //    gantt-filter-popup 클래스를 공유해서 바깥클릭-닫기 로직을 재사용함)은 건드리지 않게 한다.
-            popup.className = 'row-action-popup gantt-filter-popup gantt-filter-popup-dynamic';
+            popup.className = 'row-action-popup gantt-filter-popup';
             popup.id = 'gantt-filter-popup-' + col.index;
             popup.dataset.triggerId = 'gantt-filter-trigger-' + col.index;
             popup.appendChild(groupDiv);
@@ -11668,11 +10728,10 @@ window.TaskInbox = {
         const fname = this._fileName(); const token = this._token();
         if (!fname || !token) return; // 비로그인: localStorage 단독 동작
         try {
-            const folderId = await window.getOrCreateTaskInboxFolder(token);
-            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
+            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(fname);
             const boundary = 'inbox_sync_boundary';
             const metadata = { name: fname, mimeType: 'application/json' };
-            if (!this._driveFileId) metadata.parents = [folderId];
+            if (!this._driveFileId) metadata.parents = [SHARED_FOLDER_ID];
             const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ inbox: this.load(), savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
             const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
@@ -11684,8 +10743,7 @@ window.TaskInbox = {
         const fname = this._fileName(); const token = this._token();
         if (!fname || !token) return;
         try {
-            const folderId = await window.getOrCreateTaskInboxFolder(token);
-            this._driveFileId = await window._findOrMigrateFile(token, fname, folderId);
+            this._driveFileId = await window.findSaveFile(fname);
             if (!this._driveFileId) { this.scheduleDriveSync(); return; } // 첫 사용: 로컬 내용을 드라이브로 업로드
             const resp = await fetch('https://www.googleapis.com/drive/v3/files/' + this._driveFileId + '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
             if (!resp.ok) return;
@@ -11749,21 +10807,6 @@ window.getCurrentL0List = function() {
     return window.buildL0SectionInfo(globalData, colIdx);
 };
 
-// 💡 [버그 수정] "▼ 상세 보기"로 펼친 상태는 지금까지 DOM(display:none/block)에만 있었는데,
-//    renderTaskInbox()는 목록 전체를 innerHTML로 통째로 새로 그리기 때문에, 버튼 하나(현재 Proj 전송/
-//    매칭 Proj 전송/🗑 등)를 눌러 목록이 다시 그려지는 순간 펼쳐놨던 상세 내용이 전부 접혀버렸음.
-//    → 어떤 카드를 펼쳤는지 uid 기준으로 별도 기억해뒀다가, 다시 그릴 때 그 상태를 그대로 복원한다.
-window._ibExpandedUids = window._ibExpandedUids || new Set();
-window._ibToggleDetail = function(uid, linkEl) {
-    const d = document.getElementById('inbox-detail-' + uid);
-    if (!d) return;
-    const open = d.style.display === 'none';
-    d.style.display = open ? 'block' : 'none';
-    const _en = window._currentLang === 'en';
-    linkEl.textContent = open ? (_en ? '▲ Collapse' : '▲ 상세 접기') : (_en ? '▼ Details' : '▼ 상세 보기');
-    if (open) window._ibExpandedUids.add(uid); else window._ibExpandedUids.delete(uid);
-};
-
 window.renderTaskInbox = function() {
     const listEl = document.getElementById('inbox-list');
     if (!listEl) return;
@@ -11815,14 +10858,14 @@ window.renderTaskInbox = function() {
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
                     <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</span>
-                    <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibExpandedUids.has(it.uid) ? (_ibEn ? '▲ Collapse' : '▲ 상세 접기') : (_ibEn ? '▼ Details' : '▼ 상세 보기')}</a>
+                    <a href="javascript:void(0)" onclick="var d=document.getElementById('inbox-detail-${it.uid}'); var open=d.style.display==='none'; d.style.display=open?'block':'none'; this.textContent=open?(window._currentLang==='en'?'▲ Collapse':'▲ 상세 접기'):(window._currentLang==='en'?'▼ Details':'▼ 상세 보기');" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${_ibEn ? '▼ Details' : '▼ 상세 보기'}</a>
                 </div>
                 <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
                 ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(it.source || '')} · ${when}
             </div>
-            <div id="inbox-detail-${it.uid}" style="display:${window._ibExpandedUids.has(it.uid) ? 'block' : 'none'}; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
+            <div id="inbox-detail-${it.uid}" style="display:none; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
                 <div><b>${_ibEn ? 'Task' : '업무명'}</b> : ${escapeHtml(t['업무명'] || '')}</div>
                 <div><b>${_ibEn ? 'Detail' : '상세내용'}</b> : <span style="white-space:pre-wrap;">${escapeHtml((t['상세내용'] || '').toString())}</span></div>
                 <div><b>${_ibEn ? 'Period' : '기간'}</b> : ${escapeHtml(t['시작일'] || '?')} ~ ${escapeHtml(t['완료일'] || '?')} · <b>${_ibEn ? 'Status' : '상태'}</b> : ${escapeHtml(t['상태'] || '진행')} · <b>${_ibEn ? 'WBS Level' : 'WBS레벨'}</b> : L${escapeHtml(String(t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4))}</div>
@@ -11837,7 +10880,7 @@ window.renderTaskInbox = function() {
                     ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
                     : ''}
                 <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#e67e22; color:#fff; cursor:pointer;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
-                <button onclick="window._ibExpandedUids.delete('${it.uid}'); window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
+                <button onclick="window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -12119,7 +11162,6 @@ window.inboxOpenDistribute = async function(uid) {
                 && f.name !== HOLIDAY_DRIVE_FILENAME
                 && f.name !== PRIORITY_CONFIG_FILENAME
                 && f.name !== PROJECT_INDEX_FILENAME
-                && f.name !== MS_FILTER_RULES_DRIVE_FILENAME
                 && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
         });
         inlineEl.innerHTML = '';
@@ -12198,20 +11240,8 @@ window.inboxDistPickFile = async function(fileId, fileName) {
     if (!ctx) return;
     document.getElementById('dist-step2').style.display = 'none';
     try {
-        // 💡 [성능] metadata/content 두 호출을 순차 await 하면 alt=media 지연이 그대로 두 번 더해짐 —
-        //    서로 독립적인 호출이므로 병렬로 보내 대기 시간을 절반 가까이 줄임
-        const [metaResp, contentResp] = await Promise.all([
-            gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true }),
-            gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true })
-        ]);
-        // 💡 [버그 수정] alt=media는 수 초~수십 초 걸릴 수 있는데, 그동안 사용자가 패널을 닫거나
-        //    (closeInboxDist → window._distCtx = null) 다른 업무의 "다른 프로젝트 선택"을 열면
-        //    (inboxOpenDistribute → window._distCtx = 새 객체) window._distCtx가 이 요청을 시작할
-        //    때와 달라진다. 그 상태로 그대로 진행하면 inboxDistFillL0Select()가 null이거나
-        //    엉뚱한 업무의 window._distCtx를 읽어 "Cannot read properties of null (reading 'saveData')"
-        //    로 크래시하거나, 최악의 경우 다른 업무의 ctx에 이 파일 데이터를 덮어씀 — 응답이 온 시점에
-        //    여전히 같은 요청인지(참조가 동일한지) 확인해서 아니면 조용히 무시
-        if (window._distCtx !== ctx) return;
+        const metaResp    = await gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true });
+        const contentResp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
         const saveData = contentResp.result;
         if (!saveData || !saveData.globalData || !saveData.colIdx) {
             alert('⚠️ 대상 파일에 간트 데이터가 없거나 구조를 해석할 수 없습니다.');
@@ -12231,10 +11261,7 @@ window.inboxDistPickFile = async function(fileId, fileName) {
         window.inboxDistFillL0Select(undefined);
         document.getElementById('dist-target-name').textContent = fileName;
         document.getElementById('dist-step2').style.display = 'block';
-    } catch (err) {
-        if (window._distCtx !== ctx) return; // 이미 패널을 닫고 나간 뒤라면 에러 알림도 띄우지 않음
-        alert('대상 프로젝트 로드 실패: ' + err.message);
-    }
+    } catch (err) { alert('대상 프로젝트 로드 실패: ' + err.message); }
 };
 
 // 대상 프로젝트의 L0 목록으로 드롭다운 구성 (preferred 값 우선 선택)
@@ -12268,15 +11295,9 @@ window.distRecomputePreview = function() {
 // 충돌 감지 시 최신본 재확보
 window.inboxDistReload = async function(prevL0) {
     const ctx = window._distCtx;
-    if (!ctx) return false;
     try {
-        // 💡 [성능] inboxDistPickFile과 동일하게 병렬 호출
-        const [metaResp, contentResp] = await Promise.all([
-            gapi.client.drive.files.get({ fileId: ctx.fileId, fields: 'modifiedTime', supportsAllDrives: true }),
-            gapi.client.drive.files.get({ fileId: ctx.fileId, alt: 'media', supportsAllDrives: true })
-        ]);
-        // 💡 대기 중 패널이 닫히거나 다른 업무로 전환됐으면 중단 (동일한 크래시 방지 목적)
-        if (window._distCtx !== ctx) return false;
+        const metaResp    = await gapi.client.drive.files.get({ fileId: ctx.fileId, fields: 'modifiedTime', supportsAllDrives: true });
+        const contentResp = await gapi.client.drive.files.get({ fileId: ctx.fileId, alt: 'media', supportsAllDrives: true });
         const saveData = contentResp.result;
         if (!saveData || !saveData.globalData || !saveData.colIdx) { alert('⚠️ 최신본 구조를 해석할 수 없습니다.'); return false; }
         ctx.saveData = saveData;
@@ -12295,10 +11316,7 @@ window.inboxDistReload = async function(prevL0) {
             return false;
         }
         return true;
-    } catch (err) {
-        if (window._distCtx !== ctx) return false;
-        alert('최신본 확보 실패: ' + err.message); return false;
-    }
+    } catch (err) { alert('최신본 확보 실패: ' + err.message); return false; }
 };
 
 // 전송 실행 (attempt: 충돌 자동 재시도 횟수)
@@ -12401,28 +11419,9 @@ window.inboxDistExecute = async function(attempt) {
 // 📥 [Phase 2.5] 저장 시 배분 원장 자동 병합
 //    낡은 사본으로 저장해도 "내가 연 이후 배분된 업무"가 유실되지 않도록 방어
 // =========================================================
-// 💡 [성능 수정] 이 함수가 저장할 때마다 프로젝트 파일 전체를 통째로 다시 다운로드하고 있었다
-//    (실측: 같은 파일을 "프로젝트 열기"로 받을 때 1초 남짓 걸리던 게, 저장 직전엔 이 중복 다운로드
-//    까지 겹쳐서 "프로젝트 열기" 버튼의 "전환 전 저장" 단계가 3~4초, 응답이 느릴 땐 47초까지도
-//    걸렸다). 배분 원장(distributions)에 새 항목이 왔는지 확인하려고 매번 파일 전체를 받을 필요는
-//    없다 — 가벼운 modifiedTime만 먼저 확인해서, 마지막으로 내가 저장(또는 확인)한 이후 파일이 실제로
-//    바뀐 적이 없으면(=다른 사람이 그 사이 배분한 적이 없으면) 무거운 전체 다운로드를 건너뛴다.
-//    (이 코드베이스의 다른 곳 — 업무 보관함 배분 충돌 감지 등 — 에서 이미 쓰던 modifiedTime 선확인
-//    패턴과 동일)
-window._distMergeModifiedTime = window._distMergeModifiedTime || {};
 window.mergeRemoteDistributions = async function(fileId) {
     try {
-        const _tM0 = performance.now();
-        const metaResp = await gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true });
-        const remoteModifiedTime = metaResp.result.modifiedTime;
-        if (window._distMergeModifiedTime[fileId] === remoteModifiedTime) {
-            console.info(`[저장 계측] 배분 병합 확인: ${Math.round(performance.now() - _tM0)}ms (변경 없음 → 전체 다운로드 생략)`);
-            return; // 마지막 확인 이후 파일이 안 바뀜 → 전체 다운로드 생략
-        }
-        window._distMergeModifiedTime[fileId] = remoteModifiedTime;
-
         const resp = await gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true });
-        console.info(`[저장 계측] 배분 병합 확인: ${Math.round(performance.now() - _tM0)}ms (파일이 바뀌어 전체 다운로드 수행)`);
         const remote = resp.result || {};
         const remoteDists = remote.distributions || [];
         if (!remoteDists.length) return;
@@ -12504,7 +11503,6 @@ window.updateInboxBadge();
            max-height는 line-clamp 미지원 브라우저를 위한 폴백으로만 남겨둠. */
         display: -webkit-box;
         -webkit-line-clamp: 1;
-        line-clamp: 1;
         -webkit-box-orient: vertical;
         max-height: 16px;
         overflow: hidden;
@@ -12513,7 +11511,6 @@ window.updateInboxBadge();
     td.detail-td.detail-td-expanded .detail-td-inner {
         display: block;
         -webkit-line-clamp: unset;
-        line-clamp: unset;
         max-height: none;
         overflow: visible;
     }
@@ -12624,10 +11621,10 @@ window.updateInboxBadge();
             background: transparent !important;
         }
         body.printing-tab-summary {
-            page: summaryPortraitPage !important;
+            page: summaryLandscapePage !important;
         }
-        @page summaryPortraitPage {
-            size: A4 portrait !important;
+        @page summaryLandscapePage { 
+            size: A4 landscape !important; 
             margin: 10mm !important;
         }
 
@@ -12638,19 +11635,6 @@ window.updateInboxBadge();
         @page briefspecLandscapePage {
             size: A4 landscape !important;
             margin: 10mm !important;
-        }
-        /* 💡 [버그 수정] "펼치기" 상태는 숨겨져 있던 빈 행까지 전부 나오면서 전체 높이가 커져서,
-           1페이지 축소 배율(printTabSection의 zoom 계산)이 극단적으로 작아지거나 실측 오차로
-           2페이지로 넘어가는 경우가 있었음 — 인쇄 시 행 자체의 여백/줄간격을 줄여서 필요한 축소
-           배율 자체를 덜 극단적으로 만들고, 여유 마진을 넓혀 안정적으로 1페이지에 맞도록 함. */
-        body.printing-tab-briefspec #tab-print-area td,
-        body.printing-tab-briefspec #tab-print-area th {
-            padding: 3px 5px !important;
-        }
-        body.printing-tab-briefspec #tab-print-area td textarea,
-        body.printing-tab-briefspec #tab-print-area td input {
-            padding: 0 !important;
-            line-height: 1.25 !important;
         }
         /* 📌 편집 중 드래그로 선택된 텍스트가 인쇄 시 회색(흑백 인쇄 기준)으로 같이 찍히는 것 방지 */
         body.printing-tab-briefspec ::selection,
@@ -12752,7 +11736,7 @@ window.updateInboxBadge();
             break-after: auto !important;
         }
 
-        /* 🎯 [Weekly Report 탭 전용] A4 세로, 여러 페이지로 자연스럽게 흐르되 "적당한 위치"에서만 나뉨 */
+        /* 🎯 [Weekly Report 탭 전용] A4 세로 + 1페이지 맞춤 */
         body.printing-tab-weekly {
             page: weeklyPortraitPage !important;
         }
@@ -12761,14 +11745,6 @@ window.updateInboxBadge();
             margin: 10mm !important;
         }
         body.printing-tab-weekly #tab-print-area tr {
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
-        }
-        /* 💡 [버그 수정] 더 이상 1페이지로 강제 축소하지 않으므로(위 fitOnePage에서 제외), 개발 진척
-           현황 / 주요 실적·추진 계획 / 문제점 및 Issue — 이 세 큰 블록과 각 실적·계획 항목 카드가
-           중간에서 잘리지 않고, 블록과 블록 사이의 여백에서만 페이지가 넘어가도록 함. */
-        body.printing-tab-weekly #tab-print-area .wr-print-block,
-        body.printing-tab-weekly #tab-print-area .wr-print-item {
             page-break-inside: avoid !important;
             break-inside: avoid !important;
         }
@@ -13175,19 +12151,9 @@ window.updateInboxBadge();
             ※ 위 예시가 아니어도, 이 프로젝트에 맞는 이름을 자유롭게 적으셔도 됩니다.<br>
             ※ 취소하시면 우선 <b>"미지정"</b>으로 저장되고, 나중에 언제든 이름만 바꾸실 수 있습니다.
         </div>
-        <input id="mc-add-unit-input" type="text" placeholder="예: BTN" list="mc-unit-options" autocomplete="off"
+        <input id="mc-add-unit-input" type="text" placeholder="예: BTN"
                onkeydown="if(event.key==='Enter') window.mcAddUnitConfirm()"
                style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; margin-bottom:14px;">
-        <!-- 💡 드롭다운(자동완성)으로 자주 쓰는 제품구분자를 바로 고를 수 있으면서도, datalist라 목록에
-             없는 이름도 그대로 자유롭게 직접 입력 가능 (mcAddUnitConfirm 등 기존 로직은 손댈 필요 없음) -->
-        <datalist id="mc-unit-options">
-            <option value="BTN">BTN (Button Deck)</option>
-            <option value="MVD">MVD</option>
-            <option value="TVD">TVD</option>
-            <option value="TPR">TPR (Topper)</option>
-            <option value="PTD">PTD</option>
-            <option value="SUB">SUB</option>
-        </datalist>
         <div style="display:flex; gap:8px; justify-content:flex-end;">
             <button class="action-btn" onclick="window.mcAddUnitCancel()" style="min-width:auto;">취소</button>
             <button class="action-btn" onclick="window.mcAddUnitConfirm()" style="min-width:auto; background:#2c5f8a; color:#fff;">추가</button>
@@ -15213,7 +14179,6 @@ window._msGetFilterRules = function() {
 };
 window._msSaveFilterRules = function(rules) {
     localStorage.setItem(MS_FILTER_RULES_KEY, JSON.stringify(rules));
-    window._msScheduleFilterRulesDriveSync(rules); // 💡 회사/집 등 다른 PC에서도 같은 규칙이 적용되도록 팀 공용 Drive에도 반영
 };
 // 💡 [자동 등록] 검토 큐(폐기/신규발신자)에서 "이 조건으로 앞으로도 자동 걸러줘" 클릭 시 호출 —
 //    type: 'subjectKeywords'|'noreplyPatterns'|'blockedDomains'
@@ -15226,72 +14191,6 @@ window._msAddFilterRule = function(type, value) {
     rules[type].push(v);
     window._msSaveFilterRules(rules);
     return true;
-};
-
-// ═══════════════════════════════════════════════════════════
-// ☁️ [자동폐기 필터 규칙 — 팀 공용 Drive 동기화]
-//    이전엔 localStorage에만 저장돼 "회사 PC에서 차단 도메인 등록해도 집 PC엔 없음" 문제가 있었음.
-//    AddressBook과 동일한 패턴: localStorage를 빠른 로컬 캐시로 계속 쓰되(동기 호출부 변경 불필요),
-//    저장할 때마다 디바운스로 Drive에도 올리고, Drive 연동 시점에 팀 최신본과 로컬을 합쳐서 복원.
-// ═══════════════════════════════════════════════════════════
-const MS_FILTER_RULES_DRIVE_FILENAME = 'MailFilterRules_Shared.json';
-window._msFilterRulesDriveFileId = null;
-window._msFilterRulesSyncTimer = null;
-
-window._msScheduleFilterRulesDriveSync = function(rules) {
-    if (window._msFilterRulesSyncTimer) clearTimeout(window._msFilterRulesSyncTimer);
-    window._msFilterRulesSyncTimer = setTimeout(function() { window._msSyncFilterRulesToDrive(rules); }, 3000);
-};
-
-window._msSyncFilterRulesToDrive = async function(rules) {
-    try {
-        const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
-        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!token) return; // 비로그인: localStorage 단독 동작 (다음 Drive 연동 시 자동 병합됨)
-        const folderId = await window.getOrCreateConfigFolder(token);
-        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window._findOrMigrateFile(token, MS_FILTER_RULES_DRIVE_FILENAME, folderId);
-        const boundary = 'ms_filter_rules_boundary';
-        const metadata = { name: MS_FILTER_RULES_DRIVE_FILENAME, mimeType: 'application/json' };
-        if (!window._msFilterRulesDriveFileId) metadata.parents = [folderId];
-        const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
-                   + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(rules)
-                   + "\r\n--" + boundary + "--";
-        const url = 'https://www.googleapis.com/upload/drive/v3/files' + (window._msFilterRulesDriveFileId ? '/' + window._msFilterRulesDriveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
-        const resp = await fetch(url, { method: window._msFilterRulesDriveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
-        const file = await resp.json();
-        if (file && file.id) window._msFilterRulesDriveFileId = file.id;
-    } catch(e) { console.warn('자동폐기 필터 규칙 Drive 동기화 실패:', e.message); }
-};
-
-// 💡 Drive 연동 후 호출 — 팀 공용 규칙과 로컬 규칙을 합집합으로 병합해 로컬 캐시 갱신
-//    (다른 PC에서 등록한 규칙도 반영되고, 이 PC에서만 등록했던 규칙도 유실되지 않음)
-window.loadFilterRulesFromDrive = async function() {
-    try {
-        const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
-        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!token) return null;
-        const folderId = await window.getOrCreateConfigFolder(token);
-        if (!window._msFilterRulesDriveFileId) window._msFilterRulesDriveFileId = await window._findOrMigrateFile(token, MS_FILTER_RULES_DRIVE_FILENAME, folderId);
-        if (!window._msFilterRulesDriveFileId) return null;
-        const response = await gapi.client.drive.files.get({ fileId: window._msFilterRulesDriveFileId, alt: 'media', supportsAllDrives: true });
-        const remote = response.result;
-        if (!remote || !Array.isArray(remote.subjectKeywords)) return null;
-
-        const local = window._msGetFilterRules();
-        const mergeUnique = function(a, b) {
-            const seen = new Set(a.map(function(x) { return x.toLowerCase(); }));
-            const out = a.slice();
-            b.forEach(function(x) { if (!seen.has(x.toLowerCase())) { seen.add(x.toLowerCase()); out.push(x); } });
-            return out;
-        };
-        const merged = {
-            subjectKeywords: mergeUnique(remote.subjectKeywords || [], local.subjectKeywords || []),
-            noreplyPatterns: mergeUnique(remote.noreplyPatterns || [], local.noreplyPatterns || []),
-            blockedDomains:  mergeUnique(remote.blockedDomains  || [], local.blockedDomains  || [])
-        };
-        localStorage.setItem(MS_FILTER_RULES_KEY, JSON.stringify(merged)); // 💡 직접 저장 — _msSaveFilterRules를 쓰면 다시 Drive 업로드가 예약되어 불필요한 왕복이 생김
-        return merged;
-    } catch(e) { console.warn('자동폐기 필터 규칙 Drive 조회 실패:', e.message); return null; }
 };
 
 window._msParseSenderEmail = function(senderStr) {
@@ -15414,9 +14313,6 @@ window._msResolveMatchAndContext = async function(mail) {
 // 💡 AI가 반환한 매칭신뢰도/주매칭프로젝트번호로 최종 projectTag를 확정하는 공용 헬퍼.
 //    신뢰도 "상"만 자동배치급 matched로 승격하고, 그 외(중/하)는 사람 확인이 필요한 ambiguous로 남긴다.
 //    (ms/mf/자동틱 3곳의 중복 로직을 여기로 통일 — 한 곳만 고치면 전체에 적용됨)
-// 💡 [복수 프로젝트 매칭] 주매칭이 "상"으로 확정된 경우에만, AI가 별도로 확신한 추가 프로젝트를
-//    extraCandidates로 함께 반환한다. 주매칭 자체가 불확실(중/하)하면 그 위에 추가매칭을 얹지 않고
-//    무시한다(불확실한 기준 위에 더 쌓지 않기 위한 안전장치). 폭주 방지를 위해 최대 2개까지만 허용.
 window._msResolveAiProjectMatch = function(task, candidatesForAI) {
     if (!task || !candidatesForAI || !candidatesForAI.length) return null;
     const conf = task['매칭신뢰도'];
@@ -15424,23 +14320,9 @@ window._msResolveAiProjectMatch = function(task, candidatesForAI) {
     if (!conf || !pickedIdx) return null;
     const picked = (pickedIdx >= 1 && pickedIdx <= candidatesForAI.length) ? candidatesForAI[pickedIdx - 1] : null;
     if (!picked) return null;
-
-    let extraCandidates = [];
-    if (conf === '상' && Array.isArray(task['추가매칭프로젝트번호목록'])) {
-        const seen = new Set([pickedIdx]);
-        task['추가매칭프로젝트번호목록'].forEach(function(n) {
-            if (extraCandidates.length >= 2) return; // 최대 2개(주매칭 포함 총 3개 프로젝트)까지만
-            const idx = parseInt(n, 10);
-            if (idx >= 1 && idx <= candidatesForAI.length && !seen.has(idx)) {
-                seen.add(idx);
-                extraCandidates.push(candidatesForAI[idx - 1]);
-            }
-        });
-    }
-
     return conf === '상'
-        ? { status: 'matched', candidates: [picked], extraCandidates: extraCandidates }
-        : { status: 'ambiguous', candidates: [picked], extraCandidates: [] };
+        ? { status: 'matched', candidates: [picked] }
+        : { status: 'ambiguous', candidates: [picked] };
 };
 
 // 💡 [매칭/점수 통일화] projectTag({status,candidates}) → 리스트 배지에 쓸 표시용 문자열
@@ -15449,9 +14331,7 @@ window._msProjectTagLabel = function(projectTag) {
     if (projectTag.status === 'matched') {
         const c = projectTag.candidates[0];
         const name = c.model || c.customer || '매칭됨';
-        const extra = (projectTag.extraCandidates && projectTag.extraCandidates.length)
-            ? ` (+${projectTag.extraCandidates.length}개 프로젝트 추가매칭)` : '';
-        return name + (c.inch ? ` (${c.inch}인치)` : '') + extra;
+        return name + (c.inch ? ` (${c.inch}인치)` : '');
     }
     return `❓후보 ${projectTag.candidates.length}개`;
 };
@@ -15798,39 +14678,9 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
     } catch (e) { return { ok: false, reason: e.message }; }
 };
 
-// 💡 [복수 프로젝트 매칭] 같은 메일 업무를 여러 프로젝트에 각각 등록할 때 공용으로 쓰는 헬퍼.
-//    "한 uid가 여러 프로젝트를 가리키는" 구조 변경 대신, 프로젝트마다 독립된 TaskInbox 항목(uid)을 만들어
-//    각자 상태/이력을 따로 추적한다(기존 "uid=1건=1프로젝트" 설계를 그대로 유지). targets[0]이 주매칭, 나머지가
-//    AI가 "상" 신뢰도로 확신한 추가매칭(최대 2개, _msResolveAiProjectMatch에서 이미 캡 걸림).
-//    onEachDone(target, result, idx)는 대상 하나가 끝날 때마다(성공/실패 무관) 호출됨.
-window._msRegisterToProjectTargets = function(targets, task, mailRawObj, sourceLabel, alarmWorthy, historyType, onEachDone) {
-    targets.forEach(function(target, idx) {
-        if (!target || !target.drive_file_id) { if (onEachDone) onEachDone(target, { ok: false, reason: 'no_drive_file_id' }, idx); return; }
-        const isExtra = idx > 0;
-        window.TaskInbox.add(task, {
-            source: isExtra ? `${sourceLabel} [추가매칭: ${target.model || target.customer || target.file_name}]` : sourceLabel,
-            mailRaw: mailRawObj,
-            matchedProject: { status: 'matched', candidates: [target] },
-            alarmWorthy: !!alarmWorthy
-        });
-        const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 항상 맨 앞이 방금 추가한 항목
-        window._msAutoRegisterToProject(newUid, task, target.drive_file_id, target.file_name, mailRawObj, 0, !!alarmWorthy)
-            .then(function(result) {
-                if (result.ok) {
-                    window.TaskInbox.setStatus(newUid, '자동배치됨', { type: historyType, target: target.file_name, at: new Date().toISOString() });
-                } else {
-                    console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태로 유지:', result.reason);
-                }
-                if (onEachDone) onEachDone(target, result, idx);
-            });
-    });
-};
-
 // 💡 [완전자동] mail_mode='full'이면 메일서버/파일첨부 탭(수동 분석)도 자동틱과 동일 기준으로
 //    TaskInbox 대기 없이 바로 Gantt에 등록 — 매칭 확정(단일후보) + 내 담당 + 날짜확정일 때만.
 //    (그 외엔 기존처럼 TaskInbox '대기'로 쌓여서, 사람이 [✅매칭전송]/[📤다른 프로젝트]로 직접 처리)
-//    💡 [복수 프로젝트 매칭] AI가 "상" 신뢰도로 확신한 추가 프로젝트가 있으면(item._projectTag.extraCandidates)
-//    같은 업무를 그 프로젝트들에도 각각 독립적으로 등록한다(최대 총 3개 프로젝트).
 //    반환: true면 완전자동 처리를 "시도"함(성공여부는 비동기), false면 조건 미충족으로 건너뜀
 window._msTryFullAutoRegister = function(item, mailRawObj, onDone) {
     const taskName = (item && item.task && item.task['업무명']) || '(제목없음)';
@@ -15839,47 +14689,39 @@ window._msTryFullAutoRegister = function(item, mailRawObj, onDone) {
     if (!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled())) return skip('완전자동 모드 아님');
     if (!item || !item.task) return skip('AI 분석 결과 없음');
     if (!item._projectTag || item._projectTag.status !== 'matched') return skip(`매칭 미확정(status=${item._projectTag ? item._projectTag.status : '없음'})`);
-    const primary = (item._projectTag.candidates || [])[0];
-    if (!primary || !primary.drive_file_id) return skip('매칭 후보에 drive_file_id 없음');
+    const target = (item._projectTag.candidates || [])[0];
+    if (!target || !target.drive_file_id) return skip('매칭 후보에 drive_file_id 없음');
     const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
         && !String(item.task['완료일'] || '').includes('날짜확인필요');
     if (!hasValidDate) return skip('날짜확인필요 상태');
     // 💡 [정책 변경] 완전자동은 "내 담당" 여부와 무관하게, 매칭이 단일 확정되면 그 프로젝트로 바로 배치한다.
     //    TaskInbox(업무 보관함)는 매칭 자체가 안 된(프로젝트 미등록/미분류) 업무만 남기는 용도로 좁힌다.
 
-    const extraTargets = (item._projectTag.extraCandidates || []).filter(function(t) { return t && t.drive_file_id; });
-    const targets = [primary].concat(extraTargets);
-    console.info(`[메일 완전자동] 등록 시도: "${taskName}" → ${targets.map(function(t) { return t.file_name; }).join(', ')}`);
-    const srcLabel = `${item._scoreGrade || ''}${item._score != null ? item._score + '점 ' : ''}메일분석(${item.project || primary.model || ''})`;
-
-    let doneCount = 0;
-    window._msRegisterToProjectTargets(targets, item.task, mailRawObj, srcLabel, item._alarmWorthy, '메일완전자동', function(target, result) {
-        doneCount++;
-        const multiSuffix = targets.length > 1 ? ` (${doneCount}/${targets.length}개 프로젝트)` : '';
-        if (result.ok) {
-            if (window.showToast) window.showToast(`🎯 "${taskName}" 완전자동 배치 완료 → ${target.file_name}${multiSuffix} (${result.label || ''})`, 'info');
-        } else {
-            if (window.showToast) window.showToast(`⚠️ "${taskName}" → ${target ? target.file_name : '?'} 완전자동 등록 실패 (${result.reason || '알 수 없는 오류'}) — 보관함에서 [✅매칭전송]으로 직접 처리해주세요.`, 'error');
-        }
-        if (doneCount === targets.length) {
-            item.registered = true;
-            item.selected = false;
-            if (onDone) onDone();
-        }
+    console.info(`[메일 완전자동] 등록 시도: "${taskName}" → ${target.file_name} (담당: ${target.assignee || '?'})`);
+    const srcLabel = `${item._scoreGrade || ''}${item._score != null ? item._score + '점 ' : ''}메일분석(${item.project || target.model || ''})`;
+    window.TaskInbox.add(item.task, {
+        source: srcLabel, mailRaw: mailRawObj,
+        matchedProject: item._projectTag, alarmWorthy: !!item._alarmWorthy
     });
+    const newUid = window.TaskInbox.load()[0].uid; // add()는 unshift라 항상 맨 앞이 방금 추가한 항목
+    window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj, 0, !!item._alarmWorthy)
+        .then(function(result) {
+            if (result.ok) {
+                window.TaskInbox.setStatus(newUid, '자동배치됨', { type: '메일완전자동', target: target.file_name, at: new Date().toISOString() });
+                item.registered = true;
+                item.selected = false;
+                if (window.showToast) window.showToast(`🎯 "${taskName}" 완전자동 배치 완료 → ${target.file_name} (${result.label || ''})`, 'info');
+            } else {
+                console.warn('[메일 완전자동] 등록 실패, TaskInbox 대기 상태로 유지:', result.reason);
+                if (window.showToast) window.showToast(`⚠️ "${taskName}" 완전자동 등록 실패 (${result.reason || '알 수 없는 오류'}) — 보관함에서 [✅매칭전송]으로 직접 처리해주세요.`, 'error');
+            }
+            if (onDone) onDone();
+        });
     return true;
 };
 
 // ─── [메일 자동처리 ①] 자동 수집 틱 — 저장된 계정으로 백그라운드 수집, 기존 큐에 append만 ──
 window._autoMailFetchTick = async function() {
-    // 💡 [중복 메일 버그 수정] 메일 1건당 AI 분석에 4초+ 걸려 신규 메일이 많으면 한 틱 실행 시간이
-    //    스케줄러 점검 주기(60초, _startMailAutoScheduler)보다 길어질 수 있음. 마지막 수집시각(MS_LAST_AUTO_FETCH_KEY)은
-    //    틱이 "끝날 때"만 갱신되므로, 이전 틱이 아직 안 끝난 상태에서 스케줄러가 또 틱을 실행시키면
-    //    두 틱이 같은 신규 메일을 각자 중복 없다고 판단해 미분류 큐(_msResults)에 동시에 쌓는다.
-    //    → 재진입 가드로 이전 틱이 실행 중이면 새 틱을 건너뛴다.
-    if (window._msAutoTickRunning) return;
-    window._msAutoTickRunning = true;
-    try {
     const savedUser = localStorage.getItem('ms_saved_userid');
     const savedPwB64 = localStorage.getItem('ms_saved_pw');
     if (!savedUser || !savedPwB64) return; // 저장된 로그인 정보 없으면 자동수집 불가 → 조용히 스킵
@@ -16022,12 +14864,12 @@ window._autoMailFetchTick = async function() {
                     // 💡 [완전자동] 매칭 확정(단일 후보) + 날짜 확정 → 무조건 배치. 커트라인 이상이면 추가로 알림도 켬
                     const hasValidDate = !String(item.task['시작일'] || '').includes('날짜확인필요')
                         && !String(item.task['완료일'] || '').includes('날짜확인필요');
-                    const setAlarm = scoreResult.total >= priorityConfig.cutline; // 💡 배치는 무조건, 알림만 커트라인으로 결정
                     // 💡 [정책 변경] "내 담당" 여부와 무관하게, 매칭이 단일 확정되면 완전자동으로 그 프로젝트에 바로 배치한다.
                     //    TaskInbox(업무 보관함)는 매칭 자체가 안 된(프로젝트 미등록/미분류) 업무만 남기는 용도로 좁힌다.
                     if (window.isAutoRegisterEnabled && window.isAutoRegisterEnabled()
                         && finalProjectTag.status === 'matched' && hasValidDate) {
                         const target = finalProjectTag.candidates[0];
+                        const setAlarm = scoreResult.total >= priorityConfig.cutline; // 💡 배치는 무조건, 알림만 커트라인으로 결정
                         window._msAutoRegisterToProject(newUid, item.task, target.drive_file_id, target.file_name, mailRawObj, 0, setAlarm)
                             .then(function(result) {
                                 if (result.ok) {
@@ -16041,38 +14883,6 @@ window._autoMailFetchTick = async function() {
                                     console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태 유지:', result.reason);
                                 }
                             });
-                    }
-
-                    // 💡 [복수 프로젝트 매칭] AI가 "상" 신뢰도로 추가 확신한 프로젝트가 있으면(최대 2개, 캡은
-                    //    _msResolveAiProjectMatch에서 이미 걸림) 그 프로젝트들에도 같은 업무를 독립된 TaskInbox
-                    //    항목으로 추가한다 — 항상 "대기"로는 추가해서 사람이 확인할 수 있게 하고, 완전자동
-                    //    조건까지 충족하면 주매칭과 동일하게 바로 그 프로젝트 파일에도 등록까지 진행한다.
-                    const extraTargets = (finalProjectTag.status === 'matched' ? (finalProjectTag.extraCandidates || []) : [])
-                        .filter(function(t) { return t && t.drive_file_id; });
-                    if (extraTargets.length) {
-                        const fullAuto = !!(window.isAutoRegisterEnabled && window.isAutoRegisterEnabled() && hasValidDate);
-                        window._msRegisterToProjectTargets(
-                            fullAuto ? extraTargets : [], // 💡 완전자동이 아니면 자동등록은 안 하고, 아래에서 대기 항목만 추가
-                            item.task, mailRawObj, sourceLabel, setAlarm, '메일자동처리(커트라인,추가매칭)',
-                            function(target, result) {
-                                if (window.showToast) {
-                                    window.showToast(result.ok
-                                        ? `🎯 "${item.task['업무명']}" 추가매칭 자동배치 완료 → ${target.file_name} (${result.label || ''})`
-                                        : `⚠️ "${item.task['업무명']}" 추가매칭 등록 실패 → ${target ? target.file_name : '?'} (${result.reason || ''})`, result.ok ? 'info' : 'error');
-                                }
-                            }
-                        );
-                        if (!fullAuto) {
-                            // 반자동: 자동등록 없이 "대기" 상태로만 추가 — 사람이 보관함에서 [✅매칭전송]으로 직접 처리
-                            extraTargets.forEach(function(target) {
-                                window.TaskInbox.add(item.task, {
-                                    source: `${sourceLabel} [추가매칭: ${target.model || target.customer || target.file_name}]`,
-                                    mailRaw: mailRawObj,
-                                    matchedProject: { status: 'matched', candidates: [target] },
-                                    alarmWorthy: setAlarm
-                                });
-                            });
-                        }
                     }
                 }
             }
@@ -16099,9 +14909,6 @@ window._autoMailFetchTick = async function() {
     } catch(e) {
         console.warn('[메일 자동처리] 자동 수집 실패:', e.message);
         // 실패해도 last_fetch_at은 갱신하지 않음 → 다음 틱에서 같은 구간 재시도
-    }
-    } finally {
-        window._msAutoTickRunning = false; // 다음 스케줄러 틱이 다시 실행될 수 있도록 항상 해제
     }
 };
 
@@ -17669,15 +16476,9 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
             `※ 후보 중 이름이 같은 것들은 인치(크기)로 구별하세요.\n` +
             `- 핵심 주제가 명확하면: 해당 후보의 번호를 아래 필드에 적으세요.\n` +
             `- 목록 어디에도 해당 안 되거나(신규/미등록 프로젝트), 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: 0으로 적으세요.\n` +
-            `- ⚠️ [복수 프로젝트] 이 메일이 서로 다른 프로젝트 여러 개에 대해 "각각 명확하고 독립적인" 실행 항목(To do)을 담고 있을 때만` +
-            `(예: 한 메일 안에 프로젝트 A 용건과 프로젝트 B 용건이 완전히 별개의 문단으로 따로 존재) — 위 "주매칭프로젝트번호"로 답한 것 외에` +
-            ` 그만큼 확실한 프로젝트가 더 있다면 그 번호(들)를 "추가매칭프로젝트번호목록" 배열에 적으세요. 각 번호는 반드시 "상" 신뢰도에 준하는` +
-            ` 확신이 있을 때만 넣고, 조금이라도 애매하면 절대 넣지 마세요. 단순히 다른 프로젝트가 언급되거나(참고·비교 목적), 회의록처럼 여러` +
-            ` 프로젝트가 대등하게 나열만 된 경우는 포함하지 마세요 — 그럴 땐 이 배열을 반드시 빈 배열 []로 두세요.\n` +
-            `위 JSON에 아래 세 필드를 추가로 포함해서 응답하세요:\n` +
+            `위 JSON에 아래 두 필드를 추가로 포함해서 응답하세요:\n` +
             `"주매칭프로젝트번호": 1 (해당 번호, 애매하거나 목록에 없으면 0),\n` +
-            `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)",\n` +
-            `"추가매칭프로젝트번호목록": [] (독립적인 실행 항목이 있는 추가 프로젝트 번호만, 없으면 반드시 빈 배열 [])`;
+            `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)"`;
     }
 
     const callResult = await window.callAiBackend(apiKey, prompt);
@@ -18154,10 +16955,6 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         });
         const label = document.getElementById('wr-level-all-label');
         if (label) label.classList.toggle('active', arr.length === 5);
-        // 💡 [수정] Weekly Report는 기본값 자체가 "전체(All)"가 아니라 L3/L4라서, Gantt와 같은 기준으로
-        //    "전체가 아니면 강조"를 적용하면 평소에도 계속 파란 배경으로 보여 Gantt WBS 버튼(평소엔
-        //    흰 바탕, 마우스 올릴 때만 파란 바탕)과 다르게 보였음 — 강조 없이 항상 기본 action-btn
-        //    모양(흰 바탕/파란 글씨 → 호버 시 파란 바탕/흰 글씨)만 쓰도록 되돌림.
     };
     window.wrToggleLevel = function(level) {
         const arr = window.wrState.levelFilter;
@@ -18307,7 +17104,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
             const contentStr = wrStripIssueLines(rawContent);
             const _wrMailBtn = t.row._mailRaw ? `<button onclick="window.showGanttMailRaw(${t.idx}); event.stopPropagation();" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; margin-top:6px;">📧 ${window._currentLang === 'en' ? 'View Mail Source' : '원문 보기'}</button>` : '';
             return `
-                <div class="wr-print-item" style="border:1px solid #eee; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
+                <div style="border:1px solid #eee; border-radius:6px; padding:10px 12px; margin-bottom:8px;">
                     <div style="font-weight:bold; font-size:16px; margin-bottom:4px;">${escapeHtml(t.text)}${assignee ? ` <span style="color:#6f42c1; font-weight:normal; font-size:11px;">[${escapeHtml(assignee)}]</span>` : ''}</div>
                     <div style="font-size:12px; color:#444; white-space:pre-line; line-height:1.3;">${escapeHtml(contentStr).replace(/\r/g, '').replace(/(\n[ \t]*){2,}/g, '\n')}</div>
                     ${_wrMailBtn}
@@ -18375,7 +17172,6 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
 
 // ── 팝업 표시 ─────────────────────────────────────────
     window.showWeeklyReport = function() {
-        window.wrSyncLevelFilterUI(); // 💡 [드롭다운화] 탭을 열 때마다 트리거 버튼 강조 상태를 현재 필터와 맞춤
         const data = window.wrClassifyTasks();
         const _wrEn = window._currentLang === 'en';
 
@@ -18388,27 +17184,25 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         const wrWeekLabel = document.getElementById('wr-week-label');
         if (wrWeekLabel) wrWeekLabel.textContent = `${wrFormatMD(data.thisWeek.start)} ~ ${wrFormatMD(data.thisWeek.end)} (${data.thisWeekNo}W)`;
 
-        // 💡 [인쇄 페이지 나눔] 각 섹션에 wr-print-block 클래스를 붙여서, 인쇄 시 이 블록 중간이 아니라
-        //    블록과 블록 사이의 "적당한 위치"에서만 페이지가 나뉘도록 함 (아래 print CSS와 짝)
         container.innerHTML = `
             <div>
-                <div class="wr-print-block" style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                <div style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Development Progress' : '개발 진척 현황'}</div>
                     <div style="padding:12px;">${wrRenderTimeline()}</div>
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:14px;">
-                    <div class="wr-print-block" style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                    <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Key Achievements (${data.thisWeekNo}W)` : `주요 실적 (${data.thisWeekNo}W)`}</div>
                         <div style="padding:12px;">${wrRenderEditableList(data.thisList)}</div>
                     </div>
-                    <div class="wr-print-block" style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                    <div style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Upcoming Plans (${data.nextWeekNo}W)` : `추진 계획 (${data.nextWeekNo}W)`}</div>
                         <div style="padding:12px;">${wrRenderEditableList(data.nextList)}</div>
                     </div>
                 </div>
 
-                <div class="wr-print-block" style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                <div style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Issues & Actions' : '문제점 및 Issue'}</div>
                     <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                 </div>
@@ -20791,69 +19585,12 @@ window._ccBulkRemoveAll = function() {
     if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
 };
 
-// 💡 [버그 수정] 메일 본문에서 AI가 이름을 "있는 그대로" 추출하다 보니 "윤재권 팀장님"처럼
-//    직함/존칭이 붙어 나오는 경우가 매우 흔한데, 주소록엔 "윤재권"처럼 직함 없이 등록돼 있어
-//    문자열이 정확히 일치하지 않으면 이메일을 아예 못 찾던 문제 — 흔한 직함/존칭 접미사를
-//    떼어내고 재시도하는 폴백을 추가한다. (앞에 붙는 "팀장 윤재권" 형태나, 영문 Mr./Manager 등도 함께 처리)
-const ADDR_KO_TITLE_WORDS = [
-    '회장','부회장','사장','부사장','대표','전무','상무','이사','감사',
-    '본부장','소장','센터장','실장','팀장','파트장','그룹장','랩장',
-    '수석','책임','선임','주임','매니저','대리','과장','차장','부장','사원','연구원'
-];
-const ADDR_EN_TITLE_WORDS = ['mr','mrs','ms','miss','dr','prof','manager','director','leader','president','vp','ceo','cto','coo'];
-
-// 이름 뒤(또는 앞)에 붙은 흔한 직함/존칭을 반복적으로 떼어낸 결과를 돌려줌 (원본과 다를 때만 폴백 매칭에 사용)
-window._addrStripTitleSuffix = function(name) {
-    let n = String(name || '').trim();
-    let changed = true;
-    while (changed) {
-        changed = false;
-        const before = n;
-        n = n.replace(/\s*(님|씨)\s*$/u, '').trim(); // 끝의 "님"/"씨" 제거
-        for (const t of ADDR_KO_TITLE_WORDS) {
-            if (n.endsWith(t) && n.length > t.length) { n = n.slice(0, -t.length).trim(); break; }
-            if (n.startsWith(t) && n.length > t.length) { n = n.slice(t.length).trim(); break; } // "팀장 윤재권" 형태
-        }
-        for (const t of ADDR_EN_TITLE_WORDS) {
-            const reSuf = new RegExp('[.,]?\\s*' + t + '\\.?$', 'i');
-            const rePre = new RegExp('^' + t + '\\.?\\s*', 'i');
-            if (reSuf.test(n)) { n = n.replace(reSuf, '').trim(); break; }
-            if (rePre.test(n)) { n = n.replace(rePre, '').trim(); break; }
-        }
-        if (n !== before) changed = true;
-    }
-    return n;
-};
-
-// 💡 [버그 수정] 알람 발신/수신인 원문에는 "정민희/임희철"("/" 구분 공동 발신) 또는
-//    "박용훈 외 다수"/"홍길동 외 3명"(수신인이 너무 많아 요약된 형태)처럼 쉼표 하나로는 못 쪼개는
-//    패턴이 메일 파싱 결과에 섞여 들어올 때가 있다 — 이걸 안 쪼개면 통째로 주소록에 없는 문자열이
-//    되어 이메일을 못 찾고 "미등록 ⚠"으로만 표시된다. 쉼표뿐 아니라 "/"로도 나누고, 각 조각 끝의
-//    "외 N명"/"외 다수" 꼬리표를 떼어 실제 이름만 남긴다.
-window._addrSplitNames = function(str) {
-    if (!str) return [];
-    return String(str).split(/[,，\/]/)
-        .map(n => n.trim())
-        .map(n => n.replace(/\s*외\s*(\d+\s*(명|인)?|다수)?\s*$/u, '').trim()) // "박용훈 외 다수"→"박용훈", "홍길동 외 3명"→"홍길동"
-        .filter(Boolean);
-};
-
-// 💡 이름으로 주소록에서 사람 찾기 — 한글 이름으로 먼저 찾고, 없으면 영문 이름으로 폴백.
-//    정확히 일치하는 게 없으면 직함/존칭을 뗀 이름으로 한 번 더 시도.
+// 💡 이름으로 주소록에서 사람 찾기 — 한글 이름으로 먼저 찾고, 없으면 영문 이름으로 폴백
 window._addrFindByName = function(name) {
     if (!name) return null;
     const addressBook = (window.tabData || {}).addressBook || [];
-    const tryExact = function(n) {
-        if (!n) return null;
-        let found = addressBook.find(p => p.name && p.name.trim() === n);
-        if (!found) found = addressBook.find(p => p.nameEn && p.nameEn.trim().toLowerCase() === n.toLowerCase());
-        return found || null;
-    };
-    const trimmed = String(name).trim();
-    let found = tryExact(trimmed);
-    if (found) return found;
-    const stripped = window._addrStripTitleSuffix(trimmed);
-    if (stripped && stripped !== trimmed) found = tryExact(stripped);
+    let found = addressBook.find(p => p.name && p.name.trim() === name);
+    if (!found) found = addressBook.find(p => p.nameEn && p.nameEn.trim().toLowerCase() === name.toLowerCase());
     return found || null;
 };
 
@@ -21108,18 +19845,19 @@ window.collectAlarmItems = function() {
 
         // [발신인→수신인] 패턴 추출
         const arrowMatch  = contentRaw.match(/\[([^\]→]+)→([^\]]+)\]/);
-        const senderRaw   = arrowMatch ? arrowMatch[1].trim() : String(row[ci.assignee] || '-').trim();
+        const senderName  = arrowMatch ? arrowMatch[1].trim() : String(row[ci.assignee] || '-').trim();
         const receiverRaw = arrowMatch ? arrowMatch[2].trim() : '';
-        // 발신인/수신인 다중 지원 — "정민희/임희철", "박용훈 외 다수" 같은 패턴도 개별 이름으로 분리(위 _addrSplitNames 참고)
-        const senderNames   = window._addrSplitNames(senderRaw);
-        const receiverNames = window._addrSplitNames(receiverRaw);
+        // 수신인 다중 지원 (콤마 구분)
+        const receiverNames = receiverRaw
+            ? receiverRaw.split(/[,，]/).map(n => n.trim()).filter(Boolean)
+            : [];
         // 발신인 + 수신인 전원
-        const allPeople  = [...new Set([...senderNames, ...receiverNames].filter(Boolean))];
+        const allPeople  = [...new Set([senderName, ...receiverNames].filter(Boolean))];
         const toEmails   = [...new Set(allPeople.map(n => lookupEmail(n)).filter(Boolean))];
         const missingPeople = allPeople.filter(n => !lookupEmail(n));
 
-        const assignee       = senderNames.join(', ') || '-';
-        const assigneeEmail  = [...new Set(senderNames.map(n => lookupEmail(n)).filter(Boolean))].join(',');
+        const assignee       = senderName;
+        const assigneeEmail  = lookupEmail(senderName);
         const receiverStr    = receiverNames.join(', ') || '-';
         // 수신인 이메일만 (표시용) — 화면 표시는 도메인 차단과 무관하게 실제 등록된 이메일을 그대로 보여줌
         const receiverEmails = [...new Set(receiverNames.map(n => lookupEmail(n)).filter(Boolean))];
@@ -21949,11 +20687,10 @@ window.AddressBook = {
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return; // 비로그인: localStorage 단독 동작
         try {
-            const folderId = await window.getOrCreateConfigFolder(token);
-            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
+            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(this.FILE_NAME);
             const boundary = 'addr_sync_boundary';
             const metadata = { name: this.FILE_NAME, mimeType: 'application/json' };
-            if (!this._driveFileId) metadata.parents = [folderId];
+            if (!this._driveFileId) metadata.parents = [SHARED_FOLDER_ID];
             const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ addressBook: list, savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
             const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
@@ -21966,8 +20703,7 @@ window.AddressBook = {
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) return null; // 비로그인: 로컬 캐시만 사용
         try {
-            const folderId = await window.getOrCreateConfigFolder(token);
-            if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
+            if (!this._driveFileId) this._driveFileId = await window.findSaveFile(this.FILE_NAME);
             if (!this._driveFileId) return null;
             const response = await gapi.client.drive.files.get({ fileId: this._driveFileId, alt: 'media', supportsAllDrives: true });
             const data = response.result;
@@ -22332,8 +21068,6 @@ window.populateTabData = function() {
             if (window.renderAddressTable) window.renderAddressTable();
         }
     });
-    // 💡 자동폐기 필터 규칙(제목 키워드/노리플라이 패턴/차단 도메인)도 팀 공용 Drive 최신본으로 병합 복원
-    if (window.loadFilterRulesFromDrive) window.loadFilterRulesFromDrive();
 
     setVal('sum-purpose', sd.purpose);
     setVal('sum-volume', sd.volume);
@@ -24624,10 +23358,6 @@ window.calSyncLevelFilterUI = function() {
     });
     const label = document.getElementById('cal-level-all-label');
     if (label) label.classList.toggle('active', arr.length === 5);
-    // 💡 [수정] Calendar는 기본값 자체가 "전체(All)"가 아니라 L3/L4라서, Gantt와 같은 기준으로
-    //    "전체가 아니면 강조"를 적용하면 평소에도 계속 파란 배경으로 보여 Gantt WBS 버튼(평소엔
-    //    흰 바탕, 마우스 올릴 때만 파란 바탕)과 다르게 보였음 — 강조 없이 항상 기본 action-btn
-    //    모양(흰 바탕/파란 글씨 → 호버 시 파란 바탕/흰 글씨)만 쓰도록 되돌림.
 };
 window.calToggleLevel = function(level) {
     const arr = window.calState.levelFilter;
@@ -25065,7 +23795,6 @@ function calBuildDayCell(cellDate, eventsByDay, todayKey, selectedEvent, opts) {
 }
 
 window.calRender = function() {
-    window.calSyncLevelFilterUI(); // 💡 [드롭다운화] 탭을 열 때마다 트리거 버튼 강조 상태를 현재 필터와 맞춤
     const container = document.getElementById('cal-page');
     if (!container) return;
     const baseY = window.calState.year, baseM = window.calState.month;
