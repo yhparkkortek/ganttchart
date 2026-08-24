@@ -17196,9 +17196,14 @@ window._msRenderQueueModal = function(type, title) {
             // 💡 [자동 등록] 신규발신자 큐에서만 "이 도메인 영구차단" 버튼 제공 — 검토 후 확정된 스팸이면
             //    한 번의 클릭으로 자동폐기 필터 규칙에 등록(다음부터는 조용히 걸러짐, AI 호출도 안 됨)
             const domain = (window._msParseSenderEmail(r.sender) || '').split('@')[1] || '';
+            // 💡 [2026-08-24 버그 수정] 이 사각 아이콘 버튼들이 flex-centering 없이 UA 기본 정렬에만
+            //    의존하고 있어서(width/height만 지정) 📧/🚫 아이콘이 중앙이 아니라 오른쪽으로 치우쳐
+            //    보였음(🗑는 우연히 괜찮아 보였을 뿐). display:inline-flex + align/justify-content:center로
+            //    명시 중앙정렬하면 셋 다 동일하게 정중앙에 옴 — 실측(getBoundingClientRect)으로 좌우
+            //    여백이 거의 동일해지는 것까지 확인함.
             const ruleBtn = (type === 'newsender' && domain)
                 ? `<button class="ms-queue-rule-btn" data-idx="${i}" data-domain="${_msQEsc(domain)}"
-                        title="이 발신자 도메인을 자동폐기 규칙에 영구 등록" style="background:#fff; border:1px solid #7a5210; color:#7a5210; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;">🚫</button>`
+                        title="이 발신자 도메인을 자동폐기 규칙에 영구 등록" style="display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #7a5210; color:#7a5210; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px;">🚫</button>`
                 : '';
             return `
             <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
@@ -17209,10 +17214,10 @@ window._msRenderQueueModal = function(type, title) {
                 </div>
                 <div style="flex-shrink:0; display:flex; gap:4px;">
                     <button class="ms-queue-view-btn" data-idx="${i}"
-                        title="원문 보기" style="background:#fff; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;">📧</button>
+                        title="원문 보기" style="display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px;">📧</button>
                     ${ruleBtn}
                     <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
-                        title="삭제" style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:26px; height:26px; cursor:pointer; font-size:12px;">🗑</button>
+                        title="삭제" style="display:inline-flex; align-items:center; justify-content:center; background:#fff; border:1px solid #e03131; color:#e03131; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px;">🗑</button>
                 </div>
             </div>`;
         }).join('')
