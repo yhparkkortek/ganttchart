@@ -7046,7 +7046,12 @@ window.deleteHistoryByDateRange = function() {
     function injectMailRawBtn(html, row, rowIndex) {
         if (!row._mailRaw) return html;
         const _en = window._currentLang === 'en';
-        const btn = `<button onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
+        let btn = `<button onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
+        // 💡 [2026-08-24 신규] AI가 원래 뽑았던 시작일/완료일 백업이 있는 업무만 복원 버튼 노출
+        //    (Ctrl/Shift+클릭 시 다중 선택된 행 전부 일괄 복원 — window.restoreAiTaskDate 참고)
+        if (row._aiOrigStart || row._aiOrigPlan) {
+            btn += `<button onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail. Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다. Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:4px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
+        }
         return html.replace(/(<b>\[출처\]<\/b>[\s\S]*?)(<br>|$)/, function(m, p1, p2) { return p1 + btn + p2; });
     }
 
@@ -11433,6 +11438,12 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     else if (ci.period !== -1) newRow[ci.period] = "1";
 
     newRow._mailRaw = mailRaw || null;
+    // 💡 [2026-08-24 신규] AI가 처음 뽑아낸 시작일/완료일 원본을 별도 백업 — 이후 자동 일정계산(특히
+    //    ＊AI마커로 인한 _isParallel 처리, 아래 taskName 참고)으로 화면상 날짜가 틀어져도, "📅 AI 분석
+    //    날짜로 복원" 버튼(window.restoreAiTaskDate)으로 이 원본값에 언제든 다시 맞출 수 있게 한다.
+    //    완료일을 AI가 못 뽑은 경우(_aiOrigPlan이 없음)는 원래도 자동계산에 맡겨진 상태이므로 정상이다.
+    newRow._aiOrigStart = r['시작일'] ? _fixYear(r['시작일']) : null;
+    newRow._aiOrigPlan  = r['완료일'] ? _fixYear(r['완료일']) : null;
     return { row: newRow, taskName: taskName };
 };
 
@@ -12058,6 +12069,57 @@ window.showGanttMailRaw = function(rowIndex) {
     const row = globalData[rowIndex];
     if (!row || !row._mailRaw) return;
     window.showMailRawModal(row._mailRaw);
+};
+
+// 💡 [2026-08-24 신규] "📅 AI 분석 날짜로 복원" — 메일 자동등록 시 buildMailTaskRow/mfDirectInsert가
+//    같이 남겨둔 _aiOrigStart/_aiOrigPlan(AI가 원래 뽑았던 값)으로 시작일/완료일을 되돌린다.
+//    단순히 셀 값만 바꾸면 다음 자동 일정계산 때 다시 틀어질 수 있어(특히 ＊AI마커로 _isParallel이
+//    켜진 업무는, 시작일이 강제(forced)되어 있지 않으면 "이전 형제 업무와 같은 시작일"로 다시 흡수됨),
+//    값과 함께 _startForced/_planForced도 같이 다시 켜서 재계산에도 안 풀리게 고정한다.
+//    Ctrl(⌘) 또는 Shift를 누른 채 클릭하면, 지금 다중 선택(window._selectedRows)돼 있는 행 전부에
+//    한 번에 적용한다 — No. 칸 Ctrl/Shift 클릭으로 여러 행을 먼저 선택해두고 이 버튼을 누르면 됨.
+window.restoreAiTaskDate = function(rowIndex, event) {
+    if (event) event.stopPropagation();
+    const bulk = !!(event && (event.ctrlKey || event.metaKey || event.shiftKey));
+    const targets = (bulk && window._selectedRows && window._selectedRows.size)
+        ? Array.from(window._selectedRows)
+        : [rowIndex];
+
+    let restoredCount = 0, skippedCount = 0;
+    targets.forEach(function(idx) {
+        const row = globalData[idx];
+        if (!row || (!row._aiOrigStart && !row._aiOrigPlan)) { skippedCount++; return; }
+        const oldStart = colIdx.start !== -1 ? row[colIdx.start] : '';
+        const oldPlan  = colIdx.plan  !== -1 ? row[colIdx.plan]  : '';
+        let changed = false;
+        if (row._aiOrigStart && colIdx.start !== -1 && row[colIdx.start] !== row._aiOrigStart) {
+            row[colIdx.start] = row._aiOrigStart;
+            row._startForced = true;
+            changed = true;
+        }
+        if (row._aiOrigPlan && colIdx.plan !== -1 && row[colIdx.plan] !== row._aiOrigPlan) {
+            row[colIdx.plan] = row._aiOrigPlan;
+            row._planForced = true;
+            changed = true;
+        }
+        if (changed) {
+            logChange(idx, colIdx.start, `${oldStart || '-'} ~ ${oldPlan || '-'}`, `${row[colIdx.start] || '-'} ~ ${row[colIdx.plan] || '-'}`, 'AI 분석 날짜로 복원');
+        }
+        restoredCount++;
+    });
+
+    if (!restoredCount) {
+        alert('⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(메일 자동등록 이후 이 기능이 추가되기 전에 들어온 업무는 백업이 없어 복원할 수 없습니다.)');
+        return;
+    }
+
+    window.recalculateSchedules();
+    if (window.showToast) {
+        const msg = (targets.length > 1)
+            ? `📅 선택된 ${restoredCount}건의 날짜를 AI 분석 원본으로 복원했습니다.${skippedCount ? ` (백업 없는 ${skippedCount}건 제외)` : ''}`
+            : '📅 AI 분석 원본 날짜로 복원했습니다.';
+        window.showToast(msg, 'info');
+    }
 };
 
 window.inboxRecomputePreview = function(uid) {
@@ -15053,13 +15115,16 @@ function mfDirectInsert(task, mailRaw, setAlarm) {
     // 💡 날짜 데이터 강제 삽입 (검토한 데이터를 확실하게 반영)
     // colIdx가 -1(열 없음)이면 무시하고 진행하도록 안전 조건 추가
     if (colIdx.start >= 0 && colIdx.start < newRow.length) {
-        newRow[colIdx.start] = task['시작일'] || ""; 
+        newRow[colIdx.start] = task['시작일'] || "";
         newRow._startForced = true;
     }
     if (colIdx.plan >= 0 && colIdx.plan < newRow.length) {
-        newRow[colIdx.plan] = task['완료일'] || ""; 
+        newRow[colIdx.plan] = task['완료일'] || "";
         newRow._planForced = true;
     }
+    // 💡 [2026-08-24 신규] buildMailTaskRow와 동일한 AI 원본 날짜 백업 — "📅 AI 분석 날짜로 복원"용
+    newRow._aiOrigStart = task['시작일'] || null;
+    newRow._aiOrigPlan  = task['완료일'] || null;
     if (colIdx.status >= 0 && colIdx.status < newRow.length) 
         newRow[colIdx.status] = (task['상태'] || "진행");
     if (colIdx.devStage >= 0 && colIdx.devStage < newRow.length) 
