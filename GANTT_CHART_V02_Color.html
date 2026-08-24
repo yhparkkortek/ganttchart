@@ -12307,7 +12307,12 @@ window.inboxOpenDistribute = async function(uid) {
                     });
                     div.classList.add('dist-file-selected');
                     applyStyle();
-                    document.getElementById('dist-step2').style.display = 'none';
+                    // 💡 [2026-08-24 UX 개선] "대상 선택 + 전송 실행" 패널(dist-step2)이 항상 목록 맨 끝에
+                    //    붙어 있어서, 그룹이 여러 개거나 목록이 길면 방금 고른 항목과 실제 조작할 패널이
+                    //    화면상 멀리 떨어져 "선택은 됐는데 뭘 눌러야 하는지" 헷갈렸다. 클릭한 항목 바로
+                    //    아래로 옮겨서, 선택 즉시 그 자리에서 이어서 조작할 수 있게 한다.
+                    const step2El = document.getElementById('dist-step2');
+                    if (step2El) { div.insertAdjacentElement('afterend', step2El); step2El.style.display = 'none'; }
                     window.inboxDistPickFile(f.id, f.name);
                 });
                 body.appendChild(div);
