@@ -6873,23 +6873,33 @@ ${recentLogs}
     };
 
     // ── 💡 개선 요청 코멘트 입력 모달 (메일분석의 improve-comment-modal과 별도 — id 충돌 방지) ──
+    // 💡 [2026-08-24 UX 개선] 다른 팝업들처럼 표준 모달 기능(드래그 이동, 배경 흐림/딤 처리로 뒤 화면
+    //    조작 차단, 배경 클릭 시 닫기, 우상단 ✕ 버튼)을 적용 — 메일분석의 improve-comment-modal과
+    //    동일한 처리를 적용함(디자인 일관성).
     window.openPsImproveCommentModal = function() {
         let modal = document.getElementById('ps-improve-comment-modal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'ps-improve-comment-modal';
-            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; pointer-events:none; background:none;';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.35); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);';
+            modal.onclick = function() { modal.style.display = 'none'; }; // 배경 클릭 시 닫기
             modal.innerHTML = `
-            <div onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); padding:18px;">
-                <div style="font-weight:bold; font-size:14px; margin-bottom:10px; color:#333;">✏️ 어떤 부분이 문제였나요?</div>
-                <textarea id="ps-improve-comment-input" placeholder="예: 완료율이 높은데도 신호등을 🔴로 판단함 (선택 입력)"
-                    style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
-                <div style="display:flex; gap:8px; margin-top:12px;">
-                    <button onclick="window.submitPsImproveComment()" style="flex:1; padding:9px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🤖 요청</button>
-                    <button onclick="document.getElementById('ps-improve-comment-modal').style.display='none'" style="flex:1; padding:9px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">✖ 취소</button>
+            <div id="ps-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); overflow:hidden;">
+                <div id="ps-improve-comment-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                    <span>✏️ 어떤 부분이 문제였나요?</span>
+                    <button onclick="event.stopPropagation(); document.getElementById('ps-improve-comment-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                </div>
+                <div style="padding:18px;">
+                    <textarea id="ps-improve-comment-input" placeholder="예: 완료율이 높은데도 신호등을 🔴로 판단함 (선택 입력)"
+                        style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button onclick="window.submitPsImproveComment()" style="flex:1; padding:9px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🤖 요청</button>
+                        <button onclick="document.getElementById('ps-improve-comment-modal').style.display='none'" style="flex:1; padding:9px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">✖ 취소</button>
+                    </div>
                 </div>
             </div>`;
             document.body.appendChild(modal);
+            window._makeDraggable('ps-improve-comment-box', 'ps-improve-comment-drag');
             window._bindClickToFront('ps-improve-comment-modal');
         }
         document.getElementById('ps-improve-comment-input').value = '';
@@ -11768,24 +11778,34 @@ window.saveFeedbackLog = function(rating) {
 };
 
 // ── 💡 개선 요청 코멘트 입력 모달 ───────────────────────────────────
+// 💡 [2026-08-24 UX 개선] 다른 팝업들처럼 표준 모달 기능(드래그 이동, 배경 흐림/딤 처리로 뒤 화면
+//    조작 차단, 배경 클릭 시 닫기, 우상단 ✕ 버튼)을 적용 — 예전엔 헤더/오버레이 없이 텍스트 박스만
+//    화면 중앙에 떠 있고 뒤 배경도 그대로 조작 가능해서 다른 모달들과 이질감이 있었음.
 window.openImproveCommentModal = function() {
     const _en = window._currentLang === 'en';
     let modal = document.getElementById('improve-comment-modal');
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'improve-comment-modal';
-        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; pointer-events:none; background:none;';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.35); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);';
+        modal.onclick = function() { modal.style.display = 'none'; }; // 배경 클릭 시 닫기
         modal.innerHTML = `
-        <div onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); padding:18px;">
-            <div style="font-weight:bold; font-size:14px; margin-bottom:10px; color:#333;">✏️ <span id="improve-comment-title"></span></div>
-            <textarea id="improve-comment-input" placeholder="${_en ? 'e.g. Extracted the wrong date from the forwarding chain (optional)' : '예: 포워딩 체인에서 날짜를 잘못 추출함 (선택 입력)'}"
-                style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
-            <div style="display:flex; gap:8px; margin-top:12px;">
-                <button onclick="window.submitImproveComment()" style="flex:1; padding:9px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🤖 ${_en ? 'Request' : '요청'}</button>
-                <button onclick="document.getElementById('improve-comment-modal').style.display='none'" style="flex:1; padding:9px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">✖ ${_en ? 'Cancel' : '취소'}</button>
+        <div id="improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); overflow:hidden;">
+            <div id="improve-comment-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                <span>✏️ <span id="improve-comment-title"></span></span>
+                <button onclick="event.stopPropagation(); document.getElementById('improve-comment-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+            </div>
+            <div style="padding:18px;">
+                <textarea id="improve-comment-input" placeholder="${_en ? 'e.g. Extracted the wrong date from the forwarding chain (optional)' : '예: 포워딩 체인에서 날짜를 잘못 추출함 (선택 입력)'}"
+                    style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button onclick="window.submitImproveComment()" style="flex:1; padding:9px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🤖 ${_en ? 'Request' : '요청'}</button>
+                    <button onclick="document.getElementById('improve-comment-modal').style.display='none'" style="flex:1; padding:9px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">✖ ${_en ? 'Cancel' : '취소'}</button>
+                </div>
             </div>
         </div>`;
         document.body.appendChild(modal);
+        window._makeDraggable('improve-comment-box', 'improve-comment-drag');
         window._bindClickToFront('improve-comment-modal');
     }
     document.getElementById('improve-comment-title').textContent =
