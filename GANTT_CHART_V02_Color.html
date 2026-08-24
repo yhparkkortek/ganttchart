@@ -1798,7 +1798,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>
             <button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" title="새 리비전 추가 (R1부터 무제한)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:1.5px dashed #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">➕</button>
+            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:1.5px dashed #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">➕</button>
             <button id="mc-rev-cycle-btn" class="mc-rev-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)"
                 style="padding:6px 10px; min-width:auto; border:1.5px solid #2c5f8a; background:#fff; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
@@ -24875,18 +24875,35 @@ window.mcCycleRevision = function() {
     window.mcSwitchRevision(next);
 };
 
-// 💡 "➕ 새 리비전": 지금까지 쓰인 가장 큰 R번호 다음 번호로 이동 (R1~R5든 R37이든 항상 다음 빈 슬롯)
+// 💡 "➕ 새 리비전": 지금까지 "금액이 실제로 입력된" 가장 큰 R번호 다음 번호로 이동.
+//    💡 [2026-08-24 버그 수정] 예전엔 "한 번이라도 방문한 R번호"까지 최댓값 계산에 포함시켰음 —
+//    그래서 ➕를 실수로 여러 번 눌러 금액 없는 빈 리비전(R2,R3,R4…)이 연달아 생기면, 그 뒤로는
+//    RX로 R1(금액 있음)에 돌아온 뒤 ➕를 다시 눌러도 R2가 아니라 그다음 미사용 번호(R6…)로 건너뛰어
+//    버려서, "R2로 등록하고 싶었는데 실수로 R5까지 눌러버리면 되돌릴 방법이 없다"는 문제가 있었음.
+//    → 금액이 있는 리비전(+지금 화면에 입력 중이라 아직 저장 전인 활성 리비전)만 최댓값 계산에 포함.
+//    빈 리비전은 셈에서 빠지므로, RX로 금액 있는 리비전으로 돌아온 뒤 ➕를 누르면 그 사이의 빈 슬롯이
+//    재사용되어(그 자리에 새로 입력됨) 다시 "다음 R2"가 나온다.
 window.mcAddNewRevision = function() {
     const td = window.tabData || {};
     td.mcRevisions = td.mcRevisions || {};
+    const curRev = td.mcActiveRevision || 'R1';
+    const curRows = _readRowsFromTbody('mctable-body'); // 아직 mcRevisions에 저장되기 전, 지금 화면에 입력된 내용
+
     let maxN = 0;
     Object.keys(td.mcRevisions).forEach(function(k) {
         const m = k.match(/^R(\d+)$/);
-        if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
+        if (m && window._mcHasRealMoney(td.mcRevisions[k])) maxN = Math.max(maxN, parseInt(m[1], 10));
     });
-    const curM = (td.mcActiveRevision || 'R1').match(/^R(\d+)$/);
-    if (curM) maxN = Math.max(maxN, parseInt(curM[1], 10));
-    window.mcSwitchRevision('R' + (maxN + 1));
+    const curM = curRev.match(/^R(\d+)$/);
+    if (curM && window._mcHasRealMoney(curRows)) maxN = Math.max(maxN, parseInt(curM[1], 10));
+
+    let nextN = maxN + 1;
+    // 💡 계산된 다음 번호가 "지금 이미 서 있는(빈) 리비전"과 같다면(예: 이 함수로 막 만든 빈 슬롯에서
+    //    아무것도 입력하지 않고 ➕를 한 번 더 누른 경우) 제자리 그대로면 버튼이 안 눌리는 것처럼
+    //    보이므로, 그때만 한 단계 더 진행한다.
+    if (curM && nextN === parseInt(curM[1], 10)) nextN += 1;
+
+    window.mcSwitchRevision('R' + nextN);
 };
 
 // 💡 R1~R5 리비전 전환: 현재 화면 내용을 활성 리비전에 저장하고, 선택한 리비전 데이터로 다시 그림
