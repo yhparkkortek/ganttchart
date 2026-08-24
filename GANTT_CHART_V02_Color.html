@@ -21937,6 +21937,10 @@ window.AddressBook = {
     //    호출해서, 아직 Drive에서 못 받아온 빈/오래된 로컬 캐시로 팀 공용 주소록 전체를 덮어쓰는 사고가
     //    실제로 발생했음(365명 → 빈 배열로 반복 붕괴). syncToDrive()에서 이 값과 비교해 스킵 여부를 판단.
     _lastKnownServerCount: 0,
+    // 💡 [2026-08-24 낙관적 동시성 제어] 내가 마지막으로 Drive에서 읽었던 savedAt. 저장 직전 Drive의
+    //    "지금" savedAt과 비교해서, 그 사이 다른 팀원이 먼저 저장했다면(=savedAt이 달라졌다면) 내
+    //    오래된 로컬본으로 그 사람의 최신 수정을 덮어쓰지 않고 저장을 중단 + 최신본을 다시 받아온다.
+    _lastKnownSavedAt: null,
     _meaningfulCount: function(list) {
         return (list || []).filter(function(p) { return p && (String(p.name||'').trim() || String(p.email||'').trim()); }).length;
     },
@@ -21968,15 +21972,37 @@ window.AddressBook = {
         try {
             const folderId = await window.getOrCreateConfigFolder(token);
             if (!this._driveFileId) this._driveFileId = await window._findOrMigrateFile(token, this.FILE_NAME, folderId);
+
+            // 💡 [낙관적 동시성 제어] 파일이 이미 있고(=신규 생성이 아니고) 내가 이전에 읽어둔 savedAt이
+            //    있다면, 쓰기 직전 Drive의 "지금" savedAt을 한 번 더 확인한다. 그 사이 달라졌다면 —
+            //    다른 사람이 나보다 먼저 저장한 것 — 내 오래된 로컬본으로 그 수정을 덮어쓰지 않고 중단한다.
+            if (this._driveFileId && this._lastKnownSavedAt) {
+                try {
+                    const checkResp = await gapi.client.drive.files.get({ fileId: this._driveFileId, alt: 'media', supportsAllDrives: true });
+                    const currentSavedAt = checkResp.result && checkResp.result.savedAt;
+                    if (currentSavedAt && currentSavedAt !== this._lastKnownSavedAt) {
+                        console.warn(`[AddressBook 안전장치] Drive 동기화 중단 — 다른 팀원이 ${currentSavedAt}에 이미 저장했습니다(내가 마지막으로 본 건 ${this._lastKnownSavedAt}). 내 화면의 오래된 내용으로 덮어쓰지 않고, 최신본을 다시 불러옵니다.`);
+                        if (window.showToast) window.showToast('⚠️ 주소록이 다른 팀원에 의해 방금 업데이트되어 저장을 건너뛰고 최신본을 다시 불러왔습니다. 방금 변경사항은 다시 입력해주세요.', 'warning', 6000);
+                        const fresh = await this.loadFromDrive();
+                        if (fresh) { window.tabData = window.tabData || {}; window.tabData.addressBook = fresh; if (window.renderAddressTable) window.renderAddressTable(); }
+                        return;
+                    }
+                } catch(checkErr) { console.warn('AddressBook 동시성 확인 실패(그냥 진행):', checkErr.message); }
+            }
+
             const boundary = 'addr_sync_boundary';
             const metadata = { name: this.FILE_NAME, mimeType: 'application/json' };
             if (!this._driveFileId) metadata.parents = [folderId];
-            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ addressBook: list, savedAt: new Date().toISOString() }) + "\r\n--" + boundary + "--";
+            const newSavedAt = new Date().toISOString();
+            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify({ addressBook: list, savedAt: newSavedAt }) + "\r\n--" + boundary + "--";
             const url = 'https://www.googleapis.com/upload/drive/v3/files' + (this._driveFileId ? '/' + this._driveFileId : '') + '?uploadType=multipart&supportsAllDrives=true';
             const resp = await fetch(url, { method: this._driveFileId ? 'PATCH' : 'POST', headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' }, body: body });
             const file = await resp.json();
             if (file && file.id) this._driveFileId = file.id;
-            if (resp.ok) this._lastKnownServerCount = meaningful; // 성공적으로 반영된 값으로 기준선 갱신
+            if (resp.ok) {
+                this._lastKnownServerCount = meaningful; // 성공적으로 반영된 값으로 기준선 갱신
+                this._lastKnownSavedAt = newSavedAt;      // 내가 방금 쓴 시각을 새 기준선으로 기록
+            }
         } catch(e) { console.warn('AddressBook Drive 동기화 실패:', e.message); }
     },
     loadFromDrive: async function() {
@@ -21991,13 +22017,19 @@ window.AddressBook = {
             const data = response.result;
             const list = (data && data.addressBook) || [];
             this._lastKnownServerCount = Math.max(this._lastKnownServerCount, this._meaningfulCount(list)); // 💡 방금 Drive에서 실제로 확인한 인원 수를 기준선으로 기록
+            if (data && data.savedAt) this._lastKnownSavedAt = data.savedAt; // 💡 낙관적 동시성 제어용 기준선도 함께 갱신
             this.save(list, true); // 로컬 캐시만 갱신 (방금 받은 걸 다시 올릴 필요 없음)
             return list;
         } catch(e) { console.warn('AddressBook Drive 조회 실패:', e.message); return null; }
     }
 };
 
-window.collectAddressData = function() {
+// 💡 [2026-08-24] skipDriveSync=true로 부르면 로컬 tabData(=프로젝트 자체 저장용 스냅샷)만 갱신하고
+//    공용 Drive 주소록에는 밀어쓰지 않는다. 프로젝트 자동저장(collectTabData)이 Address 탭을 보지도
+//    않은 채 이 함수를 얼결에 호출해서, 아직 못 받아온 오래된/빈 로컬 캐시로 팀 공용 주소록 전체를
+//    덮어쓰는 사고가 실제로 있었음(365명 → 빈 배열 반복 붕괴). 실제 사용자가 Address 탭에서 직접
+//    편집(onchange/정렬 등)할 때만 Drive까지 동기화하도록 분리 — 그 호출부들은 인자 없이(기본값 false) 부른다.
+window.collectAddressData = function(skipDriveSync) {
     window.tabData = window.tabData || {};
     const rows = [];
     document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
@@ -22005,7 +22037,7 @@ window.collectAddressData = function() {
         rows.push({ name: get('name'), nameEn: get('nameEn'), dept: get('dept'), title: get('title'), email: get('email'), mobile: get('mobile'), phone: get('phone'), telegramId: get('telegramId') });
     });
     window.tabData.addressBook = rows;
-    window.AddressBook.save(rows); // 💡 프로젝트와 무관한 공용 저장소에도 반영 (3초 디바운스 후 Drive 동기화)
+    window.AddressBook.save(rows, skipDriveSync); // 💡 프로젝트와 무관한 공용 저장소에도 반영 (3초 디바운스 후 Drive 동기화) — skipDriveSync면 로컬 캐시만
 };
 
 // =========================================================
@@ -22266,8 +22298,9 @@ window.collectTabData = function() {
     // 💡 주요 자재 목록 수집 (고정 13개 + 자유추가)
     if (window.collectMaterialRows) window.tabData.projectMaterials = window.collectMaterialRows();
 
-    // 🪪 Address Book도 함께 수집 (드라이브/JSON 저장에 포함)
-    if (window.collectAddressData) window.collectAddressData();
+    // 🪪 Address Book도 함께 수집 (프로젝트 자체 JSON 저장용 스냅샷) — 이 프로젝트 자동저장 경로에서는
+    //    공용 Drive 주소록까지는 밀어쓰지 않는다(skipDriveSync=true). 실제 편집은 onchange 핸들러에서 별도 동기화됨.
+    if (window.collectAddressData) window.collectAddressData(true);
 
     // Brief SPEC / M.C Table
     window.tabData.briefSpec = _readRowsFromTbody('briefspec-body');
