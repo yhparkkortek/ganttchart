@@ -14279,6 +14279,9 @@ window.mfAnalyzeSingle = async function(idx) {
         result = {
             idx: window._mfResults.length, fileName: f.name,
             subject: parsed.subject, sender: parsed.sender, date: parsed.date, body: parsed.body,
+            // 💡 [2026-08-24 버그 수정] ms 탭과 동일한 사고 — 이 필드가 없어서 "⚡ 선택항목 연속등록"이
+            //    엉뚱한(직접입력 탭 전용) window._mailParsedRaw로 대체하려다 실패해 "📧 원문 보기"가 사라졌었다.
+            mailRaw: { subject: parsed.subject, sender: parsed.sender, date: parsed.date, body2000: parsed.body, fileName: f.name },
             project: window._msProjectTagLabel(projectTag), task, selected: !!task, registered: false,
             _projectTag: projectTag,
             _score: scoreResult ? scoreResult.total : null,
@@ -14292,6 +14295,7 @@ window.mfAnalyzeSingle = async function(idx) {
         result = {
             idx: window._mfResults.length, fileName: f.name,
             subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body: parsed.body || '',
+            mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name },
             project:null, task:null, selected:false, registered:false, error: e.message
         };
     }
@@ -14484,7 +14488,9 @@ function mfParseFile(file) {
                 body = text.replace(/\s+/g, ' ').trim();
             }
 
-            resolve({ subject, sender, date, body: body.substring(0, 6000), fileName: file.name });
+            // 💡 [2026-08-24] "원문 보기"용 저장 한도(6000→15000, 메일서버 탭 kortek_backend.py와 동일 기준으로 통일).
+            //    AI 분석 입력은 msCallGemini가 이 값과 무관하게 항상 별도로 2000자로 다시 잘라 쓰므로 영향 없음.
+            resolve({ subject, sender, date, body: body.substring(0, 15000), fileName: file.name });
         };
         if (ext === 'eml') reader.readAsArrayBuffer(file);
         else reader.readAsText(file, 'utf-8');
@@ -15267,6 +15273,10 @@ window.msFetchMail = async function() {
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     body: mail.body,
+                    // 💡 [2026-08-24 버그 수정] 이 필드가 없어서 "⚡ 선택항목 연속등록"(AR.batchInsert)이
+                    //    r.mailRaw를 못 찾고 엉뚱한(직접입력 탭 전용) window._mailParsedRaw로 대체하려다
+                    //    실패 → Gantt에 꽂힌 행에 _mailRaw가 안 남아 "📧 원문 보기" 버튼이 사라졌었다.
+                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName },
                     project: window._msProjectTagLabel(projectTag), task,
                     _projectTag: projectTag,
                     _score: scoreResult ? scoreResult.total : null,
@@ -15282,6 +15292,7 @@ window.msFetchMail = async function() {
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     body: mail.body,
+                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName },
                     project: null, task: null,
                     selected: false, registered: false, error: e.message
                 };
