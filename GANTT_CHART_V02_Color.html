@@ -12020,13 +12020,17 @@ window.showMailRawModal = function(r) {
         modal.id = 'inbox-mailraw-modal';
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
-        <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:30%; max-width:680px; max-height:160vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:520px;">
+        <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:30%; max-width:95vw; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:400px;">
             <div id="inbox-mailraw-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
                 <span id="inbox-mailraw-title">📧 메일 원문</span>
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
             <div id="inbox-mailraw-meta" style="padding:8px 16px; font-size:11.5px; color:#555; background:#fafafa; border-bottom:1px solid #eee;"></div>
-            <textarea id="inbox-mailraw-body" readonly wrap="off" style="flex:1; margin:12px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; white-space:pre; tab-size:4; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; overflow:auto; line-height:1.5; background:#f8f9fa; color:#333;"></textarea>
+            <!-- 💡 [2026-08-24] wrap="off" + white-space:pre 조합이 줄바꿈을 강제로 막아서, 모달을 아무리 넓게
+                 늘려도 긴 줄은 늘 원래 길이 그대로 남아 좌우 스크롤이 필요했다. white-space:pre-wrap으로
+                 바꿔서 원문의 줄바꿈(엔터)은 그대로 보존하되, 한 줄이 너무 길면 모달 폭에 맞춰 자동으로
+                 접히도록(wrap) 한다 — wrap="off" 속성도 제거(기본값 soft로 줄바꿈 허용). -->
+            <textarea id="inbox-mailraw-body" readonly style="flex:1; margin:12px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; white-space:pre-wrap; word-break:break-word; tab-size:4; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; overflow:auto; line-height:1.5; background:#f8f9fa; color:#333;"></textarea>
             <div style="padding:10px 16px; text-align:right; border-top:1px solid #eee;">
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="padding:7px 18px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">✖ ${_en ? 'Close' : '닫기'}</button>
             </div>
