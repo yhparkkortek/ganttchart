@@ -24830,8 +24830,17 @@ window.mcAddUnitConfirm = function() {
 };
 
 // 종류 제거 (프로젝트 목록에서만 빼고, 저장된 견적 데이터는 유지)
+// 💡 [2026-08-24 안전장치 추가] 예전엔 "저장된 견적 데이터는 지워지지 않고 보관되므로"라는 이유로
+//    확인창도 없이 클릭 한 번에 바로 지워졌음 — 그런데 탭 목록에서는 사라져서 사용자 입장에선 사실상
+//    "지워진 것"처럼 보이고, 다시 찾으려면 코드/Drive를 뒤져야 해서 실수로 누르기엔 너무 쉬웠음.
+//    확인창 + 관리자 비밀번호 인증(계획 삭제 등 다른 파괴적 액션과 동일한 절차)을 추가함.
 window.mcRemoveUnit = function(unit) {
-    // 💡 저장된 견적 데이터는 지워지지 않고 보관되므로 확인창 없이 바로 진행
+    if (!unit) return;
+    if (!confirm(`"${unit}" 제품구분자를 삭제할까요?\n(입력된 데이터는 남지만 탭 목록에서 사라져 다시 찾기 어려워집니다)`)) return;
+    if (!window.verifyAdminPassword(`🔒 "${unit}" 제품구분자를 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)`)) {
+        alert('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.');
+        return;
+    }
     const units = window.getMcUnits();
     const idx = units.indexOf(unit);
     if (idx !== -1) units.splice(idx, 1);
@@ -24994,6 +25003,12 @@ window.mcClearAllPrices = function() {
     });
     if (!count) { alert('이미 비어있습니다.'); return; }
     if (!confirm(window._t(`현재 리비전의 금액 ${count}칸을 모두 지우시겠습니까?\n(TYPE/ITEM/GROUP/Note 등 나머지 내용은 그대로 유지됩니다)`, `Clear all ${count} price fields in this revision?\n(TYPE/ITEM/GROUP/Note etc. will be kept)`))) return;
+    // 💡 [2026-08-24 안전장치 추가] 확인창만으로는 실수로 지우기 쉬워서, 제품구분자 삭제와 동일하게
+    //    관리자 비밀번호 인증을 추가함.
+    if (!window.verifyAdminPassword(window._t('🔒 금액을 전체 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to clear all prices.\n(case-insensitive)'))) {
+        alert(window._t('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.', '❌ Authentication failed. Clear cancelled.'));
+        return;
+    }
 
     inputs.forEach(function(inp) {
         if (priceFields.indexOf(inp.dataset.field) !== -1) inp.value = '';
