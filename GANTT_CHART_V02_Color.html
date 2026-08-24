@@ -918,9 +918,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div onclick="window._toggleAlarmSection('sec-server')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
       <span id="sec-server-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📡 서버 연결</span>
-      <span id="sec-server-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="sec-server" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between;">
         <span id="as-install-title" style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
         <button id="as-install-guide-btn" onclick="window.openInstallGuideModal('setup')"
@@ -934,9 +934,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div onclick="window._toggleAlarmSection('sec-email')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
       <span id="sec-email-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📧 이메일 알람</span>
-      <span id="sec-email-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="sec-email-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="sec-email" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="sec-email" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
 
       <!-- 이메일 서버 설정 -->
       <p id="as-email-server-label" style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;">🖥️ 이메일 서버 설정</p>
@@ -975,9 +975,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div onclick="window._toggleAlarmSection('sec-messenger')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
       <span id="sec-messenger-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">💬 메신저 알람</span>
-      <span id="sec-messenger-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="sec-messenger-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="sec-messenger" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="sec-messenger" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
 
       <!-- 메신저 서버 설정 -->
       <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
@@ -1027,9 +1027,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div onclick="window._toggleAlarmSection('sec-domain')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
       <span id="sec-domain-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🌐 외부 도메인 발송 허용</span>
-      <span id="sec-domain-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="sec-domain-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="sec-domain" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="sec-domain" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <p style="margin:0 0 10px; font-size:11px; color:#888; line-height:1.5;">
         📌 <b>@kortek.co.kr</b>은 항상 발송됩니다. 그 외 도메인은 기본적으로 <b style="color:#e03131;">차단</b>되며,
         체크한 도메인만 메일/메신저 알람이 발송됩니다.<br>(안정화 전까지 외부인에게 알람이 나가는 것을 막기 위한 안전장치)
@@ -17076,82 +17076,99 @@ window.openMailAutoConfigModal = async function() {
                 <span>⚙️ 메일 자동배치 설정</span>
                 <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
             </div>
-            <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:16px;">
+            <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
 
-                <!-- 그룹1: 수집 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">⏱️ 수집 설정</div>
-                    <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:8px;">
-                        <span style="flex:1;">수집 주기</span>
-                        <select id="mac-interval" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                            <option value="10">10분</option>
-                            <option value="15">15분</option>
-                            <option value="30">30분</option>
-                            <option value="60">60분</option>
-                        </select>
+                <!-- ══ 큰그룹1: 수집설정 (기본 접힘) — 옛 그룹1 ══ -->
+                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div onclick="window._toggleAlarmSection('mac-sec-collect')"
+                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                        <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⏱️ 수집설정</span>
+                        <span id="mac-sec-collect-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
-                    <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
-                        <span style="flex:1;">📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
-                        <input id="mac-cutline" type="number" min="0" max="100" style="width:64px; min-width:0; box-sizing:border-box; padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                    </div>
-                </div>
-
-                <!-- 그룹2: 점수 가산 키워드 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">🚨 점수 가산 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(키워드별 점수 지정)</span></div>
-                    <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
-                    <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:2px;">+ 키워드 추가</button>
-                </div>
-
-                <!-- 그룹3: 우선순위 점수 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
-                    <div style="display:grid; grid-template-columns:1fr 64px; gap:6px 10px; align-items:center; font-size:12px;">
-                        <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                        <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                    <div id="mac-sec-collect" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                        <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:8px;">
+                            <span style="flex:1;">수집 주기</span>
+                            <select id="mac-interval" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <option value="10">10분</option>
+                                <option value="15">15분</option>
+                                <option value="30">30분</option>
+                                <option value="60">60분</option>
+                            </select>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                            <span style="flex:1;">📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
+                            <input id="mac-cutline" type="number" min="0" max="100" style="width:64px; min-width:0; box-sizing:border-box; padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                        </div>
                     </div>
                 </div>
 
-                <!-- 그룹4: 직급별 점수 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
-                    <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
+                <!-- ══ 큰그룹2: 가산점수 (기본 접힘) — 옛 그룹2(점수 가산 키워드)+그룹3(우선순위 점수)+그룹4(직급별 점수) 통합 ══ -->
+                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div onclick="window._toggleAlarmSection('mac-sec-score')"
+                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                        <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⭐ 가산점수</span>
+                        <span id="mac-sec-score-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                    </div>
+                    <div id="mac-sec-score" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                        <div style="margin-bottom:14px;">
+                            <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">🚨 점수 가산 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(키워드별 점수 지정)</span></div>
+                            <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
+                            <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:2px;">+ 키워드 추가</button>
+                        </div>
+                        <div style="margin-bottom:14px;">
+                            <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
+                            <div style="display:grid; grid-template-columns:1fr 64px; gap:6px 10px; align-items:center; font-size:12px;">
+                                <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                            </div>
+                        </div>
+                        <div>
+                            <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
+                            <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 💡 [2026-08-20] "미분류/신규발신자/자동폐기 열람" 그룹은 업무 보관함 모달에도 동일하게
                      있어서(중복) 사용자 요청으로 여기서는 제거 — 그 큐들은 업무 보관함 쪽에서만 연다. -->
 
-                <!-- 그룹5: 스팸/광고 자동폐기 필터 규칙 관리 -->
-                <div style="border:1px solid #dee2e6; border-radius:8px; padding:12px 14px;">
-                    <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:4px;">🚫 자동폐기 필터 규칙</div>
-                    <div style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
-
-                    <div style="margin-bottom:10px;">
-                        <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">제목 키워드</div>
-                        <div id="mac-filter-subject-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
-                        <div style="display:flex; gap:4px;">
-                            <input id="mac-filter-subject-input" type="text" placeholder="예: [광고]" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
-                            <button onclick="window._macAddFilterRuleFromInput('subjectKeywords','mac-filter-subject-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
-                        </div>
+                <!-- ══ 큰그룹3: 자동폐기 필터 (기본 접힘) — 옛 그룹5 ══ -->
+                <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                    <div onclick="window._toggleAlarmSection('mac-sec-filter')"
+                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                        <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🚫 자동폐기 필터</span>
+                        <span id="mac-sec-filter-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
+                    <div id="mac-sec-filter" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                        <div style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
 
-                    <div style="margin-bottom:10px;">
-                        <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 패턴 (noreply 등)</div>
-                        <div id="mac-filter-noreply-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
-                        <div style="display:flex; gap:4px;">
-                            <input id="mac-filter-noreply-input" type="text" placeholder="예: noreply" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
-                            <button onclick="window._macAddFilterRuleFromInput('noreplyPatterns','mac-filter-noreply-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                        <div style="margin-bottom:10px;">
+                            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">제목 키워드</div>
+                            <div id="mac-filter-subject-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
+                            <div style="display:flex; gap:4px;">
+                                <input id="mac-filter-subject-input" type="text" placeholder="예: [광고]" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <button onclick="window._macAddFilterRuleFromInput('subjectKeywords','mac-filter-subject-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                            </div>
                         </div>
-                    </div>
 
-                    <div>
-                        <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 도메인 완전차단</div>
-                        <div id="mac-filter-domain-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
-                        <div style="display:flex; gap:4px;">
-                            <input id="mac-filter-domain-input" type="text" placeholder="예: spam-mailer.com" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
-                            <button onclick="window._macAddFilterRuleFromInput('blockedDomains','mac-filter-domain-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                        <div style="margin-bottom:10px;">
+                            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 패턴 (noreply 등)</div>
+                            <div id="mac-filter-noreply-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
+                            <div style="display:flex; gap:4px;">
+                                <input id="mac-filter-noreply-input" type="text" placeholder="예: noreply" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <button onclick="window._macAddFilterRuleFromInput('noreplyPatterns','mac-filter-noreply-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                            </div>
+                        </div>
+
+                        <div>
+                            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 도메인 완전차단</div>
+                            <div id="mac-filter-domain-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
+                            <div style="display:flex; gap:4px;">
+                                <input id="mac-filter-domain-input" type="text" placeholder="예: spam-mailer.com" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <button onclick="window._macAddFilterRuleFromInput('blockedDomains','mac-filter-domain-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -19920,7 +19937,9 @@ window.checkAndSendAlarms = async function(isManual) {
                     : [window._addrFindByName(item.assignee)].map(p => p ? p.telegramId : '')
             )].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
-                const _tgContent = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,100) + (item.content.length>100?'…':'') : '';
+                // 💡 [2026-08-24] 100자 → 2000자로 확대. Telegram API 한도(4096자)엔 여유가 충분하고,
+                //    이 100자는 순전히 앱 자체 제한이었음(kortek_backend.py는 별도 추가제한 없이 그대로 전달).
+                const _tgContent = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,2000) + (item.content.length>2000?'…':'') : '';
                 const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlainSafe(item.diffDays)})${_tgContent}`;
                 tgChatIds.forEach(chatId => window.sendTelegramAlarm(tgMsg, { chatId }));
             }
@@ -21742,7 +21761,8 @@ window.sendSingleAlarm = async function(sendAll) {
                 (item.allowedPeople || item.allPeople || [item.assignee]).map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
             )].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
-                const _tgContent2 = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,100) + (item.content.length>100?'…':'') : '';
+                // 💡 [2026-08-24] 위 자동알람과 동일 기준으로 100자 → 2000자 확대
+                const _tgContent2 = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,2000) + (item.content.length>2000?'…':'') : '';
                 const tgMsg = `📌 [Gantt 알람] ${projTitle}\n업무: ${item.taskName}\n담당: ${item.assignee}\n기한: ${item.dueStr} (${dDayPlain(item.diffDays)})${_tgContent2}`;
                 tgChatIds.forEach(chatId => window.sendTelegramAlarm(tgMsg, { chatId }));
             }
