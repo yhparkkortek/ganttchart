@@ -15017,8 +15017,11 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
     // 원본 메일
     const origBody = document.getElementById('mail-original-body');
     if (origBody) {
+        // 💡 [2026-08-24 버그 수정] 백엔드/원문보기 모달은 15000자까지 보존하도록 이미 확장됐는데,
+        //    이 "▼ 원본 메일" 토글 섹션만 2000자로 재차 잘라서 표시하고 있었음(AI 입력용 2000자
+        //    캡과는 무관한 별개 변수인데 실수로 같은 숫자를 재사용한 것으로 보임) — 15000자로 통일.
         const bodyFormatted = (body||'')
-            .substring(0, 2000)
+            .substring(0, 15000)
             .replace(/\. /g, '.\n')
             .replace(/([^\n])\[/g, '$1\n[')
             .trim();
