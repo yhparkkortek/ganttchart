@@ -6655,6 +6655,27 @@ ${recentLogs}
                 <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">✅ 담당자별 액션 추천</div>
                 ${actionHtml}
             </div>
+        </div>
+        <div id="ai-summary-feedback-block" style="margin-top:14px; padding:10px 12px; background:#f8f9fa; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="font-size:11px; color:#888;">AI 분석 결과가 도움이 되었나요?</span>
+                <div>
+                    <button onclick="window.saveProjectSummaryFeedback('good')" id="ps-fb-good-btn"
+                        style="font-size:12px; padding:3px 12px; border:1px solid #28a745; background:#fff; color:#28a745; border-radius:5px; cursor:pointer; margin-right:4px;">
+                        👍 좋음
+                    </button>
+                    <button onclick="window.saveProjectSummaryFeedback('bad')" id="ps-fb-bad-btn"
+                        style="font-size:12px; padding:3px 12px; border:1px solid #e03131; background:#fff; color:#e03131; border-radius:5px; cursor:pointer;">
+                        👎 나쁨
+                    </button>
+                </div>
+            </div>
+            <div id="ps-fb-improve-trigger-row" style="display:none; margin-top:8px; text-align:right;">
+                <button onclick="window.openPsImproveCommentModal()"
+                    style="font-size:12px; padding:5px 14px; border:none; background:#0ca678; color:#fff; border-radius:5px; cursor:pointer; font-weight:bold;">
+                    💡 의견 남기고 AI 개선 요청
+                </button>
+            </div>
         </div>`;
     };
 
@@ -6751,6 +6772,241 @@ ${recentLogs}
     window.resetProjectSummaryPromptInModal = function() {
         if (!confirm('편집 중인 내용을 버리고 기본 프롬프트로 되돌릴까요?')) return;
         document.getElementById('ai-summary-prompt-textarea').value = window._defaultProjectSummaryPromptTemplate || '';
+    };
+
+    // ── 💡 [2026-08-24 신규] AI 요약 피드백(👍/👎) + AI 프롬프트 자동개선 요청 ─────────────
+    //    메일분석의 피드백/개선 시스템(saveFeedbackLog / triggerPromptImprove / _simpleLineDiff /
+    //    renderPromptDiffHtml / showImprovePreviewModal / applyImprovedPrompt)과 완전히 동일한
+    //    설계를 그대로 재사용하되, 이 기능엔 "사용자가 수정하는 편집 가능 필드"가 없으므로(읽기
+    //    전용 AI 리포트) "AI 원본 vs 사용자 수정본" diff 대신 "리포트 결과 + 사용자 코멘트"만 기록.
+    //    diff 유틸(_simpleLineDiff/renderPromptDiffHtml)은 범용이라 그대로 재사용.
+    const _PSF_KEY = 'gantt_project_summary_feedback';
+    window._projectSummaryPromptVersion = parseInt(localStorage.getItem('gantt_project_summary_prompt_version') || '1', 10);
+    window._lastPsFeedbackUid = null; // 방금 저장한 피드백 uid (개선 요청 시 코멘트를 채워넣을 대상)
+
+    window.saveProjectSummaryFeedback = function(rating) {
+        const r = (window.projectMeta || {}).aiSummaryReport;
+        if (!r) return;
+        const log = JSON.parse(localStorage.getItem(_PSF_KEY) || '[]');
+        const uid = 'psfb_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        log.unshift({
+            uid: uid,
+            date: new Date().toISOString(),
+            promptVersion: window._projectSummaryPromptVersion,
+            report: { 신호등: r.신호등, 총평: r.총평, 리스크: r.리스크, 액션추천: r.액션추천 },
+            userComment: '',
+            rating: rating,
+            improved: false
+        });
+        if (log.length > 200) log.splice(200);
+        localStorage.setItem(_PSF_KEY, JSON.stringify(log));
+
+        const goodBtn = document.getElementById('ps-fb-good-btn');
+        const badBtn  = document.getElementById('ps-fb-bad-btn');
+        const triggerRow = document.getElementById('ps-fb-improve-trigger-row');
+
+        if (rating === 'good') {
+            window._lastPsFeedbackUid = null;
+            if (triggerRow) triggerRow.style.display = 'none';
+            if (goodBtn) { goodBtn.style.background = '#28a745'; goodBtn.style.color = '#fff'; }
+            if (badBtn)  { badBtn.style.background = '#fff'; badBtn.style.color = '#e03131'; }
+            if (window.showToast) window.showToast('👍 피드백이 저장되었습니다.', 'info');
+        } else {
+            window._lastPsFeedbackUid = uid;
+            if (triggerRow) triggerRow.style.display = 'block'; // 💡 나쁨 선택 시에만 개선요청 버튼 노출
+            if (badBtn)  { badBtn.style.background = '#e03131'; badBtn.style.color = '#fff'; }
+            if (goodBtn) { goodBtn.style.background = '#fff'; goodBtn.style.color = '#28a745'; }
+        }
+    };
+
+    // ── 💡 개선 요청 코멘트 입력 모달 (메일분석의 improve-comment-modal과 별도 — id 충돌 방지) ──
+    window.openPsImproveCommentModal = function() {
+        let modal = document.getElementById('ps-improve-comment-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ps-improve-comment-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; pointer-events:none; background:none;';
+            modal.innerHTML = `
+            <div onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:460px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); padding:18px;">
+                <div style="font-weight:bold; font-size:14px; margin-bottom:10px; color:#333;">✏️ 어떤 부분이 문제였나요?</div>
+                <textarea id="ps-improve-comment-input" placeholder="예: 완료율이 높은데도 신호등을 🔴로 판단함 (선택 입력)"
+                    style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+                <div style="display:flex; gap:8px; margin-top:12px;">
+                    <button onclick="window.submitPsImproveComment()" style="flex:1; padding:9px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">🤖 요청</button>
+                    <button onclick="document.getElementById('ps-improve-comment-modal').style.display='none'" style="flex:1; padding:9px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">✖ 취소</button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            window._bindClickToFront('ps-improve-comment-modal');
+        }
+        document.getElementById('ps-improve-comment-input').value = '';
+        modal.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('ps-improve-comment-modal');
+    };
+
+    window.submitPsImproveComment = function() {
+        const comment = document.getElementById('ps-improve-comment-input').value.trim();
+        document.getElementById('ps-improve-comment-modal').style.display = 'none';
+
+        if (window._lastPsFeedbackUid) {
+            const log = JSON.parse(localStorage.getItem(_PSF_KEY) || '[]');
+            const it = log.find(function(x) { return x.uid === window._lastPsFeedbackUid; });
+            if (it) { it.userComment = comment; localStorage.setItem(_PSF_KEY, JSON.stringify(log)); }
+        }
+        window.triggerProjectSummaryPromptImprove(comment);
+    };
+
+    // 💡 다운스트림 코드가 의존하는 필수 구조(JSON 4개 키) + 데이터 치환용 플레이스홀더가
+    //    개선된 프롬프트에도 살아있는지 검사 (메일분석 validatePromptStructure와 동일한 목적)
+    window.validateProjectSummaryPromptStructure = function(promptText) {
+        const requiredJsonKeys = ['신호등', '총평', '리스크', '액션추천'];
+        const requiredPlaceholders = ['${customer}', '${model}', '${pm}', '${totalTasks}', '${countDone}', '${countProgress}', '${countPending}', '${countDelay}', '${delayedList}', '${dueSoonList}', '${recentLogs}'];
+        const missing = [];
+        requiredJsonKeys.forEach(function(k) {
+            if (promptText.indexOf('"' + k + '"') === -1) missing.push('JSON 키: "' + k + '"');
+        });
+        requiredPlaceholders.forEach(function(p) {
+            if (promptText.indexOf(p) === -1) missing.push('플레이스홀더: ' + p);
+        });
+        return missing; // 빈 배열이면 이상 없음
+    };
+
+    window.triggerProjectSummaryPromptImprove = async function(comment) {
+        const currentPrompt = localStorage.getItem('gantt_project_summary_prompt') || window._defaultProjectSummaryPromptTemplate || '';
+        const apiKey = window.getActiveAiKey(); // 💡 선택된 provider(Gemini/Groq/Mistral)에 맞는 키를 정식 헬퍼로 조회
+
+        const log = JSON.parse(localStorage.getItem(_PSF_KEY) || '[]');
+        const fb = window._lastPsFeedbackUid ? log.find(function(x) { return x.uid === window._lastPsFeedbackUid; }) : null;
+        const rep = (fb && fb.report) || (window.projectMeta || {}).aiSummaryReport || {};
+        const targetUids = window._lastPsFeedbackUid ? [window._lastPsFeedbackUid] : [];
+
+        // 💡 이 기능엔 "사용자 수정본"이 없으므로(읽기전용 리포트), AI가 만든 리포트 결과 + 사용자 코멘트만 케이스로 제공
+        const casesText = `[케이스 1]\n생성된 리포트:\n신호등: ${rep.신호등 || ''}\n총평: ${rep.총평 || ''}\n리스크: ${(rep.리스크 || []).join(' / ') || '(없음)'}\n액션추천: ${(rep.액션추천 || []).join(' / ') || '(없음)'}\n\n사용자 코멘트: ${comment || '(없음)'}`;
+
+        // 💡 JSON 대신 구분자 방식 — 프롬프트 원문의 줄바꿈/따옴표로 인한 이스케이프 깨짐 방지
+        // 💡 이 구조(JSON 키/플레이스홀더)는 다른 코드가 직접 파싱/치환하므로 AI가 절대 바꾸면 안 됨
+        const PROTECTED_STRUCTURE_RULE = `\n\n🔒 절대 변경 금지 규칙 (반드시 준수):\n프롬프트 내용을 개선하되, 아래 구조적 요소는 절대 이름/형식을 바꾸지 마세요. 이 값들은 다른 프로그램 코드가 그대로 파싱/치환하고 있어서, 조금이라도 바뀌면 시스템이 깨집니다.\n1. 최종 JSON 응답의 키 이름은 정확히 이 4개만 사용: "신호등","총평","리스크","액션추천" (키 이름 변경/추가/삭제 금지)\n2. "신호등" 값은 반드시 🟢 또는 🟡 또는 🔴 중 하나\n3. 아래 플레이스홀더는 정확히 이 이름 그대로 유지해야 합니다 (삭제/이름변경 금지): \${customer} \${model} \${pm} \${totalTasks} \${countDone} \${countProgress} \${countPending} \${countDelay} \${delayedList} \${dueSoonList} \${recentLogs}\n표현/지시문/설명 등 나머지는 자유롭게 개선해도 됩니다.`;
+
+        const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 "AI 프로젝트 요약 리포트" 프롬프트와, 이 프롬프트로 생성했을 때 사용자가 "나쁨"으로 평가한 사례입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}${PROTECTED_STRUCTURE_RULE}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n\n반드시 아래 형식 그대로만 응답하세요. JSON이나 코드블록(\`\`\`)은 절대 사용하지 마세요.\n\n===ANALYSIS===\n(여기에 문제점 분석을 3줄 이내로 작성)\n===PROMPT===\n(여기에 개선된 프롬프트 전문을 기존과 동일한 형식으로 작성)\n===END===`;
+
+        if (window.showToast) window.showToast('🤖 AI 개선 요청 중...', 'info');
+        try {
+            const callResult = await window.callAiBackend(apiKey, improvePrompt);
+            if (!callResult.ok) throw callResult.error;
+            const data = callResult.data;
+            const text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            const cleaned = text.replace(/```[a-z]*|```/gi, '').trim();
+            const analysisMatch = cleaned.match(/===ANALYSIS===([\s\S]*?)===PROMPT===/);
+            const promptMatch   = cleaned.match(/===PROMPT===([\s\S]*?)(===END===|$)/);
+            const analysis = analysisMatch ? analysisMatch[1].trim() : '';
+            const improvedPrompt = promptMatch ? promptMatch[1].trim() : '';
+            const isTruncated = !/===END===/.test(cleaned); // 💡 종료 마커 없으면 잘림 의심
+
+            if (!improvedPrompt) {
+                throw new Error('AI 응답 형식을 해석하지 못했습니다.');
+            }
+            // 💡 구조 손상 여부 검증 — 다운스트림 코드가 의존하는 필수 요소가 빠졌는지 확인
+            const structIssues = window.validateProjectSummaryPromptStructure(improvedPrompt);
+            window.showPsImprovePreviewModal(analysis, improvedPrompt, targetUids, currentPrompt, isTruncated, structIssues);
+        } catch(e) {
+            alert('❌ AI 개선 요청 실패: ' + (e && e.message ? e.message : e));
+        }
+    };
+
+    // ── 💡 개선 결과 미리보기 모달 (diff 유틸은 메일분석과 공유, 모달 자체는 별도) ──────────
+    window.showPsImprovePreviewModal = function(analysis, improvedPrompt, targetUids, originalPrompt, isTruncated, structIssues) {
+        let modal = document.getElementById('ps-improve-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ps-improve-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
+            modal.innerHTML = `
+            <div id="ps-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%);">
+                <div id="ps-improve-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                    <span>🤖 AI 프롬프트 개선 제안 (프로젝트 요약)</span>
+                    <button onclick="document.getElementById('ps-improve-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                </div>
+                <div id="ps-improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
+                <div id="ps-improve-struct-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#ffe3e3; border:1px solid #e03131; border-radius:6px; font-size:12px; color:#c92a2a;"></div>
+                <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+                    <div>
+                        <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">🔍 문제점 분석</div>
+                        <div id="ps-improve-analysis-text" style="font-size:12px; color:#333; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; padding:10px; white-space:pre-wrap; line-height:1.6;"></div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">🔀 변경사항 (원본 대비)
+                            <span style="font-weight:normal; color:#999;">(빨강=삭제, 초록=추가)</span>
+                        </div>
+                        <div id="ps-improve-diff-view" style="max-height:220px; overflow-y:auto; font-size:11.5px; font-family:'Malgun Gothic',monospace; border:1px solid #e6e9ef; border-radius:6px; line-height:1.5; background:#fff;"></div>
+                    </div>
+                    <div style="flex:1; display:flex; flex-direction:column;">
+                        <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">✏️ 개선된 프롬프트 (수정 가능)</div>
+                        <textarea id="ps-improve-prompt-textarea" style="flex:1; min-height:200px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:vertical; line-height:1.6;"></textarea>
+                    </div>
+                </div>
+                <div style="padding:12px 16px; display:flex; gap:8px; border-top:1px solid #eee;">
+                    <button onclick="window.applyImprovedPsPrompt()" style="flex:1; padding:10px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer;">✅ 채택</button>
+                    <button onclick="document.getElementById('ps-improve-modal').style.display='none'" style="flex:1; padding:10px; background:#6c757d; color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer;">❌ 무시</button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            window._makeDraggable('ps-improve-box', 'ps-improve-drag');
+            window._bindClickToFront('ps-improve-modal');
+        }
+
+        const warnBar = document.getElementById('ps-improve-truncate-warning');
+        warnBar.textContent = '⚠️ AI 응답이 중간에 잘렸을 수 있습니다 (종료 마커 없음). 채택 전 아래 프롬프트 끝부분을 꼭 확인하세요.';
+        warnBar.style.display = isTruncated ? 'block' : 'none';
+
+        const structBar = document.getElementById('ps-improve-struct-warning');
+        if (structIssues && structIssues.length) {
+            structBar.innerHTML = '🚨 다른 코드가 의존하는 필수 요소가 빠진 것 같습니다: <b>' + structIssues.join(', ') + '</b>';
+            structBar.style.display = 'block';
+        } else {
+            structBar.style.display = 'none';
+        }
+
+        document.getElementById('ps-improve-diff-view').innerHTML = window.renderPromptDiffHtml(originalPrompt || '', improvedPrompt);
+        document.getElementById('ps-improve-analysis-text').textContent = analysis;
+        document.getElementById('ps-improve-prompt-textarea').value = improvedPrompt;
+        modal._targetUids = targetUids || [];
+        modal.style.display = 'block';
+        window.bringModalToFront('ps-improve-modal');
+    };
+
+    // ── 💡 개선 프롬프트 채택 ───────────────────────────────────────────────
+    window.applyImprovedPsPrompt = async function() {
+        const text = document.getElementById('ps-improve-prompt-textarea').value.trim();
+        if (!text) { alert('프롬프트가 비어있습니다.'); return; }
+
+        // 버전 증가
+        window._projectSummaryPromptVersion = (window._projectSummaryPromptVersion || 1) + 1;
+        localStorage.setItem('gantt_project_summary_prompt_version', String(window._projectSummaryPromptVersion));
+        localStorage.setItem('gantt_project_summary_prompt', text);
+
+        // improved: true 마킹
+        const modal = document.getElementById('ps-improve-modal');
+        const uids = (modal && modal._targetUids) || [];
+        if (uids.length) {
+            const log = JSON.parse(localStorage.getItem(_PSF_KEY) || '[]');
+            uids.forEach(function(uid) {
+                const it = log.find(function(x) { return x.uid === uid; });
+                if (it) it.improved = true;
+            });
+            localStorage.setItem(_PSF_KEY, JSON.stringify(log));
+        }
+
+        // Drive 저장 (팀 공용 프롬프트 파일에 반영)
+        if (window.isDriveConnected && window.saveProjectSummaryPromptToDrive) {
+            const ok = await window.saveProjectSummaryPromptToDrive(text);
+            alert(ok
+                ? '✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._projectSummaryPromptVersion + ')'
+                : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다.');
+        } else {
+            alert('✅ 개선된 프롬프트가 채택되었습니다. (v' + window._projectSummaryPromptVersion + ')');
+        }
+        modal.style.display = 'none';
     };
 
     // 💡 [PDF] 리포트 카드만 별도 인쇄영역(#ai-summary-print-area)에 복제해서 window.print() —
