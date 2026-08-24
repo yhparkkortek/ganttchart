@@ -2638,6 +2638,19 @@ ${mailText}`;
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
             if (!token) return null;
 
+            // 💡 [2026-08-24 버그 수정] "AI 개선 채택"을 드라이브 미연동 상태(또는 업로드 실패)로 했다면
+            //    로컬에 아직 드라이브로 못 올라간 변경이 남아있을 수 있음 — 이 상태에서 그냥 드라이브
+            //    최신본을 받아와 덮어쓰면 방금 채택한 변경이 조용히 사라진다. 대기 중인 로컬 변경이
+            //    있으면 "받아오기" 대신 그 변경을 먼저 드라이브로 "올려주기"로 전환.
+            if (localStorage.getItem('gantt_mail_prompt_pending_push') === '1') {
+                const pendingText = localStorage.getItem('gantt_mail_prompt');
+                if (pendingText && window.savePromptToDrive) {
+                    const pushed = await window.savePromptToDrive(pendingText);
+                    if (pushed) localStorage.removeItem('gantt_mail_prompt_pending_push');
+                }
+                return pendingText; // 성공/실패 어느 쪽이든, 아직 못 올렸을 수 있으니 로컬 변경을 보존하고 그대로 반환
+            }
+
             const fileId = await window.findPromptDriveFile(token);
             if (!fileId) return null;
 
@@ -2710,6 +2723,19 @@ ${mailText}`;
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
             if (!token) return null;
+
+            // 💡 [2026-08-24 버그 수정] "AI 개선 채택"을 드라이브 미연동 상태(또는 업로드 실패)로 했다면
+            //    로컬에 아직 드라이브로 못 올라간 변경이 남아있을 수 있음 — 이 상태에서 그냥 드라이브
+            //    최신본을 받아와 덮어쓰면 방금 채택한 변경이 조용히 사라진다. 대기 중인 로컬 변경이
+            //    있으면 "받아오기" 대신 그 변경을 먼저 드라이브로 "올려주기"로 전환.
+            if (localStorage.getItem('gantt_project_summary_prompt_pending_push') === '1') {
+                const pendingText = localStorage.getItem('gantt_project_summary_prompt');
+                if (pendingText && window.saveProjectSummaryPromptToDrive) {
+                    const pushed = await window.saveProjectSummaryPromptToDrive(pendingText);
+                    if (pushed) localStorage.removeItem('gantt_project_summary_prompt_pending_push');
+                }
+                return pendingText; // 성공/실패 어느 쪽이든, 아직 못 올렸을 수 있으니 로컬 변경을 보존하고 그대로 반환
+            }
 
             const fileId = await window.findProjectSummaryPromptDriveFile(token);
             if (!fileId) return null;
@@ -7046,6 +7072,13 @@ ${recentLogs}
         const text = document.getElementById('ps-improve-prompt-textarea').value.trim();
         if (!text) { alert('프롬프트가 비어있습니다.'); return; }
 
+        // 💡 [2026-08-24 안전장치 추가] 팀 공용 프롬프트를 덮어쓰는 파괴적 액션이라, 수동 편집(✏️ 프롬프트
+        //    편집 모달의 "🔒 수정하기")과 동일하게 관리자 비밀번호 인증을 요구함.
+        if (!window.verifyAdminPassword('🔒 개선된 프롬프트를 채택하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
+            alert('❌ 비밀번호 인증 실패. 채택이 취소되었습니다.');
+            return;
+        }
+
         // 버전 증가
         window._projectSummaryPromptVersion = (window._projectSummaryPromptVersion || 1) + 1;
         localStorage.setItem('gantt_project_summary_prompt_version', String(window._projectSummaryPromptVersion));
@@ -7064,13 +7097,23 @@ ${recentLogs}
         }
 
         // Drive 저장 (팀 공용 프롬프트 파일에 반영)
+        // 💡 [2026-08-24 버그 수정] 드라이브 미연동 상태거나 업로드가 실패하면, 방금 채택한 내용이
+        //    로컬에만 남는데 — 이후 드라이브가 연결되면 loadProjectSummaryPromptFromDrive()가 (옛)
+        //    드라이브 버전을 그대로 받아와 이 로컬 변경을 조용히 덮어써버리는 문제가 있었음
+        //    ("채택했는데 다시 들어오면 저장 안 되어 있음"). "아직 드라이브에 못 올린 변경이 있다"는
+        //    표시를 남겨서, 다음 로드 시 덮어쓰는 대신 먼저 이 변경을 드라이브로 올리도록 함.
         if (window.isDriveConnected && window.saveProjectSummaryPromptToDrive) {
             const ok = await window.saveProjectSummaryPromptToDrive(text);
-            alert(ok
-                ? '✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._projectSummaryPromptVersion + ')'
-                : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다.');
+            if (ok) {
+                localStorage.removeItem('gantt_project_summary_prompt_pending_push');
+                alert('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._projectSummaryPromptVersion + ')');
+            } else {
+                localStorage.setItem('gantt_project_summary_prompt_pending_push', '1');
+                alert('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.');
+            }
         } else {
-            alert('✅ 개선된 프롬프트가 채택되었습니다. (v' + window._projectSummaryPromptVersion + ')');
+            localStorage.setItem('gantt_project_summary_prompt_pending_push', '1');
+            alert('✅ 개선된 프롬프트가 채택되었습니다. (v' + window._projectSummaryPromptVersion + ')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)');
         }
         modal.style.display = 'none';
     };
@@ -12039,6 +12082,13 @@ window.applyImprovedPrompt = async function() {
     const text = document.getElementById('improve-prompt-textarea').value.trim();
     if (!text) { alert(_en ? 'Prompt is empty.' : '프롬프트가 비어있습니다.'); return; }
 
+    // 💡 [2026-08-24 안전장치 추가] 팀 공용 프롬프트를 덮어쓰는 파괴적 액션이라, 수동 편집(✏️ 프롬프트
+    //    편집 모달의 "🔒 수정하기")과 동일하게 관리자 비밀번호 인증을 요구함.
+    if (!window.verifyAdminPassword(_en ? '🔒 Enter the admin password to adopt the improved prompt.\n(case-insensitive)' : '🔒 개선된 프롬프트를 채택하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
+        alert(_en ? '❌ Authentication failed. Adoption cancelled.' : '❌ 비밀번호 인증 실패. 채택이 취소되었습니다.');
+        return;
+    }
+
     // 버전 증가
     window._promptVersion = (window._promptVersion || 1) + 1;
     localStorage.setItem('gantt_prompt_version', String(window._promptVersion));
@@ -12072,13 +12122,23 @@ window.applyImprovedPrompt = async function() {
     }
 
     // Drive 저장
+    // 💡 [2026-08-24 버그 수정] 드라이브 미연동 상태거나 업로드가 실패하면 방금 채택한 내용이 로컬에만
+    //    남는데 — 이후 드라이브가 연결되면 loadPromptFromDrive()가 (옛) 드라이브 버전을 그대로 받아와
+    //    이 로컬 변경을 조용히 덮어써버리는 문제가 있었음("채택했는데 다시 들어오면 저장 안 되어 있음").
+    //    "아직 드라이브에 못 올린 변경이 있다"는 표시를 남겨서, 다음 로드 시 덮어쓰는 대신 먼저 이
+    //    변경을 드라이브로 올리도록 함.
     if (window.isDriveConnected && window.savePromptToDrive) {
         const ok = await window.savePromptToDrive(text);
-        alert(ok
-            ? (_en ? '✅ Improved prompt adopted & saved to Drive. (v' + window._promptVersion + ')' : '✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._promptVersion + ')')
-            : (_en ? '⚠️ Adopted locally, but Drive upload failed.' : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다.'));
+        if (ok) {
+            localStorage.removeItem('gantt_mail_prompt_pending_push');
+            alert(_en ? '✅ Improved prompt adopted & saved to Drive. (v' + window._promptVersion + ')' : '✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._promptVersion + ')');
+        } else {
+            localStorage.setItem('gantt_mail_prompt_pending_push', '1');
+            alert(_en ? '⚠️ Adopted locally, but Drive upload failed. Will retry automatically next time Drive connects.' : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.');
+        }
     } else {
-        alert(_en ? '✅ Improved prompt adopted. (v' + window._promptVersion + ')' : '✅ 개선된 프롬프트가 채택되었습니다. (v' + window._promptVersion + ')');
+        localStorage.setItem('gantt_mail_prompt_pending_push', '1');
+        alert(_en ? '✅ Improved prompt adopted. (v' + window._promptVersion + ')\n(Drive not connected — will sync to the team on next connect)' : '✅ 개선된 프롬프트가 채택되었습니다. (v' + window._promptVersion + ')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)');
     }
     modal.style.display = 'none';
 };
@@ -12092,12 +12152,17 @@ window.showPromptLogs = function() {
     if (!logModal) {
         logModal = document.createElement('div');
         logModal.id = 'prompt-log-modal';
-        logModal.style.cssText = 'position:fixed;inset:0;z-index:999999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;';
+        // 💡 [2026-08-24 UI 버그 수정] 이 모달만 예전 스타일(검은 배경 0.6 딤 + 드래그 불가)로 남아있어서
+        //    다른 모달들(손 커서로 드래그 이동 가능, 배경은 보이고 조작도 가능)과 이질감이 있었음 —
+        //    같은 표준 패턴(pointer-events:none 오버레이 + cursor:grab 드래그 헤더)으로 통일.
+        //    또한 헤더에 ✕ 닫기 버튼이 실수로 2개(제대로 된 버튼 + 남아있던 잔여 ✖ span) 겹쳐 있던
+        //    버그도 여기서 같이 제거함.
+        logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none; align-items:center; justify-content:center;';
         logModal.innerHTML = `
-            <div style="background:#fff;border-radius:10px;width:90%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
-                <div style="padding:15px 20px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:15px;background:#fff8e6;color:#7a5210;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;">
+            <div id="prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; background:#fff;border-radius:10px;width:90%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+                <div id="prompt-log-drag" style="padding:15px 20px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:15px;background:#fff8e6;color:#7a5210;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
                     <span>🕒 프롬프트 변경 이력</span>
-                    <button onclick="document.getElementById('prompt-log-modal').style.display='none'"
+                    <button onclick="event.stopPropagation(); document.getElementById('prompt-log-modal').style.display='none'"
                         style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
                                color:#7a5210; font-size:16px; cursor:pointer;
                                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
@@ -12105,7 +12170,6 @@ window.showPromptLogs = function() {
                         onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
                         onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
                         title="닫기">✕</button>
-                    <span style="cursor:pointer;font-size:18px;" onclick="document.getElementById('prompt-log-modal').style.display='none'">✖</span>
                 </div>
                 <div id="prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
                 <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">
@@ -12114,6 +12178,8 @@ window.showPromptLogs = function() {
                 </div>
             </div>`;
         document.body.appendChild(logModal);
+        window._makeDraggable('prompt-log-box', 'prompt-log-drag');
+        window._bindClickToFront('prompt-log-modal');
     }
 
     let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
