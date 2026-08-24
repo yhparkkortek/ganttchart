@@ -21188,9 +21188,17 @@ window.collectAlarmItems = function() {
         const contentRaw = String(row[ci.content] || '').trim();
 
         // [발신인→수신인] 패턴 추출
-        const arrowMatch  = contentRaw.match(/\[([^\]→]+)→([^\]]+)\]/);
-        const senderRaw   = arrowMatch ? arrowMatch[1].trim() : String(row[ci.assignee] || '-').trim();
-        const receiverRaw = arrowMatch ? arrowMatch[2].trim() : '';
+        // 💡 [2026-08-24 버그 수정] 수신인 쪽에 "[개발] 박성준, 김진석, 박용훈"처럼 부서 태그가 앞에
+        //    붙는 경우, 기존 [^\]]+(닫는 대괄호 나오면 무조건 멈춤)로는 바깥쪽 ]가 아니라 "[개발]"의
+        //    안쪽 ]에서 먼저 멈춰버려 이름을 하나도 못 뽑고 "[개발"만 미등록으로 남았다.
+        //    (?:\[[^\]]*\]|[^\]])+ 로 중첩 대괄호 한 겹까지는 통째로 건너뛰도록 허용해 바깥쪽 ]까지 정상 포착.
+        const arrowMatch  = contentRaw.match(/\[([^\]→]+)→((?:\[[^\]]*\]|[^\]])+)\]/);
+        // 💡 위에서 포착된 발신/수신 문자열 앞에 "[개발]"처럼 남아있는 부서 태그는 사람 이름이 아니므로
+        //    이름 분리(_addrSplitNames) 전에 떼어낸다. (trim을 먼저 해야 앞의 공백 때문에 ^\[ 매칭이
+        //    실패하는 일이 없음 — arrowMatch[2]는 보통 " [개발] ..."처럼 공백으로 시작함)
+        const stripTag = function(s) { return String(s || '').trim().replace(/^\[[^\]]*\]\s*/, ''); };
+        const senderRaw   = arrowMatch ? stripTag(arrowMatch[1]).trim() : String(row[ci.assignee] || '-').trim();
+        const receiverRaw = arrowMatch ? stripTag(arrowMatch[2]).trim() : '';
         // 발신인/수신인 다중 지원 — "정민희/임희철", "박용훈 외 다수" 같은 패턴도 개별 이름으로 분리(위 _addrSplitNames 참고)
         const senderNames   = window._addrSplitNames(senderRaw);
         const receiverNames = window._addrSplitNames(receiverRaw);
