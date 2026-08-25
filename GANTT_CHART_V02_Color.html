@@ -1950,9 +1950,20 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button class="action-btn" id="pc-export-btn" onclick="window.exportPanelCompareToExcel()">🟩 엑셀로 내보내기</button>
         </div>
         <div class="concept-section">
+            <style>
+                /* 💡 Brief SPEC과 동일한 방식 — thead 전체를 하나의 sticky 단위로 고정하고, 배경을 불투명하게
+                   줘서 스크롤할 때 아래 데이터 행이 헤더 밑으로 비쳐 보이지 않게 함 */
+                #tab-panelcompare .concept-table thead { position: sticky !important; top: 0 !important; z-index: 16; }
+                /* 💡 줄무늬(지브라) — M.C Table/Brief SPEC과 동일 톤(흰색/연회색) */
+                #tab-panelcompare .concept-table tbody tr.mc-zebra-a { background-color: #ffffff !important; }
+                #tab-panelcompare .concept-table tbody tr.mc-zebra-b { background-color: #efefef !important; }
+            </style>
             <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 패널 추가]로 시작하세요.</div>
             <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
-                <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;"></table>
+                <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;">
+                    <thead id="pc-thead"></thead>
+                    <tbody id="pc-tbody"></tbody>
+                </table>
             </div>
         </div>
     </div>
@@ -23982,9 +23993,10 @@ window._pcExpanded = false;
 window._panelCompareLibCache = null;
 window.renderPanelCompareTab = async function() {
     const _en = window._currentLang === 'en';
-    const tableEl = document.getElementById('pc-table');
+    const theadEl = document.getElementById('pc-thead');
+    const tbodyEl = document.getElementById('pc-tbody');
     const emptyEl = document.getElementById('pc-empty-msg');
-    if (!tableEl) return;
+    if (!theadEl || !tbodyEl) return;
 
     window.tabData = window.tabData || {};
     window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], lastAutoSeed: null };
@@ -24000,12 +24012,14 @@ window.renderPanelCompareTab = async function() {
         pc.lastAutoSeed = registeredModel;
     }
 
-    tableEl.innerHTML = `<tr><td style="padding:20px; text-align:center; color:#999;">${_en ? 'Loading…' : '불러오는 중...'}</td></tr>`;
+    theadEl.innerHTML = '';
+    tbodyEl.innerHTML = `<tr><td style="padding:20px; text-align:center; color:#999;">${_en ? 'Loading…' : '불러오는 중...'}</td></tr>`;
     const lib = await window.loadPanelLibrary();
     window._panelCompareLibCache = lib;
 
     if (!pc.selectedModels.length) {
-        tableEl.innerHTML = '';
+        theadEl.innerHTML = '';
+        tbodyEl.innerHTML = '';
         if (emptyEl) emptyEl.style.display = 'block';
         return;
     }
@@ -24014,37 +24028,41 @@ window.renderPanelCompareTab = async function() {
     const models = pc.selectedModels.slice(0, 10);
     const entries = models.map(function(m) { return window.findPanelInLibrary(lib, m); });
 
-    let html = '<tr>';
-    html += `<th style="min-width:170px; background:#f8f9fa; border:1px solid #dee2e6; padding:8px; text-align:left;">Comparison table</th>`;
+    // 💡 헤더 행("Comparison table" 코너 + 모델명들)은 회색으로 통일 — 구분(섹션) 행에만 흐린 살구색을 씀
+    let headHtml = '<tr>';
+    headHtml += `<th style="min-width:140px; background:#f8f9fa; color:#333; border:1px solid #dee2e6; padding:6px 8px; text-align:left;">Comparison table</th>`;
     models.forEach(function(m, i) {
         const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
         const has = !!entries[i];
-        html += `<th style="min-width:150px; background:#FCE4C8; color:#7A4A1F; border:1px solid #dee2e6; padding:8px; text-align:center;">
-            <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#7A4A1F; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
-            <div style="margin-top:4px; display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap;">
-                <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #e0b088; border-radius:3px; color:#7A4A1F; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
-                <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #e0b088; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
-                ${!has ? `<span style="font-size:9.5px; color:#a8621f; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
+        headHtml += `<th style="min-width:120px; background:#f8f9fa; color:#333; border:1px solid #dee2e6; padding:6px 8px; text-align:center;">
+            <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
+            <div style="margin-top:3px; display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap;">
+                <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
+                <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
+                ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
             </div>
         </th>`;
     });
-    html += '</tr>';
+    headHtml += '</tr>';
+    theadEl.innerHTML = headHtml;
 
+    let html = '';
     window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
-        html += `<tr class="pc-section-row"><td colspan="${models.length + 1}" style="background:#FCE4C8; color:#7A4A1F; font-weight:bold; padding:6px 10px; border:1px solid #dee2e6;">[${escapeHtml(sec.section)}]</td></tr>`;
+        html += `<tr class="pc-section-row"><td colspan="${models.length + 1}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #dee2e6;">[${escapeHtml(sec.section)}]</td></tr>`;
         sec.fields.forEach(function(f) {
             const label = f[0], priority = f[1];
             const rowStyle = priority === 2 ? ('display:' + (window._pcExpanded ? 'table-row' : 'none') + ';') : '';
             html += `<tr class="${priority === 2 ? 'pc-p2-row' : ''}" style="${rowStyle}">`;
-            html += `<td style="border:1px solid #e9ecef; padding:5px 8px; font-size:12px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
             entries.forEach(function(entry) {
                 const v = entry && entry.specs && entry.specs[label] != null && entry.specs[label] !== '' ? entry.specs[label] : '-';
-                html += `<td style="border:1px solid #e9ecef; padding:5px 8px; font-size:12px;">${escapeHtml(String(v))}</td>`;
+                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">${escapeHtml(String(v))}</td>`;
             });
             html += '</tr>';
         });
     });
-    tableEl.innerHTML = html;
+    tbodyEl.innerHTML = html;
+    window._pcApplyZebra();
 
     const toggleBtn = document.getElementById('pc-toggle-btn');
     if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
@@ -24056,6 +24074,20 @@ window.panelCompareToggleExpand = function() {
     const toggleBtn = document.getElementById('pc-toggle-btn');
     const _en = window._currentLang === 'en';
     if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+    window._pcApplyZebra(); // 💡 펼침/접힘으로 보이는 행이 바뀌면 줄무늬도 다시 계산해야 깨지지 않음
+};
+
+// 💡 지브라 줄무늬 — 숨겨진(display:none) 부가 스펙 행이나 섹션 구분 행은 세지 않고, "실제로 보이는
+//    데이터 행"만 순서대로 흰색/연회색을 번갈아 매긴다. 그래야 부가 스펙을 접었다 펼쳐도 줄무늬가 안 깨짐.
+window._pcApplyZebra = function() {
+    const rows = document.querySelectorAll('#pc-table tbody tr:not(.pc-section-row)');
+    let i = 0;
+    rows.forEach(function(tr) {
+        tr.classList.remove('mc-zebra-a', 'mc-zebra-b');
+        if (tr.style.display === 'none') return;
+        tr.classList.add(i % 2 === 0 ? 'mc-zebra-a' : 'mc-zebra-b');
+        i++;
+    });
 };
 
 window.panelCompareRemove = function(model) {
@@ -24096,9 +24128,9 @@ window.panelCompareOpenAddModal = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="pc-add-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(560px, 92vw); max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
-            <div id="pc-add-drag" style="padding:13px 18px; border-bottom:1px solid #e0b088; font-weight:bold; font-size:14px; background:#FCE4C8; color:#7A4A1F; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
+            <div id="pc-add-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
                 <span id="pc-add-title">🖥️ ${_en ? 'Add Panel' : '패널 추가'}</span>
-                <button onclick="document.getElementById('pc-add-modal').style.display='none'" style="background:#fff; border:1.5px solid #7A4A1F; border-radius:6px; color:#7A4A1F; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('pc-add-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
             <div style="padding:12px 16px; border-bottom:1px solid #eee; flex-shrink:0;">
                 <input id="pc-add-search" type="text" placeholder="${_en ? 'Search library by model name...' : '라이브러리에서 모델명 검색...'}" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px;" oninput="window._pcRenderLibList(this.value)">
@@ -24331,7 +24363,7 @@ window.showPanelSpecModal = async function(model) {
             if (v === '-') return; // 미리보기는 값이 있는 항목만 (한눈에 보기 편하게)
             secHtml += `<div style="display:flex; gap:6px; padding:2px 0;"><span style="flex:0 0 140px; color:#777;">${escapeHtml(label)}</span><span style="flex:1;">${escapeHtml(String(v))}</span></div>`;
         });
-        if (secHtml) html += `<div style="font-weight:bold; color:#7A4A1F; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
+        if (secHtml) html += `<div style="font-weight:bold; color:#7a5210; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
     });
     bodyEl.innerHTML = html;
 };
@@ -24385,9 +24417,10 @@ window.exportPanelCompareToExcel = async function() {
         for (let ci = 0; ci <= range.e.c; ci++) {
             const cell = ws[XLSX.utils.encode_cell({ r: ri, c: ci })];
             if (!cell) continue;
+            // 💡 헤더 행("Comparison table"+모델명)은 회색, 구분(섹션) 행만 흐린 살구색 — 화면 표시와 통일
             cell.s = {
-                font: { name: '맑은 고딕', sz: 10, bold: isHeader || isSection, color: { rgb: (isHeader || isSection) ? '7A4A1F' : '1F2937' } },
-                fill: (isHeader || isSection) ? { patternType: 'solid', fgColor: { rgb: 'FCE4C8' } } : undefined,
+                font: { name: '맑은 고딕', sz: 10, bold: isHeader || isSection, color: { rgb: isSection ? '7A5210' : (isHeader ? '333333' : '1F2937') } },
+                fill: isSection ? { patternType: 'solid', fgColor: { rgb: 'FFF8E6' } } : (isHeader ? { patternType: 'solid', fgColor: { rgb: 'F8F9FA' } } : undefined),
                 alignment: { vertical: 'center', horizontal: ci === 0 ? 'left' : 'center', wrapText: true },
                 border: { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
             };
