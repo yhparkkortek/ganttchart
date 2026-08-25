@@ -786,10 +786,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
         <span id="current-project-filename" onclick="window.selectProject()"
-              title="클릭하면 저장 후 다른 프로젝트를 열 수 있습니다"
+              title="클릭하면 다른 프로젝트를 열 수 있습니다 (저장 안 한 변경사항이 있으면 먼저 물어봅니다)"
               style="display:none; flex-shrink:0; font-size:14px; color:#fff; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center;"
               onmouseover="this.style.background='rgba(255,255,255,0.18)';"
               onmouseout="this.style.background='transparent';"></span>
+        <!-- 💡 [2026-08-25 신규] 구글 드라이브 연결 상태 표시등 — 저장을 시도해봐야만("헛수고") 끊긴 걸
+             알게 되는 문제를 줄이기 위해, 연결이 끊기면 언제든 상단에서 바로 보이게 함. 클릭하면 재연동. -->
+        <span id="drive-conn-badge" style="display:none; flex-shrink:0; font-size:15px; margin-left:6px; align-items:center;"></span>
     </div>
     <div id="file-status" style="display:none;"></div>
     <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
@@ -2310,13 +2313,163 @@ ${mailText}`;
         gisInited = true;
     }
 
+    // 💡 [2026-08-25 신규] 상단 어디서든 눈에 띄는 연결 상태 표시등. Drive 연동 성공/끊김이 있을 때마다
+    //    호출해서 갱신한다 — 저장 실패로 401을 맞기 전까지는 끊긴 줄 몰랐던("헛수고") 문제를 줄이기 위함.
+    window._updateDriveConnBadge = function() {
+        const el = document.getElementById('drive-conn-badge');
+        if (!el) return;
+        const _en = window._currentLang === 'en';
+        if (window.isDriveConnected) {
+            el.textContent = '🟢';
+            el.title = _en ? 'Google Drive connected' : '구글 드라이브 연결됨';
+            el.style.cursor = 'default';
+            el.onclick = null;
+        } else {
+            el.textContent = '🔴';
+            el.title = _en ? 'Google Drive disconnected — click to reconnect' : '구글 드라이브 연결 끊김 — 클릭해서 재연동';
+            el.style.cursor = 'pointer';
+            el.onclick = function() { window.handleAuthClick(); };
+        }
+        // 💡 아직 한 번도 연동을 시도한 적 없는 최초 상태(currentUserName 없음)에서는 굳이 "끊김"으로
+        //    붉게 표시하지 않는다 — 로그인 전인 것과 "로그인했다가 끊긴 것"은 사용자에게 다른 의미이므로.
+        el.style.display = (window.isDriveConnected || window._driveWasEverConnected) ? 'inline-flex' : 'none';
+    };
+
+    // 💡 [2026-08-25 신규] 저장 401/무토큰, 조용한 토큰 갱신 실패 등 "연결이 끊겼다"고 판단되는 모든
+    //    지점에서 공통으로 호출하는 단일 진입점. 상태 갱신 + 토스트 + (설정돼 있으면) 본인 텔레그램 알림까지
+    //    한 번에 처리해서, 사람이 저장을 시도해보고 나서야("헛수고") 끊김을 알게 되는 일을 줄인다.
+    window._driveDisconnectNotified = false;
+    // 💡 [2026-08-25 신규] 연결이 끊긴 동안 작업이 메모리(globalData 등)에만 있으면, 그 상태에서 브라우저
+    //    탭이 강제로 닫히거나 죽으면(beforeunload 경고를 무시하고 닫는 경우 포함) 그대로 유실된다.
+    //    끊김이 감지될 때마다 지금 화면 내용을 localStorage에 스냅샷으로 남겨, 다음에 이 프로젝트를 다시
+    //    열 때 "저장 안 된 로컬 백업이 있다"고 알아채고 복원을 제안할 수 있게 한다.
+    window._LOCAL_BACKUP_PREFIX = 'gantt_local_backup_';
+    window._saveLocalBackup = function(reason) {
+        try {
+            if (!window._hasUnsavedChangesNow || !window._hasUnsavedChangesNow()) return; // 바뀐 게 없으면 백업할 필요 없음
+            if (typeof globalData === 'undefined' || !globalData) return;
+            const key = window._LOCAL_BACKUP_PREFIX + (window.currentDriveFileId || 'new');
+            const serializedGlobalData = globalData.map(function(row) {
+                const obj = { data: Array.from(row) };
+                for (const k in row) { if (k.startsWith('_')) obj[k] = row[k]; }
+                return obj;
+            });
+            const payload = {
+                savedAt: new Date().toISOString(),
+                reason: reason || '',
+                fileId: window.currentDriveFileId || null,
+                fileName: window.currentDriveFileName || '',
+                changeLogsCount: window.changeLogs ? window.changeLogs.length : 0,
+                data: {
+                    globalData: serializedGlobalData,
+                    changeLogs: window.changeLogs,
+                    colIdx: (typeof colIdx !== 'undefined') ? colIdx : null,
+                    filterColumns: (typeof filterColumns !== 'undefined') ? filterColumns : null,
+                    projectMeta: window.projectMeta || {},
+                    tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}),
+                    distributions: window.projectDistributions || [],
+                    scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || [])
+                }
+            };
+            localStorage.setItem(key, JSON.stringify(payload));
+            console.info('[로컬 백업] 저장됨 (' + (reason || '') + '):', key);
+        } catch (e) {
+            console.warn('[로컬 백업] 저장 실패(용량 초과 등 — 무시하고 진행):', e.message);
+        }
+    };
+    window._clearLocalBackup = function(fileId) {
+        try { localStorage.removeItem(window._LOCAL_BACKUP_PREFIX + (fileId || 'new')); } catch (e) {}
+    };
+    // 프로젝트를 열었을 때, 그 파일에 대한 로컬 백업이 방금 받아온 원격 내용보다 "앞서 있으면"(더 많은
+    // changeLogs) 복원을 제안 — 연결이 끊긴 동안 저장 못 하고 남겨졌던 변경사항일 가능성이 높음.
+    window._checkLocalBackupOnOpen = function(fileId, remoteChangeLogsCount) {
+        try {
+            const key = window._LOCAL_BACKUP_PREFIX + fileId;
+            const raw = localStorage.getItem(key);
+            if (!raw) return;
+            const backup = JSON.parse(raw);
+            if (!backup || !backup.data || (backup.changeLogsCount || 0) <= (remoteChangeLogsCount || 0)) {
+                localStorage.removeItem(key); // 이미 반영됐거나 원격보다 오래된 백업 — 정리
+                return;
+            }
+            const _en = window._currentLang === 'en';
+            const when = backup.savedAt ? new Date(backup.savedAt).toLocaleString() : '';
+            const restore = confirm(_en
+                ? `A local backup of unsaved changes for "${backup.fileName || fileId}" was found (saved on this browser at ${when} — likely because Google Drive was disconnected at that time).\n\nRestore it now? (Review it, then save normally.)`
+                : `"${backup.fileName || fileId}" 프로젝트의 저장되지 않은 로컬 백업이 이 브라우저에 남아있습니다 (저장 시각: ${when} — 당시 구글 드라이브 연결이 끊겼을 가능성이 있습니다).\n\n지금 복원할까요? (복원 후 내용을 확인하고 직접 저장해주세요)`);
+            if (restore) {
+                window._applyLocalBackupData(backup.data);
+                if (window.showToast) window.showToast(_en ? '📥 Local backup restored — please review and save.' : '📥 로컬 백업을 복원했습니다 — 확인 후 저장해주세요.', 'info', 8000);
+            } else {
+                localStorage.removeItem(key); // 복원 안 하기로 했으면 더는 물어보지 않게 정리
+            }
+        } catch (e) { console.warn('[로컬 백업] 복원 확인 실패:', e.message); }
+    };
+    window._applyLocalBackupData = function(data) {
+        globalData = (data.globalData || []).map(function(obj) {
+            const row = obj.data;
+            for (const k in obj) { if (k !== 'data') row[k] = obj[k]; }
+            return row;
+        });
+        window.changeLogs = data.changeLogs || window.changeLogs;
+        window._nonGanttDirty = true; // 복원 직후는 아직 저장 전 상태이므로 "안 저장한 변경사항"으로 취급
+        if (data.colIdx) colIdx = data.colIdx;
+        if (data.filterColumns) filterColumns = data.filterColumns;
+        window.projectMeta = data.projectMeta || window.projectMeta;
+        window.tabData = data.tabData || window.tabData;
+        window.projectDistributions = data.distributions || window.projectDistributions;
+        if (data.scheduleBaselines && data.scheduleBaselines.length) window._scheduleBaselines = data.scheduleBaselines;
+        if (window.mcNormalizeAfterLoad) window.mcNormalizeAfterLoad();
+        if (window.populateTabData) window.populateTabData();
+        window.recalculateSchedules();
+    };
+
+    window._handleDriveDisconnected = function(reason) {
+        const wasConnected = window.isDriveConnected;
+        window.isDriveConnected = false;
+        window._updateDriveConnBadge();
+        window._saveLocalBackup('drive-disconnected:' + (reason || ''));
+        if (!wasConnected && window._driveDisconnectNotified) return; // 이미 끊긴 상태에서 또 감지된 건 중복 알림 생략
+        window._driveDisconnectNotified = true;
+        const _en = window._currentLang === 'en';
+        if (window.showToast) {
+            window.showToast(_en
+                ? '🔴 Google Drive connection lost. Please reconnect from the top menu.'
+                : '🔴 구글 드라이브 연결이 끊어졌습니다. 상단 메뉴에서 재연동해 주세요.', 'error', 8000);
+        }
+        console.warn('[구글 인증] 연결 끊김 감지:', reason);
+        // 💡 본인 텔레그램 알림 — 주소록에 내 이름으로 등록된 텔레그램 ID가 있고, 로컬 백엔드(kortek_backend)가
+        //    켜져 있을 때만 실제 전송됨. 둘 중 하나라도 없으면 sendTelegramAlarm이 조용히 실패하므로 그냥 무시.
+        try {
+            const me = window._addrFindByName ? window._addrFindByName(window.currentUserName || '') : null;
+            if (me && me.telegramId && window.sendTelegramAlarm) {
+                window.sendTelegramAlarm(
+                    `🔴 [Gantt Chart] 구글 드라이브 연결이 끊어졌습니다.\n다시 로그인해 주세요. (사유: ${reason || '알 수 없음'})`,
+                    { chatId: me.telegramId }
+                );
+            }
+        } catch (e) { /* 텔레그램 알림 실패는 무시 — 화면 표시/토스트가 주 경로 */ }
+    };
+
     window._silentRefreshTimer = null;
     window.startSilentTokenRefresh = function() {
         if (window._silentRefreshTimer) return;
         window._silentRefreshTimer = setInterval(() => {
-            if (tokenClient && window.isDriveConnected) {
-                tokenClient.requestAccessToken({ prompt: '' });
-            }
+            if (!tokenClient || !window.isDriveConnected) return;
+            // 💡 [2026-08-25] 예전엔 여기서도 handleAuthClick이 마지막으로 심어둔 callback을 그대로 재사용해서,
+            //    조용한 갱신 성공 시에도 "로그인 성공" 전체 처리(프로젝트 목록 재조회 등 무거운 부수효과)가
+            //    45분마다 배경에서 통째로 다시 실행되고 있었다. 조용한 갱신 전용 콜백으로 토큰만 갈아끼우고,
+            //    실패하면(=브라우저 세션 만료 등으로 prompt:''가 실패) 연결 끊김으로 간주해 사람이 알 수 있게 표시한다.
+            tokenClient.callback = (resp) => {
+                if (resp.error !== undefined) {
+                    window._handleDriveDisconnected('silent-refresh-failed:' + resp.error);
+                    return;
+                }
+                gapi.client.setToken(resp);
+                window.googleAccessToken = resp.access_token;
+                console.info('[구글 인증] 조용한 토큰 갱신 성공');
+            };
+            tokenClient.requestAccessToken({ prompt: '' });
         }, 45 * 60 * 1000);
     }
 
@@ -2346,6 +2499,9 @@ ${mailText}`;
             gapi.client.setToken(resp);
             window.googleAccessToken = resp.access_token;
             window.isDriveConnected = true;
+            window._driveWasEverConnected = true;
+            window._driveDisconnectNotified = false; // 💡 재연동 성공 — 다음에 또 끊기면 다시 알림 가능하도록 리셋
+            window._updateDriveConnBadge();
             window.startSilentTokenRefresh();
 
             // 💡 드라이브 연동 성공 시 팀 공용 AI 프롬프트 자동 동기화
@@ -2407,33 +2563,37 @@ ${mailText}`;
             return;
         }
         window.closeAllTopbarMenus();
-        // 💡 [버그 수정] 빈/기본 시트에서 "프로젝트 열기"를 눌러도, 저장할 실제 내용이 없으면 굳이
-        //    저장을 시도하지 않는다. 예전엔 여기서 항상 저장을 먼저 시도했는데, 빈 시트는 필수 정보
-        //    검증에 걸려 저장이 실패(false 반환)하고 그대로 return돼서 — 프로젝트 목록조차 못 여는
-        //    문제가 있었다. (Summary가 실제로 채워진 프로젝트는 지금처럼 그대로 먼저 저장하고 전환됨)
-        if (window._hasUnsavedProjectData && window._hasUnsavedProjectData()) {
-            window.showToast(window._currentLang === 'en'
-                ? "💾 Saving current project before switching..."
-                : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
-            // 💡 [진단용 계측] "프로젝트 열기가 느리다"는 신고가 반복돼서, 다음에 또 느려질 때 정확히
-            //    어느 단계(전환 전 저장 vs 목록 조회 vs 파일 열기)가 느린지 바로 알 수 있게 시간을 잰다.
-            const _t0 = performance.now();
-            // 💡 [UX 수정] 저장이 막혀도 여기서 alert을 띄우지 않게 하고(suppressAlert), 사유만 받아온다.
-            //    예전엔 ①저장 실패 안내 alert + ②"그래도 목록을 여시겠습니까?" confirm — 모달이 두 번
-            //    연달아 떴고, 두 번째에서 취소하면 프로젝트 목록 자체를 못 열었다.
-            const saved = await window.saveToGoogleDrive({ suppressAlert: true });
-            const _saveMs = Math.round(performance.now() - _t0);
-            console.info(`[프로젝트 열기 계측] 전환 전 저장(saveToGoogleDrive): ${_saveMs}ms`);
-            if (_saveMs > 3000) console.warn(`[프로젝트 열기 계측] ⚠️ 전환 전 저장이 ${_saveMs}ms나 걸림 — Drive 응답 지연 또는 병합 처리가 원인일 수 있음`);
-            // 💡 저장이 막힌 경우(필수정보 미입력 / 새 프로젝트 비밀번호 미입력 등)에도 프로젝트 목록은
-            //    항상 열어준다 — 저장된 다른 프로젝트를 여는 것 자체는 막을 이유가 없고, 지금 화면 내용은
-            //    멀티시트 탭에 그대로 남아 있어 유실되지 않는다. 안내는 사유와 함께 "한 번만" 표시.
-            if (!saved) {
-                const _why = window._lastSaveBlockReason || '';
-                alert(window._currentLang === 'en'
-                    ? (_why ? _why + '\n\n' : '') + '→ Skipping the save and opening the project list.\n(Current screen content stays in its sheet tab — nothing is lost.)'
-                    : (_why ? _why + '\n\n' : '') + '→ 저장은 건너뛰고 프로젝트 목록을 엽니다.\n(지금 화면 내용은 시트 탭에 그대로 남아 있어 사라지지 않습니다)');
+        const _en = window._currentLang === 'en';
+        // 💡 [2026-08-25] 예전엔 저장할 데이터가 조금이라도 있으면(_hasUnsavedProjectData) 무조건
+        //    조용히 자동저장부터 했다 — 이미 저장된 상태라도 매번 실제로 Drive에 다시 쓰는 낭비였고,
+        //    사용자가 "저장할지 말지"를 고를 기회도 없었다. 이제는 실제로 "안 저장한 변경사항"이
+        //    있을 때만(_hasUnsavedChangesNow) 3지선다 모달로 물어보고, 변경사항이 없으면 그냥 바로 이동한다.
+        if (window._hasUnsavedChangesNow && window._hasUnsavedChangesNow()) {
+            const choice = await window._showSaveChoiceModal(window.currentDriveFileName, 'open');
+            if (choice === 'cancel') return;
+            if (choice === 'save') {
+                window.showToast(_en ? "💾 Saving current project before opening the list..." : "💾 프로젝트 이동 전, 현재 작업을 저장하는 중...", 'info');
+                // 💡 [진단용 계측] "프로젝트 열기가 느리다"는 신고가 반복돼서, 다음에 또 느려질 때 정확히
+                //    어느 단계(전환 전 저장 vs 목록 조회 vs 파일 열기)가 느린지 바로 알 수 있게 시간을 잰다.
+                const _t0 = performance.now();
+                // 💡 [UX 수정] 저장이 막혀도 여기서 alert을 띄우지 않게 하고(suppressAlert), 사유만 받아온다.
+                //    예전엔 ①저장 실패 안내 alert + ②"그래도 목록을 여시겠습니까?" confirm — 모달이 두 번
+                //    연달아 떴고, 두 번째에서 취소하면 프로젝트 목록 자체를 못 열었다.
+                const saved = await window.saveToGoogleDrive({ suppressAlert: true });
+                const _saveMs = Math.round(performance.now() - _t0);
+                console.info(`[프로젝트 열기 계측] 전환 전 저장(saveToGoogleDrive): ${_saveMs}ms`);
+                if (_saveMs > 3000) console.warn(`[프로젝트 열기 계측] ⚠️ 전환 전 저장이 ${_saveMs}ms나 걸림 — Drive 응답 지연 또는 병합 처리가 원인일 수 있음`);
+                // 💡 저장이 막힌 경우(필수정보 미입력 / 새 프로젝트 비밀번호 미입력 등)에도 프로젝트 목록은
+                //    항상 열어준다 — 저장된 다른 프로젝트를 여는 것 자체는 막을 이유가 없고, 지금 화면 내용은
+                //    멀티시트 탭에 그대로 남아 있어 유실되지 않는다. 안내는 사유와 함께 "한 번만" 표시.
+                if (!saved) {
+                    const _why = window._lastSaveBlockReason || '';
+                    alert(_en
+                        ? (_why ? _why + '\n\n' : '') + '→ Skipping the save and opening the project list.\n(Current screen content stays in its sheet tab — nothing is lost.)'
+                        : (_why ? _why + '\n\n' : '') + '→ 저장은 건너뛰고 프로젝트 목록을 엽니다.\n(지금 화면 내용은 시트 탭에 그대로 남아 있어 사라지지 않습니다)');
+                }
             }
+            // choice === 'discard' → 저장 없이 그대로 목록을 엶
         }
         const _t1 = performance.now();
         window.loadFromGoogleDrive().then(function() {
@@ -3387,6 +3547,17 @@ ${mailText}`;
         return next;
     };
 
+    // 💡 [2026-08-25 공용화] "지금 화면에 마지막 저장 이후 실제로 안 저장한 변경사항이 있는가"를 판단하는
+    //    단일 기준 — closeSheet/switchToSheetWithSave/selectProject 세 곳에서 각자 똑같은 식을 복붙해
+    //    쓰고 있던 걸 한 곳으로 모았다(따로 관리하면 한쪽만 고치고 잊어버리는 드리프트 위험이 있음).
+    //    ⚠️ 이름이 비슷한 _hasUnsavedProjectData()와는 다른 개념이다 — 그쪽은 "화면에 저장할 내용이
+    //    조금이라도 있는가"(완전히 빈 화면인지 판정용)이고, 이건 "마지막 저장 시점 대비 바뀐 게 있는가"다.
+    window._hasUnsavedChangesNow = function() {
+        const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
+        const savedLogs = window.lastSavedLogCount || 0;
+        return currentLogs > savedLogs || !!window._nonGanttDirty;
+    };
+
     // 💡 [버그 수정] "프로젝트 열기"가 시트 전환 전에 현재 작업을 자동 저장하려다가, 빈/기본 시트에서도
     //    "필수 정보 입력" 검증부터 걸려서 프로젝트 목록 자체를 못 여는 문제가 있었음(아래 selectProject 참고).
     //    저장할 실제 내용이 있는지부터 판단하는 로직을 별도 함수로 빼서 저장 전에 미리 확인할 수 있게 한다.
@@ -3494,7 +3665,24 @@ ${mailText}`;
             }
 
             // 📥 [Phase 2.5] 저장 직전, 내가 파일을 연 이후 도착한 배분 업무를 원격 원장에서 찾아 자동 병합
-            if (fileId) { await window.mergeRemoteDistributions(fileId); }
+            //    💡 [2026-08-25 신규] 이 호출이 이미 "원격 파일이 마지막 확인 이후 바뀌었는지" 알아내므로,
+            //    같은 정보로 "다른 사용자가 먼저 저장한 것 같은데 그래도 덮어쓸까?" 경고를 함께 띄운다
+            //    (멀티유저 동시편집 최소 안전장치 — 배분 이력 외 나머지 내용은 병합되지 않고 덮어써지므로).
+            if (fileId) {
+                const _mergeResult = await window.mergeRemoteDistributions(fileId);
+                if (_mergeResult && _mergeResult.hadBaseline && _mergeResult.remoteChanged && !opts.skipConflictCheck) {
+                    const _proceed = await window._showSaveConflictModal(dynamicFileName);
+                    if (!_proceed) {
+                        const _conflictMsg = window._t(
+                            '⚠️ 다른 사용자가 마지막 확인 이후 이 프로젝트를 저장하여, 충돌을 피하기 위해 저장을 취소했습니다.\n(최신 내용을 받으려면 이 프로젝트를 다시 열어주세요)',
+                            '⚠️ Save cancelled — another user saved this project since your last check.\n(Reopen the project to pick up the latest content.)'
+                        );
+                        window._lastSaveBlockReason = _conflictMsg;
+                        if (!opts.suppressAlert) alert(_conflictMsg);
+                        return false;
+                    }
+                }
+            }
 
             // 🆕 [새 프로젝트 최초 등록] 드라이브에 아직 없던(=fileId가 없는) 프로젝트를 처음 등록하는 순간,
             //    Summary 탭 PROTO Start(계획) 날짜를 Gantt Chart 시작일 기준(anchor)으로 반영해 전체 일정을
@@ -3523,6 +3711,7 @@ ${mailText}`;
             
             if (!token) {
                 window.showToast(_svEn ? "🔒 Auth token lost. Please reconnect Google Drive." : "🔒 구글 인증 토큰을 확보하지 못했습니다. 연동 버튼을 다시 클릭해 주세요.", 'error');
+                window._handleDriveDisconnected('save-no-token');
                 return false;
             }
 
@@ -3551,6 +3740,10 @@ ${mailText}`;
             window.updateCurrentFileLabel();
 
             if (response.ok && file && file.id) {
+                // 💡 [2026-08-25 신규] 방금 정상적으로 Drive에 저장됐으니, 이 프로젝트에 대해 남아있을 수
+                //    있는 로컬 백업(연결 끊김 등으로 저장 못 했던 시점의 스냅샷)은 이제 낡은 것이므로 정리.
+                //    저장 전 fileId(신규 프로젝트면 아직 null → 'new' 버킷)를 기준으로 지워야 정확히 맞는다.
+                window._clearLocalBackup(fileId);
                 window.currentDriveFileId = file.id;
                 window.lastSavedLogCount = window.changeLogs.length;
                 window._nonGanttDirty = false; // 💡 Summary 탭(주요자재 등) 편집도 저장됐으니 함께 리셋
@@ -3605,6 +3798,9 @@ ${mailText}`;
                         authBtn.style.borderColor = '#e67e22';
                         authBtn.style.color = '#e67e22';
                     }
+                    // 💡 [2026-08-25 신규] 저장 시도 중 발견된 401도 "연결 끊김"으로 취급 — 상단 표시등/토스트/
+                    //    (설정된 경우) 텔레그램 알림까지 한 번에 처리해서, 사람이 401을 눈치채기 전에 먼저 알려준다.
+                    window._handleDriveDisconnected('save-401');
                 } else if (status === 403) {
                     errorMsg = "🚫 공유 폴더 접근 권한이 거부되었습니다.\n\n공유 폴더('1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS')에 본인 계정이 '편집자'로 등록되어 있는지 관리자에게 확인해 주세요.";
                 } else if (file && file.error) {
@@ -3857,34 +4053,66 @@ ${mailText}`;
     window.switchToSheetWithSave = function(key, silent) {
         return window._runSerialized(async function() {
             if (key === window._activeSheetKey) return;
-            const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
-            const savedLogs = window.lastSavedLogCount || 0;
+            const _en = window._currentLang === 'en';
             // 💡 [버그 수정] "저장할 변경사항이 있는지"를 currentDriveFileId 존재 여부로도 같이 걸었었다.
             //    그런데 아직 한 번도 저장한 적 없는 "새 프로젝트"는 fileId가 없어서 이 조건이 항상 거짓이
             //    되어, 다른 시트로 전환할 때 저장 시도 자체를 건너뛰고 조용히 넘어갔다 — 새 프로젝트에
             //    쏟은 작업이 아무 경고도 없이 사라질 수 있는 유실 지점이었다(어제 버전부터 있던 문제,
             //    오늘 손댄 코드는 아니지만 마침 오늘 다룬 영역이라 같이 발견됨). fileId 유무와 무관하게
-            //    실제로 바뀐 게 있으면 저장을 시도한다 — 필수정보/비밀번호로 막히면(suppressAlert) 그
-            //    사유를 담아 확인창 한 번으로 안내(모달 중복 방지 패턴은 selectProject와 동일).
-            const hasUnsavedChanges = currentLogs > savedLogs || window._nonGanttDirty;
+            //    실제로 바뀐 게 있으면 저장을 시도한다.
+            const hasUnsavedChanges = window._hasUnsavedChangesNow();
             if (hasUnsavedChanges) {
-                if (!silent && window.showToast) window.showToast('💾 변경사항 저장 중...', 'info');
-                const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
-                if (!ok) {
-                    const _why = window._lastSaveBlockReason || '';
-                    if (!confirm((_why ? _why + '\n\n' : '') + '저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)')) return;
+                if (silent) {
+                    // 💡 [2026-08-25] "전체 프로젝트 한 번에 열기" 같은 배치 흐름에서 호출될 때(silent=true)는
+                    //    파일마다 모달이 뜨면 자동화가 끊기므로, 예전처럼 조용히 저장만 시도하고 진행한다.
+                    const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
+                    if (!ok) {
+                        const _why = window._lastSaveBlockReason || '';
+                        if (!confirm((_why ? _why + '\n\n' : '') + (_en
+                            ? 'Save failed. Move to another project anyway?\n(Current screen content is kept in memory)'
+                            : '저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)'))) return;
+                    }
+                } else {
+                    // 💡 [2026-08-25 신규] 사람이 직접 탭을 클릭해 이동할 때는 무조건 조용히 저장하지 않고,
+                    //    "저장하고 이동 / 저장 안 함 / 취소" 3지선다 모달로 직접 고르게 한다(closeSheet와 동일 패턴).
+                    const cur = window._sheets.find(function(s) { return s.key === window._activeSheetKey; });
+                    const choice = await window._showSaveChoiceModal(cur && cur.fileName, 'switch');
+                    if (choice === 'cancel') return;
+                    if (choice === 'save') {
+                        if (window.showToast) window.showToast(_en ? '💾 Saving...' : '💾 변경사항 저장 중...', 'info');
+                        const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
+                        if (!ok) {
+                            const _why = window._lastSaveBlockReason || '';
+                            if (!confirm((_why ? _why + '\n\n' : '') + (_en
+                                ? 'Save failed. Move to another project anyway?\n(Current screen content is kept in memory)'
+                                : '저장에 실패했습니다. 그래도 다른 프로젝트로 이동할까요?\n(지금 화면 내용은 메모리에 임시 보관됩니다)'))) return;
+                        }
+                    }
+                    // choice === 'discard' → 저장 없이 그대로 이동
                 }
             }
             window.switchToSheet(key);
         });
     };
 
-    // 💡 [2026-08-25 신규] 시트 탭 "✕" 닫기 전용 3지선다 확인 모달 — 브라우저 기본 confirm()은
-    //    OK/Cancel 2개뿐이라 "저장하고 닫기 / 저장 안 하고 닫기 / 취소" 3가지를 표현할 수 없어 직접 만듦.
-    //    Promise로 감싸서 closeSheet()에서 await로 선택 결과('save'|'discard'|'cancel')를 그대로 받는다.
-    window._showSaveChoiceModal = function(fileName) {
+    // 💡 [2026-08-25 신규 → 2026-08-25 범용화] 원래 시트 탭 "✕" 닫기 전용이었는데, "프로젝트 열기"·
+    //    "Sheet 이동" 등 저장 여부를 물어야 하는 다른 곳에서도 그대로 재사용하도록 action 파라미터로
+    //    문구만 갈아끼울 수 있게 일반화했다. 브라우저 기본 confirm()은 OK/Cancel 2개뿐이라
+    //    "저장하고 진행 / 저장 안 하고 진행 / 취소" 3가지를 표현할 수 없어 직접 만듦.
+    //    Promise로 감싸서 호출부에서 await로 선택 결과('save'|'discard'|'cancel')를 그대로 받는다.
+    window._SAVE_CHOICE_LABELS = {
+        close:  { ko: { title: '닫기 전에 변경사항을 저장할까요?', save: '저장하고 닫기' },
+                  en: { title: 'Save changes before closing?',   save: 'Save & Close' } },
+        switch: { ko: { title: '이동하기 전에 변경사항을 저장할까요?', save: '저장하고 이동' },
+                  en: { title: 'Save changes before switching?',      save: 'Save & Switch' } },
+        open:   { ko: { title: '프로젝트 목록을 열기 전에 변경사항을 저장할까요?', save: '저장하고 열기' },
+                  en: { title: 'Save changes before opening the project list?',    save: 'Save & Open' } },
+    };
+    window._showSaveChoiceModal = function(fileName, action) {
+        action = action || 'close';
         return new Promise(function(resolve) {
             const _en = window._currentLang === 'en';
+            const labels = (window._SAVE_CHOICE_LABELS[action] || window._SAVE_CHOICE_LABELS.close)[_en ? 'en' : 'ko'];
             let modal = document.getElementById('sheet-close-choice-modal');
             if (!modal) {
                 modal = document.createElement('div');
@@ -3895,14 +4123,14 @@ ${mailText}`;
             const label = fileName || (_en ? 'this project' : '이 프로젝트');
             modal.innerHTML = `
                 <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(420px, 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
-                    <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:10px;">💾 ${_en ? 'Save changes before closing?' : '닫기 전에 변경사항을 저장할까요?'}</div>
+                    <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:10px;">💾 ${labels.title}</div>
                     <div style="font-size:13px; color:#666; line-height:1.6; margin-bottom:18px; white-space:pre-wrap;">${_en
                         ? `You have unsaved changes in "${escapeHtml(label)}".`
                         : `"${escapeHtml(label)}"에 저장하지 않은 변경사항이 있습니다.`}</div>
                     <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
                         <button id="scc-cancel" style="padding:8px 14px; background:#fff; color:#666; border:1.5px solid #ced4da; border-radius:6px; font-size:12.5px; cursor:pointer;">${_en ? 'Cancel' : '취소'}</button>
                         <button id="scc-discard" style="padding:8px 14px; background:#fff; color:#e03131; border:1.5px solid #e03131; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">${_en ? "Don't Save" : '저장 안 함'}</button>
-                        <button id="scc-save" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">${_en ? 'Save & Close' : '저장하고 닫기'}</button>
+                        <button id="scc-save" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">${labels.save}</button>
                     </div>
                 </div>`;
             modal.style.display = 'flex';
@@ -3911,6 +4139,39 @@ ${mailText}`;
             document.getElementById('scc-discard').onclick = function() { done('discard'); };
             document.getElementById('scc-save').onclick = function() { done('save'); };
             modal.onclick = function() { done('cancel'); }; // 배경(바깥) 클릭 = 취소
+        });
+    };
+
+    // 💡 [2026-08-25 신규] 멀티유저 동시편집 최소 안전장치 — 저장이 그냥 파일을 통째로 덮어쓰는
+    // 구조라(버전/락 없음), 내가 마지막으로 확인한 시점 이후 "다른 사람이 이미 저장"했으면 그냥 조용히
+    // 덮어쓰지 않고 한 번 물어본다. _saveToGoogleDriveRaw가 mergeRemoteDistributions의 결과로 감지.
+    window._showSaveConflictModal = function(fileName) {
+        return new Promise(function(resolve) {
+            const _en = window._currentLang === 'en';
+            let modal = document.getElementById('save-conflict-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'save-conflict-modal';
+                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9600; background:rgba(0,0,0,0.4); align-items:center; justify-content:center;';
+                document.body.appendChild(modal);
+            }
+            const label = fileName || (_en ? 'this project' : '이 프로젝트');
+            modal.innerHTML = `
+                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(460px, 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px; border-top:5px solid #e67e22;">
+                    <div style="font-size:15px; font-weight:bold; color:#b85c00; margin-bottom:10px;">⚠️ ${_en ? 'Someone else saved more recently' : '다른 사용자가 더 최근에 저장했습니다'}</div>
+                    <div style="font-size:13px; color:#555; line-height:1.7; margin-bottom:18px; white-space:pre-wrap;">${_en
+                        ? `Since you last opened/saved "${escapeHtml(label)}", another user has already saved changes to it.\n\nIf you continue, your save will overwrite their changes (only the task-distribution log is safely merged — everything else is not).`
+                        : `"${escapeHtml(label)}"를(을) 마지막으로 열람/저장한 이후, 다른 사용자가 이미 이 프로젝트를 저장했습니다.\n\n지금 그대로 저장하면 그 사람의 변경사항을 덮어쓰게 됩니다(업무 배분 이력만 자동 병합되고, 나머지 내용은 병합되지 않습니다).`}</div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+                        <button id="scf-cancel" style="padding:8px 14px; background:#fff; color:#666; border:1.5px solid #ced4da; border-radius:6px; font-size:12.5px; cursor:pointer;">${_en ? 'Cancel (recommended)' : '취소 (권장)'}</button>
+                        <button id="scf-overwrite" style="padding:8px 14px; background:#e67e22; color:#fff; border:1.5px solid #e67e22; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">${_en ? 'Save anyway (overwrite)' : '그래도 저장 (덮어쓰기)'}</button>
+                    </div>
+                </div>`;
+            modal.style.display = 'flex';
+            function done(v) { modal.style.display = 'none'; resolve(v); }
+            document.getElementById('scf-cancel').onclick = function() { done(false); };
+            document.getElementById('scf-overwrite').onclick = function() { done(true); };
+            modal.onclick = function() { done(false); };
         });
     };
 
@@ -3929,14 +4190,12 @@ ${mailText}`;
             const _en = window._currentLang === 'en';
 
             if (wasActive) {
-                const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
-                const savedLogs = window.lastSavedLogCount || 0;
                 // 💡 [버그 수정] switchToSheetWithSave와 동일한 문제 — currentDriveFileId 없는(=아직
                 //    한 번도 저장 안 한) 새 프로젝트는 이 탭을 "✕"로 닫아도 저장 시도 없이 그대로 사라졌다.
-                const hasUnsavedChanges = currentLogs > savedLogs || window._nonGanttDirty;
+                const hasUnsavedChanges = window._hasUnsavedChangesNow();
                 if (hasUnsavedChanges) {
                     const sheetEntry = window._sheets[idx];
-                    const choice = await window._showSaveChoiceModal(sheetEntry && sheetEntry.fileName);
+                    const choice = await window._showSaveChoiceModal(sheetEntry && sheetEntry.fileName, 'close');
                     if (choice === 'cancel') return;
                     if (choice === 'save') {
                         if (window.showToast) window.showToast(_en ? '💾 Saving before close...' : '💾 저장 후 닫는 중...', 'info');
@@ -4211,6 +4470,9 @@ ${mailText}`;
                 if (_seedMt) { window._distMergeModifiedTime = window._distMergeModifiedTime || {}; window._distMergeModifiedTime[fileId] = _seedMt; }
                 console.info(`[프로젝트 열기 계측] "${fileName}" 화면 렌더링: ${Math.round(performance.now() - _tRender0)}ms`);
                 if (!silent) window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
+                // 💡 [2026-08-25 신규] 이 프로젝트에 대해 이 브라우저에 남은(=연결 끊김 등으로 저장 못 했던)
+                //    로컬 백업이 있으면 복원 여부를 물어봄 — 방금 받아온 원격 내용이 이미 최신이면 자동 정리됨.
+                if (window._checkLocalBackupOnOpen) window._checkLocalBackupOnOpen(fileId, window.changeLogs.length);
             }
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
@@ -10535,6 +10797,14 @@ window.handleAuthClick = function() {
                 const bkBtn2 = document.getElementById('backup_restore_btn'); if (bkBtn2) bkBtn2.disabled = false;
                 const psBtn = document.getElementById('project-select-btn'); if (psBtn) psBtn.disabled = false;
                 window.isDriveConnected = true; // ✅ 연동 완료 플래그
+                // 💡 [2026-08-25 신규] 이 함수(두 번째로 정의된 handleAuthClick)가 실제로 쓰이는 버전인데,
+                //    startSilentTokenRefresh() 호출이 빠져 있어서 45분 주기 조용한 토큰 갱신이 지금까지
+                //    한 번도 실제로 동작하지 않고 있었다 — "로그인이 계속 끊긴다"는 증상의 유력한 원인 중 하나.
+                //    상단 연결 표시등 갱신 + 끊김 재알림 플래그 리셋도 함께 처리.
+                window._driveWasEverConnected = true;
+                window._driveDisconnectNotified = false;
+                if (window._updateDriveConnBadge) window._updateDriveConnBadge();
+                if (window.startSilentTokenRefresh) window.startSilentTokenRefresh();
                 window.closeAllTopbarMenus(); // ✅ 로그인 완료 시 열려있던 파일 드롭다운 자동 닫기
 
                 // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
@@ -10975,6 +11245,10 @@ window.handleAuthClick = function() {
                 //    "저장 안 됐다"는 사실만 계속 상기시킨다 — 예전엔 이 경우 자동저장도, 알림도 전혀 없이
                 //    조용히 넘어가서 작업 내용이 사라져도 알아챌 방법이 없었다.
                 window.showToast(window._t('💾 아직 저장 안 된 새 프로젝트 작업이 있습니다 — 수동으로 저장해주세요', '💾 You have unsaved work on a new project — please save manually'), 'warning', 6000);
+                // 💡 [2026-08-25 신규] Drive에 올릴 곳(fileId)이 아직 없는 새 프로젝트는 saveToGoogleDrive() 자체를
+                //    안 타서 위 disconnect 경로도 안 거친다 — 그래도 브라우저가 꺼지면 그대로 유실되므로 이 경로에서도
+                //    별도로 로컬 백업을 남겨 최소한의 안전장치를 확보한다.
+                if (window._saveLocalBackup) window._saveLocalBackup('new-project-no-drive-file');
             }
         }, 180000);
     }
@@ -14000,14 +14274,23 @@ window.inboxDistExecute = async function(attempt) {
 //    (이 코드베이스의 다른 곳 — 업무 보관함 배분 충돌 감지 등 — 에서 이미 쓰던 modifiedTime 선확인
 //    패턴과 동일)
 window._distMergeModifiedTime = window._distMergeModifiedTime || {};
+// 💡 [2026-08-25] 반환값에 remoteChanged/hadBaseline을 추가 — "배분 이력 병합" 원래 목적과 별개로,
+//    이 함수가 이미 하고 있던 "마지막으로 내가 확인한 이후 원격 파일이 바뀌었는가" 체크가 그대로
+//    "다른 사용자가 먼저 저장했는지" 판단에도 쓸 수 있는 정보라, _saveToGoogleDriveRaw의 저장 충돌
+//    경고에 재사용한다(네트워크 왕복을 늘리지 않고 기존 체크에 얹음).
+//    - hadBaseline: 비교할 이전 값 자체가 없었으면(신규 세션 등) false → 이땐 "충돌"이라 단정할 근거가
+//      약하므로 경고를 띄우지 않는다(오탐 방지).
+//    - remoteChanged: hadBaseline이 true인데 그 값과 지금 원격 modifiedTime이 다르면 true.
 window.mergeRemoteDistributions = async function(fileId) {
     try {
         const _tM0 = performance.now();
         const metaResp = await gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true });
         const remoteModifiedTime = metaResp.result.modifiedTime;
+        const _hadBaseline = window._distMergeModifiedTime[fileId] !== undefined;
+        const _remoteChanged = _hadBaseline && window._distMergeModifiedTime[fileId] !== remoteModifiedTime;
         if (window._distMergeModifiedTime[fileId] === remoteModifiedTime) {
             console.info(`[저장 계측] 배분 병합 확인: ${Math.round(performance.now() - _tM0)}ms (변경 없음 → 전체 다운로드 생략)`);
-            return; // 마지막 확인 이후 파일이 안 바뀜 → 전체 다운로드 생략
+            return { remoteChanged: false, hadBaseline: _hadBaseline }; // 마지막 확인 이후 파일이 안 바뀜 → 전체 다운로드 생략
         }
         window._distMergeModifiedTime[fileId] = remoteModifiedTime;
 
@@ -14063,9 +14346,11 @@ window.mergeRemoteDistributions = async function(fileId) {
             window.recalculateSchedules();
             alert(`📥 작업하는 동안 다른 사용자가 배분한 업무 ${mergedNames.length}건이 자동 병합되어 함께 저장됩니다.\n\n· ${mergedNames.join('\n· ')}`);
         }
+        return { remoteChanged: _remoteChanged, hadBaseline: _hadBaseline };
     } catch (err) {
-        // 병합 확인 실패해도 저장 자체는 막지 않음 (기존 저장 동작 보존)
+        // 병합 확인 실패해도 저장 자체는 막지 않음 (기존 저장 동작 보존) — 충돌 여부도 알 수 없으니 경고하지 않음
         console.warn('배분 원장 병합 확인 실패(저장은 계속 진행):', err);
+        return { remoteChanged: false, hadBaseline: false, error: err };
     }
 };
 
