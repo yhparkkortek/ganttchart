@@ -24338,10 +24338,15 @@ window.panelCompareOpenAddModal = async function() {
             </div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
                 <div id="pc-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new panel with AI' : '또는 새 패널을 AI로 추출'}</div>
-                <div style="display:flex; gap:6px; margin-bottom:6px; flex-shrink:0;">
-                    <input type="file" id="pc-add-file" accept=".pdf,.txt,.html,.htm" style="display:none;" onchange="window._pcHandleFileUpload(this)">
-                    <button type="button" id="pc-add-file-btn" onclick="document.getElementById('pc-add-file').click()" style="flex-shrink:0; padding:6px 10px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">📄 ${_en ? 'Attach PDF/TXT/HTML' : 'PDF/TXT/HTML 첨부'}</button>
-                    <span id="pc-add-file-name" style="font-size:11px; color:#888; align-self:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                <input type="file" id="pc-add-file" accept=".pdf,.txt,.html,.htm" style="display:none;" onchange="window._pcHandleFileUpload(this)">
+                <div id="pc-add-dropzone"
+                     style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-shrink:0; padding:8px 10px; border:1.5px dashed #2c5f8a; border-radius:6px; background:#f8f9fa; cursor:pointer; transition:0.15s;"
+                     onclick="document.getElementById('pc-add-file').click()"
+                     ondragover="event.preventDefault(); this.style.background='#e9eef3';"
+                     ondragleave="this.style.background='#f8f9fa';"
+                     ondrop="event.preventDefault(); event.stopPropagation(); this.style.background='#f8f9fa'; window._pcHandleFileDrop(event.dataTransfer.files);">
+                    <button type="button" id="pc-add-file-btn" onclick="event.stopPropagation(); document.getElementById('pc-add-file').click()" style="flex-shrink:0; padding:6px 10px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">📄 ${_en ? 'Attach PDF/TXT/HTML' : 'PDF/TXT/HTML 첨부'}</button>
+                    <span id="pc-add-file-name" style="font-size:11px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${_en ? 'or drag & drop a file here' : '또는 파일을 여기로 드래그하세요'}</span>
                 </div>
                 <div style="font-size:10.5px; color:#999; margin-bottom:6px;">${_en
                     ? '💡 panelook.com\'s compare page uses a "sticky" label column that gets scrambled when printed to PDF. If the AI keeps mismatching labels and values, use the browser\'s "Save Page As → Webpage, HTML only" instead of printing, and attach that .html file — it keeps labels and values in their original order.'
@@ -24361,7 +24366,7 @@ window.panelCompareOpenAddModal = async function() {
     document.getElementById('pc-add-search').value = '';
     document.getElementById('pc-add-paste').value = '';
     document.getElementById('pc-add-preview').innerHTML = '';
-    const fileNameEl = document.getElementById('pc-add-file-name'); if (fileNameEl) fileNameEl.textContent = '';
+    const fileNameEl = document.getElementById('pc-add-file-name'); if (fileNameEl) fileNameEl.textContent = _en ? 'or drag & drop a file here' : '또는 파일을 여기로 드래그하세요';
     const fileInputEl = document.getElementById('pc-add-file'); if (fileInputEl) fileInputEl.value = '';
     // 💡 [버그 방지] 이 모달을 여는 기본값은 "새로 추가"다 — panelCompareOpenEditModal()은 이 함수를
     //    먼저 부른 "다음"에 아래 두 플래그를 다시 세팅하므로, 여기서 매번 초기화해도 편집 흐름은 안 깨진다.
@@ -24457,10 +24462,10 @@ window._pcExtractHtmlText = function(htmlString) {
     }
 };
 
-window._pcHandleFileUpload = async function(input) {
+// 💡 [2026-08-25 신규] 버튼 클릭(input[type=file])과 드래그앤드롭 둘 다 같은 처리 로직을 타도록,
+//    "File 객체 하나를 받아 읽어서 붙여넣기 칸을 채우는" 부분을 공통 함수로 분리했다.
+window._pcProcessFile = async function(file) {
     const _en = window._currentLang === 'en';
-    const file = input.files && input.files[0];
-    if (!file) return;
     const paste = document.getElementById('pc-add-paste');
     const fileNameEl = document.getElementById('pc-add-file-name');
     const ext = (file.name.split('.').pop() || '').toLowerCase();
@@ -24498,9 +24503,32 @@ window._pcHandleFileUpload = async function(input) {
     } catch (e) {
         if (paste) paste.value = '';
         alert((_en ? 'Failed to read the file: ' : '파일을 읽지 못했습니다: ') + e.message);
+    }
+};
+
+window._pcHandleFileUpload = async function(input) {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    try {
+        await window._pcProcessFile(file);
     } finally {
         input.value = ''; // 같은 파일을 다시 선택해도 change 이벤트가 재발생하도록
     }
+};
+
+// 💡 pc-add-dropzone에 파일을 끌어다 놓았을 때 — 확장자를 먼저 확인해 지원하지 않는 파일이면
+//    조용히 무시하지 않고 바로 알려준다(버튼/클릭 경로는 accept 속성이 브라우저에서 걸러주지만,
+//    드래그앤드롭은 그 필터를 타지 않으므로 여기서 직접 검사해야 함).
+window._pcHandleFileDrop = async function(fileList) {
+    const _en = window._currentLang === 'en';
+    const file = fileList && fileList[0];
+    if (!file) return;
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (['pdf', 'txt', 'html', 'htm'].indexOf(ext) === -1) {
+        alert(_en ? '⚠️ Only PDF/TXT/HTML files are supported.' : '⚠️ PDF/TXT/HTML 파일만 지원합니다.');
+        return;
+    }
+    await window._pcProcessFile(file);
 };
 
 window._pcRunExtract = async function() {
