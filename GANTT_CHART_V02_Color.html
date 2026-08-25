@@ -9409,11 +9409,17 @@ window.deleteHistoryByDateRange = function() {
             'sum-h3-member3-sub': { ko:'(자유 추가)',        en:'(Custom)' },
             'sum-add-member3-btn':{ ko:'+ 인원 추가',       en:'+ Add Member' },
             'sum-h3-photo':       { ko:'제품 사진',         en:'Product Photos' },
+            'sum-h3-materials':   { ko:'주요 자재',         en:'Key Materials' },
         };
         Object.entries(_sumTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+        const _sumAddMatBtn = document.getElementById('sum-add-material-btn');
+        if (_sumAddMatBtn) _sumAddMatBtn.textContent = _en ? '+ Add Material' : '+ 자재 추가';
+        // 💡 주요 자재 표의 칸 placeholder/버튼 title도 언어에 맞춰 다시 그림(값은 collectMaterialRows(true)로
+        //    빈 자유추가 행까지 그대로 보존한 채 다시 렌더링해서, 언어만 바뀌고 입력 중이던 내용은 안 날아감)
+        if (window.renderMaterialRows && window.collectMaterialRows) window.renderMaterialRows(window.collectMaterialRows(true));
 
         // [변경이력 박스] 시작일/종료일/삭제비밀번호/구간삭제 번역 (6개 탭 공통)
         document.querySelectorAll('label').forEach(lbl => {
@@ -23792,7 +23798,13 @@ window._MATERIAL_CATEGORY_ALIASES = { 'SLIM/CUT': ['SLIMMING/CUTTING'] };
 
 // 💡 화면 DOM에서 현재 입력 중인 값을 그대로 읽어 배열로 재구성 (add/delete 시 다른 행의
 //    미저장 편집내용이 날아가지 않도록 collectTabData() 전체를 부르지 않고 이 테이블만 직접 읽음)
-window.collectMaterialRows = function() {
+// 💡 [2026-08-25 버그 수정] keepEmptyExtras가 false(기본값·저장 시 사용)면 완전히 빈 자유추가 행은
+//    자동 정리했는데, "+ 자재 추가"가 이 함수로 "지금 몇 행이 있는지"를 센 뒤 그 위에 한 행을 얹는
+//    방식이라 — 방금 추가해서 아직 아무것도 안 적은 빈 행이 바로 다음 호출에서 사라져버려, 연속으로
+//    눌러도 매번 "빈 칸 1개"로 되돌아가는 것처럼 보였다(실제로는 늘었다 지워지길 반복). "+ 자재 추가"/
+//    "－ 삭제"처럼 화면에 지금 있는 행 그대로를 기준으로 조작할 때는 keepEmptyExtras=true로 불러서
+//    빈 행도 그대로 유지한 채 개수를 센다. 실제 저장(collectTabData 등)은 그대로 기본값(정리함)을 쓴다.
+window.collectMaterialRows = function(keepEmptyExtras) {
     const map = {};
     document.querySelectorAll('#sum-materials-rows-a [data-idx], #sum-materials-rows-b [data-idx]').forEach(function(el) {
         const i = Number(el.dataset.idx);
@@ -23809,8 +23821,8 @@ window.collectMaterialRows = function() {
         const category = isFixed ? window.MATERIAL_FIXED_CATEGORIES[i] : (r.category || '');
         const ktkPn = r.ktkPn || '', description = r.description || '', cost = r.cost || '';
         const useForAnalysis = !!r.useForAnalysis;
-        // 고정 행은 항상 유지, 자유추가 행은 완전히 빈 채로 남으면 저장 시 자동 정리
-        if (isFixed || category || ktkPn || description || cost) {
+        // 고정 행은 항상 유지, 자유추가 행은 완전히 빈 채로 남으면 저장 시 자동 정리(단, keepEmptyExtras면 유지)
+        if (isFixed || keepEmptyExtras || category || ktkPn || description || cost) {
             result.push({ category: category, ktkPn: ktkPn, description: description, cost: cost, useForAnalysis: useForAnalysis });
         }
     }
@@ -23823,6 +23835,7 @@ window.renderMaterialRows = function(rows) {
     if (!tbodyA || !tbodyB) return;
     window.tabData = window.tabData || {};
     rows = rows || [];
+    const _matEn = window._currentLang === 'en';
 
     // 고정 13개: 저장된 데이터에서 구분명으로 값을 이어받고(순서는 항상 고정 목록 순), 없으면 빈 값.
     // useForAnalysis: 저장된 값이 있으면 그대로, 없으면(=신규 프로젝트) PANEL만 기본 체크
@@ -23848,34 +23861,44 @@ window.renderMaterialRows = function(rows) {
     const rowHtml = function(r, idx) {
         const catCell = r.locked
             ? '<td style="padding:4px 6px; border:1px solid #e9ecef; background:#f8f9fa; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
-            : '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="구분명" style="border:none; width:100%; box-sizing:border-box; text-align:center;"></td>';
-        // 💡 [버그 수정] 예전엔 "분석용 체크박스"와 "삭제 버튼"이 별도 열이라, 고정 행(13개 전부)에선
-        //    삭제 버튼이 없어 마지막 열이 항상 빈 칸으로 보였음 — 한 열에 같이 넣어서 해결.
-        const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="이 행 삭제" style="border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:16px; height:16px; line-height:1; padding:0; margin-left:2px;">－</button>';
+            : '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center;"></td>';
+        // 💡 [2026-08-25 UX 개선] 예전엔 "삭제 버튼"이 맨 오른쪽 체크박스 칸에 있어서 눈에 잘 안 띈다는
+        //    지적이 있었음 — PANEL 행의 🔎(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
+        //    자유추가 행을 열 때 바로 보이는 "행 액션 버튼" 자리로 통일했다.
+        const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="' + (_matEn ? 'Delete this row' : '이 행 삭제') + '" style="flex-shrink:0; border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">－</button>';
         // 💡 [2026-08-25 신규 — Panel Compare 연동] PANEL 구분 행에 모델명이 적혀 있으면, 그 옆에
         //    스펙 미리보기 버튼을 붙인다 — 클릭하면 패널 스펙 라이브러리에서 조회해 보여주고,
         //    Panel Compare 탭 비교표에 없으면 바로 추가할 수 있게 한다.
         const descInputCell = '<td style="padding:2px; border:1px solid #e9ecef;"><div style="display:flex; align-items:center; gap:2px;">'
-            + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="예: MV315QHM-N41" style="border:none; width:100%; box-sizing:border-box;" '
-            + (r.category === 'PANEL' ? 'onchange="window.renderMaterialRows(window.collectMaterialRows());"' : '') + '>'
+            + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box;" '
+            + (r.category === 'PANEL' ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
             + ((r.category === 'PANEL' && r.description)
-                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ')" title="패널 스펙 미리보기" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
                 : '')
+            + delBtn
             + '</div></td>';
         return '<tr>' + catCell
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box;"></td>'
             + descInputCell
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box;"></td>'
-            + '<td style="border:1px solid #e9ecef; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)">' + delBtn + '</td>'
+            + '<td style="border:1px solid #e9ecef; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="' + (_matEn ? 'Check to trust mentions of this PN as a project-identifying signal (uncheck for shared/common parts)' : '체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)') + '"></td>'
             + '</tr>';
     };
 
-    tbodyA.innerHTML = allRows.slice(0, splitAt).map(function(r, i) { return rowHtml(r, i); }).join('');
-    tbodyB.innerHTML = allRows.slice(splitAt).map(function(r, i) { return rowHtml(r, i + splitAt); }).join('');
+    // 💡 [2026-08-25 UX 개선] "+ 자재 추가"로 새로 늘어나는 자유추가 행이 항상 ETC보다 위에 오도록,
+    //    "그리는 순서"만 ETC를 자유추가 행들 뒤(표의 맨 마지막)로 옮긴다. data-idx는 원래 논리적
+    //    위치(고정 목록에서의 자리) 그대로 유지해서 collectMaterialRows()의 위치 기반 해석이 깨지지 않는다.
+    const logicalRows = allRows.map(function(r, i) { return { r: r, idx: i }; });
+    const etcEntry = logicalRows.find(function(e) { return e.r.category === 'ETC'; });
+    const displayRows = logicalRows.filter(function(e) { return e.r.category !== 'ETC'; });
+    if (etcEntry) displayRows.push(etcEntry);
+
+    tbodyA.innerHTML = displayRows.slice(0, splitAt).map(function(e) { return rowHtml(e.r, e.idx); }).join('');
+    tbodyB.innerHTML = displayRows.slice(splitAt).map(function(e) { return rowHtml(e.r, e.idx); }).join('');
 };
 
 window.addMaterialRow = function() {
-    const current = window.collectMaterialRows(); // 지금 화면에 입력 중인 값 보존
+    const current = window.collectMaterialRows(true); // 지금 화면에 입력 중인 값 보존(빈 자유추가 행도 유지해야 연속 클릭 시 계속 늘어남)
     current.push({ category: '', ktkPn: '', description: '', cost: '', useForAnalysis: false });
     window.tabData.projectMaterials = current;
     window.renderMaterialRows(current);
@@ -23883,7 +23906,7 @@ window.addMaterialRow = function() {
 
 window.deleteMaterialRow = function(idx) {
     if (idx < window.MATERIAL_FIXED_CATEGORIES.length) return; // 고정 구분은 삭제 불가(안전장치)
-    const current = window.collectMaterialRows();
+    const current = window.collectMaterialRows(true); // 다른 빈 자유추가 행이 먼저 정리되면 idx가 어긋나므로 그대로 유지한 채 삭제
     current.splice(idx, 1);
     window.tabData.projectMaterials = current;
     window.renderMaterialRows(current);
