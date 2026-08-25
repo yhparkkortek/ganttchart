@@ -24533,13 +24533,13 @@ window.showPanelSpecModal = async function(model) {
         bodyEl.innerHTML = `
             <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${escapeHtml(model)}</div>
             <div style="color:#888; margin-bottom:14px;">${_en ? 'No spec has been extracted for this panel yet.' : '아직 이 패널의 스펙이 추출되지 않았습니다.'}</div>
-            <div style="font-size:11.5px; color:#666; line-height:1.6; background:#f8f9fa; border-radius:6px; padding:8px 10px; margin-bottom:12px;">
+            <div style="font-size:11.5px; color:#666; line-height:1.7; background:#f8f9fa; border-radius:6px; padding:8px 10px; margin-bottom:12px;">
                 ${_en
-                    ? '① Open the link below yourself and copy the spec text (panelook.com may show a "slide to verify" check — only a human can pass it, so this cannot be automated).<br>② Click the button below and paste that text — AI will extract it there, not on panelook.com itself.'
-                    : '① 아래 링크를 직접 열어 스펙 텍스트를 복사하세요 (panelook.com은 "슬라이드 인증"이 뜰 수 있는데, 사람만 통과할 수 있어 자동화할 수 없습니다).<br>② 아래 버튼을 눌러 그 텍스트를 붙여넣으면, panelook.com이 아니라 여기서 AI가 추출합니다.'}
+                    ? '① On the panelook.com page below, click the <b>"+"</b> button next to the panel name to add it, then click the <b>"compare"</b> button in the "Panel Compare" box on the right.<br>&nbsp;&nbsp;→ A "slide to verify you\'re human" check may appear — only a human can pass it, so this step cannot be automated.<br>&nbsp;&nbsp;→ After it passes you land on the spec comparison page. Press <b>Ctrl+S</b> there and save it as <b>"Webpage, HTML only"</b> (not PDF/printing — see the tip below for why).<br>② Click the button below, then attach that saved <b>.html file</b> (or paste the spec text) — AI extracts it here, not on panelook.com itself.'
+                    : '① 아래 panelook.com 페이지에서 패널명 앞의 <b>"+"</b> 버튼을 눌러 추가한 뒤, 오른쪽 "Panel Compare" 상자의 <b>"compare"</b> 버튼을 클릭하세요.<br>&nbsp;&nbsp;→ "사람인지 확인" 슬라이드 캡차가 뜰 수 있는데, 사람만 통과할 수 있어 자동화할 수 없습니다.<br>&nbsp;&nbsp;→ 통과하면 스펙 비교 페이지로 이동합니다. 그 페이지에서 <b>Ctrl+S</b>를 눌러 <b>"웹페이지, HTML만"</b>으로 저장하세요(PDF 인쇄 저장은 순서가 흐트러지니 아래 팁 참고).<br>② 아래 버튼을 누른 뒤, 저장한 <b>.html 파일을 첨부</b>하거나(또는 스펙 텍스트를 붙여넣어도 됨) 추출하면, panelook.com이 아니라 여기서 AI가 처리합니다.'}
             </div>
             <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 ① panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
-            <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model))});" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🤖 ${_en ? '② Paste text & extract with AI' : '② 텍스트 붙여넣고 AI로 추출'}</button>
+            <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model))});" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🤖 ${_en ? '② Attach the HTML file (or paste text) & extract with AI' : '② HTML 파일 첨부(또는 텍스트 붙여넣기) 후 AI로 추출'}</button>
         `;
         return;
     }
