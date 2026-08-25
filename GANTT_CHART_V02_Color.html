@@ -1951,9 +1951,15 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div class="concept-section">
             <style>
+                /* 💡 [2026-08-25] Summary/Brief SPEC/M.C Table과 헤더 디자인 통일 — 인라인으로 따로
+                   칠했던 회색 대신, 다른 탭과 완전히 같은 th 배경(#f4f6f8)/텍스트(#555)/중앙정렬을 그대로 씀 */
+                #tab-panelcompare .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 /* 💡 Brief SPEC과 동일한 방식 — thead 전체를 하나의 sticky 단위로 고정하고, 배경을 불투명하게
                    줘서 스크롤할 때 아래 데이터 행이 헤더 밑으로 비쳐 보이지 않게 함 */
                 #tab-panelcompare .concept-table thead { position: sticky !important; top: 0 !important; z-index: 16; }
+                #tab-panelcompare .concept-table thead th { background-color: #f4f6f8 !important; }
+                /* 💡 아직 패널이 선택 안 된 빈 슬롯 헤더 — 점선 테두리로 "여기 채워주세요"를 표시 */
+                #tab-panelcompare .concept-table th.pc-slot-empty { border-style: dashed !important; color: #aaa !important; font-weight: normal !important; }
                 /* 💡 줄무늬(지브라) — M.C Table/Brief SPEC과 동일 톤(흰색/연회색) */
                 #tab-panelcompare .concept-table tbody tr.mc-zebra-a { background-color: #ffffff !important; }
                 #tab-panelcompare .concept-table tbody tr.mc-zebra-b { background-color: #efefef !important; }
@@ -2322,7 +2328,9 @@ ${mailText}`;
     //    보여주기만 하는 뷰라 별도 입력 필드가 없음.
     window._nonGanttDirty = false;
     window._markNonGanttDirty = function() { window._nonGanttDirty = true; };
-    const _NON_GANTT_DIRTY_SELECTORS = '#tab-summary, #tab-briefspec, #tab-mctable';
+    // 💡 [2026-08-25] Panel Compare(Note 열 입력 등)도 여기 추가 — 안 넣으면 그 안에서 뭘 고쳐도
+    //    "저장 안 한 변경사항 있음" 판정에 안 잡혀서, 탭 이동/닫기 시 저장 여부를 안 물어보고 조용히 날아감.
+    const _NON_GANTT_DIRTY_SELECTORS = '#tab-summary, #tab-briefspec, #tab-mctable, #tab-panelcompare';
     document.addEventListener('input', function(e) {
         if (e.target && e.target.closest && e.target.closest(_NON_GANTT_DIRTY_SELECTORS)) window._markNonGanttDirty();
     });
@@ -23959,6 +23967,28 @@ window.upsertPanelLibraryEntry = async function(entry) {
     } catch (e) { alert((_en ? 'Failed to save panel library: ' : '패널 라이브러리 저장 실패: ') + e.message); return false; }
 };
 
+// 💡 [2026-08-25 신규] 스펙 수정 중 모델명을 바꾼 경우, 예전 이름의 라이브러리 항목을 정리하기 위해
+//    사용 — 실패해도 조용히 넘어간다(라이브러리에 옛 이름 항목이 하나 남는 정도라 저장 자체는 막지 않음).
+window._panelLibRemoveEntry = async function(model) {
+    try {
+        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return false;
+        const fileId = await window.findPanelLibFile(token);
+        if (!fileId) return true;
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const loaded = await res.json();
+        if (!loaded || !Array.isArray(loaded.panels)) return true;
+        const before = loaded.panels.length;
+        loaded.panels = loaded.panels.filter(function(p) { return !window._panelLibNamesMatch(p.model, model); });
+        if (loaded.panels.length === before) return true;
+        await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
+            method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(loaded)
+        });
+        return true;
+    } catch (e) { console.warn('패널 라이브러리 항목 삭제 실패:', e.message); return false; }
+};
+
 // ─── AI 추출: 붙여넣은 스펙 텍스트 → 113개 항목 JSON (기존 callAiBackend/getActiveAiKey 재사용) ───
 // 💡 [2026-08-25] 예전엔 8000자로 자르고 있었는데, PDF 데이터시트(pdf.js로 뽑으면 페이지마다
 //    머리말/꼬리말까지 다 들어가 금방 길어짐)는 이 정도로는 스펙 표 뒷부분이 통째로 잘려서 분석이
@@ -24030,8 +24060,9 @@ window.renderPanelCompareTab = async function() {
     if (!theadEl || !tbodyEl) return;
 
     window.tabData = window.tabData || {};
-    window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], lastAutoSeed: null };
+    window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], lastAutoSeed: null, notes: {} };
     const pc = window.tabData.panelCompare;
+    pc.notes = pc.notes || {};
 
     // 💡 Summary 주요자재 PANEL 구분 행 자동 반영 — 등록된 모델명이 새로 생기거나 바뀌면 비교표 맨 앞에 자동 추가.
     //    (한 번 자동 추가된 뒤 사람이 일부러 뺐으면, 같은 값일 때는 다시 억지로 넣지 않는다 — lastAutoSeed로 추적)
@@ -24043,52 +24074,60 @@ window.renderPanelCompareTab = async function() {
         pc.lastAutoSeed = registeredModel;
     }
 
-    theadEl.innerHTML = '';
-    tbodyEl.innerHTML = `<tr><td style="padding:20px; text-align:center; color:#999;">${_en ? 'Loading…' : '불러오는 중...'}</td></tr>`;
+    // 💡 [2026-08-25] 예전엔 선택된 패널이 0개면 표 자체를 숨기고 안내문만 보여줬는데, 이제는 "기본 4열"
+    //    (라벨/슬롯1/슬롯2/Note)을 항상 그려서 빈 슬롯 헤더 자체가 "패널 추가" 진입점 역할을 하게 한다.
+    if (emptyEl) emptyEl.style.display = 'none';
+    theadEl.innerHTML = `<tr><th colspan="99" style="padding:16px; text-align:center; color:#999; background:#fff;">${_en ? 'Loading…' : '불러오는 중...'}</th></tr>`;
+    tbodyEl.innerHTML = '';
     const lib = await window.loadPanelLibrary();
     window._panelCompareLibCache = lib;
 
-    if (!pc.selectedModels.length) {
-        theadEl.innerHTML = '';
-        tbodyEl.innerHTML = '';
-        if (emptyEl) emptyEl.style.display = 'block';
-        return;
-    }
-    if (emptyEl) emptyEl.style.display = 'none';
+    const selected = pc.selectedModels.slice(0, 10);
+    const slotCount = Math.max(2, selected.length); // 💡 기본 최소 2개 비교 슬롯(3열)을 항상 보여줌
+    const entries = selected.map(function(m) { return window.findPanelInLibrary(lib, m); });
+    const totalCols = 1 + slotCount + 1; // 라벨 + 슬롯들 + Note
 
-    const models = pc.selectedModels.slice(0, 10);
-    const entries = models.map(function(m) { return window.findPanelInLibrary(lib, m); });
-
-    // 💡 헤더 행("Comparison table" 코너 + 모델명들)은 회색으로 통일 — 구분(섹션) 행에만 흐린 살구색을 씀
     let headHtml = '<tr>';
-    headHtml += `<th style="min-width:140px; background:#f8f9fa; color:#333; border:1px solid #dee2e6; padding:6px 8px; text-align:left;">Comparison table</th>`;
-    models.forEach(function(m, i) {
-        const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
-        const has = !!entries[i];
-        headHtml += `<th style="min-width:120px; background:#f8f9fa; color:#333; border:1px solid #dee2e6; padding:6px 8px; text-align:center;">
-            <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
-            <div style="margin-top:3px; display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap;">
-                <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
-                <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
-                ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
-            </div>
-        </th>`;
-    });
+    headHtml += `<th style="min-width:140px;">Comparison table</th>`;
+    for (let i = 0; i < slotCount; i++) {
+        const m = selected[i];
+        if (m) {
+            const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
+            const has = !!entries[i];
+            headHtml += `<th style="min-width:120px;">
+                <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
+                <div style="margin-top:3px; display:flex; gap:5px; justify-content:center; align-items:center; flex-wrap:wrap;">
+                    ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2f9e44; font-size:10px; cursor:pointer; padding:1px 5px;">✏️</button>` : ''}
+                    <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
+                    <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
+                    ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
+                </div>
+            </th>`;
+        } else {
+            headHtml += `<th class="pc-slot-empty" style="min-width:120px; cursor:pointer;" onclick="window.panelCompareOpenAddModal()" title="${_en ? 'Click to add a panel' : '클릭해서 패널 추가'}">
+                ${_en ? '+ Comparison Target Panel' : '+ 비교대상 패널'}
+            </th>`;
+        }
+    }
+    headHtml += `<th style="min-width:130px;">Note</th>`;
     headHtml += '</tr>';
     theadEl.innerHTML = headHtml;
 
     let html = '';
     window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
-        html += `<tr class="pc-section-row"><td colspan="${models.length + 1}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #dee2e6;">[${escapeHtml(sec.section)}]</td></tr>`;
+        html += `<tr class="pc-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[${escapeHtml(sec.section)}]</td></tr>`;
         sec.fields.forEach(function(f) {
             const label = f[0], priority = f[1];
             const rowStyle = priority === 2 ? ('display:' + (window._pcExpanded ? 'table-row' : 'none') + ';') : '';
             html += `<tr class="${priority === 2 ? 'pc-p2-row' : ''}" style="${rowStyle}">`;
             html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
-            entries.forEach(function(entry) {
+            for (let i = 0; i < slotCount; i++) {
+                const entry = entries[i];
                 const v = entry && entry.specs && entry.specs[label] != null && entry.specs[label] !== '' ? entry.specs[label] : '-';
-                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">${escapeHtml(String(v))}</td>`;
-            });
+                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
+            }
+            const noteVal = pc.notes[label] || '';
+            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" placeholder="${_en ? 'note…' : '메모...'}" onchange="window.panelCompareSetNote(${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent;"></td>`;
             html += '</tr>';
         });
     });
@@ -24097,6 +24136,15 @@ window.renderPanelCompareTab = async function() {
 
     const toggleBtn = document.getElementById('pc-toggle-btn');
     if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+};
+
+// 💡 [2026-08-25 신규] Note 열 — 사용자가 프로젝트별로 자유롭게 남기는 메모(패널과 무관, 항목별 1개).
+window.panelCompareSetNote = function(label, value) {
+    window.tabData = window.tabData || {};
+    window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], notes: {} };
+    window.tabData.panelCompare.notes = window.tabData.panelCompare.notes || {};
+    window.tabData.panelCompare.notes[label] = value;
+    // 💡 dirty 표시는 #tab-panelcompare가 _NON_GANTT_DIRTY_SELECTORS에 포함돼 있어 change 이벤트로 자동 처리됨
 };
 
 window.panelCompareToggleExpand = function() {
@@ -24149,6 +24197,24 @@ window.panelCompareReextract = async function(model) {
     }
 };
 
+// 💡 [2026-08-25 신규] "저장한 스펙/모델명을 수정할 수 없다"는 지적에 대한 대응 — 다시 붙여넣어 AI로
+//    재추출하지 않아도, 라이브러리에 있는 현재 값을 그대로 불러와 각 항목을 직접 고칠 수 있게 한다.
+//    모델명도 이 폼에서 바꿀 수 있고, 저장 시 이름이 바뀌었으면 예전 이름의 라이브러리 항목은 정리한다.
+window.panelCompareOpenEditModal = async function(model) {
+    const _en = window._currentLang === 'en';
+    // 💡 [버그 수정] 캐시(_panelCompareLibCache)는 마지막 탭 렌더링 시점 스냅샷이라, 그 사이 다른 곳에서
+    //    라이브러리가 바뀌었으면 낡은 값을 편집 폼에 채우게 된다 — 수정할 때는 항상 최신을 다시 받는다.
+    const lib = await window.loadPanelLibrary();
+    window._panelCompareLibCache = lib;
+    const entry = window.findPanelInLibrary(lib, model);
+    if (!entry) { alert(_en ? 'This panel was not found in the library.' : '라이브러리에서 이 패널을 찾을 수 없습니다.'); return; }
+    await window.panelCompareOpenAddModal();
+    window._pcPendingReextractModel = entry.model; // 모델명 입력칸 미리 채움(기존과 동일한 메커니즘 재사용)
+    window._pcEditingOriginalModel = entry.model;   // 저장할 때 "이름이 바뀐 수정"인지 판단하는 기준값
+    window._pcRenderPreviewForm(entry.specs || {});
+    if (window.showToast) window.showToast(_en ? `Loaded the current spec for "${entry.model}" — edit and save.` : `"${entry.model}"의 현재 스펙을 불러왔습니다 — 수정 후 저장하세요.`, 'info');
+};
+
 // ─── "➕ 패널 추가" 모달: 라이브러리 검색 + 새 패널 AI 추출 ───
 window.panelCompareOpenAddModal = async function() {
     const _en = window._currentLang === 'en';
@@ -24194,6 +24260,11 @@ window.panelCompareOpenAddModal = async function() {
     document.getElementById('pc-add-preview').innerHTML = '';
     const fileNameEl = document.getElementById('pc-add-file-name'); if (fileNameEl) fileNameEl.textContent = '';
     const fileInputEl = document.getElementById('pc-add-file'); if (fileInputEl) fileInputEl.value = '';
+    // 💡 [버그 방지] 이 모달을 여는 기본값은 "새로 추가"다 — panelCompareOpenEditModal()은 이 함수를
+    //    먼저 부른 "다음"에 아래 두 플래그를 다시 세팅하므로, 여기서 매번 초기화해도 편집 흐름은 안 깨진다.
+    //    초기화 안 하면, 편집을 한 번 연 뒤 취소하고 "새 패널 추가"를 열었을 때도 예전 편집 상태가 남아
+    //    엉뚱한 이름의 라이브러리 항목을 지워버리는 사고로 이어질 수 있었다.
+    window._pcEditingOriginalModel = null;
     const lib = await window.loadPanelLibrary();
     window._panelCompareLibCache = lib;
     window._pcRenderLibList('');
@@ -24396,15 +24467,29 @@ window._pcSaveNewPanel = async function() {
         sourceUrl: 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model),
         specs: specs
     };
+    // 💡 [2026-08-25 신규] "✏️ 수정" 경로로 들어와서 모델명 자체를 바꾼 경우 — 새 이름으로 저장하는 것과
+    //    별개로, 예전 이름의 라이브러리 항목이 유령으로 남지 않도록 지우고, 이 프로젝트의 selectedModels/
+    //    lastAutoSeed도 옛 이름 → 새 이름으로 교체한다(그냥 "추가"로 취급해 중복 슬롯이 생기지 않도록).
+    const originalModel = window._pcEditingOriginalModel;
+    window._pcEditingOriginalModel = null; // 1회성 소비 — 다음 저장부터는 다시 "신규 추가"로 동작
+    const isRename = !!(originalModel && originalModel !== model);
+
     const ok = await window.upsertPanelLibraryEntry(entry);
     if (!ok) return;
+    if (isRename) await window._panelLibRemoveEntry(originalModel);
+
     window.tabData = window.tabData || {};
     window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], lastAutoSeed: null };
-    if (window.tabData.panelCompare.selectedModels.indexOf(model) === -1) {
-        if (window.tabData.panelCompare.selectedModels.length >= 10) {
+    const sel = window.tabData.panelCompare.selectedModels;
+    if (isRename) {
+        const idx = sel.indexOf(originalModel);
+        if (idx !== -1) sel[idx] = model; else if (sel.indexOf(model) === -1 && sel.length < 10) sel.push(model);
+        if (window.tabData.panelCompare.lastAutoSeed === originalModel) window.tabData.panelCompare.lastAutoSeed = model;
+    } else if (sel.indexOf(model) === -1) {
+        if (sel.length >= 10) {
             alert(_en ? 'This project already has 10 panels in the comparison table (maximum). It was saved to the library, but not added here — remove one first.' : '이미 이 프로젝트의 비교표에 패널 10개(최대)가 있습니다. 라이브러리엔 저장됐지만 여기엔 추가되지 않았습니다 — 하나를 먼저 제거해주세요.');
         } else {
-            window.tabData.panelCompare.selectedModels.push(model);
+            sel.push(model);
         }
     }
     const modal = document.getElementById('pc-add-modal'); if (modal) modal.style.display = 'none';
@@ -24489,6 +24574,8 @@ document.addEventListener('click', function(e) {
     if (rm) { window.panelCompareRemove(rm.dataset.pcRemove); return; }
     const re = e.target.closest('[data-pc-reextract]');
     if (re) { window.panelCompareReextract(re.dataset.pcReextract); return; }
+    const ed = e.target.closest('[data-pc-edit]');
+    if (ed) { window.panelCompareOpenEditModal(ed.dataset.pcEdit); return; }
 });
 
 // ─── 엑셀로 내보내기 (기존 exportToExcel과 동일하게 xlsx-js-style 재사용 — 섹션 헤더 파란 배경 + 모델명 하이퍼링크) ───
@@ -24499,11 +24586,12 @@ window.exportPanelCompareToExcel = async function() {
     if (!models.length) { alert(_en ? 'No panels in the comparison table yet.' : '비교표에 패널이 없습니다.'); return; }
     const lib = await window.loadPanelLibrary();
     const entries = models.map(function(m) { return window.findPanelInLibrary(lib, m); });
+    const notes = pc.notes || {}; // 💡 화면의 Note 열(자유 메모)도 함께 내보냄
 
     const aoa = [];
-    aoa.push(['Comparison table'].concat(models));
+    aoa.push(['Comparison table'].concat(models).concat(['Note']));
     window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
-        aoa.push(['[' + sec.section + ']'].concat(models.map(function() { return ''; })));
+        aoa.push(['[' + sec.section + ']'].concat(models.map(function() { return ''; })).concat(['']));
         sec.fields.forEach(function(f) {
             const label = f[0];
             const row = [label];
@@ -24511,12 +24599,13 @@ window.exportPanelCompareToExcel = async function() {
                 const v = (entry && entry.specs && entry.specs[label] != null && entry.specs[label] !== '') ? entry.specs[label] : '-';
                 row.push(String(v));
             });
+            row.push(notes[label] || '');
             aoa.push(row);
         });
     });
 
     const ws = XLSX.utils.aoa_to_sheet(aoa);
-    ws['!cols'] = [{ wch: 26 }].concat(models.map(function() { return { wch: 22 }; }));
+    ws['!cols'] = [{ wch: 26 }].concat(models.map(function() { return { wch: 22 }; })).concat([{ wch: 24 }]);
 
     const sectionRowIdx = [];
     let rPtr = 1;
@@ -24537,7 +24626,7 @@ window.exportPanelCompareToExcel = async function() {
                 alignment: { vertical: 'center', horizontal: ci === 0 ? 'left' : 'center', wrapText: true },
                 border: { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
             };
-            if (isHeader && ci > 0) {
+            if (isHeader && ci > 0 && ci <= models.length) { // 💡 맨 끝 Note 헤더 칸은 모델이 아니므로 제외
                 const model = models[ci - 1];
                 cell.l = { Target: 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model), Tooltip: 'panelook.com search' };
             }
