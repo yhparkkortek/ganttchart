@@ -12277,7 +12277,7 @@ window.renderMailResult = function(result) {
                        onchange="window._mailAnalyzedResult['${f.key}'] = this.value">`;
 
         html += `<tr>
-            <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; width:100px;">${f.label}</td>
+            <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; width:128px; white-space:nowrap;">${f.label}</td>
             <td style="padding:7px 10px; border:1px solid #dee2e6;">${inputType}</td>
         </tr>`;
     });
@@ -12300,7 +12300,7 @@ window.renderMailResult = function(result) {
     ).join('');
     
     html += `<tr>
-        <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; white-space:nowrap;">${_isEn ? '📊 WBS Level' : '📊 WBS 레벨'}</td>
+        <td style="padding:7px 10px; background:#f8f9fa; border:1px solid #dee2e6; font-weight:bold; width:128px; white-space:nowrap;">${_isEn ? '📊 WBS Level' : '📊 WBS 레벨'}</td>
         <td style="padding:7px 10px; border:1px solid #dee2e6;">
             <select style="width:100%; border:1px solid #ced4da; border-radius:4px; padding:4px; font-size:13px; box-sizing:border-box;" 
                 onchange="window._mailAnalyzedResult['wbs레벨'] = parseInt(this.value); window._mailAnalyzedResult['_wbsLevelUserSet'] = true;">
