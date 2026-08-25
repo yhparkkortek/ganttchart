@@ -787,6 +787,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <div class="tb-menu-sep"></div>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
+                <button id="add-user-btn" class="topbar-menu-item" onclick="window.open('https://console.cloud.google.com/auth/audience?hl=ko&amp;project=yhparkkortek-gantt','_blank'); window.open('https://drive.google.com/drive/u/0/home','_blank');" title="새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다.">👤➕ 사용자 추가</button>
             </div>
         </div>
         <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
@@ -8776,6 +8777,7 @@ window.deleteHistoryByDateRange = function() {
                 'schedule-tools-btn': '🛠️ 일정 도구',
                 'baseline-menu-btn':  '📐 계획',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
+                'add-user-btn':       '👤➕ 사용자 추가',
                 'file-input-label':'🟩 프로젝트 엑셀 열기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
@@ -8875,6 +8877,7 @@ window.deleteHistoryByDateRange = function() {
                 'schedule-tools-btn': '🛠️ Schedule Tools',
                 'baseline-menu-btn':  '📐 Plan',
                 'admin-pw-change-btn': '🔑 Change Password',
+                'add-user-btn':       '👤➕ Add User',
                 'file-input-label':'🟩 Open Project Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
@@ -23861,7 +23864,9 @@ window.renderMaterialRows = function(rows) {
     const rowHtml = function(r, idx) {
         const catCell = r.locked
             ? '<td style="padding:4px 6px; border:1px solid #e9ecef; background:#f8f9fa; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
-            : '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center;"></td>';
+            // 💡 [2026-08-25 UX 개선] 고정 행(회색 배경)과 시각적 통일성을 주기 위해, 자유추가 행의
+            //    TYPE 입력칸도 같은 회색(#f8f9fa) 배경으로 맞춤(고정 행처럼 잠겨있진 않지만 톤을 통일).
+            : '<td style="padding:2px; border:1px solid #e9ecef; background:#f8f9fa;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center; background:transparent; font-weight:bold;"></td>';
         // 💡 [2026-08-25 UX 개선] 예전엔 "삭제 버튼"이 맨 오른쪽 체크박스 칸에 있어서 눈에 잘 안 띈다는
         //    지적이 있었음 — PANEL 행의 🔎(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
         //    자유추가 행을 열 때 바로 보이는 "행 액션 버튼" 자리로 통일했다.
