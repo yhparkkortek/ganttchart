@@ -23982,6 +23982,11 @@ ${keyListText}
 2. 값은 원문 표기(단위 포함)를 최대한 그대로 유지하세요.
 3. 위에 나열된 키 이름을 한 글자도 다르지 않게 정확히 그대로 사용하세요.
 4. "Model Name"도 못 찾으면 "-"로 답하세요.
+5. ⚠️ 이 텍스트는 웹페이지를 인쇄/저장해서 뽑은 것이라, 항목명(라벨)들이 한 곳에 몰려 나오고 실제 값들은
+   전혀 다른 위치에 순서대로만 나열되어 있는 경우가 있습니다(예: 라벨 목록 "Panel Brand / Panel Type / ..."이
+   먼저 다 나온 뒤, 한참 뒤에 값 목록 "BOE / a-Si TFT-LCD / ..."가 나옴). 이런 경우 값의 형식(온도 범위,
+   %, 해상도, mm 단위, 색상 좌표 등)과 패널 스펙 도메인 지식을 활용해 각 값이 실제로 어느 항목에 해당하는지
+   판단해서 정확히 매칭하세요 — 텍스트 안에서의 물리적 인접성만으로 판단하지 마세요.
 
 [원문 텍스트]
 ${(rawText || '').substring(0, window._PANEL_EXTRACT_TEXT_LIMIT)}`;
@@ -24165,11 +24170,14 @@ window.panelCompareOpenAddModal = async function() {
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
                 <div id="pc-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new panel with AI' : '또는 새 패널을 AI로 추출'}</div>
                 <div style="display:flex; gap:6px; margin-bottom:6px; flex-shrink:0;">
-                    <input type="file" id="pc-add-file" accept=".pdf,.txt" style="display:none;" onchange="window._pcHandleFileUpload(this)">
-                    <button type="button" id="pc-add-file-btn" onclick="document.getElementById('pc-add-file').click()" style="flex-shrink:0; padding:6px 10px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">📄 ${_en ? 'Attach PDF/TXT' : 'PDF/TXT 첨부'}</button>
+                    <input type="file" id="pc-add-file" accept=".pdf,.txt,.html,.htm" style="display:none;" onchange="window._pcHandleFileUpload(this)">
+                    <button type="button" id="pc-add-file-btn" onclick="document.getElementById('pc-add-file').click()" style="flex-shrink:0; padding:6px 10px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">📄 ${_en ? 'Attach PDF/TXT/HTML' : 'PDF/TXT/HTML 첨부'}</button>
                     <span id="pc-add-file-name" style="font-size:11px; color:#888; align-self:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
                 </div>
-                <textarea id="pc-add-paste" placeholder="${_en ? 'Paste the panel spec text copied from panelook.com or a datasheet, or attach a PDF/TXT file above...' : 'panelook.com이나 데이터시트에서 복사한 패널 스펙 텍스트를 붙여넣거나, 위에서 PDF/TXT 파일을 첨부하세요...'}" style="width:100%; box-sizing:border-box; min-height:90px; border:1px solid #ced4da; border-radius:6px; padding:8px; font-size:12px; resize:vertical;"></textarea>
+                <div style="font-size:10.5px; color:#999; margin-bottom:6px;">${_en
+                    ? '💡 panelook.com\'s compare page uses a "sticky" label column that gets scrambled when printed to PDF. If the AI keeps mismatching labels and values, use the browser\'s "Save Page As → Webpage, HTML only" instead of printing, and attach that .html file — it keeps labels and values in their original order.'
+                    : '💡 panelook.com 비교표 페이지는 라벨 열이 "sticky"로 고정돼 있어서, PDF로 인쇄하면 라벨과 값의 순서가 흐트러질 수 있습니다. AI 추출 결과가 자꾸 항목과 값이 안 맞으면, 인쇄 대신 브라우저의 "다른 이름으로 저장 → 웹페이지, HTML만"으로 저장한 .html 파일을 첨부해보세요 — 원본 순서 그대로 라벨/값이 유지됩니다.'}</div>
+                <textarea id="pc-add-paste" placeholder="${_en ? 'Paste the panel spec text copied from panelook.com or a datasheet, or attach a PDF/TXT/HTML file above...' : 'panelook.com이나 데이터시트에서 복사한 패널 스펙 텍스트를 붙여넣거나, 위에서 PDF/TXT/HTML 파일을 첨부하세요...'}" style="width:100%; box-sizing:border-box; min-height:90px; border:1px solid #ced4da; border-radius:6px; padding:8px; font-size:12px; resize:vertical;"></textarea>
                 <button id="pc-add-extract-btn" onclick="window._pcRunExtract()" style="margin-top:8px; padding:8px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; flex-shrink:0;">🤖 ${_en ? 'Extract with AI' : 'AI로 추출'}</button>
                 <div id="pc-add-preview" style="margin-top:10px;"></div>
             </div>
@@ -24229,6 +24237,52 @@ window._pcExtractPdfText = async function(file) {
     return text;
 };
 
+// 💡 [2026-08-25 실측 확인] panelook.com 비교 페이지는 라벨(#left_attr_table의 <li>)과 값
+//    (#right_attr_table의 <dl>, 값은 그 안의 .vartd)이 완전히 분리된 두 DOM 서브트리다 — 그냥
+//    textContent만 뽑으면 "라벨 129개가 통째로 먼저, 그다음 값 129개가 통째로" 나와버려서 순서가
+//    아예 다르다(실제 저장된 HTML로 확인함). 다행히 두 목록의 "행 순서(li/dl 등장 순서)"는 정확히
+//    1:1로 대응하므로, 인덱스로 짝지어 "라벨 : 값" 형태로 재구성하면 완벽하게 복원된다(129/129 확인).
+//    이 구조가 아니면(다른 사이트 등) null을 반환해 호출부가 일반 텍스트 추출로 폴백하게 한다.
+window._pcExtractPanelookHtml = function(doc) {
+    const leftItems = doc.querySelectorAll('#left_attr_table > li');
+    const rightRows = doc.querySelectorAll('#right_attr_table > dl');
+    if (!leftItems.length || !rightRows.length) return null;
+    const n = Math.min(leftItems.length, rightRows.length);
+    const lines = [];
+    for (let i = 0; i < n; i++) {
+        const li = leftItems[i];
+        const dl = rightRows[i];
+        const sectionEl = li.querySelector('.class_name');
+        if (sectionEl) { lines.push(sectionEl.textContent.replace(/\s+/g, ' ').trim()); continue; }
+        const labelEl = li.querySelector('.bar');
+        if (!labelEl) continue; // 맨 위 빈 헤더 스페이서 행 등
+        const label = labelEl.textContent.replace(/\s+/g, ' ').trim();
+        // 여러 패널을 비교 중이면 panel_dd_0, panel_dd_1... 안에 각각 .vartd가 있음 — 전부 이어붙임
+        const values = Array.from(dl.querySelectorAll('.vartd'))
+            .map(function(v) { return v.textContent.replace(/\s+/g, ' ').trim(); })
+            .filter(Boolean);
+        lines.push(label + ' ' + (values.length ? values.join(' | ') : '-'));
+    }
+    return lines.join('\n');
+};
+
+// 💡 [2026-08-25 신규] "다른 이름으로 저장 → 웹페이지 HTML" 파일에서 텍스트만 뽑아낸다. panelook.com
+//    특유의 구조(위 함수)가 감지되면 그걸로 정확히 재구성하고, 아니면 DOMParser로 script/style/svg만
+//    걷어낸 뒤 순수 텍스트만 추출하는 일반적인 방식으로 폴백한다.
+window._pcExtractHtmlText = function(htmlString) {
+    try {
+        const doc = new DOMParser().parseFromString(htmlString, 'text/html');
+        const panelookLines = window._pcExtractPanelookHtml(doc);
+        if (panelookLines) return panelookLines;
+
+        doc.querySelectorAll('script, style, noscript, svg').forEach(function(el) { el.remove(); });
+        return (doc.body ? doc.body.textContent : doc.documentElement.textContent) || '';
+    } catch (e) {
+        console.warn('HTML 텍스트 추출 실패:', e.message);
+        return '';
+    }
+};
+
 window._pcHandleFileUpload = async function(input) {
     const _en = window._currentLang === 'en';
     const file = input.files && input.files[0];
@@ -24246,6 +24300,15 @@ window._pcHandleFileUpload = async function(input) {
             }
             if (paste) paste.value = _en ? 'Reading PDF…' : 'PDF 읽는 중...';
             text = await window._pcExtractPdfText(file);
+        } else if (ext === 'html' || ext === 'htm') {
+            // 💡 [2026-08-25 신규] panelook.com 비교표 페이지는 라벨 열이 CSS sticky라서, 브라우저로
+            //    "인쇄→PDF"하면 페이지가 나뉠 때마다 라벨 열이 처음부터 다시 그려져 값과 순서가 완전히
+            //    어긋나는 걸 실제 파일로 확인함(라벨 12개 정도만 반복되고 나머지 값은 짝 없이 흩어짐).
+            //    반면 "다른 이름으로 저장→웹페이지 HTML"은 화면에 그려진 CSS 배치가 아니라 원본 문서(DOM)
+            //    순서 그대로 저장되므로, sticky 여부와 무관하게 라벨 바로 다음에 그 값이 나오는 원래
+            //    순서가 보존된다. DOMParser로 파싱해 script/style만 제거하고 텍스트만 뽑아낸다.
+            const htmlStr = await file.text();
+            text = window._pcExtractHtmlText(htmlStr);
         } else {
             text = await file.text();
         }
