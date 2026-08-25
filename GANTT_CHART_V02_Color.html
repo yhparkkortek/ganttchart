@@ -13526,8 +13526,10 @@ window.renderTaskInbox = function() {
         return;
     }
     const l0List = window.getCurrentL0List();
-    const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;' };
-    const statusLabel = _ibEn ? { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent' } : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨' };
+    const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;', '자동배치됨': 'background:#f3f0ff;color:#7048e8;' };
+    const statusLabel = _ibEn
+        ? { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed' }
+        : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨', '자동배치됨': '자동배치됨' };
     let html = '';
     items.forEach(function(it) {
         const t = it.task || {};
@@ -18249,7 +18251,20 @@ window._msQueueRowHint = function(type, r) {
     return type === 'unmatched' ? '등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음)' : '';
 };
 
-window._msRenderQueueModal = function(type, title) {
+// 💡 [2026-08-25 신규] 큐 종류(type) → 모달 헤더 문구. 예전엔 호출부(msShowUnmatchedModal 등)가
+//    한글 문자열을 직접 넘겨서 영문 모드로 전환해도 이 헤더만 한글로 남아있었다 — type만 넘기면
+//    현재 언어에 맞는 제목을 여기서 고르도록 바꿔서, 언어 전환 시에도 다시 열면 바로 맞는 언어로 나온다.
+window._msQueueTypeLabel = function(type) {
+    const _en = window._currentLang === 'en';
+    if (type === 'unmatched') return _en ? '📭 Unclassified Mail' : '📭 미분류 메일';
+    if (type === 'newsender') return _en ? '👤 New Sender Mail' : '👤 신규발신자 메일';
+    if (type === 'discarded') return _en ? '🗑 Auto-discarded Mail' : '🗑 자동폐기 메일';
+    return '';
+};
+
+window._msRenderQueueModal = function(type) {
+    const _msQEn = window._currentLang === 'en';
+    const title = window._msQueueTypeLabel(type);
     const rows = window._msQueueGetRows(type);
 
     window._msQueueRows = rows; // 💡 "원문 보기" 클릭 시 참조용 (onclick 문자열에 본문을 직접 못 넣으니 인덱스로 조회)
@@ -18283,7 +18298,7 @@ window._msRenderQueueModal = function(type, title) {
                 </div>
             </div>`;
         }).join('')
-        : '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">대기 중인 항목이 없습니다</div>';
+        : '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">' + (_msQEn ? 'No pending items.' : '대기 중인 항목이 없습니다') + '</div>';
 
     let modal = document.getElementById('ms-queue-modal');
     if (!modal) {
@@ -18299,7 +18314,7 @@ window._msRenderQueueModal = function(type, title) {
             <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
                 <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" style="flex:1.3; padding:7px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;"></button>
-                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="flex:1; padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;">🗑 일괄삭제</button>
+                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="flex:1; padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;"></button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -18330,14 +18345,18 @@ window._msRenderQueueModal = function(type, title) {
     }
 
     window._msQueueCurrentType = type;
-    document.getElementById('ms-queue-title').textContent = title + ' (' + rows.length + '건)';
+    document.getElementById('ms-queue-title').textContent = title + (_msQEn ? ' (' + rows.length + ')' : ' (' + rows.length + '건)');
     document.getElementById('ms-queue-body').innerHTML = bodyHtml;
     const suggestBtn = document.getElementById('ms-queue-suggest-btn');
     if (suggestBtn) {
         // 💡 '자동폐기' 큐는 제안 기능이 없으므로(이미 규칙에 걸려서 폐기된 것) 버튼 자체를 숨김
         suggestBtn.style.display = type === 'discarded' ? 'none' : '';
-        suggestBtn.textContent = type === 'unmatched' ? '🔑 키워드 제안' : '📇 주소록 제안';
+        suggestBtn.textContent = type === 'unmatched'
+            ? (_msQEn ? '🔑 Suggest Keywords' : '🔑 키워드 제안')
+            : (_msQEn ? '📇 Suggest Contacts' : '📇 주소록 제안');
     }
+    const clearAllBtn = document.getElementById('ms-queue-clear-all-btn');
+    if (clearAllBtn) clearAllBtn.textContent = _msQEn ? '🗑 Clear All' : '🗑 일괄삭제';
     modal.style.display = 'block';
     window.bringModalToFront('ms-queue-modal'); // 💡 열 때 즉시 맨 앞으로 (클릭 안 해도)
 };
@@ -18350,15 +18369,16 @@ window._msQueueSuggestClick = function() {
 window._msQueueRemoveRow = function(type, fileName) {
     window._msQueueDeleteOne(type, fileName);
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
-    window._msRenderQueueModal(type, document.getElementById('ms-queue-title').textContent.replace(/\s*\(\d+건\)$/, ''));
+    window._msRenderQueueModal(type);
 };
 
 window._msQueueClearAll = function() {
     const type = window._msQueueCurrentType;
-    if (!confirm('대기 중인 항목을 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+    const _msQEn = window._currentLang === 'en';
+    if (!confirm(_msQEn ? 'Delete all pending items? This cannot be undone.' : '대기 중인 항목을 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
     window._msQueueDeleteAll(type);
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
-    window._msRenderQueueModal(type, document.getElementById('ms-queue-title').textContent.replace(/\s*\(\d+건\)$/, ''));
+    window._msRenderQueueModal(type);
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -18865,7 +18885,7 @@ window._msApplyAllAddressSuggestions = function() {
 };
 
 window.msShowUnmatchedModal = function() {
-    window._msRenderQueueModal('unmatched', '📭 미분류 메일');
+    window._msRenderQueueModal('unmatched');
 };
 
 // 💡 [테스트용] 캐시 초기화 후 즉시 재수집 — 그동안 콘솔에서 반복 실행하던 스크립트를 버튼화
@@ -19151,11 +19171,11 @@ window._macSave = async function() {
 };
 
 window.msShowNewSenderModal = function() {
-    window._msRenderQueueModal('newsender', '👤 신규발신자 메일');
+    window._msRenderQueueModal('newsender');
 };
 
 window.msShowDiscardedModal = function() {
-    window._msRenderQueueModal('discarded', '🗑 자동폐기 메일');
+    window._msRenderQueueModal('discarded');
 };
 
 // ─── [메일 자동처리 ①] 스케줄러 — 1분마다 체크, 설정된 주기(기본 30분) 경과 시에만 실행 ──
