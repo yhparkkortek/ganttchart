@@ -806,6 +806,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="sb-item" data-tab="summary" onclick="window.switchTab('summary')"><span class="sb-ico">📝</span><span class="sb-label">Summary</span></div>
         <div class="sb-item" data-tab="briefspec" onclick="window.switchTab('briefspec')"><span class="sb-ico">📐</span><span class="sb-label">Brief SPEC</span></div>
         <div class="sb-item" data-tab="mctable" onclick="window.switchTab('mctable')"><span class="sb-ico">💰</span><span class="sb-label">M.C Table</span></div>
+        <div class="sb-item" data-tab="panelcompare" onclick="window.switchTab('panelcompare')"><span class="sb-ico">🖥️</span><span class="sb-label">Panel Compare</span></div>
         <div class="sb-item active" data-tab="gantt" onclick="window.switchTab('gantt')"><span class="sb-ico">📊</span><span class="sb-label">Gantt chart</span></div>
         <div class="sb-item" data-tab="calendar" onclick="window.switchTab('calendar')"><span class="sb-ico">📅</span><span class="sb-label">Calendar</span></div>
         <div class="sb-item" data-tab="weekly" onclick="window.switchTab('weekly')"><span class="sb-ico">📋</span><span class="sb-label">Weekly Report</span></div>
@@ -1923,6 +1924,29 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <div id="mctable-compare-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
                     <table class="concept-table" id="mc-comparison-table" style="min-width:900px;"></table>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 🖥️ Panel Compare — panelook.com 참고 패널 스펙 비교표(팀 공용 라이브러리 + 프로젝트별 최대 10개 선택) -->
+<div id="tab-panelcompare" class="tab-panel">
+    <div class="concept-tab-wrap">
+        <div class="concept-header-box">
+            <h2 id="pc-h2-title">🖥️ Panel Compare<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="pc-help-tip">
+                📚 패널 스펙은 팀 공용 라이브러리에 저장됩니다 — 한 번 추출한 패널은 다른 프로젝트에서도 모델명으로 바로 재사용됩니다.<br><br>
+                🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
+                🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).
+            </span></span></h2>
+            <button class="concept-add-row-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()">➕ 패널 추가</button>
+            <button class="concept-add-row-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 부가 스펙 펼치기</button>
+            <div class="btn-group"></div>
+            <button class="action-btn" id="pc-export-btn" onclick="window.exportPanelCompareToExcel()">🟩 엑셀로 내보내기</button>
+        </div>
+        <div class="concept-section">
+            <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 패널 추가]로 시작하세요.</div>
+            <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+                <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;"></table>
             </div>
         </div>
     </div>
@@ -8721,6 +8745,8 @@ window.deleteHistoryByDateRange = function() {
                 'backup_restore_btn': '🔄 프로젝트 복원',
                 'new-project-btn': '➕ 새 프로젝트 추가',
                 'delete-project-btn': '🗑️ 프로젝트 삭제',
+                'pc-add-btn': '➕ 패널 추가',
+                'pc-export-btn': '🟩 엑셀로 내보내기',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -8818,6 +8844,8 @@ window.deleteHistoryByDateRange = function() {
                 'backup_restore_btn': '🔄 Restore Project',
                 'new-project-btn': '➕ Add New Project',
                 'delete-project-btn': '🗑️ Delete Project',
+                'pc-add-btn': '➕ Add Panel',
+                'pc-export-btn': '🟩 Export to Excel',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -9521,6 +9549,21 @@ window.deleteHistoryByDateRange = function() {
                전송 시 📌 알림이 자동 설정되고, 대상 프로젝트의 수정이력과 배분 원장에 함께 기록됩니다.`;
         const _ibxDistCloseBtn = document.getElementById('inbox-dist-close-btn');
         if (_ibxDistCloseBtn) _ibxDistCloseBtn.title = _en ? 'Close' : '닫기';
+
+        // [Panel Compare 탭] 제목(ℹ️ 도움말 아이콘 보존을 위해 첫 텍스트 노드만 교체) + 도움말 내용
+        const _pcTitle = document.getElementById('pc-h2-title');
+        if (_pcTitle) _pcTitle.childNodes[0].textContent = '🖥️ Panel Compare';
+        const _pcHelpTip = document.getElementById('pc-help-tip');
+        if (_pcHelpTip) _pcHelpTip.innerHTML = _en
+            ? `📚 Panel specs are stored in a team-shared library — once a panel is extracted, any project can reuse it by model name.<br><br>
+               🔗 If Summary "Key Materials" has a PANEL model registered, it's automatically added to the front of this comparison table.<br><br>
+               🌐 Clicking a model name opens panelook.com search results (the exact detail-page ID can't be known in advance, so it links to search instead).`
+            : `📚 패널 스펙은 팀 공용 라이브러리에 저장됩니다 — 한 번 추출한 패널은 다른 프로젝트에서도 모델명으로 바로 재사용됩니다.<br><br>
+               🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
+               🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).`;
+        // 지금 Panel Compare 탭이 열려있으면 표/토글버튼 문구도 바로 다시 그림
+        const _pcPanel = document.getElementById('tab-panelcompare');
+        if (_pcPanel && _pcPanel.classList.contains('active') && window.renderPanelCompareTab) window.renderPanelCompareTab();
 
         // [AI 팝업] AI 키 상태/가이드 텍스트 재적용
         if (window.onAiProviderChange) window.onAiProviderChange(window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini');
@@ -23719,9 +23762,19 @@ window.renderMaterialRows = function(rows) {
         // 💡 [버그 수정] 예전엔 "분석용 체크박스"와 "삭제 버튼"이 별도 열이라, 고정 행(13개 전부)에선
         //    삭제 버튼이 없어 마지막 열이 항상 빈 칸으로 보였음 — 한 열에 같이 넣어서 해결.
         const delBtn = r.locked ? '' : '<button type="button" onclick="window.deleteMaterialRow(' + idx + ')" title="이 행 삭제" style="border:1px solid #ccc; border-radius:3px; background:#fff; color:#999; cursor:pointer; font-size:11px; width:16px; height:16px; line-height:1; padding:0; margin-left:2px;">－</button>';
+        // 💡 [2026-08-25 신규 — Panel Compare 연동] PANEL 구분 행에 모델명이 적혀 있으면, 그 옆에
+        //    스펙 미리보기 버튼을 붙인다 — 클릭하면 패널 스펙 라이브러리에서 조회해 보여주고,
+        //    Panel Compare 탭 비교표에 없으면 바로 추가할 수 있게 한다.
+        const descInputCell = '<td style="padding:2px; border:1px solid #e9ecef;"><div style="display:flex; align-items:center; gap:2px;">'
+            + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="예: MV315QHM-N41" style="border:none; width:100%; box-sizing:border-box;" '
+            + (r.category === 'PANEL' ? 'onchange="window.renderMaterialRows(window.collectMaterialRows());"' : '') + '>'
+            + ((r.category === 'PANEL' && r.description)
+                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ')" title="패널 스펙 미리보기" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+                : '')
+            + '</div></td>';
         return '<tr>' + catCell
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box;"></td>'
-            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="예: MV315QHM-N41" style="border:none; width:100%; box-sizing:border-box;"></td>'
+            + descInputCell
             + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box;"></td>'
             + '<td style="border:1px solid #e9ecef; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)">' + delBtn + '</td>'
             + '</tr>';
@@ -23744,6 +23797,553 @@ window.deleteMaterialRow = function(idx) {
     current.splice(idx, 1);
     window.tabData.projectMaterials = current;
     window.renderMaterialRows(current);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// 🖥️ [2026-08-25 신규] Panel Compare — panelook.com을 참고한 패널 스펙 비교표
+//    - 패널 스펙 자체는 팀 공용 Drive 라이브러리(PanelSpecLibrary_Shared.json)에 모델명 기준으로 저장
+//      → 한 번 AI로 추출한 패널은 다른 프로젝트에서도 재사용 가능 (AddressBook/project_index.json과 동일 패턴)
+//    - 프로젝트는 "이 비교표에 어떤 모델을 골라뒀는지"(최대 10개)만 자기 tabData.panelCompare에 저장
+//    - panelook.com은 봇 차단(캡차)이 있고 모델명만으로 상세페이지 직접링크를 만들 수 없어서,
+//      스펙은 사용자가 붙여넣은 텍스트를 AI로 추출하고, 모델명 헤더는 검색결과 링크로 연결한다.
+// ═══════════════════════════════════════════════════════════════════
+
+// 💡 첨부 샘플 엑셀("PANEL COMP TABLE" 시트)의 11개 섹션·113개 항목을 그대로 옮긴 고정 템플릿.
+//    각 항목의 두 번째 값(1|2)은 표시 우선순위 — 1=핵심스펙(항상 표시), 2=부가스펙(기본 접힘).
+//    원본의 "[Electronics Feure]" 오타는 "Electronics Features"로, "Rec.2020 voverage"/"Late Time Order"
+//    같은 명백한 오타도 새로 만드는 템플릿이니 정리했다(사용자 확인됨).
+window.PANEL_SPEC_SCHEMA = [
+    { section: 'Basic Information', fields: [
+        ['Panel Brand', 1], ['Panel Type', 1], ['Composition', 1], ['Shipping Mode', 2],
+        ['Operating Temperature', 2], ['Storage Temperature', 2], ['Vibration Level', 2],
+        ['RoHS State', 2], ['Application', 2], ['Specific Feature', 2], ['Remarks', 2],
+    ]},
+    { section: 'Mechanical Features', fields: [
+        ['Diagonal Size', 1], ['Dot Resolution', 1], ['Pixel Configuration', 1], ['Aspect Ratio', 1],
+        ['Form Factor', 1], ['Dot Pitch (HxV)', 1], ['Weight', 2], ['Surface Glare', 1],
+        ['Surface Hardness', 1], ['Surface Reflection', 2], ['Active Area (HxV)', 1],
+        ['Bezel Area (HxV)', 2], ['Outline Dimension (HxV)', 1], ['Outline Depth', 1],
+        ['Substrate Thickness', 2], ['Shape Style', 2], ['Mount & Brackets', 2], ['Landscape or Portrait', 1],
+    ]},
+    { section: 'Touch Panel', fields: [
+        ['Touch Panel', 1], ['Simultaneously Touch', 2], ['Touch Signal Type', 2],
+        ['Touch Interface Type', 2], ['Touch Controller', 2], ['Touch OS System', 2],
+    ]},
+    { section: 'Optical Features', fields: [
+        ['Display Mode', 1], ['Brightness (Min/Typ) (cd/m²)', 1], ['HDR Peak', 2],
+        ['Transmissive Contrast Ratio', 1], ['Display Color', 1], ['Gray Method', 1],
+        ['Low Blue Light', 2], ['NTSC Ratio', 1], ['sRGB Coverage', 2], ['Adobe Coverage', 2],
+        ['DCI-P3 Coverage', 2], ['Rec.2020 Coverage', 2], ['Viewing Angle (L/R/U/D)', 1],
+        ['Viewing Direction', 2], ['Response Time', 1], ['Color Temperature', 1],
+        ['White Color Coordinates', 1], ['White Variation (Max/Min)', 1], ['Transmissivity (%)', 1],
+        ['Reflectance Ratio (%)', 2], ['Sunlight Readable', 2],
+    ]},
+    { section: 'Electronics Features', fields: [
+        ['Vertical Frequency', 1], ['Sync Type', 2], ['Scan Direction', 1], ['Reverse Scan', 1],
+        ['Total Power Consumption', 2], ['Driver IC', 2], ['T-CON', 2],
+    ]},
+    { section: 'Backlight System', fields: [
+        ['Lamp Position', 1], ['Lamp Type', 2], ['Lamp Amount', 2], ['Lamp Shape', 2],
+        ['Lamp Life Time (Hrs)', 1], ['Lamp Voltage', 2], ['Lamp Current', 2],
+        ['Lamps Power Consumption', 2], ['Lamp Driver Board', 1], ['Input Voltage of Lamp Driver', 2],
+        ['Input Current of Lamp Driver', 2], ['BLU Power Consumption', 2], ['PWM Duty Ratio', 2],
+        ['PWM Frequency', 2], ['BLU Interface Type', 2], ['BLU Interface Position', 2],
+        ['BLU Interface Brand', 2], ['BLU Interface Model', 2], ['BLU Interface Pin Pitch', 2],
+        ['BLU Interface Amount', 2], ['Pin Amount of BLU Interface', 2], ['BLU Interface Pin Configuration', 2],
+    ]},
+    { section: 'Signal Interface', fields: [
+        ['Signal Interface Category', 1], ['Signal Interface Class', 1], ['Input Voltage for Panel', 1],
+        ['Input Current for Panel', 2], ['Panel Power Consumption', 2], ['Voltage for Display Signals', 2],
+        ['Signal Interface Type', 2], ['Signal Interface Position', 2], ['Signal Interface Brand', 2],
+        ['Signal Interface Model', 2], ['Signal Interface Pin Pitch', 2], ['Signal Interface Amount', 2],
+        ['Signal Interface Pins', 1], ['Signal Pin Configuration', 2],
+    ]},
+    { section: 'Packing Form', fields: [ ['Minimum Package', 2] ] },
+    { section: 'Datasheet Source', fields: [
+        ['Document Language', 2], ['Datasheet Version', 2], ['Issue Date', 2],
+    ]},
+    { section: 'Production State', fields: [
+        ['Customer Sample', 2], ['Mass Production', 2], ['Last Time Order', 2],
+        ['Last Time Shipment', 2], ['Production State Now', 1],
+    ]},
+    { section: 'Other', fields: [
+        ['Expected Price', 1], ['Expected Price (Cutting/Slimming)', 2], ['Investment', 2], ['Note', 1],
+    ]},
+];
+window._panelFlatFields = function() {
+    const out = [];
+    window.PANEL_SPEC_SCHEMA.forEach(function(sec) { sec.fields.forEach(function(f) { out.push(f[0]); }); });
+    return out;
+};
+
+// ─── 팀 공용 패널 스펙 라이브러리 (AddressBook/project_index.json과 동일한 Drive 위치·업서트 패턴) ───
+const PANEL_LIB_FILENAME = 'PanelSpecLibrary_Shared.json';
+window._panelLibFileId = null;
+window.findPanelLibFile = async function(token) {
+    if (window._panelLibFileId) return window._panelLibFileId;
+    const folderId = await window.getOrCreateConfigFolder(token);
+    const id = await window._findOrMigrateFile(token, PANEL_LIB_FILENAME, folderId);
+    if (id) window._panelLibFileId = id;
+    return id;
+};
+window._panelLibNamesMatch = function(a, b) { return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); };
+window.findPanelInLibrary = function(lib, model) {
+    return ((lib && lib.panels) || []).find(function(p) { return window._panelLibNamesMatch(p.model, model); }) || null;
+};
+window.loadPanelLibrary = async function() {
+    try {
+        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) return { panels: [] };
+        const fileId = await window.findPanelLibFile(token);
+        if (!fileId) return { panels: [] };
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        return (data && Array.isArray(data.panels)) ? data : { panels: [] };
+    } catch (e) { console.warn('패널 라이브러리 로드 실패:', e.message); return { panels: [] }; }
+};
+window.upsertPanelLibraryEntry = async function(entry) {
+    const _en = window._currentLang === 'en';
+    try {
+        const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+        const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+        if (!token) { alert(_en ? '🔒 Please connect Google Drive first.' : '🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return false; }
+        const fileId = await window.findPanelLibFile(token);
+        let lib = { panels: [] };
+        if (fileId) {
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const loaded = await res.json();
+            if (loaded && Array.isArray(loaded.panels)) lib = loaded;
+        }
+        const idx = lib.panels.findIndex(function(p) { return window._panelLibNamesMatch(p.model, entry.model); });
+        entry.updatedAt = new Date().toISOString();
+        entry.updatedBy = window.currentUserName || '';
+        if (idx === -1) lib.panels.push(entry); else lib.panels[idx] = entry;
+        const body = JSON.stringify(lib);
+        if (fileId) {
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
+                method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body
+            });
+        } else {
+            const folderId = await window.getOrCreateConfigFolder(token);
+            const boundary = 'panel_lib_boundary';
+            const metadata = { name: PANEL_LIB_FILENAME, mimeType: 'application/json', parents: [folderId] };
+            const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + body + "\r\n--" + boundary + "--";
+            const createRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', {
+                method: 'POST', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` }, body: multipartBody
+            });
+            const created = await createRes.json();
+            if (created && created.id) window._panelLibFileId = created.id;
+        }
+        return true;
+    } catch (e) { alert((_en ? 'Failed to save panel library: ' : '패널 라이브러리 저장 실패: ') + e.message); return false; }
+};
+
+// ─── AI 추출: 붙여넣은 스펙 텍스트 → 113개 항목 JSON (기존 callAiBackend/getActiveAiKey 재사용) ───
+window._panelBuildExtractPrompt = function(rawText) {
+    const fields = window._panelFlatFields();
+    const keyListText = fields.map(function(f) { return '- "' + f + '"'; }).join('\n');
+    return `당신은 LCD/OLED 디스플레이 패널 데이터시트 분석 전문가입니다.
+아래 [원문 텍스트]는 panelook.com 페이지 또는 패널 데이터시트에서 사용자가 복사한 내용입니다.
+여기서 패널 스펙 정보를 추출해서, 아래 키 목록을 정확히 그대로 사용한 하나의 JSON 객체로만 답하세요(다른 설명이나 마크다운 코드블럭 없이 JSON 객체 하나만).
+
+키 목록(최상위 1개 + 스펙 항목들):
+- "Model Name" (패널의 정확한 모델명, 예: DV430FHM-NN1)
+${keyListText}
+
+규칙:
+1. 텍스트 안에서 찾을 수 없는 항목은 반드시 정확히 "-" 하나로 채우세요. 추측하거나 지어내지 마세요.
+2. 값은 원문 표기(단위 포함)를 최대한 그대로 유지하세요.
+3. 위에 나열된 키 이름을 한 글자도 다르지 않게 정확히 그대로 사용하세요.
+4. "Model Name"도 못 찾으면 "-"로 답하세요.
+
+[원문 텍스트]
+${(rawText || '').substring(0, 8000)}`;
+};
+window._panelParseAiJson = function(text) {
+    if (!text) return null;
+    let s = text.trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const start = s.indexOf('{'); const end = s.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+    try { return JSON.parse(s.slice(start, end + 1)); } catch (e) { return null; }
+};
+
+// ─── 탭 렌더링 ───
+window._pcExpanded = false;
+window._panelCompareLibCache = null;
+window.renderPanelCompareTab = async function() {
+    const _en = window._currentLang === 'en';
+    const tableEl = document.getElementById('pc-table');
+    const emptyEl = document.getElementById('pc-empty-msg');
+    if (!tableEl) return;
+
+    window.tabData = window.tabData || {};
+    window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], lastAutoSeed: null };
+    const pc = window.tabData.panelCompare;
+
+    // 💡 Summary 주요자재 PANEL 구분 행 자동 반영 — 등록된 모델명이 새로 생기거나 바뀌면 비교표 맨 앞에 자동 추가.
+    //    (한 번 자동 추가된 뒤 사람이 일부러 뺐으면, 같은 값일 때는 다시 억지로 넣지 않는다 — lastAutoSeed로 추적)
+    const materials = window.collectMaterialRows ? window.collectMaterialRows() : (window.tabData.projectMaterials || []);
+    const panelMat = (materials || []).find(function(m) { return m.category === 'PANEL'; });
+    const registeredModel = panelMat && panelMat.description ? panelMat.description.trim() : '';
+    if (registeredModel && registeredModel !== pc.lastAutoSeed) {
+        if (pc.selectedModels.indexOf(registeredModel) === -1) pc.selectedModels.unshift(registeredModel);
+        pc.lastAutoSeed = registeredModel;
+    }
+
+    tableEl.innerHTML = `<tr><td style="padding:20px; text-align:center; color:#999;">${_en ? 'Loading…' : '불러오는 중...'}</td></tr>`;
+    const lib = await window.loadPanelLibrary();
+    window._panelCompareLibCache = lib;
+
+    if (!pc.selectedModels.length) {
+        tableEl.innerHTML = '';
+        if (emptyEl) emptyEl.style.display = 'block';
+        return;
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+
+    const models = pc.selectedModels.slice(0, 10);
+    const entries = models.map(function(m) { return window.findPanelInLibrary(lib, m); });
+
+    let html = '<tr>';
+    html += `<th style="min-width:170px; background:#f8f9fa; border:1px solid #dee2e6; padding:8px; text-align:left;">Comparison table</th>`;
+    models.forEach(function(m, i) {
+        const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
+        const has = !!entries[i];
+        html += `<th style="min-width:150px; background:#0033cc; color:#fff; border:1px solid #dee2e6; padding:8px; text-align:center;">
+            <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#fff; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
+            <div style="margin-top:4px; display:flex; gap:4px; justify-content:center;">
+                <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:none; border-radius:3px; color:#0033cc; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
+                <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:none; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
+            </div>
+            ${!has ? `<div style="margin-top:4px; font-size:10px; color:#ffe08a;">${_en ? '⚠ Not yet extracted' : '⚠ 미추출'}</div>` : ''}
+        </th>`;
+    });
+    html += '</tr>';
+
+    window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
+        html += `<tr class="pc-section-row"><td colspan="${models.length + 1}" style="background:#0033cc; color:#fff; font-weight:bold; padding:6px 10px; border:1px solid #dee2e6;">[${escapeHtml(sec.section)}]</td></tr>`;
+        sec.fields.forEach(function(f) {
+            const label = f[0], priority = f[1];
+            const rowStyle = priority === 2 ? ('display:' + (window._pcExpanded ? 'table-row' : 'none') + ';') : '';
+            html += `<tr class="${priority === 2 ? 'pc-p2-row' : ''}" style="${rowStyle}">`;
+            html += `<td style="border:1px solid #e9ecef; padding:5px 8px; font-size:12px; color:#555; white-space:nowrap;">${escapeHtml(label)}</td>`;
+            entries.forEach(function(entry) {
+                const v = entry && entry.specs && entry.specs[label] != null && entry.specs[label] !== '' ? entry.specs[label] : '-';
+                html += `<td style="border:1px solid #e9ecef; padding:5px 8px; font-size:12px;">${escapeHtml(String(v))}</td>`;
+            });
+            html += '</tr>';
+        });
+    });
+    tableEl.innerHTML = html;
+
+    const toggleBtn = document.getElementById('pc-toggle-btn');
+    if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+};
+
+window.panelCompareToggleExpand = function() {
+    window._pcExpanded = !window._pcExpanded;
+    document.querySelectorAll('#pc-table .pc-p2-row').forEach(function(tr) { tr.style.display = window._pcExpanded ? 'table-row' : 'none'; });
+    const toggleBtn = document.getElementById('pc-toggle-btn');
+    const _en = window._currentLang === 'en';
+    if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+};
+
+window.panelCompareRemove = function(model) {
+    if (!window.tabData || !window.tabData.panelCompare) return;
+    window.tabData.panelCompare.selectedModels = window.tabData.panelCompare.selectedModels.filter(function(m) { return m !== model; });
+    window.renderPanelCompareTab();
+};
+
+window.panelCompareAddFromLibrary = function(model) {
+    const _en = window._currentLang === 'en';
+    window.tabData = window.tabData || {};
+    window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], lastAutoSeed: null };
+    const sel = window.tabData.panelCompare.selectedModels;
+    if (sel.indexOf(model) !== -1) { if (window.showToast) window.showToast(_en ? 'Already in the comparison table.' : '이미 비교표에 있습니다.', 'info'); return; }
+    if (sel.length >= 10) { alert(_en ? 'Maximum 10 panels per comparison table. Remove one first.' : '비교표는 최대 10개까지입니다. 하나를 먼저 제거해주세요.'); return; }
+    sel.push(model);
+    const addModal = document.getElementById('pc-add-modal'); if (addModal) addModal.style.display = 'none';
+    window.renderPanelCompareTab();
+};
+
+window.panelCompareReextract = async function(model) {
+    await window.panelCompareOpenAddModal();
+    window._pcPendingReextractModel = model;
+    const paste = document.getElementById('pc-add-paste');
+    if (paste) paste.focus();
+    if (window.showToast) {
+        window.showToast(window._currentLang === 'en' ? `Paste the latest spec text for "${model}" and extract.` : `"${model}"의 최신 스펙 텍스트를 붙여넣고 추출하세요.`, 'info');
+    }
+};
+
+// ─── "➕ 패널 추가" 모달: 라이브러리 검색 + 새 패널 AI 추출 ───
+window.panelCompareOpenAddModal = async function() {
+    const _en = window._currentLang === 'en';
+    let modal = document.getElementById('pc-add-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pc-add-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="pc-add-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(560px, 92vw); max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
+            <div id="pc-add-drag" style="padding:13px 18px; border-bottom:1px solid #ced4da; font-weight:bold; font-size:14px; background:#f8f9fa; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
+                <span id="pc-add-title">🖥️ ${_en ? 'Add Panel' : '패널 추가'}</span>
+                <button onclick="document.getElementById('pc-add-modal').style.display='none'" style="background:#fff; border:1.5px solid #999; border-radius:6px; color:#666; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div style="padding:12px 16px; border-bottom:1px solid #eee; flex-shrink:0;">
+                <input id="pc-add-search" type="text" placeholder="${_en ? 'Search library by model name...' : '라이브러리에서 모델명 검색...'}" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px;" oninput="window._pcRenderLibList(this.value)">
+                <div id="pc-add-lib-list" style="margin-top:8px; max-height:160px; overflow-y:auto;"></div>
+            </div>
+            <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
+                <div id="pc-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new panel with AI' : '또는 새 패널을 AI로 추출'}</div>
+                <textarea id="pc-add-paste" placeholder="${_en ? 'Paste the panel spec text copied from panelook.com or a datasheet...' : 'panelook.com이나 데이터시트에서 복사한 패널 스펙 텍스트를 붙여넣으세요...'}" style="width:100%; box-sizing:border-box; min-height:90px; border:1px solid #ced4da; border-radius:6px; padding:8px; font-size:12px; resize:vertical;"></textarea>
+                <button id="pc-add-extract-btn" onclick="window._pcRunExtract()" style="margin-top:8px; padding:8px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; flex-shrink:0;">🤖 ${_en ? 'Extract with AI' : 'AI로 추출'}</button>
+                <div id="pc-add-preview" style="margin-top:10px;"></div>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('pc-add-box', 'pc-add-drag');
+        window._bindClickToFront('pc-add-modal');
+        modal.onclick = function() { modal.style.display = 'none'; };
+    }
+    modal.style.display = 'block';
+    window.bringModalToFront('pc-add-modal');
+    document.getElementById('pc-add-search').value = '';
+    document.getElementById('pc-add-paste').value = '';
+    document.getElementById('pc-add-preview').innerHTML = '';
+    const lib = await window.loadPanelLibrary();
+    window._panelCompareLibCache = lib;
+    window._pcRenderLibList('');
+};
+
+window._pcRenderLibList = function(filterText) {
+    const list = document.getElementById('pc-add-lib-list');
+    if (!list) return;
+    const _en = window._currentLang === 'en';
+    const lib = window._panelCompareLibCache || { panels: [] };
+    const q = (filterText || '').trim().toLowerCase();
+    const filtered = (lib.panels || []).filter(function(p) { return !q || (p.model || '').toLowerCase().indexOf(q) !== -1; }).slice(0, 30);
+    if (!filtered.length) {
+        list.innerHTML = `<div style="padding:8px; color:#999; font-size:12px;">${_en ? 'No matches in the library.' : '라이브러리에 일치하는 패널이 없습니다.'}</div>`;
+        return;
+    }
+    // 💡 [버그 수정] 이 목록은 event.stopPropagation()이 걸린 모달 박스(pc-add-box) 안에 있어서,
+    //    document 전역 클릭 위임(data-pc-lib-add)이 여기까지 절대 도달하지 못한다(전파가 그 박스에서
+    //    끊김). 그래서 이 안의 버튼만은 위임 대신 직접 onclick으로 호출한다.
+    list.innerHTML = filtered.map(function(p) {
+        return `<div onclick="window.panelCompareAddFromLibrary(${escapeHtml(JSON.stringify(p.model))})" style="padding:6px 8px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:12.5px; display:flex; justify-content:space-between;"
+            onmouseover="this.style.background='#f4f8fc'" onmouseout="this.style.background='transparent'">
+            <span><b>${escapeHtml(p.model)}</b> <span style="color:#888;">${escapeHtml(p.brand || '')}</span></span>
+            <span style="color:#2c5f8a;">${_en ? '+ Add' : '+ 추가'}</span>
+        </div>`;
+    }).join('');
+};
+
+window._pcRunExtract = async function() {
+    const _en = window._currentLang === 'en';
+    const raw = (document.getElementById('pc-add-paste') || {}).value || '';
+    if (!raw.trim()) { alert(_en ? 'Please paste the panel spec text first.' : '먼저 패널 스펙 텍스트를 붙여넣어 주세요.'); return; }
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) { alert(_en ? '⚠️ No AI API key configured. Set one in the mail analysis screen first.' : '⚠️ AI API 키가 설정되어 있지 않습니다. 메일 분석 화면에서 먼저 키를 등록해주세요.'); return; }
+    const btn = document.getElementById('pc-add-extract-btn');
+    if (btn) { btn.disabled = true; btn.textContent = '🤖 ' + (_en ? 'Extracting…' : '추출 중...'); }
+    try {
+        const prompt = window._panelBuildExtractPrompt(raw);
+        const result = await window.callAiBackend(apiKey, prompt);
+        if (!result.ok) { alert((_en ? 'AI call failed: ' : 'AI 호출 실패: ') + (result.error && result.error.message || (_en ? 'Unknown error' : '알 수 없는 오류'))); return; }
+        const text = result.data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        const parsed = window._panelParseAiJson(text);
+        if (!parsed) alert(_en ? 'Could not parse the AI response. Please try again, or fill in the form manually below.' : 'AI 응답을 해석하지 못했습니다. 다시 시도하거나 아래 폼에 직접 입력해주세요.');
+        window._pcRenderPreviewForm(parsed || {});
+    } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '🤖 ' + (_en ? 'Extract with AI' : 'AI로 추출'); }
+    }
+};
+
+window._pcRenderPreviewForm = function(specs) {
+    const _en = window._currentLang === 'en';
+    const preview = document.getElementById('pc-add-preview');
+    if (!preview) return;
+    const presetModel = window._pcPendingReextractModel || ((specs['Model Name'] && specs['Model Name'] !== '-') ? specs['Model Name'] : '');
+    window._pcPendingReextractModel = null;
+    let html = '';
+    html += `<div style="margin-bottom:10px;"><label style="font-size:11px; font-weight:bold; color:#555;">${_en ? 'Model name *' : '모델명 *'}</label>
+        <input id="pc-form-model" type="text" value="${escapeHtml(presetModel)}" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1.5px solid #2c5f8a; border-radius:5px; font-size:13px; margin-top:2px;" placeholder="${_en ? 'e.g. DV430FHM-NN1' : '예: DV430FHM-NN1'}"></div>`;
+    window.PANEL_SPEC_SCHEMA.forEach(function(sec, si) {
+        html += `<details ${si === 0 ? 'open' : ''} style="margin-bottom:6px;"><summary style="cursor:pointer; font-weight:bold; font-size:12px; color:#2c5f8a; padding:4px 0;">[${escapeHtml(sec.section)}]</summary>`;
+        sec.fields.forEach(function(f) {
+            const label = f[0];
+            const val = specs[label] != null ? specs[label] : '-';
+            html += `<div style="display:flex; align-items:center; gap:6px; margin:3px 0;">
+                <label style="flex:0 0 170px; font-size:10.5px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(label)}">${escapeHtml(label)}</label>
+                <input data-pc-field="${escapeHtml(label)}" type="text" value="${escapeHtml(String(val))}" style="flex:1; padding:4px 6px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px; min-width:0;">
+            </div>`;
+        });
+        html += '</details>';
+    });
+    html += `<button onclick="window._pcSaveNewPanel()" style="margin-top:10px; width:100%; padding:9px; background:#2f9e44; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">💾 ${_en ? 'Save' : '저장'}</button>`;
+    preview.innerHTML = html;
+};
+
+window._pcSaveNewPanel = async function() {
+    const _en = window._currentLang === 'en';
+    const modelInput = document.getElementById('pc-form-model');
+    const model = (modelInput ? modelInput.value : '').trim();
+    if (!model) { alert(_en ? 'Please enter the model name.' : '모델명을 입력해주세요.'); if (modelInput) modelInput.focus(); return; }
+    const specs = {};
+    document.querySelectorAll('#pc-add-preview [data-pc-field]').forEach(function(inp) { specs[inp.dataset.pcField] = inp.value; });
+    const brand = (specs['Panel Brand'] && specs['Panel Brand'] !== '-') ? specs['Panel Brand'] : '';
+    const entry = {
+        model: model, brand: brand,
+        sourceUrl: 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model),
+        specs: specs
+    };
+    const ok = await window.upsertPanelLibraryEntry(entry);
+    if (!ok) return;
+    window.tabData = window.tabData || {};
+    window.tabData.panelCompare = window.tabData.panelCompare || { selectedModels: [], lastAutoSeed: null };
+    if (window.tabData.panelCompare.selectedModels.indexOf(model) === -1) {
+        if (window.tabData.panelCompare.selectedModels.length >= 10) {
+            alert(_en ? 'This project already has 10 panels in the comparison table (maximum). It was saved to the library, but not added here — remove one first.' : '이미 이 프로젝트의 비교표에 패널 10개(최대)가 있습니다. 라이브러리엔 저장됐지만 여기엔 추가되지 않았습니다 — 하나를 먼저 제거해주세요.');
+        } else {
+            window.tabData.panelCompare.selectedModels.push(model);
+        }
+    }
+    const modal = document.getElementById('pc-add-modal'); if (modal) modal.style.display = 'none';
+    window.renderPanelCompareTab();
+    if (window.showToast) window.showToast((_en ? '✅ Saved: ' : '✅ 저장 완료: ') + model, 'info');
+};
+
+// ─── Summary 주요자재 PANEL 행 🔎 버튼 → 패널 스펙 미리보기 모달 ───
+window.showPanelSpecModal = async function(model) {
+    const _en = window._currentLang === 'en';
+    let modal = document.getElementById('pc-spec-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'pc-spec-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="pc-spec-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(480px, 92vw); max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:300px;">
+            <div id="pc-spec-drag" style="padding:13px 18px; border-bottom:1px solid #ced4da; font-weight:bold; font-size:14px; background:#f8f9fa; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
+                <span id="pc-spec-title">🖥️ ${_en ? 'Panel Spec' : '패널 스펙'}</span>
+                <button onclick="document.getElementById('pc-spec-modal').style.display='none'" style="background:#fff; border:1.5px solid #999; border-radius:6px; color:#666; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div id="pc-spec-body" style="padding:12px 16px; flex:1; overflow-y:auto; font-size:12px;"></div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('pc-spec-box', 'pc-spec-drag');
+        window._bindClickToFront('pc-spec-modal');
+        modal.onclick = function() { modal.style.display = 'none'; };
+    }
+    modal.style.display = 'block';
+    window.bringModalToFront('pc-spec-modal');
+    const bodyEl = document.getElementById('pc-spec-body');
+    bodyEl.innerHTML = `<div style="text-align:center; color:#999; padding:20px;">${_en ? 'Loading…' : '불러오는 중...'}</div>`;
+    const lib = await window.loadPanelLibrary();
+    const entry = window.findPanelInLibrary(lib, model);
+    const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model);
+    if (!entry) {
+        bodyEl.innerHTML = `
+            <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${escapeHtml(model)}</div>
+            <div style="color:#888; margin-bottom:14px;">${_en ? 'No spec has been extracted for this panel yet.' : '아직 이 패널의 스펙이 추출되지 않았습니다.'}</div>
+            <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a><br>
+            <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model))});" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🤖 ${_en ? 'Extract now' : '지금 추출하기'}</button>
+        `;
+        return;
+    }
+    const inCompare = !!(window.tabData && window.tabData.panelCompare && window.tabData.panelCompare.selectedModels && window.tabData.panelCompare.selectedModels.indexOf(model) !== -1);
+    let html = `<div style="font-size:13px; font-weight:bold; margin-bottom:2px;">${escapeHtml(entry.model)}</div>
+        <div style="color:#888; margin-bottom:8px;">${escapeHtml(entry.brand || '')}</div>
+        <a href="${escapeHtml(entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>
+        <div style="margin:10px 0;">
+            ${inCompare
+                ? `<span style="color:#2f9e44; font-weight:bold;">✓ ${_en ? 'Already in this project\'s comparison table' : '이 프로젝트 비교표에 있음'}</span>`
+                : `<button onclick="window.panelCompareAddFromLibrary(${escapeHtml(JSON.stringify(model))}); document.getElementById('pc-spec-modal').style.display='none';" style="padding:6px 12px; background:#2f9e44; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">➕ ${_en ? 'Add to comparison table' : '비교표에 추가'}</button>`}
+        </div>
+        <div style="font-size:10px; color:#aaa; margin-bottom:8px;">${_en ? 'Updated' : '갱신'}: ${escapeHtml(entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '-')}</div>`;
+    window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
+        let secHtml = '';
+        sec.fields.forEach(function(f) {
+            const label = f[0];
+            const v = (entry.specs && entry.specs[label] != null && entry.specs[label] !== '') ? entry.specs[label] : '-';
+            if (v === '-') return; // 미리보기는 값이 있는 항목만 (한눈에 보기 편하게)
+            secHtml += `<div style="display:flex; gap:6px; padding:2px 0;"><span style="flex:0 0 140px; color:#777;">${escapeHtml(label)}</span><span style="flex:1;">${escapeHtml(String(v))}</span></div>`;
+        });
+        if (secHtml) html += `<div style="font-weight:bold; color:#0033cc; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
+    });
+    bodyEl.innerHTML = html;
+};
+
+// 💡 비교표 헤더의 제거·재추출 버튼 — 표가 innerHTML로 통째로 다시 그려지므로 개별 리스너 대신
+//    전역 위임 클릭으로 한 번만 바인딩. (⚠️ 모달 안쪽 버튼은 모달 박스의 event.stopPropagation()에
+//    막혀 여기까지 전파되지 않으므로, 라이브러리 목록/스펙 모달의 버튼들은 인라인 onclick으로 직접 호출함)
+document.addEventListener('click', function(e) {
+    const rm = e.target.closest('[data-pc-remove]');
+    if (rm) { window.panelCompareRemove(rm.dataset.pcRemove); return; }
+    const re = e.target.closest('[data-pc-reextract]');
+    if (re) { window.panelCompareReextract(re.dataset.pcReextract); return; }
+});
+
+// ─── 엑셀로 내보내기 (기존 exportToExcel과 동일하게 xlsx-js-style 재사용 — 섹션 헤더 파란 배경 + 모델명 하이퍼링크) ───
+window.exportPanelCompareToExcel = async function() {
+    const _en = window._currentLang === 'en';
+    const pc = (window.tabData && window.tabData.panelCompare) || { selectedModels: [] };
+    const models = (pc.selectedModels || []).slice(0, 10);
+    if (!models.length) { alert(_en ? 'No panels in the comparison table yet.' : '비교표에 패널이 없습니다.'); return; }
+    const lib = await window.loadPanelLibrary();
+    const entries = models.map(function(m) { return window.findPanelInLibrary(lib, m); });
+
+    const aoa = [];
+    aoa.push(['Comparison table'].concat(models));
+    window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
+        aoa.push(['[' + sec.section + ']'].concat(models.map(function() { return ''; })));
+        sec.fields.forEach(function(f) {
+            const label = f[0];
+            const row = [label];
+            entries.forEach(function(entry) {
+                const v = (entry && entry.specs && entry.specs[label] != null && entry.specs[label] !== '') ? entry.specs[label] : '-';
+                row.push(String(v));
+            });
+            aoa.push(row);
+        });
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols'] = [{ wch: 26 }].concat(models.map(function() { return { wch: 22 }; }));
+
+    const sectionRowIdx = [];
+    let rPtr = 1;
+    window.PANEL_SPEC_SCHEMA.forEach(function(sec) { sectionRowIdx.push(rPtr); rPtr += 1 + sec.fields.length; });
+
+    const range = XLSX.utils.decode_range(ws['!ref']);
+    const thinBorder = { style: 'thin', color: { rgb: 'DDDDDD' } };
+    for (let ri = 0; ri <= range.e.r; ri++) {
+        const isHeader = ri === 0;
+        const isSection = sectionRowIdx.indexOf(ri) !== -1;
+        for (let ci = 0; ci <= range.e.c; ci++) {
+            const cell = ws[XLSX.utils.encode_cell({ r: ri, c: ci })];
+            if (!cell) continue;
+            cell.s = {
+                font: { name: '맑은 고딕', sz: 10, bold: isHeader || isSection, color: { rgb: (isHeader || isSection) ? 'FFFFFF' : '1F2937' } },
+                fill: (isHeader || isSection) ? { patternType: 'solid', fgColor: { rgb: '0033CC' } } : undefined,
+                alignment: { vertical: 'center', horizontal: ci === 0 ? 'left' : 'center', wrapText: true },
+                border: { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
+            };
+            if (isHeader && ci > 0) {
+                const model = models[ci - 1];
+                cell.l = { Target: 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model), Tooltip: 'panelook.com search' };
+            }
+        }
+    }
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'PANEL COMP TABLE');
+    const fileName = (window.driveSaveFilenameStr || window.exportFilenameStr || 'Panel') + '_비교표.xlsx';
+    XLSX.writeFile(wb, fileName);
 };
 
 // ── Summary 탭 변경이력 (토글/기록/렌더링/삭제) — Brief SPEC/M.C Table과 동일 패턴 ──
@@ -26679,6 +27279,8 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabName === 'summary' && window._checkAllRequiredFields) window._checkAllRequiredFields();
         // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
         if (tabName === 'calendar' && window.calRender) window.calRender();
+        // Panel Compare 탭은 매번 Summary 주요자재(PANEL) 등록값 반영 + 최신 라이브러리 상태로 다시 그린다
+        if (tabName === 'panelcompare' && window.renderPanelCompareTab) window.renderPanelCompareTab();
         // Alarm/Notice 탭 진입 시 마지막으로 보던 뷰(알람/공지)를 복원해서 그린다
         if (tabName === 'alarm') {
             let savedView = 'alarm';
