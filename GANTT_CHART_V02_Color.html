@@ -9456,11 +9456,50 @@ window.deleteHistoryByDateRange = function() {
         if (_mfDropSub) _mfDropSub.textContent = _en ? '.eml / .html / .txt up to 500 files' : '.eml / .html / .txt 최대 500개';
 
         // [업무 보관함 모달] 헤더 번역
+        // 💡 [2026-08-25] childNodes[0]만 바꾸는 이유 — 이 span 안엔 ℹ️ 도움말 아이콘(nested span)이
+        //    같이 들어있어서, textContent를 통째로 덮으면 그 아이콘/툴팁까지 같이 사라진다.
         const _ibxTitle = document.getElementById('inbox-modal-title');
         if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? 'Task Inbox' : '업무 보관함';
+        const _ibxHelpTip = document.getElementById('inbox-help-tip-text');
+        if (_ibxHelpTip) _ibxHelpTip.innerHTML = _en
+            ? `📧 Tasks added via [📥 Inbox] in mail analysis are kept independent of any project (persists across project switches).<br><br>
+               ➡️ <b>Current Project</b>: placed at the end of the open project's development-stage (L0) section<br>
+               📤 <b>Other Project</b>: sent directly to another project on Drive, without switching screens<br><br>
+               If a sent task was lost because a teammate saved at the same time, resending the "Sent" item the same way recovers it.`
+            : `📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
+               ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
+               📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>
+               전송된 업무가 팀원의 동시 저장으로 유실된 경우, '전송됨' 항목을 같은 방법으로 재전송하면 복구됩니다.`;
+
+        const _ibxBatchBtn = document.getElementById('inbox-batch-register-btn');
+        if (_ibxBatchBtn) {
+            _ibxBatchBtn.textContent = _en ? '🚀 Send Matched Batch' : '🚀 매칭건 일괄전송';
+            _ibxBatchBtn.title = _en
+                ? 'Send all "Pending" items with a confirmed single match + confirmed dates to their projects at once (for clearing out previously piled-up items)'
+                : '매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)';
+        }
+        const _ibxCloseBtn = document.getElementById('inbox-close-btn');
+        if (_ibxCloseBtn) _ibxCloseBtn.title = _en ? 'Close' : '닫기';
+
+        const _ibxSubTexts = {
+            'inbox-subqueue-header':     { ko:'📬 미분류 / 신규발신자 / 자동폐기', en:'📬 Unclassified / New Senders / Auto-discarded' },
+            'inbox-unmatched-label':     { ko:'📭 미분류',              en:'📭 Unclassified' },
+            'inbox-newsender-label':     { ko:'👤 신규발신자',          en:'👤 New Sender' },
+            'inbox-discarded-label':     { ko:'🗑 자동폐기',            en:'🗑 Discarded' },
+            'inbox-unmatched-unit':      { ko:'건',                     en:'' },
+            'inbox-newsender-unit':      { ko:'건',                     en:'' },
+            'inbox-discarded-unit':      { ko:'건',                     en:'' },
+            'inbox-reset-unmatched-btn': { ko:'🗑 미분류 초기화',       en:'🗑 Reset Unclassified' },
+            'inbox-reset-newsender-btn': { ko:'🗑 신규발신자 초기화',   en:'🗑 Reset New Senders' },
+            'inbox-reset-discarded-btn': { ko:'🗑 자동폐기 초기화',     en:'🗑 Reset Discarded' },
+        };
+        Object.entries(_ibxSubTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+
         // [업무 배분 모달]
         const _ibxDistTexts = {
-            'inbox-dist-title':        { ko:'📤 다른 프로젝트로 전송',               en:'📤 Send to Another Project' },
             'inbox-dist-task-label':   { ko:'전송 업무',                              en:'Task' },
             'inbox-dist-target-label': { ko:'대상',                                   en:'Target' },
             'inbox-dist-select-label': { ko:'삽입할 개발단계(L0) 구간을 선택하세요.', en:'Select a development stage (L0) to insert into.' },
@@ -9471,6 +9510,17 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+        // 💡 inbox-dist-title도 inbox-modal-title과 동일한 이유로 첫 텍스트 노드만 교체(ℹ️ 아이콘 보존)
+        const _ibxDistTitle = document.getElementById('inbox-dist-title');
+        if (_ibxDistTitle) _ibxDistTitle.childNodes[0].textContent = _en ? '📤 Send to Another Project' : '📤 다른 프로젝트로 전송';
+        const _ibxDistHelpTip = document.getElementById('inbox-dist-help-tip-text');
+        if (_ibxDistHelpTip) _ibxDistHelpTip.innerHTML = _en
+            ? `Checks whether the target file was updated right before sending, and if another user just saved it, fetches the latest version and retries automatically.<br><br>
+               Sending automatically sets a 📌 reminder and records the change in the target project's edit history and distribution ledger.`
+            : `전송 직전 대상 파일의 갱신 여부를 확인하며, 다른 사용자가 방금 저장한 경우 최신본을 받아 자동 재시도합니다.<br><br>
+               전송 시 📌 알림이 자동 설정되고, 대상 프로젝트의 수정이력과 배분 원장에 함께 기록됩니다.`;
+        const _ibxDistCloseBtn = document.getElementById('inbox-dist-close-btn');
+        if (_ibxDistCloseBtn) _ibxDistCloseBtn.title = _en ? 'Close' : '닫기';
 
         // [AI 팝업] AI 키 상태/가이드 텍스트 재적용
         if (window.onAiProviderChange) window.onAiProviderChange(window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini');
@@ -13471,6 +13521,7 @@ window.inboxQuickRegisterMatched = async function(uid) {
 // 💡 [완전자동 백필] 완전자동 기능이 생기기 전부터 쌓여있던 '대기' 항목들은 그때는 자동전송 대상이 아니었으므로
 //    새로 분석되는 메일과 달리 저절로 넘어가지 않는다 — 매칭 확정 + 날짜 확정된 기존 대기 항목을 한 번에 훑어서 전송
 window.inboxBatchRegisterMatched = async function() {
+    const _en = window._currentLang === 'en';
     const targets = window.TaskInbox.load().filter(function(it) {
         return it.status === '대기' && it.matchedProject && it.matchedProject.status === 'matched'
             && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id
@@ -13478,14 +13529,18 @@ window.inboxBatchRegisterMatched = async function() {
             && !String((it.task || {})['완료일'] || '').includes('날짜확인필요');
     });
     if (!targets.length) {
-        alert('일괄전송할 항목이 없습니다.\n(매칭이 단일 확정 + 날짜 확정된 "대기" 항목만 대상 — 후보 다수/미매칭/날짜미확정 건은 여전히 직접 처리해야 합니다.)');
+        alert(_en
+            ? 'Nothing to batch-send.\n(Only "Pending" items with a single confirmed match + confirmed dates qualify — multiple candidates/unmatched/undated items still need manual handling.)'
+            : '일괄전송할 항목이 없습니다.\n(매칭이 단일 확정 + 날짜 확정된 "대기" 항목만 대상 — 후보 다수/미매칭/날짜미확정 건은 여전히 직접 처리해야 합니다.)');
         return;
     }
-    if (!confirm(`매칭 확정된 대기 항목 ${targets.length}건을 지금 각자 매칭된 프로젝트로 전송할까요?`)) return;
+    if (!confirm(_en
+        ? `Send ${targets.length} confirmed-match pending item(s) to their matched project(s) now?`
+        : `매칭 확정된 대기 항목 ${targets.length}건을 지금 각자 매칭된 프로젝트로 전송할까요?`)) return;
 
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-    if (!token) { alert('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
+    if (!token) { alert(_en ? '🔒 Please connect Google Drive first from the top menu.' : '🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
 
     let okCount = 0; const fails = [];
     for (const it of targets) {
@@ -13496,16 +13551,17 @@ window.inboxBatchRegisterMatched = async function() {
                 window.TaskInbox.setStatus(it.uid, '자동배치됨', { type: '일괄전송', target: target.file_name, at: new Date().toISOString() });
                 okCount++;
             } else {
-                fails.push(`${it.task['업무명'] || '(제목없음)'}: ${result.reason || '알수없음'}`);
+                fails.push(`${it.task['업무명'] || (_en ? '(untitled)' : '(제목없음)')}: ${result.reason || (_en ? 'unknown' : '알수없음')}`);
             }
         } catch (e) {
-            fails.push(`${it.task['업무명'] || '(제목없음)'}: ${e.message}`);
+            fails.push(`${it.task['업무명'] || (_en ? '(untitled)' : '(제목없음)')}: ${e.message}`);
         }
     }
     window.renderTaskInbox();
-    let msg = `✅ ${okCount}건 전송 완료`;
+    let msg = _en ? `✅ ${okCount} sent` : `✅ ${okCount}건 전송 완료`;
     if (fails.length) {
-        msg += `\n❌ ${fails.length}건 실패:\n` + fails.slice(0, 5).join('\n') + (fails.length > 5 ? `\n...외 ${fails.length - 5}건` : '');
+        msg += (_en ? `\n❌ ${fails.length} failed:\n` : `\n❌ ${fails.length}건 실패:\n`) + fails.slice(0, 5).join('\n')
+            + (fails.length > 5 ? (_en ? `\n...and ${fails.length - 5} more` : `\n...외 ${fails.length - 5}건`) : '');
         console.warn('[업무 보관함] 일괄전송 실패 목록:', fails);
     }
     alert(msg);
@@ -13837,9 +13893,10 @@ window.toggleInboxCleanupMode = function() {
     localStorage.setItem('inbox_cleanup_mode', next);
     window.refreshInboxCleanupModeButton();
     if (window.showToast) {
+        const _en = window._currentLang === 'en';
         window.showToast(next === 'auto'
-            ? '🟢 처리됨 자동삭제 모드 — 앞으로 처리된 업무는 즉시 보관함에서 사라집니다.'
-            : '🟠 처리됨 보관 모드 — 처리된 업무가 보관함에 남습니다. 각 행의 🗑로 직접 지워주세요.', 'info');
+            ? (_en ? '🟢 Auto-delete mode — processed tasks now disappear from the inbox immediately.' : '🟢 처리됨 자동삭제 모드 — 앞으로 처리된 업무는 즉시 보관함에서 사라집니다.')
+            : (_en ? '🟠 Keep mode — processed tasks stay in the inbox. Delete them yourself with the 🗑 per row.' : '🟠 처리됨 보관 모드 — 처리된 업무가 보관함에 남습니다. 각 행의 🗑로 직접 지워주세요.'), 'info');
     }
 };
 window.refreshInboxCleanupModeButton = function() {
@@ -14946,7 +15003,7 @@ window.updateInboxBadge();
         <div id="inbox-drag-handle" class="history-header"
              style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative;
                     cursor:grab; border-bottom:1px solid #ffe08a; border-radius:10px 10px 0 0; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
-            <span id="inbox-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+            <span id="inbox-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="inbox-help-tip-text">
                 📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
                 ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
                 📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>
@@ -14955,7 +15012,7 @@ window.updateInboxBadge();
             <div style="display:flex; gap:6px; flex-shrink:0;">
                 <button id="inbox-batch-register-btn" class="action-btn" onclick="window.inboxBatchRegisterMatched()" style="font-size:12px; color:#2f9e44; border-color:#2f9e44;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
                 <button id="inbox-cleanup-mode-btn" class="action-btn" onclick="window.toggleInboxCleanupMode()" style="font-size:12px;"></button>
-                <button onclick="window.closeTaskInbox()"
+                <button id="inbox-close-btn" onclick="window.closeTaskInbox()"
                     style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
                            color:#2c5f8a; font-size:16px; cursor:pointer;
                            width:28px; height: 29px; padding:0; line-height:1; box-sizing:border-box;
@@ -14975,22 +15032,22 @@ window.updateInboxBadge();
             <!-- 💡 [버그 수정] 아래 배지 id가 설정 모달(⚙️ 메일 자동배치 설정)의 동일 id와 중복돼서
                  document.getElementById가 항상 먼저 나온 쪽만 갱신하고 있었음 — "-2" 접미사로 분리 -->
             <div style="flex-shrink:0; padding:12px; border-top:1px solid #eee; border:1px solid #dee2e6; border-radius:8px; margin:0 12px 12px 12px; padding:12px 14px;">
-                <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
+                <div id="inbox-subqueue-header" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
                 <div style="display:flex; gap:6px; margin-bottom:10px;">
                     <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
-                        📭 미분류<br><span id="ms-unmatched-count-2" style="font-size:15px;">0</span>건
+                        <span id="inbox-unmatched-label">📭 미분류</span><br><span id="ms-unmatched-count-2" style="font-size:15px;">0</span><span id="inbox-unmatched-unit">건</span>
                     </button>
                     <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
-                        👤 신규발신자<br><span id="ms-newsender-count-2" style="font-size:15px;">0</span>건
+                        <span id="inbox-newsender-label">👤 신규발신자</span><br><span id="ms-newsender-count-2" style="font-size:15px;">0</span><span id="inbox-newsender-unit">건</span>
                     </button>
                     <button onclick="window.msShowDiscardedModal()" style="flex:1; padding:10px 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
-                        🗑 자동폐기<br><span id="ms-discarded-count-2" style="font-size:15px;">0</span>건
+                        <span id="inbox-discarded-label">🗑 자동폐기</span><br><span id="ms-discarded-count-2" style="font-size:15px;">0</span><span id="inbox-discarded-unit">건</span>
                     </button>
                 </div>
                 <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
-                    <button onclick="window._macClearQueue('unmatched')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
-                    <button onclick="window._macClearQueue('newsender')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
-                    <button onclick="window._macClearQueue('discarded')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 자동폐기 초기화</button>
+                    <button id="inbox-reset-unmatched-btn" onclick="window._macClearQueue('unmatched')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
+                    <button id="inbox-reset-newsender-btn" onclick="window._macClearQueue('newsender')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
+                    <button id="inbox-reset-discarded-btn" onclick="window._macClearQueue('discarded')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 자동폐기 초기화</button>
                 </div>
             </div>
         </div>
@@ -15008,11 +15065,11 @@ window.updateInboxBadge();
         <div id="inbox-dist-drag-handle" class="history-header"
              style="background:rgba(0,0,0,0.01); color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative;
                     cursor:grab; border-bottom:1.5px solid #2c5f8a; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
-            <span id="inbox-dist-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📤 다른 프로젝트로 전송<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip">
+            <span id="inbox-dist-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap;">📤 다른 프로젝트로 전송<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="inbox-dist-help-tip-text">
                 전송 직전 대상 파일의 갱신 여부를 확인하며, 다른 사용자가 방금 저장한 경우 최신본을 받아 자동 재시도합니다.<br><br>
                 전송 시 📌 알림이 자동 설정되고, 대상 프로젝트의 수정이력과 배분 원장에 함께 기록됩니다.
             </span></span></span>
-            <button onclick="window.closeInboxDist()"
+            <button id="inbox-dist-close-btn" onclick="window.closeInboxDist()"
                 style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
                        color:#2c5f8a; font-size:16px; cursor:pointer;
                        width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
