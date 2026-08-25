@@ -24249,8 +24249,15 @@ window._pcHandleFileUpload = async function(input) {
         } else {
             text = await file.text();
         }
-        if (paste) paste.value = text;
-        if (window.showToast) window.showToast((_en ? '📄 Loaded text from "' : '📄 "') + file.name + (_en ? '"' : '"에서 텍스트를 불러왔습니다'), 'info');
+        // 💡 PDF는 페이지마다 반복되는 머리말/꼬리말이 그대로 다 붙어나와 글자수만 불필요하게 늘리는
+        //    경우가 흔해서, AI에게 보내기 전 글자수 예산을 아끼도록 미리 한 번 정리해둔다.
+        const cleaned = window._pcCleanExtractedText(text);
+        if (paste) paste.value = cleaned;
+        const savedChars = text.length - cleaned.length;
+        if (window.showToast) {
+            window.showToast((_en ? '📄 Loaded text from "' : '📄 "') + file.name + (_en ? '"' : '"에서 텍스트를 불러왔습니다')
+                + (savedChars > 200 ? (_en ? ` (removed ${savedChars.toLocaleString()} repeated chars)` : ` (반복 ${savedChars.toLocaleString()}자 정리됨)`) : ''), 'info');
+        }
     } catch (e) {
         if (paste) paste.value = '';
         alert((_en ? 'Failed to read the file: ' : '파일을 읽지 못했습니다: ') + e.message);
@@ -24263,6 +24270,14 @@ window._pcRunExtract = async function() {
     const _en = window._currentLang === 'en';
     const raw = (document.getElementById('pc-add-paste') || {}).value || '';
     if (!raw.trim()) { alert(_en ? 'Please paste the panel spec text first.' : '먼저 패널 스펙 텍스트를 붙여넣어 주세요.'); return; }
+    // 💡 이 길이를 넘으면 프롬프트에서 뒷부분이 잘려나가 그 뒤에 나오는 스펙은 분석되지 않는다 —
+    //    조용히 자르는 대신 미리 알려주고, 계속할지 사람이 고르게 한다(취소하면 직접 텍스트를 다듬을 수 있음).
+    if (raw.length > window._PANEL_EXTRACT_TEXT_LIMIT) {
+        const proceed = confirm(_en
+            ? `The pasted text is ${raw.length.toLocaleString()} characters, but only the first ${window._PANEL_EXTRACT_TEXT_LIMIT.toLocaleString()} will be analyzed (AI input limit) — specs beyond that point may be missed.\n\nContinue anyway? (Cancel to trim the text yourself first, e.g. remove cover pages or repeated boilerplate.)`
+            : `붙여넣은 텍스트가 ${raw.length.toLocaleString()}자인데, AI 분석에는 앞부분 ${window._PANEL_EXTRACT_TEXT_LIMIT.toLocaleString()}자까지만 사용됩니다 — 그 뒤에 있는 스펙은 누락될 수 있습니다.\n\n그래도 진행할까요? (취소하고 표지/반복되는 문구 등을 직접 지워서 줄여보세요.)`);
+        if (!proceed) return;
+    }
     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
     if (!apiKey) { alert(_en ? '⚠️ No AI API key configured. Set one in the mail analysis screen first.' : '⚠️ AI API 키가 설정되어 있지 않습니다. 메일 분석 화면에서 먼저 키를 등록해주세요.'); return; }
     const btn = document.getElementById('pc-add-extract-btn');
