@@ -760,7 +760,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="display:none;" />
                 <button id="excel-btn" class="topbar-menu-item" onclick="exportToExcel()">🟩 프로젝트 엑셀 저장</button>
                 <div class="tb-menu-sep"></div>
-                <button id="new-project-btn" class="topbar-menu-item" onclick="window.startNewProject()" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트</button>
+                <button id="new-project-btn" class="topbar-menu-item" onclick="window.startNewProject()" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트 추가</button>
+                <button id="delete-project-btn" class="topbar-menu-item" onclick="window.deleteProjectFlow()" title="구글 드라이브의 프로젝트 파일을 영구 삭제합니다 (관리자 비밀번호 필요)" style="color:#e03131;">🗑️ 프로젝트 삭제</button>
             </div>
         </div>
         <!-- 🤖 AI 업무분석 — 직접 버튼 -->
@@ -2455,25 +2456,29 @@ ${mailText}`;
         }
     };
 
+    // 💡 [공용화] 팀 공용 폴더의 "실제 프로젝트 파일" 목록만 걸러서 반환 — 공유설정/인덱스/백업류
+    //    (project_index.json·PriorityScore_Shared.json 등)는 프로젝트가 아니므로 제외.
+    //    loadFromGoogleDrive(열기)와 deleteProjectFlow(삭제) 양쪽에서 같은 필터 기준을 공유한다.
+    window._listProjectFiles = async function() {
+        let response = await gapi.client.drive.files.list({
+            q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+            fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
+        });
+        return (response.result.files || []).filter(function(f) {
+            return !f.name.startsWith('TaskInbox_')
+                && f.name !== PROMPT_DRIVE_FILENAME
+                && f.name !== HOLIDAY_DRIVE_FILENAME
+                && f.name !== PRIORITY_CONFIG_FILENAME
+                && f.name !== PROJECT_INDEX_FILENAME
+                && f.name !== MS_FILTER_RULES_DRIVE_FILENAME
+                && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
+        });
+    };
+
     window.loadFromGoogleDrive = async function() {
         const _ldEn = window._currentLang === 'en';
         try {
-            let response = await gapi.client.drive.files.list({
-                q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
-                fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
-            });
-            
-            // 💡 프로젝트 파일이 아닌 공유설정/인덱스/백업류는 목록에서 제외 (project_index.json·PriorityScore_Shared.json 등이
-            //    "미지정" 그룹에 새 게시로 잘못 뜨던 문제 수정)
-            let files = (response.result.files || []).filter(function(f) {
-                return !f.name.startsWith('TaskInbox_')
-                    && f.name !== PROMPT_DRIVE_FILENAME
-                    && f.name !== HOLIDAY_DRIVE_FILENAME
-                    && f.name !== PRIORITY_CONFIG_FILENAME
-                    && f.name !== PROJECT_INDEX_FILENAME
-                    && f.name !== MS_FILTER_RULES_DRIVE_FILENAME
-                    && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
-            });
+            let files = await window._listProjectFiles();
             if (!files || files.length === 0) {
                 window.showToast(_ldEn ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.", 'error');
                 return;
@@ -2483,6 +2488,119 @@ ${mailText}`;
             window.showToast(_ldEn ? "✅ Project list loaded. Please select a file." : "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.");
         } catch (err) { alert(_ldEn ? "Failed to load list: insufficient permissions or invalid folder ID." : "목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
+
+    // 💡 [2026-08-25 신규] "🗑️ 프로젝트 삭제" — 구글 드라이브에서 프로젝트 파일을 지워도
+    //    project_index.json(메일 자동매칭용 인덱스)엔 그 항목이 유령처럼 계속 남아있던 문제 해결.
+    //    같은 목록 모달을 'delete' 모드로 열어서, 여기서 지우면 ①드라이브 파일 휴지통 이동
+    //    ②project_index.json 항목 제거 ③열려있던 시트 탭 정리까지 한 번에 처리한다.
+    window.deleteProjectFlow = async function() {
+        const _en = window._currentLang === 'en';
+        if (!window.isDriveConnected) {
+            alert(_en ? "🔒 Please connect Google Drive first." : "🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.");
+            return;
+        }
+        window.closeAllTopbarMenus();
+        try {
+            const files = await window._listProjectFiles();
+            if (!files || files.length === 0) {
+                window.showToast(_en ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.", 'error');
+                return;
+            }
+            window.showDriveFileModal(files, 'delete');
+        } catch (err) {
+            alert((_en ? "Failed to load list: " : "목록 호출 실패: ") + err.message);
+        }
+    };
+
+    // project_index.json에서 특정 프로젝트 항목만 제거 (드라이브에서 파일을 지운 뒤, 메일 자동매칭
+    // 후보 목록에 유령으로 남지 않도록 함께 정리). 인덱스 파일 자체가 없으면 지울 것도 없으니 통과.
+    window._removeProjectIndexEntry = async function(driveFileId) {
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return false;
+            const indexFileId = await window.findProjectIndexFile(token);
+            if (!indexFileId) return true;
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${indexFileId}?alt=media&supportsAllDrives=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const loaded = await res.json();
+            if (!loaded || !Array.isArray(loaded.projects)) return true;
+            const before = loaded.projects.length;
+            loaded.projects = loaded.projects.filter(function(p) { return p.drive_file_id !== driveFileId; });
+            if (loaded.projects.length === before) return true; // 원래 인덱스에 없었음
+            await fetch(`https://www.googleapis.com/upload/drive/v3/files/${indexFileId}?uploadType=media&supportsAllDrives=true`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(loaded)
+            });
+            return true;
+        } catch (err) { console.warn('project_index.json 항목 제거 실패:', err.message); return false; }
+    };
+
+    // 실제 삭제 실행 — ①파일명 직접 입력 확인(오클릭 방지) ②관리자 비밀번호 확인 ③드라이브 휴지통 이동
+    // ④project_index.json 정리 ⑤열려있는 시트 탭 정리, 순서로 진행. 완전삭제가 아니라 "휴지통 이동"이라
+    // 구글 드라이브 휴지통에서 30일 내 복구는 가능함(실수 대비 최소 안전장치).
+    window._confirmDeleteProjectFile = async function(file) {
+        const _en = window._currentLang === 'en';
+        const typed = prompt(_en
+            ? `⚠️ This permanently removes the project from the shared folder (recoverable from Google Drive Trash for a limited time).\nType the exact file name to confirm:\n\n${file.name}`
+            : `⚠️ 이 프로젝트를 공용 폴더에서 삭제합니다 (구글 드라이브 휴지통에서 일정 기간 복구 가능).\n확인을 위해 파일명을 정확히 입력하세요:\n\n${file.name}`);
+        if (typed !== file.name) {
+            if (typed !== null) alert(_en ? '❌ File name did not match. Cancelled.' : '❌ 파일명이 일치하지 않습니다. 삭제가 취소되었습니다.');
+            return;
+        }
+        if (!verifyAdminPassword(_en
+            ? '🔒 Enter the admin password to delete this project.\n(case-insensitive)'
+            : '🔒 프로젝트를 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
+            alert(_en ? '❌ Authentication failed. Deletion cancelled.' : '❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.');
+            return;
+        }
+        try {
+            const tokenObj = gapi.client.getToken();
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) { alert(_en ? '🔒 Auth token lost. Please reconnect Google Drive.' : '🔒 구글 인증 토큰을 확보하지 못했습니다. 연동 버튼을 다시 클릭해 주세요.'); return; }
+
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${file.id}?supportsAllDrives=true`, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trashed: true })
+            });
+            if (!res.ok) {
+                const errBody = await res.json().catch(function() { return {}; });
+                throw new Error((errBody.error && errBody.error.message) || ('HTTP ' + res.status));
+            }
+
+            await window._removeProjectIndexEntry(file.id);
+
+            // 지금 열려있는 시트 중 이 파일과 연결된 탭이 있으면 정리(이미 지운 파일이라 저장하지 않고 그냥 닫음)
+            const openIdx = window._sheets ? window._sheets.findIndex(function(s) { return s.fileId === file.id; }) : -1;
+            if (openIdx !== -1) {
+                const wasActive = window._sheets[openIdx].key === window._activeSheetKey;
+                window._sheets.splice(openIdx, 1);
+                if (wasActive) {
+                    if (window._sheets.length) {
+                        const next = window._sheets[Math.min(openIdx, window._sheets.length - 1)];
+                        window._activeSheetKey = next.key;
+                        window._restoreSheetSnapshot(next.snapshot);
+                    } else {
+                        window._activeSheetKey = null;
+                        window._resetToBlankNoConfirm(true);
+                    }
+                } else {
+                    window.renderSheetTabsBar();
+                }
+            }
+
+            if (window.showToast) window.showToast(_en ? `🗑️ Deleted: ${file.name}` : `🗑️ 삭제 완료: ${file.name}`, 'info');
+
+            // 같은 모달에서 이어서 다른 프로젝트도 지울 수 있도록 목록을 새로고침
+            const remaining = await window._listProjectFiles();
+            if (remaining.length) window.showDriveFileModal(remaining, 'delete'); else window.closeDriveModal();
+        } catch (err) {
+            alert((_en ? 'Delete failed: ' : '삭제 실패: ') + err.message);
+        }
+    };
 
     // 💡 백업 폴더(Drive) 찾기/생성 — SHARED_FOLDER_ID 안에 "Backups" 폴더가 없으면 새로 만듦
     window.getOrCreateBackupFolder = async function(token) {
@@ -3761,9 +3879,45 @@ ${mailText}`;
         });
     };
 
-    // 💡 [2026-08-20] "닫을지 확인" 창 제거 + 닫기 전 저장하도록 변경(사용자 요청).
-    //    닫으려는 시트가 지금 활성 시트(=화면에 보이는 내용)면 저장 안 한 변경사항이 있는지 확인 후 저장.
-    //    비활성 탭은 switchToSheetWithSave에서 전환 시점에 이미 저장됐어야 하므로 별도 저장 불필요.
+    // 💡 [2026-08-25 신규] 시트 탭 "✕" 닫기 전용 3지선다 확인 모달 — 브라우저 기본 confirm()은
+    //    OK/Cancel 2개뿐이라 "저장하고 닫기 / 저장 안 하고 닫기 / 취소" 3가지를 표현할 수 없어 직접 만듦.
+    //    Promise로 감싸서 closeSheet()에서 await로 선택 결과('save'|'discard'|'cancel')를 그대로 받는다.
+    window._showSaveChoiceModal = function(fileName) {
+        return new Promise(function(resolve) {
+            const _en = window._currentLang === 'en';
+            let modal = document.getElementById('sheet-close-choice-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'sheet-close-choice-modal';
+                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,0.35); align-items:center; justify-content:center;';
+                document.body.appendChild(modal);
+            }
+            const label = fileName || (_en ? 'this project' : '이 프로젝트');
+            modal.innerHTML = `
+                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(420px, 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
+                    <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:10px;">💾 ${_en ? 'Save changes before closing?' : '닫기 전에 변경사항을 저장할까요?'}</div>
+                    <div style="font-size:13px; color:#666; line-height:1.6; margin-bottom:18px; white-space:pre-wrap;">${_en
+                        ? `You have unsaved changes in "${escapeHtml(label)}".`
+                        : `"${escapeHtml(label)}"에 저장하지 않은 변경사항이 있습니다.`}</div>
+                    <div style="display:flex; gap:8px; justify-content:flex-end; flex-wrap:wrap;">
+                        <button id="scc-cancel" style="padding:8px 14px; background:#fff; color:#666; border:1.5px solid #ced4da; border-radius:6px; font-size:12.5px; cursor:pointer;">${_en ? 'Cancel' : '취소'}</button>
+                        <button id="scc-discard" style="padding:8px 14px; background:#fff; color:#e03131; border:1.5px solid #e03131; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">${_en ? "Don't Save" : '저장 안 함'}</button>
+                        <button id="scc-save" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">${_en ? 'Save & Close' : '저장하고 닫기'}</button>
+                    </div>
+                </div>`;
+            modal.style.display = 'flex';
+            function done(v) { modal.style.display = 'none'; resolve(v); }
+            document.getElementById('scc-cancel').onclick = function() { done('cancel'); };
+            document.getElementById('scc-discard').onclick = function() { done('discard'); };
+            document.getElementById('scc-save').onclick = function() { done('save'); };
+            modal.onclick = function() { done('cancel'); }; // 배경(바깥) 클릭 = 취소
+        });
+    };
+
+    // 💡 [2026-08-20 → 2026-08-25 재도입] 2026-08-20엔 "닫을지 확인" 창을 없애고 무조건 저장 후
+    //    닫도록 바꿨었는데, 이번에 다시 "저장하고 닫기 / 저장 안 하고 닫기 / 취소" 3지선다 모달로 복원한다.
+    //    이전 동작 대신, 저장 안 한 변경사항이 있을 때만 사람이 직접 고르게 한다.
+    //    비활성 탭은 switchToSheetWithSave에서 전환 시점에 이미 저장됐어야 하므로 별도 확인 불필요.
     //    저장+닫기를 한 대기열(_runSerialized)로 묶어서 다른 저장 작업과 겹치는 사고를 막음
     //    (switchToSheetWithSave와 동일 패턴 — raw 저장 함수를 직접 호출, 공개 saveToGoogleDrive()는
     //    같은 대기열에 재진입하면 데드락 나므로 사용 안 함).
@@ -3772,6 +3926,7 @@ ${mailText}`;
             const idx = window._sheets.findIndex(function(s) { return s.key === key; });
             if (idx === -1) return;
             const wasActive = (key === window._activeSheetKey);
+            const _en = window._currentLang === 'en';
 
             if (wasActive) {
                 const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
@@ -3780,12 +3935,20 @@ ${mailText}`;
                 //    한 번도 저장 안 한) 새 프로젝트는 이 탭을 "✕"로 닫아도 저장 시도 없이 그대로 사라졌다.
                 const hasUnsavedChanges = currentLogs > savedLogs || window._nonGanttDirty;
                 if (hasUnsavedChanges) {
-                    if (window.showToast) window.showToast('💾 저장 후 닫는 중...', 'info');
-                    const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
-                    if (!ok) {
-                        const _why = window._lastSaveBlockReason || '';
-                        if (!confirm((_why ? _why + '\n\n' : '') + '저장에 실패했습니다. 그래도 이 시트를 닫을까요?\n(저장하지 않은 변경사항은 사라집니다)')) return;
+                    const sheetEntry = window._sheets[idx];
+                    const choice = await window._showSaveChoiceModal(sheetEntry && sheetEntry.fileName);
+                    if (choice === 'cancel') return;
+                    if (choice === 'save') {
+                        if (window.showToast) window.showToast(_en ? '💾 Saving before close...' : '💾 저장 후 닫는 중...', 'info');
+                        const ok = await window._saveToGoogleDriveRaw({ suppressAlert: true });
+                        if (!ok) {
+                            const _why = window._lastSaveBlockReason || '';
+                            if (!confirm((_why ? _why + '\n\n' : '') + (_en
+                                ? 'Save failed. Close this tab anyway?\n(Unsaved changes will be lost)'
+                                : '저장에 실패했습니다. 그래도 이 시트를 닫을까요?\n(저장하지 않은 변경사항은 사라집니다)'))) return;
+                        }
                     }
+                    // choice === 'discard' → 저장 없이 그대로 닫기 진행
                 }
             }
 
@@ -4052,15 +4215,20 @@ ${mailText}`;
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
 
-    window.showDriveFileModal = function(files) {
+    window.showDriveFileModal = function(files, mode) {
+        mode = mode || 'open'; // 'open' | 'delete'
         let listContainer = document.getElementById('drive-file-list');
         if(!listContainer) return;
         listContainer.innerHTML = '';
         const _dmEn = window._currentLang === 'en';
         const _dmTitle = document.getElementById('drive-modal-title');
-        if (_dmTitle) _dmTitle.textContent = _dmEn ? '📂 Open Project' : '📂 프로젝트 불러오기';
+        if (_dmTitle) _dmTitle.textContent = mode === 'delete'
+            ? (_dmEn ? '🗑️ Delete Project' : '🗑️ 프로젝트 삭제')
+            : (_dmEn ? '📂 Open Project' : '📂 프로젝트 불러오기');
         const _dmDesc = document.getElementById('drive-modal-desc');
-        if (_dmDesc) _dmDesc.textContent = _dmEn ? 'Select a project file to open.' : '불러올 프로젝트 파일을 선택해 주세요.';
+        if (_dmDesc) _dmDesc.textContent = mode === 'delete'
+            ? (_dmEn ? '⚠️ Select a project file to delete. This cannot be undone from within the app.' : '⚠️ 삭제할 프로젝트 파일을 선택해 주세요. 앱 안에서는 되돌릴 수 없습니다.')
+            : (_dmEn ? 'Select a project file to open.' : '불러올 프로젝트 파일을 선택해 주세요.');
 
         // 💡 [성능] 목록 조회 응답에는 이미 modifiedTime이 들어있다(fields=files(id,name,modifiedTime,...)).
         //    이걸 기억해뒀다가 프로젝트를 열 때 배분 병합 캐시의 기준값으로 삼는다 — 안 그러면 파일을 연
@@ -4088,7 +4256,7 @@ ${mailText}`;
 
         // 💡 [멀티시트] 담당자별 "한 번에 열기"와 동일한 방식으로, 목록 전체(모든 담당자)를 한 번에 여는 버튼.
         //    executeLoadFile(..., true)를 그대로 재사용 — 이미 열려있는 시트는 다시 안 받아오고 전환만 됨.
-        if (files.length > 1) {
+        if (files.length > 1 && mode === 'open') {
             const topActionsRow = document.createElement('div');
             topActionsRow.style.cssText = 'display:flex; gap:8px; align-items:stretch;';
 
@@ -4146,8 +4314,8 @@ ${mailText}`;
             headerRow.appendChild(arrow);
             const label = document.createElement('span');
             label.textContent = `${pmName} (${groupFiles.length})`;
-            // 💡 [멀티시트] 담당자 이름을 클릭하면 그 담당자의 프로젝트를 전부 시트로 한 번에 열기
-            if (pmName !== UNASSIGNED) {
+            // 💡 [멀티시트] 담당자 이름을 클릭하면 그 담당자의 프로젝트를 전부 시트로 한 번에 열기 (삭제 모드에선 비활성)
+            if (pmName !== UNASSIGNED && mode === 'open') {
                 label.style.cssText = 'text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;';
                 label.title = _dmEn ? `Open all ${groupFiles.length} project(s) for ${pmName} at once` : `[${pmName}] 담당 프로젝트 ${groupFiles.length}개를 한 번에 엽니다`;
                 label.onclick = async function(e) {
@@ -4170,11 +4338,25 @@ ${mailText}`;
             groupFiles.forEach(file => {
                 let d = new Date(file.modifiedTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
                 let fileBtn = document.createElement('div');
-                fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
-                fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
-                fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
-                fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
-                fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
+                if (mode === 'delete') {
+                    fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff;";
+                    const infoWrap = document.createElement('div');
+                    infoWrap.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${escapeHtml(file.name)}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
+                    const delBtn = document.createElement('button');
+                    delBtn.textContent = _dmEn ? '🗑 Delete' : '🗑 삭제';
+                    delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fff; color:#e03131; border:1.5px solid #e03131; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;';
+                    delBtn.onmouseover = function() { this.style.background = '#e03131'; this.style.color = '#fff'; };
+                    delBtn.onmouseout  = function() { this.style.background = '#fff'; this.style.color = '#e03131'; };
+                    delBtn.onclick = function(e) { e.stopPropagation(); window._confirmDeleteProjectFile(file); };
+                    fileBtn.appendChild(infoWrap);
+                    fileBtn.appendChild(delBtn);
+                } else {
+                    fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
+                    fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
+                    fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+                    fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
+                    fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
+                }
                 body.appendChild(fileBtn);
             });
 
@@ -8275,7 +8457,8 @@ window.deleteHistoryByDateRange = function() {
                 'redo-btn': '↪️ 다시실행',
                 'recalc-range-btn': '🔓 선택 구간 재계산',
                 'backup_restore_btn': '🔄 프로젝트 복원',
-                'new-project-btn': '➕ 새 프로젝트',
+                'new-project-btn': '➕ 새 프로젝트 추가',
+                'delete-project-btn': '🗑️ 프로젝트 삭제',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -8371,7 +8554,8 @@ window.deleteHistoryByDateRange = function() {
                 'redo-btn': '↪️ Redo',
                 'recalc-range-btn': '🔓 Recalc Selected Range',
                 'backup_restore_btn': '🔄 Restore Project',
-                'new-project-btn': '➕ New Project',
+                'new-project-btn': '➕ Add New Project',
+                'delete-project-btn': '🗑️ Delete Project',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -13096,17 +13280,13 @@ window.showInboxMailRaw = function(uid) {
     window.showMailRawModal(it.mailRaw);
 };
 
-// 💡 [추출] 업무 보관함 카드의 "메일 원문 + AI 분석 결과"를 한 텍스트로 합쳐 클립보드에 복사.
-//    AI 분석이 메일 내용과 다르게(오매칭) 나온 경우, 이 텍스트를 그대로 AI 채팅창에 붙여넣어
-//    "이 분석이 맞는지, 어디가 잘못됐는지"를 바로 상의할 수 있게 하기 위함.
-window.extractInboxForAI = async function(uid) {
-    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
-    if (!it) return;
+// 💡 [추출] 업무 보관함 카드의 "메일 원문 + AI 분석 결과"를 한 텍스트로 정리.
+//    클립보드 복사(다른 곳에 붙여넣기용)와, 앱 안에서 바로 AI에게 "왜 이렇게 분석했는지" 물어보는
+//    미니 채팅 모달 양쪽에서 공용으로 쓰는 컨텍스트 빌더 — 내용이 어긋나지 않도록 한 곳에서만 만든다.
+window._ibBuildAnalysisContext = function(it) {
     const t = it.task || {};
     const _en = window._currentLang === 'en';
     const lines = [];
-    lines.push(_en ? '===== Please review this AI mail-analysis result for mismatches =====' : '===== AI 메일 업무분석 결과 오매칭 검토 요청 =====');
-    lines.push('');
     lines.push(_en ? '[Analysis result]' : '[분석 결과]');
     lines.push((_en ? 'Task name: ' : '업무명: ') + (t['업무명'] || ''));
     lines.push((_en ? 'Detail: ' : '상세내용: ') + (t['상세내용'] || ''));
@@ -13134,19 +13314,139 @@ window.extractInboxForAI = async function(uid) {
     } else {
         lines.push(_en ? '[No mail source attached to this task]' : '[이 업무에는 메일 원문이 없습니다]');
     }
-    lines.push('');
-    lines.push(_en
+    return lines.join('\n');
+};
+
+// 💡 클릭 한 번으로 ① 클립보드 복사(다른 AI 채팅창에 붙여넣고 싶을 때 대비)와
+//    ② 앱 안에서 바로 AI에게 "왜 이렇게 분석됐는지" 물어보는 미니 채팅 모달을 동시에 띄운다.
+window.extractInboxForAI = async function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const _en = window._currentLang === 'en';
+    const context = window._ibBuildAnalysisContext(it);
+    const closingQuestion = _en
         ? 'Does the analysis result above correctly match the mail content? If it is a mismatch, please point out exactly which part is wrong.'
-        : '위 분석 결과가 메일 원문 내용과 잘 맞게 추출된 것인지 확인해줘. 오매칭이라면 어느 부분이 왜 잘못됐는지 짚어줘.');
-    const text = lines.join('\n');
+        : '위 분석 결과가 메일 원문 내용과 잘 맞게 추출된 것인지 확인해줘. 오매칭이라면 어느 부분이 왜 잘못됐는지 짚어줘.';
+
+    // ① 클립보드 복사는 되든 안 되든(권한 문제 등) 채팅 모달 진행을 막지 않음 — 실패해도 조용히 넘어감
     try {
-        await navigator.clipboard.writeText(text);
-        alert(_en
-            ? '✅ Copied the mail source + analysis result to the clipboard.\nPaste it into the AI chat to discuss whether it was mismatched.'
-            : '✅ 메일 원문 + 분석 결과가 클립보드에 복사되었습니다.\nAI 채팅창에 붙여넣어 오매칭 여부를 상의해보세요.');
-    } catch (e) {
-        alert((_en ? 'Copy failed: ' : '복사 실패: ') + e.message);
+        await navigator.clipboard.writeText(
+            (_en ? '===== Please review this AI mail-analysis result for mismatches =====' : '===== AI 메일 업무분석 결과 오매칭 검토 요청 =====')
+            + '\n\n' + context + '\n\n' + closingQuestion
+        );
+        if (window.showToast) window.showToast(_en ? '📋 Copied to clipboard as well.' : '📋 클립보드에도 복사해뒀습니다.', 'info');
+    } catch (e) { /* 클립보드 실패는 무시 — 아래 채팅 모달이 주 경로 */ }
+
+    // ② 앱 내 AI 채팅 모달을 열고, 오매칭 여부를 묻는 첫 질문을 바로 전송
+    if (!(window.getActiveAiKey && window.getActiveAiKey())) {
+        alert(_en ? '⚠️ No AI API key configured. Set one in Settings first (mail analysis screen).' : '⚠️ AI API 키가 설정되어 있지 않습니다. 메일 분석 화면 상단 설정에서 먼저 키를 등록해주세요.');
+        return;
     }
+    window._ibAiChatState = window._ibAiChatState || {};
+    window._ibAiChatState[uid] = { context: context, messages: [] };
+    window._ibOpenAiChatModal(uid);
+    window._ibSendAiChatTurn(uid, closingQuestion);
+};
+
+// ─── 업무 보관함 "📋 추출" → AI 미니 채팅 모달 ──────────────────────────────
+window._ibOpenAiChatModal = function(uid) {
+    const _en = window._currentLang === 'en';
+    let modal = document.getElementById('inbox-ai-chat-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'inbox-ai-chat-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9110; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="inbox-ai-chat-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:34%; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:440px;">
+            <div id="inbox-ai-chat-drag" style="padding:13px 18px; border-bottom:1px solid #d0bfff; font-weight:bold; font-size:14px; background:#f3f0ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#5f3dc4;">
+                <span>🤖 AI 분석 근거 문의</span>
+                <button onclick="document.getElementById('inbox-ai-chat-modal').style.display='none'" style="background:#fff; border:1.5px solid #5f3dc4; border-radius:6px; color:#5f3dc4; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div id="inbox-ai-chat-log" style="flex:1; overflow-y:auto; padding:12px 14px; background:#fafafa;"></div>
+            <div style="padding:10px; border-top:1px solid #eee; display:flex; gap:6px; align-items:flex-end;">
+                <textarea id="inbox-ai-chat-input" placeholder="${_en ? 'Ask a follow-up (Enter to send, Shift+Enter for newline)' : '추가로 물어볼 내용을 입력하세요 (Enter 전송, Shift+Enter 줄바꿈)'}" style="flex:1; resize:none; height:40px; font-size:12px; padding:6px 8px; border:1px solid #ced4da; border-radius:6px; font-family:inherit;" onkeydown="if(event.key==='Enter' && !event.shiftKey){ event.preventDefault(); window._ibSubmitAiChatInput(this); }"></textarea>
+                <button onclick="window._ibSubmitAiChatInput(document.getElementById('inbox-ai-chat-input'))" style="flex-shrink:0; padding:8px 14px; height:40px; background:#7048e8; color:#fff; border:none; border-radius:6px; font-size:12px; cursor:pointer;">${_en ? 'Send' : '전송'}</button>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('inbox-ai-chat-box', 'inbox-ai-chat-drag');
+        window._bindClickToFront('inbox-ai-chat-modal');
+    }
+    modal.dataset.uid = uid;
+    window._ibRenderAiChatLog(uid);
+    modal.style.display = 'block';
+    window.bringModalToFront('inbox-ai-chat-modal');
+};
+
+window._ibRenderAiChatLog = function(uid) {
+    const state = window._ibAiChatState && window._ibAiChatState[uid];
+    const log = document.getElementById('inbox-ai-chat-log');
+    if (!state || !log) return;
+    const wasAtBottom = (log.scrollTop + log.clientHeight) >= (log.scrollHeight - 20);
+    log.innerHTML = state.messages.map(function(m) {
+        const isUser = m.role === 'user';
+        return `<div style="display:flex; justify-content:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:8px;">
+            <div style="max-width:85%; padding:8px 12px; border-radius:10px; white-space:pre-wrap; font-size:12.5px; line-height:1.6; ${isUser ? 'background:#7048e8; color:#fff;' : 'background:#fff; border:1px solid #e0e0e0; color:#333;'}">${escapeHtml(m.text)}</div>
+        </div>`;
+    }).join('') + (state.loading ? '<div style="color:#888; font-size:12px; padding:4px 0;">🤖 ' + (window._currentLang === 'en' ? 'Thinking…' : '생각 중...') + '</div>' : '');
+    if (wasAtBottom || state.loading) log.scrollTop = log.scrollHeight;
+};
+
+window._ibSetAiChatLoading = function(uid, loading) {
+    const state = window._ibAiChatState && window._ibAiChatState[uid];
+    if (state) state.loading = loading;
+    const modal = document.getElementById('inbox-ai-chat-modal');
+    const btn = modal ? modal.querySelector('button[onclick*="_ibSubmitAiChatInput"]') : null;
+    const input = document.getElementById('inbox-ai-chat-input');
+    if (btn) btn.disabled = loading;
+    if (input) input.disabled = loading;
+    window._ibRenderAiChatLog(uid);
+};
+
+window._ibSendAiChatTurn = async function(uid, userText) {
+    const state = window._ibAiChatState && window._ibAiChatState[uid];
+    if (!state) return;
+    const _en = window._currentLang === 'en';
+    state.messages.push({ role: 'user', text: userText });
+    window._ibRenderAiChatLog(uid);
+    window._ibSetAiChatLoading(uid, true);
+
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) {
+        state.messages.push({ role: 'ai', text: _en ? '⚠️ No AI API key configured.' : '⚠️ AI API 키가 설정되어 있지 않습니다.' });
+        window._ibSetAiChatLoading(uid, false);
+        return;
+    }
+    const transcript = state.messages.map(function(m) {
+        return (m.role === 'user' ? (_en ? '[User question] ' : '[사용자 질문] ') : (_en ? '[AI answer] ' : '[AI 답변] ')) + m.text;
+    }).join('\n\n');
+    const prompt = state.context + '\n\n' + transcript + '\n\n' + (_en
+        ? 'Based on the context above, answer the last [User question] in plain natural-language text (no JSON), citing concrete evidence from the mail/analysis result.'
+        : '위 맥락을 참고해서 마지막 [사용자 질문]에 대해, 메일 원문/분석 결과의 구체적인 근거를 들어 자연스러운 설명 텍스트로만(JSON 금지) 답변해줘.');
+
+    let result;
+    try {
+        result = await window.callAiBackend(apiKey, prompt);
+    } catch (e) {
+        result = { ok: false, error: e };
+    }
+    if (!result.ok) {
+        state.messages.push({ role: 'ai', text: (_en ? '⚠️ AI call failed: ' : '⚠️ AI 호출 실패: ') + (result.error && result.error.message || (_en ? 'Unknown error' : '알 수 없는 오류')) });
+    } else {
+        const text = result.data.result?.candidates?.[0]?.content?.parts?.[0]?.text || (_en ? '(empty response)' : '(응답 없음)');
+        state.messages.push({ role: 'ai', text: text.trim() });
+    }
+    window._ibSetAiChatLoading(uid, false);
+};
+
+window._ibSubmitAiChatInput = function(textarea) {
+    const modal = document.getElementById('inbox-ai-chat-modal');
+    const uid = modal ? modal.dataset.uid : null;
+    if (!uid) return;
+    const val = (textarea.value || '').trim();
+    if (!val) return;
+    textarea.value = '';
+    window._ibSendAiChatTurn(uid, val);
 };
 
 window.showGanttMailRaw = function(rowIndex) {
