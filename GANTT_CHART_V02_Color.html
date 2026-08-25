@@ -9526,6 +9526,19 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+        // [AI팝업] "📋 수집 N개 / 분석 N개" — 안에 숫자용 <span>(ms-result-count/ms-analyzed-count)이
+        //    끼어있어서 위 textContent 방식(통째로 덮어쓰기)을 쓰면 그 숫자 칸까지 같이 날아간다.
+        //    현재 숫자를 먼저 읽어둔 뒤, 언어에 맞는 문구로 innerHTML을 다시 조립하면서 숫자를 그대로 되살린다.
+        const _msSummaryEl = document.getElementById('ms-collect-summary');
+        if (_msSummaryEl) {
+            const _msRc = document.getElementById('ms-result-count');
+            const _msAc = document.getElementById('ms-analyzed-count');
+            const _msRcVal = _msRc ? _msRc.textContent : '0';
+            const _msAcVal = _msAc ? _msAc.textContent : '0';
+            _msSummaryEl.innerHTML = _en
+                ? `📋 Collected <span id="ms-result-count">${_msRcVal}</span> / Analyzed <span id="ms-analyzed-count">${_msAcVal}</span>`
+                : `📋 수집 <span id="ms-result-count">${_msRcVal}</span>개 / 분석 <span id="ms-analyzed-count">${_msAcVal}</span>개`;
+        }
         // [AI팝업] textarea placeholder 번역
         const _mcInput = document.getElementById('mail-content-input');
         if (_mcInput) _mcInput.placeholder = _en ? 'Paste the mail content here...' : '메일 본문을 여기에 붙여넣으세요...';
@@ -15562,7 +15575,7 @@ window.updateInboxBadge();
                     <!-- 결과 목록 헤더 -->
                     <div id="ms-list-header" style="display:none; padding:6px 0; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
                         <div style="display:flex; justify-content:space-between; align-items:center; padding:0 12px; width:100%; box-sizing:border-box;">
-                            <span style="font-size:11px; font-weight:bold;">📋 수집 <span id="ms-result-count">0</span>개 / 분석 <span id="ms-analyzed-count">0</span>개</span>
+                            <span id="ms-collect-summary" style="font-size:11px; font-weight:bold;">📋 수집 <span id="ms-result-count">0</span>개 / 분석 <span id="ms-analyzed-count">0</span>개</span>
                             <label style="font-size:10px; color:#555; cursor:pointer;">
                                 <input type="checkbox" id="ms-check-all" onchange="window.msSelectAll(this.checked)"> <span id="ms-check-all-label">전체선택</span>
                             </label>
