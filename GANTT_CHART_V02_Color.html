@@ -23887,9 +23887,9 @@ window.renderMaterialRows = function(rows) {
 
     // 💡 [2026-08-25 UX 개선] 자유추가 행을 전부 오른쪽에만 쌓으면 오른쪽만 계속 길어지고 왼쪽엔
     //    빈 공간이 남는다는 지적이 있었음 — 왼쪽 고정 7개/오른쪽 고정 5개(+ETC)는 그대로 두고,
-    //    새로 추가되는 자유추가 행만 왼쪽→오른쪽→왼쪽… 순서로 지그재그 배정해서 두 표의 높이가
-    //    비슷하게 유지되도록 한다. ETC는 항상 오른쪽 표 맨 마지막에 고정. data-idx는 원래 논리적
-    //    위치(고정 목록에서의 자리) 그대로 유지해서 collectMaterialRows()의 위치 기반 해석이 깨지지 않는다.
+    //    새로 추가되는 자유추가 행은 항상 "더 짧은 쪽"에 지그재그로 배정해서 두 표의 높이가 비슷하게
+    //    유지되도록 한다(아래 그리디 로직 참고). ETC는 항상 오른쪽 표 맨 마지막에 고정. data-idx는
+    //    원래 논리적 위치(고정 목록에서의 자리) 그대로 유지해서 collectMaterialRows()의 위치 기반 해석이 깨지지 않는다.
     const logicalRows = allRows.map(function(r, i) { return { r: r, idx: i }; });
     const etcEntry = logicalRows.find(function(e) { return e.r.category === 'ETC'; });
     const nonEtcRows = logicalRows.filter(function(e) { return e.r.category !== 'ETC'; });
@@ -23898,8 +23898,16 @@ window.renderMaterialRows = function(rows) {
     const leftFixed = fixedNonEtc.slice(0, splitAt);   // PANEL~BLU (7개)
     const rightFixed = fixedNonEtc.slice(splitAt);     // POWER~PACKING (5개)
 
+    // 💡 왼쪽이 고정 7개로 시작해 오른쪽(5개)보다 2개 더 많으므로, 단순 홀짝 교대(왼→오→왼→오)로는
+    //    그 격차가 끝까지 안 좁혀진다. 대신 "지금 더 짧은 쪽에 추가, 같으면 왼쪽"으로 매번 판단하는
+    //    그리디 방식을 쓰면 처음엔 오른쪽에 2개 연속 붙어 격차를 메운 뒤(→R,R), 그 다음부턴 자연스럽게
+    //    한 칸씩 번갈아 붙는다(→L,R,L,R…) — 두 표의 높이가 항상 최대 1행 차이로 유지된다.
     const extraLeft = [], extraRight = [];
-    extrasList.forEach(function(e, i) { (i % 2 === 0 ? extraLeft : extraRight).push(e); });
+    let _matLeftCount = leftFixed.length, _matRightCount = rightFixed.length;
+    extrasList.forEach(function(e) {
+        if (_matLeftCount <= _matRightCount) { extraLeft.push(e); _matLeftCount++; }
+        else { extraRight.push(e); _matRightCount++; }
+    });
 
     const displayLeft = leftFixed.concat(extraLeft);
     const displayRight = rightFixed.concat(extraRight);
