@@ -23960,6 +23960,12 @@ window.upsertPanelLibraryEntry = async function(entry) {
 };
 
 // ─── AI 추출: 붙여넣은 스펙 텍스트 → 113개 항목 JSON (기존 callAiBackend/getActiveAiKey 재사용) ───
+// 💡 [2026-08-25] 예전엔 8000자로 자르고 있었는데, PDF 데이터시트(pdf.js로 뽑으면 페이지마다
+//    머리말/꼬리말까지 다 들어가 금방 길어짐)는 이 정도로는 스펙 표 뒷부분이 통째로 잘려서 분석이
+//    안 되는 문제가 있었다. 4배로 올리고(대부분의 AI 제공사 무료/저가 모델도 이 정도 입력은 소화함),
+//    아래 _pcCleanExtractedText로 반복되는 페이지 머리말/꼬리말 노이즈부터 걷어내 같은 글자수 예산
+//    안에 실제 스펙 내용이 더 많이 들어가게 한다.
+window._PANEL_EXTRACT_TEXT_LIMIT = 32000;
 window._panelBuildExtractPrompt = function(rawText) {
     const fields = window._panelFlatFields();
     const keyListText = fields.map(function(f) { return '- "' + f + '"'; }).join('\n');
@@ -23978,7 +23984,27 @@ ${keyListText}
 4. "Model Name"도 못 찾으면 "-"로 답하세요.
 
 [원문 텍스트]
-${(rawText || '').substring(0, 8000)}`;
+${(rawText || '').substring(0, window._PANEL_EXTRACT_TEXT_LIMIT)}`;
+};
+
+// 💡 PDF(특히 pdf.js로 뽑은 텍스트)는 페이지마다 반복되는 머리말/꼬리말/워터마크 줄이 그대로 다 붙어나와
+//    같은 문장이 페이지 수만큼 중복되는 경우가 흔하다 — 실제 스펙 내용은 안 늘고 글자수만 차지해서
+//    위 글자수 제한에 더 쉽게 걸리게 만든다. 8자 넘는 줄이 3번 이상 똑같이 반복되면 첫 등장만 남기고
+//    나머지는 지운다(짧은 줄은 표의 값/단위처럼 정상적으로 반복될 수 있어 건드리지 않음).
+window._pcCleanExtractedText = function(raw) {
+    if (!raw) return '';
+    const lines = String(raw).split('\n').map(function(l) { return l.replace(/[ \t]+/g, ' ').trim(); });
+    const counts = {};
+    lines.forEach(function(l) { if (l.length > 8) counts[l] = (counts[l] || 0) + 1; });
+    const seen = {};
+    const filtered = lines.filter(function(l) {
+        if (l.length > 8 && counts[l] >= 3) {
+            seen[l] = (seen[l] || 0) + 1;
+            return seen[l] === 1; // 반복되는 줄은 처음 한 번만 남김
+        }
+        return true;
+    });
+    return filtered.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 };
 window._panelParseAiJson = function(text) {
     if (!text) return null;
