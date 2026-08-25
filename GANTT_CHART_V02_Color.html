@@ -21,6 +21,11 @@
 <script async defer src="https://accounts.google.com/gsi/client" onload="gisLoaded()"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<!-- 🖥️ [Panel Compare] PDF 데이터시트에서 텍스트를 뽑아 AI 추출 입력으로 쓰기 위한 pdf.js (UMD, 전역 pdfjsLib) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<script>
+    if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
 <style>
@@ -1938,8 +1943,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
                 🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).
             </span></span></h2>
-            <button class="concept-add-row-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()">➕ 패널 추가</button>
-            <button class="concept-add-row-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 부가 스펙 펼치기</button>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <button class="action-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin-right:6px;">➕ 패널 추가</button>
+            <button class="action-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 부가 스펙 펼치기</button>
             <div class="btn-group"></div>
             <button class="action-btn" id="pc-export-btn" onclick="window.exportPanelCompareToExcel()">🟩 엑셀로 내보내기</button>
         </div>
@@ -24013,19 +24019,19 @@ window.renderPanelCompareTab = async function() {
     models.forEach(function(m, i) {
         const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
         const has = !!entries[i];
-        html += `<th style="min-width:150px; background:#0033cc; color:#fff; border:1px solid #dee2e6; padding:8px; text-align:center;">
-            <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#fff; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
-            <div style="margin-top:4px; display:flex; gap:4px; justify-content:center;">
-                <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:none; border-radius:3px; color:#0033cc; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
-                <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:none; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
+        html += `<th style="min-width:150px; background:#FCE4C8; color:#7A4A1F; border:1px solid #dee2e6; padding:8px; text-align:center;">
+            <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#7A4A1F; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
+            <div style="margin-top:4px; display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:wrap;">
+                <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #e0b088; border-radius:3px; color:#7A4A1F; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
+                <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #e0b088; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
+                ${!has ? `<span style="font-size:9.5px; color:#a8621f; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
             </div>
-            ${!has ? `<div style="margin-top:4px; font-size:10px; color:#ffe08a;">${_en ? '⚠ Not yet extracted' : '⚠ 미추출'}</div>` : ''}
         </th>`;
     });
     html += '</tr>';
 
     window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
-        html += `<tr class="pc-section-row"><td colspan="${models.length + 1}" style="background:#0033cc; color:#fff; font-weight:bold; padding:6px 10px; border:1px solid #dee2e6;">[${escapeHtml(sec.section)}]</td></tr>`;
+        html += `<tr class="pc-section-row"><td colspan="${models.length + 1}" style="background:#FCE4C8; color:#7A4A1F; font-weight:bold; padding:6px 10px; border:1px solid #dee2e6;">[${escapeHtml(sec.section)}]</td></tr>`;
         sec.fields.forEach(function(f) {
             const label = f[0], priority = f[1];
             const rowStyle = priority === 2 ? ('display:' + (window._pcExpanded ? 'table-row' : 'none') + ';') : '';
@@ -24090,9 +24096,9 @@ window.panelCompareOpenAddModal = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="pc-add-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(560px, 92vw); max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
-            <div id="pc-add-drag" style="padding:13px 18px; border-bottom:1px solid #ced4da; font-weight:bold; font-size:14px; background:#f8f9fa; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
+            <div id="pc-add-drag" style="padding:13px 18px; border-bottom:1px solid #e0b088; font-weight:bold; font-size:14px; background:#FCE4C8; color:#7A4A1F; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
                 <span id="pc-add-title">🖥️ ${_en ? 'Add Panel' : '패널 추가'}</span>
-                <button onclick="document.getElementById('pc-add-modal').style.display='none'" style="background:#fff; border:1.5px solid #999; border-radius:6px; color:#666; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
+                <button onclick="document.getElementById('pc-add-modal').style.display='none'" style="background:#fff; border:1.5px solid #7A4A1F; border-radius:6px; color:#7A4A1F; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
             </div>
             <div style="padding:12px 16px; border-bottom:1px solid #eee; flex-shrink:0;">
                 <input id="pc-add-search" type="text" placeholder="${_en ? 'Search library by model name...' : '라이브러리에서 모델명 검색...'}" style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px;" oninput="window._pcRenderLibList(this.value)">
@@ -24100,7 +24106,12 @@ window.panelCompareOpenAddModal = async function() {
             </div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
                 <div id="pc-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new panel with AI' : '또는 새 패널을 AI로 추출'}</div>
-                <textarea id="pc-add-paste" placeholder="${_en ? 'Paste the panel spec text copied from panelook.com or a datasheet...' : 'panelook.com이나 데이터시트에서 복사한 패널 스펙 텍스트를 붙여넣으세요...'}" style="width:100%; box-sizing:border-box; min-height:90px; border:1px solid #ced4da; border-radius:6px; padding:8px; font-size:12px; resize:vertical;"></textarea>
+                <div style="display:flex; gap:6px; margin-bottom:6px; flex-shrink:0;">
+                    <input type="file" id="pc-add-file" accept=".pdf,.txt" style="display:none;" onchange="window._pcHandleFileUpload(this)">
+                    <button type="button" id="pc-add-file-btn" onclick="document.getElementById('pc-add-file').click()" style="flex-shrink:0; padding:6px 10px; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer;">📄 ${_en ? 'Attach PDF/TXT' : 'PDF/TXT 첨부'}</button>
+                    <span id="pc-add-file-name" style="font-size:11px; color:#888; align-self:center; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"></span>
+                </div>
+                <textarea id="pc-add-paste" placeholder="${_en ? 'Paste the panel spec text copied from panelook.com or a datasheet, or attach a PDF/TXT file above...' : 'panelook.com이나 데이터시트에서 복사한 패널 스펙 텍스트를 붙여넣거나, 위에서 PDF/TXT 파일을 첨부하세요...'}" style="width:100%; box-sizing:border-box; min-height:90px; border:1px solid #ced4da; border-radius:6px; padding:8px; font-size:12px; resize:vertical;"></textarea>
                 <button id="pc-add-extract-btn" onclick="window._pcRunExtract()" style="margin-top:8px; padding:8px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; flex-shrink:0;">🤖 ${_en ? 'Extract with AI' : 'AI로 추출'}</button>
                 <div id="pc-add-preview" style="margin-top:10px;"></div>
             </div>
@@ -24115,6 +24126,8 @@ window.panelCompareOpenAddModal = async function() {
     document.getElementById('pc-add-search').value = '';
     document.getElementById('pc-add-paste').value = '';
     document.getElementById('pc-add-preview').innerHTML = '';
+    const fileNameEl = document.getElementById('pc-add-file-name'); if (fileNameEl) fileNameEl.textContent = '';
+    const fileInputEl = document.getElementById('pc-add-file'); if (fileInputEl) fileInputEl.value = '';
     const lib = await window.loadPanelLibrary();
     window._panelCompareLibCache = lib;
     window._pcRenderLibList('');
@@ -24141,6 +24154,51 @@ window._pcRenderLibList = function(filterText) {
             <span style="color:#2c5f8a;">${_en ? '+ Add' : '+ 추가'}</span>
         </div>`;
     }).join('');
+};
+
+// 💡 [2026-08-25 신규] 패널 데이터시트는 대부분 PDF라 텍스트 붙여넣기만으론 불편하다는 요청 —
+//    클라이언트 사이드 pdf.js(전역 pdfjsLib, 서버 없이 브라우저에서 텍스트만 뽑아냄)로 PDF/TXT
+//    파일을 첨부하면 본문을 자동으로 붙여넣기 칸에 채워준다. 이후 흐름(AI로 추출)은 그대로 재사용.
+window._pcExtractPdfText = async function(file) {
+    const buf = await file.arrayBuffer();
+    const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
+    let text = '';
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        text += content.items.map(function(it) { return it.str; }).join(' ') + '\n';
+    }
+    return text;
+};
+
+window._pcHandleFileUpload = async function(input) {
+    const _en = window._currentLang === 'en';
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const paste = document.getElementById('pc-add-paste');
+    const fileNameEl = document.getElementById('pc-add-file-name');
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    if (fileNameEl) fileNameEl.textContent = '📄 ' + file.name;
+    try {
+        let text = '';
+        if (ext === 'pdf') {
+            if (!window.pdfjsLib) {
+                alert(_en ? '⚠️ The PDF reader library failed to load (check your network) — paste the text manually instead.' : '⚠️ PDF 읽기 라이브러리를 불러오지 못했습니다(네트워크 확인) — 대신 텍스트를 직접 붙여넣어주세요.');
+                return;
+            }
+            if (paste) paste.value = _en ? 'Reading PDF…' : 'PDF 읽는 중...';
+            text = await window._pcExtractPdfText(file);
+        } else {
+            text = await file.text();
+        }
+        if (paste) paste.value = text;
+        if (window.showToast) window.showToast((_en ? '📄 Loaded text from "' : '📄 "') + file.name + (_en ? '"' : '"에서 텍스트를 불러왔습니다'), 'info');
+    } catch (e) {
+        if (paste) paste.value = '';
+        alert((_en ? 'Failed to read the file: ' : '파일을 읽지 못했습니다: ') + e.message);
+    } finally {
+        input.value = ''; // 같은 파일을 다시 선택해도 change 이벤트가 재발생하도록
+    }
 };
 
 window._pcRunExtract = async function() {
@@ -24273,7 +24331,7 @@ window.showPanelSpecModal = async function(model) {
             if (v === '-') return; // 미리보기는 값이 있는 항목만 (한눈에 보기 편하게)
             secHtml += `<div style="display:flex; gap:6px; padding:2px 0;"><span style="flex:0 0 140px; color:#777;">${escapeHtml(label)}</span><span style="flex:1;">${escapeHtml(String(v))}</span></div>`;
         });
-        if (secHtml) html += `<div style="font-weight:bold; color:#0033cc; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
+        if (secHtml) html += `<div style="font-weight:bold; color:#7A4A1F; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
     });
     bodyEl.innerHTML = html;
 };
@@ -24328,8 +24386,8 @@ window.exportPanelCompareToExcel = async function() {
             const cell = ws[XLSX.utils.encode_cell({ r: ri, c: ci })];
             if (!cell) continue;
             cell.s = {
-                font: { name: '맑은 고딕', sz: 10, bold: isHeader || isSection, color: { rgb: (isHeader || isSection) ? 'FFFFFF' : '1F2937' } },
-                fill: (isHeader || isSection) ? { patternType: 'solid', fgColor: { rgb: '0033CC' } } : undefined,
+                font: { name: '맑은 고딕', sz: 10, bold: isHeader || isSection, color: { rgb: (isHeader || isSection) ? '7A4A1F' : '1F2937' } },
+                fill: (isHeader || isSection) ? { patternType: 'solid', fgColor: { rgb: 'FCE4C8' } } : undefined,
                 alignment: { vertical: 'center', horizontal: ci === 0 ? 'left' : 'center', wrapText: true },
                 border: { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
             };
