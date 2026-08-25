@@ -19633,8 +19633,15 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
         window._applyDefaultDueDate(result);
         // 💡 AI가 프롬프트 지시대로 스스로 만든 [출처]가 있으면 지우고, 코드에서 만든 깨끗한 것만 남김
         result['상세내용'] = window.stripAiGeneratedSourceTag(result['상세내용']);
+        // 💡 [2026-08-25 신규] AI가 판정한 "담당구분"(예: HW)은 지금까지 배지/보관함 메타 정보로만
+        //    보여지고, 정작 저장되는 상세내용 텍스트 안에는 없었다 — Gantt 셀/엑셀 export/"추출" 등
+        //    상세내용 텍스트만 따라가는 곳에서는 이 분류가 통째로 사라졌다. [출처]와 같은 방식으로
+        //    태그 한 줄을 상세내용에 함께 새겨서, 텍스트가 어디로 옮겨져도 분류 정보가 유지되게 한다.
+        //    (담당자 "이름"까지는 안 넣는다 — 이름은 실제로 어느 프로젝트에 등록되느냐에 따라 달라지는
+        //    화면 표시용 해석값이라, 분석 시점에 고정해서 저장하면 나중에 다른 프로젝트로 매칭될 때 틀어짐)
+        const catTag = (result['담당구분'] && result['담당구분'] !== '미분류') ? `[담당구분]${result['담당구분']}` : '';
         const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
-        result['상세내용'] = (result['상세내용'] || '') + '\n' + srcTag;
+        result['상세내용'] = (result['상세내용'] || '') + (catTag ? '\n' + catTag : '') + '\n' + srcTag;
     }
     return result;
 }
