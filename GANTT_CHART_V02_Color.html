@@ -24378,11 +24378,20 @@ window.showPanelSpecModal = async function(model) {
     const entry = window.findPanelInLibrary(lib, model);
     const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model);
     if (!entry) {
+        // 💡 [2026-08-25] 두 요소를 헷갈려서(링크=panelook.com 이동, 버튼=로컬 붙여넣기/AI추출) "추출하기를
+        //    눌렀는데 홈페이지에서 멈춘다"는 문의가 있었음 — panelook.com은 자동화 접근을 막는 슬라이더
+        //    캡차가 있어서(사람이 직접 풀어야 함), 저 링크는 "사람이 직접 확인·복사하러 가는 창구"일 뿐이고
+        //    실제 추출은 아래 버튼(붙여넣기 → AI)에서만 일어난다는 걸 문구로 명확히 구분해뒀다.
         bodyEl.innerHTML = `
             <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${escapeHtml(model)}</div>
             <div style="color:#888; margin-bottom:14px;">${_en ? 'No spec has been extracted for this panel yet.' : '아직 이 패널의 스펙이 추출되지 않았습니다.'}</div>
-            <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a><br>
-            <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model))});" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🤖 ${_en ? 'Extract now' : '지금 추출하기'}</button>
+            <div style="font-size:11.5px; color:#666; line-height:1.6; background:#f8f9fa; border-radius:6px; padding:8px 10px; margin-bottom:12px;">
+                ${_en
+                    ? '① Open the link below yourself and copy the spec text (panelook.com may show a "slide to verify" check — only a human can pass it, so this cannot be automated).<br>② Click the button below and paste that text — AI will extract it there, not on panelook.com itself.'
+                    : '① 아래 링크를 직접 열어 스펙 텍스트를 복사하세요 (panelook.com은 "슬라이드 인증"이 뜰 수 있는데, 사람만 통과할 수 있어 자동화할 수 없습니다).<br>② 아래 버튼을 눌러 그 텍스트를 붙여넣으면, panelook.com이 아니라 여기서 AI가 추출합니다.'}
+            </div>
+            <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 ① panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
+            <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model))});" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🤖 ${_en ? '② Paste text & extract with AI' : '② 텍스트 붙여넣고 AI로 추출'}</button>
         `;
         return;
     }
