@@ -23855,8 +23855,8 @@ window.renderMaterialRows = function(rows) {
     const allRows = fixedRows.concat(extraRows);
     window.tabData.projectMaterials = allRows.map(function(r) { return { category: r.category, ktkPn: r.ktkPn, description: r.description, cost: r.cost, useForAnalysis: r.useForAnalysis }; });
 
-    // 💡 [2열 배치] 프로젝트 멤버-1/2와 같은 느낌으로 좌우 분할. 고정 13개는 절반씩(7/6) 나누고,
-    //    자유추가 행은 전부 오른쪽 열 밑에 이어붙임.
+    // 💡 [2열 배치] 프로젝트 멤버-1/2와 같은 느낌으로 좌우 분할. 고정 13개(ETC 제외 12개) 중
+    //    왼쪽 7개/오른쪽 5개로 나누고, 자유추가 행은 아래에서 지그재그로 배정한다.
     const splitAt = Math.ceil(window.MATERIAL_FIXED_CATEGORIES.length / 2); // 7
     const rowHtml = function(r, idx) {
         const catCell = r.locked
@@ -23885,16 +23885,28 @@ window.renderMaterialRows = function(rows) {
             + '</tr>';
     };
 
-    // 💡 [2026-08-25 UX 개선] "+ 자재 추가"로 새로 늘어나는 자유추가 행이 항상 ETC보다 위에 오도록,
-    //    "그리는 순서"만 ETC를 자유추가 행들 뒤(표의 맨 마지막)로 옮긴다. data-idx는 원래 논리적
+    // 💡 [2026-08-25 UX 개선] 자유추가 행을 전부 오른쪽에만 쌓으면 오른쪽만 계속 길어지고 왼쪽엔
+    //    빈 공간이 남는다는 지적이 있었음 — 왼쪽 고정 7개/오른쪽 고정 5개(+ETC)는 그대로 두고,
+    //    새로 추가되는 자유추가 행만 왼쪽→오른쪽→왼쪽… 순서로 지그재그 배정해서 두 표의 높이가
+    //    비슷하게 유지되도록 한다. ETC는 항상 오른쪽 표 맨 마지막에 고정. data-idx는 원래 논리적
     //    위치(고정 목록에서의 자리) 그대로 유지해서 collectMaterialRows()의 위치 기반 해석이 깨지지 않는다.
     const logicalRows = allRows.map(function(r, i) { return { r: r, idx: i }; });
     const etcEntry = logicalRows.find(function(e) { return e.r.category === 'ETC'; });
-    const displayRows = logicalRows.filter(function(e) { return e.r.category !== 'ETC'; });
-    if (etcEntry) displayRows.push(etcEntry);
+    const nonEtcRows = logicalRows.filter(function(e) { return e.r.category !== 'ETC'; });
+    const fixedNonEtc = nonEtcRows.slice(0, window.MATERIAL_FIXED_CATEGORIES.length - 1); // 고정 12개(ETC 제외)
+    const extrasList = nonEtcRows.slice(window.MATERIAL_FIXED_CATEGORIES.length - 1);     // 자유추가 행들
+    const leftFixed = fixedNonEtc.slice(0, splitAt);   // PANEL~BLU (7개)
+    const rightFixed = fixedNonEtc.slice(splitAt);     // POWER~PACKING (5개)
 
-    tbodyA.innerHTML = displayRows.slice(0, splitAt).map(function(e) { return rowHtml(e.r, e.idx); }).join('');
-    tbodyB.innerHTML = displayRows.slice(splitAt).map(function(e) { return rowHtml(e.r, e.idx); }).join('');
+    const extraLeft = [], extraRight = [];
+    extrasList.forEach(function(e, i) { (i % 2 === 0 ? extraLeft : extraRight).push(e); });
+
+    const displayLeft = leftFixed.concat(extraLeft);
+    const displayRight = rightFixed.concat(extraRight);
+    if (etcEntry) displayRight.push(etcEntry);
+
+    tbodyA.innerHTML = displayLeft.map(function(e) { return rowHtml(e.r, e.idx); }).join('');
+    tbodyB.innerHTML = displayRight.map(function(e) { return rowHtml(e.r, e.idx); }).join('');
 };
 
 window.addMaterialRow = function() {
