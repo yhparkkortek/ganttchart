@@ -24127,7 +24127,7 @@ window.renderPanelCompareTab = async function() {
                 html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
             }
             const noteVal = pc.notes[label] || '';
-            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" placeholder="${_en ? 'note…' : '메모...'}" onchange="window.panelCompareSetNote(${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent;"></td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.panelCompareSetNote(${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent;"></td>`;
             html += '</tr>';
         });
     });
