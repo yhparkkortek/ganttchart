@@ -12940,6 +12940,7 @@ window.renderTaskInbox = function() {
                 <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
                     <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</span>
                     <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibExpandedUids.has(it.uid) ? (_ibEn ? '▲ Collapse' : '▲ 상세 접기') : (_ibEn ? '▼ Details' : '▼ 상세 보기')}</a>
+                    <button onclick="window.extractInboxForAI('${it.uid}')" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#7048e8; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; white-space:nowrap;">📋 ${_ibEn ? 'Extract' : '추출'}</button>
                 </div>
                 <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
@@ -13093,6 +13094,59 @@ window.showInboxMailRaw = function(uid) {
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it || !it.mailRaw) return;
     window.showMailRawModal(it.mailRaw);
+};
+
+// 💡 [추출] 업무 보관함 카드의 "메일 원문 + AI 분석 결과"를 한 텍스트로 합쳐 클립보드에 복사.
+//    AI 분석이 메일 내용과 다르게(오매칭) 나온 경우, 이 텍스트를 그대로 AI 채팅창에 붙여넣어
+//    "이 분석이 맞는지, 어디가 잘못됐는지"를 바로 상의할 수 있게 하기 위함.
+window.extractInboxForAI = async function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const t = it.task || {};
+    const _en = window._currentLang === 'en';
+    const lines = [];
+    lines.push(_en ? '===== Please review this AI mail-analysis result for mismatches =====' : '===== AI 메일 업무분석 결과 오매칭 검토 요청 =====');
+    lines.push('');
+    lines.push(_en ? '[Analysis result]' : '[분석 결과]');
+    lines.push((_en ? 'Task name: ' : '업무명: ') + (t['업무명'] || ''));
+    lines.push((_en ? 'Detail: ' : '상세내용: ') + (t['상세내용'] || ''));
+    lines.push((_en ? 'Start: ' : '시작일: ') + (t['시작일'] || '?') + (_en ? ' ~ End: ' : ' ~ 완료일: ') + (t['완료일'] || '?'));
+    lines.push((_en ? 'Status: ' : '상태: ') + (t['상태'] || ''));
+    lines.push((_en ? 'Dev stage(L0): ' : '개발단계(L0): ') + (t['개발단계'] || ''));
+    lines.push((_en ? 'Assignee category: ' : '담당구분: ') + (t['담당구분'] || ''));
+    lines.push('WBS' + (_en ? ' level: L' : '레벨: L') + (t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4));
+    if (it.matchedProject) {
+        lines.push((_en ? 'Matched project status: ' : '매칭 프로젝트 상태: ') + (it.matchedProject.status || ''));
+        if (it.matchedProject.candidates && it.matchedProject.candidates.length) {
+            lines.push((_en ? 'Matched candidates: ' : '매칭 후보: ') + it.matchedProject.candidates.map(function(c) {
+                return (c.file_name || c.model || c.customer || '') + (c.assignee ? ' (' + c.assignee + ')' : '');
+            }).join(', '));
+        }
+    }
+    lines.push('');
+    if (it.mailRaw) {
+        lines.push(_en ? '[Original mail]' : '[메일 원문]');
+        lines.push((_en ? 'Subject: ' : '제목: ') + (it.mailRaw.subject || ''));
+        lines.push((_en ? 'Sender: ' : '발신: ') + (it.mailRaw.sender || ''));
+        lines.push((_en ? 'Date: ' : '날짜: ') + (it.mailRaw.date || ''));
+        lines.push('');
+        lines.push(it.mailRaw.body2000 || '');
+    } else {
+        lines.push(_en ? '[No mail source attached to this task]' : '[이 업무에는 메일 원문이 없습니다]');
+    }
+    lines.push('');
+    lines.push(_en
+        ? 'Does the analysis result above correctly match the mail content? If it is a mismatch, please point out exactly which part is wrong.'
+        : '위 분석 결과가 메일 원문 내용과 잘 맞게 추출된 것인지 확인해줘. 오매칭이라면 어느 부분이 왜 잘못됐는지 짚어줘.');
+    const text = lines.join('\n');
+    try {
+        await navigator.clipboard.writeText(text);
+        alert(_en
+            ? '✅ Copied the mail source + analysis result to the clipboard.\nPaste it into the AI chat to discuss whether it was mismatched.'
+            : '✅ 메일 원문 + 분석 결과가 클립보드에 복사되었습니다.\nAI 채팅창에 붙여넣어 오매칭 여부를 상의해보세요.');
+    } catch (e) {
+        alert((_en ? 'Copy failed: ' : '복사 실패: ') + e.message);
+    }
 };
 
 window.showGanttMailRaw = function(rowIndex) {
