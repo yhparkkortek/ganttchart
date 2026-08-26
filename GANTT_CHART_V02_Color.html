@@ -787,7 +787,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <div class="tb-menu-sep"></div>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
-                <button id="add-user-btn" class="topbar-menu-item" onclick="window.open('https://console.cloud.google.com/auth/audience?hl=ko&amp;project=yhparkkortek-gantt','_blank'); window.open('https://drive.google.com/drive/u/0/home','_blank');" title="새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다.">👤➕ 사용자 추가</button>
+                <button id="add-user-btn" class="topbar-menu-item" onclick="window.open('https://console.cloud.google.com/auth/audience?hl=ko&amp;project=yhparkkortek-gantt','_blank'); window.open('https://drive.google.com/drive/u/0/home','_blank');" title="새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다.">👤 사용자 추가</button>
             </div>
         </div>
         <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
@@ -6013,6 +6013,8 @@ ${mailText}`;
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.recalcSelectedRange();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '🔓 Recalc Selected Range' : '🔓 선택 구간 재계산'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Unlock selected rows and recalculate dates (data will change)' : '선택한 행의 잠금을 풀고 날짜를 다시 계산 (데이터 변경)'}</div></div>
                 <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.sortRowsByStartDate();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '📅 Sort by Date' : '📅 날짜순 정렬'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Keep dates as-is, reorder rows by start date' : '날짜는 그대로 두고, 표시 순서만 시작일순 정리'}</div></div>
+                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
+                <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.restoreAiTaskDateAll();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '📅 Restore AI-analyzed Dates (All)' : '📅 AI 분석 날짜로 복원 (전체)'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Restore original AI dates for every task that has a backup, in one go' : '백업이 있는 모든 업무의 날짜를 AI 분석 원본으로 한 번에 복원'}</div></div>
             `;
             document.body.appendChild(popup);
             document.addEventListener('click', function(e) {
@@ -8777,7 +8779,7 @@ window.deleteHistoryByDateRange = function() {
                 'schedule-tools-btn': '🛠️ 일정 도구',
                 'baseline-menu-btn':  '📐 계획',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
-                'add-user-btn':       '👤➕ 사용자 추가',
+                'add-user-btn':       '👤 사용자 추가',
                 'file-input-label':'🟩 프로젝트 엑셀 열기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
@@ -8877,7 +8879,7 @@ window.deleteHistoryByDateRange = function() {
                 'schedule-tools-btn': '🛠️ Schedule Tools',
                 'baseline-menu-btn':  '📐 Plan',
                 'admin-pw-change-btn': '🔑 Change Password',
-                'add-user-btn':       '👤➕ Add User',
+                'add-user-btn':       '👤 Add User',
                 'file-input-label':'🟩 Open Project Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
@@ -13958,6 +13960,57 @@ window.restoreAiTaskDate = function(rowIndex, event) {
             : '📅 AI 분석 원본 날짜로 복원했습니다.';
         window.showToast(msg, 'info');
     }
+};
+
+// 💡 [2026-08-25 신규] "🛠️ 일정 도구" 메뉴 전용 — 위 restoreAiTaskDate()는 행을 미리 선택해야 하는데,
+//    "일단 이 프로젝트 전체를 AI 원본 날짜로 되돌리고 싶다"는 요청이 있어 표 전체(선택 여부 무관)를
+//    한 번에 훑어서 백업(_aiOrigStart/_aiOrigPlan)이 있는 업무만 전부 복원하는 버전을 추가한다.
+//    핵심 로직(값+forced 플래그 동시 복원)은 동일 — 선택 없이 globalData 전체를 순회할 뿐.
+window.restoreAiTaskDateAll = function() {
+    const _en = window._currentLang === 'en';
+    if (!globalData || globalData.length <= 1) return;
+    const eligibleCount = globalData.slice(1).filter(function(row) { return row && (row._aiOrigStart || row._aiOrigPlan); }).length;
+    if (!eligibleCount) {
+        alert(_en
+            ? '⚠️ No AI-analyzed original dates to restore.\n(Tasks added before this feature existed have no backup.)'
+            : '⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(이 기능이 추가되기 전에 들어온 업무는 백업이 없어 복원할 수 없습니다.)');
+        return;
+    }
+    const confirmMsg = _en
+        ? `Restore AI-analyzed original dates for ${eligibleCount} task(s) in this project?\nRestored dates will be locked (forced) again so auto-recalculation doesn't move them.`
+        : `이 프로젝트의 업무 ${eligibleCount}건을 AI 분석 원본 날짜로 복원할까요?\n복원된 날짜는 자동 재계산에 밀리지 않도록 다시 고정(잠금)됩니다.`;
+    const doRestore = function() {
+        let restoredCount = 0;
+        for (let idx = 1; idx < globalData.length; idx++) {
+            const row = globalData[idx];
+            if (!row || (!row._aiOrigStart && !row._aiOrigPlan)) continue;
+            const oldStart = colIdx.start !== -1 ? row[colIdx.start] : '';
+            const oldPlan  = colIdx.plan  !== -1 ? row[colIdx.plan]  : '';
+            let changed = false;
+            if (row._aiOrigStart && colIdx.start !== -1 && row[colIdx.start] !== row._aiOrigStart) {
+                row[colIdx.start] = row._aiOrigStart;
+                row._startForced = true;
+                changed = true;
+            }
+            if (row._aiOrigPlan && colIdx.plan !== -1 && row[colIdx.plan] !== row._aiOrigPlan) {
+                row[colIdx.plan] = row._aiOrigPlan;
+                row._planForced = true;
+                changed = true;
+            }
+            if (changed) {
+                logChange(idx, colIdx.start, `${oldStart || '-'} ~ ${oldPlan || '-'}`, `${row[colIdx.start] || '-'} ~ ${row[colIdx.plan] || '-'}`, 'AI 분석 날짜로 복원(전체)');
+                restoredCount++;
+            }
+        }
+        window.recalculateSchedules();
+        if (window.showToast) {
+            window.showToast(_en
+                ? `📅 Restored AI-analyzed original dates for ${restoredCount} task(s).`
+                : `📅 ${restoredCount}건의 날짜를 AI 분석 원본으로 복원했습니다.`, 'info');
+        }
+    };
+    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doRestore);
+    else if (confirm(confirmMsg)) doRestore();
 };
 
 window.inboxRecomputePreview = function(uid) {
