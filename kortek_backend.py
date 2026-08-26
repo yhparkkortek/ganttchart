@@ -159,31 +159,52 @@ def decode_str(value):
 
 def extract_body(msg):
     body = ""
+    html_fallback = ""  # 💡 text/plain 파트가 끝내 없는 HTML 전용 메일 대비 폴백
     if msg.is_multipart():
         for part in msg.walk():
             ct = part.get_content_type()
             cd = str(part.get("Content-Disposition", ""))
-            if ct == "text/plain" and "attachment" not in cd:
+            if "attachment" in cd:
+                continue
+            if ct == "text/plain" and not body:
                 charset = part.get_content_charset() or "utf-8"
                 try:
                     body = part.get_payload(decode=True).decode(charset, errors="replace")
-                    break
                 except Exception:
-                    continue
+                    pass
+            elif ct == "text/html" and not html_fallback:
+                charset = part.get_content_charset() or "utf-8"
+                try:
+                    html_fallback = part.get_payload(decode=True).decode(charset, errors="replace")
+                except Exception:
+                    pass
+        if not body and html_fallback:
+            body = html_fallback
     else:
         charset = msg.get_content_charset() or "utf-8"
         try:
             body = msg.get_payload(decode=True).decode(charset, errors="replace")
         except Exception:
             body = ""
-    # 💡 <br>/<p>/<div> 등 줄바꿈 성격의 태그는 개행으로 치환 후 나머지 태그 제거 — 원문 가독성 보존
+    # 💡 [2026-08-25 버그 수정] "원문 보기"에서 메일 속 표(HTML table)가 다 깨져 보인다는 지적 — 원인은
+    #    두 가지였다. ① <table>/<tr>/<td>/<th> 태그를 아무 구분자 없이 그냥 다 지워버려서, 표 칸
+    #    내용이 "Item1Qty1Price1"처럼 서로 다 붙어버렸음(줄바꿈 성격인 <br>/<p>/<div>만 개행으로
+    #    바꿔주고 있었음). ② 그 뒤 공백·탭을 무조건 한 칸으로 압축해서, 설령 칸이 스페이스로 정렬된
+    #    표(예: 고정폭 폰트 기준 정렬)라 해도 그 정렬용 공백까지 다 뭉개졌음.
+    #    → 표 태그도 <br>/<p>/<div>처럼 개행/탭으로 먼저 바꿔 구조를 보존하고(①), 공백 압축은
+    #    "짧은 공백(표 정렬용)"은 그대로 두고 "지나치게 긴 공백(HTML 레이아웃 찌꺼기)"만 적당히 줄이도록
+    #    완화했다(②).
     body = re.sub(r"(?i)<br\s*/?>", "\n", body)
     body = re.sub(r"(?i)</p\s*>|</div\s*>", "\n", body)
+    body = re.sub(r"(?i)</t[dh]\s*>", "\t", body)                 # 표 칸 끝 → 탭(다음 칸과 구분)
+    body = re.sub(r"(?i)</tr\s*>", "\n", body)                    # 표 행 끝 → 줄바꿈
+    body = re.sub(r"(?i)<table[^>]*>|</table\s*>", "\n", body)    # 표 시작/끝도 앞뒤 글과 분리
     body = re.sub(r"<[^>]+>", "", body)
-    body = re.sub(r"[ \t]+", " ", body)          # 공백·탭만 압축 (줄바꿈은 보존)
-    # 💡 국내 메일 특유의 "문장. \n \n다음문장." 패턴 — 스페이스만 있는 빈 줄까지 전부 제거해 간격을 촘촘하게
-    lines = [ln.strip() for ln in body.split("\n")]
-    lines = [ln for ln in lines if ln]
+    body = re.sub(r"[ \t]{8,}", "    ", body)     # 지나치게 긴 공백(레이아웃 찌꺼기)만 축소 — 표 정렬용 짧은 공백은 보존
+    # 💡 국내 메일 특유의 "문장. \n \n다음문장." 패턴 — 완전히 빈 줄까지 전부 제거해 간격을 촘촘하게
+    #    (앞쪽 들여쓰기/표 정렬 공백은 유지하기 위해 rstrip만 하고, 빈 줄 판정에만 strip을 씀)
+    lines = [ln.rstrip() for ln in body.split("\n")]
+    lines = [ln for ln in lines if ln.strip()]
     body = "\n".join(lines)
     # 💡 [2026-08-24] "원문 보기"용 저장 한도. AI 분석 입력은 프론트(msCallGemini)에서 이 값과 무관하게
     #    항상 별도로 2000자로 다시 잘라 쓰므로, 여기를 늘려도 AI 분석에는 영향 없음 — 저장/표시용 한도만 확장.
