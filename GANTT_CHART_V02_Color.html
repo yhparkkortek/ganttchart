@@ -1955,23 +1955,18 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <span id="eh-panel-btns" style="display:contents;">
-                <span class="inbox-help-ico" style="margin-right:6px;">ℹ️<span class="inbox-help-tip" id="pc-help-tip">
-                    📚 패널 스펙은 팀 공용 라이브러리에 저장됩니다 — 한 번 추출한 패널은 다른 프로젝트에서도 모델명으로 바로 재사용됩니다.<br><br>
-                    🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
-                    🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).
-                </span></span>
-                <button class="action-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin-right:6px;">➕ 추가</button>
-                <button class="action-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 펼치기</button>
+                <button class="concept-add-row-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin:0 6px 0 0;">➕ 추가</button>
+                <button class="concept-add-row-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()" style="margin:0;">🔽 펼치기</button>
                 <div class="btn-group"><button class="action-btn" id="pc-export-btn" onclick="window.exportPanelCompareToExcel()">🟩 엑셀로 내보내기</button></div>
             </span>
             <span id="eh-adbd-btns" style="display:none;">
-                <button class="action-btn" id="ep-adbd-add-btn" onclick="window.elecCompareOpenAddModal('adbd')" style="margin-right:6px;">➕ 추가</button>
-                <button class="action-btn" id="ep-adbd-toggle-btn" onclick="window.elecCompareToggleExpand('adbd')">🔽 펼치기</button>
+                <button class="concept-add-row-btn" id="ep-adbd-add-btn" onclick="window.elecCompareOpenAddModal('adbd')" style="margin:0 6px 0 0;">➕ 추가</button>
+                <button class="concept-add-row-btn" id="ep-adbd-toggle-btn" onclick="window.elecCompareToggleExpand('adbd')" style="margin:0;">🔽 펼치기</button>
                 <div class="btn-group"><button class="action-btn" id="ep-adbd-export-btn" onclick="window.exportElecCompareToExcel('adbd')">🟩 엑셀로 내보내기</button></div>
             </span>
             <span id="eh-convbd-btns" style="display:none;">
-                <button class="action-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin-right:6px;">➕ 추가</button>
-                <button class="action-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')">🔽 펼치기</button>
+                <button class="concept-add-row-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin:0 6px 0 0;">➕ 추가</button>
+                <button class="concept-add-row-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')" style="margin:0;">🔽 펼치기</button>
                 <div class="btn-group"><button class="action-btn" id="ep-convbd-export-btn" onclick="window.exportElecCompareToExcel('convbd')">🟩 엑셀로 내보내기</button></div>
             </span>
         </div>
