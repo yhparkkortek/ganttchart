@@ -8880,12 +8880,14 @@ window.deleteHistoryByDateRange = function() {
                 'pc-add-btn': '➕ 추가',
                 'pc-toggle-btn': '🔽 펼치기',
                 'pc-export-btn': '🟩 엑셀로 내보내기',
+                'pc-save-btn': '💾 저장',
                 'ep-adbd-add-btn': '➕ 추가',
                 'ep-adbd-toggle-btn': '🔽 펼치기',
                 'ep-adbd-export-btn': '🟩 엑셀로 내보내기',
                 'ep-convbd-add-btn': '➕ 추가',
                 'ep-convbd-toggle-btn': '🔽 펼치기',
                 'ep-convbd-export-btn': '🟩 엑셀로 내보내기',
+                'ep-save-btn': '💾 저장',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -8987,12 +8989,14 @@ window.deleteHistoryByDateRange = function() {
                 'pc-add-btn': '➕ Add',
                 'pc-toggle-btn': '🔽 Expand',
                 'pc-export-btn': '🟩 Export to Excel',
+                'pc-save-btn': '💾 Save',
                 'ep-adbd-add-btn': '➕ Add',
                 'ep-adbd-toggle-btn': '🔽 Expand',
                 'ep-adbd-export-btn': '🟩 Export to Excel',
                 'ep-convbd-add-btn': '➕ Add',
                 'ep-convbd-toggle-btn': '🔽 Expand',
                 'ep-convbd-export-btn': '🟩 Export to Excel',
+                'ep-save-btn': '💾 Save',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -24675,6 +24679,9 @@ window.panelCompareOpenAddModal = async function() {
                 <button id="pc-add-extract-btn" onclick="window._pcRunExtract()" style="margin-top:8px; padding:8px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; flex-shrink:0;">🤖 ${_en ? 'Extract with AI' : 'AI로 추출'}</button>
                 <div id="pc-add-preview" style="margin-top:10px;"></div>
             </div>
+            <div id="pc-add-footer" style="display:none; padding:12px 16px; border-top:1px solid #eee; flex-shrink:0;">
+                <button id="pc-save-btn" onclick="window._pcSaveNewPanel()" style="width:100%; padding:9px; background:#2f9e44; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">💾 ${_en ? 'Save' : '저장'}</button>
+            </div>
         </div>`;
         document.body.appendChild(modal);
         window._makeDraggable('pc-add-box', 'pc-add-drag');
@@ -24686,6 +24693,7 @@ window.panelCompareOpenAddModal = async function() {
     document.getElementById('pc-add-search').value = '';
     document.getElementById('pc-add-paste').value = '';
     document.getElementById('pc-add-preview').innerHTML = '';
+    const pcFooterEl = document.getElementById('pc-add-footer'); if (pcFooterEl) pcFooterEl.style.display = 'none';
     const fileNameEl = document.getElementById('pc-add-file-name'); if (fileNameEl) fileNameEl.textContent = _en ? 'or drag & drop a file here' : '또는 파일을 여기로 드래그하세요';
     const fileInputEl = document.getElementById('pc-add-file'); if (fileInputEl) fileInputEl.value = '';
     // 💡 [버그 방지] 이 모달을 여는 기본값은 "새로 추가"다 — panelCompareOpenEditModal()은 이 함수를
@@ -24901,8 +24909,11 @@ window._pcRenderPreviewForm = function(specs) {
         });
         html += '</details>';
     });
-    html += `<button onclick="window._pcSaveNewPanel()" style="margin-top:10px; width:100%; padding:9px; background:#2f9e44; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">💾 ${_en ? 'Save' : '저장'}</button>`;
     preview.innerHTML = html;
+    // 💡 [2026-08-27] 저장 버튼은 폼 맨 아래(스크롤 영역 안)에 있으면 항목이 많을 때 스크롤해야 보였다 —
+    //    "저장 버튼이 사라진 것 같다"는 문의가 있어, 모달 하단 고정 푸터(pc-add-footer)로 옮겼다.
+    const footer = document.getElementById('pc-add-footer');
+    if (footer) footer.style.display = 'block';
 };
 
 window._pcSaveNewPanel = async function() {
@@ -25737,6 +25748,9 @@ window.elecCompareOpenAddModal = async function(type) {
                 <button id="ep-add-extract-btn" onclick="window._epRunExtract()" style="margin-top:8px; padding:8px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; flex-shrink:0;">🤖 ${_en ? 'Extract with AI' : 'AI로 추출'}</button>
                 <div id="ep-add-preview" style="margin-top:10px;"></div>
             </div>
+            <div id="ep-add-footer" style="display:none; padding:12px 16px; border-top:1px solid #eee; flex-shrink:0;">
+                <button id="ep-save-btn" onclick="window._epSaveNewItem(window._epActiveType)" style="width:100%; padding:9px; background:#2f9e44; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">💾 ${_en ? 'Save' : '저장'}</button>
+            </div>
         </div>`;
         document.body.appendChild(modal);
         window._makeDraggable('ep-add-box', 'ep-add-drag');
@@ -25751,6 +25765,7 @@ window.elecCompareOpenAddModal = async function(type) {
     document.getElementById('ep-add-search').value = '';
     document.getElementById('ep-add-paste').value = '';
     document.getElementById('ep-add-preview').innerHTML = '';
+    const epFooterEl = document.getElementById('ep-add-footer'); if (epFooterEl) epFooterEl.style.display = 'none';
     const fileNameEl = document.getElementById('ep-add-file-name'); if (fileNameEl) fileNameEl.textContent = _en ? 'or drag & drop a file here' : '또는 파일을 여기로 드래그하세요';
     const fileInputEl = document.getElementById('ep-add-file'); if (fileInputEl) fileInputEl.value = '';
     window._epEditingOriginalModel = null;
@@ -25989,8 +26004,11 @@ window._epRenderPreviewForm = function(type, specs) {
     });
     const connCount = (window._epPendingConnectors || []).length;
     html += `<div style="font-size:11px; color:#888; margin:6px 0 2px;">🔌 ${_en ? 'Pin map extracted' : '추출된 핀맵'}: ${connCount ? (connCount + (_en ? ' connector(s)' : '개 커넥터')) : (_en ? 'none' : '없음')}</div>`;
-    html += `<button onclick="window._epSaveNewItem(${escapeHtml(JSON.stringify(type))})" style="margin-top:10px; width:100%; padding:9px; background:#2f9e44; color:#fff; border:none; border-radius:6px; font-weight:bold; cursor:pointer;">💾 ${_en ? 'Save' : '저장'}</button>`;
     preview.innerHTML = html;
+    // 💡 [2026-08-27] 저장 버튼은 폼 맨 아래(스크롤 영역 안)에 있으면 항목이 많을 때 스크롤해야 보였다 —
+    //    "저장 버튼이 사라진 것 같다"는 문의가 있어, 모달 하단 고정 푸터(ep-add-footer)로 옮겼다.
+    const footer = document.getElementById('ep-add-footer');
+    if (footer) footer.style.display = 'block';
 };
 
 window._epSaveNewItem = async function(type) {
