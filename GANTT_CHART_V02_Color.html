@@ -24160,7 +24160,7 @@ window.deleteMaterialRow = function(idx) {
 //    같은 명백한 오타도 새로 만드는 템플릿이니 정리했다(사용자 확인됨).
 window.PANEL_SPEC_SCHEMA = [
     { section: 'Basic Information', fields: [
-        ['Panel Brand', 1], ['Panel Type', 1], ['Composition', 1], ['Shipping Mode', 2],
+        ['Panel Brand', 1], ['Item Code', 1], ['Part Name', 1], ['Revision', 1], ['Panel Type', 1], ['Composition', 1], ['Shipping Mode', 2],
         ['Operating Temperature', 2], ['Storage Temperature', 2], ['Vibration Level', 2],
         ['RoHS State', 2], ['Application', 2], ['Specific Feature', 2], ['Remarks', 2],
     ]},
@@ -24234,7 +24234,15 @@ window.findPanelLibFile = async function(token) {
 };
 window._panelLibNamesMatch = function(a, b) { return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); };
 window.findPanelInLibrary = function(lib, model) {
-    return ((lib && lib.panels) || []).find(function(p) { return window._panelLibNamesMatch(p.model, model); }) || null;
+    // 💡 [2026-08-27] Summary 주요자재 PANEL 설명칸에 코드 유무가 오락가락해도 찾을 수 있도록,
+    //    CONV/AD BD와 동일한 범용 매처(_epFlexibleFind)를 재사용한다(완전일치 우선, 실패 시 코드/이름 분리 대조).
+    const panels = (lib && lib.panels) || [];
+    return window._epFlexibleFind(
+        panels, model,
+        function(p) { return p.model; },
+        function(p) { return p.specs && p.specs['Item Code']; },
+        function(p) { return p.specs && p.specs['Part Name']; }
+    );
 };
 window.loadPanelLibrary = async function() {
     try {
@@ -25083,7 +25091,7 @@ window.exportPanelCompareToExcel = async function() {
 //    Panel Compare 코드를 그대로 복제하지 않고 ELEC_PART_TYPES 설정(스키마+라이브러리 파일명)으로
 //    여러 부품 종류를 하나의 엔진(window.ep*, window.elecCompare*)이 돌리게 만들었다 — 나중에
 //    AD BD를 추가할 때는 스키마만 채우고 ELEC_PART_TYPES.adbd.schema에 넣으면 끝난다.
-//    - 라이브러리 항목 키(model)는 "Item Code_PBA Name" 결합 문자열(예: 301782_KCB-02508B-60).
+//    - 라이브러리 항목 키(model)는 "Item Code_Part Name" 결합 문자열(예: 301782_KCB-02508B-60).
 //    - Electrical Spec의 Min/Typ/Max는 패널의 "Brightness (Min/Typ)"처럼 한 필드에 " / "로 결합.
 //    - 커넥터 핀아웃(J1/J2/J3 등)은 비교표엔 요약 행만 노출하고, 항목별 전체 핀맵은 entry.connectors에
 //      구조화된 채로 저장해뒀다가 "🔌 핀맵 보기" 모달에서만 펼쳐 보여준다(완제품 SPEC 자동 생성 기능에서
@@ -25094,7 +25102,7 @@ window.exportPanelCompareToExcel = async function() {
 
 window.CONV_BD_SPEC_SCHEMA = [
     { section: 'Basic Information', fields: [
-        ['Brand', 1], ['Item Code', 1], ['PBA Name', 1], ['Revision', 1], ['Item Description', 2],
+        ['Brand', 1], ['Item Code', 1], ['Part Name', 1], ['Revision', 1], ['Item Description', 2],
     ]},
     { section: 'Application / Load', fields: [
         ['Suitable Load', 1], ['Application', 2],
@@ -25122,7 +25130,7 @@ window.CONV_BD_SPEC_SCHEMA = [
 //    Enable/Disable/기타(자유 텍스트) 드롭다운으로 렌더링된다(그 외 필드는 CONV BD와 동일하게 자유 텍스트).
 window.AD_BD_SPEC_SCHEMA = [
     { section: 'Basic Information', fields: [
-        ['Brand', 1], ['Item Code', 1], ['PBA Name', 1], ['Revision', 1], ['Item Description', 2],
+        ['Brand', 1], ['Item Code', 1], ['Part Name', 1], ['Revision', 1], ['Item Description', 2],
     ]},
     { section: 'Application', fields: [
         ['Application', 2], ['Max/Native Resolution', 1],
@@ -25176,8 +25184,71 @@ window.findElecPartLibFile = async function(type, token) {
     return id;
 };
 window._epNamesMatch = function(a, b) { return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); };
+// 💡 [2026-08-27 신규 — 안전장치] "PBA Name" → "Part Name" 필드명 변경 이전에 이미 라이브러리에
+//    저장된 항목(옛 키로 저장됨)도 화면에서 계속 정상적으로 표시되도록, 새 키가 없으면 옛 키로 폴백한다.
+//    새로 AI 추출하는 항목은 프롬프트가 이미 "Part Name"으로 답하므로 이 폴백을 안 타게 된다.
+window._epPartNameOf = function(specs) {
+    if (!specs) return '';
+    if (specs['Part Name'] && specs['Part Name'] !== '-') return specs['Part Name'];
+    if (specs['PBA Name'] && specs['PBA Name'] !== '-') return specs['PBA Name'];
+    return '';
+};
+
+// 💡 [2026-08-27 신규 — 안전장치] Summary 주요자재 설명칸에 "코드_이름"(예: 301782_KCB-02508B-60),
+//    "이름만"(예: MV315QHB-N41-A000), "코드만"(예: 303222) 중 무엇을 적어도 🔎가 라이브러리에서
+//    찾아내도록 하는 범용 매처. 완전일치(대소문자·공백 차이 무시)를 먼저 시도하고, 실패하면 쿼리를
+//    "6자리 코드" + "나머지 이름"으로 쪼개 Item Code/Part Name 필드와 각각 대조한다.
+window._epNormalizeKey = function(s) {
+    return String(s || '').trim().toUpperCase()
+        .replace(/\s*-\s*/g, '-')   // "A - B" -> "A-B"
+        .replace(/\s*_\s*/g, '_')   // "A _ B" -> "A_B"
+        .replace(/\s+/g, ' ')
+        .trim();
+};
+window._epFlexibleFind = function(items, query, getModel, getItemCode, getPartName) {
+    const norm = window._epNormalizeKey;
+    const q = norm(query);
+    if (!q || !items || !items.length) return null;
+
+    // 1) 완전일치 — 기존 동작 그대로(대소문자/공백 차이만 무시)
+    let hit = items.find(function(it) { return norm(getModel(it)) === q; });
+    if (hit) return hit;
+
+    // 쿼리 맨 앞의 6자리 숫자(Item Code)와 나머지(이름)를 분리 시도
+    const m = q.match(/^(\d{6})[_\-\s]+(.+)$/);
+    const qCode = m ? m[1] : (/^\d{6}$/.test(q) ? q : null);
+    const qName = m ? m[2] : (/^\d{6}$/.test(q) ? '' : q);
+
+    // 2) 코드만 입력된 경우 — Item Code로 매칭
+    if (qCode && !qName) {
+        hit = items.find(function(it) { return norm(getItemCode(it)) === qCode; });
+        if (hit) return hit;
+    }
+    // 3) 코드+이름이 모두 있는 경우 — 코드 일치 우선(이름 표기 차이는 무시)
+    if (qCode && qName) {
+        hit = items.find(function(it) { return norm(getItemCode(it)) === qCode; });
+        if (hit) return hit;
+    }
+    // 4) 이름만 입력된 경우(코드 없이) — Part Name 또는 "코드_이름" 형태 모델 키의 뒷부분과 대조
+    if (qName) {
+        hit = items.find(function(it) { return norm(getPartName(it)) === qName; });
+        if (hit) return hit;
+        hit = items.find(function(it) {
+            const modelNorm = norm(getModel(it));
+            return modelNorm === qName || modelNorm.endsWith('_' + qName) || modelNorm.endsWith('-' + qName);
+        });
+        if (hit) return hit;
+    }
+    return null;
+};
 window.findElecPartInLibrary = function(lib, model) {
-    return ((lib && lib.items) || []).find(function(p) { return window._epNamesMatch(p.model, model); }) || null;
+    const items = (lib && lib.items) || [];
+    return window._epFlexibleFind(
+        items, model,
+        function(p) { return p.model; },
+        function(p) { return p.specs && p.specs['Item Code']; },
+        function(p) { return window._epPartNameOf(p.specs); }
+    );
 };
 window.loadElecPartLibrary = async function(type) {
     try {
@@ -25275,7 +25346,7 @@ ${keyListText}
 2. 값은 원문 표기(단위 포함)를 최대한 그대로 유지하세요.
 3. "Input Voltage (Min/Typ/Max)"처럼 Min/Typ/Max가 나뉜 항목은 "10.8V / 12~24V / 26.4V" 형식처럼 " / "로 이어붙여 하나의 값으로 답하세요. 값이 없는 자리는 "-"로 채우세요(예: "10.8V / - / 26.4V").
 4. "Brand"는 문서에 제조사명이 명시되어 있으면 그대로 쓰고, 없으면 "-"로 답하세요(내부 제작 문서라면 회사명이 곧 Brand입니다).
-5. "Item Code"는 사내 관리번호(예: 301782)처럼 숫자/코드 형태의 고유 식별자, "PBA Name"은 제품/모델 명칭(예: KCB-02508B-60, GH765A(A1))입니다 — 문서에 원래 하나로만 표기되어 있어도 이 두 성격에 맞게 나눠서 채우세요.
+5. "Item Code"는 사내 관리번호(예: 301782)처럼 숫자/코드 형태의 고유 식별자, "Part Name"은 제품/모델 명칭(예: KCB-02508B-60, GH765A(A1))입니다 — 문서에 원래 하나로만 표기되어 있어도 이 두 성격에 맞게 나눠서 채우세요.
 6. 위에 나열된 스펙 키 이름을 한 글자도 다르지 않게 정확히 그대로 사용하세요. "Connectors"의 하위 키(name/role/model/pins/no/symbol/desc)도 정확히 그대로 사용하세요.
 
 [원문 텍스트]
@@ -25323,7 +25394,7 @@ window.renderElecCompareTab = async function(type) {
         if (m) {
             const has = !!entries[i];
             const entry = entries[i];
-            const displayName = entry ? ((entry.specs && entry.specs['PBA Name'] && entry.specs['PBA Name'] !== '-') ? entry.specs['PBA Name'] : m) : m;
+            const displayName = entry ? (window._epPartNameOf(entry.specs) || m) : m;
             const subCode = (entry && entry.specs && entry.specs['Item Code'] && entry.specs['Item Code'] !== '-') ? entry.specs['Item Code'] : '';
             headHtml += `<th style="min-width:130px;">
                 <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>
@@ -25369,7 +25440,7 @@ window.renderElecCompareTab = async function(type) {
             for (let i = 0; i < slotCount; i++) {
                 const entry = entries[i];
                 const hasConn = entry && Array.isArray(entry.connectors) && entry.connectors.length;
-                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; text-align:center;">`;
+                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; text-align:left;">`;
                 if (selected[i]) {
                     html += hasConn
                         ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" style="background:#fff; border:1px solid #2c5f8a; border-radius:4px; color:#2c5f8a; font-size:10.5px; cursor:pointer; padding:2px 8px;">🔌 ${_en ? 'View' : '보기'}</button>`
@@ -25387,11 +25458,12 @@ window.renderElecCompareTab = async function(type) {
     for (let i = 0; i < slotCount; i++) {
         const entry = entries[i];
         const images = (entry && Array.isArray(entry.images)) ? entry.images : [];
-        html += `<td style="border:1px solid #e9ecef; padding:4px 6px; text-align:center;">`;
+        html += `<td style="border:1px solid #e9ecef; padding:4px 6px; text-align:left;">`;
         if (selected[i] && images.length) {
             html += `<img id="ep-img-thumb-${escapeHtml(type)}-${i}" src="${images[0].data}" data-idx="0"
                     onclick="window._epCycleImage(${escapeHtml(JSON.stringify(type))}, ${i})"
-                    title="${_en ? 'Click for next photo' : '클릭하면 다음 사진'}"
+                    ondblclick="event.stopPropagation(); window.showElecPhotoLightbox(${escapeHtml(JSON.stringify(type))}, ${i})"
+                    title="${_en ? 'Click for next photo, double-click to zoom in' : '클릭하면 다음 사진, 더블클릭하면 크게 보기'}"
                     style="max-width:120px; max-height:88px; cursor:pointer; border:1px solid #ced4da; border-radius:4px; object-fit:cover;">`;
             if (images.length > 1) html += `<div id="ep-img-counter-${escapeHtml(type)}-${i}" style="font-size:9.5px; color:#999; margin-top:2px;">1/${images.length}</div>`;
         } else if (selected[i]) {
@@ -25452,6 +25524,103 @@ window._epCycleImage = function(type, i) {
     imgEl.src = images[nextIdx].data;
     const counterEl = document.getElementById('ep-img-counter-' + type + '-' + i);
     if (counterEl) counterEl.textContent = (nextIdx + 1) + '/' + images.length;
+};
+
+// ─── 📷 사진 크게 보기(라이트박스) — 여러 장이면 좌우로 이동 가능. Elec Parts 표뿐 아니라 Summary
+//    제품사진에서도 그대로 재사용할 수 있게, "이미지 배열 하나 크게 보여주기"라는 범용 코어(_openImageLightbox)와
+//    호출부(사진 위치를 어디서 가져오는지)를 분리했다. 모달 자체는 다른 Elec Parts 모달과 동일한 기본
+//    패턴을 따른다: 드래그 가능한 헤더, ✕/바깥 클릭으로 닫기, bringModalToFront로 항상 맨 위에 오게.
+window._epLightboxState = null; // { images: [...], idx, onSync? } — onSync(idx)는 작은 썸네일 등 호출부 UI 동기화용(선택)
+window._openImageLightbox = function(images, startIdx, title, onSync) {
+    if (!images || !images.length) return;
+    window._epLightboxState = {
+        images: images,
+        idx: ((startIdx % images.length) + images.length) % images.length,
+        onSync: onSync || null
+    };
+
+    let modal = document.getElementById('ep-lightbox-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ep-lightbox-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="ep-lightbox-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(80vw, 900px); max-height:90vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:280px;">
+            <div id="ep-lightbox-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
+                <span id="ep-lightbox-title">📷 Picture</span>
+                <button onclick="document.getElementById('ep-lightbox-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto; background:#20242b; min-height:200px;">
+                <button id="ep-lightbox-prev" onclick="window._epLightboxNav(-1)" title="Previous" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.85); border:none; border-radius:50%; width:34px; height:34px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;">‹</button>
+                <img id="ep-lightbox-img" style="max-width:100%; max-height:70vh; object-fit:contain;">
+                <button id="ep-lightbox-next" onclick="window._epLightboxNav(1)" title="Next" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.85); border:none; border-radius:50%; width:34px; height:34px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;">›</button>
+            </div>
+            <div id="ep-lightbox-counter" style="text-align:center; padding:8px; font-size:12px; color:#666; flex-shrink:0;"></div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('ep-lightbox-box', 'ep-lightbox-drag');
+        window._bindClickToFront('ep-lightbox-modal');
+        modal.onclick = function() { modal.style.display = 'none'; };
+        // 열려있는 동안엔 좌우 화살표 키/Esc로도 넘기고 닫을 수 있게
+        document.addEventListener('keydown', function(e) {
+            if (!window._epLightboxState) return;
+            const m = document.getElementById('ep-lightbox-modal');
+            if (!m || m.style.display === 'none') return;
+            if (e.key === 'ArrowLeft') window._epLightboxNav(-1);
+            else if (e.key === 'ArrowRight') window._epLightboxNav(1);
+            else if (e.key === 'Escape') m.style.display = 'none';
+        });
+    }
+    modal.style.display = 'block';
+    window.bringModalToFront('ep-lightbox-modal');
+    const titleEl = document.getElementById('ep-lightbox-title');
+    if (titleEl) titleEl.textContent = '📷 ' + (title || '');
+    window._epRenderLightbox();
+};
+
+// 💡 라이트박스 이미지/카운터/이전·다음 버튼을 현재 idx에 맞춰 갱신하고, onSync가 있으면 호출부(작은
+//    썸네일 등)도 같은 위치로 동기화한다 — 그래야 라이트박스를 닫고 다시 열었을 때 이어서 보여줄 수 있다.
+window._epRenderLightbox = function() {
+    const st = window._epLightboxState;
+    if (!st) return;
+    const images = st.images || [];
+    if (!images.length) return;
+    const idx = ((st.idx % images.length) + images.length) % images.length;
+    st.idx = idx;
+    const imgEl = document.getElementById('ep-lightbox-img');
+    if (imgEl) imgEl.src = images[idx].data;
+    const multi = images.length > 1;
+    const counterEl = document.getElementById('ep-lightbox-counter');
+    if (counterEl) counterEl.textContent = multi ? (idx + 1) + ' / ' + images.length : '';
+    const prevBtn = document.getElementById('ep-lightbox-prev');
+    const nextBtn = document.getElementById('ep-lightbox-next');
+    if (prevBtn) prevBtn.style.display = multi ? 'flex' : 'none';
+    if (nextBtn) nextBtn.style.display = multi ? 'flex' : 'none';
+    if (st.onSync) st.onSync(idx);
+};
+window._epLightboxNav = function(dir) {
+    if (!window._epLightboxState) return;
+    window._epLightboxState.idx += dir;
+    window._epRenderLightbox();
+};
+
+// 💡 Elec Parts 표의 작은 사진 썸네일 전용 진입점 — 라이트박스에서 넘긴 위치를 작은 썸네일에도
+//    그대로 동기화해서, 닫고 표에서 다시 클릭했을 때도 이어서 순환되게 한다.
+window.showElecPhotoLightbox = function(type, i) {
+    const entries = window._epRenderedEntries[type];
+    const entry = entries && entries[i];
+    const images = entry && Array.isArray(entry.images) ? entry.images : [];
+    if (!images.length) return;
+    const thumbEl = document.getElementById('ep-img-thumb-' + type + '-' + i);
+    const startIdx = thumbEl ? parseInt(thumbEl.dataset.idx || '0', 10) : 0;
+    const title = window._epPartNameOf(entry.specs) || entry.model || '';
+    window._openImageLightbox(images, startIdx, title, function(idx) {
+        if (!thumbEl) return;
+        thumbEl.dataset.idx = idx;
+        thumbEl.src = images[idx].data;
+        const thumbCounter = document.getElementById('ep-img-counter-' + type + '-' + i);
+        if (thumbCounter) thumbCounter.textContent = (idx + 1) + '/' + images.length;
+    });
 };
 
 window.elecCompareRemove = function(type, model) {
@@ -25667,7 +25836,7 @@ window._epRenderLibList = function(filterText) {
     list.innerHTML = filtered.map(function(p) {
         return `<div onclick="window.elecCompareAddFromLibrary(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))})" style="padding:6px 8px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:12.5px; display:flex; justify-content:space-between;"
             onmouseover="this.style.background='#f4f8fc'" onmouseout="this.style.background='transparent'">
-            <span><b>${escapeHtml((p.specs && p.specs['PBA Name']) || p.model)}</b> <span style="color:#888;">${escapeHtml((p.specs && p.specs['Brand']) || '')}</span></span>
+            <span><b>${escapeHtml(window._epPartNameOf(p.specs) || p.model)}</b> <span style="color:#888;">${escapeHtml((p.specs && p.specs['Brand']) || '')}</span></span>
             <span style="color:#2c5f8a;">${_en ? '+ Add' : '+ 추가'}</span>
         </div>`;
     }).join('');
@@ -25773,14 +25942,14 @@ window._epRenderPreviewForm = function(type, specs) {
     const cfg = window.ELEC_PART_TYPES[type];
     const preview = document.getElementById('ep-add-preview');
     if (!preview) return;
-    // 💡 모델(라이브러리 키)은 "Item Code_PBA Name" 결합 — 재추출/수정 흐름이면 기존 키를 그대로 보존.
+    // 💡 모델(라이브러리 키)은 "Item Code_Part Name" 결합 — 재추출/수정 흐름이면 기존 키를 그대로 보존.
     const itemCode = (specs['Item Code'] && specs['Item Code'] !== '-') ? specs['Item Code'] : '';
-    const pbaName = (specs['PBA Name'] && specs['PBA Name'] !== '-') ? specs['PBA Name'] : '';
-    const autoModel = [itemCode, pbaName].filter(Boolean).join('_');
+    const partName = window._epPartNameOf(specs);
+    const autoModel = [itemCode, partName].filter(Boolean).join('_');
     const presetModel = window._epPendingReextractModel || autoModel;
     window._epPendingReextractModel = null;
     let html = '';
-    html += `<div style="margin-bottom:10px;"><label style="font-size:11px; font-weight:bold; color:#555;">${_en ? 'Library key (Item Code_PBA Name) *' : '라이브러리 키(Item Code_PBA Name) *'}</label>
+    html += `<div style="margin-bottom:10px;"><label style="font-size:11px; font-weight:bold; color:#555;">${_en ? 'Library key (Item Code_Part Name) *' : '라이브러리 키(Item Code_Part Name) *'}</label>
         <input id="ep-form-model" type="text" value="${escapeHtml(presetModel)}" style="width:100%; box-sizing:border-box; padding:6px 8px; border:1.5px solid #2c5f8a; border-radius:5px; font-size:13px; margin-top:2px;" placeholder="${_en ? 'e.g. 301782_KCB-02508B-60' : '예: 301782_KCB-02508B-60'}"></div>`;
     (cfg.schema || []).forEach(function(sec, si) {
         html += `<details ${si === 0 ? 'open' : ''} style="margin-bottom:6px;"><summary style="cursor:pointer; font-weight:bold; font-size:12px; color:#2c5f8a; padding:4px 0;">[${escapeHtml(sec.section)}]</summary>`;
@@ -25883,7 +26052,7 @@ window.showElecPinMapModal = async function(type, model) {
     const lib = window._epLibCache[type] || await window.loadElecPartLibrary(type);
     const entry = window.findElecPartInLibrary(lib, model);
     const titleEl = document.getElementById('ep-pinmap-title');
-    if (titleEl) titleEl.textContent = '🔌 ' + escapeHtml((entry && entry.specs && entry.specs['PBA Name']) || model);
+    if (titleEl) titleEl.textContent = '🔌 ' + escapeHtml((entry && window._epPartNameOf(entry.specs)) || model);
     const connectors = (entry && Array.isArray(entry.connectors)) ? entry.connectors : [];
     if (!connectors.length) {
         bodyEl.innerHTML = `<div style="color:#888; padding:10px 0;">${_en ? 'No pin map extracted for this item.' : '이 항목에서 추출된 핀맵이 없습니다.'}</div>`;
@@ -25952,9 +26121,9 @@ window.showElecPartSpecModal = async function(type, model) {
     }
     const ec = (window.tabData && window.tabData.elecCompare && window.tabData.elecCompare[type]) || { selectedModels: [] };
     const inCompare = (ec.selectedModels || []).indexOf(entry.model) !== -1;
-    const pbaName = (entry.specs && entry.specs['PBA Name'] && entry.specs['PBA Name'] !== '-') ? entry.specs['PBA Name'] : entry.model;
+    const partName = window._epPartNameOf(entry.specs) || entry.model;
     const brand = (entry.specs && entry.specs['Brand'] && entry.specs['Brand'] !== '-') ? entry.specs['Brand'] : '';
-    let html = `<div style="font-size:13px; font-weight:bold; margin-bottom:2px;">${escapeHtml(pbaName)}</div>
+    let html = `<div style="font-size:13px; font-weight:bold; margin-bottom:2px;">${escapeHtml(partName)}</div>
         <div style="color:#888; margin-bottom:8px;">${escapeHtml(brand)}</div>`;
     if (Array.isArray(entry.images) && entry.images.length && entry.images[0] && entry.images[0].data) {
         html += `<img src="${entry.images[0].data}" style="max-width:160px; max-height:110px; border:1px solid #ced4da; border-radius:4px; margin-bottom:8px; display:block; object-fit:cover;">`;
@@ -28942,6 +29111,23 @@ window.mcRenderComparisonTable = function() {
     // 💡 버튼이 하나(순환식)로 통합되어, "데이터 없는 리비전 버튼 숨김" 로직은 제거함
 };
 
+// 💡 [2026-08-27 신규] Summary 제품사진 크게 보기 — Elec Parts 표의 사진 라이트박스와 동일한 모달을
+//    재사용한다(_openImageLightbox 공용 코어). slotIndex는 클릭한 슬롯(0/1)이고, 빈 슬롯은 건너뛰어
+//    실제 채워진 사진들만 모아서 그 안에서의 위치를 계산한다.
+window.showProductPhotoLightbox = function(slotIndex) {
+    const _en = window._currentLang === 'en';
+    const all = (window.tabData && window.tabData.productImages) || [];
+    const valid = all.filter(Boolean);
+    if (!valid.length) return;
+    let startIdx = 0, seen = 0;
+    for (let k = 0; k < all.length; k++) {
+        if (!all[k]) continue;
+        if (k === slotIndex) { startIdx = seen; break; }
+        seen++;
+    }
+    window._openImageLightbox(valid, startIdx, _en ? 'Product Photo' : '제품 사진');
+};
+
 // 💡 제품 사진 업로드 슬롯 초기화
 window.initProductImageSlots = function() {
     [0, 1].forEach(function(i) {
@@ -28952,10 +29138,21 @@ window.initProductImageSlots = function() {
         const ph   = slot.querySelector('.prod-placeholder');
         const del  = slot.querySelector('.prod-del-btn');
 
-        // 슬롯 클릭 → 파일 선택 (삭제 버튼 클릭은 제외)
+        // 슬롯 클릭 → 파일 선택 (삭제 버튼 클릭은 제외).
+        // 💡 [2026-08-27] 이미 사진이 있는 슬롯은 클릭으로 더 이상 파일 선택창을 바로 열지 않는다 —
+        //    열면 더블클릭(=크게 보기)의 첫 클릭에서 매번 파일 선택창이 뜨는 충돌이 생기기 때문.
+        //    사진 교체는 ✕로 먼저 지운 뒤 빈 슬롯을 클릭하면 된다.
         slot.addEventListener('click', function(e) {
             if (e.target === del) return;
+            if (img.style.display !== 'none' && img.src) return;
             fileInput.click();
+        });
+        // 더블클릭 → 크게 보기(사진이 있을 때만)
+        img.title = window._currentLang === 'en' ? 'Double-click to enlarge' : '더블클릭하면 크게 보기';
+        img.addEventListener('dblclick', function(e) {
+            e.stopPropagation();
+            if (img.style.display === 'none' || !img.src) return;
+            window.showProductPhotoLightbox(i);
         });
 
         // 파일 선택 → JPEG 압축 → 저장
