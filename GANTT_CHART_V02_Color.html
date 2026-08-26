@@ -8160,7 +8160,32 @@ ${historyText}
 [사용자의 새 질문]
 ${question}
 
-위 질문에 대한 답변만 자연스러운 텍스트로 작성하세요 (JSON이나 다른 형식 지시 없이).`;
+위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 말되, 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
+    };
+
+    // 💡 [버그 수정] AI에게 마크다운(굵게/글머리 기호)으로 답하라고 프롬프트에 지시해도, 채팅창이
+    //    escapeHtml()로 그대로 이스케이프해 white-space:pre-wrap으로만 찍고 있어서 "**제목**", "- 항목"
+    //    같은 마크다운 기호가 글자 그대로 화면에 보였음 — Gemini 앱에서 보던 것처럼 소제목/글머리
+    //    기호가 실제로 정리되어 보이려면 여기서 최소한의 마크다운을 HTML로 변환해줘야 함.
+    //    보안: escapeHtml을 먼저 거친 뒤 그 결과 위에서만 **...**/글머리 기호 패턴을 치환하므로,
+    //    AI 응답에 <script> 등이 섞여 있어도 이미 이스케이프된 텍스트라 안전함.
+    window._mdToHtml = function(raw) {
+        let escaped = escapeHtml(raw || '');
+        escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
+        const lines = escaped.split('\n');
+        return lines.map(function(line) {
+            const heading = line.match(/^(#{1,4})\s+(.*)$/);
+            if (heading) return `<div style="font-weight:bold; margin:8px 0 3px;">${heading[2]}</div>`;
+            const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+            if (bullet) {
+                const depth = Math.floor(bullet[1].length / 2);
+                const mark = depth > 0 ? '◦' : '•';
+                const pad = 14 + depth * 16;
+                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px;">${mark}&nbsp;${bullet[2]}</div>`;
+            }
+            if (line.trim() === '') return '<div style="height:6px;"></div>';
+            return `<div style="margin-bottom:2px;">${line}</div>`;
+        }).join('');
     };
 
     window._renderGanttQaMessages = function() {
@@ -8174,8 +8199,11 @@ ${question}
             const isUser = m.role === 'user';
             const bg = isUser ? '#0056b3' : (m.error ? '#fff0f0' : '#f1f3f5');
             const fg = isUser ? '#fff' : (m.error ? '#c92a2a' : '#333');
+            const body = isUser
+                ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
+                : `<div style="word-break:break-word;">${window._mdToHtml(m.text)}</div>`;
             return `<div style="display:flex; justify-content:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
-                <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>
+                <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;
