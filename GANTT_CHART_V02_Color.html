@@ -16331,10 +16331,14 @@ function _mfStripInsignificantWhitespace(root) {
     }
     toRemove.forEach(function(n) { n.remove(); });
 }
+// 💡 [2026-08-26] 칸 구분자를 탭(\t) 대신 눈에 보이는 경계문자 " │ "(U+2502)로 변경 — 탭은 값 길이가
+//    다르면 세로줄이 안 맞아 보일 수 있는데, │는 정렬 목적이 아니라 "여기서 칸이 나뉜다"만 항상
+//    명확하게 표시하고, 실제 메일 본문에 이 문자가 등장할 일이 거의 없어 원본 내용과도 안 헷갈린다.
+const MF_CELL_BOUNDARY = ' │ ';
 function _mfInsertStructureBreaks(root) {
     if (!root) return;
     root.querySelectorAll('br').forEach(function(el) { el.replaceWith('\n'); });
-    root.querySelectorAll('td, th').forEach(function(el) { el.insertAdjacentText('afterend', '\t'); });
+    root.querySelectorAll('td, th').forEach(function(el) { el.insertAdjacentText('afterend', MF_CELL_BOUNDARY); });
     root.querySelectorAll('tr, p, div, table').forEach(function(el) { el.insertAdjacentText('afterend', '\n'); });
 }
 function _mfExtractText(root) {
@@ -16348,8 +16352,10 @@ function _mfExtractText(root) {
 function _mfNormalizeBody(text) {
     return (text || '')
         .replace(/\r\n?/g, '\n')
-        .replace(/[ \t]+\n/g, '\n')  // 줄 끝 trailing space 제거(탭은 표 구분자라 건드리지 않음)
-        .replace(/ {2,}/g, ' ')  // 같은 줄 안의 연속 스페이스(2칸 이상)만 1칸으로 — 탭(\t)은 표 셀 구분자라 그대로 둠
+        // 줄 끝 trailing space/경계문자 제거 — 각 행의 "마지막 칸" 뒤에는 다음 칸이 없어 경계문자가
+        // 덜렁 남는데($ 도 같이 매칭해서 문자열 맨 끝인 경우까지 처리), 그걸 정리한다.
+        .replace(/[ \t│]+(\n|$)/g, '$1')
+        .replace(/ {2,}/g, ' ')  // 같은 줄 안의 연속 스페이스(2칸 이상)만 1칸으로 — 경계문자( │ )는 건드리지 않음
         .replace(/\n{3,}/g, '\n\n')      // 빈 줄 3개 이상 → 2개로
         .trim();
 }
