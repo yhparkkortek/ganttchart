@@ -16313,6 +16313,24 @@ window.mfAnalyzeSingle = async function(idx) {
 //    우리가 직접 텍스트 노드를 끼워넣은 뒤, 레이아웃에 전혀 의존하지 않는 textContent로 뽑는다
 //    (HTML 엔티티 디코딩은 파싱 단계에서 이미 되므로 그대로 유지됨). kortek_backend.py의 정규식
 //    기반 표 처리와 같은 철학 — 구조를 "렌더링에 맡기지" 않고 우리가 명시적으로 보장한다.
+// 💡 [2026-08-26 버그 수정 ②] 위 구조 삽입만으로는 부족했다 — 실제 메일(특히 Outlook)의 표 HTML은
+//    보통 예쁘게 들여쓰기되어 있어서 <td>...</td> 사이에 "줄바꿈+공백"으로만 이루어진 텍스트 노드가
+//    이미 원본에 끼어있다. insertAdjacentText로 넣은 우리 탭(\t)이 하필 그 원본 줄바꿈 바로 앞에
+//    붙게 되고, 아래 _mfNormalizeBody의 "줄 끝 trailing space/탭 제거" 규칙이 그 탭까지 "줄 끝
+//    찌꺼기"로 착각해 같이 지워버려서 — 칸 구분자였던 탭이 사라지고 칸마다 다시 다른 줄로 떨어졌다.
+//    → 구조를 끼워넣기 "전에" 원본에 있던 공백/줄바꿈만으로 된 텍스트 노드를 먼저 다 걷어내서,
+//    최종적으로 남는 탭·줄바꿈은 전부 우리가 의도적으로 넣은 것만 남게 한다.
+function _mfStripInsignificantWhitespace(root) {
+    if (!root) return;
+    const doc = root.ownerDocument || document;
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const toRemove = [];
+    let node;
+    while ((node = walker.nextNode())) {
+        if (/^\s+$/.test(node.nodeValue)) toRemove.push(node);
+    }
+    toRemove.forEach(function(n) { n.remove(); });
+}
 function _mfInsertStructureBreaks(root) {
     if (!root) return;
     root.querySelectorAll('br').forEach(function(el) { el.replaceWith('\n'); });
@@ -16322,6 +16340,7 @@ function _mfInsertStructureBreaks(root) {
 function _mfExtractText(root) {
     if (!root) return '';
     root.querySelectorAll('script, style').forEach(function(el) { el.remove(); });
+    _mfStripInsignificantWhitespace(root);
     _mfInsertStructureBreaks(root);
     return root.textContent || '';
 }
