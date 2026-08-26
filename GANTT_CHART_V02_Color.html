@@ -25395,10 +25395,10 @@ window.renderElecCompareTab = async function(type) {
             const has = !!entries[i];
             const entry = entries[i];
             const displayName = entry ? (window._epPartNameOf(entry.specs) || m) : m;
-            const subCode = (entry && entry.specs && entry.specs['Item Code'] && entry.specs['Item Code'] !== '-') ? entry.specs['Item Code'] : '';
+            // 💡 [2026-08-27] Item Code(6자리 숫자)는 표 아래 Basic Information 행에 이미 나오므로
+            //    헤더에 중복 표시할 필요 없음 — 요청에 따라 헤더에서는 뺌.
             headHtml += `<th style="min-width:130px;">
                 <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>
-                ${subCode ? `<div style="font-size:10px; color:#999; font-weight:normal;">${escapeHtml(subCode)}</div>` : ''}
                 <div style="margin-top:3px; display:flex; gap:5px; justify-content:flex-start; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2f9e44; font-size:10px; cursor:pointer; padding:1px 5px;">✏️</button>` : ''}
                     <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
