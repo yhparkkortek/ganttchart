@@ -7986,8 +7986,12 @@ ${recentLogs}
             const assignee = (colIdx.assignee !== -1 && row[colIdx.assignee]) ? row[colIdx.assignee] : '미지정';
             const start = (colIdx.start !== -1 && row[colIdx.start]) ? row[colIdx.start] : '';
             const plan = (colIdx.plan !== -1 && row[colIdx.plan]) ? row[colIdx.plan] : (row._calcPlanTs ? formatTsToYMD(row._calcPlanTs) : '');
-            const content = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, 120) : '';
-            const answer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+            // 💡 [버그 수정] 120자로 너무 짧게 잘라서, "요약해줘" 질문에 AI가 실제 내용(무슨 이슈인지)을
+            //    읽고 종합할 재료가 부족해 이름/날짜/상태만 재나열하는 결과로 이어졌음 — 특히 메일 자동
+            //    등록 업무(＊AI📧)는 상세내용에 실제 이슈 내용이 들어있는데 이게 대부분 잘려나갔었음.
+            //    250자로 늘려서 AI가 실제로 읽고 판단할 수 있는 최소한의 맥락을 확보.
+            const content = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, 250) : '';
+            const answer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, 250) : '';
 
             let dueTag = '';
             if (status !== '완료' && plan) {
@@ -8105,8 +8109,16 @@ ${recentLogs}
             : '(없음)';
 
         return `당신은 아래 프로젝트(Gantt 일정 + Summary/Brief SPEC/M.C Table/Elec Parts/Address 등 프로젝트 파일 전체 데이터)를 잘 아는 보조 AI입니다. 아래 데이터에 있는 내용에 근거해서만 답하세요.
-데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로, 필요하면 관련 업무명/항목명을 인용해 답변하세요.
+데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로 답변하세요.
 "오늘/이번 주/이번 달/내일" 등 상대적인 날짜 표현이 나오면, 반드시 아래 [오늘 날짜]를 기준으로 [업무 목록]의 시작일/계획일과 비교해서 판단하세요 (예: 오늘 업무 = 시작일~계획일 구간에 오늘 날짜가 포함되거나 오늘이 마감인 업무).
+
+🔒 "요약/정리/분석해줘" 유형 질문에 대한 필수 규칙:
+사용자는 이미 Gantt 화면에서 업무명·날짜·상태를 보고 있습니다. "요약해줘/정리해줘"라고 물었는데 그 목록을 이름/날짜/상태만 그대로 다시 나열하면, 사용자 입장에서 Gantt 표를 보는 것과 다를 게 없어 AI에게 물어본 의미가 없습니다. 아래처럼 답하세요:
+1. 각 업무의 [내용:...] / [대응:...]을 읽고, 실제로 무슨 이슈·작업인지 파악해서 설명하세요 (업무명만 복사하지 말 것).
+2. 성격이 비슷하거나 관련된 업무는 묶어서 "~건은 ~와 관련된 작업" 식으로 그룹핑하세요.
+3. 그 중 특히 챙겨야 할 것(지연/오늘 마감/내용상 리스크가 있는 것)이 있으면 짚어주세요.
+4. 근거로 인용할 때만 업무명을 언급하고, 목록 나열이 답변의 전부가 되지 않게 하세요.
+반대로 "지연된 업무 목록 보여줘"처럼 명시적으로 "목록/리스트"를 요청한 경우엔 목록으로 답해도 됩니다.
 
 [오늘 날짜]
 ${ctx.todayStr}
