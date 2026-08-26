@@ -7417,17 +7417,17 @@ ${recentLogs}
                         <button onclick="document.getElementById('ai-summary-prompt-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
                     </div>
                 </div>
-                <div style="padding:10px 18px 0; font-size:11px; color:#888; line-height:1.5;">
-                    아래 <code>\${...}</code> 표시는 실제 값으로 자동 치환됩니다 (customer/model/pm/totalTasks/countDone/countProgress/countPending/countDelay/delayedList/dueSoonList/recentLogs). 팀 공용으로 저장되어 다른 팀원에게도 적용됩니다.
-                </div>
+                <div id="ai-summary-prompt-notice" style="margin:10px 18px 0; padding:8px 12px; font-size:11px; color:#495057; background:#eef3f8; border-radius:6px; line-height:1.5;"></div>
                 <div id="ai-summary-prompt-meta" style="padding:4px 18px 0; font-size:10.5px; color:#aaa;"></div>
-                <div style="flex:1; padding:10px 18px; overflow:hidden; display:flex;">
-                    <textarea id="ai-summary-prompt-textarea" style="flex:1; width:100%; resize:none; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; line-height:1.5;"></textarea>
+                <div style="flex:1; padding:10px 18px; overflow:hidden; display:flex; flex-direction:column;">
+                    <textarea id="ai-summary-prompt-textarea" readonly style="flex:1; width:100%; resize:none; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; line-height:1.5; background:#f8f9fa; color:#555;"></textarea>
+                    <input id="ai-summary-save-memo" type="text" maxlength="40" placeholder="💬 이번 저장 메모 (선택, 예: 우선순위 점수 필드 추가 v1)"
+                        style="display:none; width:100%; margin-top:8px; padding:7px 10px; border:1px solid #ced4da; border-radius:6px; font-size:12px; box-sizing:border-box; flex-shrink:0;">
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">
-                    <button onclick="window.saveProjectSummaryPromptFromModal()" style="flex:1; min-width:120px; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 팀 공용으로 저장</button>
-                    <button onclick="window.resetProjectSummaryPromptInModal()" style="padding:8px 14px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">🔄 기본값으로 초기화</button>
-                    <button onclick="document.getElementById('ai-summary-prompt-modal').style.display='none'" style="padding:8px 14px; background:#fff; color:#6c757d; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">✖ 닫기</button>
+                    <button id="ai-summary-unlock-btn" onclick="window.unlockPsPrompt()" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e67e22; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🔒 수정하기</button>
+                    <button id="ai-summary-save-btn" onclick="window.saveProjectSummaryPromptFromModal()" style="flex:1; min-width:120px; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none;">💾 저장</button>
+                    <button id="ai-summary-reset-btn" onclick="window.resetProjectSummaryPromptInModal()" style="padding:8px 14px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap; display:none;">🔄 기본값으로 초기화</button>
                     <button onclick="window.triggerProjectSummaryPromptImprove('batch')" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🤖 일괄개선</button>
                 </div>
             </div>`;
@@ -7446,8 +7446,47 @@ ${recentLogs}
         const metaEl = document.getElementById('ai-summary-prompt-meta');
         if (metaEl) metaEl.textContent = (meta && meta.updatedBy) ? `마지막 수정: ${meta.updatedBy} · ${meta.updatedAt}` : '';
 
+        // 💡 [2026-08-27] "AI 분석 프롬프트"(메일분석) 편집창과 UI/동작 통일 — 팀 공용 프롬프트를
+        //    아무나 바로 고칠 수 있던 것을, 저쪽처럼 관리자 비밀번호로 잠가서 열 때마다 잠금 상태로
+        //    초기화함 (실수로 팀 공용 프롬프트를 건드리는 걸 방지).
+        document.getElementById('ai-summary-prompt-textarea').readOnly = true;
+        document.getElementById('ai-summary-prompt-textarea').style.background = '#f8f9fa';
+        document.getElementById('ai-summary-prompt-textarea').style.color = '#555';
+        document.getElementById('ai-summary-unlock-btn').style.display = 'block';
+        document.getElementById('ai-summary-save-btn').style.display = 'none';
+        document.getElementById('ai-summary-reset-btn').style.display = 'none';
+        const memoEl0 = document.getElementById('ai-summary-save-memo');
+        if (memoEl0) memoEl0.style.display = 'none';
+        const notice = document.getElementById('ai-summary-prompt-notice');
+        notice.style.background = '#eef3f8';
+        notice.style.color = '#495057';
+        notice.textContent = window.isDriveConnected
+            ? '💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.'
+            : '⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.';
+
         modal.style.display = 'block';
         window.bringModalToFront('ai-summary-prompt-modal');
+    };
+
+    // 💡 [2026-08-27] "AI 분석 프롬프트"의 unlockPrompt()와 동일한 잠금 해제 흐름 — 관리자 비밀번호
+    //    확인 후에만 편집 가능해짐. 안내 문구는 이 프롬프트에서 실제로 쓰이는 변수(customer/delayedList
+    //    등)로 바꿔서 보여줌.
+    window.unlockPsPrompt = function() {
+        const success = verifyAdminPassword('🔒 프롬프트 수정을 위해 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)');
+        if (!success) { alert('❌ 비밀번호 인증 실패. 프롬프트 수정이 취소되었습니다.'); return; }
+
+        document.getElementById('ai-summary-prompt-textarea').readOnly = false;
+        document.getElementById('ai-summary-prompt-textarea').style.background = '#fffde7';
+        document.getElementById('ai-summary-prompt-textarea').style.color = '#333';
+        document.getElementById('ai-summary-unlock-btn').style.display = 'none';
+        document.getElementById('ai-summary-save-btn').style.display = 'block';
+        const memoEl = document.getElementById('ai-summary-save-memo');
+        if (memoEl) memoEl.style.display = 'block';
+        document.getElementById('ai-summary-reset-btn').style.display = 'block';
+        const notice = document.getElementById('ai-summary-prompt-notice');
+        notice.textContent = '✏️ 프롬프트를 자유롭게 수정하세요. ${customer}, ${delayedList} 등 변수는 그대로 유지하세요.';
+        notice.style.color = '#0056b3';
+        notice.style.background = '#e7f1ff';
     };
 
     // 💡 [2026-08-24 신규] 프롬프트 버전 전체 텍스트 스냅샷 저장(복원용) — 메일분석 프롬프트의
@@ -7485,7 +7524,11 @@ ${recentLogs}
 
             window._projectSummaryPromptVersion = (window._projectSummaryPromptVersion || 1) + 1;
             localStorage.setItem('gantt_project_summary_prompt_version', String(window._projectSummaryPromptVersion));
-            window.savePsPromptVersionSnapshot(text, '수동 저장 v' + window._projectSummaryPromptVersion);
+            // 💡 "AI 분석 프롬프트"와 동일하게 저장 메모(선택 입력)를 이력에 함께 남김
+            const memoEl = document.getElementById('ai-summary-save-memo');
+            const memo = memoEl && memoEl.value.trim() ? ': ' + memoEl.value.trim() : '';
+            window.savePsPromptVersionSnapshot(text, '수동 저장 v' + window._projectSummaryPromptVersion + memo);
+            if (memoEl) memoEl.value = ''; // 다음 저장을 위해 비워둠
         }
 
         localStorage.setItem('gantt_project_summary_prompt', text);
@@ -13052,7 +13095,6 @@ window.editPrompt = async function() {
                     <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e67e22; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🔒 수정하기</button>
                     <button id="prompt-save-btn" onclick="window.savePrompt()" style="flex:1; min-width:120px; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none;">💾 저장</button>
                     <button id="prompt-reset-btn" onclick="window.resetPrompt()" style="padding:8px 14px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap; display:none;">🔄 기본값으로 초기화</button>
-                    <button id="prompt-close-btn" onclick="document.getElementById('prompt-edit-modal').style.display='none'" style="padding:8px 14px; background:#fff; color:#6c757d; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">✖ 닫기</button>
                     <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" title="쌓인 👎 피드백 케이스를 모아 한번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🤖 일괄개선</button>
                 </div>
             </div>`;
@@ -13069,7 +13111,6 @@ window.editPrompt = async function() {
         'prompt-unlock-btn':   _pEn ? '🔒 Edit'                      : '🔒 수정하기',
         'prompt-save-btn':     _pEn ? '💾 Save'                      : '💾 저장',
         'prompt-reset-btn':    _pEn ? '🔄 Reset to Default'          : '🔄 기본값으로 초기화',
-        'prompt-close-btn':    _pEn ? '✖ Close'                      : '✖ 닫기',
         'prompt-history-btn':  _pEn ? '🕒 History'                   : '🕒 이력',
         'prompt-ai-improve-btn': _pEn ? '🤖 Batch Improve'           : '🤖 일괄개선',
     };
