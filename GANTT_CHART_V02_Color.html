@@ -1228,13 +1228,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <!-- LEVEL(WBS) / 업무상태 / 개발단계 드롭다운 버튼은 generateFilters()가 여기 채웁니다 -->
     </div>
     <div class="btn-group" style="margin-left: auto;">
-        <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
         <button id="schedule-tools-btn" class="action-btn" onclick="window.toggleScheduleToolsMenu(event)" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬">🛠️ 일정 도구</button>
         </div>
 
         <div class="btn-group">
-            <button id="ai-tools-btn" class="action-btn" onclick="window.toggleAiToolsMenu(event)" style="border-color:#d35400; color:#d35400;" title="AI 요약 · AI 문답 · 설정">🤖 AI 도구</button>
-            <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+            <button id="ai-tools-btn" class="action-btn" onclick="window.toggleAiToolsMenu(event)" title="AI 요약 · AI 문답 · 설정">🤖 AI 도구</button>
+            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+            <button id="print-btn" class="action-btn" onclick="window.smartPrint()">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
 
