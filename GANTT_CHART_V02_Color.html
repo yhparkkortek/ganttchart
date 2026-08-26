@@ -1998,10 +1998,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-tab-wrap">
         <div class="concept-header-box" id="elec-header-box">
             <div id="elec-view-toggle" style="display:flex; align-items:center; gap:14px; flex-shrink:0;">
-                <span id="ev-tab-convbd" onclick="window._switchElecView('convbd')"
-                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🔌 CONV BD</span>
                 <span id="ev-tab-adbd" onclick="window._switchElecView('adbd')"
                       style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔲 AD BD</span>
+                <span id="ev-tab-convbd" onclick="window._switchElecView('convbd')"
+                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🔌 CONV BD</span>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button class="action-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin-right:6px;">➕ CONV BD 추가</button>
@@ -24055,12 +24055,17 @@ window.renderMaterialRows = function(rows) {
         // 💡 [2026-08-25 신규 — Panel Compare 연동] PANEL 구분 행에 모델명이 적혀 있으면, 그 옆에
         //    스펙 미리보기 버튼을 붙인다 — 클릭하면 패널 스펙 라이브러리에서 조회해 보여주고,
         //    Panel Compare 탭 비교표에 없으면 바로 추가할 수 있게 한다.
+        // 💡 [2026-08-26 신규 — Elec Parts(CONV BD) 연동] CONVERTER 구분 행도 PANEL과 완전히 동일한
+        //    규칙 — 값이 있을 때만 돋보기를 보여준다(showElecPartSpecModal 내부에서 빈칸/미등록 두
+        //    경우 모두 "붙여넣어 AI로 추출" 흐름으로 이어주지만, 버튼 노출 자체는 PANEL과 통일).
         const descInputCell = '<td style="padding:2px; border:1px solid #e9ecef;"><div style="display:flex; align-items:center; gap:2px;">'
             + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box;" '
-            + (r.category === 'PANEL' ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
+            + ((r.category === 'PANEL' || r.category === 'CONVERTER') ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
             + ((r.category === 'PANEL' && r.description)
                 ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
-                : '')
+                : ((r.category === 'CONVERTER' && r.description)
+                    ? '<button type="button" onclick="window.showElecPartSpecModal(\'convbd\', ' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'CONV BD spec preview' : 'CONV BD 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+                    : ''))
             + delBtn
             + '</div></td>';
         return '<tr>' + catCell
@@ -25230,6 +25235,7 @@ window._epParseAiJson = function(text) {
 // ─── 탭 렌더링 ───
 window._epExpanded = {}; // type별 부가스펙 펼침 상태
 window._epLibCache = {}; // type별 라이브러리 캐시
+window._epRenderedEntries = {}; // type별로 마지막에 그려진 entries — 사진 순환 클릭 시 재조회 없이 참조
 window.renderElecCompareTab = async function(type) {
     const _en = window._currentLang === 'en';
     const cfg = window.ELEC_PART_TYPES[type];
@@ -25317,7 +25323,28 @@ window.renderElecCompareTab = async function(type) {
             html += `<td style="border:1px solid #e9ecef;"></td></tr>`;
         }
     });
+    // 💡 [2026-08-26 신규] 사진(최대 2장) — 도표 맨 하단에 한 행으로. 한 번에 1장만 보여주고
+    //    클릭하면 다음 장으로 순환(마지막 다음은 다시 1장) — window._epCycleImage가 재렌더 없이 img만 갱신.
+    html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[${_en ? 'Photos' : '사진'}]</td></tr>`;
+    html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">${_en ? 'Photo' : '사진'}</td>`;
+    for (let i = 0; i < slotCount; i++) {
+        const entry = entries[i];
+        const images = (entry && Array.isArray(entry.images)) ? entry.images : [];
+        html += `<td style="border:1px solid #e9ecef; padding:4px 6px; text-align:center;">`;
+        if (selected[i] && images.length) {
+            html += `<img id="ep-img-thumb-${escapeHtml(type)}-${i}" src="${images[0].data}" data-idx="0"
+                    onclick="window._epCycleImage(${escapeHtml(JSON.stringify(type))}, ${i})"
+                    title="${_en ? 'Click for next photo' : '클릭하면 다음 사진'}"
+                    style="max-width:120px; max-height:88px; cursor:pointer; border:1px solid #ced4da; border-radius:4px; object-fit:cover;">`;
+            if (images.length > 1) html += `<div id="ep-img-counter-${escapeHtml(type)}-${i}" style="font-size:9.5px; color:#999; margin-top:2px;">1/${images.length}</div>`;
+        } else if (selected[i]) {
+            html += `<span style="color:#bbb;">-</span>`;
+        }
+        html += `</td>`;
+    }
+    html += `<td style="border:1px solid #e9ecef;"></td></tr>`;
     tbodyEl.innerHTML = html;
+    window._epRenderedEntries[type] = entries; // _epCycleImage가 재조회 없이 바로 참조하도록 캐시
     window._epApplyZebra(type);
 
     const toggleBtn = document.getElementById('ep-' + type + '-toggle-btn');
@@ -25355,6 +25382,21 @@ window._epApplyZebra = function(type) {
     });
 };
 
+// 💡 사진 클릭 → 다음 장으로 순환. 표 전체를 다시 그리지 않고 그 셀의 img/카운터만 갱신한다.
+window._epCycleImage = function(type, i) {
+    const entries = window._epRenderedEntries[type];
+    const entry = entries && entries[i];
+    const images = entry && Array.isArray(entry.images) ? entry.images : [];
+    if (images.length < 2) return; // 0~1장이면 순환할 게 없음
+    const imgEl = document.getElementById('ep-img-thumb-' + type + '-' + i);
+    if (!imgEl) return;
+    const nextIdx = (parseInt(imgEl.dataset.idx || '0', 10) + 1) % images.length;
+    imgEl.dataset.idx = nextIdx;
+    imgEl.src = images[nextIdx].data;
+    const counterEl = document.getElementById('ep-img-counter-' + type + '-' + i);
+    if (counterEl) counterEl.textContent = (nextIdx + 1) + '/' + images.length;
+};
+
 window.elecCompareRemove = function(type, model) {
     if (!window.tabData || !window.tabData.elecCompare || !window.tabData.elecCompare[type]) return;
     window.tabData.elecCompare[type].selectedModels = window.tabData.elecCompare[type].selectedModels.filter(function(m) { return m !== model; });
@@ -25378,6 +25420,14 @@ window.elecCompareAddFromLibrary = function(type, model) {
 
 window.elecCompareReextract = async function(type, model) {
     await window.elecCompareOpenAddModal(type);
+    // 💡 사진은 AI가 텍스트에서 재추출할 수 있는 정보가 아니므로, 스펙만 새로 붙여넣게 하고
+    //    이미 등록돼 있던 사진은 그대로 유지한다(openAddModal이 방금 빈 슬롯으로 초기화했으므로 덮어씀).
+    const lib = window._epLibCache[type] || await window.loadElecPartLibrary(type);
+    const existing = window.findElecPartInLibrary(lib, model);
+    if (existing && Array.isArray(existing.images) && existing.images.length) {
+        window._epPendingImages = [existing.images[0] || null, existing.images[1] || null];
+        window._epSyncImageSlotsUI();
+    }
     window._epPendingReextractModel = model;
     const paste = document.getElementById('ep-add-paste');
     if (paste) paste.focus();
@@ -25398,6 +25448,8 @@ window.elecCompareOpenEditModal = async function(type, model) {
     window._epPendingReextractModel = entry.model;
     window._epEditingOriginalModel = entry.model;
     window._epPendingConnectors = entry.connectors || [];
+    window._epPendingImages = [(entry.images && entry.images[0]) || null, (entry.images && entry.images[1]) || null];
+    window._epSyncImageSlotsUI();
     window._epRenderPreviewForm(type, entry.specs || {});
     if (window.showToast) window.showToast(_en ? `Loaded the current spec for "${entry.model}" — edit and save.` : `"${entry.model}"의 현재 스펙을 불러왔습니다 — 수정 후 저장하세요.`, 'info');
 };
@@ -25423,6 +25475,21 @@ window.elecCompareOpenAddModal = async function(type) {
                 <div id="ep-add-lib-list" style="margin-top:8px; max-height:160px; overflow-y:auto;"></div>
             </div>
             <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; min-height:0;">
+                <div style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">📷 ${_en ? 'Photos (up to 2)' : '사진 (최대 2장)'}</div>
+                <div style="display:flex; gap:8px; margin-bottom:12px; flex-shrink:0;">
+                    <div class="ep-img-slot" data-slot="0" style="position:relative; width:104px; height:78px; border:1.5px dashed #ced4da; border-radius:6px; cursor:pointer; overflow:hidden; background:#f8f9fa; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <input type="file" accept="image/*" style="display:none;">
+                        <img class="ep-img-preview" style="display:none; width:100%; height:100%; object-fit:cover;">
+                        <span class="ep-img-placeholder" style="font-size:22px; color:#bbb;">📷</span>
+                        <button type="button" class="ep-img-del-btn" style="display:none; position:absolute; top:2px; right:2px; width:18px; height:18px; border:none; border-radius:50%; background:rgba(224,49,49,0.9); color:#fff; font-size:11px; cursor:pointer; line-height:18px; padding:0;">✕</button>
+                    </div>
+                    <div class="ep-img-slot" data-slot="1" style="position:relative; width:104px; height:78px; border:1.5px dashed #ced4da; border-radius:6px; cursor:pointer; overflow:hidden; background:#f8f9fa; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                        <input type="file" accept="image/*" style="display:none;">
+                        <img class="ep-img-preview" style="display:none; width:100%; height:100%; object-fit:cover;">
+                        <span class="ep-img-placeholder" style="font-size:22px; color:#bbb;">📷</span>
+                        <button type="button" class="ep-img-del-btn" style="display:none; position:absolute; top:2px; right:2px; width:18px; height:18px; border:none; border-radius:50%; background:rgba(224,49,49,0.9); color:#fff; font-size:11px; cursor:pointer; line-height:18px; padding:0;">✕</button>
+                    </div>
+                </div>
                 <div id="ep-add-extract-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:6px;">${_en ? 'Or extract a new item with AI' : '또는 새 항목을 AI로 추출'}</div>
                 <input type="file" id="ep-add-file" accept=".pdf,.txt,.html,.htm" style="display:none;" onchange="window._epHandleFileUpload(this)">
                 <div id="ep-add-dropzone"
@@ -25443,6 +25510,7 @@ window.elecCompareOpenAddModal = async function(type) {
         window._makeDraggable('ep-add-box', 'ep-add-drag');
         window._bindClickToFront('ep-add-modal');
         modal.onclick = function() { modal.style.display = 'none'; };
+        window._epInitImageSlots();
     }
     const titleEl = document.getElementById('ep-add-title');
     if (titleEl) titleEl.textContent = cfg.icon + ' ' + (_en ? 'Add ' + cfg.label : cfg.label + ' 추가');
@@ -25455,9 +25523,76 @@ window.elecCompareOpenAddModal = async function(type) {
     const fileInputEl = document.getElementById('ep-add-file'); if (fileInputEl) fileInputEl.value = '';
     window._epEditingOriginalModel = null;
     window._epPendingConnectors = [];
+    window._epPendingImages = [null, null];
+    window._epSyncImageSlotsUI();
     const lib = await window.loadElecPartLibrary(type);
     window._epLibCache[type] = lib;
     window._epRenderLibList('');
+};
+
+// 💡 [2026-08-26 신규] 사진 슬롯(최대 2장) — Summary 탭의 initProductImageSlots와 동일한 방식
+//    (업로드 시 최대 1000px로 리사이즈 + JPEG 0.8 압축해 base64로 tabData 대신 라이브러리 항목에 저장).
+//    모델과 무관하게 모달 DOM은 한 번만 만들어지므로, 리스너도 한 번만 붙이고 이후엔 항상
+//    window._epPendingImages(현재 편집 중인 항목의 사진)만 읽고 쓴다.
+window._epInitImageSlots = function() {
+    document.querySelectorAll('#ep-add-modal .ep-img-slot').forEach(function(slot) {
+        const i = parseInt(slot.dataset.slot, 10);
+        const fileInput = slot.querySelector('input[type="file"]');
+        const del = slot.querySelector('.ep-img-del-btn');
+        slot.addEventListener('click', function(e) {
+            if (e.target === del) return;
+            fileInput.click();
+        });
+        fileInput.addEventListener('change', function() {
+            const file = fileInput.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(ev) {
+                const tempImg = new Image();
+                tempImg.onload = function() {
+                    const MAX = 1000;
+                    let w = tempImg.width, h = tempImg.height;
+                    if (w > MAX || h > MAX) {
+                        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+                        else        { w = Math.round(w * MAX / h); h = MAX; }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w; canvas.height = h;
+                    canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+                    const b64 = canvas.toDataURL('image/jpeg', 0.80);
+                    window._epPendingImages = window._epPendingImages || [null, null];
+                    window._epPendingImages[i] = { data: b64, w: w, h: h };
+                    window._epSyncImageSlotsUI();
+                };
+                tempImg.src = ev.target.result;
+            };
+            reader.readAsDataURL(file);
+            fileInput.value = ''; // 같은 파일 재선택 허용
+        });
+        del.addEventListener('click', function(e) {
+            e.stopPropagation();
+            window._epPendingImages = window._epPendingImages || [null, null];
+            window._epPendingImages[i] = null;
+            window._epSyncImageSlotsUI();
+        });
+    });
+};
+window._epSyncImageSlotsUI = function() {
+    const imgs = window._epPendingImages || [null, null];
+    document.querySelectorAll('#ep-add-modal .ep-img-slot').forEach(function(slot) {
+        const i = parseInt(slot.dataset.slot, 10);
+        const img = slot.querySelector('.ep-img-preview');
+        const ph = slot.querySelector('.ep-img-placeholder');
+        const del = slot.querySelector('.ep-img-del-btn');
+        const data = imgs[i];
+        if (data && data.data) {
+            img.src = data.data; img.style.display = 'block';
+            ph.style.display = 'none'; del.style.display = 'block';
+        } else {
+            img.src = ''; img.style.display = 'none';
+            ph.style.display = 'flex'; del.style.display = 'none';
+        }
+    });
 };
 
 window._epRenderLibList = function(filterText) {
@@ -25599,7 +25734,7 @@ window._epSaveNewItem = async function(type) {
     if (!model) { alert(_en ? 'Please enter the library key.' : '라이브러리 키를 입력해주세요.'); if (modelInput) modelInput.focus(); return; }
     const specs = {};
     document.querySelectorAll('#ep-add-preview [data-ep-field]').forEach(function(inp) { specs[inp.dataset.epField] = inp.value; });
-    const entry = { model: model, specs: specs, connectors: window._epPendingConnectors || [] };
+    const entry = { model: model, specs: specs, connectors: window._epPendingConnectors || [], images: (window._epPendingImages || []).filter(Boolean) };
     const originalModel = window._epEditingOriginalModel;
     window._epEditingOriginalModel = null;
     const isRename = !!(originalModel && originalModel !== model);
@@ -25678,6 +25813,80 @@ window.showElecPinMapModal = async function(type, model) {
         });
         html += '</tbody></table>';
     });
+    bodyEl.innerHTML = html;
+};
+
+// ─── Summary 주요자재 CONVERTER 행 🔎 버튼 → 전기부품 스펙 미리보기 모달 (showPanelSpecModal과 동일 패턴) ───
+window.showElecPartSpecModal = async function(type, model) {
+    const _en = window._currentLang === 'en';
+    const cfg = window.ELEC_PART_TYPES[type];
+    let modal = document.getElementById('ep-spec-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ep-spec-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
+        modal.innerHTML = `
+        <div id="ep-spec-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(480px, 92vw); max-height:82vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:300px;">
+            <div id="ep-spec-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
+                <span id="ep-spec-title">⚡ ${_en ? 'Elec Part Spec' : '전기부품 스펙'}</span>
+                <button onclick="document.getElementById('ep-spec-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center;">✕</button>
+            </div>
+            <div id="ep-spec-body" style="padding:12px 16px; flex:1; overflow-y:auto; font-size:12px;"></div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('ep-spec-box', 'ep-spec-drag');
+        window._bindClickToFront('ep-spec-modal');
+        modal.onclick = function() { modal.style.display = 'none'; };
+    }
+    modal.style.display = 'block';
+    window.bringModalToFront('ep-spec-modal');
+    const titleEl = document.getElementById('ep-spec-title');
+    if (titleEl) titleEl.textContent = cfg.icon + ' ' + cfg.label + ' ' + (_en ? 'Spec' : '스펙');
+    const bodyEl = document.getElementById('ep-spec-body');
+    bodyEl.innerHTML = `<div style="text-align:center; color:#999; padding:20px;">${_en ? 'Loading…' : '불러오는 중...'}</div>`;
+    const lib = await window.loadElecPartLibrary(type);
+    window._epLibCache[type] = lib;
+    const entry = model ? window.findElecPartInLibrary(lib, model) : null;
+    if (!entry) {
+        // 💡 Panel Compare의 showPanelSpecModal과 동일한 자리 — 값이 비어있든(설명 미입력) 라이브러리에
+        //    없는 값이든, 여기선 똑같이 "붙여넣어 AI로 추출" 흐름(elecCompareReextract)으로 이어준다.
+        bodyEl.innerHTML = `
+            <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${model ? escapeHtml(model) : (_en ? '(No description entered)' : '(설명 미입력)')}</div>
+            <div style="color:#888; margin-bottom:14px;">${model
+                ? (_en ? `No spec has been extracted for "${model}" yet.` : `"${model}"의 스펙이 아직 추출되지 않았습니다.`)
+                : (_en ? 'Not extracted yet — search the library or extract a new one below.' : '아직 추출된 스펙이 없습니다 — 아래에서 라이브러리를 검색하거나 새로 추출하세요.')}</div>
+            <button onclick="document.getElementById('ep-spec-modal').style.display='none'; window.elecCompareReextract(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(model || ''))});" style="padding:8px 14px; background:#2c5f8a; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🤖 ${_en ? 'Paste spec text & extract with AI' : '스펙 텍스트 붙여넣고 AI로 추출'}</button>
+        `;
+        return;
+    }
+    const ec = (window.tabData && window.tabData.elecCompare && window.tabData.elecCompare[type]) || { selectedModels: [] };
+    const inCompare = (ec.selectedModels || []).indexOf(entry.model) !== -1;
+    const pbaName = (entry.specs && entry.specs['PBA Name'] && entry.specs['PBA Name'] !== '-') ? entry.specs['PBA Name'] : entry.model;
+    const brand = (entry.specs && entry.specs['Brand'] && entry.specs['Brand'] !== '-') ? entry.specs['Brand'] : '';
+    let html = `<div style="font-size:13px; font-weight:bold; margin-bottom:2px;">${escapeHtml(pbaName)}</div>
+        <div style="color:#888; margin-bottom:8px;">${escapeHtml(brand)}</div>`;
+    if (Array.isArray(entry.images) && entry.images.length && entry.images[0] && entry.images[0].data) {
+        html += `<img src="${entry.images[0].data}" style="max-width:160px; max-height:110px; border:1px solid #ced4da; border-radius:4px; margin-bottom:8px; display:block; object-fit:cover;">`;
+    }
+    html += `<div style="margin:10px 0;">
+            ${inCompare
+                ? `<span style="color:#2f9e44; font-weight:bold;">✓ ${_en ? 'Already in this project\'s comparison table' : '이 프로젝트 비교표에 있음'}</span>`
+                : `<button onclick="window.elecCompareAddFromLibrary(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))}); document.getElementById('ep-spec-modal').style.display='none';" style="padding:6px 12px; background:#2f9e44; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">➕ ${_en ? 'Add to comparison table' : '비교표에 추가'}</button>`}
+        </div>
+        <div style="font-size:10px; color:#aaa; margin-bottom:8px;">${_en ? 'Updated' : '갱신'}: ${escapeHtml(entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '-')}</div>`;
+    (cfg.schema || []).forEach(function(sec) {
+        let secHtml = '';
+        sec.fields.forEach(function(f) {
+            const label = f[0];
+            const v = (entry.specs && entry.specs[label] != null && entry.specs[label] !== '') ? entry.specs[label] : '-';
+            if (v === '-') return; // 미리보기는 값이 있는 항목만 (한눈에 보기 편하게)
+            secHtml += `<div style="display:flex; gap:6px; padding:2px 0;"><span style="flex:0 0 170px; color:#777;">${escapeHtml(label)}</span><span style="flex:1;">${escapeHtml(String(v))}</span></div>`;
+        });
+        if (secHtml) html += `<div style="font-weight:bold; color:#7a5210; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
+    });
+    if (Array.isArray(entry.connectors) && entry.connectors.length) {
+        html += `<div style="margin-top:10px;"><button onclick="window.showElecPinMapModal(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))})" style="padding:5px 10px; background:#fff; border:1px solid #2c5f8a; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:11.5px;">🔌 ${_en ? 'View pin map' : '핀맵 보기'}</button></div>`;
+    }
     bodyEl.innerHTML = html;
 };
 
