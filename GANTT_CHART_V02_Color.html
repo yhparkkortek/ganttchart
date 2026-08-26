@@ -1229,13 +1229,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
     <div class="btn-group" style="margin-left: auto;">
         <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-        <button id="schedule-tools-btn" class="action-btn" onclick="window.toggleScheduleToolsMenu(event)" title="선택 구간 재계산 · 날짜순 정렬">🛠️ 일정 도구</button>
-        <button id="baseline-menu-btn" class="action-btn" onclick="window.toggleBaselineMenu(event)" title="계획(기준선) 저장 · 비교 · 삭제">📐 계획</button>
+        <button id="schedule-tools-btn" class="action-btn" onclick="window.toggleScheduleToolsMenu(event)" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬">🛠️ 일정 도구</button>
         </div>
 
         <div class="btn-group">
-            <button id="ai-summary-btn" class="action-btn" onclick="window.openAiProjectSummaryModal()" style="border-color:#d35400; color:#d35400;" title="지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다">🤖 AI 요약</button>
-            <button id="gantt-qa-btn" class="action-btn" onclick="window.openGanttQaModal()" style="border-color:#134a73; color:#134a73;" title="이 Gantt 프로젝트의 업무 데이터에 대해 자유롭게 질문하고 AI의 답변을 받습니다">💬 AI 문답</button>
+            <button id="ai-tools-btn" class="action-btn" onclick="window.toggleAiToolsMenu(event)" style="border-color:#d35400; color:#d35400;" title="AI 요약 · AI 문답 · 설정">🤖 AI 도구</button>
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
@@ -6062,31 +6060,11 @@ ${mailText}`;
         return out;
     };
 
-    // 📐 계획 메뉴 팝업 — 저장/비교선택/삭제를 버튼 하나로 통합
-    window.toggleBaselineMenu = function(ev) {
-        if (ev) ev.stopPropagation();
-        let popup = document.getElementById('baseline-popup');
-        if (popup && popup.style.display === 'block') { popup.style.display = 'none'; return; }
-        if (!popup) {
-            popup = document.createElement('div');
-            popup.id = 'baseline-popup';
-            popup.className = 'row-action-popup';
-            popup.style.minWidth = '230px';
-            popup.style.padding = '6px';
-            document.body.appendChild(popup);
-            document.addEventListener('click', function(e) {
-                if (!popup.contains(e.target) && e.target.id !== 'baseline-menu-btn') popup.style.display = 'none';
-            });
-        }
-        window.autoSaveCurrentSnapshot(); // 📌 버튼 누를 때마다 "현재 일정" 슬롯 최신화
-        window.renderBaselineMenu();
-        const btn = document.getElementById('baseline-menu-btn');
-        const rect = btn.getBoundingClientRect();
-        popup.style.left = rect.left + 'px';
-        popup.style.top = (rect.bottom + 4) + 'px';
-        popup.style.display = 'block';
-    };
-
+    // 🛠️ 일정 도구 메뉴 팝업 — 원래 별도 버튼이던 "📐 계획"(저장/비교선택/삭제)을 이 메뉴 위쪽으로
+    //    합침(2026-08-27, 버튼 정리) — 계획 관련 조작과 일정 재계산/정렬 조작이 다 "이 표의 일정을
+    //    어떻게 다룰지"라는 같은 성격이라 버튼 하나로 묶는 게 자연스러움. 팝업 DOM/id는 그대로
+    //    schedule-tools-popup 하나만 쓰고, 그 안에 계획 목록을 그리는 자리(schedule-baseline-section)만
+    //    별도 div로 둬서 renderBaselineMenu()가 계속 그 자리만 갱신하면 되게 함(호출부 여럿 안 건드림).
     window.toggleScheduleToolsMenu = function(ev) {
         if (ev) ev.stopPropagation();
         let popup = document.getElementById('schedule-tools-popup');
@@ -6099,6 +6077,8 @@ ${mailText}`;
             popup.style.padding = '6px';
             const _stEn = window._currentLang === 'en';
             popup.innerHTML = `
+                <div id="schedule-baseline-section"></div>
+                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.recalcSelectedRange();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '🔓 Recalc Selected Range' : '🔓 선택 구간 재계산'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Unlock selected rows and recalculate dates (data will change)' : '선택한 행의 잠금을 풀고 날짜를 다시 계산 (데이터 변경)'}</div></div>
                 <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
                 <div onclick="document.getElementById('schedule-tools-popup').style.display='none'; window.sortRowsByStartDate();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">${_stEn ? '📅 Sort by Date' : '📅 날짜순 정렬'}<div style="font-size:10px; color:#adb5bd; font-weight:normal;">${_stEn ? 'Keep dates as-is, reorder rows by start date' : '날짜는 그대로 두고, 표시 순서만 시작일순 정리'}</div></div>
@@ -6110,6 +6090,8 @@ ${mailText}`;
                 if (!popup.contains(e.target) && e.target.id !== 'schedule-tools-btn') popup.style.display = 'none';
             });
         }
+        window.autoSaveCurrentSnapshot(); // 📌 버튼 누를 때마다 "현재 일정" 슬롯 최신화 (예전 toggleBaselineMenu에 있던 동작)
+        window.renderBaselineMenu();
         const btn = document.getElementById('schedule-tools-btn');
         const rect = btn.getBoundingClientRect();
         popup.style.left = rect.left + 'px';
@@ -6118,7 +6100,7 @@ ${mailText}`;
     };
 
     window.renderBaselineMenu = function() {
-        const popup = document.getElementById('baseline-popup');
+        const popup = document.getElementById('schedule-baseline-section');
         if (!popup) return;
         const _blEn = window._currentLang === 'en';
         let html = `<div onclick="event.stopPropagation(); window.saveScheduleBaseline()" style="padding:6px 8px; cursor:pointer; border-radius:4px; font-size:12px; color:#1971c2; font-weight:bold;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">➕ ${_blEn ? 'Save current schedule as plan' : '현재 일정을 새 계획으로 저장'}</div>`;
@@ -6182,7 +6164,7 @@ ${mailText}`;
         renderTable(globalData);
         applyFilters();
         window.renderBaselineMenu();
-        const popup = document.getElementById('baseline-popup');
+        const popup = document.getElementById('schedule-tools-popup');
         if (popup) popup.style.display = 'block'; // 🔒 안전장치: 재렌더링 중 팝업이 닫히는 걸 방지
     };
 
@@ -7168,10 +7150,17 @@ ${mailText}`;
             const diffDays = Math.round((planDate - today) / 86400000);
             const label = taskLabel(row) || '(제목없음)';
             const assignee = (colIdx.assignee !== -1 && row[colIdx.assignee]) ? row[colIdx.assignee] : '미지정';
+            // 💡 [버그 수정] 지연/임박 업무 목록에 업무명·담당자·날짜만 담고 "무슨 이슈인지"(상세내용)는
+            //    아예 안 넣고 있었음 — AI 문답에서 발견된 것과 똑같은 원인으로, AI 요약의 리스크/액션추천도
+            //    실제 내용을 못 보고 업무명만 보고 짐작해서 만든 것이라 부실할 수 있었음. 같은 설정값
+            //    ([🤖 AI 도구 > ⚙️ 설정])으로 상세내용/답변을 함께 담아줌.
+            const _psMaxLen = window.getAiContentMaxLen ? window.getAiContentMaxLen() : 500;
+            const detail = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
+            const detailAnswer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
             if (diffDays < 0) {
-                delayed.push({ task: label, assignee: assignee, dueDate: planRaw, overdueDays: -diffDays });
+                delayed.push({ task: label, assignee: assignee, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer });
             } else if (diffDays <= 7) {
-                dueSoon.push({ task: label, assignee: assignee, dueDate: planRaw, dDay: diffDays });
+                dueSoon.push({ task: label, assignee: assignee, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer });
             }
         });
 
@@ -7231,11 +7220,23 @@ ${recentLogs}
     // 💡 실제 사용 지점 — localStorage에 팀원이 고쳐둔 프롬프트가 있으면 그걸 쓰고(플레이스홀더만
     //    실값으로 치환), 없으면 코드 기본 템플릿을 그대로 씀. getSystemPrompt와 동일 패턴.
     window._buildProjectSummaryPrompt = function(d) {
+        // 💡 [버그 수정] 업무명·날짜만 넣고 상세내용은 안 보여줘서, AI가 "왜 위험한지" 실제 이유를
+        //    모른 채 리스크/액션추천을 지어내야 했음 — detail(상세내용)/detailAnswer(답변)가 있으면 같이 붙임.
         const delayedText = d.delayed.length
-            ? d.delayed.map(function(x) { return `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, ${x.overdueDays}일 지연)`; }).join('\n')
+            ? d.delayed.map(function(x) {
+                let line = `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, ${x.overdueDays}일 지연)`;
+                if (x.detail) line += ` | 내용:${x.detail}`;
+                if (x.detailAnswer) line += ` | 대응:${x.detailAnswer}`;
+                return line;
+            }).join('\n')
             : '(없음)';
         const dueSoonText = d.dueSoon.length
-            ? d.dueSoon.map(function(x) { return `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, D-${x.dDay})`; }).join('\n')
+            ? d.dueSoon.map(function(x) {
+                let line = `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, D-${x.dDay})`;
+                if (x.detail) line += ` | 내용:${x.detail}`;
+                if (x.detailAnswer) line += ` | 대응:${x.detailAnswer}`;
+                return line;
+            }).join('\n')
             : '(없음)';
         const logsText = d.recentLogs.length ? d.recentLogs.join('\n') : '(없음)';
 
@@ -7989,9 +7990,10 @@ ${recentLogs}
             // 💡 [버그 수정] 120자로 너무 짧게 잘라서, "요약해줘" 질문에 AI가 실제 내용(무슨 이슈인지)을
             //    읽고 종합할 재료가 부족해 이름/날짜/상태만 재나열하는 결과로 이어졌음 — 특히 메일 자동
             //    등록 업무(＊AI📧)는 상세내용에 실제 이슈 내용이 들어있는데 이게 대부분 잘려나갔었음.
-            //    250자로 늘려서 AI가 실제로 읽고 판단할 수 있는 최소한의 맥락을 확보.
-            const content = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, 250) : '';
-            const answer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, 250) : '';
+            //    고정값 대신 [🤖 AI 도구 > ⚙️ 설정]에서 사용자가 정한 길이(기본 500자)를 씀.
+            const _qaMaxLen = window.getAiContentMaxLen ? window.getAiContentMaxLen() : 500;
+            const content = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, _qaMaxLen) : '';
+            const answer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, _qaMaxLen) : '';
 
             let dueTag = '';
             if (status !== '완료' && plan) {
@@ -8283,6 +8285,95 @@ ${question}
         modal.style.display = 'block';
         window.bringModalToFront('gantt-qa-modal');
         setTimeout(function() { const inp = document.getElementById('gantt-qa-input'); if (inp) inp.focus(); }, 50);
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // ⚙️ [2026-08-27 신규] AI 도구 설정 — "업무 상세내용/답변을 AI에게 보낼 때 최대 몇 자까지
+    //    보여줄지"를 사용자가 직접 정하게 함. 원래 250자로 하드코딩돼 있어서 UPS 송장번호·PWM 수치처럼
+    //    문장 뒷부분에 있는 세부 내용이 잘려나가 "요약이 부실하다"는 문제로 이어졌었음(AI 문답에서 발견,
+    //    AI 요약도 같은 원인으로 부실할 수 있어 둘 다 이 설정 값을 공유해서 씀).
+    // ═══════════════════════════════════════════════════════════
+    window._AI_CONTENT_MAXLEN_DEFAULT = 500;
+    window.getAiContentMaxLen = function() {
+        const v = parseInt(localStorage.getItem('gantt_ai_content_maxlen'), 10);
+        return (v && v >= 50) ? v : window._AI_CONTENT_MAXLEN_DEFAULT;
+    };
+    window.setAiContentMaxLen = function(v) {
+        localStorage.setItem('gantt_ai_content_maxlen', String(v));
+    };
+
+    window.openAiToolsSettingsModal = function() {
+        let modal = document.getElementById('ai-tools-settings-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ai-tools-settings-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9160; pointer-events:none; background:none;';
+            modal.innerHTML = `
+            <div id="ai-tools-settings-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:90%; max-width:400px; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); overflow:hidden;">
+                <div id="ai-tools-settings-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+                    <span>⚙️ AI 도구 설정</span>
+                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                </div>
+                <div style="padding:16px 18px;">
+                    <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">업무 상세내용/답변 최대 글자 수</label>
+                    <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약 · 💬 AI 문답이 각 업무의 "상세내용"/"답변" 필드를 읽을 때 최대 몇 자까지 참고할지 정합니다. 너무 짧으면 세부 내용(수치·번호 등)이 잘려서 답변이 부실해지고, 너무 길면 업무가 많을 때 응답이 느려지거나 실패할 수 있습니다.</div>
+                    <input id="ai-content-maxlen-input" type="number" min="100" max="3000" step="50" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                    <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 500자 (기본값)</div>
+                </div>
+                <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
+                    <button onclick="window.saveAiToolsSettings()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 저장</button>
+                    <button onclick="document.getElementById('ai-content-maxlen-input').value=window._AI_CONTENT_MAXLEN_DEFAULT;" style="padding:8px 14px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">🔄 기본값으로</button>
+                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="padding:8px 14px; background:#fff; color:#6c757d; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">✖ 닫기</button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            window._makeDraggable('ai-tools-settings-box', 'ai-tools-settings-drag');
+            window._bindClickToFront('ai-tools-settings-modal');
+        }
+        document.getElementById('ai-content-maxlen-input').value = window.getAiContentMaxLen();
+        modal.style.display = 'block';
+        window.bringModalToFront('ai-tools-settings-modal');
+    };
+
+    window.saveAiToolsSettings = function() {
+        const input = document.getElementById('ai-content-maxlen-input');
+        let v = parseInt(input.value, 10);
+        if (!v || v < 100) v = 100;
+        if (v > 3000) v = 3000;
+        input.value = v;
+        window.setAiContentMaxLen(v);
+        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (업무 상세내용 최대 ' + v + '자)', 'info');
+    };
+
+    // 🤖 [2026-08-27 신규] "AI 도구" 메뉴 — 원래 별도 버튼이던 "🤖 AI 요약"/"💬 AI 문답"을 여기로
+    //    합치고, ⚙️ 설정(위 글자 수 설정)도 같은 메뉴에 둠 (버튼 정리)
+    window.toggleAiToolsMenu = function(ev) {
+        if (ev) ev.stopPropagation();
+        let popup = document.getElementById('ai-tools-popup');
+        if (popup && popup.style.display === 'block') { popup.style.display = 'none'; return; }
+        if (!popup) {
+            popup = document.createElement('div');
+            popup.id = 'ai-tools-popup';
+            popup.className = 'row-action-popup';
+            popup.style.minWidth = '230px';
+            popup.style.padding = '6px';
+            popup.innerHTML = `
+                <div onclick="document.getElementById('ai-tools-popup').style.display='none'; window.openAiProjectSummaryModal();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">🤖 AI 요약<div style="font-size:10px; color:#adb5bd; font-weight:normal;">지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다</div></div>
+                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
+                <div onclick="document.getElementById('ai-tools-popup').style.display='none'; window.openGanttQaModal();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">💬 AI 문답<div style="font-size:10px; color:#adb5bd; font-weight:normal;">이 프로젝트 데이터에 대해 자유롭게 질문하고 AI 답변을 받습니다</div></div>
+                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
+                <div onclick="document.getElementById('ai-tools-popup').style.display='none'; window.openAiToolsSettingsModal();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">⚙️ 설정<div style="font-size:10px; color:#adb5bd; font-weight:normal;">AI에게 보낼 업무 상세내용 길이 등을 설정합니다</div></div>
+            `;
+            document.body.appendChild(popup);
+            document.addEventListener('click', function(e) {
+                if (!popup.contains(e.target) && e.target.id !== 'ai-tools-btn') popup.style.display = 'none';
+            });
+        }
+        const btn = document.getElementById('ai-tools-btn');
+        const rect = btn.getBoundingClientRect();
+        popup.style.left = rect.left + 'px';
+        popup.style.top = (rect.bottom + 4) + 'px';
+        popup.style.display = 'block';
     };
 
     function logChange(rowIndex, colIndex, oldVal, newVal, reason) {
@@ -9220,7 +9311,7 @@ window.deleteHistoryByDateRange = function() {
                 'mail-btn':'🤖 AI 업무분석',
                 'project-select-btn': '🔃 프로젝트 선택',
                 'schedule-tools-btn': '🛠️ 일정 도구',
-                'baseline-menu-btn':  '📐 계획',
+                'ai-tools-btn':       '🤖 AI 도구',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'add-user-btn':       '👤 사용자 추가',
                 'file-input-label':'🟩 프로젝트 엑셀 열기',
@@ -9329,7 +9420,7 @@ window.deleteHistoryByDateRange = function() {
                 'mail-btn':'🤖 AI Analysis',
                 'project-select-btn': '🔃 Select Project',
                 'schedule-tools-btn': '🛠️ Schedule Tools',
-                'baseline-menu-btn':  '📐 Plan',
+                'ai-tools-btn':       '🤖 AI Tools',
                 'admin-pw-change-btn': '🔑 Change Password',
                 'add-user-btn':       '👤 Add User',
                 'file-input-label':'🟩 Open Project Excel',
