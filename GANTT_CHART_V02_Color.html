@@ -1974,7 +1974,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div class="concept-section">
             <style>
-                #tab-elecparts .concept-table th { text-align: center !important; vertical-align: middle !important; }
+                #tab-elecparts .concept-table th { text-align: left !important; vertical-align: middle !important; }
                 #tab-elecparts .concept-table thead { position: sticky !important; top: 0 !important; z-index: 16; }
                 #tab-elecparts .concept-table thead th { background-color: #f4f6f8 !important; }
                 #tab-elecparts .concept-table th.pc-slot-empty,
@@ -24426,7 +24426,7 @@ window.renderPanelCompareTab = async function() {
             </th>`;
         } else {
             headHtml += `<th class="pc-slot-empty" style="min-width:120px; cursor:pointer;" onclick="window.panelCompareOpenAddModal()" title="${_en ? 'Click to add a panel' : '클릭해서 패널 추가'}">
-                ${_en ? '+ Comparison Target Panel' : '+ 비교대상 패널'}
+                ${_en ? '+ Add' : '+ 추가'}
             </th>`;
         }
     }
@@ -25337,7 +25337,7 @@ window.renderElecCompareTab = async function(type) {
             </th>`;
         } else {
             headHtml += `<th class="ep-slot-empty" style="min-width:120px; cursor:pointer;" onclick="window.elecCompareOpenAddModal(${escapeHtml(JSON.stringify(type))})" title="${_en ? 'Click to add' : '클릭해서 추가'}">
-                ${_en ? '+ Comparison Target' : '+ 비교대상 추가'}
+                ${_en ? '+ Add' : '+ 추가'}
             </th>`;
         }
     }
@@ -25365,7 +25365,7 @@ window.renderElecCompareTab = async function(type) {
         // 💡 Interface 섹션에만 "핀맵 보기" 요약 행을 하나 추가 — 스키마 필드는 아니지만, AI 추출 시
         //    함께 저장해둔 entry.connectors(J1/J2/J3 등 전체 핀아웃)를 여기서만 볼 수 있게 한다.
         if (sec.section === 'Interface') {
-            html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">${_en ? 'Pin Map' : '핀맵'}</td>`;
+            html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">Pin map</td>`;
             for (let i = 0; i < slotCount; i++) {
                 const entry = entries[i];
                 const hasConn = entry && Array.isArray(entry.connectors) && entry.connectors.length;
@@ -25382,8 +25382,8 @@ window.renderElecCompareTab = async function(type) {
     });
     // 💡 [2026-08-26 신규] 사진(최대 2장) — 도표 맨 하단에 한 행으로. 한 번에 1장만 보여주고
     //    클릭하면 다음 장으로 순환(마지막 다음은 다시 1장) — window._epCycleImage가 재렌더 없이 img만 갱신.
-    html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[${_en ? 'Photos' : '사진'}]</td></tr>`;
-    html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">${_en ? 'Photo' : '사진'}</td>`;
+    html += `<tr class="ep-section-row"><td colspan="${totalCols}" style="background:#fff8e6; color:#7a5210; font-weight:bold; padding:5px 10px; border:1px solid #e3e6ea;">[Picture]</td></tr>`;
+    html += `<tr><td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; color:#555; white-space:nowrap;">Picture</td>`;
     for (let i = 0; i < slotCount; i++) {
         const entry = entries[i];
         const images = (entry && Array.isArray(entry.images)) ? entry.images : [];
