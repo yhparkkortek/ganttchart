@@ -21766,6 +21766,15 @@ window.parseConceptSheetsFromWorkbook = function(workbook) {
     const f = _parseMcChangeLogSheetFromWorkbook(workbook);
     const g = _parseProductImagesSheetFromWorkbook(workbook);
     if (c && window.tabData) {
+        // 💡 [2026-08-28 버그 수정] 엑셀의 M.C Table 시트에 "M.C Table-PTD R1"처럼 제품구분자(이름표)가
+        //    붙어있으면, _parseMcTableSheetFromWorkbook은 그 데이터를 mcRevisionsByUnit['PTD']에 저장하고
+        //    mcActiveUnit은 ''(기본/이름없음)으로 남겨둔다 — 드라이브 프로젝트를 불러올 때는 항상
+        //    mcNormalizeAfterLoad()가 "첫 번째 제품구분자를 즉시 활성화"해주는데, 엑셀 파일을 여는 이
+        //    경로에서는 그 호출이 빠져있었다. 그 결과 데이터는 정상적으로 저장됐는데도 화면은 계속
+        //    빈 기본 자리를 보여줘서 "가격 정보가 안 보인다"는 문의로 이어졌음(새로고침 후 프로젝트를
+        //    다시 열면 드라이브 로드 경로를 타서 정상화되니 그제서야 보였던 것). 드라이브 로드와
+        //    동일하게 여기서도 정규화를 호출해 mcRevisions가 실제 활성 제품구분자를 가리키게 한다.
+        if (window.mcNormalizeAfterLoad) window.mcNormalizeAfterLoad();
         // 💡 엑셀로 불러온 직후에도 "가장 최신(금액 있는) 리비전"을 기본으로 보여줌
         window.tabData.mcActiveRevision = window._mcLatestRevWithData(window.tabData.mcRevisions);
     }
