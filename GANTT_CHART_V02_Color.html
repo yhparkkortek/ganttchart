@@ -7970,7 +7970,14 @@ ${recentLogs}
             return row._origT4 || '';
         };
 
+        // 💡 [버그 수정] "오늘 업무 정리해줘"/"이번주 마감" 같은 상대 날짜 질문에 AI가 답하려면 "오늘이
+        //    몇 일인지"를 알아야 하는데, 지금까지 프롬프트 어디에도 실제 날짜를 문자로 넣어주지 않았음
+        //    (지연/D-day 계산에 today 변수는 썼지만 AI에게 보여주진 않았음) — AI 입장에선 "오늘"이 뭔지
+        //    알 방법이 없으니, "추측하지 말라"는 지시를 충실히 따라 매번 "데이터에서 확인되지 않습니다"로
+        //    답한 것. 오늘 날짜/요일을 프롬프트에 명시해서 상대 날짜 추론이 가능하도록 함.
         const today = new Date(); today.setHours(0, 0, 0, 0);
+        const _weekdayKo = ['일', '월', '화', '수', '목', '금', '토'][today.getDay()];
+        const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')} (${_weekdayKo}요일)`;
         const MAX_TASKS = 300; // 프롬프트 크기 보호 — 이보다 많으면 뒤는 생략하고 건수만 알림
         const lines = [];
         rows.slice(0, MAX_TASKS).forEach(function(row) {
@@ -8075,6 +8082,7 @@ ${recentLogs}
         const addressOmitted = addressRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${addressRows.length - MAX_TABLE_ROWS}명 생략됨)` : '';
 
         return {
+            todayStr: todayStr,
             projectLine: `[프로젝트] 고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}`,
             overviewText: overviewLines.length ? overviewLines.join('\n') : '(없음)',
             memberText: memberLines.length ? memberLines.join('\n') : '(없음)',
@@ -8098,6 +8106,10 @@ ${recentLogs}
 
         return `당신은 아래 프로젝트(Gantt 일정 + Summary/Brief SPEC/M.C Table/Elec Parts/Address 등 프로젝트 파일 전체 데이터)를 잘 아는 보조 AI입니다. 아래 데이터에 있는 내용에 근거해서만 답하세요.
 데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로, 필요하면 관련 업무명/항목명을 인용해 답변하세요.
+"오늘/이번 주/이번 달/내일" 등 상대적인 날짜 표현이 나오면, 반드시 아래 [오늘 날짜]를 기준으로 [업무 목록]의 시작일/계획일과 비교해서 판단하세요 (예: 오늘 업무 = 시작일~계획일 구간에 오늘 날짜가 포함되거나 오늘이 마감인 업무).
+
+[오늘 날짜]
+${ctx.todayStr}
 
 ${ctx.projectLine}
 
