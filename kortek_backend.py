@@ -200,17 +200,22 @@ def extract_body(msg):
     #    ln.rstrip()이 "줄 끝 찌꺼기"로 착각해 탭까지 같이 지워버려서 — 칸 구분자가 사라지고 칸마다
     #    다시 다른 줄로 떨어졌다. 태그 사이에 순수 공백/줄바꿈만 있는 서식용 여백을 먼저 다 걷어내서,
     #    최종적으로 남는 탭·줄바꿈은 전부 우리가 의도적으로 넣은 것만 남게 한다.
+    # 💡 [2026-08-26 변경] 칸 구분자를 탭(\t) 대신 눈에 보이는 경계문자 " │ "(U+2502)로 변경 — 탭은
+    #    칸 값 길이가 다르면 세로줄이 안 맞아 보이는데, │는 정렬이 아니라 "여기서 칸이 나뉜다"만
+    #    항상 명확히 표시하고, 실제 메일 본문에 이 문자가 등장할 일이 거의 없어 원본과도 안 헷갈린다.
+    CELL_BOUNDARY = " │ "
     body = re.sub(r">\s+<", "><", body)
     body = re.sub(r"(?i)<br\s*/?>", "\n", body)
     body = re.sub(r"(?i)</p\s*>|</div\s*>", "\n", body)
-    body = re.sub(r"(?i)</t[dh]\s*>", "\t", body)                 # 표 칸 끝 → 탭(다음 칸과 구분)
+    body = re.sub(r"(?i)</t[dh]\s*>", CELL_BOUNDARY, body)        # 표 칸 끝 → 경계문자(다음 칸과 구분)
     body = re.sub(r"(?i)</tr\s*>", "\n", body)                    # 표 행 끝 → 줄바꿈
     body = re.sub(r"(?i)<table[^>]*>|</table\s*>", "\n", body)    # 표 시작/끝도 앞뒤 글과 분리
     body = re.sub(r"<[^>]+>", "", body)
     body = re.sub(r"[ \t]{8,}", "    ", body)     # 지나치게 긴 공백(레이아웃 찌꺼기)만 축소 — 표 정렬용 짧은 공백은 보존
     # 💡 국내 메일 특유의 "문장. \n \n다음문장." 패턴 — 완전히 빈 줄까지 전부 제거해 간격을 촘촘하게
     #    (앞쪽 들여쓰기/표 정렬 공백은 유지하기 위해 rstrip만 하고, 빈 줄 판정에만 strip을 씀)
-    lines = [ln.rstrip() for ln in body.split("\n")]
+    #    각 행의 "마지막 칸" 뒤에는 다음 칸이 없어 경계문자( │ )가 덜렁 남으므로 같이 정리한다.
+    lines = [ln.rstrip(" \t" + CELL_BOUNDARY) for ln in body.split("\n")]
     lines = [ln for ln in lines if ln.strip()]
     body = "\n".join(lines)
     # 💡 [2026-08-24] "원문 보기"용 저장 한도. AI 분석 입력은 프론트(msCallGemini)에서 이 값과 무관하게
