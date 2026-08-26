@@ -8003,25 +8003,71 @@ ${recentLogs}
             return `${l.time} ${l.userName} — ${l.rowName}/${l.colName}: ${l.oldVal} → ${l.newVal}`;
         });
 
+        // 💡 [버그 수정] 처음엔 Gantt 업무 목록만 컨텍스트로 넣었는데, "Summary" 탭에 있는 프로젝트 개요/
+        //    담당자/주요 자재 등을 물어보면 이 데이터가 아예 없어서 AI가 무조건 "데이터에서 확인되지
+        //    않습니다"라고 답하는 문제가 있었음 — "프로젝트 JSON 파일 전체"를 보고 답하길 기대하는
+        //    사용자 기대와 어긋남. Summary 탭 개요/멤버/주요자재도 함께 포함시킴.
+        const td = window.tabData || {};
+        const sd = td.summary || {};
+        const overviewLines = [];
+        if (sd.purpose) overviewLines.push(`적용 목적: ${sd.purpose}`);
+        if (sd.volume) overviewLines.push(`연간 수요량: ${sd.volume}`);
+        if (sd.mpDate) overviewLines.push(`목표 양산 일정: ${sd.mpDate}`);
+        if (sd.background) overviewLines.push(`추진 배경 및 의의: ${sd.background}`);
+        if (sd.devDays) overviewLines.push(`개발기간(일): ${sd.devDays}`);
+        if (pm.프로젝트코드) overviewLines.push(`프로젝트 코드: ${pm.프로젝트코드}`);
+        if (pm.프로젝트명) overviewLines.push(`프로젝트 명칭: ${pm.프로젝트명}`);
+        if (pm.인치) overviewLines.push(`인치: ${pm.인치}`);
+
+        const memberLabels = pm.memberLabels || {};
+        const memberFieldDefs = [
+            ['프로젝트담당자', 'PM'], ['기구담당자', '기구'], ['HW담당자', 'HW'], ['FW담당자', 'FW'],
+            ['TSP담당자', 'TSP'], ['LCM담당자', 'LCM'], ['Slimming담당자', 'Slimming'],
+            ['Cutting담당자', 'Cutting'], ['Module담당자', 'Module'], ['Tooling담당자', 'Tooling']
+        ];
+        const memberLines = memberFieldDefs
+            .filter(function(f) { return pm[f[0]]; })
+            .map(function(f) { return `${memberLabels[f[0]] || f[1]}: ${pm[f[0]]}`; });
+        (td.projectMembers3 || []).forEach(function(m) {
+            if (m && (m.name || m.role)) memberLines.push(`${m.role || '멤버'}: ${m.name || ''}`);
+        });
+
+        const materialLines = (td.projectMaterials || [])
+            .filter(function(m) { return m && (m.category || m.ktkPn || m.description); })
+            .map(function(m) { return `- ${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}` + (m.cost ? ` | Cost:${m.cost}` : '') + (m.useForAnalysis ? ' [분석용]' : ''); });
+
         return {
             projectLine: `[프로젝트] 고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}`,
+            overviewText: overviewLines.length ? overviewLines.join('\n') : '(없음)',
+            memberText: memberLines.length ? memberLines.join('\n') : '(없음)',
+            materialText: materialLines.length ? materialLines.join('\n') : '(없음)',
             totalTasks: rows.length,
             taskListText: (lines.length ? lines.join('\n') : '(등록된 업무 없음)') + omittedNote,
             recentLogsText: recentLogs.length ? recentLogs.join('\n') : '(없음)'
         };
     };
 
-    // 💡 [업무 목록 + 최근 이력 + 지금까지의 대화 + 새 질문]을 하나의 프롬프트로 합침
+    // 💡 [프로젝트 개요/멤버/자재 + 업무 목록 + 최근 이력 + 지금까지의 대화 + 새 질문]을 하나의 프롬프트로 합침
     window._buildGanttQaPrompt = function(question, priorHistory) {
         const ctx = window._buildGanttQaContext();
         const historyText = (priorHistory && priorHistory.length)
             ? priorHistory.map(function(h) { return (h.role === 'user' ? '사용자' : 'AI') + ': ' + h.text; }).join('\n')
             : '(없음)';
 
-        return `당신은 아래 Gantt 프로젝트의 일정 데이터를 잘 아는 보조 AI입니다. [업무 목록]과 [최근 변경 이력]에 있는 내용에 근거해서만 답하세요.
+        return `당신은 아래 프로젝트(Gantt 일정 + 프로젝트 개요/멤버/자재 정보)를 잘 아는 보조 AI입니다. 아래 데이터에 있는 내용에 근거해서만 답하세요.
 데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로, 필요하면 관련 업무명을 인용해 답변하세요.
 
 ${ctx.projectLine}
+
+[프로젝트 개요]
+${ctx.overviewText}
+
+[담당자/프로젝트 멤버]
+${ctx.memberText}
+
+[주요 자재]
+${ctx.materialText}
+
 전체 업무 수: ${ctx.totalTasks}건
 
 [업무 목록]
@@ -8043,7 +8089,7 @@ ${question}
         const box = document.getElementById('gantt-qa-messages');
         if (!box) return;
         if (!window._ganttQaHistory.length) {
-            box.innerHTML = '<div style="padding:30px 10px; text-align:center; color:#999; font-size:12px; line-height:1.6;">이 프로젝트의 Gantt 데이터에 대해 자유롭게 질문해보세요.<br>예) "김철수님 담당 업무 중 지연된 게 있어?"<br>예) "이번 달 마감인 업무 정리해줘"</div>';
+            box.innerHTML = '<div style="padding:30px 10px; text-align:center; color:#999; font-size:12px; line-height:1.6;">이 프로젝트의 Gantt 업무 · 개요 · 멤버 · 주요 자재에 대해 자유롭게 질문해보세요.<br>예) "김철수님 담당 업무 중 지연된 게 있어?"<br>예) "이 프로젝트 연간 수요량이 얼마야?"<br>예) "기구 담당자가 누구야?"</div>';
             return;
         }
         box.innerHTML = window._ganttQaHistory.map(function(m) {
