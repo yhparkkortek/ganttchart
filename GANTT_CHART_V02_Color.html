@@ -812,7 +812,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="sb-item" data-tab="summary" onclick="window.switchTab('summary')"><span class="sb-ico">📝</span><span class="sb-label">Summary</span></div>
         <div class="sb-item" data-tab="briefspec" onclick="window.switchTab('briefspec')"><span class="sb-ico">📐</span><span class="sb-label">Brief SPEC</span></div>
         <div class="sb-item" data-tab="mctable" onclick="window.switchTab('mctable')"><span class="sb-ico">💰</span><span class="sb-label">M.C Table</span></div>
-        <div class="sb-item" data-tab="panelcompare" onclick="window.switchTab('panelcompare')"><span class="sb-ico">🖥️</span><span class="sb-label">Panel Compare</span></div>
         <div class="sb-item" data-tab="elecparts" onclick="window.switchTab('elecparts')"><span class="sb-ico">⚡</span><span class="sb-label">Elec Parts</span></div>
         <div class="sb-item active" data-tab="gantt" onclick="window.switchTab('gantt')"><span class="sb-ico">📊</span><span class="sb-label">Gantt chart</span></div>
         <div class="sb-item" data-tab="calendar" onclick="window.switchTab('calendar')"><span class="sb-ico">📅</span><span class="sb-label">Calendar</span></div>
@@ -1936,89 +1935,78 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 </div>
 
-<!-- 🖥️ Panel Compare — panelook.com 참고 패널 스펙 비교표(팀 공용 라이브러리 + 프로젝트별 최대 10개 선택) -->
-<div id="tab-panelcompare" class="tab-panel">
-    <div class="concept-tab-wrap">
-        <div class="concept-header-box">
-            <h2 id="pc-h2-title">🖥️ Panel Compare<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="pc-help-tip">
-                📚 패널 스펙은 팀 공용 라이브러리에 저장됩니다 — 한 번 추출한 패널은 다른 프로젝트에서도 모델명으로 바로 재사용됩니다.<br><br>
-                🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
-                🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).
-            </span></span></h2>
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="action-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin-right:6px;">➕ 패널 추가</button>
-            <button class="action-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 부가 스펙 펼치기</button>
-            <div class="btn-group"></div>
-            <button class="action-btn" id="pc-export-btn" onclick="window.exportPanelCompareToExcel()">🟩 엑셀로 내보내기</button>
-        </div>
-        <div class="concept-section">
-            <style>
-                /* 💡 [2026-08-25] Summary/Brief SPEC/M.C Table과 헤더 디자인 통일 — 인라인으로 따로
-                   칠했던 회색 대신, 다른 탭과 완전히 같은 th 배경(#f4f6f8)/텍스트(#555)/중앙정렬을 그대로 씀 */
-                #tab-panelcompare .concept-table th { text-align: center !important; vertical-align: middle !important; }
-                /* 💡 Brief SPEC과 동일한 방식 — thead 전체를 하나의 sticky 단위로 고정하고, 배경을 불투명하게
-                   줘서 스크롤할 때 아래 데이터 행이 헤더 밑으로 비쳐 보이지 않게 함 */
-                #tab-panelcompare .concept-table thead { position: sticky !important; top: 0 !important; z-index: 16; }
-                #tab-panelcompare .concept-table thead th { background-color: #f4f6f8 !important; }
-                /* 💡 아직 패널이 선택 안 된 빈 슬롯 헤더 — 점선 테두리로 "여기 채워주세요"를 표시 */
-                #tab-panelcompare .concept-table th.pc-slot-empty { border-style: dashed !important; color: #aaa !important; font-weight: normal !important; }
-                /* 💡 줄무늬(지브라) — M.C Table/Brief SPEC과 동일 톤(흰색/연회색) */
-                #tab-panelcompare .concept-table tbody tr.mc-zebra-a { background-color: #ffffff !important; }
-                #tab-panelcompare .concept-table tbody tr.mc-zebra-b { background-color: #efefef !important; }
-            </style>
-            <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 패널 추가]로 시작하세요.</div>
-            <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
-                <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;">
-                    <thead id="pc-thead"></thead>
-                    <tbody id="pc-tbody"></tbody>
-                </table>
-            </div>
-            <div id="pc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
-                <div id="pc-history-header" onclick="window.pcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
-                    <span id="pc-history-toggle-icon">▶</span>
-                    <span data-i18n="h-history">🕒 변경 이력 확인</span>
-                </div>
-                <div id="pc-history-body" style="display:none; max-height:320px; overflow-y:auto;">
-                    <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
-                        <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="pc-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
-                        <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="pc-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
-                        <input type="password" id="pc-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
-                        <button class="action-btn" onclick="window.deletePcHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
-                    </div>
-                    <table id="pc-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- ⚡ Elec Parts — Panel Compare와 동일한 패턴의 전기부품(CONV BD/AD BD...) 스펙 비교표.
-     Alarm/Notice와 동일한 밑줄 전환으로 부품 종류를 바꾼다. 오늘은 CONV BD만 구현, AD BD는 준비중 자리만. -->
+<!-- ⚡ Elec Parts — PANEL(구 Panel Compare)/AD BD/CONV BD 스펙 비교표 모음.
+     Alarm/Notice와 동일한 밑줄 전환으로 부품 종류를 바꾼다. PANEL·CONV BD는 구현 완료, AD BD는 준비중 자리만.
+     💡 [2026-08-26] Panel Compare가 별도 최상위 탭이었다가 여기 PANEL 서브탭으로 이동해옴 — 표/모달/함수(pc*,
+        panelCompare*)는 그대로 두고 컨테이너 위치만 옮겼다. 헤더는 하나를 공유하되, 뷰마다 버튼 구성이 달라
+        display:contents로 감싼 버튼 묶음을 통째로 보이기/숨기기 한다(Alarm/Notice의 헤더box 2개 분리 대신
+        더 가벼운 방식으로 동일한 효과). -->
 <div id="tab-elecparts" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box" id="elec-header-box">
             <div id="elec-view-toggle" style="display:flex; align-items:center; gap:14px; flex-shrink:0;">
+                <span id="ev-tab-panel" onclick="window._switchElecView('panel')"
+                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🖥️ PANEL</span>
                 <span id="ev-tab-adbd" onclick="window._switchElecView('adbd')"
                       style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔲 AD BD</span>
                 <span id="ev-tab-convbd" onclick="window._switchElecView('convbd')"
-                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🔌 CONV BD</span>
+                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔌 CONV BD</span>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="action-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin-right:6px;">➕ CONV BD 추가</button>
-            <button class="action-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')">🔽 부가 스펙 펼치기</button>
-            <div class="btn-group"></div>
-            <button class="action-btn" id="ep-convbd-export-btn" onclick="window.exportElecCompareToExcel('convbd')">🟩 엑셀로 내보내기</button>
+            <span id="eh-panel-btns" style="display:contents;">
+                <span class="inbox-help-ico" style="margin-right:6px;">ℹ️<span class="inbox-help-tip" id="pc-help-tip">
+                    📚 패널 스펙은 팀 공용 라이브러리에 저장됩니다 — 한 번 추출한 패널은 다른 프로젝트에서도 모델명으로 바로 재사용됩니다.<br><br>
+                    🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
+                    🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).
+                </span></span>
+                <button class="action-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin-right:6px;">➕ 패널 추가</button>
+                <button class="action-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 부가 스펙 펼치기</button>
+                <div class="btn-group"><button class="action-btn" id="pc-export-btn" onclick="window.exportPanelCompareToExcel()">🟩 엑셀로 내보내기</button></div>
+            </span>
+            <span id="eh-convbd-btns" style="display:none;">
+                <button class="action-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin-right:6px;">➕ CONV BD 추가</button>
+                <button class="action-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')">🔽 부가 스펙 펼치기</button>
+                <div class="btn-group"><button class="action-btn" id="ep-convbd-export-btn" onclick="window.exportElecCompareToExcel('convbd')">🟩 엑셀로 내보내기</button></div>
+            </span>
         </div>
         <div class="concept-section">
             <style>
                 #tab-elecparts .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #tab-elecparts .concept-table thead { position: sticky !important; top: 0 !important; z-index: 16; }
                 #tab-elecparts .concept-table thead th { background-color: #f4f6f8 !important; }
+                #tab-elecparts .concept-table th.pc-slot-empty,
                 #tab-elecparts .concept-table th.ep-slot-empty { border-style: dashed !important; color: #aaa !important; font-weight: normal !important; }
                 #tab-elecparts .concept-table tbody tr.mc-zebra-a { background-color: #ffffff !important; }
                 #tab-elecparts .concept-table tbody tr.mc-zebra-b { background-color: #efefef !important; }
             </style>
-            <div id="elec-view-convbd" style="display:block;">
+            <div id="elec-view-panel" style="display:block;">
+                <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 패널 추가]로 시작하세요.</div>
+                <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+                    <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;">
+                        <thead id="pc-thead"></thead>
+                        <tbody id="pc-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="pc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                    <div id="pc-history-header" onclick="window.pcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                        <span id="pc-history-toggle-icon">▶</span>
+                        <span data-i18n="h-history">🕒 변경 이력 확인</span>
+                    </div>
+                    <div id="pc-history-body" style="display:none; max-height:320px; overflow-y:auto;">
+                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                            <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="pc-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                            <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="pc-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                            <input type="password" id="pc-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                            <button class="action-btn" onclick="window.deletePcHistoryByDateRange()" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
+                        </div>
+                        <table id="pc-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
+                    </div>
+                </div>
+            </div>
+            <div id="elec-view-adbd" style="display:none; padding:60px; text-align:center; color:#999; font-size:13px;">
+                🔲 AD BD 비교표는 준비 중입니다. 곧 CONV BD와 동일한 방식으로 추가될 예정입니다.
+            </div>
+            <div id="elec-view-convbd" style="display:none;">
                 <div id="ep-convbd-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
                     <table class="concept-table" id="ep-convbd-table" style="min-width:900px; border-collapse:collapse;">
                         <thead id="ep-convbd-thead"></thead>
@@ -2040,9 +2028,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <table id="ep-convbd-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
                     </div>
                 </div>
-            </div>
-            <div id="elec-view-adbd" style="display:none; padding:60px; text-align:center; color:#999; font-size:13px;">
-                🔲 AD BD 비교표는 준비 중입니다. 곧 CONV BD와 동일한 방식으로 추가될 예정입니다.
             </div>
         </div>
     </div>
@@ -2408,7 +2393,7 @@ ${mailText}`;
     window._markNonGanttDirty = function() { window._nonGanttDirty = true; };
     // 💡 [2026-08-25] Panel Compare(Note 열 입력 등)도 여기 추가 — 안 넣으면 그 안에서 뭘 고쳐도
     //    "저장 안 한 변경사항 있음" 판정에 안 잡혀서, 탭 이동/닫기 시 저장 여부를 안 물어보고 조용히 날아감.
-    const _NON_GANTT_DIRTY_SELECTORS = '#tab-summary, #tab-briefspec, #tab-mctable, #tab-panelcompare, #tab-elecparts';
+    const _NON_GANTT_DIRTY_SELECTORS = '#tab-summary, #tab-briefspec, #tab-mctable, #tab-elecparts';
     document.addEventListener('input', function(e) {
         if (e.target && e.target.closest && e.target.closest(_NON_GANTT_DIRTY_SELECTORS)) window._markNonGanttDirty();
     });
@@ -9696,9 +9681,7 @@ window.deleteHistoryByDateRange = function() {
         const _ibxDistCloseBtn = document.getElementById('inbox-dist-close-btn');
         if (_ibxDistCloseBtn) _ibxDistCloseBtn.title = _en ? 'Close' : '닫기';
 
-        // [Panel Compare 탭] 제목(ℹ️ 도움말 아이콘 보존을 위해 첫 텍스트 노드만 교체) + 도움말 내용
-        const _pcTitle = document.getElementById('pc-h2-title');
-        if (_pcTitle) _pcTitle.childNodes[0].textContent = '🖥️ Panel Compare';
+        // [Elec Parts > PANEL 서브탭] 도움말 내용 (h2 타이틀은 밑줄탭 "PANEL" 라벨로 대체돼 별도 텍스트 노드 없음)
         const _pcHelpTip = document.getElementById('pc-help-tip');
         if (_pcHelpTip) _pcHelpTip.innerHTML = _en
             ? `📚 Panel specs are stored in a team-shared library — once a panel is extracted, any project can reuse it by model name.<br><br>
@@ -9707,9 +9690,9 @@ window.deleteHistoryByDateRange = function() {
             : `📚 패널 스펙은 팀 공용 라이브러리에 저장됩니다 — 한 번 추출한 패널은 다른 프로젝트에서도 모델명으로 바로 재사용됩니다.<br><br>
                🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
                🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).`;
-        // 지금 Panel Compare 탭이 열려있으면 표/토글버튼 문구도 바로 다시 그림
-        const _pcPanel = document.getElementById('tab-panelcompare');
-        if (_pcPanel && _pcPanel.classList.contains('active') && window.renderPanelCompareTab) window.renderPanelCompareTab();
+        // 지금 Elec Parts 탭의 PANEL 서브뷰가 열려있으면 표/토글버튼 문구도 바로 다시 그림
+        const _pcTab = document.getElementById('tab-elecparts');
+        if (_pcTab && _pcTab.classList.contains('active') && window._elecView === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
 
         // [AI 팝업] AI 키 상태/가이드 텍스트 재적용
         if (window.onAiProviderChange) window.onAiProviderChange(window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini');
@@ -24453,7 +24436,7 @@ window.panelCompareSetNote = function(label, value) {
     const oldVal = window.tabData.panelCompare.notes[label] || '';
     window.tabData.panelCompare.notes[label] = value;
     window.pcLogChange(label, 'Note', oldVal, value);
-    // 💡 dirty 표시는 #tab-panelcompare가 _NON_GANTT_DIRTY_SELECTORS에 포함돼 있어 change 이벤트로 자동 처리됨
+    // 💡 dirty 표시는 #tab-elecparts가 _NON_GANTT_DIRTY_SELECTORS에 포함돼 있어 change 이벤트로 자동 처리됨
 };
 
 // ── Panel Compare 탭 변경이력 (토글/기록/렌더링/삭제) — Summary/Brief SPEC/M.C Table과 동일 패턴 ──
@@ -28988,12 +28971,11 @@ document.addEventListener('DOMContentLoaded', function() {
         if (tabName === 'summary' && window._checkAllRequiredFields) window._checkAllRequiredFields();
         // Calendar 탭은 매번 최신 Gantt 데이터로 다시 그린다
         if (tabName === 'calendar' && window.calRender) window.calRender();
-        // Panel Compare 탭은 매번 Summary 주요자재(PANEL) 등록값 반영 + 최신 라이브러리 상태로 다시 그린다
-        if (tabName === 'panelcompare' && window.renderPanelCompareTab) window.renderPanelCompareTab();
-        // Elec Parts 탭 진입 시 마지막으로 보던 서브뷰(CONV BD/AD BD)를 복원해서 그린다
+        // Elec Parts 탭 진입 시 마지막으로 보던 서브뷰(PANEL/AD BD/CONV BD)를 복원해서 그린다.
+        // PANEL 뷰는 Summary 주요자재(PANEL) 등록값 반영 + 최신 라이브러리 상태로 매번 다시 그려진다(_switchElecView 내부).
         if (tabName === 'elecparts') {
-            let savedElecView = 'convbd';
-            try { savedElecView = localStorage.getItem('gantt_elec_view') || 'convbd'; } catch(e) {}
+            let savedElecView = 'panel';
+            try { savedElecView = localStorage.getItem('gantt_elec_view') || 'panel'; } catch(e) {}
             window._switchElecView(savedElecView);
         }
         // Alarm/Notice 탭 진입 시 마지막으로 보던 뷰(알람/공지)를 복원해서 그린다
@@ -29032,17 +29014,24 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ⚡ Elec Parts 탭의 CONV BD/AD BD 밑줄 전환 — Alarm/Notice의 _switchAlarmView와 동일한 패턴.
     //    AD BD는 아직 스키마가 없는 준비중 placeholder라 렌더 호출 없이 안내문만 보여준다.
-    window._elecView = window._elecView || 'convbd';
+    window._elecView = window._elecView || 'panel';
+    // 💡 [2026-08-26] PANEL(구 Panel Compare)이 이 탭으로 들어오면서 3-way가 됨 — 콘텐츠/밑줄탭은 뷰별로
+    //    하나씩(panel/adbd/convbd) 있지만, 헤더의 액션 버튼 묶음은 뷰마다 구성이 달라(대상 함수가 다름)
+    //    eh-panel-btns/eh-convbd-btns 두 묶음만 display:contents ↔ none으로 토글한다(AD BD는 버튼 없음).
     window._switchElecView = function(view) {
         window._elecView = view;
-        const cbSec = document.getElementById('elec-view-convbd');
-        const adSec = document.getElementById('elec-view-adbd');
-        const tabCb = document.getElementById('ev-tab-convbd');
-        const tabAd = document.getElementById('ev-tab-adbd');
-        if (cbSec) cbSec.style.display = view === 'convbd' ? 'block' : 'none';
-        if (adSec) adSec.style.display = view === 'adbd' ? 'block' : 'none';
-        if (tabCb) { tabCb.style.color = view === 'convbd' ? '#2c5f8a' : '#999'; tabCb.style.borderBottomColor = view === 'convbd' ? '#2c5f8a' : 'transparent'; }
-        if (tabAd) { tabAd.style.color = view === 'adbd' ? '#2c5f8a' : '#999'; tabAd.style.borderBottomColor = view === 'adbd' ? '#2c5f8a' : 'transparent'; }
+        const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd' };
+        Object.keys(sections).forEach(function(v) {
+            const sec = document.getElementById(sections[v]);
+            if (sec) sec.style.display = (v === view) ? 'block' : 'none';
+            const tab = document.getElementById('ev-tab-' + v);
+            if (tab) { tab.style.color = (v === view) ? '#2c5f8a' : '#999'; tab.style.borderBottomColor = (v === view) ? '#2c5f8a' : 'transparent'; }
+        });
+        const panelBtns = document.getElementById('eh-panel-btns');
+        const convbdBtns = document.getElementById('eh-convbd-btns');
+        if (panelBtns) panelBtns.style.display = (view === 'panel') ? 'contents' : 'none';
+        if (convbdBtns) convbdBtns.style.display = (view === 'convbd') ? 'contents' : 'none';
+        if (view === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
         if (view === 'convbd' && window.renderElecCompareTab) window.renderElecCompareTab('convbd');
         try { localStorage.setItem('gantt_elec_view', view); } catch(e) {}
     };
@@ -29052,6 +29041,10 @@ document.addEventListener('DOMContentLoaded', function() {
         if (localStorage.getItem('gantt_sidebar_collapsed') === '1') applySidebarState(true);
         let lastTab = localStorage.getItem('gantt_active_tab');
         if (lastTab === 'notice') { lastTab = 'alarm'; try { localStorage.setItem('gantt_alarm_view', 'notice'); } catch(e) {} }
+        // 💡 [2026-08-26] Panel Compare가 최상위 탭에서 Elec Parts > PANEL 서브탭으로 이동하면서, 예전에
+        //    저장된 "마지막 탭=panelcompare" 값이 있는 사용자가 새로고침해도 조용히 기본 Gantt 탭으로
+        //    떨어지지 않도록 Elec Parts의 PANEL 뷰로 이어준다(Notice→Alarm 이관과 동일한 패턴).
+        if (lastTab === 'panelcompare') { lastTab = 'elecparts'; try { localStorage.setItem('gantt_elec_view', 'panel'); } catch(e) {} }
         if (lastTab && document.getElementById('tab-' + lastTab)) window.switchTab(lastTab);
     } catch(e) {}
 })();
