@@ -1941,7 +1941,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
      (Alarm/Notice의 헤더box 2개 분리 대신 더 가벼운 방식으로 동일한 효과). -->
 <div id="tab-elecparts" class="tab-panel">
     <div class="concept-tab-wrap">
-        <div class="concept-header-box" id="elec-header-box">
+        <!-- 💡 [2026-08-27] PANEL 표(113개 필드)가 길어서 바깥(#app-main) 스크롤이 걸리는 경우, sticky가
+             없으면 이 헤더(PANEL/AD BD/CONV 밑줄탭)가 스크롤에 같이 밀려 올라가 가려져버린다 —
+             top:0으로 고정해서 바깥을 스크롤해도 항상 보이게 함 -->
+        <div class="concept-header-box" id="elec-header-box" style="position:sticky; top:0; z-index:20;">
             <div id="elec-view-toggle" style="display:flex; align-items:center; gap:14px; flex-shrink:0;">
                 <span id="ev-tab-panel" onclick="window._switchElecView('panel')"
                       style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🖥️ PANEL</span>
@@ -1990,7 +1993,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </style>
             <div id="elec-view-panel" style="display:block;">
                 <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 추가]로 시작하세요.</div>
-                <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+                <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px);">
                     <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;">
                         <thead id="pc-thead"></thead>
                         <tbody id="pc-tbody"></tbody>
