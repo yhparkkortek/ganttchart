@@ -10837,6 +10837,63 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             XLSX.utils.book_append_sheet(wb, wsMcLog, "M.C 수정이력");
         }
 
+        // ── Elec Parts 시트 — PANEL/CONV/AD BD 비교표의 "선택 모델·Note·수정이력"을 백업/복원 ──
+        //    💡 [2026-08-28 신규] 실제 스펙 데이터는 팀 공용 라이브러리(Drive JSON)에 있어 프로젝트
+        //    엑셀엔 필요 없지만, "이 프로젝트가 무슨 모델을 비교표에 골라뒀는지"는 프로젝트별 정보라
+        //    여기 없으면 엑셀로 백업→복원 시 통째로 사라진다. ## 구획 표시로 섹션을 나누고,
+        //    가져오기(_parseElecPartsSheetFromWorkbook)도 이 구조를 그대로 되읽는다.
+        (function() {
+            const epTypeLabel = { panel: 'PANEL', convbd: 'CONV', adbd: 'AD BD' };
+            const pc = tabData.panelCompare || { selectedModels: [], notes: {} };
+            const ecAll = tabData.elecCompare || {};
+            const selByType = {
+                panel: pc.selectedModels || [],
+                convbd: (ecAll.convbd && ecAll.convbd.selectedModels) || [],
+                adbd: (ecAll.adbd && ecAll.adbd.selectedModels) || []
+            };
+            const notesByType = {
+                panel: pc.notes || {},
+                convbd: (ecAll.convbd && ecAll.convbd.notes) || {},
+                adbd: (ecAll.adbd && ecAll.adbd.notes) || {}
+            };
+            const logsByType = {
+                panel: tabData.panelCompareChangeLog || [],
+                convbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.convbd) || [],
+                adbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.adbd) || []
+            };
+            const epData = [
+                ['ELEC PARTS DATA'],
+                ['## SELECTED MODELS'],
+                ['TYPE', 'MODELS (comma-separated)'],
+                ['PANEL', selByType.panel.join(',')],
+                ['CONV', selByType.convbd.join(',')],
+                ['AD BD', selByType.adbd.join(',')],
+                [],
+                ['## NOTES'],
+                ['TYPE', 'LABEL', 'NOTE'],
+            ];
+            ['panel', 'convbd', 'adbd'].forEach(function(t) {
+                Object.keys(notesByType[t]).forEach(function(label) {
+                    const v = notesByType[t][label];
+                    if (v) epData.push([epTypeLabel[t], label, v]);
+                });
+            });
+            epData.push([], ['## CHANGE LOG'], ['TYPE', '변경 일시', '수정자', '항목', '필드', '변경 전 (Old)', '변경 후 (New)']);
+            ['panel', 'convbd', 'adbd'].forEach(function(t) {
+                logsByType[t].forEach(function(log) {
+                    epData.push([epTypeLabel[t], log.time, log.userName || '알 수 없음', log.row, log.field, log.oldVal, log.newVal]);
+                });
+            });
+            const hasAnyData = selByType.panel.length || selByType.convbd.length || selByType.adbd.length
+                || Object.keys(notesByType.panel).length || Object.keys(notesByType.convbd).length || Object.keys(notesByType.adbd).length
+                || logsByType.panel.length || logsByType.convbd.length || logsByType.adbd.length;
+            if (hasAnyData) {
+                const wsEp = XLSX.utils.aoa_to_sheet(epData);
+                wsEp['!cols'] = [{wch: 10}, {wch: 40}, {wch: 16}, {wch: 20}, {wch: 12}, {wch: 26}, {wch: 26}];
+                XLSX.utils.book_append_sheet(wb, wsEp, "Elec Parts");
+            }
+        })();
+
         XLSX.utils.book_append_sheet(wb, ws, "GanttChart");
 
         if (window.changeLogs && window.changeLogs.length > 0) {
@@ -21726,6 +21783,50 @@ function _parseMcChangeLogSheetFromWorkbook(workbook) {
     return true;
 }
 
+// 💡 [2026-08-28 신규] "Elec Parts" 시트(PANEL/CONV/AD BD 비교표의 선택 모델·Note·수정이력)를 읽어
+//    tabData.panelCompare / tabData.elecCompare로 복원. 내보내기(exportToExcel의 Elec Parts 시트 생성부)와
+//    정확히 같은 "## 구획 표시" 구조를 기대한다 — 구획이 바뀌면 이 파서도 같이 고쳐야 함.
+function _parseElecPartsSheetFromWorkbook(workbook) {
+    const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === 'Elec Parts'; });
+    if (!sheetName) return false;
+    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
+    if (!json.length) return false;
+
+    const typeKeyOf = { 'PANEL': 'panel', 'CONV': 'convbd', 'AD BD': 'adbd' };
+    const selByType = { panel: [], convbd: [], adbd: [] };
+    const notesByType = { panel: {}, convbd: {}, adbd: {} };
+    const logsByType = { panel: [], convbd: [], adbd: [] };
+
+    let section = null;
+    json.forEach(function(row) {
+        if (!row || !row.length) return;
+        const c0 = String(row[0] || '').trim();
+        if (c0 === '## SELECTED MODELS' || c0 === '## NOTES' || c0 === '## CHANGE LOG') { section = c0; return; }
+        if (c0 === 'ELEC PARTS DATA' || c0 === 'TYPE') return; // 제목/하위 헤더 행은 건너뜀
+        const typeKey = typeKeyOf[c0];
+        if (!typeKey) return;
+        if (section === '## SELECTED MODELS') {
+            selByType[typeKey] = String(row[1] || '').split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+        } else if (section === '## NOTES') {
+            const label = String(row[1] || '').trim();
+            if (label) notesByType[typeKey][label] = row[2] || '';
+        } else if (section === '## CHANGE LOG') {
+            logsByType[typeKey].push({ time: row[1] || '', userName: row[2] || '알 수 없음', row: row[3] || '', field: row[4] || '', oldVal: row[5], newVal: row[6] });
+        }
+    });
+
+    window.tabData = window.tabData || {};
+    window.tabData.panelCompare = { selectedModels: selByType.panel, notes: notesByType.panel, lastAutoSeed: null };
+    window.tabData.elecCompare = window.tabData.elecCompare || {};
+    window.tabData.elecCompare.convbd = { selectedModels: selByType.convbd, notes: notesByType.convbd };
+    window.tabData.elecCompare.adbd = { selectedModels: selByType.adbd, notes: notesByType.adbd };
+    window.tabData.panelCompareChangeLog = logsByType.panel;
+    window.tabData.elecCompareChangeLog = window.tabData.elecCompareChangeLog || {};
+    window.tabData.elecCompareChangeLog.convbd = logsByType.convbd;
+    window.tabData.elecCompareChangeLog.adbd = logsByType.adbd;
+    return true;
+}
+
 // 💡 "제품사진_원본데이터" 시트를 읽어 여러 행에 나뉜 base64 조각을 순번대로 합쳐 tabData.productImages로 복원
 function _parseProductImagesSheetFromWorkbook(workbook) {
     const sheetName = workbook.SheetNames.find(function(n) { return n.trim() === '제품사진_원본데이터'; });
@@ -21765,6 +21866,7 @@ window.parseConceptSheetsFromWorkbook = function(workbook) {
     const e = _parseMcSalesDetailSheetFromWorkbook(workbook);
     const f = _parseMcChangeLogSheetFromWorkbook(workbook);
     const g = _parseProductImagesSheetFromWorkbook(workbook);
+    const h = _parseElecPartsSheetFromWorkbook(workbook);
     if (c && window.tabData) {
         // 💡 [2026-08-28 버그 수정] 엑셀의 M.C Table 시트에 "M.C Table-PTD R1"처럼 제품구분자(이름표)가
         //    붙어있으면, _parseMcTableSheetFromWorkbook은 그 데이터를 mcRevisionsByUnit['PTD']에 저장하고
@@ -21778,7 +21880,7 @@ window.parseConceptSheetsFromWorkbook = function(workbook) {
         // 💡 엑셀로 불러온 직후에도 "가장 최신(금액 있는) 리비전"을 기본으로 보여줌
         window.tabData.mcActiveRevision = window._mcLatestRevWithData(window.tabData.mcRevisions);
     }
-    if ((a || b || c || d || e || f || g) && window.populateTabData) window.populateTabData();
+    if ((a || b || c || d || e || f || g || h) && window.populateTabData) window.populateTabData();
 };
 // ── Summary 탭: Gantt chart Level 0 데이터와 연동된 진척 타임라인 (말풍선 + 텍스트) ──
 function _sumTlEscHtml(s) {
@@ -27475,6 +27577,9 @@ window.populateTabData = function() {
     //    펼쳐놓은 채로 프로젝트를 전환하면 이전 프로젝트의 패널이 그대로 남아있었다 — 다른 탭들처럼
     //    프로젝트 로드 시점에도 항상 다시 그려서, 지금 보고 있는 탭이 뭐든 즉시 새 프로젝트 데이터로 갱신되게 한다.
     if (window.renderPanelCompareTab) window.renderPanelCompareTab();
+    // ⚡ [2026-08-28 신규] CONV BD/AD BD도 동일한 이유로 항상 다시 그림 — 위 Panel Compare와 같은 패턴
+    //    (Elec Parts 탭이 열려있는 채로 엑셀/프로젝트를 불러와도 즉시 최신 선택 목록으로 갱신되게 함).
+    if (window.renderElecCompareTab) { window.renderElecCompareTab('convbd'); window.renderElecCompareTab('adbd'); }
 };
 
 // ============================================================
