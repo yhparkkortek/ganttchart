@@ -26745,6 +26745,15 @@ function addrShowSuggestions(inputEl, query, emailEl, isMulti, onPick) {
     }).slice(0, 8);
     if (!list.length) { dd.style.display = 'none'; return; }
 
+    // 💡 [2026-08-27 신규] 키보드(↑/↓/Enter)로도 고를 수 있도록, 지금 목록/입력칸/현재 선택 위치를
+    // dd 자신에 기록해둔다 — addrHandleAutocompleteKeydown이 이 상태만 보고 동작하므로, 마우스로
+    // 열었든 어떤 자동완성 필드에서 열었든 동일하게 처리된다(입력필드마다 로직을 따로 안 둬도 됨).
+    dd._list = list;
+    dd._inputEl = inputEl;
+    dd._emailEl = emailEl;
+    dd._isMulti = isMulti;
+    dd._activeIndex = 0;
+
     const rect = inputEl.getBoundingClientRect();
     dd.style.left  = (rect.left + window.scrollX) + 'px';
     dd.style.top   = (rect.bottom + window.scrollY + 2) + 'px';
@@ -26760,10 +26769,43 @@ function addrShowSuggestions(inputEl, query, emailEl, isMulti, onPick) {
             if (dd._onPick) dd._onPick(list[i]);
             dd.style.display = 'none';
         });
-        el.addEventListener('mouseover', function() { el.style.background = '#f0f6ff'; });
-        el.addEventListener('mouseout',  function() { el.style.background = '#fff'; });
+        // 마우스로 올리면 그 항목이 곧 "현재 선택"이 되게(↑/↓로 움직인 것과 동일한 하이라이트 로직 재사용)
+        el.addEventListener('mouseover', function() { addrSetActiveSuggestion(dd, i); });
     });
     dd.style.display = 'block';
+    addrSetActiveSuggestion(dd, 0); // 기본은 맨 위 항목 하이라이트 — 바로 Enter만 눌러도 선택되게
+}
+
+// 💡 현재 하이라이트된 자동완성 항목을 옮기고 시각적으로 표시. 화살표 키/마우스 오버 둘 다 이걸 공유한다.
+function addrSetActiveSuggestion(dd, idx) {
+    const items = dd.querySelectorAll('.addr-ac-item');
+    if (!items.length) return;
+    dd._activeIndex = ((idx % items.length) + items.length) % items.length;
+    items.forEach(function(el, i) { el.style.background = (i === dd._activeIndex) ? '#f0f6ff' : '#fff'; });
+    const activeEl = items[dd._activeIndex];
+    if (activeEl && activeEl.scrollIntoView) activeEl.scrollIntoView({ block: 'nearest' });
+}
+
+// 💡 [2026-08-27 신규] 이름 자동완성 입력칸 공통 키보드 처리 — ↓/↑로 후보 이동, Enter로 확정(마우스
+// 클릭 없이도 등록됨), Esc로 닫기. attachAddressAutocomplete와 멤버-3 위임 핸들러 양쪽에서 재사용한다.
+function addrHandleAutocompleteKeydown(e) {
+    const dd = document.getElementById('addr-autocomplete-dropdown');
+    if (!dd || dd.style.display === 'none' || !dd._list || !dd._list.length) return;
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        addrSetActiveSuggestion(dd, dd._activeIndex + 1);
+    } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        addrSetActiveSuggestion(dd, dd._activeIndex - 1);
+    } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const person = dd._list[dd._activeIndex] || dd._list[0];
+        addrApplyPick(dd._inputEl, dd._emailEl, dd._isMulti, person);
+        if (dd._onPick) dd._onPick(person);
+        dd.style.display = 'none';
+    } else if (e.key === 'Escape') {
+        dd.style.display = 'none';
+    }
 }
 
 function addrApplyPick(inputEl, emailEl, isMulti, person) {
@@ -26791,6 +26833,9 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti, onPick) {
         const query = isMulti ? val.split(',').pop().trim() : val.trim();
         addrShowSuggestions(inputEl, query, emailEl, !!isMulti, onPick);
     });
+    // 💡 [2026-08-27 신규] 마우스 클릭 없이 ↓/↑로 후보를 고르고 Enter로 등록 — 이름 자동완성이 붙는
+    // 모든 필드(멤버-1/2, 메일 수신인, 알람 참조인 등)가 attachAddressAutocomplete 하나를 거치므로 공통 적용됨.
+    inputEl.addEventListener('keydown', addrHandleAutocompleteKeydown);
     inputEl.addEventListener('blur', function() {
         setTimeout(function() {
             const dd = document.getElementById('addr-autocomplete-dropdown');
@@ -26820,6 +26865,11 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti, onPick) {
             const idx = e.target.dataset.idx;
             const emailEl = wrap.querySelector('[data-idx="' + idx + '"][data-field="email"]');
             addrShowSuggestions(e.target, e.target.value.trim(), emailEl, false);
+        });
+        // 💡 [2026-08-27 신규] 멤버-3(자유 추가) 이름칸도 ↓/↑/Enter로 마우스 없이 고를 수 있게(공용 핸들러 재사용)
+        wrap.addEventListener('keydown', function(e) {
+            if (!e.target.matches('[data-field="name"]')) return;
+            addrHandleAutocompleteKeydown(e);
         });
         wrap.addEventListener('focusout', function(e) {
             if (!e.target.matches('[data-field="name"]')) return;
