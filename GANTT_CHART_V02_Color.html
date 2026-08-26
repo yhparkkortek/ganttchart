@@ -27449,7 +27449,16 @@ window.populateTabData = function() {
                 if (mcWrap) mcWrap.classList.toggle('mc-wrap-expanded', expanded);
             }, 10);
         } catch (error) {
+            // 💡 [2026-08-27 버그 수정] 여기서 예외가 나면 M.C Table 화면이 옛 데이터로 남은 채 아무
+            //    표시 없이 조용히 실패했다 — 엑셀로 불러온 직후엔 이게 "저장한 내용이 화면에 안 보인다"는
+            //    문의로 이어졌음(실제로는 저장 자체는 정상, 이 탭의 재렌더링만 실패한 것). 콘솔 로그만으론
+            //    사용자가 알 방법이 없으므로 화면에도 눈에 띄게 알려서, 새로고침이 필요하다는 걸 바로 알 수 있게 한다.
             console.error("M.C Table 업그레이드 렌더링 에러:", error);
+            if (window.showToast) {
+                window.showToast((window._currentLang === 'en'
+                    ? '⚠️ M.C Table failed to refresh — press Ctrl+F5 to reload.'
+                    : '⚠️ M.C Table 화면 갱신에 실패했습니다 — Ctrl+F5로 새로고침 해주세요.'), 'error');
+            }
         }
     }
 
