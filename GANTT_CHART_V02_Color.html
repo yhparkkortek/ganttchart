@@ -24706,13 +24706,25 @@ window.panelCompareOpenAddModal = async function() {
     window._pcRenderLibList('');
 };
 
+// 💡 [2026-08-27] 모델명뿐 아니라 제조사(Panel Brand)·인치(Diagonal Size)로도 검색되게 확장 —
+//    검색어를 공백으로 나눠 각 단어를 모델명/브랜드/인치 어디서든 찾으면 되는 AND 매칭이라,
+//    "BOE 15.6"처럼 여러 조건을 같이 입력해도(단어 순서·필드 구분 없이) 전부 만족하는 패널만 남는다.
+window._pcLibSearchHaystack = function(p) {
+    const specs = p.specs || {};
+    return [p.model, p.brand, specs['Panel Brand'], specs['Diagonal Size'], specs['Panel Type']]
+        .filter(Boolean).join(' ').toLowerCase();
+};
 window._pcRenderLibList = function(filterText) {
     const list = document.getElementById('pc-add-lib-list');
     if (!list) return;
     const _en = window._currentLang === 'en';
     const lib = window._panelCompareLibCache || { panels: [] };
-    const q = (filterText || '').trim().toLowerCase();
-    const filtered = (lib.panels || []).filter(function(p) { return !q || (p.model || '').toLowerCase().indexOf(q) !== -1; }).slice(0, 30);
+    const terms = (filterText || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const filtered = (lib.panels || []).filter(function(p) {
+        if (!terms.length) return true;
+        const hay = window._pcLibSearchHaystack(p);
+        return terms.every(function(t) { return hay.indexOf(t) !== -1; });
+    }).slice(0, 30);
     if (!filtered.length) {
         list.innerHTML = `<div style="padding:8px; color:#999; font-size:12px;">${_en ? 'No matches in the library.' : '라이브러리에 일치하는 패널이 없습니다.'}</div>`;
         return;
@@ -24721,9 +24733,11 @@ window._pcRenderLibList = function(filterText) {
     //    document 전역 클릭 위임(data-pc-lib-add)이 여기까지 절대 도달하지 못한다(전파가 그 박스에서
     //    끊김). 그래서 이 안의 버튼만은 위임 대신 직접 onclick으로 호출한다.
     list.innerHTML = filtered.map(function(p) {
+        const size = (p.specs && p.specs['Diagonal Size'] && p.specs['Diagonal Size'] !== '-') ? p.specs['Diagonal Size'] : '';
+        const meta = [p.brand, size].filter(Boolean).join(' · ');
         return `<div onclick="window.panelCompareAddFromLibrary(${escapeHtml(JSON.stringify(p.model))})" style="padding:6px 8px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:12.5px; display:flex; justify-content:space-between;"
             onmouseover="this.style.background='#f4f8fc'" onmouseout="this.style.background='transparent'">
-            <span><b>${escapeHtml(p.model)}</b> <span style="color:#888;">${escapeHtml(p.brand || '')}</span></span>
+            <span><b>${escapeHtml(p.model)}</b> <span style="color:#888;">${escapeHtml(meta)}</span></span>
             <span style="color:#2c5f8a;">${_en ? '+ Add' : '+ 추가'}</span>
         </div>`;
     }).join('');
