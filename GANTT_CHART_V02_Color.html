@@ -1974,7 +1974,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div class="concept-section">
             <style>
-                #tab-elecparts .concept-table th { text-align: left !important; vertical-align: middle !important; }
+                /* 💡 [2026-08-27] 첫 번째 열(라벨: "Comparison table" 헤더 + Brand/Item Code 등 행 이름)만
+                   왼쪽 정렬, 나머지 열(모델 값·+추가·Note, 사진·핀맵 버튼 포함)은 전부 가운데 정렬 —
+                   th/td 모두 이 규칙 하나로 위에서 아래까지 통일되게 적용된다. */
+                #tab-elecparts .concept-table th,
+                #tab-elecparts .concept-table td { text-align: center !important; vertical-align: middle !important; }
+                #tab-elecparts .concept-table th:first-child,
+                #tab-elecparts .concept-table td:first-child { text-align: left !important; }
                 #tab-elecparts .concept-table thead { position: sticky !important; top: 0 !important; z-index: 16; }
                 #tab-elecparts .concept-table thead th { background-color: #f4f6f8 !important; }
                 #tab-elecparts .concept-table th.pc-slot-empty,
@@ -24425,7 +24431,7 @@ window.renderPanelCompareTab = async function() {
             const has = !!entries[i];
             headHtml += `<th style="min-width:120px;">
                 <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
-                <div style="margin-top:3px; display:flex; gap:5px; justify-content:flex-start; align-items:center; flex-wrap:wrap;">
+                <div style="margin-top:3px; display:flex; gap:5px; justify-content:center; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2f9e44; font-size:10px; cursor:pointer; padding:1px 5px;">✏️</button>` : ''}
                     <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
                     <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
@@ -24456,7 +24462,7 @@ window.renderPanelCompareTab = async function() {
                 html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
             }
             const noteVal = pc.notes[label] || '';
-            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.panelCompareSetNote(${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent;"></td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.panelCompareSetNote(${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent; text-align:center;"></td>`;
             html += '</tr>';
         });
     });
@@ -25399,7 +25405,7 @@ window.renderElecCompareTab = async function(type) {
             //    헤더에 중복 표시할 필요 없음 — 요청에 따라 헤더에서는 뺌.
             headHtml += `<th style="min-width:130px;">
                 <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>
-                <div style="margin-top:3px; display:flex; gap:5px; justify-content:flex-start; align-items:center; flex-wrap:wrap;">
+                <div style="margin-top:3px; display:flex; gap:5px; justify-content:center; align-items:center; flex-wrap:wrap;">
                     ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2f9e44; font-size:10px; cursor:pointer; padding:1px 5px;">✏️</button>` : ''}
                     <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
                     <button data-ep-remove="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
@@ -25430,7 +25436,7 @@ window.renderElecCompareTab = async function(type) {
                 html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">${selected[i] ? escapeHtml(String(v)) : ''}</td>`;
             }
             const noteVal = ec.notes[label] || '';
-            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.elecCompareSetNote(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent;"></td>`;
+            html += `<td style="border:1px solid #e9ecef; padding:2px 4px; font-size:12px;"><input type="text" value="${escapeHtml(noteVal)}" onchange="window.elecCompareSetNote(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(label))}, this.value)" style="width:100%; box-sizing:border-box; border:none; font-size:11.5px; padding:2px 4px; background:transparent; text-align:center;"></td>`;
             html += '</tr>';
         });
         // 💡 Interface 섹션에만 "핀맵 보기" 요약 행을 하나 추가 — 스키마 필드는 아니지만, AI 추출 시
@@ -25440,7 +25446,7 @@ window.renderElecCompareTab = async function(type) {
             for (let i = 0; i < slotCount; i++) {
                 const entry = entries[i];
                 const hasConn = entry && Array.isArray(entry.connectors) && entry.connectors.length;
-                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px; text-align:left;">`;
+                html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">`;
                 if (selected[i]) {
                     html += hasConn
                         ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" style="background:#fff; border:1px solid #2c5f8a; border-radius:4px; color:#2c5f8a; font-size:10.5px; cursor:pointer; padding:2px 8px;">🔌 ${_en ? 'View' : '보기'}</button>`
@@ -25458,7 +25464,7 @@ window.renderElecCompareTab = async function(type) {
     for (let i = 0; i < slotCount; i++) {
         const entry = entries[i];
         const images = (entry && Array.isArray(entry.images)) ? entry.images : [];
-        html += `<td style="border:1px solid #e9ecef; padding:4px 6px; text-align:left;">`;
+        html += `<td style="border:1px solid #e9ecef; padding:4px 6px;">`;
         if (selected[i] && images.length) {
             html += `<img id="ep-img-thumb-${escapeHtml(type)}-${i}" src="${images[0].data}" data-idx="0"
                     onclick="window._epCycleImage(${escapeHtml(JSON.stringify(type))}, ${i})"
