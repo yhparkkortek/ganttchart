@@ -16306,6 +16306,26 @@ window.mfAnalyzeSingle = async function(idx) {
 //    뭉개버리던 것. innerText는 표를 뽑을 때 셀 사이에 탭(\t), 행 사이에 줄바꿈(\n)을 이미 넣어주는데
 //    이 처리가 그 구조를 통째로 지워서 표뿐 아니라 문단 구분까지 한 줄로 뭉개졌었다. 탭/줄바꿈 "구조"는
 //    보존하고, "같은 줄 안의 불필요한 연속 스페이스"와 "3줄 이상 이어지는 빈 줄"만 정리하도록 순화한다.
+// 💡 [2026-08-26 버그 수정] DOMParser로 만든 문서는 실제 화면에 붙어 렌더링되지 않는 "떠 있는" 문서라,
+//    innerText가 기대하는 "레이아웃 계산 결과 기반" 줄바꿈/탭 삽입(문단 사이 개행, 표 셀 사이 탭)이
+//    브라우저 구현에 따라 제대로 안 나올 수 있다(실측 결과 표 칸 구분 없이 셀 내용이 뒤죽박죽 나옴) —
+//    대신 DOM을 직접 순회하며 줄바꿈/탭이 필요한 자리(<br>/<p>/<div>/<tr>/<td>/<th>/<table>)에
+//    우리가 직접 텍스트 노드를 끼워넣은 뒤, 레이아웃에 전혀 의존하지 않는 textContent로 뽑는다
+//    (HTML 엔티티 디코딩은 파싱 단계에서 이미 되므로 그대로 유지됨). kortek_backend.py의 정규식
+//    기반 표 처리와 같은 철학 — 구조를 "렌더링에 맡기지" 않고 우리가 명시적으로 보장한다.
+function _mfInsertStructureBreaks(root) {
+    if (!root) return;
+    root.querySelectorAll('br').forEach(function(el) { el.replaceWith('\n'); });
+    root.querySelectorAll('td, th').forEach(function(el) { el.insertAdjacentText('afterend', '\t'); });
+    root.querySelectorAll('tr, p, div, table').forEach(function(el) { el.insertAdjacentText('afterend', '\n'); });
+}
+function _mfExtractText(root) {
+    if (!root) return '';
+    root.querySelectorAll('script, style').forEach(function(el) { el.remove(); });
+    _mfInsertStructureBreaks(root);
+    return root.textContent || '';
+}
+
 function _mfNormalizeBody(text) {
     return (text || '')
         .replace(/\r\n?/g, '\n')
@@ -16445,8 +16465,7 @@ function mfParseFile(file) {
                 // HTML 태그 및 숨은 CSS/JS 코드 찌꺼기 완벽 청소
                 try {
                     let cleaner = new DOMParser().parseFromString(body, 'text/html');
-                    cleaner.querySelectorAll('script, style').forEach(el => el.remove());
-                    body = _mfNormalizeBody(cleaner.body ? cleaner.body.innerText : '');
+                    body = _mfNormalizeBody(_mfExtractText(cleaner.body));
                 } catch(e) {
                     // 1. 정규식으로 스타일/스크립트/XML/주석 제거 (RegExp 생성자 방식으로 HTML 파서 충돌 방지)
                     const reStyle   = new RegExp('<style[^>]*>[\\s\\S]*?<\\/style>', 'gi');
@@ -16464,7 +16483,7 @@ function mfParseFile(file) {
                     // 2. 정규식 제거 후 DOMParser 재시도
                     try {
                         let cleaner2 = new DOMParser().parseFromString(body, 'text/html');
-                        body = _mfNormalizeBody(cleaner2.body ? cleaner2.body.innerText : '');
+                        body = _mfNormalizeBody(_mfExtractText(cleaner2.body));
                     } catch(e2) {
                         // 3. 최후 수단: 모든 태그 제거
                         body = _mfNormalizeBody(body.replace(/<[^>]+>/g, ' '));
@@ -16475,7 +16494,7 @@ function mfParseFile(file) {
                 const doc = new DOMParser().parseFromString(text, 'text/html');
                 const t   = doc.querySelector('title');
                 if (t) subject = t.textContent.trim();
-                body = _mfNormalizeBody(doc.body ? doc.body.innerText : '');
+                body = _mfNormalizeBody(_mfExtractText(doc.body));
             } else {
                 const sm = text.match(/Subject[:\s]+(.+)/i);
                 const fm = text.match(/From[:\s]+(.+)/i);
