@@ -8036,11 +8036,53 @@ ${recentLogs}
             .filter(function(m) { return m && (m.category || m.ktkPn || m.description); })
             .map(function(m) { return `- ${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}` + (m.cost ? ` | Cost:${m.cost}` : '') + (m.useForAnalysis ? ' [분석용]' : ''); });
 
+        // 💡 [2026-08-27 추가] Brief SPEC / M.C Table / Elec Parts / Address 탭도 물어볼 수 있도록 포함
+        //    (용량 보호를 위해 각각 최대 개수 제한 — 이 탭들은 보통 업무 목록보다 훨씬 적음)
+        const MAX_TABLE_ROWS = 100;
+        const briefSpecRows = (td.briefSpec || []).filter(function(r) { return r && (r.type || r.sub || r.modelA || r.modelB || r.modelC || r.note); });
+        const briefSpecLines = briefSpecRows.slice(0, MAX_TABLE_ROWS).map(function(r) {
+            return `- [${r.type || '-'}${r.sub ? '/' + r.sub : ''}] A:${r.modelA || '-'} | B:${r.modelB || '-'} | C:${r.modelC || '-'}` + (r.note ? ` | 비고:${r.note}` : '');
+        });
+        const briefSpecOmitted = briefSpecRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${briefSpecRows.length - MAX_TABLE_ROWS}건 생략됨)` : '';
+
+        const mcCurRev = td.mcActiveRevision || 'R1';
+        const mcRows = ((td.mcRevisions && td.mcRevisions[mcCurRev]) || td.mcTable || [])
+            .filter(function(r) { return r && (r.item || r.pn || r.spec || r.protoCost || r.mpCost); });
+        const mcLines = mcRows.slice(0, MAX_TABLE_ROWS).map(function(r) {
+            return `- [${r.type || '-'}] ${r.item || '-'} (${r.group || '-'}) PN:${r.pn || '-'} SPEC:${r.spec || '-'}`
+                + ` | Proto:${r.protoCost || '-'}/${r.protoNre || '-'} ProtoB:${r.protoBCost || '-'}/${r.protoBNre || '-'} MP:${r.mpCost || '-'}/${r.mpNre || '-'}`
+                + (r.note ? ` | 비고:${r.note}` : '');
+        });
+        const mcOmitted = mcRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${mcRows.length - MAX_TABLE_ROWS}건 생략됨, 현재 리비전:${mcCurRev})` : '';
+
+        const elecCompare = td.elecCompare || {};
+        const elecTypeLabels = { convbd: 'CONVERTER', adbd: 'AD BOARD' };
+        const elecLines = Object.keys(elecTypeLabels).map(function(type) {
+            const ec = elecCompare[type];
+            if (!ec || !ec.selectedModels || !ec.selectedModels.length) return null;
+            const models = ec.selectedModels;
+            const notes = ec.notes || {};
+            const noteText = models.filter(function(m) { return notes[m]; }).map(function(m) { return `${m}:${notes[m]}`; }).join(' / ');
+            return `- [${elecTypeLabels[type]}] 비교 모델: ${models.join(', ')}` + (noteText ? ` | 메모: ${noteText}` : '');
+        }).filter(Boolean);
+
+        // 💡 개인정보 최소 수집 원칙 — 주소록은 이름/부서/직함까지만 포함하고 이메일·휴대폰 등
+        //    연락처는 외부 AI 백엔드로 매 질문마다 전송하지 않도록 제외함
+        const addressRows = (td.addressBook || []).filter(function(a) { return a && a.name; });
+        const addressLines = addressRows.slice(0, MAX_TABLE_ROWS).map(function(a) {
+            return `- ${a.name}${a.dept ? ' / ' + a.dept : ''}${a.title ? ' / ' + a.title : ''}`;
+        });
+        const addressOmitted = addressRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${addressRows.length - MAX_TABLE_ROWS}명 생략됨)` : '';
+
         return {
             projectLine: `[프로젝트] 고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}`,
             overviewText: overviewLines.length ? overviewLines.join('\n') : '(없음)',
             memberText: memberLines.length ? memberLines.join('\n') : '(없음)',
             materialText: materialLines.length ? materialLines.join('\n') : '(없음)',
+            briefSpecText: (briefSpecLines.length ? briefSpecLines.join('\n') : '(없음)') + briefSpecOmitted,
+            mcTableText: (mcLines.length ? mcLines.join('\n') : '(없음)') + mcOmitted,
+            elecPartsText: elecLines.length ? elecLines.join('\n') : '(없음)',
+            addressText: (addressLines.length ? addressLines.join('\n') : '(없음)') + addressOmitted,
             totalTasks: rows.length,
             taskListText: (lines.length ? lines.join('\n') : '(등록된 업무 없음)') + omittedNote,
             recentLogsText: recentLogs.length ? recentLogs.join('\n') : '(없음)'
@@ -8054,8 +8096,8 @@ ${recentLogs}
             ? priorHistory.map(function(h) { return (h.role === 'user' ? '사용자' : 'AI') + ': ' + h.text; }).join('\n')
             : '(없음)';
 
-        return `당신은 아래 프로젝트(Gantt 일정 + 프로젝트 개요/멤버/자재 정보)를 잘 아는 보조 AI입니다. 아래 데이터에 있는 내용에 근거해서만 답하세요.
-데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로, 필요하면 관련 업무명을 인용해 답변하세요.
+        return `당신은 아래 프로젝트(Gantt 일정 + Summary/Brief SPEC/M.C Table/Elec Parts/Address 등 프로젝트 파일 전체 데이터)를 잘 아는 보조 AI입니다. 아래 데이터에 있는 내용에 근거해서만 답하세요.
+데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로, 필요하면 관련 업무명/항목명을 인용해 답변하세요.
 
 ${ctx.projectLine}
 
@@ -8067,6 +8109,18 @@ ${ctx.memberText}
 
 [주요 자재]
 ${ctx.materialText}
+
+[Brief SPEC]
+${ctx.briefSpecText}
+
+[M.C Table (원가/공수)]
+${ctx.mcTableText}
+
+[Elec Parts 비교]
+${ctx.elecPartsText}
+
+[주소록 — 이름/부서/직함만 포함, 연락처는 미포함]
+${ctx.addressText}
 
 전체 업무 수: ${ctx.totalTasks}건
 
@@ -8162,7 +8216,7 @@ ${question}
                         <button onclick="document.getElementById('gantt-qa-modal').style.display='none'" style="background:#fff; border:1.5px solid #134a73; border-radius:6px; color:#134a73; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#134a73'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#134a73';">✕</button>
                     </div>
                 </div>
-                <div style="padding:8px 18px 0; font-size:10.5px; color:#999;">현재 열려있는 Gantt 프로젝트의 업무 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)</div>
+                <div style="padding:8px 18px 0; font-size:10.5px; color:#999;">현재 열려있는 프로젝트의 Gantt · Summary · Brief SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)</div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px;">
                     <textarea id="gantt-qa-input" rows="1" placeholder="이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)" style="flex:1; resize:none; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; max-height:80px;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
