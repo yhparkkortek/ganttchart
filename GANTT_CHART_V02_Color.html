@@ -20827,7 +20827,12 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         const metaFw       = pm.FW담당자 || '-';
         const pCode        = pm.프로젝트코드 || '-';
         const pName        = pm.프로젝트명 || projTitle;
-        const ktkModelName = pm.KTK모델명 || '-';
+        // 💡 [2026-08-27 버그 수정] KTK PN_모델명은 화면에선 하나로 합쳐 입력받지만 내부적으로
+        //    KTKPN(맨 앞 6자리)과 KTK모델명(그 뒤 전부)으로 나눠 저장된다(첫 "_"까지만 KTKPN) — 콤마로
+        //    여러 PN을 나열한 값(예: "502574_A,502573_B")은 KTK모델명에 "A,502573_B"까지 통째로 들어가고
+        //    맨 앞 "502574_"는 KTKPN에만 남는다. 여기서 KTK모델명만 읽으면 그 앞자리가 PPT에서 빠져
+        //    보였던 것 — sum-ktk-pn-model에 채우는 것과 동일하게 KTKPN+'_'+KTK모델명으로 되돌려 합친다.
+        const ktkModelName = [pm.KTKPN, pm.KTK모델명].filter(Boolean).join('_') || '-';
 
         // getMsDate: "2026-05-29" → "26.05.29" (슬라이드 1·2 공통 사용)
         // ── 💡 이미지 간격/여백 — 여기서 자유롭게 조절 ─────────────────
@@ -20859,7 +20864,8 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
                 [[{ text: pCode,        options: { fontSize: 14, color: '000000', bold: true, fill: { color: '#FFFAF0' }, align: 'center' } },
                   { text: pName,        options: { fontSize: 14, color: '000000', bold: true, align: 'left' } },
                   { text: ktkModelName, options: { fontSize: 14, color: '000000', bold: true, align: 'left' } }]],
-                { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [1.5, 5, 6], valign: 'middle' }
+                // 💡 프로젝트 코드 25% / 프로젝트 명칭 25% / KTK PN_모델명 50% (전체 폭 12.5" 기준)
+                { x: 0.4, y: 1.0, w: 12.5, h: 0.4, border: { type: 'solid', color: BORDER, pt: BORDER_W }, colW: [3.125, 3.125, 6.25], valign: 'middle' }
             );
         };
 
