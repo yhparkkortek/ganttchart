@@ -1235,6 +1235,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
         <div class="btn-group">
             <button id="ai-summary-btn" class="action-btn" onclick="window.openAiProjectSummaryModal()" style="border-color:#d35400; color:#d35400;" title="지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다">🤖 AI 요약</button>
+            <button id="gantt-qa-btn" class="action-btn" onclick="window.openGanttQaModal()" style="border-color:#134a73; color:#134a73;" title="이 Gantt 프로젝트의 업무 데이터에 대해 자유롭게 질문하고 AI의 답변을 받습니다">💬 AI 문답</button>
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
@@ -3099,8 +3100,13 @@ ${mailText}`;
                 version: (window._promptVersion || 1)  // 💡 버전 번호 (채택 시 증가)
             };
 
+            // 💡 [버그 수정] fetch()는 HTTP 오류 응답에도 예외 없이 resolve된다 — res.ok를 확인하지 않으면
+            //    업로드 실패를 "성공"으로 착각해 pending_push 플래그가 잘못 해제되고, 다음 드라이브
+            //    재연결 시 옛 버전이 로컬 편집을 덮어써버림 (AI 프로젝트 요약 프롬프트에서 발견된 것과
+            //    동일한 패턴의 버그 — 그쪽을 고치며 함께 수정).
+            let res;
             if (fileId) {
-                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
+                res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
                     method: 'PATCH',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -3112,12 +3118,13 @@ ${mailText}`;
                 const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(payload)
                     + "\r\n--" + boundary + "--";
-                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
                     body: body
                 });
             }
+            if (!res.ok) throw new Error(`Drive 업로드 HTTP ${res.status}`);
             return true;
         } catch (err) { console.error('프롬프트 드라이브 저장 실패:', err); return false; }
     };
@@ -3185,8 +3192,15 @@ ${mailText}`;
                 version: (window._projectSummaryPromptVersion || 1)
             };
 
+            // 💡 [버그 수정] fetch()는 401/403/404 등 HTTP 오류 응답에도 정상적으로 resolve되고 예외를
+            //    던지지 않는다 — 아래에서 res.ok를 확인하지 않으면 업로드가 실제로는 실패했는데도
+            //    이 함수가 true를 반환해서 "드라이브 저장 완료" 상태(pending_push 플래그 해제)로
+            //    잘못 표시된다. 그러면 다음번 loadProjectSummaryPromptFromDrive() 호출(드라이브
+            //    재연결 시 자동 실행됨) 때 옛 드라이브 버전을 그대로 받아와 방금 편집한 로컬 프롬프트를
+            //    조용히 덮어써버려 "프롬프트를 수정해도 분석에 반영이 안 되는" 증상으로 이어졌음.
+            let res;
             if (fileId) {
-                await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
+                res = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
                     method: 'PATCH',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
@@ -3198,12 +3212,13 @@ ${mailText}`;
                 const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                     + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(payload)
                     + "\r\n--" + boundary + "--";
-                await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
+                res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': `multipart/related; boundary="${boundary}"` },
                     body: body
                 });
             }
+            if (!res.ok) throw new Error(`Drive 업로드 HTTP ${res.status}`);
             return true;
         } catch (err) { console.error('AI 요약 프롬프트 드라이브 저장 실패:', err); return false; }
     };
@@ -7226,18 +7241,27 @@ ${recentLogs}
 
         const savedPrompt = localStorage.getItem('gantt_project_summary_prompt');
         const template = savedPrompt || window._defaultProjectSummaryPromptTemplate;
-        return template
-            .replace('${customer}', d.project.customer || '')
-            .replace('${model}', d.project.model || '')
-            .replace('${pm}', d.project.pm || '미지정')
-            .replace('${totalTasks}', d.totalTasks)
-            .replace('${countDone}', d.counts.완료)
-            .replace('${countProgress}', d.counts.진행)
-            .replace('${countPending}', d.counts.대기)
-            .replace('${countDelay}', d.counts.지연)
-            .replace('${delayedList}', delayedText)
-            .replace('${dueSoonList}', dueSoonText)
-            .replace('${recentLogs}', logsText);
+        // 💡 [버그 수정] String.replace(문자열, ...)은 첫 번째로 매치되는 자리만 치환한다 — 사용자가
+        //    편집한 프롬프트에서 같은 플레이스홀더(예: ${customer})를 두 번 이상 쓰면, 첫 자리만 실값으로
+        //    바뀌고 나머지는 "${customer}" 글자 그대로 AI에게 전달되어 "수정했는데 반영이 안 되는" 것처럼
+        //    보이는 원인이 됨. replaceAll로 모든 자리를 치환하도록 수정. 치환값에 "$"가 들어있어도
+        //    특수 치환 패턴으로 오인되지 않도록 함수형 replacer를 사용.
+        const rep = function(str, token, value) {
+            return str.split(token).join(String(value));
+        };
+        let result = template;
+        result = rep(result, '${customer}', d.project.customer || '');
+        result = rep(result, '${model}', d.project.model || '');
+        result = rep(result, '${pm}', d.project.pm || '미지정');
+        result = rep(result, '${totalTasks}', d.totalTasks);
+        result = rep(result, '${countDone}', d.counts.완료);
+        result = rep(result, '${countProgress}', d.counts.진행);
+        result = rep(result, '${countPending}', d.counts.대기);
+        result = rep(result, '${countDelay}', d.counts.지연);
+        result = rep(result, '${delayedList}', delayedText);
+        result = rep(result, '${dueSoonList}', dueSoonText);
+        result = rep(result, '${recentLogs}', logsText);
+        return result;
     };
 
     // 💡 실제 생성 실행 — 결과는 projectMeta.aiSummaryReport에 캐싱(프로젝트 저장 시 함께 보관됨)
@@ -7914,6 +7938,199 @@ ${recentLogs}
 
         const fileBase = 'AI프로젝트요약_' + title.replace(/[\\\/:*?"<>|]/g, '');
         pptx.writeFile({ fileName: `${fileBase}.pptx` });
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // 💡 [2026-08-26 신규] 💬 Gantt AI 문답 — "AI 프로젝트 요약"이 지연/임박 업무만 정해진 형식으로
+    //    보여주는 것과 달리, 여기서는 사용자가 이 프로젝트의 Gantt 데이터에 대해 자유로운 형식으로
+    //    무엇이든 물어보고 AI가 실제 업무 목록 데이터를 근거로 답변한다. 대화는 채팅 형태로 이어지며,
+    //    AI 프로젝트 요약과 동일한 백엔드 호출(window.callAiBackend/getActiveAiKey)을 그대로 재사용.
+    //    GAS 백엔드가 단일 prompt 문자열만 받으므로, 매 턴마다 [업무 목록 + 지금까지의 대화 + 새 질문]을
+    //    하나의 프롬프트로 합쳐서 보낸다(멀티턴을 흉내). 대화 내용은 저장하지 않는 휘발성 세션 상태.
+    // ═══════════════════════════════════════════════════════════
+    window._ganttQaHistory = [];
+
+    // 💡 Gantt 원본 전체를 보내면 너무 크므로, 업무 1건당 한 줄로 압축해서 최대 MAX_TASKS건까지만 포함
+    window._buildGanttQaContext = function() {
+        const pm = window.projectMeta || {};
+        const rows = (typeof globalData !== 'undefined' && globalData) ? globalData.slice(1).filter(function(r) { return r && r._level !== undefined; }) : [];
+        const koMap = (typeof LANG !== 'undefined' && LANG.ko && LANG.ko.statusMap) ? LANG.ko.statusMap : {};
+
+        const normStatus = function(raw) {
+            const s = (raw || '').toString().trim();
+            if (!s) return '(미지정)';
+            const key = Object.keys(koMap).find(function(k) { return k.toLowerCase() === s.toLowerCase(); });
+            return key ? koMap[key] : s;
+        };
+        const taskLabel = function(row) {
+            if (row._level === 0) return row._origDev || '';
+            if (row._level === 1) return row._origT1 || '';
+            if (row._level === 2) return row._origT2 || '';
+            if (row._level === 3) return row._origT3 || '';
+            return row._origT4 || '';
+        };
+
+        const today = new Date(); today.setHours(0, 0, 0, 0);
+        const MAX_TASKS = 300; // 프롬프트 크기 보호 — 이보다 많으면 뒤는 생략하고 건수만 알림
+        const lines = [];
+        rows.slice(0, MAX_TASKS).forEach(function(row) {
+            const label = taskLabel(row) || '(제목없음)';
+            const status = normStatus(colIdx.status !== -1 ? row[colIdx.status] : '');
+            const assignee = (colIdx.assignee !== -1 && row[colIdx.assignee]) ? row[colIdx.assignee] : '미지정';
+            const start = (colIdx.start !== -1 && row[colIdx.start]) ? row[colIdx.start] : '';
+            const plan = (colIdx.plan !== -1 && row[colIdx.plan]) ? row[colIdx.plan] : (row._calcPlanTs ? formatTsToYMD(row._calcPlanTs) : '');
+            const content = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+            const answer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, 120) : '';
+
+            let dueTag = '';
+            if (status !== '완료' && plan) {
+                const pd = new Date(plan);
+                if (!isNaN(pd)) {
+                    pd.setHours(0, 0, 0, 0);
+                    const diff = Math.round((pd - today) / 86400000);
+                    if (diff < 0) dueTag = ` [지연 ${-diff}일]`;
+                    else if (diff <= 7) dueTag = ` [D-${diff}]`;
+                }
+            }
+            let line = `- Lv${row._level} "${label}" | 담당:${assignee} | 상태:${status}${dueTag} | 시작:${start || '-'} | 계획:${plan || '-'}`;
+            if (content) line += ` | 내용:${content}`;
+            if (answer) line += ` | 대응:${answer}`;
+            lines.push(line);
+        });
+        const omittedNote = rows.length > MAX_TASKS ? `\n...(그 외 ${rows.length - MAX_TASKS}건은 용량 제한으로 생략됨)` : '';
+
+        const recentLogs = (window.changeLogs || []).slice(-20).reverse().map(function(l) {
+            return `${l.time} ${l.userName} — ${l.rowName}/${l.colName}: ${l.oldVal} → ${l.newVal}`;
+        });
+
+        return {
+            projectLine: `[프로젝트] 고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}`,
+            totalTasks: rows.length,
+            taskListText: (lines.length ? lines.join('\n') : '(등록된 업무 없음)') + omittedNote,
+            recentLogsText: recentLogs.length ? recentLogs.join('\n') : '(없음)'
+        };
+    };
+
+    // 💡 [업무 목록 + 최근 이력 + 지금까지의 대화 + 새 질문]을 하나의 프롬프트로 합침
+    window._buildGanttQaPrompt = function(question, priorHistory) {
+        const ctx = window._buildGanttQaContext();
+        const historyText = (priorHistory && priorHistory.length)
+            ? priorHistory.map(function(h) { return (h.role === 'user' ? '사용자' : 'AI') + ': ' + h.text; }).join('\n')
+            : '(없음)';
+
+        return `당신은 아래 Gantt 프로젝트의 일정 데이터를 잘 아는 보조 AI입니다. [업무 목록]과 [최근 변경 이력]에 있는 내용에 근거해서만 답하세요.
+데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로, 필요하면 관련 업무명을 인용해 답변하세요.
+
+${ctx.projectLine}
+전체 업무 수: ${ctx.totalTasks}건
+
+[업무 목록]
+${ctx.taskListText}
+
+[최근 변경 이력]
+${ctx.recentLogsText}
+
+[지금까지의 대화]
+${historyText}
+
+[사용자의 새 질문]
+${question}
+
+위 질문에 대한 답변만 자연스러운 텍스트로 작성하세요 (JSON이나 다른 형식 지시 없이).`;
+    };
+
+    window._renderGanttQaMessages = function() {
+        const box = document.getElementById('gantt-qa-messages');
+        if (!box) return;
+        if (!window._ganttQaHistory.length) {
+            box.innerHTML = '<div style="padding:30px 10px; text-align:center; color:#999; font-size:12px; line-height:1.6;">이 프로젝트의 Gantt 데이터에 대해 자유롭게 질문해보세요.<br>예) "김철수님 담당 업무 중 지연된 게 있어?"<br>예) "이번 달 마감인 업무 정리해줘"</div>';
+            return;
+        }
+        box.innerHTML = window._ganttQaHistory.map(function(m) {
+            const isUser = m.role === 'user';
+            const bg = isUser ? '#0056b3' : (m.error ? '#fff0f0' : '#f1f3f5');
+            const fg = isUser ? '#fff' : (m.error ? '#c92a2a' : '#333');
+            return `<div style="display:flex; justify-content:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
+                <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55; white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>
+            </div>`;
+        }).join('');
+        box.scrollTop = box.scrollHeight;
+    };
+
+    window.sendGanttQaMessage = async function() {
+        const input = document.getElementById('gantt-qa-input');
+        if (!input) return;
+        const question = input.value.trim();
+        if (!question) return;
+
+        const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+        if (!apiKey) { alert('먼저 [🤖 AI 업무분석] 팝업에서 AI API 키를 입력하고 저장해주세요.'); return; }
+
+        const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
+        window._ganttQaHistory.push({ role: 'user', text: question });
+        input.value = '';
+        input.disabled = true;
+        const sendBtn = document.getElementById('gantt-qa-send-btn');
+        if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = '⏳'; }
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ 답변 생성 중...', pending: true });
+        window._renderGanttQaMessages();
+
+        try {
+            const prompt = window._buildGanttQaPrompt(question, priorHistory);
+            const result = await window.callAiBackend(apiKey, prompt, {});
+            if (!result.ok) throw result.error || new Error('알 수 없는 오류');
+            const text = (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
+                && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
+                && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '(빈 응답)';
+            window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
+            window._ganttQaHistory.push({ role: 'ai', text: text.trim() });
+        } catch (e) {
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
+        } finally {
+            window._renderGanttQaMessages();
+            input.disabled = false;
+            input.focus();
+            if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '전송'; }
+        }
+    };
+
+    window.clearGanttQaChat = function() {
+        if (window._ganttQaHistory.length && !confirm('대화 내용을 모두 지울까요?')) return;
+        window._ganttQaHistory = [];
+        window._renderGanttQaMessages();
+    };
+
+    window.openGanttQaModal = function() {
+        let modal = document.getElementById('gantt-qa-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'gantt-qa-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9150; pointer-events:none; background:none;';
+            modal.innerHTML = `
+            <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:92%; max-width:480px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
+                <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #b2d4f0; font-weight:bold; font-size:14px; background:#eaf4fd; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#134a73;">
+                    <span>💬 Gantt AI 문답</span>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button onclick="event.stopPropagation(); window.clearGanttQaChat()" title="대화 지우기" style="background:#fff; border:1.5px solid #134a73; border-radius:6px; color:#134a73; font-size:11px; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap;">🗑️ 지우기</button>
+                        <button onclick="document.getElementById('gantt-qa-modal').style.display='none'" style="background:#fff; border:1.5px solid #134a73; border-radius:6px; color:#134a73; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#134a73'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#134a73';">✕</button>
+                    </div>
+                </div>
+                <div style="padding:8px 18px 0; font-size:10.5px; color:#999;">현재 열려있는 Gantt 프로젝트의 업무 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)</div>
+                <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
+                <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px;">
+                    <textarea id="gantt-qa-input" rows="1" placeholder="이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)" style="flex:1; resize:none; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; max-height:80px;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
+                    <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" style="padding:0 16px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap;">전송</button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            window._makeDraggable('gantt-qa-box', 'gantt-qa-drag');
+            window._bindClickToFront('gantt-qa-modal');
+        }
+        window._renderGanttQaMessages();
+        modal.style.display = 'block';
+        window.bringModalToFront('gantt-qa-modal');
+        setTimeout(function() { const inp = document.getElementById('gantt-qa-input'); if (inp) inp.focus(); }, 50);
     };
 
     function logChange(rowIndex, colIndex, oldVal, newVal, reason) {
