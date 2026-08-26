@@ -1935,12 +1935,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 </div>
 
-<!-- ⚡ Elec Parts — PANEL(구 Panel Compare)/AD BD/CONV BD 스펙 비교표 모음.
-     Alarm/Notice와 동일한 밑줄 전환으로 부품 종류를 바꾼다. PANEL·CONV BD는 구현 완료, AD BD는 준비중 자리만.
-     💡 [2026-08-26] Panel Compare가 별도 최상위 탭이었다가 여기 PANEL 서브탭으로 이동해옴 — 표/모달/함수(pc*,
-        panelCompare*)는 그대로 두고 컨테이너 위치만 옮겼다. 헤더는 하나를 공유하되, 뷰마다 버튼 구성이 달라
-        display:contents로 감싼 버튼 묶음을 통째로 보이기/숨기기 한다(Alarm/Notice의 헤더box 2개 분리 대신
-        더 가벼운 방식으로 동일한 효과). -->
+<!-- ⚡ Elec Parts — PANEL(구 Panel Compare)/AD BD/CONV 스펙 비교표 모음.
+     Alarm/Notice와 동일한 밑줄 전환으로 부품 종류를 바꾼다. 세 뷰 모두 구현 완료(2026-08-26 AD BD 추가).
+     헤더는 하나를 공유하되, 뷰마다 버튼 구성이 달라 display:contents로 감싼 버튼 묶음을 통째로 보이기/숨기기 한다
+     (Alarm/Notice의 헤더box 2개 분리 대신 더 가벼운 방식으로 동일한 효과). -->
 <div id="tab-elecparts" class="tab-panel">
     <div class="concept-tab-wrap">
         <div class="concept-header-box" id="elec-header-box">
@@ -1950,7 +1948,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <span id="ev-tab-adbd" onclick="window._switchElecView('adbd')"
                       style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔲 AD BD</span>
                 <span id="ev-tab-convbd" onclick="window._switchElecView('convbd')"
-                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔌 CONV BD</span>
+                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔌 CONV</span>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <span id="eh-panel-btns" style="display:contents;">
@@ -1959,13 +1957,18 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     🔗 Summary "주요 자재"의 PANEL 모델명이 등록되어 있으면 자동으로 이 비교표 맨 앞에 추가됩니다.<br><br>
                     🌐 모델명을 클릭하면 panelook.com 검색결과로 이동합니다(정확한 상세페이지 ID는 알 수 없어 검색결과로 연결됩니다).
                 </span></span>
-                <button class="action-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin-right:6px;">➕ 패널 추가</button>
-                <button class="action-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 부가 스펙 펼치기</button>
+                <button class="action-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin-right:6px;">➕ 추가</button>
+                <button class="action-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()">🔽 펼치기</button>
                 <div class="btn-group"><button class="action-btn" id="pc-export-btn" onclick="window.exportPanelCompareToExcel()">🟩 엑셀로 내보내기</button></div>
             </span>
+            <span id="eh-adbd-btns" style="display:none;">
+                <button class="action-btn" id="ep-adbd-add-btn" onclick="window.elecCompareOpenAddModal('adbd')" style="margin-right:6px;">➕ 추가</button>
+                <button class="action-btn" id="ep-adbd-toggle-btn" onclick="window.elecCompareToggleExpand('adbd')">🔽 펼치기</button>
+                <div class="btn-group"><button class="action-btn" id="ep-adbd-export-btn" onclick="window.exportElecCompareToExcel('adbd')">🟩 엑셀로 내보내기</button></div>
+            </span>
             <span id="eh-convbd-btns" style="display:none;">
-                <button class="action-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin-right:6px;">➕ CONV BD 추가</button>
-                <button class="action-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')">🔽 부가 스펙 펼치기</button>
+                <button class="action-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin-right:6px;">➕ 추가</button>
+                <button class="action-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')">🔽 펼치기</button>
                 <div class="btn-group"><button class="action-btn" id="ep-convbd-export-btn" onclick="window.exportElecCompareToExcel('convbd')">🟩 엑셀로 내보내기</button></div>
             </span>
         </div>
@@ -1980,7 +1983,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 #tab-elecparts .concept-table tbody tr.mc-zebra-b { background-color: #efefef !important; }
             </style>
             <div id="elec-view-panel" style="display:block;">
-                <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 패널 추가]로 시작하세요.</div>
+                <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 추가]로 시작하세요.</div>
                 <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
                     <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;">
                         <thead id="pc-thead"></thead>
@@ -2003,8 +2006,28 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </div>
                 </div>
             </div>
-            <div id="elec-view-adbd" style="display:none; padding:60px; text-align:center; color:#999; font-size:13px;">
-                🔲 AD BD 비교표는 준비 중입니다. 곧 CONV BD와 동일한 방식으로 추가될 예정입니다.
+            <div id="elec-view-adbd" style="display:none;">
+                <div id="ep-adbd-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+                    <table class="concept-table" id="ep-adbd-table" style="min-width:900px; border-collapse:collapse;">
+                        <thead id="ep-adbd-thead"></thead>
+                        <tbody id="ep-adbd-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="ep-adbd-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                    <div id="ep-adbd-history-header" onclick="window.epToggleHistoryBox('adbd')" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                        <span id="ep-adbd-history-toggle-icon">▶</span>
+                        <span data-i18n="h-history">🕒 변경 이력 확인</span>
+                    </div>
+                    <div id="ep-adbd-history-body" style="display:none; max-height:320px; overflow-y:auto;">
+                        <div style="display:flex; gap:6px; align-items:center; margin-bottom:10px; flex-wrap:wrap;">
+                            <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="ep-adbd-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                            <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="ep-adbd-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                            <input type="password" id="ep-adbd-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                            <button class="action-btn" onclick="window.deleteEpHistoryByDateRange('adbd')" style="color:#e03131; border-color:#e03131;">구간 삭제</button>
+                        </div>
+                        <table id="ep-adbd-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
+                    </div>
+                </div>
             </div>
             <div id="elec-view-convbd" style="display:none;">
                 <div id="ep-convbd-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
@@ -8848,12 +8871,15 @@ window.deleteHistoryByDateRange = function() {
                 'backup_restore_btn': '🔄 프로젝트 복원',
                 'new-project-btn': '➕ 새 프로젝트 추가',
                 'delete-project-btn': '🗑️ 프로젝트 삭제',
-                'pc-add-btn': '➕ 패널 추가',
+                'pc-add-btn': '➕ 추가',
+                'pc-toggle-btn': '🔽 펼치기',
                 'pc-export-btn': '🟩 엑셀로 내보내기',
-                'ep-convbd-add-btn': '➕ CONV BD 추가',
-                'ep-convbd-toggle-btn': '🔽 부가 스펙 펼치기',
+                'ep-adbd-add-btn': '➕ 추가',
+                'ep-adbd-toggle-btn': '🔽 펼치기',
+                'ep-adbd-export-btn': '🟩 엑셀로 내보내기',
+                'ep-convbd-add-btn': '➕ 추가',
+                'ep-convbd-toggle-btn': '🔽 펼치기',
                 'ep-convbd-export-btn': '🟩 엑셀로 내보내기',
-                'elec-view-adbd': '🔲 AD BD 비교표는 준비 중입니다. 곧 CONV BD와 동일한 방식으로 추가될 예정입니다.',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -8952,12 +8978,15 @@ window.deleteHistoryByDateRange = function() {
                 'backup_restore_btn': '🔄 Restore Project',
                 'new-project-btn': '➕ Add New Project',
                 'delete-project-btn': '🗑️ Delete Project',
-                'pc-add-btn': '➕ Add Panel',
+                'pc-add-btn': '➕ Add',
+                'pc-toggle-btn': '🔽 Expand',
                 'pc-export-btn': '🟩 Export to Excel',
-                'ep-convbd-add-btn': '➕ Add CONV BD',
-                'ep-convbd-toggle-btn': '🔽 Show extra specs',
+                'ep-adbd-add-btn': '➕ Add',
+                'ep-adbd-toggle-btn': '🔽 Expand',
+                'ep-adbd-export-btn': '🟩 Export to Excel',
+                'ep-convbd-add-btn': '➕ Add',
+                'ep-convbd-toggle-btn': '🔽 Expand',
                 'ep-convbd-export-btn': '🟩 Export to Excel',
-                'elec-view-adbd': '🔲 The AD BD comparison table is coming soon — it will be added the same way as CONV BD.',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -24046,16 +24075,18 @@ window.renderMaterialRows = function(rows) {
         // 💡 [2026-08-25 신규 — Panel Compare 연동] PANEL 구분 행에 모델명이 적혀 있으면, 그 옆에
         //    스펙 미리보기 버튼을 붙인다 — 클릭하면 패널 스펙 라이브러리에서 조회해 보여주고,
         //    Panel Compare 탭 비교표에 없으면 바로 추가할 수 있게 한다.
-        // 💡 [2026-08-26 신규 — Elec Parts(CONV BD) 연동] CONVERTER 구분 행도 PANEL과 완전히 동일한
+        // 💡 [2026-08-26 신규 — Elec Parts 연동] CONVERTER/AD BOARD 구분 행도 PANEL과 완전히 동일한
         //    규칙 — 값이 있을 때만 돋보기를 보여준다(showElecPartSpecModal 내부에서 빈칸/미등록 두
         //    경우 모두 "붙여넣어 AI로 추출" 흐름으로 이어주지만, 버튼 노출 자체는 PANEL과 통일).
+        //    구분명 → Elec Parts 타입 매핑이라 나중에 부품 종류가 늘어도 이 한 줄만 추가하면 됨.
+        const _epRowType = { 'CONVERTER': 'convbd', 'AD BOARD': 'adbd' };
         const descInputCell = '<td style="padding:2px; border:1px solid #e9ecef;"><div style="display:flex; align-items:center; gap:2px;">'
             + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box;" '
-            + ((r.category === 'PANEL' || r.category === 'CONVERTER') ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
+            + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
             + ((r.category === 'PANEL' && r.description)
                 ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
-                : ((r.category === 'CONVERTER' && r.description)
-                    ? '<button type="button" onclick="window.showElecPartSpecModal(\'convbd\', ' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'CONV BD spec preview' : 'CONV BD 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+                : ((_epRowType[r.category] && r.description)
+                    ? '<button type="button" onclick="window.showElecPartSpecModal(' + escapeHtml(JSON.stringify(_epRowType[r.category])) + ', ' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'Spec preview' : '스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
                     : ''))
             + delBtn
             + '</div></td>';
@@ -24425,7 +24456,7 @@ window.renderPanelCompareTab = async function() {
     window._pcApplyZebra();
 
     const toggleBtn = document.getElementById('pc-toggle-btn');
-    if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+    if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Collapse' : '🔼 접기') : (_en ? '🔽 Expand' : '🔽 펼치기');
 };
 
 // 💡 [2026-08-25 신규] Note 열 — 사용자가 프로젝트별로 자유롭게 남기는 메모(패널과 무관, 항목별 1개).
@@ -24528,7 +24559,7 @@ window.panelCompareToggleExpand = function() {
     document.querySelectorAll('#pc-table .pc-p2-row').forEach(function(tr) { tr.style.display = window._pcExpanded ? 'table-row' : 'none'; });
     const toggleBtn = document.getElementById('pc-toggle-btn');
     const _en = window._currentLang === 'en';
-    if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+    if (toggleBtn) toggleBtn.textContent = window._pcExpanded ? (_en ? '🔼 Collapse' : '🔼 접기') : (_en ? '🔽 Expand' : '🔽 펼치기');
     window._pcApplyZebra(); // 💡 펼침/접힘으로 보이는 행이 바뀌면 줄무늬도 다시 계산해야 깨지지 않음
 };
 
@@ -25086,17 +25117,50 @@ window.CONV_BD_SPEC_SCHEMA = [
     ]},
 ];
 
+// 💡 [2026-08-26 신규] AD BD(스케일러 보드, 예: ADONIS-QHD) 스펙 스키마. 필드 튜플의 3·4번째 값은
+//    드롭다운 선택 지원용 — ['라벨', 우선순위, 'enum', ['Enable','Disable']] 형태면 미리보기 폼에서
+//    Enable/Disable/기타(자유 텍스트) 드롭다운으로 렌더링된다(그 외 필드는 CONV BD와 동일하게 자유 텍스트).
+window.AD_BD_SPEC_SCHEMA = [
+    { section: 'Basic Information', fields: [
+        ['Brand', 1], ['Item Code', 1], ['PBA Name', 1], ['Revision', 1], ['Item Description', 2],
+    ]},
+    { section: 'Application', fields: [
+        ['Application', 2], ['Max/Native Resolution', 1],
+    ]},
+    { section: 'Video Processing', fields: [
+        ['Scaler IC', 1],
+        ['Input Signal', 1], ['Output Signal', 1],
+        ['Color Depth', 2], ['OSD Support', 2],
+        ['Resize Function', 1, 'enum', ['Enable', 'Disable']],
+        ['Flip/Mirror Function', 1, 'enum', ['Enable', 'Disable']],
+        ['OSD Rotation Function', 1, 'enum', ['Enable', 'Disable']],
+    ]},
+    { section: 'Electrical Specification', fields: [
+        ['Input Voltage', 1], ['Input Power/Current', 2], ['DPMS Support', 2],
+    ]},
+    { section: 'Dimension', fields: [
+        ['Board Size (WxH)', 1], ['Outline Depth', 1],
+    ]},
+    { section: 'Interface', fields: [
+        ['Input Connector (Model/Pins)', 2], ['Output Connector (Model/Pins)', 2],
+        ['Power Connector', 2], ['Control Connector', 2], ['OSD Key Count', 2],
+    ]},
+    { section: 'Other', fields: [
+        ['Expected Price', 1], ['Note', 1],
+    ]},
+];
+
 window.ELEC_PART_TYPES = {
-    convbd: { label: 'CONV BD', icon: '🔌', libFilename: 'ElecPartLib_CONVBD_Shared.json', schema: window.CONV_BD_SPEC_SCHEMA },
-    // 💡 AD BD는 오늘은 준비중 placeholder만 — 나중에 스키마를 채우고 위 tab-elecparts HTML의
-    //    elec-view-adbd 안에 같은 표 컨테이너(ep-adbd-thead/tbody 등)를 넣으면 이 엔진이 그대로 동작한다.
-    adbd: { label: 'AD BD', icon: '🔲', libFilename: null, schema: null },
+    convbd: { label: 'CONV', icon: '🔌', domain: 'LED 드라이버/컨버터 보드', libFilename: 'ElecPartLib_CONVBD_Shared.json', schema: window.CONV_BD_SPEC_SCHEMA },
+    adbd: { label: 'AD BD', icon: '🔲', domain: '스케일러(A/D) 보드', libFilename: 'ElecPartLib_ADBD_Shared.json', schema: window.AD_BD_SPEC_SCHEMA },
 };
 
+// 💡 [2026-08-26] 예전엔 라벨 문자열만 뽑았는데, enum 필드(Resize Function 등)의 허용값을 AI 프롬프트에도
+//    알려주려면 필드 튜플 전체([라벨, 우선순위, type?, options?])가 필요해서 원본 튜플을 그대로 반환하게 바꿨다.
 window._epFlatFields = function(type) {
     const cfg = window.ELEC_PART_TYPES[type];
     const out = [];
-    ((cfg && cfg.schema) || []).forEach(function(sec) { sec.fields.forEach(function(f) { out.push(f[0]); }); });
+    ((cfg && cfg.schema) || []).forEach(function(sec) { sec.fields.forEach(function(f) { out.push(f); }); });
     return out;
 };
 
@@ -25192,8 +25256,10 @@ window._EP_EXTRACT_TEXT_LIMIT = 32000;
 window._epBuildExtractPrompt = function(type, rawText) {
     const cfg = window.ELEC_PART_TYPES[type];
     const fields = window._epFlatFields(type);
-    const keyListText = fields.map(function(f) { return '- "' + f + '"'; }).join('\n');
-    return `당신은 LCD 백라이트용 LED 드라이버/컨버터 보드(${cfg.label}) 데이터시트 분석 전문가입니다.
+    const keyListText = fields.map(function(f) {
+        return '- "' + f[0] + '"' + (f[2] === 'enum' ? ' (값은 ' + f[3].join('/') + ' 중 하나를 우선 쓰고, 둘 다 아니면 문서에 표현된 실제 값을 그대로)' : '');
+    }).join('\n');
+    return `당신은 디스플레이용 ${cfg.domain}(${cfg.label}) 데이터시트 분석 전문가입니다.
 아래 [원문 텍스트]는 ${cfg.label} 스펙 문서(승인원, Specification 등)에서 사용자가 복사했거나 PDF에서 추출한 내용입니다.
 여기서 스펙 정보를 추출해서, 아래 형식의 JSON 객체 하나로만 답하세요(다른 설명이나 마크다운 코드블럭 없이 JSON 객체 하나만).
 
@@ -25339,7 +25405,7 @@ window.renderElecCompareTab = async function(type) {
     window._epApplyZebra(type);
 
     const toggleBtn = document.getElementById('ep-' + type + '-toggle-btn');
-    if (toggleBtn) toggleBtn.textContent = window._epExpanded[type] ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+    if (toggleBtn) toggleBtn.textContent = window._epExpanded[type] ? (_en ? '🔼 Collapse' : '🔼 접기') : (_en ? '🔽 Expand' : '🔽 펼치기');
 };
 
 window.elecCompareSetNote = function(type, label, value) {
@@ -25358,7 +25424,7 @@ window.elecCompareToggleExpand = function(type) {
     document.querySelectorAll('#ep-' + type + '-table .ep-p2-row').forEach(function(tr) { tr.style.display = window._epExpanded[type] ? 'table-row' : 'none'; });
     const toggleBtn = document.getElementById('ep-' + type + '-toggle-btn');
     const _en = window._currentLang === 'en';
-    if (toggleBtn) toggleBtn.textContent = window._epExpanded[type] ? (_en ? '🔼 Hide extra specs' : '🔼 부가 스펙 접기') : (_en ? '🔽 Show extra specs' : '🔽 부가 스펙 펼치기');
+    if (toggleBtn) toggleBtn.textContent = window._epExpanded[type] ? (_en ? '🔼 Collapse' : '🔼 접기') : (_en ? '🔽 Expand' : '🔽 펼치기');
     window._epApplyZebra(type);
 };
 
@@ -25686,6 +25752,22 @@ window._epRunExtract = async function() {
     }
 };
 
+// 💡 enum 필드 드롭다운 변경 핸들러 — "기타" 선택 시 옆의 자유 텍스트 칸을 열어서 직접 입력받고,
+//    Enable/Disable/- 선택 시엔 그 값을 바로 히든 입력칸에 채우고 자유 텍스트 칸은 숨긴다.
+window._epHandleEnumChange = function(selectEl) {
+    const wrap = selectEl.parentElement;
+    const hiddenInput = wrap.querySelector('input[data-ep-field]');
+    if (!hiddenInput) return;
+    if (selectEl.value === '__other__') {
+        hiddenInput.style.display = '';
+        hiddenInput.value = '';
+        hiddenInput.focus();
+    } else {
+        hiddenInput.style.display = 'none';
+        hiddenInput.value = selectEl.value;
+    }
+};
+
 window._epRenderPreviewForm = function(type, specs) {
     const _en = window._currentLang === 'en';
     const cfg = window.ELEC_PART_TYPES[type];
@@ -25704,11 +25786,29 @@ window._epRenderPreviewForm = function(type, specs) {
         html += `<details ${si === 0 ? 'open' : ''} style="margin-bottom:6px;"><summary style="cursor:pointer; font-weight:bold; font-size:12px; color:#2c5f8a; padding:4px 0;">[${escapeHtml(sec.section)}]</summary>`;
         sec.fields.forEach(function(f) {
             const label = f[0];
-            const val = specs[label] != null ? specs[label] : '-';
-            html += `<div style="display:flex; align-items:center; gap:6px; margin:3px 0;">
-                <label style="flex:0 0 190px; font-size:10.5px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(label)}">${escapeHtml(label)}</label>
-                <input data-ep-field="${escapeHtml(label)}" type="text" value="${escapeHtml(String(val))}" style="flex:1; padding:4px 6px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px; min-width:0;">
-            </div>`;
+            const val = specs[label] != null ? String(specs[label]) : '-';
+            // 💡 [2026-08-26 신규] enum 필드(Resize Function 등)는 Enable/Disable/기타(자유 텍스트) 드롭다운으로.
+            //    실제 저장값은 그대로 data-ep-field 히든 입력칸에 두고(_epSaveNewItem이 이 값을 그대로 읽음),
+            //    드롭다운은 그 칸을 채우는 UI일 뿐이라 저장 로직은 일반 텍스트 필드와 완전히 동일하다.
+            if (f[2] === 'enum') {
+                const opts = f[3] || [];
+                const isKnown = opts.indexOf(val) !== -1;
+                const isOther = !isKnown && val !== '-';
+                html += `<div style="display:flex; align-items:center; gap:6px; margin:3px 0;">
+                    <label style="flex:0 0 190px; font-size:10.5px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(label)}">${escapeHtml(label)}</label>
+                    <select onchange="window._epHandleEnumChange(this)" style="flex:0 0 120px; padding:4px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px;">
+                        <option value="-" ${val === '-' ? 'selected' : ''}>-</option>
+                        ${opts.map(function(o) { return `<option value="${escapeHtml(o)}" ${o === val ? 'selected' : ''}>${escapeHtml(o)}</option>`; }).join('')}
+                        <option value="__other__" ${isOther ? 'selected' : ''}>${_en ? 'Other…' : '기타(직접입력)'}</option>
+                    </select>
+                    <input data-ep-field="${escapeHtml(label)}" type="text" value="${escapeHtml(val)}" placeholder="${_en ? 'Enter value' : '값 입력'}" style="flex:1; padding:4px 6px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px; min-width:0; ${isOther ? '' : 'display:none;'}">
+                </div>`;
+            } else {
+                html += `<div style="display:flex; align-items:center; gap:6px; margin:3px 0;">
+                    <label style="flex:0 0 190px; font-size:10.5px; color:#666; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(label)}">${escapeHtml(label)}</label>
+                    <input data-ep-field="${escapeHtml(label)}" type="text" value="${escapeHtml(val)}" style="flex:1; padding:4px 6px; border:1px solid #ced4da; border-radius:4px; font-size:11.5px; min-width:0;">
+                </div>`;
+            }
         });
         html += '</details>';
     });
@@ -29028,10 +29128,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (tab) { tab.style.color = (v === view) ? '#2c5f8a' : '#999'; tab.style.borderBottomColor = (v === view) ? '#2c5f8a' : 'transparent'; }
         });
         const panelBtns = document.getElementById('eh-panel-btns');
+        const adbdBtns = document.getElementById('eh-adbd-btns');
         const convbdBtns = document.getElementById('eh-convbd-btns');
         if (panelBtns) panelBtns.style.display = (view === 'panel') ? 'contents' : 'none';
+        if (adbdBtns) adbdBtns.style.display = (view === 'adbd') ? 'contents' : 'none';
         if (convbdBtns) convbdBtns.style.display = (view === 'convbd') ? 'contents' : 'none';
         if (view === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
+        if (view === 'adbd' && window.renderElecCompareTab) window.renderElecCompareTab('adbd');
         if (view === 'convbd' && window.renderElecCompareTab) window.renderElecCompareTab('convbd');
         try { localStorage.setItem('gantt_elec_view', view); } catch(e) {}
     };
