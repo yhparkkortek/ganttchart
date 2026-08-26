@@ -151,6 +151,12 @@
     .filter-group .btn[data-value="지연"] { color: #e03131; }
     .filter-group .btn[data-value="대기"] { color: #f08c00; }
     .filter-group .btn.active[data-value] { color: #fff !important; }
+    /* 💡 [2026-08-27] LEVEL(WBS) 필터 버튼만 예외 — 기본 상태(0~4 전부 선택됨=.active)가 진한 파란
+       배경이라 너무 눈에 띈다는 피드백. generateFilters()가 LEVEL(WBS) 그룹에만 붙이는
+       .filter-group-wbs로 범위를 좁혀서, "선택됨(.active)" 판정 로직/기본값(전체 선택 Set)은
+       절대 건드리지 않고 그 상태의 "겉모습"만 흰 배경+파란 글씨로 바꿈. 다른 필터(업무상태/
+       개발단계/담당자)의 active 스타일은 원래 그대로(파란 배경+흰 글씨) 유지됨. */
+    .filter-group-wbs .btn.active[data-value] { background-color: #fff !important; color: #2c5f8a !important; border-color: #2c5f8a !important; box-shadow: none !important; }
     .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
     .btn.dimmed:hover { opacity: 0.8; background-color: #e2e6ea; color: #333; border: 1px solid #ccc; }
     .btn.active.dimmed { opacity: 1; border-style: solid; }
@@ -12247,7 +12253,12 @@ window.handleAuthClick = function() {
             //    차트 페이지 전용 변경.
             currentFilters[col.index] = savedFilters[col.index]
                 || (col.name === 'LEVEL(WBS)' ? new Set(valuesArray) : new Set(['All']));
-            let groupDiv = document.createElement('div'); groupDiv.className = 'filter-group'; groupDiv.id = 'filter-group-' + col.index;
+            let groupDiv = document.createElement('div');
+            // 💡 LEVEL(WBS) 그룹에만 전용 클래스를 붙여서, 위 CSS(.filter-group-wbs .btn.active)가
+            //    이 그룹의 active 버튼 색상만 흰바탕/파란글씨로 바꾸도록 범위를 좁힘 — 선택 판정
+            //    로직(currentFilters/.active 클래스 부여)은 전혀 손대지 않음.
+            groupDiv.className = col.name === 'LEVEL(WBS)' ? 'filter-group filter-group-wbs' : 'filter-group';
+            groupDiv.id = 'filter-group-' + col.index;
 
             let label = document.createElement('div');
             label.className = 'filter-label'; 
