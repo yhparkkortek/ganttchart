@@ -20973,6 +20973,18 @@ window.pasteRetryAsManual    = (idx) => AR.retryAsManual('paste', idx);
 window.pasteBatchInsert      = () => AR.batchInsert('paste');
 window.pasteBatchToInbox     = () => AR.batchToInbox('paste');
 
+// 💡 [2026-08-28 신규] 메일 본문에 자주 등장하는 사내 관리번호("#502319"류)를 결정론적으로 추출.
+//    프로젝트 매칭 시 브랜드명/크기만으로 오매칭되는 걸 막기 위해 msCallGemini에서 사용 —
+//    이 번호가 등록된 후보가 있으면 우선하고, 없으면 브랜드/크기만으로 섣불리 매칭하지 말라고 경고한다.
+window._msExtractCodeTokens = function(text) {
+    const s = String(text || '');
+    const found = new Set();
+    const re = /#\s?(\d{4,7})\b/g;
+    let m;
+    while ((m = re.exec(s))) found.add(m[1]);
+    return Array.from(found);
+};
+
 async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOverride) {
     const GAS_URL = localStorage.getItem("gas_server_url") || "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
@@ -21007,10 +21019,35 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
         const numbered = candidateProjects.map((c, i) =>
             `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''} [파일: ${c.file_name}]`
         ).join('\n');
+
+        // 💡 [2026-08-28 신규] 브랜드명(고객사)+크기(인치)만 같으면 실제 관리번호(#502319류)가 어느
+        //    후보에도 등록 안 돼 있어도 AI가 "이름/크기가 비슷하니까" 매칭해버리는 오탐이 실제로
+        //    확인됨(예: "LNW 27 UHD #502319"가 다른 27인치 LNW 프로젝트로 오매칭). 메일 본문에서
+        //    "#숫자" 관리번호를 결정론적으로 뽑아, 등록된 후보가 있으면 그쪽을 우선하도록, 없으면
+        //    브랜드/크기만으로 섣불리 매칭하지 말라고 명시적으로 경고한다(강제 override는 아니고
+        //    AI 판단을 돕는 강한 힌트 — 이 앱의 기존 "키워드는 힌트일 뿐" 철학과 동일).
+        const mailCodes = window._msExtractCodeTokens ? window._msExtractCodeTokens(mailText) : [];
+        let codeHint = '';
+        if (mailCodes.length) {
+            const hasCode = function(c, code) { return (c.keywords || []).some(function(k) { return String(k).includes(code); }); };
+            const withCode = candidateProjects
+                .map(function(c, i) { return { no: i + 1, c: c }; })
+                .filter(function(x) { return mailCodes.some(function(code) { return hasCode(x.c, code); }); });
+            if (withCode.length) {
+                codeHint = `\n⚠️ [관리번호 우선 근거] 메일에 등장하는 관리번호(${mailCodes.map(function(c){return '#'+c;}).join(', ')})가 등록된 후보: ` +
+                    withCode.map(function(x) { return x.no + '번(' + x.c.file_name + ')'; }).join(', ') +
+                    ' — 브랜드명·크기만 비슷한 다른 후보보다 이 근거를 우선하세요.\n';
+            } else {
+                codeHint = `\n⚠️ [관리번호 불일치 주의] 메일에 관리번호(${mailCodes.map(function(c){return '#'+c;}).join(', ')})가 등장하지만 아래 후보 중 이 번호가 등록된 곳이 없습니다. ` +
+                    '이럴 땐 브랜드명(고객사)·크기(인치)만 비슷하다고 섣불리 매칭하지 마세요 — 본문에 다른 확실한 근거가 없으면 매칭신뢰도를 "중" 이하로 낮추거나 0(해당없음)으로 답하세요.\n';
+            }
+        }
+
         prompt += `\n\n--- 프로젝트 매칭 판단 요청 (현재 등록된 활성 프로젝트 전체 목록) ---\n` +
-            `후보 프로젝트 목록:\n${numbered}\n` +
+            `후보 프로젝트 목록:\n${numbered}\n` + codeHint +
             `이 메일이 실제로 다루는 "핵심 주제"가 위 목록 중 하나로 명확한지 판단하세요. 목록의 "참고 키워드"는 힌트일 뿐이니,\n` +
             `본문 맥락상 명백히 그 프로젝트 얘기면 키워드가 없어도 선택하세요. 반대로 키워드가 우연히 겹쳐도 실제 핵심 주제가 아니면 고르지 마세요.\n` +
+            `※ 브랜드명(고객사)이나 크기(인치)가 같다는 이유만으로 매칭하지 마세요 — 같은 브랜드가 여러 프로젝트를 가질 수 있습니다. 본문의 구체적 내용(모델 고유 코드, 요청 사항 등)까지 확인하세요.\n` +
             `※ 후보 중 이름이 같은 것들은 인치(크기)로 구별하세요.\n` +
             `- 핵심 주제가 명확하면: 해당 후보의 번호를 아래 필드에 적으세요.\n` +
             `- 목록 어디에도 해당 안 되거나(신규/미등록 프로젝트), 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: 0으로 적으세요.\n` +
