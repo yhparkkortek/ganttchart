@@ -9080,7 +9080,10 @@ window.deleteHistoryByDateRange = function() {
 
     function escapeHtml(unsafe) { if (!unsafe) return ""; return unsafe.toString().replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;"); }
 
-    function linkifyAndEscape(text) {
+    // 💡 [2026-08-27] boldBrackets 매개변수 추가 — "업무 상세내용"만 [대괄호] Bold 처리를 끄기 위함.
+    //    기본값 true로 기존 호출부(답변/기타 텍스트/번역 결과 등)는 전부 그대로 동작함.
+    function linkifyAndEscape(text, boldBrackets) {
+        if (boldBrackets === undefined) boldBrackets = true;
         if (!text) return ""; let safeText = escapeHtml(text);
         const emailPattern = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gim; safeText = safeText.replace(emailPattern, '<a href="mailto:$1" style="color:#2c5f8a; text-decoration:underline;">$1</a>');
         const urlPattern = /(\b(https?|ftp):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/gim; safeText = safeText.replace(urlPattern, '<a href="$1" target="_blank" style="text-decoration: none; display: inline-block; margin-left: 2px; font-size:11px;" title="$1">⬇️</a>');
@@ -9089,8 +9092,8 @@ window.deleteHistoryByDateRange = function() {
         safeText = safeText.replace(/(\n[ \t]*){2,}/g, '\n'); // 💡 줄바꿈 사이의 공백까지 포함하여 압축
         // ✅ [추가할 코드] 2칸 이상 연속된 공백(스페이스)을 1칸으로 압축
         safeText = safeText.replace(/ {2,}/g, ' ');
-        // ✅ [대괄호 단어] Bold 처리
-        safeText = safeText.replace(/(\[[^\]]+\])/g, '<b>$1</b>');
+        // ✅ [대괄호 단어] Bold 처리 (boldBrackets=false면 건너뜀)
+        if (boldBrackets) safeText = safeText.replace(/(\[[^\]]+\])/g, '<b>$1</b>');
         return safeText.replace(/\n/g, '<br>');
     }  // ← 이 닫는 괄호가 빠져있음
 
@@ -10568,13 +10571,15 @@ window.deleteHistoryByDateRange = function() {
                         if (!isStrike && (cellText.includes('[취소]') || cellText.includes('(취소)') || cellText.includes('[Drop]') || cellText.includes('(Drop)'))) isStrike = true;
                         if (isStrike) tdStyle += " text-decoration: line-through; color: #adb5bd;";
 
+                        // 💡 [2026-08-27] "업무 상세내용"(colIdx.content)만 [대괄호] Bold 처리 끔 — 답변(colIdx.answer)은 그대로 유지.
+                        let boldBrackets = cellIndex !== colIdx.content;
                         if (transMode > 0) {
                             let safeText = encodeURIComponent(cellText).replace(/'/g, "%27").replace(/\\/g, "\\\\");
-                            let displayHtml = linkifyAndEscape(cellText);
+                            let displayHtml = linkifyAndEscape(cellText, boldBrackets);
                             if (cellIndex === colIdx.content) displayHtml = injectMailRawBtn(displayHtml, row, i);
                             tdStyle += " position: relative; padding-left: 22px;";
                             tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans"`;
-                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
+                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
@@ -10691,7 +10696,8 @@ window.deleteHistoryByDateRange = function() {
             : '\n(저장된 "최초 계획(킥오프)"이 없어 계획 일정은 그대로 두었습니다 — 신규 프로젝트 등록 시에만 자동 저장됩니다)'));
     };
 
-    function toggleTranslation(btn, encodedText, transMode) {
+    function toggleTranslation(btn, encodedText, transMode, boldBrackets) {
+        if (boldBrackets === undefined) boldBrackets = true; // 💡 기존 호출부(인자 3개)와의 하위호환
         let container = btn.parentElement; let contentSpan = container.querySelector('.content-span');
         if (btn.dataset.expanded === "true") { contentSpan.innerHTML = contentSpan.dataset.origHtml; btn.dataset.expanded = "false"; btn.style.backgroundColor = "transparent"; return; }
         if (contentSpan.dataset.transHtml) { contentSpan.innerHTML = contentSpan.dataset.transHtml; btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; return; }
@@ -10707,7 +10713,7 @@ window.deleteHistoryByDateRange = function() {
         .then(tData => {
             let translated = ''; tData[0].forEach(item => translated += item[0]);
             urls.forEach((url, idx) => { let rx = new RegExp(`\\s*ZXZX${idx}ZXZX\\s*`, 'gi'); translated = translated.replace(rx, ' ' + url + ' '); });
-            let transDisplayHtml = linkifyAndEscape(translated.trim());
+            let transDisplayHtml = linkifyAndEscape(translated.trim(), boldBrackets);
             let cleanOrigHtml = contentSpan.innerHTML.replace(/(<br\s*\/?>|\s|&nbsp;)+$/gi, ' ').trim();
             let finalHtml = cleanOrigHtml + '<br><span class="trans-result" style="color: var(--trans-text) !important; font-weight: normal;">' + transDisplayHtml + '</span>';
             contentSpan.dataset.origHtml = cleanOrigHtml; contentSpan.dataset.transHtml = finalHtml; contentSpan.innerHTML = finalHtml;
