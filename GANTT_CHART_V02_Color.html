@@ -14952,7 +14952,8 @@ window.restoreAiTaskDateAll = function() {
                 : `📅 ${restoredCount}건의 날짜를 AI 분석 원본으로 복원했습니다.`, 'info');
         }
     };
-    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doRestore);
+    const _restoreOkLabel = _en ? 'Restore' : '복원';
+    if (window.bmConfirmModal) window.bmConfirmModal(confirmMsg, doRestore, _restoreOkLabel, '#0056b3');
     else if (confirm(confirmMsg)) doRestore();
 };
 
@@ -29295,7 +29296,11 @@ function bmAddAfter(key, refTr) {
     }
 }
 
-function bmConfirmModal(message, onYes) {
+// 💡 [2026-08-28 버그 수정] 이 모달은 원래 삭제 확인용으로 만들어져 확인 버튼이 "삭제"로 하드코딩돼
+//    있었는데, restoreAiTaskDateAll()처럼 삭제가 아닌 확인(예: 복원)에도 그대로 재사용되면서 "복원할까요?"
+//    라는 메시지에 "삭제" 버튼이 붙는 문제가 있었다. okLabel/okColor를 선택적으로 받아서, 안 넘기면
+//    기존 삭제용 7곳(빨간 "삭제")은 그대로 동작하고 필요한 곳만 라벨/색을 바꿀 수 있게 함.
+function bmConfirmModal(message, onYes, okLabel, okColor) {
     let modal = document.getElementById('bm-confirm-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -29316,7 +29321,10 @@ function bmConfirmModal(message, onYes) {
     const cancelBtn = document.getElementById('bm-confirm-cancel');
     const newOk = okBtn.cloneNode(true); okBtn.parentNode.replaceChild(newOk, okBtn);
     const newCancel = cancelBtn.cloneNode(true); cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-    document.getElementById('bm-confirm-ok').addEventListener('click', function() { modal.style.display = 'none'; onYes(); });
+    const finalOk = document.getElementById('bm-confirm-ok');
+    finalOk.textContent = okLabel || '삭제';
+    finalOk.style.background = okColor || '#e03131';
+    finalOk.addEventListener('click', function() { modal.style.display = 'none'; onYes(); });
     document.getElementById('bm-confirm-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
 }
 
