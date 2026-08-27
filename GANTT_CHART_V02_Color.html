@@ -9101,11 +9101,14 @@ window.deleteHistoryByDateRange = function() {
         if (!row._mailRaw) return html;
         const _en = window._currentLang === 'en';
         let btn = `<button onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
-        // 💡 [2026-08-24 신규] AI가 원래 뽑았던 시작일/완료일 백업이 있는 업무만 복원 버튼 노출
+        // 💡 [2026-08-24 신규 → 2026-08-27 변경] 원래는 _aiOrigStart/_aiOrigPlan 백업이 있는 업무만
+        //    복원 버튼을 노출했는데, 이 백업 기능이 생기기 전에 등록된 과거 업무는 백업이 아예 없어
+        //    버튼 자체가 안 보였다. 메일 자동등록 업무(_mailRaw 존재)라면 항상 버튼을 보여주고, 클릭
+        //    시 window.restoreAiTaskDate()가 백업이 없으면 "상세내용" 첫 줄에 항상 같이 적히는
+        //    [업무유형][발신자→수신자] YYYY-MM-DD 형식에서 시작일을 추출해 대신 복원한다
+        //    (완료일은 이 형식에 포함되지 않아 과거 업무는 복원 대상에서 제외됨 — 아래 함수 주석 참고).
         //    (Ctrl/Shift+클릭 시 다중 선택된 행 전부 일괄 복원 — window.restoreAiTaskDate 참고)
-        if (row._aiOrigStart || row._aiOrigPlan) {
-            btn += `<button onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail. Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다. Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:4px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
-        }
+        btn += `<button onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail (falls back to the date embedded in the detail text for older tasks without a backup). Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다 (백업이 없는 과거 업무는 상세내용에 적힌 날짜에서 시작일만 추출해 복원). Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:4px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
         return html.replace(/(<b>\[출처\]<\/b>[\s\S]*?)(<br>|$)/, function(m, p1, p2) { return p1 + btn + p2; });
     }
 
@@ -14584,6 +14587,23 @@ window.showGanttMailRaw = function(rowIndex) {
 //    값과 함께 _startForced/_planForced도 같이 다시 켜서 재계산에도 안 풀리게 고정한다.
 //    Ctrl(⌘) 또는 Shift를 누른 채 클릭하면, 지금 다중 선택(window._selectedRows)돼 있는 행 전부에
 //    한 번에 적용한다 — No. 칸 Ctrl/Shift 클릭으로 여러 행을 먼저 선택해두고 이 버튼을 누르면 됨.
+//
+// 💡 [2026-08-27 신규] _aiOrigStart 백업이 없는 과거 업무(이 백업 기능이 생기기 전에 메일로 자동등록된
+//    업무) 대응 — AI 분석 프롬프트가 "상세내용" 첫 줄에 항상 [업무유형][발신자→수신자] YYYY-MM-DD
+//    형식으로 시작일을 같이 적어두므로(getMailAnalysisPrompt 참고), 백업이 없으면 거기서 시작일만
+//    추출해 복원한다. 완료일은 이 형식에 아예 포함되지 않아(AI가 완료일을 못 뽑은 메일이 대부분이라
+//    처음부터 정보 자체가 없었음) 과거 업무는 복원 대상에서 제외 — 새로 생긴 정보가 아니라 원래 없던 값.
+window._extractAiOrigStartFromContent = function(row) {
+    if (!row) return null;
+    const contentStr = colIdx.content !== -1 ? (row[colIdx.content] || '').toString() : '';
+    if (!contentStr) return null;
+    const firstLine = contentStr.split('\n')[0] || '';
+    const m = firstLine.match(/\]\s*(\d{4}-\d{2}-\d{2})\b/);
+    return m ? m[1] : null;
+};
+window._getAiOrigStart = function(row) {
+    return (row && row._aiOrigStart) || window._extractAiOrigStartFromContent(row);
+};
 window.restoreAiTaskDate = function(rowIndex, event) {
     if (event) event.stopPropagation();
     const bulk = !!(event && (event.ctrlKey || event.metaKey || event.shiftKey));
@@ -14594,12 +14614,13 @@ window.restoreAiTaskDate = function(rowIndex, event) {
     let restoredCount = 0, skippedCount = 0;
     targets.forEach(function(idx) {
         const row = globalData[idx];
-        if (!row || (!row._aiOrigStart && !row._aiOrigPlan)) { skippedCount++; return; }
+        const origStart = window._getAiOrigStart(row);
+        if (!row || (!origStart && !row._aiOrigPlan)) { skippedCount++; return; }
         const oldStart = colIdx.start !== -1 ? row[colIdx.start] : '';
         const oldPlan  = colIdx.plan  !== -1 ? row[colIdx.plan]  : '';
         let changed = false;
-        if (row._aiOrigStart && colIdx.start !== -1 && row[colIdx.start] !== row._aiOrigStart) {
-            row[colIdx.start] = row._aiOrigStart;
+        if (origStart && colIdx.start !== -1 && row[colIdx.start] !== origStart) {
+            row[colIdx.start] = origStart;
             row._startForced = true;
             changed = true;
         }
@@ -14615,7 +14636,7 @@ window.restoreAiTaskDate = function(rowIndex, event) {
     });
 
     if (!restoredCount) {
-        alert('⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(메일 자동등록 이후 이 기능이 추가되기 전에 들어온 업무는 백업이 없어 복원할 수 없습니다.)');
+        alert('⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(백업도 없고, 상세내용에서 날짜를 추출할 수도 없는 업무입니다.)');
         return;
     }
 
@@ -14635,11 +14656,12 @@ window.restoreAiTaskDate = function(rowIndex, event) {
 window.restoreAiTaskDateAll = function() {
     const _en = window._currentLang === 'en';
     if (!globalData || globalData.length <= 1) return;
-    const eligibleCount = globalData.slice(1).filter(function(row) { return row && (row._aiOrigStart || row._aiOrigPlan); }).length;
+    // 💡 [2026-08-27] _aiOrigStart 백업이 없어도 상세내용에서 시작일을 추출할 수 있으면 대상에 포함
+    const eligibleCount = globalData.slice(1).filter(function(row) { return row && (window._getAiOrigStart(row) || row._aiOrigPlan); }).length;
     if (!eligibleCount) {
         alert(_en
-            ? '⚠️ No AI-analyzed original dates to restore.\n(Tasks added before this feature existed have no backup.)'
-            : '⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(이 기능이 추가되기 전에 들어온 업무는 백업이 없어 복원할 수 없습니다.)');
+            ? '⚠️ No AI-analyzed original dates to restore.\n(No backup, and no date could be extracted from the detail text either.)'
+            : '⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(백업도 없고, 상세내용에서 날짜를 추출할 수도 없는 업무입니다.)');
         return;
     }
     const confirmMsg = _en
@@ -14649,12 +14671,13 @@ window.restoreAiTaskDateAll = function() {
         let restoredCount = 0;
         for (let idx = 1; idx < globalData.length; idx++) {
             const row = globalData[idx];
-            if (!row || (!row._aiOrigStart && !row._aiOrigPlan)) continue;
+            const origStart = window._getAiOrigStart(row);
+            if (!row || (!origStart && !row._aiOrigPlan)) continue;
             const oldStart = colIdx.start !== -1 ? row[colIdx.start] : '';
             const oldPlan  = colIdx.plan  !== -1 ? row[colIdx.plan]  : '';
             let changed = false;
-            if (row._aiOrigStart && colIdx.start !== -1 && row[colIdx.start] !== row._aiOrigStart) {
-                row[colIdx.start] = row._aiOrigStart;
+            if (origStart && colIdx.start !== -1 && row[colIdx.start] !== origStart) {
+                row[colIdx.start] = origStart;
                 row._startForced = true;
                 changed = true;
             }
