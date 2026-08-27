@@ -10791,7 +10791,13 @@ window.deleteHistoryByDateRange = function() {
                             let displayHtml = linkifyAndEscape(cellText, boldBrackets);
                             if (cellIndex === colIdx.content) displayHtml = injectMailRawBtn(displayHtml, row, i);
                             tdStyle += " position: relative; padding-left: 22px;";
-                            tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans"`;
+                            // 💡 [2026-08-28 버그 수정] 개별 셀 펼침(row._expandedDetailCols → 위에서 이미 tdAttrs에
+                            //    'detail-td-expanded' 클래스로 반영해둠)이 있어도, 여기서 class 속성을 통째로
+                            //    갈아끼우면서 그 클래스가 조용히 사라졌다 — 한글/영문이 섞인 대부분의 실제
+                            //    상세내용은 항상 이 분기(transMode>0)를 타므로, WBS 상하좌우/+-/삭제 등으로
+                            //    renderTable()이 다시 그려질 때마다 개별로 펼쳐뒀던 칸이 매번 접혀 보였다.
+                            const _hadExpandedClass = / class="[^"]*\bdetail-td-expanded\b[^"]*"/.test(tdAttrs);
+                            tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans${_hadExpandedClass ? ' detail-td-expanded' : ''}"`;
                             tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
                     } 
                     // 교체
