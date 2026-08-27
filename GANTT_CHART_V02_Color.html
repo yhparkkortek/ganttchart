@@ -10757,7 +10757,12 @@ window.deleteHistoryByDateRange = function() {
                         const wbsToggleHtml = _wbsHasChildren
                             ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? '펼치기' : '접기'}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
                             : `<span style="display:inline-block; width:11px;"></span>`;
-                        let prefix = wbsToggleHtml + (row._level > 0
+                        // 💡 [2026-08-28 신규] 담당구분(PM/기구/HW/FW/...) 순환 토글 배지 — 업무명 바로 앞에
+                        //    작은 글씨로 붙여서 클릭할 때마다 다음 구분으로 넘어간다. 값이 없으면 AI 분석
+                        //    업무의 상세내용 [담당구분]... 태그에서 초기값을 가져온다(window.toggleWbsDiscipline 참고).
+                        const _wbsDiscipline = row._담당구분 || window._extractDisciplineFromContent(row) || '미분류';
+                        const wbsDisciplineBadge = `<span class="wbs-discipline-badge" onclick="window.toggleWbsDiscipline(${i}, event);" title="클릭: 담당구분 순환 전환 (${window.WBS_DISCIPLINE_CATEGORIES.join(' → ')})" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border-radius:3px; padding:0 3px; margin-right:3px; cursor:pointer; vertical-align:middle; white-space:nowrap;">[${_wbsDiscipline}]</span>`;
+                        let prefix = wbsToggleHtml + wbsDisciplineBadge + (row._level > 0
                             ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '');
                         let indentEm = (row._level || 0) * 1.2;
@@ -11111,6 +11116,46 @@ window.deleteHistoryByDateRange = function() {
             arrow.textContent = row._wbsCollapsed ? '▶' : '▼';
             arrow.title = row._wbsCollapsed ? '펼치기' : '접기';
         }
+        applyFilters();
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // 💡 [2026-08-28 신규] WBS 업무명 앞 "담당구분" 순환 토글 배지 — 클릭할 때마다 AI 업무분석이
+    //    이미 쓰고 있는 담당구분 목록(getSystemPrompt의 분류 기준과 동일, 2361줄 참고)을 순서대로
+    //    한 칸씩 돌려가며 row._담당구분을 바꾼다. 사용자가 예시로 든 HW/ME/FW 대신, 이미 운용 중인
+    //    정식 구분자(PM/기구/HW/FW/BLU/TSP/LCM/Slimming/Cutting/Tooling/영업/CS/FA/미분류)를 그대로 씀
+    //    — "기구"가 사실상 ME(기구설계) 역할이라 별도 축약형을 새로 만들 필요가 없음.
+    // ═══════════════════════════════════════════════════════════
+    window.WBS_DISCIPLINE_CATEGORIES = ['PM','기구','HW','FW','BLU','TSP','LCM','Slimming','Cutting','Tooling','영업','CS','FA','미분류'];
+
+    // AI 분석 업무는 상세내용 [담당구분]기구 처럼 항상 태그를 남기므로, row._담당구분이 비어있는
+    // 과거 업무도 이 태그에서 초기값을 복원할 수 있다(AI 분석 날짜 복원 때 만든 것과 같은 패턴).
+    window._extractDisciplineFromContent = function(row) {
+        if (!row) return null;
+        const contentStr = colIdx.content !== -1 ? (row[colIdx.content] || '').toString() : '';
+        if (!contentStr) return null;
+        const m = contentStr.match(/\[담당구분\]([^\n]+)/);
+        return m ? m[1].trim() : null;
+    };
+
+    // 클릭 → 다음 구분으로 순환 + row._담당구분 갱신 + 상세내용에 [담당구분]... 태그가 이미 있으면
+    // 그 값도 같이 바꿔서 서로 어긋나지 않게 한다(태그가 원래 없던 수동 입력 업무는 새로 끼워넣지 않음).
+    window.toggleWbsDiscipline = function(rowIndex, ev) {
+        if (ev) ev.stopPropagation();
+        const row = globalData[rowIndex];
+        if (!row) return;
+        const cats = window.WBS_DISCIPLINE_CATEGORIES;
+        const cur = row._담당구분 || window._extractDisciplineFromContent(row) || '';
+        const curIdx = cats.indexOf(cur); // 목록에 없으면(빈값 등) -1 → 아래 +1 % length로 자연스럽게 0번(PM)부터 시작
+        const next = cats[(curIdx + 1) % cats.length];
+        row._담당구분 = next;
+
+        if (colIdx.content !== -1 && row[colIdx.content] && /\[담당구분\][^\n]*/.test(row[colIdx.content].toString())) {
+            row[colIdx.content] = row[colIdx.content].toString().replace(/\[담당구분\][^\n]*/, '[담당구분]' + next);
+        }
+
+        logChange(rowIndex, -1, '담당구분', (cur || '(없음)') + ' → ' + next);
+        renderTable(globalData);
         applyFilters();
     };
 
