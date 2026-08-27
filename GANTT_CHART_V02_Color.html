@@ -1967,13 +1967,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
              없으면 이 헤더(PANEL/AD BD/CONV 밑줄탭)가 스크롤에 같이 밀려 올라가 가려져버린다 —
              top:0으로 고정해서 바깥을 스크롤해도 항상 보이게 함 -->
         <div class="concept-header-box" id="elec-header-box" style="position:sticky; top:0; z-index:20;">
-            <div id="elec-view-toggle" style="display:flex; align-items:center; gap:14px; flex-shrink:0;">
-                <span id="ev-tab-panel" onclick="window._switchElecView('panel')"
-                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🖥️ PANEL</span>
-                <span id="ev-tab-adbd" onclick="window._switchElecView('adbd')"
-                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔲 AD BD</span>
-                <span id="ev-tab-convbd" onclick="window._switchElecView('convbd')"
-                      style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">🔌 CONV</span>
+            <div id="elec-view-toggle" style="position:relative; display:flex; align-items:center; flex-shrink:0;">
+                <button id="elec-view-trigger" class="action-btn" onclick="window._toggleElecViewDropdown(event)" title="스펙표가 등록된 부품 종류만 목록에 나타납니다(나머지는 추후 등록 예정)" style="min-width:130px; justify-content:space-between; gap:6px;">
+                    <span id="elec-view-trigger-label">🖥️ PANEL</span><span style="font-size:10px;">▾</span>
+                </button>
+                <div id="elec-view-dropdown" class="row-action-popup" style="min-width:150px; padding:6px;"></div>
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <span id="eh-panel-btns" style="display:contents;">
@@ -30347,21 +30345,84 @@ document.addEventListener('DOMContentLoaded', function() {
         try { localStorage.setItem('gantt_alarm_view', view); } catch(e) {}
     };
 
-    // ⚡ Elec Parts 탭의 CONV BD/AD BD 밑줄 전환 — Alarm/Notice의 _switchAlarmView와 동일한 패턴.
-    //    AD BD는 아직 스키마가 없는 준비중 placeholder라 렌더 호출 없이 안내문만 보여준다.
+    // ⚡ [2026-08-28 변경] Elec Parts 탭 부품 종류 선택 — 밑줄탭 3개 고정 대신 드롭다운으로 변경.
+    //    Summary "주요 자재"의 고정 13개 구분(MATERIAL_FIXED_CATEGORIES) 순서를 그대로 훑되, 그 중
+    //    실제로 스펙표(스키마)가 등록된 것만 드롭다운에 나타난다 — 지금은 PANEL/AD BOARD/CONVERTER
+    //    3개뿐(= Summary 주요자재에서 🔎 버튼이 뜨는 것과 정확히 같은 기준). 나머지 10개는 각자의
+    //    스펙표 정의(도표 설계)를 나중에 만들어서 아래 ELEC_CATEGORY_TO_VIEW에 한 줄만 추가하면
+    //    자동으로 드롭다운에 나타난다 — HTML/드롭다운 코드는 손댈 필요 없음.
+    window.ELEC_VIEW_META = {
+        panel:  { label: 'PANEL', icon: '🖥️' },
+        adbd:   { label: 'AD BD', icon: '🔲' },
+        convbd: { label: 'CONV',  icon: '🔌' },
+    };
+    // Summary 주요자재 구분명 → Elec Parts 뷰 키. 아직 스펙표가 없는 구분(SLIM/CUT, TOUCH / GLASS,
+    // TOUCH CTRL, BLU, POWER, METAL, MOLD, DIE CAST, PACKING, ETC)은 의도적으로 비워둠.
+    window.ELEC_CATEGORY_TO_VIEW = {
+        'PANEL': 'panel',
+        'AD BOARD': 'adbd',
+        'CONVERTER': 'convbd',
+    };
+    // Summary 순서 기준으로, 실제 등록된(=ELEC_VIEW_META에 있는) 뷰만 걸러서 드롭다운 옵션 목록 생성
+    window._getElecDropdownOptions = function() {
+        const cats = window.MATERIAL_FIXED_CATEGORIES || Object.keys(window.ELEC_CATEGORY_TO_VIEW);
+        const seen = {};
+        const out = [];
+        cats.forEach(function(cat) {
+            const key = window.ELEC_CATEGORY_TO_VIEW[cat];
+            if (!key || seen[key] || !window.ELEC_VIEW_META[key]) return;
+            seen[key] = true;
+            out.push(Object.assign({ key: key }, window.ELEC_VIEW_META[key]));
+        });
+        return out;
+    };
+    window._toggleElecViewDropdown = function(ev) {
+        if (ev) ev.stopPropagation();
+        const popup = document.getElementById('elec-view-dropdown');
+        const btn = document.getElementById('elec-view-trigger');
+        if (!popup || !btn) return;
+        if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
+        const options = window._getElecDropdownOptions();
+        popup.innerHTML = options.map(function(o) {
+            const active = o.key === window._elecView;
+            return `<div onclick="window._switchElecView('${o.key}'); document.getElementById('elec-view-dropdown').style.display='none';"
+                         style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;
+                                background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
+                         onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
+                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}</div>`;
+        }).join('');
+        const rect = btn.getBoundingClientRect();
+        popup.style.left = rect.left + 'px';
+        popup.style.top = (rect.bottom + 4) + 'px';
+        popup.style.display = 'block';
+        if (!window._elecDropdownListenerAdded) {
+            window._elecDropdownListenerAdded = true;
+            document.addEventListener('click', function(e) {
+                const p = document.getElementById('elec-view-dropdown');
+                const b = document.getElementById('elec-view-trigger');
+                if (p && p.style.display === 'block' && !p.contains(e.target) && e.target !== b && !(b && b.contains(e.target))) {
+                    p.style.display = 'none';
+                }
+            });
+        }
+    };
+
     window._elecView = window._elecView || 'panel';
-    // 💡 [2026-08-26] PANEL(구 Panel Compare)이 이 탭으로 들어오면서 3-way가 됨 — 콘텐츠/밑줄탭은 뷰별로
+    // 💡 [2026-08-26] PANEL(구 Panel Compare)이 이 탭으로 들어오면서 3-way가 됨 — 콘텐츠는 뷰별로
     //    하나씩(panel/adbd/convbd) 있지만, 헤더의 액션 버튼 묶음은 뷰마다 구성이 달라(대상 함수가 다름)
     //    eh-panel-btns/eh-convbd-btns 두 묶음만 display:contents ↔ none으로 토글한다(AD BD는 버튼 없음).
     window._switchElecView = function(view) {
+        // 💡 등록 안 된 뷰(예: 옛 localStorage 값이 가리키는 뷰가 사라졌거나 아직 없는 경우)는 PANEL로 폴백
+        if (!window.ELEC_VIEW_META[view]) view = 'panel';
         window._elecView = view;
         const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd' };
         Object.keys(sections).forEach(function(v) {
             const sec = document.getElementById(sections[v]);
             if (sec) sec.style.display = (v === view) ? 'block' : 'none';
-            const tab = document.getElementById('ev-tab-' + v);
-            if (tab) { tab.style.color = (v === view) ? '#2c5f8a' : '#999'; tab.style.borderBottomColor = (v === view) ? '#2c5f8a' : 'transparent'; }
         });
+        const meta = window.ELEC_VIEW_META[view];
+        const label = document.getElementById('elec-view-trigger-label');
+        if (label && meta) label.textContent = meta.icon + ' ' + meta.label;
         const panelBtns = document.getElementById('eh-panel-btns');
         const adbdBtns = document.getElementById('eh-adbd-btns');
         const convbdBtns = document.getElementById('eh-convbd-btns');
