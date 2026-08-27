@@ -18269,8 +18269,32 @@ window._msLoadProjectIndex = async function() {
         });
         const data = await res.json();
         const projects = (data && Array.isArray(data.projects)) ? data.projects : [];
-        window._projectIndexCache = { data: projects, at: now };
-        return projects;
+
+        // 💡 [2026-08-27] 드라이브에서 프로젝트 파일이 삭제됐는데(앱의 "🗑️ 프로젝트 삭제"를 거치지
+        //    않고 드라이브에서 직접 지웠거나, 이 정리 기능이 생기기 전에 지워진 경우) project_index.json
+        //    엔 항목이 유령으로 남아있어서, 존재하지 않는 프로젝트로 메일이 계속 자동배치되는 문제가
+        //    있었다. 실제 공용 폴더의 프로젝트 파일 목록과 대조해서, 더 이상 없는 파일을 가리키는
+        //    항목은 후보에서 제외하고(당장 오배치를 막음) project_index.json에도 정리된 목록을 다시
+        //    저장해서(유령 항목 영구 제거) 다음부터는 이 필터링 자체가 필요 없게 만든다.
+        let validProjects = projects;
+        try {
+            const realFiles = await window._listProjectFiles();
+            const validIds = new Set(realFiles.map(function(f) { return f.id; }));
+            const ghostEntries = projects.filter(function(p) { return !p || !validIds.has(p.drive_file_id); });
+            if (ghostEntries.length) {
+                validProjects = projects.filter(function(p) { return p && validIds.has(p.drive_file_id); });
+                console.warn('project_index.json에서 존재하지 않는 프로젝트 항목 ' + ghostEntries.length + '건 제거:',
+                    ghostEntries.map(function(p) { return p && p.file_name; }));
+                fetch(`https://www.googleapis.com/upload/drive/v3/files/${indexFileId}?uploadType=media&supportsAllDrives=true`, {
+                    method: 'PATCH',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify(Object.assign({}, data, { projects: validProjects }))
+                }).catch(function(e) { console.warn('project_index.json 유령 항목 정리 저장 실패(다음 로드에서 다시 시도됨):', e.message); });
+            }
+        } catch (e) { console.warn('project_index.json 유효성 검증 실패 — 원본 목록 그대로 사용:', e.message); }
+
+        window._projectIndexCache = { data: validProjects, at: now };
+        return validProjects;
     } catch(e) { console.warn('project_index.json 로드 실패:', e); return []; }
 };
 
