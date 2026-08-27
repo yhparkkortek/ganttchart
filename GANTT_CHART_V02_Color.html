@@ -11120,22 +11120,32 @@ window.deleteHistoryByDateRange = function() {
     };
 
     // ═══════════════════════════════════════════════════════════
-    // 💡 [2026-08-28 신규] WBS 업무명 앞 "담당구분" 순환 토글 배지 — 클릭할 때마다 AI 업무분석이
-    //    이미 쓰고 있는 담당구분 목록(getSystemPrompt의 분류 기준과 동일, 2361줄 참고)을 순서대로
-    //    한 칸씩 돌려가며 row._담당구분을 바꾼다. 사용자가 예시로 든 HW/ME/FW 대신, 이미 운용 중인
-    //    정식 구분자(PM/기구/HW/FW/BLU/TSP/LCM/Slimming/Cutting/Tooling/영업/CS/FA/미분류)를 그대로 씀
-    //    — "기구"가 사실상 ME(기구설계) 역할이라 별도 축약형을 새로 만들 필요가 없음.
+    // 💡 [2026-08-28 신규 → 같은 날 개편] WBS 업무명 앞 "담당구분" 순환 토글 배지 — 클릭할 때마다
+    //    담당구분 목록을 순서대로 한 칸씩 돌려가며 row._담당구분을 바꾼다. 원래는 AI 업무분석 프롬프트
+    //    (2361줄)의 정식 명칭(기구/영업/Tooling/미분류)을 그대로 썼는데, 배지가 좁아서 짧은 영문 약칭
+    //    (ME/SA/TOOL/ETC)으로 바꾸고, Slimming/Cutting은 별도 항목을 없애고 LCM으로 의미를 합쳤다
+    //    (Slimming/Cutting이 원래도 LCM 패널 자체의 두께·가공 관련 이슈라 LCM 범주에 속함).
+    //    AI가 예전 방식(기구/영업/Tooling/미분류/Slimming/Cutting)으로 이미 만들어둔 [담당구분]... 태그도
+    //    있으니, _WBS_DISCIPLINE_ALIASES로 옛 명칭 → 새 배지 값으로 자동 변환해서 읽는다(AI 프롬프트
+    //    자체의 분류 기준은 안 건드림 — 배지 표시/순환용 목록만 바뀜).
     // ═══════════════════════════════════════════════════════════
-    window.WBS_DISCIPLINE_CATEGORIES = ['PM','기구','HW','FW','BLU','TSP','LCM','Slimming','Cutting','Tooling','영업','CS','FA','미분류'];
+    window.WBS_DISCIPLINE_CATEGORIES = ['PM','ME','HW','FW','BLU','TSP','LCM','TOOL','SA','CS','FA','ETC'];
+    window._WBS_DISCIPLINE_ALIASES = {
+        '기구': 'ME', '영업': 'SA', 'Tooling': 'TOOL', '미분류': 'ETC',
+        'Slimming': 'LCM', 'Cutting': 'LCM' // 💡 별도 항목 삭제, 의미는 LCM으로 이동
+    };
 
     // AI 분석 업무는 상세내용 [담당구분]기구 처럼 항상 태그를 남기므로, row._담당구분이 비어있는
     // 과거 업무도 이 태그에서 초기값을 복원할 수 있다(AI 분석 날짜 복원 때 만든 것과 같은 패턴).
+    // 옛 정식 명칭으로 남아있는 태그는 위 별칭표로 새 배지 값으로 변환해서 반환한다.
     window._extractDisciplineFromContent = function(row) {
         if (!row) return null;
         const contentStr = colIdx.content !== -1 ? (row[colIdx.content] || '').toString() : '';
         if (!contentStr) return null;
         const m = contentStr.match(/\[담당구분\]([^\n]+)/);
-        return m ? m[1].trim() : null;
+        if (!m) return null;
+        const raw = m[1].trim();
+        return window._WBS_DISCIPLINE_ALIASES[raw] || raw;
     };
 
     // 클릭 → 다음 구분으로 순환 + row._담당구분 갱신 + 상세내용에 [담당구분]... 태그가 이미 있으면
