@@ -157,6 +157,12 @@
        절대 건드리지 않고 그 상태의 "겉모습"만 흰 배경+파란 글씨로 바꿈. 다른 필터(업무상태/
        개발단계/담당자)의 active 스타일은 원래 그대로(파란 배경+흰 글씨) 유지됨. */
     .filter-group-wbs .btn.active[data-value] { background-color: #fff !important; color: #2c5f8a !important; border-color: #2c5f8a !important; box-shadow: none !important; }
+    /* 💡 [2026-08-27] LEVEL(WBS) 라벨("filter-label-static") — 위 버튼(0~4)과 같은 흰바탕/파란글씨로
+       통일하고, 상태(active)와 무관하게 항상 이 색으로 고정. 클릭 기능은 없고(generateFilters()에서
+       onclick 미부착) 마우스오버 시에만 살짝 색이 진해지는 hover 피드백만 남김. */
+    .filter-label-static,
+    .filter-label-static.active { background-color: #fff !important; color: #2c5f8a !important; border-color: #2c5f8a !important; box-shadow: none !important; }
+    .filter-label-static:hover { background-color: #eaf2f8 !important; filter: none; }
     .btn.dimmed { opacity: 0.4; background-color: #f8f9fa; color: #868e96; border: 1px dashed #dee2e6; }
     .btn.dimmed:hover { opacity: 0.8; background-color: #e2e6ea; color: #333; border: 1px solid #ccc; }
     .btn.active.dimmed { opacity: 1; border-style: solid; }
@@ -1245,11 +1251,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="btn-group" id="gantt-filter-btn-group">
         <!-- LEVEL(WBS) / 업무상태 / 개발단계 드롭다운 버튼은 generateFilters()가 여기 채웁니다 -->
     </div>
-    <div class="btn-group" style="margin-left: auto;">
+    <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
+    <div class="btn-group">
         <button id="schedule-tools-btn" class="action-btn" onclick="window.toggleScheduleToolsMenu(event)" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬">🛠️ 일정 도구</button>
         </div>
 
-        <div class="btn-group">
+        <div class="btn-group" style="margin-left: auto;">
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
@@ -12241,10 +12248,19 @@ window.handleAuthClick = function() {
             groupDiv.id = 'filter-group-' + col.index;
 
             let label = document.createElement('div');
-            label.className = 'filter-label'; 
+            label.className = 'filter-label';
             label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
-            if (currentFilters[col.index].has('All')) label.classList.add('active'); 
-            label.onclick = () => { window.toggleAllFilter(col.index, groupDiv); window.updateGanttFilterTriggerState(col.index); };
+            // 💡 [2026-08-27] LEVEL(WBS) 라벨만 예외 — 예전엔 클릭하면 하위 0~4 버튼을 전체선택/해제로
+            //    토글하고 그 여파로 상위 트리거 버튼("LEVEL(WBS) ▾") 색까지 반응했는데, 그게 원치 않는
+            //    반응이라는 피드백으로 LEVEL(WBS) 라벨만 클릭 기능을 완전히 제거하고(하위 버튼 상태와
+            //    무관하게) 흰바탕/파란글씨 고정 장식용 라벨로 바꿈(호버만 유지, 아래 CSS 참고).
+            //    업무상태/개발단계는 기존 전체선택/해제 토글 동작 그대로 유지.
+            if (col.name === 'LEVEL(WBS)') {
+                label.classList.add('filter-label-static');
+            } else {
+                if (currentFilters[col.index].has('All')) label.classList.add('active');
+                label.onclick = () => { window.toggleAllFilter(col.index, groupDiv); window.updateGanttFilterTriggerState(col.index); };
+            }
             groupDiv.appendChild(label);
 
             valuesArray.forEach(val => {
