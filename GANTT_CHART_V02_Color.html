@@ -187,19 +187,26 @@
     th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 10px !important; padding-bottom: 10px !important; }
     
     /* 💡 [2026-08-27] 0레벨(최상위)은 모달 헤더와 같은 살구색(#fff8e6) 배경+굵게, 1레벨도 굵게로
-       구별을 강화 (2~4레벨은 기존처럼 흰 배경+보통 굵기 유지). */
-    .parent-row td { background: #fff8e6 !important; font-weight: bold; color: #000000 !important; }
+       구별을 강화 (2~4레벨은 기존처럼 흰 배경+보통 굵기 유지). renderTable()이 셀마다
+       style="font-weight:normal/bold"를 인라인으로 직접 박아 넣는데(getFontWeight()), 인라인
+       스타일이 외부 CSS보다 우선순위가 높아 이 규칙만으로는 안 먹으므로 font-weight도 !important로
+       강제해서 인라인 값을 덮어씀. */
+    .parent-row td { background: #fff8e6 !important; font-weight: bold !important; color: #000000 !important; }
     .parent-row td.period-td { color: #e03131 !important; }
     .parent-row .no-td, .parent-row .no-td .row-num-span { color: #000000 !important; }
     .parent-row .chart-label { color: #495057 !important; }
 
-    .sub-parent-row td { background: #ffffff !important; font-weight: bold; color: #333333; }
+    .sub-parent-row td { background: #ffffff !important; font-weight: bold !important; color: #333333; }
     .sub-parent-row-2 td { background: #ffffff !important; font-weight: normal; color: #333333; }
     .sub-parent-row-3 td { background: #ffffff !important; font-weight: normal; color: #333333; }
     .sub-parent-row-4 td { background: #ffffff !important; font-weight: normal; color: #333333; }
 
     /* 💡 줄무늬 — 짝수 번째 보이는 행만 옅은 회색 (M.C Table/Brief SPEC과 동일한 톤) */
     #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
+    /* 💡 [2026-08-27] 0레벨 행이 짝수 번째(줄무늬 대상)와 겹치면 위 회색 줄무늬 규칙이 클래스 2개+태그
+       조합이라 특이도가 더 높아 살구색을 덮어써 버림 — 같은 조합의 선택자를 추가해 살구색이 항상
+       이기도록 함. */
+    #myTable tbody tr.gantt-zebra-b.parent-row td { background: #fff8e6 !important; }
 
     /* 💡 TEMP: Gantt 표를 Brief SPEC/M.C Table과 완전히 동일한 테두리/헤더 스타일로 통일 */
     #myTable th, #myTable td { border: 1px solid #e3e6ea !important; }
