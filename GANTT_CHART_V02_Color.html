@@ -14622,12 +14622,29 @@ window._ibBuildAnalysisContext = function(it) {
     lines.push((_en ? 'Dev stage(L0): ' : '개발단계(L0): ') + (t['개발단계'] || ''));
     lines.push((_en ? 'Assignee category: ' : '담당구분: ') + (t['담당구분'] || ''));
     lines.push('WBS' + (_en ? ' level: L' : '레벨: L') + (t['wbs레벨'] !== undefined ? t['wbs레벨'] : 4));
+    // 💡 [2026-08-28 버그 수정] 여기 담당자(assignee)를 후보 옆에 괄호로 보여주고 있었는데, 실제 매칭
+    //    프롬프트(window.getSystemPrompt 뒤에 붙는 "프로젝트 매칭 판단 요청" 섹션)는 model/inch/customer/
+    //    keywords만 AI에게 보여주고 assignee는 애초에 넘기지도 않는다 — 그런데도 여기 담당자 이름이
+    //    같이 보이니, 이 "왜 매칭됐어?" 미니 채팅 AI가 실제 근거 대신 담당자 이름을 근거로 지어내
+    //    답하는 사고(오탐 설명)로 이어졌다. 실제 매칭에 쓰인 근거(keywords)로 바꾸고, 담당자는 매칭과
+    //    무관하다는 점을 명시해서 AI가 엉뚱한 근거를 만들어내지 못하게 막는다.
     if (it.matchedProject) {
-        lines.push((_en ? 'Matched project status: ' : '매칭 프로젝트 상태: ') + (it.matchedProject.status || ''));
+        const _stLabel = it.matchedProject.status === 'matched'
+            ? (_en ? 'Auto-confirmed (AI confidence: high/"상")' : '자동 확정 (AI 신뢰도: 상)')
+            : (it.matchedProject.status || '');
+        lines.push((_en ? 'Matched project status: ' : '매칭 프로젝트 상태: ') + _stLabel);
         if (it.matchedProject.candidates && it.matchedProject.candidates.length) {
-            lines.push((_en ? 'Matched candidates: ' : '매칭 후보: ') + it.matchedProject.candidates.map(function(c) {
-                return (c.file_name || c.model || c.customer || '') + (c.assignee ? ' (' + c.assignee + ')' : '');
-            }).join(', '));
+            lines.push(_en
+                ? 'Matched candidates (ACTUAL matching evidence — only model name/inch/customer/registered keywords are used for matching. Assignee/owner name is NEVER used for matching, even if shown elsewhere — do not cite it as a reason.):'
+                : '매칭 후보(실제 매칭에 쓰인 근거 — 모델명/인치/고객사/등록 키워드만 매칭에 사용됨. 담당자 이름은 다른 곳에 보이더라도 매칭 근거로 절대 쓰이지 않으니 이유로 들지 말 것):');
+            it.matchedProject.candidates.forEach(function(c) {
+                const kw = (c.keywords && c.keywords.length)
+                    ? c.keywords.slice(0, 8).join(', ')
+                    : (_en ? '(no keywords registered)' : '(등록된 키워드 없음)');
+                lines.push('  - ' + (c.file_name || c.model || c.customer || '')
+                    + (c.inch ? ` (${c.inch}${_en ? '"' : '인치'})` : '')
+                    + (_en ? ' | registered keywords: ' : ' | 등록 키워드: ') + kw);
+            });
         }
     }
     lines.push('');
