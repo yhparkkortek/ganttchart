@@ -9109,7 +9109,12 @@ window.deleteHistoryByDateRange = function() {
         //    (완료일은 이 형식에 포함되지 않아 과거 업무는 복원 대상에서 제외됨 — 아래 함수 주석 참고).
         //    (Ctrl/Shift+클릭 시 다중 선택된 행 전부 일괄 복원 — window.restoreAiTaskDate 참고)
         btn += `<button onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail (falls back to the date embedded in the detail text for older tasks without a backup). Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다 (백업이 없는 과거 업무는 상세내용에 적힌 날짜에서 시작일만 추출해 복원). Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:4px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
-        return html.replace(/(<b>\[출처\]<\/b>[\s\S]*?)(<br>|$)/, function(m, p1, p2) { return p1 + btn + p2; });
+        // 💡 [2026-08-27 버그 수정] "업무 상세내용"의 [대괄호] Bold 처리를 껐더니(linkifyAndEscape의
+        //    boldBrackets=false) [출처]가 더 이상 <b>[출처]</b>로 안 나와서, <b> 태그를 필수로 찾던 이
+        //    정규식이 매치를 못 해 버튼(원문 보기/AI 날짜 복원)이 통째로 안 그려지고 있었다. injectMailRawBtn은
+        //    항상 colIdx.content 칸에서만 호출되므로(다른 칸은 이 함수를 안 씀) <b> 유무와 무관하게 항상
+        //    매치되도록 <b> 요구조건을 제거.
+        return html.replace(/(\[출처\](?:<\/b>)?[\s\S]*?)(<br>|$)/, function(m, p1, p2) { return p1 + btn + p2; });
     }
 
     function parseDateValue(value) {
