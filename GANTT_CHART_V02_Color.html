@@ -775,12 +775,21 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button id="delete-project-btn" class="topbar-menu-item" onclick="window.deleteProjectFlow()" title="구글 드라이브의 프로젝트 파일을 영구 삭제합니다 (관리자 비밀번호 필요)" style="color:#e03131;">🗑️ 프로젝트 삭제</button>
             </div>
         </div>
-        <!-- 🤖 AI 업무분석 — 직접 버튼 -->
-        <button id="mail-btn" class="topbar-btn" onclick="window.showMailAnalyzer()">🤖 AI 업무분석</button>
-        <!-- 📦 보관함 — 뱃지 직접 표시 -->
-        <button id="inbox-btn" class="topbar-btn" onclick="window.openTaskInbox()">
-            📦 업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span>
-        </button>
+        <!-- 🤖 AI 도구 — AI 업무분석/AI 업무 보관함/AI 요약/AI 문답/설정 통합 메뉴 -->
+        <div style="position:relative; display:inline-block;">
+            <button id="ai-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('ai-menu-popup', this)">🤖 AI 도구</button>
+            <div id="ai-menu-popup" class="topbar-popup" style="display:none;">
+                <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">🤖 AI 업무분석</button>
+                <button id="inbox-btn" class="topbar-menu-item" onclick="window.openTaskInbox()">
+                    📦 AI 업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span>
+                </button>
+                <div class="tb-menu-sep"></div>
+                <button id="ai-summary-menu-btn" class="topbar-menu-item" onclick="window.openAiProjectSummaryModal()" title="지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다">🤖 AI 요약</button>
+                <button id="ai-qa-menu-btn" class="topbar-menu-item" onclick="window.openGanttQaModal()" title="이 프로젝트 데이터에 대해 자유롭게 질문하고 AI 답변을 받습니다">💬 AI 문답</button>
+                <div class="tb-menu-sep"></div>
+                <button id="ai-settings-link-btn" class="topbar-menu-item" onclick="window.toggleTopbarMenu('settings-menu-popup', document.getElementById('settings-menu-btn'))">⚙️ 설정</button>
+            </div>
+        </div>
         <!-- ⚙️ 설정 — 기타 기능 통합 -->
         <div style="position:relative; display:inline-block;">
             <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정</button>
@@ -790,6 +799,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <div class="tb-menu-sep"></div>
                 <button id="mail-mode-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleMailMode()" style="font-weight:bold; color:#b85c00;">🟠 메일 반자동 (보관함)</button>
                 <button id="mail-auto-config-menu-btn" class="topbar-menu-item" onclick="window.openMailAutoConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="수집주기·우선순위점수·중요키워드·초기화">📬 메일 자동배치 설정</button>
+                <div class="tb-menu-sep"></div>
+                <button id="ai-analysis-settings-btn" class="topbar-menu-item" onclick="window.openAiToolsSettingsModal(); window.closeTopbarMenu('settings-menu-popup');" title="AI 요약·AI 문답이 업무 상세내용/답변을 읽을 때 최대 몇 자까지 참고할지 설정합니다">🤖 AI 분석 설정</button>
                 <div class="tb-menu-sep"></div>
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
@@ -1238,8 +1249,6 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
 
         <div class="btn-group">
-            <button id="ai-tools-btn" class="action-btn" onclick="window.toggleAiToolsMenu(event)" title="AI 요약 · AI 문답 · 설정">🤖 AI 도구</button>
-            <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button id="print-btn" class="action-btn" onclick="window.smartPrint()">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
@@ -8360,7 +8369,7 @@ ${question}
             modal.innerHTML = `
             <div id="ai-tools-settings-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:200px;">
                 <div id="ai-tools-settings-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
-                    <span>⚙️ AI 도구 설정</span>
+                    <span>⚙️ AI 분석 설정</span>
                     <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
                 </div>
                 <div style="padding:16px 18px;">
@@ -8394,36 +8403,9 @@ ${question}
         if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (업무 상세내용 최대 ' + v + '자)', 'info');
     };
 
-    // 🤖 [2026-08-27 신규] "AI 도구" 메뉴 — 원래 별도 버튼이던 "🤖 AI 요약"/"💬 AI 문답"을 여기로
-    //    합치고, ⚙️ 설정(위 글자 수 설정)도 같은 메뉴에 둠 (버튼 정리)
-    window.toggleAiToolsMenu = function(ev) {
-        if (ev) ev.stopPropagation();
-        let popup = document.getElementById('ai-tools-popup');
-        if (popup && popup.style.display === 'block') { popup.style.display = 'none'; return; }
-        if (!popup) {
-            popup = document.createElement('div');
-            popup.id = 'ai-tools-popup';
-            popup.className = 'row-action-popup';
-            popup.style.minWidth = '230px';
-            popup.style.padding = '6px';
-            popup.innerHTML = `
-                <div onclick="document.getElementById('ai-tools-popup').style.display='none'; window.openAiProjectSummaryModal();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">🤖 AI 요약<div style="font-size:10px; color:#adb5bd; font-weight:normal;">지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다</div></div>
-                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
-                <div onclick="document.getElementById('ai-tools-popup').style.display='none'; window.openGanttQaModal();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">💬 AI 문답<div style="font-size:10px; color:#adb5bd; font-weight:normal;">이 프로젝트 데이터에 대해 자유롭게 질문하고 AI 답변을 받습니다</div></div>
-                <div style="border-top:1px solid #e9ecef; margin:4px 0;"></div>
-                <div onclick="document.getElementById('ai-tools-popup').style.display='none'; window.openAiToolsSettingsModal();" style="padding:8px; cursor:pointer; border-radius:4px; font-size:12px;" onmouseover="this.style.background='#f1f3f5'" onmouseout="this.style.background='transparent'">⚙️ 설정<div style="font-size:10px; color:#adb5bd; font-weight:normal;">AI에게 보낼 업무 상세내용 길이 등을 설정합니다</div></div>
-            `;
-            document.body.appendChild(popup);
-            document.addEventListener('click', function(e) {
-                if (!popup.contains(e.target) && e.target.id !== 'ai-tools-btn') popup.style.display = 'none';
-            });
-        }
-        const btn = document.getElementById('ai-tools-btn');
-        const rect = btn.getBoundingClientRect();
-        popup.style.left = rect.left + 'px';
-        popup.style.top = (rect.bottom + 4) + 'px';
-        popup.style.display = 'block';
-    };
+    // 🤖 [2026-08-27] "AI 요약"/"AI 문답"/"AI 분석 설정"은 상단 메뉴 "🤖 AI 도구"(및 "⚙️ 설정")로
+    //    이동 배치됨 — window.openAiProjectSummaryModal() / window.openGanttQaModal() /
+    //    window.openAiToolsSettingsModal()을 각 버튼이 직접 호출.
 
     function logChange(rowIndex, colIndex, oldVal, newVal, reason) {
         if (!globalData || globalData.length === 0) return;
@@ -9360,13 +9342,17 @@ window.deleteHistoryByDateRange = function() {
                 'mail-btn':'🤖 AI 업무분석',
                 'project-select-btn': '🔃 프로젝트 선택',
                 'schedule-tools-btn': '🛠️ 일정 도구',
-                'ai-tools-btn':       '🤖 AI 도구',
+                'ai-menu-btn':        '🤖 AI 도구',
+                'ai-summary-menu-btn':'🤖 AI 요약',
+                'ai-qa-menu-btn':     '💬 AI 문답',
+                'ai-settings-link-btn': '⚙️ 설정',
+                'ai-analysis-settings-btn': '🤖 AI 분석 설정',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'add-user-btn':       '👤 사용자 추가',
                 'file-input-label':'🟩 프로젝트 엑셀 열기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
-                'inbox-btn':'📦 업무 보관함',
+                'inbox-btn':'📦 AI 업무 보관함',
                 'weekly-report-btn': '📅 주간 업무 보고',
                 'drive_save_btn': '💾 프로젝트 저장',
                 'drive_load_btn': '📂 프로젝트 열기',
@@ -9469,13 +9455,17 @@ window.deleteHistoryByDateRange = function() {
                 'mail-btn':'🤖 AI Analysis',
                 'project-select-btn': '🔃 Select Project',
                 'schedule-tools-btn': '🛠️ Schedule Tools',
-                'ai-tools-btn':       '🤖 AI Tools',
+                'ai-menu-btn':        '🤖 AI Tools',
+                'ai-summary-menu-btn':'🤖 AI Summary',
+                'ai-qa-menu-btn':     '💬 AI Q&A',
+                'ai-settings-link-btn': '⚙️ Settings',
+                'ai-analysis-settings-btn': '🤖 AI Analysis Settings',
                 'admin-pw-change-btn': '🔑 Change Password',
                 'add-user-btn':       '👤 Add User',
                 'file-input-label':'🟩 Open Project Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
-                'inbox-btn':'📦 Task Inbox',
+                'inbox-btn':'📦 AI Task Inbox',
                 'weekly-report-btn': '📋 Weekly Report',
                 'drive_save_btn': '💾 Save Project',
                 'drive_load_btn': '📂 Open Project',
