@@ -9192,23 +9192,40 @@ window.deleteHistoryByDateRange = function() {
     }  // ← 이 닫는 괄호가 빠져있음
 
     function injectMailRawBtn(html, row, rowIndex) {
-        if (!row._mailRaw) return html;
+        // 💡 [2026-08-28 버그 수정] 예전엔 `if (!row._mailRaw) return html;`로 함수 맨 앞에서 막아서,
+        //    _mailRaw가 안 남은(원문 백업 이전에 등록됐거나 어떤 이유로 유실된) 과거 메일분석 업무는
+        //    "AI 분석 날짜로 복원" 버튼까지 통째로 안 보였다 — "항상 노출하기로 했다"던 지난 수정이 이
+        //    가드 때문에 실제로는 과거 업무에 적용이 안 되고 있었음. "원문 보기"는 원문 자체가 없으면
+        //    보여줄 게 없어 _mailRaw가 있을 때만 노출하되, "AI 분석 날짜로 복원"은 _mailRaw 없이도
+        //    _aiOrigStart/_aiOrigPlan 백업이나 상세내용에서 추출한 날짜만으로 동작 가능하므로 그 중
+        //    하나라도 있으면 노출한다.
+        const hasMailRaw = !!row._mailRaw;
+        const canRestoreDate = !!(row._aiOrigStart || row._aiOrigPlan || window._extractAiOrigStartFromContent(row));
+        if (!hasMailRaw && !canRestoreDate) return html;
+
         const _en = window._currentLang === 'en';
-        let btn = `<button onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
-        // 💡 [2026-08-24 신규 → 2026-08-27 변경] 원래는 _aiOrigStart/_aiOrigPlan 백업이 있는 업무만
-        //    복원 버튼을 노출했는데, 이 백업 기능이 생기기 전에 등록된 과거 업무는 백업이 아예 없어
-        //    버튼 자체가 안 보였다. 메일 자동등록 업무(_mailRaw 존재)라면 항상 버튼을 보여주고, 클릭
-        //    시 window.restoreAiTaskDate()가 백업이 없으면 "상세내용" 첫 줄에 항상 같이 적히는
-        //    [업무유형][발신자→수신자] YYYY-MM-DD 형식에서 시작일을 추출해 대신 복원한다
-        //    (완료일은 이 형식에 포함되지 않아 과거 업무는 복원 대상에서 제외됨 — 아래 함수 주석 참고).
-        //    (Ctrl/Shift+클릭 시 다중 선택된 행 전부 일괄 복원 — window.restoreAiTaskDate 참고)
-        btn += `<button onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail (falls back to the date embedded in the detail text for older tasks without a backup). Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다 (백업이 없는 과거 업무는 상세내용에 적힌 날짜에서 시작일만 추출해 복원). Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:4px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
+        let btn = '';
+        if (hasMailRaw) {
+            btn += `<button onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
+        }
+        if (canRestoreDate) {
+            // 💡 [2026-08-24 신규] 백업(_aiOrigStart/_aiOrigPlan)이 없으면 window.restoreAiTaskDate()가
+            //    "상세내용" 첫 줄에 항상 같이 적히는 [업무유형][발신자→수신자] YYYY-MM-DD 형식에서
+            //    시작일을 추출해 대신 복원한다(완료일은 이 형식에 없어 과거 업무는 복원 대상 제외).
+            //    (Ctrl/Shift+클릭 시 다중 선택된 행 전부 일괄 복원 — window.restoreAiTaskDate 참고)
+            btn += `<button onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail (falls back to the date embedded in the detail text for older tasks without a backup). Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다 (백업이 없는 과거 업무는 상세내용에 적힌 날짜에서 시작일만 추출해 복원). Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:${hasMailRaw ? '4' : '6'}px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
+        }
+        if (!btn) return html;
+
         // 💡 [2026-08-27 버그 수정] "업무 상세내용"의 [대괄호] Bold 처리를 껐더니(linkifyAndEscape의
         //    boldBrackets=false) [출처]가 더 이상 <b>[출처]</b>로 안 나와서, <b> 태그를 필수로 찾던 이
-        //    정규식이 매치를 못 해 버튼(원문 보기/AI 날짜 복원)이 통째로 안 그려지고 있었다. injectMailRawBtn은
-        //    항상 colIdx.content 칸에서만 호출되므로(다른 칸은 이 함수를 안 씀) <b> 유무와 무관하게 항상
-        //    매치되도록 <b> 요구조건을 제거.
-        return html.replace(/(\[출처\](?:<\/b>)?[\s\S]*?)(<br>|$)/, function(m, p1, p2) { return p1 + btn + p2; });
+        //    정규식이 매치를 못 해 버튼이 통째로 안 그려지고 있었다. <b> 요구조건은 제거했고, 그마저도
+        //    [출처] 자체가 없는(더 옛날 형식) 콘텐츠는 정규식이 아예 매치 안 되어 조용히 무시됐었으므로,
+        //    그 경우엔 그냥 맨 끝에 버튼을 붙인다(위치만 다를 뿐 항상 노출은 보장).
+        if (/\[출처\]/.test(html)) {
+            return html.replace(/(\[출처\](?:<\/b>)?[\s\S]*?)(<br>|$)/, function(m, p1, p2) { return p1 + btn + p2; });
+        }
+        return html + btn;
     }
 
     function parseDateValue(value) {
