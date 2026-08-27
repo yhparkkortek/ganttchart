@@ -284,8 +284,9 @@
     }
 
     /* 💡 [2026-08-24] WBS 2번째 클릭 — 하위(자식) 행 하이라이트. 본인 행(위 highlighted-row, 테두리+15% 톤)
-       보다 확실히 옅게: 테두리 없이 배경 톤만 살짝(4%) 줘서 "이건 부모가 아니라 딸려온 하위 행"임을
-       은근하게 구분한다. 과하지 않게 하라는 요청대로 강조 요소(테두리/굵기)는 전부 뺐다. */
+       보다 확실히 옅게: 테두리 없이 배경 톤만 살짝 줘서 "이건 부모가 아니라 딸려온 하위 행"임을
+       은근하게 구분한다. 과하지 않게 하라는 요청대로 강조 요소(테두리/굵기)는 전부 뺐다.
+       [2026-08-27] 기존 4%는 너무 흐려서 구분이 잘 안 된다는 피드백으로 9%로 살짝 진하게 조정. */
     tr.highlighted-row-child td {
         position: relative !important;
     }
@@ -293,7 +294,7 @@
         content: '';
         position: absolute;
         top: 0; left: 0; right: 0; bottom: 0;
-        background-color: rgba(230, 126, 34, 0.05) !important;
+        background-color: rgba(230, 126, 34, 0.09) !important;
         pointer-events: none;
         z-index: 4;
     }
@@ -5745,7 +5746,10 @@ ${mailText}`;
         window.recalculateSchedules();
     };
 
-    // 리프(최하위) 업무 전체를 한 번에 고정/자동으로 전환 (소요일 머릿글 자물쇠 클릭)
+    // 🔒 [2026-08-27 변경] 소요일 머릿글 자물쇠 클릭 — 이전엔 "현재 전체가 다 잠겨있으면 전체 해제,
+    //    아니면 전체 잠금"으로 토글됐으나, 그래서 어쩌다 전체가 다 잠긴 상태에서 누르면 예상과 달리
+    //    전체가 풀려버리는 문제가 있었음. 이제는 현재 상태와 무관하게 항상 "전체 잠금"만 수행함
+    //    (전체 해제가 필요하면 개별 행 자물쇠 / Ctrl·Shift 다중 선택 후 일괄 전환 / "선택 구간 재계산" 이용).
     window.wrToggleAllScheduleLock = function() {
         if (!globalData || globalData.length <= 1) return;
         // 💡 레벨/리프 여부 상관없이 전체 행 대상 (일관성 우선 — 부모 행은 완료일엔 영향 없고 시작일에만 실질 영향 있음)
@@ -5756,29 +5760,15 @@ ${mailText}`;
         }
         if (leafIndices.length === 0) return;
 
-        const allLocked = leafIndices.every(idx => {
-            const r = globalData[idx];
-            return !!(r._startForced && r._planForced);
-        });
-        const toLocked = !allLocked;
-
-        // 💡 다시 누르면 원상복구되는 토글이라 확인창 없이 바로 진행
-
         leafIndices.forEach(idx => {
             const r = globalData[idx];
             r._scheduleModeManual = true; // 💡 사용자가 직접 토글한 행 — 자동재잠금 로직에서 제외
-            if (toLocked) {
-                if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
-                if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
-                r._startForced = true; r._planForced = true;
-            } else {
-                if (colIdx.start !== -1) r[colIdx.start] = "";
-                if (colIdx.plan  !== -1) r[colIdx.plan]  = "";
-                r._startForced = false; r._planForced = false;
-            }
+            if (colIdx.start !== -1 && r._calcStartTs) r[colIdx.start] = formatTsToYMD(r._calcStartTs);
+            if (colIdx.plan  !== -1 && r._calcPlanTs)  r[colIdx.plan]  = formatTsToYMD(r._calcPlanTs);
+            r._startForced = true; r._planForced = true;
         });
 
-        logChange(0, -1, '일정 모드', (toLocked ? '전체 고정' : '전체 자동') + ` (${leafIndices.length}건)`);
+        logChange(0, -1, '일정 모드', `전체 고정 (${leafIndices.length}건)`);
         window.recalculateSchedules();
     };
 
@@ -10365,7 +10355,7 @@ window.deleteHistoryByDateRange = function() {
                 const statusLabel = lang.header['상태'] || '상태';
                 const wbsLabel = lang.header['개발업무(wbs)'] || '개발업무 (WBS)';
                 const headerLockSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"></rect><path d="M8 11V7a4 4 0 0 1 8 0v4"></path></svg>';
-                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="전체 고정 / 전체 자동 전환 (전체 업무 대상, 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
+                headHtml += `<th style="text-align: center; width: var(--w-period); min-width: 30px; max-width: var(--w-period); white-space: nowrap;">${periodLabel} <span onclick="window.wrToggleAllScheduleLock()" title="🔒 전체 업무 일정 고정 (클릭 시 현재 상태와 무관하게 항상 전체 잠금 · 완료일은 상위 업무엔 표시만 영향)" style="display:inline-flex; vertical-align:middle; cursor:pointer; color:#495057;">${headerLockSvg}</span></th>`;
                 headHtml += `<th class="status-th" style="text-align: center; width: var(--w-status); min-width: 30px; max-width: var(--w-status);">${statusLabel}</th>`;
                 headHtml += `<th style="text-align: center; width: var(--w-wbs); min-width: 100px; max-width: var(--w-wbs);">${wbsLabel}</th>`;
             }
