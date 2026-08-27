@@ -10757,12 +10757,12 @@ window.deleteHistoryByDateRange = function() {
                         const wbsToggleHtml = _wbsHasChildren
                             ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? '펼치기' : '접기'}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
                             : `<span style="display:inline-block; width:11px;"></span>`;
-                        // 💡 [2026-08-28 신규] 담당구분(PM/기구/HW/FW/...) 순환 토글 배지 — 업무명 바로 앞에
-                        //    작은 글씨로 붙여서 클릭할 때마다 다음 구분으로 넘어간다. 값이 없으면 AI 분석
-                        //    업무의 상세내용 [담당구분]... 태그에서 초기값을 가져온다(window.toggleWbsDiscipline 참고).
+                        // 💡 [2026-08-28 신규 → 뒤쪽 배치로 변경] 담당구분(PM/ME/HW/...) 순환 토글 배지 —
+                        //    업무명 "뒤"에 작은 글씨로 붙여서 클릭할 때마다 다음 구분으로 넘어간다. 값이 없으면
+                        //    AI 분석 업무의 상세내용 [담당구분]... 태그에서 초기값을 가져온다(window.toggleWbsDiscipline 참고).
                         const _wbsDiscipline = row._담당구분 || window._extractDisciplineFromContent(row) || '미분류';
-                        const wbsDisciplineBadge = `<span class="wbs-discipline-badge" onclick="window.toggleWbsDiscipline(${i}, event);" title="클릭: 담당구분 순환 전환 (${window.WBS_DISCIPLINE_CATEGORIES.join(' → ')})" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border-radius:3px; padding:0 3px; margin-right:3px; cursor:pointer; vertical-align:middle; white-space:nowrap;">[${_wbsDiscipline}]</span>`;
-                        let prefix = wbsToggleHtml + wbsDisciplineBadge + (row._level > 0
+                        const wbsDisciplineBadge = `<span class="wbs-discipline-badge" onclick="window.toggleWbsDiscipline(${i}, event);" title="클릭: 담당구분 순환 전환 (${window.WBS_DISCIPLINE_CATEGORIES.join(' → ')})" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border-radius:3px; padding:0 3px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">[${_wbsDiscipline}]</span>`;
+                        let prefix = wbsToggleHtml + (row._level > 0
                             ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '');
                         let indentEm = (row._level || 0) * 1.2;
@@ -10777,9 +10777,9 @@ window.deleteHistoryByDateRange = function() {
                         let wbsInnerHtml;
                         if (transModeWbs > 0 && taskTxt.trim() !== '') {
                             let safeTextWbs = encodeURIComponent(taskTxt).replace(/'/g, "%27").replace(/\\/g, "\\\\");
-                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print" data-trans-mode="' + transModeWbs + '" style="display:inline-block; cursor:pointer; font-size:8px; border-radius:3px; padding:1px 2px; margin-right:3px; background:transparent; vertical-align:middle;" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>';
+                            wbsInnerHtml = prefix + '<span class="trans-btn-hide-print" data-trans-mode="' + transModeWbs + '" style="display:inline-block; cursor:pointer; font-size:8px; border-radius:3px; padding:1px 2px; margin-right:3px; background:transparent; vertical-align:middle;" onclick="toggleTranslationWbs(this, \'' + safeTextWbs + '\', ' + transModeWbs + '); event.stopPropagation();">🌐</span><span class="content-span">' + escapeHtml(taskTxt) + '</span>' + wbsDisciplineBadge;
                         } else {
-                            wbsInnerHtml = prefix + escapeHtml(taskTxt);
+                            wbsInnerHtml = prefix + escapeHtml(taskTxt) + wbsDisciplineBadge;
                         }
                         bodyHtml += `<td class="wbs-cell" style="${wbsStyle}"${wbsAttrs}>${wbsInnerHtml}</td>`;
                         continue; 
