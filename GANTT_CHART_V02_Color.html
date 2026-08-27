@@ -6243,6 +6243,12 @@ ${mailText}`;
     };
 
     window.onRowNoClick = function(td, i, ev) {
+        // 💡 [2026-08-28 버그 수정] 더블클릭으로 이미 편집 모드(contenteditable)에 들어간 뒤, 커서를
+        //    원하는 위치로 옮기려고 세 번째로 클릭하면 이 함수가 매번 다시 실행돼서(더블클릭 판정은
+        //    ev.detail로만 걸러졌지 "지금 편집 중인지"는 안 봤음) forceOpenRowActions/하이라이트 등
+        //    행 선택 사이클이 다시 돌면서 포커스가 흔들려 편집 모드가 풀렸다. 편집 중인 셀 클릭은
+        //    아예 이 함수를 건너뛰어서, 브라우저 기본 동작대로 클릭한 위치에 커서만 놓이게 한다.
+        if (td.getAttribute('contenteditable') === 'true') return;
         if (window.getSelection) window.getSelection().removeAllRanges();   // shift 클릭 시 글자 파랗게 선택되는 것 방지
         if (!window._selectedRows) window._selectedRows = new Set();
         const sel = window._selectedRows;
