@@ -1967,9 +1967,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
              없으면 이 헤더(PANEL/AD BD/CONV 밑줄탭)가 스크롤에 같이 밀려 올라가 가려져버린다 —
              top:0으로 고정해서 바깥을 스크롤해도 항상 보이게 함 -->
         <div class="concept-header-box" id="elec-header-box" style="position:sticky; top:0; z-index:20;">
+            <!-- 💡 [2026-08-28] 드롭다운 기능은 유지하되, 제목 표시는 (박스형 action-btn 대신) 기존
+                 Alarm/Notice 밑줄탭과 같은 폰트(15px bold, #2c5f8a)로 되돌림 — 단 밑줄(border-bottom)은
+                 뺐음(더 이상 "여러 탭 중 활성" 개념이 아니라 단일 트리거라서). 다른 페이지 헤더 탭과
+                 폰트가 통일되도록. -->
             <div id="elec-view-toggle" style="position:relative; display:flex; align-items:center; flex-shrink:0;">
-                <button id="elec-view-trigger" class="action-btn" onclick="window._toggleElecViewDropdown(event)" title="스펙표가 등록된 부품 종류만 목록에 나타납니다(나머지는 추후 등록 예정)" style="min-width:130px; justify-content:space-between; gap:6px;">
-                    <span id="elec-view-trigger-label">🖥️ PANEL</span><span style="font-size:10px;">▾</span>
+                <button id="elec-view-trigger" onclick="window._toggleElecViewDropdown(event)" title="스펙표가 등록된 부품 종류만 목록에 나타납니다(나머지는 추후 등록 예정)"
+                        style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; background:none; border:none; padding:0; margin:0; user-select:none;">
+                    <span id="elec-view-trigger-label">🖥️ PANEL</span><span style="font-size:11px;">▾</span>
                 </button>
                 <div id="elec-view-dropdown" class="row-action-popup" style="min-width:150px; padding:6px;"></div>
             </div>
