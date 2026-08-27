@@ -7298,7 +7298,7 @@ ${recentLogs}
     // 💡 실제 생성 실행 — 결과는 projectMeta.aiSummaryReport에 캐싱(프로젝트 저장 시 함께 보관됨)
     window.generateAiProjectSummary = async function() {
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-        if (!apiKey) { alert('먼저 [🤖 AI 업무분석] 팝업에서 AI API 키를 입력하고 저장해주세요.'); return; }
+        if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
 
         const btn = document.getElementById('ai-summary-generate-btn');
         if (btn) { btn.disabled = true; btn.textContent = '⏳ 생성 중...'; }
@@ -8341,7 +8341,7 @@ ${question}
         if (!question) return;
 
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-        if (!apiKey) { alert('먼저 [🤖 AI 업무분석] 팝업에서 AI API 키를 입력하고 저장해주세요.'); return; }
+        if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
 
         const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
         window._ganttQaHistory.push({ role: 'user', text: question });
@@ -8438,6 +8438,11 @@ ${question}
         localStorage.setItem('gantt_ai_mail_maxlen', String(v));
     };
 
+    // 💡 [2026-08-28 개편] "AI 도구 → 설정"에서 흩어져 있던 AI 관련 설정을 한 곳으로 모음 —
+    //    ① AI 모델 선택(원래 AI 업무분석 팝업에 있던 AI 선택/모델/API 키를 이리로 이동)
+    //    ② AI 글자 수 설정(기존 메일 분석/요약·문답 최대 글자 수)
+    //    "메일 자동배치 설정"과 동일한 펼치기/접기 아코디언 구조(window._toggleAlarmSection 재사용)로
+    //    만들어서, 나중에 설정 항목이 늘어나도 그룹만 추가하면 되게 함.
     window.openAiToolsSettingsModal = function() {
         let modal = document.getElementById('ai-tools-settings-modal');
         if (!modal) {
@@ -8445,25 +8450,96 @@ ${question}
             modal.id = 'ai-tools-settings-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9160; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="ai-tools-settings-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:200px;">
-                <div id="ai-tools-settings-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+            <div id="ai-tools-settings-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:640px; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
+                <div id="ai-tools-settings-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210; flex-shrink:0;">
                     <span>⚙️ AI 분석 설정</span>
                     <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
                 </div>
-                <div style="padding:16px 18px;">
-                    <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 업무분석(메일) 최대 글자 수</label>
-                    <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.</div>
-                    <input id="ai-mail-maxlen-input" type="number" min="500" max="5000" step="100" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                    <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 2000자 (기본값)</div>
-                    <div style="border-top:1px solid #eee; margin:16px 0;"></div>
-                    <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 요약·문답 최대 글자 수 (업무 상세내용/답변)</label>
-                    <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약 · 💬 AI 문답이 각 업무의 "상세내용"/"답변" 필드를 읽을 때 최대 몇 자까지 참고할지 정합니다. 너무 짧으면 세부 내용(수치·번호 등)이 잘려서 답변이 부실해지고, 너무 길면 업무가 많을 때 응답이 느려지거나 실패할 수 있습니다.</div>
-                    <input id="ai-content-maxlen-input" type="number" min="100" max="3000" step="50" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                    <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 500자 (기본값)</div>
+                <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
+
+                    <!-- ══ 그룹1: AI 모델 선택 (기본 접힘) — 원래 AI 업무분석 팝업에 있던 것을 이동 ══ -->
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                        <div onclick="window._toggleAlarmSection('ai-set-sec-model')"
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🤖 AI 모델 선택</span>
+                            <span id="ai-set-sec-model-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                        </div>
+                        <div id="ai-set-sec-model" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                            <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                                <span id="mail-ai-section-label" style="white-space:nowrap; width:70px; flex-shrink:0; display:inline-block;">🤖 AI 선택</span>
+                                <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
+                                        style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                                    <option value="gemini">Gemini (Google)</option>
+                                    <option value="groq">Groq — 오픈모델 무료 호스팅</option>
+                                    <option value="mistral">Mistral (프랑스 AI, 무료)</option>
+                                    <option value="openai">OpenAI (GPT, 유료·카드등록 필요)</option>
+                                </select>
+                            </div>
+                            <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                                <span id="mail-ai-model-label" style="white-space:nowrap; width:70px; flex-shrink:0; display:inline-block;">🔧 모델 선택</span>
+                                <select id="mail-ai-model" onchange="window.onAiModelChange()"
+                                        style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                                </select>
+                            </div>
+                            <div id="mail-model-guide" style="display:none; font-size:10px; color:#555; background:#fffbe6; border:1px solid #ffe066; border-radius:4px; padding:5px 8px; margin-bottom:4px; line-height:1.5;"></div>
+                            <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                                <span id="mail-key-label">🔑 Gemini API</span>
+                                <div style="display:flex; gap:4px;">
+                                    <button id="mail-cache-clear-btn" onclick="window.clearGeminiCache()"
+                                            title="같은 메일을 다시 분석해도 캐시된 예전 결과가 아니라 새로 계산하게 함"
+                                            style="height:26px; padding:0 8px; font-size:11px; font-weight:bold; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box;">
+                                        🗑️ 캐시 초기화
+                                    </button>
+                                    <button id="mail-key-link-btn" onclick="window.open('https://aistudio.google.com/apikey', '_blank')"
+                                            title=""
+                                            style="height:26px; padding:0 8px; font-size:11px; font-weight:bold; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box;">
+                                        🔗 발급받기
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="mail-key-guide" style="display:none;"></div>
+                            <div style="display:flex; gap:4px;">
+                                <input id="mail-gemini-key" type="password" placeholder="AIza..."
+                                    style="flex:1; min-width:0; box-sizing:border-box; height:26px; padding:0 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
+                                <button id="mail-key-save-btn" onclick="window.saveGeminiKey()"
+                                        title="API 키 저장"
+                                        style="height:26px; padding:0 10px; font-size:11px; font-weight:bold; background:#2c5f8a; color:#fff; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box;">
+                                    💾 저장
+                                </button>
+                                <button onclick="window.clearGeminiKey()"
+                                        title="API 키 삭제"
+                                        style="height:26px; padding:0 8px; font-size:11px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:4px; cursor:pointer; box-sizing:border-box;">
+                                    🗑️
+                                </button>
+                            </div>
+                            <div id="mail-key-status" style="font-size:11px; margin-top:3px; color:#28a745;"></div>
+                        </div>
+                    </div>
+
+                    <!-- ══ 그룹2: AI 글자 수 설정 (기본 접힘) — 기존 메일분석/요약·문답 최대 글자 수 통합 ══ -->
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                        <div onclick="window._toggleAlarmSection('ai-set-sec-maxlen')"
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔢 AI 글자 수 설정</span>
+                            <span id="ai-set-sec-maxlen-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                        </div>
+                        <div id="ai-set-sec-maxlen" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 업무분석(메일) 최대 글자 수</label>
+                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.</div>
+                            <input id="ai-mail-maxlen-input" type="number" min="500" max="5000" step="100" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 2000자 (기본값)</div>
+                            <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 요약·문답 최대 글자 수 (업무 상세내용/답변)</label>
+                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약 · 💬 AI 문답이 각 업무의 "상세내용"/"답변" 필드를 읽을 때 최대 몇 자까지 참고할지 정합니다. 너무 짧으면 세부 내용(수치·번호 등)이 잘려서 답변이 부실해지고, 너무 길면 업무가 많을 때 응답이 느려지거나 실패할 수 있습니다.</div>
+                            <input id="ai-content-maxlen-input" type="number" min="100" max="3000" step="50" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 500자 (기본값)</div>
+                        </div>
+                    </div>
+
                 </div>
-                <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
+                <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-shrink:0;">
                     <button onclick="window.saveAiToolsSettings()" style="flex:1; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;">💾 저장</button>
-                    <button onclick="document.getElementById('ai-mail-maxlen-input').value=window._AI_MAIL_MAXLEN_DEFAULT; document.getElementById('ai-content-maxlen-input').value=window._AI_CONTENT_MAXLEN_DEFAULT;" style="padding:8px 14px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">🔄 기본값으로</button>
+                    <button onclick="document.getElementById('ai-mail-maxlen-input').value=window._AI_MAIL_MAXLEN_DEFAULT; document.getElementById('ai-content-maxlen-input').value=window._AI_CONTENT_MAXLEN_DEFAULT;" style="padding:8px 14px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">🔄 글자 수 기본값으로</button>
                     <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="padding:8px 14px; background:#fff; color:#6c757d; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap;">✖ 닫기</button>
                 </div>
             </div>`;
@@ -8473,6 +8549,10 @@ ${question}
         }
         document.getElementById('ai-mail-maxlen-input').value = window.getAiMailMaxLen();
         document.getElementById('ai-content-maxlen-input').value = window.getAiContentMaxLen();
+        // 💡 이 모달로 옮겨온 mail-ai-provider/mail-ai-model/mail-gemini-key 등은 원래 AI 업무분석
+        //    팝업이 열릴 때만 채워지던 값들이라, 여기서도 열릴 때마다 새로 채워줘야 함.
+        if (window.refreshAiKeyPanel) window.refreshAiKeyPanel();
+        if (window.refreshAiModelDropdown) window.refreshAiModelDropdown();
         modal.style.display = 'block';
         window.bringModalToFront('ai-tools-settings-modal');
     };
@@ -12909,7 +12989,7 @@ window.populateInsertPosition = function() {
 
 window.analyzeMailContent = async function() {
     const apiKey = window.getActiveAiKey();
-    if (!apiKey) { alert('먼저 AI API 키를 입력하고 저장해주세요.'); return; }
+    if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
 
     const mailText = document.getElementById('mail-content-input').value.trim();
     if (!mailText) { alert('메일 내용을 입력해주세요.'); return; }
@@ -16363,56 +16443,11 @@ window.updateInboxBadge();
             ══════════════════════════════════════ -->
             <div style="width:360px; min-width:360px; display:flex; flex-direction:column; border-right:2px solid #dee2e6; overflow:hidden;">
 
-                <!-- API 키 (공통) -->
-                <div style="padding:10px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0;">
-                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-                        <span id="mail-ai-section-label" style="white-space:nowrap; width:70px; flex-shrink:0; display:inline-block;">🤖 AI 선택</span>
-                        <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
-                                style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
-                            <option value="gemini">Gemini (Google)</option>
-                            <option value="groq">Groq — 오픈모델 무료 호스팅</option>
-                            <option value="mistral">Mistral (프랑스 AI, 무료)</option>
-                            <option value="openai">OpenAI (GPT, 유료·카드등록 필요)</option>
-                        </select>
-                    </div>
-                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-                        <span id="mail-ai-model-label" style="white-space:nowrap; width:70px; flex-shrink:0; display:inline-block;">🔧 모델 선택</span>
-                        <select id="mail-ai-model" onchange="window.onAiModelChange()"
-                                style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
-                        </select>
-                    </div>
-                    <div id="mail-model-guide" style="display:none; font-size:10px; color:#555; background:#fffbe6; border:1px solid #ffe066; border-radius:4px; padding:5px 8px; margin-bottom:4px; line-height:1.5;"></div>
-                    <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:4px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
-                        <span id="mail-key-label">🔑 Gemini API</span>
-                        <div style="display:flex; gap:4px;">
-                            <button id="mail-cache-clear-btn" onclick="window.clearGeminiCache()"
-                                    title="같은 메일을 다시 분석해도 캐시된 예전 결과가 아니라 새로 계산하게 함"
-                                    style="height:26px; padding:0 8px; font-size:11px; font-weight:bold; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box;">
-                                🗑️ 캐시 초기화
-                            </button>
-                            <button id="mail-key-link-btn" onclick="window.open('https://aistudio.google.com/apikey', '_blank')"
-                                    title=""
-                                    style="height:26px; padding:0 8px; font-size:11px; font-weight:bold; background:#fff; color:#2c5f8a; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box;">
-                                🔗 발급받기
-                            </button>
-                        </div>
-                    </div>
-                    <div id="mail-key-guide" style="display:none;"></div>
-                    <div style="display:flex; gap:4px;">
-                        <input id="mail-gemini-key" type="password" placeholder="AIza..."
-                            style="flex:1; min-width:0; box-sizing:border-box; height:26px; padding:0 8px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
-                        <button id="mail-key-save-btn" onclick="window.saveGeminiKey()"
-                                title="API 키 저장"
-                                style="height:26px; padding:0 10px; font-size:11px; font-weight:bold; background:#2c5f8a; color:#fff; border:1px solid #2c5f8a; border-radius:4px; cursor:pointer; white-space:nowrap; box-sizing:border-box;">
-                            💾 저장
-                        </button>
-                        <button onclick="window.clearGeminiKey()"
-                                title="API 키 삭제"
-                                style="height:26px; padding:0 8px; font-size:11px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:4px; cursor:pointer; box-sizing:border-box;">
-                            🗑️
-                        </button>
-                    </div>
-                    <div id="mail-key-status" style="font-size:11px; margin-top:3px; color:#28a745;"></div>
+                <!-- 💡 [2026-08-28 이동] AI 선택/모델/API 키 설정은 "⚙️ 설정 → AI 분석 설정"으로 옮김
+                     (mail-ai-provider 등 element id는 그대로 유지 — window.refreshAiKeyPanel() 등
+                     기존 함수가 id 기준으로 동작해서 위치만 옮겨도 그대로 작동함). -->
+                <div style="padding:8px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; font-size:11px; color:#888; line-height:1.5;">
+                    🤖 AI 모델/API 키 설정은 상단 <b style="color:#2c5f8a;">AI 도구 → 설정 → AI 분석 설정</b>에서 관리합니다.
                 </div>
 
                 <!-- ── 직접입력 탭 왼쪽 ── -->
@@ -21266,8 +21301,13 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
 
 <script>
 // ── 공통 드래그 함수 (모든 모달 공유) ────────────────────────
+// 💡 [2026-08-28 신규] 화면 경계 clamp — 예전엔 제한 없이 끌 수 있어서, 실수로 모달을 브라우저
+//    주소창 위(화면 밖)까지 끌고 나가면 드래그 손잡이(핸들)까지 화면 밖으로 나가버려 다시 끌어올 방법이
+//    없었다. 항상 최소 MARGIN px는 화면 안에 남도록 위치를 제한해서, 언제든 다시 손잡이를 잡을 수 있게 함
+//    (전체 모달 25개+ 이상이 이 함수 하나를 공유하므로 여기 한 곳만 고치면 전부 적용됨).
 window._makeDraggable = function(modalId, handleId) {
-    let isDragging = false, startX, startY, origLeft, origTop;
+    let isDragging = false, startX, startY, origLeft, origTop, modalW, modalH;
+    const DRAG_MARGIN = 40;
     document.addEventListener('mousedown', function(e) {
         const handle = document.getElementById(handleId);
         if (!handle || !handle.contains(e.target)) return;
@@ -21276,6 +21316,7 @@ window._makeDraggable = function(modalId, handleId) {
         isDragging = true;
         const rect = modal.getBoundingClientRect();
         origLeft = rect.left; origTop = rect.top;
+        modalW = rect.width; modalH = rect.height;
         startX = e.clientX; startY = e.clientY;
         modal.style.transform = 'none';
         modal.style.left = origLeft + 'px';
@@ -21287,8 +21328,16 @@ window._makeDraggable = function(modalId, handleId) {
         if (!isDragging) return;
         const modal = document.getElementById(modalId);
         if (!modal) return;
-        modal.style.left = (origLeft + e.clientX - startX) + 'px';
-        modal.style.top  = (origTop  + e.clientY - startY) + 'px';
+        let newLeft = origLeft + e.clientX - startX;
+        let newTop  = origTop  + e.clientY - startY;
+        const minLeft = DRAG_MARGIN - modalW, maxLeft = window.innerWidth - DRAG_MARGIN;
+        const minTop = 0, maxTop = window.innerHeight - DRAG_MARGIN; // 위쪽은 0으로 고정 — 주소창 뒤로 못 넘어감
+        if (newLeft < minLeft) newLeft = minLeft;
+        if (newLeft > maxLeft) newLeft = maxLeft;
+        if (newTop < minTop) newTop = minTop;
+        if (newTop > maxTop) newTop = maxTop;
+        modal.style.left = newLeft + 'px';
+        modal.style.top  = newTop + 'px';
     });
     document.addEventListener('mouseup', function() {
         if (!isDragging) return;
