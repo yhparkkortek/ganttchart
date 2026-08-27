@@ -186,13 +186,14 @@
     th, td { padding: var(--table-cell-padding); text-align: left; vertical-align: middle; line-height: var(--table-line-height); box-sizing: border-box; border: 1px solid #ddd; }
     th { background-color: #f4f6f8; position: sticky; top: 0; box-shadow: 0 2px 2px -1px rgba(0, 0, 0, 0.4); z-index: 20; user-select: none; padding-top: 10px !important; padding-bottom: 10px !important; }
     
-    /* 💡 TEST: 레벨별 배경색 전부 흰색으로, 줄무늬(zebra)로 대체 — 0레벨(최상위)은 글자만 검은색+굵게 구분 */
-    .parent-row td { background: #ffffff !important; font-weight: bold; color: #000000 !important; }
+    /* 💡 [2026-08-27] 0레벨(최상위)은 모달 헤더와 같은 살구색(#fff8e6) 배경+굵게, 1레벨도 굵게로
+       구별을 강화 (2~4레벨은 기존처럼 흰 배경+보통 굵기 유지). */
+    .parent-row td { background: #fff8e6 !important; font-weight: bold; color: #000000 !important; }
     .parent-row td.period-td { color: #e03131 !important; }
     .parent-row .no-td, .parent-row .no-td .row-num-span { color: #000000 !important; }
     .parent-row .chart-label { color: #495057 !important; }
 
-    .sub-parent-row td { background: #ffffff !important; font-weight: normal; color: #333333; }
+    .sub-parent-row td { background: #ffffff !important; font-weight: bold; color: #333333; }
     .sub-parent-row-2 td { background: #ffffff !important; font-weight: normal; color: #333333; }
     .sub-parent-row-3 td { background: #ffffff !important; font-weight: normal; color: #333333; }
     .sub-parent-row-4 td { background: #ffffff !important; font-weight: normal; color: #333333; }
@@ -15642,7 +15643,7 @@ window.updateInboxBadge();
     /* 💡 TEMP: Gantt 표를 Brief SPEC/M.C Table과 동일한 단순 스타일로 통일 */
     #myTable th { background: #f4f6f8 !important; }
     #myTable td, #myTable th { border-right: 1px solid #ddd !important; border-left: none !important; }
-    #myTable .parent-row td { background: #ffffff !important; }
+    #myTable .parent-row td { background: #fff8e6 !important; }
     #myTable .sub-parent-row td,
     #myTable .sub-parent-row-2 td,
     #myTable .sub-parent-row-3 td,
