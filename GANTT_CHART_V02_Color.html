@@ -7153,6 +7153,37 @@ ${mailText}`;
     //    프로젝트 저장 시 함께 보관되고, 다음에 열었을 때도 마지막 생성 결과가 그대로 남아있다.
     // ═══════════════════════════════════════════════════════════
 
+    // 💡 [2026-08-28 신규] AI 요약/AI 문답 공용 유틸 — 날짜를 "8/26~8/27" 형태로 간결하게 표시하고
+    //    (연도는 생략 — 어차피 같은 프로젝트 내 업무들이라 굳이 안 보여줘도 헷갈릴 일이 적음), 시작/계획일
+    //    중 하나만 있거나 둘이 같으면 하나만 표시한다. 원본 ISO 값은 그대로 컨텍스트에 같이 남겨서
+    //    (아래 taskListText 등) AI가 상대 날짜 계산(오늘/이번주 등)을 할 때는 정확한 값을 쓰게 한다.
+    window._fmtDateRangeShort = function(startRaw, endRaw) {
+        const fmt = function(v) {
+            if (!v) return '';
+            const d = new Date(v);
+            return isNaN(d) ? '' : (d.getMonth() + 1) + '/' + d.getDate();
+        };
+        const s = fmt(startRaw), e = fmt(endRaw);
+        if (s && e) return s === e ? s : (s + '~' + e);
+        return s || e || '';
+    };
+
+    // 💡 [2026-08-28 신규] "담당자/발신인/수신인 기준으로 검색해줘" 요청에 AI가 답을 못 하던 문제 수정 —
+    //    AI 요약/AI 문답 컨텍스트에는 담당자(assignee)만 있고 발신인/수신인은 아예 없었다. 발신인/수신인은
+    //    별도 컬럼이 아니라 메일 자동등록 업무의 "상세내용" 첫 줄에 남는 [발신자→수신자] 태그에서 추출해야
+    //    하는데(🔔 알람 탭이 발송 대상을 정할 때 쓰는 것과 동일한 패턴 — window._addrSplitNames 재사용),
+    //    이 추출을 AI용 컨텍스트에서는 아예 하지 않고 있었다. 태그가 없는 수동 입력 업무는 { sender:'',
+    //    receiver:'' }를 반환(호출부에서 표시를 생략).
+    window._extractMailSenderReceiver = function(contentRaw) {
+        const raw = String(contentRaw || '');
+        const arrowMatch = raw.match(/\[([^\]→]+)→((?:\[[^\]]*\]|[^\]])+)\]/);
+        if (!arrowMatch) return { sender: '', receiver: '' };
+        const stripTag = function(s) { return String(s || '').trim().replace(/^\[[^\]]*\]\s*/, ''); };
+        const senderNames = window._addrSplitNames ? window._addrSplitNames(stripTag(arrowMatch[1])) : [stripTag(arrowMatch[1])];
+        const receiverNames = window._addrSplitNames ? window._addrSplitNames(stripTag(arrowMatch[2])) : [stripTag(arrowMatch[2])];
+        return { sender: senderNames.filter(Boolean).join(', '), receiver: receiverNames.filter(Boolean).join(', ') };
+    };
+
     // 💡 Gantt 원본 전체를 던지지 않고, AI가 판단하기 좋은 형태로 통계+목록만 추려서 압축
     window._buildProjectSummaryData = function() {
         const pm = window.projectMeta || {};
@@ -7191,6 +7222,9 @@ ${mailText}`;
             const diffDays = Math.round((planDate - today) / 86400000);
             const label = taskLabel(row) || '(제목없음)';
             const assignee = (colIdx.assignee !== -1 && row[colIdx.assignee]) ? row[colIdx.assignee] : '미지정';
+            // 💡 [2026-08-28 신규] 시작일도 같이 담아서 "8/26~8/27"처럼 기간으로 보여줄 수 있게 함(기존엔
+            //    마감일만 있어서 기간이 아니라 마감일 하루만 알 수 있었음). window._fmtDateRangeShort 참고.
+            const startRaw = (colIdx.start !== -1 && row[colIdx.start]) ? row[colIdx.start] : (row._calcStartTs ? formatTsToYMD(row._calcStartTs) : '');
             // 💡 [버그 수정] 지연/임박 업무 목록에 업무명·담당자·날짜만 담고 "무슨 이슈인지"(상세내용)는
             //    아예 안 넣고 있었음 — AI 문답에서 발견된 것과 똑같은 원인으로, AI 요약의 리스크/액션추천도
             //    실제 내용을 못 보고 업무명만 보고 짐작해서 만든 것이라 부실할 수 있었음. 같은 설정값
@@ -7198,15 +7232,18 @@ ${mailText}`;
             const _psMaxLen = window.getAiContentMaxLen ? window.getAiContentMaxLen() : 500;
             const detail = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
             const detailAnswer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
+            // 💡 [2026-08-28 신규] "담당자/발신인/수신인 기준으로 검색해줘"에 답 못하던 문제 수정 —
+            //    window._extractMailSenderReceiver 참고.
+            const mailPeople = window._extractMailSenderReceiver(colIdx.content !== -1 ? row[colIdx.content] : '');
             // 💡 [2026-08-28 신규] "원문 메일도 봐달라"는 요청에 AI 요약도 못 읽던 문제 수정 — 지연/임박
             //    목록은 이미 최대 15+15건으로 제한돼 있어(아래 return의 slice(0,15)), 상세내용/답변과
             //    같은 글자수 한도로 원문 메일(_mailRaw) 발췌를 같이 담아도 프롬프트가 과도하게 커지지 않는다.
             //    (AI 문답처럼 300건 전체를 훑는 목록이 아니라서, 여기서는 [원문有] 표시 대신 발췌를 바로 포함.)
             const mailExcerpt = row._mailRaw ? String((row._mailRaw.body2000 || '')).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
             if (diffDays < 0) {
-                delayed.push({ task: label, assignee: assignee, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt });
+                delayed.push({ task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
             } else if (diffDays <= 7) {
-                dueSoon.push({ task: label, assignee: assignee, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt });
+                dueSoon.push({ task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
             }
         });
 
@@ -7254,7 +7291,8 @@ ${recentLogs}
   "리스크": ["리스크1 (왜 위험한지 포함)", "리스크2", "리스크3"],
   "액션추천": ["담당자명: 추천 행동", "담당자명: 추천 행동"]
 }
-리스크/액션추천은 최대 5개씩, 근거가 부족하면 빈 배열([])로 두세요.`;
+리스크/액션추천은 최대 5개씩, 근거가 부족하면 빈 배열([])로 두세요.
+총평/리스크/액션추천에서 특정 업무의 일정을 언급할 때는 위 목록의 "기간:" 표시(예: 8/26~8/27)를 그대로 쓰세요. YYYY-MM-DD로 풀어쓰지 마세요.`;
     };
 
     // 💡 코드 기본값(진짜 로직) — "🔄 기본값으로 초기화" 버튼이 참조. localStorage 상태와 무관하게
@@ -7268,9 +7306,15 @@ ${recentLogs}
     window._buildProjectSummaryPrompt = function(d) {
         // 💡 [버그 수정] 업무명·날짜만 넣고 상세내용은 안 보여줘서, AI가 "왜 위험한지" 실제 이유를
         //    모른 채 리스크/액션추천을 지어내야 했음 — detail(상세내용)/detailAnswer(답변)가 있으면 같이 붙임.
+        // 💡 [2026-08-28 신규] 마감일 하루만 보여주던 것을 "8/26~8/27"처럼 시작~마감 기간으로 표시
+        //    (window._fmtDateRangeShort). 발신인/수신인도 있으면 같이 붙여서 그 기준 검색/필터 질문에
+        //    답할 수 있게 함(window._extractMailSenderReceiver 결과).
         const delayedText = d.delayed.length
             ? d.delayed.map(function(x) {
-                let line = `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, ${x.overdueDays}일 지연)`;
+                const range = window._fmtDateRangeShort(x.startDate, x.dueDate) || x.dueDate;
+                let line = `- ${x.task} (담당:${x.assignee}, 기간:${range}, ${x.overdueDays}일 지연)`;
+                if (x.sender) line += ` | 발신:${x.sender}`;
+                if (x.receiver) line += ` | 수신:${x.receiver}`;
                 if (x.detail) line += ` | 내용:${x.detail}`;
                 if (x.detailAnswer) line += ` | 대응:${x.detailAnswer}`;
                 if (x.mailExcerpt) line += ` | 원문메일:${x.mailExcerpt}`;
@@ -7279,7 +7323,10 @@ ${recentLogs}
             : '(없음)';
         const dueSoonText = d.dueSoon.length
             ? d.dueSoon.map(function(x) {
-                let line = `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, D-${x.dDay})`;
+                const range = window._fmtDateRangeShort(x.startDate, x.dueDate) || x.dueDate;
+                let line = `- ${x.task} (담당:${x.assignee}, 기간:${range}, D-${x.dDay})`;
+                if (x.sender) line += ` | 발신:${x.sender}`;
+                if (x.receiver) line += ` | 수신:${x.receiver}`;
                 if (x.detail) line += ` | 내용:${x.detail}`;
                 if (x.detailAnswer) line += ` | 대응:${x.detailAnswer}`;
                 if (x.mailExcerpt) line += ` | 원문메일:${x.mailExcerpt}`;
@@ -8109,7 +8156,16 @@ ${recentLogs}
             //    태그로 "요청"할 때만 별도 조회해서 후속 프롬프트에 끼워넣는다(아래 _buildGanttQaPrompt/
             //    sendGanttQaMessage 참고, SET_ALARM 태그와 같은 패턴).
             const mailTag = row._mailRaw ? ' [원문有]' : '';
-            let line = `- #${x.idx} Lv${row._level} "${label}" | 담당:${assignee} | 상태:${status}${dueTag}${alarmTag}${mailTag} | 시작:${start || '-'} | 계획:${plan || '-'}`;
+            // 💡 [2026-08-28 신규] "시작:2026-08-26 | 계획:2026-08-27"처럼 풀어쓰던 것을 "기간:8/26~8/27"
+            //    형태로 압축(window._fmtDateRangeShort) — AI가 답변에 옮겨 적을 때도 이 짧은 표기를
+            //    그대로 쓰도록 프롬프트 지시문에서 유도한다(아래 _buildGanttQaPrompt 참고).
+            const dateRange = window._fmtDateRangeShort(start, plan) || '-';
+            // 💡 [2026-08-28 신규] "담당자/발신인/수신인 기준으로 검색해줘"에 답 못하던 문제 수정 —
+            //    window._extractMailSenderReceiver 참고.
+            const mailPeople = window._extractMailSenderReceiver(colIdx.content !== -1 ? row[colIdx.content] : '');
+            let line = `- #${x.idx} Lv${row._level} "${label}" | 담당:${assignee} | 상태:${status}${dueTag}${alarmTag}${mailTag} | 기간:${dateRange}`;
+            if (mailPeople.sender) line += ` | 발신:${mailPeople.sender}`;
+            if (mailPeople.receiver) line += ` | 수신:${mailPeople.receiver}`;
             if (content) line += ` | 내용:${content}`;
             if (answer) line += ` | 대응:${answer}`;
             lines.push(line);
@@ -8222,7 +8278,9 @@ ${recentLogs}
 
         return `당신은 아래 프로젝트(Gantt 일정 + Summary/Brief SPEC/M.C Table/Elec Parts/Address 등 프로젝트 파일 전체 데이터)를 잘 아는 보조 AI입니다. 아래 데이터에 있는 내용에 근거해서만 답하세요.
 데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로 답변하세요.
-"오늘/이번 주/이번 달/내일" 등 상대적인 날짜 표현이 나오면, 반드시 아래 [오늘 날짜]를 기준으로 [업무 목록]의 시작일/계획일과 비교해서 판단하세요 (예: 오늘 업무 = 시작일~계획일 구간에 오늘 날짜가 포함되거나 오늘이 마감인 업무).
+"오늘/이번 주/이번 달/내일" 등 상대적인 날짜 표현이 나오면, 반드시 아래 [오늘 날짜]를 기준으로 [업무 목록]의 "기간:" 값(시작일~계획일)과 비교해서 판단하세요 (예: 오늘 업무 = 기간 구간에 오늘 날짜가 포함되거나 오늘이 마감인 업무).
+📅 날짜 표시 규칙: 특정 업무의 일정을 답변에 언급할 때는 [업무 목록]에 있는 "기간:" 표시(예: 8/26~8/27, 연도 생략된 M/D~M/D 형식)를 그대로 옮겨 쓰세요. YYYY-MM-DD처럼 풀어쓰지 마세요. 시작일과 계획일이 같으면 "기간:"에도 날짜 하나만 적혀 있으니 그대로 하나만 쓰면 됩니다.
+🔍 조건 검색 규칙: "담당자/발신인/수신인이 누구인 업무 찾아줘/검색해줘"처럼 특정 조건으로 업무를 찾아달라는 요청에는, [업무 목록]의 "담당:"(담당자) / "발신:"(메일을 보낸 사람) / "수신:"(메일을 받은 사람) 값을 조건과 비교해서 일치하는 업무만 골라 목록으로 답하세요. 이름이 정확히 일치하지 않아도 부분 일치(예: 성만 일치)나 흔한 표기 차이는 같은 사람으로 보고 판단하세요. 발신:/수신: 값은 메일로 자동 등록된 업무에만 있고, 수동으로 입력한 업무에는 없을 수 있습니다 — 그 경우엔 "이 업무는 발신/수신 정보가 없습니다"라고 답하세요.
 
 🔒 "요약/정리/분석해줘" 유형 질문에 대한 필수 규칙:
 사용자는 이미 Gantt 화면에서 업무명·날짜·상태를 보고 있습니다. "요약해줘/정리해줘"라고 물었는데 그 목록을 이름/날짜/상태만 그대로 다시 나열하면, 사용자 입장에서 Gantt 표를 보는 것과 다를 게 없어 AI에게 물어본 의미가 없습니다. 아래처럼 답하세요:
