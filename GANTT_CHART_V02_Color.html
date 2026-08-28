@@ -786,7 +786,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div style="position:relative; display:inline-block;">
             <button id="ai-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('ai-menu-popup', this)">🤖 AI 도구</button>
             <div id="ai-menu-popup" class="topbar-popup" style="display:none;">
-                <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">🤖 AI 업무분석</button>
+                <button id="mail-btn" class="topbar-menu-item" onclick="window.showMailAnalyzer()">🤖 AI 업무 분석</button>
                 <button id="inbox-btn" class="topbar-menu-item" onclick="window.openTaskInbox()">
                     📦 AI 업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span>
                 </button>
@@ -8761,8 +8761,8 @@ ${question}
                             <span id="ai-set-sec-maxlen-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
                         <div id="ai-set-sec-maxlen" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 업무분석(메일) 최대 글자 수</label>
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.</div>
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 업무 분석(메일) 최대 글자 수</label>
+                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무 분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.</div>
                             <input id="ai-mail-maxlen-input" type="number" min="500" max="5000" step="100" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
                             <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 2000자 (기본값)</div>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
@@ -9775,7 +9775,7 @@ window.deleteHistoryByDateRange = function() {
                 'alarm-settings-menu-btn': '⚙️ 자동알람 설정',
                 'holiday-btn':       '🗓️ 휴일 등록',
                 'alarm-send-all-btn':'📧 일괄 발송',
-                'mail-btn':'🤖 AI 업무분석',
+                'mail-btn':'🤖 AI 업무 분석',
                 'project-select-btn': '🔃 프로젝트 선택',
                 'schedule-tools-btn': '🛠️ 일정 도구',
                 'ai-menu-btn':        '🤖 AI 도구',
@@ -10590,7 +10590,7 @@ window.deleteHistoryByDateRange = function() {
         // 💡 [2026-08-25] childNodes[0]만 바꾸는 이유 — 이 span 안엔 ℹ️ 도움말 아이콘(nested span)이
         //    같이 들어있어서, textContent를 통째로 덮으면 그 아이콘/툴팁까지 같이 사라진다.
         const _ibxTitle = document.getElementById('inbox-modal-title');
-        if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? 'Task Inbox' : '업무 보관함';
+        if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? 'AI Task Inbox' : 'AI 업무 보관함';
         const _ibxHelpTip = document.getElementById('inbox-help-tip-text');
         if (_ibxHelpTip) _ibxHelpTip.innerHTML = _en
             ? `📧 Tasks added via [📥 Inbox] in mail analysis are kept independent of any project (persists across project switches).<br><br>
@@ -16717,7 +16717,7 @@ window.updateInboxBadge();
         <div id="inbox-drag-handle" class="history-header"
              style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative;
                     cursor:grab; border-bottom:1px solid #ffe08a; border-radius:10px 10px 0 0; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
-            <span id="inbox-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="inbox-help-tip-text">
+            <span id="inbox-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">AI 업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="inbox-help-tip-text">
                 📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
                 ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
                 📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>
