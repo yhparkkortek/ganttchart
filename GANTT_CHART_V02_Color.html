@@ -12501,10 +12501,12 @@ window.handleAuthClick = function() {
         return changed;
     };
 
-    // 💡 [2026-08-28 신규] AI 요약/AI 문답 답변의 "#98" 링크(window._linkifyTaskRefs)를 클릭했을 때
-    //    실행되는 이동 기능 — "분석 내용이 실제 원본과 맞는지/더 자세히 보고 싶다"는 요청 대응.
-    //    1) AI 모달이 표를 가리고 있으면 닫아서 바로 보이게 하고, 2) 조상 WBS가 접혀 있으면 펼치고,
-    //    3) 그래도 필터에 걸려 안 보이면 필터를 전체 초기화한 뒤, 4) 스크롤 + 하이라이트한다.
+    // 💡 [2026-08-28 신규 → 같은 날 수정] AI 요약/AI 문답 답변의 "#98" 링크(window._linkifyTaskRefs)를
+    //    클릭했을 때 실행되는 이동 기능 — "분석 내용이 실제 원본과 맞는지/더 자세히 보고 싶다"는 요청
+    //    대응. 처음엔 이동할 때 AI 모달을 자동으로 닫았는데, 그러면 "AI 내용과 실제 업무를 나란히
+    //    비교"하려던 목적 자체가 사라진다는 피드백으로 모달은 그대로 열어둔 채 이동하도록 바꿨다.
+    //    1) 조상 WBS가 접혀 있으면 펼치고, 2) 그래도 필터에 걸려 안 보이면 필터를 전체 초기화한 뒤,
+    //    3) 스크롤 + 하이라이트한다(모달이 표를 가리고 있으면 토스트로 직접 끌어서 옮기라고 안내).
     window._aiJumpToRow = function(rowIndex) {
         const row = globalData && globalData[rowIndex];
         if (!row || row._level === undefined) {
@@ -12513,12 +12515,12 @@ window.handleAuthClick = function() {
             return;
         }
 
-        // AI 모달이 열려 있으면 닫아서 표가 바로 보이게 함 (대화/리포트 내용은 상태에 그대로 남아있어
-        // 다시 열면 그대로 이어짐 — window._ganttQaHistory / projectMeta.aiSummaryReport 참고)
-        ['gantt-qa-modal', 'ai-summary-modal'].forEach(function(id) {
-            const m = document.getElementById(id);
-            if (m) m.style.display = 'none';
-        });
+        // 모달은 그대로 열어둔 채 이동만 하므로(위 함수 설명 참고), 모달이 표를 가리고 있을 땐
+        // 드래그해서 옆으로 옮기면 비교하기 편하다는 안내만 띄운다.
+        if (window.showToast && (document.getElementById('gantt-qa-modal')?.style.display === 'block'
+            || document.getElementById('ai-summary-modal')?.style.display === 'block')) {
+            window.showToast('📍 #' + rowIndex + ' 업무로 이동했습니다. 창을 끌어서 옆으로 옮기면 비교하기 편해요.', 'info');
+        }
 
         // 조상 WBS가 접혀 있으면 펼쳐서 실제로 보이게 함 (자기 자신 위쪽에서 레벨이 더 얕은 첫 조상을
         // 계속 타고 올라가며 확인 — window.toggleWbsCollapse와 같은 트리 구조 가정)
