@@ -8363,9 +8363,14 @@ ${question}
     //    그 업무로 실제 이동(스크롤+하이라이트)할 수 있게 링크로 바꿔준다 — "분석 내용이 원본과 맞는지
     //    확인하고 싶다"는 요청 대응. escapeHtml()을 거친 텍스트 위에서만 동작하고 \d+만 캡처하므로
     //    삽입 위험 없이 안전하게 재사용 가능(_mdToHtml/AI 요약 리포트 양쪽에서 공용으로 씀).
+    // 💡 [2026-08-28 추가] "#98" 옆에 바로 알람을 켤 수 있는 🔔 아이콘도 같이 붙인다 — 사용자가 매번
+    //    "이 업무 알람 걸어줘"라고 말로 다시 요청하지 않아도, 이미 구현된 알람 설정 기능(아래
+    //    window._aiAssistSetAlarm)을 클릭 한 번으로 바로 실행할 수 있게 한다. "핀셋" 아이콘은 알람과
+    //    의미상 연결이 안 돼 있어(집게 모양이라 "선택/집기" 느낌) 대신 알람을 뜻하는 표준 이모지인
+    //    🔔(종)을 썼다 — 텍스트 이모지라 별도 아이콘 폰트/이미지 없이 어디서나 바로 렌더링된다.
     window._linkifyTaskRefs = function(escapedText) {
         return String(escapedText || '').replace(/#(\d+)\b/g, function(m, n) {
-            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span>`;
+            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="클릭하면 이 업무에 알람을 설정합니다" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">🔔</span>`;
         });
     };
 
@@ -8436,6 +8441,23 @@ ${question}
             if (alarmPanel && alarmPanel.classList.contains('active') && window.renderAlarmTab) window.renderAlarmTab();
         }
         return { ok: true, alreadyOn: alreadyOn, taskName: label };
+    };
+
+    // 💡 [2026-08-28 신규] 위 window._linkifyTaskRefs가 "#98" 옆에 붙여주는 🔔 아이콘의 클릭 핸들러 —
+    //    AI 답변의 [[ACTION:SET_ALARM:번호]] 태그(_applyGanttQaActions)와 같은 window._aiAssistSetAlarm을
+    //    그대로 재사용하되, 말로 물어보지 않고 아이콘 클릭 한 번으로 바로 실행하고 결과는 토스트로 안내한다.
+    window._aiSetAlarmFromRef = function(rowIndex, ev) {
+        if (ev) ev.stopPropagation();
+        const res = window._aiAssistSetAlarm(rowIndex);
+        if (!res.ok) {
+            if (window.showToast) window.showToast('⚠️ #' + rowIndex + ' 업무를 찾지 못해 알람을 설정하지 못했습니다.', 'warning');
+            return;
+        }
+        if (window.showToast) {
+            window.showToast(res.alreadyOn
+                ? '🔔 "' + res.taskName + '" 업무는 이미 알람이 켜져 있습니다.'
+                : '✅ "' + res.taskName + '" 업무에 알람을 설정했습니다.', 'success');
+        }
     };
 
     // 💡 [2026-08-28 신규] "원문 메일도 봐달라"는 질문에 AI가 답을 못 하던 문제 수정 — 업무 목록엔
