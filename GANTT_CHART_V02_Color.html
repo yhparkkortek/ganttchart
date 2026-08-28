@@ -8379,7 +8379,7 @@ ${question}
     //    알람 알림까지 이미 전부 📌(압정)로 알람을 표시하고 있어서, 그 관례에 맞춰 📌으로 통일한다.
     window._linkifyTaskRefs = function(escapedText) {
         return String(escapedText || '').replace(/#(\d+)\b/g, function(m, n) {
-            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="클릭하면 이 업무에 알람을 설정합니다" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>`;
+            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="클릭하면 이 업무의 알람을 켜고 끕니다(토글)" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>`;
         });
     };
 
@@ -8452,20 +8452,28 @@ ${question}
         return { ok: true, alreadyOn: alreadyOn, taskName: label };
     };
 
-    // 💡 [2026-08-28 신규] 위 window._linkifyTaskRefs가 "#98" 옆에 붙여주는 📌 아이콘의 클릭 핸들러 —
-    //    AI 답변의 [[ACTION:SET_ALARM:번호]] 태그(_applyGanttQaActions)와 같은 window._aiAssistSetAlarm을
-    //    그대로 재사용하되, 말로 물어보지 않고 아이콘 클릭 한 번으로 바로 실행하고 결과는 토스트로 안내한다.
+    // 💡 [2026-08-28 신규 → 같은 날 수정] 위 window._linkifyTaskRefs가 "#98" 옆에 붙여주는 📌 아이콘의
+    //    클릭 핸들러 — 처음엔 window._aiAssistSetAlarm(항상 "켜기"만 하고 이미 켜져 있으면 그 사실만
+    //    알려줌)을 그대로 썼는데, "한 번 클릭하면 켜고 한 번 더 클릭하면 꺼지게(토글) 해달라"는 피드백으로
+    //    "No." 칸의 행별 알람 핀(window.wrToggleAlarm, 5649줄)과 동일한 진짜 토글 방식으로 바꿨다.
+    //    (AI가 "알람 걸어줘" 같은 말로 요청했을 때 처리하는 [[ACTION:SET_ALARM]] 쪽은 "걸어줘"라는 표현
+    //    자체가 켜기를 의미하므로 그대로 "켜기 전용" 동작을 유지 — window._aiAssistSetAlarm은 안 건드림.)
     window._aiSetAlarmFromRef = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
-        const res = window._aiAssistSetAlarm(rowIndex);
-        if (!res.ok) {
-            if (window.showToast) window.showToast('⚠️ #' + rowIndex + ' 업무를 찾지 못해 알람을 설정하지 못했습니다.', 'warning');
+        const row = globalData && globalData[rowIndex];
+        if (!row || row._level === undefined) {
+            if (window.showToast) window.showToast('⚠️ #' + rowIndex + ' 업무를 찾지 못해 알람을 변경하지 못했습니다.', 'warning');
             return;
         }
+        const label = (row._level === 0 ? row._origDev : row._level === 1 ? row._origT1
+            : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4) || '(제목없음)';
+        // 💡 ev를 그대로 넘기면 wrToggleAlarm의 Ctrl/Shift 다중선택 분기를 탈 수 있는데, 이 모달엔 그런
+        //    다중선택 개념이 없으므로 null을 넘겨 항상 "이 한 업무만" 토글되게 한다.
+        window.wrToggleAlarm(rowIndex, null);
         if (window.showToast) {
-            window.showToast(res.alreadyOn
-                ? '📌 "' + res.taskName + '" 업무는 이미 알람이 켜져 있습니다.'
-                : '✅ "' + res.taskName + '" 업무에 알람을 설정했습니다.', 'success');
+            window.showToast(row._알림
+                ? '✅ "' + label + '" 업무에 알람을 설정했습니다.'
+                : '📌 "' + label + '" 업무의 알람을 해제했습니다.', 'success');
         }
     };
 
