@@ -10911,7 +10911,10 @@ window.deleteHistoryByDateRange = function() {
                         //    업무명 "뒤"에 작은 드롭다운(select)으로 붙여서 목록에서 바로 골라 지정한다(기존엔
                         //    클릭할 때마다 다음 구분으로 순환하는 방식이었음 → window.setWbsDiscipline 참고).
                         //    값이 없으면 AI 분석 업무의 상세내용 [담당구분]... 태그에서 초기값을 가져온다.
-                        const _wbsDiscipline = row._담당구분 || window._extractDisciplineFromContent(row) || '미분류';
+                        // 💡 [2026-08-28 버그 수정] row._담당구분에 AI 원본 명칭("영업" 등)이 별칭 변환 없이
+                        //    그대로 저장돼 있던 과거/현재 데이터도 여기서 한 번 더 정규화해서, 드롭다운에
+                        //    "SAL"과 "영업"이 별개 값처럼 중복 표시되지 않게 한다(_normalizeWbsDiscipline 참고).
+                        const _wbsDiscipline = window._normalizeWbsDiscipline(row._담당구분) || window._extractDisciplineFromContent(row) || 'ETC';
                         const _wbsDisciplineOpts = window.WBS_DISCIPLINE_CATEGORIES.map(c => `<option value="${c}" ${c === _wbsDiscipline ? 'selected' : ''}>${c}</option>`).join('')
                             + (window.WBS_DISCIPLINE_CATEGORIES.indexOf(_wbsDiscipline) === -1 ? `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option>` : '');
                         const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="담당구분 선택" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
@@ -11276,16 +11279,36 @@ window.deleteHistoryByDateRange = function() {
     // 💡 [2026-08-28 신규 → 같은 날 개편] WBS 업무명 앞 "담당구분" 순환 토글 배지 — 클릭할 때마다
     //    담당구분 목록을 순서대로 한 칸씩 돌려가며 row._담당구분을 바꾼다. 원래는 AI 업무분석 프롬프트
     //    (2361줄)의 정식 명칭(기구/영업/Tooling/미분류)을 그대로 썼는데, 배지가 좁아서 짧은 영문 약칭
-    //    (ME/SA/TOOL/ETC)으로 바꾸고, Slimming/Cutting은 별도 항목을 없애고 LCM으로 의미를 합쳤다
+    //    (ME/SAL/TOOL/ETC)으로 바꾸고, Slimming/Cutting은 별도 항목을 없애고 LCM으로 의미를 합쳤다
     //    (Slimming/Cutting이 원래도 LCM 패널 자체의 두께·가공 관련 이슈라 LCM 범주에 속함).
     //    AI가 예전 방식(기구/영업/Tooling/미분류/Slimming/Cutting)으로 이미 만들어둔 [담당구분]... 태그도
     //    있으니, _WBS_DISCIPLINE_ALIASES로 옛 명칭 → 새 배지 값으로 자동 변환해서 읽는다(AI 프롬프트
     //    자체의 분류 기준은 안 건드림 — 배지 표시/순환용 목록만 바뀜).
-    // ═══════════════════════════════════════════════════════════
-    window.WBS_DISCIPLINE_CATEGORIES = ['PM','ME','HW','FW','BLU','TSP','LCM','TOOL','SA','CS','FA','ETC'];
+    // 💡 [2026-08-28 버그 수정] "영업"이 SAL로도, "영업" 그대로도 둘 다 드롭다운에 보인다는 지적 —
+    //    AI 자동등록 경로(buildMailTaskRow, 14269줄 부근)가 AI 원본 응답의 정식 명칭(영업/기구/Tooling/
+    //    미분류/Slimming/Cutting)을 별칭 변환 없이 row._담당구분에 그대로 저장하고 있었다. row._담당구분이
+    //    이미 채워져 있으면(대부분의 AI 등록 업무) 아래 _extractDisciplineFromContent(상세내용 태그에서
+    //    별칭 변환하는 경로)는 아예 호출되지 않으므로, 그 값만 변환 없이 그대로 배지에 노출됐던 것.
+    //    이제 값을 "쓰는" 시점(등록 시)과 "읽는" 시점(배지 표시) 양쪽 모두 이 별칭표를 거치도록 통일한다.
+    //    (SA→SAL: "SA"만으로는 Sales인지 직관적으로 안 와닿는다는 지적 — Sales의 알파벳 3글자라 더 바로 읽힘)
+    window.WBS_DISCIPLINE_CATEGORIES = ['PM','ME','HW','FW','BLU','TSP','LCM','TOOL','SAL','CS','FA','ETC'];
     window._WBS_DISCIPLINE_ALIASES = {
-        '기구': 'ME', '영업': 'SA', 'Tooling': 'TOOL', '미분류': 'ETC',
+        '기구': 'ME', '영업': 'SAL', 'Tooling': 'TOOL', '미분류': 'ETC',
         'Slimming': 'LCM', 'Cutting': 'LCM' // 💡 별도 항목 삭제, 의미는 LCM으로 이동
+    };
+
+    // 💡 위 별칭표를 한 곳에서만 적용하도록 뺀 공용 함수 — 등록 시(newRow._담당구분 저장)와 표시 시
+    // (배지/드롭다운 렌더링) 양쪽에서 반드시 이 함수를 거쳐야 "SA"와 "영업"처럼 같은 뜻의 값이
+    // 서로 다른 문자열로 남아 드롭다운에 중복 표시되는 일이 없다. 이미 짧은 코드(ME/SAL/...)인
+    // 값이나 목록에 없는 값은 별칭이 없으므로 그대로 반환.
+    window._normalizeWbsDiscipline = function(raw) {
+        const s = (raw || '').toString().trim();
+        if (!s) return '';
+        // 💡 "HW, FW"처럼 콤마로 여러 개 기재된 경우도 각각 변환(AI 프롬프트가 최대 2개까지 허용)
+        return s.split(',').map(function(part) {
+            const p = part.trim();
+            return window._WBS_DISCIPLINE_ALIASES[p] || p;
+        }).join(', ');
     };
 
     // AI 분석 업무는 상세내용 [담당구분]기구 처럼 항상 태그를 남기므로, row._담당구분이 비어있는
@@ -11297,8 +11320,7 @@ window.deleteHistoryByDateRange = function() {
         if (!contentStr) return null;
         const m = contentStr.match(/\[담당구분\]([^\n]+)/);
         if (!m) return null;
-        const raw = m[1].trim();
-        return window._WBS_DISCIPLINE_ALIASES[raw] || raw;
+        return window._normalizeWbsDiscipline(m[1]);
     };
 
     // 💡 [2026-08-28 → 드롭다운으로 교체] 드롭다운에서 담당구분을 선택하면 row._담당구분 갱신 +
@@ -14266,7 +14288,12 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     //    그 담당자로 배정 — 없으면 기존처럼 대상 프로젝트의 기존 행(refRow) 담당자를 그대로 승계
     const _catAssignee = window._msResolveCategoryAssignee ? window._msResolveCategoryAssignee(r['담당구분']) : null;
     if (ci.assignee !== -1) newRow[ci.assignee] = _catAssignee ? _catAssignee.name : (refRow ? (refRow[ci.assignee] || "") : "");
-    newRow._담당구분 = r['담당구분'] || '';
+    // 💡 [2026-08-28 버그 수정] r['담당구분']은 AI가 프롬프트 그대로("영업"/"기구"/"Tooling" 등 정식
+    //    명칭으로) 응답한 원본값 — WBS 배지/드롭다운 짧은 코드(SAL/ME/TOOL 등)와 다른 문자열이라, 별칭
+    //    변환 없이 그대로 저장하면 드롭다운에 "SAL"과 "영업"이 같은 뜻인데 서로 다른 값으로 중복 표시됐다.
+    //    window._normalizeWbsDiscipline로 변환해서 저장(위 _catAssignee 조회는 원본 명칭 기준 매핑표를
+    //    쓰므로 그대로 r['담당구분']을 넘긴 채 유지 — 여기 저장값만 바꾼다).
+    newRow._담당구분 = window._normalizeWbsDiscipline ? window._normalizeWbsDiscipline(r['담당구분']) : (r['담당구분'] || '');
     if (ci.customer !== -1) newRow[ci.customer] = refRow ? (refRow[ci.customer] || "") : "";
     if (ci.model !== -1) newRow[ci.model] = refRow ? (refRow[ci.model] || "") : "";
     if (ci.inch !== -1) newRow[ci.inch] = refRow ? (refRow[ci.inch] || "") : "";
