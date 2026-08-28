@@ -26990,6 +26990,7 @@ window._epBuildExtractPrompt = function(type, rawText) {
 ${keyListText}
 2. "Connectors": 입력/출력 커넥터별 핀맵 배열. 각 원소는 다음 형태:
    { "name": "J1", "role": "INPUT 또는 OUTPUT 등", "model": "커넥터 모델명(예: 12505WR-12A)", "pins": [ { "no": "핀번호(예: 1,2,3)", "symbol": "핀 심볼(예: VIN)", "desc": "설명" }, ... ] }
+   "role"은 문서에 적힌 표기를 있는 그대로 쓰세요 — OUTPUT이 여러 개라 문서가 "OUTPUT 1"/"OUTPUT 2"처럼 번호를 붙여 구분해뒀다면(예: "6.2 OUTPUT 1: ...(J2)", "6.3 OUTPUT 2: ...(J5)") 그 번호까지 그대로 유지하세요(예: "OUTPUT 1", "OUTPUT 2") — 커넥터 이름(J2 vs J5)이 달라도 "OUTPUT"으로 뭉뚱그리면 문서가 구분해둔 정보가 사라집니다. 문서에 번호가 없으면 번호 없이 "INPUT"/"OUTPUT"만 쓰세요.
    문서에 커넥터/핀 테이블이 없으면 빈 배열 []로 답하세요.
 
 규칙:
