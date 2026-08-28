@@ -7187,7 +7187,13 @@ ${mailText}`;
     // 💡 Gantt 원본 전체를 던지지 않고, AI가 판단하기 좋은 형태로 통계+목록만 추려서 압축
     window._buildProjectSummaryData = function() {
         const pm = window.projectMeta || {};
-        const rows = (typeof globalData !== 'undefined' && globalData) ? globalData.slice(1).filter(function(r) { return r && r._level !== undefined; }) : [];
+        // 💡 [2026-08-28 신규] "#98 업무로 이동" 클릭 기능을 AI 요약에서도 쓰려면 리스크/액션추천이
+        //    가리키는 업무의 원래 globalData 인덱스를 알아야 한다 — filter로 빠지는 행이 있어 slice
+        //    순서만으론 복원 불가하므로, AI 문답 컨텍스트(_buildGanttQaContext)와 동일하게 filter 전에
+        //    원래 인덱스(idx)를 먼저 붙여둔다.
+        const rows = (typeof globalData !== 'undefined' && globalData)
+            ? globalData.map(function(r, i) { return { row: r, idx: i }; }).slice(1).filter(function(x) { return x.row && x.row._level !== undefined; })
+            : [];
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const koMap = (typeof LANG !== 'undefined' && LANG.ko && LANG.ko.statusMap) ? LANG.ko.statusMap : {};
 
@@ -7209,7 +7215,8 @@ ${mailText}`;
         const delayed = [];
         const dueSoon = [];
 
-        rows.forEach(function(row) {
+        rows.forEach(function(x) {
+            const row = x.row;
             const st = normStatus(colIdx.status !== -1 ? row[colIdx.status] : '');
             if (counts[st] !== undefined) counts[st]++; else counts.대기++; // 알 수 없는 상태값은 대기로 편입(집계 누락 방지)
 
@@ -7241,9 +7248,9 @@ ${mailText}`;
             //    (AI 문답처럼 300건 전체를 훑는 목록이 아니라서, 여기서는 [원문有] 표시 대신 발췌를 바로 포함.)
             const mailExcerpt = row._mailRaw ? String((row._mailRaw.body2000 || '')).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
             if (diffDays < 0) {
-                delayed.push({ task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
+                delayed.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
             } else if (diffDays <= 7) {
-                dueSoon.push({ task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
+                dueSoon.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
             }
         });
 
@@ -7288,10 +7295,11 @@ ${recentLogs}
 {
   "신호등": "🟢 또는 🟡 또는 🔴 (전체 지연 비율과 심각도 기준으로 판단)",
   "총평": "한 문장 총평",
-  "리스크": ["리스크1 (왜 위험한지 포함)", "리스크2", "리스크3"],
-  "액션추천": ["담당자명: 추천 행동", "담당자명: 추천 행동"]
+  "리스크": ["#98 업무는 ~해서 위험함(왜 위험한지 포함)", "리스크2", "리스크3"],
+  "액션추천": ["담당자명: #98 업무를 ~하세요", "담당자명: 추천 행동"]
 }
 리스크/액션추천은 최대 5개씩, 근거가 부족하면 빈 배열([])로 두세요.
+📌 특정 업무를 가리킬 때는 위 [지연 업무 목록]/[임박 마감 목록]의 각 줄 맨 앞에 있는 "#숫자"를 반드시 그대로 포함해서 언급하세요(예: "#98 업무는..."). 이 번호를 클릭하면 실제 업무로 이동하는 기능이 있으니, 번호 없이 업무명만 쓰지 마세요.
 총평/리스크/액션추천에서 특정 업무의 일정을 언급할 때는 위 목록의 "기간:" 표시(예: 8/26~8/27)를 그대로 쓰세요. YYYY-MM-DD로 풀어쓰지 마세요.`;
     };
 
@@ -7312,7 +7320,7 @@ ${recentLogs}
         const delayedText = d.delayed.length
             ? d.delayed.map(function(x) {
                 const range = window._fmtDateRangeShort(x.startDate, x.dueDate) || x.dueDate;
-                let line = `- ${x.task} (담당:${x.assignee}, 기간:${range}, ${x.overdueDays}일 지연)`;
+                let line = `- #${x.idx} ${x.task} (담당:${x.assignee}, 기간:${range}, ${x.overdueDays}일 지연)`;
                 if (x.sender) line += ` | 발신:${x.sender}`;
                 if (x.receiver) line += ` | 수신:${x.receiver}`;
                 if (x.detail) line += ` | 내용:${x.detail}`;
@@ -7324,7 +7332,7 @@ ${recentLogs}
         const dueSoonText = d.dueSoon.length
             ? d.dueSoon.map(function(x) {
                 const range = window._fmtDateRangeShort(x.startDate, x.dueDate) || x.dueDate;
-                let line = `- ${x.task} (담당:${x.assignee}, 기간:${range}, D-${x.dDay})`;
+                let line = `- #${x.idx} ${x.task} (담당:${x.assignee}, 기간:${range}, D-${x.dDay})`;
                 if (x.sender) line += ` | 발신:${x.sender}`;
                 if (x.receiver) line += ` | 수신:${x.receiver}`;
                 if (x.detail) line += ` | 내용:${x.detail}`;
@@ -7411,11 +7419,13 @@ ${recentLogs}
         const genDate = new Date(r.generatedAt);
         const genStr = isNaN(genDate) ? '' : `${genDate.getFullYear()}-${String(genDate.getMonth() + 1).padStart(2, '0')}-${String(genDate.getDate()).padStart(2, '0')} ${String(genDate.getHours()).padStart(2, '0')}:${String(genDate.getMinutes()).padStart(2, '0')}`;
 
+        // 💡 [2026-08-28 신규] 리스크/액션추천/총평에 AI가 적어주는 "#98"을 클릭하면 그 업무로 이동할 수
+        //    있게 링크로 바꿔준다(window._linkifyTaskRefs — AI 문답 채팅창과 공용 로직).
         const riskHtml = (r.리스크 && r.리스크.length)
-            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.리스크.map(function(x) { return `<li style="margin-bottom:4px;">${escapeHtml(x)}</li>`; }).join('') + '</ul>'
+            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.리스크.map(function(x) { return `<li style="margin-bottom:4px;">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul>'
             : '<div style="color:#999; font-size:12px;">특별한 리스크가 감지되지 않았습니다.</div>';
         const actionHtml = (r.액션추천 && r.액션추천.length)
-            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.액션추천.map(function(x) { return `<li style="margin-bottom:4px;">${escapeHtml(x)}</li>`; }).join('') + '</ul>'
+            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.액션추천.map(function(x) { return `<li style="margin-bottom:4px;">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul>'
             : '<div style="color:#999; font-size:12px;">추천 액션이 없습니다.</div>';
 
         body.innerHTML = `
@@ -7423,7 +7433,7 @@ ${recentLogs}
             <div style="font-size:11px; color:#999; margin-bottom:12px;">생성 시각: ${genStr}</div>
             <div style="display:flex; align-items:center; gap:10px; padding:14px; background:#f8f9fa; border-radius:8px; margin-bottom:14px;">
                 <span style="font-size:28px;">${r.신호등 || '🟡'}</span>
-                <span style="font-size:13px; font-weight:bold; color:#333;">${escapeHtml(r.총평 || '')}</span>
+                <span style="font-size:13px; font-weight:bold; color:#333;">${window._linkifyTaskRefs(escapeHtml(r.총평 || ''))}</span>
             </div>
             <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; text-align:center; font-size:12px;">
                 <div style="padding:8px; background:#e7f6ec; border-radius:6px;"><b style="font-size:16px; color:#2f9e44;">${d.counts.완료 || 0}</b><br>완료</div>
@@ -8348,6 +8358,17 @@ ${question}
 위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람"/"📧 원문 메일" 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
     };
 
+    // 💡 [2026-08-28 신규] AI 요약/AI 문답 답변에 나오는 "#98" 같은 업무 번호(컨텍스트의 taskListText가
+    //    항상 "#숫자" 형태로 붙여주는 그 번호, [[ACTION:...]] 태그가 가리키는 번호와 동일)를 클릭하면
+    //    그 업무로 실제 이동(스크롤+하이라이트)할 수 있게 링크로 바꿔준다 — "분석 내용이 원본과 맞는지
+    //    확인하고 싶다"는 요청 대응. escapeHtml()을 거친 텍스트 위에서만 동작하고 \d+만 캡처하므로
+    //    삽입 위험 없이 안전하게 재사용 가능(_mdToHtml/AI 요약 리포트 양쪽에서 공용으로 씀).
+    window._linkifyTaskRefs = function(escapedText) {
+        return String(escapedText || '').replace(/#(\d+)\b/g, function(m, n) {
+            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span>`;
+        });
+    };
+
     // 💡 [버그 수정] AI에게 마크다운(굵게/글머리 기호)으로 답하라고 프롬프트에 지시해도, 채팅창이
     //    escapeHtml()로 그대로 이스케이프해 white-space:pre-wrap으로만 찍고 있어서 "**제목**", "- 항목"
     //    같은 마크다운 기호가 글자 그대로 화면에 보였음 — Gemini 앱에서 보던 것처럼 소제목/글머리
@@ -8357,6 +8378,7 @@ ${question}
     window._mdToHtml = function(raw) {
         let escaped = escapeHtml(raw || '');
         escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
+        escaped = window._linkifyTaskRefs(escaped); // #98 → 클릭 이동 링크
         const lines = escaped.split('\n');
         return lines.map(function(line) {
             const heading = line.match(/^(#{1,4})\s+(.*)$/);
@@ -12456,7 +12478,72 @@ window.handleAuthClick = function() {
         }
         applyFilters();
     };
-    
+
+    // 💡 [2026-08-28 신규] 아래 window._aiJumpToRow가, "#98" 클릭 시 필터 때문에 그 업무가 화면에 아예
+    //    안 보이는 경우에 대비해 모든 필터를 "전체"로 되돌리는 데 쓰는 헬퍼. updateFilter의 "All 선택"
+    //    분기와 같은 처리를 모든 필터 컬럼에 일괄 적용한다(버튼 active 표시까지 화면과 동기화).
+    window._resetAllGanttFilters = function() {
+        if (typeof filterColumns === 'undefined' || typeof currentFilters === 'undefined') return false;
+        let changed = false;
+        filterColumns.forEach(function(col) {
+            const filterSet = currentFilters[col.index];
+            if (!filterSet || filterSet.has('All')) return;
+            filterSet.clear(); filterSet.add('All');
+            changed = true;
+            const groupDiv = document.getElementById('filter-group-' + col.index);
+            if (groupDiv) {
+                const label = groupDiv.querySelector('.filter-label');
+                groupDiv.querySelectorAll('.btn').forEach(function(b) { b.classList.remove('active'); });
+                if (label) label.classList.add('active');
+            }
+        });
+        if (changed) applyFilters();
+        return changed;
+    };
+
+    // 💡 [2026-08-28 신규] AI 요약/AI 문답 답변의 "#98" 링크(window._linkifyTaskRefs)를 클릭했을 때
+    //    실행되는 이동 기능 — "분석 내용이 실제 원본과 맞는지/더 자세히 보고 싶다"는 요청 대응.
+    //    1) AI 모달이 표를 가리고 있으면 닫아서 바로 보이게 하고, 2) 조상 WBS가 접혀 있으면 펼치고,
+    //    3) 그래도 필터에 걸려 안 보이면 필터를 전체 초기화한 뒤, 4) 스크롤 + 하이라이트한다.
+    window._aiJumpToRow = function(rowIndex) {
+        const row = globalData && globalData[rowIndex];
+        if (!row || row._level === undefined) {
+            if (window.showToast) window.showToast('⚠️ #' + rowIndex + ' 업무를 찾지 못했습니다(삭제되었거나 번호가 바뀐 것 같습니다).', 'warning');
+            else alert('⚠️ #' + rowIndex + ' 업무를 찾지 못했습니다.');
+            return;
+        }
+
+        // AI 모달이 열려 있으면 닫아서 표가 바로 보이게 함 (대화/리포트 내용은 상태에 그대로 남아있어
+        // 다시 열면 그대로 이어짐 — window._ganttQaHistory / projectMeta.aiSummaryReport 참고)
+        ['gantt-qa-modal', 'ai-summary-modal'].forEach(function(id) {
+            const m = document.getElementById(id);
+            if (m) m.style.display = 'none';
+        });
+
+        // 조상 WBS가 접혀 있으면 펼쳐서 실제로 보이게 함 (자기 자신 위쪽에서 레벨이 더 얕은 첫 조상을
+        // 계속 타고 올라가며 확인 — window.toggleWbsCollapse와 같은 트리 구조 가정)
+        let expanded = false;
+        let curLevel = row._level || 0;
+        for (let j = rowIndex - 1; j >= 0 && curLevel > 0; j--) {
+            const pr = globalData[j];
+            if (!pr || pr._level === undefined) continue;
+            if (pr._level < curLevel) {
+                if (pr._wbsCollapsed) { pr._wbsCollapsed = false; expanded = true; }
+                curLevel = pr._level;
+            }
+        }
+        if (expanded) applyFilters();
+
+        const tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
+        if (!tr) return;
+        if (tr.style.display === 'none') {
+            // 필터에 걸려 여전히 숨어 있으면 필터를 전체 초기화해서라도 보여준다
+            window._resetAllGanttFilters();
+        }
+        window.highlightRow(rowIndex);
+        tr.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+
 </script>
 
 <script>
