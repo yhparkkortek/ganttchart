@@ -8465,8 +8465,9 @@ ${question}
     //    썼는데, 이 앱은 "No." 칸의 행별 알람 토글(window.wrToggleAlarm, 10824줄)부터 캘린더/텔레그램
     //    알람 알림까지 이미 전부 📌(압정)로 알람을 표시하고 있어서, 그 관례에 맞춰 📌으로 통일한다.
     window._linkifyTaskRefs = function(escapedText) {
+        const _en = window._currentLang === 'en';
         return String(escapedText || '').replace(/#(\d+)\b/g, function(m, n) {
-            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="클릭하면 이 업무의 알람을 켜고 끕니다(토글)" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>`;
+            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="${_en ? 'Click to toggle this task\'s alarm on/off' : '클릭하면 이 업무의 알람을 켜고 끕니다(토글)'}" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>`;
         });
     };
 
@@ -8573,20 +8574,23 @@ ${question}
     //    자체가 켜기를 의미하므로 그대로 "켜기 전용" 동작을 유지 — window._aiAssistSetAlarm은 안 건드림.)
     window._aiSetAlarmFromRef = function(rowIndex, ev) {
         if (ev) ev.stopPropagation();
+        const _en = window._currentLang === 'en';
         const row = globalData && globalData[rowIndex];
         if (!row || row._level === undefined) {
-            if (window.showToast) window.showToast('⚠️ #' + rowIndex + ' 업무를 찾지 못해 알람을 변경하지 못했습니다.', 'warning');
+            if (window.showToast) window.showToast(_en
+                ? '⚠️ Could not find task #' + rowIndex + ', so the alarm was not changed.'
+                : '⚠️ #' + rowIndex + ' 업무를 찾지 못해 알람을 변경하지 못했습니다.', 'warning');
             return;
         }
         const label = (row._level === 0 ? row._origDev : row._level === 1 ? row._origT1
-            : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4) || '(제목없음)';
+            : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4) || (_en ? '(Untitled)' : '(제목없음)');
         // 💡 ev를 그대로 넘기면 wrToggleAlarm의 Ctrl/Shift 다중선택 분기를 탈 수 있는데, 이 모달엔 그런
         //    다중선택 개념이 없으므로 null을 넘겨 항상 "이 한 업무만" 토글되게 한다.
         window.wrToggleAlarm(rowIndex, null);
         if (window.showToast) {
             window.showToast(row._알림
-                ? '✅ "' + label + '" 업무에 알람을 설정했습니다.'
-                : '📌 "' + label + '" 업무의 알람을 해제했습니다.', 'success');
+                ? (_en ? '✅ Alarm set for "' + label + '".' : '✅ "' + label + '" 업무에 알람을 설정했습니다.')
+                : (_en ? '📌 Alarm cleared for "' + label + '".' : '📌 "' + label + '" 업무의 알람을 해제했습니다.'), 'success');
         }
     };
 
@@ -10537,6 +10541,21 @@ window.deleteHistoryByDateRange = function() {
         });
         const _sumAddMatBtn = document.getElementById('sum-add-material-btn');
         if (_sumAddMatBtn) _sumAddMatBtn.textContent = _en ? '+ Add Material' : '+ 자재 추가';
+        // [Summary 탭] "메일 키워드" 라벨 — title 툴팁(사람 이름 관련 경고 포함)
+        const _sumMailKwLbl = document.getElementById('sum-lbl-mailkw');
+        if (_sumMailKwLbl) _sumMailKwLbl.title = _en
+            ? "Aliases/abbreviations to match new mail to this project during auto-collection & analysis. Comma-separated (e.g. S32, STELLAR)\n\n⚠️ Don't enter a person's name — every mail that person sends will auto-match this project regardless of content (their own name always appears in their signature). Names already in the address book are auto-excluded from matching, but it's safest not to add them in the first place."
+            : "메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)\n\n⚠️ 사람 이름은 넣지 마세요 — 그 사람이 보내는 모든 메일이 내용과 무관하게 이 프로젝트로 자동 매칭됩니다(서명란에 항상 본인 이름이 들어가기 때문). 주소록에 등록된 이름은 매칭 시 자동으로 제외되지만, 안전하게 처음부터 넣지 않는 걸 권장합니다.";
+        // [Summary 탭] "프로젝트 상태" select — title 툴팁 + 옵션(진행중/완료) 텍스트
+        const _sumStatusSel = document.getElementById('sum-project-status');
+        if (_sumStatusSel) {
+            _sumStatusSel.title = _en
+                ? 'Marking a project "Done" grays it out in the "Load Project" list, and — unless turned off in [Settings → Mail Auto-Assign Settings] — also excludes it from new mail auto-matching.'
+                : "완료로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다.";
+            const _sumStatusOpts = _sumStatusSel.options;
+            if (_sumStatusOpts[0]) _sumStatusOpts[0].textContent = _en ? '🔵 In Progress' : '🔵 진행중';
+            if (_sumStatusOpts[1]) _sumStatusOpts[1].textContent = _en ? '✅ Done' : '✅ 완료';
+        }
         // 💡 주요 자재 표의 칸 placeholder/버튼 title도 언어에 맞춰 다시 그림(값은 collectMaterialRows(true)로
         //    빈 자유추가 행까지 그대로 보존한 채 다시 렌더링해서, 언어만 바뀌고 입력 중이던 내용은 안 날아감)
         if (window.renderMaterialRows && window.collectMaterialRows) window.renderMaterialRows(window.collectMaterialRows(true));
@@ -10652,6 +10671,9 @@ window.deleteHistoryByDateRange = function() {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
+        // [AI팝업] "원본 메일 보기" 본문 칸 — 더블클릭 접기 안내 툴팁
+        const _mailOrigBody = document.getElementById('mail-original-body');
+        if (_mailOrigBody) _mailOrigBody.title = _en ? 'Double-click to collapse' : '더블클릭하면 접힙니다';
         // [AI팝업] "📋 수집 N개 / 분석 N개" — 안에 숫자용 <span>(ms-result-count/ms-analyzed-count)이
         //    끼어있어서 위 textContent 방식(통째로 덮어쓰기)을 쓰면 그 숫자 칸까지 같이 날아간다.
         //    현재 숫자를 먼저 읽어둔 뒤, 언어에 맞는 문구로 innerHTML을 다시 조립하면서 숫자를 그대로 되살린다.
@@ -11069,7 +11091,7 @@ window.deleteHistoryByDateRange = function() {
                         //    보고 처리한다(필터와 동시에 적용돼도 서로 안 꼬이도록 한 곳에서 같이 판정).
                         const _wbsHasChildren = (i + 1 < globalData.length) && globalData[i + 1] && ((globalData[i + 1]._level || 0) > (row._level || 0));
                         const wbsToggleHtml = _wbsHasChildren
-                            ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? '펼치기' : '접기'}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
+                            ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? (window._currentLang === 'en' ? 'Expand' : '펼치기') : (window._currentLang === 'en' ? 'Collapse' : '접기')}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
                             : `<span style="display:inline-block; width:11px;"></span>`;
                         // 💡 [2026-08-28 신규 → 뒤쪽 배치 → 드롭다운으로 변경] 담당구분(PM/ME/HW/...) 선택 배지 —
                         //    업무명 "뒤"에 작은 드롭다운(select)으로 붙여서 목록에서 바로 골라 지정한다(기존엔
@@ -11081,7 +11103,7 @@ window.deleteHistoryByDateRange = function() {
                         const _wbsDiscipline = window._normalizeWbsDiscipline(row._담당구분) || window._extractDisciplineFromContent(row) || 'ETC';
                         const _wbsDisciplineOpts = window.WBS_DISCIPLINE_CATEGORIES.map(c => `<option value="${c}" ${c === _wbsDiscipline ? 'selected' : ''}>${c}</option>`).join('')
                             + (window.WBS_DISCIPLINE_CATEGORIES.indexOf(_wbsDiscipline) === -1 ? `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option>` : '');
-                        const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="담당구분 선택" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
+                        const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="${window._currentLang === 'en' ? 'Select discipline' : '담당구분 선택'}" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
                         let prefix = wbsToggleHtml + (row._level > 0
                             ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '');
@@ -12700,10 +12722,13 @@ window.handleAuthClick = function() {
     //    1) 조상 WBS가 접혀 있으면 펼치고, 2) 그래도 필터에 걸려 안 보이면 필터를 전체 초기화한 뒤,
     //    3) 스크롤 + 하이라이트한다(모달이 표를 가리고 있으면 토스트로 직접 끌어서 옮기라고 안내).
     window._aiJumpToRow = function(rowIndex) {
+        const _en = window._currentLang === 'en';
         const row = globalData && globalData[rowIndex];
         if (!row || row._level === undefined) {
-            if (window.showToast) window.showToast('⚠️ #' + rowIndex + ' 업무를 찾지 못했습니다(삭제되었거나 번호가 바뀐 것 같습니다).', 'warning');
-            else alert('⚠️ #' + rowIndex + ' 업무를 찾지 못했습니다.');
+            if (window.showToast) window.showToast(_en
+                ? '⚠️ Could not find task #' + rowIndex + ' (it may have been deleted or renumbered).'
+                : '⚠️ #' + rowIndex + ' 업무를 찾지 못했습니다(삭제되었거나 번호가 바뀐 것 같습니다).', 'warning');
+            else alert(_en ? '⚠️ Could not find task #' + rowIndex + '.' : '⚠️ #' + rowIndex + ' 업무를 찾지 못했습니다.');
             return;
         }
 
@@ -12711,7 +12736,9 @@ window.handleAuthClick = function() {
         // 드래그해서 옆으로 옮기면 비교하기 편하다는 안내만 띄운다.
         if (window.showToast && (document.getElementById('gantt-qa-modal')?.style.display === 'block'
             || document.getElementById('ai-summary-modal')?.style.display === 'block')) {
-            window.showToast('📍 #' + rowIndex + ' 업무로 이동했습니다. 창을 끌어서 옆으로 옮기면 비교하기 편해요.', 'info');
+            window.showToast(_en
+                ? '📍 Jumped to task #' + rowIndex + '. Drag the window aside to compare side by side.'
+                : '📍 #' + rowIndex + ' 업무로 이동했습니다. 창을 끌어서 옆으로 옮기면 비교하기 편해요.', 'info');
         }
 
         // 조상 WBS가 접혀 있으면 펼쳐서 실제로 보이게 함 (자기 자신 위쪽에서 레벨이 더 얕은 첫 조상을
