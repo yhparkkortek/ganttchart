@@ -8502,8 +8502,13 @@ ${question}
         }
         box.innerHTML = window._ganttQaHistory.map(function(m) {
             const isUser = m.role === 'user';
-            const bg = isUser ? '#0056b3' : (m.error ? '#fff0f0' : '#f1f3f5');
-            const fg = isUser ? '#fff' : (m.error ? '#c92a2a' : '#333');
+            // 💡 [2026-08-29 버그 수정] 원색 파랑(#0056b3) 배경 + 흰 글자 조합이었는데, 대부분의 브라우저
+            //    기본 텍스트 선택(드래그) 하이라이트도 비슷한 파란 계열이라 이미 파란 배경 위에서는
+            //    "지금 어디까지 선택됐는지"가 거의 안 보였다 — 그래서 복사하려고 드래그해도 선택 범위를
+            //    확인할 수 없었음. 배경을 흐린 파랑으로, 글자는 진한 파랑으로 바꿔서 선택 하이라이트가
+            //    배경과 뚜렷이 구분되게 한다(선택 안 된 상태에서도 읽기 편함은 그대로 유지).
+            const bg = isUser ? '#e7f3ff' : (m.error ? '#fff0f0' : '#f1f3f5');
+            const fg = isUser ? '#0056b3' : (m.error ? '#c92a2a' : '#333');
             const body = isUser
                 ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
                 : `<div style="word-break:break-word;">${window._mdToHtml(m.text)}</div>`;
