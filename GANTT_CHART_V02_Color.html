@@ -26296,6 +26296,14 @@ window._pcRenderLibList = function(filterText) {
 // 💡 [2026-08-25 신규] 패널 데이터시트는 대부분 PDF라 텍스트 붙여넣기만으론 불편하다는 요청 —
 //    클라이언트 사이드 pdf.js(전역 pdfjsLib, 서버 없이 브라우저에서 텍스트만 뽑아냄)로 PDF/TXT
 //    파일을 첨부하면 본문을 자동으로 붙여넣기 칸에 채워준다. 이후 흐름(AI로 추출)은 그대로 재사용.
+// 💡 [2026-08-28 버그 수정] "Suitable Load"처럼 한 항목의 값이 PDF 원본에서 여러 줄로 나뉘어 있으면
+//    (예: "8strings x 2bars" / "4strings x 4bars" 두 줄) AI 추출이 빈칸("-")으로 남기는 문제 — 원인은
+//    이 함수가 페이지의 모든 텍스트 조각(items)을 줄바꿈 정보 없이 스페이스 하나로만 다 이어붙이고
+//    있었던 것. 그러면 "2. Suitable Load 8strings x 2bars 4strings x 4bars 3. Electrical..."처럼
+//    줄 구분이 통째로 사라진 한 덩어리 문장이 되어, AI가 어디까지가 이 항목의 값인지 판단할 근거
+//    자체를 잃는다(값이 한 줄뿐인 항목은 우연히 살아남아 "1개는 되고 2개는 안 되는" 것처럼 보였음).
+//    pdf.js의 각 텍스트 조각은 transform[5]에 y좌표를 담고 있으므로, 같은 줄(y좌표가 거의 동일)이면
+//    스페이스로, 줄이 바뀌면(y좌표가 달라지면) 개행으로 이어붙여 원본의 줄 구조를 최대한 복원한다.
 window._pcExtractPdfText = async function(file) {
     const buf = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
@@ -26303,7 +26311,18 @@ window._pcExtractPdfText = async function(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        text += content.items.map(function(it) { return it.str; }).join(' ') + '\n';
+        let lastY = null;
+        content.items.forEach(function(it) {
+            const y = (it.transform && typeof it.transform[5] === 'number') ? it.transform[5] : null;
+            if (lastY !== null && y !== null && Math.abs(y - lastY) > 1) {
+                text += '\n';
+            } else if (text && !/[\n ]$/.test(text)) {
+                text += ' ';
+            }
+            text += it.str;
+            if (y !== null) lastY = y;
+        });
+        text += '\n';
     }
     return text;
 };
@@ -26929,6 +26948,7 @@ ${keyListText}
 4. "Brand"는 문서에 제조사명이 명시되어 있으면 그대로 쓰고, 없으면 "-"로 답하세요(내부 제작 문서라면 회사명이 곧 Brand입니다).
 5. "Item Code"는 사내 관리번호(예: 301782)처럼 숫자/코드 형태의 고유 식별자, "Part Name"은 제품/모델 명칭(예: KCB-02508B-60, GH765A(A1))입니다 — 문서에 원래 하나로만 표기되어 있어도 이 두 성격에 맞게 나눠서 채우세요.
 6. 위에 나열된 스펙 키 이름을 한 글자도 다르지 않게 정확히 그대로 사용하세요. "Connectors"의 하위 키(name/role/model/pins/no/symbol/desc)도 정확히 그대로 사용하세요.
+7. 한 항목에 값이 여러 줄/여러 개로 나열된 경우(예: "Suitable Load"가 "8strings x 2bars"와 "4strings x 4bars"처럼 서로 다른 두 가지 구성으로 표기된 경우) — 절대 하나만 골라서 답하거나 빈칸("-")으로 남기지 말고, 발견한 값 전부를 세미콜론과 공백("; ")으로 이어붙여 하나의 문자열로 답하세요(예: "8strings x 2bars; 4strings x 4bars"). 이 규칙은 위 3번(Min/Typ/Max 전용 " / " 구분자)과는 별개이며, Min/Typ/Max처럼 정해진 자리가 없는 임의 개수의 나열형 값에 적용합니다.
 
 [원문 텍스트]
 ${(rawText || '').substring(0, window._EP_EXTRACT_TEXT_LIMIT)}`;
@@ -27418,13 +27438,58 @@ window._epRenderLibList = function(filterText) {
         list.innerHTML = `<div style="padding:8px; color:#999; font-size:12px;">${_en ? 'No matches in the library.' : '라이브러리에 일치하는 항목이 없습니다.'}</div>`;
         return;
     }
+    // 💡 [2026-08-28 신규] "등록된 품목을 삭제할 방법이 없다"는 지적 — 지금까지는 이 목록에서 항목을
+    //    클릭해 비교표에 "추가"만 할 수 있었고, 팀 공용 라이브러리(Drive) 자체에서 항목을 완전히 지우는
+    //    UI가 없었다(window._epLibRemoveEntry 함수 자체는 있었지만 "이름 변경" 흐름에서만 내부적으로
+    //    쓰이고 있었음). 각 행에 🗑 삭제 버튼을 추가 — event.stopPropagation()으로 행 클릭(추가)과
+    //    분리해서, 삭제 버튼만 눌렀을 때는 추가되지 않게 한다.
     list.innerHTML = filtered.map(function(p) {
-        return `<div onclick="window.elecCompareAddFromLibrary(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))})" style="padding:6px 8px; border-bottom:1px solid #f0f0f0; cursor:pointer; font-size:12.5px; display:flex; justify-content:space-between;"
+        return `<div style="padding:6px 8px; border-bottom:1px solid #f0f0f0; font-size:12.5px; display:flex; justify-content:space-between; align-items:center;"
             onmouseover="this.style.background='#f4f8fc'" onmouseout="this.style.background='transparent'">
-            <span><b>${escapeHtml(window._epPartNameOf(p.specs) || p.model)}</b> <span style="color:#888;">${escapeHtml((p.specs && p.specs['Brand']) || '')}</span></span>
-            <span style="color:#2c5f8a;">${_en ? '+ Add' : '+ 추가'}</span>
+            <span onclick="window.elecCompareAddFromLibrary(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))})" style="cursor:pointer; flex:1; min-width:0;">
+                <b>${escapeHtml(window._epPartNameOf(p.specs) || p.model)}</b> <span style="color:#888;">${escapeHtml((p.specs && p.specs['Brand']) || '')}</span>
+            </span>
+            <span onclick="window.elecCompareAddFromLibrary(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))})" style="color:#2c5f8a; cursor:pointer; flex-shrink:0; margin-left:8px;">${_en ? '+ Add' : '+ 추가'}</span>
+            <button type="button" onclick="event.stopPropagation(); window._epDeleteLibEntry(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))});" title="${_en ? 'Permanently delete from the shared library' : '공용 라이브러리에서 완전히 삭제'}" style="flex-shrink:0; margin-left:6px; background:#fff; border:1px solid #e03131; color:#e03131; border-radius:4px; font-size:11px; cursor:pointer; padding:2px 6px;">🗑</button>
         </div>`;
     }).join('');
+};
+
+// 💡 [2026-08-28 신규] 위 🗑 버튼의 실행부 — 공용 라이브러리(Drive)에서 항목을 완전히 삭제한다.
+//    되돌릴 수 없는 파괴적 동작이라 confirm으로 한 번 더 확인한다. 삭제 후에는 로컬 캐시(_epLibCache)와
+//    현재 프로젝트의 비교표 선택(selectedModels)에서도 같이 제거해서, 다시 불러오지 않아도 화면이
+//    바로 일치하게 만든다(이미 라이브러리에서 지워진 모델을 비교표가 계속 참조하면 "미추출"로 깨져 보임).
+window._epDeleteLibEntry = async function(type, model) {
+    const _en = window._currentLang === 'en';
+    const cfg = window.ELEC_PART_TYPES[type];
+    const displayName = (function() {
+        const lib = window._epLibCache[type] || { items: [] };
+        const p = (lib.items || []).find(function(x) { return x.model === model; });
+        return (p && window._epPartNameOf(p.specs)) || model;
+    })();
+    const ok = confirm(_en
+        ? `Permanently delete "${displayName}" from the shared ${cfg.label} library?\nThis cannot be undone and affects everyone on the team.`
+        : `공용 ${cfg.label} 라이브러리에서 "${displayName}"을(를) 완전히 삭제할까요?\n되돌릴 수 없으며 팀 전체에 영향을 줍니다.`);
+    if (!ok) return;
+
+    const success = await window._epLibRemoveEntry(type, model);
+    if (!success) {
+        alert(_en ? '⚠️ Failed to delete from the library. Please check your Drive login and try again.' : '⚠️ 라이브러리 삭제에 실패했습니다. 드라이브 로그인 상태를 확인하고 다시 시도해주세요.');
+        return;
+    }
+
+    const lib = window._epLibCache[type];
+    if (lib && Array.isArray(lib.items)) lib.items = lib.items.filter(function(p) { return p.model !== model; });
+
+    const ec = window.tabData && window.tabData.elecCompare && window.tabData.elecCompare[type];
+    if (ec && Array.isArray(ec.selectedModels) && ec.selectedModels.indexOf(model) !== -1) {
+        ec.selectedModels = ec.selectedModels.filter(function(m) { return m !== model; });
+        window.renderElecCompareTab(type);
+    }
+
+    const searchInput = document.getElementById('ep-add-search');
+    window._epRenderLibList(searchInput ? searchInput.value : '');
+    if (window.showToast) window.showToast((_en ? '🗑 Deleted from library: ' : '🗑 라이브러리에서 삭제했습니다: ') + displayName, 'info');
 };
 
 window._epHandleFileUpload = async function(input) {
