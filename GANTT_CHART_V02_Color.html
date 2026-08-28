@@ -7198,10 +7198,15 @@ ${mailText}`;
             const _psMaxLen = window.getAiContentMaxLen ? window.getAiContentMaxLen() : 500;
             const detail = (colIdx.content !== -1 && row[colIdx.content]) ? String(row[colIdx.content]).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
             const detailAnswer = (colIdx.answer !== -1 && row[colIdx.answer]) ? String(row[colIdx.answer]).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
+            // 💡 [2026-08-28 신규] "원문 메일도 봐달라"는 요청에 AI 요약도 못 읽던 문제 수정 — 지연/임박
+            //    목록은 이미 최대 15+15건으로 제한돼 있어(아래 return의 slice(0,15)), 상세내용/답변과
+            //    같은 글자수 한도로 원문 메일(_mailRaw) 발췌를 같이 담아도 프롬프트가 과도하게 커지지 않는다.
+            //    (AI 문답처럼 300건 전체를 훑는 목록이 아니라서, 여기서는 [원문有] 표시 대신 발췌를 바로 포함.)
+            const mailExcerpt = row._mailRaw ? String((row._mailRaw.body2000 || '')).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
             if (diffDays < 0) {
-                delayed.push({ task: label, assignee: assignee, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer });
+                delayed.push({ task: label, assignee: assignee, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt });
             } else if (diffDays <= 7) {
-                dueSoon.push({ task: label, assignee: assignee, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer });
+                dueSoon.push({ task: label, assignee: assignee, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt });
             }
         });
 
@@ -7268,6 +7273,7 @@ ${recentLogs}
                 let line = `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, ${x.overdueDays}일 지연)`;
                 if (x.detail) line += ` | 내용:${x.detail}`;
                 if (x.detailAnswer) line += ` | 대응:${x.detailAnswer}`;
+                if (x.mailExcerpt) line += ` | 원문메일:${x.mailExcerpt}`;
                 return line;
             }).join('\n')
             : '(없음)';
@@ -7276,6 +7282,7 @@ ${recentLogs}
                 let line = `- ${x.task} (담당:${x.assignee}, 마감:${x.dueDate}, D-${x.dDay})`;
                 if (x.detail) line += ` | 내용:${x.detail}`;
                 if (x.detailAnswer) line += ` | 대응:${x.detailAnswer}`;
+                if (x.mailExcerpt) line += ` | 원문메일:${x.mailExcerpt}`;
                 return line;
             }).join('\n')
             : '(없음)';
@@ -8096,7 +8103,13 @@ ${recentLogs}
                 }
             }
             const alarmTag = row._알림 ? ' [알람ON]' : '';
-            let line = `- #${x.idx} Lv${row._level} "${label}" | 담당:${assignee} | 상태:${status}${dueTag}${alarmTag} | 시작:${start || '-'} | 계획:${plan || '-'}`;
+            // 💡 [2026-08-28 신규] "원문 메일도 봐줘" 질문에 AI가 답하려면 이 업무에 원본 이메일이
+            //    저장돼 있는지부터 알아야 한다 — 전문을 매번 다 넣으면(업무당 최대 수천 자) 프롬프트가
+            //    폭발하므로, 목록에는 있음/없음 표시만 두고 실제 전문은 AI가 [[ACTION:VIEW_MAIL:번호]]
+            //    태그로 "요청"할 때만 별도 조회해서 후속 프롬프트에 끼워넣는다(아래 _buildGanttQaPrompt/
+            //    sendGanttQaMessage 참고, SET_ALARM 태그와 같은 패턴).
+            const mailTag = row._mailRaw ? ' [원문有]' : '';
+            let line = `- #${x.idx} Lv${row._level} "${label}" | 담당:${assignee} | 상태:${status}${dueTag}${alarmTag}${mailTag} | 시작:${start || '-'} | 계획:${plan || '-'}`;
             if (content) line += ` | 내용:${content}`;
             if (answer) line += ` | 대응:${answer}`;
             lines.push(line);
@@ -8195,11 +8208,17 @@ ${recentLogs}
     };
 
     // 💡 [프로젝트 개요/멤버/자재 + 업무 목록 + 최근 이력 + 지금까지의 대화 + 새 질문]을 하나의 프롬프트로 합침
-    window._buildGanttQaPrompt = function(question, priorHistory) {
+    // 💡 [2026-08-28 신규] mailTexts — AI가 직전 턴에서 [[ACTION:VIEW_MAIL:번호]]로 "요청"한 업무의
+    //    원본 메일 전문(_aiAssistGetMailRaw 결과)들. 있으면 [요청하신 원문 메일 전문] 섹션으로 끼워 넣어
+    //    같은 질문을 다시 물어본다(sendGanttQaMessage의 후속 호출에서만 채워짐).
+    window._buildGanttQaPrompt = function(question, priorHistory, mailTexts) {
         const ctx = window._buildGanttQaContext();
         const historyText = (priorHistory && priorHistory.length)
             ? priorHistory.map(function(h) { return (h.role === 'user' ? '사용자' : 'AI') + ': ' + h.text; }).join('\n')
             : '(없음)';
+        const mailSection = (mailTexts && mailTexts.length)
+            ? `\n[요청하신 원문 메일 전문]\n${mailTexts.join('\n\n---\n\n')}\n`
+            : '';
 
         return `당신은 아래 프로젝트(Gantt 일정 + Summary/Brief SPEC/M.C Table/Elec Parts/Address 등 프로젝트 파일 전체 데이터)를 잘 아는 보조 AI입니다. 아래 데이터에 있는 내용에 근거해서만 답하세요.
 데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로 답변하세요.
@@ -8220,6 +8239,13 @@ ${recentLogs}
 3. 일치하는 업무가 여러 개거나 하나도 없으면 절대 저 태그를 쓰지 말고, 어떤 업무인지 되물어보거나 "해당 업무를 찾지 못했습니다"라고 답하세요.
 4. 이미 [알람ON]이 붙어있는 업무면 그 사실을 답변에 알려주고, 그래도 태그는 그대로 붙이세요(중복 실행해도 안전하게 무시됨).
 5. 알람과 무관한 질문에는 이 태그를 절대 붙이지 마세요.
+
+📧 "원문/원본 메일 보여줘·읽어줘·확인해줘" 유형 요청에 대한 필수 규칙 (실제 메일 원문을 조회하는 기능):
+[업무 목록]에서 " [원문有]" 표시가 붙은 업무는 등록 당시의 원본 이메일 전문이 시스템에 별도로 저장되어 있습니다 — 다만 이 목록에는 "있다/없다" 표시만 있고 원문 내용 자체는 아직 포함되어 있지 않으니, 표시만 보고 원문 내용을 안다고 착각하거나 지어내지 마세요.
+1. 아래 [요청하신 원문 메일 전문] 섹션이 이미 포함되어 있다면, 그 내용을 근거로 바로 답변하세요(2~4번 절차를 다시 밟지 말고, 태그도 다시 붙이지 마세요).
+2. 그 섹션이 없는데 사용자가 특정 업무의 원문/원본 메일을 보여달라/읽어달라고 요청하면, [업무 목록]에서 그 업무를 정확히 하나만 찾으세요.
+3. 그 업무에 [원문有] 표시가 있으면, 다른 말이나 설명 없이 답변으로 정확히 이 한 줄만 출력하세요: [[ACTION:VIEW_MAIL:그업무의#숫자]]  (예: [[ACTION:VIEW_MAIL:12]]) — 시스템이 원문을 찾아 자동으로 다시 물어봅니다.
+4. [원문有] 표시가 없는 업무면 태그를 쓰지 말고 "이 업무는 저장된 원본 메일이 없습니다"라고 답하세요. 일치하는 업무가 여러 개거나 하나도 없어도 태그를 쓰지 말고 되물어보세요.
 
 [오늘 날짜]
 ${ctx.todayStr}
@@ -8251,7 +8277,7 @@ ${ctx.addressText}
 
 [업무 목록]
 ${ctx.taskListText}
-
+${mailSection}
 [최근 변경 이력]
 ${ctx.recentLogsText}
 
@@ -8261,7 +8287,7 @@ ${historyText}
 [사용자의 새 질문]
 ${question}
 
-위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람" 규칙에 따른 [[ACTION:SET_ALARM:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
+위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람"/"📧 원문 메일" 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
     };
 
     // 💡 [버그 수정] AI에게 마크다운(굵게/글머리 기호)으로 답하라고 프롬프트에 지시해도, 채팅창이
@@ -8332,6 +8358,24 @@ ${question}
         return { ok: true, alreadyOn: alreadyOn, taskName: label };
     };
 
+    // 💡 [2026-08-28 신규] "원문 메일도 봐달라"는 질문에 AI가 답을 못 하던 문제 수정 — 업무 목록엔
+    //    [원문有] 표시만 있고 실제 메일 본문(row._mailRaw)은 안 넣어주고 있었다. AI가 [[ACTION:VIEW_MAIL:
+    //    번호]] 태그로 "이 업무 원문을 보여달라"고 요청하면, 그 행의 _mailRaw(제목/발신/날짜/본문)를 찾아
+    //    후속 프롬프트에 끼워 넣어 다시 답하게 한다(sendGanttQaMessage 참고). rowIndex가 없거나 그 업무에
+    //    원문이 없으면 null 반환.
+    window._aiAssistGetMailRaw = function(rowIndex) {
+        const row = globalData && globalData[rowIndex];
+        if (!row || !row._mailRaw) return null;
+        const label = (row._level === 0 ? row._origDev : row._level === 1 ? row._origT1
+            : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4) || '(제목없음)';
+        const mr = row._mailRaw;
+        // 💡 업무 상세내용/답변(getAiContentMaxLen, 기본 500자)보다 원문 메일은 훨씬 길 수 있어(협의
+        // 내용·수치가 본문 뒷부분에 있는 경우가 흔함) 별도로 더 넉넉한 하한(2000자)을 보장한다.
+        const maxLen = Math.max(window.getAiContentMaxLen ? window.getAiContentMaxLen() : 500, 2000);
+        const body = (mr.body2000 || '').toString().trim().slice(0, maxLen);
+        return `#${rowIndex} "${label}"의 원본 메일\n제목: ${mr.subject || '-'}\n발신: ${mr.sender || '-'}\n날짜: ${mr.date || '-'}\n본문:\n${body || '(본문 없음)'}`;
+    };
+
     // AI 답변 텍스트에서 [[ACTION:SET_ALARM:번호]] 태그를 찾아 제거하고, 실행 결과 안내문을 답변에 덧붙인다.
     // 태그가 없으면 원문을 그대로 반환.
     window._applyGanttQaActions = function(text) {
@@ -8343,6 +8387,15 @@ ${question}
         return cleaned + (res.alreadyOn
             ? `\n\n🔔 "${res.taskName}" 업무는 이미 알람이 켜져 있었습니다.`
             : `\n\n✅ "${res.taskName}" 업무에 알람을 설정했습니다.`);
+    };
+
+    // 💡 callAiBackend 응답에서 실제 답변 텍스트만 꺼내는 공통 로직 — 원문 메일 후속 조회(위 VIEW_MAIL
+    //    처리) 때 두 번째 호출에도 그대로 재사용하기 위해 별도 함수로 뺐다(기존엔 sendGanttQaMessage
+    //    안에 한 번만 인라인으로 있었음).
+    window._extractGanttQaAiText = function(result) {
+        return (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
+            && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
+            && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '(빈 응답)';
     };
 
     window.sendGanttQaMessage = async function() {
@@ -8367,9 +8420,26 @@ ${question}
             const prompt = window._buildGanttQaPrompt(question, priorHistory);
             const result = await window.callAiBackend(apiKey, prompt, {});
             if (!result.ok) throw result.error || new Error('알 수 없는 오류');
-            let text = (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
-                && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
-                && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '(빈 응답)';
+            let text = window._extractGanttQaAiText(result);
+
+            // 💡 [2026-08-28 신규] "원문 메일도 봐줘" 대응 — AI가 [[ACTION:VIEW_MAIL:번호]] 태그로
+            //    특정 업무의 원문을 요청하면(위 프롬프트의 "📧 원문 메일" 규칙), 그 태그를 사용자에게
+            //    그대로 보여주는 대신 원문을 조회해 후속 프롬프트에 끼워 넣고 한 번 더 물어봐서, 사용자
+            //    눈에는 "바로 원문 내용을 근거로 답한 것"처럼 보이게 한다(SET_ALARM처럼 즉시 실행되는
+            //    액션이 아니라, 답을 만들기 위한 추가 조회이므로 왕복이 한 번 더 필요함).
+            const mailRowIdxs = Array.from(text.matchAll(/\[\[ACTION:VIEW_MAIL:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
+            if (mailRowIdxs.length) {
+                const mailTexts = mailRowIdxs.map(window._aiAssistGetMailRaw).filter(Boolean);
+                if (mailTexts.length) {
+                    const followupPrompt = window._buildGanttQaPrompt(question, priorHistory, mailTexts);
+                    const result2 = await window.callAiBackend(apiKey, followupPrompt, {});
+                    if (result2.ok) text = window._extractGanttQaAiText(result2);
+                    else text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 원문 메일을 불러오는 중 오류가 발생했습니다.';
+                } else {
+                    text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 해당 업무의 원문 메일을 찾지 못했습니다.';
+                }
+            }
+
             text = window._applyGanttQaActions(text.trim());
             window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
             window._ganttQaHistory.push({ role: 'ai', text: text.trim() });
@@ -10757,11 +10827,14 @@ window.deleteHistoryByDateRange = function() {
                         const wbsToggleHtml = _wbsHasChildren
                             ? `<span class="wbs-toggle-arrow" onclick="window.toggleWbsCollapse(${i}, event);" title="${row._wbsCollapsed ? '펼치기' : '접기'}" style="display:inline-block; width:11px; text-align:center; cursor:pointer; color:#aaa; font-size:9px; vertical-align:middle; user-select:none;">${row._wbsCollapsed ? '▶' : '▼'}</span>`
                             : `<span style="display:inline-block; width:11px;"></span>`;
-                        // 💡 [2026-08-28 신규 → 뒤쪽 배치로 변경] 담당구분(PM/ME/HW/...) 순환 토글 배지 —
-                        //    업무명 "뒤"에 작은 글씨로 붙여서 클릭할 때마다 다음 구분으로 넘어간다. 값이 없으면
-                        //    AI 분석 업무의 상세내용 [담당구분]... 태그에서 초기값을 가져온다(window.toggleWbsDiscipline 참고).
+                        // 💡 [2026-08-28 신규 → 뒤쪽 배치 → 드롭다운으로 변경] 담당구분(PM/ME/HW/...) 선택 배지 —
+                        //    업무명 "뒤"에 작은 드롭다운(select)으로 붙여서 목록에서 바로 골라 지정한다(기존엔
+                        //    클릭할 때마다 다음 구분으로 순환하는 방식이었음 → window.setWbsDiscipline 참고).
+                        //    값이 없으면 AI 분석 업무의 상세내용 [담당구분]... 태그에서 초기값을 가져온다.
                         const _wbsDiscipline = row._담당구분 || window._extractDisciplineFromContent(row) || '미분류';
-                        const wbsDisciplineBadge = `<span class="wbs-discipline-badge" onclick="window.toggleWbsDiscipline(${i}, event);" title="클릭: 담당구분 순환 전환 (${window.WBS_DISCIPLINE_CATEGORIES.join(' → ')})" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border-radius:3px; padding:0 3px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">[${_wbsDiscipline}]</span>`;
+                        const _wbsDisciplineOpts = window.WBS_DISCIPLINE_CATEGORIES.map(c => `<option value="${c}" ${c === _wbsDiscipline ? 'selected' : ''}>${c}</option>`).join('')
+                            + (window.WBS_DISCIPLINE_CATEGORIES.indexOf(_wbsDiscipline) === -1 ? `<option value="${_wbsDiscipline}" selected>${_wbsDiscipline}</option>` : '');
+                        const wbsDisciplineBadge = `<select class="wbs-discipline-badge" onclick="event.stopPropagation();" onmousedown="event.stopPropagation();" onchange="window.setWbsDiscipline(${i}, this.value); event.stopPropagation();" title="담당구분 선택" style="display:inline-block; font-size:9px; color:#868e96; background:#f1f3f5; border:none; border-radius:3px; padding:0 1px; margin-left:4px; cursor:pointer; vertical-align:middle; white-space:nowrap;">${_wbsDisciplineOpts}</select>`;
                         let prefix = wbsToggleHtml + (row._level > 0
                             ? `<span style="font-size:9px; color:#999; margin-right:1px;">${row._level}</span>` + (row._isLastChild ? '└ ' : '├ ')
                             : '');
@@ -11148,16 +11221,15 @@ window.deleteHistoryByDateRange = function() {
         return window._WBS_DISCIPLINE_ALIASES[raw] || raw;
     };
 
-    // 클릭 → 다음 구분으로 순환 + row._담당구분 갱신 + 상세내용에 [담당구분]... 태그가 이미 있으면
-    // 그 값도 같이 바꿔서 서로 어긋나지 않게 한다(태그가 원래 없던 수동 입력 업무는 새로 끼워넣지 않음).
-    window.toggleWbsDiscipline = function(rowIndex, ev) {
-        if (ev) ev.stopPropagation();
+    // 💡 [2026-08-28 → 드롭다운으로 교체] 드롭다운에서 담당구분을 선택하면 row._담당구분 갱신 +
+    //    상세내용에 [담당구분]... 태그가 이미 있으면 그 값도 같이 바꿔서 서로 어긋나지 않게 한다
+    //    (태그가 원래 없던 수동 입력 업무는 새로 끼워넣지 않음). 기존엔 클릭할 때마다 다음 구분으로
+    //    순환하는 toggleWbsDiscipline()이었으나, 목록에서 바로 골라 지정하는 방식으로 바뀌었다.
+    window.setWbsDiscipline = function(rowIndex, next) {
         const row = globalData[rowIndex];
-        if (!row) return;
-        const cats = window.WBS_DISCIPLINE_CATEGORIES;
+        if (!row || !next) return;
         const cur = row._담당구분 || window._extractDisciplineFromContent(row) || '';
-        const curIdx = cats.indexOf(cur); // 목록에 없으면(빈값 등) -1 → 아래 +1 % length로 자연스럽게 0번(PM)부터 시작
-        const next = cats[(curIdx + 1) % cats.length];
+        if (cur === next) return;
         row._담당구분 = next;
 
         if (colIdx.content !== -1 && row[colIdx.content] && /\[담당구분\][^\n]*/.test(row[colIdx.content].toString())) {
