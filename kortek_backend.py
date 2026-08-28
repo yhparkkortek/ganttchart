@@ -21,7 +21,7 @@
 #    /all/decrypt       — 전체 설정 복호화 (Drive 로드용)
 # ══════════════════════════════════════════════════════════════
 
-import os, json, re, poplib, email, smtplib, hashlib, base64
+import os, json, re, poplib, email, smtplib, hashlib, base64, html
 from email.header     import decode_header
 from email.utils      import parsedate_to_datetime
 from email.mime.text  import MIMEText
@@ -159,27 +159,35 @@ def decode_str(value):
 
 def extract_body(msg):
     body = ""
-    html_fallback = ""  # 💡 text/plain 파트가 끝내 없는 HTML 전용 메일 대비 폴백
+    plain_fallback = ""  # 💡 text/html 파트가 끝내 없는 텍스트 전용 메일 대비 폴백
+    # 💡 [2026-08-28 버그 수정] 표(HTML table)가 있는 메일에서 "경계문자(│)로 칸을 구분해주기로 했는데도
+    #    표가 여전히 알아볼 수 없게 나온다"는 지적 — 원인은 아래 우선순위였다. multipart/alternative
+    #    메일은 보통 text/plain 파트도 같이 들어있는데, 그건 Outlook 등 메일 클라이언트가 "표를 이미
+    #    한 줄씩 늘어놓은 형태로 미리 납작하게 만들어둔" 버전이라 칸 구분 정보가 아예 없다. 그런데 예전
+    #    코드는 그 text/plain을 무조건 최우선으로 골라 썼고, 표 구조가 살아있는 text/html은 text/plain이
+    #    "아예 없을 때"만 쓰는 최후 폴백으로 밀려나 있었다 — 그래서 아래 CELL_BOUNDARY 처리(표 칸마다
+    #    │ 경계문자를 넣어주는 로직)가 있어도 실행될 기회 자체가 없었다. text/html을 우선으로 바꾸고,
+    #    text/html이 없는 경우에만 text/plain으로 폴백하도록 순서를 뒤집는다.
     if msg.is_multipart():
         for part in msg.walk():
             ct = part.get_content_type()
             cd = str(part.get("Content-Disposition", ""))
             if "attachment" in cd:
                 continue
-            if ct == "text/plain" and not body:
+            if ct == "text/html" and not body:
                 charset = part.get_content_charset() or "utf-8"
                 try:
                     body = part.get_payload(decode=True).decode(charset, errors="replace")
                 except Exception:
                     pass
-            elif ct == "text/html" and not html_fallback:
+            elif ct == "text/plain" and not plain_fallback:
                 charset = part.get_content_charset() or "utf-8"
                 try:
-                    html_fallback = part.get_payload(decode=True).decode(charset, errors="replace")
+                    plain_fallback = part.get_payload(decode=True).decode(charset, errors="replace")
                 except Exception:
                     pass
-        if not body and html_fallback:
-            body = html_fallback
+        if not body and plain_fallback:
+            body = plain_fallback
     else:
         charset = msg.get_content_charset() or "utf-8"
         try:
@@ -203,15 +211,48 @@ def extract_body(msg):
     # 💡 [2026-08-26 변경] 칸 구분자를 탭(\t) 대신 눈에 보이는 경계문자 " │ "(U+2502)로 변경 — 탭은
     #    칸 값 길이가 다르면 세로줄이 안 맞아 보이는데, │는 정렬이 아니라 "여기서 칸이 나뉜다"만
     #    항상 명확히 표시하고, 실제 메일 본문에 이 문자가 등장할 일이 거의 없어 원본과도 안 헷갈린다.
+    # 💡 [2026-08-28 버그 수정 ④] 위 우선순위 수정으로 CELL_BOUNDARY가 드디어 실행되긴 했지만, 실제
+    #    Outlook 표는 칸 안의 글자를 <td><p>내용</p></td>처럼 Word 문단(<p>) 태그로 감싸고, 그마저도
+    #    헤더 칸처럼 한 칸 안에 문단이 여러 개( <p>Achievable</p><p>Brightness Min.</p> )인 경우가
+    #    흔했다. "</p>는 무조건 개행"이라는 기존 규칙을 표 안에서도 그대로 적용하면, 칸 하나의 내용이
+    #    여러 줄로 쪼개지면서 "칸 경계"가 "행 경계"와 뒤섞여버려 — 정작 한 행이어야 할 칸들이 서로
+    #    다른 줄에 흩어지고(예: "칸1│칸2첫줄" 한 줄, "칸2둘째줄│칸3" 다음 줄) 표를 알아볼 수 없게
+    #    나왔다. 표(<table>...</table>) 안에서는 "칸 하나 = 항상 한 줄"이 되도록, 칸 내부의 문단
+    #    구분(</p>, </div>, <br>)을 개행이 아니라 공백으로 합치고, 실제 줄바꿈은 오직 행 경계(</tr>)
+    #    에서만 만든다 — 표 밖 본문의 <br>/<p>/<div>는 기존처럼 그대로 개행 유지.
+    # 💡 [2026-08-28 버그 수정 ⑤] 표를 고치다 같이 발견 — <style> 블록(예: Outlook의 v\:*, o\:*,
+    #    w\:* VML 스타일 정의)을 태그만 벗겨내고 안의 CSS 텍스트는 안 지워서, "원문 보기"/AI 분석
+    #    맨 앞에 표와 무관한 CSS 잡음(v\:* {behavior:url(#default#VML);} 등)이 그대로 섞여 나왔다.
+    #    JS 쪽(_mfExtractText)은 script/style을 통째로 remove()하고 있었는데 이 백엔드만 빠져 있었다.
+    body = re.sub(r"(?is)<style\b.*?</style\s*>", "", body)
+    body = re.sub(r"(?is)<script\b.*?</script\s*>", "", body)
     CELL_BOUNDARY = " │ "
+
+    def _flatten_table_block(m):
+        tbl = m.group(0)
+        tbl = re.sub(r"(?i)<br\s*/?>", " ", tbl)
+        tbl = re.sub(r"(?i)</p\s*>|</div\s*>", " ", tbl)
+        tbl = re.sub(r"(?i)</t[dh]\s*>", CELL_BOUNDARY, tbl)      # 표 칸 끝 → 경계문자(다음 칸과 구분)
+        tbl = re.sub(r"(?i)</tr\s*>", "\n", tbl)                  # 표 행 끝 → 줄바꿈(칸 경계와 절대 안 섞이게)
+        tbl = re.sub(r"(?i)<table[^>]*>|</table\s*>", "\n", tbl)  # 표 시작/끝도 앞뒤 글과 분리
+        return tbl
+
     body = re.sub(r">\s+<", "><", body)
-    body = re.sub(r"(?i)<br\s*/?>", "\n", body)
+    body = re.sub(r"(?is)<table\b.*?</table\s*>", _flatten_table_block, body)  # 표는 먼저 통째로 처리(중첩 표는 미지원)
+    body = re.sub(r"(?i)<br\s*/?>", "\n", body)                   # 표 밖 나머지는 기존 그대로 개행
     body = re.sub(r"(?i)</p\s*>|</div\s*>", "\n", body)
-    body = re.sub(r"(?i)</t[dh]\s*>", CELL_BOUNDARY, body)        # 표 칸 끝 → 경계문자(다음 칸과 구분)
-    body = re.sub(r"(?i)</tr\s*>", "\n", body)                    # 표 행 끝 → 줄바꿈
-    body = re.sub(r"(?i)<table[^>]*>|</table\s*>", "\n", body)    # 표 시작/끝도 앞뒤 글과 분리
     body = re.sub(r"<[^>]+>", "", body)
+    # 💡 [2026-08-28 버그 수정 ⑥] 표를 고치다 같이 발견 — &nbsp;/&lt;/&gt;/&quot;/&amp; 같은 HTML
+    #    엔티티를 한 번도 실제 문자로 디코딩하지 않아서 "&lt;vbernard@lnw.com&gt;"처럼 원문이 그대로
+    #    노출되고 있었다. 태그를 다 벗겨낸 "뒤"에 디코딩해야 안전하다 — 미리 디코딩하면 본문에 있던
+    #    "&lt;100"(=<100이라는 뜻의 문장)이 실제 "<" 문자가 되어 버려서, 그 뒤 어딘가의 ">"와 짝지어져
+    #    위 태그 제거 정규식이 그 사이를 "태그"로 오인해 지워버릴 위험이 있다.
+    body = html.unescape(body)
     body = re.sub(r"[ \t]{8,}", "    ", body)     # 지나치게 긴 공백(레이아웃 찌꺼기)만 축소 — 표 정렬용 짧은 공백은 보존
+    # 💡 위 문단→공백 치환(</p> → " ")이 칸 내용 끝의 원래 공백과 겹치면 CELL_BOUNDARY 자체의 앞뒤
+    #    공백과 합쳐져 "내용  │  다음칸"처럼 보기 싫은 이중 공백이 생긴다 — 경계문자 바로 옆의 공백만
+    #    한 칸으로 정리(표 정렬용 공백은 │가 없는 다른 위치라 이 치환의 영향을 받지 않음).
+    body = re.sub(r" {2,}(?=│)|(?<=│) {2,}", " ", body)
     # 💡 국내 메일 특유의 "문장. \n \n다음문장." 패턴 — 완전히 빈 줄까지 전부 제거해 간격을 촘촘하게
     #    (앞쪽 들여쓰기/표 정렬 공백은 유지하기 위해 rstrip만 하고, 빈 줄 판정에만 strip을 씀)
     #    각 행의 "마지막 칸" 뒤에는 다음 칸이 없어 경계문자( │ )가 덜렁 남으므로 같이 정리한다.
