@@ -8251,9 +8251,15 @@ ${recentLogs}
 
         // 💡 개인정보 최소 수집 원칙 — 주소록은 이름/부서/직함까지만 포함하고 이메일·휴대폰 등
         //    연락처는 외부 AI 백엔드로 매 질문마다 전송하지 않도록 제외함
-        const addressRows = (td.addressBook || []).filter(function(a) { return a && a.name; });
+        // 💡 [2026-08-28 버그 수정] 한글 이름으로 물으면 한글로 적힌 업무만, 영문 이름(예: Jun Kim)으로
+        //    물으면 영문으로 적힌 업무(발신:/수신: 등은 메일 원문 그대로 영문으로 남는 경우가 흔함)만
+        //    찾아지던 문제 — 주소록에 영문 이름(nameEn)이 같이 등록돼 있는데도 여기서는 한글 이름(name)만
+        //    컨텍스트에 넣고 있어서, AI가 "김준식 = Jun Kim"이라는 매핑 자체를 알 방법이 없었다.
+        //    nameEn도 같이 보여줘서 AI가 두 표기를 같은 사람으로 연결할 수 있게 한다.
+        const addressRows = (td.addressBook || []).filter(function(a) { return a && (a.name || a.nameEn); });
         const addressLines = addressRows.slice(0, MAX_TABLE_ROWS).map(function(a) {
-            return `- ${a.name}${a.dept ? ' / ' + a.dept : ''}${a.title ? ' / ' + a.title : ''}`;
+            const nameStr = a.name && a.nameEn ? `${a.name} (${a.nameEn})` : (a.name || a.nameEn || '');
+            return `- ${nameStr}${a.dept ? ' / ' + a.dept : ''}${a.title ? ' / ' + a.title : ''}`;
         });
         const addressOmitted = addressRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${addressRows.length - MAX_TABLE_ROWS}명 생략됨)` : '';
 
@@ -8290,7 +8296,10 @@ ${recentLogs}
 데이터에서 확인할 수 없는 내용은 추측하지 말고 "데이터에서 확인되지 않습니다"라고 답하세요. 간결하고 실무적인 한국어로 답변하세요.
 "오늘/이번 주/이번 달/내일" 등 상대적인 날짜 표현이 나오면, 반드시 아래 [오늘 날짜]를 기준으로 [업무 목록]의 "기간:" 값(시작일~계획일)과 비교해서 판단하세요 (예: 오늘 업무 = 기간 구간에 오늘 날짜가 포함되거나 오늘이 마감인 업무).
 📅 날짜 표시 규칙: 특정 업무의 일정을 답변에 언급할 때는 [업무 목록]에 있는 "기간:" 표시(예: 8/26~8/27, 연도 생략된 M/D~M/D 형식)를 그대로 옮겨 쓰세요. YYYY-MM-DD처럼 풀어쓰지 마세요. 시작일과 계획일이 같으면 "기간:"에도 날짜 하나만 적혀 있으니 그대로 하나만 쓰면 됩니다.
-🔍 조건 검색 규칙: "담당자/발신인/수신인이 누구인 업무 찾아줘/검색해줘"처럼 특정 조건으로 업무를 찾아달라는 요청에는, [업무 목록]의 "담당:"(담당자) / "발신:"(메일을 보낸 사람) / "수신:"(메일을 받은 사람) 값을 조건과 비교해서 일치하는 업무만 골라 목록으로 답하세요. 이름이 정확히 일치하지 않아도 부분 일치(예: 성만 일치)나 흔한 표기 차이는 같은 사람으로 보고 판단하세요. 발신:/수신: 값은 메일로 자동 등록된 업무에만 있고, 수동으로 입력한 업무에는 없을 수 있습니다 — 그 경우엔 "이 업무는 발신/수신 정보가 없습니다"라고 답하세요.
+🔍 조건 검색 규칙: "담당자/발신인/수신인이 누구인 업무 찾아줘/검색해줘"처럼 특정 조건으로 업무를 찾아달라는 요청에는, [업무 목록]의 "담당:"(담당자) / "발신:"(메일을 보낸 사람) / "수신:"(메일을 받은 사람) 값을 조건과 비교해서 일치하는 업무만 골라 목록으로 답하세요.
+- 같은 사람으로 봐도 되는 경우: (1) 완전히 같은 이름, (2) [주소록]에 "한글이름 (영문이름)"으로 같이 등록된 경우의 그 두 표기(예: 주소록에 "김준식 (Jun Kim)"이 있으면 질문의 "김준식"과 업무 목록의 "Jun Kim"은 같은 사람), (3) 성/이름 표기 순서만 다르거나(Kim Jun ↔ Jun Kim) 대소문자·공백 차이만 있는 경우.
+- ⚠️ 절대 같은 사람으로 보면 안 되는 경우: 이름의 일부(성만, 이름만, 한 단어만)만 우연히 같다고 같은 사람으로 묶지 마세요. 예를 들어 질문이 "Jun Kim"인데 업무 목록에 "Jun Park"이 있다고 그 업무까지 결과에 포함시키면 안 됩니다 — "Jun"이라는 이름만으로는 두 사람을 구별할 수 없으므로 "Jun Kim"과 "Jun Park"은 서로 다른 사람입니다. 성(姓)까지 포함해서 정확히(또는 위 (2)(3)의 정당한 표기 차이로) 일치할 때만 같은 사람으로 판단하세요.
+- 발신:/수신: 값은 메일로 자동 등록된 업무에만 있고, 수동으로 입력한 업무에는 없을 수 있습니다 — 그 경우엔 "이 업무는 발신/수신 정보가 없습니다"라고 답하세요.
 
 🔒 "요약/정리/분석해줘" 유형 질문에 대한 필수 규칙:
 사용자는 이미 Gantt 화면에서 업무명·날짜·상태를 보고 있습니다. "요약해줘/정리해줘"라고 물었는데 그 목록을 이름/날짜/상태만 그대로 다시 나열하면, 사용자 입장에서 Gantt 표를 보는 것과 다를 게 없어 AI에게 물어본 의미가 없습니다. 아래처럼 답하세요:
@@ -8363,14 +8372,14 @@ ${question}
     //    그 업무로 실제 이동(스크롤+하이라이트)할 수 있게 링크로 바꿔준다 — "분석 내용이 원본과 맞는지
     //    확인하고 싶다"는 요청 대응. escapeHtml()을 거친 텍스트 위에서만 동작하고 \d+만 캡처하므로
     //    삽입 위험 없이 안전하게 재사용 가능(_mdToHtml/AI 요약 리포트 양쪽에서 공용으로 씀).
-    // 💡 [2026-08-28 추가] "#98" 옆에 바로 알람을 켤 수 있는 🔔 아이콘도 같이 붙인다 — 사용자가 매번
-    //    "이 업무 알람 걸어줘"라고 말로 다시 요청하지 않아도, 이미 구현된 알람 설정 기능(아래
-    //    window._aiAssistSetAlarm)을 클릭 한 번으로 바로 실행할 수 있게 한다. "핀셋" 아이콘은 알람과
-    //    의미상 연결이 안 돼 있어(집게 모양이라 "선택/집기" 느낌) 대신 알람을 뜻하는 표준 이모지인
-    //    🔔(종)을 썼다 — 텍스트 이모지라 별도 아이콘 폰트/이미지 없이 어디서나 바로 렌더링된다.
+    // 💡 [2026-08-28 추가 → 같은 날 수정] "#98" 옆에 바로 알람을 켤 수 있는 아이콘도 같이 붙인다 —
+    //    사용자가 매번 "이 업무 알람 걸어줘"라고 말로 다시 요청하지 않아도, 이미 구현된 알람 설정
+    //    기능(아래 window._aiAssistSetAlarm)을 클릭 한 번으로 바로 실행할 수 있게 한다. 처음엔 🔔(종)을
+    //    썼는데, 이 앱은 "No." 칸의 행별 알람 토글(window.wrToggleAlarm, 10824줄)부터 캘린더/텔레그램
+    //    알람 알림까지 이미 전부 📌(압정)로 알람을 표시하고 있어서, 그 관례에 맞춰 📌으로 통일한다.
     window._linkifyTaskRefs = function(escapedText) {
         return String(escapedText || '').replace(/#(\d+)\b/g, function(m, n) {
-            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="클릭하면 이 업무에 알람을 설정합니다" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">🔔</span>`;
+            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="클릭하면 이 업무로 이동합니다" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="클릭하면 이 업무에 알람을 설정합니다" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>`;
         });
     };
 
@@ -8443,7 +8452,7 @@ ${question}
         return { ok: true, alreadyOn: alreadyOn, taskName: label };
     };
 
-    // 💡 [2026-08-28 신규] 위 window._linkifyTaskRefs가 "#98" 옆에 붙여주는 🔔 아이콘의 클릭 핸들러 —
+    // 💡 [2026-08-28 신규] 위 window._linkifyTaskRefs가 "#98" 옆에 붙여주는 📌 아이콘의 클릭 핸들러 —
     //    AI 답변의 [[ACTION:SET_ALARM:번호]] 태그(_applyGanttQaActions)와 같은 window._aiAssistSetAlarm을
     //    그대로 재사용하되, 말로 물어보지 않고 아이콘 클릭 한 번으로 바로 실행하고 결과는 토스트로 안내한다.
     window._aiSetAlarmFromRef = function(rowIndex, ev) {
@@ -8455,7 +8464,7 @@ ${question}
         }
         if (window.showToast) {
             window.showToast(res.alreadyOn
-                ? '🔔 "' + res.taskName + '" 업무는 이미 알람이 켜져 있습니다.'
+                ? '📌 "' + res.taskName + '" 업무는 이미 알람이 켜져 있습니다.'
                 : '✅ "' + res.taskName + '" 업무에 알람을 설정했습니다.', 'success');
         }
     };
@@ -8487,7 +8496,7 @@ ${question}
         const res = window._aiAssistSetAlarm(parseInt(m[1], 10));
         if (!res.ok) return cleaned + '\n\n⚠️ 지정한 업무를 찾지 못해 알람을 설정하지 못했습니다.';
         return cleaned + (res.alreadyOn
-            ? `\n\n🔔 "${res.taskName}" 업무는 이미 알람이 켜져 있었습니다.`
+            ? `\n\n📌 "${res.taskName}" 업무는 이미 알람이 켜져 있었습니다.`
             : `\n\n✅ "${res.taskName}" 업무에 알람을 설정했습니다.`);
     };
 
