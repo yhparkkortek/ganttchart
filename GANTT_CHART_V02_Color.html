@@ -8324,6 +8324,21 @@ ${recentLogs}
     // ═══════════════════════════════════════════════════════════
     window._ganttQaHistory = [];
 
+    // 💡 [2026-08-29 신규 — 버그 수정] "다른 프로젝트로 이동해서 물어보면 응답이 없다(⏳가 멈추지 않음).
+    //    내용을 지우고 다시 물으면 답한다"는 제보 — 프로젝트를 전환한 직후엔 구글 드라이브 토큰이 막
+    //    갱신 중이거나 네트워크가 일시적으로 불안정한 경우가 있는데, fetch 자체엔 타임아웃이 없어서
+    //    (아래 Elec Parts 라이브러리 조회, callAiBackend의 GAS 호출 등) 요청이 "실패"도 "성공"도 아닌
+    //    채로 영원히 멈춰버릴 수 있다 — try/catch로는 못 잡는다(예외가 안 나고 그냥 응답이 안 오는 것).
+    //    그러면 "⏳ 답변 생성 중..." 표시가 영원히 안 바뀌어 사용자 눈엔 "응답 없음"으로 보인다.
+    //    지정 시간 안에 안 끝나면 강제로 실패 처리(reject)하는 범용 타임아웃 래퍼를 만들어서, 오래 걸리는
+    //    비동기 호출들을 감싸 "무한 대기"를 "명확한 오류 메시지"로 바꾼다(사용자가 재시도할 수 있게).
+    window._withTimeout = function(promise, ms, timeoutMessage) {
+        return new Promise(function(resolve, reject) {
+            const timer = setTimeout(function() { reject(new Error(timeoutMessage || `요청이 ${Math.round(ms / 1000)}초 안에 끝나지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.`)); }, ms);
+            promise.then(function(v) { clearTimeout(timer); resolve(v); }, function(e) { clearTimeout(timer); reject(e); });
+        });
+    };
+
     // 💡 Gantt 원본 전체를 보내면 너무 크므로, 업무 1건당 한 줄로 압축해서 최대 MAX_TASKS건까지만 포함
     window._buildGanttQaContext = async function() {
         const pm = window.projectMeta || {};
@@ -8481,7 +8496,9 @@ ${recentLogs}
             const notes = ec.notes || {};
             let lib = window._epLibCache && window._epLibCache[type];
             if (!lib && window.loadElecPartLibrary) {
-                try { lib = await window.loadElecPartLibrary(type); window._epLibCache[type] = lib; } catch (e) { lib = null; }
+                // 💡 위 _withTimeout 참고 — 라이브러리 조회가 안 끝나도 8초면 포기하고 "스펙 없음"으로
+                //    넘어간다(전체 AI 문답 자체가 이거 하나 때문에 무한정 멈추면 안 됨).
+                try { lib = await window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과'); window._epLibCache[type] = lib; } catch (e) { lib = null; }
             }
             const items = (lib && lib.items) || [];
             models.forEach(function(m) {
@@ -8847,7 +8864,10 @@ ${question}
 
         try {
             const prompt = await window._buildGanttQaPrompt(question, priorHistory);
-            const result = await window.callAiBackend(apiKey, prompt, {});
+            // 💡 위 window._withTimeout 참고 — GAS 호출(callAiBackend)이 네트워크 문제 등으로 응답도
+            //    오류도 없이 멈춰버리면 "⏳ 답변 생성 중..."이 영원히 안 바뀌어 "응답 없음"으로 보인다.
+            //    60초 안에 안 끝나면 오류로 처리해서 사용자가 재시도할 수 있게 한다.
+            const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
             if (!result.ok) throw result.error || new Error('알 수 없는 오류');
             let text = window._extractGanttQaAiText(result);
 
@@ -8861,7 +8881,7 @@ ${question}
                 const mailTexts = mailRowIdxs.map(window._aiAssistGetMailRaw).filter(Boolean);
                 if (mailTexts.length) {
                     const followupPrompt = await window._buildGanttQaPrompt(question, priorHistory, mailTexts);
-                    const result2 = await window.callAiBackend(apiKey, followupPrompt, {});
+                    const result2 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
                     if (result2.ok) text = window._extractGanttQaAiText(result2);
                     else text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 원문 메일을 불러오는 중 오류가 발생했습니다.';
                 } else {
