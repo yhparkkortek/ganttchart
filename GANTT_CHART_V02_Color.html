@@ -8309,13 +8309,15 @@ ${recentLogs}
 4. 근거로 인용할 때만 업무명을 언급하고, 목록 나열이 답변의 전부가 되지 않게 하세요.
 반대로 "지연된 업무 목록 보여줘"처럼 명시적으로 "목록/리스트"를 요청한 경우엔 목록으로 답해도 됩니다.
 
-🔔 "알람 걸어줘/알림 설정해줘/알람 켜줘" 유형 요청에 대한 필수 규칙 (실제로 앱 데이터를 바꾸는 유일한 기능):
-[업무 목록]의 각 줄 맨 앞 "#숫자"가 그 업무의 고유 번호입니다. 사용자가 특정 업무에 알람을 걸어달라고 요청하면:
+🔔 "알람 걸어줘/알림 설정해줘/알람 켜줘" 또는 "알람 해제해줘/꺼줘/취소해줘" 유형 요청에 대한 필수 규칙 (실제로 앱 데이터를 바꾸는 기능):
+[업무 목록]의 각 줄 맨 앞 "#숫자"가 그 업무의 고유 번호입니다. 사용자가 특정 업무의 알람을 켜거나 끄고 싶다고 요청하면:
 1. [업무 목록]에서 요청과 가장 일치하는 업무를 정확히 하나만 찾으세요 (업무명·담당자·내용 등을 종합 판단).
-2. 일치하는 업무가 명확히 하나면, 평소처럼 자연스러운 한국어로 답변한 뒤 답변의 맨 마지막 줄에 아무 다른 글자 없이 정확히 이 형식만 추가하세요: [[ACTION:SET_ALARM:그업무의#숫자]]  (예: [[ACTION:SET_ALARM:12]])
+2. 일치하는 업무가 명확히 하나면, 평소처럼 자연스러운 한국어로 답변한 뒤 답변의 맨 마지막 줄에 아무 다른 글자 없이 정확히 이 형식만 추가하세요:
+   - "켜줘/걸어줘/설정해줘" 계열 요청 → [[ACTION:SET_ALARM:그업무의#숫자]]  (예: [[ACTION:SET_ALARM:12]])
+   - "꺼줘/해제해줘/취소해줘" 계열 요청 → [[ACTION:CLEAR_ALARM:그업무의#숫자]]  (예: [[ACTION:CLEAR_ALARM:12]])
 3. 일치하는 업무가 여러 개거나 하나도 없으면 절대 저 태그를 쓰지 말고, 어떤 업무인지 되물어보거나 "해당 업무를 찾지 못했습니다"라고 답하세요.
-4. 이미 [알람ON]이 붙어있는 업무면 그 사실을 답변에 알려주고, 그래도 태그는 그대로 붙이세요(중복 실행해도 안전하게 무시됨).
-5. 알람과 무관한 질문에는 이 태그를 절대 붙이지 마세요.
+4. 이미 [알람ON]이 붙은 업무에 "켜줘"라고 하거나, [알람ON]이 없는(꺼져 있는) 업무에 "꺼줘"라고 하는 경우처럼 이미 원하는 상태인 경우엔 그 사실을 답변에 알려주고, 그래도 해당 태그는 그대로 붙이세요(중복 실행해도 안전하게 무시됨).
+5. 알람과 무관한 질문에는 두 태그 모두 절대 붙이지 마세요. 방향(켜기/끄기)을 헷갈리지 마세요 — "해제"를 "설정"으로, "설정"을 "해제"로 착각해 반대 태그를 붙이면 안 됩니다.
 
 📧 "원문/원본 메일 보여줘·읽어줘·확인해줘" 유형 요청에 대한 필수 규칙 (실제 메일 원문을 조회하는 기능):
 [업무 목록]에서 " [원문有]" 표시가 붙은 업무는 등록 당시의 원본 이메일 전문이 시스템에 별도로 저장되어 있습니다 — 다만 이 목록에는 "있다/없다" 표시만 있고 원문 내용 자체는 아직 포함되어 있지 않으니, 표시만 보고 원문 내용을 안다고 착각하거나 지어내지 마세요.
@@ -8364,7 +8366,7 @@ ${historyText}
 [사용자의 새 질문]
 ${question}
 
-위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람"/"📧 원문 메일" 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
+위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람"/"📧 원문 메일" 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:CLEAR_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
     };
 
     // 💡 [2026-08-28 신규] AI 요약/AI 문답 답변에 나오는 "#98" 같은 업무 번호(컨텍스트의 taskListText가
@@ -8452,6 +8454,27 @@ ${question}
         return { ok: true, alreadyOn: alreadyOn, taskName: label };
     };
 
+    // 💡 [2026-08-28 신규] 위 window._aiAssistSetAlarm의 "끄기" 짝 — "알람 해제해줘/꺼줘/취소해줘" 요청에
+    //    대응한다. 이미 꺼져 있으면(원래부터 알람이 없던 업무 포함) 아무 것도 건드리지 않고 그 사실만
+    //    알려준다(안전한 재실행 — SET_ALARM과 대칭되는 설계).
+    window._aiAssistClearAlarm = function(rowIndex) {
+        const row = globalData && globalData[rowIndex];
+        if (!row || row._level === undefined) return { ok: false };
+        const label = (row._level === 0 ? row._origDev : row._level === 1 ? row._origT1
+            : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4) || '(제목없음)';
+        const alreadyOff = !row._알림;
+        if (!alreadyOff) {
+            row._알림 = false;
+            logChange(rowIndex, -1, '알림 설정', '알림 꺼짐', 'AI 문답으로 설정');
+            renderTable(globalData);
+            applyFilters();
+            if (window.paintRowSelection) window.paintRowSelection();
+            const alarmPanel = document.getElementById('tab-alarm');
+            if (alarmPanel && alarmPanel.classList.contains('active') && window.renderAlarmTab) window.renderAlarmTab();
+        }
+        return { ok: true, alreadyOff: alreadyOff, taskName: label };
+    };
+
     // 💡 [2026-08-28 신규 → 같은 날 수정] 위 window._linkifyTaskRefs가 "#98" 옆에 붙여주는 📌 아이콘의
     //    클릭 핸들러 — 처음엔 window._aiAssistSetAlarm(항상 "켜기"만 하고 이미 켜져 있으면 그 사실만
     //    알려줌)을 그대로 썼는데, "한 번 클릭하면 켜고 한 번 더 클릭하면 꺼지게(토글) 해달라"는 피드백으로
@@ -8495,17 +8518,31 @@ ${question}
         return `#${rowIndex} "${label}"의 원본 메일\n제목: ${mr.subject || '-'}\n발신: ${mr.sender || '-'}\n날짜: ${mr.date || '-'}\n본문:\n${body || '(본문 없음)'}`;
     };
 
-    // AI 답변 텍스트에서 [[ACTION:SET_ALARM:번호]] 태그를 찾아 제거하고, 실행 결과 안내문을 답변에 덧붙인다.
-    // 태그가 없으면 원문을 그대로 반환.
+    // AI 답변 텍스트에서 [[ACTION:SET_ALARM:번호]] 또는 [[ACTION:CLEAR_ALARM:번호]] 태그를 찾아 제거하고,
+    // 실행 결과 안내문을 답변에 덧붙인다. 태그가 없으면 원문을 그대로 반환.
+    // 💡 [2026-08-28 신규] "알람 해제해줘" 요청 대응 — CLEAR_ALARM 태그 처리를 추가(SET_ALARM과 대칭).
+    //    한 답변에 두 태그가 동시에 나올 일은 없지만(프롬프트가 방향당 하나만 붙이도록 지시), 방어적으로
+    //    SET_ALARM을 먼저 찾고 없으면 CLEAR_ALARM을 찾는다.
     window._applyGanttQaActions = function(text) {
-        const m = text.match(/\[\[ACTION:SET_ALARM:(\d+)\]\]/);
-        if (!m) return text;
-        const cleaned = text.replace(m[0], '').trim();
-        const res = window._aiAssistSetAlarm(parseInt(m[1], 10));
-        if (!res.ok) return cleaned + '\n\n⚠️ 지정한 업무를 찾지 못해 알람을 설정하지 못했습니다.';
-        return cleaned + (res.alreadyOn
-            ? `\n\n📌 "${res.taskName}" 업무는 이미 알람이 켜져 있었습니다.`
-            : `\n\n✅ "${res.taskName}" 업무에 알람을 설정했습니다.`);
+        const mSet = text.match(/\[\[ACTION:SET_ALARM:(\d+)\]\]/);
+        if (mSet) {
+            const cleaned = text.replace(mSet[0], '').trim();
+            const res = window._aiAssistSetAlarm(parseInt(mSet[1], 10));
+            if (!res.ok) return cleaned + '\n\n⚠️ 지정한 업무를 찾지 못해 알람을 설정하지 못했습니다.';
+            return cleaned + (res.alreadyOn
+                ? `\n\n📌 "${res.taskName}" 업무는 이미 알람이 켜져 있었습니다.`
+                : `\n\n✅ "${res.taskName}" 업무에 알람을 설정했습니다.`);
+        }
+        const mClear = text.match(/\[\[ACTION:CLEAR_ALARM:(\d+)\]\]/);
+        if (mClear) {
+            const cleaned = text.replace(mClear[0], '').trim();
+            const res = window._aiAssistClearAlarm(parseInt(mClear[1], 10));
+            if (!res.ok) return cleaned + '\n\n⚠️ 지정한 업무를 찾지 못해 알람을 해제하지 못했습니다.';
+            return cleaned + (res.alreadyOff
+                ? `\n\n📌 "${res.taskName}" 업무는 이미 알람이 꺼져 있었습니다.`
+                : `\n\n✅ "${res.taskName}" 업무의 알람을 해제했습니다.`);
+        }
+        return text;
     };
 
     // 💡 callAiBackend 응답에서 실제 답변 텍스트만 꺼내는 공통 로직 — 원문 메일 후속 조회(위 VIEW_MAIL
