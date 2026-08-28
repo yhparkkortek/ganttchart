@@ -794,7 +794,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button id="ai-summary-menu-btn" class="topbar-menu-item" onclick="window.openAiProjectSummaryModal()" title="지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다">🤖 AI 요약</button>
                 <button id="ai-qa-menu-btn" class="topbar-menu-item" onclick="window.openGanttQaModal()" title="이 프로젝트 데이터에 대해 자유롭게 질문하고 AI 답변을 받습니다">💬 AI 문답</button>
                 <div class="tb-menu-sep"></div>
-                <button id="ai-settings-link-btn" class="topbar-menu-item" onclick="window.toggleTopbarMenu('settings-menu-popup', document.getElementById('settings-menu-btn'))">⚙️ 설정</button>
+                <!-- 💡 [2026-08-28 이동] "⚙️ 설정" 바로가기 버튼 삭제 → 원래 ⚙️ 설정 메뉴 안에 있던
+                     "🤖 AI 분석 설정"을 이 자리로 옮김(AI 관련 설정이니 AI 도구 메뉴 안에 있는 게 더 자연스럽다는
+                     피드백). 상단 ⚙️ 설정 메뉴 자체는 그대로 유지됨. -->
+                <button id="ai-analysis-settings-btn" class="topbar-menu-item" onclick="window.openAiToolsSettingsModal(); window.closeTopbarMenu('ai-menu-popup');" title="AI 요약·AI 문답이 업무 상세내용/답변을 읽을 때 최대 몇 자까지 참고할지 설정합니다">🤖 AI 분석 설정</button>
             </div>
         </div>
         <!-- ⚙️ 설정 — 기타 기능 통합 -->
@@ -807,8 +810,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button id="mail-mode-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleMailMode()" style="font-weight:bold; color:#b85c00;">🟠 메일 반자동 (보관함)</button>
                 <button id="mail-auto-config-menu-btn" class="topbar-menu-item" onclick="window.openMailAutoConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="수집주기·우선순위점수·중요키워드·초기화">📬 메일 자동배치 설정</button>
                 <div class="tb-menu-sep"></div>
-                <button id="ai-analysis-settings-btn" class="topbar-menu-item" onclick="window.openAiToolsSettingsModal(); window.closeTopbarMenu('settings-menu-popup');" title="AI 요약·AI 문답이 업무 상세내용/답변을 읽을 때 최대 몇 자까지 참고할지 설정합니다">🤖 AI 분석 설정</button>
-                <div class="tb-menu-sep"></div>
+                <!-- 💡 [2026-08-28 이동] "🤖 AI 분석 설정"은 위 "🤖 AI 도구" 메뉴 안으로 옮김(ai-analysis-settings-btn 참고) -->
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
                 <button id="add-user-btn" class="topbar-menu-item" onclick="window.open('https://console.cloud.google.com/auth/audience?hl=ko&amp;project=yhparkkortek-gantt','_blank'); window.open('https://drive.google.com/drive/u/0/home','_blank');" title="새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다.">👤 사용자 추가</button>
@@ -9814,7 +9816,6 @@ window.deleteHistoryByDateRange = function() {
                 'ai-menu-btn':        '🤖 AI 도구',
                 'ai-summary-menu-btn':'🤖 AI 요약',
                 'ai-qa-menu-btn':     '💬 AI 문답',
-                'ai-settings-link-btn': '⚙️ 설정',
                 'ai-analysis-settings-btn': '🤖 AI 분석 설정',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'add-user-btn':       '👤 사용자 추가',
@@ -9927,7 +9928,6 @@ window.deleteHistoryByDateRange = function() {
                 'ai-menu-btn':        '🤖 AI Tools',
                 'ai-summary-menu-btn':'🤖 AI Summary',
                 'ai-qa-menu-btn':     '💬 AI Q&A',
-                'ai-settings-link-btn': '⚙️ Settings',
                 'ai-analysis-settings-btn': '🤖 AI Analysis Settings',
                 'admin-pw-change-btn': '🔑 Change Password',
                 'add-user-btn':       '👤 Add User',
