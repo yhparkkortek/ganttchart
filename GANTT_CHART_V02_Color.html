@@ -1640,7 +1640,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <label id="sum-lbl-pcode">프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
                     <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
                     <label id="sum-lbl-ktkpn">KTK PN_모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-ktk-pn-model" class="u-input req-field" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW" oninput="window._checkRequiredField(this)">
-                    <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)">메일 키워드 🔖</label><input type="text" id="sum-mail-keywords" class="u-input" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)">
+                    <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)&#10;&#10;⚠️ 사람 이름은 넣지 마세요 — 그 사람이 보내는 모든 메일이 내용과 무관하게 이 프로젝트로 자동 매칭됩니다(서명란에 항상 본인 이름이 들어가기 때문). 주소록에 등록된 이름은 매칭 시 자동으로 제외되지만, 안전하게 처음부터 넣지 않는 걸 권장합니다.">메일 키워드 🔖</label><input type="text" id="sum-mail-keywords" class="u-input" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)">
                 </div>
             </div>
         </div>
@@ -3464,6 +3464,34 @@ ${mailText}`;
         return Array.from(seen);
     };
 
+    // 💡 [2026-08-29 신규] "발신인 이름만으로 오매칭됐다"는 지적 대응 — 사람이 보내는 메일에는 본인
+    //    이름이 서명란에 항상 등장하므로, 그 사람 이름이 어느 프로젝트의 "메일키워드"에 등록돼 있으면
+    //    그 사람이 보내는 모든 메일(내용과 무관하게)이 그 프로젝트로 자동 매칭돼버린다. 이미
+    //    _msSuggestKeywordsForUnmatched(20195줄 부근)가 "키워드 제안" 단계에서 주소록 이름을 걸러내는
+    //    knownNameTokens 로직을 갖고 있었지만, 그건 ①AI가 아직 못 찾은 메일에서 "새 키워드를 제안할 때"만
+    //    적용되고 ②영문 패턴(A-Z 정규식)만 훑어서 한글 이름("박용훈")은 애초에 후보로도 안 잡혔다 —
+    //    그래서 "메일키워드" 칸에 누군가(예: 담당자 본인)가 직접 한글 이름을 수동으로 입력해두면 이 필터를
+    //    완전히 우회해서 그대로 매칭에 쓰였다. 여기서는 실제로 "이 사람이 보낸 메일과 매칭시킬 키워드
+    //    목록"을 만드는 지점(buildProjectIndexEntry) 자체에서 주소록에 등록된 이름과 겹치는 키워드를
+    //    걸러내서, 어떤 경로로 이름이 끼어들었든(수동 입력·붙여넣기·향후 다른 자동 제안 경로) 매칭에는
+    //    절대 안 쓰이게 막는다. Summary 탭의 "메일키워드" 입력값 자체는 지우지 않음 — 매칭에서만 뺀다.
+    window._msIsKnownPersonName = function(token) {
+        const t = String(token || '').trim().toLowerCase();
+        if (!t) return false;
+        const book = (window.AddressBook && window.AddressBook.load) ? window.AddressBook.load() : [];
+        for (let i = 0; i < book.length; i++) {
+            const p = book[i];
+            for (const n of [p.name, p.nameEn]) {
+                const full = String(n || '').trim().toLowerCase();
+                if (!full) continue;
+                if (full === t) return true;
+                // 성/이름을 띄어쓰기로 등록해뒀으면(예: "Jun Kim") 낱말 단위로도 같은 사람으로 간주
+                if (full.split(/[\s,]+/).filter(Boolean).indexOf(t) !== -1) return true;
+            }
+        }
+        return false;
+    };
+
     // 현재 열려 있는 프로젝트의 인덱스 항목 생성 (모델/고객사/담당자/인치 4필드 + 커스텀 키워드)
     // 💡 [긴급 버그 수정] pmOverride를 안 넘기면 window.projectMeta(전역, 실시간)를 읽는데, 이 함수의
     //    호출부(updateProjectIndexEntry)에 await가 여러 번 있어서 그 사이 다른 프로젝트로 시트가
@@ -3476,7 +3504,11 @@ ${mailText}`;
         //    (예: LNW의 STELLAR32/OBSIDIAN) 전부 후보로 묶여버려 변별력이 없음.
         //    customer 필드 자체는 화면 표시용으로만 남기고, keywords 배열엔 안 넣음.
         const baseFields = [pm.모델명, pm.고객모델명, pm.인치, pm.프로젝트명].filter(Boolean);
-        const customKeywords = window._parseMailKeywords(pm.메일키워드);
+        // 💡 [2026-08-29 버그 수정] "발신인 이름만으로 오매칭됐다"는 지적 — 메일키워드 칸에 사람 이름이
+        //    (직접 입력 등으로) 들어가 있으면, 그 사람이 보내는 모든 메일이 서명란 때문에 내용과 무관하게
+        //    이 프로젝트로 매칭돼버린다. 주소록에 등록된 이름과 겹치는 항목은 매칭용 키워드에서 제외
+        //    (Summary 탭 입력값 자체는 그대로 둠 — window._msIsKnownPersonName 참고).
+        const customKeywords = window._parseMailKeywords(pm.메일키워드).filter(function(kw) { return !window._msIsKnownPersonName(kw); });
         // 💡 [2026-08-20] "분석용" 체크된 주요 자재의 PN/설명도 매칭 키워드로 편입 — 공용 부품은
         //    체크 안 하는 게 원칙이므로, 여기 들어오는 건 이 프로젝트를 특정할 만한 것들만 남음.
         const materials = materialsOverride || (window.tabData && window.tabData.projectMaterials) || [];
