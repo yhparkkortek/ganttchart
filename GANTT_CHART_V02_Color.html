@@ -346,15 +346,15 @@
     .sub-parent-row-3 td { background: #ffffff !important; font-weight: normal; color: #333333; }
     .sub-parent-row-4 td { background: #ffffff !important; font-weight: normal; color: #333333; }
 
-    /* 💡 줄무늬 — 짝수 번째 보이는 행만 옅은 회색 (M.C Table/Brief SPEC과 동일한 톤) */
-    #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
+    /* 💡 줄무늬 — 짝수 번째 보이는 행만 옅은 청록 틴트 회색 (M.C Table/Brief SPEC과 동일한 톤) */
+    #myTable tbody tr.gantt-zebra-b td { background: #e8f2f3 !important; }
     /* 💡 [2026-08-27] 0레벨 행이 짝수 번째(줄무늬 대상)와 겹치면 위 회색 줄무늬 규칙이 클래스 2개+태그
        조합이라 특이도가 더 높아 살구색을 덮어써 버림 — 같은 조합의 선택자를 추가해 살구색이 항상
        이기도록 함. */
     #myTable tbody tr.gantt-zebra-b.parent-row td { background: #fff8e6 !important; }
 
     /* 💡 TEMP: Gantt 표를 Brief SPEC/M.C Table과 완전히 동일한 테두리/헤더 스타일로 통일 */
-    #myTable th, #myTable td { border: 1px solid #e3e6ea !important; }
+    #myTable th, #myTable td { border: 1px solid #cfe3e5 !important; }
     #myTable th { background: #eef6f7 !important; font-weight: 600 !important; color: #3d5c60 !important; }
 
     .container { height: auto; overflow: visible; border: 1px solid #a3d9e0; border-radius: 6px; position: relative; background: #e0f5f7; }
@@ -1060,7 +1060,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div id="alarm-view-dropdown" class="row-action-popup" style="min-width:140px; padding:6px;"></div>
         <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
       </div>
-      <span id="alarm-server-status" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
+      <span id="alarm-server-status" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#e0f5f7; color:#00707d;">확인 중...</span>
       <div class="btn-group">
         <button id="alarm-send-all-btn"
           onclick="window.sendAllPendingAlarms()"
@@ -1480,8 +1480,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       </div>
     </div>
 
+    <!-- 💡 [2026-08-29] 다른 탭들처럼 전체를 감싸는 청록 파스텔 외곽 박스 추가 — 안쪽 공지 목록/발송
+         로그 박스는 흰 카드로 유지(다른 탭의 서브 박스와 동일한 패턴) -->
+    <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
     <!-- 공지 목록 테이블 -->
-    <div style="background:#e0f5f7; border:1px solid #a3d9e0; border-radius:8px; overflow:hidden; margin-bottom:16px;">
+    <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
           <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
@@ -1505,7 +1508,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
 
     <!-- 발송 로그 (접기/펼치기) -->
-    <div style="background:#e0f5f7; border:1px solid #a3d9e0; border-radius:8px; overflow:hidden;">
+    <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden;">
       <div onclick="const b=document.getElementById('notice-log-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.notice-log-arrow').textContent=b.style.display==='none'?'▶':'▼'"
            style="padding:12px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; background:#f8f9fa;">
         <span id="notice-log-title" style="font-size:12.5px; font-weight:bold; color:#444;">📋 발송 로그</span>
@@ -1514,6 +1517,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <div id="notice-log-body" style="display:none; padding:12px 16px; max-height:200px; overflow-y:auto;">
         <div id="notice-log-list" style="font-size:12px; color:#888;">발송 로그가 없습니다.</div>
       </div>
+    </div>
     </div>
   </div>
 </div>
@@ -16911,14 +16915,14 @@ window.updateInboxBadge();
     #myTable thead { position: sticky !important; top: 0 !important; z-index: 16; }
 
     /* 💡 TEMP: Gantt 표를 Brief SPEC/M.C Table과 동일한 단순 스타일로 통일 */
-    #myTable th { background: #f4f6f8 !important; }
-    #myTable td, #myTable th { border-right: 1px solid #ddd !important; border-left: none !important; }
+    #myTable th { background: #eef6f7 !important; color: #3d5c60 !important; }
+    #myTable td, #myTable th { border-right: 1px solid #cfe3e5 !important; border-left: none !important; }
     #myTable .parent-row td { background: #fff8e6 !important; }
     #myTable .sub-parent-row td,
     #myTable .sub-parent-row-2 td,
     #myTable .sub-parent-row-3 td,
     #myTable .sub-parent-row-4 td { background: #ffffff !important; }
-    #myTable tbody tr.gantt-zebra-b td { background: #f5f5f5 !important; }
+    #myTable tbody tr.gantt-zebra-b td { background: #e8f2f3 !important; }
 
     /* 💡 다중선택(Ctrl/Shift)이 알람(파랑)·지브라(회색)보다 항상 최우선이 되도록 클래스 중복으로 특이도 강화 */
     #myTable tbody tr.multi-selected.multi-selected td {
@@ -22735,14 +22739,14 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
                     <div style="padding:12px; background:#fff;">${wrRenderTimeline()}</div>
                 </div>
 
-                <div style="display:flex; gap:10px; margin-bottom:14px;">
-                    <div class="wr-print-block" style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                <div style="display:flex; gap:10px; margin-bottom:14px; align-items:stretch;">
+                    <div class="wr-print-block" style="flex:1; display:flex; flex-direction:column; background:#fff; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Key Achievements (${data.thisWeekNo}W)` : `주요 실적 (${data.thisWeekNo}W)`}</div>
-                        <div style="padding:12px; background:#fff;">${wrRenderEditableList(data.thisList)}</div>
+                        <div style="padding:12px; background:#fff; flex:1;">${wrRenderEditableList(data.thisList)}</div>
                     </div>
-                    <div class="wr-print-block" style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
+                    <div class="wr-print-block" style="flex:1; display:flex; flex-direction:column; background:#fff; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Upcoming Plans (${data.nextWeekNo}W)` : `추진 계획 (${data.nextWeekNo}W)`}</div>
-                        <div style="padding:12px; background:#fff;">${wrRenderEditableList(data.nextList)}</div>
+                        <div style="padding:12px; background:#fff; flex:1;">${wrRenderEditableList(data.nextList)}</div>
                     </div>
                 </div>
 
@@ -25626,12 +25630,12 @@ window.renderAlarmTab = async function() {
         const r = await fetch('http://127.0.0.1:5000/health', { signal: AbortSignal.timeout(2000) });
         const d = await r.json();
         if (statusEl) statusEl.innerHTML = _isEn
-            ? '<span style="color:#27ae60;">● Mail server connected</span>'
-            : '<span style="color:#27ae60;">● 메일 서버 연결됨</span>';
+            ? '<span style="color:#00707d;">● Mail server connected</span>'
+            : '<span style="color:#00707d;">● 메일 서버 연결됨</span>';
     } catch(e) {
         if (statusEl) statusEl.innerHTML = _isEn
-            ? '<span style="color:#e03131;">● Mail server not connected — Please run kortek_backend.bat</span>'
-            : '<span style="color:#e03131;">● 메일 서버 미연결 — kortek_backend.bat을 실행하세요</span>';
+            ? '<span style="color:#00707d;">● Mail server not connected — Please run kortek_backend.bat</span>'
+            : '<span style="color:#00707d;">● 메일 서버 미연결 — kortek_backend.bat을 실행하세요</span>';
     }
 
     const items = window.collectAlarmItems();
@@ -27575,7 +27579,7 @@ window.renderElecCompareTab = async function(type) {
                 html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">`;
                 if (selected[i]) {
                     html += hasConn
-                        ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" style="background:#fff; border:1px solid #2c5f8a; border-radius:4px; color:#2c5f8a; font-size:10.5px; cursor:pointer; padding:2px 8px;">🔌 ${_en ? 'View' : '보기'}</button>`
+                        ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#fff'; this.style.borderColor='#2c5f8a';" style="background:#fff; border:1px solid #2c5f8a; border-radius:4px; color:#2c5f8a; font-size:10.5px; cursor:pointer; padding:2px 8px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View' : '보기'}</button>`
                         : `<span style="color:#bbb;">-</span>`;
                 }
                 html += `</td>`;
@@ -28329,7 +28333,7 @@ window.showElecPartSpecModal = async function(type, model) {
         if (secHtml) html += `<div style="font-weight:bold; color:#7a5210; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
     });
     if (Array.isArray(entry.connectors) && entry.connectors.length) {
-        html += `<div style="margin-top:10px;"><button onclick="window.showElecPinMapModal(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))})" style="padding:5px 10px; background:#fff; border:1px solid #2c5f8a; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:11.5px;">🔌 ${_en ? 'View pin map' : '핀맵 보기'}</button></div>`;
+        html += `<div style="margin-top:10px;"><button onclick="window.showElecPinMapModal(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))})" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#fff'; this.style.borderColor='#2c5f8a';" style="padding:5px 10px; background:#fff; border:1px solid #2c5f8a; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:11.5px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View pin map' : '핀맵 보기'}</button></div>`;
     }
     bodyEl.innerHTML = html;
 };
