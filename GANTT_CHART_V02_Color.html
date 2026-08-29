@@ -677,7 +677,7 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 @media (max-width: 700px) { .mem3-cols { column-count: 1; } }
 .concept-grid label { font-size:12.5px; color:#666; }
 .concept-grid input, .concept-grid textarea {
-    width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
+    width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
 }
 .concept-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
 .concept-table th, .concept-table td { border:1px solid #cfe3e5; padding:6px 8px; }
@@ -918,8 +918,8 @@ tr.alarm-on > td { background-color: #e8f4fd !important; }
 tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 제품 사진 업로드 슬롯 */
-.prod-img-slot { position:relative; width:180px; min-height:140px; border:2px dashed #ccc; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; background:#fafafa; transition:border-color 0.2s; }
-.prod-img-slot:hover { border-color:#2c5f8a; }
+.prod-img-slot { position:relative; width:180px; min-height:140px; border:2px dashed #a3d9e0; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; background:#eef6f7; transition:border-color 0.2s; }
+.prod-img-slot:hover { border-color:#52a5af; }
 .prod-img-slot .prod-placeholder { color:#aaa; font-size:12px; text-align:center; padding:8px; pointer-events:none; }
 .prod-img-slot img.prod-preview { width:100%; height:140px; object-fit:contain; display:none; }
 .prod-img-slot .prod-del-btn { display:none; position:absolute; top:4px; right:4px; background:rgba(0,0,0,0.55); color:#fff; border:none; border-radius:50%; width:20px; height:20px; font-size:11px; cursor:pointer; line-height:20px; text-align:center; padding:0; }
@@ -1700,7 +1700,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <tbody id="address-table-body"></tbody>
                 </table>
             </div>
-            <div id="addr-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
+            <div id="addr-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
                 <div id="addr-history-header" onclick="window.addrToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                     <span id="addr-history-toggle-icon">▶</span>
                     <span data-i18n="h-history">변경 이력 확인</span>
@@ -1829,7 +1829,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
                 <h3 id="sum-h3-overview">프로젝트 개요</h3>
                 <div class="concept-grid">
-                    <label id="sum-lbl-purpose" style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="6" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:150px;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발"></textarea>
+                    <label id="sum-lbl-purpose" style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="6" style="width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:150px;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발"></textarea>
                     <label id="sum-lbl-volume">연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
                     <label id="sum-lbl-mpdate">목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
                 </div>
@@ -1848,7 +1848,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         </div>
         <div class="concept-section">
             <h3 id="sum-h3-background">추진 배경 및 의의</h3>
-            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:80px; max-height:220px; overflow-y:auto;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
+            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:80px; max-height:220px; overflow-y:auto;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
         </div>
         <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
@@ -1887,7 +1887,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-section" id="major-materials-section">
             <h3><span id="sum-h3-materials">주요 자재</span> <span style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용 · 체크박스는 &quot;분석용&quot;, 그 옆 － 버튼은 자유추가 행 삭제)</span></h3>
             <div style="display:flex; gap:16px; flex-wrap:wrap;">
-                <div style="flex:1 1 320px; min-width:280px; overflow-x:auto;">
+                <div style="flex:1 1 320px; min-width:280px; overflow:auto; border:1px solid #cfe3e5; border-radius:8px;">
                     <table style="width:100%; border-collapse:collapse; font-size:12px;">
                         <thead>
                             <tr style="background:#eef6f7;">
@@ -1901,7 +1901,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <tbody id="sum-materials-rows-a"></tbody>
                     </table>
                 </div>
-                <div style="flex:1 1 320px; min-width:280px; overflow-x:auto;">
+                <div style="flex:1 1 320px; min-width:280px; overflow:auto; border:1px solid #cfe3e5; border-radius:8px;">
                     <table style="width:100%; border-collapse:collapse; font-size:12px;">
                         <thead>
                             <tr style="background:#eef6f7;">
@@ -2134,7 +2134,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </tbody>
             </table>
             </div>
-            <div id="mc-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
+            <div id="mc-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
                 <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; justify-content:space-between;">
                     <span style="display:flex; align-items:center; gap:6px;">
                         <span id="mc-history-toggle-icon">▶</span>
@@ -2224,7 +2224,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <tbody id="pc-tbody"></tbody>
                     </table>
                 </div>
-                <div id="pc-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
+                <div id="pc-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
                     <div id="pc-history-header" onclick="window.pcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                         <span id="pc-history-toggle-icon">▶</span>
                         <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -2247,7 +2247,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <tbody id="ep-adbd-tbody"></tbody>
                     </table>
                 </div>
-                <div id="ep-adbd-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
+                <div id="ep-adbd-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
                     <div id="ep-adbd-history-header" onclick="window.epToggleHistoryBox('adbd')" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                         <span id="ep-adbd-history-toggle-icon">▶</span>
                         <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -2270,7 +2270,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <tbody id="ep-convbd-tbody"></tbody>
                     </table>
                 </div>
-                <div id="ep-convbd-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
+                <div id="ep-convbd-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
                     <div id="ep-convbd-history-header" onclick="window.epToggleHistoryBox('convbd')" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                         <span id="ep-convbd-history-toggle-icon">▶</span>
                         <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -24717,8 +24717,8 @@ window.renderNoticeTab = function() {
         if (rcp.some(r=>r.tgOn))    chParts.push('<span title="텔레그램 발송 포함">💬</span>');
         const targetLabel = chParts.join(' ') || '-';
         const dDaysLabel  = (n.alarmDays||[]).map(d=>`D-${d}`).join(', ');
-        const rowBg = i%2===0?'#fff':'#fafafa';
-        return `<tr style="background:${rowBg};border-bottom:1px solid #f0f0f0;">
+        const rowBg = i%2===0?'#fff':'#e8f2f3';
+        return `<tr style="background:${rowBg};border-bottom:1px solid #cfe3e5;">
           <td style="padding:10px 12px;text-align:center;font-size:16px;">${statusDot}</td>
           <td style="padding:10px 12px;">
             <div style="font-weight:bold;color:#333;font-size:12.5px;">${n.title}</div>
@@ -26141,10 +26141,10 @@ window.renderMaterialRows = function(rows) {
     const splitAt = Math.ceil(window.MATERIAL_FIXED_CATEGORIES.length / 2); // 7
     const rowHtml = function(r, idx) {
         const catCell = r.locked
-            ? '<td style="padding:4px 6px; border:1px solid #e9ecef; background:#f8f9fa; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
+            ? '<td style="padding:4px 6px; border:1px solid #cfe3e5; background:#eef6f7; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
             // 💡 [2026-08-25 UX 개선] 고정 행(회색 배경)과 시각적 통일성을 주기 위해, 자유추가 행의
             //    TYPE 입력칸도 같은 회색(#f8f9fa) 배경으로 맞춤(고정 행처럼 잠겨있진 않지만 톤을 통일).
-            : '<td style="padding:2px; border:1px solid #e9ecef; background:#f8f9fa;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center; background:transparent; font-weight:bold;"></td>';
+            : '<td style="padding:2px; border:1px solid #cfe3e5; background:#eef6f7;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center; background:transparent; font-weight:bold;"></td>';
         // 💡 [2026-08-25 UX 개선] 예전엔 "삭제 버튼"이 맨 오른쪽 체크박스 칸에 있어서 눈에 잘 안 띈다는
         //    지적이 있었음 — PANEL 행의 🔎(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
         //    자유추가 행을 열 때 바로 보이는 "행 액션 버튼" 자리로 통일했다.
@@ -26157,7 +26157,7 @@ window.renderMaterialRows = function(rows) {
         //    경우 모두 "붙여넣어 AI로 추출" 흐름으로 이어주지만, 버튼 노출 자체는 PANEL과 통일).
         //    구분명 → Elec Parts 타입 매핑이라 나중에 부품 종류가 늘어도 이 한 줄만 추가하면 됨.
         const _epRowType = { 'CONVERTER': 'convbd', 'AD BOARD': 'adbd' };
-        const descInputCell = '<td style="padding:2px; border:1px solid #e9ecef;"><div style="display:flex; align-items:center; gap:2px;">'
+        const descInputCell = '<td style="padding:2px; border:1px solid #cfe3e5;"><div style="display:flex; align-items:center; gap:2px;">'
             + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box;" '
             + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
             + ((r.category === 'PANEL' && r.description)
@@ -26167,11 +26167,11 @@ window.renderMaterialRows = function(rows) {
                     : ''))
             + delBtn
             + '</div></td>';
-        return '<tr>' + catCell
-            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box;"></td>'
+        return '<tr style="background:' + (idx % 2 === 1 ? '#e8f2f3' : '#fff') + ';">' + catCell
+            + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box;"></td>'
             + descInputCell
-            + '<td style="padding:2px; border:1px solid #e9ecef;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box;"></td>'
-            + '<td style="border:1px solid #e9ecef; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="' + (_matEn ? 'Check to trust mentions of this PN as a project-identifying signal (uncheck for shared/common parts)' : '체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)') + '"></td>'
+            + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box;"></td>'
+            + '<td style="border:1px solid #cfe3e5; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="' + (_matEn ? 'Check to trust mentions of this PN as a project-identifying signal (uncheck for shared/common parts)' : '체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)') + '"></td>'
             + '</tr>';
     };
 
