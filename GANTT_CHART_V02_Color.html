@@ -13446,8 +13446,8 @@ window.showMailAnalyzer = function() {
         analyzeBtn.style.width = '100%';
         analyzeBtn.disabled = false;
         analyzeBtn.innerHTML = window._currentLang === 'en' ? '🤖 AI Analyze' : '🤖 AI 분석';
-        analyzeBtn.style.background = '#2c5f8a';
-        analyzeBtn.style.borderColor = '#2c5f8a';
+        analyzeBtn.style.background = '#e8f4fd';
+        analyzeBtn.style.borderColor = '#a5c8f0';
     }
     const loadingDiv = document.getElementById('mail-loading');
     if (loadingDiv) loadingDiv.style.display = 'none';
@@ -13462,8 +13462,8 @@ if (!window._mailInputListenerBound) {
             const btn = document.getElementById('mail-analyze-btn');
             if (btn && !btn.disabled) {
                 btn.innerHTML = window._currentLang === 'en' ? '🤖 AI Analyze' : '🤖 AI 분석';
-                btn.style.background = '#2c5f8a';
-                btn.style.borderColor = '#2c5f8a';
+                btn.style.background = '#e8f4fd';
+                btn.style.borderColor = '#a5c8f0';
             }
         }
     });
@@ -13835,8 +13835,8 @@ window.mailResetAnalysis = function() {
     const analyzeBtn = document.getElementById('mail-analyze-btn');
     analyzeBtn.disabled = false;
     analyzeBtn.innerHTML = window._currentLang === 'en' ? '🤖 AI Analyze' : '🤖 AI 분석';
-    analyzeBtn.style.background = '#2c5f8a';
-    analyzeBtn.style.borderColor = '#2c5f8a';
+    analyzeBtn.style.background = '#e8f4fd';
+    analyzeBtn.style.borderColor = '#a5c8f0';
     const errDiv = document.getElementById('mail-error');
     errDiv.style.display = 'block';
     errDiv.textContent = '⏹ 분석을 중단하고 초기 상태로 되돌렸습니다.';
@@ -15712,46 +15712,15 @@ window.inboxPlaceToCurrent = function(uid) {
     alert(`✅ "${built.taskName}" 업무가 배치되었습니다.\n(${posInfo.previewLabel})`);
 };
 
-// ─── 💡 [처리됨 정리 토글] 처리됨(대기 아닌 상태) 항목을 어떻게 다룰지 두 모드 ─────────────────
+// ─── 💡 [처리됨 정리 모드] 처리됨(대기 아닌 상태) 항목을 어떻게 다룰지 두 모드 ─────────────────
 //    - keep(처리됨 보관, 기본값): 지금까지 동작 그대로 — 처리돼도 목록에 남고, 사람이 각 행의 🗑로
 //      직접 훑어보고 지운다.
 //    - auto(처리됨 자동삭제): TaskInbox.setStatus()로 상태가 "대기"가 아닌 값(배치됨/자동배치됨/전송됨 등)으로
 //      바뀌는 그 순간 바로 목록에서 제거 — 직접 지울 필요 없이 처리 즉시 사라짐.
+//    💡 [2026-08-29] 이 모드를 켜고 끄던 업무 보관함 헤더의 토글 버튼은 삭제하고, 설정(⚙️ 메일 자동배치
+//    설정 → ⏱️ 수집설정)의 체크박스(mac-cleanup-auto)로 이동함 — 값은 그대로 localStorage 사용.
 window.getInboxCleanupMode = function() {
     return localStorage.getItem('inbox_cleanup_mode') || 'keep'; // 기본값: 보관(기존 동작 유지)
-};
-window.toggleInboxCleanupMode = function() {
-    const next = window.getInboxCleanupMode() === 'auto' ? 'keep' : 'auto';
-    localStorage.setItem('inbox_cleanup_mode', next);
-    window.refreshInboxCleanupModeButton();
-    if (window.showToast) {
-        const _en = window._currentLang === 'en';
-        window.showToast(next === 'auto'
-            ? (_en ? '🟢 Auto-delete mode — processed tasks now disappear from the inbox immediately.' : '🟢 처리됨 자동삭제 모드 — 앞으로 처리된 업무는 즉시 보관함에서 사라집니다.')
-            : (_en ? '🟠 Keep mode — processed tasks stay in the inbox. Delete them yourself with the 🗑 per row.' : '🟠 처리됨 보관 모드 — 처리된 업무가 보관함에 남습니다. 각 행의 🗑로 직접 지워주세요.'), 'info');
-    }
-};
-window.refreshInboxCleanupModeButton = function() {
-    const btn = document.getElementById('inbox-cleanup-mode-btn');
-    if (!btn) return;
-    const mode = window.getInboxCleanupMode();
-    const isEn = window._currentLang === 'en';
-    // 💡 [파스텔 톤 통일] 옅은 배경(평상시) → 짙은 파스텔(호버) — 아래 미분류/신규발신자/자동폐기,
-    //    업무 카드 액션버튼과 동일한 4색 파스텔 기준(파랑/초록/주황/빨강) 중 초록(자동)·주황(보관) 사용.
-    const palette = mode === 'auto'
-        ? { bg:'#e6f6ea', border:'#a8dab8', text:'#1f7a3d', hoverBg:'#c9ecd3', hoverBorder:'#7cc494' }
-        : { bg:'#fbead9', border:'#edbf85', text:'#a85d0a', hoverBg:'#f4d9b3', hoverBorder:'#dba354' };
-    btn.textContent = mode === 'auto' ? (isEn ? '🟢 Auto-delete Done' : '🟢 처리됨 자동삭제') : (isEn ? '🟠 Keep Done' : '🟠 처리됨 보관');
-    btn.style.background = palette.bg;
-    btn.style.borderColor = palette.border;
-    btn.style.color = palette.text;
-    btn.onmouseover = function() { btn.style.background = palette.hoverBg; btn.style.borderColor = palette.hoverBorder; };
-    btn.onmouseout = function() { btn.style.background = palette.bg; btn.style.borderColor = palette.border; };
-    btn.title = mode === 'auto'
-        ? (isEn ? 'Processed tasks are removed from the inbox immediately once handled.'
-                : '자동배치/전송 등으로 처리된 업무를 처리 즉시 보관함에서 자동으로 지웁니다.')
-        : (isEn ? 'Processed tasks stay in the inbox until you delete them yourself (🗑 per row).'
-                : '처리된 업무를 보관함에 남겨두고, 각 행의 🗑로 직접 확인 후 삭제합니다.');
 };
 
 window.mailRightToInbox = function() {
@@ -17052,14 +17021,12 @@ window.updateInboxBadge();
                 📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>
                 전송된 업무가 팀원의 동시 저장으로 유실된 경우, '전송됨' 항목을 같은 방법으로 재전송하면 복구됩니다.
             </span></span></span>
-            <div style="display:flex; gap:6px; flex-shrink:0;">
-                <button id="inbox-batch-register-btn" onclick="window.inboxBatchRegisterMatched()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:12px; font-weight:bold; padding:0 10px; height:29px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; cursor:pointer; transition:background .15s, border-color .15s;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
-                <button id="inbox-cleanup-mode-btn" onclick="window.toggleInboxCleanupMode()" style="font-size:12px; font-weight:bold; padding:0 10px; height:29px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; cursor:pointer; transition:background .15s, border-color .15s;"></button>
+            <div style="display:flex; gap:6px; flex-shrink:0; align-items:center;">
+                <button id="inbox-batch-register-btn" onclick="window.inboxBatchRegisterMatched()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:12px; font-weight:bold; padding:0 10px; height:29px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s, border-color .15s;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
                 <button id="inbox-close-btn" onclick="window.closeTaskInbox()"
                     style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
                            color:#1a4f7a; font-size:16px; cursor:pointer;
                            width:28px; height: 29px; padding:0; line-height:1; box-sizing:border-box;
-                           margin-top:4px;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
                     onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
                     onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
@@ -17074,7 +17041,7 @@ window.updateInboxBadge();
             <!-- 분류 못한 메일/신규 발신자 확인도 결국 업무 보관함 정리 작업의 일부라 여기 있는 게 자연스러움 -->
             <!-- 💡 [버그 수정] 아래 배지 id가 설정 모달(⚙️ 메일 자동배치 설정)의 동일 id와 중복돼서
                  document.getElementById가 항상 먼저 나온 쪽만 갱신하고 있었음 — "-2" 접미사로 분리 -->
-            <div style="flex-shrink:0; padding:12px; border-top:1px solid #eee; border:1px solid #dee2e6; border-radius:8px; margin:0 12px 12px 12px; padding:12px 14px;">
+            <div style="flex-shrink:0; border:1px solid #dee2e6; border-radius:8px; margin:0 12px 12px 12px; padding:12px 14px; background:#fff; box-shadow:0 -6px 10px -8px rgba(0,0,0,0.25); position:relative; z-index:1;">
                 <div id="inbox-subqueue-header" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
                 <div style="display:flex; gap:6px; margin-bottom:10px;">
                     <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
@@ -17088,9 +17055,9 @@ window.updateInboxBadge();
                     </button>
                 </div>
                 <div style="display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
-                    <button id="inbox-reset-unmatched-btn" onclick="window._macClearQueue('unmatched')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 미분류 초기화</button>
-                    <button id="inbox-reset-newsender-btn" onclick="window._macClearQueue('newsender')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 신규발신자 초기화</button>
-                    <button id="inbox-reset-discarded-btn" onclick="window._macClearQueue('discarded')" style="padding:3px 8px; background:#fff; color:#aaa; border:1px solid #ddd; border-radius:6px; font-size:10px; cursor:pointer;">🗑 자동폐기 초기화</button>
+                    <button id="inbox-reset-unmatched-btn" onclick="window._macClearQueue('unmatched')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:3px 8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑 미분류 초기화</button>
+                    <button id="inbox-reset-newsender-btn" onclick="window._macClearQueue('newsender')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:3px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑 신규발신자 초기화</button>
+                    <button id="inbox-reset-discarded-btn" onclick="window._macClearQueue('discarded')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:3px 8px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑 자동폐기 초기화</button>
                 </div>
             </div>
         </div>
@@ -20988,6 +20955,12 @@ window.openMailAutoConfigModal = async function() {
                             <span style="flex:1;">완료 프로젝트도 수집 대상에 포함</span>
                         </label>
                         <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 Summary 탭에서 "완료"로 표시한 프로젝트를 새 메일 자동매칭에서 제외합니다(이미 끝난 프로젝트에 실수로 새 업무가 등록되는 걸 방지). 체크하면 완료 프로젝트도 계속 매칭 대상에 포함됩니다.</div>
+                        <!-- 💡 [2026-08-29 이동] AI 업무 보관함 헤더에 있던 "🟠 처리됨 보관 / 🟢 처리됨 자동삭제" 토글을 여기로 옮김 -->
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-top:10px;">
+                            <input id="mac-cleanup-auto" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
+                            <span style="flex:1;">처리된 업무는 보관함에서 자동삭제</span>
+                        </label>
+                        <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.</div>
                     </div>
                 </div>
 
@@ -21076,6 +21049,7 @@ window.openMailAutoConfigModal = async function() {
     // 값 채우기
     document.getElementById('mac-interval').value = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
     document.getElementById('mac-collect-completed').checked = window.getMailAutoCollectCompleted ? window.getMailAutoCollectCompleted() : false;
+    document.getElementById('mac-cleanup-auto').checked = (window.getInboxCleanupMode ? window.getInboxCleanupMode() : 'keep') === 'auto';
     document.getElementById('mac-external').value   = cfg.externalCustomerScore;
     document.getElementById('mac-tome').value       = cfg.toMeScore;
     document.getElementById('mac-ccme').value       = cfg.ccMeScore;
@@ -21180,6 +21154,10 @@ window._macSave = async function() {
     // 완료 프로젝트 수집 여부
     const collectCompletedEl = document.getElementById('mac-collect-completed');
     if (collectCompletedEl) localStorage.setItem('mail_auto_collect_completed', collectCompletedEl.checked ? '1' : '0');
+
+    // 처리됨 업무 자동삭제 여부 (예전엔 업무 보관함 헤더의 토글 버튼 — 2026-08-29 여기로 이동)
+    const cleanupAutoEl = document.getElementById('mac-cleanup-auto');
+    if (cleanupAutoEl) localStorage.setItem('inbox_cleanup_mode', cleanupAutoEl.checked ? 'auto' : 'keep');
 
     // 우선순위 점수
     const titleScores = {};
