@@ -134,7 +134,7 @@
     .action-btn { padding: 6px 12px; font-size: clamp(10px, 1vw, 13px); font-weight: bold; cursor: pointer; border: 1.5px solid #2c5f8a; background-color: #fff; color: #2c5f8a; border-radius: 6px; transition: 0.2s; height: clamp(24px, 2.5vw, 32px); box-sizing: border-box; display: flex; align-items: center; min-width: 120px; justify-content: center; }
     .action-btn:hover { background-color: #2c5f8a !important; color: #fff !important; }
     
-    #print-btn:hover { background-color: #2c5f8a !important; color: #fff !important; border-color: #2c5f8a !important; }
+    #print-btn:hover { background-color: #a3d9e0 !important; color: #00707d !important; border-color: #52a5af !important; }
     .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
     .history-btn { border-color: #6f42c1; color: #6f42c1; }
     .history-btn:hover { background-color: #6f42c1; color: #fff; }
@@ -1737,7 +1737,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                  안 건드림) mousedown에서 기본 동작(드롭다운 펼치기)만 막고 window._toggleProjectStatus로
                  값을 직접 뒤집는다. 키보드 방향키로 포커스된 select를 조작하는 경우는 기본 동작이 이미
                  두 옵션 사이 토글과 동일해서 그대로 둬도 문제없음(접근성 유지). -->
-            <select id="sum-project-status" title="완료로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다." onmousedown="event.preventDefault(); window._toggleProjectStatus();" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#2c5f8a; cursor:pointer; padding:0; margin:0; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none;">
+            <select id="sum-project-status" title="완료로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다." onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; padding:2px 8px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
                 <option value="">🔵 진행중</option>
                 <option value="완료">✅ 완료</option>
             </select>
@@ -15538,9 +15538,9 @@ window._ibOpenAiChatModal = function(uid) {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9110; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="inbox-ai-chat-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:440px;">
-            <div id="inbox-ai-chat-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+            <div id="inbox-ai-chat-drag" style="padding:13px 18px; border-bottom:1px solid #a3d9e0; font-weight:bold; font-size:14px; background:#e0f5f7; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#00707d;">
                 <span>🤖 AI 분석 근거 문의</span>
-                <button onclick="document.getElementById('inbox-ai-chat-modal').style.display='none'" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+                <button onclick="document.getElementById('inbox-ai-chat-modal').style.display='none'" style="background:#e0f5f7; border:1px solid #a3d9e0; border-radius:6px; color:#00707d; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#a3d9e0'; this.style.borderColor='#52a5af';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a3d9e0';">✕</button>
             </div>
             <div id="inbox-ai-chat-log" style="flex:1; overflow-y:auto; padding:12px 14px; background:#fafafa;"></div>
             <div style="padding:10px; border-top:1px solid #eee; display:flex; gap:6px; align-items:flex-end;">
@@ -20430,8 +20430,8 @@ window._msRenderQueueModal = function(type) {
             </div>
             <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
-                <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" style="flex:1; padding:7px 10px; background:#e7f6ec; color:#2f9e44; border:1px solid #2f9e44; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;"></button>
-                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" style="flex:1; padding:7px 14px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:12px; cursor:pointer;"></button>
+                <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"></button>
+                <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1; padding:7px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;"></button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -20762,9 +20762,9 @@ window._msShowKeywordSuggestModal = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="ms-kwsuggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
-            <div id="ms-kwsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+            <div id="ms-kwsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #a3d9e0; font-weight:bold; font-size:14px; background:#e0f5f7; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#00707d;">
                 <span id="ms-kwsuggest-title">🔑 키워드 제안</span>
-                <button onclick="document.getElementById('ms-kwsuggest-modal').style.display='none'" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+                <button onclick="document.getElementById('ms-kwsuggest-modal').style.display='none'" style="background:#e0f5f7; border:1px solid #a3d9e0; border-radius:6px; color:#00707d; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#a3d9e0'; this.style.borderColor='#52a5af';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a3d9e0';">✕</button>
             </div>
             <div id="ms-kwsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee;">
@@ -20930,9 +20930,9 @@ window._msShowAddressSuggestModal = function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="ms-addrsuggest-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
-            <div id="ms-addrsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
+            <div id="ms-addrsuggest-drag" style="padding:13px 18px; border-bottom:1px solid #a3d9e0; font-weight:bold; font-size:14px; background:#e0f5f7; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#00707d;">
                 <span id="ms-addrsuggest-title">📇 주소록 추가 제안</span>
-                <button onclick="document.getElementById('ms-addrsuggest-modal').style.display='none'" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+                <button onclick="document.getElementById('ms-addrsuggest-modal').style.display='none'" style="background:#e0f5f7; border:1px solid #a3d9e0; border-radius:6px; color:#00707d; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#a3d9e0'; this.style.borderColor='#52a5af';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a3d9e0';">✕</button>
             </div>
             <div id="ms-addrsuggest-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee;">
