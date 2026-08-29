@@ -576,7 +576,7 @@
 
 #app-sidebar {
     position: fixed; top: var(--topbar-h); left: 0; height: calc(100vh - var(--topbar-h)); width: var(--sb-w);
-    background: #00a1b6;
+    background: #e0f5f7;
     display: flex; flex-direction: column;
     transition: width 0.18s ease;
     overflow: hidden;
@@ -589,16 +589,16 @@
     padding: 14px 14px 3px 19px; height: 30px; flex-shrink: 0;
 }
 #app-sidebar .sb-toggle-btn {
-    background: none; border: none; color: #fff;
+    background: none; border: none; color: #00707d;
     width: 26px; height: 26px; border-radius: 4px; cursor: pointer;
     flex-shrink: 0; font-size: 20px; line-height: 1;
 }
-#app-sidebar .sb-toggle-btn:hover { background: rgba(255,255,255,0.15); }
+#app-sidebar .sb-toggle-btn:hover { background: rgba(0,113,125,0.12); }
 #app-sidebar .sb-nav { flex: 1; overflow-y: auto; padding: 8px 0; margin-top: -10px; }
 #app-sidebar .sb-item {
     display: flex; align-items: center; gap: 10px;
     padding: 11px 0 11px 21px; cursor: pointer; white-space: nowrap;
-    font-size: 15px; color: rgba(255,255,255,0.88);
+    font-size: 15px; color: #00707d;
     border-left: 3px solid transparent;
     transition: background 0.15s ease;
 }
@@ -608,8 +608,8 @@
     opacity: 1; max-width: 160px;
     transition: opacity 0.15s ease, max-width 0.18s ease;
 }
-#app-sidebar .sb-item:hover { background: rgba(255,255,255,0.08); }
-#app-sidebar .sb-item.active { background: rgba(255,255,255,0.16); border-left-color: #ffce54; font-weight: bold; }
+#app-sidebar .sb-item:hover { background: rgba(0,113,125,0.08); }
+#app-sidebar .sb-item.active { background: rgba(0,113,125,0.16); border-left-color: #e67e22; font-weight: bold; }
 #app-sidebar.collapsed { width: var(--sb-w-collapsed); }
 #app-sidebar.collapsed .sb-label { opacity: 0; max-width: 0; }
 
@@ -1796,7 +1796,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </tr>
                 </tbody>
             </table>
-            <div class="concept-grid" style="margin-top:12px;">
+            <div class="concept-grid" style="margin-top:12px; margin-bottom:12px;">
                 <label id="sum-lbl-devdays">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
             </div>
         <div class="concept-section">
@@ -1862,7 +1862,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <div id="sum-member3-col-b" class="concept-grid" style="grid-template-columns:140px 1fr 1fr; row-gap:10px; column-gap:12px;"></div>
                 </div>
             </div>
-            <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 인원 추가</button>
+            <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" onmouseover="this.style.background='#e8f4fd';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="major-materials-section">
             <h3><span id="sum-h3-materials">주요 자재</span> <span style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용 · 체크박스는 &quot;분석용&quot;, 그 옆 － 버튼은 자유추가 행 삭제)</span></h3>
@@ -1896,7 +1896,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </table>
                 </div>
             </div>
-            <button id="sum-add-material-btn" type="button" onclick="window.addMaterialRow()" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 자재 추가</button>
+            <button id="sum-add-material-btn" type="button" onclick="window.addMaterialRow()" onmouseover="this.style.background='#e8f4fd';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 자재 추가</button>
         </div>
         <div class="concept-section" id="product-images-section">
             <h3><span id="sum-h3-photo">제품 사진</span> <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
@@ -4722,21 +4722,21 @@ ${mailText}`;
         }
         const labelW = Math.max(30, tabW - 40); // 패딩+닫기버튼+gap 몫만큼 라벨 폭에서 뺌(기존 160/120 비율과 동일)
 
-        // 💡 [2026-08-29 파스텔 통일] 활성 탭=진한 살구색/흰 배경 대신, 다른 곳과 동일한 파랑 파스텔
-        //    2단계(대기=옅음, 활성=한 단계 짙음)로 통일 + 호버 추가.
+        // 💡 [2026-08-29 파스텔 통일 v2] 선택 안 된 탭=흰 배경, 선택된 탭=제목 상자와 동일한 배경색
+        //    (.concept-header-box와 동일한 #e7f3ff/#a5c8f0/#2c5f8a)으로 통일 + 두 상태 모두 호버 추가.
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
             const label = s.fileName || '(새 프로젝트)';
-            const bg = active ? '#cfe6fa' : '#e8f4fd';
-            const border = active ? '#7fb0dd' : '#a5c8f0';
-            const hoverBg = active ? '#b3d9f5' : '#cfe6fa';
-            const hoverBorder = active ? '#5f96c9' : '#7fb0dd';
+            const bg = active ? '#e7f3ff' : '#fff';
+            const border = '#a5c8f0';
+            const hoverBg = active ? '#cfe6fa' : '#e8f4fd';
+            const hoverBorder = '#7fb0dd';
             return `<div onclick="window.switchToSheetWithSave('${s.key}')"
                 title="${escapeHtml(label)}"
                 onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}';"
                 onmouseout="this.style.background='${bg}'; this.style.borderColor='${border}';"
                 style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px; transition:background .15s, border-color .15s;
-                       background:${bg}; color:#1a4f7a; font-weight:${active ? 'bold' : 'normal'};
+                       background:${bg}; color:#2c5f8a; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${border}; border-bottom:1px solid ${bg}; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
