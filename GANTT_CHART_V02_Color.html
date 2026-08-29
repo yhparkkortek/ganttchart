@@ -4716,20 +4716,32 @@ ${mailText}`;
         }
         const labelW = Math.max(30, tabW - 40); // 패딩+닫기버튼+gap 몫만큼 라벨 폭에서 뺌(기존 160/120 비율과 동일)
 
+        // 💡 [2026-08-29 파스텔 통일] 활성 탭=진한 살구색/흰 배경 대신, 다른 곳과 동일한 파랑 파스텔
+        //    2단계(대기=옅음, 활성=한 단계 짙음)로 통일 + 호버 추가.
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
             const label = s.fileName || '(새 프로젝트)';
+            const bg = active ? '#cfe6fa' : '#e8f4fd';
+            const border = active ? '#7fb0dd' : '#a5c8f0';
+            const hoverBg = active ? '#b3d9f5' : '#cfe6fa';
+            const hoverBorder = active ? '#5f96c9' : '#7fb0dd';
             return `<div onclick="window.switchToSheetWithSave('${s.key}')"
                 title="${escapeHtml(label)}"
-                style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px;
-                       background:${active ? '#fff8e6' : '#fff'}; color:${active ? '#2c5f8a' : '#666'}; font-weight:${active ? 'bold' : 'normal'};
-                       border:1px solid ${active ? '#2c5f8a' : '#ced4da'}; border-bottom:1px solid #fff; margin-bottom:-1px;">
+                onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}';"
+                onmouseout="this.style.background='${bg}'; this.style.borderColor='${border}';"
+                style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px; transition:background .15s, border-color .15s;
+                       background:${bg}; color:#1a4f7a; font-weight:${active ? 'bold' : 'normal'};
+                       border:1px solid ${border}; border-bottom:1px solid ${bg}; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
-                    style="color:#999; font-size:13px; line-height:1; flex-shrink:0;">✕</span>
+                    onmouseover="event.stopPropagation(); this.style.background='#fbe4e2'; this.style.color='#b1432f';"
+                    onmouseout="this.style.background='transparent'; this.style.color='#7a97ae';"
+                    style="color:#7a97ae; background:transparent; border-radius:4px; padding:0 3px; font-size:13px; line-height:1.4; flex-shrink:0; transition:background .15s, color .15s;">✕</span>
             </div>`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
-                style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:#2c5f8a; font-weight:bold;">+</div>`;
+                onmouseover="this.style.background='#e8f4fd';"
+                onmouseout="this.style.background='transparent';"
+                style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:#1a4f7a; font-weight:bold; border-radius:6px; transition:background .15s;">+</div>`;
     };
 
     // 💡 [버그 수정 v2] 탭 폭 자동조정은 지금까지 시트가 새로 열리거나 닫힐 때, 그리고(직전 수정으로)
