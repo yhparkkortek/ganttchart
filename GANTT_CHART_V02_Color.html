@@ -1030,21 +1030,25 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-header-box" id="alarm-header-box">
       <!-- 💡 [멀티시트 UI 통일] 알람/공지 토글 — 두 뷰 모두 같은 한 줄짜리 헤더박스를 쓰도록,
            이 토글 요소를 _switchAlarmView()가 활성 뷰의 헤더박스 맨 앞으로 옮겨 씀 -->
-      <div id="alarm-view-toggle" style="display:flex; align-items:center; gap:14px; flex-shrink:0;">
-        <span id="av-tab-alarm" onclick="window._switchAlarmView('alarm')"
-              style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; padding-bottom:2px; user-select:none;">🔔 Alarm</span>
-        <span id="av-tab-notice" onclick="window._switchAlarmView('notice')"
-              style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#999; border-bottom:2px solid transparent; padding-bottom:2px; user-select:none;">📢 Notice</span>
-        <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px 0 0;"></span>
+      <div id="alarm-view-toggle" style="position:relative; display:flex; align-items:center; flex-shrink:0;">
+        <button id="alarm-view-trigger" onclick="window._toggleAlarmViewDropdown(event)" title="Alarm(D-day 알람) / Notice(반복 공지) 중 선택"
+                style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; background:none; border:none; padding:0; margin:0; user-select:none;">
+            <span id="alarm-view-trigger-label">🔔 Alarm</span><span style="font-size:11px;">▾</span>
+        </button>
+        <div id="alarm-view-dropdown" class="row-action-popup" style="min-width:140px; padding:6px;"></div>
+        <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
       </div>
       <span id="alarm-server-status" style="font-size:11px; padding:2px 8px; border-radius:10px; background:#f0f0f0; color:#888;">확인 중...</span>
       <div class="btn-group">
-        <button class="action-btn" id="alarm-send-all-btn"
+        <button id="alarm-send-all-btn"
           onclick="window.sendAllPendingAlarms()"
-          style="border-color:#e67e22; color:#e67e22;"
+          onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
+          style="padding:6px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"
           title="과거 미발송분 포함 전체 발송">📧 일괄 발송</button>
       </div>
-      <button class="action-btn" data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')" style="border-color:#2c5f8a; color:#2c5f8a;">🖨️ 인쇄 (PDF)</button>
+      <button data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')"
+        onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+        style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
     </div>
 
     <!-- 알람 목록 테이블 -->
@@ -1445,10 +1449,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div class="concept-header-box" id="notice-header-box">
       <span data-i18n="notice-desc" style="font-size:12px; color:#888;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
       <div class="btn-group">
-        <button class="action-btn" data-i18n="btn-notice-add" onclick="window.openNoticeModal()"
-                style="border-color:#27ae60; color:#27ae60;">+ 공지 등록</button>
-        <button class="action-btn" data-i18n="btn-notice-sendall" onclick="window.checkAndSendNotices(true)"
-                style="border-color:#2c5f8a; color:#2c5f8a;">📢 전체 즉시 발송</button>
+        <button data-i18n="btn-notice-add" onclick="window.openNoticeModal()"
+                onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 공지 등록</button>
+        <button data-i18n="btn-notice-sendall" onclick="window.checkAndSendNotices(true)"
+                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📢 전체 즉시 발송</button>
       </div>
     </div>
 
@@ -24650,9 +24656,15 @@ window.renderNoticeTab = function() {
           <td style="padding:10px 12px;text-align:center;font-size:11.5px;color:#666;">${lastSent}</td>
           <td style="padding:10px 12px;text-align:center;">
             <div style="display:flex;gap:4px;justify-content:center;flex-wrap:nowrap;">
-              <button onclick="window.sendNoticeNow('${n.id}')" title="즉시 발송" class="notice-icon-btn notice-icon-blue" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #2c5f8a;color:#2c5f8a;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">📤</button>
-              <button onclick="window.openNoticeModal('${n.id}')" title="수정" class="notice-icon-btn notice-icon-gray" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #888;color:#555;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">✏️</button>
-              <button onclick="window.deleteNoticeItem('${n.id}')" title="삭제" class="notice-icon-btn notice-icon-red" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #e03131;color:#e03131;background:#fff;border-radius:3px;cursor:pointer;padding:0;box-sizing:border-box;">🗑️</button>
+              <button onclick="window.sendNoticeNow('${n.id}')" title="즉시 발송"
+                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #a5c8f0;color:#1a4f7a;background:#e8f4fd;border-radius:4px;cursor:pointer;padding:0;box-sizing:border-box;transition:background .15s, border-color .15s;">📤</button>
+              <button onclick="window.openNoticeModal('${n.id}')" title="수정"
+                onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
+                style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #edbf85;color:#a85d0a;background:#fbead9;border-radius:4px;cursor:pointer;padding:0;box-sizing:border-box;transition:background .15s, border-color .15s;">✏️</button>
+              <button onclick="window.deleteNoticeItem('${n.id}')" title="삭제"
+                onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:13px;border:1px solid #eeb0ac;color:#b1432f;background:#fbe4e2;border-radius:4px;cursor:pointer;padding:0;box-sizing:border-box;transition:background .15s, border-color .15s;">🗑️</button>
             </div>
           </td>
         </tr>`;
@@ -25436,9 +25448,17 @@ window.collectAlarmItems = function() {
         const diffDays = Math.round((dueDate - today) / 86400000);
         const dueStr   = `${dueDate.getFullYear()}-${String(dueDate.getMonth()+1).padStart(2,'0')}-${String(dueDate.getDate()).padStart(2,'0')}`;
 
-        // 업무명 (WBS 컬럼 td[5])
-        const taskTd   = tr.querySelectorAll('td')[5];
-        const taskName = taskTd ? taskTd.textContent.trim().replace(/^🌐\s*/, '') : '-';
+        // 업무명 (WBS 컬럼)
+        // 💡 [2026-08-29 버그 수정] 예전엔 화면 테이블의 "6번째 <td>"라는 위치 가정만으로 textContent를
+        //    그대로 긁어왔는데, 그 셀 안에 다른 요소(예: 숨은 텍스트·아이콘)가 같이 들어있으면 상세내용
+        //    등 엉뚱한 텍스트가 업무명에 섞여 들어오는 문제가 있었다. colIdx.wbs(헤더 "개발업무(WBS)"로
+        //    찾은 실제 데이터 컬럼)에서 직접 읽도록 바꾸고, 혹시 못 찾을 때만 예전 방식으로 폴백한다.
+        let taskName = (row._origDev || (ci.wbs > -1 ? row[ci.wbs] : '') || '').toString().trim();
+        if (!taskName) {
+            const taskTd = tr.querySelectorAll('td')[5];
+            taskName = taskTd ? taskTd.textContent.trim() : '';
+        }
+        taskName = taskName.replace(/^🌐\s*/, '') || '-';
 
         // 업무 내용
         const contentRaw = String(row[ci.content] || '').trim();
@@ -31453,13 +31473,17 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
 
+    // 💡 [2026-08-29 변경] Alarm/Notice 밑줄탭 2개 고정 대신, Elec Parts(🖥️ PANEL ▾)와 동일한
+    //    "단일 트리거 + 드롭다운" 구성으로 통일 — window._toggleAlarmViewDropdown 참고.
+    window.ALARM_VIEW_META = {
+        alarm:  { label: 'Alarm',  icon: '🔔' },
+        notice: { label: 'Notice', icon: '📢' },
+    };
     window._alarmView = window._alarmView || 'alarm';
     window._switchAlarmView = function(view) {
         window._alarmView = view;
         const alarmSec  = document.getElementById('alarm-view-alarm');
         const noticeSec = document.getElementById('tab-notice');
-        const tabAlarm  = document.getElementById('av-tab-alarm');
-        const tabNotice = document.getElementById('av-tab-notice');
         if (alarmSec)  alarmSec.style.display  = view === 'alarm'  ? 'block' : 'none';
         if (noticeSec) noticeSec.style.display = view === 'notice' ? 'block' : 'none';
         // 💡 [멀티시트 UI 통일] 알람/공지 토글을 지금 보이는 뷰의 헤더박스 맨 앞으로 옮겨서,
@@ -31467,12 +31491,42 @@ document.addEventListener('DOMContentLoaded', function() {
         const toggleEl = document.getElementById('alarm-view-toggle');
         const targetBox = document.getElementById(view === 'alarm' ? 'alarm-header-box' : 'notice-header-box');
         if (toggleEl && targetBox && targetBox.firstElementChild !== toggleEl) targetBox.insertBefore(toggleEl, targetBox.firstChild);
-        // 밑줄 탭 스타일 — 활성:파란 글자+밑줄, 비활성:회색 글자+투명 밑줄
-        if (tabAlarm)  { tabAlarm.style.color  = view === 'alarm'  ? '#2c5f8a' : '#999'; tabAlarm.style.borderBottomColor  = view === 'alarm'  ? '#2c5f8a' : 'transparent'; }
-        if (tabNotice) { tabNotice.style.color = view === 'notice' ? '#2c5f8a' : '#999'; tabNotice.style.borderBottomColor = view === 'notice' ? '#2c5f8a' : 'transparent'; }
+        const meta = window.ALARM_VIEW_META[view];
+        const label = document.getElementById('alarm-view-trigger-label');
+        if (label && meta) label.textContent = meta.icon + ' ' + meta.label;
         if (view === 'alarm'  && window.renderAlarmTab)  window.renderAlarmTab();
         if (view === 'notice' && window.renderNoticeTab) window.renderNoticeTab();
         try { localStorage.setItem('gantt_alarm_view', view); } catch(e) {}
+    };
+    window._toggleAlarmViewDropdown = function(ev) {
+        if (ev) ev.stopPropagation();
+        const popup = document.getElementById('alarm-view-dropdown');
+        const btn = document.getElementById('alarm-view-trigger');
+        if (!popup || !btn) return;
+        if (popup.style.display === 'block') { popup.style.display = 'none'; return; }
+        const options = Object.keys(window.ALARM_VIEW_META).map(function(key) { return Object.assign({ key: key }, window.ALARM_VIEW_META[key]); });
+        popup.innerHTML = options.map(function(o) {
+            const active = o.key === window._alarmView;
+            return `<div onclick="window._switchAlarmView('${o.key}'); document.getElementById('alarm-view-dropdown').style.display='none';"
+                         style="padding:8px 10px; cursor:pointer; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;
+                                background:${active ? '#2c5f8a' : 'transparent'}; color:${active ? '#fff' : '#333'};"
+                         onmouseover="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='#f1f3f5';"
+                         onmouseout="if(this.style.background!=='rgb(44, 95, 138)') this.style.background='transparent';">${o.icon} ${o.label}</div>`;
+        }).join('');
+        const rect = btn.getBoundingClientRect();
+        popup.style.left = rect.left + 'px';
+        popup.style.top = (rect.bottom + 4) + 'px';
+        popup.style.display = 'block';
+        if (!window._alarmDropdownListenerAdded) {
+            window._alarmDropdownListenerAdded = true;
+            document.addEventListener('click', function(e) {
+                const p = document.getElementById('alarm-view-dropdown');
+                const b = document.getElementById('alarm-view-trigger');
+                if (p && p.style.display === 'block' && !p.contains(e.target) && e.target !== b && !(b && b.contains(e.target))) {
+                    p.style.display = 'none';
+                }
+            });
+        }
     };
 
     // ⚡ [2026-08-28 변경] Elec Parts 탭 부품 종류 선택 — 밑줄탭 3개 고정 대신 드롭다운으로 변경.
