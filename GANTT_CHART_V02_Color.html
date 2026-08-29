@@ -1048,7 +1048,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       </div>
       <button data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')"
         onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-        style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
+        style="margin-left:8px; padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
     </div>
 
     <!-- 알람 목록 테이블 -->
@@ -2319,13 +2319,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="history-modal" onclick="event.stopPropagation()" style="pointer-events:all;">
             <div class="history-header">
                 <span data-i18n="h-session-history">🕒 변경 이력 (Session History)</span>
-                <button onclick="closeHistoryModal()" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                <button onclick="closeHistoryModal()" style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';">✕</button>
             </div>
             <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 20px; border-bottom:1px solid #e3e6ea; background:#f8f9fa; flex-wrap:wrap; font-size:12px; color:#555;">
                 <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                 <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
                 <input type="password" id="history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
-                <button class="action-btn" style="border-color:#e03131; color:#e03131; min-width:auto;" onclick="window.deleteHistoryByDateRange()">🗑️ 구간 삭제</button>
+                <button onclick="window.deleteHistoryByDateRange()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="padding:6px 12px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑️ 구간 삭제</button>
             </div>
             <div class="history-body" id="history-content"></div>
         </div>
@@ -2335,7 +2335,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div id="cal-day-popup-modal" class="history-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:15vh; left:50%; transform:translateX(-50%); width:420px; max-width:92vw; height:auto; max-height:70vh; min-width:320px; min-height:200px; resize:both; overflow:hidden;">
             <div id="cal-day-popup-drag" class="history-header" style="cursor:grab;">
                 <span id="cal-day-popup-title">업무 목록</span>
-                <button onclick="window.closeCalDayPopup()" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                <button onclick="window.closeCalDayPopup()" style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';">✕</button>
             </div>
             <div class="history-body" id="cal-day-popup-body" style="padding:14px; overflow-y:auto;"></div>
         </div>
@@ -2348,11 +2348,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     display:flex; flex-direction:column;">
             <div id="cal-sync-help-drag" class="history-header" style="cursor:grab;">
                 <span id="cal-sync-help-title">🔗 Google 자동 동기화</span>
-                <button onclick="window.closeCalSyncHelp()" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';">✕</button>
+                <button onclick="window.closeCalSyncHelp()" style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';">✕</button>
             </div>
             <div style="padding:14px 16px 0; display:flex; gap:8px; flex-shrink:0;">
-                <button id="cal-sync-ics-btn" class="action-btn" onclick="window.calExportICS()" style="flex:1;">📤 ICS 내보내기 (1회성)</button>
-                <button id="cal-sync-run-btn" class="action-btn" onclick="window.calSyncToGist()" style="flex:1; background:#2c5f8a; color:#fff;">🔗 지금 동기화 실행 (자동)</button>
+                <button id="cal-sync-ics-btn" onclick="window.calExportICS()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; padding:7px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ICS 내보내기 (1회성)</button>
+                <button id="cal-sync-run-btn" onclick="window.calSyncToGist()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔗 지금 동기화 실행 (자동)</button>
             </div>
             <div id="cal-sync-help-body" class="history-body" style="padding:16px; overflow-y:auto; font-size:12.5px; line-height:1.7; color:#333;">
             </div>
@@ -2367,10 +2367,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             새 프로젝트를 시작합니다.<br>참조 엑셀을 다운로드해서 작성한 뒤<br>화면에 드래그하세요.
         </div>
         <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
-            <button id="new-project-auto-import-btn" onclick="window.autoImportReferenceExcel()" title="구글 드라이브에 연동되어 있으면, 참조 엑셀을 자동으로 가져와 바로 화면에 반영합니다" style="width:240px; box-sizing:border-box; padding:10px 0; background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:0.15s;" onmouseover="this.style.background='#fff'; this.style.color='#2c5f8a';" onmouseout="this.style.background='#2c5f8a'; this.style.color='#fff';">🚀 자동으로 가져오기</button>
+            <button id="new-project-auto-import-btn" onclick="window.autoImportReferenceExcel()" title="구글 드라이브에 연동되어 있으면, 참조 엑셀을 자동으로 가져와 바로 화면에 반영합니다" style="width:240px; box-sizing:border-box; padding:10px 0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">🚀 자동으로 가져오기</button>
             <div style="font-size:11px; color:#999; margin:2px 0;">— 또는 직접 다운로드해서 작성하려면 —</div>
-            <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; width:240px; box-sizing:border-box; padding:10px 0; background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px; text-align:center; transition:0.15s;" onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';">📥 참조 엑셀 다운로드</a>
-            <button onclick="document.getElementById('new-project-modal-overlay').style.display='none';" style="width:240px; box-sizing:border-box; padding:10px 0; margin-top:6px; background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:0.15s;" onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';">확인</button>
+            <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; width:240px; box-sizing:border-box; padding:10px 0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">📥 참조 엑셀 다운로드</a>
+            <button onclick="document.getElementById('new-project-modal-overlay').style.display='none';" style="width:240px; box-sizing:border-box; padding:10px 0; margin-top:6px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:background .15s;" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';">확인</button>
         </div>
     </div>
 </div>
@@ -2383,15 +2383,15 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     display:flex; flex-direction:column;">
             <div id="drive-drag-handle" class="history-header"
                  style="background:#fff8e6; color:#7a5210; padding:8px 14px; flex-shrink:0; position:relative;
-                        cursor:grab; border-bottom:1.5px solid #ffe08a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                        cursor:grab; border-bottom:1px solid #ffe08a; display:flex; justify-content:space-between; align-items:center; gap:10px;">
                 <span id="drive-modal-title" style="font-size:15px; font-weight:bold; color:#7a5210; white-space:nowrap;">📂 프로젝트 불러오기</span>
                 <button onclick="window.closeDriveModal()"
-                    style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+                    style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px;
                            color:#7a5210; font-size:16px; cursor:pointer;
                            width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                    onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
-                    onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+                    onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';"
+                    onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';"
                     title="닫기">✕</button>
             </div>
             <div class="history-body" style="padding: 20px; overflow-y:auto; flex:1;">
@@ -4318,9 +4318,9 @@ ${mailText}`;
             groupFiles.forEach(function(file) {
                 let d = new Date(file.createdTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
                 let fileBtn = document.createElement('div');
-                fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: #fff;";
-                fileBtn.onmouseover = function() { this.style.background = '#fff3e0'; this.style.borderColor = '#ff9800'; };
-                fileBtn.onmouseout = function() { this.style.background = '#fff'; this.style.borderColor = '#ced4da'; };
+                fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #a5c8f0; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: #e8f4fd;";
+                fileBtn.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
+                fileBtn.onmouseout = function() { this.style.background = '#e8f4fd'; this.style.borderColor = '#a5c8f0'; };
                 fileBtn.onclick = function() { window.executeRestoreBackup(file.id, file.name); };
                 fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">🗄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
                 body.appendChild(fileBtn);
@@ -5045,18 +5045,18 @@ ${mailText}`;
                     infoWrap.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
                     const delBtn = document.createElement('button');
                     delBtn.textContent = _dmEn ? '🗑 Delete' : '🗑 삭제';
-                    delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fff; color:#e03131; border:1.5px solid #e03131; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;';
-                    delBtn.onmouseover = function() { this.style.background = '#e03131'; this.style.color = '#fff'; };
-                    delBtn.onmouseout  = function() { this.style.background = '#fff'; this.style.color = '#e03131'; };
+                    delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;';
+                    delBtn.onmouseover = function() { this.style.background = '#f5c2bd'; this.style.borderColor = '#e08f87'; };
+                    delBtn.onmouseout  = function() { this.style.background = '#fbe4e2'; this.style.borderColor = '#eeb0ac'; };
                     delBtn.onclick = function(e) { e.stopPropagation(); window._confirmDeleteProjectFile(file); };
                     fileBtn.appendChild(infoWrap);
                     fileBtn.appendChild(delBtn);
                 } else {
                     // 💡 완료된 프로젝트는 회색 톤(글자색/배경)으로 흐리게 — 목록에서 계속 눈에 띄되
                     //    "이건 이미 끝난 것"이라는 게 한눈에 구분되도록. 클릭해서 여는 동작 자체는 그대로 유지.
-                    fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; cursor: pointer; transition: 0.2s; display: flex; justify-content: space-between; align-items: center; background: " + (isCompleted ? '#f8f9fa' : '#fff') + ";";
-                    fileBtn.onmouseover = function() { this.style.background = '#fff8e1'; this.style.borderColor = '#ff9800'; };
-                    fileBtn.onmouseout = function() { this.style.background = isCompleted ? '#f8f9fa' : '#fff'; this.style.borderColor = '#ced4da'; };
+                    fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid " + (isCompleted ? '#ced4da' : '#a5c8f0') + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + (isCompleted ? '#f8f9fa' : '#e8f4fd') + ";";
+                    fileBtn.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
+                    fileBtn.onmouseout = function() { this.style.background = isCompleted ? '#f8f9fa' : '#e8f4fd'; this.style.borderColor = isCompleted ? '#ced4da' : '#a5c8f0'; };
                     fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
                     fileBtn.innerHTML = `<div style="font-weight: bold; color: ${isCompleted ? '#868e96' : '#333'}; font-size: 14px;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
                 }
