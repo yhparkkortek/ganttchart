@@ -13937,18 +13937,21 @@ window.renderMailResult = function(result) {
                 <span style="font-size:11px; color:#888;">${_fbEn ? 'Was this analysis helpful?' : 'AI 분석 결과가 도움이 되었나요?'}</span>
                 <div>
                     <button onclick="window.saveFeedbackLog('good')" id="fb-good-btn"
-                        style="font-size:12px; padding:3px 12px; border:1px solid #28a745; background:#fff; color:#28a745; border-radius:5px; cursor:pointer; margin-right:4px;">
+                        onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                        style="font-size:12px; padding:3px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; font-weight:bold; cursor:pointer; margin-right:4px; transition:background .15s, border-color .15s;">
                         👍 ${_fbEn ? 'Good' : '좋음'}
                     </button>
                     <button onclick="window.saveFeedbackLog('bad')" id="fb-bad-btn"
-                        style="font-size:12px; padding:3px 12px; border:1px solid #e03131; background:#fff; color:#e03131; border-radius:5px; cursor:pointer;">
+                        onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                        style="font-size:12px; padding:3px 12px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                         👎 ${_fbEn ? 'Bad' : '나쁨'}
                     </button>
                 </div>
             </div>
             <div id="fb-improve-trigger-row" style="display:none; margin-top:8px; text-align:right;">
                 <button onclick="window.openImproveCommentModal()"
-                    style="font-size:12px; padding:5px 14px; border:none; background:#0ca678; color:#fff; border-radius:5px; cursor:pointer; font-weight:bold;">
+                    onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                    style="font-size:12px; padding:5px 14px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">
                     💡 ${_fbEn ? 'Request AI improvement based on this edit' : '수정사항 반영해서 AI 개선 요청'}
                 </button>
             </div>
@@ -14019,7 +14022,7 @@ window.editPrompt = async function() {
                 <div id="prompt-drag-handle" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
                     <span id="prompt-modal-title" style="color:#2c5f8a;">✏️ AI 분석 프롬프트</span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button id="prompt-history-btn" onclick="event.stopPropagation(); window.showPromptLogs()" onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px; color:#7a5210; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
+                        <button id="prompt-history-btn" onclick="event.stopPropagation(); window.showPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
                         <button onclick="document.getElementById('prompt-edit-modal').style.display='none'"
                             style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
                                    color:#1a4f7a; font-size:16px; cursor:pointer;
@@ -14042,7 +14045,7 @@ window.editPrompt = async function() {
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">
                     <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔒 수정하기</button>
                     <button id="prompt-save-btn" onclick="window.savePrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">💾 저장</button>
-                    <button id="prompt-reset-btn" onclick="window.resetPrompt()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
+                    <button id="prompt-reset-btn" onclick="window.resetPrompt()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; min-width:120px; padding:8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
                     <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
                 </div>
             </div>`;
@@ -17170,9 +17173,9 @@ window.updateInboxBadge();
 <div id="mail-analyzer-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:740px; min-height:600px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
         <!-- 헤더 -->
-       <div id="mail-drag-handle" class="history-header" style="background:#e7f3ff; color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1px solid #a5c8f0; border-radius:10px 10px 0 0; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px;">
-            <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; justify-self:start;">📧 AI 업무 분석</span>
-            <div style="display:flex; gap:6px; justify-self:center; align-items:center;">
+       <div id="mail-drag-handle" class="history-header" style="background:#e7f3ff; color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1px solid #a5c8f0; border-radius:10px 10px 0 0; display:flex; align-items:center; gap:14px;">
+            <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; flex-shrink:0;">📧 AI 업무 분석</span><!-- flex 헤더로 전환(2026-08-29): 제목+탭은 왼쪽, 프롬프트+닫기는 오른쪽에 붙도록 재배치 -->
+            <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
                             background:#cfe6fa; color:#1a4f7a; border:1px solid #7fb0dd; border-radius:6px;
@@ -17193,15 +17196,15 @@ window.updateInboxBadge();
                             white-space:nowrap; transition:all 0.2s;">
                     🌐 메일 서버
                 </div>
-                <div style="width:1px; height:20px; background:#dee2e6; margin:0 4px;"></div>
-                <button id="mail-prompt-btn" onclick="window.editPrompt()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="3개 탭 공용 AI 분석 프롬프트 수정"
-                    style="padding:6px 12px; font-size:13px; font-weight:bold; height:29px; box-sizing:border-box; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; cursor:pointer; transition:background .15s, border-color .15s;">
-                    ✏️ 프롬프트
-                </button>
             </div>
+            <div style="flex:1;"></div>
+            <button id="mail-prompt-btn" onclick="window.editPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="3개 탭 공용 AI 분석 프롬프트 수정"
+                style="padding:6px 12px; font-size:13px; font-weight:bold; height:29px; box-sizing:border-box; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; flex-shrink:0; transition:background .15s, border-color .15s;">
+                ✏️ 프롬프트
+            </button>
             <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                 onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-                style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; width:28px; height:28px; padding:0; line-height:1; justify-self:end; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.15s;"
+                style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.15s;"
                 title="닫기">✕</button>
         </div>
         <!-- ===== 공통 좌우분할 컨테이너 ===== -->
@@ -17277,7 +17280,7 @@ window.updateInboxBadge();
                     </div>
                     <div id="mf-pending-list" style="display:none; max-height:180px; overflow-y:auto; margin-bottom:8px; border:1px solid #dee2e6; border-radius:6px; flex-shrink:0;"></div>
                     <div id="mf-analyze-group" style="display:none; gap:8px; margin-bottom:8px; flex-shrink:0; justify-content:center;">
-                        <button id="mf-clear-btn" class="action-btn" onclick="window.mfClearFiles()" style="min-width:130px !important; border-color:#e03131; color:#e03131;">
+                        <button id="mf-clear-btn" onclick="window.mfClearFiles()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="min-width:130px; padding:6px 12px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                             🗑️ 전체 비우기
                         </button>
                         <button id="mf-analyze-btn" onclick="window.mfAnalyze()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="min-width:130px; padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
@@ -17531,15 +17534,17 @@ window.updateInboxBadge();
                                 style="flex:1; min-width:100px; height:38px; box-sizing:border-box; padding:0 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; background:#fff;">
                         </select>
                         <button onclick="window.mailRightInsert()"
-                                style="height:38px; box-sizing:border-box; padding:0 24px; background:#2c5f8a; color:white; border:none;
+                                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                                style="height:38px; box-sizing:border-box; padding:0 24px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0;
                                        border-radius:6px; font-size:13px; font-weight:bold; flex-shrink:0;
-                                       cursor:pointer; white-space:nowrap; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+                                       cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">
                             <span id="mail-right-insert-btn-label">✅ 개별 등록</span>
                         </button>
                         <button onclick="window.mailRightToInbox()"
-                                style="height:38px; box-sizing:border-box; padding:0 16px; background:#fff; color:#e67e22; border:1px solid #e67e22;
+                                onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
+                                style="height:38px; box-sizing:border-box; padding:0 16px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85;
                                        border-radius:6px; font-size:13px; font-weight:bold; flex-shrink:0;
-                                       cursor:pointer; white-space:nowrap;"
+                                       cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;"
                                 title="현재 프로젝트가 아닌 업무를 보관함에 담아두고, 나중에 다른 프로젝트에 배치합니다.">
                             <span id="mail-right-inbox-btn-label">📥 보관함</span>
                         </button>
@@ -18012,9 +18017,9 @@ function mfRenderPendingList() {
     box.innerHTML = arr.map((f, i) => `
         <div id="mf-pending-item-${i}" style="display:flex; align-items:center; gap:6px; padding:5px 8px; border-bottom:1px solid #f0f0f0; font-size:11px;">
             <span style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(f.name)}">${i+1}. ${escapeHtml(f.name)}</span>
-            <button id="mf-pending-analyze-${i}" class="action-btn" onclick="window.mfAnalyzeSingle(${i})" style="min-width:60px !important; padding:2px 8px !important; font-size:10px; background:#2c5f8a; color:#fff;">🤖 분석</button>
-            <button id="mf-pending-remove-${i}" onclick="window.mfRemoveFile(${i})" title="목록에서 제외 (잘못 올린 파일 삭제)"
-                style="background:#fff; border:1px solid #e03131; color:#e03131; border-radius:4px; width:20px; height:20px; line-height:1; cursor:pointer; flex-shrink:0;">×</button>
+            <button id="mf-pending-analyze-${i}" onclick="window.mfAnalyzeSingle(${i})" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="min-width:60px; padding:2px 8px; font-size:10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🤖 분석</button>
+            <button id="mf-pending-remove-${i}" onclick="window.mfRemoveFile(${i})" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="목록에서 제외 (잘못 올린 파일 삭제)"
+                style="background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:4px; width:20px; height:20px; line-height:1; font-weight:bold; cursor:pointer; flex-shrink:0; transition:background .15s, border-color .15s;">×</button>
         </div>
     `).join('');
 }
@@ -18117,7 +18122,15 @@ window.mfAnalyzeSingle = async function(idx) {
         btnAfter.disabled = false;
         btnAfter.style.opacity = '';
         btnAfter.innerHTML = result.task ? '✅ 완료' : '⚠️ 실패(재분석)';
-        btnAfter.style.background = result.task ? '#28a745' : '#e03131';
+        // 💡 [2026-08-29 파스텔 통일] 완료=초록/실패=빨강 파스텔 — 호버 핸들러도 최종 색에 맞게 재설정
+        const _p = result.task
+            ? { bg:'#e6f6ea', border:'#a8dab8', text:'#1f7a3d', hoverBg:'#c9ecd3', hoverBorder:'#7cc494' }
+            : { bg:'#fbe4e2', border:'#eeb0ac', text:'#b1432f', hoverBg:'#f5c2bd', hoverBorder:'#e08f87' };
+        btnAfter.style.background = _p.bg;
+        btnAfter.style.borderColor = _p.border;
+        btnAfter.style.color = _p.text;
+        btnAfter.onmouseover = function() { btnAfter.style.background = _p.hoverBg; btnAfter.style.borderColor = _p.hoverBorder; };
+        btnAfter.onmouseout  = function() { btnAfter.style.background = _p.bg; btnAfter.style.borderColor = _p.border; };
     }
 };
 
