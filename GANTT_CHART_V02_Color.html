@@ -665,7 +665,7 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
 .concept-tab-wrap h2 { margin-top:0; font-size:19px; color:#2c5f8a; }
-.concept-section { background:#fff; border:1px solid #e3e6ea; border-radius:6px; padding:16px 18px; margin-bottom:16px; }
+.concept-section { background:#fff; border:1px solid #cfe3e5; border-radius:6px; padding:16px 18px; margin-bottom:16px; }
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
 .concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
@@ -680,8 +680,12 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
     width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
 }
 .concept-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
-.concept-table th, .concept-table td { border:1px solid #e3e6ea; padding:6px 8px; }
-.concept-table th { background:#f4f6f8; font-weight:600; color:#555; }
+.concept-table th, .concept-table td { border:1px solid #cfe3e5; padding:6px 8px; }
+.concept-table th { background:#eef6f7; font-weight:600; color:#3d5c60; }
+.concept-table thead tr:first-child th:first-child { border-top-left-radius:6px; }
+.concept-table thead tr:first-child th:last-child { border-top-right-radius:6px; }
+.concept-table tbody tr:last-child td:first-child { border-bottom-left-radius:6px; }
+.concept-table tbody tr:last-child td:last-child { border-bottom-right-radius:6px; }
 .concept-table td input, .concept-table td textarea { border:none; width:100%; font-size:12.5px; padding:2px; font-family:inherit; }
 .concept-add-row-btn {
     margin-top:8px; padding:6px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:0.2s;
@@ -850,7 +854,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 /* ========================================= */
 
 /* ── Calendar 탭 ───────────────────────── */
-.cal-grid-wrap { border:1px solid #e3e6ea; border-radius:6px; overflow:hidden; }
+.cal-grid-wrap { border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; }
 .cal-weekday-row { display:grid; grid-template-columns:repeat(7,1fr); background:#f4f6f8; }
 .cal-weekday-row > div { padding:7px; text-align:center; font-size:12px; font-weight:600; color:#555; border-bottom:1px solid #e3e6ea; }
 .cal-weekday-row > div:first-child { color:#e03131; }
@@ -906,7 +910,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     border:2px solid #fff; border-radius:50%; transform:translate(50%,-50%); box-shadow:0 1px 2px rgba(0,0,0,0.3);
 }
 .cal-day-cell-tall .cal-dur-bar { top:34px; height:8px; }
-.cal-day-popup-item { padding:8px 10px; border:1px solid #e3e6ea; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; }
+.cal-day-popup-item { padding:8px 10px; border:1px solid #cfe3e5; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; }
 .cal-day-popup-item:hover { border-color:#2c5f8a; }
 .cal-day-popup-item.cal-alarm-on { background:#fff3cd; border-color:#ffe08a; }
 tr.alarm-on > td { background-color: #e8f4fd !important; }
@@ -1073,18 +1077,18 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <div id="alarm-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 280px);">
       <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
         <thead style="position:sticky; top:0; z-index:10;">
-          <tr style="background:#f4f6f8;">
-            <th style="padding:8px 10px; text-align:center; width:18%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-task-name">업무명</th>
-            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-status">업무상태</th>
-            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-sender">발신인</th>
-            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-sender-email">발신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-receiver">수신인</th>
-            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-receiver-email">수신인 이메일</th>
-            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-due-date">완료 예정일</th>
-            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;">D-Day</th>
-            <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-send-status">발송 상태</th>
-            <th style="padding:8px 10px; text-align:center; width:13%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-last-sent">마지막 발송</th>
-            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#f4f6f8; border-bottom:2px solid #dee2e6;" data-i18n="th-schedule">일정</th>
+          <tr style="background:#eef6f7;">
+            <th style="padding:8px 10px; text-align:center; width:18%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-task-name">업무명</th>
+            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-status">업무상태</th>
+            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-sender">발신인</th>
+            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-sender-email">발신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-receiver">수신인</th>
+            <th style="padding:8px 10px; text-align:center; width:12%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-receiver-email">수신인 이메일</th>
+            <th style="padding:8px 10px; text-align:center; width:9%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-due-date">완료 예정일</th>
+            <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;">D-Day</th>
+            <th style="padding:8px 10px; text-align:center; width:10%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-send-status">발송 상태</th>
+            <th style="padding:8px 10px; text-align:center; width:13%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-last-sent">마지막 발송</th>
+            <th style="padding:8px 10px; text-align:center; width:5%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-schedule">일정</th>
           </tr>
         </thead>
         <tbody id="alarm-table-body">
@@ -1479,7 +1483,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <div style="background:#e0f5f7; border:1px solid #a3d9e0; border-radius:8px; overflow:hidden; margin-bottom:16px;">
       <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
         <thead>
-          <tr style="background:#f0f4f8; border-bottom:2px solid #dde3ea;">
+          <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
             <th style="padding:10px 12px; text-align:center; width:54px;" data-i18n="th-notice-status">상태</th>
             <th style="padding:10px 12px; text-align:left;" data-i18n="th-notice-title">제목</th>
             <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-target">발송 채널</th>
@@ -1646,7 +1650,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     z-index: 16;
                 }
                 #tab-address .concept-table thead th {
-                    background-color: #f4f6f8 !important;
+                    background-color: #eef6f7 !important;
                 }
                 #tab-address .concept-table td input.u-input {
                     background: transparent !important;
@@ -1664,13 +1668,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 }
                 #tab-address .concept-table tbody tr.mc-zebra-b,
                 #tab-address .concept-table tbody tr.mc-zebra-b input {
-                    background-color: #efefef !important;
+                    background-color: #e8f2f3 !important;
                 }
                 #tab-alarm .concept-table tbody tr.mc-zebra-a {
                     background-color: #ffffff !important;
                 }
                 #tab-alarm .concept-table tbody tr.mc-zebra-b {
-                    background-color: #efefef !important;
+                    background-color: #e8f2f3 !important;
                 }
             </style>
             <div id="addr-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
@@ -1691,7 +1695,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <tbody id="address-table-body"></tbody>
                 </table>
             </div>
-            <div id="addr-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+            <div id="addr-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
                 <div id="addr-history-header" onclick="window.addrToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                     <span id="addr-history-toggle-icon">▶</span>
                     <span data-i18n="h-history">변경 이력 확인</span>
@@ -1757,7 +1761,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     z-index: 16;
                 }
                 #tab-summary .concept-table thead th {
-                    background-color: #f4f6f8 !important;
+                    background-color: #eef6f7 !important;
                 }
             </style>
             <table class="concept-table">
@@ -1926,7 +1930,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
              </div>
         </div>
-        <div id="sum-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden; background:#fff;">
+        <div id="sum-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
             <div id="sum-history-header" onclick="window.sumToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                 <span id="sum-history-toggle-icon">▶</span>
                 <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -1969,7 +1973,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     z-index: 16;
                 }
                 #tab-briefspec .concept-table thead th {
-                    background-color: #f4f6f8 !important;
+                    background-color: #eef6f7 !important;
                 }
             </style>
             <div id="briefspec-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
@@ -1993,7 +1997,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </tbody>
             </table>
             </div>
-            <div id="bs-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden; background:#fff;">
+            <div id="bs-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
                 <div id="bs-history-header" onclick="window.bsToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                     <span id="bs-history-toggle-icon">▶</span>
                     <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -2062,7 +2066,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     }
                     #tab-mctable .concept-table thead th,
                     #mc-comparison-table thead th {
-                        background-color: #f4f6f8 !important;
+                        background-color: #eef6f7 !important;
                     }
                     /* 💡 R1~R5 표 줄무늬 — input 배경까지 강제로 덮어써서 효과가 보이게 함 (16계조 중 1단계 진한 회색) */
                     #tab-mctable .concept-table tbody tr.mc-zebra-a,
@@ -2071,7 +2075,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     }
                     #tab-mctable .concept-table tbody tr.mc-zebra-b,
                     #tab-mctable .concept-table tbody tr.mc-zebra-b input {
-                        background-color: #efefef !important;
+                        background-color: #e8f2f3 !important;
                     }
                     #tab-briefspec .concept-table tbody tr.mc-zebra-a,
                     #tab-briefspec .concept-table tbody tr.mc-zebra-a input {
@@ -2079,7 +2083,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     }
                     #tab-briefspec .concept-table tbody tr.mc-zebra-b,
                     #tab-briefspec .concept-table tbody tr.mc-zebra-b input {
-                        background-color: #efefef !important;
+                        background-color: #e8f2f3 !important;
                     }
             </style>
             <table class="concept-table">
@@ -2125,7 +2129,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </tbody>
             </table>
             </div>
-            <div id="mc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+            <div id="mc-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
                 <div id="mc-history-header" onclick="window.mcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px; justify-content:space-between;">
                     <span style="display:flex; align-items:center; gap:6px;">
                         <span id="mc-history-toggle-icon">▶</span>
@@ -2201,11 +2205,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 #tab-elecparts .concept-table th:first-child,
                 #tab-elecparts .concept-table td:first-child { text-align: left !important; }
                 #tab-elecparts .concept-table thead { position: sticky !important; top: 0 !important; z-index: 16; }
-                #tab-elecparts .concept-table thead th { background-color: #f4f6f8 !important; }
+                #tab-elecparts .concept-table thead th { background-color: #eef6f7 !important; }
                 #tab-elecparts .concept-table th.pc-slot-empty,
                 #tab-elecparts .concept-table th.ep-slot-empty { border-style: dashed !important; color: #aaa !important; font-weight: normal !important; }
                 #tab-elecparts .concept-table tbody tr.mc-zebra-a { background-color: #ffffff !important; }
-                #tab-elecparts .concept-table tbody tr.mc-zebra-b { background-color: #efefef !important; }
+                #tab-elecparts .concept-table tbody tr.mc-zebra-b { background-color: #e8f2f3 !important; }
             </style>
             <div id="elec-view-panel" style="display:block;">
                 <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 추가]로 시작하세요.</div>
@@ -2215,7 +2219,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <tbody id="pc-tbody"></tbody>
                     </table>
                 </div>
-                <div id="pc-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                <div id="pc-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
                     <div id="pc-history-header" onclick="window.pcToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                         <span id="pc-history-toggle-icon">▶</span>
                         <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -2238,7 +2242,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <tbody id="ep-adbd-tbody"></tbody>
                     </table>
                 </div>
-                <div id="ep-adbd-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                <div id="ep-adbd-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
                     <div id="ep-adbd-history-header" onclick="window.epToggleHistoryBox('adbd')" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                         <span id="ep-adbd-history-toggle-icon">▶</span>
                         <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -2261,7 +2265,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <tbody id="ep-convbd-tbody"></tbody>
                     </table>
                 </div>
-                <div id="ep-convbd-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+                <div id="ep-convbd-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden;">
                     <div id="ep-convbd-history-header" onclick="window.epToggleHistoryBox('convbd')" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                         <span id="ep-convbd-history-toggle-icon">▶</span>
                         <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -22718,7 +22722,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         const container = document.getElementById('weekly-report-page');
         if (!container) return;
 
-        const SKY_C = '#2c5f8a', SKY_TINT = '#eef3f7', BORDER_C = '#e3e6ea';
+        const SKY_C = '#2c5f8a', SKY_TINT = '#eef6f7', BORDER_C = '#cfe3e5';
 
         // 💡 주간업무 보고 타이틀과 프로젝트 정보 패널을 완전히 삭제했습니다.
         const wrWeekLabel = document.getElementById('wr-week-label');
@@ -22730,23 +22734,23 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
             <div>
                 <div class="wr-print-block" style="margin-bottom:14px; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Development Progress' : '개발 진척 현황'}</div>
-                    <div style="padding:12px;">${wrRenderTimeline()}</div>
+                    <div style="padding:12px; background:#fff;">${wrRenderTimeline()}</div>
                 </div>
 
                 <div style="display:flex; gap:10px; margin-bottom:14px;">
                     <div class="wr-print-block" style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Key Achievements (${data.thisWeekNo}W)` : `주요 실적 (${data.thisWeekNo}W)`}</div>
-                        <div style="padding:12px;">${wrRenderEditableList(data.thisList)}</div>
+                        <div style="padding:12px; background:#fff;">${wrRenderEditableList(data.thisList)}</div>
                     </div>
                     <div class="wr-print-block" style="flex:1; border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                         <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? `Upcoming Plans (${data.nextWeekNo}W)` : `추진 계획 (${data.nextWeekNo}W)`}</div>
-                        <div style="padding:12px;">${wrRenderEditableList(data.nextList)}</div>
+                        <div style="padding:12px; background:#fff;">${wrRenderEditableList(data.nextList)}</div>
                     </div>
                 </div>
 
                 <div class="wr-print-block" style="border:1px solid ${BORDER_C}; border-radius:4px; overflow:hidden;">
                     <div style="background:${SKY_TINT}; padding:8px; text-align:center; font-weight:bold; font-size:16px; color:#2c5f8a;">${_wrEn ? 'Issues & Actions' : '문제점 및 Issue'}</div>
-                    <div>${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
+                    <div style="background:#fff;">${wrRenderIssueTable([...data.thisList, ...data.nextList])}</div>
                 </div>
             </div>`;
         setTimeout(function() { window.wrAutoActivateNearest(); }, 0);
