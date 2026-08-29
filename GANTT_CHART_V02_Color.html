@@ -688,16 +688,17 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 .concept-table tbody tr:last-child td:last-child { border-bottom-right-radius:6px; }
 .concept-table td input, .concept-table td textarea { border:none; width:100%; font-size:12.5px; padding:2px; font-family:inherit; }
 .concept-add-row-btn {
-    margin-top:8px; padding:6px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:0.2s;
+    margin-top:8px; padding:6px 12px; border:1px solid #a3d9e0; color:#00707d; background:#e0f5f7; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:0.2s;
 }
-.concept-add-row-btn:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
-/* 💡 금액삭제 버튼은 위험(삭제) 액션이라 빨강 파스텔 기준으로 hover — 위 파란 규칙을 id 특정성으로 덮어씀 */
+/* 💡 [2026-08-29] 제목 박스 버튼 전체를 청록 기본색으로 통일하면서 호버도 어두운 청록으로 맞춤 */
+.concept-add-row-btn:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
+/* 💡 금액삭제 버튼은 위험(삭제) 액션이라 빨강 파스텔 기준으로 hover — 위 청록 규칙을 id 특정성으로 덮어씀 (M.C Table 예외 버튼) */
 #mc-clear-price-btn:hover { background-color:#f5c2bd !important; border-color:#e08f87 !important; color:#b1432f !important; }
-/* 💡 Elec Parts "➕ 추가" 버튼은 초록(추가) 액션이라 위 파란 .concept-add-row-btn 기본 hover를 id 특정성으로 덮어씀 */
-#pc-add-btn:hover, #ep-adbd-add-btn:hover, #ep-convbd-add-btn:hover { background-color:#c9ecd3 !important; border-color:#7cc494 !important; color:#1f7a3d !important; }
-/* 💡 Calendar/Weekly의 LEVEL(WBS) 필터 트리거 — 필터 미적용 시 파스텔 기본, .filter-active(실제 필터 적용중) 상태는
-   메인 Gantt 페이지와 동일한 강조색을 유지하도록 건드리지 않음(기존 동작 유지) */
-#gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
+/* 💡 [2026-08-29] Elec Parts "➕ 추가" 버튼도 이제 다른 제목 박스 버튼과 동일한 청록 기본색으로 통일되어
+   더 이상 초록 hover가 필요 없음 — 위 .concept-add-row-btn:hover(청록)를 그대로 따름 */
+/* 💡 Calendar/Weekly의 LEVEL(WBS) 필터 트리거 — 필터 미적용 시 파스텔 청록 기본, .filter-active(실제 필터
+   적용중) 상태는 메인 Gantt 페이지와 동일한 강조색을 유지하도록 건드리지 않음(기존 동작 유지) */
+#gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
 /* 💡 M.C Table 상단 버튼(R1 리비전, VS 비교, 제품구분자 +/-, 리비전추가 ➕) hover 통일 */
 #mc-add-unit-btn, #mc-remove-unit-btn, #mc-add-rev-btn, #mc-unit-rename-btn { transition:0.2s; border-radius:4px; }
 #mc-add-unit-btn:hover { background-color:#cfe6fa !important; color:#1a4f7a !important; }
@@ -788,7 +789,7 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 
 /* 1. 마일스톤 입력창 텍스트 중앙 맞춤 (개발기간은 제외됨) */
 #sum-milestone-body .u-input, #sum-milestone-body-actual .u-input { text-align: center !important; }
-#sum-milestone-body .u-input { background: #f4f6f8 !important; }
+#sum-milestone-body .u-input { background: #eef6f7 !important; }
 #sum-milestone-body-actual .u-input { background: #fff8e6 !important; }
 /* 💡 위 두 규칙(ID+클래스)이 .req-field.req-missing(클래스만)보다 명시도가 높아 미입력 경고 배경(연노랑)을
    가려버리므로, PROTO Start 같은 필수 마일스톤 칸에서도 경고 배경이 그대로 보이도록 별도로 덮어씀 */
@@ -1063,13 +1064,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <div class="btn-group">
         <button id="alarm-send-all-btn"
           onclick="window.sendAllPendingAlarms()"
-          onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
-          style="padding:6px 12px; background:#fbead9; color:#a85d0a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"
+          onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+          style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;"
           title="과거 미발송분 포함 전체 발송">📧 일괄 발송</button>
       </div>
       <button data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')"
-        onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';"
-        style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
+        onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+        style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
     </div>
 
     <!-- 알람 목록 테이블 -->
@@ -1426,11 +1427,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     </div>
     <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
     <div class="btn-group">
-        <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e0f5f7';" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🛠️ 일정 도구</button>
+        <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🛠️ 일정 도구</button>
         </div>
 
         <div class="btn-group" style="margin-left: auto;">
-            <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
+            <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
     </div>
 
@@ -1471,11 +1472,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <span data-i18n="notice-desc" style="font-size:12px; color:#888;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
       <div class="btn-group">
         <button data-i18n="btn-notice-add" onclick="window.openNoticeModal()"
-                onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
-                style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 공지 등록</button>
+                onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+                style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">+ 공지 등록</button>
         <button data-i18n="btn-notice-sendall" onclick="window.checkAndSendNotices(true)"
-                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';"
-                style="padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📢 전체 즉시 발송</button>
+                onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+                style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📢 전체 즉시 발송</button>
       </div>
     </div>
 
@@ -1627,10 +1628,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>🪪 Address</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button data-i18n="btn-addr-load" onclick="window.importAddressFromDrive()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="margin:0; padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📂 불러오기</button>
+            <button data-i18n="btn-addr-load" onclick="window.importAddressFromDrive()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin:0; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📂 불러오기</button>
             <div class="btn-group">
-                <button data-i18n="btn-sort-name" onclick="window.sortAddressBy('name')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔤 이름순</button>
-                <button data-i18n="btn-sort-dept" onclick="window.sortAddressBy('dept')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🏢 부서순</button>
+                <button data-i18n="btn-sort-name" onclick="window.sortAddressBy('name')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔤 이름순</button>
+                <button data-i18n="btn-sort-dept" onclick="window.sortAddressBy('dept')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🏢 부서순</button>
             </div>
             <div style="position:relative; display:inline-flex; align-items:center;">
                 <input id="addr-search-input" type="text" placeholder="🔍 검색 (이름/부서/직함/이메일/전화 등)" oninput="window.filterAddressRows(this.value)"
@@ -1639,7 +1640,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     style="display:none; position:absolute; right:8px; cursor:pointer; color:#999; font-size:13px;">✕</span>
             </div>
             <span id="addr-search-count" style="font-size:12px; color:#888;"></span>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-address')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
+            <button data-i18n="btn-print" onclick="window.printTabSection('tab-address')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <style>
@@ -1736,8 +1737,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <option value="">🔵 진행중</option>
                 <option value="완료">✅ 완료</option>
             </select>
-            <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 Gantt 실적 연동</button></div>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e0f5f7';" style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
+            <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 Gantt 실적 연동</button></div>
+            <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
         <div class="concept-section summary-outer-box" style="background:#e0f5f7; border-color:#a3d9e0;">
@@ -1785,7 +1786,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </tr>
                 </thead>
                 <tbody>
-                    <tr id="sum-milestone-body" style="background:#f4f6f8;">
+                    <tr id="sum-milestone-body" style="background:#eef6f7;">
                         <td id="sum-td-plan" style="font-weight:bold;">계획</td>
                         <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (직접 입력하거나, 달력 아이콘을 눌러 선택)" oninput="window._checkRequiredField(this)"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
                         <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
@@ -1885,12 +1886,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <div style="flex:1 1 320px; min-width:280px; overflow-x:auto;">
                     <table style="width:100%; border-collapse:collapse; font-size:12px;">
                         <thead>
-                            <tr style="background:#f8f9fa;">
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:120px;">TYPE</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:60px;">KTK PN</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center;">Description</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:50px;">Cost($)</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
+                            <tr style="background:#eef6f7;">
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:120px;">TYPE</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:60px;">KTK PN</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center;">Description</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:50px;">Cost($)</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
                             </tr>
                         </thead>
                         <tbody id="sum-materials-rows-a"></tbody>
@@ -1899,12 +1900,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <div style="flex:1 1 320px; min-width:280px; overflow-x:auto;">
                     <table style="width:100%; border-collapse:collapse; font-size:12px;">
                         <thead>
-                            <tr style="background:#f8f9fa;">
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:120px;">TYPE</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:60px;">KTK PN</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center;">Description</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:50px;">Cost($)</th>
-                                <th style="padding:5px 6px; border:1px solid #e9ecef; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
+                            <tr style="background:#eef6f7;">
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:120px;">TYPE</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:60px;">KTK PN</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center;">Description</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:50px;">Cost($)</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
                             </tr>
                         </thead>
                         <tbody id="sum-materials-rows-b"></tbody>
@@ -1955,9 +1956,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div class="concept-header-box">
             <h2>📐 Customer SPEC</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="margin:0; padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔽 펼치기</button>
+            <button id="bs-toggle-hidden-btn" onclick="window.bmToggleHidden && window.bmToggleHidden('bs', this)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin:0; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔽 펼치기</button>
             <div class="btn-group"></div>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-briefspec')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
+            <button data-i18n="btn-print" onclick="window.printTabSection('tab-briefspec')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <style>
@@ -2025,21 +2026,21 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 📌 TYPE이 비어있는 행은 바로 위 행의 TYPE을 그대로 이어받은 것으로 간주됩니다 (그룹 구분용).
             </span></span></h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0; background:#e0f5f7; border:none;">🔽 펼치기</button>
+            <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0; background:#e0f5f7; color:#00707d; border:none;">🔽 펼치기</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
             <button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>
             <button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:none; background:#e0f5f7; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">➕</button>
+            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:none; background:#e0f5f7; color:#00707d; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold; transition:background .15s;">➕</button>
             <button id="mc-rev-cycle-btn" class="mc-rev-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)"
-                style="padding:6px 10px; min-width:auto; border:none; background:#e0f5f7; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
+                style="padding:6px 10px; min-width:auto; border:1px solid #a5c8f0; background:#e8f4fd; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
-                style="margin-left:4px; padding:6px 10px; min-width:auto; border:none; background:#fbead9; color:#a85d0a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
+                style="margin-left:4px; padding:6px 10px; min-width:auto; border:1px solid #edbf85; background:#fbead9; color:#a85d0a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="mc-clear-price-btn" class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; background:#fbe4e2; border-color:#eeb0ac; color:#b1432f; border:none;">금액삭제</button>
+            <button id="mc-clear-price-btn" class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f;">금액삭제</button>
             <div class="btn-group"></div>
-            <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-mctable')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
+            <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-mctable')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="mc-normal-section">
@@ -2180,19 +2181,19 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             </div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <span id="eh-panel-btns" style="display:contents;">
-                <button class="concept-add-row-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin:0 6px 0 0; background:#e6f6ea; border-color:#a8dab8; color:#1f7a3d; border:none;">➕ 추가</button>
-                <button class="concept-add-row-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()" style="margin:0; background:#e0f5f7; border:none;">🔽 펼치기</button>
-                <div class="btn-group"><button id="pc-export-btn" onclick="window.exportPanelCompareToExcel()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🟩 엑셀로 내보내기</button></div>
+                <button class="concept-add-row-btn" id="pc-add-btn" onclick="window.panelCompareOpenAddModal()" style="margin:0 6px 0 0; background:#e0f5f7; color:#00707d; border:none;">➕ 추가</button>
+                <button class="concept-add-row-btn" id="pc-toggle-btn" onclick="window.panelCompareToggleExpand()" style="margin:0; background:#e0f5f7; color:#00707d; border:none;">🔽 펼치기</button>
+                <div class="btn-group"><button id="pc-export-btn" onclick="window.exportPanelCompareToExcel()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🟩 엑셀로 내보내기</button></div>
             </span>
             <span id="eh-adbd-btns" style="display:none;">
-                <button class="concept-add-row-btn" id="ep-adbd-add-btn" onclick="window.elecCompareOpenAddModal('adbd')" style="margin:0 6px 0 0; background:#e6f6ea; border-color:#a8dab8; color:#1f7a3d; border:none;">➕ 추가</button>
-                <button class="concept-add-row-btn" id="ep-adbd-toggle-btn" onclick="window.elecCompareToggleExpand('adbd')" style="margin:0; background:#e0f5f7; border:none;">🔽 펼치기</button>
-                <div class="btn-group"><button id="ep-adbd-export-btn" onclick="window.exportElecCompareToExcel('adbd')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🟩 엑셀로 내보내기</button></div>
+                <button class="concept-add-row-btn" id="ep-adbd-add-btn" onclick="window.elecCompareOpenAddModal('adbd')" style="margin:0 6px 0 0; background:#e0f5f7; color:#00707d; border:none;">➕ 추가</button>
+                <button class="concept-add-row-btn" id="ep-adbd-toggle-btn" onclick="window.elecCompareToggleExpand('adbd')" style="margin:0; background:#e0f5f7; color:#00707d; border:none;">🔽 펼치기</button>
+                <div class="btn-group"><button id="ep-adbd-export-btn" onclick="window.exportElecCompareToExcel('adbd')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🟩 엑셀로 내보내기</button></div>
             </span>
             <span id="eh-convbd-btns" style="display:none;">
-                <button class="concept-add-row-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin:0 6px 0 0; background:#e6f6ea; border-color:#a8dab8; color:#1f7a3d; border:none;">➕ 추가</button>
-                <button class="concept-add-row-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')" style="margin:0; background:#e0f5f7; border:none;">🔽 펼치기</button>
-                <div class="btn-group"><button id="ep-convbd-export-btn" onclick="window.exportElecCompareToExcel('convbd')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🟩 엑셀로 내보내기</button></div>
+                <button class="concept-add-row-btn" id="ep-convbd-add-btn" onclick="window.elecCompareOpenAddModal('convbd')" style="margin:0 6px 0 0; background:#e0f5f7; color:#00707d; border:none;">➕ 추가</button>
+                <button class="concept-add-row-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')" style="margin:0; background:#e0f5f7; color:#00707d; border:none;">🔽 펼치기</button>
+                <div class="btn-group"><button id="ep-convbd-export-btn" onclick="window.exportElecCompareToExcel('convbd')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🟩 엑셀로 내보내기</button></div>
             </span>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
@@ -2299,13 +2300,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <button type="button" id="cal-view-month-btn" class="cal-view-btn cal-view-btn-active" onclick="window.calSetViewMode('month')">월</button>
                     <button type="button" id="cal-view-week-btn" class="cal-view-btn" onclick="window.calSetViewMode('week')">주</button>
                 </div>
-                <button data-i18n="btn-prev" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onclick="window.calChangePeriod(-1)">◀ 이전</button>
+                <button data-i18n="btn-prev" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calChangePeriod(-1)">◀ 이전</button>
                 <span id="cal-header-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:80px; text-align:center;"></span>
-                <button data-i18n="btn-next" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onclick="window.calChangePeriod(1)">다음 ▶</button>
-                <button data-i18n="btn-today" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onclick="window.calGoToday()">오늘</button>
+                <button data-i18n="btn-next" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calChangePeriod(1)">다음 ▶</button>
+                <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calGoToday()">오늘</button>
             </div>
-            <button data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
+            <button data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
+            <button data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div id="calendar-table-scroll" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px); background:#e0f5f7; border-color:#a3d9e0;">
             <div id="cal-page"></div>
@@ -2324,19 +2325,19 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                  body 하단의 gantt-filter-popup-wr-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
             <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('wr-wbs', event)" style="background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border:none;">LEVEL(WBS) ▾</button>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px; margin-left:8px;">
-                <button data-i18n="btn-prev-week" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
+                <button data-i18n="btn-prev-week" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
                 <span id="wr-week-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:140px; text-align:center;"></span>
-                <button data-i18n="btn-next-week" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onclick="window.wrShiftWeek(1)">다음주 ▶</button>
-                <button data-i18n="btn-today" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onclick="window.wrShiftWeek(0)">오늘</button>
+                <button data-i18n="btn-next-week" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(1)">다음주 ▶</button>
+                <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:31px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(0)">오늘</button>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
                 <label style="font-size:13px; color:#555; display:flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;">
                     <span data-i18n="lbl-ppt-color">🎨 PPT 색상</span>
                     <input type="color" value="#19c3d6" oninput="window.wrPptBaseColor = this.value.replace('#','')" style="cursor:pointer; width:24px; height:24px; border:none; padding:0; background:none; border-radius:3px; outline:none;" title="PPT 출력시 적용될 메인 테마 색상을 선택하세요">
                 </label>
-                <button data-i18n="btn-ppt-export" data-i18n="btn-ppt-export" onclick="window.exportWeeklyReportPPT()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📥 PPT 출력</button>
+                <button data-i18n="btn-ppt-export" data-i18n="btn-ppt-export" onclick="window.exportWeeklyReportPPT()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📥 PPT 출력</button>
             </div>
-            <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-weekly')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e0f5f7'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#1a4f7a; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
+            <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-weekly')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
        <div id="weekly-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px); background:#e0f5f7; border-color:#a3d9e0;"></div>
     </div>
@@ -13154,7 +13155,7 @@ window.handleAuthClick = function() {
         /* 💡 [2026-08-29 파스텔 통일] 필터 미적용(기본) 상태 — .action-btn 기본(흰 배경+solid 호버)을
            파스텔 블루로 교체. 이 클래스는 Gantt/Calendar/Weekly 페이지 제목 박스 안에서만 쓰여서 안전하게 교체 가능. */
         .gantt-filter-trigger-btn:not(.filter-active) { background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border-style:none !important; }
-        .gantt-filter-trigger-btn:not(.filter-active):hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
+        .gantt-filter-trigger-btn:not(.filter-active):hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
         .gantt-filter-trigger-btn.filter-active { background-color: #a5c8f0 !important; border-color: #7fb0dd !important; color: #0d3357 !important; }
         /* 💡 [버그 수정] .action-btn:hover가 filter-active와 완전히 같은 색이라, 필터가 걸려있는(기본상태)
            트리거 버튼은 마우스를 올려도 시각적으로 아무 변화가 없어 "호버가 안 먹는다"고 느껴졌음.
@@ -29562,7 +29563,7 @@ window.populateTabData = function() {
             const ratioCell = function(field, totalVal, border) {
                 const spVal = parseNum(sp[field]);
                 const text = spVal > 0 ? (totalVal / spVal * 100).toFixed(1) + '%' : '-';
-                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a; text-align:center; font-weight:bold; color:#e65100;"' : ' style="text-align:center; font-weight:bold; color:#e65100;"') + '>' + text + '</td>';
+                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a; text-align:center; font-weight:bold; color:#b1432f;"' : ' style="text-align:center; font-weight:bold; color:#b1432f;"') + '>' + text + '</td>';
             };
             let ratioHtml = '<tr class="mc-summary-row" style="background-color:#ffe0b2; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
             if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost, true) + ratioCell('protoNre', grandtotal.protoNre);
@@ -31129,15 +31130,17 @@ window.mcShowComparison = function() {
     document.getElementById('mc-comparison-section').style.display = 'block';
     const btn = document.getElementById('mc-toggle-hidden-btn');
     if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
+    // 💡 [2026-08-29 버그 수정] 원색(#e67e22)+흰 배경으로 강제 전환하던 걸 파스텔 팔레트로 교체 —
+    //    VS 버튼은 "진입중" 상태를 한 단계 짙은 톤(hover와 동일)으로 표시
     const compBtn = document.getElementById('mc-comparison-btn');
-    if (compBtn) { compBtn.style.background = '#e67e22'; compBtn.style.color = '#fff'; }
+    if (compBtn) { compBtn.style.background = '#f4d9b3'; compBtn.style.color = '#a85d0a'; }
 
-    // 💡 비교 화면으로 전환하면 R1~R5 버튼은 전부 비활성(흰색)으로
+    // 💡 비교 화면으로 전환하면 R1~R5 버튼은 전부 비활성 — 흰 배경 대신 원래 파스텔 기본색으로 되돌림
     document.querySelectorAll('.mc-rev-btn').forEach(function(b) {
         b.classList.remove('active');
-        b.style.background = '#fff';
-        b.style.color = '#2c5f8a';
-        b.style.fontWeight = 'normal';
+        b.style.background = '#e8f4fd';
+        b.style.color = '#1a4f7a';
+        b.style.fontWeight = 'bold';
     });
 
     window.mcRenderComparisonTable();
@@ -31148,8 +31151,9 @@ window.mcHideComparison = function() {
     document.getElementById('mc-normal-section').style.display = '';
     const btn = document.getElementById('mc-toggle-hidden-btn');
     if (btn) btn.textContent = (window._bmExpanded && window._bmExpanded.mc) ? (window._currentLang==='en'?'🔼 Collapse':'🔼 접기') : (window._currentLang==='en'?'🔽 Expand':'🔽 펼치기');
+    // 💡 [2026-08-29 버그 수정] 흰 배경 대신 원래 파스텔 기본색으로 되돌림
     const compBtn = document.getElementById('mc-comparison-btn');
-    if (compBtn) { compBtn.style.background = '#fff'; compBtn.style.color = '#e67e22'; }
+    if (compBtn) { compBtn.style.background = '#fbead9'; compBtn.style.color = '#a85d0a'; }
 };
 
 window.mcToggleCompareExpand = function(btnEl) {
@@ -31355,8 +31359,8 @@ window.mcRenderComparisonTable = function() {
         const spNre = _mcParseNum(detail.mpNre);
         const costRatio = spCost > 0 ? (totals[rev].cost / spCost * 100).toFixed(1) + '%' : '-';
         const nreRatio = spNre > 0 ? (totals[rev].nre / spNre * 100).toFixed(1) + '%' : '-';
-        ratioRow += '<td class="mc-comp-divider" style="text-align:center; color:#e65100;">' + costRatio + '</td>'
-            + '<td style="text-align:center; color:#e65100;">' + nreRatio + '</td>';
+        ratioRow += '<td class="mc-comp-divider" style="text-align:center; color:#b1432f;">' + costRatio + '</td>'
+            + '<td style="text-align:center; color:#b1432f;">' + nreRatio + '</td>';
     });
     ratioRow += '<td></td></tr>';
 
