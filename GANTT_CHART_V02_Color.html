@@ -545,15 +545,17 @@
 }
 #app-topbar {
     position: fixed; top: 0; left: 0; width: 100%; height: var(--topbar-h);
-    background: #00a1b6; color: #fff; z-index: 700;
+    background: #e0f5f7; color: #00707d; z-index: 700;
     display: flex; align-items: center; gap: 0; padding: 0 18px 0 0;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     box-sizing: border-box;
 }
 #app-topbar .tb-logo-wrap { width: var(--sb-w-expanded); height: 100%; flex-shrink:0; display:flex; align-items:center; padding-left: 20px; justify-content:flex-start; box-sizing:border-box; }
-#app-topbar .tb-logo { height: 40px; width: auto; max-width: calc(var(--sb-w-expanded) - 36px); object-fit: contain; display:block; }
+/* 💡 로고 이미지는 어두운(청록) 배경 위에 놓일 흰색 워드마크라, 배경을 파스텔톤으로 바꾸면서
+   반전 필터로 검게 뒤집어 밝은 배경 위에서도 그대로 잘 보이도록 함 */
+#app-topbar .tb-logo { height: 40px; width: auto; max-width: calc(var(--sb-w-expanded) - 36px); object-fit: contain; display:block; filter: invert(1); }
 #app-topbar .tb-btns { display:flex; align-items:center; margin-left: 15px; gap:0px; flex-wrap:nowrap; }
-#app-topbar .tb-sep { width:1px; height:22px; background:rgba(255,255,255,0.4); margin:0 4px; }
+#app-topbar .tb-sep { width:1px; height:22px; background:rgba(0,113,125,0.3); margin:0 4px; }
 #app-topbar .tb-lang { margin-left:auto; flex-shrink:0; }
 .topbar-btn {
     display: inline-flex;       /* 수직/수평 중앙 정렬을 위해 변경 */
@@ -563,15 +565,15 @@
     box-sizing: border-box;     /* 테두리 두께를 30px 안에 포함시킴 */
     padding: 0 12px;            /* 🎯 상하 패딩을 0으로 지우고 좌우 여백만 유지 */
     font-size: 14px;            /* 🎯 글자 크기 13px */
-    
-    background: transparent; 
-    border: none; 
-    color: #fff;
-    border-radius: 6px; 
-    cursor: pointer; 
+
+    background: transparent;
+    border: none;
+    color: #00707d;
+    border-radius: 6px;
+    cursor: pointer;
     white-space: nowrap;
 }
-.topbar-btn:hover { background: rgba(255,255,255,0.18); }
+.topbar-btn:hover { background: rgba(0,113,125,0.12); }
 .topbar-btn:disabled { opacity:0.5; cursor:default; }
 
 #app-sidebar {
@@ -970,8 +972,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
         <span id="current-project-filename" onclick="window.selectProject()"
               title="클릭하면 다른 프로젝트를 열 수 있습니다 (저장 안 한 변경사항이 있으면 먼저 물어봅니다)"
-              style="display:none; flex-shrink:0; font-size:14px; color:#fff; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center;"
-              onmouseover="this.style.background='rgba(255,255,255,0.18)';"
+              style="display:none; flex-shrink:0; font-size:14px; color:#00707d; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center;"
+              onmouseover="this.style.background='rgba(0,113,125,0.12)';"
               onmouseout="this.style.background='transparent';"></span>
         <!-- 💡 [2026-08-25 신규] 구글 드라이브 연결 상태 표시등 — 저장을 시도해봐야만("헛수고") 끊긴 걸
              알게 되는 문제를 줄이기 위해, 연결이 끊기면 언제든 상단에서 바로 보이게 함. 클릭하면 재연동. -->
@@ -1721,11 +1723,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <option value="">🔵 진행중</option>
                 <option value="완료">✅ 완료</option>
             </select>
-            <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 Gantt 실적 연동</button></div>
-            <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
+            <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 Gantt 실적 연동</button></div>
+            <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
-        <div class="concept-section summary-outer-box" style="background:#e7f3ff;">
+        <div class="concept-section summary-outer-box" style="background:#e7f3ff; border-color:#a5c8f0;">
             <style>
                 /* 💡 [outer box 통합] PROTO/ES/PP 일정 박스를 Summary 탭 전체를 감싸는 외곽 박스로 확장해서
                    개발진척현황/개요/정보/추진배경/멤버1~3/주요자재/사진/변경이력을 전부 이 안쪽으로 이동함.
