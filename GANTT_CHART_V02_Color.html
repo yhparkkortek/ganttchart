@@ -17165,18 +17165,21 @@ window.updateInboxBadge();
                      보이도록 이동함) -->
                 <div style="display:flex; gap:6px; padding:10px 12px 0; flex-shrink:0;">
                     <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
+                        onmouseover="window._mtTabHover(this,'paste')" onmouseout="window._mtTabUnhover(this,'paste')"
                         style="flex:1; text-align:center; padding:6px 8px; cursor:pointer;
                                 background:#cfe6fa; color:#1a4f7a; border:1px solid #7fb0dd; border-radius:6px;
                                 font-size:12px; font-weight:bold; white-space:nowrap; transition:all 0.2s;">
                         ✏️ 직접 입력
                     </div>
                     <div id="mail-tab-file" onclick="window.switchMailTab('file')"
+                        onmouseover="window._mtTabHover(this,'file')" onmouseout="window._mtTabUnhover(this,'file')"
                         style="flex:1; text-align:center; padding:6px 8px; cursor:pointer;
                                 background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px;
                                 font-size:12px; font-weight:normal; white-space:nowrap; transition:all 0.2s;">
                         📂 파일 첨부
                     </div>
                     <div id="mail-tab-server" onclick="window.switchMailTab('server')"
+                        onmouseover="window._mtTabHover(this,'server')" onmouseout="window._mtTabUnhover(this,'server')"
                         style="flex:1; text-align:center; padding:6px 8px; cursor:pointer;
                                 background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px;
                                 font-size:12px; font-weight:normal; white-space:nowrap; transition:all 0.2s;">
@@ -17294,7 +17297,7 @@ window.updateInboxBadge();
                     <div style="margin-bottom:10px; flex-shrink:0;">
                         <div>
                             <button id="ms-install-title" onclick="window.openInstallGuideModal('setup')"
-                              style="width:100%; box-sizing:border-box; text-align:left; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; padding:10px 14px; font-size:13px; font-weight:bold; cursor:pointer;">📥 처음 사용자 — 설치 안내</button>
+                              style="width:100%; box-sizing:border-box; text-align:left; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; padding:6px 14px; font-size:13px; font-weight:bold; cursor:pointer;">📥 처음 사용자 — 설치 안내</button>
                         </div>
                         <div id="ms-install-guide" style="display:none;">
                         <div id="ms-install-guide-content">
@@ -17611,6 +17614,37 @@ window._mfFiles      = [];
 window._mfResults    = [];
 
 // ─── 3개 탭 전환 및 디자인 스타일 동적 변경 함수 ─────────────────────────────────────────
+// 💡 [2026-08-29 파스텔 통일] 탭별 고유 파스텔 색(파랑/초록/주황) — 선택 시 짙은 톤, 대기 시 옅은 톤,
+//    호버 시 그보다 한 단계 더 짙은 톤. switchMailTab()과 아래 _mtTabHover/_mtTabUnhover가 공용으로
+//    참조하도록 window에 붙여둠(예전엔 함수 안 지역변수라 호버 핸들러에서 못 썼음 — 그래서 탭 3개에
+//    호버가 안 먹던 문제의 원인).
+window._mtPalette = {
+    paste:  { light:'#e8f4fd', active:'#cfe6fa', hover:'#b3d9f5', borderLight:'#a5c8f0', borderActive:'#7fb0dd', borderHover:'#5f96c9', text:'#1a4f7a' },
+    file:   { light:'#e6f6ea', active:'#c9ecd3', hover:'#a8ddb5', borderLight:'#a8dab8', borderActive:'#7cc494', borderHover:'#5aab76', text:'#1f7a3d' },
+    server: { light:'#fbead9', active:'#f4d9b3', hover:'#eec48a', borderLight:'#edbf85', borderActive:'#dba354', borderHover:'#c88a34', text:'#a85d0a' }
+};
+window._mailActiveTab = 'paste';
+
+// 탭 위에 마우스를 올렸을 때: 선택/대기 상태와 무관하게 항상 가장 짙은 호버 톤으로
+window._mtTabHover = function(el, key) {
+    const p = window._mtPalette[key];
+    if (!p) return;
+    el.style.background = p.hover;
+    el.style.borderColor = p.borderHover;
+};
+// 마우스가 빠져나갈 때: 지금 선택된 탭이면 "선택" 톤으로, 아니면 "대기" 톤으로 복귀
+window._mtTabUnhover = function(el, key) {
+    const p = window._mtPalette[key];
+    if (!p) return;
+    if (window._mailActiveTab === key) {
+        el.style.background = p.active;
+        el.style.borderColor = p.borderActive;
+    } else {
+        el.style.background = p.light;
+        el.style.borderColor = p.borderLight;
+    }
+};
+
 window.switchMailTab = function(tab) {
     // 1. 콘텐츠 화면 제어
     const pc = document.getElementById('mail-tab-paste-content');
@@ -17620,26 +17654,20 @@ window.switchMailTab = function(tab) {
     if (fc) fc.style.display = tab === 'file'   ? 'flex' : 'none';
     if (sc) sc.style.display = tab === 'server' ? 'flex' : 'none';
 
+    window._mailActiveTab = tab;
+
     // 2. 탭 버튼 오브젝트 수집
     const pt = document.getElementById('mail-tab-paste');
     const ft = document.getElementById('mail-tab-file');
     const st = document.getElementById('mail-tab-server');
-    
-    // 3. 탭별 고유 파스텔 색(파랑/초록/주황) — 선택 시 짙은 톤, 대기 시 옅은 톤으로 전환
-    //    💡 [2026-08-29 파스텔 통일] 예전엔 3개 탭 모두 선택 시 네이비 한 가지 색으로 채워졌는데,
-    //    탭마다 고유색(직접입력=파랑/파일첨부=초록/메일서버=주황)을 갖도록 바꾸고, 원색 대신 파스텔로.
-    const _mtPalette = {
-        paste:  { light:'#e8f4fd', active:'#cfe6fa', borderLight:'#a5c8f0', borderActive:'#7fb0dd', text:'#1a4f7a' },
-        file:   { light:'#e6f6ea', active:'#c9ecd3', borderLight:'#a8dab8', borderActive:'#7cc494', text:'#1f7a3d' },
-        server: { light:'#fbead9', active:'#f4d9b3', borderLight:'#edbf85', borderActive:'#dba354', text:'#a85d0a' }
-    };
+
     [
         { el: pt, key: 'paste',  active: tab === 'paste'  },
         { el: ft, key: 'file',   active: tab === 'file'   },
         { el: st, key: 'server', active: tab === 'server' }
     ].forEach(({ el, key, active }) => {
         if (!el) return;
-        const p = _mtPalette[key];
+        const p = window._mtPalette[key];
         el.style.color = p.text;
         el.style.boxShadow = 'none';
         if (active) {
