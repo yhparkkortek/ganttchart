@@ -29537,21 +29537,21 @@ window.populateTabData = function() {
                 const typeWillChange = !!(nextRow && nextType && nextType !== currentType);
 
                 if (currentType && (itemHasNre || typeWillChange || isLastRow)) {
-                    htmlChunks.push(renderSummaryRow(currentType + ' SUBTOTAL', subtotal, '#fff9c4', 'subtotal_' + currentType));
+                    htmlChunks.push(renderSummaryRow(currentType + ' SUBTOTAL', subtotal, '#fff8e6', 'subtotal_' + currentType));
                     subtotal = { protoCost: 0, protoNre: 0, protoBCost: 0, protoBNre: 0, mpCost: 0, mpNre: 0 };
                 }
             });
 
-            htmlChunks.push(renderSummaryRow('TOTAL(M.C)', grandtotal, '#e3f2fd', 'total'));
+            htmlChunks.push(renderSummaryRow('TOTAL(M.C)', grandtotal, '#fbead9', 'total'));
 
             // 💡 영업판가 행
             const sp = (window.tabData.mcSalesPriceDetail && window.tabData.mcSalesPriceDetail[curRev]) || {};
             const spCell = function(field, border) {
                 const raw = sp[field];
                 const display = raw ? '$' + parseNum(raw).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
-                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value, this)" style="background-color:transparent; font-weight:bold; color:#2e7d32; text-align:center;"></td>';
+                return '<td' + (border ? ' style="border-left:2px solid #2c5f8a;"' : '') + '><input type="text" class="u-input" value="' + _escTabVal(display) + '" onchange="window.mcUpdateSalesPriceDetail(\'' + curRev + '\', \'' + field + '\', this.value, this)" style="background-color:transparent; font-weight:bold; color:#1f7a3d; text-align:center;"></td>';
             };
-            let salesHtml = '<tr class="mc-summary-row" style="background-color:#e8f5e9; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
+            let salesHtml = '<tr class="mc-summary-row" style="background-color:#e6f6ea; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">영업판가</td>';
             if (!hidePairs.protoA) salesHtml += spCell('protoCost', true) + spCell('protoNre');
             if (!hidePairs.protoB) salesHtml += spCell('protoBCost', true) + spCell('protoBNre');
             if (!hidePairs.mp) salesHtml += spCell('mpCost', true) + spCell('mpNre');
@@ -29565,7 +29565,7 @@ window.populateTabData = function() {
                 const text = spVal > 0 ? (totalVal / spVal * 100).toFixed(1) + '%' : '-';
                 return '<td' + (border ? ' style="border-left:2px solid #2c5f8a; text-align:center; font-weight:bold; color:#b1432f;"' : ' style="text-align:center; font-weight:bold; color:#b1432f;"') + '>' + text + '</td>';
             };
-            let ratioHtml = '<tr class="mc-summary-row" style="background-color:#ffe0b2; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
+            let ratioHtml = '<tr class="mc-summary-row" style="background-color:#fbe4e2; font-weight:bold;"><td colspan="' + (hidePnSpec ? 4 : 6) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">재료비율 (M.C ÷ 영업판가) [%]</td>';
             if (!hidePairs.protoA) ratioHtml += ratioCell('protoCost', grandtotal.protoCost, true) + ratioCell('protoNre', grandtotal.protoNre);
             if (!hidePairs.protoB) ratioHtml += ratioCell('protoBCost', grandtotal.protoBCost, true) + ratioCell('protoBNre', grandtotal.protoBNre);
             if (!hidePairs.mp) ratioHtml += ratioCell('mpCost', grandtotal.mpCost, true) + ratioCell('mpNre', grandtotal.mpNre);
@@ -31321,7 +31321,7 @@ window.mcRenderComparisonTable = function() {
         const typeWillChange = !!(nextRow && nextType && nextType !== compCurrentType);
 
         if (compCurrentType && (itemHasNre || typeWillChange || isLastRow)) {
-            tbody += '<tr style="background-color:#fff9c4; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + compCurrentType + ' SUBTOTAL</td>';
+            tbody += '<tr style="background-color:#fff8e6; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px; font-size:13px; color:#333;">' + compCurrentType + ' SUBTOTAL</td>';
             visibleRevs.forEach(function(rev) {
             tbody += '<td class="mc-comp-divider" style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].cost) + '</td>'
                 + '<td style="text-align:center; font-weight:bold; color:#333;">' + _mcFmtCurSummary(compSubtotal[rev].nre) + '</td>';
@@ -31333,7 +31333,7 @@ window.mcRenderComparisonTable = function() {
     tbody += '</tbody>';
 
     // TOTAL 행 (하늘색)
-    let totalRow = '<tr style="background-color:#e3f2fd; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">TOTAL</td>';
+    let totalRow = '<tr style="background-color:#fbead9; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">TOTAL</td>';
     visibleRevs.forEach(function(rev) {
         totalRow += '<td class="mc-comp-divider" style="text-align:center;">' + _mcFmtCurSummary(totals[rev].cost) + '</td>'
             + '<td style="text-align:center;">' + _mcFmtCurSummary(totals[rev].nre) + '</td>';
@@ -31341,18 +31341,18 @@ window.mcRenderComparisonTable = function() {
     totalRow += '<td></td></tr>';
 
     // 영업판가 행 (연두색, 입력 가능 — 메인 R1~R5 표의 MP 영업판가와 동일한 저장소를 공유함)
-    let salesRow = '<tr style="background-color:#e8f5e9; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">영업판가</td>';
+    let salesRow = '<tr style="background-color:#e6f6ea; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">영업판가</td>';
     visibleRevs.forEach(function(rev) {
         const detail = (td.mcSalesPriceDetail && td.mcSalesPriceDetail[rev]) || {};
         const costVal = detail.mpCost ? _mcFmtCurSummary(_mcParseNum(detail.mpCost)) : '';
         const nreVal = detail.mpNre ? _mcFmtCurSummary(_mcParseNum(detail.mpNre)) : '';
-        salesRow += '<td class="mc-comp-divider" style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + costVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpCost\', this.value, this)"></td>'
-            + '<td style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#2e7d32; background:transparent;" value="' + nreVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpNre\', this.value, this)"></td>';
+        salesRow += '<td class="mc-comp-divider" style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#1f7a3d; background:transparent;" value="' + costVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpCost\', this.value, this)"></td>'
+            + '<td style="text-align:center;"><input type="text" class="u-input" style="text-align:center; font-weight:bold; color:#1f7a3d; background:transparent;" value="' + nreVal + '" onchange="window.mcUpdateSalesPriceFromCompare(\'' + rev + '\', \'mpNre\', this.value, this)"></td>';
     });
     salesRow += '<td></td></tr>';
 
     // 재료비율 행 (주황색, TOTAL MP Cost/NRE 각각 ÷ 영업판가)
-    let ratioRow = '<tr style="background-color:#ffe0b2; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">재료비율 (M.C ÷ 영업판가) [%]</td>';
+    let ratioRow = '<tr style="background-color:#fbe4e2; font-weight:bold;"><td colspan="' + (expanded ? 6 : 4) + '" style="text-align:right; padding-right:15px;">재료비율 (M.C ÷ 영업판가) [%]</td>';
     visibleRevs.forEach(function(rev) {
         const detail = (td.mcSalesPriceDetail && td.mcSalesPriceDetail[rev]) || {};
         const spCost = _mcParseNum(detail.mpCost);
