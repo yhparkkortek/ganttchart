@@ -4958,10 +4958,10 @@ ${mailText}`;
             topActionsRow.style.cssText = 'display:flex; gap:8px; align-items:stretch;';
 
             const allBar = document.createElement('div');
-            allBar.style.cssText = 'flex:2 1 0; padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#2c5f8a; background:#f4f8fc; transition:0.15s;';
+            allBar.style.cssText = 'flex:2 1 0; padding:8px 14px; border:1px solid #a5c8f0; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#1a4f7a; background:#e8f4fd; transition:background .15s, border-color .15s;';
             allBar.textContent = _dmEn ? `🗂️ Open all ${files.length} project(s) at once` : `🗂️ 전체 프로젝트 ${files.length}개 한 번에 열기`;
-            allBar.onmouseover = function() { this.style.background = '#e7f0fa'; };
-            allBar.onmouseout  = function() { this.style.background = '#f4f8fc'; };
+            allBar.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
+            allBar.onmouseout  = function() { this.style.background = '#e8f4fd'; this.style.borderColor = '#a5c8f0'; };
             allBar.onclick = async function() {
                 const msg = _dmEn ? `Open all ${files.length} project(s) as separate sheets?` : `전체 프로젝트 ${files.length}개를 모두 새 시트로 여시겠습니까?`;
                 if (!confirm(msg)) return;
@@ -4985,10 +4985,10 @@ ${mailText}`;
             //    새 기능을 따로 만들지 않고 기존 startNewProject()(확인창 → 초기화 → 참조 엑셀 안내 팝업)를
             //    그대로 재사용한다 — 새 프로젝트 버튼과 동작이 100% 동일하게 유지됨.
             const newProjectBar = document.createElement('div');
-            newProjectBar.style.cssText = 'flex:1 1 0; padding:8px 14px; border:1px dashed #2c5f8a; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#fff; background:#2c5f8a; transition:0.15s;';
+            newProjectBar.style.cssText = 'flex:1 1 0; padding:8px 14px; border:1px solid #a8dab8; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#1f7a3d; background:#e6f6ea; transition:background .15s, border-color .15s;';
             newProjectBar.textContent = _dmEn ? '➕ New Project' : '➕ 새 프로젝트 등록';
-            newProjectBar.onmouseover = function() { this.style.background = '#244d70'; };
-            newProjectBar.onmouseout  = function() { this.style.background = '#2c5f8a'; };
+            newProjectBar.onmouseover = function() { this.style.background = '#c9ecd3'; this.style.borderColor = '#7cc494'; };
+            newProjectBar.onmouseout  = function() { this.style.background = '#e6f6ea'; this.style.borderColor = '#a8dab8'; };
             newProjectBar.onclick = function() {
                 window.closeDriveModal();
                 window.startNewProject();
@@ -9081,21 +9081,26 @@ ${question}
                         <div id="ai-set-sec-maxlen" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
                             <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 업무 분석(메일) 최대 글자 수</label>
                             <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무 분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.</div>
-                            <input id="ai-mail-maxlen-input" type="number" min="500" max="5000" step="100" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-mail-maxlen-input" type="number" min="500" max="5000" step="100" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('ai-mail-maxlen-input').value=window._AI_MAIL_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
                             <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 2000자 (기본값)</div>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
                             <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 요약·문답 최대 글자 수 (업무 상세내용/답변)</label>
                             <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약 · 💬 AI 문답이 각 업무의 "상세내용"/"답변" 필드를 읽을 때 최대 몇 자까지 참고할지 정합니다. 너무 짧으면 세부 내용(수치·번호 등)이 잘려서 답변이 부실해지고, 너무 길면 업무가 많을 때 응답이 느려지거나 실패할 수 있습니다.</div>
-                            <input id="ai-content-maxlen-input" type="number" min="100" max="3000" step="50" style="width:100%; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-content-maxlen-input" type="number" min="100" max="3000" step="50" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('ai-content-maxlen-input').value=window._AI_CONTENT_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
                             <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 500자 (기본값)</div>
                         </div>
                     </div>
 
                 </div>
-                <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-shrink:0;">
-                    <button onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">💾 저장</button>
-                    <button onclick="document.getElementById('ai-mail-maxlen-input').value=window._AI_MAIL_MAXLEN_DEFAULT; document.getElementById('ai-content-maxlen-input').value=window._AI_CONTENT_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 글자 수 기본값으로</button>
-                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:8px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap; transition:background .15s;">✖ 닫기</button>
+                <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
+                    <button onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
+                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">✖ 닫기</button>
                 </div>
             </div>`;
             document.body.appendChild(modal);
@@ -27915,7 +27920,7 @@ window._epRenderLibList = function(filterText) {
                 <b>${escapeHtml(window._epPartNameOf(p.specs) || p.model)}</b> <span style="color:#888;">${escapeHtml((p.specs && p.specs['Brand']) || '')}</span>
             </span>
             <span onclick="window.elecCompareAddFromLibrary(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))})" style="color:#2c5f8a; cursor:pointer; flex-shrink:0; margin-left:8px;">${_en ? '+ Add' : '+ 추가'}</span>
-            <button type="button" onclick="event.stopPropagation(); window._epDeleteLibEntry(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))});" title="${_en ? 'Permanently delete from the shared library' : '공용 라이브러리에서 완전히 삭제'}" style="flex-shrink:0; margin-left:6px; background:#fff; border:1px solid #e03131; color:#e03131; border-radius:4px; font-size:11px; cursor:pointer; padding:2px 6px;">🗑</button>
+            <button type="button" onclick="event.stopPropagation(); window._epDeleteLibEntry(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(p.model))});" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="${_en ? 'Permanently delete from the shared library' : '공용 라이브러리에서 완전히 삭제'}" style="flex-shrink:0; margin-left:6px; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:4px; font-size:11px; font-weight:bold; cursor:pointer; padding:2px 6px; transition:background .15s, border-color .15s;">🗑</button>
         </div>`;
     }).join('');
 };
