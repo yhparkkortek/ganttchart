@@ -1086,12 +1086,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-26px -28px 18px; padding:14px 20px 12px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="as-modal-title" style="margin:0; font-size:15px; color:#7a5210;">⚙️ 알람 설정</h3>
     <button onclick="window.closeAlarmSettings()"
-        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+        style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px;
                color:#7a5210; font-size:16px; cursor:pointer;
                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
-        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';"
+        onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';"
         title="닫기">✕</button>
   </div>
 
@@ -1126,7 +1126,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <label id="as-lbl-pass">비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
       </div>
       <p id="as-smtp-privacy-note" style="margin:0 0 8px; font-size:11px; color:#999;">🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장</p>
-      <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">💾 저장</button>
+      <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
       <span id="as-smtp-save-msg" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
 
       <!-- 이메일 수신자 -->
@@ -1139,12 +1139,13 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
           <button type="button" onclick="window.toggleAllCc()" title="전체 발송 선택/해제"
                   style="width:24px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:4px; cursor:pointer; font-size:11px; padding:0;">✓</button>
           <button type="button" onclick="window._ccBulkRemoveAll()" title="수신자 전체 삭제"
-                  style="width:26px; height:20px; border:none; background:none; color:#e03131; cursor:pointer; font-size:13px; padding:0;">✕</button>
+                  onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
+                  style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
         </div>
 
         <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;"></div>
         <datalist id="alarm-cc-namelist"></datalist>
-        <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" style="margin-top:8px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px;">+ 수신자 추가</button>
+        <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="margin-top:8px; padding:4px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
       </div>
     </div>
   </div>
@@ -1170,22 +1171,23 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)">
       </div>
       <div style="display:flex; gap:6px; align-items:center;">
-        <button id="as-tg-save-btn" onclick="window.saveTelegramConfig()" style="padding:5px 12px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">💾 저장</button>
-        <button id="as-tg-test-btn" onclick="window.testTelegram()" style="padding:5px 12px; border:1px solid #27ae60; color:#27ae60; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">📨 테스트</button>
+        <button id="as-tg-save-btn" onclick="window.saveTelegramConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">💾 저장</button>
+        <button id="as-tg-test-btn" onclick="window.testTelegram()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:5px 12px; border:1px solid #a8dab8; color:#1f7a3d; background:#e6f6ea; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📨 테스트</button>
         <div style="position:relative; display:inline-block;">
           <button onclick="window._toggleDriveMenu()"
-                  style="padding:5px 12px; border:1px solid #8e44ad; color:#8e44ad; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; white-space:nowrap;">
+                  onmouseover="this.style.background='#e0d4f5'; this.style.borderColor='#b79ce0';" onmouseout="this.style.background='#ede9fb'; this.style.borderColor='#c9b8f0';"
+                  style="padding:5px 12px; border:1px solid #c9b8f0; color:#6741d9; background:#ede9fb; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">
             ☁️ Drive ▾
           </button>
           <div id="tg-drive-menu" style="display:none; position:absolute; left:0; bottom:100%; margin-bottom:2px; background:#fff; border:1px solid #ddd; border-radius:4px; box-shadow:0 -4px 12px rgba(0,0,0,0.12); z-index:9999; min-width:160px;">
             <div id="as-drive-save-item" onclick="window.saveAllToDrive(); window._toggleDriveMenu(false)"
-                 style="padding:8px 14px; font-size:12px; cursor:pointer; color:#e67e22; white-space:nowrap;"
-                 onmouseenter="this.style.background='#fff8f0'" onmouseleave="this.style.background=''">
+                 style="padding:8px 14px; font-size:12px; cursor:pointer; color:#a85d0a; white-space:nowrap;"
+                 onmouseenter="this.style.background='#fbead9'" onmouseleave="this.style.background=''">
               ⬆️ 전체 설정 저장
             </div>
             <div id="as-drive-load-item" onclick="window.loadAllFromDrive(); window._toggleDriveMenu(false)"
-                 style="padding:8px 14px; font-size:12px; cursor:pointer; color:#8e44ad; border-top:1px solid #f0f0f0; white-space:nowrap;"
-                 onmouseenter="this.style.background='#fdf5ff'" onmouseleave="this.style.background=''">
+                 style="padding:8px 14px; font-size:12px; cursor:pointer; color:#6741d9; border-top:1px solid #f0f0f0; white-space:nowrap;"
+                 onmouseenter="this.style.background='#ede9fb'" onmouseleave="this.style.background=''">
               ⬇️ 전체 설정 불러오기
             </div>
           </div>
@@ -1218,8 +1220,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   </div>
 
   <div style="display:flex; justify-content:flex-end; gap:8px;">
-    <button id="as-modal-save-btn" onclick="window.saveAlarmSettings()" style="padding:6px 18px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">저장</button>
-    <button id="as-modal-close-btn" onclick="window.closeAlarmSettings()" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">닫기</button>
+    <button id="as-modal-save-btn" onclick="window.saveAlarmSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
+    <button id="as-modal-close-btn" onclick="window.closeAlarmSettings()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
   </div>
 </div>
 
@@ -1239,12 +1241,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
               cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0;">
     <span id="install-guide-title2" style="font-size:14px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
     <button onclick="window.closeInstallGuideModal()"
-        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+        style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px;
                color:#7a5210; font-size:16px; cursor:pointer;
                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
-        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';"
+        onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';"
         title="닫기">✕</button>
   </div>
   <!-- 탭 -->
@@ -1334,21 +1336,23 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-28px -28px 18px; padding:14px 20px 12px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="alarm-modal-title" style="margin:0; font-size:15px; color:#7a5210;">알람 상세</h3>
     <button onclick="window.closeAlarmModal()"
-        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+        style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px;
                color:#7a5210; font-size:16px; cursor:pointer;
                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
-        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';"
+        onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';"
         title="닫기">✕</button>
   </div>
   <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
   <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
-    <button id="alarm-modal-send-btn" class="action-btn"
-      style="border-color:#2c5f8a; color:#2c5f8a;"
+    <button id="alarm-modal-send-btn"
+      onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+      style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"
       onclick="window.sendSingleAlarm(false)">📧 즉시 발송</button>
-    <button class="action-btn" onclick="window.closeAlarmModal()"
-      style="border-color:#ccc; color:#555; background:#f8f9fa;">닫기</button>
+    <button onclick="window.closeAlarmModal()"
+      onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';"
+      style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
   </div>
 </div>
 
@@ -1359,12 +1363,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <div style="display:flex; align-items:center; justify-content:space-between; margin:-24px -24px 14px; padding:12px 18px 10px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="alarm-schedule-title" style="margin:0; font-size:14.5px; color:#7a5210;">⚙️ 알람 일정 설정</h3>
     <button onclick="window.closeAlarmScheduleModal()"
-        style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
+        style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px;
                color:#7a5210; font-size:16px; cursor:pointer;
                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
-        onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+        onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';"
+        onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';"
         title="닫기">✕</button>
   </div>
   <p style="font-size:11.5px; color:#888; margin:0 0 12px;">이 업무만 아래 체크한 날짜 기준으로 알람이 발송됩니다. (완료 예정일이 지나면 어떤 경우든 발송되지 않습니다)</p>
@@ -1380,10 +1384,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
     <input id="alarm-schedule-custom" type="text" placeholder="예: 20, 30" class="u-input" style="width:100%; margin-top:4px; box-sizing:border-box;">
   </div>
   <div style="margin-top:18px; display:flex; gap:8px; justify-content:space-between;">
-    <button class="action-btn" onclick="window.resetAlarmScheduleForm()" style="border-color:#e67e22; color:#e67e22;">기본값으로</button>
+    <button onclick="window.resetAlarmScheduleForm()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:6px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">기본값으로</button>
     <div style="display:flex; gap:8px;">
-      <button class="action-btn" onclick="window.closeAlarmScheduleModal()" style="border-color:#ccc; color:#555; background:#f8f9fa;">취소</button>
-      <button class="action-btn" onclick="window.saveAlarmSchedule()" style="border-color:#2c5f8a; color:#fff; background:#2c5f8a;">저장</button>
+      <button onclick="window.closeAlarmScheduleModal()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">취소</button>
+      <button onclick="window.saveAlarmSchedule()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">저장</button>
     </div>
   </div>
 </div>
@@ -1496,8 +1500,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
        style="display:flex; align-items:center; justify-content:space-between; margin:-24px -26px 18px; padding:14px 20px 12px; cursor:grab; user-select:none; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="notice-modal-title" style="margin:0; font-size:15px; color:#7a5210;">📢 공지 등록</h3>
     <button onclick="window.closeNoticeModal()"
-            style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
-            onmouseover="this.style.background='#7a5210'; this.style.color='#fff';" onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+            style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
+            onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';"
             onmousedown="event.stopPropagation()">✕</button>
   </div>
 
@@ -1546,7 +1550,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                onkeydown="if(event.key==='Enter'){event.preventDefault();window._nmAddCustomDay();}">
         <span id="nm-lbl-days-before" style="font-size:11.5px; color:#888;">일 전</span>
         <button id="nm-lbl-add-btn" type="button" onclick="window._nmAddCustomDay()"
-                style="padding:3px 8px; border:1px solid #2c5f8a; color:#2c5f8a; background:#fff; border-radius:3px; font-size:11.5px; cursor:pointer;">+ 추가</button>
+                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                style="padding:3px 8px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 추가</button>
       </div>
       <div id="nm-d-custom-tags" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; min-height:4px;"></div>
     </div>
@@ -1566,21 +1571,25 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <button type="button" onclick="window._nmBulkToggleChannel('tg')" title="텔레그램 전체 선택/해제"
               style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
       <button type="button" onclick="window._nmBulkRemoveAll()" title="수신자 전체 삭제"
-              style="width:26px; height:20px; border:none; background:none; color:#e03131; cursor:pointer; font-size:13px; padding:0;">✕</button>
+              onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
+              style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
     </div>
 
     <div id="nm-recipient-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px;"></div>
     <button type="button" onclick="window._nmAddRecipientRow()"
-            style="padding:3px 10px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:3px; font-size:11.5px; cursor:pointer;">+ 수신자 추가</button>
+            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+            style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
     <p style="margin:6px 2px 0; font-size:10.5px; color:#999;">이름 입력 시 주소록에서 이메일/텔레그램 ID 자동완성 · 채널 아이콘 클릭으로 개별 발송 on/off</p>
   </div>
 
   <input type="hidden" id="nm-edit-id">
   <div style="display:flex; justify-content:flex-end; gap:8px;">
     <button id="nm-save-btn" onclick="window.saveNoticeItem()"
-            style="padding:7px 20px; background:#2c5f8a; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px;">저장</button>
+            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+            style="padding:7px 20px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
     <button id="nm-cancel-btn" onclick="window.closeNoticeModal()"
-            style="padding:7px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px;">취소</button>
+            onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';"
+            style="padding:7px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">취소</button>
   </div>
 </div>
 <div id="notice-modal-bg" class="modal-overlay"
