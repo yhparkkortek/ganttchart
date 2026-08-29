@@ -1725,8 +1725,19 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
-        <div class="concept-section">
+        <div class="concept-section summary-outer-box" style="background:#e7f3ff;">
             <style>
+                /* 💡 [outer box 통합] PROTO/ES/PP 일정 박스를 Summary 탭 전체를 감싸는 외곽 박스로 확장.
+                   내부 서브섹션(.concept-section)들은 history 라벨링(closest('.concept-section') + h3)이
+                   그대로 동작하도록 클래스는 유지하되, 시각적으로는 개별 카드 테두리/배경 없이 하나의
+                   외곽 박스 안에 이어지는 구역으로만 보이게 함(다른 탭들처럼 outer box 1개 구조로 통일). */
+                #tab-summary .summary-outer-box .concept-section {
+                    background: transparent !important;
+                    border: none !important;
+                    border-radius: 0 !important;
+                    padding: 0 !important;
+                    margin-bottom: 20px !important;
+                }
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #sum-milestone-body td, #sum-milestone-body input, #sum-milestone-body-actual td, #sum-milestone-body-actual input { text-align: center !important; }
                 /* 💡 [버그 수정] 이 표는 헤더가 2행(rowspan="구분" + colspan 그룹명 / 하위 Start·End·DR)인데,
@@ -1790,10 +1801,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </tr>
                 </tbody>
             </table>
-            <div class="concept-grid" style="margin-top:12px;">
+            <div class="concept-grid" style="margin-top:12px; margin-bottom:20px;">
                 <label id="sum-lbl-devdays">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
             </div>
-        </div>
         <div class="concept-section">
             <h3 id="sum-h3-progress" style="margin:0 0 4px 0;">개발 진척 현황</h3>
             <div id="sum-level0-timeline" style="min-height:90px; margin-top:0;">
@@ -1910,7 +1920,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
              </div>
         </div>
-        <div id="sum-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden;">
+        <div id="sum-history-box" style="margin-top:14px; border:1px solid #e3e6ea; border-radius:6px; overflow:hidden; background:#fff;">
             <div id="sum-history-header" onclick="window.sumToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                 <span id="sum-history-toggle-icon">▶</span>
                 <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -1924,6 +1934,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </div>
                 <table id="sum-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
             </div>
+        </div>
         </div>
         </div>
     </div>
