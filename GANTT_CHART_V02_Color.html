@@ -550,10 +550,10 @@
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     box-sizing: border-box;
 }
-#app-topbar .tb-logo-wrap { width: var(--sb-w-expanded); height: 100%; flex-shrink:0; display:flex; align-items:center; padding-left: 20px; justify-content:flex-start; box-sizing:border-box; }
-/* 💡 로고 이미지는 어두운(청록) 배경 위에 놓일 흰색 워드마크라, 배경을 파스텔톤으로 바꾸면서
-   반전 필터로 검게 뒤집어 밝은 배경 위에서도 그대로 잘 보이도록 함 */
-#app-topbar .tb-logo { height: 40px; width: auto; max-width: calc(var(--sb-w-expanded) - 36px); object-fit: contain; display:block; filter: invert(1); }
+/* 💡 로고는 원래 색(흰색 워드마크) 그대로 유지하고, 로고 영역만 원래 배경색(청록)을 그대로 남겨서
+   가독성을 유지 — 나머지 탑바 영역만 파스텔톤으로 전환됨 */
+#app-topbar .tb-logo-wrap { width: var(--sb-w-expanded); height: 100%; flex-shrink:0; display:flex; align-items:center; padding-left: 20px; justify-content:flex-start; box-sizing:border-box; background: #00a1b6; }
+#app-topbar .tb-logo { height: 40px; width: auto; max-width: calc(var(--sb-w-expanded) - 36px); object-fit: contain; display:block; }
 #app-topbar .tb-btns { display:flex; align-items:center; margin-left: 15px; gap:0px; flex-wrap:nowrap; }
 #app-topbar .tb-sep { width:1px; height:22px; background:rgba(0,113,125,0.3); margin:0 4px; }
 #app-topbar .tb-lang { margin-left:auto; flex-shrink:0; }
@@ -565,6 +565,7 @@
     box-sizing: border-box;     /* 테두리 두께를 30px 안에 포함시킴 */
     padding: 0 12px;            /* 🎯 상하 패딩을 0으로 지우고 좌우 여백만 유지 */
     font-size: 14px;            /* 🎯 글자 크기 13px */
+    font-weight: bold;
 
     background: transparent;
     border: none;
