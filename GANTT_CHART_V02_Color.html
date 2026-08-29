@@ -1727,17 +1727,12 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
         <div class="concept-section summary-outer-box" style="background:#e7f3ff;">
             <style>
-                /* 💡 [outer box 통합] PROTO/ES/PP 일정 박스를 Summary 탭 전체를 감싸는 외곽 박스로 확장.
-                   내부 서브섹션(.concept-section)들은 history 라벨링(closest('.concept-section') + h3)이
-                   그대로 동작하도록 클래스는 유지하되, 시각적으로는 개별 카드 테두리/배경 없이 하나의
-                   외곽 박스 안에 이어지는 구역으로만 보이게 함(다른 탭들처럼 outer box 1개 구조로 통일). */
-                #tab-summary .summary-outer-box .concept-section {
-                    background: transparent !important;
-                    border: none !important;
-                    border-radius: 0 !important;
-                    padding: 0 !important;
-                    margin-bottom: 20px !important;
-                }
+                /* 💡 [outer box 통합] PROTO/ES/PP 일정 박스를 Summary 탭 전체를 감싸는 외곽 박스로 확장해서
+                   개발진척현황/개요/정보/추진배경/멤버1~3/주요자재/사진/변경이력을 전부 이 안쪽으로 이동함.
+                   💡 [2026-08-29 되돌림] 내부 서브섹션(.concept-section)의 개별 카드 박스(테두리/배경/패딩)를
+                   지워서 하나로 이어붙였었는데, 각 항목이 갖고 있던 기존 박스가 사라져 보인다는 피드백으로
+                   그 CSS는 제거 — 각 서브섹션은 원래대로 자기 카드 박스를 유지한 채, 이 outer box 안에
+                   중첩되어 표시됨(history 라벨링 closest('.concept-section') + h3 로직은 그대로 영향 없음). */
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #sum-milestone-body td, #sum-milestone-body input, #sum-milestone-body-actual td, #sum-milestone-body-actual input { text-align: center !important; }
                 /* 💡 [버그 수정] 이 표는 헤더가 2행(rowspan="구분" + colspan 그룹명 / 하위 Start·End·DR)인데,
@@ -1801,7 +1796,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </tr>
                 </tbody>
             </table>
-            <div class="concept-grid" style="margin-top:12px; margin-bottom:20px;">
+            <div class="concept-grid" style="margin-top:12px;">
                 <label id="sum-lbl-devdays">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
             </div>
         <div class="concept-section">
