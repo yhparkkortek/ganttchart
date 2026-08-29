@@ -1103,11 +1103,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
       <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
     <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
-      <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:5px; padding:8px 12px; display:flex; align-items:center; justify-content:space-between;">
-        <span id="as-install-title" style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-        <button id="as-install-guide-btn" onclick="window.openInstallGuideModal('setup')"
-          style="padding:3px 12px; background:#7a5210; color:#fff; border:none; border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap;">📖 안내 보기</button>
-      </div>
+      <button id="as-install-title" onclick="window.openInstallGuideModal('setup')"
+        style="width:100%; box-sizing:border-box; text-align:left; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:5px; padding:8px 12px; font-size:13px; font-weight:bold; cursor:pointer;">📥 처음 사용자 — 설치 안내</button>
       </div>
   </div>
 
@@ -10387,7 +10384,6 @@ window.deleteHistoryByDateRange = function() {
             'as-modal-title':          { ko:'⚙️ 알람 설정',                       en:'⚙️ Alarm Settings' },
             'sec-server-label':        { ko:'📡 서버 연결',                       en:'📡 Server Connection' },
             'as-install-title':        { ko:'📥 처음 사용자 — 설치 안내',          en:'📥 First-time Setup Guide' },
-            'as-install-guide-btn':    { ko:'📖 안내 보기',                       en:'📖 View Guide' },
             'sec-email-label':         { ko:'📧 이메일 알람',                     en:'📧 Email Alarm' },
             'as-email-server-label':   { ko:'🖥️ 이메일 서버 설정',                en:'🖥️ Email Server Settings' },
             'as-lbl-host':             { ko:'서버 주소',                          en:'Server' },
@@ -10468,13 +10464,10 @@ window.deleteHistoryByDateRange = function() {
         const _igTabTelegram = document.getElementById('ig-tab-telegram');
         if (_igTabTelegram) _igTabTelegram.textContent = _en ? '📱 Telegram (Step 5)' : '📱 Telegram (Step 5)';
 
-        // [처음 사용자 설치 안내] 진입 배너 (알람설정 / AI 팝업 2곳) 제목·버튼 번역
+        // [처음 사용자 설치 안내] 진입 버튼 (알람설정 / AI 팝업 2곳) 번역
+        // 💡 [2026-08-29] 라벨(span)+버튼 2개였던 걸 버튼 하나로 합쳐서 as/ms-install-guide-btn은 더는 없음
         const _asInstallTitle = document.getElementById('as-install-title');
         if (_asInstallTitle) _asInstallTitle.textContent = _en ? '📥 First-time Setup Guide' : '📥 처음 사용자 — 설치 안내';
-        const _asInstallBtn = document.getElementById('as-install-guide-btn');
-        if (_asInstallBtn) _asInstallBtn.textContent = _en ? '📖 View Guide' : '📖 안내 보기';
-        const _msInstallBtn = document.getElementById('ms-install-guide-btn');
-        if (_msInstallBtn) _msInstallBtn.textContent = _en ? '📖 View Guide' : '📖 안내 보기';
 
         ['ig-badge-pm-1','ig-badge-pm-2','ig-badge-pm-3','ms-badge-pm-1','ms-badge-pm-2','ms-badge-pm-3'].forEach(id => {
             const el = document.getElementById(id);
@@ -14023,17 +14016,17 @@ window.editPrompt = async function() {
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:99999; background:none; pointer-events:none;';
         modal.innerHTML = `
             <div id="prompt-edit-modal-box" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
-                <div id="prompt-drag-handle" style="padding:13px 18px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:14px;background:#fff8e6;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
-                    <span id="prompt-modal-title" style="color:#7a5210;">✏️ AI 분석 프롬프트</span>
+                <div id="prompt-drag-handle" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
+                    <span id="prompt-modal-title" style="color:#2c5f8a;">✏️ AI 분석 프롬프트</span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button id="prompt-history-btn" onclick="event.stopPropagation(); window.showPromptLogs()" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#fff; border:1.5px solid #7a5210; border-radius:6px; color:#7a5210; font-size:11px; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap;">🕒 이력</button>
+                        <button id="prompt-history-btn" onclick="event.stopPropagation(); window.showPromptLogs()" onmouseover="this.style.background='#efe0c8'; this.style.borderColor='#d0b088';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#f8f1e8; border:1px solid #e0c8a5; border-radius:6px; color:#7a5210; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
                         <button onclick="document.getElementById('prompt-edit-modal').style.display='none'"
-                            style="background:#fff; border:1.5px solid #7a5210; border-radius:6px;
-                                   color:#7a5210; font-size:16px; cursor:pointer;
+                            style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
+                                   color:#1a4f7a; font-size:16px; cursor:pointer;
                                    width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                                    display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                            onmouseover="this.style.background='#7a5210'; this.style.color='#fff';"
-                            onmouseout="this.style.background='#fff'; this.style.color='#7a5210';"
+                            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
+                            onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                             title="닫기">✕</button>
                     </div>
                 </div>
@@ -14047,10 +14040,10 @@ window.editPrompt = async function() {
                         style="display:none; width:100%; margin-top:8px; padding:7px 10px; border:1px solid #ced4da; border-radius:6px; font-size:12px; box-sizing:border-box; flex-shrink:0;">
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">
-                    <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e67e22; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🔒 수정하기</button>
-                    <button id="prompt-save-btn" onclick="window.savePrompt()" style="flex:1; min-width:120px; padding:8px; background:#0056b3; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none;">💾 저장</button>
-                    <button id="prompt-reset-btn" onclick="window.resetPrompt()" style="padding:8px 14px; background:#fff; color:#e67e22; border:1px solid #e67e22; border-radius:6px; font-size:12px; cursor:pointer; white-space:nowrap; display:none;">🔄 기본값으로 초기화</button>
-                    <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" title="쌓인 👎 피드백 케이스를 모아 한번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#0ca678; color:#fff; border:none; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap;">🤖 일괄개선</button>
+                    <button id="prompt-unlock-btn" onclick="window.unlockPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔒 수정하기</button>
+                    <button id="prompt-save-btn" onclick="window.savePrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">💾 저장</button>
+                    <button id="prompt-reset-btn" onclick="window.resetPrompt()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
+                    <button id="prompt-ai-improve-btn" onclick="window.triggerPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
                 </div>
             </div>`;
         document.body.appendChild(modal);
@@ -15195,7 +15188,7 @@ window.renderTaskInbox = function() {
                 <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
                     <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</span>
                     <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibExpandedUids.has(it.uid) ? (_ibEn ? '▲ Collapse' : '▲ 상세 접기') : (_ibEn ? '▼ Details' : '▼ 상세 보기')}</a>
-                    <button onclick="window.extractInboxForAI('${it.uid}')" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#7048e8; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; white-space:nowrap;">📋 ${_ibEn ? 'Extract' : '추출'}</button>
+                    <button onclick="window.extractInboxForAI('${it.uid}')" onmouseover="this.style.background='#e4dbff'; this.style.borderColor='#b8a4f0';" onmouseout="this.style.background='#f3f0ff'; this.style.borderColor='#d0bfff';" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#5f3dc4; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📋 ${_ibEn ? 'Extract' : '추출'}</button>
                 </div>
                 <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
@@ -15212,12 +15205,12 @@ window.renderTaskInbox = function() {
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 1 200px; min-width:60px; max-width:220px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
-                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2c5f8a; border-radius:6px; background:#2c5f8a; color:#fff; cursor:pointer;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
+                <button onclick="window.inboxPlaceToCurrent('${it.uid}')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
                 ${(it.matchedProject && it.matchedProject.status === 'matched' && it.matchedProject.candidates && it.matchedProject.candidates[0] && it.matchedProject.candidates[0].drive_file_id)
-                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #2f9e44; border-radius:6px; background:#2f9e44; color:#fff; cursor:pointer;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
+                    ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
                     : ''}
-                <button onclick="window.inboxOpenDistribute('${it.uid}')" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1.5px solid #e67e22; border-radius:6px; background:#e67e22; color:#fff; cursor:pointer;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
-                <button onclick="window._ibExpandedUids.delete('${it.uid}'); window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1.5px solid #e03131; border-radius:6px; background:#fff; color:#e03131; cursor:pointer;">🗑</button>
+                <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
+                <button onclick="window._ibExpandedUids.delete('${it.uid}'); window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -15740,17 +15733,22 @@ window.refreshInboxCleanupModeButton = function() {
     if (!btn) return;
     const mode = window.getInboxCleanupMode();
     const isEn = window._currentLang === 'en';
-    if (mode === 'auto') {
-        btn.textContent = isEn ? '🟢 Auto-delete Done' : '🟢 처리됨 자동삭제';
-        btn.style.color = '#2f7a2f'; btn.style.borderColor = '#2f9e44';
-        btn.title = isEn ? 'Processed tasks are removed from the inbox immediately once handled.'
-                          : '자동배치/전송 등으로 처리된 업무를 처리 즉시 보관함에서 자동으로 지웁니다.';
-    } else {
-        btn.textContent = isEn ? '🟠 Keep Done' : '🟠 처리됨 보관';
-        btn.style.color = '#b85c00'; btn.style.borderColor = '#b85c00';
-        btn.title = isEn ? 'Processed tasks stay in the inbox until you delete them yourself (🗑 per row).'
-                          : '처리된 업무를 보관함에 남겨두고, 각 행의 🗑로 직접 확인 후 삭제합니다.';
-    }
+    // 💡 [파스텔 톤 통일] 옅은 배경(평상시) → 짙은 파스텔(호버) — 아래 미분류/신규발신자/자동폐기,
+    //    업무 카드 액션버튼과 동일한 4색 파스텔 기준(파랑/초록/주황/빨강) 중 초록(자동)·주황(보관) 사용.
+    const palette = mode === 'auto'
+        ? { bg:'#e6f6ea', border:'#a8dab8', text:'#1f7a3d', hoverBg:'#c9ecd3', hoverBorder:'#7cc494' }
+        : { bg:'#fbead9', border:'#edbf85', text:'#a85d0a', hoverBg:'#f4d9b3', hoverBorder:'#dba354' };
+    btn.textContent = mode === 'auto' ? (isEn ? '🟢 Auto-delete Done' : '🟢 처리됨 자동삭제') : (isEn ? '🟠 Keep Done' : '🟠 처리됨 보관');
+    btn.style.background = palette.bg;
+    btn.style.borderColor = palette.border;
+    btn.style.color = palette.text;
+    btn.onmouseover = function() { btn.style.background = palette.hoverBg; btn.style.borderColor = palette.hoverBorder; };
+    btn.onmouseout = function() { btn.style.background = palette.bg; btn.style.borderColor = palette.border; };
+    btn.title = mode === 'auto'
+        ? (isEn ? 'Processed tasks are removed from the inbox immediately once handled.'
+                : '자동배치/전송 등으로 처리된 업무를 처리 즉시 보관함에서 자동으로 지웁니다.')
+        : (isEn ? 'Processed tasks stay in the inbox until you delete them yourself (🗑 per row).'
+                : '처리된 업무를 보관함에 남겨두고, 각 행의 🗑로 직접 확인 후 삭제합니다.');
 };
 
 window.mailRightToInbox = function() {
@@ -17052,16 +17050,16 @@ window.updateInboxBadge();
                 전송된 업무가 팀원의 동시 저장으로 유실된 경우, '전송됨' 항목을 같은 방법으로 재전송하면 복구됩니다.
             </span></span></span>
             <div style="display:flex; gap:6px; flex-shrink:0;">
-                <button id="inbox-batch-register-btn" class="action-btn" onclick="window.inboxBatchRegisterMatched()" style="font-size:12px; color:#2f9e44; border-color:#2f9e44;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
-                <button id="inbox-cleanup-mode-btn" class="action-btn" onclick="window.toggleInboxCleanupMode()" style="font-size:12px;"></button>
+                <button id="inbox-batch-register-btn" onclick="window.inboxBatchRegisterMatched()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:12px; font-weight:bold; padding:0 10px; height:29px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; cursor:pointer; transition:background .15s, border-color .15s;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
+                <button id="inbox-cleanup-mode-btn" onclick="window.toggleInboxCleanupMode()" style="font-size:12px; font-weight:bold; padding:0 10px; height:29px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; cursor:pointer; transition:background .15s, border-color .15s;"></button>
                 <button id="inbox-close-btn" onclick="window.closeTaskInbox()"
-                    style="background:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
-                           color:#2c5f8a; font-size:16px; cursor:pointer;
+                    style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
+                           color:#1a4f7a; font-size:16px; cursor:pointer;
                            width:28px; height: 29px; padding:0; line-height:1; box-sizing:border-box;
                            margin-top:4px;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                    onmouseover="this.style.background='#2c5f8a'; this.style.color='#fff';"
-                    onmouseout="this.style.background='#fff'; this.style.color='#2c5f8a';"
+                    onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
+                    onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                     title="닫기">✕</button>
             </div>
         </div>
@@ -17079,7 +17077,7 @@ window.updateInboxBadge();
                     <button onclick="window.msShowUnmatchedModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
                         <span id="inbox-unmatched-label">📭 미분류</span><br><span id="ms-unmatched-count-2" style="font-size:15px;">0</span><span id="inbox-unmatched-unit">건</span>
                     </button>
-                    <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
+                    <button onclick="window.msShowNewSenderModal()" style="flex:1; padding:10px 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
                         <span id="inbox-newsender-label">👤 신규발신자</span><br><span id="ms-newsender-count-2" style="font-size:15px;">0</span><span id="inbox-newsender-unit">건</span>
                     </button>
                     <button onclick="window.msShowDiscardedModal()" style="flex:1; padding:10px 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center;">
@@ -17177,32 +17175,33 @@ window.updateInboxBadge();
             <div style="display:flex; gap:6px; justify-self:center; align-items:center;">
                 <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
-                            background:#2c5f8a; color:#fff; border:1.5px solid #2c5f8a; border-radius:6px;
+                            background:#cfe6fa; color:#1a4f7a; border:1px solid #7fb0dd; border-radius:6px;
                             font-size:13px; font-weight:bold; white-space:nowrap; transition:all 0.2s;">
                     ✏️ 직접 입력
                 </div>
                 <div id="mail-tab-file" onclick="window.switchMailTab('file')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
-                            background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px;
+                            background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px;
                             font-size:13px; font-weight:normal;
                             white-space:nowrap; transition:all 0.2s;">
                     📂 파일 첨부
                 </div>
                 <div id="mail-tab-server" onclick="window.switchMailTab('server')"
                     style="text-align:center; padding:6px 12px; cursor:pointer;
-                            background:#fff; color:#2c5f8a; border:1.5px solid #2c5f8a; border-radius:6px;
+                            background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px;
                             font-size:13px; font-weight:normal;
                             white-space:nowrap; transition:all 0.2s;">
                     🌐 메일 서버
                 </div>
                 <div style="width:1px; height:20px; background:#dee2e6; margin:0 4px;"></div>
-                <button id="mail-prompt-btn" class="action-btn" onclick="window.editPrompt()" title="3개 탭 공용 AI 분석 프롬프트 수정"
-                    style="min-width:auto !important; padding:6px 12px !important; font-size:13px;">
+                <button id="mail-prompt-btn" onclick="window.editPrompt()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" title="3개 탭 공용 AI 분석 프롬프트 수정"
+                    style="padding:6px 12px; font-size:13px; font-weight:bold; height:29px; box-sizing:border-box; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; cursor:pointer; transition:background .15s, border-color .15s;">
                     ✏️ 프롬프트
                 </button>
             </div>
-            <button class="icon-btn" onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
-                style="border-radius:6px; font-size:16px; width:28px; height:28px; padding:0; line-height:1; justify-self:end;"
+            <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
+                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; width:28px; height:28px; padding:0; line-height:1; justify-self:end; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.15s;"
                 title="닫기">✕</button>
         </div>
         <!-- ===== 공통 좌우분할 컨테이너 ===== -->
@@ -17227,7 +17226,7 @@ window.updateInboxBadge();
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
                     <div style="display:flex; gap:8px;">
-                        <button class="action-btn solid" onclick="window.analyzeMailContent()" id="mail-analyze-btn" style="width:100%; min-width:auto !important; margin:0 !important;">
+                        <button onclick="window.analyzeMailContent()" id="mail-analyze-btn" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="width:100%; box-sizing:border-box; height:38px; margin:0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                             🤖 AI 분석
                         </button>
                         <div id="mail-loading" style="display:none;">
@@ -17243,19 +17242,19 @@ window.updateInboxBadge();
                             <label style="font-size:10px; color:#555; cursor:pointer;">
                                 <input type="checkbox" id="paste-check-all" onchange="window.pasteSelectAll(this.checked)"> 전체선택
                             </label>
-                            <button class="icon-btn c-danger" onclick="window.pasteClearResults()"
-                                style="padding:2px 8px; font-size:10px;">
+                            <button onclick="window.pasteClearResults()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                                style="padding:2px 8px; font-size:10px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                                 🗑️ 초기화
                             </button>
                         </div>
                     </div>
                     <div id="paste-result-list" style="flex:1; overflow-y:auto; margin-top:4px; display:none; border:1px solid #dee2e6; border-radius:6px;"></div>
-                    <button class="action-btn solid" id="paste-batch-btn" onclick="window.pasteBatchInsert()"
-                            style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important;">
+                    <button id="paste-batch-btn" onclick="window.pasteBatchInsert()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                            style="display:none; width:100%; box-sizing:border-box; margin:8px 0 0 -1px; height:38px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                         ⚡ 선택항목 연속등록
                     </button>
-                    <button class="action-btn c-warning" id="paste-batch-inbox-btn" onclick="window.pasteBatchToInbox()"
-                            style="display:none; width:100%; margin:6px 0 0 -1px !important; min-width:auto !important; height:36px !important;">
+                    <button id="paste-batch-inbox-btn" onclick="window.pasteBatchToInbox()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
+                            style="display:none; width:100%; box-sizing:border-box; margin:6px 0 0 -1px; height:36px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                         📥 선택항목 보관함 이동
                     </button>
                 </div>
@@ -17281,7 +17280,7 @@ window.updateInboxBadge();
                         <button id="mf-clear-btn" class="action-btn" onclick="window.mfClearFiles()" style="min-width:130px !important; border-color:#e03131; color:#e03131;">
                             🗑️ 전체 비우기
                         </button>
-                        <button class="action-btn" id="mf-analyze-btn" onclick="window.mfAnalyze()" style="min-width:130px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                        <button id="mf-analyze-btn" onclick="window.mfAnalyze()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="min-width:130px; padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                             🤖 AI 일괄 분석 (<span id="mf-file-count">0</span>개)
                         </button>
                     </div>
@@ -17300,19 +17299,19 @@ window.updateInboxBadge();
                             <label style="font-size:10px; color:#555; cursor:pointer;">
                                 <input type="checkbox" id="mf-check-all" onchange="window.mfSelectAll(this.checked)"> 전체선택
                             </label>
-                            <button onclick="window.mfClearResults()"
-                                style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
+                            <button onclick="window.mfClearResults()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                                style="padding:2px 8px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                                 🗑️ 초기화
                             </button>
                         </div>
                     </div>
                     <div id="mf-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
-                    <button class="action-btn" id="mf-batch-btn" onclick="window.mfBatchInsert()"
-                            style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                    <button id="mf-batch-btn" onclick="window.mfBatchInsert()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                            style="display:none; width:100%; box-sizing:border-box; margin:8px 0 0 -1px; height:38px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                         ⚡ 선택항목 연속등록
                     </button>
-                    <button class="action-btn" id="mf-batch-inbox-btn" onclick="window.mfBatchToInbox()"
-                            style="display:none; width:100%; margin:6px 0 0 -1px !important; min-width:auto !important; height:36px !important; background:#fff; color:#e67e22; border-color:#e67e22;">
+                    <button id="mf-batch-inbox-btn" onclick="window.mfBatchToInbox()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
+                            style="display:none; width:100%; box-sizing:border-box; margin:6px 0 0 -1px; height:36px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                         📥 선택항목 보관함 이동
                     </button>
                 </div>
@@ -17320,11 +17319,10 @@ window.updateInboxBadge();
                 <!-- ── 메일서버 탭 왼쪽 ── -->
                 <div id="mail-tab-server-content" style="display:none; flex-direction:column; flex:1; overflow-y:auto; padding:12px;">
                     <!-- 설치 안내 (접기/펼치기) -->
-                    <div style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:10px 14px; margin-bottom:10px; flex-shrink:0;">
-                        <div style="display:flex; align-items:center; justify-content:space-between;">
-                            <span id="ms-install-title" style="font-size:13px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-                            <button id="ms-install-guide-btn" onclick="window.openInstallGuideModal('setup')"
-                              style="padding:3px 12px; background:#7a5210; color:#fff; border:none; border-radius:4px; font-size:11px; cursor:pointer; white-space:nowrap;">📖 안내 보기</button>
+                    <div style="margin-bottom:10px; flex-shrink:0;">
+                        <div>
+                            <button id="ms-install-title" onclick="window.openInstallGuideModal('setup')"
+                              style="width:100%; box-sizing:border-box; text-align:left; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; padding:10px 14px; font-size:13px; font-weight:bold; cursor:pointer;">📥 처음 사용자 — 설치 안내</button>
                         </div>
                         <div id="ms-install-guide" style="display:none;">
                         <div id="ms-install-guide-content">
@@ -17429,7 +17427,7 @@ window.updateInboxBadge();
                             <label style="display:flex; align-items:center; gap:4px; font-size:11px; color:#555; cursor:pointer; white-space:nowrap;">
                                 <input type="checkbox" id="ms-save-id"> <span id="ms-save-id-label">로그인정보 저장</span>
                             </label>
-                            <button id="ms-fetch-btn" class="action-btn" onclick="window.msFetchMail()" style="min-width:150px !important; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                            <button id="ms-fetch-btn" onclick="window.msFetchMail()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="min-width:150px; padding:6px 12px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                                 📥 메일 가져오기
                             </button>
                         </div>
@@ -17456,8 +17454,8 @@ window.updateInboxBadge();
                             <label style="font-size:10px; color:#555; cursor:pointer;">
                                 <input type="checkbox" id="ms-check-all" onchange="window.msSelectAll(this.checked)"> <span id="ms-check-all-label">전체선택</span>
                             </label>
-                            <button id="ms-clear-results-btn" onclick="window.msClearResults()"
-                                style="padding:2px 8px; background:#fff; color:#e03131; border:1px solid #e03131; border-radius:6px; font-size:10px; cursor:pointer;">
+                            <button id="ms-clear-results-btn" onclick="window.msClearResults()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                                style="padding:2px 8px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                                 🗑️ 초기화
                             </button>
                         </div>
@@ -17465,12 +17463,12 @@ window.updateInboxBadge();
                     <!-- 결과 목록 -->
                     <div id="ms-result-list" style="flex:1; min-width:0; box-sizing:border-box; overflow-y:auto; border:1px solid #dee2e6; border-radius:6px; display:none;"></div>
                     <!-- 연속등록 버튼 -->
-                    <button class="action-btn" id="ms-batch-btn" onclick="window.msBatchInsert()"
-                            style="display:none; width:100%; margin:8px 0 0 -1px !important; min-width:auto !important; height:38px !important; flex-shrink:0; background:#2c5f8a; color:#fff; border-color:#2c5f8a;">
+                    <button id="ms-batch-btn" onclick="window.msBatchInsert()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                            style="display:none; width:100%; box-sizing:border-box; margin:8px 0 0 -1px; height:38px; flex-shrink:0; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                         ⚡ 선택항목 연속등록
                     </button>
-                    <button class="action-btn" id="ms-batch-inbox-btn" onclick="window.msBatchToInbox()"
-                            style="display:none; width:100%; margin:6px 0 0 -1px !important; min-width:auto !important; height:36px !important; flex-shrink:0; background:#fff; color:#e67e22; border-color:#e67e22;">
+                    <button id="ms-batch-inbox-btn" onclick="window.msBatchToInbox()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
+                            style="display:none; width:100%; box-sizing:border-box; margin:6px 0 0 -1px; height:36px; flex-shrink:0; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                         📥 선택항목 보관함 이동
                     </button>
                 </div>
@@ -17653,25 +17651,33 @@ window.switchMailTab = function(tab) {
     const ft = document.getElementById('mail-tab-file');
     const st = document.getElementById('mail-tab-server');
     
-    // 3. 음각 캡슐 디자인 규칙 일괄 주입
+    // 3. 탭별 고유 파스텔 색(파랑/초록/주황) — 선택 시 짙은 톤, 대기 시 옅은 톤으로 전환
+    //    💡 [2026-08-29 파스텔 통일] 예전엔 3개 탭 모두 선택 시 네이비 한 가지 색으로 채워졌는데,
+    //    탭마다 고유색(직접입력=파랑/파일첨부=초록/메일서버=주황)을 갖도록 바꾸고, 원색 대신 파스텔로.
+    const _mtPalette = {
+        paste:  { light:'#e8f4fd', active:'#cfe6fa', borderLight:'#a5c8f0', borderActive:'#7fb0dd', text:'#1a4f7a' },
+        file:   { light:'#e6f6ea', active:'#c9ecd3', borderLight:'#a8dab8', borderActive:'#7cc494', text:'#1f7a3d' },
+        server: { light:'#fbead9', active:'#f4d9b3', borderLight:'#edbf85', borderActive:'#dba354', text:'#a85d0a' }
+    };
     [
-        { el: pt, active: tab === 'paste'  },
-        { el: ft, active: tab === 'file'   },
-        { el: st, active: tab === 'server' }
-    ].forEach(({ el, active }) => {
+        { el: pt, key: 'paste',  active: tab === 'paste'  },
+        { el: ft, key: 'file',   active: tab === 'file'   },
+        { el: st, key: 'server', active: tab === 'server' }
+    ].forEach(({ el, key, active }) => {
         if (!el) return;
+        const p = _mtPalette[key];
+        el.style.color = p.text;
+        el.style.boxShadow = 'none';
         if (active) {
-            // 선택된 탭 스타일 (네이비 채움)
-            el.style.background  = '#2c5f8a';
-            el.style.color       = '#fff';
-            el.style.fontWeight  = 'bold';
-            el.style.boxShadow   = 'none';
+            // 선택된 탭 스타일 (짙은 파스텔 채움)
+            el.style.background   = p.active;
+            el.style.borderColor  = p.borderActive;
+            el.style.fontWeight   = 'bold';
         } else {
-            // 선택되지 않은 대기 탭 스타일 (흰 배경 + 네이비 테두리)
-            el.style.background  = '#fff';
-            el.style.color       = '#2c5f8a';
-            el.style.fontWeight  = 'normal';
-            el.style.boxShadow   = 'none';
+            // 선택되지 않은 대기 탭 스타일 (옅은 파스텔 + 옅은 테두리)
+            el.style.background   = p.light;
+            el.style.borderColor  = p.borderLight;
+            el.style.fontWeight   = 'normal';
         }
     });
 };
