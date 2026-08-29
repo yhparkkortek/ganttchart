@@ -17174,29 +17174,7 @@ window.updateInboxBadge();
     <div class="history-modal" id="mail-analyzer-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:4vh; left:50%; transform:translateX(-50%); width:min(1200px, 96vw); height:min(92vh, 900px); max-width:98vw; max-height:96vh; min-width:740px; min-height:600px; resize:both; overflow:hidden; display:flex; flex-direction:column;">
         <!-- 헤더 -->
        <div id="mail-drag-handle" class="history-header" style="background:#e7f3ff; color:#2c5f8a; padding:8px 14px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1px solid #a5c8f0; border-radius:10px 10px 0 0; display:flex; align-items:center; gap:14px;">
-            <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; flex-shrink:0;">📧 AI 업무 분석</span><!-- flex 헤더로 전환(2026-08-29): 제목+탭은 왼쪽, 프롬프트+닫기는 오른쪽에 붙도록 재배치 -->
-            <div style="display:flex; gap:6px; align-items:center; flex-shrink:0;">
-                <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
-                    style="text-align:center; padding:6px 12px; cursor:pointer;
-                            background:#cfe6fa; color:#1a4f7a; border:1px solid #7fb0dd; border-radius:6px;
-                            font-size:13px; font-weight:bold; white-space:nowrap; transition:all 0.2s;">
-                    ✏️ 직접 입력
-                </div>
-                <div id="mail-tab-file" onclick="window.switchMailTab('file')"
-                    style="text-align:center; padding:6px 12px; cursor:pointer;
-                            background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px;
-                            font-size:13px; font-weight:normal;
-                            white-space:nowrap; transition:all 0.2s;">
-                    📂 파일 첨부
-                </div>
-                <div id="mail-tab-server" onclick="window.switchMailTab('server')"
-                    style="text-align:center; padding:6px 12px; cursor:pointer;
-                            background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px;
-                            font-size:13px; font-weight:normal;
-                            white-space:nowrap; transition:all 0.2s;">
-                    🌐 메일 서버
-                </div>
-            </div>
+            <span id="mail-popup-title" style="font-size:15px; font-weight:bold; color:#2c5f8a; white-space:nowrap; flex-shrink:0;">📧 AI 업무 분석</span>
             <div style="flex:1;"></div>
             <button id="mail-prompt-btn" onclick="window.editPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="3개 탭 공용 AI 분석 프롬프트 수정"
                 style="padding:6px 12px; font-size:13px; font-weight:bold; height:29px; box-sizing:border-box; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; flex-shrink:0; transition:background .15s, border-color .15s;">
@@ -17214,6 +17192,30 @@ window.updateInboxBadge();
                  왼쪽 패널 (탭별 콘텐츠)
             ══════════════════════════════════════ -->
             <div style="width:360px; min-width:360px; display:flex; flex-direction:column; border-right:2px solid #dee2e6; overflow:hidden;">
+
+                <!-- 💡 [2026-08-29] 탭 전환 버튼 — 왼쪽 패널 콘텐츠(붙여넣기/드롭존/설치안내) 위쪽에
+                     항상 표시되도록 배치 (예전엔 헤더 쪽에 있었는데, 왼쪽 패널 소속이라는 게 더 명확하게
+                     보이도록 이동함) -->
+                <div style="display:flex; gap:6px; padding:10px 12px 0; flex-shrink:0;">
+                    <div id="mail-tab-paste" onclick="window.switchMailTab('paste')"
+                        style="flex:1; text-align:center; padding:6px 8px; cursor:pointer;
+                                background:#cfe6fa; color:#1a4f7a; border:1px solid #7fb0dd; border-radius:6px;
+                                font-size:12px; font-weight:bold; white-space:nowrap; transition:all 0.2s;">
+                        ✏️ 직접 입력
+                    </div>
+                    <div id="mail-tab-file" onclick="window.switchMailTab('file')"
+                        style="flex:1; text-align:center; padding:6px 8px; cursor:pointer;
+                                background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px;
+                                font-size:12px; font-weight:normal; white-space:nowrap; transition:all 0.2s;">
+                        📂 파일 첨부
+                    </div>
+                    <div id="mail-tab-server" onclick="window.switchMailTab('server')"
+                        style="flex:1; text-align:center; padding:6px 8px; cursor:pointer;
+                                background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px;
+                                font-size:12px; font-weight:normal; white-space:nowrap; transition:all 0.2s;">
+                        🌐 메일 서버
+                    </div>
+                </div>
 
                 <!-- 💡 [2026-08-28 이동] AI 선택/모델/API 키 설정은 "⚙️ 설정 → AI 분석 설정"으로 옮김
                      (mail-ai-provider 등 element id는 그대로 유지 — window.refreshAiKeyPanel() 등
