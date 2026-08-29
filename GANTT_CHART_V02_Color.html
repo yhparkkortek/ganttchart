@@ -1089,7 +1089,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <!-- ── 알람 설정 모달 ── -->
 <div id="alarm-settings-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
 <div id="alarm-settings-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-  width:480px; max-width:94vw; max-height:90vh; overflow-y:auto;
+  width:480px; max-width:94vw; max-height:90vh; overflow:auto; resize:both; min-width:360px; min-height:300px;
   background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   padding:26px 28px 20px; font-family:'맑은 고딕',sans-serif;">
 
@@ -1108,7 +1108,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
  <!-- ══ 섹션 1: 서버 연결 (기본 접힘) ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-server')"
-         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="sec-server-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📡 서버 연결</span>
       <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
@@ -1121,7 +1121,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <!-- ══ 섹션 2: 이메일 알람 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-email')"
-         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="sec-email-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📧 이메일 알람</span>
       <span id="sec-email-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
@@ -1163,7 +1163,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <!-- ══ 섹션 3: 메신저 알람 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-messenger')"
-         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="sec-messenger-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">💬 메신저 알람</span>
       <span id="sec-messenger-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
@@ -1216,7 +1216,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
   <!-- ══ 섹션 4: 외부 도메인 발송 허용 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-domain')"
-         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="sec-domain-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🌐 외부 도메인 발송 허용</span>
       <span id="sec-domain-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
@@ -4321,7 +4321,9 @@ ${mailText}`;
             groupWrap.style.cssText = 'border:1px solid #eee; border-radius:8px; overflow:hidden;';
 
             const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none;';
+            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none; transition:background .15s;';
+            headerRow.onmouseover = function() { headerRow.style.background = '#eef0f2'; };
+            headerRow.onmouseout  = function() { headerRow.style.background = '#f8f9fa'; };
             const arrow = document.createElement('span');
             arrow.textContent = '▸';
             arrow.style.cssText = 'font-size:11px; transition:0.15s;';
@@ -5022,7 +5024,9 @@ ${mailText}`;
             groupWrap.style.cssText = 'border:1px solid #eee; border-radius:8px; overflow:hidden;';
 
             const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none;';
+            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none; transition:background .15s;';
+            headerRow.onmouseover = function() { headerRow.style.background = '#eef0f2'; };
+            headerRow.onmouseout  = function() { headerRow.style.background = '#f8f9fa'; };
             const arrow = document.createElement('span');
             arrow.textContent = '▸'; // 💡 기본은 접힌 상태 — 담당자 이름만 먼저 보이게
             arrow.style.cssText = 'font-size:11px; transition:0.15s;';
@@ -9029,7 +9033,7 @@ ${question}
                     <!-- ══ 그룹1: AI 모델 선택 (기본 접힘) — 원래 AI 업무분석 팝업에 있던 것을 이동 ══ -->
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-model')"
-                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🤖 AI 모델 선택</span>
                             <span id="ai-set-sec-model-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
@@ -9092,7 +9096,7 @@ ${question}
                     <!-- ══ 그룹2: AI 글자 수 설정 (기본 접힘) — 기존 메일분석/요약·문답 최대 글자 수 통합 ══ -->
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-maxlen')"
-                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                             <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔢 AI 글자 수 설정</span>
                             <span id="ai-set-sec-maxlen-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
@@ -15897,7 +15901,9 @@ window.inboxOpenDistribute = async function(uid) {
             groupWrap.style.cssText = 'border:1px solid #eee; border-radius:6px; overflow:hidden; margin-bottom:6px;';
 
             const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'padding:6px 10px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:11.5px; color:#555; user-select:none;';
+            headerRow.style.cssText = 'padding:6px 10px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:11.5px; color:#555; user-select:none; transition:background .15s;';
+            headerRow.onmouseover = function() { headerRow.style.background = '#eef0f2'; };
+            headerRow.onmouseout  = function() { headerRow.style.background = '#f8f9fa'; };
             const arrow = document.createElement('span');
             arrow.textContent = '▾';
             arrow.style.cssText = 'font-size:10px;';
@@ -21013,7 +21019,7 @@ window.openMailAutoConfigModal = async function() {
                 <!-- ══ 큰그룹1: 수집설정 (기본 접힘) — 옛 그룹1 ══ -->
                 <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                     <div onclick="window._toggleAlarmSection('mac-sec-collect')"
-                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                         <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⏱️ 수집설정</span>
                         <span id="mac-sec-collect-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
@@ -21051,7 +21057,7 @@ window.openMailAutoConfigModal = async function() {
                 <!-- ══ 큰그룹2: 가산점수 (기본 접힘) — 옛 그룹2(점수 가산 키워드)+그룹3(우선순위 점수)+그룹4(직급별 점수) 통합 ══ -->
                 <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                     <div onclick="window._toggleAlarmSection('mac-sec-score')"
-                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                         <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⭐ 가산점수</span>
                         <span id="mac-sec-score-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
@@ -21083,7 +21089,7 @@ window.openMailAutoConfigModal = async function() {
                 <!-- ══ 큰그룹3: 자동폐기 필터 (기본 접힘) — 옛 그룹5 ══ -->
                 <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                     <div onclick="window._toggleAlarmSection('mac-sec-filter')"
-                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none;">
+                         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
                         <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🚫 자동폐기 필터</span>
                         <span id="mac-sec-filter-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
@@ -21120,9 +21126,9 @@ window.openMailAutoConfigModal = async function() {
                 </div>
 
             </div>
-            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
-                <button onclick="window._macSave()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">💾 저장</button>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="flex:1; padding:8px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s;">✖ 닫기</button>
+            <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px;">
+                <button onclick="window._macSave()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
+                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
