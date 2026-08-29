@@ -4364,7 +4364,7 @@ ${mailText}`;
             groupFiles.forEach(function(file) {
                 let d = new Date(file.createdTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
                 let fileBtn = document.createElement('div');
-                fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #a5c8f0; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: #e8f4fd;";
+                fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid #a5c8f0; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: #e8f4fd;";
                 fileBtn.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
                 fileBtn.onmouseout = function() { this.style.background = '#e8f4fd'; this.style.borderColor = '#a5c8f0'; };
                 fileBtn.onclick = function() { window.executeRestoreBackup(file.id, file.name); };
@@ -5100,7 +5100,7 @@ ${mailText}`;
                 const doneBadge = isCompleted ? ` <span style="font-size:10.5px; font-weight:bold; color:#2f9e44; background:#e7f6ec; border-radius:9px; padding:1px 8px; vertical-align:middle;">✅ ${_dmEn ? 'Done' : '완료'}</span>` : '';
                 let fileBtn = document.createElement('div');
                 if (mode === 'delete') {
-                    fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid #ced4da; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff;";
+                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid #ced4da; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff;";
                     const infoWrap = document.createElement('div');
                     infoWrap.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
                     const delBtn = document.createElement('button');
@@ -5114,7 +5114,7 @@ ${mailText}`;
                 } else {
                     // 💡 완료된 프로젝트는 회색 톤(글자색/배경)으로 흐리게 — 목록에서 계속 눈에 띄되
                     //    "이건 이미 끝난 것"이라는 게 한눈에 구분되도록. 클릭해서 여는 동작 자체는 그대로 유지.
-                    fileBtn.style.cssText = "padding: 12px 15px; border: 1px solid " + (isCompleted ? '#ced4da' : '#a5c8f0') + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + (isCompleted ? '#f8f9fa' : '#e8f4fd') + ";";
+                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + (isCompleted ? '#ced4da' : '#a5c8f0') + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + (isCompleted ? '#f8f9fa' : '#e8f4fd') + ";";
                     fileBtn.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
                     fileBtn.onmouseout = function() { this.style.background = isCompleted ? '#f8f9fa' : '#e8f4fd'; this.style.borderColor = isCompleted ? '#ced4da' : '#a5c8f0'; };
                     fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
@@ -13531,7 +13531,6 @@ window.showMailAnalyzer = function() {
     // 💡 새로 열 때는 "AI 분석" 버튼이 다시 전체 폭 단일 버튼으로 시작
     const analyzeBtn = document.getElementById('mail-analyze-btn');
     if (analyzeBtn) {
-        analyzeBtn.style.width = '100%';
         analyzeBtn.disabled = false;
         analyzeBtn.innerHTML = window._currentLang === 'en' ? '🤖 AI Analyze' : '🤖 AI 분석';
         analyzeBtn.style.background = '#e8f4fd';
@@ -13827,11 +13826,11 @@ window.analyzeMailContent = async function() {
 
     const analyzeBtn = document.getElementById('mail-analyze-btn');
     const loadingDiv = document.getElementById('mail-loading');
-    // 💡 flex 비율 대신 width(calc)로 2:1 분할 — .action-btn의 flex !important 규칙과
-    //    충돌하지 않도록, "선택항목 연속등록"과 동일하게 width 속성만 사용
-    analyzeBtn.style.width = 'calc(66.6667% - 5.33px)';
+    // 💡 두 버튼 모두 flex:1 + min-width:0 (정적 스타일)로 1:1 균등분배되므로
+    //    여기서 width를 강제로 덮어쓰지 않음 (예전 2:1 calc 분할은 제거)
+    analyzeBtn.style.width = '';
     loadingDiv.style.display = 'block';
-    loadingDiv.style.width = 'calc(33.3333% - 2.67px)';
+    loadingDiv.style.width = '';
     document.getElementById('mail-result-section').style.display = 'none';
     document.getElementById('mail-error').style.display = 'none';
 
@@ -17296,11 +17295,13 @@ window.updateInboxBadge();
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
-                    <div style="display:flex; gap:8px; padding:6px 12px;">
+                    <div style="display:flex; gap:8px;">
+                        <div id="mail-analyze-wrap" style="flex:1; min-width:0;">
                         <button onclick="window.analyzeMailContent()" id="mail-analyze-btn" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="width:100%; box-sizing:border-box; height:29px; margin:0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                             🤖 AI 분석
                         </button>
-                        <div id="mail-loading" style="display:none; width:100%;">
+                        </div>
+                        <div id="mail-loading" style="display:none; flex:1; min-width:0;">
                             <button id="mail-reset-btn" onclick="window.mailResetAnalysis()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="width:100%; box-sizing:border-box; height:29px; padding:0 10px; margin:0; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">⏹ 중단/초기화</button>
                         </div>
                     </div>
