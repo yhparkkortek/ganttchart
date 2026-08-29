@@ -3909,7 +3909,7 @@ ${mailText}`;
 
     // 💡 저장 성공처럼 "확인" 없이 넘어가도 되는 알림 — 잠깐 떴다가 자동으로 사라짐
     window._toastStack = [];
-    window._toastH = 56; // 토스트 1개 높이 (padding+font 기준)
+    window._toastH = 64; // 토스트 1개 높이 — 아래 showToast의 고정 크기(width/max-height)와 일치시켜야 스택이 안 겹침
 
     window._toastReposition = function() {
         window._toastStack.forEach(function(el, i) {
@@ -3920,17 +3920,29 @@ ${mailText}`;
 
     window.showToast = function(message, type, duration) {
         type = type || 'success';
-        const bgMap = { error: '#e03131', info: '#555', warning: '#e67e22', success: '#2c5f8a' };
+        // 💡 [2026-08-29 파스텔 통일] 채도 높은 solid 배경(빨강/주황/진남색)+흰 글자 대신, 다른 곳과 동일한
+        //    4색 파스텔 기준(옅은 배경 + 진한 글자 + 옅은 테두리)으로 교체.
+        const themeMap = {
+            error:   { bg: '#fbe4e2', text: '#b1432f', border: '#eeb0ac' },
+            info:    { bg: '#eef1f3', text: '#495057', border: '#ced4da' },
+            warning: { bg: '#fbead9', text: '#a85d0a', border: '#edbf85' },
+            success: { bg: '#e8f4fd', text: '#1a4f7a', border: '#a5c8f0' },
+        };
+        const theme = themeMap[type] || themeMap.success;
         const ms = duration || (type === 'error' ? 5000 : type === 'info' ? 2500 : 3000);
         const toast = document.createElement('div');
         toast.textContent = message;
         const initBottom = 24 + window._toastStack.length * (window._toastH + 8);
+        // 💡 [2026-08-29 크기 통일] min/max-width 범위 + 줄 수 제한 없음이라 메시지 길이에 따라 토스트마다
+        //    폭·높이가 들쭉날쭉했다(길게 줄바꿈되면 아래 토스트와 겹치기도 함). width 고정 + 최대 2줄까지만
+        //    보이고 넘치면 …로 잘라서, 메시지 길이와 무관하게 항상 같은 크기의 토스트가 뜨도록 통일.
         toast.style.cssText = `
             position:fixed; bottom:${initBottom}px; right:24px; z-index:999999;
-            background:${bgMap[type] || bgMap.success}; color:#fff;
-            padding:12px 18px; border-radius:8px; font-size:13px; line-height:1.5;
-            box-shadow:0 4px 14px rgba(0,0,0,0.25); min-width:260px; max-width:340px; white-space:pre-line;
-            opacity:0; transform:translateY(8px);
+            background:${theme.bg}; color:${theme.text}; border:1px solid ${theme.border};
+            padding:12px 18px; border-radius:8px; font-size:13px; font-weight:bold; line-height:1.5;
+            box-shadow:0 4px 14px rgba(0,0,0,0.18); width:320px; height:64px; white-space:pre-line;
+            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+            opacity:0; transform:translateY(8px); box-sizing:border-box;
             transition:opacity 0.25s, transform 0.25s, bottom 0.25s;
         `;
         document.body.appendChild(toast);
