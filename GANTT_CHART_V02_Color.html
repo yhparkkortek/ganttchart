@@ -4770,19 +4770,26 @@ ${mailText}`;
         // 해버려서 CSS 쪽 [style*="#hex"] 오버라이드도 못 따라가 마우스를 올리면 도로 청록으로 보였다.
         // _cpRoleHex()를 직접 호출해 항상 "지금 테마"의 실제 색을 즉석에서 계산해 넣는다.
         const _cpHex = window._cpRoleHex || function(k) { return { bg: '#e0f5f7', hoverBg: '#a3d9e0', border: '#a3d9e0', hoverBorder: '#52a5af', darkText: '#00707d' }[k]; };
+        const _cpHexFor = window._cpRoleHexFor || function(k) { return _cpHex(k); };
+        // 💡 [2026-08-30 신규] "테마가 프로젝트마다 저장되니, 시트 탭 색만 보고도 그 프로젝트가 어떤
+        // 테마인지 알아보고 싶다"는 요청 — 지금 활성화된(보고 있는) 시트의 테마가 아니라, 각 탭이
+        // "자기 자신의" 저장된 테마(활성 시트는 실시간 tabData, 비활성 시트는 전환 시 떠둔 snapshot의
+        // tabData)를 각자 따로 읽어서 그 색으로 그린다 — 전환 안 해도 탭 색만으로 구분 가능해짐.
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
             const label = s.fileName || '(새 프로젝트)';
-            const bg = active ? _cpHex('bg') : '#fff';
-            const border = _cpHex('hoverBg');
-            const hoverBg = active ? _cpHex('zebraB') : _cpHex('bg');
-            const hoverBorder = _cpHex('hoverBorder');
+            const sheetOwnTabData = active ? window.tabData : (s.snapshot && s.snapshot.tabData);
+            const sheetThemeHex = sheetOwnTabData ? sheetOwnTabData.themeColor : null; // 없으면 기본 청록
+            const bg = active ? _cpHexFor('bg', sheetThemeHex) : '#fff';
+            const border = _cpHexFor('hoverBg', sheetThemeHex);
+            const hoverBg = active ? _cpHexFor('zebraB', sheetThemeHex) : _cpHexFor('bg', sheetThemeHex);
+            const hoverBorder = _cpHexFor('hoverBorder', sheetThemeHex);
             return `<div onclick="window.switchToSheetWithSave('${s.key}')"
                 title="${escapeHtml(label)}"
                 onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}';"
                 onmouseout="this.style.background='${bg}'; this.style.borderColor='${border}';"
                 style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px; transition:background .15s, border-color .15s;
-                       background:${bg}; color:${_cpHex('darkText')}; font-weight:${active ? 'bold' : 'normal'};
+                       background:${bg}; color:${_cpHexFor('darkText', sheetThemeHex)}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${border}; border-bottom:1px solid ${bg}; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
@@ -23586,7 +23593,11 @@ window._cpApplyLive = function(hex, skipSave) {
         [window.CP_CURRENT_TEAL.border, gen.border], [window.CP_CURRENT_TEAL.hoverBorder, gen.hoverBorder],
         [window.CP_CURRENT_TEAL.hoverBg, gen.hoverBg] // hoverBg(#a3d9e0)는 버튼 배경으로도, 박스 테두리로도 둘 다 쓰임
     ];
-    const textRoles = [[window.CP_CURRENT_TEAL.darkText, gen.darkText], [nav.text, genNav.text]];
+    // 💡 [2026-08-30 추가] "변경 이력 확인" 헤더 라벨(gantt/addr/summary/M.C Table/Brief SPEC/Panel
+    // Compare/Elec Parts 등 8곳)을 비롯해 모달 제목·섹션 라벨 40여 곳이 청록 전환 이전부터 쓰던 옛
+    // 원색 파랑(#2c5f8a)을 텍스트 색으로 그대로 쓰고 있어서, 팔레트로 어떤 테마를 골라도 이 글자들만
+    // 안 바뀌는 문제가 있었다 — darkText 역할과 같은 의미(강조 텍스트)이므로 같이 매핑.
+    const textRoles = [[window.CP_CURRENT_TEAL.darkText, gen.darkText], ['#2c5f8a', gen.darkText], [nav.text, genNav.text]];
 
     let css = '';
     // 💡 [2026-08-30] .concept-section(서브 카드 박스 전부의 공용 클래스)의 기본 테두리(#cfe3e5, border
@@ -23601,7 +23612,11 @@ window._cpApplyLive = function(hex, skipSave) {
         // 파랑(#2c5f8a)으로 박혀 있어서 페이지마다 "제목 버튼 호버만 테마 미적용"으로 보였던 부분.
         + '.action-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.prod-img-slot { border-color: ' + gen.hoverBg + ' !important; background: ' + gen.headerTint + ' !important; }\n'
-        + '.prod-img-slot:hover { border-color: ' + gen.hoverBorder + ' !important; }\n';
+        + '.prod-img-slot:hover { border-color: ' + gen.hoverBorder + ' !important; }\n'
+        // 💡 [2026-08-30 추가] Gantt 메인 표를 감싸는 .container(외곽 테두리+배경, 그 안에 표와
+        // "변경 이력 확인" 박스가 같이 들어있음)도 클래스 규칙이라 인라인 매칭이 안 잡아서 항상 청록으로
+        // 박혀 있었음.
+        + '.container { border-color: ' + gen.hoverBg + ' !important; background: ' + gen.bg + ' !important; }\n';
     // 🐛 [버그 수정] onmouseover/onmouseout처럼 JS가 el.style.xxx = '#hex'로 직접 건드리는 순간, 브라우저가
     // 그 요소의 style 속성 전체를 rgb(...) 표기로 다시 직렬화해버린다(건드리지 않은 다른 속성까지 포함)
     // — 그러면 hex 문자열이 통째로 사라져서 [style*="#hex"] 매칭이 전부 실패하고, 마우스를 올리거나
@@ -23738,16 +23753,22 @@ window._cpMarkRevertedForSave = function() {
 // 커스텀 테마가 있으면 그 색으로, 없으면 기본 청록으로 계산해 "#rrggbb" 형태로 돌려준다 — JS로 동적
 // 생성/갱신되는 UI(시트 탭바 등)가 하드코딩 hex 대신 이걸 직접 참조하면, onmouseover가 style을 건드려도
 // (재직렬화 문제와 무관하게) 항상 최신 테마색을 쓰게 된다.
-window._cpRoleHex = function(roleKey) {
+// 💡 baseHex를 명시적으로 넘기면 "지금 화면에 적용된 라이브 테마"가 아니라 그 색 기준으로 역할색을
+// 계산한다 — 시트 탭바처럼 "지금 활성화된 시트"와 무관하게 "그 시트 자신이 저장해둔 테마"로 각자
+// 색을 내야 하는 경우에 씀(아래 renderSheetTabsBar 참고).
+window._cpRoleHexFor = function(roleKey, baseHex) {
     let hex;
-    if (window._cpLiveAppliedHex) {
-        const hue = window._cpHexToHsl(window._cpLiveAppliedHex).h;
+    if (baseHex) {
+        const hue = window._cpHexToHsl(baseHex).h;
         const roleDef = window.CP_ROLES.find(function(r) { return r.key === roleKey; });
         hex = roleDef ? window._cpHslToHex(hue, roleDef.s, roleDef.l) : window.CP_CURRENT_TEAL[roleKey];
     } else {
         hex = window.CP_CURRENT_TEAL[roleKey];
     }
     return hex || '#000000';
+};
+window._cpRoleHex = function(roleKey) {
+    return window._cpRoleHexFor(roleKey, window._cpLiveAppliedHex);
 };
 window._cpXlsxRole = function(roleKey) {
     return window._cpRoleHex(roleKey).replace('#', '').toUpperCase();
