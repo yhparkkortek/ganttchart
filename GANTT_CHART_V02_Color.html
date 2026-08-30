@@ -616,11 +616,15 @@
 }
 .topbar-btn:hover { background: #90cdd5; }
 .topbar-btn:disabled { opacity:0.5; cursor:default; }
-/* 💡 [2026-08-30 신규] 언어 토글이 "영문 선택됨" 상태일 때의 강조 표시 — 예전엔 toggleLang()이
-   인라인 style로 직접 칠해서 테마 변경을 못 따라갔음(위 toggleLang 주석 참고). 클래스로 빼서
-   정적 기본값은 여기(사이드바 "선택됨"과 같은 진한 청록), 라이브 테마는 _cpApplyLive가 담당한다. */
-.topbar-btn.lang-active { background:#00636e; color:#fff; border-color:#00636e; }
-.topbar-btn.lang-active:hover { background:#00505a; }
+/* 💡 [2026-08-30 신규 → 같은 날 재수정] 언어 토글이 "영문 선택됨" 상태일 때의 강조 표시 — 예전엔
+   toggleLang()이 인라인 style로 직접 칠해서 테마 변경을 못 따라갔음(위 toggleLang 주석 참고).
+   클래스로 뺀 뒤 처음엔 진한 청록 배경+흰 글자(genNav.text를 배경으로)로 칠했는데, 이 앱의 "선택됨/
+   활성" 표시는 어디서나(사이드바 .sb-item.active 등) 옅은 파스텔 배경("active" 역할, genNav.active)
+   + 진한 글자(genNav.text) 조합만 쓰지, 진한 배경+흰 글자 조합은 이 앱 어디에도 없다 — 그래서
+   "테마는 따라가는데 색 자체가 다른 버튼들과 안 어울리고 튄다(=색이 틀렸다)"는 지적이 나온 것.
+   사이드바 "선택됨"과 완전히 동일한 배색 규칙으로 통일한다. */
+.topbar-btn.lang-active { background:#72c0ca; color:#00636e; }
+.topbar-btn.lang-active:hover { background:#90cdd5; }
 /* 💡 [2026-08-30 신규] Elec Parts "🔌 핀맵 보기"/"🔌 보기" 버튼 호버가 다른 액션 버튼들과 같은
    고정 하늘색(#cfe6fa)이라 테마가 안 먹혔음 — 호버만 "펼치기"(.concept-add-row-btn)와 같은
    테마색으로 통일(평소 색은 다른 액션 버튼과 통일감 있게 그대로 유지). */
@@ -24471,10 +24475,12 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#app-sidebar .sb-toggle-btn:hover { background: ' + genNav.hover + ' !important; }\n'
         + '.topbar-btn { color: ' + genNav.text + ' !important; }\n'
         + '.topbar-btn:hover { background: ' + genNav.hover + ' !important; }\n'
-        // 💡 [2026-08-30 추가] 언어 토글 "영문 선택됨" 강조 — 사이드바 메뉴의 "선택됨"과 같은 역할색
-        // (genNav.text: 진한 색 + 흰 글자)으로, 테마를 바꾸면 이 표시도 즉시 같이 바뀐다.
-        + '.topbar-btn.lang-active { background: ' + genNav.text + ' !important; border-color: ' + genNav.text + ' !important; color: #fff !important; }\n'
-        + '.topbar-btn.lang-active:hover { background: ' + genNav.active + ' !important; }\n'
+        // 💡 [2026-08-30 추가 → 같은 날 재수정] 언어 토글 "영문 선택됨" 강조 — 사이드바 .sb-item.active와
+        // 완전히 동일한 배색(옅은 파스텔 배경=genNav.active + 진한 글자=genNav.text)으로 통일. 처음엔
+        // genNav.text를 배경으로 쓰고 흰 글자를 얹었는데, 이 조합은 이 앱의 "선택됨" 표시 관례(옅은
+        // 배경+진한 글자)와 달라서 튀어 보였다("테마는 따라가는데 색 자체가 이상하다"는 지적의 원인).
+        + '.topbar-btn.lang-active { background: ' + genNav.active + ' !important; color: ' + genNav.text + ' !important; }\n'
+        + '.topbar-btn.lang-active:hover { background: ' + genNav.hover + ' !important; }\n'
         // 💡 [2026-08-30 추가] 상단바의 "📄 현재 프로젝트 파일명" 표시가 옛 고정 청록(글자/호버 배경
         // 둘 다)이라 테마가 안 먹혔음 — 같은 상단바 안의 .topbar-btn과 같은 톤(genNav)으로 통일.
         + '#current-project-filename { color: ' + genNav.text + ' !important; }\n'
