@@ -23652,6 +23652,14 @@ window._cpApplyLive = function(hex) {
         + '.concept-add-row-btn, .gantt-filter-trigger-btn:not(.filter-active) { background: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.concept-add-row-btn:hover, .gantt-filter-trigger-btn:not(.filter-active):hover, #gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover, #print-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
+    // 🐛 [버그 수정] "핀셋(알람 켜짐)" 행 파란 하이라이트(tr.alarm-on, #e3f2fd + 좌측 파란 선)가 지브라
+    // 줄무늬보다 항상 위에 오도록 원래 코드에서 이미 한 번 재선언까지 해뒀는데, 지금 라이브 테마
+    // 오버라이드(위 gantt-zebra-b 규칙)가 동일 특이도로 "더 나중에" 끼어들면서 도로 덮어써 알람 표시가
+    // 테마색에 가려 안 보이게 됐다. 알람 표시는 청록/보라 등 테마와 무관한 고정 상태색이므로(M.C Table
+    // MVD/R1/VS처럼) 절대 안 바뀌어야 함 — 이 오버라이드 블록 "맨 끝"에 원래 색을 다시 선언해 항상 이기게 함.
+    css += '#myTable tbody tr.alarm-on td { background-color: #e3f2fd !important; }\n'
+        + '#myTable tbody tr.alarm-on td:first-child { box-shadow: inset 3px 0 0 0 #4285f4 !important; }\n';
+
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
     //    문서 전체에서 가장 마지막 스타일이 되도록 보장한다(매번 다시 appendChild해서 위치 유지).
