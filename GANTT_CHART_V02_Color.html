@@ -808,8 +808,20 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 /* 🐛 [버그 수정 3차] 고정 박스로 만든 뒤에도 "화살표 자리에 빈 상자만 보인다"는 지적이 계속됨 —
    실제로 열어보면 화살표 글자(▶, U+25B6)는 정상적으로 들어있었지만, 크기(9px)와 색(#777, 연회색)이
    너무 옅고 작아서 흰 배경 위 옅은 회색 박스(#f1f3f5) 안에서는 육안으로 거의 안 보였다 — 그래서
-   "글자 없는 빈 박스"처럼 보인 것. 굵게+더 진한 색+살짝 더 큰 크기로 확실히 보이게 한다. */
-.ai-ref-toggle { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; line-height:1; cursor:pointer; font-size:10px; font-weight:bold; color:#495057; margin:0 3px; border-radius:3px; vertical-align:middle; user-select:none; transition:background .15s, color .15s; }
+   "글자 없는 빈 박스"처럼 보인 것. 굵게+더 진한 색+살짝 더 큰 크기로 확실히 보이게 한다.
+   🐛 [버그 수정 4차 — 진짜 원인] "AI 요약은 멀쩡한데 AI 문답만 화살표가 번호에 겹치고 빈 상자가
+   보인다"는 지적의 실제 원인. 두 화면은 같은 _linkifyTaskRefs를 쓰지만 감싸는 렌더링 경로가 다르다:
+     · AI 요약  → <ul><li> 로 그림 (text-indent 없음)          → 정상
+     · AI 문답  → _mdToHtml이 마크다운 불릿("- ")을 만나면
+                  <div style="padding-left:14px; text-indent:-14px"> 로 그림 → 깨짐
+   text-indent는 상속되는 속성이라, inline-flex인 이 토글 안의 텍스트(▶)를 감싸는 익명 블록에까지
+   내려와 글자를 14px 왼쪽으로 밀어낸다 → ▶가 자기 상자를 벗어나 바로 앞 "#G94" 위에 겹쳐 그려지고,
+   정작 상자는 빈 채로 남아 "빈 상자"처럼 보였다(실측: 상자 left=290인데 글자 left=285).
+   여기서 text-indent를 0으로 끊어주면 어떤 부모 아래에 있든 항상 상자 정중앙에 그려진다.
+   ※ 이전 검증이 통과했던 이유: 테스트 문자열에 "• "(이미 변환된 불릿 문자)를 썼는데, _mdToHtml의
+     불릿 정규식은 "- "/"* "만 매치하므로 text-indent 경로 자체를 안 타서 문제가 재현되지 않았다. */
+.ai-ref-toggle { display:inline-flex; align-items:center; justify-content:center; width:16px; height:16px; line-height:1; text-indent:0; cursor:pointer; font-size:10px; font-weight:bold; color:#495057; margin:0 3px; border-radius:3px; vertical-align:middle; user-select:none; transition:background .15s, color .15s; }
+.ai-ref-extra { text-indent:0; } /* 펼쳤을 때 나오는 📌/📧/발신인도 같은 이유로 밀리지 않도록 */
 .ai-ref-toggle { background:#eef1f3; border:1px solid #ced4da; } /* 💡 평소에도 옅은 칩 배경을 둬서 바로 앞 굵은 글자와 확실히 분리돼 보이게 함 */
 .ai-ref-toggle:hover { color:#212529; background:#dee2e6; }
 .ai-ref-extra { display:inline-block; max-width:0; overflow:hidden; opacity:0; transition:max-width .25s ease, opacity .2s ease; vertical-align:middle; white-space:nowrap; }
