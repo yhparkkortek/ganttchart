@@ -624,6 +624,21 @@
    있어도 JS가 매번 다시 덮어써서 테마가 안 먹혔음. CSS :hover로 바꿔서 _cpApplyLive가 이길 수
    있게 함(#current-project-filename:hover, 아래 참고) — 정적 기본값은 기존과 동일한 청록. */
 #current-project-filename:hover { background:rgba(0,113,125,0.12) !important; }
+/* 💡 [2026-08-30 신규] "변경/수정 이력 확인" 박스(Gantt/Address/Summary/Brief SPEC/M.C Table/
+   Panel Compare/Elec Parts adbd·convbd — 8개 탭 + 세션 히스토리 모달 공통) 디자인 통일 — 예전엔
+   회색 헤더 배경에 파란 글자만 있었는데, 흰 배경 + 강조 밑줄로 정리하고 시작일/종료일/삭제비밀번호
+   입력칸도 "구간 삭제" 버튼과 같은 높이/폰트 크기로 맞췄다. id가 전부 이 접미사로 끝나는 규칙을
+   이용해 8곳(+세션 히스토리)을 한 번에 통일한다(각 HTML을 일일이 안 고쳐도 됨). */
+[id$="-history-header"] {
+    background: #fff !important;
+    border-bottom: 2px solid #52a5af; /* 정적 기본값(teal) — _cpApplyLive가 라이브 테마일 땐 덮어씀 */
+}
+/* 💡 Gantt 탭(및 세션 히스토리 모달)만 예전부터 "gantt-" 접두사 없이 그냥 history-del-from처럼 써서
+   접두사 있는 나머지 7곳과 id 규칙이 다르다 — 접두사 유무 둘 다 잡히도록 "history-del-..."로 끝나는
+   것만 확인(하이픈 없이). */
+[id$="history-del-from"], [id$="history-del-to"], [id$="history-del-pw"] {
+    font-size: 13px; padding: 6px 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 6px;
+}
 
 #app-sidebar {
     position: fixed; top: var(--topbar-h); left: 0; height: calc(100vh - var(--topbar-h)); width: var(--sb-w);
@@ -10809,9 +10824,14 @@ window.deleteHistoryByDateRange = function() {
         window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
         const btn = document.getElementById('lang-toggle-btn');
         btn.textContent = LANG[window._currentLang].btnText;
-        btn.style.background = window._currentLang === 'en' ? '#0056b3' : '';
+        // 🐛 [2026-08-30 버그 수정] "ENG" 활성 표시가 옛 고정 파랑(#0056b3)이라 테마가 안 먹혔음 —
+        // 사이드바 메뉴의 "선택됨" 표시(nav.text 역할, 원래도 진한 청록 #00636e라 흰 글자와 대비가
+        // 좋았음)와 같은 역할색을 재사용해서, 테마를 바꾸면 이 표시도 같이 바뀌도록 한다.
+        const _navHue = window._cpHexToHsl ? window._cpHexToHsl(window._cpLiveAppliedHex || '#00707d').h : null;
+        const _activeBg = (_navHue !== null && window._cpComputeGenNav) ? window._cpComputeGenNav(_navHue).text : '#0056b3';
+        btn.style.background = window._currentLang === 'en' ? _activeBg : '';
         btn.style.color = window._currentLang === 'en' ? '#fff' : '';
-        btn.style.borderColor = window._currentLang === 'en' ? '#0056b3' : '';
+        btn.style.borderColor = window._currentLang === 'en' ? _activeBg : '';
 
         // UI 버튼 텍스트 일괄 업데이트
         const uiMap = LANG[window._currentLang].ui;
@@ -24393,6 +24413,11 @@ window._cpApplyLive = function(hex, skipSave) {
         // 💡 [2026-08-30 추가] M.C Table 제품구분자 패널의 ✏️(이름변경)/➕(추가) 호버도 "펼치기"(위
         // .concept-add-row-btn)와 동일한 테마색으로 통일(🗑️ 삭제는 위험 액션이라 빨강 고정 유지).
         + '#mc-add-unit-btn:hover, #mc-unit-rename-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        // 💡 [2026-08-30 추가] ✏️(이름변경)는 ➕/🗑️와 달리 평소에도 테두리+배경이 있는 박스 형태라
+        // (➕/🗑️는 투명 배경) 흰 배경이 고정으로 박혀 있었음 — 평소 상태도 "펼치기"와 같은 테마색으로.
+        + '#mc-unit-rename-btn { background-color: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        // 💡 [2026-08-30 추가] "변경/수정 이력 확인" 헤더의 강조 밑줄도 테마색으로.
+        + '[id$="-history-header"] { border-bottom-color: ' + gen.hoverBorder + ' !important; }\n'
         // 💡 [2026-08-30 추가] Calendar의 월/주 토글(.cal-view-btn)이 옛 파스텔-블루 고정색이라 테마가
         // 안 먹혀서 항상 파랗게 박혀 보였음 — LEVEL(WBS) 트리거와 같은 톤 규칙으로 편입.
         + '.cal-view-btn { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
@@ -31757,7 +31782,7 @@ window.mcRenderUnitTabs = function() {
         + escapeHtml(cur) + '</button>'
         + '<button id="mc-unit-actions-toggle" onclick="window.mcToggleUnitActions()" title="' + (isOpen ? '접기' : '제품구분자 관리(이름변경/추가/삭제)') + '" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (isOpen ? '#e9ecef' : 'none') + '; color:#555; cursor:pointer; font-size:12px;">' + (isOpen ? '◀' : '▶') + '</button>'
         + '<div id="mc-unit-actions-panel" class="' + (isOpen ? 'mc-unit-actions-open' : '') + '">'
-        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:1px solid #ddd; border-radius:4px; background:#fff; color:#555; cursor:pointer; font-size:14px;">✏️</button>'
+        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:1px solid #a3d9e0; border-radius:4px; background:#e0f5f7; color:#00707d; cursor:pointer; font-size:14px;">✏️</button>'
         + '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
         + '<button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
         + '</div>';
