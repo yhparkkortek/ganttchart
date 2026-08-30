@@ -11970,10 +11970,10 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                     if (!cell) continue;
                     cell.s = {
                         font: c === 8
-                            ? { name: "Consolas", sz: 11, bold: true, color: { rgb: "1F3A5F" } }
+                            ? { name: "Consolas", sz: 11, bold: true, color: { rgb: window._cpXlsxRole('darkText') } }
                             : { name: "맑은 고딕", sz: 10, bold: isL0, color: { rgb: "1F2937" } },
-                        fill: isL0 ? { patternType: "solid", fgColor: { rgb: "E9EEF6" } }
-                                : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
+                        fill: isL0 ? { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('headerTint') } }
+                                : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('zebraB') } } : undefined),
                         alignment: { vertical: "center", horizontal: c <= 5 ? "center" : (c === 8 ? "center" : "left"), wrapText: c === 7 }
                     };
                 }
@@ -12041,7 +12041,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             { s: { r: 15, c: 0 }, e: { r: 15, c: 9 } }, // 추진 배경 내용
         ];
         (function() {
-            const NAVYS = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+            const NAVYS = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('darkText') } }, alignment: { vertical: "center", horizontal: "center" } };
             const rowFill = function(r, rgb) {
                 for (let c = 0; c <= 9; c++) { const cell = wsSummary[XLSX.utils.encode_cell({ r: r, c: c })]; if (!cell) continue;
                     cell.s = { font: { name: "맑은 고딕", sz: 10, bold: c === 0 }, fill: { patternType: "solid", fgColor: { rgb: rgb } }, alignment: { vertical: "center", horizontal: "center", wrapText: true } }; }
@@ -12170,7 +12170,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                 for (let r = 0; r <= 1; r++) {
                     for (let c = 0; c < header1.length; c++) {
                         const h = wsComp[XLSX.utils.encode_cell({ r: r, c: c })];
-                        if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                        if (h) h.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('darkText') } }, alignment: { vertical: "center", horizontal: "center" } };
                     }
                 }
                 const compRange = XLSX.utils.decode_range(wsComp['!ref']);
@@ -12187,7 +12187,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                                 alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
                             };
                         } else if (c === 0) {
-                            cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                            cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('darkText') } }, alignment: { vertical: "center", horizontal: "center" } };
                         }
                     }
                 }
@@ -12275,7 +12275,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
             typeMerges.forEach(function(m) { wsMc['!merges'].push(m); });
             for (let c = 0; c <= 11; c++) {
                 const h2 = wsMc[XLSX.utils.encode_cell({ r: 1, c: c })];
-                if (h2) h2.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                if (h2) h2.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('darkText') } }, alignment: { vertical: "center", horizontal: "center" } };
             }
             // 💡 Note 헤더 상단 셀(최종수정 날짜)만 우측 정렬 — 나머지 헤더는 기본 중앙정렬 유지
             const noteDateCell = wsMc[XLSX.utils.encode_cell({ r: 0, c: 11 })];
@@ -12294,7 +12294,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                             alignment: { vertical: "center", horizontal: c === 0 ? "right" : "center" }
                         };
                     } else if (c === 0) {
-                        cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: "1F3A5F" } }, alignment: { vertical: "center", horizontal: "center" } };
+                        cell.s = { font: { name: "맑은 고딕", sz: 10, bold: true, color: { rgb: "FFFFFF" } }, fill: { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('darkText') } }, alignment: { vertical: "center", horizontal: "center" } };
                     }
                 }
             }
@@ -12467,7 +12467,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
 
     // ===== 엑셀 출력 공통 스타일러 =====
     function applyExcelStyles(wb) {
-        const NAVY = "1F3A5F", BORDER = { style: "thin", color: { rgb: "B7C1CE" } };
+        const NAVY = window._cpXlsxRole('darkText'), BORDER = { style: "thin", color: { rgb: window._cpXlsxRole('border') } };
         const allBorder = { top: BORDER, bottom: BORDER, left: BORDER, right: BORDER };
         wb.SheetNames.forEach(function(name) {
             const ws = wb.Sheets[name];
@@ -12492,7 +12492,7 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                     const base = {
                         font: { name: "맑은 고딕", sz: 10, bold: isHeader, color: { rgb: isHeader ? "FFFFFF" : "1F2937" } },
                         fill: isHeader ? { patternType: "solid", fgColor: { rgb: NAVY } }
-                              : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: "F7F9FB" } } : undefined),
+                              : (r % 2 === 0 ? { patternType: "solid", fgColor: { rgb: window._cpXlsxRole('zebraB') } } : undefined),
                         border: allBorder,
                         alignment: { vertical: "center", horizontal: isHeader ? "center" : undefined, wrapText: txt2.indexOf('\n') !== -1 }
                     };
@@ -23703,6 +23703,20 @@ window._cpMarkRevertedForSave = function() {
     if (window._markNonGanttDirty) window._markNonGanttDirty();
 };
 // 💡 프로젝트를 불러온 직후(populateTabData) 저장돼 있던 테마 색이 있으면 자동으로 다시 적용.
+// 💡 [2026-08-30 신규] "엑셀로 내보내기" 결과물(xlsx)이 항상 고정된 남색(1F3A5F)/회색 헤더로 나가던 것을,
+// 지금 화면에 적용 중인 테마(팔레트로 고른 색이 있으면 그 색, 없으면 기본 청록)에 맞춰 색이 바뀌도록
+// 하는 헬퍼. XLSX 셀 색은 "#" 없는 6자리 대문자 hex라 그 형식으로 반환한다.
+window._cpXlsxRole = function(roleKey) {
+    let hex;
+    if (window._cpLiveAppliedHex) {
+        const hue = window._cpHexToHsl(window._cpLiveAppliedHex).h;
+        const roleDef = window.CP_ROLES.find(function(r) { return r.key === roleKey; });
+        hex = roleDef ? window._cpHslToHex(hue, roleDef.s, roleDef.l) : window.CP_CURRENT_TEAL[roleKey];
+    } else {
+        hex = window.CP_CURRENT_TEAL[roleKey];
+    }
+    return (hex || '#000000').replace('#', '').toUpperCase();
+};
 window._cpApplyStoredTheme = function() {
     const hex = window.tabData && window.tabData.themeColor;
     if (hex && window._cpApplyLive) window._cpApplyLive(hex, true);
@@ -27602,7 +27616,7 @@ window.exportPanelCompareToExcel = async function() {
             // 💡 헤더 행("Comparison table"+모델명)은 회색, 구분(섹션) 행만 흐린 살구색 — 화면 표시와 통일
             cell.s = {
                 font: { name: '맑은 고딕', sz: 10, bold: isHeader || isSection, color: { rgb: isSection ? '7A5210' : (isHeader ? '333333' : '1F2937') } },
-                fill: isSection ? { patternType: 'solid', fgColor: { rgb: 'FFF8E6' } } : (isHeader ? { patternType: 'solid', fgColor: { rgb: 'F8F9FA' } } : undefined),
+                fill: isSection ? { patternType: 'solid', fgColor: { rgb: 'FFF8E6' } } : (isHeader ? { patternType: 'solid', fgColor: { rgb: window._cpXlsxRole('headerTint') } } : undefined),
                 alignment: { vertical: 'center', horizontal: ci === 0 ? 'left' : 'center', wrapText: true },
                 border: { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
             };
@@ -28886,7 +28900,7 @@ window.exportElecCompareToExcel = async function(type) {
             if (!cell) continue;
             cell.s = {
                 font: { name: '맑은 고딕', sz: 10, bold: isHeader || isSection, color: { rgb: isSection ? '7A5210' : (isHeader ? '333333' : '1F2937') } },
-                fill: isSection ? { patternType: 'solid', fgColor: { rgb: 'FFF8E6' } } : (isHeader ? { patternType: 'solid', fgColor: { rgb: 'F8F9FA' } } : undefined),
+                fill: isSection ? { patternType: 'solid', fgColor: { rgb: 'FFF8E6' } } : (isHeader ? { patternType: 'solid', fgColor: { rgb: window._cpXlsxRole('headerTint') } } : undefined),
                 alignment: { vertical: 'center', horizontal: ci === 0 ? 'left' : 'center', wrapText: true },
                 border: { top: thinBorder, bottom: thinBorder, left: thinBorder, right: thinBorder }
             };
