@@ -4044,7 +4044,7 @@ ${mailText}`;
     window._hasUnsavedChangesNow = function() {
         const currentLogs = window.changeLogs ? window.changeLogs.length : 0;
         const savedLogs = window.lastSavedLogCount || 0;
-        return currentLogs > savedLogs || !!window._nonGanttDirty;
+        return currentLogs > savedLogs || !!window._nonGanttDirty || !!window._cpThemeDirty;
     };
 
     // 💡 [버그 수정] "프로젝트 열기"가 시트 전환 전에 현재 작업을 자동 저장하려다가, 빈/기본 시트에서도
@@ -4109,7 +4109,7 @@ ${mailText}`;
         //    바꾸고 그냥 다시 눌러도(예: 불안해서 여러 번 누르는 경우) 매번 백업 파일을 통째로 새로
         //    만들고 있었다 — 이 함수가 changeLogs/lastSavedLogCount를 갱신하기 "전"인 지금 시점의
         //    상태를 미리 캡처해서, 성공 후 실제로 바뀐 게 있었는지 판단하는 데 쓴다.
-        const _preSaveHadChanges = ((window.changeLogs ? window.changeLogs.length : 0) > (window.lastSavedLogCount || 0)) || !!window._nonGanttDirty;
+        const _preSaveHadChanges = ((window.changeLogs ? window.changeLogs.length : 0) > (window.lastSavedLogCount || 0)) || !!window._nonGanttDirty || !!window._cpThemeDirty;
         try {
             if (window.collectTabData) window.collectTabData();
             window._ensureRowUids(); // 🔀 이번에 저장될 모든 행이 고유 uid를 갖도록 보장(3-way 병합의 전제조건)
@@ -4257,6 +4257,10 @@ ${mailText}`;
                 window.currentDriveFileId = file.id;
                 window.lastSavedLogCount = window.changeLogs.length;
                 window._nonGanttDirty = false; // 💡 Summary 탭(주요자재 등) 편집도 저장됐으니 함께 리셋
+                // 💡 [2026-08-30] 방금 저장된 테마 색을 "저장된 기준값"으로 갱신 — 팔레트에서 색을
+                // 이리저리 바꿔보다가 결국 이 값으로 되돌아오면 dirty 취급하지 않기 위한 기준점.
+                window._cpSavedThemeHex = (window.tabData && window.tabData.themeColor) || null;
+                window._cpThemeDirty = false; // 방금 저장됐으니 테마 dirty도 같이 리셋
                 // 💡 [버그 수정] 새 프로젝트를 처음 저장하면 currentDriveFileId/Name은 바로 갱신되는데,
                 //    시트 탭 바가 읽는 window._sheets 배열의 해당 항목(fileId/fileName)은 안 바뀌었다 —
                 //    그 배열은 "다른 시트로 전환할 때"(_commitActiveSheet)만 동기화돼서, 저장 직후엔 탭이
@@ -13175,7 +13179,7 @@ window.handleAuthClick = function() {
             let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
             let savedLogs = window.lastSavedLogCount || 0;
             // 💡 Gantt 표 편집뿐 아니라 Summary/Brief SPEC/M.C Table 편집도 같이 확인
-            const hasChanges = currentLogs > savedLogs || window._nonGanttDirty;
+            const hasChanges = currentLogs > savedLogs || window._nonGanttDirty || window._cpThemeDirty;
             if (!hasChanges) return;
             if (window.currentDriveFileId) {
                 saveToGoogleDrive();
@@ -13209,7 +13213,7 @@ window.handleAuthClick = function() {
         let currentLogs = window.changeLogs ? window.changeLogs.length : 0;
         let savedLogs = window.lastSavedLogCount || 0;
         // 💡 Gantt 표 편집뿐 아니라 Summary/Brief SPEC/M.C Table 편집도 같이 확인
-        let hasUnsaved = currentLogs > savedLogs || window._nonGanttDirty;
+        let hasUnsaved = currentLogs > savedLogs || window._nonGanttDirty || window._cpThemeDirty;
         // 💡 [버그 수정] 지금 활성 시트만 확인했는데, [멀티시트]로 백그라운드에 잠들어있는 다른 시트
         //    (특히 fileId가 없어 어디서도 자동저장되지 않는 "새 프로젝트")에 저장 안 한 변경사항이 있어도
         //    감지하지 못했다 — 그 상태로 탭/창을 닫으면 경고 없이 그대로 사라졌다. 백그라운드 시트의
@@ -23605,6 +23609,10 @@ window._cpComputeGenNav = function(hue) {
     };
 };
 window._cpLiveAppliedHex = null;
+// 💡 [2026-08-30 신규] "지금 프로젝트 파일에 실제로 저장되어 있는" 테마 색 기준값 — populateTabData
+// (프로젝트 로드/시트 전환)와 저장 성공 시점마다 갱신된다. 팔레트에서 색을 이리저리 바꿔보다가
+// 결국 이 값으로 돌아오면 "실제로는 아무것도 안 바뀐 것"이므로 dirty로 잡지 않기 위한 비교 기준.
+window._cpSavedThemeHex = null;
 window._cpApplyLive = function(hex, skipSave) {
     const hue = window._cpHexToHsl(hex).h;
     const gen = {};
@@ -23785,14 +23793,22 @@ window._cpApplyLive = function(hex, skipSave) {
     if (!skipSave) {
         window.tabData = window.tabData || {};
         window.tabData.themeColor = hex;
-        if (window._markNonGanttDirty) window._markNonGanttDirty();
+        // 🐛 [버그 수정] 여기서 무조건(전역 공용 플래그로) dirty 표시했더니, 팔레트에서 다른 색을
+        // 눌러봤다가 결국 원래(저장돼 있던) 색으로 되돌아와도 한 번 켜진 dirty 플래그가 그대로 남아
+        // 시트를 옮길 때마다 계속 저장 여부를 물어봤다 — 실제로는 아무것도 안 바뀐 상태인데도.
+        // 다른 편집(Summary/Brief SPEC 등)의 dirty 플래그와는 별도로 "테마만의 dirty" 상태를 전용
+        // 플래그(_cpThemeDirty)로 따로 관리해서, 저장된 기준값으로 되돌아오면 다시 꺼질 수 있게 한다
+        // (_hasUnsavedChangesNow() 등에서 이 플래그도 같이 확인함).
+        window._cpThemeDirty = (hex !== window._cpSavedThemeHex);
     }
 };
 // 💡 프로젝트를 저장할 때 테마도 같이 저장되도록, "청록으로 되돌리기"도 저장 대상 상태로 기록한다
 // (안 그러면 새로고침 없이 저장만 했을 때 되돌린 게 반영 안 되고 이전 색이 계속 복원됨).
 window._cpMarkRevertedForSave = function() {
     if (window.tabData) { delete window.tabData.themeColor; }
-    if (window._markNonGanttDirty) window._markNonGanttDirty();
+    // 🐛 [버그 수정] 저장된 기준값이 애초에 없었으면(=커스텀 테마를 저장한 적 없는 프로젝트) 되돌리기는
+    // 실제로 아무것도 바꾸지 않는 조작이므로 dirty로 잡지 않는다.
+    window._cpThemeDirty = !!window._cpSavedThemeHex;
 };
 // 💡 프로젝트를 불러온 직후(populateTabData) 저장돼 있던 테마 색이 있으면 자동으로 다시 적용.
 // 💡 [2026-08-30 신규] "엑셀로 내보내기" 결과물(xlsx)이 항상 고정된 남색(1F3A5F)/회색 헤더로 나가던 것을,
@@ -23837,6 +23853,10 @@ window._gftHover = function(el, entering) {
 };
 window._cpApplyStoredTheme = function() {
     const hex = window.tabData && window.tabData.themeColor;
+    // 💡 [2026-08-30] 이 프로젝트가 실제로 저장해둔(또는 안 해둔) 테마를 "기준값"으로 기록 — 팔레트를
+    // 열어 색을 이리저리 눌러보다가 결국 이 값으로 되돌아오면 dirty로 잡지 않기 위함.
+    window._cpSavedThemeHex = hex || null;
+    window._cpThemeDirty = false; // 방금 불러온 프로젝트는 아직 아무것도 안 건드린 깨끗한 상태
     if (hex && window._cpApplyLive) window._cpApplyLive(hex, true);
 };
 if (!window._cpPopulateTabDataWrapped) {
