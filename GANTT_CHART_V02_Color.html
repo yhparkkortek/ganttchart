@@ -790,11 +790,17 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 #mc-unit-actions-panel.mc-unit-actions-open { max-width:220px; opacity:1; }
 #mc-unit-actions-toggle { transition:background .15s; border-radius:4px; }
 #mc-unit-actions-toggle:hover { background-color:#e9ecef !important; }
-/* 💡 [2026-08-30 신규] AI 요약/문답의 "#G숫자📌📧발신인" 인용이 여러 개 연달아 나오면 한 줄이 너무
-   길어져 보기 불편하다는 지적 — M.C Table 제품구분자 관리 패널과 동일하게, 평소엔 화살표(▶)만
-   보이고 누르면 📌(알람)/📧(원문)/발신인 이름이 옆으로 슬라이드 펼쳐지도록(◀ 누르면 다시 접힘). */
-.ai-ref-toggle { display:inline-block; cursor:pointer; font-size:10px; color:#888; margin-left:2px; vertical-align:middle; user-select:none; }
-.ai-ref-toggle:hover { color:#555; }
+/* 💡 [2026-08-30 신규 → 같은 날 재수정] AI 요약/문답의 "#G숫자📌📧발신인" 인용이 여러 개 연달아
+   나오면 한 줄이 너무 길어져 보기 불편하다는 지적 — M.C Table 제품구분자 관리 패널과 동일하게,
+   평소엔 화살표(▶)만 보이고 누르면 📌(알람)/📧(원문)/발신인 이름이 옆으로 슬라이드 펼쳐지도록
+   (◀ 누르면 다시 접힘).
+   🐛 [버그 수정] 처음엔 화살표 "앞"(margin-left)에만 간격을 줬는데, 정작 화살표 "뒤"(펼쳐졌을 때
+   바로 이어지는 📌 등 내용 시작 지점)에는 간격이 전혀 없어서, 펼친 순간 "▶📌"가 틈 없이 붙어
+   하나의 뭉개진 도형처럼 보이는 문제가 있었다("화살표랑 겹쳐 보인다"는 지적의 실제 원인). 화살표
+   좌우 모두에 여백을 주고, 인식하기 쉽도록 살짝 더 크고 진하게(호버 시 옅은 배경 박스도 추가)
+   바꿔 M.C Table 토글처럼 "이건 누를 수 있는 버튼"이라는 느낌이 들게 했다. */
+.ai-ref-toggle { display:inline-block; cursor:pointer; font-size:11px; color:#777; margin:0 3px; padding:0 2px; border-radius:3px; vertical-align:middle; user-select:none; transition:background .15s, color .15s; }
+.ai-ref-toggle:hover { color:#555; background:#eee; }
 .ai-ref-extra { display:inline-block; max-width:0; overflow:hidden; opacity:0; transition:max-width .25s ease, opacity .2s ease; vertical-align:middle; white-space:nowrap; }
 .ai-ref-extra.ai-ref-extra-open { max-width:180px; opacity:1; }
 .mc-rev-btn { transition:0.2s; }
