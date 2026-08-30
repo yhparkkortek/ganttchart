@@ -7236,10 +7236,16 @@ ${mailText}`;
             //    페이지 맨 아래에 붙어서 — 박스 하단과 푸터 사이에 빈 틈이 생기며 "박스에서 벗어나
             //    따로 떨어져 보이는" 문제가 있었다. 대신 박스(.summary-outer-box) "안쪽" 맨 끝에 그냥
             //    흐르는 요소로 넣어서, 배율 계산에도 포함되고 항상 박스 마지막 내용 바로 밑에 붙는다.
+            // 🐛 [2026-08-30 버그 수정] 셀 너비를 1300px/1100px로 고정해뒀었는데, 이 박스(.summary-outer-box)의
+            // 실제 렌더 폭은 fitOnePage 배율 계산이 프로젝트 내용량에 따라 매번 다르게 정하는 값이라
+            // 2400px(1300+1100)와 거의 항상 어긋났다 — table-layout:fixed에서 셀의 절대 px 너비는 table
+            // 자신의 width(100%)와 무관하게 그대로 유지되므로, 실제 폭이 2400px보다 좁으면 오른쪽 셀
+            // (날짜_파일명)이 페이지 인쇄 영역 밖으로 밀려나 잘려 보이지 않았다. 절대 px 대신 비율(%)로
+            // 바꿔서 실제 렌더 폭이 얼마든 항상 박스 안에 맞도록 수정.
             const summaryFooter = document.createElement('div');
             summaryFooter.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:9px; line-height:1.2; color:#000; font-family:"Malgun Gothic",sans-serif; padding-top:6px;';
-            summaryFooter.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
-                + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+            summaryFooter.innerHTML = '<span style="display:table-cell; width:54%; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+                + '<span style="display:table-cell; width:46%; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
             (clone.querySelector('.summary-outer-box') || clone).appendChild(summaryFooter);
         } else if (!isCalendar) {
             // 💡 [범용 반복 푸터 v2] 표가 없는 탭(Weekly 등)은 가짜 테이블로 감싸도 행이 1개뿐이라
@@ -7305,10 +7311,17 @@ ${mailText}`;
             //    높이를 다시 재서 줄이는 과정을 최대 5회 반복(예전 3회에서 확대) — 1~3회만으로는 경계
             //    근처에서 부족해서 Copyright 푸터가 다음 페이지로 밀려나는 경우가 있었음. 여유 마진
             //    (pageHeightPx)도 계속 유지하도록 기준을 통일함
+            // 🐛 [2026-08-30 버그 수정] 여기서 zoom(scale)만 더 줄이고 width는 그대로 둬서, width*scale
+            // (=실제로 인쇄되는 가로 폭)이 pageWidthPx보다 좁아져 내용이 페이지 왼쪽에 작게 몰리고 양옆에
+            // 빈 여백이 크게 남는 문제가 있었다 — scale을 줄이는 만큼 width를 반대로 늘려서 width*scale이
+            // 항상 pageWidthPx(=페이지 전체 폭)로 유지되도록 함(세로만 줄고 가로 폭은 항상 페이지를 꽉 채움).
             for (let j = 0; j < 5; j++) {
                 const actualH = clone.getBoundingClientRect().height;
                 if (actualH <= pageHeightPx) break;
-                scale = scale * (pageHeightPx / actualH) * 0.98;
+                const factor = (pageHeightPx / actualH) * 0.98;
+                scale = scale * factor;
+                width = width / factor;
+                clone.style.width = width + 'px';
                 clone.style.zoom = scale;
             }
 
