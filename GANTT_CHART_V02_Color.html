@@ -694,12 +694,14 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 @media (max-width: 700px) { .mem3-cols { column-count: 1; } }
 /* 💡 [2026-08-30 신규] 라벨도 값 입력칸처럼 둥근모서리 박스로 감싸고, 라벨/입력칸 각각에 마우스를
    올리면 테두리가 강조색으로 반응하도록 — 요청 스크린샷의 "작은 박스" 느낌을 그대로 구현. */
-.concept-grid label { font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; box-sizing:border-box; background:#fff; transition:border-color .15s; }
-.concept-grid label:hover { border-color:#52a5af; }
+.concept-grid label { font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; box-sizing:border-box; background:#fff; transition:border-color .15s, background-color .15s; }
+.concept-grid label:hover { border-color:#52a5af; background-color:#eef6f7; }
 .concept-grid input, .concept-grid textarea {
-    width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; transition:border-color .15s;
+    width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; transition:border-color .15s, background-color .15s;
 }
-.concept-grid input:hover, .concept-grid textarea:hover { border-color:#52a5af; }
+/* 💡 [2026-08-30 추가] 테두리만 반응하던 걸 배경색도 같이 채워지도록 — .u-input의 투명 배경 규칙과
+   특이도가 같아서(클래스 2개+태그) 순서로만 이기므로, 확실히 이기도록 !important로 고정. */
+.concept-grid input:hover, .concept-grid textarea:hover { border-color:#52a5af; background-color:#eef6f7 !important; }
 .concept-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
 .concept-table th, .concept-table td { border:1px solid #cfe3e5; padding:6px 8px; }
 .concept-table th { background:#eef6f7; font-weight:600; color:#3d5c60; }
@@ -8827,11 +8829,62 @@ ${question}
     //    기능(아래 window._aiAssistSetAlarm)을 클릭 한 번으로 바로 실행할 수 있게 한다. 처음엔 🔔(종)을
     //    썼는데, 이 앱은 "No." 칸의 행별 알람 토글(window.wrToggleAlarm, 10824줄)부터 캘린더/텔레그램
     //    알람 알림까지 이미 전부 📌(압정)로 알람을 표시하고 있어서, 그 관례에 맞춰 📌으로 통일한다.
+    // 💡 [2026-08-30 신규] "#98" 인용 옆에 원문 메일 링크와 발신인 이름도 같이 보여달라는 요청 —
+    // AI가 자기 답변 텍스트에 직접 "발신:이름"을 적게 하면(다른 프롬프트 필드들처럼) 옮겨 적는 과정에서
+    // 틀리거나 빠뜨릴 위험이 있으므로, #98처럼 실제 globalData[rowIndex]에서 프로그램적으로 정확한 값을
+    // 읽어와 붙인다(📌 알람 아이콘과 동일한 이유). 원문이 없거나 발신인을 못 찾으면 그 부분만 조용히 생략.
     window._linkifyTaskRefs = function(escapedText) {
         const _en = window._currentLang === 'en';
         return String(escapedText || '').replace(/#(\d+)\b/g, function(m, n) {
-            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="${_en ? 'Click to toggle this task\'s alarm on/off' : '클릭하면 이 업무의 알람을 켜고 끕니다(토글)'}" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>`;
+            const rowIndex = parseInt(n, 10);
+            const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
+            let extra = '';
+            if (row) {
+                if (row._mailRaw) {
+                    extra += `<span class="ai-mail-ref" onclick="window._showAiTaskMailModal(${rowIndex}); event.stopPropagation();" title="${_en ? 'View the original mail for this task' : '이 업무의 원본 메일 보기'}" style="color:#1a4f7a; font-weight:bold; cursor:pointer; text-decoration:underline; margin-left:4px; font-size:11px;">📧${_en ? 'original' : '원문'}</span>`;
+                }
+                const contentStr = (typeof colIdx !== 'undefined' && colIdx.content !== -1) ? (row[colIdx.content] || '').toString() : '';
+                const mailPeople = window._extractMailSenderReceiver ? window._extractMailSenderReceiver(contentStr) : { sender: '' };
+                if (mailPeople.sender) {
+                    extra += `<span style="color:#888; font-size:11px; margin-left:4px;">${_en ? 'from' : '발신'}:${escapeHtml(mailPeople.sender)}</span>`;
+                }
+            }
+            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="${_en ? 'Click to toggle this task\'s alarm on/off' : '클릭하면 이 업무의 알람을 켜고 끕니다(토글)'}" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>${extra}`;
         });
+    };
+    // 💡 위 "원문" 링크 클릭 시 뜨는 가벼운 읽기전용 모달 — Elec Parts 라이트박스(ep-lightbox-modal)와
+    // 동일한 드래그 가능 팝업 패턴 재사용. Mail Analyzer 전체 작업공간을 여는 mailShowRightDetail은
+    // 여기엔 과함(삽입/편집 기능까지 딸려 있음)이라 별도로 만듦.
+    window._showAiTaskMailModal = function(rowIndex) {
+        const _en = window._currentLang === 'en';
+        const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
+        const mr = row && row._mailRaw;
+        if (!mr) { if (window.showToast) window.showToast(_en ? '⚠️ No original mail saved for this task.' : '⚠️ 이 업무에는 저장된 원본 메일이 없습니다.', 'warning'); return; }
+        let modal = document.getElementById('ai-mail-view-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ai-mail-view-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; pointer-events:none; background:none;';
+            modal.innerHTML = `
+            <div id="ai-mail-view-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:280px;">
+                <div id="ai-mail-view-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
+                    <span id="ai-mail-view-title">📧 ${_en ? 'Original mail' : '원본 메일'}</span>
+                    <button onclick="document.getElementById('ai-mail-view-modal').style.display='none'" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
+                </div>
+                <div id="ai-mail-view-body" style="padding:14px 18px; flex:1; overflow-y:auto; font-size:12.5px; white-space:pre-wrap; line-height:1.6; color:#333;"></div>
+            </div>`;
+            document.body.appendChild(modal);
+            if (window._makeDraggable) window._makeDraggable('ai-mail-view-box', 'ai-mail-view-drag');
+            if (window._bindClickToFront) window._bindClickToFront('ai-mail-view-modal');
+            modal.onclick = function() { modal.style.display = 'none'; };
+        }
+        const bodyEl = document.getElementById('ai-mail-view-body');
+        bodyEl.textContent = (_en ? 'Subject: ' : '제목: ') + (mr.subject || '-') + '\n'
+            + (_en ? 'Sender: ' : '발신: ') + (mr.sender || '-') + '\n'
+            + (_en ? 'Date: ' : '날짜: ') + (mr.date || '-') + '\n\n'
+            + (mr.body2000 || (_en ? '(No body)' : '(본문 없음)'));
+        modal.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('ai-mail-view-modal');
     };
 
     // 💡 [버그 수정] AI에게 마크다운(굵게/글머리 기호)으로 답하라고 프롬프트에 지시해도, 채팅창이
@@ -23715,7 +23768,7 @@ window._cpApplyLive = function(hex, skipSave) {
     css += '.concept-section { border-color: ' + gen.border + ' !important; }\n'
         + '.concept-section:hover:not(.summary-outer-box) { border-color: ' + gen.hoverBorder + ' !important; }\n'
         + '.concept-grid label { border-color: ' + gen.border + ' !important; }\n'
-        + '.concept-grid label:hover, .concept-grid input:hover, .concept-grid textarea:hover { border-color: ' + gen.hoverBorder + ' !important; }\n'
+        + '.concept-grid label:hover, .concept-grid input:hover, .concept-grid textarea:hover { border-color: ' + gen.hoverBorder + ' !important; background-color: ' + gen.headerTint + ' !important; }\n'
         + '.concept-grid input, .concept-grid textarea { border-color: ' + gen.border + ' !important; }\n'
         + '#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { border-color: ' + gen.border + ' !important; }\n'
         // 💡 페이지 제목 옆 액션 버튼들(.action-btn: 인쇄/펼치기/MVD/R1/VS 등) 공용 호버가 옛날 원색
