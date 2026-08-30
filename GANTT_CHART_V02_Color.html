@@ -362,6 +362,11 @@
     /* 💡 TEMP: Gantt 표를 Brief SPEC/M.C Table과 완전히 동일한 테두리/헤더 스타일로 통일 */
     #myTable th, #myTable td { border: 1px solid #cfe3e5 !important; }
     #myTable th { background: #eef6f7 !important; font-weight: 600 !important; color: #3d5c60 !important; }
+    /* 🐛 [버그 수정] 전역 `th { background-color:#f4f6f8; }`(아래 338행 근처) 규칙이 자식 <th>에
+       자체 회색 배경을 칠해서, 부모 <tr>에 준 청록(#eef6f7)이 화면엔 전혀 안 보이고 회색만 보였던
+       문제 — Notice 표는 .concept-table 클래스가 없어 그 회색 규칙을 막을 게 없었음(다른 표들은
+       #myTable/.concept-table th 규칙이 이미 있어서 문제 없었음). th 자체에 직접 재선언해서 해결. */
+    #tab-notice thead th { background: #eef6f7 !important; }
 
     .container { height: auto; overflow: visible; border: 1px solid #a3d9e0; border-radius: 6px; position: relative; background: #e0f5f7; }
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
@@ -551,7 +556,7 @@
 }
 #app-topbar {
     position: fixed; top: 0; left: 0; width: 100%; height: var(--topbar-h);
-    background: #e0f5f7; color: #00707d; z-index: 700;
+    background: #cee9ed; color: #00636e; z-index: 700;
     display: flex; align-items: center; gap: 0; padding: 0 18px 0 0;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     box-sizing: border-box;
@@ -583,17 +588,17 @@
 
     background: transparent;
     border: none;
-    color: #00707d;
+    color: #00636e;
     border-radius: 6px;
     cursor: pointer;
     white-space: nowrap;
 }
-.topbar-btn:hover { background: rgba(0,113,125,0.12); }
+.topbar-btn:hover { background: #bce0e3; }
 .topbar-btn:disabled { opacity:0.5; cursor:default; }
 
 #app-sidebar {
     position: fixed; top: var(--topbar-h); left: 0; height: calc(100vh - var(--topbar-h)); width: var(--sb-w);
-    background: #e0f5f7;
+    background: #cee9ed;
     display: flex; flex-direction: column;
     transition: width 0.18s ease;
     overflow: hidden;
@@ -606,16 +611,16 @@
     padding: 14px 14px 3px 19px; height: 30px; flex-shrink: 0;
 }
 #app-sidebar .sb-toggle-btn {
-    background: none; border: none; color: #00707d;
+    background: none; border: none; color: #00636e;
     width: 26px; height: 26px; border-radius: 4px; cursor: pointer;
     flex-shrink: 0; font-size: 20px; line-height: 1;
 }
-#app-sidebar .sb-toggle-btn:hover { background: rgba(0,113,125,0.12); }
+#app-sidebar .sb-toggle-btn:hover { background: #bce0e3; }
 #app-sidebar .sb-nav { flex: 1; overflow-y: auto; padding: 8px 0; margin-top: -10px; }
 #app-sidebar .sb-item {
     display: flex; align-items: center; gap: 10px;
     padding: 11px 0 11px 21px; cursor: pointer; white-space: nowrap;
-    font-size: 15px; color: #00707d;
+    font-size: 15px; color: #00636e;
     border-left: 3px solid transparent;
     transition: background 0.15s ease;
 }
@@ -625,8 +630,8 @@
     opacity: 1; max-width: 160px;
     transition: opacity 0.15s ease, max-width 0.18s ease;
 }
-#app-sidebar .sb-item:hover { background: rgba(0,113,125,0.08); }
-#app-sidebar .sb-item.active { background: rgba(0,113,125,0.16); border-left-color: #e67e22; font-weight: bold; }
+#app-sidebar .sb-item:hover { background: #bce0e3; }
+#app-sidebar .sb-item.active { background: #aad5da; border-left-color: #e67e22; font-weight: bold; }
 #app-sidebar.collapsed { width: var(--sb-w-collapsed); }
 #app-sidebar.collapsed .sb-label { opacity: 0; max-width: 0; }
 
@@ -937,7 +942,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 <body>
 
 <div id="app-topbar">
-    <div class="tb-logo-wrap"><div class="tb-logo" role="img" aria-label="Kortek"></div></div>
+    <div class="tb-logo-wrap"><div class="tb-logo" role="img" aria-label="Kortek" onclick="window.openColorPaletteModal && window.openColorPaletteModal()" title="🎨 컬러 팔레트 보기" style="cursor:pointer;"></div></div>
     <div class="tb-btns">
         <!-- ☁️ Drive — 파일/드라이브/프로젝트 통합 -->
         <div style="position:relative; display:inline-block;">
@@ -23372,6 +23377,149 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
 
 </div> <!-- /#app-main -->
 
+<!-- 🎨 [2026-08-30 신규] 컬러 팔레트 보기 모달 — 로고 클릭으로 열림. 현재 적용된 청록 테마의
+     역할별 기준색을 정리해서 보여주고, 다른 원색을 고르면 같은 채도/명도 공식으로 파스텔톤을
+     계산해 미리보기(실제 앱에는 적용 안 됨 — 순수 시각화용) -->
+<div id="color-palette-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
+<div id="color-palette-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
+    width:760px; max-width:95vw; max-height:88vh; overflow-y:auto; resize:both; min-width:420px; min-height:300px;
+    background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+    font-family:'맑은 고딕',sans-serif; z-index:5000;">
+    <div id="cp-modal-header" style="display:flex; align-items:center; justify-content:space-between; padding:14px 20px 12px; cursor:grab; user-select:none; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
+        <h3 style="margin:0; font-size:15px; color:#7a5210;">🎨 컬러 팔레트</h3>
+        <button onclick="window.closeColorPaletteModal()" onmousedown="event.stopPropagation()"
+            style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
+            onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+    </div>
+    <div style="padding:20px 22px;">
+        <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">✅ 현재 적용된 테마 (청록)</div>
+        <div style="font-size:11.5px; color:#888; margin-bottom:12px;">지금 앱 전체(표 헤더·제브라·테두리·호버 등)에 실제로 쓰이고 있는 역할별 기준색입니다.</div>
+        <div id="cp-current-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:10px;"></div>
+        <div style="font-size:11.5px; color:#888; margin:14px 0 6px;">사이드바 / 상단바 전용</div>
+        <div id="cp-current-swatches-nav" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:22px;"></div>
+
+        <div style="border-top:1px solid #eee; margin-bottom:18px;"></div>
+
+        <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🔍 다른 색상으로 미리보기</div>
+        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">원색을 고르면 지금과 동일한 채도·명도 공식으로 파스텔 톤을 계산해서 보여줍니다 — <b>실제 앱에는 적용되지 않는 미리보기</b>입니다.</div>
+        <div id="cp-preset-swatches" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"></div>
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+            <label style="font-size:12px; color:#555;">직접 선택:</label>
+            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value)" style="width:44px; height:30px; border:1px solid #ccc; border-radius:4px; cursor:pointer; padding:2px;">
+            <span id="cp-custom-hex" style="font-size:12px; color:#888; font-family:monospace;"></span>
+        </div>
+        <div id="cp-preview-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:18px;"></div>
+
+        <div style="font-size:11.5px; color:#888; margin-bottom:6px;">미니 미리보기 표</div>
+        <div id="cp-preview-demo"></div>
+    </div>
+</div>
+
+<script>
+// 🎨 [2026-08-30] 컬러 팔레트 모달 — hex↔HSL 변환 + "원색의 hue만 뽑아서 역할별 고정 채도/명도로
+//    재조합" 방식으로, 지금 청록 테마를 실제로 만들 때 썼던 값들(아래 CP_ROLES)을 그대로 공식화함.
+window._cpHexToHsl = function(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    const r = parseInt(hex.slice(0, 2), 16) / 255, g = parseInt(hex.slice(2, 4), 16) / 255, b = parseInt(hex.slice(4, 6), 16) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0; const l = (max + min) / 2;
+    const d = max - min;
+    if (d !== 0) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        switch (max) {
+            case r: h = 60 * (((g - b) / d) % 6); break;
+            case g: h = 60 * ((b - r) / d + 2); break;
+            case b: h = 60 * ((r - g) / d + 4); break;
+        }
+    }
+    if (h < 0) h += 360;
+    return { h: h, s: s * 100, l: l * 100 };
+};
+window._cpHslToHex = function(h, s, l) {
+    s /= 100; l /= 100;
+    const c = (1 - Math.abs(2 * l - 1)) * s;
+    const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+    const m = l - c / 2;
+    let r = 0, g = 0, b = 0;
+    if (h < 60) { r = c; g = x; } else if (h < 120) { r = x; g = c; } else if (h < 180) { g = c; b = x; }
+    else if (h < 240) { g = x; b = c; } else if (h < 300) { r = x; b = c; } else { r = c; b = x; }
+    const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
+    return '#' + toHex(r) + toHex(g) + toHex(b);
+};
+// 💡 지금 청록 테마 실측값(bg #e0f5f7, 헤더 #eef6f7, 테두리 #cfe3e5, 제브라B #e8f2f3,
+//    진한글씨 #00707d, 호버배경 #a3d9e0, 호버테두리 #52a5af)을 역산해서 얻은 채도/명도 공식.
+//    hue만 입력색에서 뽑아 쓰고 s/l은 고정값이라, 어떤 색을 골라도 "청록과 같은 파스텔 규칙"이 유지됨.
+window.CP_ROLES = [
+    { key: 'bg',          label: '배경(bg)',        s: 58, l: 94 },
+    { key: 'headerTint',  label: '헤더 / 테이블 틴트', s: 41, l: 95 },
+    { key: 'border',      label: '테두리',           s: 26, l: 87 },
+    { key: 'zebraB',      label: '제브라 B행',        s: 30, l: 93 },
+    { key: 'darkText',    label: '진한 텍스트',       s: 100, l: 25 },
+    { key: 'hoverBg',     label: '호버 배경(강조)',    s: 48, l: 75 },
+    { key: 'hoverBorder', label: '호버 테두리',       s: 36, l: 51 }
+];
+window.CP_CURRENT_TEAL = { bg: '#e0f5f7', headerTint: '#eef6f7', border: '#cfe3e5', zebraB: '#e8f2f3', darkText: '#00707d', hoverBg: '#a3d9e0', hoverBorder: '#52a5af' };
+window.CP_CURRENT_NAV = { base: '#cee9ed', hover: '#bce0e3', active: '#aad5da', text: '#00636e' };
+window.CP_PRESETS = ['#e03131', '#e67e22', '#f1c40f', '#2f9e44', '#00707d', '#2c5f8a', '#6f42c1', '#d6336c', '#495057'];
+
+window._cpSwatch = function(hex, label) {
+    const textColor = (window._cpHexToHsl(hex).l < 55) ? '#fff' : '#333';
+    return '<div style="border:1px solid #e0e0e0; border-radius:8px; overflow:hidden;">'
+        + '<div style="height:44px; background:' + hex + '; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:bold; color:' + textColor + ';">' + hex + '</div>'
+        + '<div style="padding:5px 8px; font-size:11px; color:#555; background:#fafafa;">' + label + '</div>'
+        + '</div>';
+};
+
+window._cpRenderCurrent = function() {
+    document.getElementById('cp-current-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(window.CP_CURRENT_TEAL[r.key], r.label)).join('');
+    const nav = window.CP_CURRENT_NAV;
+    document.getElementById('cp-current-swatches-nav').innerHTML = [
+        window._cpSwatch(nav.base, '사이드바/상단바 배경'),
+        window._cpSwatch(nav.hover, '메뉴 호버'),
+        window._cpSwatch(nav.active, '메뉴 active'),
+        window._cpSwatch(nav.text, '메뉴 글자색')
+    ].join('');
+};
+
+window._cpRenderPreview = function(hex) {
+    document.getElementById('cp-custom-color').value = hex;
+    document.getElementById('cp-custom-hex').textContent = hex;
+    const hue = window._cpHexToHsl(hex).h;
+    const gen = {};
+    window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
+    document.getElementById('cp-preview-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(gen[r.key], r.label)).join('');
+
+    // 미니 미리보기 표 — 실제 청록 표(헤더/제브라/테두리/버튼 호버)와 동일한 구조
+    document.getElementById('cp-preview-demo').innerHTML =
+        '<div style="background:' + gen.bg + '; border:1px solid ' + gen.hoverBg + '; border-radius:8px; padding:12px;">'
+        + '<div style="background:#fff; border:1px solid ' + gen.border + '; border-radius:8px; overflow:hidden;">'
+        + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="background:' + gen.headerTint + '; border-bottom:2px solid ' + gen.border + ';">'
+        + '<th style="padding:8px 10px; text-align:left; color:' + gen.darkText + ';">항목</th><th style="padding:8px 10px; text-align:center; color:' + gen.darkText + ';">상태</th><th style="padding:8px 10px; text-align:center; color:' + gen.darkText + ';">액션</th>'
+        + '</tr></thead><tbody>'
+        + '<tr style="background:#fff; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">샘플 행 A</td><td style="padding:8px 10px; text-align:center;">🟢</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.bg + '; color:' + gen.darkText + '; border:1px solid ' + gen.border + '; border-radius:6px; cursor:default; font-size:11px;">버튼</button></td></tr>'
+        + '<tr style="background:' + gen.zebraB + '; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">샘플 행 B</td><td style="padding:8px 10px; text-align:center;">🔴</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.hoverBg + '; color:#fff; border:1px solid ' + gen.hoverBorder + '; border-radius:6px; cursor:default; font-size:11px;">호버 예시</button></td></tr>'
+        + '</tbody></table></div></div>';
+};
+
+window.openColorPaletteModal = function() {
+    window._cpRenderCurrent();
+    document.getElementById('cp-preset-swatches').innerHTML = window.CP_PRESETS.map(hex =>
+        '<div onclick="window._cpRenderPreview(\'' + hex + '\')" title="' + hex + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>'
+    ).join('');
+    window._cpRenderPreview(document.getElementById('cp-custom-color').value || '#2c5f8a');
+    document.getElementById('color-palette-modal-overlay').style.display = 'block';
+    document.getElementById('color-palette-modal').style.display = 'block';
+    if (window.bringModalToFront) window.bringModalToFront('color-palette-modal');
+};
+window.closeColorPaletteModal = function() {
+    document.getElementById('color-palette-modal-overlay').style.display = 'none';
+    document.getElementById('color-palette-modal').style.display = 'none';
+};
+if (window._makeDraggable) window._makeDraggable('color-palette-modal', 'cp-modal-header');
+if (window._bindClickToFront) window._bindClickToFront('color-palette-modal');
+</script>
+
 <script>
 // ══════════════════════════════════════════════════════
 // 신규 탭(Summary / Brief SPEC / M.C Table) 데이터 바인딩 (컨셉 단계)
@@ -26151,11 +26299,13 @@ window.renderMaterialRows = function(rows) {
     //    왼쪽 7개/오른쪽 5개로 나누고, 자유추가 행은 아래에서 지그재그로 배정한다.
     const splitAt = Math.ceil(window.MATERIAL_FIXED_CATEGORIES.length / 2); // 7
     const rowHtml = function(r, idx) {
+        // 💡 [2026-08-29 색상 정리] TYPE 칸이 제브라와 무관하게 항상 헤더색(#eef6f7)으로 고정돼 있어서,
+        //    같은 행 안에서 TYPE 칸만 따로 노는 것처럼 보였음 — 헤더 배경(#eef6f7)은 <thead>에만 쓰고,
+        //    본문 행은 TYPE 칸도 나머지 칸과 동일하게 제브라(A=#fff/B=#e8f2f3)를 따르도록 통일.
+        const _zebraBg = idx % 2 === 1 ? '#e8f2f3' : '#fff';
         const catCell = r.locked
-            ? '<td style="padding:4px 6px; border:1px solid #cfe3e5; background:#eef6f7; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
-            // 💡 [2026-08-25 UX 개선] 고정 행(회색 배경)과 시각적 통일성을 주기 위해, 자유추가 행의
-            //    TYPE 입력칸도 같은 회색(#f8f9fa) 배경으로 맞춤(고정 행처럼 잠겨있진 않지만 톤을 통일).
-            : '<td style="padding:2px; border:1px solid #cfe3e5; background:#eef6f7;"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center; background:transparent; font-weight:bold;"></td>';
+            ? '<td style="padding:4px 6px; border:1px solid #cfe3e5; background:' + _zebraBg + '; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
+            : '<td style="padding:2px; border:1px solid #cfe3e5; background:' + _zebraBg + ';"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center; background:transparent; font-weight:bold;"></td>';
         // 💡 [2026-08-25 UX 개선] 예전엔 "삭제 버튼"이 맨 오른쪽 체크박스 칸에 있어서 눈에 잘 안 띈다는
         //    지적이 있었음 — PANEL 행의 🔎(스펙 미리보기) 버튼과 같은 자리(설명 입력칸 바로 옆)로 옮겨서,
         //    자유추가 행을 열 때 바로 보이는 "행 액션 버튼" 자리로 통일했다.
@@ -26178,7 +26328,7 @@ window.renderMaterialRows = function(rows) {
                     : ''))
             + delBtn
             + '</div></td>';
-        return '<tr style="background:' + (idx % 2 === 1 ? '#e8f2f3' : '#fff') + ';">' + catCell
+        return '<tr style="background:' + _zebraBg + ';">' + catCell
             + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box; background:transparent;"></td>'
             + descInputCell
             + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;"></td>'
