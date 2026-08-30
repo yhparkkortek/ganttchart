@@ -913,18 +913,21 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 /* ========================================= */
 
 /* ── Calendar 탭 ───────────────────────── */
-.cal-grid-wrap { border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; }
+.cal-grid-wrap { border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; } /* 💡 border-color는 _cpApplyLive에서 테마색으로 덮어씀(기본값은 teal 프리셋과 우연히 같은 값) */
 .cal-weekday-row { display:grid; grid-template-columns:repeat(7,1fr); background:#f4f6f8; }
 .cal-weekday-row > div { padding:7px; text-align:center; font-size:12px; font-weight:600; color:#555; border-bottom:1px solid #e3e6ea; }
 .cal-weekday-row > div:first-child { color:#e03131; }
-.cal-weekday-row > div:last-child { color:#1971c2; }
+.cal-weekday-row > div:last-child { color:#1971c2; } /* 💡 _cpApplyLive에서 테마색으로 덮어씀(일요일 빨강은 고정 유지) */
 .cal-body-row { display:grid; grid-template-columns:repeat(7,1fr); }
-.cal-day-cell { border-right:1px solid #eee; border-bottom:1px solid #eee; min-height:96px; padding:4px; box-sizing:border-box; position:relative; cursor:pointer; transition:background 0.12s; }
+/* 💡 [2026-08-30 추가] 이번주/이번달 강조(.cal-month-current)가 블록 전체 배경을 보색으로 칠하는데,
+   날짜 칸 자체는 항상 흰 배경을 유지해야 한다는 요청 — 날짜 칸에 명시적 흰 배경을 줘서 부모의 배경이
+   비치지 않게 막는다(오늘/다른달 칸은 아래에서 별도 배경으로 다시 덮어씀). */
+.cal-day-cell { border-right:1px solid #eee; border-bottom:1px solid #eee; min-height:96px; padding:4px; box-sizing:border-box; position:relative; cursor:pointer; transition:background 0.12s; background:#fff; }
 .cal-day-cell.cal-other-month { background:#fafafa; color:#bbb; }
 .cal-day-cell.cal-today { background:#eef6fb; }
 .cal-day-num { font-size:12px; font-weight:600; color:#333; display:inline-block; padding:1px 6px; border-radius:10px; }
 .cal-day-cell.cal-today .cal-day-num { background:#2c5f8a; color:#fff; }
-.cal-day-cell.cal-weekend-sat .cal-day-num { color:#1971c2; }
+.cal-day-cell.cal-weekend-sat .cal-day-num { color:#1971c2; } /* 💡 _cpApplyLive에서 테마색으로 덮어씀(일요일 빨강은 고정 유지) */
 .cal-day-cell.cal-weekend-sun .cal-day-num { color:#e03131; }
 /* 💡 [클릭영역 확대] 예전엔 숫자(.cal-day-num)만 클릭 가능해서 맞춰 누르기 어려웠음 — 이제 셀 전체가
    클릭 영역이라 호버도 셀 전체에 항상 보이게(다른 배경색 규칙보다 우선하도록 !important) */
@@ -1840,7 +1843,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <!-- 💡 [2026-08-30 신규] 개발기간(일) 입력칸을 표 아래 별도 줄로 두지 않고, 이미 표에 있는
                              계획/실적 날짜(Start~PRA)로 자동 계산해서 표 오른쪽 열에 바로 보여주도록 통합.
                              클릭하면 일/주/개월 단위를 순환 전환(sumToggleDevDaysUnit). -->
-                        <th rowspan="2" style="width:90px; cursor:pointer;" onclick="window.sumToggleDevDaysUnit()" title="클릭하면 일/주/개월 단위로 순환 전환됩니다"><span id="sum-lbl-devdays">개발기간(일)</span><br><span id="sum-devdays-unit-label" style="font-size:10.5px; color:#888; font-weight:normal;">소요(일) 🔄</span></th>
+                        <th rowspan="2" style="width:90px; cursor:pointer;" onclick="window.sumToggleDevDaysUnit()" title="클릭하면 일/주/개월 단위로 순환 전환됩니다"><span id="sum-lbl-devdays">개발기간</span><br><span id="sum-devdays-unit-label" style="font-size:10.5px; color:#888; font-weight:normal;">소요(일) 🔄</span></th>
                     </tr>
                     <tr id="sum-milestone-head">
                         <th>Start <span style="color:#e03131;" title="필수 입력 — 새 프로젝트 등록 시 Gantt Chart의 시작일 기준(anchor)으로 사용되어 전체 일정이 자동 계산됩니다">*</span></th>
@@ -6093,6 +6096,55 @@ ${mailText}`;
         if (alarmPanel && alarmPanel.classList.contains('active')) {
             if (window.renderAlarmTab) window.renderAlarmTab();
         }
+    };
+
+    // 💡 [2026-08-30 신규] 핀셋(📌) 클릭/더블클릭 구분 — 한 번 클릭이면 기존처럼 알람 토글, 두 번
+    // 빠르게 클릭(더블클릭)하면 토글하지 않고 알람 목록(Alarm/Notice 탭)의 이 업무 행으로 바로 이동한다.
+    // wrToggleAlarm은 클릭 즉시 renderTable()로 표 전체를 다시 그려서 원래 <span> 자체가 사라지므로,
+    // 클릭을 곧바로 실행하면 두 번째 클릭이 새로 그려진(다른) <span>에 떨어져 브라우저가 dblclick을
+    // 아예 인식하지 못한다 — 그래서 클릭을 250ms 살짝 지연시켜, 그 사이 두 번째 클릭(dblclick)이 오면
+    // 토글을 취소하고 이동만 실행하는 방식으로 처리한다(알람 탭 목록 행의 동일 패턴과 통일).
+    window._wrPinClickTimer = null;
+    window._wrPinClick = function(rowIndex, ev) {
+        if (ev) ev.stopPropagation();
+        if (window._wrPinClickTimer) { clearTimeout(window._wrPinClickTimer); window._wrPinClickTimer = null; return; }
+        window._wrPinClickTimer = setTimeout(function() {
+            window._wrPinClickTimer = null;
+            window.wrToggleAlarm(rowIndex, ev);
+        }, 250);
+    };
+    window._wrPinDblClick = function(rowIndex, ev) {
+        if (ev) ev.stopPropagation();
+        if (window._wrPinClickTimer) { clearTimeout(window._wrPinClickTimer); window._wrPinClickTimer = null; }
+        if (window._jumpToAlarmRow) window._jumpToAlarmRow(rowIndex);
+    };
+    // 💡 Gantt 표의 핀셋(📌) 더블클릭 → Alarm/Notice 탭의 "알람" 뷰로 전환한 뒤, collectAlarmItems()가
+    // 만드는 목록에서 이 업무(rowIdx로 매칭)를 찾아 그 행으로 스크롤+반짝임 표시한다(알람이 꺼진 업무는
+    // 애초에 그 목록에 없으므로 안내만 하고 종료).
+    window._jumpToAlarmRow = async function(rowIndex) {
+        const _en = window._currentLang === 'en';
+        const row = typeof globalData !== 'undefined' && globalData ? globalData[rowIndex] : null;
+        if (!row || !row._알림) {
+            if (window.showToast) window.showToast(_en
+                ? '⚠️ This task has no alarm set.'
+                : '⚠️ 이 업무는 알람이 설정되어 있지 않습니다.', 'warning');
+            return;
+        }
+        if (window.switchTab) window.switchTab('alarm');
+        if (window._switchAlarmView) window._switchAlarmView('alarm');
+        if (window.renderAlarmTab) { try { await window.renderAlarmTab(); } catch (e) {} }
+        const items = window.collectAlarmItems ? window.collectAlarmItems() : [];
+        const idx = items.findIndex(function(it) { return it.rowIdx === rowIndex; });
+        if (idx === -1) {
+            if (window.showToast) window.showToast(_en
+                ? '⚠️ Could not find this task in the alarm list.'
+                : '⚠️ 알람 목록에서 이 업무를 찾지 못했습니다.', 'warning');
+            return;
+        }
+        setTimeout(function() {
+            const tr = document.querySelectorAll('#alarm-table-body tr')[idx];
+            if (tr && window._aiFlashRow) window._aiFlashRow(tr);
+        }, 60);
     };
 
     // 행별 일정 모드(자동↔고정) 토글. Ctrl/Shift는 선택만, 일반 클릭은 토글(선택된 행 있으면 일괄 적용)
@@ -11110,7 +11162,7 @@ window.deleteHistoryByDateRange = function() {
             'sum-th-category':    { ko:'구분',              en:'Category' },
             'sum-td-plan':        { ko:'계획',              en:'Plan' },
             'sum-td-actual':      { ko:'실적',              en:'Actual' },
-            'sum-lbl-devdays':    { ko:'개발기간(일)',       en:'Dev Period (days)' },
+            'sum-lbl-devdays':    { ko:'개발기간',       en:'Dev Period' },
             'sum-h3-progress':    { ko:'개발 진척 현황',    en:'Development Progress' },
             'sum-h3-overview':    { ko:'프로젝트 개요',     en:'Project Overview' },
             'sum-lbl-purpose':    { ko:'적용 목적',         en:'Purpose' },
@@ -11572,7 +11624,7 @@ window.deleteHistoryByDateRange = function() {
                         : 'opacity:1; transform:scale(1.0);';
                     tdHtml = `
                         <div style="display:flex; align-items:center; justify-content:center; gap:3px; position:relative;">
-                            <span onclick="window.wrToggleAlarm(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)' : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'}"
+                            <span onclick="window._wrPinClick(${i}, event)" ondblclick="window._wrPinDblClick(${i}, event)" title="${alarmOn ? '알림 켜짐 (클릭하여 끄기 · 더블클릭하면 알람 목록의 이 업무로 이동 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)' : '알림 꺼짐 (클릭하여 켜기 · Ctrl/Shift+클릭 시 선택된 행 일괄 토글)'}"
                                 style="font-size:13px; cursor:pointer; flex-shrink:0; ${alarmStyle}">📌</span>
                             <span class="row-num-span"></span>
                         </div>`;
@@ -24263,6 +24315,12 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.cal-event-chip.cal-selected { background: ' + gen.darkText + ' !important; border-left-color: ' + gen.darkText + ' !important; }\n'
         + '.cal-day-cell.cal-today { background: ' + gen.bg + ' !important; }\n'
         + '.cal-day-cell.cal-today .cal-day-num { background: ' + gen.darkText + ' !important; color: #fff !important; }\n'
+        // 💡 [2026-08-30 추가] 요일 헤더 토요일 글자/토요일 날짜 숫자 색, 달력 표 바깥 테두리가 옛 고정
+        // 파랑(#1971c2/#cfe3e5)이라 테마가 안 먹혔음 — 일요일 빨강은 관례대로 고정 유지하고, 토요일과
+        // 테두리만 테마색을 따르도록 편입.
+        + '.cal-weekday-row > div:last-child { color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-day-cell.cal-weekend-sat .cal-day-num { color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-grid-wrap { border-color: ' + gen.border + ' !important; }\n'
         // 💡 [2026-08-30 추가] "핀셋 알람"/"이번달·이번주 강조"는 테마색이 아니라 그 보색(위 compGen)으로
         // — 업무 상자(테마색)와는 확실히 구분되면서, 어떤 테마를 고르든 항상 대비되는 색이 나오게 함.
         + '.cal-event-chip.cal-alarm-on { background: ' + compGen.headerTint + ' !important; border-left-color: ' + compGen.hoverBorder + ' !important; color: ' + compGen.darkText + ' !important; }\n'
@@ -26739,6 +26797,23 @@ window.collectAlarmItems = function() {
     return items;
 };
 
+// 💡 [2026-08-30 신규] 알람 목록 행 클릭/더블클릭 구분 — 한 클릭이면 기존처럼 상세 모달을 열고,
+// 두 번 빠르게 클릭(더블클릭)하면 모달을 열지 않고 바로 Gantt chart의 해당 업무 행으로 이동한다.
+// 그냥 onclick+ondblclick을 같이 달면 더블클릭 시 click이 먼저 2번 발생해 모달이 열렸다 닫히는 등
+// 지저분해지므로, 클릭을 살짝(250ms) 지연시켜 그 사이 두 번째 클릭(dblclick)이 오면 취소하는 방식.
+window._alarmRowClickTimer = null;
+window._alarmRowClick = function(idx) {
+    if (window._alarmRowClickTimer) { clearTimeout(window._alarmRowClickTimer); window._alarmRowClickTimer = null; return; }
+    window._alarmRowClickTimer = setTimeout(function() {
+        window._alarmRowClickTimer = null;
+        window.openAlarmModal(idx);
+    }, 250);
+};
+window._alarmRowDblClick = function(idx, rowIdx) {
+    if (window._alarmRowClickTimer) { clearTimeout(window._alarmRowClickTimer); window._alarmRowClickTimer = null; }
+    if (window._aiJumpToRow) window._aiJumpToRow(rowIdx);
+};
+
 // 알람 탭 렌더링
 window.renderAlarmTab = async function() {
     const tbody = document.getElementById('alarm-table-body');
@@ -26831,7 +26906,8 @@ window.renderAlarmTab = async function() {
     tbody.innerHTML = items.map((item, idx) => `
         <tr class="${idx % 2 === 1 ? 'mc-zebra-b' : 'mc-zebra-a'}" style="cursor:pointer; border-bottom:1px solid #cfe3e5;"
             onmouseover="this.style.background='#d3ecef'" onmouseout="this.style.background=''"
-            onclick="window.openAlarmModal(${idx})">
+            title="더블클릭하면 Gantt chart의 해당 업무로 이동합니다"
+            onclick="window._alarmRowClick(${idx})" ondblclick="window._alarmRowDblClick(${idx}, ${item.rowIdx})">
             <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.status || '-'}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.assignee)}</td>
