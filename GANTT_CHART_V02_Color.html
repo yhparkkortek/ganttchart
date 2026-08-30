@@ -23565,24 +23565,45 @@ window._cpApplyLive = function(hex) {
         text: window._cpHslToHex(hue, window._cpHexToHsl(nav.text).s, window._cpHexToHsl(nav.text).l)
     };
 
-    const bgAndBorder = [
+    const logoHsl = window._cpHexToHsl('#00a1b6');
+    const genLogo = window._cpHslToHex(hue, logoHsl.s, logoHsl.l);
+
+    // 🐛 [버그 수정] 처음엔 hex 하나당 [style*="그 hex"] 한 줄로 배경/테두리를 한꺼번에 덮어썼는데,
+    // 한 요소의 style 문자열 안에 "배경용 hex"와 "테두리용 hex"가 같이 들어있으면(예:
+    // style="background:#e0f5f7; border-color:#a3d9e0;") 두 규칙이 전부 매치되면서 나중 규칙이
+    // background-color까지 덮어써 버려 엉뚱한(너무 진한) 색이 배경에 칠해지는 사고가 있었다.
+    // → 이제 "background:HEX"/"background-color:HEX"처럼 프로퍼티까지 포함한 문자열로 매치해서,
+    // 그 hex가 실제로 배경으로 쓰인 경우에만 배경을, 테두리로 쓰인 경우에만 테두리를 바꾸도록 분리.
+    const bgRoles = [
         [window.CP_CURRENT_TEAL.bg, gen.bg], [window.CP_CURRENT_TEAL.headerTint, gen.headerTint],
         [window.CP_CURRENT_TEAL.zebraB, gen.zebraB], [window.CP_CURRENT_TEAL.hoverBg, gen.hoverBg],
         [nav.base, genNav.base], [nav.hover, genNav.hover], [nav.active, genNav.active]
     ];
-    const borderOnly = [[window.CP_CURRENT_TEAL.border, gen.border], [window.CP_CURRENT_TEAL.hoverBorder, gen.hoverBorder]];
-    const textOnly = [[window.CP_CURRENT_TEAL.darkText, gen.darkText], [nav.text, genNav.text]];
+    const borderRoles = [
+        [window.CP_CURRENT_TEAL.border, gen.border], [window.CP_CURRENT_TEAL.hoverBorder, gen.hoverBorder],
+        [window.CP_CURRENT_TEAL.hoverBg, gen.hoverBg] // hoverBg(#a3d9e0)는 버튼 배경으로도, 박스 테두리로도 둘 다 쓰임
+    ];
+    const textRoles = [[window.CP_CURRENT_TEAL.darkText, gen.darkText], [nav.text, genNav.text]];
 
     let css = '';
-    bgAndBorder.forEach(function(p) { css += '[style*="' + p[0] + '"] { background-color: ' + p[1] + ' !important; border-color: ' + p[1] + ' !important; }\n'; });
-    borderOnly.forEach(function(p) { css += '[style*="' + p[0] + '"] { border-color: ' + p[1] + ' !important; }\n'; });
-    textOnly.forEach(function(p) { css += '[style*="' + p[0] + '"] { color: ' + p[1] + ' !important; }\n'; });
+    bgRoles.forEach(function(p) {
+        css += '[style*="background:' + p[0] + '"], [style*="background: ' + p[0] + '"], [style*="background-color:' + p[0] + '"], [style*="background-color: ' + p[0] + '"] { background-color: ' + p[1] + ' !important; }\n';
+    });
+    borderRoles.forEach(function(p) {
+        css += '[style*="border-color:' + p[0] + '"], [style*="border-color: ' + p[0] + '"], [style*="solid ' + p[0] + '"] { border-color: ' + p[1] + ' !important; }\n';
+    });
+    textRoles.forEach(function(p) {
+        // 💡 " color:HEX"(앞에 공백)만 매치 — "background-color:"/"border-color:"는 "color:" 앞에
+        // 공백이 없는 한 단어라 여기 안 걸림(위 배경/테두리 규칙과 서로 침범하지 않음).
+        css += '[style*=" color:' + p[0] + '"] { color: ' + p[1] + ' !important; }\n';
+    });
 
     // 💡 [style*="..."] 방식은 인라인 style에 그 hex가 "문자 그대로" 들어있는 요소만 잡는다 — 사이드바/
-    //    상단바/표 헤더 등 상당수는 인라인이 아니라 <style> 블록의 클래스/id 규칙으로 색이 정해져 있어서
-    //    (#app-sidebar, .concept-table th, #myTable th 등) 위 규칙만으로는 안 바뀐다. 이 세션에서 실제로
-    //    찾아낸 그 규칙들을 여기서 직접 다시 선언해 덮어쓴다(동일 특이도 + !important면 나중에 로드된
-    //    이 <style>이 이김 — 이 태그는 항상 런타임에 <head> 맨 끝에 추가되므로 항상 나중임).
+    //    상단바/표 헤더/각 페이지 제목 박스/로고 등 상당수는 인라인이 아니라 <style> 블록의 클래스/id
+    //    규칙으로 색이 정해져 있어서(#app-sidebar, .concept-table th, .concept-header-box, .tb-logo 등)
+    //    위 규칙만으로는 안 바뀐다. 이 세션에서 실제로 찾아낸 그 규칙들을 여기서 직접 다시 선언해
+    //    덮어쓴다(동일 특이도 + !important면 나중에 로드된 이 <style>이 이김 — 이 태그는 항상 런타임에
+    //    body 맨 끝에 추가되므로 항상 나중임).
     css += '#app-topbar { background: ' + genNav.base + ' !important; color: ' + genNav.text + ' !important; }\n'
         + '#app-sidebar { background: ' + genNav.base + ' !important; }\n'
         + '#app-sidebar .sb-item { color: ' + genNav.text + ' !important; }\n'
@@ -23592,6 +23613,9 @@ window._cpApplyLive = function(hex) {
         + '#app-sidebar .sb-toggle-btn:hover { background: ' + genNav.hover + ' !important; }\n'
         + '.topbar-btn { color: ' + genNav.text + ' !important; }\n'
         + '.topbar-btn:hover { background: ' + genNav.hover + ' !important; }\n'
+        + '#app-topbar .tb-logo { background-color: ' + genLogo + ' !important; }\n'
+        + '.concept-header-box, .concept-header-box h2 { color: ' + gen.darkText + ' !important; }\n'
+        + '.concept-header-box { background-color: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; }\n'
         + '.concept-table th, #myTable th, #tab-notice thead th, #tab-elecparts .concept-table thead th { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.concept-table th, .concept-table td, #myTable th, #myTable td { border-color: ' + gen.border + ' !important; }\n'
         + '#tab-alarm .concept-table tbody tr.mc-zebra-b, #tab-address .concept-table tbody tr.mc-zebra-b, #tab-elecparts .concept-table tbody tr.mc-zebra-b { background-color: ' + gen.zebraB + ' !important; }\n';
