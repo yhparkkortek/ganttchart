@@ -1776,10 +1776,8 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <h2>🪪 Address</h2>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button data-i18n="btn-addr-load" onclick="window.importAddressFromDrive()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin:0; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📂 불러오기</button>
-            <div class="btn-group">
-                <button data-i18n="btn-sort-name" onclick="window.sortAddressBy('name')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔤 이름순</button>
-                <button data-i18n="btn-sort-dept" onclick="window.sortAddressBy('dept')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🏢 부서순</button>
-            </div>
+            <!-- 💡 [2026-08-30 삭제] "🔤 이름순"/"🏢 부서순" 버튼 — 표 헤더 클릭 정렬(sortAddressByHeader)로
+                 대체되어 더 이상 필요 없어짐(모든 열을 클릭 정렬 가능하고 오름차순/내림차순도 토글됨). -->
             <div style="position:relative; display:inline-flex; align-items:center;">
                 <input id="addr-search-input" type="text" placeholder="🔍 검색 (이름/부서/직함/이메일/전화 등)" oninput="window.filterAddressRows(this.value)"
                     style="width:220px; padding:6px 28px 6px 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; box-sizing:border-box;">
@@ -1799,6 +1797,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 }
                 #tab-address .concept-table thead th {
                     background-color: #eef6f7 !important;
+                }
+                /* 💡 [2026-08-30 신규] 정렬 가능한 헤더(data-sort-field)에 호버 시 색이 채워져서
+                   클릭 가능함을 알 수 있게 함 — 테마 변경 시에도 같이 바뀌도록 _cpApplyLive에도 동일 규칙 있음. */
+                #tab-address .concept-table thead th[data-sort-field]:hover {
+                    background-color: #a3d9e0 !important;
+                }
+                #tab-address .addr-sort-indicator {
+                    display: inline-block;
+                    color: #00707d;
+                    font-size: 10px;
                 }
                 #tab-address .concept-table td input.u-input {
                     background: transparent !important;
@@ -1830,14 +1838,14 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <thead>
                         <tr>
                             <th style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
-                            <th style="width:11%;" data-i18n="th-addr-name">이름</th>
-                            <th style="width:11%;" data-i18n="th-addr-name-en">영문 이름</th>
-                            <th style="width:10%;" data-i18n="th-addr-dept">부서</th>
-                            <th style="width:11%;" data-i18n="th-addr-title">직함</th>
-                            <th style="width:19%;" data-i18n="th-addr-email">이메일</th>
-                            <th style="width:11%;" data-i18n="th-addr-mobile">휴대폰</th>
-                            <th style="width:11%;" data-i18n="th-addr-phone">근무처 전화</th>
-                            <th style="width:12%;" data-i18n="th-addr-telegram">텔레그램 ID</th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="name" onclick="window.sortAddressByHeader('name')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-name">이름</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="nameEn" onclick="window.sortAddressByHeader('nameEn')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-name-en">영문 이름</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:10%; cursor:pointer;" data-sort-field="dept" onclick="window.sortAddressByHeader('dept')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-dept">부서</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="title" onclick="window.sortAddressByHeader('title')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-title">직함</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:19%; cursor:pointer;" data-sort-field="email" onclick="window.sortAddressByHeader('email')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-email">이메일</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="mobile" onclick="window.sortAddressByHeader('mobile')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-mobile">휴대폰</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="phone" onclick="window.sortAddressByHeader('phone')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-phone">근무처 전화</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:12%; cursor:pointer;" data-sort-field="telegramId" onclick="window.sortAddressByHeader('telegramId')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-telegram">텔레그램 ID</span><span class="addr-sort-indicator"></span></th>
                         </tr>
                     </thead>
                     <tbody id="address-table-body"></tbody>
@@ -10750,8 +10758,6 @@ window.deleteHistoryByDateRange = function() {
                 'btn-notice-add':     '+ 공지 등록',
                 'btn-notice-sendall': '📢 전체 즉시 발송',
                 'btn-addr-load':      '📂 불러오기',
-                'btn-sort-name':      '🔤 이름순',
-                'btn-sort-dept':      '🏢 부서순',
                 'btn-sync-gantt':     '🔄 Gantt 실적 연동',
                 'btn-print':          '🖨️ 인쇄 (PDF)',
                 'btn-prev':           '◀ 이전',
@@ -10861,8 +10867,6 @@ window.deleteHistoryByDateRange = function() {
                 'btn-notice-add':     '+ Add Notice',
                 'btn-notice-sendall': '📢 Send All Now',
                 'btn-addr-load':      '📂 Load',
-                'btn-sort-name':      '🔤 By Name',
-                'btn-sort-dept':      '🏢 By Dept',
                 'btn-sync-gantt':     '🔄 Sync from Gantt',
                 'btn-print':          '🖨️ Print (PDF)',
                 'btn-prev':           '◀ Prev',
@@ -24555,6 +24559,9 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.cal-day-cell { border-color: ' + gen.border + ' !important; }\n'
         // 💡 [2026-08-30 추가] 월/주 토글(.cal-view-toggle) 바깥 테두리도 옛 고정 하늘색이었음.
         + '.cal-view-toggle { border-color: ' + gen.hoverBg + ' !important; }\n'
+        // 💡 [2026-08-30 추가] Address 표 헤더 클릭 정렬 호버/정렬 표시(▲▼)도 테마색으로.
+        + '#tab-address .concept-table thead th[data-sort-field]:hover { background-color: ' + gen.hoverBg + ' !important; }\n'
+        + '#tab-address .addr-sort-indicator { color: ' + gen.darkText + ' !important; }\n'
         // 💡 [2026-08-30 추가] "핀셋 알람"/"이번달·이번주 강조"는 테마색이 아니라 그 보색(위 compGen)으로
         // — 업무 상자(테마색)와는 확실히 구분되면서, 어떤 테마를 고르든 항상 대비되는 색이 나오게 함.
         + '.cal-event-chip.cal-alarm-on { background: ' + compGen.headerTint + ' !important; border-left-color: ' + compGen.hoverBorder + ' !important; color: ' + compGen.darkText + ' !important; }\n'
@@ -30144,12 +30151,40 @@ window.filterAddressRows = function(term) {
     if (clearEl) clearEl.style.display = q ? 'inline' : 'none';
 };
 
-window.sortAddressBy = function(field) {
+// 💡 [2026-08-30 수정] dir 파라미터 추가(오름차순/내림차순) — 예전엔 "이름순"/"부서순" 버튼 전용으로
+// 항상 오름차순만 지원했는데, 이제 표 헤더 클릭 정렬(sortAddressByHeader)이 이 함수를 재사용하면서
+// 같은 열을 다시 클릭하면 내림차순으로 뒤집을 수 있어야 해서 방향을 받도록 확장했다.
+window.sortAddressBy = function(field, dir) {
     window.collectAddressData();
-    window.tabData.addressBook.sort(function(a, b) { return String(a[field] || '').localeCompare(String(b[field] || ''), 'ko'); });
+    const mul = dir === 'desc' ? -1 : 1;
+    window.tabData.addressBook.sort(function(a, b) { return mul * String(a[field] || '').localeCompare(String(b[field] || ''), 'ko'); });
     window._bmSelected.addr.clear();
     window._bmAnchor.addr = null;
     window.renderAddressTable();
+};
+
+// 💡 [2026-08-30 신규] Address 표 헤더 클릭 정렬 — "🔤 이름순"/"🏢 부서순" 버튼을 없애는 대신, 정렬
+// 가능한 모든 열(이름/영문 이름/부서/직함/이메일/휴대폰/근무처 전화/텔레그램 ID) 헤더 자체를 누르면
+// 그 열 기준으로 정렬되고, 같은 열을 다시 누르면 오름차순↔내림차순이 토글되도록 한다(엑셀/구글시트
+// 표 헤더 정렬과 동일한 관례). 현재 정렬 기준 열에는 헤더에 ▲/▼ 표시를 붙여 어떤 상태인지 보여준다.
+window._addrSortState = { field: null, dir: 'asc' };
+window.sortAddressByHeader = function(field) {
+    if (window._addrSortState.field === field) {
+        window._addrSortState.dir = window._addrSortState.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+        window._addrSortState.field = field;
+        window._addrSortState.dir = 'asc';
+    }
+    window.sortAddressBy(field, window._addrSortState.dir);
+    window._updateAddrSortHeaderUI();
+};
+window._updateAddrSortHeaderUI = function() {
+    document.querySelectorAll('#tab-address thead th[data-sort-field]').forEach(function(th) {
+        const indicator = th.querySelector('.addr-sort-indicator');
+        if (!indicator) return;
+        indicator.textContent = (th.dataset.sortField === window._addrSortState.field)
+            ? (window._addrSortState.dir === 'asc' ? ' ▲' : ' ▼') : '';
+    });
 };
 
 // 🪪 공용 주소록(Address Book) — 프로젝트와 무관하게 팀 전체가 공유하는 단일 소스
