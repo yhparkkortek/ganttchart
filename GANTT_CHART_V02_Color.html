@@ -676,7 +676,13 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
 .concept-tab-wrap h2 { margin-top:0; font-size:19px; color:#2c5f8a; }
-.concept-section { background:#fff; border:1px solid #cfe3e5; border-radius:6px; padding:16px 18px; margin-bottom:16px; }
+.concept-section { background:#fff; border:1px solid #cfe3e5; border-radius:6px; padding:16px 18px; margin-bottom:16px; transition:border-color .15s, box-shadow .15s; }
+/* 💡 [2026-08-30 신규] Summary 페이지 각 박스(프로젝트 개요/정보/배경/멤버/주요자재/제품사진 등)에
+   마우스를 올리면 테두리가 강조색으로 살짝 진해지도록 — 어떤 박스인지 시각적으로 바로 구분되게 함. */
+/* 💡 summary-outer-box는 Summary 페이지 전체를 감싸는 가장 바깥 박스라, 이 규칙을 그대로 적용하면
+   안쪽 어느 박스에 마우스를 올려도(이벤트가 항상 이 박스를 거쳐가므로) 바깥 테두리까지 같이
+   반응해버려 "어느 박스에 올렸는지" 구분이 안 됨 — 안쪽 개별 박스만 반응하도록 제외. */
+.concept-section:hover:not(.summary-outer-box) { border-color:#52a5af; box-shadow:0 1px 6px rgba(0,0,0,0.08); }
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
 .concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
@@ -1761,7 +1767,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                  안 건드림) mousedown에서 기본 동작(드롭다운 펼치기)만 막고 window._toggleProjectStatus로
                  값을 직접 뒤집는다. 키보드 방향키로 포커스된 select를 조작하는 경우는 기본 동작이 이미
                  두 옵션 사이 토글과 동일해서 그대로 둬도 문제없음(접근성 유지). -->
-            <select id="sum-project-status" title="완료로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다." onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; padding:2px 8px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
+            <select id="sum-project-status" title="완료로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다." onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; padding:6px 12px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
                 <option value="">🔵 진행중</option>
                 <option value="완료">✅ 완료</option>
             </select>
@@ -1883,20 +1889,20 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <h3 id="sum-h3-member1">프로젝트 멤버-1</h3>
                 <div class="concept-grid concept-grid-mem">
                     <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자 *" readonly style="color:#e03131; font-weight:bold;"><input type="text" id="sum-pm" class="u-input req-field" placeholder="예: 박용훈" oninput="window._checkRequiredField(this)"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">                  
-                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member2">프로젝트 멤버-2</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
         </div>
@@ -23637,6 +23643,7 @@ window._cpApplyLive = function(hex, skipSave) {
     // 바깥쪽 큰 박스처럼 인라인으로 다른 테두리색(hoverBg 역할)을 따로 가진 경우엔 나중에 나오는
     // 더 구체적인 규칙이 이걸 덮어쓰도록 순서를 지킨다(동일 특이도라 나중 규칙이 이김).
     css += '.concept-section { border-color: ' + gen.border + ' !important; }\n'
+        + '.concept-section:hover:not(.summary-outer-box) { border-color: ' + gen.hoverBorder + ' !important; }\n'
         + '.concept-grid input, .concept-grid textarea { border-color: ' + gen.border + ' !important; }\n'
         + '#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { border-color: ' + gen.border + ' !important; }\n'
         // 💡 페이지 제목 옆 액션 버튼들(.action-btn: 인쇄/펼치기/MVD/R1/VS 등) 공용 호버가 옛날 원색
