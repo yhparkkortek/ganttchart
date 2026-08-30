@@ -7459,29 +7459,44 @@ ${mailText}`;
         window.print();
     };
 
+    // 💡 [공용화] afterprint/포커스 복귀 양쪽에서 똑같이 쓰는 정리 로직 — 인쇄 미리보기 중에만 화면에서
+    //    숨겨야 하는 요소(사이드바/상단바/시트탭바 등 — CSS가 body.tab-printing-mode 기준으로 숨김)를
+    //    되돌린다. 이 클래스가 body에 남아있는 한 화면 전체 chrome이 계속 안 보이므로, 정리를 놓치면
+    //    안 되는 중요한 훅이다.
+    window._clearPrintingModeClasses = function() {
+        const printArea = document.getElementById('tab-print-area');
+        if (printArea) printArea.innerHTML = '';
+        document.body.classList.remove('tab-printing-mode');
+        document.body.classList.remove('printing-tab-summary');
+        document.body.classList.remove('printing-tab-briefspec');
+        document.body.classList.remove('printing-tab-mctable');
+        document.body.classList.remove('printing-tab-calendar');
+        document.body.classList.remove('printing-tab-weekly');
+        document.body.classList.remove('printing-tab-alarm');
+        document.body.classList.remove('printing-tab-address');
+
+        // 💡 Gantt 인쇄 전용 사본도 같이 정리 (안 지우면 다음 인쇄 때 다른 탭과 겹쳐 보임)
+        const ganttPrintArea = document.getElementById('gantt-print-area');
+        if (ganttPrintArea) ganttPrintArea.innerHTML = '';
+        document.body.classList.remove('gantt-printing-mode');
+
+        // 💡 AI 프로젝트 요약 인쇄 전용 사본도 함께 정리
+        const aiSummaryPrintArea = document.getElementById('ai-summary-print-area');
+        if (aiSummaryPrintArea) aiSummaryPrintArea.innerHTML = '';
+        document.body.classList.remove('ai-summary-printing-mode');
+    };
     window.addEventListener('afterprint', function() {
-        setTimeout(function() {
-            const printArea = document.getElementById('tab-print-area');
-            if (printArea) printArea.innerHTML = '';
-            document.body.classList.remove('tab-printing-mode');
-            document.body.classList.remove('printing-tab-summary');
-            document.body.classList.remove('printing-tab-briefspec');
-            document.body.classList.remove('printing-tab-mctable');
-            document.body.classList.remove('printing-tab-calendar');
-            document.body.classList.remove('printing-tab-weekly');
-            document.body.classList.remove('printing-tab-alarm');
-            document.body.classList.remove('printing-tab-address');
-
-            // 💡 Gantt 인쇄 전용 사본도 같이 정리 (안 지우면 다음 인쇄 때 다른 탭과 겹쳐 보임)
-            const ganttPrintArea = document.getElementById('gantt-print-area');
-            if (ganttPrintArea) ganttPrintArea.innerHTML = '';
-            document.body.classList.remove('gantt-printing-mode');
-
-            // 💡 AI 프로젝트 요약 인쇄 전용 사본도 함께 정리
-            const aiSummaryPrintArea = document.getElementById('ai-summary-print-area');
-            if (aiSummaryPrintArea) aiSummaryPrintArea.innerHTML = '';
-            document.body.classList.remove('ai-summary-printing-mode');
-        }, 1000);
+        setTimeout(window._clearPrintingModeClasses, 1000);
+    });
+    // 🐛 [버그 수정] afterprint 이벤트는 브라우저/실행 환경에 따라(인쇄창을 특정 방식으로 닫거나,
+    // 원격/임베디드 브라우저인 경우 등) 아예 발생하지 않을 수 있다 — 그러면 위 정리가 영원히 안 일어나
+    // body.tab-printing-mode가 그대로 남아, 사이드바·상단바·시트탭바가 화면에서 사라진 것처럼 보이는
+    // 상태로 굳어버린다(새로고침 전까진 복구 불가). 안전망으로, 인쇄 대화상자가 떠 있는 동안 잃었던
+    // 창 포커스가 돌아오는 시점(=인쇄창을 어떤 식으로든 닫음)에도 같은 정리를 한 번 더 시도한다.
+    window.addEventListener('focus', function() {
+        if (document.body.classList.contains('tab-printing-mode') || document.body.classList.contains('gantt-printing-mode') || document.body.classList.contains('ai-summary-printing-mode')) {
+            setTimeout(window._clearPrintingModeClasses, 300);
+        }
     });
 
     // ═══════════════════════════════════════════════════════════
@@ -23549,7 +23564,12 @@ window._cpRenderPreview = function(hex) {
 
     // 💡 이미 "실제 페이지에 적용" 중이면(라이브 모드), 프리셋/커스텀 색을 바꿀 때마다 실제 화면도
     //    같이 즉시 갱신 — 매번 "적용" 버튼을 다시 누를 필요 없이 색상만 계속 바꿔가며 실시간 비교 가능.
-    if (window._cpLiveAppliedHex) window._cpApplyLive(hex);
+    // 🐛 [버그 수정] 이 hex가 "지금 이미 적용 중인 색과 같으면" 재적용을 건너뛴다 — 안 그러면 로고를
+    //    클릭해 팔레트를 열기만 해도(직접선택 칸의 기본값 '#2c5f8a'로 미리보기를 그리며) 실제 테마가
+    //    조용히 그 기본값으로 바뀌고 저장 안 한 변경사항으로 표시되는 사고가 있었다(openColorPaletteModal
+    //    이 이 함수를 호출할 때 그 칸 값을 지금 라이브 테마로 먼저 맞춰두므로, 아무것도 안 골랐으면
+    //    hex===_cpLiveAppliedHex라 여기서 걸러진다 — 실제로 다른 색을 고르면 정상적으로 통과).
+    if (window._cpLiveAppliedHex && hex !== window._cpLiveAppliedHex) window._cpApplyLive(hex);
 };
 
 // 🎨 [실제 적용] 청록 작업에 실제로 쓰인 hex 상수들을, 페이지 전체에서 "그 hex 문자열을 inline
@@ -23824,7 +23844,13 @@ window.openColorPaletteModal = function() {
     document.getElementById('cp-preset-swatches').innerHTML = window.CP_PRESETS.map(hex =>
         '<div onclick="window._cpRenderPreview(\'' + hex + '\'); window._cpApplyLive(\'' + hex + '\');" title="' + hex + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>'
     ).join('');
-    window._cpRenderPreview(document.getElementById('cp-custom-color').value || '#2c5f8a');
+    // 🐛 [버그 수정] "직접 선택" 칸이 항상 하드코딩 기본값(#2c5f8a)에서 시작해서, 이미 다른 색(예:
+    // 빨강)이 저장/적용돼 있는 프로젝트에서 로고를 눌러 팔레트를 열기만 해도 그 기본값으로 미리보기가
+    // 그려지며(아래 _cpRenderPreview가 라이브 모드일 때 자동 재적용) 실제 테마가 조용히 바뀌었었다.
+    // 지금 실제로 적용 중인 색이 있으면 그 색으로 칸을 먼저 맞춰서, 아무것도 새로 고르지 않았으면
+    // 정말 아무 변화도 없도록 한다.
+    document.getElementById('cp-custom-color').value = window._cpLiveAppliedHex || '#2c5f8a';
+    window._cpRenderPreview(window._cpLiveAppliedHex || document.getElementById('cp-custom-color').value || '#2c5f8a');
     window._cpUpdateApplyStatus();
     document.getElementById('color-palette-modal-overlay').style.display = 'block';
     document.getElementById('color-palette-modal').style.display = 'block';
@@ -28022,12 +28048,12 @@ window.renderElecCompareTab = async function(type) {
             const displayName = entry ? (window._epPartNameOf(entry.specs) || m) : m;
             // 💡 [2026-08-27] Item Code(6자리 숫자)는 표 아래 Basic Information 행에 이미 나오므로
             //    헤더에 중복 표시할 필요 없음 — 요청에 따라 헤더에서는 뺌.
-            headHtml += `<th style="min-width:130px;">
+            headHtml += `<th style="min-width:130px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
                 <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>
-                <div style="margin-top:3px; display:flex; gap:5px; justify-content:center; align-items:center; flex-wrap:wrap;">
-                    ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">✏️</button>` : ''}
-                    <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🔄</button>
-                    <button data-ep-remove="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🗑</button>
+                <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
+                    ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">✏️</button>` : ''}
+                    <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🔄</button>
+                    <button data-ep-remove="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🗑</button>
                     ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
                 </div>
             </th>`;
@@ -28175,10 +28201,10 @@ window._openImageLightbox = function(images, startIdx, title, onSync) {
                 <span id="ep-lightbox-title">📷 Picture</span>
                 <button onclick="document.getElementById('ep-lightbox-modal').style.display='none'" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
             </div>
-            <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto; background:#20242b; min-height:200px;">
-                <button id="ep-lightbox-prev" onclick="window._epLightboxNav(-1)" title="Previous" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.85); border:none; border-radius:50%; width:34px; height:34px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;">‹</button>
+            <div style="position:relative; flex:1; display:flex; align-items:center; justify-content:center; padding:16px; overflow:auto; background:#fff; min-height:200px;">
+                <button id="ep-lightbox-prev" onclick="window._epLightboxNav(-1)" title="Previous" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.85); border:1px solid #ddd; border-radius:50%; width:34px; height:34px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;">‹</button>
                 <img id="ep-lightbox-img" style="max-width:100%; max-height:70vh; object-fit:contain;">
-                <button id="ep-lightbox-next" onclick="window._epLightboxNav(1)" title="Next" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.85); border:none; border-radius:50%; width:34px; height:34px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;">›</button>
+                <button id="ep-lightbox-next" onclick="window._epLightboxNav(1)" title="Next" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:rgba(255,255,255,0.85); border:1px solid #ddd; border-radius:50%; width:34px; height:34px; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center;">›</button>
             </div>
             <div id="ep-lightbox-counter" style="text-align:center; padding:8px; font-size:12px; color:#666; flex-shrink:0;"></div>
         </div>`;
