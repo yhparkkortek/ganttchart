@@ -616,6 +616,11 @@
 }
 .topbar-btn:hover { background: #90cdd5; }
 .topbar-btn:disabled { opacity:0.5; cursor:default; }
+/* 💡 [2026-08-30 신규] 언어 토글이 "영문 선택됨" 상태일 때의 강조 표시 — 예전엔 toggleLang()이
+   인라인 style로 직접 칠해서 테마 변경을 못 따라갔음(위 toggleLang 주석 참고). 클래스로 빼서
+   정적 기본값은 여기(사이드바 "선택됨"과 같은 진한 청록), 라이브 테마는 _cpApplyLive가 담당한다. */
+.topbar-btn.lang-active { background:#00636e; color:#fff; border-color:#00636e; }
+.topbar-btn.lang-active:hover { background:#00505a; }
 /* 💡 [2026-08-30 신규] Elec Parts "🔌 핀맵 보기"/"🔌 보기" 버튼 호버가 다른 액션 버튼들과 같은
    고정 하늘색(#cfe6fa)이라 테마가 안 먹혔음 — 호버만 "펼치기"(.concept-add-row-btn)와 같은
    테마색으로 통일(평소 색은 다른 액션 버튼과 통일감 있게 그대로 유지). */
@@ -10863,14 +10868,14 @@ window.deleteHistoryByDateRange = function() {
         window._currentLang = window._currentLang === 'ko' ? 'en' : 'ko';
         const btn = document.getElementById('lang-toggle-btn');
         btn.textContent = LANG[window._currentLang].btnText;
-        // 🐛 [2026-08-30 버그 수정] "ENG" 활성 표시가 옛 고정 파랑(#0056b3)이라 테마가 안 먹혔음 —
-        // 사이드바 메뉴의 "선택됨" 표시(nav.text 역할, 원래도 진한 청록 #00636e라 흰 글자와 대비가
-        // 좋았음)와 같은 역할색을 재사용해서, 테마를 바꾸면 이 표시도 같이 바뀌도록 한다.
-        const _navHue = window._cpHexToHsl ? window._cpHexToHsl(window._cpLiveAppliedHex || '#00707d').h : null;
-        const _activeBg = (_navHue !== null && window._cpComputeGenNav) ? window._cpComputeGenNav(_navHue).text : '#0056b3';
-        btn.style.background = window._currentLang === 'en' ? _activeBg : '';
-        btn.style.color = window._currentLang === 'en' ? '#fff' : '';
-        btn.style.borderColor = window._currentLang === 'en' ? _activeBg : '';
+        // 🐛 [2026-08-30 버그 수정 → 같은 날 재작성] "영문 선택됨" 표시가 옛 고정 파랑(#0056b3)이라
+        // 테마가 안 먹혔음. 처음엔 여기서 현재 테마색을 계산해 btn.style에 직접 넣었는데, 그러면
+        // "영문으로 바꾼 뒤 테마를 변경"하면 인라인 색이 그대로 굳어버려(다시 토글하기 전까지 갱신 안 됨)
+        // 여전히 테마와 다른 색으로 남는 문제가 있었다 — 실제로 그 상태가 "파란색이 박혀 있다"로 보였다.
+        // 색을 JS로 칠하지 않고 클래스만 토글해서, 색은 전적으로 CSS(.topbar-btn.lang-active)와
+        // _cpApplyLive의 라이브 테마 규칙이 결정하도록 바꾼다 → 테마를 언제 바꾸든 항상 같이 따라간다.
+        btn.classList.toggle('lang-active', window._currentLang === 'en');
+        btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; // 옛 인라인 잔재 제거
 
         // UI 버튼 텍스트 일괄 업데이트
         const uiMap = LANG[window._currentLang].ui;
@@ -24414,6 +24419,10 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#app-sidebar .sb-toggle-btn:hover { background: ' + genNav.hover + ' !important; }\n'
         + '.topbar-btn { color: ' + genNav.text + ' !important; }\n'
         + '.topbar-btn:hover { background: ' + genNav.hover + ' !important; }\n'
+        // 💡 [2026-08-30 추가] 언어 토글 "영문 선택됨" 강조 — 사이드바 메뉴의 "선택됨"과 같은 역할색
+        // (genNav.text: 진한 색 + 흰 글자)으로, 테마를 바꾸면 이 표시도 즉시 같이 바뀐다.
+        + '.topbar-btn.lang-active { background: ' + genNav.text + ' !important; border-color: ' + genNav.text + ' !important; color: #fff !important; }\n'
+        + '.topbar-btn.lang-active:hover { background: ' + genNav.active + ' !important; }\n'
         // 💡 [2026-08-30 추가] 상단바의 "📄 현재 프로젝트 파일명" 표시가 옛 고정 청록(글자/호버 배경
         // 둘 다)이라 테마가 안 먹혔음 — 같은 상단바 안의 .topbar-btn과 같은 톤(genNav)으로 통일.
         + '#current-project-filename { color: ' + genNav.text + ' !important; }\n'
