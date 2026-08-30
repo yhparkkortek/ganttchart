@@ -746,6 +746,9 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .bm-pop-btn:hover { background:#cfe6fa; border-color:#7fb0dd; }
 .bm-pop-btn.bm-pop-danger { border-color:#eeb0ac; background:#fbe4e2; color:#b1432f; }
 .bm-pop-btn.bm-pop-danger:hover { background:#f5c2bd; border-color:#e08f87; }
+/* 💡 [2026-08-30] ▲▼＋－ 팝업의 "＋"(추가)만 다른 O/B/R 버튼들과 구분되게 초록 파스텔로 강조 */
+.bm-pop-btn.bm-pop-add { border-color:#a8dab8; background:#e6f6ea; color:#1f7a3d; }
+.bm-pop-btn.bm-pop-add:hover { background:#c9ecd3; border-color:#7cc494; }
 /* 💡 [2026-08-29 되돌림] 첨부 엑셀의 "사용자 작성 구간" 회색 표시를 흉내낸 배경이었으나, 청록 테마
    전환 후 흰 카드 위에서 탁한 회색 박스로 튀어 보인다는 피드백으로 투명(카드 배경 그대로)으로 변경 */
 .concept-grid input.u-input, .concept-grid textarea.u-input {
@@ -2323,7 +2326,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
                  body 하단의 gantt-filter-popup-cal-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
-            <button type="button" id="gantt-filter-trigger-cal-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('cal-wbs', event)" style="background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border:none;">LEVEL(WBS) ▾</button>
+            <button type="button" id="gantt-filter-trigger-cal-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('cal-wbs', event)" onmouseover="window._gftHover && window._gftHover(this, true)" onmouseout="window._gftHover && window._gftHover(this, false)" style="background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border:none;">LEVEL(WBS) ▾</button>
             <div class="btn-group" style="flex:1; justify-content:center; gap:6px; margin-left:8px;">
                 <div class="cal-view-toggle">
                     <button type="button" id="cal-view-month-btn" class="cal-view-btn cal-view-btn-active" onclick="window.calSetViewMode('month')">월</button>
@@ -2352,7 +2355,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <!-- 💡 [드롭다운화] Gantt 차트 페이지와 동일하게 트리거 버튼 + 팝업 방식으로 통일 (실제 필터 그룹은
                  body 하단의 gantt-filter-popup-wr-wbs 팝업 안에 있음 — window.toggleGanttFilterPopup 재사용) -->
-            <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('wr-wbs', event)" style="background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border:none;">LEVEL(WBS) ▾</button>
+            <button type="button" id="gantt-filter-trigger-wr-wbs" class="action-btn gantt-filter-trigger-btn" onclick="window.toggleGanttFilterPopup('wr-wbs', event)" onmouseover="window._gftHover && window._gftHover(this, true)" onmouseout="window._gftHover && window._gftHover(this, false)" style="background:#e0f5f7 !important; border-color:#a3d9e0 !important; color:#00707d !important; border:none;">LEVEL(WBS) ▾</button>
             <div class="btn-group" style="flex:1; justify-content:center; gap:3px; margin-left:8px;">
                 <button data-i18n="btn-prev-week" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(-1)">◀ 이전주</button>
                 <span id="wr-week-label" style="font-size:13px; font-weight:bold; color:#444; padding:0 4px; min-width:140px; text-align:center;"></span>
@@ -2360,10 +2363,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.wrShiftWeek(0)">오늘</button>
             </div>
             <div style="display:flex; align-items:center; gap:6px;">
-                <label style="font-size:13px; color:#555; display:flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;">
-                    <span data-i18n="lbl-ppt-color">🎨 PPT 색상</span>
-                    <input type="color" value="#19c3d6" oninput="window.wrPptBaseColor = this.value.replace('#','')" style="cursor:pointer; width:24px; height:24px; border:none; padding:0; background:none; border-radius:3px; outline:none;" title="PPT 출력시 적용될 메인 테마 색상을 선택하세요">
-                </label>
+                <!-- 💡 [2026-08-30 통합] 별도 "🎨 PPT 색상" 피커를 없애고, 로고 클릭 시 나오는 컬러
+                     팔레트 모달에서 고른(또는 프로젝트에 저장된) 테마 색을 PPT 출력에도 그대로 쓰도록
+                     통합 — exportWeeklyReportPPT() 내부에서 window._cpLiveAppliedHex를 직접 참조. -->
                 <button data-i18n="btn-ppt-export" data-i18n="btn-ppt-export" onclick="window.exportWeeklyReportPPT()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📥 PPT 출력</button>
             </div>
             <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-weekly')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
@@ -9414,7 +9416,7 @@ window.deleteHistoryByDateRange = function() {
             <span id="rap-left"  class="rap-btn" title="WBS 레벨 올리기"><i class="ti ti-chevron-left"></i></span>
             <span id="rap-right" class="rap-btn" title="WBS 레벨 내리기"><i class="ti ti-chevron-right"></i></span>
             <span id="rap-dn"    class="rap-btn" title="아래로 이동"><i class="ti ti-chevron-down"></i></span>
-            <span id="rap-add"   class="rap-btn" title="행 추가"><i class="ti ti-plus"></i></span>
+            <span id="rap-add"   class="rap-btn rap-btn-add" title="행 추가"><i class="ti ti-plus"></i></span>
             <span id="rap-del"   class="rap-btn rap-btn-danger" title="행 삭제"><i class="ti ti-minus"></i></span>
 
         </div>`;
@@ -17114,7 +17116,10 @@ window.updateInboxBadge();
     .rap-btn:hover { background: #cfe6fa; border-color: #7fb0dd; }
     .rap-btn-danger { border-color: #eeb0ac; background: #fbe4e2; color: #b1432f; }
     .rap-btn-danger:hover { background: #f5c2bd; border-color: #e08f87; }
-    
+    /* 💡 [2026-08-30] 상하좌우＋－ 팝업의 "＋"(행 추가)만 다른 버튼들과 구분되게 초록 파스텔로 강조 */
+    .rap-btn-add { border-color: #a8dab8; background: #e6f6ea; color: #1f7a3d; }
+    .rap-btn-add:hover { background: #c9ecd3; border-color: #7cc494; }
+
     /* 행 액션 팝업 */
     .row-action-popup {
         position: fixed;
@@ -22507,7 +22512,9 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         };
     }
 
-    window.wrPptBaseColor = window.wrPptBaseColor || '19C3D6';
+    // 💡 [2026-08-30 통합] 별도 "🎨 PPT 색상" 피커(구 window.wrPptBaseColor 값)를 없애고, 로고 팔레트에서
+    //    지금 실제 적용 중인 테마 색(없으면 기본 청록과 같은 계열인 19C3D6)을 그대로 PPT 기준색으로 쓴다
+    //    — exportWeeklyReportPPT() 호출부에서 window._cpLiveAppliedHex를 직접 참조(아래 wrDeriveColors 호출부 참고).
 
     window.projectMeta = window.projectMeta || {
         프로젝트코드: "",
@@ -22873,7 +22880,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         pptx.layout = 'WIDE';
 
         // ── 공통 상수 & 헬퍼 (슬라이드 1·2 공유) ──────────────────────────────
-        const C = wrDeriveColors(window.wrPptBaseColor || '19C3D6');
+        const C = wrDeriveColors((window._cpLiveAppliedHex || '#19c3d6').replace('#', ''));
         const SKY = C.base, SKY_DARK = C.dark;
         const BORDER = 'A6A6A6';
         const BORDER_W = 0.75;
@@ -23713,7 +23720,13 @@ window._cpApplyLive = function(hex, skipSave) {
     css += zebraBSelectors.join(', ') + ' { background-color: ' + gen.zebraB + ' !important; }\n';
     css += '#myTable tbody tr.gantt-zebra-b td { background: ' + gen.zebraB + ' !important; }\n'
         + '.concept-add-row-btn, .gantt-filter-trigger-btn:not(.filter-active) { background: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
-        + '.concept-add-row-btn:hover, .gantt-filter-trigger-btn:not(.filter-active):hover, #gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover, #print-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n';
+        + '.concept-add-row-btn:hover, .gantt-filter-trigger-btn:not(.filter-active):hover, #gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover, #print-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        // 💡 [2026-08-30 추가] Calendar의 월/주 토글(.cal-view-btn)이 옛 파스텔-블루 고정색이라 테마가
+        // 안 먹혀서 항상 파랗게 박혀 보였음 — LEVEL(WBS) 트리거와 같은 톤 규칙으로 편입.
+        + '.cal-view-btn { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-view-btn:not(.cal-view-btn-active):hover { background: ' + gen.hoverBg + ' !important; }\n'
+        + '.cal-view-btn.cal-view-btn-active { background: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-view-btn + .cal-view-btn { border-left-color: ' + gen.hoverBg + ' !important; }\n';
 
     // 🐛 [버그 수정] "핀셋(알람 켜짐)" 행 파란 하이라이트(tr.alarm-on, #e3f2fd + 좌측 파란 선)가 지브라
     // 줄무늬보다 항상 위에 오도록 원래 코드에서 이미 한 번 재선언까지 해뒀는데, 지금 라이브 테마
@@ -23801,6 +23814,19 @@ window._cpRoleHex = function(roleKey) {
 };
 window._cpXlsxRole = function(roleKey) {
     return window._cpRoleHex(roleKey).replace('#', '').toUpperCase();
+};
+// 🐛 [버그 수정] Calendar/Weekly Report의 LEVEL(WBS) 트리거 버튼(#gantt-filter-trigger-cal-wbs,
+// #gantt-filter-trigger-wr-wbs)은 원본 HTML에 인라인 !important 스타일이 박혀 있어서(위 _cpApplyLive의
+// "이 두 트리거 버튼은..." 주석 참고) 어떤 CSS :hover 규칙도 이걸 못 이긴다 — 실측 결과 마우스를
+// 올려도 색이 전혀 안 바뀌었음. 베이스 색과 똑같이 hover도 JS로 직접 스타일을 바꿔야 한다.
+// filter-active(실제 필터 적용중) 상태는 별도 파란 계열 강조색이라 건드리지 않고 그대로 둔다.
+window._gftHover = function(el, entering) {
+    if (!el || el.classList.contains('filter-active')) return;
+    const bg = entering ? window._cpRoleHex('hoverBg') : window._cpRoleHex('bg');
+    const border = entering ? window._cpRoleHex('hoverBorder') : window._cpRoleHex('hoverBg');
+    el.style.setProperty('background', bg, 'important');
+    el.style.setProperty('border-color', border, 'important');
+    el.style.setProperty('color', window._cpRoleHex('darkText'), 'important');
 };
 window._cpApplyStoredTheme = function() {
     const hex = window.tabData && window.tabData.themeColor;
@@ -26045,9 +26071,18 @@ window.collectAlarmItems = function() {
         // 업무) 모드는 전혀 안 봐서 — 레벨0이 아닌 실제(본인에게 할당된) 업무는 항상 비어 매칭 실패 →
         // 아래 td[5] 폴백으로 넘어가면서 결국 레벨0(예: "PROTO B*") 이름이 잡히고 있었다. Gantt 렌더
         // 코드(window.renderTable 안 wbsColIdx 계산)와 동일한 레벨별 열 결정 로직을 그대로 재사용.
+        // 🐛 [2026-08-30 재수정] 위 수정 이후에도 "단일 WBS 열" 모드 프로젝트에서는 여전히 0레벨 이름이
+        // 잡히는 문제가 남아있었다 — 원인은 이 함수가 아니라 window.recalculateSchedules()에 있었음:
+        // 그 함수가 "개발단계 필터"를 최신 상태로 유지하려고 단일 WBS 열 모드에서 row[colIdx.wbs] 전체를
+        // 매번 "가장 가까운 0레벨 조상의 이름"으로 덮어써서(레벨 무관하게), 행 자신의 실제 텍스트가
+        // 그 칸에서 사라지고 있었다(칸이 "표시용 텍스트"와 "필터 그룹 키"라는 두 역할을 동시에 하다가
+        // 후자가 전자를 지워버린 셈). 반면 row._origDev/_origT1~4는 이 파일 다른 모든 곳(코드 13885,
+        // 14930 등)에서 이미 "그 행 자신의, 자기 레벨 텍스트"로 정확히 유지되고 있으므로, 컬럼값보다
+        // _orig*를 먼저 신뢰하도록 순서를 바꾼다(컬럼값은 _orig*가 비어있는 극히 드문 경우의 폴백으로만 사용).
+        const origByLevel = row._level === 0 ? row._origDev : (row._level === 1 ? row._origT1 : (row._level === 2 ? row._origT2 : (row._level === 3 ? row._origT3 : row._origT4)));
         let wbsColIdx = (row._level === 0) ? ci.devStage : (row._level === 1 ? ci.taskType1 : (row._level === 2 ? ci.taskType2 : (row._level === 3 ? ci.taskType3 : ci.taskType4)));
         if ((wbsColIdx === undefined || wbsColIdx === -1) && ci.wbs !== -1) wbsColIdx = ci.wbs;
-        let taskName = (wbsColIdx !== undefined && wbsColIdx > -1 ? row[wbsColIdx] : '') || (row._level === 0 ? row._origDev : '') || '';
+        let taskName = (origByLevel || '') || (wbsColIdx !== undefined && wbsColIdx > -1 ? row[wbsColIdx] : '') || '';
         taskName = taskName.toString().trim();
         if (!taskName) {
             const taskTd = tr.querySelectorAll('td')[5];
@@ -27019,12 +27054,12 @@ window.renderPanelCompareTab = async function() {
         if (m) {
             const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(m);
             const has = !!entries[i];
-            headHtml += `<th style="min-width:120px;">
+            headHtml += `<th style="min-width:120px; padding-left:6px; padding-right:6px; padding-top:4px !important; padding-bottom:4px !important;">
                 <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
-                <div style="margin-top:3px; display:flex; gap:5px; justify-content:center; align-items:center; flex-wrap:wrap;">
-                    ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">✏️</button>` : ''}
-                    <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🔄</button>
-                    <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🗑</button>
+                <div style="margin-top:2px; display:flex; gap:4px; justify-content:center; align-items:center; flex-wrap:wrap;">
+                    ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">✏️</button>` : ''}
+                    <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🔄</button>
+                    <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:0 3px; line-height:1.6; transition:background .15s, border-color .15s;">🗑</button>
                     ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
                 </div>
             </th>`;
