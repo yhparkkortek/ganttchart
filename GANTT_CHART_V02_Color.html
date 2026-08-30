@@ -1837,7 +1837,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </tr>
                 </tbody>
             </table>
-            <div class="concept-grid" style="margin-top:12px; margin-bottom:12px;">
+            <!-- 💡 [정렬 수정] 이 grid는 summary-outer-box에 바로 붙어있어 padding이 한 겹(18px)뿐인데,
+                 바로 아래 "개발 진척 현황"은 그 안에 중첩된 .concept-section(자체 padding 18px)의
+                 h3라 총 두 겹(36px)만큼 더 안쪽에서 시작함 — 라벨을 그 차이(18px)만큼 오른쪽으로
+                 밀어서 왼쪽 시작선을 맞춘다. -->
+            <div class="concept-grid" style="margin-top:12px; margin-bottom:12px; padding-left:18px;">
                 <label id="sum-lbl-devdays" style="font-weight:bold;">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603" style="width:100px; background:#fff;">
             </div>
         <div class="concept-section">
