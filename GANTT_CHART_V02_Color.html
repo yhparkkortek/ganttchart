@@ -4013,12 +4013,15 @@ ${mailText}`;
         // 💡 [2026-08-29 크기 통일] min/max-width 범위 + 줄 수 제한 없음이라 메시지 길이에 따라 토스트마다
         //    폭·높이가 들쭉날쭉했다(길게 줄바꿈되면 아래 토스트와 겹치기도 함). width 고정 + 최대 2줄까지만
         //    보이고 넘치면 …로 잘라서, 메시지 길이와 무관하게 항상 같은 크기의 토스트가 뜨도록 통일.
+        // 💡 [2026-08-30 수정] 2줄 제한이었는데 메시지가 3줄로 꺾이는 경우가 종종 있어 3번째 줄이 통째로
+        //    잘려 안 보이는 문제 — 토스트 바깥 크기(320×64)는 그대로 고정하고, 안쪽 여백을 살짝 줄이고
+        //    글자 크기/줄간격을 낮춰서 같은 박스 안에 3줄까지 들어가도록 조정.
         toast.style.cssText = `
             position:fixed; bottom:${initBottom}px; right:24px; z-index:999999;
             background:${theme.bg}; color:${theme.text}; border:1px solid ${theme.border};
-            padding:12px 18px; border-radius:8px; font-size:13px; font-weight:bold; line-height:1.5;
+            padding:10px 16px; border-radius:8px; font-size:11px; font-weight:bold; line-height:1.3;
             box-shadow:0 4px 14px rgba(0,0,0,0.18); width:320px; height:64px; white-space:pre-line;
-            display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+            display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden;
             opacity:0; transform:translateY(8px); box-sizing:border-box;
             transition:opacity 0.25s, transform 0.25s, bottom 0.25s;
         `;
