@@ -4765,19 +4765,24 @@ ${mailText}`;
 
         // 💡 [2026-08-29 파스텔 통일 v3] 선택 안 된 탭=흰 배경, 선택된 탭=제목 상자와 동일한 배경색
         //    (.concept-header-box와 동일한 #e0f5f7/#a3d9e0/#00707d, 청록톤)으로 통일 + 두 상태 모두 호버 추가.
+        // 🐛 [버그 수정] 예전엔 이 색들이 하드코딩 hex라 (a) 팔레트로 다른 테마를 골라도 안 바뀌고,
+        // (b) onmouseover가 style을 직접 건드리는 순간 브라우저가 style 속성 전체를 rgb(...)로 재직렬화
+        // 해버려서 CSS 쪽 [style*="#hex"] 오버라이드도 못 따라가 마우스를 올리면 도로 청록으로 보였다.
+        // _cpRoleHex()를 직접 호출해 항상 "지금 테마"의 실제 색을 즉석에서 계산해 넣는다.
+        const _cpHex = window._cpRoleHex || function(k) { return { bg: '#e0f5f7', hoverBg: '#a3d9e0', border: '#a3d9e0', hoverBorder: '#52a5af', darkText: '#00707d' }[k]; };
         bar.innerHTML = window._sheets.map(function(s) {
             const active = s.key === window._activeSheetKey;
             const label = s.fileName || '(새 프로젝트)';
-            const bg = active ? '#e0f5f7' : '#fff';
-            const border = '#a3d9e0';
-            const hoverBg = active ? '#c2e7ec' : '#e0f5f7';
-            const hoverBorder = '#52a5af';
+            const bg = active ? _cpHex('bg') : '#fff';
+            const border = _cpHex('hoverBg');
+            const hoverBg = active ? _cpHex('zebraB') : _cpHex('bg');
+            const hoverBorder = _cpHex('hoverBorder');
             return `<div onclick="window.switchToSheetWithSave('${s.key}')"
                 title="${escapeHtml(label)}"
                 onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}';"
                 onmouseout="this.style.background='${bg}'; this.style.borderColor='${border}';"
                 style="display:flex; align-items:center; gap:6px; padding:6px 10px; border-radius:8px 8px 0 0; cursor:pointer; font-size:12px; white-space:nowrap; max-width:${tabW}px; transition:background .15s, border-color .15s;
-                       background:${bg}; color:#00707d; font-weight:${active ? 'bold' : 'normal'};
+                       background:${bg}; color:${_cpHex('darkText')}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${border}; border-bottom:1px solid ${bg}; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
                 <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
@@ -4786,9 +4791,9 @@ ${mailText}`;
                     style="color:#7a97ae; background:transparent; border-radius:4px; padding:0 3px; font-size:13px; line-height:1.4; flex-shrink:0; transition:background .15s, color .15s;">✕</span>
             </div>`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
-                onmouseover="this.style.background='#e0f5f7';"
+                onmouseover="this.style.background='${_cpHex('bg')}';"
                 onmouseout="this.style.background='transparent';"
-                style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:#00707d; font-weight:bold; border-radius:6px; transition:background .15s;">+</div>`;
+                style="display:flex; align-items:center; justify-content:center; width:28px; flex-shrink:0; padding:6px 4px; cursor:pointer; font-size:14px; color:${_cpHex('darkText')}; font-weight:bold; border-radius:6px; transition:background .15s;">+</div>`;
     };
 
     // 💡 [버그 수정 v2] 탭 폭 자동조정은 지금까지 시트가 새로 열리거나 닫힐 때, 그리고(직전 수정으로)
@@ -23597,16 +23602,30 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.action-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.prod-img-slot { border-color: ' + gen.hoverBg + ' !important; background: ' + gen.headerTint + ' !important; }\n'
         + '.prod-img-slot:hover { border-color: ' + gen.hoverBorder + ' !important; }\n';
+    // 🐛 [버그 수정] onmouseover/onmouseout처럼 JS가 el.style.xxx = '#hex'로 직접 건드리는 순간, 브라우저가
+    // 그 요소의 style 속성 전체를 rgb(...) 표기로 다시 직렬화해버린다(건드리지 않은 다른 속성까지 포함)
+    // — 그러면 hex 문자열이 통째로 사라져서 [style*="#hex"] 매칭이 전부 실패하고, 마우스를 올리거나
+    // 클릭(선택)하는 순간 원래 청록으로 "돌아간 것처럼" 보였다(실제로는 청록으로 돌아간 게 아니라
+    // 내 오버라이드가 더 이상 그 요소를 못 찾는 것). hex 표기와 브라우저가 실제로 쓰는
+    // "rgb(r, g, b)" 표기를 둘 다 매칭 대상에 넣어서 해결.
+    const hexToRgbStr = function(hex) {
+        hex = hex.replace('#', '');
+        const r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+        return 'rgb(' + r + ', ' + g + ', ' + b + ')';
+    };
     bgRoles.forEach(function(p) {
-        css += '[style*="background:' + p[0] + '"], [style*="background: ' + p[0] + '"], [style*="background-color:' + p[0] + '"], [style*="background-color: ' + p[0] + '"] { background-color: ' + p[1] + ' !important; }\n';
+        const rgbOld = hexToRgbStr(p[0]);
+        css += '[style*="background:' + p[0] + '"], [style*="background: ' + p[0] + '"], [style*="background-color:' + p[0] + '"], [style*="background-color: ' + p[0] + '"], [style*="background: ' + rgbOld + '"], [style*="background-color: ' + rgbOld + '"] { background-color: ' + p[1] + ' !important; }\n';
     });
     borderRoles.forEach(function(p) {
-        css += '[style*="border-color:' + p[0] + '"], [style*="border-color: ' + p[0] + '"], [style*="solid ' + p[0] + '"], [style*="dashed ' + p[0] + '"], [style*="dotted ' + p[0] + '"] { border-color: ' + p[1] + ' !important; }\n';
+        const rgbOld = hexToRgbStr(p[0]);
+        css += '[style*="border-color:' + p[0] + '"], [style*="border-color: ' + p[0] + '"], [style*="solid ' + p[0] + '"], [style*="dashed ' + p[0] + '"], [style*="dotted ' + p[0] + '"], [style*="border-color: ' + rgbOld + '"], [style*="solid ' + rgbOld + '"], [style*="dashed ' + rgbOld + '"] { border-color: ' + p[1] + ' !important; }\n';
     });
     textRoles.forEach(function(p) {
         // 💡 " color:HEX"(앞에 공백)만 매치 — "background-color:"/"border-color:"는 "color:" 앞에
         // 공백이 없는 한 단어라 여기 안 걸림(위 배경/테두리 규칙과 서로 침범하지 않음).
-        css += '[style*=" color:' + p[0] + '"] { color: ' + p[1] + ' !important; }\n';
+        const rgbOld = hexToRgbStr(p[0]);
+        css += '[style*=" color:' + p[0] + '"], [style*=" color: ' + rgbOld + '"] { color: ' + p[1] + ' !important; }\n';
     });
 
     // 💡 [style*="..."] 방식은 인라인 style에 그 hex가 "문자 그대로" 들어있는 요소만 잡는다 — 사이드바/
@@ -23681,6 +23700,7 @@ window._cpApplyLive = function(hex, skipSave) {
 
     window._cpLiveAppliedHex = hex;
     window._cpUpdateApplyStatus();
+    if (window.renderSheetTabsBar) window.renderSheetTabsBar(); // 💡 이미 그려진 시트 탭도 새 테마색으로 다시 그림
 
     // 💡 [2026-08-30 신규] "이전에 고른 테마 색을 저장해달라"는 요청 — 로그인 계정별 별도 저장소를 새로
     // 만들 필요 없이, 이미 프로젝트 파일 저장/불러오기에 실려다니는 tabData에 그냥 값 하나(themeColor)로
@@ -23706,7 +23726,11 @@ window._cpMarkRevertedForSave = function() {
 // 💡 [2026-08-30 신규] "엑셀로 내보내기" 결과물(xlsx)이 항상 고정된 남색(1F3A5F)/회색 헤더로 나가던 것을,
 // 지금 화면에 적용 중인 테마(팔레트로 고른 색이 있으면 그 색, 없으면 기본 청록)에 맞춰 색이 바뀌도록
 // 하는 헬퍼. XLSX 셀 색은 "#" 없는 6자리 대문자 hex라 그 형식으로 반환한다.
-window._cpXlsxRole = function(roleKey) {
+// 💡 CP_ROLES(배경/헤더틴트/제브라/테두리/진한텍스트/호버배경/호버테두리) 중 하나를, 지금 라이브 적용된
+// 커스텀 테마가 있으면 그 색으로, 없으면 기본 청록으로 계산해 "#rrggbb" 형태로 돌려준다 — JS로 동적
+// 생성/갱신되는 UI(시트 탭바 등)가 하드코딩 hex 대신 이걸 직접 참조하면, onmouseover가 style을 건드려도
+// (재직렬화 문제와 무관하게) 항상 최신 테마색을 쓰게 된다.
+window._cpRoleHex = function(roleKey) {
     let hex;
     if (window._cpLiveAppliedHex) {
         const hue = window._cpHexToHsl(window._cpLiveAppliedHex).h;
@@ -23715,7 +23739,10 @@ window._cpXlsxRole = function(roleKey) {
     } else {
         hex = window.CP_CURRENT_TEAL[roleKey];
     }
-    return (hex || '#000000').replace('#', '').toUpperCase();
+    return hex || '#000000';
+};
+window._cpXlsxRole = function(roleKey) {
+    return window._cpRoleHex(roleKey).replace('#', '').toUpperCase();
 };
 window._cpApplyStoredTheme = function() {
     const hex = window.tabData && window.tabData.themeColor;
@@ -23745,6 +23772,7 @@ window._cpRevertLive = function() {
     window._cpLiveAppliedHex = null;
     window._cpUpdateApplyStatus();
     if (window._cpMarkRevertedForSave) window._cpMarkRevertedForSave();
+    if (window.renderSheetTabsBar) window.renderSheetTabsBar();
 };
 window._cpUpdateApplyStatus = function() {
     const el = document.getElementById('cp-apply-status');
