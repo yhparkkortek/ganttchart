@@ -8963,6 +8963,41 @@ ${recentLogs}
                 elecLinesArr.push(`- #EP${epIdx} [${elecTypeLabels[type]}] ${partName} (모델:${m})\n  ${specLine}${noteText}`);
             });
         }
+        // 🐛 [2026-08-31 버그 수정] "elec parts 패널 해상도 물어보니 데이터에서 확인 안 된다"는 지적의
+        // 실제 원인 — 위 루프가 CONVERTER/AD BOARD(elecCompare)만 돌고 PANEL은 처음부터 아예 빠져
+        // 있었다. PANEL은 데이터 구조 자체가 달라서(tabData.panelCompare, loadPanelLibrary/
+        // findPanelInLibrary, PANEL_SPEC_SCHEMA — CONVERTER/AD BOARD의 elecCompare/loadElecPartLibrary/
+        // ELEC_PART_TYPES와 별개) 같은 루프에 못 끼워서, 이 부분을 만들 때 실수로 빠뜨린 것으로 보인다.
+        // 실제로 Dot Resolution 등 패널 스펙 데이터는 등록돼 있는데 AI 컨텍스트에 아예 전달이 안 됐던
+        // 것 — #EP 번호 체계·클릭 이동(_aiJumpToEpRow)도 그대로 이어서 쓸 수 있게 같은 방식으로 추가.
+        const pc = td.panelCompare || {};
+        if (pc.selectedModels && pc.selectedModels.length && window.loadPanelLibrary && window.findPanelInLibrary) {
+            const models = pc.selectedModels;
+            const notes = pc.notes || {};
+            let panelLib = window._epLibCache && window._epLibCache.panel;
+            if (!panelLib) {
+                try { panelLib = await window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과'); window._epLibCache = window._epLibCache || {}; window._epLibCache.panel = panelLib; } catch (e) { panelLib = null; }
+            }
+            const panelFields = [];
+            (window.PANEL_SPEC_SCHEMA || []).forEach(function(sec) { sec.fields.forEach(function(f) { panelFields.push(f); }); });
+            models.forEach(function(m) {
+                const entry = panelLib ? window.findPanelInLibrary(panelLib, m) : null;
+                const specs = entry && entry.specs;
+                const partName = (window._epPartNameOf && specs) ? (window._epPartNameOf(specs) || m) : m;
+                let specLine = '(라이브러리에서 상세 스펙을 찾지 못함 — 모델명만 있음)';
+                if (specs) {
+                    const kv = panelFields.map(function(f) {
+                        const v = specs[f[0]];
+                        return (v && v !== '-') ? `${f[0]}:${v}` : null;
+                    }).filter(Boolean);
+                    specLine = kv.length ? kv.join(' | ') : '(등록된 상세 스펙 없음)';
+                }
+                const noteText = notes[m] ? ` | 메모:${notes[m]}` : '';
+                const epIdx = window._aiEpRefMap.length;
+                window._aiEpRefMap[epIdx] = { type: 'panel', model: m };
+                elecLinesArr.push(`- #EP${epIdx} [PANEL] ${partName} (모델:${m})\n  ${specLine}${noteText}`);
+            });
+        }
         const elecLines = elecLinesArr;
 
         // 💡 개인정보 최소 수집 원칙 — 주소록은 이름/부서/직함까지만 포함하고 이메일·휴대폰 등
@@ -9030,7 +9065,7 @@ ${recentLogs}
 
 🔧 "SPEC(스펙)" 질문 구분 규칙 — 이 프로젝트엔 성격이 다른 두 SPEC 데이터가 있으니 헷갈리지 마세요:
 - [Customer SPEC] = 고객사에 "제안"하는 완제품 모델 비교(Model A/B/C 등, TYPE별 비교표). "고객 스펙/제안 스펙/Model A랑 B 차이" 같은 질문은 여기서 찾으세요.
-- [Elec Parts SPEC] = 실제로 이 제품에 "사용"하는 전자부품(컨버터 보드/AD 보드 등 원자재)의 상세 스펙(전압/전류/커넥터/브랜드 등). "이 부품 SPEC이 뭐야/컨버터 보드 사양/원자재 스펙" 같은 질문은 여기서 찾으세요.
+- [Elec Parts SPEC] = 실제로 이 제품에 "사용"하는 부품/원자재(패널·컨버터 보드·AD 보드 등)의 상세 스펙(해상도/전압/전류/커넥터/브랜드 등). "이 부품 SPEC이 뭐야/패널 해상도/컨버터 보드 사양/원자재 스펙" 같은 질문은 여기서 찾으세요 — [PANEL] 표시가 붙은 항목이 실사용 패널 부품 자체의 스펙입니다(고객 제안용 완제품 비교인 [Customer SPEC]의 패널 항목과 헷갈리지 마세요).
 - 질문에 어느 쪽인지 애매하면(예: 그냥 "SPEC 알려줘"), 두 섹션 모두에서 관련 내용을 찾아보고 어느 항목을 말하는 것인지 되물어보거나, 둘 다 있으면 구분해서 각각 답하세요.
 "오늘/이번 주/이번 달/내일" 등 상대적인 날짜 표현이 나오면, 반드시 아래 [오늘 날짜]를 기준으로 [업무 목록]의 "기간:" 값(시작일~계획일)과 비교해서 판단하세요 (예: 오늘 업무 = 기간 구간에 오늘 날짜가 포함되거나 오늘이 마감인 업무).
 ⚠️ 연도 확인 필수: "기간:"은 올해(=[오늘 날짜]의 연도)와 같은 해면 연도 없이 "M/D"로만 적혀 있지만, 올해와 다른 해(작년/내년 등)이면 "YYYY.M/D"처럼 연도가 붙어서 나옵니다(예: 오늘이 2026년이면 "8/26"은 2026년, "2025.8/26"은 2025년, "2027.8/26"은 2027년 — 전혀 다른 시점입니다). "이번 주/이번 달/오늘" 같은 질문에는 반드시 연도까지 [오늘 날짜]와 일치하는 업무만 포함하세요 — 연도 표시가 없다고 무조건 올해로 단정하지 말고, 연도가 붙어 있으면 그 연도를 그대로 따르세요. 월/일만 보고 "이번 주"라고 잘못 판단해 다른 해의 업무를 섞어 넣으면 안 됩니다.
@@ -13831,12 +13866,24 @@ window.handleAuthClick = function() {
             return;
         }
         if (window.switchTab) window.switchTab('elecparts');
+        // 🐛 [2026-08-31 버그 수정] PANEL은 CONVERTER/AD BOARD와 렌더링 함수·DOM id·버튼
+        // data-속성이 전부 다르다(제품 종류가 하나뿐이라 type 접미사가 안 붙음: #pc-thead/#pc-tbody,
+        // data-pc-reextract="모델명"만 있고 "type|모델명" 형식이 아님) — 분기 안 해주면 PANEL 인용은
+        // 클릭해도 "찾지 못했습니다"만 뜨고 실제로는 이동이 안 됐다.
+        const isPanel = ref.type === 'panel';
         setTimeout(async function() {
-            if (window._switchElecView) window._switchElecView(ref.type);
-            if (window.renderElecCompareTab) { try { await window.renderElecCompareTab(ref.type); } catch (e) {} }
-            const theadEl = document.getElementById('ep-' + ref.type + '-thead');
-            const tbodyEl = document.getElementById('ep-' + ref.type + '-tbody');
-            const btn = theadEl && theadEl.querySelector('[data-ep-reextract="' + ref.type + '|' + ref.model + '"], [data-ep-edit="' + ref.type + '|' + ref.model + '"]');
+            if (isPanel) {
+                if (window._switchElecView) window._switchElecView('panel');
+                if (window.renderPanelCompareTab) { try { await window.renderPanelCompareTab(); } catch (e) {} }
+            } else {
+                if (window._switchElecView) window._switchElecView(ref.type);
+                if (window.renderElecCompareTab) { try { await window.renderElecCompareTab(ref.type); } catch (e) {} }
+            }
+            const theadEl = document.getElementById(isPanel ? 'pc-thead' : ('ep-' + ref.type + '-thead'));
+            const tbodyEl = document.getElementById(isPanel ? 'pc-tbody' : ('ep-' + ref.type + '-tbody'));
+            const btn = theadEl && theadEl.querySelector(isPanel
+                ? ('[data-pc-reextract="' + ref.model + '"], [data-pc-edit="' + ref.model + '"]')
+                : ('[data-ep-reextract="' + ref.type + '|' + ref.model + '"], [data-ep-edit="' + ref.type + '|' + ref.model + '"]'));
             const th = btn && btn.closest('th');
             if (!theadEl || !tbodyEl || !th) {
                 if (window.showToast) window.showToast(_en
