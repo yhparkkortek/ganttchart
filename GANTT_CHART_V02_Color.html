@@ -728,6 +728,12 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 #mc-remove-unit-btn:hover { background-color:#f5c2bd !important; color:#b1432f !important; }
 #mc-unit-rename-btn:hover { background-color:#e9ecef !important; color:#555 !important; }
 #mc-add-rev-btn:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
+/* 💡 [2026-08-30 신규] 제품구분자 관리(이름변경/추가/삭제)를 연필 아이콘 뒤로 접어두고, 누르면
+   옆으로 슬라이드 펼쳐지게 — 제목줄에 아이콘 3개가 항상 떠 있어 공간을 많이 차지한다는 지적 대응. */
+#mc-unit-actions-panel { display:flex; align-items:center; gap:2px; max-width:0; overflow:hidden; transition:max-width .25s ease, opacity .2s ease; opacity:0; white-space:nowrap; }
+#mc-unit-actions-panel.mc-unit-actions-open { max-width:220px; opacity:1; }
+#mc-unit-actions-toggle { transition:background .15s; border-radius:4px; }
+#mc-unit-actions-toggle:hover { background-color:#e9ecef !important; }
 .mc-rev-btn { transition:0.2s; }
 .mc-rev-btn:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
 .mc-comparison-btn { transition:0.2s; }
@@ -2072,9 +2078,11 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
             <button class="concept-add-row-btn" id="mc-toggle-hidden-btn" onclick="window.mcToggleHiddenUnified(this)" style="margin:0; background:#e0f5f7; color:#00707d; border:none;">🔽 펼치기</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
+            <!-- 💡 [2026-08-30 개편] 제품구분자 관리(이름변경 ✏️/추가 ➕/삭제 🗑️)를 항상 펼쳐진 3개
+                 아이콘 대신, 연필(✏️) 하나만 보이고 누르면 옆으로 슬라이드 펼쳐지는 방식으로 바꿈 —
+                 아래 mc-unit-bar를 window.mcRenderUnitTabs()가 전부(이름 순환 버튼·연필 토글·펼침
+                 패널 안 이름변경/추가/삭제) 그려준다. -->
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
-            <button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>
-            <button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 8px 0 0; display:none; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
             <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:none; background:#e0f5f7; color:#00707d; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold; transition:background .15s;">➕</button>
             <button id="mc-rev-cycle-btn" class="mc-rev-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)"
@@ -31111,27 +31119,49 @@ function bmDeleteSelected(key) {
 // ═══════════════════════════════════════════════════════════
 const MC_UNIT_LABELS = { BTN: 'BTN(버튼덱)', MAIN: 'MAIN', UPR: 'UPR(어퍼)', TPR: 'TPR(토퍼)' };
 
+// 💡 [2026-08-30 개편] ✏️(이름변경)➕(추가)🗑️(삭제) 3개 아이콘이 제목줄에 항상 떠 있어 공간을
+// 많이 차지한다는 지적 — 연필(✏️) 하나만 항상 보이게 하고, 누르면 나머지가 옆으로 슬라이드
+// 펼쳐지도록(mc-unit-actions-open, max-width 트랜지션) 개편. 제품구분자가 하나도 없는 상태(아직
+// 이 기능을 안 쓰는 프로젝트)에선 관리할 대상 자체가 없으므로 연필 없이 ➕(시작하기)만 노출한다.
+window._mcUnitActionsOpen = false;
+window.mcToggleUnitActions = function() {
+    window._mcUnitActionsOpen = !window._mcUnitActionsOpen;
+    const panel = document.getElementById('mc-unit-actions-panel');
+    const toggleBtn = document.getElementById('mc-unit-actions-toggle');
+    if (panel) panel.classList.toggle('mc-unit-actions-open', window._mcUnitActionsOpen);
+    if (toggleBtn) toggleBtn.style.background = window._mcUnitActionsOpen ? '#e9ecef' : 'none';
+};
 window.mcRenderUnitTabs = function() {
     const bar = document.getElementById('mc-unit-bar');
-    const addBtn = document.getElementById('mc-add-unit-btn');
-    const removeBtn = document.getElementById('mc-remove-unit-btn');
     if (!bar) return;
     const units = window.getMcUnits();
 
     const defaultRevs = window.tabData.mcRevisions || {};
     const hasDefaultData = Object.keys(defaultRevs).some(function(k) { return defaultRevs[k] && defaultRevs[k].length; });
-    if (addBtn) addBtn.style.display = (units.length || hasDefaultData) ? 'inline-flex' : 'none';
-    if (removeBtn) removeBtn.style.display = units.length ? 'inline-flex' : 'none';
 
-    if (!units.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+    if (!units.length) {
+        // 아직 제품구분자를 안 쓰는 상태 — 관리할 게 없으니 연필 패널 없이 "시작하기" ➕만 노출
+        if (!hasDefaultData) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+        bar.style.display = 'flex';
+        bar.innerHTML = '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>';
+        return;
+    }
+
     bar.style.display = 'flex';
     const cur = window.mcActiveUnit || units[0];
-    // 💡 하나의 버튼: 클릭하면 다음 제품구분자로 순환 전환. 옆의 작은 ✏️로 이름변경. (🗑️는 ➕ 옆으로 이동)
+    const isOpen = !!window._mcUnitActionsOpen;
+    // 💡 이름 순환 버튼(클릭할 때마다 다음 제품구분자로 전환)은 그대로 항상 보이고, 이름변경/추가/삭제는
+    // 연필 토글 뒤 펼침 패널로 이동.
     bar.innerHTML =
         '<button class="mc-unit-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
         + ' style="padding:6px 10px; min-width:auto; border:1px solid #c9b8f0; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#ede9fb; color:#6741d9;">'
         + escapeHtml(cur) + '</button>'
-        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; border:none; background:none; color:#555; cursor:pointer; font-size:14px;">✏️</button>';
+        + '<button id="mc-unit-actions-toggle" onclick="window.mcToggleUnitActions()" title="제품구분자 관리(이름변경/추가/삭제)" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (isOpen ? '#e9ecef' : 'none') + '; color:#555; cursor:pointer; font-size:14px;">✏️</button>'
+        + '<div id="mc-unit-actions-panel" class="' + (isOpen ? 'mc-unit-actions-open' : '') + '">'
+        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:1px solid #ddd; border-radius:4px; background:#fff; color:#555; cursor:pointer; font-size:12px; white-space:nowrap;">✏️ 이름변경</button>'
+        + '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
+        + '<button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
+        + '</div>';
 };
 
 // 💡 제품구분자 순환 버튼 — 누를 때마다 다음 제품구분자로 전환 (없으면 처음으로 돌아감)
