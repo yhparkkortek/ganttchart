@@ -461,14 +461,16 @@
         z-index: 4;
     }
 
-    /* 💡 [2026-08-30 신규] AI 요약/문답의 "#CS숫자"/"#MC숫자" 클릭 이동 시 잠깐 반짝여서 어느 행인지
-       알려주는 용도 — Gantt highlighted-row와 달리 M.C Table/Customer SPEC 행은 클릭으로 선택 해제되는
-       개념이 없어서(별도 클릭 시 해제되는 지속형이 아니라) 일정 시간 후 자동으로 사라지는 flash 방식 사용. */
+    /* 💡 [2026-08-30 신규] AI 요약/문답의 "#CS숫자"/"#MC숫자"/"#MT숫자"/"#AD숫자"/"#EP숫자" 클릭 이동 시
+       잠깐 반짝여서 어느 행(또는 Elec Parts처럼 열)인지 알려주는 용도 — Gantt highlighted-row와 달리
+       이 표들의 행/열은 클릭으로 선택 해제되는 개념이 없어서(별도 클릭 시 해제되는 지속형이 아니라)
+       일정 시간 후 자동으로 사라지는 flash 방식 사용. tr에 붙이면 그 안의 td 전체가(행 하이라이트),
+       td/th에 직접 붙이면 그 칸 하나만(Elec Parts의 열 하이라이트) 반짝인다. */
     @keyframes aiRefFlash {
         0%   { background-color: rgba(230, 126, 34, 0.35); }
         100% { background-color: transparent; }
     }
-    tr.ai-ref-flash td {
+    tr.ai-ref-flash td, td.ai-ref-flash, th.ai-ref-flash {
         animation: aiRefFlash 1.6s ease-out;
     }
 
@@ -8664,9 +8666,16 @@ ${recentLogs}
             if (m && (m.name || m.role)) memberLines.push(`${m.role || '멤버'}: ${m.name || ''}`);
         });
 
+        // 💡 [2026-08-30 신규] 주요자재도 #MT숫자로 인용 가능하게 — 화면(#sum-materials-rows-a/b)의
+        // <tr>에는 위치기반 data-idx만 있고 고유 id가 없어서, CS/MC와 동일하게 category+ktkPn+description
+        // 값 대조로 찾는다(_aiJumpToMtRow 참고).
+        window._aiMtRefMap = [];
         const materialLines = (td.projectMaterials || [])
             .filter(function(m) { return m && (m.category || m.ktkPn || m.description); })
-            .map(function(m) { return `- ${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}` + (m.cost ? ` | Cost:${m.cost}` : '') + (m.useForAnalysis ? ' [분석용]' : ''); });
+            .map(function(m, i) {
+                window._aiMtRefMap[i] = { category: m.category || '', ktkPn: m.ktkPn || '', description: m.description || '' };
+                return `- #MT${i} ${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}` + (m.cost ? ` | Cost:${m.cost}` : '') + (m.useForAnalysis ? ' [분석용]' : '');
+            });
 
         // 💡 [2026-08-27 추가] Brief SPEC / M.C Table / Elec Parts / Address 탭도 물어볼 수 있도록 포함
         //    (용량 보호를 위해 각각 최대 개수 제한 — 이 탭들은 보통 업무 목록보다 훨씬 적음)
@@ -8709,6 +8718,10 @@ ${recentLogs}
         const elecCompare = td.elecCompare || {};
         const elecTypeLabels = { convbd: 'CONVERTER', adbd: 'AD BOARD' };
         const elecLinesArr = [];
+        // 💡 [2026-08-30 신규] Elec Parts도 #EP숫자로 인용 가능하게 — 단, 이 표는 모델이 "행"이 아니라
+        // "열"이라(스펙 항목이 행, 비교 모델이 열) Gantt/CS/MC처럼 tr 하나를 통째로 찾는 게 아니라
+        // type+model로 해당 열(column)의 <th>와 그 아래 칸들을 찾아 반짝여준다(_aiJumpToEpRow 참고).
+        window._aiEpRefMap = [];
         for (const type of Object.keys(elecTypeLabels)) {
             const ec = elecCompare[type];
             if (!ec || !ec.selectedModels || !ec.selectedModels.length) continue;
@@ -8735,7 +8748,9 @@ ${recentLogs}
                     specLine = kv.length ? kv.join(' | ') : '(등록된 상세 스펙 없음)';
                 }
                 const noteText = notes[m] ? ` | 메모:${notes[m]}` : '';
-                elecLinesArr.push(`- [${elecTypeLabels[type]}] ${partName} (모델:${m})\n  ${specLine}${noteText}`);
+                const epIdx = window._aiEpRefMap.length;
+                window._aiEpRefMap[epIdx] = { type: type, model: m };
+                elecLinesArr.push(`- #EP${epIdx} [${elecTypeLabels[type]}] ${partName} (모델:${m})\n  ${specLine}${noteText}`);
             });
         }
         const elecLines = elecLinesArr;
@@ -8747,10 +8762,15 @@ ${recentLogs}
         //    찾아지던 문제 — 주소록에 영문 이름(nameEn)이 같이 등록돼 있는데도 여기서는 한글 이름(name)만
         //    컨텍스트에 넣고 있어서, AI가 "김준식 = Jun Kim"이라는 매핑 자체를 알 방법이 없었다.
         //    nameEn도 같이 보여줘서 AI가 두 표기를 같은 사람으로 연결할 수 있게 한다.
+        // 💡 [2026-08-30 신규] 주소록도 #AD숫자로 인용 가능하게 — <tr>에 고유 id가 없어서 CS/MC와
+        // 동일하게 name+nameEn 값 대조로 찾는다(_aiJumpToAdRow 참고). 검색어로 필터돼 화면에 숨어
+        // 있을 수도 있으니(주소록 검색), 이동 시 검색어를 초기화한다.
+        window._aiAdRefMap = [];
         const addressRows = (td.addressBook || []).filter(function(a) { return a && (a.name || a.nameEn); });
-        const addressLines = addressRows.slice(0, MAX_TABLE_ROWS).map(function(a) {
+        const addressLines = addressRows.slice(0, MAX_TABLE_ROWS).map(function(a, i) {
+            window._aiAdRefMap[i] = { name: a.name || '', nameEn: a.nameEn || '' };
             const nameStr = a.name && a.nameEn ? `${a.name} (${a.nameEn})` : (a.name || a.nameEn || '');
-            return `- ${nameStr}${a.dept ? ' / ' + a.dept : ''}${a.title ? ' / ' + a.title : ''}`;
+            return `- #AD${i} ${nameStr}${a.dept ? ' / ' + a.dept : ''}${a.title ? ' / ' + a.title : ''}`;
         });
         const addressOmitted = addressRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${addressRows.length - MAX_TABLE_ROWS}명 생략됨)` : '';
 
@@ -8810,12 +8830,13 @@ ${recentLogs}
    근거 표시입니다(사용자가 그 번호를 클릭해 실제 업무로 이동하거나 알람을 걸 수 있으므로 빠지면 안 됨).
 반대로 "지연된 업무 목록 보여줘"처럼 명시적으로 "목록/리스트"를 요청한 경우엔 목록으로 답해도 됩니다.
 
-🔗 표별 인용 번호 규칙 — [업무 목록]/[Customer SPEC]/[M.C Table (원가/공수)] 각 줄 맨 앞에는 "#G숫자"(Gantt 업무)
-/ "#CS숫자"(Customer SPEC 행) / "#MC숫자"(M.C Table 행)처럼 표마다 다른 접두사가 붙은 고유 번호가 있습니다.
-Gantt 업무뿐 아니라 Customer SPEC이나 M.C Table(견적/원가) 내용을 근거로 답할 때도, 위 5번 규칙과 동일하게
-언급하는 항목마다 그 항목의 "#CS숫자"/"#MC숫자"를 그대로 옮겨 적으세요(클릭하면 해당 탭의 그 행으로 바로
-이동합니다). 접두사(G/CS/MC)를 절대 서로 바꿔 쓰거나 생략하지 마세요 — 표가 다르면 같은 숫자라도 완전히
-다른 항목입니다.
+🔗 표별 인용 번호 규칙 — [업무 목록]/[Customer SPEC]/[M.C Table (원가/공수)]/[Elec Parts SPEC]/[주요 자재]/
+[주소록] 각 줄 맨 앞에는 "#G숫자"(Gantt 업무) / "#CS숫자"(Customer SPEC 행) / "#MC숫자"(M.C Table 행) /
+"#EP숫자"(Elec Parts SPEC 항목) / "#MT숫자"(주요 자재 행) / "#AD숫자"(주소록 행)처럼 표마다 다른 접두사가
+붙은 고유 번호가 있습니다. Gantt 업무뿐 아니라 이 여섯 가지 표 중 어느 내용을 근거로 답하든, 위 5번 규칙과
+동일하게 언급하는 항목마다 그 항목의 번호를 그대로 옮겨 적으세요(클릭하면 해당 탭의 그 항목으로 바로
+이동합니다). 접두사(G/CS/MC/EP/MT/AD)를 절대 서로 바꿔 쓰거나 생략하지 마세요 — 표가 다르면 같은 숫자라도
+완전히 다른 항목입니다.
 
 🔔 "알람 걸어줘/알림 설정해줘/알람 켜줘" 또는 "알람 해제해줘/꺼줘/취소해줘" 유형 요청에 대한 필수 규칙 (실제로 앱 데이터를 바꾸는 기능):
 [업무 목록]의 각 줄 맨 앞 "#G숫자"에서 G 뒤의 숫자가 그 업무의 고유 번호입니다(알람/원문 조회는 Gantt
@@ -8894,17 +8915,20 @@ ${question}
     // 읽어와 붙인다(📌 알람 아이콘과 동일한 이유). 원문이 없거나 발신인을 못 찾으면 그 부분만 조용히 생략.
     window._linkifyTaskRefs = function(escapedText) {
         const _en = window._currentLang === 'en';
-        // 💡 [2026-08-30 확장] 표별 접두사(#G=Gantt, #CS=Customer SPEC, #MC=M.C Table) 지원.
-        //    접두사 없는 bare "#숫자"는 더 이상 생성하지 않지만(과거 AI 응답/히스토리 호환 목적으로)
-        //    #G와 동일하게 처리한다.
-        return String(escapedText || '').replace(/#(G|CS|MC)?(\d+)\b/g, function(m, prefix, n) {
+        // 💡 [2026-08-30 확장] 표별 접두사(#G=Gantt, #CS=Customer SPEC, #MC=M.C Table, #EP=Elec Parts SPEC,
+        //    #MT=주요 자재, #AD=주소록) 지원. 접두사 없는 bare "#숫자"는 더 이상 생성하지 않지만
+        //    (과거 AI 응답/히스토리 호환 목적으로) #G와 동일하게 처리한다.
+        const _simpleRefJump = { CS: ['window._aiJumpToCsRow', 'Click to jump to this Customer SPEC row', '클릭하면 이 Customer SPEC 행으로 이동합니다'],
+            MC: ['window._aiJumpToMcRow', 'Click to jump to this M.C Table row', '클릭하면 이 M.C Table 행으로 이동합니다'],
+            EP: ['window._aiJumpToEpRow', 'Click to jump to this Elec Parts spec column', '클릭하면 이 Elec Parts 스펙 열로 이동합니다'],
+            MT: ['window._aiJumpToMtRow', 'Click to jump to this material row', '클릭하면 이 주요 자재 행으로 이동합니다'],
+            AD: ['window._aiJumpToAdRow', 'Click to jump to this address book row', '클릭하면 이 주소록 행으로 이동합니다'] };
+        return String(escapedText || '').replace(/#(G|CS|MC|EP|MT|AD)?(\d+)\b/g, function(m, prefix, n) {
             const idx = parseInt(n, 10);
             const p = prefix || 'G';
-            if (p === 'CS') {
-                return `<span class="ai-task-ref" onclick="window._aiJumpToCsRow(${idx}); event.stopPropagation();" title="${_en ? 'Click to jump to this Customer SPEC row' : '클릭하면 이 Customer SPEC 행으로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#CS${n}</span>`;
-            }
-            if (p === 'MC') {
-                return `<span class="ai-task-ref" onclick="window._aiJumpToMcRow(${idx}); event.stopPropagation();" title="${_en ? 'Click to jump to this M.C Table row' : '클릭하면 이 M.C Table 행으로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#MC${n}</span>`;
+            if (_simpleRefJump[p]) {
+                const def = _simpleRefJump[p];
+                return `<span class="ai-task-ref" onclick="${def[0]}(${idx}); event.stopPropagation();" title="${_en ? def[1] : def[2]}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${p}${n}</span>`;
             }
             const rowIndex = idx;
             const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
@@ -13460,6 +13484,118 @@ window.handleAuthClick = function() {
                 window._aiFlashRow(found);
             }, 60);
         }, 60);
+    };
+
+    // 💡 [2026-08-30 신규] AI 답변의 "#MT숫자"(주요 자재) 클릭 이동 — 이 표는 별도 탭이 아니라 Summary
+    //    탭 안에 있어서(좌/우 두 tbody로 분할) switchTab('summary')만 하고, category/ktkPn/description
+    //    값 대조로 찾는다(CS와 동일 패턴).
+    window._aiJumpToMtRow = function(idx) {
+        const _en = window._currentLang === 'en';
+        const ref = window._aiMtRefMap && window._aiMtRefMap[idx];
+        if (!ref) {
+            if (window.showToast) window.showToast(_en
+                ? '⚠️ Could not find material row #' + idx + '.'
+                : '⚠️ 주요 자재 #' + idx + ' 행을 찾지 못했습니다.', 'warning');
+            return;
+        }
+        if (window.switchTab) window.switchTab('summary');
+        setTimeout(function() {
+            const rows = document.querySelectorAll('#sum-materials-rows-a tr, #sum-materials-rows-b tr');
+            let found = null;
+            rows.forEach(function(tr) {
+                if (found) return;
+                // 💡 고정(locked) 구분명 행은 category가 <input>이 아니라 첫 칸의 평문 텍스트라서
+                // (window.renderMaterialRows의 catCell 분기 참고) data-field가 없으면 첫 칸 텍스트로 대체.
+                const g = function(f) { const el = tr.querySelector('[data-field="' + f + '"]'); return el ? el.value : ''; };
+                const cat = tr.querySelector('[data-field="category"]') ? g('category') : (tr.cells[0] ? tr.cells[0].textContent.trim() : '');
+                if (cat === ref.category && g('ktkPn') === ref.ktkPn && g('description') === ref.description) found = tr;
+            });
+            if (!found) {
+                if (window.showToast) window.showToast(_en
+                    ? '⚠️ Could not find material row #' + idx + ' (it may have changed).'
+                    : '⚠️ 주요 자재 #' + idx + ' 행을 찾지 못했습니다(내용이 바뀐 것 같습니다).', 'warning');
+                return;
+            }
+            window._aiFlashRow(found);
+        }, 60);
+    };
+
+    // 💡 [2026-08-30 신규] AI 답변의 "#AD숫자"(주소록) 클릭 이동 — 검색어로 필터돼(display:none) 화면에
+    //    숨어 있을 수 있으니 먼저 검색어를 비운 뒤 name/nameEn 값 대조로 찾는다.
+    window._aiJumpToAdRow = function(idx) {
+        const _en = window._currentLang === 'en';
+        const ref = window._aiAdRefMap && window._aiAdRefMap[idx];
+        if (!ref) {
+            if (window.showToast) window.showToast(_en
+                ? '⚠️ Could not find address book row #' + idx + '.'
+                : '⚠️ 주소록 #' + idx + ' 행을 찾지 못했습니다.', 'warning');
+            return;
+        }
+        if (window.switchTab) window.switchTab('address');
+        setTimeout(function() {
+            if (window.filterAddressRows) window.filterAddressRows(''); // 검색 필터에 가려 안 보이는 경우 대비
+            const searchInput = document.getElementById('addr-search-input');
+            if (searchInput) searchInput.value = '';
+            const rows = document.querySelectorAll('#address-table-body tr');
+            let found = null;
+            rows.forEach(function(tr) {
+                if (found) return;
+                const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
+                if (g('name') === ref.name && g('nameEn') === ref.nameEn) found = tr;
+            });
+            if (!found) {
+                if (window.showToast) window.showToast(_en
+                    ? '⚠️ Could not find address book row #' + idx + ' (it may have changed).'
+                    : '⚠️ 주소록 #' + idx + ' 행을 찾지 못했습니다(내용이 바뀐 것 같습니다).', 'warning');
+                return;
+            }
+            window._aiFlashRow(found);
+        }, 60);
+    };
+
+    // 💡 [2026-08-30 신규] AI 답변의 "#EP숫자"(Elec Parts SPEC) 클릭 이동 — 이 표는 Gantt/CS/MC와 달리
+    //    "모델"이 행이 아니라 열(column)이라(스펙 항목이 행) tr 하나를 통째로 찾을 수 없다. 대신
+    //    1) elecparts 탭 + 해당 종류(convbd/adbd) 뷰로 전환하고, 2) 그 모델의 헤더 <th>를 열 버튼의
+    //    data-ep-reextract="type|model" 속성으로 찾아 cellIndex를 알아낸 뒤, 3) 같은 칸 수를 가진(=콜스팬
+    //    섹션 제목행이 아닌) 본문 행들에서 그 인덱스의 <td>만 반짝여서 "이 열"임을 보여준다.
+    window._aiJumpToEpRow = function(idx) {
+        const _en = window._currentLang === 'en';
+        const ref = window._aiEpRefMap && window._aiEpRefMap[idx];
+        if (!ref) {
+            if (window.showToast) window.showToast(_en
+                ? '⚠️ Could not find Elec Parts spec item #' + idx + '.'
+                : '⚠️ Elec Parts #' + idx + ' 항목을 찾지 못했습니다.', 'warning');
+            return;
+        }
+        if (window.switchTab) window.switchTab('elecparts');
+        setTimeout(async function() {
+            if (window._switchElecView) window._switchElecView(ref.type);
+            if (window.renderElecCompareTab) { try { await window.renderElecCompareTab(ref.type); } catch (e) {} }
+            const theadEl = document.getElementById('ep-' + ref.type + '-thead');
+            const tbodyEl = document.getElementById('ep-' + ref.type + '-tbody');
+            const btn = theadEl && theadEl.querySelector('[data-ep-reextract="' + ref.type + '|' + ref.model + '"], [data-ep-edit="' + ref.type + '|' + ref.model + '"]');
+            const th = btn && btn.closest('th');
+            if (!theadEl || !tbodyEl || !th) {
+                if (window.showToast) window.showToast(_en
+                    ? '⚠️ Could not find Elec Parts spec item #' + idx + ' (it may have changed).'
+                    : '⚠️ Elec Parts #' + idx + ' 항목을 찾지 못했습니다(내용이 바뀐 것 같습니다).', 'warning');
+                return;
+            }
+            const headerRow = theadEl.querySelector('tr');
+            const totalCols = headerRow ? headerRow.cells.length : 0;
+            const cellIndex = th.cellIndex;
+            const cellsToFlash = [th];
+            tbodyEl.querySelectorAll('tr').forEach(function(tr) {
+                if (tr.cells.length === totalCols && tr.cells[cellIndex]) cellsToFlash.push(tr.cells[cellIndex]);
+            });
+            th.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            cellsToFlash.forEach(function(td) {
+                td.classList.remove('ai-ref-flash');
+                void td.offsetWidth;
+                td.classList.add('ai-ref-flash');
+                setTimeout(function() { td.classList.remove('ai-ref-flash'); }, 1700);
+            });
+        }, 80);
     };
 
 </script>
