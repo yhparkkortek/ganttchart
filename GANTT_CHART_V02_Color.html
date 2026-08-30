@@ -619,10 +619,13 @@
    고정 하늘색(#cfe6fa)이라 테마가 안 먹혔음 — 호버만 "펼치기"(.concept-add-row-btn)와 같은
    테마색으로 통일(평소 색은 다른 액션 버튼과 통일감 있게 그대로 유지). */
 .ep-theme-hover-btn:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
-/* 💡 [2026-08-30 신규] 시트 탭(프로젝트 탭) 닫기(✕) 호버가 삭제 계열 고정 빨강이었음 — 탭을 닫는 건
-   프로젝트 데이터를 지우는 게 아니라 "일단 화면에서 치우는" 동작(저장 여부는 따로 물어봄)이라
-   위험(삭제) 액션으로 볼 필요가 없어서, 다른 닫기(✕) 버튼들처럼 테마색으로 통일. */
-.sheet-tab-close-btn:hover { background-color:#a3d9e0; color:#00707d; }
+/* 💡 [2026-08-30 신규 → 같은 날 재작성] 시트 탭(프로젝트 탭) 닫기(✕) 호버가 삭제 계열 고정 빨강이었음
+   — 탭을 닫는 건 프로젝트 데이터를 지우는 게 아니라 "일단 화면에서 치우는" 동작(저장 여부는 따로
+   물어봄)이라 위험(삭제) 액션으로 볼 필요가 없어서 테마색으로 통일하려 했으나, 처음엔 이 전역 CSS
+   클래스로 시도했다가 "청록으로 되돌리기"(라이브 스타일을 통째로 지움) 상태에서 안 먹히는 문제가
+   있었음 — 탭 자체가 이미 "자기 자신의" 저장된 테마색으로 그려지는데(renderSheetTabsBar), 이 버튼만
+   전역 활성 테마를 보는 규칙이라 어긋난 것. renderSheetTabsBar에서 그 탭 고유의 색을 직접 인라인으로
+   넣는 방식(탭 배경과 동일한 방식)으로 바꾸고 이 규칙은 제거함. */
 /* 💡 [2026-08-30 신규] 현재 프로젝트 파일명(📄 xxx.json) 표시 — 예전엔 onmouseover/onmouseout으로
    청록 고정색(rgba(0,113,125,0.12))을 직접 칠했는데, 그러면 _cpApplyLive의 !important 규칙이
    있어도 JS가 매번 다시 덮어써서 테마가 안 먹혔음. CSS :hover로 바꿔서 _cpApplyLive가 이길 수
@@ -980,11 +983,14 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .cal-day-cell-tall { min-height:420px; padding:8px; }
 .cal-day-cell-tall .cal-day-num { font-size:15px; }
 .cal-day-cell-tall .cal-chips-grid { margin-top:6px; }
-.cal-view-toggle { display:flex; gap:0; border:1px solid #a5c8f0; border-radius:6px; overflow:hidden; flex-shrink:0; }
-.cal-view-btn { padding:0 12px; height:31px; border:none; background:#e8f4fd; color:#1a4f7a; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s; }
-.cal-view-btn:not(.cal-view-btn-active):hover { background:#cfe6fa; }
-.cal-view-btn + .cal-view-btn { border-left:1px solid #a5c8f0; }
-.cal-view-btn.cal-view-btn-active { background:#cfe6fa; color:#1a4f7a; }
+/* 💡 [2026-08-30 수정] 정적 기본값이 예전 하늘색 그대로였음 — _cpApplyLive는 항상 이 위에 !important로
+   덮어쓰지만, "청록으로 되돌리기"(팔레트 청록 원)는 라이브 스타일 자체를 지워버리는 동작이라 그 순간
+   이 정적 기본값이 그대로 드러남. 기본값도 teal로 맞춰야 "청록 = 테마 미적용"일 때도 일관되게 보임. */
+.cal-view-toggle { display:flex; gap:0; border:1px solid #a3d9e0; border-radius:6px; overflow:hidden; flex-shrink:0; }
+.cal-view-btn { padding:0 12px; height:31px; border:none; background:#e0f5f7; color:#00707d; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s; }
+.cal-view-btn:not(.cal-view-btn-active):hover { background:#a3d9e0; }
+.cal-view-btn + .cal-view-btn { border-left:1px solid #a3d9e0; }
+.cal-view-btn.cal-view-btn-active { background:#a3d9e0; color:#00707d; }
 .cal-chips-grid { display:grid; gap:1px 2px; margin-top:2px; }
 .cal-chips-grid.chips-single { grid-template-columns:1fr; }
 .cal-chips-grid.chips-double { grid-template-columns:1fr 1fr; }
@@ -4894,8 +4900,10 @@ ${mailText}`;
                        background:${bg}; color:${_cpHexFor('darkText', sheetThemeHex)}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${border}; border-bottom:1px solid ${bg}; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
-                <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');" class="sheet-tab-close-btn"
-                    style="color:#7a97ae; background:transparent; border-radius:4px; padding:0 3px; font-size:13px; line-height:1.4; flex-shrink:0; transition:background .15s, color .15s;">✕</span>
+                <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
+                    onmouseover="event.stopPropagation(); this.style.background='${hoverBg}'; this.style.color='${_cpHexFor('darkText', sheetThemeHex)}';"
+                    onmouseout="this.style.background='transparent'; this.style.color='${hoverBorder}';"
+                    style="color:${hoverBorder}; background:transparent; border-radius:4px; padding:0 3px; font-size:13px; line-height:1.4; flex-shrink:0; transition:background .15s, color .15s;">✕</span>
             </div>`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
                 onmouseover="this.style.background='${_cpHex('bg')}';"
@@ -24145,7 +24153,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
              굳이 별도로 알릴 필요가 없음). -->
         <div id="cp-preset-swatches" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
             <div id="cp-preset-swatches-list" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value); window._cpApplyLive(this.value);" title="직접 선택 (클릭하면 색상 선택기가 열립니다)" style="width:32px; height:32px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #ddd; cursor:pointer; padding:0; -webkit-appearance:none; appearance:none;">
+            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value); window._cpApplyLive(this.value);" title="직접 선택 (클릭하면 색상 선택기가 열립니다)" style="width:32px; height:32px; border-radius:8px; border:2px solid #999; cursor:pointer; padding:0; -webkit-appearance:none; appearance:none;">
         </div>
         <div id="cp-preview-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:18px;"></div>
 
@@ -24154,12 +24162,14 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
     </div>
 </div>
 <style>
-/* 💡 [2026-08-30 신규] "직접 선택" 색상칸(<input type=color>)을 프리셋 원(⭕)과 똑같은 원형으로 —
-   브라우저가 그 안에 그리는 미리보기 사각형(::-webkit-color-swatch 등)까지 같이 둥글게 깎아야
-   바깥 테두리만 둥글고 안쪽은 네모인 어색한 모양이 안 나온다. */
-#cp-custom-color::-webkit-color-swatch-wrapper { padding:0; border-radius:50%; }
-#cp-custom-color::-webkit-color-swatch { border:none; border-radius:50%; }
-#cp-custom-color::-moz-color-swatch { border:none; border-radius:50%; }
+/* 💡 [2026-08-30 신규 → 같은 날 재수정] "직접 선택" 색상칸(<input type=color>) — 처음엔 프리셋
+   원(⭕)과 똑같은 원형으로 만들었는데, 값이 청록(#00707d 등)과 겹치면 "청록 프리셋"과 구분이 안 될
+   때가 있어서 모서리가 둥근 회색 사각형(테두리 #999)으로 바꿔 "이건 프리셋이 아니라 직접 고르는
+   칸"임을 모양으로 구분되게 했다. 브라우저가 안쪽에 그리는 미리보기 사각형(::-webkit-color-swatch
+   등)의 모서리도 같이(안쪽은 바깥 테두리보다 살짝 작은 반지름으로) 둥글게 맞춘다. */
+#cp-custom-color::-webkit-color-swatch-wrapper { padding:0; border-radius:6px; }
+#cp-custom-color::-webkit-color-swatch { border:none; border-radius:6px; }
+#cp-custom-color::-moz-color-swatch { border:none; border-radius:6px; }
 </style>
 
 <script>
@@ -24456,9 +24466,6 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.cal-day-cell { border-color: ' + gen.border + ' !important; }\n'
         // 💡 [2026-08-30 추가] 월/주 토글(.cal-view-toggle) 바깥 테두리도 옛 고정 하늘색이었음.
         + '.cal-view-toggle { border-color: ' + gen.hoverBg + ' !important; }\n'
-        // 💡 [2026-08-30 추가] 시트 탭 닫기(✕) 호버도 위 .sheet-tab-close-btn 정적 기본값과 동일하게
-        // 테마 추적(삭제/위험 액션이 아니므로 다른 닫기 버튼들처럼 테마색을 따름).
-        + '.sheet-tab-close-btn:hover { background-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         // 💡 [2026-08-30 추가] "핀셋 알람"/"이번달·이번주 강조"는 테마색이 아니라 그 보색(위 compGen)으로
         // — 업무 상자(테마색)와는 확실히 구분되면서, 어떤 테마를 고르든 항상 대비되는 색이 나오게 함.
         + '.cal-event-chip.cal-alarm-on { background: ' + compGen.headerTint + ' !important; border-left-color: ' + compGen.hoverBorder + ' !important; color: ' + compGen.darkText + ' !important; }\n'
