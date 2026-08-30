@@ -750,6 +750,13 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 #mc-unit-actions-panel.mc-unit-actions-open { max-width:220px; opacity:1; }
 #mc-unit-actions-toggle { transition:background .15s; border-radius:4px; }
 #mc-unit-actions-toggle:hover { background-color:#e9ecef !important; }
+/* 💡 [2026-08-30 신규] AI 요약/문답의 "#G숫자📌📧발신인" 인용이 여러 개 연달아 나오면 한 줄이 너무
+   길어져 보기 불편하다는 지적 — M.C Table 제품구분자 관리 패널과 동일하게, 평소엔 화살표(▶)만
+   보이고 누르면 📌(알람)/📧(원문)/발신인 이름이 옆으로 슬라이드 펼쳐지도록(◀ 누르면 다시 접힘). */
+.ai-ref-toggle { display:inline-block; cursor:pointer; font-size:10px; color:#888; margin-left:2px; vertical-align:middle; user-select:none; }
+.ai-ref-toggle:hover { color:#555; }
+.ai-ref-extra { display:inline-block; max-width:0; overflow:hidden; opacity:0; transition:max-width .25s ease, opacity .2s ease; vertical-align:middle; white-space:nowrap; }
+.ai-ref-extra.ai-ref-extra-open { max-width:180px; opacity:1; }
 .mc-rev-btn { transition:0.2s; }
 .mc-rev-btn:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
 .mc-comparison-btn { transition:0.2s; }
@@ -8732,32 +8739,52 @@ ${recentLogs}
         // 💡 [2026-08-27 추가] Brief SPEC / M.C Table / Elec Parts / Address 탭도 물어볼 수 있도록 포함
         //    (용량 보호를 위해 각각 최대 개수 제한 — 이 탭들은 보통 업무 목록보다 훨씬 적음)
         const MAX_TABLE_ROWS = 100;
-        // 💡 [2026-08-30 신규] Gantt 업무의 "#G숫자" 인용과 같은 방식으로, Customer SPEC/M.C Table 행도
-        // 클릭하면 해당 탭으로 이동해 그 행을 찾아 하이라이트할 수 있도록 "#CS숫자"/"#MC숫자" 번호를
-        // 붙인다. 표별로 접두사를 다르게 둬서(#G/#CS/#MC) 같은 숫자가 서로 다른 표를 가리켜 혼동되는
-        // 일이 없게 한다. 실제 화면의 <tr>에는 위치를 특정할 고유 id가 없어서(입력칸만 있는 구조),
-        // 번호별로 "이 행을 찾을 때 비교할 값"을 window._aiCsRefMap/_aiMcRefMap에 같이 기록해뒀다가
-        // 클릭 시 화면에 실제 그려진 행들과 값을 대조해서 찾는다(_aiJumpToCsRow/_aiJumpToMcRow 참고).
+        // 💡 [2026-08-30 신규 → 같은 날 재작성] Gantt 업무의 "#G숫자" 인용과 같은 방식으로, Customer
+        // SPEC/M.C Table 행도 클릭하면 해당 탭으로 이동해 그 행을 찾아 하이라이트할 수 있도록
+        // "#CS숫자"/"#MC숫자" 번호를 붙인다. 표별로 접두사를 다르게 둬서(#G/#CS/#MC) 같은 숫자가 서로
+        // 다른 표를 가리켜 혼동되는 일이 없게 한다.
+        // 🐛 [2026-08-30 버그 수정] 처음엔 이 번호를 tabData 원본 배열을 별도 기준으로 필터링해서
+        // 0부터 새로 매겼는데, 그 필터 기준이 화면의 "No." 열 번호를 매기는 기준(빈 행 자동 숨김,
+        // bmSetupAllRows)과 정확히 같지 않아서 "AI가 말한 번호가 실제 표에서 보이는 번호와 다르다"는
+        // 문제가 있었다. 이제는 화면에 실제 렌더링된 <tr>을 그대로 순회해서 "No." 칸(.bm-no)에 찍힌
+        // 값을 번호로 그대로 쓰므로, 사용자가 표에서 보는 번호와 AI가 인용하는 번호가 항상 똑같다
+        // (숨겨진 행은 "No."가 안 매겨지므로 그대로 건너뜀 — _aiJumpToCsRow/_aiJumpToMcRow도 이제
+        // 내용 대조 대신 이 "No." 값으로 직접 찾는다).
         window._aiCsRefMap = [];
-        const briefSpecRows = (td.briefSpec || []).filter(function(r) { return r && (r.type || r.sub || r.modelA || r.modelB || r.modelC || r.note); });
-        const briefSpecLines = briefSpecRows.slice(0, MAX_TABLE_ROWS).map(function(r, i) {
-            window._aiCsRefMap[i] = { type: r.type || '', sub: r.sub || '', modelA: r.modelA || '' };
-            return `- #CS${i} [${r.type || '-'}${r.sub ? '/' + r.sub : ''}] A:${r.modelA || '-'} | B:${r.modelB || '-'} | C:${r.modelC || '-'}` + (r.note ? ` | 비고:${r.note}` : '');
+        const briefSpecLines = [];
+        let briefSpecOmittedCount = 0;
+        document.querySelectorAll('#briefspec-body tr').forEach(function(tr) {
+            if (tr.style.display === 'none') return;
+            const noEl = tr.querySelector('.bm-no');
+            const no = noEl ? parseInt(noEl.textContent, 10) : NaN;
+            if (!no) return;
+            if (briefSpecLines.length >= MAX_TABLE_ROWS) { briefSpecOmittedCount++; return; }
+            const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
+            const type = g('type'), sub = g('sub'), modelA = g('modelA'), modelB = g('modelB'), modelC = g('modelC'), note = g('note');
+            window._aiCsRefMap[no] = true;
+            briefSpecLines.push(`- #CS${no} [${type || '-'}${sub ? '/' + sub : ''}] A:${modelA || '-'} | B:${modelB || '-'} | C:${modelC || '-'}` + (note ? ` | 비고:${note}` : ''));
         });
-        const briefSpecOmitted = briefSpecRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${briefSpecRows.length - MAX_TABLE_ROWS}건 생략됨)` : '';
+        const briefSpecOmitted = briefSpecOmittedCount ? `\n...(그 외 ${briefSpecOmittedCount}건 생략됨)` : '';
 
         window._aiMcRefMap = [];
         const mcCurRev = td.mcActiveRevision || 'R1';
         const mcCurUnit = window.mcActiveUnit || '';
-        const mcRows = ((td.mcRevisions && td.mcRevisions[mcCurRev]) || td.mcTable || [])
-            .filter(function(r) { return r && (r.item || r.pn || r.spec || r.protoCost || r.mpCost); });
-        const mcLines = mcRows.slice(0, MAX_TABLE_ROWS).map(function(r, i) {
-            window._aiMcRefMap[i] = { unit: mcCurUnit, rev: mcCurRev, item: r.item || '', pn: r.pn || '', group: r.group || '', spec: r.spec || '' };
-            return `- #MC${i} [${r.type || '-'}] ${r.item || '-'} (${r.group || '-'}) PN:${r.pn || '-'} SPEC:${r.spec || '-'}`
-                + ` | Proto:${r.protoCost || '-'}/${r.protoNre || '-'} ProtoB:${r.protoBCost || '-'}/${r.protoBNre || '-'} MP:${r.mpCost || '-'}/${r.mpNre || '-'}`
-                + (r.note ? ` | 비고:${r.note}` : '');
+        const mcLines = [];
+        let mcOmittedCount = 0;
+        document.querySelectorAll('#mctable-body tr').forEach(function(tr) {
+            if (tr.style.display === 'none') return;
+            const noEl = tr.querySelector('.bm-no');
+            const no = noEl ? parseInt(noEl.textContent, 10) : NaN;
+            if (!no) return; // TYPE 소계/합계 등 요약행은 .bm-no가 없어서 자동으로 제외됨
+            if (mcLines.length >= MAX_TABLE_ROWS) { mcOmittedCount++; return; }
+            const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
+            const type = g('type'), item = g('item'), group = g('group'), pn = g('pn'), spec = g('spec'), note = g('note');
+            window._aiMcRefMap[no] = { unit: mcCurUnit, rev: mcCurRev };
+            mcLines.push(`- #MC${no} [${type || '-'}] ${item || '-'} (${group || '-'}) PN:${pn || '-'} SPEC:${spec || '-'}`
+                + ` | Proto:${g('protoCost') || '-'}/${g('protoNre') || '-'} ProtoB:${g('protoBCost') || '-'}/${g('protoBNre') || '-'} MP:${g('mpCost') || '-'}/${g('mpNre') || '-'}`
+                + (note ? ` | 비고:${note}` : ''));
         });
-        const mcOmitted = mcRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${mcRows.length - MAX_TABLE_ROWS}건 생략됨, 현재 리비전:${mcCurRev})` : '';
+        const mcOmitted = mcOmittedCount ? `\n...(그 외 ${mcOmittedCount}건 생략됨, 현재 리비전:${mcCurRev})` : '';
 
         // 💡 [2026-08-29 신규] "AI 문답에서 SPEC 물어보면 Elec Parts에서 찾아서 답해야 하는데, Brief SPEC
         //    (고객 제안용 모델 비교, 지금은 Customer SPEC으로 개명)만 참조해서 헷갈린다"는 지적 — 원인은
@@ -8814,17 +8841,29 @@ ${recentLogs}
         //    찾아지던 문제 — 주소록에 영문 이름(nameEn)이 같이 등록돼 있는데도 여기서는 한글 이름(name)만
         //    컨텍스트에 넣고 있어서, AI가 "김준식 = Jun Kim"이라는 매핑 자체를 알 방법이 없었다.
         //    nameEn도 같이 보여줘서 AI가 두 표기를 같은 사람으로 연결할 수 있게 한다.
-        // 💡 [2026-08-30 신규] 주소록도 #AD숫자로 인용 가능하게 — <tr>에 고유 id가 없어서 CS/MC와
-        // 동일하게 name+nameEn 값 대조로 찾는다(_aiJumpToAdRow 참고). 검색어로 필터돼 화면에 숨어
-        // 있을 수도 있으니(주소록 검색), 이동 시 검색어를 초기화한다.
+        // 💡 [2026-08-30 신규 → 같은 날 재작성] 주소록도 #AD숫자로 인용 가능하게 — CS/MC와 동일하게
+        // 화면의 "No." 열(.bm-no)을 그대로 번호로 쓴다. 단, 주소록의 display:none은 CS/MC처럼 "빈 행
+        // 자동 숨김"이 아니라 검색창에 입력된 검색어로 인한 일시적 필터링일 뿐이고, bmSetupAllRows가
+        // 매길 때는 검색 필터 적용 "전"에 전체 행 기준으로 번호를 매겨두므로(renderAddressTable 참고),
+        // 검색 중이어도 "No." 값 자체는 전체 목록 기준으로 안정적이다 — 그래서 여기선 display:none
+        // 여부를 보지 않고 항상 전체 행을 대상으로 한다(검색어가 남아있다고 AI가 못 보는 사람이
+        // 생기면 안 되므로). 이동 시(_aiJumpToAdRow)에는 검색어를 초기화해서 화면에서도 바로 보이게 한다.
         window._aiAdRefMap = [];
-        const addressRows = (td.addressBook || []).filter(function(a) { return a && (a.name || a.nameEn); });
-        const addressLines = addressRows.slice(0, MAX_TABLE_ROWS).map(function(a, i) {
-            window._aiAdRefMap[i] = { name: a.name || '', nameEn: a.nameEn || '' };
-            const nameStr = a.name && a.nameEn ? `${a.name} (${a.nameEn})` : (a.name || a.nameEn || '');
-            return `- #AD${i} ${nameStr}${a.dept ? ' / ' + a.dept : ''}${a.title ? ' / ' + a.title : ''}`;
+        const addressLines = [];
+        let addressOmittedCount = 0;
+        document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
+            const noEl = tr.querySelector('.bm-no');
+            const no = noEl ? parseInt(noEl.textContent, 10) : NaN;
+            if (!no) return;
+            const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
+            const name = g('name'), nameEn = g('nameEn');
+            if (!name && !nameEn) return; // 완전히 빈 최소 1행(신규 프로젝트 기본행) 등은 제외
+            if (addressLines.length >= MAX_TABLE_ROWS) { addressOmittedCount++; return; }
+            window._aiAdRefMap[no] = true;
+            const nameStr = name && nameEn ? `${name} (${nameEn})` : (name || nameEn || '');
+            addressLines.push(`- #AD${no} ${nameStr}${g('dept') ? ' / ' + g('dept') : ''}${g('title') ? ' / ' + g('title') : ''}`);
         });
-        const addressOmitted = addressRows.length > MAX_TABLE_ROWS ? `\n...(그 외 ${addressRows.length - MAX_TABLE_ROWS}명 생략됨)` : '';
+        const addressOmitted = addressOmittedCount ? `\n...(그 외 ${addressOmittedCount}명 생략됨)` : '';
 
         return {
             todayStr: todayStr,
@@ -8984,7 +9023,11 @@ ${question}
             }
             const rowIndex = idx;
             const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
-            let extra = '';
+            // 💡 [2026-08-30 재작성] 요약/문답 답변에 "#G105, #G106, #G108"처럼 인용이 여러 개 연달아
+            // 나오면, 매번 붙던 📌(알람)/📧(원문)/발신인 이름까지 다 펼쳐져 한 줄이 너무 길어져 보기
+            // 불편하다는 지적 — M.C Table 제품구분자 패널과 같은 방식으로, 평소엔 작은 화살표(▶)만
+            // 보이고 눌러야 그 안의 내용이 옆으로 슬라이드 펼쳐지게(◀ 누르면 다시 접힘) 바꿨다.
+            let extra = `<span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="${_en ? 'Click to toggle this task\'s alarm on/off' : '클릭하면 이 업무의 알람을 켜고 끕니다(토글)'}" style="cursor:pointer; font-size:11px; vertical-align:middle;">📌</span>`;
             if (row) {
                 if (row._mailRaw) {
                     // 💡 [2026-08-30 축소] "📧원문"이었던 걸 아이콘만(📧)으로 — 글자 최소화 요청
@@ -8997,8 +9040,16 @@ ${question}
                     extra += `<span style="color:#888; font-size:11px; margin-left:4px;">${escapeHtml(mailPeople.sender)}</span>`;
                 }
             }
-            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#G${n}</span><span class="ai-alarm-ref" onclick="window._aiSetAlarmFromRef(${n}, event);" title="${_en ? 'Click to toggle this task\'s alarm on/off' : '클릭하면 이 업무의 알람을 켜고 끕니다(토글)'}" style="cursor:pointer; margin-left:2px; font-size:11px; vertical-align:middle;">📌</span>${extra}`;
+            return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#G${n}</span><span class="ai-ref-toggle" onclick="window._aiToggleRefExtra(this); event.stopPropagation();" title="${_en ? 'Show/hide alarm · mail · sender' : '펼치기/접기(알람·원문·발신인)'}">▶</span><span class="ai-ref-extra">${extra}</span>`;
         });
+    };
+    // 💡 위 "#G숫자 ▶" 화살표 클릭 시, 바로 옆 .ai-ref-extra(📌/📧/발신인)를 슬라이드로 펼치거나 접는다
+    // (M.C Table의 mcToggleUnitActions와 동일한 max-width 트랜지션 패턴).
+    window._aiToggleRefExtra = function(toggleEl) {
+        const extra = toggleEl.nextElementSibling;
+        if (!extra || !extra.classList.contains('ai-ref-extra')) return;
+        const open = extra.classList.toggle('ai-ref-extra-open');
+        toggleEl.textContent = open ? '◀' : '▶';
     };
     // 💡 위 "원문" 링크 클릭 시 뜨는 가벼운 읽기전용 모달 — Elec Parts 라이트박스(ep-lightbox-modal)와
     // 동일한 드래그 가능 팝업 패턴 재사용. Mail Analyzer 전체 작업공간을 여는 mailShowRightDetail은
@@ -13461,15 +13512,12 @@ window.handleAuthClick = function() {
         setTimeout(function() { tr.classList.remove('ai-ref-flash'); }, 1700);
     };
 
-    // 💡 [2026-08-30 신규] AI 답변의 "#CS숫자"(Customer SPEC) 클릭 이동 — window._aiCsRefMap(문맥 생성
-    //    시점에 window._buildGanttQaContext가 채워둠)의 값(type/sub/modelA)과 실제 #briefspec-body의
-    //    <tr> 안 입력값을 대조해서 찾는다. DOM 위치(index)가 아닌 내용으로 대조하는 이유는, 문맥에
-    //    올라가는 목록은 빈 행을 걸러낸(filter) 뒤 번호를 다시 매긴 것이라 실제 화면상의 행 순서/개수와
-    //    어긋날 수 있기 때문(예: 중간에 빈 행이 있으면 그 뒤로 다 밀림).
+    // 💡 [2026-08-30 신규 → 같은 날 재작성] AI 답변의 "#CS숫자"(Customer SPEC) 클릭 이동 — 이제 번호
+    //    자체가 화면 "No." 열(.bm-no)의 값과 정확히 같으므로, 내용 대조 없이 그 번호가 찍힌 <tr>을
+    //    바로 찾는다(위 _buildGanttQaContext 참고 — 번호를 매기는 기준을 아예 화면 렌더링과 통일함).
     window._aiJumpToCsRow = function(idx) {
         const _en = window._currentLang === 'en';
-        const ref = window._aiCsRefMap && window._aiCsRefMap[idx];
-        if (!ref) {
+        if (!(window._aiCsRefMap && window._aiCsRefMap[idx])) {
             if (window.showToast) window.showToast(_en
                 ? '⚠️ Could not find Customer SPEC row #' + idx + '.'
                 : '⚠️ Customer SPEC #' + idx + ' 행을 찾지 못했습니다.', 'warning');
@@ -13481,8 +13529,8 @@ window.handleAuthClick = function() {
             let found = null;
             rows.forEach(function(tr) {
                 if (found) return;
-                const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
-                if (g('type') === ref.type && g('sub') === ref.sub && g('modelA') === ref.modelA) found = tr;
+                const noEl = tr.querySelector('.bm-no');
+                if (noEl && noEl.textContent === String(idx)) found = tr;
             });
             if (!found) {
                 if (window.showToast) window.showToast(_en
@@ -13494,9 +13542,10 @@ window.handleAuthClick = function() {
         }, 60);
     };
 
-    // 💡 [2026-08-30 신규] AI 답변의 "#MC숫자"(M.C Table) 클릭 이동 — 문맥 생성 당시의 종류(unit)/
-    //    리비전(rev)이 지금 화면과 다르면 먼저 그 종류/리비전으로 전환한 뒤(mcSwitchUnit/mcSwitchRevision,
-    //    둘 다 populateTabData()로 화면을 다시 그려줌) item/pn(+group/spec 보조)로 행을 찾는다.
+    // 💡 [2026-08-30 신규 → 같은 날 재작성] AI 답변의 "#MC숫자"(M.C Table) 클릭 이동 — 번호가 화면
+    //    "No." 열(.bm-no)과 정확히 같으므로, 문맥 생성 당시의 종류(unit)/리비전(rev)만 지금 화면과
+    //    다르면 먼저 전환한 뒤(mcSwitchUnit/mcSwitchRevision, 둘 다 populateTabData()로 다시 그림)
+    //    그 번호가 찍힌 <tr>을 바로 찾는다.
     window._aiJumpToMcRow = function(idx) {
         const _en = window._currentLang === 'en';
         const ref = window._aiMcRefMap && window._aiMcRefMap[idx];
@@ -13523,9 +13572,8 @@ window.handleAuthClick = function() {
                 let found = null;
                 rows.forEach(function(tr) {
                     if (found) return;
-                    const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
-                    if (g('item') === ref.item && g('pn') === ref.pn
-                        && (!ref.group || g('group') === ref.group) && (!ref.spec || g('spec') === ref.spec)) found = tr;
+                    const noEl = tr.querySelector('.bm-no');
+                    if (noEl && noEl.textContent === String(idx)) found = tr;
                 });
                 if (!found) {
                     if (window.showToast) window.showToast(_en
@@ -13576,8 +13624,7 @@ window.handleAuthClick = function() {
     //    숨어 있을 수 있으니 먼저 검색어를 비운 뒤 name/nameEn 값 대조로 찾는다.
     window._aiJumpToAdRow = function(idx) {
         const _en = window._currentLang === 'en';
-        const ref = window._aiAdRefMap && window._aiAdRefMap[idx];
-        if (!ref) {
+        if (!(window._aiAdRefMap && window._aiAdRefMap[idx])) {
             if (window.showToast) window.showToast(_en
                 ? '⚠️ Could not find address book row #' + idx + '.'
                 : '⚠️ 주소록 #' + idx + ' 행을 찾지 못했습니다.', 'warning');
@@ -13592,8 +13639,8 @@ window.handleAuthClick = function() {
             let found = null;
             rows.forEach(function(tr) {
                 if (found) return;
-                const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value : ''; };
-                if (g('name') === ref.name && g('nameEn') === ref.nameEn) found = tr;
+                const noEl = tr.querySelector('.bm-no');
+                if (noEl && noEl.textContent === String(idx)) found = tr;
             });
             if (!found) {
                 if (window.showToast) window.showToast(_en
@@ -31610,17 +31657,26 @@ function bmDeleteSelected(key) {
 // ═══════════════════════════════════════════════════════════
 const MC_UNIT_LABELS = { BTN: 'BTN(버튼덱)', MAIN: 'MAIN', UPR: 'UPR(어퍼)', TPR: 'TPR(토퍼)' };
 
-// 💡 [2026-08-30 개편] ✏️(이름변경)➕(추가)🗑️(삭제) 3개 아이콘이 제목줄에 항상 떠 있어 공간을
-// 많이 차지한다는 지적 — 연필(✏️) 하나만 항상 보이게 하고, 누르면 나머지가 옆으로 슬라이드
-// 펼쳐지도록(mc-unit-actions-open, max-width 트랜지션) 개편. 제품구분자가 하나도 없는 상태(아직
-// 이 기능을 안 쓰는 프로젝트)에선 관리할 대상 자체가 없으므로 연필 없이 ➕(시작하기)만 노출한다.
+// 💡 [2026-08-30 개편 → 같은 날 재수정] ✏️(이름변경)➕(추가)🗑️(삭제) 3개 아이콘이 제목줄에 항상 떠 있어
+// 공간을 많이 차지한다는 지적 — 토글 버튼 하나만 항상 보이게 하고, 누르면 나머지가 옆으로 슬라이드
+// 펼쳐지도록(mc-unit-actions-open, max-width 트랜지션) 개편. 토글 버튼은 처음엔 연필(✏️)이었는데,
+// "연필 대신 펼침/접힘을 나타내는 화살표(삼각형)로 바꿔달라"는 요청으로 ▶(닫힘, 누르면 펼침) /
+// ◀(열림, 누르면 접힘)으로 교체 — 펼침 패널 안쪽은 아이콘만(✏️/➕/🗑️) 보이도록 "이름변경" 텍스트도
+// 뺐다. 제품구분자가 하나도 없는 상태(아직 이 기능을 안 쓰는 프로젝트)에선 관리할 대상 자체가
+// 없으므로 화살표 없이 ➕(시작하기)만 노출한다.
 window._mcUnitActionsOpen = false;
 window.mcToggleUnitActions = function() {
     window._mcUnitActionsOpen = !window._mcUnitActionsOpen;
     const panel = document.getElementById('mc-unit-actions-panel');
     const toggleBtn = document.getElementById('mc-unit-actions-toggle');
     if (panel) panel.classList.toggle('mc-unit-actions-open', window._mcUnitActionsOpen);
-    if (toggleBtn) toggleBtn.style.background = window._mcUnitActionsOpen ? '#e9ecef' : 'none';
+    if (toggleBtn) {
+        toggleBtn.style.background = window._mcUnitActionsOpen ? '#e9ecef' : 'none';
+        // 🐛 [2026-08-30 버그 수정] 화살표 방향(▶/◀)이 mcRenderUnitTabs 전체 재렌더 때만 갱신되고
+        // 이 가벼운 토글 함수에서는 안 바뀌어서, 펼친 뒤에도 계속 ▶로 보이는 버그가 있었음.
+        toggleBtn.textContent = window._mcUnitActionsOpen ? '◀' : '▶';
+        toggleBtn.title = window._mcUnitActionsOpen ? '접기' : '제품구분자 관리(이름변경/추가/삭제)';
+    }
 };
 window.mcRenderUnitTabs = function() {
     const bar = document.getElementById('mc-unit-bar');
@@ -31647,9 +31703,9 @@ window.mcRenderUnitTabs = function() {
         '<button class="mc-unit-btn" onclick="window.mcCycleUnit()" title="클릭할 때마다 다음 제품구분자로 전환"'
         + ' style="padding:6px 10px; min-width:auto; border:1px solid #c9b8f0; border-radius:5px; cursor:pointer; font-size:12px; font-weight:bold; background:#ede9fb; color:#6741d9;">'
         + escapeHtml(cur) + '</button>'
-        + '<button id="mc-unit-actions-toggle" onclick="window.mcToggleUnitActions()" title="제품구분자 관리(이름변경/추가/삭제)" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (isOpen ? '#e9ecef' : 'none') + '; color:#555; cursor:pointer; font-size:14px;">✏️</button>'
+        + '<button id="mc-unit-actions-toggle" onclick="window.mcToggleUnitActions()" title="' + (isOpen ? '접기' : '제품구분자 관리(이름변경/추가/삭제)') + '" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:' + (isOpen ? '#e9ecef' : 'none') + '; color:#555; cursor:pointer; font-size:12px;">' + (isOpen ? '◀' : '▶') + '</button>'
         + '<div id="mc-unit-actions-panel" class="' + (isOpen ? 'mc-unit-actions-open' : '') + '">'
-        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:1px solid #ddd; border-radius:4px; background:#fff; color:#555; cursor:pointer; font-size:12px; white-space:nowrap;">✏️ 이름변경</button>'
+        + '<button id="mc-unit-rename-btn" onclick="window.mcRenameUnit(\'' + escapeHtml(cur).replace(/'/g, "\\'") + '\')" title="이름 바꾸기" style="margin:0 2px 0 6px; padding:6px 8px; min-width:auto; border:1px solid #ddd; border-radius:4px; background:#fff; color:#555; cursor:pointer; font-size:14px;">✏️</button>'
         + '<button id="mc-add-unit-btn" onclick="window.mcAddUnit()" title="제품구분자 추가" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#2c5f8a; cursor:pointer; font-size:14px;">➕</button>'
         + '<button id="mc-remove-unit-btn" onclick="window.mcRemoveUnit(window.mcActiveUnit)" title="현재 제품구분자 제거" style="margin:0 2px; padding:6px 8px; min-width:auto; border:none; background:none; color:#e03131; cursor:pointer; font-size:14px;">🗑️</button>'
         + '</div>';
