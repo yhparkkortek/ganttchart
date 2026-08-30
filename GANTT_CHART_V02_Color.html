@@ -556,7 +556,7 @@
 }
 #app-topbar {
     position: fixed; top: 0; left: 0; width: 100%; height: var(--topbar-h);
-    background: #cee9ed; color: #00636e; z-index: 700;
+    background: #aedae0; color: #00636e; z-index: 700;
     display: flex; align-items: center; gap: 0; padding: 0 18px 0 0;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     box-sizing: border-box;
@@ -593,12 +593,12 @@
     cursor: pointer;
     white-space: nowrap;
 }
-.topbar-btn:hover { background: #bce0e3; }
+.topbar-btn:hover { background: #90cdd5; }
 .topbar-btn:disabled { opacity:0.5; cursor:default; }
 
 #app-sidebar {
     position: fixed; top: var(--topbar-h); left: 0; height: calc(100vh - var(--topbar-h)); width: var(--sb-w);
-    background: #cee9ed;
+    background: #aedae0;
     display: flex; flex-direction: column;
     transition: width 0.18s ease;
     overflow: hidden;
@@ -615,7 +615,7 @@
     width: 26px; height: 26px; border-radius: 4px; cursor: pointer;
     flex-shrink: 0; font-size: 20px; line-height: 1;
 }
-#app-sidebar .sb-toggle-btn:hover { background: #bce0e3; }
+#app-sidebar .sb-toggle-btn:hover { background: #90cdd5; }
 #app-sidebar .sb-nav { flex: 1; overflow-y: auto; padding: 8px 0; margin-top: -10px; }
 #app-sidebar .sb-item {
     display: flex; align-items: center; gap: 10px;
@@ -630,8 +630,8 @@
     opacity: 1; max-width: 160px;
     transition: opacity 0.15s ease, max-width 0.18s ease;
 }
-#app-sidebar .sb-item:hover { background: #bce0e3; }
-#app-sidebar .sb-item.active { background: #aad5da; border-left-color: #e67e22; font-weight: bold; }
+#app-sidebar .sb-item:hover { background: #90cdd5; }
+#app-sidebar .sb-item.active { background: #72c0ca; border-left-color: #e67e22; font-weight: bold; }
 #app-sidebar.collapsed { width: var(--sb-w-collapsed); }
 #app-sidebar.collapsed .sb-label { opacity: 0; max-width: 0; }
 
@@ -9918,14 +9918,14 @@ window.deleteHistoryByDateRange = function() {
         const _en = window._currentLang === 'en';
         let btn = '';
         if (hasMailRaw) {
-            btn += `<button onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
+            btn += `<button class="detail-inline-action-btn" onclick="window.showGanttMailRaw(${rowIndex}); event.stopPropagation();" style="font-size:11px; padding:2px 8px; margin-left:6px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; vertical-align:middle;">📧 ${_en ? 'View Mail Source' : '원문 보기'}</button>`;
         }
         if (canRestoreDate) {
             // 💡 [2026-08-24 신규] 백업(_aiOrigStart/_aiOrigPlan)이 없으면 window.restoreAiTaskDate()가
             //    "상세내용" 첫 줄에 항상 같이 적히는 [업무유형][발신자→수신자] YYYY-MM-DD 형식에서
             //    시작일을 추출해 대신 복원한다(완료일은 이 형식에 없어 과거 업무는 복원 대상 제외).
             //    (Ctrl/Shift+클릭 시 다중 선택된 행 전부 일괄 복원 — window.restoreAiTaskDate 참고)
-            btn += `<button onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail (falls back to the date embedded in the detail text for older tasks without a backup). Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다 (백업이 없는 과거 업무는 상세내용에 적힌 날짜에서 시작일만 추출해 복원). Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:${hasMailRaw ? '4' : '6'}px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
+            btn += `<button class="detail-inline-action-btn" onclick="window.restoreAiTaskDate(${rowIndex}, event); event.stopPropagation();" title="${_en ? 'Restore to the start/end date AI originally extracted from the mail (falls back to the date embedded in the detail text for older tasks without a backup). Ctrl/Shift+click to apply to all currently selected rows.' : '시작일/완료일을 메일 분석 당시 AI가 뽑았던 원본 날짜로 되돌립니다 (백업이 없는 과거 업무는 상세내용에 적힌 날짜에서 시작일만 추출해 복원). Ctrl(⌘) 또는 Shift를 누른 채 클릭하면 지금 선택된 행 전부에 한 번에 적용됩니다.'}" style="font-size:11px; padding:2px 8px; margin-left:${hasMailRaw ? '4' : '6'}px; background:#fff3e0; color:#b85c00; border:1px solid #ffcc80; border-radius:5px; cursor:pointer; vertical-align:middle;">📅 ${_en ? 'Restore AI Date' : 'AI 분석 날짜로 복원'}</button>`;
         }
         if (!btn) return html;
 
@@ -11448,7 +11448,7 @@ window.deleteHistoryByDateRange = function() {
                             //    renderTable()이 다시 그려질 때마다 개별로 펼쳐뒀던 칸이 매번 접혀 보였다.
                             const _hadExpandedClass = / class="[^"]*\bdetail-td-expanded\b[^"]*"/.test(tdAttrs);
                             tdAttrs = tdAttrs.replace(/ class="[^"]*"/, '') + ` class="detail-td content-cell-trans${_hadExpandedClass ? ' detail-td-expanded' : ''}"`;
-                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 2px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
+                            tdHtml = '<span class="content-span" style="display: block;">' + displayHtml + '</span><span class="trans-btn-hide-print" style="position: absolute; top: 3.6px; left: 2px; cursor: pointer; font-size: 8px; border-radius:3px; padding:2px 2px; z-index: 1; background:transparent;" onclick="toggleTranslation(this, \'' + safeText + '\', ' + transMode + ', ' + boldBrackets + '); event.stopPropagation();">🌐</span>';                        } else { tdHtml = linkifyAndEscape(cellText, boldBrackets); if (cellIndex === colIdx.content) tdHtml = injectMailRawBtn(tdHtml, row, i); }
                     } 
                     // 교체
                     else if (cellIndex === colIdx.chart) { 
@@ -12557,9 +12557,18 @@ window.handleAuthClick = function() {
                     authBtn.style.color = '#4285F4';
                 }
                 authBtn.disabled = false;
-                return; 
+                return;
             }
-            
+
+            // 🐛 [버그 수정] 위(2692행 부근)의 첫 번째 handleAuthClick 정의에는 있던
+            // "gapi.client.setToken(resp)"가 이 두 번째(나중에 로드되어 실제로 이 함수를 덮어쓰는) 정의에는
+            // 빠져 있었음 — 그 결과 로그인에 성공해도 gapi.client가 새 토큰을 모른 채 계속 이전(만료된) 토큰
+            // 또는 무토큰 상태로 Drive API를 호출해서 곧바로 401로 "연결 끊김" 처리되고, 사용자가 다시
+            // [연동하기]를 누를 때마다 (조용한 갱신이 아니라) prompt:'consent'로 매번 전체 로그인 팝업이
+            // 뜨는 게 반복됐다 — "구글 로그인 팝업이 너무 자주 뜬다"의 실제 원인.
+            gapi.client.setToken(resp);
+            window.googleAccessToken = resp.access_token;
+
             let retries = 0;
             while (!(window.gapi && gapi.client && gapi.client.drive) && retries < 20) {
                 await new Promise(r => setTimeout(r, 250));
@@ -16563,6 +16572,13 @@ window.updateInboxBadge();
         line-clamp: unset;
         max-height: none;
         overflow: visible;
+    }
+    /* 🐛 [버그 수정] "원문 보기"/"AI 분석 날짜로 복원" 버튼은 padding 때문에 일반 텍스트보다 줄 높이가
+       커서, 상세내용이 짧아 버튼이 같은 줄(1번째 줄)에 붙는 경우 line-clamp:1이 그 줄을 텍스트와
+       함께 잘라내 글자까지 가려 보였음 — 다른 셀도 접었을 때 1번째 줄 이후 내용은 안 보이는 것과
+       동일하게, 접힌 상태에서는 이 버튼들도 숨기고 펼쳤을 때만 노출한다. */
+    td.detail-td:not(.detail-td-expanded) .detail-inline-action-btn {
+        display: none;
     }
     /* 💡 [2026-08-20] 예전엔 "인쇄할 때는 접힘 상태와 무관하게 항상 전체 내용이 나오도록" 강제 override가
        있었는데, 이게 두 가지 문제를 일으켰음:
@@ -23401,13 +23417,16 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         <div style="border-top:1px solid #eee; margin-bottom:18px;"></div>
 
         <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🔍 다른 색상으로 미리보기</div>
-        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">원색을 고르면 지금과 동일한 채도·명도 공식으로 파스텔 톤을 계산해서 보여줍니다 — <b>실제 앱에는 적용되지 않는 미리보기</b>입니다.</div>
+        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">원색을 고르면 지금과 동일한 채도·명도 공식으로 파스텔 톤을 계산합니다. <b>[✅ 실제 페이지에 적용]</b>을 누르면 이 창을 닫아도 사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지 실제 화면에 그대로 반영됩니다(새로고침하면 원래 청록으로 돌아감 — 저장되는 변경이 아닙니다).</div>
         <div id="cp-preset-swatches" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"></div>
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
             <label style="font-size:12px; color:#555;">직접 선택:</label>
             <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value)" style="width:44px; height:30px; border:1px solid #ccc; border-radius:4px; cursor:pointer; padding:2px;">
             <span id="cp-custom-hex" style="font-size:12px; color:#888; font-family:monospace;"></span>
+            <button onclick="window._cpApplyLive(document.getElementById('cp-custom-color').value)" style="margin-left:10px; padding:6px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ 실제 페이지에 적용</button>
+            <button onclick="window._cpRevertLive()" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12.5px; cursor:pointer;">↩️ 청록으로 되돌리기</button>
         </div>
+        <div id="cp-apply-status" style="font-size:11.5px; color:#888; margin-bottom:16px;">⚪ 아직 미리보기만 — 실제 페이지는 원래 청록 그대로입니다</div>
         <div id="cp-preview-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:18px;"></div>
 
         <div style="font-size:11.5px; color:#888; margin-bottom:6px;">미니 미리보기 표</div>
@@ -23460,7 +23479,7 @@ window.CP_ROLES = [
     { key: 'hoverBorder', label: '호버 테두리',       s: 36, l: 51 }
 ];
 window.CP_CURRENT_TEAL = { bg: '#e0f5f7', headerTint: '#eef6f7', border: '#cfe3e5', zebraB: '#e8f2f3', darkText: '#00707d', hoverBg: '#a3d9e0', hoverBorder: '#52a5af' };
-window.CP_CURRENT_NAV = { base: '#cee9ed', hover: '#bce0e3', active: '#aad5da', text: '#00636e' };
+window.CP_CURRENT_NAV = { base: '#aedae0', hover: '#90cdd5', active: '#72c0ca', text: '#00636e' };
 window.CP_PRESETS = ['#e03131', '#e67e22', '#f1c40f', '#2f9e44', '#00707d', '#2c5f8a', '#6f42c1', '#d6336c', '#495057'];
 
 window._cpSwatch = function(hex, label) {
@@ -23500,6 +23519,88 @@ window._cpRenderPreview = function(hex) {
         + '<tr style="background:#fff; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">샘플 행 A</td><td style="padding:8px 10px; text-align:center;">🟢</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.bg + '; color:' + gen.darkText + '; border:1px solid ' + gen.border + '; border-radius:6px; cursor:default; font-size:11px;">버튼</button></td></tr>'
         + '<tr style="background:' + gen.zebraB + '; border-bottom:1px solid ' + gen.border + ';"><td style="padding:8px 10px;">샘플 행 B</td><td style="padding:8px 10px; text-align:center;">🔴</td><td style="padding:8px 10px; text-align:center;"><button style="padding:4px 10px; background:' + gen.hoverBg + '; color:#fff; border:1px solid ' + gen.hoverBorder + '; border-radius:6px; cursor:default; font-size:11px;">호버 예시</button></td></tr>'
         + '</tbody></table></div></div>';
+
+    // 💡 이미 "실제 페이지에 적용" 중이면(라이브 모드), 프리셋/커스텀 색을 바꿀 때마다 실제 화면도
+    //    같이 즉시 갱신 — 매번 "적용" 버튼을 다시 누를 필요 없이 색상만 계속 바꿔가며 실시간 비교 가능.
+    if (window._cpLiveAppliedHex) window._cpApplyLive(hex);
+};
+
+// 🎨 [실제 적용] 청록 작업에 실제로 쓰인 hex 상수들을, 페이지 전체에서 "그 hex 문자열을 inline
+//    style에 포함한 모든 요소"를 CSS 속성-값 선택자([style*="..."])로 찾아 !important로 새 색으로
+//    덮어쓰는 방식. 수천 곳에 흩어진 인라인 색상을 하나하나 바꾸지 않고도, 실제 화면 전체에
+//    (사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지) 한 번에 반영해서 진짜로 눈으로 비교 가능.
+//    background-color/border-color만 건드리고(border-style이 없으면 안 보여서 안전), 텍스트 역할
+//    (darkText/nav text)에는 color만 건드려서 엉뚱한 곳에 배경이 생기는 부작용을 막았다.
+window._cpLiveAppliedHex = null;
+window._cpApplyLive = function(hex) {
+    const hue = window._cpHexToHsl(hex).h;
+    const gen = {};
+    window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
+    const nav = window.CP_CURRENT_NAV;
+    const genNav = {
+        base: window._cpHslToHex(hue, window._cpHexToHsl(nav.base).s, window._cpHexToHsl(nav.base).l),
+        hover: window._cpHslToHex(hue, window._cpHexToHsl(nav.hover).s, window._cpHexToHsl(nav.hover).l),
+        active: window._cpHslToHex(hue, window._cpHexToHsl(nav.active).s, window._cpHexToHsl(nav.active).l),
+        text: window._cpHslToHex(hue, window._cpHexToHsl(nav.text).s, window._cpHexToHsl(nav.text).l)
+    };
+
+    const bgAndBorder = [
+        [window.CP_CURRENT_TEAL.bg, gen.bg], [window.CP_CURRENT_TEAL.headerTint, gen.headerTint],
+        [window.CP_CURRENT_TEAL.zebraB, gen.zebraB], [window.CP_CURRENT_TEAL.hoverBg, gen.hoverBg],
+        [nav.base, genNav.base], [nav.hover, genNav.hover], [nav.active, genNav.active]
+    ];
+    const borderOnly = [[window.CP_CURRENT_TEAL.border, gen.border], [window.CP_CURRENT_TEAL.hoverBorder, gen.hoverBorder]];
+    const textOnly = [[window.CP_CURRENT_TEAL.darkText, gen.darkText], [nav.text, genNav.text]];
+
+    let css = '';
+    bgAndBorder.forEach(function(p) { css += '[style*="' + p[0] + '"] { background-color: ' + p[1] + ' !important; border-color: ' + p[1] + ' !important; }\n'; });
+    borderOnly.forEach(function(p) { css += '[style*="' + p[0] + '"] { border-color: ' + p[1] + ' !important; }\n'; });
+    textOnly.forEach(function(p) { css += '[style*="' + p[0] + '"] { color: ' + p[1] + ' !important; }\n'; });
+
+    // 💡 [style*="..."] 방식은 인라인 style에 그 hex가 "문자 그대로" 들어있는 요소만 잡는다 — 사이드바/
+    //    상단바/표 헤더 등 상당수는 인라인이 아니라 <style> 블록의 클래스/id 규칙으로 색이 정해져 있어서
+    //    (#app-sidebar, .concept-table th, #myTable th 등) 위 규칙만으로는 안 바뀐다. 이 세션에서 실제로
+    //    찾아낸 그 규칙들을 여기서 직접 다시 선언해 덮어쓴다(동일 특이도 + !important면 나중에 로드된
+    //    이 <style>이 이김 — 이 태그는 항상 런타임에 <head> 맨 끝에 추가되므로 항상 나중임).
+    css += '#app-topbar { background: ' + genNav.base + ' !important; color: ' + genNav.text + ' !important; }\n'
+        + '#app-sidebar { background: ' + genNav.base + ' !important; }\n'
+        + '#app-sidebar .sb-item { color: ' + genNav.text + ' !important; }\n'
+        + '#app-sidebar .sb-item:hover { background: ' + genNav.hover + ' !important; }\n'
+        + '#app-sidebar .sb-item.active { background: ' + genNav.active + ' !important; }\n'
+        + '#app-sidebar .sb-toggle-btn { color: ' + genNav.text + ' !important; }\n'
+        + '#app-sidebar .sb-toggle-btn:hover { background: ' + genNav.hover + ' !important; }\n'
+        + '.topbar-btn { color: ' + genNav.text + ' !important; }\n'
+        + '.topbar-btn:hover { background: ' + genNav.hover + ' !important; }\n'
+        + '.concept-table th, #myTable th, #tab-notice thead th, #tab-elecparts .concept-table thead th { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '.concept-table th, .concept-table td, #myTable th, #myTable td { border-color: ' + gen.border + ' !important; }\n'
+        + '#tab-alarm .concept-table tbody tr.mc-zebra-b, #tab-address .concept-table tbody tr.mc-zebra-b, #tab-elecparts .concept-table tbody tr.mc-zebra-b { background-color: ' + gen.zebraB + ' !important; }\n';
+
+    // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
+    //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
+    //    문서 전체에서 가장 마지막 스타일이 되도록 보장한다(매번 다시 appendChild해서 위치 유지).
+    let styleTag = document.getElementById('cp-live-style');
+    if (!styleTag) { styleTag = document.createElement('style'); styleTag.id = 'cp-live-style'; }
+    document.body.appendChild(styleTag);
+    styleTag.textContent = css;
+    window._cpLiveAppliedHex = hex;
+    window._cpUpdateApplyStatus();
+};
+window._cpRevertLive = function() {
+    const styleTag = document.getElementById('cp-live-style');
+    if (styleTag) styleTag.textContent = '';
+    window._cpLiveAppliedHex = null;
+    window._cpUpdateApplyStatus();
+};
+window._cpUpdateApplyStatus = function() {
+    const el = document.getElementById('cp-apply-status');
+    if (!el) return;
+    if (window._cpLiveAppliedHex) {
+        el.textContent = '✅ 지금 실제 페이지에 적용 중 (' + window._cpLiveAppliedHex + ' 기반)';
+        el.style.color = '#1f7a3d';
+    } else {
+        el.textContent = '⚪ 아직 미리보기만 — 실제 페이지는 원래 청록 그대로입니다';
+        el.style.color = '#888';
+    }
 };
 
 window.openColorPaletteModal = function() {
@@ -23508,6 +23609,7 @@ window.openColorPaletteModal = function() {
         '<div onclick="window._cpRenderPreview(\'' + hex + '\')" title="' + hex + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>'
     ).join('');
     window._cpRenderPreview(document.getElementById('cp-custom-color').value || '#2c5f8a');
+    window._cpUpdateApplyStatus();
     document.getElementById('color-palette-modal-overlay').style.display = 'block';
     document.getElementById('color-palette-modal').style.display = 'block';
     if (window.bringModalToFront) window.bringModalToFront('color-palette-modal');
