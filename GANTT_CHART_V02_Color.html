@@ -803,7 +803,10 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 
 /* 1. 마일스톤 입력창 텍스트 중앙 맞춤 (개발기간은 제외됨) */
 #sum-milestone-body .u-input, #sum-milestone-body-actual .u-input { text-align: center !important; }
-#sum-milestone-body .u-input { background: #eef6f7 !important; }
+/* 💡 [2026-08-30] 이 셀 자체는 색을 안 갖고, 부모 <tr id="sum-milestone-body">(인라인 background:#eef6f7)의
+   색이 그대로 비쳐 보이게 투명 처리 — input이 자기 색을 따로 가지면 팔레트 실적용 시 tr 색만 바뀌고
+   input은 그대로 남아 "따로 노는" 것처럼 보임(청록 하드코딩이라 다른 테마色으로 안 바뀌던 문제이기도 함). */
+#sum-milestone-body .u-input { background: transparent !important; }
 #sum-milestone-body-actual .u-input { background: #fff8e6 !important; }
 /* 💡 위 두 규칙(ID+클래스)이 .req-field.req-missing(클래스만)보다 명시도가 높아 미입력 경고 배경(연노랑)을
    가려버리므로, PROTO Start 같은 필수 마일스톤 칸에서도 경고 배경이 그대로 보이도록 별도로 덮어씀 */
@@ -23429,15 +23432,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
             onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
     </div>
     <div style="padding:20px 22px;">
-        <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">✅ 현재 적용된 테마 (청록)</div>
-        <div style="font-size:11.5px; color:#888; margin-bottom:12px;">지금 앱 전체(표 헤더·제브라·테두리·호버 등)에 실제로 쓰이고 있는 역할별 기준색입니다.</div>
-        <div id="cp-current-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:10px;"></div>
-        <div style="font-size:11.5px; color:#888; margin:14px 0 6px;">사이드바 / 상단바 전용</div>
-        <div id="cp-current-swatches-nav" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:22px;"></div>
-
-        <div style="border-top:1px solid #eee; margin-bottom:18px;"></div>
-
-        <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🔍 다른 색상으로 미리보기</div>
+        <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🎨 테마 색상 선택</div>
         <div style="font-size:11.5px; color:#888; margin-bottom:10px;">아래 프리셋을 클릭하거나 색을 직접 고르면 <b>바로 실제 화면에 자동 적용</b>됩니다 — 사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지 이 창을 닫아도 그대로 유지됩니다(새로고침하면 원래 청록으로 돌아감 — 저장되는 변경은 아닙니다). 마음에 안 들면 [↩️ 청록으로 되돌리기]를 누르세요.</div>
         <div id="cp-preset-swatches" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"></div>
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
@@ -23501,7 +23496,10 @@ window.CP_ROLES = [
 ];
 window.CP_CURRENT_TEAL = { bg: '#e0f5f7', headerTint: '#eef6f7', border: '#cfe3e5', zebraB: '#e8f2f3', darkText: '#00707d', hoverBg: '#a3d9e0', hoverBorder: '#52a5af' };
 window.CP_CURRENT_NAV = { base: '#aedae0', hover: '#90cdd5', active: '#72c0ca', text: '#00636e' };
-window.CP_PRESETS = ['#e03131', '#e67e22', '#f1c40f', '#2f9e44', '#00707d', '#2c5f8a', '#6f42c1', '#d6336c', '#495057'];
+// 💡 [2026-08-30 버그 수정] 회색 계열(#495057)이 있었는데, 이 팔레트 도구는 "원색의 색상환 각도(hue)만
+// 뽑아서 재조합"하는 방식이라 무채색(회색)은 hue 자체가 없어서(R/G/B가 거의 같음) RGB의 미세한 오차로
+// 엉뚱한 hue(파란빛)가 뽑혀 나갔음 — 애초에 이 방식으로는 "무채색 테마"를 표현할 수 없어 프리셋에서 제외.
+window.CP_PRESETS = ['#e03131', '#e67e22', '#f1c40f', '#2f9e44', '#00707d', '#2c5f8a', '#6f42c1', '#d6336c'];
 
 window._cpSwatch = function(hex, label) {
     const textColor = (window._cpHexToHsl(hex).l < 55) ? '#fff' : '#333';
@@ -23511,24 +23509,16 @@ window._cpSwatch = function(hex, label) {
         + '</div>';
 };
 
-window._cpRenderCurrent = function() {
-    document.getElementById('cp-current-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(window.CP_CURRENT_TEAL[r.key], r.label)).join('');
-    const nav = window.CP_CURRENT_NAV;
-    document.getElementById('cp-current-swatches-nav').innerHTML = [
-        window._cpSwatch(nav.base, '사이드바/상단바 배경'),
-        window._cpSwatch(nav.hover, '메뉴 호버'),
-        window._cpSwatch(nav.active, '메뉴 active'),
-        window._cpSwatch(nav.text, '메뉴 글자색')
-    ].join('');
-};
-
 window._cpRenderPreview = function(hex) {
     document.getElementById('cp-custom-color').value = hex;
     document.getElementById('cp-custom-hex').textContent = hex;
     const hue = window._cpHexToHsl(hex).h;
     const gen = {};
     window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
-    document.getElementById('cp-preview-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(gen[r.key], r.label)).join('');
+    const genNav = window._cpComputeGenNav(hue);
+    document.getElementById('cp-preview-swatches').innerHTML = window.CP_ROLES.map(r => window._cpSwatch(gen[r.key], r.label)).join('')
+        + window._cpSwatch(genNav.base, '사이드바/상단바 배경') + window._cpSwatch(genNav.hover, '메뉴 호버')
+        + window._cpSwatch(genNav.active, '메뉴 active') + window._cpSwatch(genNav.text, '메뉴 글자색');
 
     // 미니 미리보기 표 — 실제 청록 표(헤더/제브라/테두리/버튼 호버)와 동일한 구조
     document.getElementById('cp-preview-demo').innerHTML =
@@ -23552,18 +23542,22 @@ window._cpRenderPreview = function(hex) {
 //    (사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지) 한 번에 반영해서 진짜로 눈으로 비교 가능.
 //    background-color/border-color만 건드리고(border-style이 없으면 안 보여서 안전), 텍스트 역할
 //    (darkText/nav text)에는 color만 건드려서 엉뚱한 곳에 배경이 생기는 부작용을 막았다.
+window._cpComputeGenNav = function(hue) {
+    const nav = window.CP_CURRENT_NAV;
+    return {
+        base: window._cpHslToHex(hue, window._cpHexToHsl(nav.base).s, window._cpHexToHsl(nav.base).l),
+        hover: window._cpHslToHex(hue, window._cpHexToHsl(nav.hover).s, window._cpHexToHsl(nav.hover).l),
+        active: window._cpHslToHex(hue, window._cpHexToHsl(nav.active).s, window._cpHexToHsl(nav.active).l),
+        text: window._cpHslToHex(hue, window._cpHexToHsl(nav.text).s, window._cpHexToHsl(nav.text).l)
+    };
+};
 window._cpLiveAppliedHex = null;
 window._cpApplyLive = function(hex) {
     const hue = window._cpHexToHsl(hex).h;
     const gen = {};
     window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
     const nav = window.CP_CURRENT_NAV;
-    const genNav = {
-        base: window._cpHslToHex(hue, window._cpHexToHsl(nav.base).s, window._cpHexToHsl(nav.base).l),
-        hover: window._cpHslToHex(hue, window._cpHexToHsl(nav.hover).s, window._cpHexToHsl(nav.hover).l),
-        active: window._cpHslToHex(hue, window._cpHexToHsl(nav.active).s, window._cpHexToHsl(nav.active).l),
-        text: window._cpHslToHex(hue, window._cpHexToHsl(nav.text).s, window._cpHexToHsl(nav.text).l)
-    };
+    const genNav = window._cpComputeGenNav(hue);
 
     const logoHsl = window._cpHexToHsl('#00a1b6');
     const genLogo = window._cpHslToHex(hue, logoHsl.s, logoHsl.l);
@@ -23616,9 +23610,30 @@ window._cpApplyLive = function(hex) {
         + '#app-topbar .tb-logo { background-color: ' + genLogo + ' !important; }\n'
         + '.concept-header-box, .concept-header-box h2 { color: ' + gen.darkText + ' !important; }\n'
         + '.concept-header-box { background-color: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; }\n'
-        + '.concept-table th, #myTable th, #tab-notice thead th, #tab-elecparts .concept-table thead th { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; }\n'
-        + '.concept-table th, .concept-table td, #myTable th, #myTable td { border-color: ' + gen.border + ' !important; }\n'
-        + '#tab-alarm .concept-table tbody tr.mc-zebra-b, #tab-address .concept-table tbody tr.mc-zebra-b, #tab-elecparts .concept-table tbody tr.mc-zebra-b { background-color: ' + gen.zebraB + ' !important; }\n';
+        + '.concept-table th, .concept-table td, #myTable th, #myTable td { border-color: ' + gen.border + ' !important; }\n';
+
+    // 💡 [2026-08-30] 탭마다 "sticky 헤더는 별도로 재선언해야 함" 패턴이 반복돼서(각 탭 .concept-table
+    // thead th에 #tab-XXX 접두사가 붙은 !important 규칙이 따로 있음 — 스크롤 시 헤더 고정을 위해),
+    // 그 전체 목록을 여기 한 곳에 모아 전부 덮어쓴다. 하나라도 빠지면 그 탭만 색이 안 바뀜.
+    const headerSelectors = [
+        '.concept-table th', '#myTable th', '#tab-notice thead th',
+        '#tab-address .concept-table thead th', '#tab-summary .concept-table thead th',
+        '#tab-briefspec .concept-table thead th', '#tab-elecparts .concept-table thead th',
+        '#tab-mctable .concept-table thead th', '#mc-comparison-table thead th'
+    ];
+    css += headerSelectors.join(', ') + ' { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; }\n';
+
+    const zebraBSelectors = [
+        '#tab-alarm .concept-table tbody tr.mc-zebra-b',
+        '#tab-address .concept-table tbody tr.mc-zebra-b', '#tab-address .concept-table tbody tr.mc-zebra-b input',
+        '#tab-elecparts .concept-table tbody tr.mc-zebra-b',
+        '#tab-mctable .concept-table tbody tr.mc-zebra-b', '#tab-mctable .concept-table tbody tr.mc-zebra-b input',
+        '#tab-briefspec .concept-table tbody tr.mc-zebra-b', '#tab-briefspec .concept-table tbody tr.mc-zebra-b input'
+    ];
+    css += zebraBSelectors.join(', ') + ' { background-color: ' + gen.zebraB + ' !important; }\n';
+    css += '#myTable tbody tr.gantt-zebra-b td { background: ' + gen.zebraB + ' !important; }\n'
+        + '.concept-add-row-btn, .gantt-filter-trigger-btn:not(.filter-active) { background: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '.concept-add-row-btn:hover, .gantt-filter-trigger-btn:not(.filter-active):hover, #gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover, #print-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
@@ -23627,12 +23642,31 @@ window._cpApplyLive = function(hex) {
     if (!styleTag) { styleTag = document.createElement('style'); styleTag.id = 'cp-live-style'; }
     document.body.appendChild(styleTag);
     styleTag.textContent = css;
+
+    // 🐛 [버그 수정] 이 두 트리거 버튼은 인라인 style에 직접 !important가 박혀 있어서(HTML 원본에
+    // style="background:#e0f5f7 !important; ..."), 어떤 <style> 규칙도(설령 !important를 걸어도)
+    // 인라인 !important보다 우선순위가 낮아 절대 못 이긴다 — 요소를 직접 찾아 스타일 자체를 새로 써야 함.
+    ['gantt-filter-trigger-cal-wbs', 'gantt-filter-trigger-wr-wbs'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el || el.classList.contains('filter-active')) return; // 필터 활성 상태는 별도 파란 계열이라 건드리지 않음
+        el.style.setProperty('background', gen.bg, 'important');
+        el.style.setProperty('border-color', gen.hoverBg, 'important');
+        el.style.setProperty('color', gen.darkText, 'important');
+    });
+
     window._cpLiveAppliedHex = hex;
     window._cpUpdateApplyStatus();
 };
 window._cpRevertLive = function() {
     const styleTag = document.getElementById('cp-live-style');
     if (styleTag) styleTag.textContent = '';
+    ['gantt-filter-trigger-cal-wbs', 'gantt-filter-trigger-wr-wbs'].forEach(function(id) {
+        const el = document.getElementById(id);
+        if (!el || el.classList.contains('filter-active')) return;
+        el.style.setProperty('background', '#e0f5f7', 'important');
+        el.style.setProperty('border-color', '#a3d9e0', 'important');
+        el.style.setProperty('color', '#00707d', 'important');
+    });
     window._cpLiveAppliedHex = null;
     window._cpUpdateApplyStatus();
 };
@@ -23649,7 +23683,6 @@ window._cpUpdateApplyStatus = function() {
 };
 
 window.openColorPaletteModal = function() {
-    window._cpRenderCurrent();
     document.getElementById('cp-preset-swatches').innerHTML = window.CP_PRESETS.map(hex =>
         '<div onclick="window._cpRenderPreview(\'' + hex + '\'); window._cpApplyLive(\'' + hex + '\');" title="' + hex + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>'
     ).join('');
