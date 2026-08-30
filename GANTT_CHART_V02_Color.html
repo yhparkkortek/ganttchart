@@ -619,6 +619,10 @@
    고정 하늘색(#cfe6fa)이라 테마가 안 먹혔음 — 호버만 "펼치기"(.concept-add-row-btn)와 같은
    테마색으로 통일(평소 색은 다른 액션 버튼과 통일감 있게 그대로 유지). */
 .ep-theme-hover-btn:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
+/* 💡 [2026-08-30 신규] 시트 탭(프로젝트 탭) 닫기(✕) 호버가 삭제 계열 고정 빨강이었음 — 탭을 닫는 건
+   프로젝트 데이터를 지우는 게 아니라 "일단 화면에서 치우는" 동작(저장 여부는 따로 물어봄)이라
+   위험(삭제) 액션으로 볼 필요가 없어서, 다른 닫기(✕) 버튼들처럼 테마색으로 통일. */
+.sheet-tab-close-btn:hover { background-color:#a3d9e0; color:#00707d; }
 /* 💡 [2026-08-30 신규] 현재 프로젝트 파일명(📄 xxx.json) 표시 — 예전엔 onmouseover/onmouseout으로
    청록 고정색(rgba(0,113,125,0.12))을 직접 칠했는데, 그러면 _cpApplyLive의 !important 규칙이
    있어도 JS가 매번 다시 덮어써서 테마가 안 먹혔음. CSS :hover로 바꿔서 _cpApplyLive가 이길 수
@@ -4890,9 +4894,7 @@ ${mailText}`;
                        background:${bg}; color:${_cpHexFor('darkText', sheetThemeHex)}; font-weight:${active ? 'bold' : 'normal'};
                        border:1px solid ${border}; border-bottom:1px solid ${bg}; margin-bottom:-1px;">
                 <span style="overflow:hidden; text-overflow:ellipsis; max-width:${labelW}px;">📄 ${escapeHtml(label)}</span>
-                <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');"
-                    onmouseover="event.stopPropagation(); this.style.background='#fbe4e2'; this.style.color='#b1432f';"
-                    onmouseout="this.style.background='transparent'; this.style.color='#7a97ae';"
+                <span onclick="event.stopPropagation(); window.closeSheet('${s.key}');" class="sheet-tab-close-btn"
                     style="color:#7a97ae; background:transparent; border-radius:4px; padding:0 3px; font-size:13px; line-height:1.4; flex-shrink:0; transition:background .15s, color .15s;">✕</span>
             </div>`;
         }).join('') + `<div onclick="window.selectProject()" title="새 시트로 프로젝트 열기"
@@ -24437,6 +24439,26 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.cal-weekday-row > div:last-child { color: ' + gen.darkText + ' !important; }\n'
         + '.cal-day-cell.cal-weekend-sat .cal-day-num { color: ' + gen.darkText + ' !important; }\n'
         + '.cal-grid-wrap { border-color: ' + gen.border + ' !important; }\n'
+        // 🐛 [2026-08-30 버그 수정] "달력 년월 표시/요일 셀/도표 색상이 계속 회색으로 박혀서 테마가
+        // 안 바뀐다"는 반복된 지적 — 원인은 그동안 "파란색만"/"이번주·이번달만" 같은 좁은 범위로만
+        // 하나씩 고쳐와서, 정작 (1) 현재 달이 아닌 다른 달들의 "OOOO년 O월" 제목(.cal-month-title,
+        // 이번달만 compGen으로 덮여 있었음), (2) 요일 헤더 줄의 배경/밑줄과 월~금 글자색,
+        // (3) 날짜 칸 사이 구분선(.cal-day-cell 테두리)은 그동안 단 한 번도 테마 규칙에 안 들어가
+        // 있었다 — 항상 정적 회색(#f4f6f8/#e3e6ea/#555/#eee)이었던 것. 이번에 전부 포함시킨다.
+        + '.cal-month-title { color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-weekday-row { background: ' + gen.headerTint + ' !important; }\n'
+        + '.cal-weekday-row > div { border-bottom-color: ' + gen.border + ' !important; }\n'
+        // 🐛 [2026-08-30 주의] 위 규칙에 color까지 같이 넣으면 !important끼리는 특이도와 무관하게
+        // "이 rule이 이겨야 하는" :first-child(일요일 빨강, 아래 static 규칙엔 !important가 없음)
+        // 보다 이 규칙이 우선해버려 일요일까지 테마색으로 덮어써 버린다 — 월~금(5칸)만 콕 집어서
+        // 적용해 일요일 빨강/토요일 테마색(위에서 이미 처리) 둘 다 안전하게 유지한다.
+        + '.cal-weekday-row > div:not(:first-child):not(:last-child) { color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-day-cell { border-color: ' + gen.border + ' !important; }\n'
+        // 💡 [2026-08-30 추가] 월/주 토글(.cal-view-toggle) 바깥 테두리도 옛 고정 하늘색이었음.
+        + '.cal-view-toggle { border-color: ' + gen.hoverBg + ' !important; }\n'
+        // 💡 [2026-08-30 추가] 시트 탭 닫기(✕) 호버도 위 .sheet-tab-close-btn 정적 기본값과 동일하게
+        // 테마 추적(삭제/위험 액션이 아니므로 다른 닫기 버튼들처럼 테마색을 따름).
+        + '.sheet-tab-close-btn:hover { background-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         // 💡 [2026-08-30 추가] "핀셋 알람"/"이번달·이번주 강조"는 테마색이 아니라 그 보색(위 compGen)으로
         // — 업무 상자(테마색)와는 확실히 구분되면서, 어떤 테마를 고르든 항상 대비되는 색이 나오게 함.
         + '.cal-event-chip.cal-alarm-on { background: ' + compGen.headerTint + ' !important; border-left-color: ' + compGen.hoverBorder + ' !important; color: ' + compGen.darkText + ' !important; }\n'
