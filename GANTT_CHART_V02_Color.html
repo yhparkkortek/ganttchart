@@ -23676,8 +23676,14 @@ window._cpApplyLive = function(hex, skipSave) {
     // 오버라이드(위 gantt-zebra-b 규칙)가 동일 특이도로 "더 나중에" 끼어들면서 도로 덮어써 알람 표시가
     // 테마색에 가려 안 보이게 됐다. 알람 표시는 청록/보라 등 테마와 무관한 고정 상태색이므로(M.C Table
     // MVD/R1/VS처럼) 절대 안 바뀌어야 함 — 이 오버라이드 블록 "맨 끝"에 원래 색을 다시 선언해 항상 이기게 함.
-    css += '#myTable tbody tr.alarm-on td { background-color: #e3f2fd !important; }\n'
-        + '#myTable tbody tr.alarm-on td:first-child { box-shadow: inset 3px 0 0 0 #4285f4 !important; }\n';
+    // 💡 [2026-08-30 추가] 다만 고른 테마 색상 자체가 파란 계열(hue 195~235°, "파랑" 프리셋 #2c5f8a 등)이면
+    // 알람의 고정 파랑(#e3f2fd/#4285f4)과 색이 너무 비슷해져서 오히려 안 보인다는 지적 — 이 구간에서만
+    // 예외로 빨간 파스텔로 바꿔서 어떤 테마를 골라도 항상 눈에 띄게 한다.
+    const isBlueTheme = hue >= 195 && hue <= 235;
+    const alarmBg = isBlueTheme ? '#fbe4e2' : '#e3f2fd';
+    const alarmAccent = isBlueTheme ? '#e03131' : '#4285f4';
+    css += '#myTable tbody tr.alarm-on td { background-color: ' + alarmBg + ' !important; }\n'
+        + '#myTable tbody tr.alarm-on td:first-child { box-shadow: inset 3px 0 0 0 ' + alarmAccent + ' !important; }\n';
 
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
