@@ -40,7 +40,7 @@
         --badge-text: #0f5132;
         --badge-border: #badbcc;
         --today-line: rgba(224, 49, 49, 0.9); 
-        --trans-text: #0056b3; 
+        --trans-text: #00707d; /* 💡 [2026-08-30 수정] 번역 결과 글자색 — 정적 기본값 teal, 라이브 테마일 땐 _cpApplyLive가 덮어씀(document.documentElement.style.setProperty) */
 
         --w-no: 45px;        /* No 열 */
         --w-date: 60px;       /* 시작일, 완료일 열 */
@@ -513,9 +513,10 @@
         color: var(--trans-text) !important;
     }
 
-    /* 번역 버튼(🌐) 아이콘 — 기본은 파란색, "완료" 행에서만 20% 회색으로 예외 적용 */
+    /* 💡 [2026-08-30 수정] 번역 버튼(🌐) 아이콘 — 예전엔 원색 파랑(#0056b3) 고정이었음(정적 기본값은
+       teal로, 라이브 테마일 땐 _cpApplyLive가 덮어씀). "완료" 행에서만 20% 회색으로 예외 적용은 그대로 유지. */
     .trans-btn-hide-print {
-        color: #0056b3;
+        color: #00707d;
     }
     #myTable tbody tr.status-done .trans-btn-hide-print {
         color: rgba(0, 0, 0, 0.2) !important;
@@ -24506,6 +24507,11 @@ window._cpApplyLive = function(hex, skipSave) {
     css += '#myTable tbody tr.alarm-on td { background-color: ' + alarmBg + ' !important; }\n'
         + '#myTable tbody tr.alarm-on td:first-child { box-shadow: inset 3px 0 0 0 ' + alarmAccent + ' !important; }\n';
 
+    // 💡 [2026-08-30 추가] 셀 안 번역(🌐) 버튼/번역 결과 글자색이 옛 고정 파랑(#0056b3)이었음 —
+    // "완료" 행에서만 회색으로 바뀌는 예외는 더 구체적인 선택자라 그대로 유지됨.
+    css += '.trans-btn-hide-print { color: ' + gen.darkText + ' !important; }\n';
+    document.documentElement.style.setProperty('--trans-text', gen.darkText);
+
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
     //    문서 전체에서 가장 마지막 스타일이 되도록 보장한다(매번 다시 appendChild해서 위치 유지).
@@ -24641,6 +24647,9 @@ window._cpRevertLive = function() {
         el.style.setProperty('border-color', '#a3d9e0', 'important');
         el.style.setProperty('color', '#00707d', 'important');
     });
+    // 💡 --trans-text는 <style id="cp-live-style"> 안이 아니라 documentElement 인라인으로 직접 설정하므로
+    // (CSS 커스텀 프로퍼티라 !important 규칙으로는 못 지움), 되돌리기 시 여기서도 같이 teal 기본값으로 되돌려야 함.
+    document.documentElement.style.setProperty('--trans-text', '#00707d');
     window._cpLiveAppliedHex = null;
     window._cpUpdateApplyStatus();
     if (window._cpMarkRevertedForSave) window._cpMarkRevertedForSave();
