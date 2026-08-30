@@ -9673,7 +9673,7 @@ window.deleteHistoryByDateRange = function() {
     window.showHistoryModal = function() {
         let content = document.getElementById('history-content');
         if (!window.changeLogs || window.changeLogs.length === 0) {
-            alert(window._t(`✅ "${baseline.label}" 계획으로 ${Object.keys(rows).length}건의 시작일·완료일을 저장했습니다.`, `✅ Saved ${Object.keys(rows).length} start/end dates as plan "${baseline.label}".`));
+            content.innerHTML = '<div style="padding:10px; color:#999;">' + window._t('수정 이력이 없습니다.', 'No change history.') + '</div>';
         } else {
             let html = `
                 <table class="history-table">
