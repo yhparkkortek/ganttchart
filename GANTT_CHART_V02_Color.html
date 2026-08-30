@@ -956,8 +956,8 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     border:2px solid #fff; border-radius:50%; transform:translate(50%,-50%); box-shadow:0 1px 2px rgba(0,0,0,0.3);
 }
 .cal-day-cell-tall .cal-dur-bar { top:34px; height:8px; }
-.cal-day-popup-item { padding:8px 10px; border:1px solid #cfe3e5; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; }
-.cal-day-popup-item:hover { border-color:#2c5f8a; }
+.cal-day-popup-item { padding:8px 10px; border:1px solid #cfe3e5; border-radius:4px; margin-bottom:6px; font-size:12.5px; cursor:pointer; transition:background .15s, border-color .15s; }
+.cal-day-popup-item:hover { background:#eef6f7; border-color:#52a5af; }
 .cal-day-popup-item.cal-alarm-on { background:#fff3cd; border-color:#ffe08a; }
 tr.alarm-on > td { background-color: #e8f4fd !important; }
 tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
@@ -23849,6 +23849,13 @@ window._cpApplyLive = function(hex, skipSave) {
     const nav = window.CP_CURRENT_NAV;
     const genNav = window._cpComputeGenNav(hue);
 
+    // 💡 [2026-08-30 신규] Calendar 페이지의 "핀셋 알람"/"이번달·이번주 강조"는 테마색 그 자체가 아니라
+    // 색상환 반대편(보색, hue+180°)으로 강조되도록 요청받음 — 같은 CP_ROLES 공식(S/L 고정, hue만 교체)을
+    // 보색 hue에 적용해서, 어떤 테마를 고르든 항상 "테마와 대비되는" 파스텔 강조색이 자동으로 나오게 한다.
+    const compHue = (hue + 180) % 360;
+    const compGen = {};
+    window.CP_ROLES.forEach(r => { compGen[r.key] = window._cpHslToHex(compHue, r.s, r.l); });
+
     const logoHsl = window._cpHexToHsl('#00a1b6');
     const genLogo = window._cpHslToHex(hue, logoHsl.s, logoHsl.l);
 
@@ -23972,7 +23979,25 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.cal-view-btn { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.cal-view-btn:not(.cal-view-btn-active):hover { background: ' + gen.hoverBg + ' !important; }\n'
         + '.cal-view-btn.cal-view-btn-active { background: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
-        + '.cal-view-btn + .cal-view-btn { border-left-color: ' + gen.hoverBg + ' !important; }\n';
+        + '.cal-view-btn + .cal-view-btn { border-left-color: ' + gen.hoverBg + ' !important; }\n'
+        // 💡 [2026-08-30 추가] 달력 칸 안의 업무 상자(.cal-event-chip, 기본/오늘 표시)가 옛 고정 파랑이라
+        // 테마가 안 먹혔음 — 일반 업무 상자와 "오늘" 표시는 현재 테마색을 그대로 따르도록 편입.
+        + '.cal-event-chip { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; border-left-color: ' + gen.hoverBorder + ' !important; }\n'
+        + '.cal-event-chip:hover { background: ' + gen.hoverBg + ' !important; }\n'
+        + '.cal-event-chip.cal-selected { background: ' + gen.darkText + ' !important; border-left-color: ' + gen.darkText + ' !important; }\n'
+        + '.cal-day-cell.cal-today { background: ' + gen.bg + ' !important; }\n'
+        + '.cal-day-cell.cal-today .cal-day-num { background: ' + gen.darkText + ' !important; color: #fff !important; }\n'
+        // 💡 [2026-08-30 추가] "핀셋 알람"/"이번달·이번주 강조"는 테마색이 아니라 그 보색(위 compGen)으로
+        // — 업무 상자(테마색)와는 확실히 구분되면서, 어떤 테마를 고르든 항상 대비되는 색이 나오게 함.
+        + '.cal-event-chip.cal-alarm-on { background: ' + compGen.headerTint + ' !important; border-left-color: ' + compGen.hoverBorder + ' !important; color: ' + compGen.darkText + ' !important; }\n'
+        + '.cal-month-block.cal-month-current { background: ' + compGen.headerTint + ' !important; outline-color: ' + compGen.hoverBorder + ' !important; }\n'
+        + '.cal-month-block.cal-month-current .cal-month-title { color: ' + compGen.darkText + ' !important; }\n'
+        // 💡 [2026-08-30 추가] 날짜 클릭 시 뜨는 "업무 목록" 팝업의 각 항목도 파스텔 호버(테두리+배경 채우기)
+        // 적용 — 라벨 박스 호버와 동일한 규칙. 핀셋 알람 항목은 위 그리드 칩과 통일해서 보색 사용.
+        + '.cal-day-popup-item { border-color: ' + gen.border + ' !important; }\n'
+        + '.cal-day-popup-item:hover { background: ' + gen.headerTint + ' !important; border-color: ' + gen.hoverBorder + ' !important; }\n'
+        + '.cal-day-popup-item.cal-alarm-on { background: ' + compGen.headerTint + ' !important; border-color: ' + compGen.hoverBorder + ' !important; }\n'
+        + '.cal-day-popup-item.cal-alarm-on:hover { background: ' + compGen.hoverBg + ' !important; }\n';
 
     // 🐛 [버그 수정] "핀셋(알람 켜짐)" 행 파란 하이라이트(tr.alarm-on, #e3f2fd + 좌측 파란 선)가 지브라
     // 줄무늬보다 항상 위에 오도록 원래 코드에서 이미 한 번 재선언까지 해뒀는데, 지금 라이브 테마
@@ -32764,7 +32789,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
         title.textContent = '📋 ' + ev.name;
         body.innerHTML =
             '<div style="margin-bottom:10px;">'
-            + '<button onclick="window.calShowDayPopup(\'' + dateKey + '\')" style="font-size:11.5px; padding:3px 10px; border:1px solid #2c5f8a; border-radius:4px; background:#fff; color:#2c5f8a; cursor:pointer;">◀ 목록으로</button>'
+            + '<button onclick="window.calShowDayPopup(\'' + dateKey + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="font-size:11.5px; padding:3px 10px; border:1px solid #a5c8f0; border-radius:4px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; transition:background .15s, border-color .15s;">◀ 목록으로</button>'
             + '</div>'
             + '<div style="margin-bottom:8px; font-size:12px; color:#777;">'
             + '📅 ' + wrFormatMD(ev.start) + ' ~ ' + wrFormatMD(ev.end)
@@ -32773,7 +32798,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
             + '</div>'
             + (contentText ? '<div style="font-size:12px; white-space:pre-line; line-height:1.5; margin-bottom:6px;">' + escapeHtml(contentText) + '</div>' : '')
             + (!contentText ? '<div style="color:#aaa; padding:24px; text-align:center; font-size:12px;">상세 내용 없음</div>' : '')
-            + (row._mailRaw ? '<button onclick="window.showGanttMailRaw(' + ev.idx + '); event.stopPropagation();" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer;">📧 ' + (window._currentLang === 'en' ? 'View Mail Source' : '원문 보기') + '</button>' : '');
+            + (row._mailRaw ? '<button onclick="window.showGanttMailRaw(' + ev.idx + '); event.stopPropagation();" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e7f3ff\'; this.style.borderColor=\'#a5c8f0\';" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; transition:background .15s, border-color .15s;">📧 ' + (window._currentLang === 'en' ? 'Original' : '원본') + '</button>' : '');
     } else {
         // 날짜 숫자 클릭 → 업무 목록을 버튼으로 표시
         const events = allEvents.filter(function(ev) {
