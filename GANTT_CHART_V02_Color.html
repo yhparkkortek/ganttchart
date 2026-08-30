@@ -814,6 +814,10 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 /* 💡 마일스톤 날짜칸 — 직접 입력 + 옆의 📅 아이콘(달력) 둘 다 쓸 수 있도록, input을 살짝 줄여서
    아이콘이 같은 줄에 들어갈 자리를 남겨둔다(td의 display를 안 건드려서 표 컬럼 정렬에 영향 없음) */
 #sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { width: calc(100% - 16px); box-sizing: border-box; }
+/* 💡 [2026-08-30] 이 칸들은 지금까지 테두리를 따로 정한 적이 없어 브라우저 기본(회색) 테두리 그대로였음
+   — 다른 입력칸들과 통일되게 청록 테두리 지정(팔레트로 다른 색 적용 시 같이 바뀌도록 [style*=...] 매칭
+   대상은 아니라 여기 직접 #cfe3e5로 지정 — 실제 적용 시엔 별도 오버라이드가 이 값도 같이 덮어씀) */
+#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { border: 1px solid #cfe3e5; border-radius: 4px; }
 .ms-cal-btn { display: inline-block; width: 13px; cursor: pointer; font-size: 11px; vertical-align: middle; }
 
 /* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
@@ -1899,7 +1903,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     <div id="sum-member3-col-b" class="concept-grid" style="grid-template-columns:140px 1fr 1fr; row-gap:10px; column-gap:12px;"></div>
                 </div>
             </div>
-            <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" onmouseover="this.style.background='#e8f4fd';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 인원 추가</button>
+            <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="major-materials-section">
             <h3><span id="sum-h3-materials">주요 자재</span> <span style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용 · 체크박스는 &quot;분석용&quot;, 그 옆 － 버튼은 자유추가 행 삭제)</span></h3>
@@ -1933,7 +1937,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     </table>
                 </div>
             </div>
-            <button id="sum-add-material-btn" type="button" onclick="window.addMaterialRow()" onmouseover="this.style.background='#e8f4fd';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #2c5f8a; color:#2c5f8a; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 자재 추가</button>
+            <button id="sum-add-material-btn" type="button" onclick="window.addMaterialRow()" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 자재 추가</button>
         </div>
         <div class="concept-section" id="product-images-section">
             <h3><span id="sum-h3-photo">제품 사진</span> <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
@@ -17072,13 +17076,13 @@ window.updateInboxBadge();
     .rap-btn {
         width: 33px; height: 33px; padding: 0; margin: 0; line-height: 1; box-sizing: border-box;
         display: flex; align-items: center; justify-content: center;
-        border: 1.5px solid #2c5f8a; border-radius: 6px; background: #fff; color: #2c5f8a;
+        border: 1px solid #a5c8f0; border-radius: 6px; background: #e8f4fd; color: #1a4f7a;
         font-size: 18px;
         cursor: pointer; user-select: none; -webkit-user-select: none; transition: 0.15s;
     }
-    .rap-btn:hover { background: #2c5f8a; color: #fff; }
-    .rap-btn-danger { border-color: #e03131; color: #e03131; }
-    .rap-btn-danger:hover { background: #e03131; color: #fff; }
+    .rap-btn:hover { background: #cfe6fa; border-color: #7fb0dd; }
+    .rap-btn-danger { border-color: #eeb0ac; background: #fbe4e2; color: #b1432f; }
+    .rap-btn-danger:hover { background: #f5c2bd; border-color: #e08f87; }
     
     /* 행 액션 팝업 */
     .row-action-popup {
@@ -23580,11 +23584,24 @@ window._cpApplyLive = function(hex) {
     const textRoles = [[window.CP_CURRENT_TEAL.darkText, gen.darkText], [nav.text, genNav.text]];
 
     let css = '';
+    // 💡 [2026-08-30] .concept-section(서브 카드 박스 전부의 공용 클래스)의 기본 테두리(#cfe3e5, border
+    // 역할)는 클래스 규칙이라 인라인 매칭으로는 안 잡힘 — 각 페이지의 "프로젝트 멤버/주요자재/제품 사진"
+    // 등 흰 카드 테두리가 전부 이걸 씀. 반드시 아래 배경/테두리 속성-매칭 규칙들보다 "먼저" 선언해서,
+    // 바깥쪽 큰 박스처럼 인라인으로 다른 테두리색(hoverBg 역할)을 따로 가진 경우엔 나중에 나오는
+    // 더 구체적인 규칙이 이걸 덮어쓰도록 순서를 지킨다(동일 특이도라 나중 규칙이 이김).
+    css += '.concept-section { border-color: ' + gen.border + ' !important; }\n'
+        + '.concept-grid input, .concept-grid textarea { border-color: ' + gen.border + ' !important; }\n'
+        + '#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { border-color: ' + gen.border + ' !important; }\n'
+        // 💡 페이지 제목 옆 액션 버튼들(.action-btn: 인쇄/펼치기/MVD/R1/VS 등) 공용 호버가 옛날 원색
+        // 파랑(#2c5f8a)으로 박혀 있어서 페이지마다 "제목 버튼 호버만 테마 미적용"으로 보였던 부분.
+        + '.action-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '.prod-img-slot { border-color: ' + gen.hoverBg + ' !important; background: ' + gen.headerTint + ' !important; }\n'
+        + '.prod-img-slot:hover { border-color: ' + gen.hoverBorder + ' !important; }\n';
     bgRoles.forEach(function(p) {
         css += '[style*="background:' + p[0] + '"], [style*="background: ' + p[0] + '"], [style*="background-color:' + p[0] + '"], [style*="background-color: ' + p[0] + '"] { background-color: ' + p[1] + ' !important; }\n';
     });
     borderRoles.forEach(function(p) {
-        css += '[style*="border-color:' + p[0] + '"], [style*="border-color: ' + p[0] + '"], [style*="solid ' + p[0] + '"] { border-color: ' + p[1] + ' !important; }\n';
+        css += '[style*="border-color:' + p[0] + '"], [style*="border-color: ' + p[0] + '"], [style*="solid ' + p[0] + '"], [style*="dashed ' + p[0] + '"], [style*="dotted ' + p[0] + '"] { border-color: ' + p[1] + ' !important; }\n';
     });
     textRoles.forEach(function(p) {
         // 💡 " color:HEX"(앞에 공백)만 매치 — "background-color:"/"border-color:"는 "color:" 앞에
@@ -23608,8 +23625,8 @@ window._cpApplyLive = function(hex) {
         + '.topbar-btn { color: ' + genNav.text + ' !important; }\n'
         + '.topbar-btn:hover { background: ' + genNav.hover + ' !important; }\n'
         + '#app-topbar .tb-logo { background-color: ' + genLogo + ' !important; }\n'
-        + '.concept-header-box, .concept-header-box h2 { color: ' + gen.darkText + ' !important; }\n'
-        + '.concept-header-box { background-color: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; }\n'
+        + '.concept-header-box, .concept-header-box h2, #table-info, #table-info-text { color: ' + gen.darkText + ' !important; }\n'
+        + '.concept-header-box, #table-info { background-color: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; }\n'
         + '.concept-table th, .concept-table td, #myTable th, #myTable td { border-color: ' + gen.border + ' !important; }\n';
 
     // 💡 [2026-08-30] 탭마다 "sticky 헤더는 별도로 재선언해야 함" 패턴이 반복돼서(각 탭 .concept-table
@@ -26850,9 +26867,9 @@ window.renderPanelCompareTab = async function() {
             headHtml += `<th style="min-width:120px;">
                 <a href="${url}" target="_blank" rel="noopener" title="${_en ? 'Open panelook.com search results' : 'panelook.com 검색결과 열기'}" style="color:#2c5f8a; text-decoration:underline; font-weight:bold; word-break:break-all;">${escapeHtml(m)}</a>
                 <div style="margin-top:3px; display:flex; gap:5px; justify-content:center; align-items:center; flex-wrap:wrap;">
-                    ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2f9e44; font-size:10px; cursor:pointer; padding:1px 5px;">✏️</button>` : ''}
-                    <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
-                    <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
+                    ${has ? `<button data-pc-edit="${escapeHtml(m)}" title="${_en ? 'Edit spec / rename' : '스펙 수정 / 이름 변경'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">✏️</button>` : ''}
+                    <button data-pc-reextract="${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🔄</button>
+                    <button data-pc-remove="${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🗑</button>
                     ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
                 </div>
             </th>`;
@@ -27883,9 +27900,9 @@ window.renderElecCompareTab = async function(type) {
             headHtml += `<th style="min-width:130px;">
                 <span style="color:#2c5f8a; font-weight:bold; word-break:break-all;">${escapeHtml(displayName)}</span>
                 <div style="margin-top:3px; display:flex; gap:5px; justify-content:center; align-items:center; flex-wrap:wrap;">
-                    ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2f9e44; font-size:10px; cursor:pointer; padding:1px 5px;">✏️</button>` : ''}
-                    <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#2c5f8a; font-size:10px; cursor:pointer; padding:1px 5px;">🔄</button>
-                    <button data-ep-remove="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" style="background:#fff; border:1px solid #ced4da; border-radius:3px; color:#e03131; font-size:10px; cursor:pointer; padding:1px 5px;">🗑</button>
+                    ${has ? `<button data-ep-edit="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Edit spec' : '스펙 수정'}" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="background:#fbead9; border:1px solid #edbf85; border-radius:3px; color:#a85d0a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">✏️</button>` : ''}
+                    <button data-ep-reextract="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Re-extract / refresh' : '다시 추출/갱신'}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:3px; color:#1a4f7a; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🔄</button>
+                    <button data-ep-remove="${escapeHtml(type)}|${escapeHtml(m)}" title="${_en ? 'Remove from this comparison' : '이 프로젝트에서 제거'}" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="background:#fbe4e2; border:1px solid #eeb0ac; border-radius:3px; color:#b1432f; font-size:10px; cursor:pointer; padding:1px 5px; transition:background .15s, border-color .15s;">🗑</button>
                     ${!has ? `<span style="font-size:9.5px; color:#e67e22; font-weight:bold; white-space:nowrap;">⚠ ${_en ? 'Not extracted' : '미추출'}</span>` : ''}
                 </div>
             </th>`;
