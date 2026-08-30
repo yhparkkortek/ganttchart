@@ -7949,7 +7949,15 @@ ${recentLogs}
         const rep = function(str, token, value) {
             return str.split(token).join(String(value));
         };
+        // 🐛 [2026-08-31 버그 수정] "프롬프트에 ${todayDate}를 넣었는데 반영이 안 된다" — 원래 이 프롬프트
+        // (AI 요약)에는 오늘 날짜를 알려주는 기능 자체가 없었다(AI 문답 쪽 프롬프트에만 있었음). 그래서
+        // 사용자가 직접 프롬프트를 고쳐 "${todayDate}" 자리를 만들어도, 아래 rep() 목록에 그 토큰이
+        // 없어서 치환되지 않고 "${todayDate}"라는 글자 그대로 AI에게 전달되고 있었다 — AI가 "기간 집중
+        // 분석"을 하려 해도 기준일 자체를 모르니 제대로 판단할 수 없었을 것이다. 이제 이 프롬프트도
+        // 오늘 날짜를 지원한다.
+        const todayDate = (function() { const t = new Date(); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); })();
         let result = template;
+        result = rep(result, '${todayDate}', todayDate);
         result = rep(result, '${customer}', d.project.customer || '');
         result = rep(result, '${model}', d.project.model || '');
         result = rep(result, '${pm}', d.project.pm || '미지정');
@@ -7989,6 +7997,13 @@ ${recentLogs}
             window.projectMeta.aiSummaryReport = {
                 신호등: parsed.신호등 || '🟡',
                 총평: parsed.총평 || '',
+                // 🐛 [2026-08-31 버그 수정] "프롬프트에 '업무 요약' 항목을 추가했는데 안 나온다" — 원래
+                // 이 앱의 JSON 응답 형식은 4개 키(신호등/총평/리스크/액션추천)만 읽도록 고정되어 있어서,
+                // 사용자가 프롬프트를 고쳐 AI에게 "업무 요약"이라는 5번째 항목을 추가로 요청해도 AI가
+                // 실제로 그 내용을 응답에 포함시켰든 안 시켰든 여기서 아예 안 읽고 버리고 있었다(다른
+                // 필드처럼 파싱해서 저장해야 화면에도 그려짐). 커스텀 프롬프트가 없는 사람에겐 이 키가
+                // 원래 없으므로 빈 배열로 저장되고, 그 경우 아래 렌더링에서 이 섹션 자체가 안 보인다.
+                업무요약: Array.isArray(parsed['업무 요약']) ? parsed['업무 요약'] : [],
                 리스크: Array.isArray(parsed.리스크) ? parsed.리스크 : [],
                 액션추천: Array.isArray(parsed.액션추천) ? parsed.액션추천 : [],
                 generatedAt: new Date().toISOString(),
@@ -8023,6 +8038,13 @@ ${recentLogs}
         const actionHtml = (r.액션추천 && r.액션추천.length)
             ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.액션추천.map(function(x) { return `<li style="margin-bottom:4px;">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul>'
             : '<div style="color:#999; font-size:12px;">추천 액션이 없습니다.</div>';
+        // 💡 [2026-08-31 신규] "업무 요약" — 기본 프롬프트엔 없는 선택적 항목이라, 커스텀 프롬프트를
+        // 안 쓰는 사람에겐 이 값이 항상 빈 배열이다. 그런 경우 리스크/액션추천처럼 "없습니다" 문구를
+        // 굳이 보여주지 않고 섹션 자체를 통째로 생략한다(안 쓰는 기능이 빈 칸으로 계속 보이면 어색함).
+        const taskSummaryHtml = (r.업무요약 && r.업무요약.length)
+            ? '<div style="margin-bottom:14px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">📋 업무 요약</div>'
+                + '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.업무요약.map(function(x) { return `<li style="margin-bottom:4px;">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul></div>'
+            : '';
 
         body.innerHTML = `
         <div id="ai-summary-report-content">
@@ -8037,6 +8059,7 @@ ${recentLogs}
                 <div style="padding:8px; background:#fff8e6; border-radius:6px;"><b style="font-size:16px; color:#b85c00;">${d.counts.대기 || 0}</b><br>대기</div>
                 <div style="padding:8px; background:#ffe3e3; border-radius:6px;"><b style="font-size:16px; color:#e03131;">${d.counts.지연 || 0}</b><br>지연</div>
             </div>
+            ${taskSummaryHtml}
             <div style="margin-bottom:14px;">
                 <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">⚠️ 주요 리스크</div>
                 ${riskHtml}
