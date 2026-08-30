@@ -3307,7 +3307,8 @@ ${mailText}`;
             const backupName = '백업_' + (baseName || 'GanttChart').replace(/\.json$/i, '') + '_' + ts + '.json';
 
             const boundary = 'backup_boundary';
-            const metadata = { name: backupName, mimeType: 'application/json', parents: [folderId] };
+            // 💡 [2026-08-30 신규] 복원 목록에서도 저장된 테마 색을 바로 보여주기 위해 appProperties에 같이 태움.
+            const metadata = { name: backupName, mimeType: 'application/json', parents: [folderId], appProperties: { themeColor: (saveData && saveData.tabData && saveData.tabData.themeColor) || '' } };
             const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
                 + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
                 + "\r\n--" + boundary + "--";
@@ -4214,7 +4215,10 @@ ${mailText}`;
             // 💡 [2026-08-29 신규] completed appProperty — "프로젝트 불러오기" 목록이 파일 내용을 통째로
             //    안 받고도(가벼운 메타데이터 조회만으로) 완료된 프로젝트를 구분 표시할 수 있게, pm과 같은
             //    방식으로 완료 여부도 같이 태운다. Drive appProperties 값은 문자열만 허용되므로 '1'/''로 기록.
-            let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '', completed: (window.projectMeta || {}).완료여부 === '완료' ? '1' : '' } };
+            // 💡 [2026-08-30 신규] themeColor도 appProperties에 같이 태운다 — "프로젝트 열기/삭제/복원"
+            // 목록이 파일 내용을 통째로 안 받아도(가벼운 메타데이터 조회만으로) 그 프로젝트의 저장된
+            // 테마 색을 바로 알 수 있게 하기 위함(showDriveFileModal/showBackupFileModal에서 사용).
+            let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '', completed: (window.projectMeta || {}).완료여부 === '완료' ? '1' : '', themeColor: (window.tabData || {}).themeColor || '' } };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
 
             let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
@@ -4350,7 +4354,7 @@ ${mailText}`;
             const folderId = await window.getOrCreateBackupFolder(token);
             let response = await gapi.client.drive.files.list({
                 q: `mimeType='application/json' and trashed=false and '${folderId}' in parents`,
-                fields: 'files(id, name, createdTime)', orderBy: 'createdTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
+                fields: 'files(id, name, createdTime, appProperties)', orderBy: 'createdTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             let files = response.result.files;
             if (!files || files.length === 0) {
@@ -4404,10 +4408,12 @@ ${mailText}`;
 
             groupFiles.forEach(function(file) {
                 let d = new Date(file.createdTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+                // 💡 [2026-08-30 신규] 백업 당시 저장돼 있던 테마 색으로 행 표시
+                const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd', darkText: '#333' };
                 let fileBtn = document.createElement('div');
-                fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid #a5c8f0; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: #e8f4fd;";
-                fileBtn.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
-                fileBtn.onmouseout = function() { this.style.background = '#e8f4fd'; this.style.borderColor = '#a5c8f0'; };
+                fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + rowC.border + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + rowC.bg + ";";
+                fileBtn.onmouseover = function() { this.style.background = rowC.hoverBg; this.style.borderColor = rowC.hoverBorder; };
+                fileBtn.onmouseout = function() { this.style.background = rowC.bg; this.style.borderColor = rowC.border; };
                 fileBtn.onclick = function() { window.executeRestoreBackup(file.id, file.name); };
                 fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">🗄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
                 body.appendChild(fileBtn);
@@ -5151,11 +5157,18 @@ ${mailText}`;
                 //    파일 내용을 안 받아도(목록 조회만으로) 바로 알 수 있다(위 saveToGoogleDrive 참고).
                 const isCompleted = !!(file.appProperties && file.appProperties.completed === '1');
                 const doneBadge = isCompleted ? ` <span style="font-size:10.5px; font-weight:bold; color:#2f9e44; background:#e7f6ec; border-radius:9px; padding:1px 8px; vertical-align:middle;">✅ ${_dmEn ? 'Done' : '완료'}</span>` : '';
+                // 💡 [2026-08-30 신규] "이 파일 자신이 저장해둔" 테마 색으로 행을 표시 — 완료된 프로젝트는
+                //    기존처럼 회색으로 흐리게(테마色보다 "끝난 것" 표시가 우선하도록 그대로 둠).
+                const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd', darkText: '#333' };
                 let fileBtn = document.createElement('div');
                 if (mode === 'delete') {
-                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid #ced4da; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #fff;";
+                    const delBg = isCompleted ? '#fff' : rowC.bg, delBorder = isCompleted ? '#ced4da' : rowC.border;
+                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + delBorder + "; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: " + delBg + "; transition: background .15s, border-color .15s;";
                     const infoWrap = document.createElement('div');
-                    infoWrap.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
+                    // 💡 [정렬 수정] 예전엔 파일명/날짜가 각자 <div>라 세로로 쌓였음 — "파일 열기"처럼 같은 줄에
+                    //    나란히(파일명 왼쪽, 날짜는 삭제 버튼 바로 왼쪽) 보이도록 이 wrap 자체를 flex row로 변경.
+                    infoWrap.style.cssText = 'flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:12px;';
+                    infoWrap.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96; flex-shrink:0;">${dateStr}</div>`;
                     const delBtn = document.createElement('button');
                     delBtn.textContent = _dmEn ? '🗑 Delete' : '🗑 삭제';
                     delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;';
@@ -5167,9 +5180,11 @@ ${mailText}`;
                 } else {
                     // 💡 완료된 프로젝트는 회색 톤(글자색/배경)으로 흐리게 — 목록에서 계속 눈에 띄되
                     //    "이건 이미 끝난 것"이라는 게 한눈에 구분되도록. 클릭해서 여는 동작 자체는 그대로 유지.
-                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + (isCompleted ? '#ced4da' : '#a5c8f0') + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + (isCompleted ? '#f8f9fa' : '#e8f4fd') + ";";
-                    fileBtn.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
-                    fileBtn.onmouseout = function() { this.style.background = isCompleted ? '#f8f9fa' : '#e8f4fd'; this.style.borderColor = isCompleted ? '#ced4da' : '#a5c8f0'; };
+                    const openBg = isCompleted ? '#f8f9fa' : rowC.bg, openBorder = isCompleted ? '#ced4da' : rowC.border;
+                    const openHoverBg = isCompleted ? '#e9ecef' : rowC.hoverBg, openHoverBorder = isCompleted ? '#adb5bd' : rowC.hoverBorder;
+                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + openBorder + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + openBg + ";";
+                    fileBtn.onmouseover = function() { this.style.background = openHoverBg; this.style.borderColor = openHoverBorder; };
+                    fileBtn.onmouseout = function() { this.style.background = openBg; this.style.borderColor = openBorder; };
                     fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
                     fileBtn.innerHTML = `<div style="font-weight: bold; color: ${isCompleted ? '#868e96' : '#333'}; font-size: 14px;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
                 }
@@ -23883,6 +23898,20 @@ window._cpRoleHexFor = function(roleKey, baseHex) {
 };
 window._cpRoleHex = function(roleKey) {
     return window._cpRoleHexFor(roleKey, window._cpLiveAppliedHex);
+};
+// 💡 [2026-08-30 신규] "프로젝트 열기/삭제/복원" 목록의 파일 한 줄(row)이, 지금 화면에 적용 중인
+// 테마가 아니라 "그 파일 자신이 저장해둔" 테마 색으로 보이도록 — 시트 탭바(renderSheetTabsBar)와
+// 똑같은 원리. Drive appProperties.themeColor(가벼운 메타데이터 조회만으로 얻을 수 있음, 파일 내용
+// 전체를 안 받아도 됨)를 기준으로 역할별 색을 계산해서 돌려준다.
+window._driveRowThemeColors = function(file) {
+    const hex = (file && file.appProperties && file.appProperties.themeColor) || null;
+    return {
+        bg: window._cpRoleHexFor('bg', hex),
+        border: window._cpRoleHexFor('hoverBg', hex),
+        hoverBg: window._cpRoleHexFor('zebraB', hex),
+        hoverBorder: window._cpRoleHexFor('hoverBorder', hex),
+        darkText: window._cpRoleHexFor('darkText', hex)
+    };
 };
 window._cpXlsxRole = function(roleKey) {
     return window._cpRoleHex(roleKey).replace('#', '').toUpperCase();
