@@ -939,7 +939,7 @@ tr.alarm-on > td { background-color: #e8f4fd !important; }
 tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
 
 /* 제품 사진 업로드 슬롯 */
-.prod-img-slot { position:relative; width:180px; min-height:140px; border:2px dashed #a3d9e0; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; background:#eef6f7; transition:border-color 0.2s; }
+.prod-img-slot { position:relative; width:180px; min-height:140px; border:2px dashed #a3d9e0; border-radius:6px; display:flex; flex-direction:column; align-items:center; justify-content:center; cursor:pointer; overflow:hidden; background:#fff; transition:border-color 0.2s; }
 .prod-img-slot:hover { border-color:#52a5af; }
 .prod-img-slot .prod-placeholder { color:#aaa; font-size:12px; text-align:center; padding:8px; pointer-events:none; }
 .prod-img-slot img.prod-preview { width:100%; height:140px; object-fit:contain; display:none; }
@@ -1838,7 +1838,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 </tbody>
             </table>
             <div class="concept-grid" style="margin-top:12px; margin-bottom:12px;">
-                <label id="sum-lbl-devdays">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603">
+                <label id="sum-lbl-devdays" style="font-weight:bold;">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603" style="width:100px; background:#fff;">
             </div>
         <div class="concept-section">
             <h3 id="sum-h3-progress" style="margin:0 0 4px 0;">개발 진척 현황</h3>
@@ -23611,7 +23611,9 @@ window._cpApplyLive = function(hex, skipSave) {
         // 💡 페이지 제목 옆 액션 버튼들(.action-btn: 인쇄/펼치기/MVD/R1/VS 등) 공용 호버가 옛날 원색
         // 파랑(#2c5f8a)으로 박혀 있어서 페이지마다 "제목 버튼 호버만 테마 미적용"으로 보였던 부분.
         + '.action-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
-        + '.prod-img-slot { border-color: ' + gen.hoverBg + ' !important; background: ' + gen.headerTint + ' !important; }\n'
+        // 💡 [2026-08-30 되돌림] 점선 안쪽 배경은 사진이 없을 때도 항상 흰 종이처럼 보이도록 고정 흰색으로
+        // 유지 요청 — 테마가 바뀌어도 이 배경만은 건드리지 않고 테두리 색만 테마를 따름.
+        + '.prod-img-slot { border-color: ' + gen.hoverBg + ' !important; background: #fff !important; }\n'
         + '.prod-img-slot:hover { border-color: ' + gen.hoverBorder + ' !important; }\n'
         // 💡 [2026-08-30 추가] Gantt 메인 표를 감싸는 .container(외곽 테두리+배경, 그 안에 표와
         // "변경 이력 확인" 박스가 같이 들어있음)도 클래스 규칙이라 인라인 매칭이 안 잡아서 항상 청록으로
@@ -23670,7 +23672,10 @@ window._cpApplyLive = function(hex, skipSave) {
         '.concept-table th', '#myTable th', '#tab-notice thead th',
         '#tab-address .concept-table thead th', '#tab-summary .concept-table thead th',
         '#tab-briefspec .concept-table thead th', '#tab-elecparts .concept-table thead th',
-        '#tab-mctable .concept-table thead th', '#mc-comparison-table thead th'
+        '#tab-mctable .concept-table thead th', '#mc-comparison-table thead th',
+        // 💡 [2026-08-30 추가] 주요 자재 표(2개, 좌/우)는 .concept-table 클래스가 아닌 일반 table이라
+        // 위 목록 어디에도 안 걸려서 전역 `th{background:#f4f6f8}` 회색 규칙이 그대로 이겼음.
+        '#major-materials-section thead th'
     ];
     css += headerSelectors.join(', ') + ' { background: ' + gen.headerTint + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
@@ -26617,11 +26622,15 @@ window.renderMaterialRows = function(rows) {
     // 💡 [2열 배치] 프로젝트 멤버-1/2와 같은 느낌으로 좌우 분할. 고정 13개(ETC 제외 12개) 중
     //    왼쪽 7개/오른쪽 5개로 나누고, 자유추가 행은 아래에서 지그재그로 배정한다.
     const splitAt = Math.ceil(window.MATERIAL_FIXED_CATEGORIES.length / 2); // 7
-    const rowHtml = function(r, idx) {
+    const rowHtml = function(r, idx, pos) {
         // 💡 [2026-08-29 색상 정리] TYPE 칸이 제브라와 무관하게 항상 헤더색(#eef6f7)으로 고정돼 있어서,
         //    같은 행 안에서 TYPE 칸만 따로 노는 것처럼 보였음 — 헤더 배경(#eef6f7)은 <thead>에만 쓰고,
         //    본문 행은 TYPE 칸도 나머지 칸과 동일하게 제브라(A=#fff/B=#e8f2f3)를 따르도록 통일.
-        const _zebraBg = idx % 2 === 1 ? '#e8f2f3' : '#fff';
+        // 💡 [2026-08-30 수정] 제브라를 "고정 13개 목록에서의 논리적 idx"로 계산했더니, 오른쪽 표는
+        //    항상 idx=7부터 시작(홀수)이라 첫 행부터 음영이 깔려 왼쪽 표(idx=0, 첫 행 흰색)와 줄무늬가
+        //    어긋나 보였음 — 화면에 실제로 그려지는 위치(pos, 각 표 안에서 0부터 시작)로 계산해서
+        //    좌우 표가 항상 같은 행 번호끼리 같은 색이 되도록 통일.
+        const _zebraBg = pos % 2 === 1 ? '#e8f2f3' : '#fff';
         const catCell = r.locked
             ? '<td style="padding:4px 6px; border:1px solid #cfe3e5; background:' + _zebraBg + '; font-weight:bold; white-space:nowrap; text-align:center;">' + escapeHtml(r.category) + '</td>'
             : '<td style="padding:2px; border:1px solid #cfe3e5; background:' + _zebraBg + ';"><input type="text" data-idx="' + idx + '" data-field="category" class="u-input" value="' + _escTabVal(r.category) + '" placeholder="' + (_matEn ? 'Category' : '구분명') + '" style="border:none; width:100%; box-sizing:border-box; text-align:center; background:transparent; font-weight:bold;"></td>';
@@ -26683,8 +26692,8 @@ window.renderMaterialRows = function(rows) {
     const displayRight = rightFixed.concat(extraRight);
     if (etcEntry) displayRight.push(etcEntry);
 
-    tbodyA.innerHTML = displayLeft.map(function(e) { return rowHtml(e.r, e.idx); }).join('');
-    tbodyB.innerHTML = displayRight.map(function(e) { return rowHtml(e.r, e.idx); }).join('');
+    tbodyA.innerHTML = displayLeft.map(function(e, pos) { return rowHtml(e.r, e.idx, pos); }).join('');
+    tbodyB.innerHTML = displayRight.map(function(e, pos) { return rowHtml(e.r, e.idx, pos); }).join('');
 };
 
 window.addMaterialRow = function() {
