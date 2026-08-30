@@ -28160,7 +28160,7 @@ window.renderElecCompareTab = async function(type) {
                 html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">`;
                 if (selected[i]) {
                     html += hasConn
-                        ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#fff'; this.style.borderColor='#2c5f8a';" style="background:#fff; border:1px solid #2c5f8a; border-radius:4px; color:#2c5f8a; font-size:10.5px; cursor:pointer; padding:2px 8px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View' : '보기'}</button>`
+                        ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:4px; color:#1a4f7a; font-size:10.5px; cursor:pointer; padding:2px 8px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View' : '보기'}</button>`
                         : `<span style="color:#bbb;">-</span>`;
                 }
                 html += `</td>`;
@@ -28914,7 +28914,7 @@ window.showElecPartSpecModal = async function(type, model) {
         if (secHtml) html += `<div style="font-weight:bold; color:#7a5210; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
     });
     if (Array.isArray(entry.connectors) && entry.connectors.length) {
-        html += `<div style="margin-top:10px;"><button onclick="window.showElecPinMapModal(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))})" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#fff'; this.style.borderColor='#2c5f8a';" style="padding:5px 10px; background:#fff; border:1px solid #2c5f8a; color:#2c5f8a; border-radius:5px; cursor:pointer; font-size:11.5px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View pin map' : '핀맵 보기'}</button></div>`;
+        html += `<div style="margin-top:10px;"><button onclick="window.showElecPinMapModal(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))})" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 10px; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:11.5px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View pin map' : '핀맵 보기'}</button></div>`;
     }
     bodyEl.innerHTML = html;
 };
