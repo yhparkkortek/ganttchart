@@ -24091,22 +24091,34 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
     </div>
     <div style="padding:20px 22px;">
         <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🎨 테마 색상 선택</div>
-        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">아래 프리셋을 클릭하거나 색을 직접 고르면 <b>바로 실제 화면에 자동 적용</b>됩니다 — 사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지 이 창을 닫아도 그대로 유지됩니다. <b>이 프로젝트를 저장하면 색상도 같이 저장</b>되어, 다음에 이 프로젝트를 다시 열 때 자동으로 복원됩니다(저장 전 새로고침하면 청록으로 돌아감). 마음에 안 들면 [↩️ 청록으로 되돌리기]를 누른 뒤 저장하세요.</div>
-        <div id="cp-preset-swatches" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"></div>
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
-            <label style="font-size:12px; color:#555;">직접 선택:</label>
-            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value); window._cpApplyLive(this.value);" style="width:44px; height:30px; border:1px solid #ccc; border-radius:4px; cursor:pointer; padding:2px;">
-            <span id="cp-custom-hex" style="font-size:12px; color:#888; font-family:monospace;"></span>
-            <button onclick="window._cpApplyLive(document.getElementById('cp-custom-color').value)" style="margin-left:10px; padding:6px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ 확인 (실제 페이지에 적용)</button>
-            <button onclick="window._cpRevertLive()" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12.5px; cursor:pointer;">↩️ 청록으로 되돌리기</button>
+        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">아래 원(⭕) 중 하나를 클릭하면 <b>바로 실제 화면에 자동 적용</b>됩니다 — 사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지 이 창을 닫아도 그대로 유지됩니다. <b>이 프로젝트를 저장하면 색상도 같이 저장</b>되어, 다음에 이 프로젝트를 다시 열 때 자동으로 복원됩니다(저장 전 새로고침하면 청록으로 돌아감). 마음에 안 들면 청록 원(맨 왼쪽에서 5번째)을 다시 누른 뒤 저장하세요. 맨 끝의 무지개 원은 원하는 색을 직접 고를 수 있는 "직접 선택"입니다.</div>
+        <!-- 💡 [2026-08-30 정리] "✅ 확인(실제 페이지에 적용)" 버튼은 프리셋/직접 선택 모두 클릭·선택
+             즉시 이미 라이브 적용되고 있어서 실제로 하는 일이 없었고(눌러도 똑같은 값을 한 번 더
+             적용할 뿐), "↩️ 청록으로 되돌리기"도 프리셋 중 청록 원(#00707d)을 누르는 것과 결과가
+             같아서 둘 다 무의미하다는 지적으로 제거. 대신 청록 원 클릭 시엔(아래 JS) 일반
+             프리셋과 달리 _cpRevertLive()를 호출해 "커스텀 색을 청록과 우연히 같게 고른 상태"가
+             아니라 "원래 상태로 완전히 되돌아간 상태"가 되도록 구분한다(프로젝트 저장 시 "변경사항
+             있음" 오탐 방지). "직접 선택"도 별도 줄의 사각형 대신, 프리셋과 같은 줄·같은 원형으로
+             통일하고 "지금 실제 페이지에 적용 중" 상태 문구도 제거(원을 누르는 순간 바로 적용되니
+             굳이 별도로 알릴 필요가 없음). -->
+        <div id="cp-preset-swatches" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
+            <div id="cp-preset-swatches-list" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
+            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value); window._cpApplyLive(this.value);" title="직접 선택 (클릭하면 색상 선택기가 열립니다)" style="width:32px; height:32px; border-radius:50%; border:2px solid #fff; box-shadow:0 0 0 1px #ddd; cursor:pointer; padding:0; -webkit-appearance:none; appearance:none;">
         </div>
-        <div id="cp-apply-status" style="font-size:11.5px; color:#888; margin-bottom:16px;">⚪ 아직 미리보기만 — 실제 페이지는 원래 청록 그대로입니다</div>
         <div id="cp-preview-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:18px;"></div>
 
         <div style="font-size:11.5px; color:#888; margin-bottom:6px;">미니 미리보기 표</div>
         <div id="cp-preview-demo"></div>
     </div>
 </div>
+<style>
+/* 💡 [2026-08-30 신규] "직접 선택" 색상칸(<input type=color>)을 프리셋 원(⭕)과 똑같은 원형으로 —
+   브라우저가 그 안에 그리는 미리보기 사각형(::-webkit-color-swatch 등)까지 같이 둥글게 깎아야
+   바깥 테두리만 둥글고 안쪽은 네모인 어색한 모양이 안 나온다. */
+#cp-custom-color::-webkit-color-swatch-wrapper { padding:0; border-radius:50%; }
+#cp-custom-color::-webkit-color-swatch { border:none; border-radius:50%; }
+#cp-custom-color::-moz-color-swatch { border:none; border-radius:50%; }
+</style>
 
 <script>
 // 🎨 [2026-08-30] 컬러 팔레트 모달 — hex↔HSL 변환 + "원색의 hue만 뽑아서 역할별 고정 채도/명도로
@@ -24169,7 +24181,7 @@ window._cpSwatch = function(hex, label) {
 
 window._cpRenderPreview = function(hex) {
     document.getElementById('cp-custom-color').value = hex;
-    document.getElementById('cp-custom-hex').textContent = hex;
+    document.getElementById('cp-custom-color').title = '직접 선택 (' + hex + ') — 클릭하면 색상 선택기가 열립니다'; // 💡 별도 텍스트(cp-custom-hex) 대신 툴팁으로 통합
     const hue = window._cpHexToHsl(hex).h;
     const gen = {};
     window.CP_ROLES.forEach(r => { gen[r.key] = window._cpHslToHex(hue, r.s, r.l); });
@@ -24554,9 +24566,17 @@ window._cpUpdateApplyStatus = function() {
 };
 
 window.openColorPaletteModal = function() {
-    document.getElementById('cp-preset-swatches').innerHTML = window.CP_PRESETS.map(hex =>
-        '<div onclick="window._cpRenderPreview(\'' + hex + '\'); window._cpApplyLive(\'' + hex + '\');" title="' + hex + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>'
-    ).join('');
+    // 💡 [2026-08-30 수정] 청록(#00707d) 프리셋만은 다른 프리셋처럼 _cpApplyLive(hex)로 "그 색을 새로
+    // 적용"하는 게 아니라 _cpRevertLive()로 "원래 기본 상태로 되돌리기"를 호출한다 — 둘 다 화면에
+    // 보이는 색은 똑같지만(청록 hue로 역산한 값이라), _cpApplyLive는 _cpLiveAppliedHex를 '#00707d'로
+    // 남겨 "커스텀 색을 청록과 우연히 같게 골랐을 뿐"인 상태가 되어 저장 시 불필요하게 "변경사항
+    // 있음"으로 잡히던 문제(예전 "↩️ 청록으로 되돌리기" 버튼이 이 구분을 위해 따로 있었음)가 있었다.
+    document.getElementById('cp-preset-swatches-list').innerHTML = window.CP_PRESETS.map(function(hex) {
+        const isDefault = hex === '#00707d';
+        const action = isDefault ? "window._cpRevertLive();" : "window._cpApplyLive('" + hex + "');";
+        const title = isDefault ? hex + ' (기본 청록 — 클릭하면 원래대로 되돌아갑니다)' : hex;
+        return '<div onclick="window._cpRenderPreview(\'' + hex + '\'); ' + action + '" title="' + title + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>';
+    }).join('');
     // 🐛 [버그 수정] "직접 선택" 칸이 항상 하드코딩 기본값(#2c5f8a)에서 시작해서, 이미 다른 색(예:
     // 빨강)이 저장/적용돼 있는 프로젝트에서 로고를 눌러 팔레트를 열기만 해도 그 기본값으로 미리보기가
     // 그려지며(아래 _cpRenderPreview가 라이브 모드일 때 자동 재적용) 실제 테마가 조용히 바뀌었었다.
