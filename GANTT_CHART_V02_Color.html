@@ -740,9 +740,11 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 #gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
 /* 💡 M.C Table 상단 버튼(R1 리비전, VS 비교, 제품구분자 +/-, 리비전추가 ➕) hover 통일 */
 #mc-add-unit-btn, #mc-remove-unit-btn, #mc-add-rev-btn, #mc-unit-rename-btn { transition:0.2s; border-radius:4px; }
-#mc-add-unit-btn:hover { background-color:#cfe6fa !important; color:#1a4f7a !important; }
+/* 💡 [2026-08-30 수정] ✏️(이름변경)/➕(추가) 호버를 "펼치기"(.concept-add-row-btn) 버튼과 동일한
+   테마색으로 통일 — _cpApplyLive가 라이브 테마일 땐 아래 값을 덮어씀(정적 기본값은 teal 프리셋). */
+#mc-add-unit-btn:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
+#mc-unit-rename-btn:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
 #mc-remove-unit-btn:hover { background-color:#f5c2bd !important; color:#b1432f !important; }
-#mc-unit-rename-btn:hover { background-color:#e9ecef !important; color:#555 !important; }
 #mc-add-rev-btn:hover { background-color:#cfe6fa !important; border-color:#7fb0dd !important; color:#1a4f7a !important; }
 /* 💡 [2026-08-30 신규] 제품구분자 관리(이름변경/추가/삭제)를 연필 아이콘 뒤로 접어두고, 누르면
    옆으로 슬라이드 펼쳐지게 — 제목줄에 아이콘 3개가 항상 떠 있어 공간을 많이 차지한다는 지적 대응. */
@@ -24349,6 +24351,9 @@ window._cpApplyLive = function(hex, skipSave) {
     css += '#myTable tbody tr.gantt-zebra-b td { background: ' + gen.zebraB + ' !important; }\n'
         + '.concept-add-row-btn, .gantt-filter-trigger-btn:not(.filter-active) { background: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.concept-add-row-btn:hover, .gantt-filter-trigger-btn:not(.filter-active):hover, #gantt-filter-trigger-cal-wbs:hover, #gantt-filter-trigger-wr-wbs:hover, #print-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        // 💡 [2026-08-30 추가] M.C Table 제품구분자 패널의 ✏️(이름변경)/➕(추가) 호버도 "펼치기"(위
+        // .concept-add-row-btn)와 동일한 테마색으로 통일(🗑️ 삭제는 위험 액션이라 빨강 고정 유지).
+        + '#mc-add-unit-btn:hover, #mc-unit-rename-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
         // 💡 [2026-08-30 추가] Calendar의 월/주 토글(.cal-view-btn)이 옛 파스텔-블루 고정색이라 테마가
         // 안 먹혀서 항상 파랗게 박혀 보였음 — LEVEL(WBS) 트리거와 같은 톤 규칙으로 편입.
         + '.cal-view-btn { background: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
