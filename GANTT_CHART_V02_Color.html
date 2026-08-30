@@ -7762,6 +7762,15 @@ ${mailText}`;
 
     // 💡 Gantt 원본 전체를 던지지 않고, AI가 판단하기 좋은 형태로 통계+목록만 추려서 압축
     window._buildProjectSummaryData = function() {
+        // 🐛 [2026-08-30 버그 수정] "프로젝트 정보를 수정/저장했는데도 AI가 기존 정보를 그대로 쓴다"는
+        // 지적의 실제 원인 — Summary 탭의 입력칸(프로젝트 개요/고객사/담당자/마일스톤 등)은 타이핑하는
+        // 즉시 window.projectMeta/window.tabData.summary에 반영되는 게 아니라, collectTabData()가
+        // 화면의 <input> 값을 실제로 "긁어올" 때만 반영된다(collectAlarmItems 등 다른 기능은 이미 이걸
+        // 먼저 호출하고 있었는데, AI 요약/문답 컨텍스트만 빠져 있었음). 그래서 최근에 고친 값이 아직
+        // 한 번도 collectTabData()를 거치지 않은 시점(예: 다른 조작 없이 바로 AI 요약을 다시 생성)에는
+        // 화면엔 새 값이 보여도 AI에게 넘어가는 pm/tabData.summary는 예전 값 그대로였다. 매번 최신
+        // 화면 값을 반영하도록 여기서 직접 한 번 호출한다(저장 여부와 무관하게 항상 최신 상태 보장).
+        if (window.collectTabData) window.collectTabData();
         const pm = window.projectMeta || {};
         // 💡 [2026-08-28 신규] "#98 업무로 이동" 클릭 기능을 AI 요약에서도 쓰려면 리스크/액션추천이
         //    가리키는 업무의 원래 globalData 인덱스를 알아야 한다 — filter로 빠지는 행이 있어 slice
@@ -8695,6 +8704,10 @@ ${recentLogs}
 
     // 💡 Gantt 원본 전체를 보내면 너무 크므로, 업무 1건당 한 줄로 압축해서 최대 MAX_TASKS건까지만 포함
     window._buildGanttQaContext = async function() {
+        // 🐛 [2026-08-30 버그 수정] 위 _buildProjectSummaryData와 동일한 원인 — Summary 탭 입력값은
+        // collectTabData()를 거쳐야 window.projectMeta/window.tabData.summary에 반영되는데, AI 문답도
+        // 이걸 안 부르고 있어서 "정보를 고쳤는데도 AI가 예전 정보로 답한다"는 문제가 있었다.
+        if (window.collectTabData) window.collectTabData();
         const pm = window.projectMeta || {};
         // 💡 [2026-08-28 신규] "이 업무 알람 걸어줘" 같은 실행 요청을 처리하려면 AI가 각 업무를 어느
         //    globalData 인덱스로 다시 가리켜야 하는지 알아야 한다 — filter로 빠지는 행이 있어 slice
