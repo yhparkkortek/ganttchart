@@ -129,7 +129,14 @@
                 tr { page-break-inside: avoid; }
             }
     body { font-family: 'Malgun Gothic', sans-serif; margin: 20px 20px 0 20px; color: #333; }
-    
+    /* 💡 [2026-08-30 신규] "변경/수정이력 확인" 박스의 시작일/종료일(input[type=date])·삭제 비밀번호
+       (input[type=password]) 칸이 body의 font-family를 상속받지 못해(폼 컨트롤은 브라우저 기본
+       UI 폰트를 쓰는 게 보통이라 자동 상속되지 않음) 주변 라벨과 다른 폰트로 보이던 문제 — id가
+       전부 "history-del-from/to/pw"로 끝나는 규칙(6개 탭 공통, Gantt/Address/Summary/Brief SPEC/
+       M.C Table/Panel Compare/Elec Parts 전부 동일 접미사)을 이용해 한 번에 통일한다.
+    */
+    input[id$="history-del-from"], input[id$="history-del-to"], input[id$="history-del-pw"] { font-family: 'Malgun Gothic', sans-serif; }
+
     .btn-group { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
     /* 💡 [2026-08-29 버튼 높이 표준화] 모달 곳곳의 텍스트 버튼이 padding만으로 높이가 정해져
        1px~10px까지 제각각이었음 — 너비(padding 좌우)는 상황에 따라 다를 수 있지만 높이는 28px로
@@ -608,6 +615,15 @@
 }
 .topbar-btn:hover { background: #90cdd5; }
 .topbar-btn:disabled { opacity:0.5; cursor:default; }
+/* 💡 [2026-08-30 신규] Elec Parts "🔌 핀맵 보기"/"🔌 보기" 버튼 호버가 다른 액션 버튼들과 같은
+   고정 하늘색(#cfe6fa)이라 테마가 안 먹혔음 — 호버만 "펼치기"(.concept-add-row-btn)와 같은
+   테마색으로 통일(평소 색은 다른 액션 버튼과 통일감 있게 그대로 유지). */
+.ep-theme-hover-btn:hover { background-color:#a3d9e0 !important; border-color:#52a5af !important; color:#00707d !important; }
+/* 💡 [2026-08-30 신규] 현재 프로젝트 파일명(📄 xxx.json) 표시 — 예전엔 onmouseover/onmouseout으로
+   청록 고정색(rgba(0,113,125,0.12))을 직접 칠했는데, 그러면 _cpApplyLive의 !important 규칙이
+   있어도 JS가 매번 다시 덮어써서 테마가 안 먹혔음. CSS :hover로 바꿔서 _cpApplyLive가 이길 수
+   있게 함(#current-project-filename:hover, 아래 참고) — 정적 기본값은 기존과 동일한 청록. */
+#current-project-filename:hover { background:rgba(0,113,125,0.12) !important; }
 
 #app-sidebar {
     position: fixed; top: var(--topbar-h); left: 0; height: calc(100vh - var(--topbar-h)); width: var(--sb-w);
@@ -1056,9 +1072,7 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
         <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
         <span id="current-project-filename" onclick="window.selectProject()"
               title="클릭하면 다른 프로젝트를 열 수 있습니다 (저장 안 한 변경사항이 있으면 먼저 물어봅니다)"
-              style="display:none; flex-shrink:0; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center;"
-              onmouseover="this.style.background='rgba(0,113,125,0.12)';"
-              onmouseout="this.style.background='transparent';"></span>
+              style="display:none; flex-shrink:0; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center; transition:background .15s;"></span>
         <!-- 💡 [2026-08-25 신규] 구글 드라이브 연결 상태 표시등 — 저장을 시도해봐야만("헛수고") 끊긴 걸
              알게 되는 문제를 줄이기 위해, 연결이 끊기면 언제든 상단에서 바로 보이게 함. 클릭하면 재연동. -->
         <span id="drive-conn-badge" style="display:none; flex-shrink:0; font-size:15px; margin-left:6px; align-items:center;"></span>
@@ -11477,6 +11491,12 @@ window.deleteHistoryByDateRange = function() {
         // 지금 Elec Parts 탭의 PANEL 서브뷰가 열려있으면 표/토글버튼 문구도 바로 다시 그림
         const _pcTab = document.getElementById('tab-elecparts');
         if (_pcTab && _pcTab.classList.contains('active') && window._elecView === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
+        // 🐛 [2026-08-30 버그 수정] 위 PANEL 서브뷰만 다시 그려주고 있어서, CONVERTER/AD BOARD 서브뷰를
+        // 보고 있는 중에 언어를 전환하면 "🔌 보기"/"핀맵 보기" 등 버튼 문구가 예전 언어 그대로 남아있는
+        // 문제가 있었음 — 같은 방식으로 두 서브뷰도 다시 그려서 즉시 반영되게 한다.
+        if (_pcTab && _pcTab.classList.contains('active') && (window._elecView === 'adbd' || window._elecView === 'convbd') && window.renderElecCompareTab) {
+            window.renderElecCompareTab(window._elecView);
+        }
 
         // [AI 팝업] AI 키 상태/가이드 텍스트 재적용
         if (window.onAiProviderChange) window.onAiProviderChange(window.getActiveAiProvider ? window.getActiveAiProvider() : 'gemini');
@@ -24333,6 +24353,13 @@ window._cpApplyLive = function(hex, skipSave) {
         + '#app-sidebar .sb-toggle-btn:hover { background: ' + genNav.hover + ' !important; }\n'
         + '.topbar-btn { color: ' + genNav.text + ' !important; }\n'
         + '.topbar-btn:hover { background: ' + genNav.hover + ' !important; }\n'
+        // 💡 [2026-08-30 추가] 상단바의 "📄 현재 프로젝트 파일명" 표시가 옛 고정 청록(글자/호버 배경
+        // 둘 다)이라 테마가 안 먹혔음 — 같은 상단바 안의 .topbar-btn과 같은 톤(genNav)으로 통일.
+        + '#current-project-filename { color: ' + genNav.text + ' !important; }\n'
+        + '#current-project-filename:hover { background: ' + genNav.hover + ' !important; }\n'
+        // 💡 [2026-08-30 추가] Elec Parts "🔌 핀맵 보기"/"🔌 보기" 버튼 호버도 다른 테마 추적 호버와
+        // 동일하게(.concept-add-row-btn:hover와 같은 gen 팔레트 사용).
+        + '.ep-theme-hover-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '#app-topbar .tb-logo { background-color: ' + genLogo + ' !important; }\n'
         + '.concept-header-box, .concept-header-box h2, #table-info, #table-info-text { color: ' + gen.darkText + ' !important; }\n'
         + '.concept-header-box, #table-info { background-color: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; }\n'
@@ -28854,7 +28881,7 @@ window.renderElecCompareTab = async function(type) {
                 html += `<td style="border:1px solid #e9ecef; padding:3px 6px; font-size:12px;">`;
                 if (selected[i]) {
                     html += hasConn
-                        ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:4px; color:#1a4f7a; font-size:10.5px; cursor:pointer; padding:2px 8px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View' : '보기'}</button>`
+                        ? `<button data-ep-pinmap="${escapeHtml(type)}|${escapeHtml(selected[i])}" class="ep-theme-hover-btn" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:4px; color:#1a4f7a; font-size:10.5px; cursor:pointer; padding:2px 8px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View' : '보기'}</button>`
                         : `<span style="color:#bbb;">-</span>`;
                 }
                 html += `</td>`;
@@ -29608,7 +29635,7 @@ window.showElecPartSpecModal = async function(type, model) {
         if (secHtml) html += `<div style="font-weight:bold; color:#7a5210; margin-top:8px; padding:3px 0; border-top:1px solid #eee;">[${escapeHtml(sec.section)}]</div>` + secHtml;
     });
     if (Array.isArray(entry.connectors) && entry.connectors.length) {
-        html += `<div style="margin-top:10px;"><button onclick="window.showElecPinMapModal(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))})" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 10px; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:11.5px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View pin map' : '핀맵 보기'}</button></div>`;
+        html += `<div style="margin-top:10px;"><button onclick="window.showElecPinMapModal(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(entry.model))})" class="ep-theme-hover-btn" style="padding:5px 10px; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:11.5px; transition:background .15s, border-color .15s;">🔌 ${_en ? 'View pin map' : '핀맵 보기'}</button></div>`;
     }
     bodyEl.innerHTML = html;
 };
