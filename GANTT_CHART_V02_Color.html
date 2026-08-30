@@ -1800,6 +1800,9 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                    중첩되어 표시됨(history 라벨링 closest('.concept-section') + h3 로직은 그대로 영향 없음). */
                 #tab-summary .concept-table th { text-align: center !important; vertical-align: middle !important; }
                 #sum-milestone-body td, #sum-milestone-body input, #sum-milestone-body-actual td, #sum-milestone-body-actual input { text-align: center !important; }
+                /* 💡 [2026-08-30 신규] 달력 아이콘을 없애고 칸 자체를 누르게 바꾸면서(readonly), 클릭하면
+                   달력이 뜬다는 걸 커서 모양으로 알려줌 — 더블클릭으로 잠깐 편집 가능해지면 텍스트 커서로 돌아옴. */
+                #sum-milestone-body input.u-input[readonly], #sum-milestone-body-actual input.u-input[readonly] { cursor: pointer; }
                 /* 💡 [버그 수정] 이 표는 헤더가 2행(rowspan="구분" + colspan 그룹명 / 하위 Start·End·DR)인데,
                    전역 `th { position:sticky; top:0 }` 규칙이 th 하나하나에 개별로 걸리면서 1행/2행이
                    전부 top:0에서 경합해 스크롤 시 2행이 1행 밑으로 들어가며 병합 셀과 어긋났음.
@@ -1821,6 +1824,10 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                         <th colspan="3">PROTO</th>
                         <th colspan="3">ES</th>
                         <th colspan="3">PP</th>
+                        <!-- 💡 [2026-08-30 신규] 개발기간(일) 입력칸을 표 아래 별도 줄로 두지 않고, 이미 표에 있는
+                             계획/실적 날짜(Start~PRA)로 자동 계산해서 표 오른쪽 열에 바로 보여주도록 통합.
+                             클릭하면 일/주/개월 단위를 순환 전환(sumToggleDevDaysUnit). -->
+                        <th rowspan="2" style="width:90px; cursor:pointer;" onclick="window.sumToggleDevDaysUnit()" title="클릭하면 일/주/개월 단위로 순환 전환됩니다"><span id="sum-lbl-devdays">개발기간(일)</span><br><span id="sum-devdays-unit-label" style="font-size:10.5px; color:#888; font-weight:normal;">소요(일) 🔄</span></th>
                     </tr>
                     <tr id="sum-milestone-head">
                         <th>Start <span style="color:#e03131;" title="필수 입력 — 새 프로젝트 등록 시 Gantt Chart의 시작일 기준(anchor)으로 사용되어 전체 일정이 자동 계산됩니다">*</span></th>
@@ -1837,38 +1844,33 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 <tbody>
                     <tr id="sum-milestone-body" style="background:#eef6f7;">
                         <td id="sum-td-plan" style="font-weight:bold;">계획</td>
-                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (직접 입력하거나, 달력 아이콘을 눌러 선택)" oninput="window._checkRequiredField(this)"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" readonly title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력)" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)" oninput="window._checkRequiredField(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td id="sum-devdays-plan" style="font-weight:bold;">-</td>
                     </tr>
                     <tr id="sum-milestone-body-actual" style="background:#fff8e6; position:relative; z-index:1;">
                         <td id="sum-td-actual" style="font-weight:bold;">실적</td>
-                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD"><span class="ms-cal-btn" onclick="window.showGenericCalendar(this.previousElementSibling)" title="달력에서 선택">📅</span></td>
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td id="sum-devdays-actual" style="font-weight:bold;">-</td>
                     </tr>
                 </tbody>
             </table>
-            <!-- 💡 [정렬 수정] 이 grid는 summary-outer-box에 바로 붙어있어 padding이 한 겹(18px)뿐인데,
-                 바로 아래 "개발 진척 현황"은 그 안에 중첩된 .concept-section(자체 padding 18px)의
-                 h3라 총 두 겹(36px)만큼 더 안쪽에서 시작함 — 라벨을 그 차이(18px)만큼 오른쪽으로
-                 밀어서 왼쪽 시작선을 맞춘다. -->
-            <div class="concept-grid" style="margin-top:12px; margin-bottom:12px; padding-left:18px;">
-                <label id="sum-lbl-devdays" style="font-weight:bold;">개발기간(일)</label><input type="text" id="sum-dev-days" class="u-input" placeholder="예: 603" style="width:100px; background:#fff;">
-            </div>
-        <div class="concept-section">
+        <div class="concept-section" style="margin-top:16px;">
             <h3 id="sum-h3-progress" style="margin:0 0 4px 0;">개발 진척 현황</h3>
             <div id="sum-level0-timeline" style="min-height:90px; margin-top:0;">
                 <div style="color:#999; padding:10px 0;">Gantt chart 데이터를 불러오면 0레벨 항목이 타임라인으로 표시됩니다.</div>
@@ -9861,6 +9863,83 @@ window.deleteHistoryByDateRange = function() {
         window.showCalendar(inputEl, ts, null, null);
         window.currentCalendarGenericInput = inputEl; // showCalendar가 초기화한 뒤 다시 지정
     };
+
+    // 💡 [2026-08-30 신규] Summary 마일스톤 날짜칸을 기본 readonly(한 번 클릭 = 달력 팝업)로 바꾸면서,
+    // "직접 타이핑도 하고 싶을 때"를 위해 더블클릭하면 잠깐 readonly를 풀고 포커스를 준다 — 입력을
+    // 끝내고 포커스를 벗어나면(blur) 다시 readonly로 돌아가 항상 "클릭=달력"이 기본 동작이 되게 한다.
+    window._msEnableDirectEdit = function(el) {
+        if (!el) return;
+        el.removeAttribute('readonly');
+        el.focus();
+        el.select();
+        const reReadonly = function() {
+            el.setAttribute('readonly', 'readonly');
+            el.removeEventListener('blur', reReadonly);
+        };
+        el.addEventListener('blur', reReadonly);
+    };
+
+    // 💡 [2026-08-30 신규] 개발기간(일) 자동 계산 — 계획/실적 각각 "기획Start ~ PRA" 사이 날짜 차이를
+    // 계산해서 표 오른쪽 열에 보여준다. 이전엔 사용자가 숫자를 직접 타이핑했는데, 이미 표에 있는
+    // 날짜로부터 계산 가능한 값을 또 손으로 넣게 하면 표와 어긋날 위험(오차/깜빡함)이 있어 자동 계산으로 전환.
+    window._sumDevDaysBetween = function(startStr, endStr) {
+        if (!startStr || !endStr) return null;
+        const s = new Date(startStr), e = new Date(endStr);
+        if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
+        const days = Math.round((e.getTime() - s.getTime()) / 86400000);
+        return days >= 0 ? days : null;
+    };
+    window._sumDevDaysUnitLabels = {
+        day:   { ko: '소요(일)',   en: 'Days' },
+        week:  { ko: '소요(주)',   en: 'Weeks' },
+        month: { ko: '소요(개월)', en: 'Months' }
+    };
+    window._sumDevDaysUnit = (function() {
+        try { return localStorage.getItem('gantt_sum_devdays_unit') || 'day'; } catch (e) { return 'day'; }
+    })();
+    // 💡 개월은 달력상 "몇 월 며칠"까지 정확히 세지 않고, 이해하기 쉬운 근사치(1개월=30일)로 단순 환산한다
+    //    — 대략적인 개발기간 감을 잡는 용도라 정밀한 캘린더 개월 계산까지는 필요 없다고 판단.
+    window._sumFormatDevDays = function(days) {
+        if (days === null || days === undefined) return '-';
+        const _en = window._currentLang === 'en';
+        const unit = window._sumDevDaysUnit;
+        if (unit === 'week') return Math.round(days / 7) + (_en ? 'w' : '주');
+        if (unit === 'month') return Math.round(days / 30) + (_en ? 'mo' : '개월');
+        return days + (_en ? 'd' : '일');
+    };
+    window.sumToggleDevDaysUnit = function(ev) {
+        if (ev) ev.stopPropagation();
+        const order = ['day', 'week', 'month'];
+        const idx = order.indexOf(window._sumDevDaysUnit);
+        window._sumDevDaysUnit = order[(idx + 1) % order.length];
+        try { localStorage.setItem('gantt_sum_devdays_unit', window._sumDevDaysUnit); } catch (e) {}
+        window.sumRecalcDevDays();
+    };
+    window.sumRecalcDevDays = function() {
+        const labelEl = document.getElementById('sum-devdays-unit-label');
+        if (labelEl) {
+            const _en = window._currentLang === 'en';
+            const lbl = window._sumDevDaysUnitLabels[window._sumDevDaysUnit] || window._sumDevDaysUnitLabels.day;
+            labelEl.textContent = (_en ? lbl.en : lbl.ko) + ' 🔄';
+        }
+        const planStart = document.querySelector('#sum-milestone-body [data-stage="기획Start"][data-field="date"]');
+        const planEnd = document.querySelector('#sum-milestone-body [data-stage="PRA"][data-field="date"]');
+        const actualStart = document.querySelector('#sum-milestone-body-actual [data-stage="기획Start"][data-field="actualDate"]');
+        const actualEnd = document.querySelector('#sum-milestone-body-actual [data-stage="PRA"][data-field="actualDate"]');
+        const planDays = window._sumDevDaysBetween(planStart && planStart.value, planEnd && planEnd.value);
+        const actualDays = window._sumDevDaysBetween(actualStart && actualStart.value, actualEnd && actualEnd.value);
+        const planTd = document.getElementById('sum-devdays-plan');
+        const actualTd = document.getElementById('sum-devdays-actual');
+        if (planTd) planTd.textContent = window._sumFormatDevDays(planDays);
+        if (actualTd) actualTd.textContent = window._sumFormatDevDays(actualDays);
+    };
+    // 💡 계획/실적 날짜칸 18개 중 어느 것을 고치든(달력 선택 = input 이벤트 발생, 더블클릭 직접입력 모두
+    // 포함) 한 곳에서 감시해서 다시 계산 — 18곳에 각각 이벤트를 붙이는 대신 이벤트 위임으로 한 번에 처리.
+    document.addEventListener('input', function(e) {
+        if (e.target && e.target.closest && e.target.closest('#sum-milestone-body, #sum-milestone-body-actual')) {
+            window.sumRecalcDevDays();
+        }
+    });
 
     window.changeCalendarMonth = function(e, deltaMonth, deltaYear) {
         if (e) e.stopPropagation();
@@ -29787,7 +29866,13 @@ window.collectTabData = function() {
     sd.volume = getVal('sum-volume');
     sd.mpDate = getVal('sum-mp-date');
     sd.background = getVal('sum-background');
-    sd.devDays = getVal('sum-dev-days');
+    // 💡 [2026-08-30 신규] 개발기간(일)은 더 이상 직접 입력칸이 아니라 마일스톤(계획 Start~PRA) 날짜로부터
+    // 자동 계산됨 — AI 컨텍스트/엑셀 내보내기 등 sd.devDays를 참조하는 기존 코드가 계속 동작하도록,
+    // 여기서도 "일" 단위 값을 그대로 계산해 넣는다(표시 단위 토글과는 무관하게 항상 일수 기준).
+    const _msPlanStart = document.querySelector('#sum-milestone-body [data-stage="기획Start"][data-field="date"]');
+    const _msPlanEnd = document.querySelector('#sum-milestone-body [data-stage="PRA"][data-field="date"]');
+    const _msPlanDays = window._sumDevDaysBetween ? window._sumDevDaysBetween(_msPlanStart && _msPlanStart.value, _msPlanEnd && _msPlanEnd.value) : null;
+    sd.devDays = (_msPlanDays !== null && _msPlanDays !== undefined) ? _msPlanDays : '';
     const milestones = {};
     document.querySelectorAll('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]').forEach(function(inp) {
         milestones[inp.dataset.stage] = milestones[inp.dataset.stage] || {};
@@ -29967,12 +30052,14 @@ window.populateTabData = function() {
     setVal('sum-volume', sd.volume);
     setVal('sum-mp-date', sd.mpDate);
     setVal('sum-background', sd.background);
-    setVal('sum-dev-days', sd.devDays);
-    
+
     document.querySelectorAll('#sum-milestone-body input[data-stage], #sum-milestone-body-actual input[data-stage]').forEach(function(inp) {
         const m = sd.milestones && sd.milestones[inp.dataset.stage];
         inp.value = (m && m[inp.dataset.field]) ? m[inp.dataset.field] : '';
     });
+    // 💡 [2026-08-30 신규] 개발기간(일)은 더 이상 직접 입력이 아니라 위에서 막 채운 마일스톤 날짜로부터
+    // 계산되므로, 날짜를 채운 직후 다시 계산해서 표에 반영한다.
+    if (window.sumRecalcDevDays) window.sumRecalcDevDays();
     
     // Brief SPEC 탭 렌더링
     if (td.briefSpec && td.briefSpec.length) {
