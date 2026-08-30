@@ -692,10 +692,14 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 .mem3-row .mem3-email { flex: 1.4 1 0; }
 .mem3-row .mem3-del { flex: 0 0 22px; text-align: center; }
 @media (max-width: 700px) { .mem3-cols { column-count: 1; } }
-.concept-grid label { font-size:12.5px; color:#666; }
+/* 💡 [2026-08-30 신규] 라벨도 값 입력칸처럼 둥근모서리 박스로 감싸고, 라벨/입력칸 각각에 마우스를
+   올리면 테두리가 강조색으로 반응하도록 — 요청 스크린샷의 "작은 박스" 느낌을 그대로 구현. */
+.concept-grid label { font-size:12.5px; color:#666; border:1px solid #cfe3e5; border-radius:6px; padding:6px 8px; box-sizing:border-box; background:#fff; transition:border-color .15s; }
+.concept-grid label:hover { border-color:#52a5af; }
 .concept-grid input, .concept-grid textarea {
-    width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit;
+    width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; transition:border-color .15s;
 }
+.concept-grid input:hover, .concept-grid textarea:hover { border-color:#52a5af; }
 .concept-table { width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px; }
 .concept-table th, .concept-table td { border:1px solid #cfe3e5; padding:6px 8px; }
 .concept-table th { background:#eef6f7; font-weight:600; color:#3d5c60; }
@@ -23652,6 +23656,8 @@ window._cpApplyLive = function(hex, skipSave) {
     // 더 구체적인 규칙이 이걸 덮어쓰도록 순서를 지킨다(동일 특이도라 나중 규칙이 이김).
     css += '.concept-section { border-color: ' + gen.border + ' !important; }\n'
         + '.concept-section:hover:not(.summary-outer-box) { border-color: ' + gen.hoverBorder + ' !important; }\n'
+        + '.concept-grid label { border-color: ' + gen.border + ' !important; }\n'
+        + '.concept-grid label:hover, .concept-grid input:hover, .concept-grid textarea:hover { border-color: ' + gen.hoverBorder + ' !important; }\n'
         + '.concept-grid input, .concept-grid textarea { border-color: ' + gen.border + ' !important; }\n'
         + '#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { border-color: ' + gen.border + ' !important; }\n'
         // 💡 페이지 제목 옆 액션 버튼들(.action-btn: 인쇄/펼치기/MVD/R1/VS 등) 공용 호버가 옛날 원색
