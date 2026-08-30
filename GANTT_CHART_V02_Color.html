@@ -739,13 +739,13 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 .bm-pop-btn {
     width:33px; height:33px; padding:0; margin:0; line-height:1; box-sizing:border-box;
     display:flex; align-items:center; justify-content:center;
-    border:1.5px solid #2c5f8a; border-radius:6px; background:#fff; color:#2c5f8a;
+    border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a;
     font-size:20px; font-weight:bold; -webkit-text-stroke:0.5px currentColor;
     cursor:pointer; user-select:none; transition:0.15s;
 }
-.bm-pop-btn:hover { background:#2c5f8a; color:#fff; }
-.bm-pop-btn.bm-pop-danger { border-color:#e03131; color:#e03131; }
-.bm-pop-btn.bm-pop-danger:hover { background:#e03131; color:#fff; }
+.bm-pop-btn:hover { background:#cfe6fa; border-color:#7fb0dd; }
+.bm-pop-btn.bm-pop-danger { border-color:#eeb0ac; background:#fbe4e2; color:#b1432f; }
+.bm-pop-btn.bm-pop-danger:hover { background:#f5c2bd; border-color:#e08f87; }
 /* 💡 [2026-08-29 되돌림] 첨부 엑셀의 "사용자 작성 구간" 회색 표시를 흉내낸 배경이었으나, 청록 테마
    전환 후 흰 카드 위에서 탁한 회색 박스로 튀어 보인다는 피드백으로 투명(카드 배경 그대로)으로 변경 */
 .concept-grid input.u-input, .concept-grid textarea.u-input {
@@ -756,8 +756,10 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
     border:1.5px solid #e03131 !important;
     box-shadow:0 0 0 2px rgba(224,49,49,0.15);
 }
+/* 💡 [2026-08-30] .concept-grid와 동일한 이유로 투명 처리 (Address 등 .concept-table 안의 입력칸도
+   탁한 회색 박스로 튀어 보인다는 지적) — 제브라 줄무늬(zebra) 배경이 그대로 비쳐 보이는 게 자연스러움 */
 .concept-table td input.u-input, .concept-table td textarea.u-input {
-    background:#eceff1;
+    background:transparent;
 }
 /* 💡 Summary 탭 개발 진척 타임라인 — Gantt chart Level 0 항목을 말풍선(텍스트 포함)으로 표시 */
 .sum-tl-wrap { position:relative; padding-top:80px; padding-bottom:80px; }
@@ -7156,8 +7158,19 @@ ${mailText}`;
                 + '<span style="display:table-cell; width:1100px; text-align:right; font-size:13px; color:#000; font-family:\'Malgun Gothic\',sans-serif;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>'
                 + '</td></tr>';
             footerTable.appendChild(footerTfoot);
+        } else if (!isCalendar && isSummary) {
+            // 🐛 [버그 수정] Summary는 예전에 Weekly와 같은 "position:fixed로 페이지 맨 아래(6mm)에 고정"
+            //    방식을 같이 썼는데, 그 고정 위치는 박스가 JS 배율로 줄어드는 것과 전혀 무관하게 항상
+            //    페이지 맨 아래에 붙어서 — 박스 하단과 푸터 사이에 빈 틈이 생기며 "박스에서 벗어나
+            //    따로 떨어져 보이는" 문제가 있었다. 대신 박스(.summary-outer-box) "안쪽" 맨 끝에 그냥
+            //    흐르는 요소로 넣어서, 배율 계산에도 포함되고 항상 박스 마지막 내용 바로 밑에 붙는다.
+            const summaryFooter = document.createElement('div');
+            summaryFooter.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:9px; line-height:1.2; color:#000; font-family:"Malgun Gothic",sans-serif; padding-top:6px;';
+            summaryFooter.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
+                + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
+            (clone.querySelector('.summary-outer-box') || clone).appendChild(summaryFooter);
         } else if (!isCalendar) {
-            // 💡 [범용 반복 푸터 v2] 표가 없는 탭(Summary/Weekly 등)은 가짜 테이블로 감싸도 행이 1개뿐이라
+            // 💡 [범용 반복 푸터 v2] 표가 없는 탭(Weekly 등)은 가짜 테이블로 감싸도 행이 1개뿐이라
             //    tfoot이 페이지마다 반복될 계기 자체가 없었음(표 안이 그냥 거대한 통짜 셀 하나라 페이지네이션이
             //    안 걸림) — 그래서 여전히 중간에 끼는 문제가 재현됨. 대신 Chrome은 인쇄 시 position:fixed
             //    요소를 매 페이지 하단에 자동으로 반복해서 그려주므로, 그 성질을 그대로 이용한다
@@ -7165,15 +7178,7 @@ ${mailText}`;
             //    끼어들어 배율에 영향을 주므로, 페이지 하단에 고정 오버레이되는 요소는 분리해두는 게 맞음)
             fixedFooterDiv = document.createElement('div');
             fixedFooterDiv.className = 'print-fixed-footer';
-            // 💡 [버그 수정] Summary는 콘텐츠를 JS가 계산한 배율로 1페이지에 꽉 차게 축소하는데(SAFETY=0.94),
-            //    그 스케일 계산은 clone 내부 콘텐츠 높이만 재고 clone "밖"에 별도로 얹는 이 고정 푸터의
-            //    높이는 전혀 고려하지 않는다 — 그래서 13px 크기의 푸터가 페이지 맨 아래(6mm)에서 위로
-            //    차지하는 높이만큼 마지막 박스(주요자재)와 겹치거나 바짝 붙어 보였다. 다른 탭 인쇄 푸터가
-            //    쓰는 더 작은 크기(Gantt=8px, 표 기반 탭들의 소형 폰트 기준=10px)를 참고해 Summary만
-            //    9px로 줄여 푸터가 차지하는 높이를 낮추고 주요자재 박스 아래로 여유 있게 붙도록 함
-            //    (Weekly Report는 이 고정 푸터를 함께 쓰지만 요청 대상이 아니므로 13px 그대로 유지).
-            const footerFontPx = isSummary ? 9 : 13;
-            fixedFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:' + footerFontPx + 'px; line-height:1.2; color:#000; font-family:"Malgun Gothic",sans-serif;';
+            fixedFooterDiv.style.cssText = 'display:table; width:100%; table-layout:fixed; box-sizing:border-box; font-size:13px; line-height:1.2; color:#000; font-family:"Malgun Gothic",sans-serif;';
             fixedFooterDiv.innerHTML = '<span style="display:table-cell; width:1300px; text-align:left;">ⓒ Copyright ' + _pfNow.getFullYear() + ' KORTEK Corporation</span>'
                 + '<span style="display:table-cell; width:1100px; text-align:right;">' + _pfDateStr + (_pfProjectName ? '_' + _pfProjectName : '') + '</span>';
         }
@@ -12607,6 +12612,22 @@ window.handleAuthClick = function() {
                 if (window._updateDriveConnBadge) window._updateDriveConnBadge();
                 if (window.startSilentTokenRefresh) window.startSilentTokenRefresh();
                 window.closeAllTopbarMenus(); // ✅ 로그인 완료 시 열려있던 파일 드롭다운 자동 닫기
+
+                // 🐛 [버그 수정] 첫 번째(지금은 이 함수에 덮어써져 죽은) handleAuthClick 정의에는 있던
+                // 로그인 성공 시 자동 동기화(팀 공용 AI 프롬프트/공휴일/비밀번호 동기화/개인 업무 보관함/
+                // 공용 주소록)가 이 실제 동작 버전에는 빠져 있었음 — 되살림.
+                if (typeof window.loadPromptFromDrive === 'function') window.loadPromptFromDrive();
+                if (typeof window.loadProjectSummaryPromptFromDrive === 'function') window.loadProjectSummaryPromptFromDrive();
+                if (typeof window.loadHolidaysFromDrive === 'function') window.loadHolidaysFromDrive();
+                setTimeout(() => { if (typeof window.checkPasswordSync === 'function') window.checkPasswordSync(); }, 1500);
+                if (window.TaskInbox && window.TaskInbox.loadFromDrive) window.TaskInbox.loadFromDrive();
+                if (window.AddressBook && window.AddressBook.loadFromDrive) {
+                    window.tabData = window.tabData || {};
+                    window.tabData.addressBook = window.AddressBook.load();
+                    window.AddressBook.loadFromDrive().then(function(list) {
+                        if (list) { window.tabData.addressBook = list; if (window.renderAddressTable) window.renderAddressTable(); }
+                    });
+                }
 
                 // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
                 setTimeout(() => {
@@ -23417,13 +23438,13 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         <div style="border-top:1px solid #eee; margin-bottom:18px;"></div>
 
         <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🔍 다른 색상으로 미리보기</div>
-        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">원색을 고르면 지금과 동일한 채도·명도 공식으로 파스텔 톤을 계산합니다. <b>[✅ 실제 페이지에 적용]</b>을 누르면 이 창을 닫아도 사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지 실제 화면에 그대로 반영됩니다(새로고침하면 원래 청록으로 돌아감 — 저장되는 변경이 아닙니다).</div>
+        <div style="font-size:11.5px; color:#888; margin-bottom:10px;">아래 프리셋을 클릭하거나 색을 직접 고르면 <b>바로 실제 화면에 자동 적용</b>됩니다 — 사이드바·상단바·표 헤더·제브라·테두리·버튼 호버까지 이 창을 닫아도 그대로 유지됩니다(새로고침하면 원래 청록으로 돌아감 — 저장되는 변경은 아닙니다). 마음에 안 들면 [↩️ 청록으로 되돌리기]를 누르세요.</div>
         <div id="cp-preset-swatches" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;"></div>
         <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
             <label style="font-size:12px; color:#555;">직접 선택:</label>
-            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value)" style="width:44px; height:30px; border:1px solid #ccc; border-radius:4px; cursor:pointer; padding:2px;">
+            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value); window._cpApplyLive(this.value);" style="width:44px; height:30px; border:1px solid #ccc; border-radius:4px; cursor:pointer; padding:2px;">
             <span id="cp-custom-hex" style="font-size:12px; color:#888; font-family:monospace;"></span>
-            <button onclick="window._cpApplyLive(document.getElementById('cp-custom-color').value)" style="margin-left:10px; padding:6px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ 실제 페이지에 적용</button>
+            <button onclick="window._cpApplyLive(document.getElementById('cp-custom-color').value)" style="margin-left:10px; padding:6px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">✅ 확인 (실제 페이지에 적용)</button>
             <button onclick="window._cpRevertLive()" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12.5px; cursor:pointer;">↩️ 청록으로 되돌리기</button>
         </div>
         <div id="cp-apply-status" style="font-size:11.5px; color:#888; margin-bottom:16px;">⚪ 아직 미리보기만 — 실제 페이지는 원래 청록 그대로입니다</div>
@@ -23606,7 +23627,7 @@ window._cpUpdateApplyStatus = function() {
 window.openColorPaletteModal = function() {
     window._cpRenderCurrent();
     document.getElementById('cp-preset-swatches').innerHTML = window.CP_PRESETS.map(hex =>
-        '<div onclick="window._cpRenderPreview(\'' + hex + '\')" title="' + hex + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>'
+        '<div onclick="window._cpRenderPreview(\'' + hex + '\'); window._cpApplyLive(\'' + hex + '\');" title="' + hex + '" style="width:32px; height:32px; border-radius:50%; background:' + hex + '; cursor:pointer; border:2px solid #fff; box-shadow:0 0 0 1px #ddd;"></div>'
     ).join('');
     window._cpRenderPreview(document.getElementById('cp-custom-color').value || '#2c5f8a');
     window._cpUpdateApplyStatus();
@@ -25795,7 +25816,13 @@ window.collectAlarmItems = function() {
         //    먼저 확인해버려서, 실제 업무(레벨0이 아닌 핀셋 걸린 행)까지 개발단계명("PROTO A" 등)으로
         //    표시되는 사고가 났다. 다른 곳들(_origDev 참고하는 모든 코드)과 동일하게 row._level===0일
         //    때만 _origDev를 쓰고, 그 외엔 항상 row[ci.wbs](실제 WBS 업무명)를 먼저 쓰도록 순서를 바로잡음.
-        let taskName = (ci.wbs > -1 ? row[ci.wbs] : '') || (row._level === 0 ? row._origDev : '') || '';
+        // 🐛 [버그 수정] ci.wbs(단일 "개발업무(WBS)" 열 모드)만 확인하고, 레벨별로 나뉜 열(개발단계/1~4차
+        // 업무) 모드는 전혀 안 봐서 — 레벨0이 아닌 실제(본인에게 할당된) 업무는 항상 비어 매칭 실패 →
+        // 아래 td[5] 폴백으로 넘어가면서 결국 레벨0(예: "PROTO B*") 이름이 잡히고 있었다. Gantt 렌더
+        // 코드(window.renderTable 안 wbsColIdx 계산)와 동일한 레벨별 열 결정 로직을 그대로 재사용.
+        let wbsColIdx = (row._level === 0) ? ci.devStage : (row._level === 1 ? ci.taskType1 : (row._level === 2 ? ci.taskType2 : (row._level === 3 ? ci.taskType3 : ci.taskType4)));
+        if ((wbsColIdx === undefined || wbsColIdx === -1) && ci.wbs !== -1) wbsColIdx = ci.wbs;
+        let taskName = (wbsColIdx !== undefined && wbsColIdx > -1 ? row[wbsColIdx] : '') || (row._level === 0 ? row._origDev : '') || '';
         taskName = taskName.toString().trim();
         if (!taskName) {
             const taskTd = tr.querySelectorAll('td')[5];
@@ -29994,10 +30021,13 @@ const BM_CONF = {
                 + '<td><input type="text" class="u-input" data-field="title"></td>'
                 + '<td><input type="email" class="u-input" data-field="email"></td>'
                 + '<td><input type="text" class="u-input" data-field="mobile"></td>'
-                + '<td><input type="text" class="u-input" data-field="phone"></td>';
+                + '<td><input type="text" class="u-input" data-field="phone"></td>'
+                // 🐛 [버그 수정] 이 템플릿이 텔레그램 ID 열이 추가되기 전에 만들어진 채 그대로 남아있어서,
+                // ▲▼＋－ 팝업으로 행을 추가하면 마지막 "텔레그램 ID" 칸 자체가 통째로 빠진 행이 생겼음.
+                + '<td><input type="text" class="u-input" data-field="telegramId" placeholder="예: 987654321"></td>';
         }
     },
-    
+
     bs: {
         tbodyId: 'briefspec-body',
         isSkip: function() { return false; },
