@@ -15633,7 +15633,7 @@ window.editPrompt = async function() {
         modal.innerHTML = `
             <div id="prompt-edit-modal-box" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
                 <div id="prompt-drag-handle" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;color:#1971c2;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
-                    <span id="prompt-modal-title">✏️ AI 분석 프롬프트</span>
+                    <span id="prompt-modal-title">✏️ AI 업무 분석 — 프롬프트 편집</span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button id="prompt-history-btn" onclick="event.stopPropagation(); window.showPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
                         <button onclick="document.getElementById('prompt-edit-modal').style.display='none'"
@@ -15671,7 +15671,7 @@ window.editPrompt = async function() {
     // 💡 언어 전환 시 버튼 텍스트 즉시 반영
     const _pEn = window._currentLang === 'en';
     const _pTexts = {
-        'prompt-modal-title':  _pEn ? '✏️ AI Analysis Prompt'       : '✏️ AI 분석 프롬프트',
+        'prompt-modal-title':  _pEn ? '✏️ AI Work Analysis — Prompt Edit' : '✏️ AI 업무 분석 — 프롬프트 편집',
         'prompt-unlock-btn':   _pEn ? '🔒 Edit'                      : '🔒 수정하기',
         'prompt-save-btn':     _pEn ? '💾 Save'                      : '💾 저장',
         'prompt-reset-btn':    _pEn ? '🔄 Reset to Default'          : '🔄 기본값으로 초기화',
