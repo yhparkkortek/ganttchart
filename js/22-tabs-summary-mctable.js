@@ -2010,6 +2010,8 @@ window.saveSmtpConfig = async function() {
     const localCfg = window.loadAlarmSettings();
     localCfg.smtp = { host: cfg.host, port: cfg.port, user: cfg.user, pass: cfg.pass };
     localStorage.setItem('gantt_alarm_settings', JSON.stringify(localCfg));
+    // 💡 AI 업무 분석 탭의 메일 서버 계정 표시도 같은 계정을 공유하므로 즉시 갱신
+    if (window._msRefreshServerAccountStatus) window._msRefreshServerAccountStatus();
 
     try {
         const res = await fetch('http://127.0.0.1:5000/config', {

@@ -118,6 +118,7 @@ window.switchMailTab = function(tab) {
     if (pc) pc.style.display = tab === 'paste'  ? 'flex' : 'none';
     if (fc) fc.style.display = tab === 'file'   ? 'flex' : 'none';
     if (sc) sc.style.display = tab === 'server' ? 'flex' : 'none';
+    if (tab === 'server' && window._msRefreshServerAccountStatus) window._msRefreshServerAccountStatus();
 
     window._mailActiveTab = tab;
 
@@ -1457,22 +1458,33 @@ window._msLoadQueueFromStorage = function() {
     } catch(e) { console.warn('큐 복원 실패:', e); }
 };
 
-// ─── 아이디 저장/불러오기 ────────────────────────────────
+// ─── 메일 서버 계정 상태 표시 + 초기값 세팅 ────────────────────
+// 💡 [2026-08-31] POP3(메일 수신, 이 탭)와 SMTP(메일 발송, 알람 설정) 계정을 실제로 테스트해보니
+//    같은 메일 계정(예: yhpark@kortek.co.kr)으로 둘 다 로그인된다 — 회사 메일함 하나를 프로토콜만
+//    다르게 접근하는 구조라 당연한 결과. 그래서 여기서 따로 아이디/비번을 입력·저장받지 않고,
+//    알람 설정(⚙️ 알람 설정 → 📧 이메일 알람 → 🖥️ 이메일 서버 설정)에 저장된 계정을 그대로 재사용한다.
+window._msRefreshServerAccountStatus = function() {
+    const el = document.getElementById('ms-account-status-text');
+    if (!el) return;
+    const _en = window._currentLang === 'en';
+    const smtp = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
+    if (smtp.user && smtp.pass) {
+        el.textContent = _en ? `✅ Mail account: ${smtp.user} (shared with Alarm Settings)` : `✅ 메일 계정: ${smtp.user} (알람 설정과 공용)`;
+        el.style.color = '#27ae60';
+    } else {
+        el.textContent = _en ? '⚠️ No mail account configured — set it up with the button on the right.' : '⚠️ 메일 계정이 설정되지 않았습니다 — 오른쪽 버튼으로 먼저 설정해주세요.';
+        el.style.color = '#e67e22';
+    }
+};
+
+// 알람 설정 모달을 열고 "📧 이메일 알람" 섹션을 강제로 펼쳐서 보여줌 (이미 펼쳐져 있어도 그대로 유지)
+window.msOpenEmailServerSettings = function() {
+    if (window.openAlarmSettings) window.openAlarmSettings();
+    const sec = document.getElementById('sec-email');
+    if (sec && sec.style.display === 'none' && window._toggleAlarmSection) window._toggleAlarmSection('sec-email');
+};
+
     (function() {
-    const saved   = localStorage.getItem('ms_saved_userid');
-    const savedPw = localStorage.getItem('ms_saved_pw');
-    if (saved) {
-        const el = document.getElementById('ms-userid');
-        const cb = document.getElementById('ms-save-id');
-        if (el) el.value = saved;
-        if (cb) cb.checked = true;
-    }
-    if (savedPw) {
-        const pwEl = document.getElementById('ms-password');
-        // btoa 난독화 복호화 (평문 저장 방지)
-        try { if (pwEl) pwEl.value = decodeURIComponent(escape(atob(savedPw))); }
-        catch(e) { if (pwEl) pwEl.value = savedPw; } // 구버전 호환
-    }
     // 저장된 API 키 상태 표시 (선택된 AI 제공사 기준)
     const savedKey = window.getActiveAiKey();
     const keyInput  = document.getElementById('ms-personal-apikey');
@@ -1499,23 +1511,20 @@ window._msLoadQueueFromStorage = function() {
 
 // ─── 메일 가져오기 ───────────────────────────────────────
 window.msFetchMail = async function() {
-    const userid   = document.getElementById('ms-userid').value.trim();
-    const password = document.getElementById('ms-password').value;
+    // 💡 아이디/비번은 더 이상 이 탭에서 따로 입력받지 않고, 알람 설정(이메일 서버 설정)의 SMTP
+    //    계정을 그대로 재사용한다 — 같은 메일 계정이 POP3(수신)/SMTP(발송) 둘 다에 로그인됨을 확인함.
+    const smtp = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
+    const userid   = (smtp.user || '').trim();
+    const password = smtp.pass || '';
     const startDate = document.getElementById('ms-start-date').value;
     const endDate   = document.getElementById('ms-end-date').value;
 
-    if (!userid || !password) { alert('아이디와 비밀번호를 입력해주세요.'); return; }
-    if (!startDate || !endDate) { alert('날짜를 선택해주세요.'); return; }
-
-    // 로그인정보 저장 (아이디 + 비밀번호)
-    if (document.getElementById('ms-save-id').checked) {
-        localStorage.setItem('ms_saved_userid', userid);
-        // btoa 난독화 저장 (평문 저장 방지)
-        localStorage.setItem('ms_saved_pw', btoa(unescape(encodeURIComponent(password))));
-    } else {
-        localStorage.removeItem('ms_saved_userid');
-        localStorage.removeItem('ms_saved_pw');
+    if (!userid || !password) {
+        alert('먼저 이메일 서버 계정을 설정해주세요 (⚙️ 이메일 서버 설정 버튼).');
+        window.msOpenEmailServerSettings();
+        return;
     }
+    if (!startDate || !endDate) { alert('날짜를 선택해주세요.'); return; }
 
     // UI 초기화
     window._msAnalyzeCancelled = false;
