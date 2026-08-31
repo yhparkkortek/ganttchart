@@ -4492,18 +4492,40 @@ window.loadElecPartLibrary = async function(type) {
         return (data && Array.isArray(data.items)) ? data : { items: [] };
     } catch (e) { console.warn('전기부품 라이브러리 로드 실패:', e.message); return { items: [] }; }
 };
+// 💡 [2026-08-31 신규 — 사고 방지] "파일이 있는지 찾아보고 없으면 만든다"는 흐름 사이에 잠금장치가
+//    없어서, 두 사람(또는 탭 2개)이 거의 동시에 저장하면 둘 다 "없다"고 판단해 똑같은 이름의 파일을
+//    2개씩 만들어버리는 사고가 실제로 있었다(ElecPartLib_ADBD_Shared.json이 2개 생성됨). AddressBook의
+//    낙관적 동시성 제어(_lastKnownSavedAt)와 동일한 아이디어를, 전체 내용을 다시 받을 필요 없이
+//    Drive의 modifiedTime 메타데이터만으로 가볍게 구현 — ①읽을 때 그 시점의 modifiedTime을 기억해두고,
+//    ②쓰기 직전 한 번 더 확인해서 그 사이 바뀌었으면(=남이 먼저 저장함) 내 오래된 내용으로 덮어쓰지
+//    않고 중단, 최신본을 다시 불러오게 안내한다.
+window._epLibKnownModifiedTime = {};
+
+window._epFetchModifiedTime = async function(fileId, token) {
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=modifiedTime&supportsAllDrives=true`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    const data = await res.json();
+    return data && data.modifiedTime;
+};
+
 window.upsertElecPartLibraryEntry = async function(type, entry) {
     const _en = window._currentLang === 'en';
     try {
         const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
         if (!token) { alert(_en ? '🔒 Please connect Google Drive first.' : '🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return false; }
-        const fileId = await window.findElecPartLibFile(type, token);
+        let fileId = await window.findElecPartLibFile(type, token);
         let lib = { items: [] };
+        let knownModifiedTime = null;
         if (fileId) {
-            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, { headers: { 'Authorization': `Bearer ${token}` } });
+            const [res, modifiedTime] = await Promise.all([
+                fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`, { headers: { 'Authorization': `Bearer ${token}` } }),
+                window._epFetchModifiedTime(fileId, token)
+            ]);
             const loaded = await res.json();
             if (loaded && Array.isArray(loaded.items)) lib = loaded;
+            knownModifiedTime = modifiedTime;
         }
         const idx = lib.items.findIndex(function(p) { return window._epNamesMatch(p.model, entry.model); });
         entry.updatedAt = new Date().toISOString();
@@ -4512,11 +4534,29 @@ window.upsertElecPartLibraryEntry = async function(type, entry) {
         const body = JSON.stringify(lib);
         const cfg = window.ELEC_PART_TYPES[type];
         if (fileId) {
+            // 낙관적 동시성 제어 — 쓰기 직전, 내가 읽은 이후로 다른 사람이 먼저 저장하지 않았는지 재확인
+            try {
+                const currentModifiedTime = await window._epFetchModifiedTime(fileId, token);
+                if (knownModifiedTime && currentModifiedTime && currentModifiedTime !== knownModifiedTime) {
+                    const msg = _en
+                        ? '⚠️ This library was just updated by someone else. Your changes were NOT saved — please reload and try again.'
+                        : '⚠️ 다른 팀원이 방금 이 라이브러리를 먼저 저장했습니다. 오래된 내용으로 덮어쓰지 않기 위해 저장을 중단했습니다 — 다시 불러온 뒤 시도해주세요.';
+                    if (window.showToast) window.showToast(msg, 'warning', 6000); else alert(msg);
+                    return false; // 캐시된 파일 id 자체는 안 바뀌므로 window._epLibFileIds는 그대로 둬도 됨 — 다음 저장 때 다시 최신 내용을 읽어옴
+                }
+            } catch (checkErr) { console.warn('전기부품 라이브러리 동시성 확인 실패(그냥 진행):', checkErr.message); }
+
             await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media&supportsAllDrives=true`, {
                 method: 'PATCH', headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, body: body
             });
         } else {
+            // 생성 직전 한 번 더 재확인 — 그 사이 다른 사람이 이미 만들었으면 새로 만들지 않고 그 파일에 이어서 저장(중복 생성 방지)
             const folderId = await window.getOrCreateConfigFolder(token);
+            const recheckId = await window._findOrMigrateFile(token, cfg.libFilename, folderId);
+            if (recheckId) {
+                window._epLibFileIds[type] = recheckId;
+                return window.upsertElecPartLibraryEntry(type, entry); // 방금 알아낸 fileId로 update 경로를 다시 탐
+            }
             const boundary = 'elec_part_lib_boundary';
             const metadata = { name: cfg.libFilename, mimeType: 'application/json', parents: [folderId] };
             const multipartBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
