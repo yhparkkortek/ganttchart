@@ -13833,14 +13833,25 @@ window.handleAuthClick = function() {
             gapi.client.setToken(resp);
             window.googleAccessToken = resp.access_token;
 
+            // 🐛 [2026-08-31 버그 수정] "로그인 성공 직후 구글 드라이브 연결이 꼬였습니다" 알림이 반복
+            //    발생하던 문제 — 원인은 gapi.client.drive가 준비될 때까지 20회×250ms(=5초)만 기다리고
+            //    포기하는 게 너무 짧았던 것. gapi.load('client', ...) → gapi.client.init(discoveryDocs)
+            //    로 이어지는 두 단계 네트워크 요청이 느린 회선/첫 로드(특히 Ctrl+F5 직후 캐시가 비어
+            //    있을 때)에서는 5초를 쉽게 넘긴다 — 이걸 "브라우저 캐시 문제"로 잘못 안내해서, 실제로는
+            //    "조금 더 기다리면 되는" 상황에 사용자가 오히려 Ctrl+F5(캐시 비우기)를 눌러 매번 더
+            //    느려지는 악순환이었다. 대기 시간을 60회×250ms(=15초)로 늘리고, 중간(2.5초 지점)에
+            //    한 번 더 gapi.load를 재요청해서 콜백이 드물게 안 불리는 경우도 방어한다.
             let retries = 0;
-            while (!(window.gapi && gapi.client && gapi.client.drive) && retries < 20) {
+            while (!(window.gapi && gapi.client && gapi.client.drive) && retries < 60) {
+                if (retries === 10 && window.intializeGapiClient) {
+                    try { gapi.load('client', window.intializeGapiClient); } catch (e) {}
+                }
                 await new Promise(r => setTimeout(r, 250));
                 retries++;
             }
 
             if (!(window.gapi && gapi.client && gapi.client.drive)) {
-                alert("❌ 브라우저 캐시로 인해 구글 서버 연결이 꼬였습니다.\n키보드의 [Ctrl + F5]를 눌러 '강력 새로고침' 후 다시 시도해 주세요.");
+                alert("❌ 구글 드라이브 연결 준비가 너무 오래 걸립니다 (네트워크가 느리거나 일시적 오류일 수 있습니다).\n잠시 후 [🔵 드라이브 연동하기]를 다시 눌러주세요. 계속 안 되면 그때 Ctrl+F5로 강력 새로고침 후 시도해 주세요.");
                 authBtn.innerText = window._currentLang === 'en' ? "🔵 Connect Google Drive" : "🔵 구글 드라이브 연동하기";
                 authBtn.disabled = false;
                 return;
