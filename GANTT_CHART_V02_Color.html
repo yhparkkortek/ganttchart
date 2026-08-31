@@ -23113,6 +23113,10 @@ window.CP_CURRENT_NAV = { base: '#aedae0', hover: '#90cdd5', active: '#72c0ca', 
 // 뽑아서 재조합"하는 방식이라 무채색(회색)은 hue 자체가 없어서(R/G/B가 거의 같음) RGB의 미세한 오차로
 // 엉뚱한 hue(파란빛)가 뽑혀 나갔음 — 애초에 이 방식으로는 "무채색 테마"를 표현할 수 없어 프리셋에서 제외.
 window.CP_PRESETS = ['#e03131', '#e67e22', '#f1c40f', '#2f9e44', '#00707d', '#2c5f8a', '#6f42c1', '#d6336c'];
+// 💡 [2026-08-31 신규] 프로젝트에 저장된 테마색이 없을 때(=새 프로젝트, 또는 아직 팔레트를 한 번도
+//    안 건드린 프로젝트) 적용할 기본값 — 기존엔 이게 없어서 "아무 것도 안 하면" HTML/CSS에 하드코딩된
+//    청록(#00707d)이 그대로 보였다. 청록 → 파랑 프리셋으로 기본값을 바꾼다(아래 _cpApplyStoredTheme 참고).
+window.CP_DEFAULT_HEX = '#2c5f8a';
 
 window._cpSwatch = function(hex, label) {
     const textColor = (window._cpHexToHsl(hex).l < 55) ? '#fff' : '#333';
@@ -23510,7 +23514,9 @@ window._gftHover = function(el, entering) {
     el.style.setProperty('color', window._cpRoleHex('darkText'), 'important');
 };
 window._cpApplyStoredTheme = function() {
-    const hex = window.tabData && window.tabData.themeColor;
+    // 💡 [2026-08-31 수정] 프로젝트에 저장된 테마색이 없으면(신규/미설정 프로젝트) 예전엔 아무 것도
+    //    적용하지 않아 하드코딩된 청록 그대로 보였다 — 이제 CP_DEFAULT_HEX(파랑)를 기본값으로 적용한다.
+    const hex = (window.tabData && window.tabData.themeColor) || window.CP_DEFAULT_HEX;
     // 💡 [2026-08-30] 이 프로젝트가 실제로 저장해둔(또는 안 해둔) 테마를 "기준값"으로 기록 — 팔레트를
     // 열어 색을 이리저리 눌러보다가 결국 이 값으로 되돌아오면 dirty로 잡지 않기 위함.
     window._cpSavedThemeHex = hex || null;
@@ -23520,6 +23526,11 @@ window._cpApplyStoredTheme = function() {
 if (!window._cpPopulateTabDataWrapped) {
     window._cpPopulateTabDataWrapped = true;
     window.addEventListener('DOMContentLoaded', function() {
+        // 💡 [2026-08-31 신규] populateTabData는 프로젝트를 실제로 열었을 때만 호출된다 — 그래서 기본값
+        //    적용을 그 안에서만 하면, 아직 프로젝트를 안 연 "빈 화면"(사이드바/상단바 등)은 새로고침(F5)
+        //    직후에도 계속 하드코딩된 청록으로 보였다. 여기서 한 번 더 즉시 호출해서, 프로젝트를 열기
+        //    전부터 기본값(파랑)이 곧바로 적용되게 한다(tabData가 비어 있으면 CP_DEFAULT_HEX로 대체됨).
+        window._cpApplyStoredTheme();
         const _origPopulateTabData = window.populateTabData;
         window.populateTabData = function() {
             const ret = _origPopulateTabData ? _origPopulateTabData.apply(this, arguments) : undefined;
