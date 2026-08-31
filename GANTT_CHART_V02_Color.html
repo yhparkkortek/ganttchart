@@ -850,6 +850,11 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
 .bm-no { cursor:pointer; text-align:center; user-select:none; }
 .bm-no:hover { background-color:#e9ecef; }
 tr.bm-selected > td { background-color:#fff3cd !important; }
+/* 💡 [2026-08-31 신규] 노란 배경만으로는 선택된 행 경계가 잘 안 보인다는 지적 — 위/아래 테두리로
+   행 전체를 감싸고, border-collapse로 인접 셀과 선이 겹치는 좌/우 끝 칸에는 별도로 좌/우 테두리도 추가. */
+tr.bm-selected > td { border-top:2px solid #ffc107 !important; border-bottom:2px solid #ffc107 !important; }
+tr.bm-selected > td:first-child { border-left:2px solid #ffc107 !important; }
+tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
 .bm-row-popup {
     position:absolute; z-index:9999; display:none; background:#fff;
     border:1px solid #ced4da; border-radius:8px; padding:8px; box-shadow:0 4px 12px rgba(0,0,0,0.15);
@@ -938,7 +943,9 @@ tr.bm-selected > td { background-color:#fff3cd !important; }
 /* 💡 [2026-08-30] 이 칸들은 지금까지 테두리를 따로 정한 적이 없어 브라우저 기본(회색) 테두리 그대로였음
    — 다른 입력칸들과 통일되게 청록 테두리 지정(팔레트로 다른 색 적용 시 같이 바뀌도록 [style*=...] 매칭
    대상은 아니라 여기 직접 #cfe3e5로 지정 — 실제 적용 시엔 별도 오버라이드가 이 값도 같이 덮어씀) */
-#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { border: 1px solid #cfe3e5; border-radius: 4px; }
+/* 💡 [2026-08-31 수정] 날짜 칸을 감싸던 청록 테두리 박스가 답답해 보인다는 피드백으로 제거 —
+   클릭 가능함은 위 .ms-cal-btn/cursor:pointer 규칙으로 계속 안내됨. */
+#sum-milestone-body input.u-input, #sum-milestone-body-actual input.u-input { border: none; border-radius: 0; }
 .ms-cal-btn { display: inline-block; width: 13px; cursor: pointer; font-size: 11px; vertical-align: middle; }
 
 /* 2. 일반 말주머니 모양 적용 (기존 꼬리 초기화 후 테두리가 있는 이중 꼬리 생성) */
@@ -2251,6 +2258,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                     #tab-briefspec .concept-table tbody tr.mc-zebra-b,
                     #tab-briefspec .concept-table tbody tr.mc-zebra-b input {
                         background-color: #e8f2f3 !important;
+                    }
+                    /* 💡 [2026-08-31 버그 수정] "No." 클릭으로 행을 선택하면(.bm-selected) 위 tr.bm-selected>td
+                       규칙(852번째 줄)이 노란 하이라이트(#fff3cd)를 칠하는데, 바로 위 줄무늬(zebra) 규칙이
+                       input 배경까지 흰색/청록색으로 !important 덮어쓰고 있어서 그 노란색이 입력칸 안에서는
+                       전혀 안 보였다(칸 사이 여백에만 살짝 비쳤음) — "작성창이 회색/흰색"이라는 지적의 원인.
+                       선택된 행에서는 input 배경을 투명으로 되돌려서 td의 노란 하이라이트가 그대로 비치게 함.
+                       (같은 특이도의 !important 규칙이라 이 규칙이 코드상 더 뒤에 있어야 이긴다.) */
+                    #tab-mctable .concept-table tbody tr.bm-selected input,
+                    #tab-briefspec .concept-table tbody tr.bm-selected input {
+                        background-color: transparent !important;
                     }
             </style>
             <table class="concept-table">
