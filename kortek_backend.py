@@ -19,9 +19,19 @@
 #    /mail/decrypt      — SMTP 설정 복호화 (Drive 로드용)
 #    /all/encrypt       — 전체 설정 암호화 (Drive 저장용)
 #    /all/decrypt       — 전체 설정 복호화 (Drive 로드용)
+#    /schedule          — 예약 발송 규칙 등록/조회 (GET/POST)
+#    /schedule/<id>     — 예약 발송 규칙 삭제 (DELETE)
+#
+#    [2026-08-31 신규] 예약 발송(반복 규칙) 스케줄러
+#    기존엔 "언제 보낼지" 판단을 전부 브라우저(JS setInterval)가 맡고 있어서,
+#    브라우저 탭이 열려 있어야만 알람/공지가 발송됐다. 이제 브라우저는 "무엇을
+#    보낼지"(규칙)만 이 서버에 등록하고, "언제 보낼지"는 서버가 1분마다 자체
+#    확인해서 직접 발송한다 — 탭이 꺼져 있어도 이 서버(kortek_backend.bat)만
+#    켜져 있으면 계속 동작한다. 서버가 꺼져있던 동안 지나간 시각은 그냥
+#    건너뛴다(밀린 발송을 몰아서 보내지 않음).
 # ══════════════════════════════════════════════════════════════
 
-import os, json, re, poplib, email, smtplib, hashlib, base64, html
+import os, json, re, poplib, email, smtplib, hashlib, base64, html, threading, time, uuid
 from email.header     import decode_header
 from email.utils      import parsedate_to_datetime
 from email.mime.text  import MIMEText
@@ -63,6 +73,7 @@ KST            = timezone(timedelta(hours=9))
 BASE_DIR       = os.path.dirname(os.path.abspath(__file__))
 CONFIG_FILE    = os.path.join(BASE_DIR, 'mail_config.json')
 TG_CONFIG_FILE = os.path.join(BASE_DIR, 'telegram_config.json')
+SCHEDULE_FILE  = os.path.join(BASE_DIR, 'schedule_rules.json')
 POP3_HOST      = "gw.kortek.co.kr"
 POP3_PORT      = 110
 
@@ -77,6 +88,11 @@ SMTP_TLS  = True
 TELEGRAM_TOKEN   = ''
 TELEGRAM_CHAT_ID = ''
 TELEGRAM_MEMBERS = []
+
+# ── 예약 발송 규칙 (메모리 + schedule_rules.json 영속 저장) ────
+#    스케줄러 백그라운드 스레드와 Flask 요청 스레드가 동시에 건드릴 수 있어 락으로 보호.
+SCHEDULE_RULES = []
+_SCHEDULE_LOCK = threading.Lock()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -108,12 +124,30 @@ def save_tg_config(cfg: dict):
     with open(TG_CONFIG_FILE, 'w', encoding='utf-8') as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
 
+def load_schedule_rules() -> list:
+    if os.path.exists(SCHEDULE_FILE):
+        try:
+            with open(SCHEDULE_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data if isinstance(data, list) else []
+        except Exception as e:
+            print(f"[경고] schedule_rules.json 로드 실패: {e}")
+    return []
+
+def save_schedule_rules(rules: list):
+    try:
+        with open(SCHEDULE_FILE, 'w', encoding='utf-8') as f:
+            json.dump(rules, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print(f"[경고] schedule_rules.json 저장 실패: {e}")
+
 # 서버 시작 시 로드
 load_smtp_config()
 _tg = load_tg_config()
 TELEGRAM_TOKEN   = _tg.get("token", "")
 TELEGRAM_CHAT_ID = _tg.get("default_chat_id", "")
 TELEGRAM_MEMBERS = _tg.get("members", [])
+SCHEDULE_RULES   = load_schedule_rules()
 
 
 # ══════════════════════════════════════════════════════════════
@@ -342,6 +376,7 @@ def health():
         'pop3':    POP3_HOST,
         'telegram': '연결됨' if TELEGRAM_TOKEN else '(미설정)',
         'members': len(TELEGRAM_MEMBERS),
+        'scheduleRules': len(SCHEDULE_RULES),
         'time':    datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')
     })
 
@@ -365,19 +400,13 @@ def update_smtp_config():
         return jsonify({'ok': False, 'error': str(e)}), 500
 
 
-# ── 메일 발송 (SMTP) ──────────────────────────────────────────
-@app.route('/send-mail', methods=['POST'])
-def send_mail():
-    data    = request.json or {}
-    to      = data.get('to', '').strip()
-    cc      = data.get('cc', '').strip()
-    subject = data.get('subject', '').strip()
-    body    = data.get('body', '').strip()
-
+# ── 메일 발송 코어 (SMTP) — /send-mail 엔드포인트와 예약 발송 스케줄러가 공용으로 씀 ──
+def _send_mail_core(to, subject, body, cc=''):
+    """반환: (ok: bool, error: str|None, http_status: int)"""
     if not to:
-        return jsonify({'ok': False, 'error': '수신자 없음'}), 400
+        return False, '수신자 없음', 400
     if not SMTP_USER or not SMTP_PASS:
-        return jsonify({'ok': False, 'error': 'SMTP 미설정 — 알람 설정에서 SMTP를 입력하세요'}), 400
+        return False, 'SMTP 미설정 — 알람 설정에서 SMTP를 입력하세요', 400
     try:
         msg            = MIMEMultipart('alternative')
         msg['From']    = SMTP_USER
@@ -398,15 +427,29 @@ def send_mail():
                 smtp.ehlo()
             smtp.login(SMTP_USER, SMTP_PASS)
             smtp.sendmail(SMTP_USER, recipients, msg.as_string())
+        return True, None, 200
+    except smtplib.SMTPAuthenticationError:
+        return False, '로그인 실패: 비밀번호를 확인하세요', 401
+    except smtplib.SMTPConnectError:
+        return False, f'서버 연결 실패: {SMTP_HOST}:{SMTP_PORT}', 503
+    except Exception as e:
+        return False, str(e), 500
 
+
+# ── 메일 발송 (SMTP) ──────────────────────────────────────────
+@app.route('/send-mail', methods=['POST'])
+def send_mail():
+    data    = request.json or {}
+    to      = data.get('to', '').strip()
+    cc      = data.get('cc', '').strip()
+    subject = data.get('subject', '').strip()
+    body    = data.get('body', '').strip()
+
+    ok, err, status = _send_mail_core(to, subject, body, cc)
+    if ok:
         print(f"[OK] 메일 발송 → {to} / {subject}")
         return jsonify({'ok': True})
-    except smtplib.SMTPAuthenticationError:
-        return jsonify({'ok': False, 'error': '로그인 실패: 비밀번호를 확인하세요'}), 401
-    except smtplib.SMTPConnectError:
-        return jsonify({'ok': False, 'error': f'서버 연결 실패: {SMTP_HOST}:{SMTP_PORT}'}), 503
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+    return jsonify({'ok': False, 'error': err}), status
 
 
 # ── 메일 수신 (POP3) ──────────────────────────────────────────
@@ -621,6 +664,181 @@ def telegram_test():
         return jsonify({'ok': False, 'error': str(e)})
 
 
+# ══════════════════════════════════════════════════════════════
+# ⏰ 예약 발송(반복 규칙) — 규칙 등록/조회/삭제 + 백그라운드 스케줄러
+# ══════════════════════════════════════════════════════════════
+#
+# 규칙(rule) 스키마:
+#   id, type('notice'|'alarm'), title, message,
+#   recipients: [{name, email, telegramId, emailOn, tgOn}, ...],
+#   dateMode('range'|'specific'),
+#     range  → startDate, endDate, dayInterval(N일마다)
+#     specific → specificDates: ["YYYY-MM-DD", ...]
+#   hourStart, hourEnd ("HH:MM", 기본 09:00~21:00), hourInterval(N시간마다),
+#   enabled, createdAt, lastFiredBucket(중복발송 방지용, 서버가 내부적으로 기록)
+
+@app.route('/schedule', methods=['GET', 'POST'])
+def schedule_api():
+    global SCHEDULE_RULES
+    if request.method == 'GET':
+        with _SCHEDULE_LOCK:
+            return jsonify({'ok': True, 'rules': SCHEDULE_RULES})
+
+    data    = request.json or {}
+    rule_id = data.get('id') or str(uuid.uuid4())
+    rule = {
+        'id':            rule_id,
+        'type':          data.get('type', 'notice'),
+        'title':         (data.get('title') or '').strip(),
+        'message':       data.get('message', ''),
+        'recipients':    data.get('recipients', []),
+        'dateMode':      data.get('dateMode', 'range'),
+        'startDate':     data.get('startDate', ''),
+        'endDate':       data.get('endDate', ''),
+        'specificDates': data.get('specificDates', []),
+        'dayInterval':   max(1, int(data.get('dayInterval', 1) or 1)),
+        'hourStart':     data.get('hourStart', '09:00'),
+        'hourEnd':       data.get('hourEnd', '21:00'),
+        'hourInterval':  max(0.25, float(data.get('hourInterval', 1) or 1)),
+        'enabled':       bool(data.get('enabled', True)),
+        'createdAt':     data.get('createdAt') or datetime.now(KST).isoformat(),
+    }
+    if not rule['title']:
+        return jsonify({'ok': False, 'error': '제목이 필요합니다'}), 400
+
+    with _SCHEDULE_LOCK:
+        existing = next((r for r in SCHEDULE_RULES if r.get('id') == rule_id), None)
+        if existing:
+            # 💡 이력(마지막 발송 버킷)은 유지한 채 나머지 설정만 덮어씀 — 안 그러면 저장할 때마다
+            #    "이미 오늘 보냈는지" 기록이 사라져 같은 시각에 중복 발송될 수 있음.
+            rule['lastFiredBucket'] = existing.get('lastFiredBucket')
+            rule['lastFiredAt']     = existing.get('lastFiredAt')
+            SCHEDULE_RULES[SCHEDULE_RULES.index(existing)] = rule
+        else:
+            SCHEDULE_RULES.append(rule)
+        save_schedule_rules(SCHEDULE_RULES)
+    return jsonify({'ok': True, 'id': rule_id})
+
+
+@app.route('/schedule/<rule_id>', methods=['DELETE'])
+def schedule_delete_api(rule_id):
+    global SCHEDULE_RULES
+    with _SCHEDULE_LOCK:
+        before = len(SCHEDULE_RULES)
+        SCHEDULE_RULES = [r for r in SCHEDULE_RULES if r.get('id') != rule_id]
+        removed = before - len(SCHEDULE_RULES)
+        save_schedule_rules(SCHEDULE_RULES)
+    return jsonify({'ok': True, 'removed': removed > 0})
+
+
+def _rule_active_today(rule: dict, today) -> bool:
+    """오늘이 이 규칙의 발송 대상 날짜인지(기간+N일마다, 또는 특정 날짜 목록)"""
+    if rule.get('dateMode') == 'specific':
+        return today.strftime('%Y-%m-%d') in (rule.get('specificDates') or [])
+    start_s, end_s = rule.get('startDate'), rule.get('endDate')
+    if not start_s or not end_s:
+        return False
+    try:
+        start = datetime.strptime(start_s, '%Y-%m-%d').date()
+        end   = datetime.strptime(end_s,   '%Y-%m-%d').date()
+    except Exception:
+        return False
+    if today < start or today > end:
+        return False
+    interval = max(1, int(rule.get('dayInterval', 1) or 1))
+    return (today - start).days % interval == 0
+
+
+def _rule_today_buckets(rule: dict) -> list:
+    """오늘 이 규칙이 울려야 할 시각들을 자정 기준 분(minute) 목록으로 반환 (시간창 + N시간마다)"""
+    try:
+        sh, sm = map(int, (rule.get('hourStart') or '09:00').split(':'))
+        eh, em = map(int, (rule.get('hourEnd')   or '21:00').split(':'))
+    except Exception:
+        sh, sm, eh, em = 9, 0, 21, 0
+    start_min = sh * 60 + sm
+    end_min   = eh * 60 + em
+    step_min  = max(15, int(round(float(rule.get('hourInterval', 1) or 1) * 60)))
+    buckets, t = [], start_min
+    while t <= end_min:
+        buckets.append(t)
+        t += step_min
+    return buckets
+
+
+def _fire_rule(rule: dict):
+    """규칙에 등록된 수신자 전원에게 실제 발송(메일/텔레그램)"""
+    title      = rule.get('title', '')
+    message    = rule.get('message', '')
+    recipients = rule.get('recipients', []) or []
+    subject    = f"[예약 발송] {title}"
+    body_html  = '<div style="white-space:pre-wrap; font-family:\'맑은 고딕\',sans-serif;">' \
+                 + html.escape(message).replace('\n', '<br>') + '</div>'
+    for r in recipients:
+        try:
+            if r.get('emailOn') and r.get('email'):
+                ok, err, _ = _send_mail_core(r['email'], subject, body_html)
+                if not ok:
+                    print(f"[예약발송 실패-메일] {r.get('name','')} <{r['email']}>: {err}")
+        except Exception as e:
+            print(f"[예약발송 예외-메일] {r.get('name','')}: {e}")
+        try:
+            if r.get('tgOn') and r.get('telegramId'):
+                res = send_telegram_msg(f"📢 <b>{html.escape(title)}</b>\n{html.escape(message)}", r['telegramId'])
+                if not res.get('ok'):
+                    print(f"[예약발송 실패-텔레그램] {r.get('name','')}: {res}")
+        except Exception as e:
+            print(f"[예약발송 예외-텔레그램] {r.get('name','')}: {e}")
+    print(f"[예약발송] '{title}' → 수신자 {len(recipients)}명 처리 ({datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')})")
+
+
+def _scheduler_tick():
+    """1분마다 호출 — 오늘 발송해야 할 규칙을 찾아 발송하고 lastFiredBucket을 기록한다.
+       서버가 꺼져 있던 동안 지나간 시각은 유예시간(GRACE_MINUTES)을 넘기면 그냥 건너뛴다
+       (밀린 발송을 몰아서 보내지 않음 — 사용자 요청사항)."""
+    GRACE_MINUTES = 2  # 체크 주기(1분)보다 약간 넉넉하게
+    now         = datetime.now(KST)
+    today       = now.date()
+    today_str   = today.strftime('%Y-%m-%d')
+    cur_minutes = now.hour * 60 + now.minute
+
+    with _SCHEDULE_LOCK:
+        rules_snapshot = list(SCHEDULE_RULES)
+
+    fired_any = False
+    for rule in rules_snapshot:
+        if not rule.get('enabled', True):
+            continue
+        try:
+            if not _rule_active_today(rule, today):
+                continue
+            for bm in _rule_today_buckets(rule):
+                if bm > cur_minutes or (cur_minutes - bm) > GRACE_MINUTES:
+                    continue  # 아직 안 됐거나, 유예시간 넘겨 지나침(=건너뜀)
+                bucket_key = f"{today_str}T{bm//60:02d}:{bm%60:02d}"
+                if rule.get('lastFiredBucket') == bucket_key:
+                    continue  # 이미 이 시각엔 발송함
+                _fire_rule(rule)
+                rule['lastFiredBucket'] = bucket_key
+                rule['lastFiredAt']     = now.isoformat()
+                fired_any = True
+        except Exception as e:
+            print(f"[예약발송 규칙 처리 오류] {rule.get('title','')}: {e}")
+
+    if fired_any:
+        with _SCHEDULE_LOCK:
+            save_schedule_rules(SCHEDULE_RULES)
+
+
+def _scheduler_loop():
+    while True:
+        try:
+            _scheduler_tick()
+        except Exception as e:
+            print(f"[예약발송 스케줄러 오류] {e}")
+        time.sleep(60)
+
+
 # ── 설정 암호화 (Google Drive 저장용) ────────────────────────
 @app.route('/telegram/encrypt', methods=['POST'])
 def telegram_encrypt():
@@ -796,8 +1014,10 @@ if __name__ == '__main__':
     print(f"  POP3 : {POP3_HOST}:{POP3_PORT}")
     print(f"  TG   : {'연결됨 ✓' if TELEGRAM_TOKEN else '미설정 (알람설정 > Telegram 탭에서 입력)'}")
     print(f"  팀원 : {len(TELEGRAM_MEMBERS)}명 등록")
+    print(f"  예약 : {len(SCHEDULE_RULES)}건 등록 (1분마다 자동 확인)")
     print("-" * 58)
     print("  URL  : http://127.0.0.1:5000")
     print("  종료 : Ctrl+C 또는 창 닫기")
     print("=" * 58)
+    threading.Thread(target=_scheduler_loop, daemon=True).start()
     app.run(host='127.0.0.1', port=5000, debug=False)
