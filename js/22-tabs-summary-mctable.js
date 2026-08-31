@@ -1334,7 +1334,7 @@ window.renderNoticeTab = function() {
     if (!window._noticeItems.length) {
         const _niEn = window._currentLang === 'en';
         tbody.innerHTML = `<tr><td colspan="7" style="padding:30px;text-align:center;color:#aaa;font-size:13px;">${_niEn ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.'}</td></tr>`;
-        window._noticeRenderLog(); return;
+        window._noticeRenderLog(); window.loadScheduleRulesFromBackend(); return;
     }
     const today = new Date(); today.setHours(0,0,0,0);
     tbody.innerHTML = window._noticeItems.map((n, i) => {
@@ -1383,6 +1383,7 @@ window.renderNoticeTab = function() {
         </tr>`;
     }).join('');
     window._noticeRenderLog();
+    window.loadScheduleRulesFromBackend();
 };
 
 window._noticeRenderLog = function() {
@@ -1407,6 +1408,20 @@ window.openNoticeModal = async function(id) {
     // 커스텀 D-day 초기화
     window._nmCustomDays = [];
     window._nmRenderCustomTags();
+
+    // 기간·반복 예약 필드 초기화 (레거시 D-day 공지 등록/수정 경로이므로 항상 발송방식=D-day로 리셋)
+    window._nmSpecificDates = [];
+    window._nmRenderSpecificDateTags();
+    const dEl = document.getElementById('nm-mode-dday'); if (dEl) dEl.checked = true;
+    window._nmToggleMode();
+    const rEl = document.getElementById('nm-datemode-range'); if (rEl) rEl.checked = true;
+    window._nmToggleDateMode();
+    ['nm-recur-start','nm-recur-end'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
+    const diEl = document.getElementById('nm-recur-day-interval'); if (diEl) diEl.value = 1;
+    const hsEl = document.getElementById('nm-recur-hour-start'); if (hsEl) hsEl.value = '09:00';
+    const heEl = document.getElementById('nm-recur-hour-end'); if (heEl) heEl.value = '21:00';
+    const hiEl = document.getElementById('nm-recur-hour-interval'); if (hiEl) hiEl.value = 1;
+    const ruleIdEl = document.getElementById('nm-schedule-rule-id'); if (ruleIdEl) ruleIdEl.value = '';
 
     document.getElementById('nm-edit-id').value = id || '';
     const _nmEn = window._currentLang === 'en';
@@ -1566,18 +1581,57 @@ window._nmRemoveCustomDay = function(d) {
     window._nmRenderCustomTags();
 };
 
-window.saveNoticeItem = function() {
-    const title    = document.getElementById('nm-title').value.trim();
-    const body     = document.getElementById('nm-body').value.trim();
-    const deadline = document.getElementById('nm-deadline').value;
-    if (!title || !body || !deadline) { alert('제목, 내용, 기준일은 필수입니다.'); return; }
+// ── 발송 방식(D-day / 기간·반복) 및 날짜 지정방식(기간 / 특정 날짜) 토글 ──────
+window._nmToggleMode = function() {
+    const isRecur = document.getElementById('nm-mode-recur')?.checked;
+    const ddayEl  = document.getElementById('nm-dday-fields');
+    const recurEl = document.getElementById('nm-recur-fields');
+    if (ddayEl)  ddayEl.style.display  = isRecur ? 'none' : 'grid';
+    if (recurEl) recurEl.style.display = isRecur ? 'block' : 'none';
+};
 
-    // D-day 수집 (기본 체크박스 + 커스텀)
-    const presetDays  = [7,3,1,0].filter(d => { const el=document.getElementById(`nm-d${d}`); return el&&el.checked; });
-    const alarmDays   = [...new Set([...presetDays, ...(window._nmCustomDays||[])])].sort((a,b)=>b-a);
+window._nmToggleDateMode = function() {
+    const isSpecific = document.getElementById('nm-datemode-specific')?.checked;
+    const rangeEl = document.getElementById('nm-daterange-fields');
+    const specEl  = document.getElementById('nm-specific-dates-fields');
+    if (rangeEl) rangeEl.style.display = isSpecific ? 'none' : 'grid';
+    if (specEl)  specEl.style.display  = isSpecific ? 'block' : 'none';
+};
 
-    // 수신자 수집 (이름/이메일/텔레그램ID + 채널별 on/off)
-    const recipients = [...document.querySelectorAll('.nm-recipient-row')].map(row => {
+// ── 특정 날짜 태그 관리 (커스텀 D-day 패턴과 동일) ──────────────────────────
+window._nmSpecificDates = [];
+
+window._nmAddSpecificDate = function() {
+    const input = document.getElementById('nm-specific-date-input');
+    const val = input?.value;
+    if (!val) { input && input.focus(); return; }
+    if (window._nmSpecificDates.includes(val)) { input.value = ''; return; }
+    window._nmSpecificDates.push(val);
+    window._nmSpecificDates.sort();
+    window._nmRenderSpecificDateTags();
+    input.value = '';
+};
+
+window._nmRenderSpecificDateTags = function() {
+    const wrap = document.getElementById('nm-specific-date-tags');
+    if (!wrap) return;
+    wrap.innerHTML = window._nmSpecificDates.map(d =>
+        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#e8f0fb;border:1px solid #b0c4e8;border-radius:12px;font-size:11.5px;color:#2c5f8a;">
+          ${d}
+          <button type="button" onclick="window._nmRemoveSpecificDate('${d}')"
+                  style="background:none;border:none;cursor:pointer;color:#888;font-size:11px;padding:0;line-height:1;">✕</button>
+        </span>`
+    ).join('');
+};
+
+window._nmRemoveSpecificDate = function(d) {
+    window._nmSpecificDates = window._nmSpecificDates.filter(x => x !== d);
+    window._nmRenderSpecificDateTags();
+};
+
+// 수신자 수집 (이름/이메일/텔레그램ID + 채널별 on/off) — D-day/기간반복 저장 경로 공용
+window._nmCollectRecipients = function() {
+    return [...document.querySelectorAll('.nm-recipient-row')].map(row => {
         const name = row.querySelector('.nm-rr-name')?.value.trim() || '';
         return {
             name,
@@ -1587,6 +1641,22 @@ window.saveNoticeItem = function() {
             tgOn: row.querySelector('.nm-rr-tg-btn')?.dataset.on === '1'
         };
     }).filter(r => r.name && (r.emailOn || r.tgOn));
+};
+
+window.saveNoticeItem = function() {
+    const isRecur = document.getElementById('nm-mode-recur')?.checked;
+    if (isRecur) { window._nmSaveRecurRule(); return; }
+
+    const title    = document.getElementById('nm-title').value.trim();
+    const body     = document.getElementById('nm-body').value.trim();
+    const deadline = document.getElementById('nm-deadline').value;
+    if (!title || !body || !deadline) { alert('제목, 내용, 기준일은 필수입니다.'); return; }
+
+    // D-day 수집 (기본 체크박스 + 커스텀)
+    const presetDays  = [7,3,1,0].filter(d => { const el=document.getElementById(`nm-d${d}`); return el&&el.checked; });
+    const alarmDays   = [...new Set([...presetDays, ...(window._nmCustomDays||[])])].sort((a,b)=>b-a);
+
+    const recipients = window._nmCollectRecipients();
 
     const editId = document.getElementById('nm-edit-id').value;
     if (editId) {
@@ -1602,6 +1672,176 @@ window.saveNoticeItem = function() {
     window._noticeSave();
     window.closeNoticeModal();
     window.renderNoticeTab();
+};
+
+// ── 기간·반복 예약 발송 규칙 저장 (백엔드 스케줄러가 "언제" 발송할지 담당) ──
+window._nmSaveRecurRule = async function() {
+    const title = document.getElementById('nm-title').value.trim();
+    const body  = document.getElementById('nm-body').value.trim();
+    if (!title || !body) { alert('제목, 내용은 필수입니다.'); return; }
+
+    const recipients = window._nmCollectRecipients();
+    if (!recipients.length) { alert('수신 대상을 1명 이상 추가해주세요.'); return; }
+
+    const dateMode = document.getElementById('nm-datemode-specific')?.checked ? 'specific' : 'range';
+    let startDate = '', endDate = '', dayInterval = 1;
+    if (dateMode === 'range') {
+        startDate = document.getElementById('nm-recur-start').value;
+        endDate   = document.getElementById('nm-recur-end').value;
+        if (!startDate || !endDate) { alert('시작일/종료일을 입력해주세요.'); return; }
+        if (startDate > endDate) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+        dayInterval = parseInt(document.getElementById('nm-recur-day-interval').value, 10) || 1;
+    } else {
+        if (!window._nmSpecificDates.length) { alert('특정 날짜를 1개 이상 추가해주세요.'); return; }
+    }
+
+    const hourStart    = document.getElementById('nm-recur-hour-start').value || '09:00';
+    const hourEnd      = document.getElementById('nm-recur-hour-end').value || '21:00';
+    const hourInterval = parseFloat(document.getElementById('nm-recur-hour-interval').value) || 1;
+    const ruleId       = document.getElementById('nm-schedule-rule-id').value || undefined;
+
+    const payload = {
+        id: ruleId, type: 'notice', title, message: body, recipients,
+        dateMode, startDate, endDate, specificDates: window._nmSpecificDates.slice(),
+        dayInterval, hourStart, hourEnd, hourInterval, enabled: true
+    };
+
+    try {
+        const health = await fetch(`${MAIL_SERVER}/health`, { signal: AbortSignal.timeout(2000) });
+        if (!health.ok) throw new Error();
+    } catch (e) {
+        alert('❌ 메일 서버(kortek_backend.py)가 실행되지 않았습니다.\n예약 발송(기간·반복)은 이 서버가 켜져 있어야 등록/동작합니다.');
+        return;
+    }
+
+    try {
+        const res = await fetch(`${MAIL_SERVER}/schedule`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        window.closeNoticeModal();
+        window.loadScheduleRulesFromBackend();
+    } catch (e) {
+        alert('❌ 예약 규칙 저장 실패: ' + e.message);
+    }
+};
+
+// ── 예약 발송 규칙 관리 (백엔드 /schedule API) ──────────────────────────────
+window._scheduleRules = [];
+
+window.loadScheduleRulesFromBackend = async function() {
+    const tbody = document.getElementById('schedule-rule-table-body');
+    if (!tbody) return; // 공지 탭이 아직 렌더되지 않은 시점이면 스킵
+    try {
+        const res = await fetch(`${MAIL_SERVER}/schedule`, { signal: AbortSignal.timeout(3000) });
+        const data = await res.json();
+        window._scheduleRules = (data && data.rules) || [];
+    } catch (e) {
+        window._scheduleRules = null; // 서버 연결 불가 상태 표시용
+    }
+    window.renderScheduleRuleTable();
+};
+
+window.renderScheduleRuleTable = function() {
+    const tbody = document.getElementById('schedule-rule-table-body');
+    if (!tbody) return;
+    if (window._scheduleRules === null) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#e67e22;font-size:12.5px;">⚠️ 메일 서버(kortek_backend.py)에 연결할 수 없습니다 — 실행 후 새로고침해주세요.</td></tr>`;
+        return;
+    }
+    if (!window._scheduleRules.length) {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#aaa;font-size:12.5px;">등록된 예약 발송 규칙이 없습니다. [+ 공지 등록]에서 "기간·반복"을 선택해 추가하세요.</td></tr>`;
+        return;
+    }
+    tbody.innerHTML = window._scheduleRules.map((r, i) => {
+        const rowBg = i % 2 === 0 ? '#fff' : '#e8f2f3';
+        const dateLabel = r.dateMode === 'specific'
+            ? `특정 ${(r.specificDates||[]).length}일`
+            : `${r.startDate||'?'} ~ ${r.endDate||'?'} (${r.dayInterval||1}일마다)`;
+        const timeLabel = `${r.hourStart||'09:00'}~${r.hourEnd||'21:00'} (${r.hourInterval||1}h마다)`;
+        const typeLabel = r.type === 'alarm' ? '업무 알람' : '공지';
+        const isOn = r.enabled !== false;
+        const statusIcon = `<span onclick="window.toggleScheduleRuleEnabled('${r.id}')" style="cursor:pointer;font-size:16px;" title="${isOn ? '🟢 켜짐 — 클릭하여 끄기' : '🔴 꺼짐 — 클릭하여 켜기'}">${isOn ? '🟢' : '🔴'}</span>`;
+        return `<tr style="background:${rowBg};border-bottom:1px solid #cfe3e5;">
+          <td style="padding:8px 12px;text-align:center;">${statusIcon}</td>
+          <td style="padding:8px 12px;">
+            <div style="font-weight:bold;color:#333;font-size:12.5px;">${escapeHtml(r.title||'')}</div>
+            <div style="font-size:11px;color:#888;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.message||'')}</div>
+          </td>
+          <td style="padding:8px 12px;text-align:center;font-size:12px;color:#555;">${typeLabel}</td>
+          <td style="padding:8px 12px;text-align:center;font-size:11.5px;color:#555;">${dateLabel}</td>
+          <td style="padding:8px 12px;text-align:center;font-size:11.5px;color:#555;">${timeLabel}</td>
+          <td style="padding:8px 12px;text-align:center;">
+            <div style="display:flex;gap:4px;justify-content:center;">
+              <button onclick="window.openScheduleRuleEditModal('${r.id}')" title="수정"
+                style="width:26px;height:26px;border:1px solid #edbf85;color:#a85d0a;background:#fbead9;border-radius:4px;cursor:pointer;font-size:12px;">✏️</button>
+              <button onclick="window.deleteScheduleRule('${r.id}')" title="삭제"
+                style="width:26px;height:26px;border:1px solid #eeb0ac;color:#b1432f;background:#fbe4e2;border-radius:4px;cursor:pointer;font-size:12px;">🗑️</button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+};
+
+window.toggleScheduleRuleEnabled = async function(id) {
+    const rule = (window._scheduleRules || []).find(r => r.id === id);
+    if (!rule) return;
+    rule.enabled = !(rule.enabled !== false);
+    window.renderScheduleRuleTable();
+    try {
+        await fetch(`${MAIL_SERVER}/schedule`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rule) });
+    } catch (e) {
+        alert('❌ 상태 변경 실패: 메일 서버에 연결할 수 없습니다.');
+        rule.enabled = !(rule.enabled !== false);
+        window.renderScheduleRuleTable();
+    }
+};
+
+window.deleteScheduleRule = async function(id) {
+    if (!confirm('이 예약 발송 규칙을 삭제할까요?')) return;
+    try {
+        await fetch(`${MAIL_SERVER}/schedule/${id}`, { method: 'DELETE' });
+    } catch (e) {}
+    window.loadScheduleRulesFromBackend();
+};
+
+// 규칙 목록에서 "수정" 클릭 시 — 공지 등록 모달을 기간·반복 모드로 열어 기존 값 채움
+window.openScheduleRuleEditModal = async function(ruleId) {
+    const rule = (window._scheduleRules || []).find(r => r.id === ruleId);
+    if (!rule) { alert('규칙을 찾을 수 없습니다.'); return; }
+
+    await window.openNoticeModal(); // 신규 등록 상태로 모달 초기화(리셋)부터 시작
+
+    document.getElementById('nm-title').value = rule.title || '';
+    document.getElementById('nm-body').value  = rule.message || '';
+    document.getElementById('nm-schedule-rule-id').value = rule.id;
+    const _nmEn = window._currentLang === 'en';
+    document.getElementById('notice-modal-title').textContent = _nmEn ? '📢 Edit Scheduled Rule' : '📢 예약 발송 규칙 수정';
+
+    document.getElementById('nm-mode-recur').checked = true;
+    window._nmToggleMode();
+
+    if (rule.dateMode === 'specific') {
+        document.getElementById('nm-datemode-specific').checked = true;
+        window._nmSpecificDates = (rule.specificDates || []).slice();
+    } else {
+        document.getElementById('nm-datemode-range').checked = true;
+        document.getElementById('nm-recur-start').value = rule.startDate || '';
+        document.getElementById('nm-recur-end').value = rule.endDate || '';
+        document.getElementById('nm-recur-day-interval').value = rule.dayInterval || 1;
+    }
+    window._nmToggleDateMode();
+    window._nmRenderSpecificDateTags();
+
+    document.getElementById('nm-recur-hour-start').value = rule.hourStart || '09:00';
+    document.getElementById('nm-recur-hour-end').value = rule.hourEnd || '21:00';
+    document.getElementById('nm-recur-hour-interval').value = rule.hourInterval || 1;
+
+    // 수신자 다시 채우기 (규칙 자체의 저장값 기준 — 프로젝트 담당자 자동등록으로 덮이지 않도록 마지막에 처리)
+    const list = document.getElementById('nm-recipient-list');
+    if (list) list.innerHTML = '';
+    (rule.recipients || []).forEach(r => window._nmAddRecipientRow(r.name, r.email, r.telegramId, r.emailOn !== false, r.tgOn !== false));
 };
 window.deleteNoticeItem = function(id) {
     if(!confirm(window._t('이 공지를 삭제하면 D-day 자동 발송이 중단됩니다. 삭제할까요?','Deleting this notice will stop D-day auto-send. Delete anyway?'))) return;
