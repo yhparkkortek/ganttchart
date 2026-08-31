@@ -1440,9 +1440,7 @@ window.openNoticeModal = async function(id) {
     window._nmToggleDateMode();
     ['nm-recur-start','nm-recur-end'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
     const diEl = document.getElementById('nm-recur-day-interval'); if (diEl) diEl.value = 1;
-    const hsEl = document.getElementById('nm-recur-hour-start'); if (hsEl) hsEl.value = '09:00';
-    const heEl = document.getElementById('nm-recur-hour-end'); if (heEl) heEl.value = '21:00';
-    const hiEl = document.getElementById('nm-recur-hour-interval'); if (hiEl) hiEl.value = 1;
+    const stEl = document.getElementById('nm-recur-send-time'); if (stEl) stEl.value = '09:00';
     const ruleIdEl = document.getElementById('nm-schedule-rule-id'); if (ruleIdEl) ruleIdEl.value = '';
 
     document.getElementById('nm-edit-id').value = id || '';
@@ -1512,11 +1510,12 @@ window._nmAddRecipientRow = function(name='', email='', telegramId='', emailOn=t
         <button type="button" class="nm-rr-tg-btn" onclick="window._nmToggleChannel(this)"
                 title="텔레그램 발송 on/off"
                 style="width:28px; height:26px; border:1px solid ${tgOn?'#27ae60':'#ccc'}; background:${tgOn?'#e8f7ee':'#fff'}; color:${tgOn?'#27ae60':'#aaa'}; border-radius:3px; cursor:pointer; font-size:12px; padding:0;">💬</button>
-        <button type="button" onclick="this.closest('.nm-recipient-row').remove()"
+        <button type="button" onclick="this.closest('.nm-recipient-row').remove(); window._asSyncRecipHeaderPad('nm-recipient-list');"
                 style="width:26px; height:26px; border:none; background:none; color:#e03131; cursor:pointer; font-size:15px; padding:0;">✕</button>`;
     row.querySelector('.nm-rr-email-btn').dataset.on = emailOn ? '1' : '0';
     row.querySelector('.nm-rr-tg-btn').dataset.on = tgOn ? '1' : '0';
     list.appendChild(row);
+    window._asSyncRecipHeaderPad('nm-recipient-list');
 
     window.attachAddressAutocomplete(row.querySelector('.nm-rr-name'), null, false, function(person) {
         row.dataset.email = person.email || '';
@@ -1548,7 +1547,10 @@ window._nmBulkToggleChannel = function(type) {
 // 일괄 삭제
 window._nmBulkRemoveAll = function() {
     const list = document.getElementById('nm-recipient-list');
-    if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
+    if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) {
+        list.innerHTML = '';
+        window._asSyncRecipHeaderPad('nm-recipient-list');
+    }
 };
 
 // (함수 전체 삭제 — attachAddressAutocomplete의 onPick 콜백으로 대체됨)
@@ -1748,9 +1750,13 @@ window._nmSaveRecurRule = async function() {
         if (!window._nmSpecificDates.length) { alert('특정 날짜를 1개 이상 추가해주세요.'); return; }
     }
 
-    const hourStart    = document.getElementById('nm-recur-hour-start').value || '09:00';
-    const hourEnd      = document.getElementById('nm-recur-hour-end').value || '21:00';
-    const hourInterval = parseFloat(document.getElementById('nm-recur-hour-interval').value) || 1;
+    // 💡 [2026-08-31] 시간창(시작~종료+몇시간마다) 대신 "발송 시각" 하나만 받음 — 백엔드 스키마는
+    //    그대로 두고(hourStart/hourEnd/hourInterval), 시작=종료=이 시각으로 보내 하루 1번만 걸리게 함
+    //    (_rule_today_buckets가 시작==종료면 그 시각 1개만 버킷으로 만듦 — kortek_backend.py 참고).
+    const sendTime     = document.getElementById('nm-recur-send-time').value || '09:00';
+    const hourStart    = sendTime;
+    const hourEnd      = sendTime;
+    const hourInterval = 1;
     const ruleId       = document.getElementById('nm-schedule-rule-id').value || undefined;
 
     const payload = {
@@ -1887,9 +1893,8 @@ window.openScheduleRuleEditModal = async function(ruleId) {
     window._nmToggleDateMode();
     window._nmRenderSpecificDateTags();
 
-    document.getElementById('nm-recur-hour-start').value = rule.hourStart || '09:00';
-    document.getElementById('nm-recur-hour-end').value = rule.hourEnd || '21:00';
-    document.getElementById('nm-recur-hour-interval').value = rule.hourInterval || 1;
+    // 💡 예전 규칙(시간창)에서 넘어온 경우 hourStart를 발송 시각으로 사용
+    document.getElementById('nm-recur-send-time').value = rule.hourStart || '09:00';
 
     // 수신자 다시 채우기 (규칙 자체의 저장값 기준 — 프로젝트 담당자 자동등록으로 덮이지 않도록 마지막에 처리)
     const list = document.getElementById('nm-recipient-list');
@@ -2748,8 +2753,9 @@ window.openAlarmScheduleModal = async function(idx) {
         cb.checked = current.has(Number(cb.value));
         current.delete(Number(cb.value));
     });
-    // 프리셋(14/7/3/1/0)에 없는 나머지 숫자는 "기타" 텍스트칸으로
-    document.getElementById('alarm-schedule-custom').value = Array.from(current).sort((a,b) => a-b).join(', ');
+    // 프리셋(14/7/3/1/0)에 없는 나머지 숫자는 공지 등록과 동일하게 태그로 표시
+    window._asCustomDays = Array.from(current).sort((a,b) => a-b);
+    window._asRenderCustomTags();
 
     // 기간·반복 필드 초기화 (매번 신규 상태로 리셋 후, 기존 규칙이 있으면 아래서 덮어씀)
     window._asSpecificDates = [];
@@ -2758,9 +2764,7 @@ window.openAlarmScheduleModal = async function(idx) {
     document.getElementById('as-datemode-range').checked = true;
     ['as-recur-start','as-recur-end'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
     document.getElementById('as-recur-day-interval').value = 1;
-    document.getElementById('as-recur-hour-start').value = '09:00';
-    document.getElementById('as-recur-hour-end').value = '21:00';
-    document.getElementById('as-recur-hour-interval').value = 1;
+    document.getElementById('as-recur-send-time').value = '09:00';
     document.getElementById('as-schedule-rule-id').value = '';
     document.getElementById('as-delete-rule-btn').style.display = 'none';
 
@@ -2780,9 +2784,8 @@ window.openAlarmScheduleModal = async function(idx) {
             document.getElementById('as-recur-end').value = existing.endDate || '';
             document.getElementById('as-recur-day-interval').value = existing.dayInterval || 1;
         }
-        document.getElementById('as-recur-hour-start').value = existing.hourStart || '09:00';
-        document.getElementById('as-recur-hour-end').value = existing.hourEnd || '21:00';
-        document.getElementById('as-recur-hour-interval').value = existing.hourInterval || 1;
+        // 💡 예전 규칙(시간창)에서 넘어온 경우 hourStart를 발송 시각으로 사용
+        document.getElementById('as-recur-send-time').value = existing.hourStart || '09:00';
         document.getElementById('as-delete-rule-btn').style.display = 'block';
     }
     window._asToggleMode();
@@ -2814,7 +2817,8 @@ window.resetAlarmScheduleForm = function() {
     document.querySelectorAll('.alarm-sched-cb').forEach(cb => {
         cb.checked = ['7', '3', '1'].includes(cb.value);
     });
-    document.getElementById('alarm-schedule-custom').value = '';
+    window._asCustomDays = [];
+    window._asRenderCustomTags();
 };
 
 window.closeAlarmScheduleModal = function() {
@@ -2824,6 +2828,42 @@ window.closeAlarmScheduleModal = function() {
 };
 
 // ── 발송 방식(D-day 목록 / 기간·반복) 및 날짜 지정방식(기간 / 특정 날짜) 토글 ──────
+// ── 커스텀 D-day 태그 관리 (notice-modal의 _nmCustomDays와 동일 패턴으로 통일) ──────
+window._asCustomDays = [];
+const AS_DDAY_PRESETS = [14, 7, 3, 1, 0];
+
+window._asAddCustomDay = function() {
+    const input = document.getElementById('as-d-custom');
+    const val   = parseInt(input?.value);
+    if (!val || val < 1 || val > 365) { input && input.focus(); return; }
+    // 기본 체크박스와 중복 방지
+    if (AS_DDAY_PRESETS.includes(val)) {
+        const cb = document.getElementById(`as-d${val}`);
+        if (cb) { cb.checked = true; input.value = ''; return; }
+    }
+    if (window._asCustomDays.includes(val)) { input.value = ''; return; }
+    window._asCustomDays.push(val);
+    window._asRenderCustomTags();
+    input.value = '';
+};
+
+window._asRenderCustomTags = function() {
+    const wrap = document.getElementById('as-d-custom-tags');
+    if (!wrap) return;
+    wrap.innerHTML = window._asCustomDays.sort((a,b)=>b-a).map(d =>
+        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#e8f0fb;border:1px solid #b0c4e8;border-radius:12px;font-size:11.5px;color:#2c5f8a;">
+          D-${d}
+          <button type="button" onclick="window._asRemoveCustomDay(${d})"
+                  style="background:none;border:none;cursor:pointer;color:#888;font-size:11px;padding:0;line-height:1;">✕</button>
+        </span>`
+    ).join('');
+};
+
+window._asRemoveCustomDay = function(d) {
+    window._asCustomDays = window._asCustomDays.filter(x => x !== d);
+    window._asRenderCustomTags();
+};
+
 window._asToggleMode = function() {
     const isRecur  = document.getElementById('as-mode-recur')?.checked;
     const ddayEl   = document.getElementById('as-dday-fields');
@@ -2947,9 +2987,13 @@ window._asSaveRecurRule = async function() {
         if (!window._asSpecificDates.length) { alert('특정 날짜를 1개 이상 추가해주세요.'); return; }
     }
 
-    const hourStart    = document.getElementById('as-recur-hour-start').value || '09:00';
-    const hourEnd      = document.getElementById('as-recur-hour-end').value || '21:00';
-    const hourInterval = parseFloat(document.getElementById('as-recur-hour-interval').value) || 1;
+    // 💡 [2026-08-31] 시간창(시작~종료+몇시간마다) 대신 "발송 시각" 하나만 받음 — 백엔드 스키마는
+    //    그대로 두고(hourStart/hourEnd/hourInterval), 시작=종료=이 시각으로 보내 하루 1번만 걸리게 함
+    //    (_rule_today_buckets가 시작==종료면 그 시각 1개만 버킷으로 만듦 — kortek_backend.py 참고).
+    const sendTime     = document.getElementById('as-recur-send-time').value || '09:00';
+    const hourStart    = sendTime;
+    const hourEnd      = sendTime;
+    const hourInterval = 1;
     const ruleId       = document.getElementById('as-schedule-rule-id').value || undefined;
 
     // 💡 수신 대상(기본수신/개별수신)을 지금 화면 상태로 저장(전역 CC 명단 갱신 또는 이 업무에만 기록)
@@ -3014,10 +3058,7 @@ window.saveAlarmSchedule = function() {
     if (!row) return;
 
     const checked = Array.from(document.querySelectorAll('.alarm-sched-cb:checked')).map(cb => Number(cb.value));
-    const customTxt = document.getElementById('alarm-schedule-custom').value || '';
-    const customVals = customTxt.split(/[,，\s]+/).map(s => parseInt(s, 10)).filter(n => !isNaN(n) && n >= 0 && n <= 365);
-
-    const finalDays = Array.from(new Set([...checked, ...customVals])).sort((a, b) => b - a);
+    const finalDays = Array.from(new Set([...checked, ...(window._asCustomDays || [])])).sort((a, b) => b - a);
     if (!finalDays.length) {
         const msg = '최소 1개 이상의 알람 시점을 선택해주세요.';
         if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
