@@ -83,6 +83,13 @@ window.handleAuthClick = function() {
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
+                // 💡 [2026-08-31 신규] 조용한 토큰 갱신 시 계정을 못 정해 "계정 선택" 창이 뜬 채 안 닫히는
+                //    문제 방지용 — 로그인 성공 시 이메일을 기억해뒀다가, 이후 조용한 갱신 요청에 hint로
+                //    같이 넘겨서 구글이 어느 계정인지 바로 알 수 있게 한다(브라우저에 구글 계정이 여러 개
+                //    로그인돼 있으면 hint 없이는 조용한 요청도 "계정 선택" UI를 띄우고 사용자 입력을
+                //    기다리게 됨 — 이게 배지는 초록색(연결됨)인데 팝업이 안 닫히던 증상의 실제 원인).
+                window.currentUserEmail = aboutResp.result.user.emailAddress || '';
+                try { localStorage.setItem('gantt_google_email_hint', window.currentUserEmail); } catch(e) {}
 
                 authBtn.innerText = `🟢 ${window.currentUserName}`;
                 // 💡 [2026-08-28] _handleDriveDisconnected가 끊김 표시로 빨갛게 물들여 놨을 수 있는
@@ -153,6 +160,10 @@ window.handleAuthClick = function() {
             authBtn.disabled = false;
         };
 
+        // 💡 이전 로그인에서 기억해둔 이메일이 있으면 hint로 같이 넘겨서, 브라우저에 구글 계정이
+        //    여러 개 로그인돼 있어도 "계정 선택" 창 없이 바로 그 계정으로 조용히 시도하게 한다.
+        const _emailHint = window.currentUserEmail || (function() { try { return localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) { return ''; } })();
+
         // 1차: 조용한 시도(prompt:'') — 이미 로그인+권한이 살아있으면 화면에 아무것도 안 띄우고 성공한다.
         tokenClient.callback = async (resp) => {
             if (resp.error !== undefined) {
@@ -162,10 +173,10 @@ window.handleAuthClick = function() {
                     if (resp2.error !== undefined) { onFinalFailure(resp2); return; }
                     await onAuthSuccess(resp2);
                 };
-                tokenClient.requestAccessToken({ prompt: 'consent' });
+                tokenClient.requestAccessToken(_emailHint ? { prompt: 'consent', hint: _emailHint } : { prompt: 'consent' });
                 return;
             }
             await onAuthSuccess(resp);
         };
-        tokenClient.requestAccessToken({ prompt: '' });
+        tokenClient.requestAccessToken(_emailHint ? { prompt: '', hint: _emailHint } : { prompt: '' });
     };

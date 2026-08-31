@@ -408,7 +408,12 @@ ${mailText}`;
                 window.googleAccessToken = resp.access_token;
                 console.info('[구글 인증] 조용한 토큰 갱신 성공');
             };
-            tokenClient.requestAccessToken({ prompt: '' });
+            // 💡 [2026-08-31] 브라우저에 구글 계정이 여러 개 로그인돼 있으면 hint 없는 조용한 요청은
+            //    "계정 선택" 창을 띄운 채 사용자 입력을 기다리며 안 닫힌다 — 이게 상단 배지는 초록색
+            //    (아직 연결 끊김 판정 전)인데 팝업만 계속 떠 있던 증상의 실제 원인. 로그인 성공 시
+            //    기억해둔 이메일을 hint로 넘겨 계정을 미리 지정해서 이 창 자체가 뜨지 않게 한다.
+            const _emailHint = window.currentUserEmail || (function() { try { return localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) { return ''; } })();
+            tokenClient.requestAccessToken(_emailHint ? { prompt: '', hint: _emailHint } : { prompt: '' });
         }, 12 * 60 * 1000);
     }
 
