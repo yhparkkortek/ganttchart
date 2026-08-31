@@ -5283,6 +5283,11 @@ ${mailText}`;
         const counts = { 완료: 0, 진행: 0, 대기: 0, 지연: 0 };
         const delayed = [];
         const dueSoon = [];
+        // 💡 [2026-08-31 신규] 지연/임박 마감 둘 다 기준일 기준 ±이 기간(기본 21일, [🤖 AI 도구 > ⚙️ 설정
+        //    > 📅 AI 요약 기간 설정]에서 조절)까지만 담음 — 예전엔 임박 마감이 D-7로 하드코딩,
+        //    지연은 기간 제한 없이(지연일수 큰 순 상위 15건)라서 프롬프트 지침에 "±21일 분석"이라고
+        //    적어도 실제 데이터 자체가 그 범위를 담고 있지 않아 반영되지 않는 문제가 있었음.
+        const rangeDays = window.getAiSummaryRangeDays ? window.getAiSummaryRangeDays() : window._AI_SUMMARY_RANGE_DAYS_DEFAULT;
 
         rows.forEach(function(x) {
             const row = x.row;
@@ -5317,8 +5322,8 @@ ${mailText}`;
             //    (AI 문답처럼 300건 전체를 훑는 목록이 아니라서, 여기서는 [원문有] 표시 대신 발췌를 바로 포함.)
             const mailExcerpt = row._mailRaw ? String((row._mailRaw.body2000 || '')).replace(/\s+/g, ' ').trim().slice(0, _psMaxLen) : '';
             if (diffDays < 0) {
-                delayed.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
-            } else if (diffDays <= 7) {
+                if (-diffDays <= rangeDays) delayed.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, overdueDays: -diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
+            } else if (diffDays <= rangeDays) {
                 dueSoon.push({ idx: x.idx, task: label, assignee: assignee, startDate: startRaw, dueDate: planRaw, dDay: diffDays, detail: detail, detailAnswer: detailAnswer, mailExcerpt: mailExcerpt, sender: mailPeople.sender, receiver: mailPeople.receiver });
             }
         });
@@ -5336,7 +5341,8 @@ ${mailText}`;
             counts: counts,
             delayed: delayed.slice(0, 15),
             dueSoon: dueSoon.slice(0, 15),
-            recentLogs: recentLogs
+            recentLogs: recentLogs,
+            rangeDays: rangeDays
         };
     };
 
@@ -5345,16 +5351,16 @@ ${mailText}`;
     //    트릭 재사용: 진짜 파라미터로 부르면 진짜 프롬프트가 나오고, 플레이스홀더 "문자열"을 그대로
     //    파라미터 자리에 넣어서 부르면 그 문자열이 그대로 본문에 박힌 "편집용 템플릿"이 나온다.
     //    한 함수로 "실제 프롬프트 생성"과 "편집 기본값 생성"을 둘 다 해결.
-    window._buildProjectSummaryPromptFromData = function(customer, model, pm, totalTasks, countDone, countProgress, countPending, countDelay, delayedList, dueSoonList, recentLogs) {
+    window._buildProjectSummaryPromptFromData = function(customer, model, pm, totalTasks, countDone, countProgress, countPending, countDelay, delayedList, dueSoonList, recentLogs, rangeDays) {
         return `당신은 프로젝트 관리 보조 AI입니다. 아래 Gantt 프로젝트 현황 데이터를 보고, 실무자가 한눈에 파악할 수 있는 간단한 프로젝트 분석 보고서를 작성하세요.
 
 [프로젝트] ${customer} ${model} (PM: ${pm})
 [전체 업무 수] ${totalTasks}건 — 완료 ${countDone} / 진행 ${countProgress} / 대기 ${countPending} / 지연 ${countDelay}
 
-[지연 업무 목록]
+[지연 업무 목록 (최근 ${rangeDays}일 이내)]
 ${delayedList}
 
-[임박 마감(D-7 이내) 목록]
+[임박 마감(D-${rangeDays} 이내) 목록]
 ${dueSoonList}
 
 [최근 변경 이력]
@@ -5375,7 +5381,7 @@ ${recentLogs}
     // 💡 코드 기본값(진짜 로직) — "🔄 기본값으로 초기화" 버튼이 참조. localStorage 상태와 무관하게
     //    항상 이 값이 "진짜 코드 기본 템플릿"임(자기순환 방지, getSystemPrompt와 동일한 이유).
     window._defaultProjectSummaryPromptTemplate = window._buildProjectSummaryPromptFromData(
-        '${customer}', '${model}', '${pm}', '${totalTasks}', '${countDone}', '${countProgress}', '${countPending}', '${countDelay}', '${delayedList}', '${dueSoonList}', '${recentLogs}'
+        '${customer}', '${model}', '${pm}', '${totalTasks}', '${countDone}', '${countProgress}', '${countPending}', '${countDelay}', '${delayedList}', '${dueSoonList}', '${recentLogs}', '${rangeDays}'
     );
 
     // 💡 실제 사용 지점 — localStorage에 팀원이 고쳐둔 프롬프트가 있으면 그걸 쓰고(플레이스홀더만
@@ -5442,6 +5448,11 @@ ${recentLogs}
         result = rep(result, '${delayedList}', delayedText);
         result = rep(result, '${dueSoonList}', dueSoonText);
         result = rep(result, '${recentLogs}', logsText);
+        // 💡 [2026-08-31 신규] 지연/임박 조회 기간(기본 21일, [🤖 AI 도구 > ⚙️ 설정]에서 조절) — 사용자가
+        //    프롬프트를 직접 고쳐서 "${rangeDays}"를 넣으면(또는 기본 템플릿의 "D-${rangeDays} 이내"
+        //    라벨처럼) 실제 설정값이 그대로 반영됨. 이 토큰 자체는 예전 프롬프트(이 기능 이전에 저장된
+        //    커스텀 프롬프트)에는 없을 수 있는데, 그 경우도 rep()이 안전하게 아무것도 안 바꾸고 넘어감.
+        result = rep(result, '${rangeDays}', d.rangeDays != null ? d.rangeDays : (window.getAiSummaryRangeDays ? window.getAiSummaryRangeDays() : window._AI_SUMMARY_RANGE_DAYS_DEFAULT));
         return result;
     };
 
@@ -7610,6 +7621,20 @@ ${question}
         localStorage.setItem('gantt_ai_mail_maxlen', String(v));
     };
 
+    // 💡 [2026-08-31 신규] "AI 요약이 오늘 위주로만 요약하고 21일치를 안 본다"는 지적 — 실제 원인은
+    //    _buildProjectSummaryData의 임박 마감 목록이 diffDays<=7로, 지연 목록은 기간 제한 없이(지연일수
+    //    큰 순) 하드코딩돼 있어서, 프롬프트 문구가 "±21일"이라 안내해도 정작 AI에게 전달되는 데이터
+    //    자체가 그 범위를 담고 있지 않았던 것. 하드코딩 대신 사용자가 조절 가능한 설정값으로 뺌
+    //    (지연/임박 양쪽에 동일하게 적용 — ±기간이라는 개념이 자연스럽게 대칭이 되도록).
+    window._AI_SUMMARY_RANGE_DAYS_DEFAULT = 21;
+    window.getAiSummaryRangeDays = function() {
+        const v = parseInt(localStorage.getItem('gantt_ai_summary_range_days'), 10);
+        return (v && v >= 1) ? v : window._AI_SUMMARY_RANGE_DAYS_DEFAULT;
+    };
+    window.setAiSummaryRangeDays = function(v) {
+        localStorage.setItem('gantt_ai_summary_range_days', String(v));
+    };
+
     // 💡 [2026-08-28 개편] "AI 도구 → 설정"에서 흩어져 있던 AI 관련 설정을 한 곳으로 모음 —
     //    ① AI 모델 선택(원래 AI 업무분석 팝업에 있던 AI 선택/모델/API 키를 이리로 이동)
     //    ② AI 글자 수 설정(기존 메일 분석/요약·문답 최대 글자 수)
@@ -7718,6 +7743,24 @@ ${question}
                         </div>
                     </div>
 
+                    <!-- ══ 그룹3: AI 요약 기간 설정 (기본 접힘) — 지연/임박 마감 조회 범위(±일) ══ -->
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                        <div onclick="window._toggleAlarmSection('ai-set-sec-range')"
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
+                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📅 AI 요약 기간 설정</span>
+                            <span id="ai-set-sec-range-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                        </div>
+                        <div id="ai-set-sec-range" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🤖 AI 요약(프로젝트 분석 보고서)의 지연·임박 마감 조회 기간 (오늘 기준 ±일)</label>
+                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약이 "지연 업무"/"임박 마감" 목록을 뽑을 때, 오늘 날짜 기준으로 며칠 이내 업무까지 담을지 정합니다. 값을 늘리면 더 먼 미래의 임박 마감과 더 오래된 지연 업무까지 AI에게 전달되어 요약이 길어지고, 줄이면 당장 급한 업무 위주로만 짧게 요약됩니다.</div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-summary-range-days-input" type="number" min="1" max="90" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('ai-summary-range-days-input').value=window._AI_SUMMARY_RANGE_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 21일 (기본값)</div>
+                        </div>
+                    </div>
+
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
                     <button onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
@@ -7730,6 +7773,7 @@ ${question}
         }
         document.getElementById('ai-mail-maxlen-input').value = window.getAiMailMaxLen();
         document.getElementById('ai-content-maxlen-input').value = window.getAiContentMaxLen();
+        document.getElementById('ai-summary-range-days-input').value = window.getAiSummaryRangeDays();
         // 💡 이 모달로 옮겨온 mail-ai-provider/mail-ai-model/mail-gemini-key 등은 원래 AI 업무분석
         //    팝업이 열릴 때만 채워지던 값들이라, 여기서도 열릴 때마다 새로 채워줘야 함.
         if (window.refreshAiKeyPanel) window.refreshAiKeyPanel();
@@ -7752,7 +7796,15 @@ ${question}
         if (v > 3000) v = 3000;
         input.value = v;
         window.setAiContentMaxLen(v);
-        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자)', 'info');
+
+        const rangeInput = document.getElementById('ai-summary-range-days-input');
+        let rd = parseInt(rangeInput.value, 10);
+        if (!rd || rd < 1) rd = 1;
+        if (rd > 90) rd = 90;
+        rangeInput.value = rd;
+        window.setAiSummaryRangeDays(rd);
+
+        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · AI 요약 기간 ±' + rd + '일)', 'info');
     };
 
     // 🤖 [2026-08-27] "AI 요약"/"AI 문답"/"AI 분석 설정"은 상단 메뉴 "🤖 AI 도구"(및 "⚙️ 설정")로
