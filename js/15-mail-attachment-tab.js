@@ -1469,7 +1469,7 @@ window._msRefreshServerAccountStatus = function() {
     const _en = window._currentLang === 'en';
     const smtp = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).smtp || {};
     if (smtp.user && smtp.pass) {
-        el.textContent = _en ? `✅ Mail account: ${smtp.user} (shared with Alarm Settings)` : `✅ 메일 계정: ${smtp.user} (알람 설정과 공용)`;
+        el.textContent = _en ? `✅ Mail account: ${smtp.user}` : `✅ 메일 계정: ${smtp.user}`;
         el.style.color = '#27ae60';
     } else {
         el.textContent = _en ? '⚠️ No mail account configured — set it up with the button on the right.' : '⚠️ 메일 계정이 설정되지 않았습니다 — 오른쪽 버튼으로 먼저 설정해주세요.';
