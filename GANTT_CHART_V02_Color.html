@@ -595,6 +595,33 @@
       </table>
     </div>
 
+    <!-- 💡 [2026-08-31 신규] 예약 발송(기간·반복) 규칙 목록 — kortek_backend.py의 /schedule API에
+         등록된 규칙을 보여준다. 공지 목록(위 표)과는 완전히 다른 저장소(로컬 백엔드)에서 온다 —
+         "+ 공지 등록" 모달에서 발송 방식을 "기간·반복"으로 선택하면 여기에 나타난다. -->
+    <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
+      <div style="padding:10px 12px; background:#eef6f7; border-bottom:2px solid #cfe3e5; display:flex; align-items:center; justify-content:space-between;">
+        <span style="font-size:12.5px; font-weight:bold; color:#444;">⏰ 예약 발송 규칙 (기간·반복 — 서버가 직접 스케줄을 돕니다)</span>
+        <button onclick="window.loadScheduleRulesFromBackend()" title="새로고침"
+                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 새로고침</button>
+      </div>
+      <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+        <thead>
+          <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+            <th style="padding:10px 12px; text-align:center; width:54px;">상태</th>
+            <th style="padding:10px 12px; text-align:left;">제목</th>
+            <th style="padding:10px 12px; text-align:center; width:120px;">종류</th>
+            <th style="padding:10px 12px; text-align:center; width:200px;">날짜</th>
+            <th style="padding:10px 12px; text-align:center; width:130px;">시간</th>
+            <th style="padding:10px 12px; text-align:center; width:150px;">액션</th>
+          </tr>
+        </thead>
+        <tbody id="schedule-rule-table-body">
+          <tr><td colspan="6" style="padding:24px; text-align:center; color:#aaa; font-size:13px;">불러오는 중...</td></tr>
+        </tbody>
+      </table>
+    </div>
+
     <!-- 발송 로그 (접기/펼치기) -->
     <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden;">
       <div onclick="const b=document.getElementById('notice-log-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.notice-log-arrow').textContent=b.style.display==='none'?'▶':'▼'"
@@ -644,8 +671,22 @@
               style="width:100%; height:110px; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; resize:vertical; font-family:'맑은 고딕',sans-serif; line-height:1.6;"></textarea>
   </div>
 
+  <!-- 💡 [2026-08-31 신규] 발송 방식 — 기존 "D-day 기준"(완료예정일 역산) 외에, 서버가 직접 스케줄을
+       도는 "기간·반복" 방식을 추가. 브라우저 탭이 꺼져 있어도 kortek_backend.py만 켜져 있으면 동작함
+       (자세한 설계는 대화 참고 — id/type이 있는 규칙은 /schedule API로 백엔드에 등록됨). -->
+  <div style="margin-bottom:12px; display:flex; gap:16px; align-items:center; padding:8px 10px; background:#f8f9fa; border-radius:6px; border:1px solid #eee;">
+    <span style="font-size:12px; font-weight:bold; color:#444;">발송 방식</span>
+    <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="radio" name="nm-mode" id="nm-mode-dday" value="dday" checked onchange="window._nmToggleMode()"> D-day 기준
+    </label>
+    <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+      <input type="radio" name="nm-mode" id="nm-mode-recur" value="recur" onchange="window._nmToggleMode()"> 기간·반복
+    </label>
+    <span style="font-size:10.5px; color:#999; margin-left:auto;" title="탭이 꺼져 있어도 로컬 메일서버(kortek_backend.py)가 켜져 있으면 계속 동작합니다">ⓘ 기간·반복은 서버가 직접 스케줄을 돕니다</span>
+  </div>
+
   <!-- 기준일 + D-day -->
-  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+  <div id="nm-dday-fields" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
     <div>
       <label id="nm-lbl-deadline" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">기준일 (D-day 기준) *</label>
       <input id="nm-deadline" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
@@ -681,6 +722,70 @@
       <div id="nm-d-custom-tags" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; min-height:4px;"></div>
     </div>
   </div>
+
+  <!-- 💡 [2026-08-31 신규] "기간·반복" 방식 필드 — /schedule API로 백엔드에 등록되는 규칙.
+       날짜(기간+며칠마다, 또는 특정 날짜 여러 개) × 시간창+몇시간마다를 곱해서 반복 발송 시각을 만든다. -->
+  <div id="nm-recur-fields" style="display:none; margin-bottom:14px; padding:10px; background:#f0f6ff; border-radius:6px; border:1px solid #d6e4f7;">
+    <div style="display:flex; gap:14px; align-items:center; margin-bottom:8px;">
+      <span style="font-size:12px; font-weight:bold; color:#444;">날짜</span>
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="nm-datemode" id="nm-datemode-range" value="range" checked onchange="window._nmToggleDateMode()"> 기간
+      </label>
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="nm-datemode" id="nm-datemode-specific" value="specific" onchange="window._nmToggleDateMode()"> 특정 날짜
+      </label>
+    </div>
+
+    <div id="nm-daterange-fields" style="display:grid; grid-template-columns:1fr 1fr 90px; gap:10px; margin-bottom:10px;">
+      <div>
+        <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">시작일</label>
+        <input id="nm-recur-start" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
+               style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box; cursor:pointer;">
+      </div>
+      <div>
+        <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">종료일</label>
+        <input id="nm-recur-end" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
+               style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box; cursor:pointer;">
+      </div>
+      <div>
+        <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">며칠마다</label>
+        <input id="nm-recur-day-interval" type="number" min="1" max="365" value="1"
+               style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+      </div>
+    </div>
+
+    <div id="nm-specific-dates-fields" style="display:none; margin-bottom:10px;">
+      <div style="display:flex; align-items:center; gap:6px; margin-bottom:6px;">
+        <input id="nm-specific-date-input" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
+               style="padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box; cursor:pointer;">
+        <button type="button" onclick="window._nmAddSpecificDate()"
+                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                style="padding:5px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 추가</button>
+      </div>
+      <div id="nm-specific-date-tags" style="display:flex; gap:5px; flex-wrap:wrap; min-height:4px;"></div>
+    </div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr 90px; gap:10px;">
+      <div>
+        <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">시작 시각</label>
+        <input id="nm-recur-hour-start" type="time" class="u-input" value="09:00"
+               style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">종료 시각</label>
+        <input id="nm-recur-hour-end" type="time" class="u-input" value="21:00"
+               style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+      </div>
+      <div>
+        <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">몇시간마다</label>
+        <input id="nm-recur-hour-interval" type="number" min="0.5" max="24" step="0.5" value="2"
+               style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+      </div>
+    </div>
+    <p style="margin:8px 2px 0; font-size:10.5px; color:#888;">예: 09:00~21:00에 2시간마다 → 09/11/13/15/17/19/21시에 발송 확인. 서버(kortek_backend.py)가 켜져 있어야 동작하며, 꺼져있던 동안 지나간 시각은 건너뜁니다.</p>
+  </div>
+
+  <input type="hidden" id="nm-schedule-rule-id">
 
   <!-- 수신 대상 -->
   <div style="background:#f8f9fa; border-radius:6px; padding:12px; margin-bottom:14px;">
