@@ -8402,7 +8402,12 @@ ${recentLogs}
             window._bindClickToFront('ps-prompt-log-modal');
         }
 
-        let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+        // 💡 [2026-08-31 버그 수정] table-layout이 auto(기본값)이던 상태에서 "변경일시"/"수정자" 칸에
+        //    white-space:nowrap을 걸어두니, 칸이 좁아질 때 그 글자가 줄바꿈되는 대신 칸 경계를 넘어
+        //    옆 칸(다음 열) 위에 겹쳐 보이는 버그가 있었음("...8:20박용훈"처럼 시각과 이름이 붙어 보임).
+        //    table-layout:fixed + colgroup으로 각 열 너비를 고정폭 비율로 미리 확보해서, 브라우저가
+        //    내용 길이에 따라 열 너비를 제멋대로 줄이지 못하게 막는다.
+        let html = '<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px;"><colgroup><col style="width:14%;"><col style="width:11%;"><col style="width:33%;"><col style="width:33%;"><col style="width:9%;"></colgroup>';
         html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
         [...logs].reverse().forEach((log) => {
             const matched = versions.find(v => v.time === log.time);
@@ -8410,8 +8415,8 @@ ${recentLogs}
                 ? `<button onclick="window.restorePsPromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 복원</button>`
                 : `<span style="font-size:10px; color:#ccc;">-</span>`;
             html += `<tr>
-                <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;color:#6c757d;">${log.time}</td>
-                <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;font-weight:bold;color:#0056b3;">${log.userName}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;color:#6c757d; word-break:break-word;">${log.time}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;color:#0056b3; word-break:break-word;">${log.userName}</td>
                 <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#dc3545;word-break:break-all;">${log.oldPrompt}</td>
                 <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#0f5132;word-break:break-all;">${log.newPrompt}</td>
                 <td style="padding:8px;border:1px solid #dee2e6;text-align:center;">${restoreBtn}</td>
@@ -10144,7 +10149,12 @@ ${question}
             window._bindClickToFront('gantt-qa-prompt-log-modal');
         }
 
-        let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+        // 💡 [2026-08-31 버그 수정] table-layout이 auto(기본값)이던 상태에서 "변경일시"/"수정자" 칸에
+        //    white-space:nowrap을 걸어두니, 칸이 좁아질 때 그 글자가 줄바꿈되는 대신 칸 경계를 넘어
+        //    옆 칸(다음 열) 위에 겹쳐 보이는 버그가 있었음("...8:20박용훈"처럼 시각과 이름이 붙어 보임).
+        //    table-layout:fixed + colgroup으로 각 열 너비를 고정폭 비율로 미리 확보해서, 브라우저가
+        //    내용 길이에 따라 열 너비를 제멋대로 줄이지 못하게 막는다.
+        let html = '<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px;"><colgroup><col style="width:14%;"><col style="width:11%;"><col style="width:33%;"><col style="width:33%;"><col style="width:9%;"></colgroup>';
         html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
         [...logs].reverse().forEach((log) => {
             const matched = versions.find(v => v.time === log.time);
@@ -10152,8 +10162,8 @@ ${question}
                 ? `<button onclick="window.restoreQaPromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 복원</button>`
                 : `<span style="font-size:10px; color:#ccc;">-</span>`;
             html += `<tr>
-                <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;color:#6c757d;">${log.time}</td>
-                <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;font-weight:bold;color:#0056b3;">${log.userName}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;color:#6c757d; word-break:break-word;">${log.time}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;color:#0056b3; word-break:break-word;">${log.userName}</td>
                 <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#dc3545;word-break:break-all;">${log.oldPrompt}</td>
                 <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#0f5132;word-break:break-all;">${log.newPrompt}</td>
                 <td style="padding:8px;border:1px solid #dee2e6;text-align:center;">${restoreBtn}</td>
@@ -16197,7 +16207,12 @@ window.showPromptLogs = function() {
         window._bindClickToFront('prompt-log-modal');
     }
 
-    let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+    // 💡 [2026-08-31 버그 수정] table-layout이 auto(기본값)이던 상태에서 "변경일시"/"수정자" 칸에
+    //    white-space:nowrap을 걸어두니, 칸이 좁아질 때 그 글자가 줄바꿈되는 대신 칸 경계를 넘어
+    //    옆 칸(다음 열) 위에 겹쳐 보이는 버그가 있었음("...8:20박용훈"처럼 시각과 이름이 붙어 보임).
+    //    table-layout:fixed + colgroup으로 각 열 너비를 고정폭 비율로 미리 확보해서, 브라우저가
+    //    내용 길이에 따라 열 너비를 제멋대로 줄이지 못하게 막는다.
+    let html = '<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px;"><colgroup><col style="width:14%;"><col style="width:11%;"><col style="width:33%;"><col style="width:33%;"><col style="width:9%;"></colgroup>';
     html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
     [...logs].reverse().forEach((log, revIdx) => {
         // 💡 시간 문자열로 versions 배열에서 대응하는 전체 텍스트 스냅샷 매칭 (없으면 복원 버튼 비활성)
@@ -16206,8 +16221,8 @@ window.showPromptLogs = function() {
             ? `<button onclick="window.restorePromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 복원</button>`
             : `<span style="font-size:10px; color:#ccc;">-</span>`;
         html += `<tr>
-            <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;color:#6c757d;">${log.time}</td>
-            <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;font-weight:bold;color:#0056b3;">${log.userName}</td>
+            <td style="padding:8px;border:1px solid #dee2e6;color:#6c757d; word-break:break-word;">${log.time}</td>
+            <td style="padding:8px;border:1px solid #dee2e6;font-weight:bold;color:#0056b3; word-break:break-word;">${log.userName}</td>
             <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#dc3545;word-break:break-all;">${log.oldPrompt}</td>
             <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#0f5132;word-break:break-all;">${log.newPrompt}</td>
             <td style="padding:8px;border:1px solid #dee2e6;text-align:center;">${restoreBtn}</td>
