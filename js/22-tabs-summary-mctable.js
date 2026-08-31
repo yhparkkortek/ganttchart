@@ -709,11 +709,16 @@ window.checkAndSendAlarms = async function(isManual) {
             console.log(`[알람] 발송 완료: ${item.taskName} (${dDayPlainSafe(item.diffDays)})`);
 
             // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭 (🌐 외부 도메인 차단된 사람은 제외)
-            const tgChatIds = [...new Set(
-                item.allowedPeople
+            //    + 수신 대상(CC)에 텔레그램이 켜진 사람도 함께 (2026-08-31: 기본수신/개별수신 신설)
+            const ccTgChatIds = (item.ccRecipients || [])
+                .filter(r => r.tgOn && r.telegramId && (!r.email || window._isAlarmDomainAllowed(r.email)))
+                .map(r => r.telegramId);
+            const tgChatIds = [...new Set([
+                ...(item.allowedPeople
                     ? item.allowedPeople.map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
-                    : [window._addrFindByName(item.assignee)].map(p => p ? p.telegramId : '')
-            )].filter(Boolean);
+                    : [window._addrFindByName(item.assignee)].map(p => p ? p.telegramId : '')),
+                ...ccTgChatIds
+            ])].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
                 // 💡 [2026-08-24] 100자 → 2000자로 확대. Telegram API 한도(4096자)엔 여유가 충분하고,
                 //    이 100자는 순전히 앱 자체 제한이었음(kortek_backend.py는 별도 추가제한 없이 그대로 전달).
@@ -835,16 +840,10 @@ window.renderAlarmDomainList = function() {
 };
 
 // 설정 저장
+// 💡 [2026-08-31] CC(기본수신) 명단은 이제 이 모달이 아니라 업무별 "개별 알림 설정" 모달의
+//    [기본수신] 화면에서 바로 저장되므로(window._asSaveRecipients), 여기서는 더 이상 다루지 않음.
 window.saveAlarmSettings = function() {
-    const ccRows = [...document.querySelectorAll('.alarm-cc-row')].map(row => ({
-        name:    row.querySelector('.cc-name').value.trim(),
-        email:   row.querySelector('.cc-email').value.trim(),
-        enabled: row.dataset.enabled !== '0',
-        auto:    row.dataset.auto === '1',
-    })).filter(r => r.email);
-
     const cfg = window.loadAlarmSettings();
-    cfg.ccList = ccRows;
     cfg.allowedExternalDomains = [...document.querySelectorAll('.alarm-domain-cb:checked')].map(cb => cb.value);
     localStorage.setItem('gantt_alarm_settings', JSON.stringify(cfg));
     window.closeAlarmSettings();
@@ -1289,10 +1288,6 @@ window._toggleAlarmSection = function(id) {
     el.style.display = open ? 'none' : 'block';
     const isEn = window._currentLang === 'en';
     if (arrow) arrow.textContent = open ? (isEn ? '▶ Expand' : '▶ 펼치기') : (isEn ? '▼ Collapse' : '▼ 접기');
-    // 💡 이메일 수신자 섹션이 접혀있던 동안(offsetWidth=0) 행이 채워졌으면 스크롤바 폭 계산이
-    //    부정확했을 수 있으므로, 이 섹션을 펼치는 순간 다시 정확히 맞춘다.
-    //    (2026-08-31 알람 설정 섹션 재구성으로 수신자 목록이 sec-email → sec-email-recv로 이동)
-    if (id === 'sec-email-recv' && !open && window._syncAlarmCcHeaderPad) window._syncAlarmCcHeaderPad();
 };
 
 // 💡 [2026-08-31] "처음 사용자 — 설치 안내" 섹션 안의 탭 전환 — 설치(Step1~4)/Telegram(Step5) 내용을
@@ -1477,7 +1472,12 @@ window.openNoticeModal = async function(id) {
         const d0 = document.getElementById('nm-d0'); if(d0) d0.checked=false;
     }
 
-    window._nmLoadRecipients(id ? window._noticeItems.find(x => x.id === id) : null);
+    // 수신 대상 모드 — 수정 시 저장된 모드 복원, 신규 등록은 항상 개별수신(기존 동작과 동일)으로 시작
+    const nExisting = id ? window._noticeItems.find(x => x.id === id) : null;
+    const nmIsDefault = nExisting && nExisting.recipientMode === 'default';
+    document.getElementById('nm-recip-mode-default').checked = !!nmIsDefault;
+    document.getElementById('nm-recip-mode-custom').checked  = !nmIsDefault;
+    window._nmLoadRecipients(nExisting);
     // 💡 [2026-08-31 버그 수정] 'block'으로 열면 CSS의 display:flex(헤더/본문 스크롤/푸터 3단 레이아웃)가
     //    인라인 스타일에 덮여 무효화된다 — 반드시 'flex'로 열어야 본문 스크롤·리사이즈가 의도대로 동작함.
     modal.style.display='flex';
@@ -1553,12 +1553,24 @@ window._nmBulkRemoveAll = function() {
 
 // (함수 전체 삭제 — attachAddressAutocomplete의 onPick 콜백으로 대체됨)
 
-// Summary 담당자 기준 자동 등록 + 저장된 값 복원 (신규/수정 공통)
+// 💡 [2026-08-31 신규] 수신 대상 기본수신/개별수신 — 업무별 알람과 동일한 개념/명단(gantt_alarm_settings
+//    .ccList)을 공유한다. 라디오를 바꾸면 그 시점 값으로 목록을 다시 그림(미저장 편집은 버려짐 —
+//    D-day 체크박스처럼 "저장"을 눌러야 확정되는 폼이라 자연스러운 동작, 업무별 알람과 동일 정책).
+window._nmToggleRecipMode = function() {
+    window._nmLoadRecipients(window._noticeItems.find(x => x.id === document.getElementById('nm-edit-id').value));
+};
+
+// Summary 담당자 기준 자동 등록 + 저장된 값 복원 (신규/수정 공통) — 기본수신/개별수신에 따라 소스가 다름
 window._nmLoadRecipients = function(n) {
     const list = document.getElementById('nm-recipient-list');
     if (!list) return;
     list.innerHTML = '';
 
+    const isDefault = document.getElementById('nm-recip-mode-default')?.checked;
+    if (isDefault) {
+        window._computeDefaultCcList().forEach(r => window._nmAddRecipientRow(r.name, r.email, r.telegramId, r.emailOn, r.tgOn, r.auto));
+        return;
+    }
     if (n && Array.isArray(n.recipients) && n.recipients.length) {
         n.recipients.forEach(r => window._nmAddRecipientRow(r.name, r.email, r.telegramId, r.emailOn !== false, r.tgOn !== false, !!r.auto));
         return;
@@ -1670,6 +1682,20 @@ window._nmCollectRecipients = function() {
     }).filter(r => r.name && (r.emailOn || r.tgOn));
 };
 
+// 💡 [2026-08-31 신규] 지금 화면 상태(기본수신/개별수신)를 실제로 반영 — 기본수신이면 화면의 명단을
+//    전체 공용 명단(gantt_alarm_settings.ccList, 업무별 알람과 동일 저장소)에 그대로 덮어써서 다른
+//    공지·업무 알람에도 즉시 적용되게 하고, 개별수신이면 그냥 이 공지만의 명단으로 반환.
+window._nmPersistRecipientMode = function() {
+    const recipients = window._nmCollectRecipients();
+    const recipientMode = document.getElementById('nm-recip-mode-default')?.checked ? 'default' : 'custom';
+    if (recipientMode === 'default') {
+        const cfg = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+        cfg.ccList = recipients;
+        localStorage.setItem('gantt_alarm_settings', JSON.stringify(cfg));
+    }
+    return { recipientMode, recipients };
+};
+
 window.saveNoticeItem = function() {
     const isRecur = document.getElementById('nm-mode-recur')?.checked;
     if (isRecur) { window._nmSaveRecurRule(); return; }
@@ -1683,16 +1709,16 @@ window.saveNoticeItem = function() {
     const presetDays  = [7,3,1,0].filter(d => { const el=document.getElementById(`nm-d${d}`); return el&&el.checked; });
     const alarmDays   = [...new Set([...presetDays, ...(window._nmCustomDays||[])])].sort((a,b)=>b-a);
 
-    const recipients = window._nmCollectRecipients();
+    const { recipientMode, recipients } = window._nmPersistRecipientMode();
 
     const editId = document.getElementById('nm-edit-id').value;
     if (editId) {
         const idx = window._noticeItems.findIndex(x => x.id === editId);
-        if (idx >= 0) window._noticeItems[idx] = { ...window._noticeItems[idx], title, body, deadline, alarmDays, recipients };
+        if (idx >= 0) window._noticeItems[idx] = { ...window._noticeItems[idx], title, body, deadline, alarmDays, recipients, recipientMode };
     } else {
         window._noticeItems.push({
             id: 'notice_' + Date.now(), title, body, deadline, alarmDays,
-            recipients,
+            recipients, recipientMode,
             status: 'active', sentLog: [], createdAt: new Date().toISOString().slice(0,10)
         });
     }
@@ -1707,7 +1733,7 @@ window._nmSaveRecurRule = async function() {
     const body  = document.getElementById('nm-body').value.trim();
     if (!title || !body) { alert('제목, 내용은 필수입니다.'); return; }
 
-    const recipients = window._nmCollectRecipients();
+    const { recipients } = window._nmPersistRecipientMode();
     if (!recipients.length) { alert('수신 대상을 1명 이상 추가해주세요.'); return; }
 
     const dateMode = document.getElementById('nm-datemode-specific')?.checked ? 'specific' : 'range';
@@ -1892,7 +1918,9 @@ window.sendNoticeNow = async function(id, skipLog) {
     const tgMsg=`📢 <b>${n.title}</b>\n\n${n.body}\n\n📅 기준일: ${n.deadline} (${dDayStr})\n<i>KORTEK Gantt PM 공지</i>`;
     const emailBody=`<div style="font-family:'맑은 고딕',sans-serif;font-size:14px;color:#333;"><p><b>📢 ${n.title}</b></p><hr style="border:none;border-top:1px solid #eee;margin:10px 0;"><p style="white-space:pre-wrap;">${n.body.replace(/</g,'&lt;')}</p><p style="margin-top:12px;color:#666;font-size:12px;">📅 기준일: ${n.deadline} (${dDayStr})</p><p style="color:#aaa;font-size:11px;">KORTEK Gantt PM 공지 발송</p></div>`;
     let results=[];
-    const recipients = n.recipients || [];
+    // 💡 [2026-08-31] 수신 대상이 "기본수신"이면 저장된 값이 아니라 그 시점 공용 명단을 다시 조회
+    //    (업무별 알람과 동일하게 운영 — 기본수신 편집은 어디서 하든 즉시 전체에 반영됨)
+    const recipients = n.recipientMode === 'default' ? window._computeDefaultCcList() : (n.recipients || []);
     const toEmail = recipients.filter(r => r.emailOn && r.email).map(r => r.email).join(',');
     if(toEmail){
         try{const r=await fetch(`${MAIL_SERVER}/send-mail`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:toEmail,subject:`[공지] ${n.title}`,body:emailBody})});const d=await r.json();results.push(d.ok?'📧 메일 완료':`📧 오류:${d.error}`);}catch(e){results.push(`📧 오류:${e.message}`);}
@@ -2056,77 +2084,95 @@ window.saveSmtpConfig = async function() {
     }
 };
 
-// CC 행 추가
-window.addAlarmCcRow = function(name='', email='', enabled=true, auto=false) {
-    const list = document.getElementById('alarm-cc-list');
+// ══════════════════════════════════════════════════════════════
+// 👥 수신 대상(기본수신/개별수신) 공용 행 UI — alarm-schedule-modal(#as-recip-list)에서 사용.
+//    공지 등록의 수신자 행(_nmAddRecipientRow, 이름/이메일/텔레그램/채널on-off)과 같은 모양이지만,
+//    한 화면에 "기본수신"(전체 공용 명단) / "개별수신"(이 업무만의 명단) 두 목록을 상황에 따라
+//    갈아끼워 보여줘야 해서 별도 함수로 둔다(컨테이너 id를 항상 받아 그 안에서만 동작 — 공지 등록
+//    쪽의 document 전체 조회 방식과 달리 동시에 여러 모달이 떠 있어도 서로 안 섞이게 함).
+// ══════════════════════════════════════════════════════════════
+window._asRecipAddRow = function(containerId, r) {
+    const row0 = window._normalizeRecipRow(r || {});
+    const list = document.getElementById(containerId);
     if (!list) return;
     const row = document.createElement('div');
-    row.className = 'alarm-cc-row';
-    row.dataset.enabled = enabled ? '1' : '0';
-    row.dataset.auto = auto ? '1' : '0';
-    row.style.cssText = 'display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center;';
+    row.className = 'as-recip-row';
+    row.dataset.email = row0.email;
+    row.dataset.tg = row0.telegramId;
+    row.style.cssText = 'display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; padding:4px 0; border-bottom:1px solid #eee;';
     row.innerHTML = `
-        <input class="cc-name u-input" placeholder="이름" value="${name}"
-          style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-        <input class="cc-email u-input" placeholder="이메일" value="${email}"
-          style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-        <span title="Summary 프로젝트 멤버에서 자동 등록됨" style="font-size:10px; color:#2c5f8a; background:${auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${auto ? 'visible' : 'hidden'};">auto</span>
-        <button type="button" class="cc-toggle-btn" onclick="window._toggleCcRow(this)" title="발송 ON/OFF"
-          style="border:1px solid ${enabled ? '#27ae60' : '#ccc'}; background:${enabled ? '#27ae60' : '#fff'}; color:${enabled ? '#fff' : '#aaa'}; cursor:pointer; font-size:12px; width:24px; height:24px; border-radius:4px; line-height:1;">✓</button>
-        <button onclick="this.parentElement.remove(); window._syncAlarmCcHeaderPad();"
-          style="width:26px; height:24px; border:none; background:none; color:#e03131; cursor:pointer; font-size:15px; padding:0;">✕</button>`;
+        <input class="as-recip-name u-input" placeholder="이름 (자동완성)" value="${row0.name}"
+               oninput="window._asRecipAutofill(this)"
+               style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
+        <span style="font-size:10px; color:#2c5f8a; background:${row0.auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${row0.auto ? 'visible' : 'hidden'};">auto</span>
+        <span class="as-recip-info" style="font-size:11.5px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row0.email || row0.telegramId ? [row0.email, row0.telegramId ? 'TG:'+row0.telegramId : ''].filter(Boolean).join(' · ') : '이름 입력 시 자동완성'}</span>
+        <button type="button" class="as-recip-email-btn" onclick="window._asRecipToggleChannel(this)" title="이메일 발송 on/off"
+                style="width:28px; height:26px; border:1px solid ${row0.emailOn?'#27ae60':'#ccc'}; background:${row0.emailOn?'#e8f7ee':'#fff'}; color:${row0.emailOn?'#27ae60':'#aaa'}; border-radius:3px; cursor:pointer; font-size:12px; padding:0;">📧</button>
+        <button type="button" class="as-recip-tg-btn" onclick="window._asRecipToggleChannel(this)" title="텔레그램 발송 on/off"
+                style="width:28px; height:26px; border:1px solid ${row0.tgOn?'#27ae60':'#ccc'}; background:${row0.tgOn?'#e8f7ee':'#fff'}; color:${row0.tgOn?'#27ae60':'#aaa'}; border-radius:3px; cursor:pointer; font-size:12px; padding:0;">💬</button>
+        <button type="button" onclick="this.closest('.as-recip-row').remove(); window._asSyncRecipHeaderPad('${containerId}');"
+                style="width:26px; height:26px; border:none; background:none; color:#e03131; cursor:pointer; font-size:15px; padding:0;">✕</button>`;
+    row.querySelector('.as-recip-email-btn').dataset.on = row0.emailOn ? '1' : '0';
+    row.querySelector('.as-recip-tg-btn').dataset.on = row0.tgOn ? '1' : '0';
     list.appendChild(row);
-    window._syncAlarmCcHeaderPad();
+    window._asSyncRecipHeaderPad(containerId);
 
-    window.attachAddressAutocomplete(row.querySelector('.cc-name'), row.querySelector('.cc-email'), false);
-};
-
-// 참조인 개별 발송 ON/OFF 토글
-window._toggleCcRow = function(btn) {
-    const row = btn.closest('.alarm-cc-row');
-    const enabled = row.dataset.enabled !== '1';
-    row.dataset.enabled = enabled ? '1' : '0';
-    btn.style.borderColor = enabled ? '#27ae60' : '#ccc';
-    btn.style.background  = enabled ? '#27ae60' : '#fff';
-    btn.style.color       = enabled ? '#fff' : '#aaa';
-};
-
-// 참조인 전체 발송 ON/OFF
-// 인자 없이 호출하면 현재 상태를 보고 전체 on/off를 자동 판단 (공지관리 방식과 동일)
-window.toggleAllCc = function(enabled) {
-    const rows = document.querySelectorAll('.alarm-cc-row');
-    if (enabled === undefined) {
-        const allOn = Array.from(rows).every(row => row.dataset.enabled === '1');
-        enabled = !allOn;
-    }
-    rows.forEach(row => {
-        row.dataset.enabled = enabled ? '1' : '0';
-        const btn = row.querySelector('.cc-toggle-btn');
-        if (btn) {
-            btn.style.borderColor = enabled ? '#27ae60' : '#ccc';
-            btn.style.background  = enabled ? '#27ae60' : '#fff';
-            btn.style.color       = enabled ? '#fff' : '#aaa';
-        }
+    window.attachAddressAutocomplete(row.querySelector('.as-recip-name'), null, false, function(person) {
+        row.dataset.email = person.email || '';
+        row.dataset.tg = person.telegramId || '';
+        const info = row.querySelector('.as-recip-info');
+        if (info) info.textContent = [person.email, person.telegramId ? 'TG:'+person.telegramId : ''].filter(Boolean).join(' · ') || '이메일/텔레그램 미등록';
     });
 };
 
-// 수신자 전체 삭제
-window._ccBulkRemoveAll = function() {
-    const list = document.getElementById('alarm-cc-list');
+window._asRecipApplyChannelState = function(btn, on) {
+    btn.dataset.on = on ? '1' : '0';
+    btn.style.borderColor = on ? '#27ae60' : '#ccc';
+    btn.style.background  = on ? '#e8f7ee' : '#fff';
+    btn.style.color       = on ? '#27ae60' : '#aaa';
+};
+window._asRecipToggleChannel = function(btn) {
+    window._asRecipApplyChannelState(btn, btn.dataset.on !== '1');
+};
+// 일괄 채널 토글 — 컨테이너 안에서만 동작(다른 모달의 같은 클래스 행에 영향 없음)
+window._asRecipBulkToggleChannel = function(containerId, type) {
+    const btns = document.querySelectorAll(`#${containerId} .as-recip-${type}-btn`);
+    if (!btns.length) return;
+    const allOn = Array.from(btns).every(b => b.dataset.on === '1');
+    btns.forEach(b => window._asRecipApplyChannelState(b, !allOn));
+};
+window._asRecipBulkRemoveAll = function(containerId) {
+    const list = document.getElementById(containerId);
     if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
-    window._syncAlarmCcHeaderPad();
+    window._asSyncRecipHeaderPad(containerId);
+};
+// 수신자 수집 — 이름/이메일/텔레그램ID + 채널별 on/off (이름·채널 둘 다 꺼져있으면 제외)
+window._asRecipCollect = function(containerId) {
+    return [...document.querySelectorAll(`#${containerId} .as-recip-row`)].map(row => {
+        const name = row.querySelector('.as-recip-name')?.value.trim() || '';
+        return {
+            name,
+            email: row.dataset.email || '',
+            telegramId: row.dataset.tg || '',
+            emailOn: row.querySelector('.as-recip-email-btn')?.dataset.on === '1',
+            tgOn: row.querySelector('.as-recip-tg-btn')?.dataset.on === '1',
+        };
+    }).filter(r => r.name && (r.emailOn || r.tgOn));
+};
+// 이름만 입력하고 자동완성을 안 거친 경우(직접 타이핑 중) 표시용 안내만 갱신 — 실제 매칭은 onPick에서
+window._asRecipAutofill = function(input) {
+    const row = input.closest('.as-recip-row');
+    const info = row && row.querySelector('.as-recip-info');
+    if (info && !row.dataset.email && !row.dataset.tg) info.textContent = '이름 입력 시 자동완성';
 };
 
-// 💡 [2026-08-31 신규] #alarm-cc-list(이메일 수신자 목록)는 행이 많아지면 자체 스크롤바가 생기는데,
-//    이때 스크롤바가 차지하는 폭만큼 각 행의 실제 콘텐츠 폭이 줄어들어 ✓/✕ 위치가 왼쪽으로 밀린다.
-//    바로 위 "ALL ✓ ✕" 일괄 제어 헤더(#alarm-cc-header)는 스크롤바가 없어 그 폭만큼 정렬이 어긋나
-//    보이는 문제 — 헤더에 목록의 실제 스크롤바 폭만큼 padding-right를 똑같이 줘서 항상 맞춘다.
-//    (행 추가/삭제/전체삭제 등 목록 내용이 바뀔 수 있는 모든 경로에서 호출)
-window._syncAlarmCcHeaderPad = function() {
-    const list = document.getElementById('alarm-cc-list');
-    const header = document.getElementById('alarm-cc-header');
+// 💡 목록에 스크롤바가 생기면 그만큼 폭이 줄어 행의 채널 버튼 위치가 헤더보다 왼쪽으로 밀리는 문제 보정
+//    (containerId="as-recip-list", headerId="as-recip-header" 고정 쌍으로 사용)
+window._asSyncRecipHeaderPad = function(containerId) {
+    const list = document.getElementById(containerId);
+    const header = document.getElementById(containerId.replace('-list', '-header'));
     if (!list || !header) return;
-    const sbWidth = list.offsetWidth - list.clientWidth; // 스크롤바가 없으면 0
+    const sbWidth = list.offsetWidth - list.clientWidth;
     header.style.paddingRight = sbWidth > 0 ? sbWidth + 'px' : '';
 };
 
@@ -2309,42 +2355,49 @@ window.openAlarmSettings = function() {
     document.getElementById('as-smtp-user').value = smtp.user || '';
     document.getElementById('as-smtp-pass').value = smtp.pass || '';
     window.refreshAlarmAutoButtons(cfg.autoSend !== false);
-    // 주소록 이름 목록으로 자동완성 datalist 채우기 (한글/영문 이름 모두)
-    const nameList = document.getElementById('alarm-cc-namelist');
-    if (nameList) {
-        const addressBook = (window.tabData || {}).addressBook || [];
-        const opts = [];
-        addressBook.forEach(p => {
-            if (p.name)   opts.push(p.name);
-            if (p.nameEn) opts.push(p.nameEn);
-        });
-        nameList.innerHTML = opts.map(n => `<option value="${n.replace(/"/g,'&quot;')}">`).join('');
-    }
-    // Summary 프로젝트 멤버 기준으로 자동 참조인을 매번 새로 계산 (수동으로 추가한 사람은 그대로 유지)
-    const prevList = cfg.ccList || [];
-    const prevEnabledByEmail = {};
-    prevList.forEach(r => { if (r.email) prevEnabledByEmail[r.email] = (r.enabled !== false); });
-
-    const seen = new Set();
-    const autoList = window._autoRegisterCcFromMembers()
-        .filter(m => { if (seen.has(m.email)) return false; seen.add(m.email); return true; })
-        .map(m => ({
-            name: m.name, email: m.email, auto: true,
-            // 💡 자동 등록되는 참조인은 기본 체크 해제(발송 OFF) — 필요 시 사용자가 직접 ✓ 눌러서 켬
-            enabled: prevEnabledByEmail.hasOwnProperty(m.email) ? prevEnabledByEmail[m.email] : false,
-        }));
-    const manualList = prevList.filter(r => !r.auto && !seen.has(r.email));
-    const ccList = [...autoList, ...manualList];
-
-    const list = document.getElementById('alarm-cc-list');
-    if (list) {
-        list.innerHTML = '';
-        ccList.forEach(r => window.addAlarmCcRow(r.name, r.email, r.enabled !== false, !!r.auto));
-    }
     window.renderAlarmDomainList();
     document.getElementById('alarm-settings-overlay').style.display = 'flex';
     document.getElementById('alarm-settings-modal').style.display  = 'block';
     window.bringModalToFront('alarm-settings-modal');
+};
+
+// 💡 [2026-08-31 신규] "이메일 수신자 선택"(기본수신 CC 명단)을 알람 설정 모달에서 빼서, 업무별
+//    "개별 알림 설정"(alarm-schedule-modal)의 [기본수신] 버튼 아래로 옮겼다 — 어느 업무에서 열든
+//    같은 전체 공용 명단을 그 자리에서 바로 보고 수정할 수 있다. 이 두 헬퍼는 그 화면에서 재사용:
+//    ① 옛 스키마(email만/enabled)와 새 스키마(email+텔레그램/emailOn·tgOn)를 하나로 정규화
+window._normalizeRecipRow = function(r) {
+    return {
+        name: (r && r.name) || '',
+        email: (r && r.email) || '',
+        telegramId: (r && r.telegramId) || '',
+        emailOn: r && r.emailOn !== undefined ? r.emailOn !== false : !(r && r.enabled === false),
+        tgOn: !!(r && r.tgOn),
+        auto: !!(r && r.auto),
+    };
+};
+// ② Summary 프로젝트 멤버 기준 자동 참조인 + 기존 수동 추가분을 합쳐 "기본수신" 후보 목록 계산
+//    (기존 자동 등록자의 on/off 상태는 유지, 신규 자동 등록자는 기본 OFF — 사용자가 직접 켜야 발송)
+window._computeDefaultCcList = function() {
+    const cfg = window.loadAlarmSettings();
+    const prevList = (cfg.ccList || []).map(window._normalizeRecipRow);
+    const prevByEmail = {};
+    prevList.forEach(r => { if (r.email) prevByEmail[r.email] = r; });
+
+    const seen = new Set();
+    const autoList = window._autoRegisterCcFromMembers()
+        .filter(m => { if (seen.has(m.email)) return false; seen.add(m.email); return true; })
+        .map(m => {
+            const prev = prevByEmail[m.email];
+            const p = window._addrFindByName ? window._addrFindByName(m.name) : null;
+            return {
+                name: m.name, email: m.email, auto: true,
+                telegramId: (prev && prev.telegramId) || (p ? (p.telegramId || '') : ''),
+                emailOn: prev ? prev.emailOn : false,
+                tgOn:    prev ? prev.tgOn    : false,
+            };
+        });
+    const manualList = prevList.filter(r => !r.auto && !seen.has(r.email));
+    return [...autoList, ...manualList];
 };
 
 // 💡 [2026-08-31] "처음 사용자 — 설치 안내"가 별도 팝업(install-guide-modal)이 아니라 알람 설정
@@ -2394,9 +2447,9 @@ window.collectAlarmItems = function() {
         return found ? (found.email || '') : '';
     };
 
-    // CC 이메일 — 알람 설정에 등록된 참조인 중 발송 ON(enabled)이고, 🌐 외부 도메인 발송 허용 대상인 사람만
-    const cfg     = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
-    const ccMails = (cfg.ccList || []).filter(r => r.email && r.enabled !== false && window._isAlarmDomainAllowed(r.email)).map(r => r.email).join(',');
+    // 💡 [2026-08-31] 수신 대상(CC)은 업무마다 다를 수 있음 — 기본수신(전역 공용 명단, 대부분의
+    //    업무가 여기 해당)이거나 개별수신(그 업무의 row._알림수신자)이거나. 행마다 아래서 계산.
+    const defaultCcList = (window.loadAlarmSettings ? window.loadAlarmSettings() : {}).ccList || [];
 
     document.querySelectorAll('#table-body tr').forEach(function(tr) {
         // dataset.rowIndex → globalData 인덱스 (1-based, 0번은 헤더)
@@ -2496,6 +2549,11 @@ window.collectAlarmItems = function() {
         // 💡 이 업무만 별도로 설정한 알람 일정이 있으면 그걸 쓰고, 없으면 기본값(ALARM_DAYS) 사용
         const alarmDays = (row._알림일정 && row._알림일정.length) ? row._알림일정.slice() : ALARM_DAYS.slice();
 
+        // 이 업무의 수신 대상(기본수신 전역 공용 명단 / 개별수신 이 업무만의 명단)
+        const ccSource     = (row._알림수신자모드 === 'custom') ? (row._알림수신자 || []) : defaultCcList;
+        const ccRecipients = ccSource.map(window._normalizeRecipRow);
+        const ccMails      = ccRecipients.filter(r => r.email && r.emailOn && window._isAlarmDomainAllowed(r.email)).map(r => r.email).join(',');
+
         // 발송 이력
         // 💡 [멀티탭 대비] rowId에 프로젝트 식별자가 없으면, 서로 다른 프로젝트의 같은 행번호+마감일이
         //    우연히 겹칠 때 localStorage 발송기록이 프로젝트 간에 충돌해서 한쪽이 조용히 스킵될 수 있음
@@ -2522,7 +2580,7 @@ window.collectAlarmItems = function() {
             receiverStr, receiverEmail,
             missingPeople, blockedByDomain,
             toEmail, allPeople, allowedPeople,
-            ccMails, dueStr, dueDate, diffDays, alarmDays,
+            ccMails, ccRecipients, dueStr, dueDate, diffDays, alarmDays,
             content: contentRaw, sentLog, sentHidden, tr,
             mailRaw: row._mailRaw || null // 💡 메일분석으로 자동등록된 업무면 원문 메일(제목/발신/날짜/본문) 보관
         });
@@ -2728,6 +2786,13 @@ window.openAlarmScheduleModal = async function(idx) {
     window._asToggleMode();
     window._asToggleDateMode();
 
+    // 수신 대상 — 이 업무가 개별수신으로 지정돼 있으면 그 상태로, 아니면 기본수신으로 열기
+    const recipRow = (window.globalData || [])[item.rowIdx];
+    const isCustomRecip = recipRow && recipRow._알림수신자모드 === 'custom';
+    document.getElementById('as-recip-mode-default').checked = !isCustomRecip;
+    document.getElementById('as-recip-mode-custom').checked  = !!isCustomRecip;
+    window._asRenderRecipList();
+
     document.getElementById('alarm-schedule-title').textContent = '⚙️ ' + item.taskName + (window._currentLang === 'en' ? ' — Alarm Schedule' : ' — 알람 일정');
     document.getElementById('alarm-schedule-overlay').style.display = 'flex';
     document.getElementById('alarm-schedule-modal').style.display = 'block';
@@ -2765,6 +2830,54 @@ window._asToggleDateMode = function() {
     const specEl  = document.getElementById('as-specific-dates-fields');
     if (rangeEl) rangeEl.style.display = isSpecific ? 'none' : 'grid';
     if (specEl)  specEl.style.display  = isSpecific ? 'block' : 'none';
+};
+
+// ── 수신 대상: 기본수신(전체 공용 CC 명단) / 개별수신(이 업무만의 명단) ─────────
+// 라디오를 바꾸면 그 시점의 저장된 값으로 목록을 다시 그린다(전환 중 미저장 편집은 버려짐 — D-day
+// 체크박스처럼 "저장" 눌러야 확정되는 폼이라 자연스러운 동작).
+window._asToggleRecipMode = function() {
+    window._asRenderRecipList();
+};
+
+window._asRenderRecipList = function() {
+    const list = document.getElementById('as-recip-list');
+    if (!list) return;
+    list.innerHTML = '';
+    const isDefault = document.getElementById('as-recip-mode-default')?.checked;
+    const descEl = document.getElementById('as-recip-mode-desc');
+    let rows;
+    if (isDefault) {
+        rows = window._computeDefaultCcList();
+        if (descEl) descEl.textContent = '기본수신: 모든 업무가 함께 쓰는 공통 명단 — 여기서 고치면 다른 업무에도 함께 적용됩니다.';
+    } else {
+        const item = window._alarmScheduleItem;
+        const row  = item ? (window.globalData || [])[item.rowIdx] : null;
+        rows = ((row && row._알림수신자) || []).map(window._normalizeRecipRow);
+        if (descEl) descEl.textContent = '개별수신: 이 업무에만 적용되는 명단입니다.';
+    }
+    rows.forEach(r => window._asRecipAddRow('as-recip-list', r));
+    window._asSyncRecipHeaderPad('as-recip-list');
+};
+
+// 저장 시점 화면 상태를 실제로 반영 — 기본수신이면 전체 공용 명단(gantt_alarm_settings.ccList)을
+// 갱신, 개별수신이면 이 업무의 행(row._알림수신자)에 기록. 반환값은 이번에 저장된 수신자 배열
+// (기간·반복 규칙 저장 시 백엔드로 그대로 스냅샷해서 보냄).
+window._asPersistRecipients = function() {
+    const item = window._alarmScheduleItem;
+    if (!item) return [];
+    const row  = (window.globalData || [])[item.rowIdx];
+    const isDefault = document.getElementById('as-recip-mode-default')?.checked;
+    const rows = window._asRecipCollect('as-recip-list');
+    if (isDefault) {
+        const cfg = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+        cfg.ccList = rows;
+        localStorage.setItem('gantt_alarm_settings', JSON.stringify(cfg));
+        if (row) { delete row._알림수신자모드; delete row._알림수신자; }
+    } else if (row) {
+        row._알림수신자모드 = 'custom';
+        row._알림수신자 = rows;
+    }
+    return rows;
 };
 
 // ── 특정 날짜 태그 관리 (notice-modal의 _nmSpecificDates와 동일 패턴) ──────────
@@ -2829,6 +2942,9 @@ window._asSaveRecurRule = async function() {
     const hourInterval = parseFloat(document.getElementById('as-recur-hour-interval').value) || 1;
     const ruleId       = document.getElementById('as-schedule-rule-id').value || undefined;
 
+    // 💡 수신 대상(기본수신/개별수신)을 지금 화면 상태로 저장(전역 CC 명단 갱신 또는 이 업무에만 기록)
+    const ccRecipients = window._asPersistRecipients ? (window._asPersistRecipients() || []) : [];
+
     // 💡 CC 명단/외부도메인 허용목록은 브라우저 localStorage(알람 설정)에만 있어 서버가 못 보므로,
     //    저장 시점 값을 그대로 스냅샷해서 같이 보낸다 (담당자/마감일/업무내용과 달리 자주 안 바뀌는 값).
     const cfg = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
@@ -2836,7 +2952,7 @@ window._asSaveRecurRule = async function() {
         id: ruleId, type: 'alarm',
         driveFileId, rowIdx: item.rowIdx,
         taskNameSnapshot: item.taskName,
-        ccMailsSnapshot: item.ccMails || '',
+        ccRecipientsSnapshot: ccRecipients,
         allowedExternalDomainsSnapshot: cfg.allowedExternalDomains || [],
         dateMode, startDate, endDate, specificDates: window._asSpecificDates.slice(),
         dayInterval, hourStart, hourEnd, hourInterval, enabled: true
@@ -2904,6 +3020,8 @@ window.saveAlarmSchedule = function() {
     } else {
         row._알림일정 = finalDays;
     }
+
+    if (window._asPersistRecipients) window._asPersistRecipients(); // 수신 대상(기본수신/개별수신)도 함께 저장
 
     if (window.logChange) window.logChange(item.rowIdx, -1, '알람 일정', isDefault ? '기본값으로 복원' : '커스텀 설정: ' + finalDays.map(d => d === 0 ? 'D-Day' : ('D-' + d)).join(', '));
 
@@ -3045,9 +3163,14 @@ window.sendSingleAlarm = async function(sendAll) {
             item.sentLog['manual'] = new Date().toISOString();
 
             // 💡 텔레그램 발송 — 주소록 telegramId 기준으로 수신자 매칭 (🌐 외부 도메인 차단된 사람은 제외)
-            const tgChatIds = [...new Set(
-                (item.allowedPeople || item.allPeople || [item.assignee]).map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; })
-            )].filter(Boolean);
+            //    + 수신 대상(CC)에 텔레그램이 켜진 사람도 함께 (2026-08-31: 기본수신/개별수신 신설)
+            const ccTgChatIds2 = (item.ccRecipients || [])
+                .filter(r => r.tgOn && r.telegramId && (!r.email || window._isAlarmDomainAllowed(r.email)))
+                .map(r => r.telegramId);
+            const tgChatIds = [...new Set([
+                ...(item.allowedPeople || item.allPeople || [item.assignee]).map(n => { const p = window._addrFindByName(n); return p ? p.telegramId : ''; }),
+                ...ccTgChatIds2
+            ])].filter(Boolean);
             if (tgChatIds.length && window.sendTelegramAlarm) {
                 // 💡 [2026-08-24] 위 자동알람과 동일 기준으로 100자 → 2000자 확대
                 const _tgContent2 = item.content ? '\n내용: ' + item.content.replace(/\n/g,' ').substring(0,2000) + (item.content.length>2000?'…':'') : '';
