@@ -737,6 +737,10 @@
                     style="display:none; position:absolute; right:8px; cursor:pointer; color:#999; font-size:13px;">✕</span>
             </div>
             <span id="addr-search-count" style="font-size:12px; color:#888;"></span>
+            <!-- 💡 [2026-08-31 버그 수정] 다른 탭들은 이 빈 .btn-group(margin-left:auto)으로 인쇄 버튼을
+                 헤더 박스 맨 오른쪽에 고정시키는데, Address 탭에만 이게 빠져 있어서 인쇄 버튼이 검색창
+                 바로 옆에 붙어 있었다 — 다른 페이지와 동일하게 오른쪽 끝으로 이동. -->
+            <div class="btn-group"></div>
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-address')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
