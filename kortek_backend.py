@@ -701,8 +701,10 @@ def telegram_test():
 #   driveFileId          — 이 업무가 속한 프로젝트의 구글드라이브 파일 ID (window.currentDriveFileId)
 #   rowIdx               — globalData 배열 안에서 이 업무 행의 인덱스
 #   taskNameSnapshot      — 목록 표시용(실제 발송 내용에는 안 씀, 매번 최신 이름으로 다시 계산됨)
-#   ccMailsSnapshot       — 알람 설정(CC 명단)은 브라우저에만 있어 서버가 못 보므로, 규칙 저장 시점의
-#                           CC 이메일 목록을 그대로 스냅샷 — recipients와 달리 자주 안 바뀔 값이라 실용적 절충
+#   ccRecipientsSnapshot  — 수신 대상(기본수신/개별수신) 명단은 브라우저에만 있어 서버가 못 보므로,
+#                           규칙 저장 시점의 명단을 [{name, email, telegramId, emailOn, tgOn}, ...]
+#                           그대로 스냅샷 — recipients와 달리 자주 안 바뀔 값이라 실용적 절충.
+#                           [2026-08-31] 이메일만 담던 ccMailsSnapshot(문자열)을 대체 — 텔레그램도 발송.
 #   allowedExternalDomainsSnapshot — 위와 동일한 이유로 스냅샷하는 "외부 도메인 발송 허용" 목록
 
 @app.route('/schedule', methods=['GET', 'POST'])
@@ -738,7 +740,7 @@ def schedule_api():
         rule['driveFileId']                     = data.get('driveFileId', '')
         rule['rowIdx']                          = data.get('rowIdx')
         rule['taskNameSnapshot']                = data.get('taskNameSnapshot', '')
-        rule['ccMailsSnapshot']                 = data.get('ccMailsSnapshot', '')
+        rule['ccRecipientsSnapshot']            = data.get('ccRecipientsSnapshot', []) or []
         rule['allowedExternalDomainsSnapshot']  = data.get('allowedExternalDomainsSnapshot', []) or []
         if not rule['title']:
             rule['title'] = rule['taskNameSnapshot'] or '(제목 없음)'
@@ -1130,7 +1132,13 @@ def _fire_alarm_rule(rule: dict):
     assignee_email  = snap['assigneeEmail'] if _is_alarm_domain_allowed(snap['assigneeEmail'], allowed_domains) else ''
     receiver_emails = [e for e in snap['receiverEmails'] if _is_alarm_domain_allowed(e, allowed_domains)]
     to_email = ','.join(dict.fromkeys([e for e in ([assignee_email] + receiver_emails) if e]))
-    cc_mails = rule.get('ccMailsSnapshot', '')
+    # 💡 [2026-08-31] 수신 대상(기본수신/개별수신) 스냅샷 — 이메일 켜져있고(emailOn) 도메인 허용된
+    #    사람만 이메일 cc로, 텔레그램 켜져있는(tgOn) 사람은 아래에서 별도로 텔레그램 발송
+    cc_recipients = rule.get('ccRecipientsSnapshot') or []
+    cc_mails = ','.join(dict.fromkeys(
+        r.get('email', '') for r in cc_recipients
+        if r.get('emailOn') and r.get('email') and _is_alarm_domain_allowed(r['email'], allowed_domains)
+    ))
 
     project_meta = project_data.get('projectMeta') or {}
     proj_title   = ' > '.join([x for x in [project_meta.get('고객사'), project_meta.get('고객모델명')] if x]) or '프로젝트'
@@ -1171,6 +1179,15 @@ def _fire_alarm_rule(rule: dict):
         if snap['content']:
             tg_msg += '\n내용: ' + snap['content'].replace('\n', ' ')[:2000]
         sent_chat_ids = set()
+
+        def _tg_send_once(chat_id, label):
+            if not chat_id or chat_id in sent_chat_ids:
+                return
+            sent_chat_ids.add(chat_id)
+            res = send_telegram_msg(tg_msg, chat_id)
+            if not res.get('ok'):
+                print(f"[업무알람 실패-텔레그램] {label}: {res}")
+
         for name in snap['allPeopleNames']:
             person = _addr_find_by_name(address_book, name)
             if not person or not person.get('telegramId'):
@@ -1178,13 +1195,16 @@ def _fire_alarm_rule(rule: dict):
             email = person.get('email') or ''
             if email and not _is_alarm_domain_allowed(email, allowed_domains):
                 continue
-            chat_id = person['telegramId']
-            if chat_id in sent_chat_ids:
+            _tg_send_once(person['telegramId'], name)
+
+        # 💡 수신 대상(기본수신/개별수신)에 텔레그램이 켜진 사람도 함께 발송
+        for r in cc_recipients:
+            if not r.get('tgOn') or not r.get('telegramId'):
                 continue
-            sent_chat_ids.add(chat_id)
-            res = send_telegram_msg(tg_msg, chat_id)
-            if not res.get('ok'):
-                print(f"[업무알람 실패-텔레그램] {name}: {res}")
+            email = r.get('email') or ''
+            if email and not _is_alarm_domain_allowed(email, allowed_domains):
+                continue
+            _tg_send_once(r['telegramId'], r.get('name', ''))
     except Exception as e:
         print(f"[업무알람 텔레그램 예외] {snap['taskName']}: {e}")
 

@@ -312,39 +312,8 @@
     </div>
   </div>
 
-  <!-- ══ 섹션 3: 이메일 수신자 선택 ══ -->
-  <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
-    <div onclick="window._toggleAlarmSection('sec-email-recv')"
-         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-      <span id="sec-email-recv-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">👥 이메일 수신자 선택</span>
-      <span id="sec-email-recv-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
-    </div>
-    <div id="sec-email-recv" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
-      <p style="margin:0 0 8px; font-size:11px; color:#888;"><span id="as-email-recv-sub">(Summary 멤버 자동 반영)</span></p>
 
-      <!-- 데이터 행과 동일한 grid 정의를 공유하는 일괄 제어 헤더
-           💡 [2026-08-31] id="alarm-cc-header" — 아래 목록(#alarm-cc-list)이 스크롤바가 생기면
-           그만큼 폭이 줄어 행의 ✓/✕ 위치가 이 헤더보다 왼쪽으로 밀리는 문제가 있어, JS가
-           매번 목록의 실제 스크롤바 폭을 재서 이 헤더에 같은 만큼 padding-right로 보정한다
-           (window._syncAlarmCcHeaderPad, js/22-tabs-summary-mctable.js). -->
-      <div id="alarm-cc-header" style="display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center; margin-bottom:4px;">
-        <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
-        <button type="button" onclick="window.toggleAllCc()" title="전체 발송 선택/해제"
-                style="width:24px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:4px; cursor:pointer; font-size:11px; padding:0;">✓</button>
-        <button type="button" onclick="window._ccBulkRemoveAll()" title="수신자 전체 삭제"
-                onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
-                style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
-      </div>
-
-      <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;"></div>
-      <datalist id="alarm-cc-namelist"></datalist>
-      <div style="display:flex; justify-content:flex-end; margin-top:8px;">
-        <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:4px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ══ 섹션 4: 메신저 서버 설정 ══ -->
+  <!-- ══ 섹션 3: 메신저 서버 설정 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-messenger')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
@@ -397,7 +366,7 @@
     </div>
   </div>
 
-  <!-- ══ 섹션 5: 외부 도메인 발송 허용 ══ -->
+  <!-- ══ 섹션 4: 외부 도메인 발송 허용 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-domain')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
@@ -449,8 +418,8 @@
 </div>
 
 <div id="alarm-schedule-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
-<div id="alarm-schedule-modal" style="display:none; pointer-events:all; position:fixed; top:10vh; left:50%; transform:translateX(-50%);
-  width:400px; max-width:90vw; min-width:320px; min-height:300px; max-height:88vh; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+<div id="alarm-schedule-modal" style="display:none; pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
+  width:460px; max-width:92vw; min-width:340px; min-height:300px; max-height:90vh; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   padding:24px 24px 18px; font-family:'맑은 고딕',sans-serif; resize:both; overflow-y:auto;">
   <div id="alarm-schedule-drag" style="display:flex; align-items:center; justify-content:space-between; margin:-24px -24px 14px; padding:12px 18px 10px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="alarm-schedule-title" style="margin:0; font-size:14px; color:#7a5210;">⚙️ 알람 일정 설정</h3>
@@ -558,6 +527,38 @@
             onmouseover="this.style.background='#f5c2bd';" onmouseout="this.style.background='#fbe4e2';">🗑️ 이 업무의 기간·반복 예약 해제</button>
   </div>
   <input type="hidden" id="as-schedule-rule-id">
+
+  <!-- 💡 [2026-08-31 신규] 수신 대상 — 기본수신(모든 업무가 공유하는 공통 명단, 여기서 고치면
+       전체 업무에 바로 적용됨) / 개별수신(이 업무만의 명단) 중 골라서 사용. 발송 방식(D-day/기간·반복)
+       과 무관하게 항상 적용됨. 이전엔 알람 설정 모달의 "이메일 수신자 선택"이 기본수신 역할을 겸했는데,
+       여기 하나로 합쳐 업무를 열 때마다 바로 확인·수정할 수 있게 옮겼다. -->
+  <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
+    <div style="display:flex; gap:14px; align-items:center; margin-bottom:6px;">
+      <span style="font-size:12px; font-weight:bold; color:#444;">수신 대상</span>
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="as-recip-mode" id="as-recip-mode-default" value="default" checked onchange="window._asToggleRecipMode()"> 기본수신
+      </label>
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="as-recip-mode" id="as-recip-mode-custom" value="custom" onchange="window._asToggleRecipMode()"> 개별수신
+      </label>
+    </div>
+    <p id="as-recip-mode-desc" style="margin:0 0 8px; font-size:10.5px; color:#888;">기본수신: 모든 업무가 함께 쓰는 공통 명단 — 여기서 고치면 다른 업무에도 함께 적용됩니다.</p>
+
+    <div id="as-recip-header" style="display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; margin-bottom:3px;">
+      <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
+      <button type="button" onclick="window._asRecipBulkToggleChannel('as-recip-list', 'email')" title="이메일 전체 선택/해제"
+              style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
+      <button type="button" onclick="window._asRecipBulkToggleChannel('as-recip-list', 'tg')" title="텔레그램 전체 선택/해제"
+              style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
+      <button type="button" onclick="window._asRecipBulkRemoveAll('as-recip-list')" title="수신자 전체 삭제"
+              onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
+              style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
+    </div>
+    <div id="as-recip-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px; max-height:180px; overflow-y:auto; padding-right:4px;"></div>
+    <button type="button" onclick="window._asRecipAddRow('as-recip-list', {emailOn:true, tgOn:true})"
+            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+            style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
+  </div>
 
   <div style="margin-top:18px; display:flex; gap:8px; justify-content:space-between;">
     <button id="as-reset-btn" onclick="window.resetAlarmScheduleForm()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:6px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">기본값으로</button>
@@ -852,6 +853,17 @@
   <!-- 수신 대상 -->
   <div style="background:#f8f9fa; border-radius:6px; padding:12px; margin-bottom:14px;">
     <p id="nm-lbl-target" style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#444;">📬 수신 대상</p>
+
+    <!-- 💡 [2026-08-31 신규] 기본수신(업무별 알람과 공유하는 전체 공용 명단) / 개별수신(이 공지만의
+         명단, 기존 동작) — 신규 등록은 항상 개별수신으로 시작(기존과 동일한 자동입력 유지). -->
+    <div style="display:flex; gap:14px; align-items:center; margin-bottom:8px;">
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="nm-recip-mode" id="nm-recip-mode-default" value="default" onchange="window._nmToggleRecipMode()"> 기본수신
+      </label>
+      <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="radio" name="nm-recip-mode" id="nm-recip-mode-custom" value="custom" checked onchange="window._nmToggleRecipMode()"> 개별수신
+      </label>
+    </div>
 
     <datalist id="nm-addr-namelist"></datalist>
 
