@@ -492,20 +492,38 @@
         </label>
       </div>
 
-      <!-- 💡 D-day/기간·반복 둘 다 같은 라운드 상자 스타일로 통일 -->
+      <!-- 💡 [2026-08-31] D-day/기간·반복 둘 다 같은 라운드 상자 스타일로 통일 + D-day 목록도
+           공지 등록과 동일하게(체크박스 가로 배치 + 직접입력은 태그로 계속 나열) 맞춤 -->
       <div id="as-dday-fields" style="padding:10px; background:#f0f6ff; border-radius:6px; border:1px solid #d6e4f7;">
         <p style="font-size:11.5px; color:#888; margin:0 0 12px;">이 업무만 아래 체크한 날짜 기준으로 알람이 발송됩니다. (완료 예정일이 지나면 어떤 경우든 발송되지 않습니다)</p>
-        <div style="display:flex; flex-direction:column; gap:8px; font-size:13px;">
-          <label><input type="checkbox" class="alarm-sched-cb" value="14"> D-14 (14일 전)</label>
-          <label><input type="checkbox" class="alarm-sched-cb" value="7"> D-7 (7일 전)</label>
-          <label><input type="checkbox" class="alarm-sched-cb" value="3"> D-3 (3일 전)</label>
-          <label><input type="checkbox" class="alarm-sched-cb" value="1"> D-1 (1일 전)</label>
-          <label><input type="checkbox" class="alarm-sched-cb" value="0"> D-Day (당일)</label>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
+            <input type="checkbox" class="alarm-sched-cb" id="as-d14" value="14"> D-14
+          </label>
+          <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
+            <input type="checkbox" class="alarm-sched-cb" id="as-d7" value="7"> D-7
+          </label>
+          <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
+            <input type="checkbox" class="alarm-sched-cb" id="as-d3" value="3"> D-3
+          </label>
+          <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
+            <input type="checkbox" class="alarm-sched-cb" id="as-d1" value="1"> D-1
+          </label>
+          <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
+            <input type="checkbox" class="alarm-sched-cb" id="as-d0" value="0"> D-day
+          </label>
         </div>
-        <div style="margin-top:12px;">
-          <label style="font-size:12px; color:#555;">기타(며칠 전, 콤마로 구분)</label>
-          <input id="alarm-schedule-custom" type="text" placeholder="예: 20, 30" class="u-input" style="width:100%; margin-top:4px; box-sizing:border-box;">
+        <div style="display:flex; align-items:center; gap:6px; margin-top:7px;">
+          <span style="font-size:11.5px; color:#666; white-space:nowrap;">직접 입력:</span>
+          <input id="as-d-custom" type="number" min="1" max="365" placeholder="예: 20"
+                 style="width:80px; padding:4px 7px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();window._asAddCustomDay();}">
+          <span style="font-size:11.5px; color:#888;">일 전</span>
+          <button type="button" onclick="window._asAddCustomDay()"
+                  onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                  style="padding:3px 8px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 추가</button>
         </div>
+        <div id="as-d-custom-tags" style="display:flex; gap:5px; flex-wrap:wrap; margin-top:5px; min-height:4px;"></div>
       </div>
 
       <!-- 💡 [2026-08-31 신규] "기간·반복" 방식 필드 — notice-modal의 nm-recur-fields와 동일 패턴,
@@ -551,24 +569,14 @@
           <div id="as-specific-date-tags" style="display:flex; gap:5px; flex-wrap:wrap; min-height:4px;"></div>
         </div>
 
-        <div style="display:grid; grid-template-columns:1fr 1fr 80px; gap:8px;">
-          <div>
-            <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">시작 시각</label>
-            <input id="as-recur-hour-start" type="time" class="u-input" value="09:00"
-                   style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">종료 시각</label>
-            <input id="as-recur-hour-end" type="time" class="u-input" value="21:00"
-                   style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">몇시간마다</label>
-            <input id="as-recur-hour-interval" type="number" min="0.5" max="24" step="0.5" value="2"
-                   style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-          </div>
+        <!-- 💡 [2026-08-31] 시간창(시작~종료+몇시간마다)은 의미가 없다는 피드백 — 발송할 날짜가
+             정해지면 그 날 몇 시에 한 번 보낼지만 정하면 되므로 발송 시각 하나로 단순화.
+             (내부적으로는 hourStart=hourEnd=이 시각으로 저장해 기존 백엔드 로직 그대로 재사용) -->
+        <div style="max-width:160px;">
+          <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">발송 시각</label>
+          <input id="as-recur-send-time" type="time" class="u-input" value="09:00"
+                 style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
         </div>
-        <p style="margin:8px 2px 0; font-size:10px; color:#888;">탭이 꺼져 있어도 kortek_backend.py만 켜져 있으면 계속 동작하며, 꺼져있던 동안 지나간 시각은 건너뜁니다.</p>
 
         <button id="as-delete-rule-btn" type="button" onclick="window._asDeleteRecurRule()" style="display:none; margin-top:12px; width:100%; padding:6px 10px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer;"
                 onmouseover="this.style.background='#f5c2bd';" onmouseout="this.style.background='#fbe4e2';">🗑️ 이 업무의 기간·반복 예약 해제</button>
@@ -619,11 +627,11 @@
   </div>
   <!-- /#alarm-schedule-body -->
 
-  <!-- 💡 [2026-08-31] 기본값으로/닫기/저장 전부 오른쪽 정렬로 통일(공지 등록과 동일) -->
+  <!-- 💡 [2026-08-31] 기본값으로/저장/닫기 순서로 오른쪽 정렬 통일(공지 등록의 저장→닫기 순서와 동일) -->
   <div style="padding:14px 20px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
     <button id="as-reset-btn" onclick="window.resetAlarmScheduleForm()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:6px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">기본값으로</button>
-    <button onclick="window.closeAlarmScheduleModal()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
     <button onclick="window.saveAlarmSchedule()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">저장</button>
+    <button onclick="window.closeAlarmScheduleModal()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
   </div>
 </div>
 
@@ -791,14 +799,14 @@
       <div style="margin-bottom:12px;">
         <label id="nm-lbl-title" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">제목 *</label>
         <input id="nm-title" class="u-input" placeholder="공지 제목"
-               style="width:100%; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:13px; box-sizing:border-box;">
+               style="width:100%; padding:7px 10px; border:1px solid #eee; border-radius:4px; font-size:13px; box-sizing:border-box; background:#f8f9fa;">
       </div>
 
       <!-- 내용 -->
       <div>
         <label id="nm-lbl-body" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">내용 *</label>
         <textarea id="nm-body" placeholder="발송할 공지 내용"
-                  style="width:100%; height:110px; padding:7px 10px; border:1px solid #ddd; border-radius:4px; font-size:12.5px; box-sizing:border-box; resize:vertical; font-family:'맑은 고딕',sans-serif; line-height:1.6;"></textarea>
+                  style="width:100%; height:110px; padding:7px 10px; border:1px solid #eee; border-radius:4px; font-size:12.5px; box-sizing:border-box; resize:vertical; font-family:'맑은 고딕',sans-serif; line-height:1.6; background:#f8f9fa;"></textarea>
       </div>
     </div>
   </div>
@@ -906,24 +914,14 @@
           <div id="nm-specific-date-tags" style="display:flex; gap:5px; flex-wrap:wrap; min-height:4px;"></div>
         </div>
 
-        <div style="display:grid; grid-template-columns:1fr 1fr 90px; gap:10px;">
-          <div>
-            <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">시작 시각</label>
-            <input id="nm-recur-hour-start" type="time" class="u-input" value="09:00"
-                   style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">종료 시각</label>
-            <input id="nm-recur-hour-end" type="time" class="u-input" value="21:00"
-                   style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-          </div>
-          <div>
-            <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">몇시간마다</label>
-            <input id="nm-recur-hour-interval" type="number" min="0.5" max="24" step="0.5" value="2"
-                   style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-          </div>
+        <!-- 💡 [2026-08-31] 시간창(시작~종료+몇시간마다)은 의미가 없다는 피드백 — 발송할 날짜가
+             정해지면 그 날 몇 시에 한 번 보낼지만 정하면 되므로 발송 시각 하나로 단순화.
+             (내부적으로는 hourStart=hourEnd=이 시각으로 저장해 기존 백엔드 로직 그대로 재사용) -->
+        <div style="max-width:160px;">
+          <label style="font-size:11.5px; color:#666; display:block; margin-bottom:3px;">발송 시각</label>
+          <input id="nm-recur-send-time" type="time" class="u-input" value="09:00"
+                 style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
         </div>
-        <p style="margin:8px 2px 0; font-size:10.5px; color:#888;">예: 09:00~21:00에 2시간마다 → 09/11/13/15/17/19/21시에 발송 확인. 서버(kortek_backend.py)가 켜져 있어야 동작하며, 꺼져있던 동안 지나간 시각은 건너뜁니다.</p>
       </div>
 
       <input type="hidden" id="nm-schedule-rule-id">
@@ -951,8 +949,11 @@
 
       <datalist id="nm-addr-namelist"></datalist>
 
-      <!-- 액션 버튼(📧/💬/✕) 바로 위에 정렬되는 일괄 토글 헤더 (행과 동일한 grid 정의 공유) -->
-      <div style="display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; margin-bottom:3px;">
+      <!-- 액션 버튼(📧/💬/✕) 바로 위에 정렬되는 일괄 토글 헤더 (행과 동일한 grid 정의 공유)
+           💡 [2026-08-31] id="nm-recipient-header" — 아래 목록에 스크롤바가 생기면 그만큼 폭이 줄어
+           행의 채널 버튼 위치가 이 헤더보다 왼쪽으로 밀리는 문제가 있어, 알람 일정과 동일하게
+           window._asSyncRecipHeaderPad로 스크롤바 폭만큼 보정한다. -->
+      <div id="nm-recipient-header" style="display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; margin-bottom:3px;">
         <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
         <button type="button" onclick="window._nmBulkToggleChannel('email')" title="이메일 전체 선택/해제"
                 style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
@@ -967,7 +968,6 @@
       <button type="button" onclick="window._nmAddRecipientRow()"
               onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
               style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
-      <p style="margin:6px 2px 0; font-size:10.5px; color:#999;">이름 입력 시 주소록에서 이메일/텔레그램 ID 자동완성 · 채널 아이콘 클릭으로 개별 발송 on/off</p>
     </div>
   </div>
 
