@@ -1436,7 +1436,9 @@ window.openNoticeModal = async function(id) {
     }
 
     window._nmLoadRecipients(id ? window._noticeItems.find(x => x.id === id) : null);
-    modal.style.display='block';
+    // 💡 [2026-08-31 버그 수정] 'block'으로 열면 CSS의 display:flex(헤더/본문 스크롤/푸터 3단 레이아웃)가
+    //    인라인 스타일에 덮여 무효화된다 — 반드시 'flex'로 열어야 본문 스크롤·리사이즈가 의도대로 동작함.
+    modal.style.display='flex';
     bg.style.display='flex';
     window.bringModalToFront('notice-modal');
 };

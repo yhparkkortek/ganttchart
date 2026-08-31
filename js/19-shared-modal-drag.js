@@ -84,4 +84,7 @@ window._makeDraggable('alarm-settings-modal','alarm-settings-drag-handle');
 window._makeDraggable('install-guide-modal', 'install-guide-drag-handle');
 window._makeDraggable('alarm-modal',         'alarm-modal-drag-handle');
 window._makeDraggable('notice-modal',        'notice-modal-header');
+// 💡 [2026-08-31 버그 수정] 헤더에 cursor:grab 스타일만 있고 실제 이 등록이 빠져 있어서, 손 모양
+//    커서는 보이는데 눌러서 끌어도 전혀 움직이지 않았다("손 표시는 있는데 이동이 안 됨").
+window._makeDraggable('alarm-schedule-modal','alarm-schedule-drag');
 window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
