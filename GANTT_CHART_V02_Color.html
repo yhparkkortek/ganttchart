@@ -863,7 +863,9 @@ tr.bm-selected > td:last-child { border-right:2px solid #ffc107 !important; }
     width:33px; height:33px; padding:0; margin:0; line-height:1; box-sizing:border-box;
     display:flex; align-items:center; justify-content:center;
     border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a;
-    font-size:20px; font-weight:bold; -webkit-text-stroke:0.5px currentColor;
+    /* 💡 [2026-08-31] Gantt Chart의 .rap-btn과 통일(font-size 20px→18px, text-stroke 제거) —
+       단, 굵기는 유지를 원해서 font-weight:bold는 그대로 둠 */
+    font-size:18px; font-weight:bold;
     cursor:pointer; user-select:none; transition:0.15s;
 }
 .bm-pop-btn:hover { background:#cfe6fa; border-color:#7fb0dd; }
@@ -18587,7 +18589,8 @@ window.updateInboxBadge();
         width: 33px; height: 33px; padding: 0; margin: 0; line-height: 1; box-sizing: border-box;
         display: flex; align-items: center; justify-content: center;
         border: 1px solid #a5c8f0; border-radius: 6px; background: #e8f4fd; color: #1a4f7a;
-        font-size: 18px;
+        /* 💡 [2026-08-31] Customer SPEC/M.C Table의 .bm-pop-btn과 아이콘 굵기를 맞추기 위해 bold 추가 */
+        font-size: 18px; font-weight: bold;
         cursor: pointer; user-select: none; -webkit-user-select: none; transition: 0.15s;
     }
     .rap-btn:hover { background: #cfe6fa; border-color: #7fb0dd; }
