@@ -9111,8 +9111,8 @@ window.deleteHistoryByDateRange = function() {
         const _asIdTexts = {
             'as-modal-title':          { ko:'⚙️ 알람 설정',                       en:'⚙️ Alarm Settings' },
             'sec-server-label':        { ko:'📥 처음 사용자 — 설치 안내',          en:'📥 First-time Setup Guide' },
-            'ig-heading-setup':        { ko:'⚙️ KORTEK Backend 설치 (Step 1~4)', en:'⚙️ Install KORTEK Backend (Step 1~4)' },
-            'ig-heading-telegram':     { ko:'📱 Telegram (Step 5)',               en:'📱 Telegram (Step 5)' },
+            'ig-tab-setup':            { ko:'⚙️ KORTEK Backend 설치 (Step 1~4)', en:'⚙️ Install KORTEK Backend (Step 1~4)' },
+            'ig-tab-telegram':         { ko:'📱 Telegram (Step 5)',               en:'📱 Telegram (Step 5)' },
             'sec-email-label':         { ko:'🖥️ 이메일 서버 설정',                en:'🖥️ Email Server Settings' },
             'as-lbl-host':             { ko:'서버 주소',                          en:'Server' },
             'as-lbl-port':             { ko:'포트',                               en:'Port' },
@@ -9186,8 +9186,8 @@ window.deleteHistoryByDateRange = function() {
 
         // [처음 사용자 설치 안내] 섹션 안 텔레그램 배지 번역
         // 💡 [2026-08-31] 이 안내가 별도 팝업(install-guide-modal)이 아니라 알람 설정 안의 섹션 하나로
-        //    옮겨지면서, 제목/헤딩(sec-server-label, ig-heading-setup, ig-heading-telegram)은 위
-        //    _asIdTexts에 통합됨 — 배지만 별도 forEach로 남아있음(ig-badge-* id는 그대로 재사용).
+        //    옮겨지면서, 제목/탭(sec-server-label, ig-tab-setup, ig-tab-telegram)은 위 _asIdTexts에
+        //    통합됨 — 배지만 별도 forEach로 남아있음(ig-badge-* id는 그대로 재사용).
         ['ig-badge-pm-1','ig-badge-pm-2','ig-badge-pm-3'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? 'PM' : 'PM';

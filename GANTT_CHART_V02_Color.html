@@ -219,9 +219,19 @@
     <!-- 💡 [2026-08-31] 예전엔 이 안에 버튼 하나만 있고 클릭하면 별도 팝업(install-guide-modal)이 열렸는데,
          이제 이 섹션 자체가 설치 안내라서 펼치면 바로 안내 내용이 보이도록 인라인으로 옮겼다.
          ig-content-setup/ig-content-telegram id는 예전 팝업과 동일하게 유지 — 언어 전환(translateUI)
-         로직이 그 id를 그대로 참조하므로 그대로 재사용. -->
+         로직이 그 id를 그대로 참조하므로 그대로 재사용. 다만 두 내용을 한 번에 다 보여주면 너무
+         길어서, 예전 팝업처럼 탭으로 하나씩만 보이게 전환하는 방식으로 되돌림(_switchAsInstallTab). -->
     <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8; font-size:11px; color:#555; line-height:1.9;">
-      <p id="ig-heading-setup" style="margin:0 0 10px; font-size:12.5px; font-weight:bold; color:#2c5f8a;">⚙️ KORTEK Backend 설치 (Step 1~4)</p>
+      <div style="display:flex; border-bottom:1px solid #eee; margin-bottom:12px;">
+        <div id="ig-tab-setup" onclick="window._switchAsInstallTab('setup')"
+             style="flex:1; padding:8px; text-align:center; font-size:12px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; background:#f8fbff;">
+          ⚙️ KORTEK Backend 설치 (Step 1~4)
+        </div>
+        <div id="ig-tab-telegram" onclick="window._switchAsInstallTab('telegram')"
+             style="flex:1; padding:8px; text-align:center; font-size:12px; font-weight:bold; cursor:pointer; color:#888; border-bottom:2px solid transparent; background:#fff;">
+          📱 Telegram (Step 5)
+        </div>
+      </div>
       <div id="ig-content-setup">
         <div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">
           🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.
@@ -250,8 +260,7 @@
         </div>
       </div>
 
-      <p id="ig-heading-telegram" style="margin:16px 0 10px; padding-top:12px; border-top:1px solid #eee; font-size:12.5px; font-weight:bold; color:#2c5f8a;">📱 Telegram (Step 5)</p>
-      <div id="ig-content-telegram">
+      <div id="ig-content-telegram" style="display:none;">
         <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
           💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>
           　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호
