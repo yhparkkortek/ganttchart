@@ -2795,9 +2795,17 @@ window.openAlarmScheduleModal = async function(idx) {
     document.getElementById('as-recip-mode-custom').checked  = !!isCustomRecip;
     window._asRenderRecipList();
 
+    // 업무 정보 — Gantt 업무에서 그대로 가져와 표시(읽기 전용). 메일분석으로 자동등록된 업무면 원문보기 버튼도.
+    document.getElementById('as-info-title').textContent = item.taskName || '-';
+    document.getElementById('as-info-content').textContent = item.content
+        ? (window.alarmFormatContent ? window.alarmFormatContent(item.content) : item.content)
+        : '-';
+    document.getElementById('as-info-mailraw-wrap').style.display = item.mailRaw ? 'block' : 'none';
+
     document.getElementById('alarm-schedule-title').textContent = '⚙️ ' + item.taskName + (window._currentLang === 'en' ? ' — Alarm Schedule' : ' — 알람 일정');
     document.getElementById('alarm-schedule-overlay').style.display = 'flex';
-    document.getElementById('alarm-schedule-modal').style.display = 'block';
+    // 💡 반드시 'flex'로 열어야 헤더/본문 스크롤/푸터 3단 레이아웃(flex-direction:column)이 적용됨
+    document.getElementById('alarm-schedule-modal').style.display = 'flex';
     window.bringModalToFront('alarm-schedule-modal');
 };
 
