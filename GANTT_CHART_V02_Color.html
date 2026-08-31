@@ -240,15 +240,21 @@
         <label id="as-lbl-pass">비밀번호</label><input id="as-smtp-pass" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
       </div>
       <p id="as-smtp-privacy-note" style="margin:0 0 8px; font-size:11px; color:#999;">🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장</p>
-      <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
-      <span id="as-smtp-save-msg" style="font-size:11px; color:#27ae60; margin-left:8px;"></span>
+      <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px;">
+        <span id="as-smtp-save-msg" style="font-size:11px; color:#27ae60;"></span>
+        <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
+      </div>
 
       <!-- 이메일 수신자 -->
       <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
         <p style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;"><span id="as-email-recv-label">👥 이메일 수신자</span> <span id="as-email-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
 
-        <!-- 데이터 행과 동일한 grid 정의를 공유하는 일괄 제어 헤더 -->
-        <div style="display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center; margin-bottom:4px;">
+        <!-- 데이터 행과 동일한 grid 정의를 공유하는 일괄 제어 헤더
+             💡 [2026-08-31] id="alarm-cc-header" — 아래 목록(#alarm-cc-list)이 스크롤바가 생기면
+             그만큼 폭이 줄어 행의 ✓/✕ 위치가 이 헤더보다 왼쪽으로 밀리는 문제가 있어, JS가
+             매번 목록의 실제 스크롤바 폭을 재서 이 헤더에 같은 만큼 padding-right로 보정한다
+             (window._syncAlarmCcHeaderPad, js/22-tabs-summary-mctable.js). -->
+        <div id="alarm-cc-header" style="display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center; margin-bottom:4px;">
           <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
           <button type="button" onclick="window.toggleAllCc()" title="전체 발송 선택/해제"
                   style="width:24px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:4px; cursor:pointer; font-size:11px; padding:0;">✓</button>
@@ -259,7 +265,9 @@
 
         <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;"></div>
         <datalist id="alarm-cc-namelist"></datalist>
-        <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="margin-top:8px; padding:4px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
+        <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+          <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:4px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
+        </div>
       </div>
     </div>
   </div>
@@ -284,7 +292,7 @@
         <label id="as-lbl-chatid">내 Chat ID</label>
         <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)">
       </div>
-      <div style="display:flex; gap:6px; align-items:center;">
+      <div style="display:flex; gap:6px; align-items:center; justify-content:flex-end;">
         <button id="as-tg-save-btn" onclick="window.saveTelegramConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">💾 저장</button>
         <button id="as-tg-test-btn" onclick="window.testTelegram()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:5px 12px; border:1px solid #a8dab8; color:#1f7a3d; background:#e6f6ea; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📨 테스트</button>
         <div style="position:relative; display:inline-block;">
@@ -584,7 +592,7 @@
   <div style="margin-top:18px; display:flex; gap:8px; justify-content:space-between;">
     <button id="as-reset-btn" onclick="window.resetAlarmScheduleForm()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:6px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">기본값으로</button>
     <div style="display:flex; gap:8px;">
-      <button onclick="window.closeAlarmScheduleModal()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">취소</button>
+      <button onclick="window.closeAlarmScheduleModal()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
       <button onclick="window.saveAlarmSchedule()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">저장</button>
     </div>
   </div>
@@ -905,7 +913,7 @@
             style="padding:7px 20px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
     <button id="nm-cancel-btn" onclick="window.closeNoticeModal()"
             onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';"
-            style="padding:7px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">취소</button>
+            style="padding:7px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
   </div>
 </div>
 <div id="notice-modal-bg" class="modal-overlay"

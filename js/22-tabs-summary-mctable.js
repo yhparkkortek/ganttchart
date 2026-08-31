@@ -1289,6 +1289,9 @@ window._toggleAlarmSection = function(id) {
     el.style.display = open ? 'none' : 'block';
     const isEn = window._currentLang === 'en';
     if (arrow) arrow.textContent = open ? (isEn ? '▶ Expand' : '▶ 펼치기') : (isEn ? '▼ Collapse' : '▼ 접기');
+    // 💡 이메일 알람 섹션이 접혀있던 동안(offsetWidth=0) 행이 채워졌으면 스크롤바 폭 계산이
+    //    부정확했을 수 있으므로, 이 섹션을 펼치는 순간 다시 정확히 맞춘다.
+    if (id === 'sec-email' && !open && window._syncAlarmCcHeaderPad) window._syncAlarmCcHeaderPad();
 };
 
 // ── Drive 드롭다운 메뉴 토글 ──────────────────────────────────
@@ -2046,9 +2049,10 @@ window.addAlarmCcRow = function(name='', email='', enabled=true, auto=false) {
         <span title="Summary 프로젝트 멤버에서 자동 등록됨" style="font-size:10px; color:#2c5f8a; background:${auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${auto ? 'visible' : 'hidden'};">auto</span>
         <button type="button" class="cc-toggle-btn" onclick="window._toggleCcRow(this)" title="발송 ON/OFF"
           style="border:1px solid ${enabled ? '#27ae60' : '#ccc'}; background:${enabled ? '#27ae60' : '#fff'}; color:${enabled ? '#fff' : '#aaa'}; cursor:pointer; font-size:12px; width:24px; height:24px; border-radius:4px; line-height:1;">✓</button>
-        <button onclick="this.parentElement.remove()"
+        <button onclick="this.parentElement.remove(); window._syncAlarmCcHeaderPad();"
           style="width:26px; height:24px; border:none; background:none; color:#e03131; cursor:pointer; font-size:15px; padding:0;">✕</button>`;
     list.appendChild(row);
+    window._syncAlarmCcHeaderPad();
 
     window.attachAddressAutocomplete(row.querySelector('.cc-name'), row.querySelector('.cc-email'), false);
 };
@@ -2086,6 +2090,20 @@ window.toggleAllCc = function(enabled) {
 window._ccBulkRemoveAll = function() {
     const list = document.getElementById('alarm-cc-list');
     if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
+    window._syncAlarmCcHeaderPad();
+};
+
+// 💡 [2026-08-31 신규] #alarm-cc-list(이메일 수신자 목록)는 행이 많아지면 자체 스크롤바가 생기는데,
+//    이때 스크롤바가 차지하는 폭만큼 각 행의 실제 콘텐츠 폭이 줄어들어 ✓/✕ 위치가 왼쪽으로 밀린다.
+//    바로 위 "ALL ✓ ✕" 일괄 제어 헤더(#alarm-cc-header)는 스크롤바가 없어 그 폭만큼 정렬이 어긋나
+//    보이는 문제 — 헤더에 목록의 실제 스크롤바 폭만큼 padding-right를 똑같이 줘서 항상 맞춘다.
+//    (행 추가/삭제/전체삭제 등 목록 내용이 바뀔 수 있는 모든 경로에서 호출)
+window._syncAlarmCcHeaderPad = function() {
+    const list = document.getElementById('alarm-cc-list');
+    const header = document.getElementById('alarm-cc-header');
+    if (!list || !header) return;
+    const sbWidth = list.offsetWidth - list.clientWidth; // 스크롤바가 없으면 0
+    header.style.paddingRight = sbWidth > 0 ? sbWidth + 'px' : '';
 };
 
 // 💡 [버그 수정] 메일 본문에서 AI가 이름을 "있는 그대로" 추출하다 보니 "윤재권 팀장님"처럼
