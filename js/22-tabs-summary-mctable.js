@@ -1295,6 +1295,29 @@ window._toggleAlarmSection = function(id) {
     if (id === 'sec-email-recv' && !open && window._syncAlarmCcHeaderPad) window._syncAlarmCcHeaderPad();
 };
 
+// 💡 [2026-08-31] "처음 사용자 — 설치 안내" 섹션 안의 탭 전환 — 설치(Step1~4)/Telegram(Step5) 내용을
+//    한 번에 다 펼쳐 보여주면 너무 길어서, 예전 팝업(install-guide-modal)과 동일하게 하나씩만
+//    보이는 탭 방식으로 유지한다. ig-tab-*/ig-content-* id는 예전 팝업 것을 그대로 재사용.
+window._switchAsInstallTab = function(tab) {
+    const isSetup = tab === 'setup';
+    const cSetup = document.getElementById('ig-content-setup');
+    const cTg    = document.getElementById('ig-content-telegram');
+    if (cSetup) cSetup.style.display = isSetup ? 'block' : 'none';
+    if (cTg)    cTg.style.display    = isSetup ? 'none' : 'block';
+    const tSetup = document.getElementById('ig-tab-setup');
+    const tTg    = document.getElementById('ig-tab-telegram');
+    if (tSetup) {
+        tSetup.style.color = isSetup ? '#2c5f8a' : '#888';
+        tSetup.style.borderBottom = isSetup ? '2px solid #2c5f8a' : '2px solid transparent';
+        tSetup.style.background = isSetup ? '#f8fbff' : '#fff';
+    }
+    if (tTg) {
+        tTg.style.color = isSetup ? '#888' : '#2c5f8a';
+        tTg.style.borderBottom = isSetup ? '2px solid transparent' : '2px solid #2c5f8a';
+        tTg.style.background = isSetup ? '#fff' : '#f8fbff';
+    }
+};
+
 // ── Drive 드롭다운 메뉴 토글 ──────────────────────────────────
 window._toggleDriveMenu = function(forceClose) {
     const menu = document.getElementById('tg-drive-menu');
