@@ -2634,14 +2634,32 @@ window.renderAlarmTab = async function() {
             <td style="padding:7px 10px; text-align:center; font-size:11px; color:#888;">${lastSent(item.sentLog)}</td>
             <td style="padding:7px 10px; text-align:center;">
                 <span onclick="event.stopPropagation(); window.openAlarmScheduleModal(${idx});" title="이 업무만 알람 일정을 다르게 설정" style="cursor:pointer; font-size:14px;">${item.alarmDays.length !== 3 || item.alarmDays.slice().sort((a,b)=>a-b).join(',') !== '1,3,7' ? '⚙️<span style="color:#2c5f8a; font-size:9px; vertical-align:top;">●</span>' : '⚙️'}</span>
+                <span id="as-recur-badge-${idx}"></span>
             </td>
         </tr>`).join('');
 
     window._alarmItems = items;
+    // 💡 [2026-08-31 신규] 이 업무들 중 "기간·반복" 예약(백엔드 /schedule, type='alarm')이 걸려있는
+    //    행에 ⏰ 배지 표시 — 렌더링 자체를 막지 않도록 fire-and-forget(비동기, 결과 기다리지 않음)
+    window._alarmAnnotateRecurBadges();
 };
 
-// 💡 업무별 커스텀 알람 일정 — 체크박스 상태를 폼에 채움
-window.openAlarmScheduleModal = function(idx) {
+// 💡 알람 목록 각 행에 "기간·반복" 예약 등록 여부(⏰)를 표시 — 백엔드 /schedule 규칙과 driveFileId+rowIdx로 매칭
+window._alarmAnnotateRecurBadges = async function() {
+    if (window.loadScheduleRulesFromBackend) await window.loadScheduleRulesFromBackend();
+    const rules = window._scheduleRules || [];
+    const driveFileId = window.currentDriveFileId;
+    (window._alarmItems || []).forEach((item, idx) => {
+        const badge = document.getElementById(`as-recur-badge-${idx}`);
+        if (!badge) return;
+        const has = rules.some(r => r.type === 'alarm' && r.driveFileId === driveFileId && r.rowIdx === item.rowIdx && r.enabled !== false);
+        badge.innerHTML = has ? '<span title="기간·반복 예약 등록됨" style="color:#2c5f8a; font-size:9px;">⏰</span>' : '';
+    });
+};
+
+// 💡 업무별 커스텀 알람 일정 — 체크박스 상태를 폼에 채움 + 이 업무에 이미 등록된 "기간·반복"
+//    예약(백엔드 /schedule)이 있으면 그 값도 불러와 채운다.
+window.openAlarmScheduleModal = async function(idx) {
     const item = (window._alarmItems || [])[idx];
     if (!item) return;
     window._alarmScheduleItem = item;
@@ -2653,6 +2671,43 @@ window.openAlarmScheduleModal = function(idx) {
     });
     // 프리셋(14/7/3/1/0)에 없는 나머지 숫자는 "기타" 텍스트칸으로
     document.getElementById('alarm-schedule-custom').value = Array.from(current).sort((a,b) => a-b).join(', ');
+
+    // 기간·반복 필드 초기화 (매번 신규 상태로 리셋 후, 기존 규칙이 있으면 아래서 덮어씀)
+    window._asSpecificDates = [];
+    window._asRenderSpecificDateTags();
+    document.getElementById('as-mode-dday').checked = true;
+    document.getElementById('as-datemode-range').checked = true;
+    ['as-recur-start','as-recur-end'].forEach(i => { const el=document.getElementById(i); if(el) el.value=''; });
+    document.getElementById('as-recur-day-interval').value = 1;
+    document.getElementById('as-recur-hour-start').value = '09:00';
+    document.getElementById('as-recur-hour-end').value = '21:00';
+    document.getElementById('as-recur-hour-interval').value = 1;
+    document.getElementById('as-schedule-rule-id').value = '';
+    document.getElementById('as-delete-rule-btn').style.display = 'none';
+
+    // 이 업무(driveFileId+rowIdx)에 이미 등록된 "기간·반복" 규칙이 있으면 불러와 채움
+    if (window.loadScheduleRulesFromBackend) await window.loadScheduleRulesFromBackend();
+    const driveFileId = window.currentDriveFileId;
+    const existing = (window._scheduleRules || []).find(r => r.type === 'alarm' && r.driveFileId === driveFileId && r.rowIdx === item.rowIdx);
+    if (existing) {
+        document.getElementById('as-mode-recur').checked = true;
+        document.getElementById('as-schedule-rule-id').value = existing.id;
+        if (existing.dateMode === 'specific') {
+            document.getElementById('as-datemode-specific').checked = true;
+            window._asSpecificDates = (existing.specificDates || []).slice();
+            window._asRenderSpecificDateTags();
+        } else {
+            document.getElementById('as-recur-start').value = existing.startDate || '';
+            document.getElementById('as-recur-end').value = existing.endDate || '';
+            document.getElementById('as-recur-day-interval').value = existing.dayInterval || 1;
+        }
+        document.getElementById('as-recur-hour-start').value = existing.hourStart || '09:00';
+        document.getElementById('as-recur-hour-end').value = existing.hourEnd || '21:00';
+        document.getElementById('as-recur-hour-interval').value = existing.hourInterval || 1;
+        document.getElementById('as-delete-rule-btn').style.display = 'block';
+    }
+    window._asToggleMode();
+    window._asToggleDateMode();
 
     document.getElementById('alarm-schedule-title').textContent = '⚙️ ' + item.taskName + (window._currentLang === 'en' ? ' — Alarm Schedule' : ' — 알람 일정');
     document.getElementById('alarm-schedule-overlay').style.display = 'flex';
@@ -2674,8 +2729,140 @@ window.closeAlarmScheduleModal = function() {
     window._alarmScheduleItem = null;
 };
 
-// 저장: row._알림일정에 기록 (기본값(7/3/1)과 완전히 같으면 커스텀 설정을 지워서 "기본값 사용" 상태로 되돌림)
+// ── 발송 방식(D-day 목록 / 기간·반복) 및 날짜 지정방식(기간 / 특정 날짜) 토글 ──────
+window._asToggleMode = function() {
+    const isRecur  = document.getElementById('as-mode-recur')?.checked;
+    const ddayEl   = document.getElementById('as-dday-fields');
+    const recurEl  = document.getElementById('as-recur-fields');
+    const resetBtn = document.getElementById('as-reset-btn');
+    if (ddayEl)   ddayEl.style.display   = isRecur ? 'none' : 'block';
+    if (recurEl)  recurEl.style.display  = isRecur ? 'block' : 'none';
+    if (resetBtn) resetBtn.style.display = isRecur ? 'none' : 'inline-block';
+};
+
+window._asToggleDateMode = function() {
+    const isSpecific = document.getElementById('as-datemode-specific')?.checked;
+    const rangeEl = document.getElementById('as-daterange-fields');
+    const specEl  = document.getElementById('as-specific-dates-fields');
+    if (rangeEl) rangeEl.style.display = isSpecific ? 'none' : 'grid';
+    if (specEl)  specEl.style.display  = isSpecific ? 'block' : 'none';
+};
+
+// ── 특정 날짜 태그 관리 (notice-modal의 _nmSpecificDates와 동일 패턴) ──────────
+window._asSpecificDates = [];
+
+window._asAddSpecificDate = function() {
+    const input = document.getElementById('as-specific-date-input');
+    const val = input?.value;
+    if (!val) { input && input.focus(); return; }
+    if (window._asSpecificDates.includes(val)) { input.value = ''; return; }
+    window._asSpecificDates.push(val);
+    window._asSpecificDates.sort();
+    window._asRenderSpecificDateTags();
+    input.value = '';
+};
+
+window._asRenderSpecificDateTags = function() {
+    const wrap = document.getElementById('as-specific-date-tags');
+    if (!wrap) return;
+    wrap.innerHTML = window._asSpecificDates.map(d =>
+        `<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 8px;background:#e8f0fb;border:1px solid #b0c4e8;border-radius:12px;font-size:11.5px;color:#2c5f8a;">
+          ${d}
+          <button type="button" onclick="window._asRemoveSpecificDate('${d}')"
+                  style="background:none;border:none;cursor:pointer;color:#888;font-size:11px;padding:0;line-height:1;">✕</button>
+        </span>`
+    ).join('');
+};
+
+window._asRemoveSpecificDate = function(d) {
+    window._asSpecificDates = window._asSpecificDates.filter(x => x !== d);
+    window._asRenderSpecificDateTags();
+};
+
+// ── 기간·반복 예약 저장/해제 (백엔드 /schedule API, type='alarm') ─────────────
+// 💡 공지(notice)와 달리 title/message/recipients를 고정 저장하지 않는다 — driveFileId+rowIdx만
+//    기억해두면 백엔드가 발송 직전 구글드라이브에서 이 업무의 최신 상태를 다시 읽는다
+//    (kortek_backend.py의 _fire_alarm_rule/_build_alarm_task_snapshot 참고).
+window._asSaveRecurRule = async function() {
+    const item = window._alarmScheduleItem;
+    if (!item) return;
+    const driveFileId = window.currentDriveFileId;
+    if (!driveFileId) {
+        const msg = '이 프로젝트가 구글드라이브에 저장된 후에만 기간·반복 예약이 가능합니다. 먼저 저장해주세요.';
+        if (window.bmAlertModal) window.bmAlertModal(msg); else alert(msg);
+        return;
+    }
+
+    const dateMode = document.getElementById('as-datemode-specific')?.checked ? 'specific' : 'range';
+    let startDate = '', endDate = '', dayInterval = 1;
+    if (dateMode === 'range') {
+        startDate = document.getElementById('as-recur-start').value;
+        endDate   = document.getElementById('as-recur-end').value;
+        if (!startDate || !endDate) { alert('시작일/종료일을 입력해주세요.'); return; }
+        if (startDate > endDate) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+        dayInterval = parseInt(document.getElementById('as-recur-day-interval').value, 10) || 1;
+    } else {
+        if (!window._asSpecificDates.length) { alert('특정 날짜를 1개 이상 추가해주세요.'); return; }
+    }
+
+    const hourStart    = document.getElementById('as-recur-hour-start').value || '09:00';
+    const hourEnd      = document.getElementById('as-recur-hour-end').value || '21:00';
+    const hourInterval = parseFloat(document.getElementById('as-recur-hour-interval').value) || 1;
+    const ruleId       = document.getElementById('as-schedule-rule-id').value || undefined;
+
+    // 💡 CC 명단/외부도메인 허용목록은 브라우저 localStorage(알람 설정)에만 있어 서버가 못 보므로,
+    //    저장 시점 값을 그대로 스냅샷해서 같이 보낸다 (담당자/마감일/업무내용과 달리 자주 안 바뀌는 값).
+    const cfg = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
+    const payload = {
+        id: ruleId, type: 'alarm',
+        driveFileId, rowIdx: item.rowIdx,
+        taskNameSnapshot: item.taskName,
+        ccMailsSnapshot: item.ccMails || '',
+        allowedExternalDomainsSnapshot: cfg.allowedExternalDomains || [],
+        dateMode, startDate, endDate, specificDates: window._asSpecificDates.slice(),
+        dayInterval, hourStart, hourEnd, hourInterval, enabled: true
+    };
+
+    try {
+        const health = await fetch(`${MAIL_SERVER}/health`, { signal: AbortSignal.timeout(2000) });
+        if (!health.ok) throw new Error();
+    } catch (e) {
+        alert('❌ 메일 서버(kortek_backend.py)가 실행되지 않았습니다.\n기간·반복 예약은 이 서버가 켜져 있어야 등록/동작합니다.');
+        return;
+    }
+
+    try {
+        const res = await fetch(`${MAIL_SERVER}/schedule`, {
+            method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || !data.ok) throw new Error(data.error || `HTTP ${res.status}`);
+        window.closeAlarmScheduleModal();
+        await window.loadScheduleRulesFromBackend();
+        window.renderAlarmTab();
+        if (window.showToast) window.showToast('✅ 기간·반복 예약이 저장되었습니다.');
+    } catch (e) {
+        alert('❌ 예약 규칙 저장 실패: ' + e.message);
+    }
+};
+
+window._asDeleteRecurRule = async function() {
+    const ruleId = document.getElementById('as-schedule-rule-id').value;
+    if (!ruleId) return;
+    if (!confirm('이 업무의 기간·반복 예약을 해제할까요?')) return;
+    try {
+        await fetch(`${MAIL_SERVER}/schedule/${ruleId}`, { method: 'DELETE' });
+    } catch (e) {}
+    window.closeAlarmScheduleModal();
+    await window.loadScheduleRulesFromBackend();
+    window.renderAlarmTab();
+};
+
+// 저장: D-day 목록 모드면 row._알림일정에 기록(기본값(7/3/1)과 완전히 같으면 커스텀 설정을 지워서
+// "기본값 사용" 상태로 되돌림), 기간·반복 모드면 백엔드 예약 규칙 저장으로 위임
 window.saveAlarmSchedule = function() {
+    if (document.getElementById('as-mode-recur')?.checked) { window._asSaveRecurRule(); return; }
+
     const item = window._alarmScheduleItem;
     if (!item) return;
     const row = (window.globalData || [])[item.rowIdx];

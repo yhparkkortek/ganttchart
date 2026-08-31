@@ -49,6 +49,14 @@ except ImportError:
     CRYPTO_OK = False
     print("[경고] cryptography 미설치 → pip install cryptography")
 
+try:
+    from google.oauth2 import service_account as _google_service_account
+    from google.auth.transport.requests import Request as _GoogleAuthRequest
+    GOOGLE_AUTH_OK = True
+except ImportError:
+    GOOGLE_AUTH_OK = False
+    print("[경고] google-auth 미설치 → pip install google-auth (업무별 예약 알람의 실시간 조회 기능에 필요)")
+
 app = Flask(__name__)
 
 # ── CORS: 허용 출처 제한 (보안 강화) ─────────────────────────
@@ -76,6 +84,16 @@ TG_CONFIG_FILE = os.path.join(BASE_DIR, 'telegram_config.json')
 SCHEDULE_FILE  = os.path.join(BASE_DIR, 'schedule_rules.json')
 POP3_HOST      = "gw.kortek.co.kr"
 POP3_PORT      = 110
+
+# ── 업무별(개별 태스크) 예약 알람 — 구글드라이브 서비스계정 읽기전용 접근 ──
+#    GANTT_CHART_V02_Color.html(js/04-core-app.js의 SHARED_FOLDER_ID)과 동일한 폴더.
+#    이 폴더 밑에 프로젝트 파일들과 App_Config/AddressBook_Shared.json이 들어있다.
+GANTT_SHARED_FOLDER_ID     = '1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS'
+GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get(
+    'GOOGLE_SERVICE_ACCOUNT_FILE',
+    os.path.join(BASE_DIR, 'google_service_account.json')
+)
+ADDRESS_BOOK_CACHE_TTL_SEC = 300  # 주소록은 자주 안 바뀌므로 5분 캐시(매 발송 tick마다 Drive 조회하지 않도록)
 
 # ── SMTP 기본값 ───────────────────────────────────────────────
 SMTP_HOST = ''
@@ -676,6 +694,16 @@ def telegram_test():
 #     specific → specificDates: ["YYYY-MM-DD", ...]
 #   hourStart, hourEnd ("HH:MM", 기본 09:00~21:00), hourInterval(N시간마다),
 #   enabled, createdAt, lastFiredBucket(중복발송 방지용, 서버가 내부적으로 기록)
+#
+# [2026-08-31 신규] type='alarm'(업무별 개별 알람) 전용 추가 필드 — 공지(notice)와 달리
+# "저장 시점 스냅샷"이 아니라 "발송 직전 구글드라이브에서 해당 업무의 최신 상태를 다시 읽어서"
+# 담당자/완료예정일/업무내용이 바뀌었으면 바뀐 대로 발송한다(_fire_alarm_rule 참고).
+#   driveFileId          — 이 업무가 속한 프로젝트의 구글드라이브 파일 ID (window.currentDriveFileId)
+#   rowIdx               — globalData 배열 안에서 이 업무 행의 인덱스
+#   taskNameSnapshot      — 목록 표시용(실제 발송 내용에는 안 씀, 매번 최신 이름으로 다시 계산됨)
+#   ccMailsSnapshot       — 알람 설정(CC 명단)은 브라우저에만 있어 서버가 못 보므로, 규칙 저장 시점의
+#                           CC 이메일 목록을 그대로 스냅샷 — recipients와 달리 자주 안 바뀔 값이라 실용적 절충
+#   allowedExternalDomainsSnapshot — 위와 동일한 이유로 스냅샷하는 "외부 도메인 발송 허용" 목록
 
 @app.route('/schedule', methods=['GET', 'POST'])
 def schedule_api():
@@ -684,11 +712,12 @@ def schedule_api():
         with _SCHEDULE_LOCK:
             return jsonify({'ok': True, 'rules': SCHEDULE_RULES})
 
-    data    = request.json or {}
-    rule_id = data.get('id') or str(uuid.uuid4())
+    data     = request.json or {}
+    rule_id  = data.get('id') or str(uuid.uuid4())
+    rule_type = data.get('type', 'notice')
     rule = {
         'id':            rule_id,
-        'type':          data.get('type', 'notice'),
+        'type':          rule_type,
         'title':         (data.get('title') or '').strip(),
         'message':       data.get('message', ''),
         'recipients':    data.get('recipients', []),
@@ -703,6 +732,18 @@ def schedule_api():
         'enabled':       bool(data.get('enabled', True)),
         'createdAt':     data.get('createdAt') or datetime.now(KST).isoformat(),
     }
+    if rule_type == 'alarm':
+        # 💡 업무별 알람은 "지금" 제목/내용을 저장하는 게 아니라, driveFileId+rowIdx로 어느 업무인지만
+        #    기억해뒀다가 발송 직전에 매번 구글드라이브에서 최신 상태를 다시 읽는다(_fire_alarm_rule).
+        rule['driveFileId']                     = data.get('driveFileId', '')
+        rule['rowIdx']                          = data.get('rowIdx')
+        rule['taskNameSnapshot']                = data.get('taskNameSnapshot', '')
+        rule['ccMailsSnapshot']                 = data.get('ccMailsSnapshot', '')
+        rule['allowedExternalDomainsSnapshot']  = data.get('allowedExternalDomainsSnapshot', []) or []
+        if not rule['title']:
+            rule['title'] = rule['taskNameSnapshot'] or '(제목 없음)'
+        if not rule['driveFileId'] or rule['rowIdx'] is None:
+            return jsonify({'ok': False, 'error': 'driveFileId/rowIdx가 필요합니다 (알람 규칙)'}), 400
     if not rule['title']:
         return jsonify({'ok': False, 'error': '제목이 필요합니다'}), 400
 
@@ -729,6 +770,275 @@ def schedule_delete_api(rule_id):
         removed = before - len(SCHEDULE_RULES)
         save_schedule_rules(SCHEDULE_RULES)
     return jsonify({'ok': True, 'removed': removed > 0})
+
+
+# ══════════════════════════════════════════════════════════════
+# 📂 업무별(개별 태스크) 알람용 — 구글드라이브 실시간 조회 (서비스계정, 읽기전용)
+#    GANTT_CHART_V02_Color.html은 구글시트가 아니라, 이 폴더(GANTT_SHARED_FOLDER_ID) 안의
+#    JSON 파일 1개(프로젝트당 1개)에 전체 데이터를 저장한다 — js/04-core-app.js 참고.
+#    여기서는 그 JSON을 그대로 읽어 collectAlarmItems()(js/22-tabs-summary-mctable.js:2357)와
+#    동등한 로직으로 딱 한 업무(행)의 "지금 이 순간" 상태를 재계산한다.
+# ══════════════════════════════════════════════════════════════
+_drive_creds = None
+
+
+def _drive_get_access_token() -> str:
+    """서비스계정 JSON 키로 구글드라이브 접근 토큰(읽기전용)을 발급/갱신해서 돌려준다."""
+    global _drive_creds
+    if not GOOGLE_AUTH_OK:
+        raise RuntimeError('google-auth 미설치 — pip install google-auth')
+    if not os.path.exists(GOOGLE_SERVICE_ACCOUNT_FILE):
+        raise RuntimeError(f'서비스계정 키 파일을 찾을 수 없습니다: {GOOGLE_SERVICE_ACCOUNT_FILE}')
+    if _drive_creds is None:
+        _drive_creds = _google_service_account.Credentials.from_service_account_file(
+            GOOGLE_SERVICE_ACCOUNT_FILE,
+            scopes=['https://www.googleapis.com/auth/drive.readonly']
+        )
+    if not _drive_creds.valid:
+        _drive_creds.refresh(_GoogleAuthRequest())
+    return _drive_creds.token
+
+
+def _drive_find_child(parent_id: str, name: str, mime_type: str = None):
+    """parent_id 폴더 바로 밑에서 이름이 name인 파일/폴더 1개의 id를 찾는다 (없으면 None)."""
+    token = _drive_get_access_token()
+    q = f"name='{name}' and trashed=false and '{parent_id}' in parents"
+    if mime_type:
+        q += f" and mimeType='{mime_type}'"
+    resp = requests.get(
+        'https://www.googleapis.com/drive/v3/files',
+        params={'q': q, 'supportsAllDrives': 'true', 'includeItemsFromAllDrives': 'true', 'fields': 'files(id,name)'},
+        headers={'Authorization': f'Bearer {token}'}, timeout=15
+    )
+    resp.raise_for_status()
+    files = (resp.json() or {}).get('files') or []
+    return files[0]['id'] if files else None
+
+
+def _drive_read_json_file(file_id: str) -> dict:
+    """파일 id로 JSON 파일 내용을 그대로 읽어온다 (alt=media)."""
+    token = _drive_get_access_token()
+    resp = requests.get(
+        f'https://www.googleapis.com/drive/v3/files/{file_id}',
+        params={'alt': 'media', 'supportsAllDrives': 'true'},
+        headers={'Authorization': f'Bearer {token}'}, timeout=20
+    )
+    resp.raise_for_status()
+    return resp.json()
+
+
+_app_config_folder_cache = {'id': None}
+
+
+def _drive_get_app_config_folder_id():
+    """'App_Config' 하위 폴더 id — AddressBook_Shared.json 등이 들어있다 (js: getOrCreateConfigFolder)."""
+    if _app_config_folder_cache['id']:
+        return _app_config_folder_cache['id']
+    fid = _drive_find_child(GANTT_SHARED_FOLDER_ID, 'App_Config', mime_type='application/vnd.google-apps.folder')
+    _app_config_folder_cache['id'] = fid
+    return fid
+
+
+_address_book_cache = {'data': [], 'loadedAt': 0.0}
+
+
+def _drive_load_address_book(force: bool = False) -> list:
+    """AddressBook_Shared.json(이름→이메일/텔레그램ID, 모든 프로젝트 공유) — 자주 안 바뀌므로 캐시."""
+    now = time.time()
+    if not force and (now - _address_book_cache['loadedAt']) < ADDRESS_BOOK_CACHE_TTL_SEC:
+        return _address_book_cache['data']
+    try:
+        folder_id = _drive_get_app_config_folder_id() or GANTT_SHARED_FOLDER_ID
+        file_id = _drive_find_child(folder_id, 'AddressBook_Shared.json')
+        if not file_id and folder_id != GANTT_SHARED_FOLDER_ID:
+            file_id = _drive_find_child(GANTT_SHARED_FOLDER_ID, 'AddressBook_Shared.json')  # 구버전 위치 폴백
+        if file_id:
+            data = _drive_read_json_file(file_id)
+            _address_book_cache['data'] = data.get('addressBook') or []
+            _address_book_cache['loadedAt'] = now
+    except Exception as e:
+        print(f"[업무알람] 주소록 로드 실패(이전 캐시로 계속 진행): {e}")
+    return _address_book_cache['data']
+
+
+# ── 이름 매칭 유틸 (js/22-tabs-summary-mctable.js의 _addrSplitNames/_addrStripTitleSuffix/
+#    _addrFindByName과 동일 로직 — 메일 본문에서 뽑힌 발신/수신인 이름을 주소록과 매칭하기 위함) ──
+ADDR_KO_TITLE_WORDS = [
+    '회장', '부회장', '사장', '부사장', '대표', '전무', '상무', '이사', '감사',
+    '본부장', '소장', '센터장', '실장', '팀장', '파트장', '그룹장', '랩장',
+    '수석', '책임', '선임', '주임', '매니저', '대리', '과장', '차장', '부장', '사원', '연구원'
+]
+ADDR_EN_TITLE_WORDS = ['mr', 'mrs', 'ms', 'miss', 'dr', 'prof', 'manager', 'director', 'leader', 'president', 'vp', 'ceo', 'cto', 'coo']
+KORTEK_INTERNAL_DOMAIN = 'kortek.co.kr'
+
+
+def _addr_strip_title_suffix(name: str) -> str:
+    n = (name or '').strip()
+    changed = True
+    while changed:
+        changed = False
+        before = n
+        n = re.sub(r'\s*(님|씨)\s*$', '', n).strip()
+        for t in ADDR_KO_TITLE_WORDS:
+            if n.endswith(t) and len(n) > len(t):
+                n = n[:-len(t)].strip(); break
+            if n.startswith(t) and len(n) > len(t):
+                n = n[len(t):].strip(); break
+        for t in ADDR_EN_TITLE_WORDS:
+            re_suf = re.compile(r'[.,]?\s*' + t + r'\.?$', re.IGNORECASE)
+            re_pre = re.compile(r'^' + t + r'\.?\s*', re.IGNORECASE)
+            if re_suf.search(n):
+                n = re_suf.sub('', n).strip(); break
+            if re_pre.search(n):
+                n = re_pre.sub('', n).strip(); break
+        if n != before:
+            changed = True
+    return n
+
+
+def _addr_split_names(s: str) -> list:
+    """"정민희/임희철", "박용훈 외 다수" 같은 패턴도 개별 이름으로 분리"""
+    if not s:
+        return []
+    out = []
+    for p in re.split(r'[,，/]', str(s)):
+        p = re.sub(r'\s*외\s*(\d+\s*(명|인)?|다수)?\s*$', '', p.strip()).strip()
+        if p:
+            out.append(p)
+    return out
+
+
+def _addr_find_by_name(address_book: list, name: str):
+    """한글 이름 정확일치 → 영문 이름 정확일치 → (둘 다 실패 시) 직함/존칭 뗀 이름으로 재시도"""
+    if not name:
+        return None
+
+    def try_exact(n):
+        if not n:
+            return None
+        for p in address_book:
+            if (p.get('name') or '').strip() == n:
+                return p
+        for p in address_book:
+            if (p.get('nameEn') or '').strip().lower() == n.lower():
+                return p
+        return None
+
+    trimmed = str(name).strip()
+    found = try_exact(trimmed)
+    if found:
+        return found
+    stripped = _addr_strip_title_suffix(trimmed)
+    if stripped and stripped != trimmed:
+        found = try_exact(stripped)
+    return found
+
+
+def _lookup_email(address_book: list, name: str) -> str:
+    if not name:
+        return ''
+    trimmed = name.strip()
+    if re.match(r'^[^\s@]+@[^\s@]+\.[^\s@]+$', trimmed):  # 이름 자리에 이메일이 이미 들어있는 경우
+        return trimmed
+    found = _addr_find_by_name(address_book, trimmed)
+    return (found.get('email') or '') if found else ''
+
+
+def _is_alarm_domain_allowed(email: str, allowed_external_domains: list) -> bool:
+    """@kortek.co.kr은 항상 허용, 그 외 도메인은 규칙 저장 시점에 스냅샷된 허용 목록에 있어야 허용"""
+    if not email:
+        return False
+    m = re.search(r'@([^@\s]+)$', email.strip().lower())
+    if not m:
+        return False
+    if m.group(1) == KORTEK_INTERNAL_DOMAIN:
+        return True
+    return m.group(1) in (allowed_external_domains or [])
+
+
+def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
+    """딱 한 업무(row_idx)의 "지금 이 순간" 상태를 계산한다 — collectAlarmItems()의 파이썬 버전.
+       프로젝트 JSON은 저장 시점에 globalData의 모든 _밑줄필드(_level, _origDev 등)를 그대로
+       보존하므로(js/04-core-app.js:1802 serializedGlobalData), 화면 렌더링 로직을 다시 짤 필요
+       없이 저장된 값을 그대로 읽으면 된다. 대상이 아니면(알림 꺼짐/완료예정일 없음/행 없음) None."""
+    global_data = project_data.get('globalData') or []
+    if row_idx < 0 or row_idx >= len(global_data):
+        return None
+    row_obj = global_data[row_idx]
+    if not isinstance(row_obj, dict):
+        return None
+    if not row_obj.get('_알림'):  # 알람이 등록되지 않은 업무
+        return None
+
+    cols    = row_obj.get('data') or []
+    col_idx = project_data.get('colIdx') or {}
+
+    def col(name):
+        idx = col_idx.get(name)
+        if idx is None or idx < 0 or idx >= len(cols):
+            return ''
+        return cols[idx]
+
+    # 완료 예정일 — plan 컬럼(YYYY-MM-DD), 자동(🔓) 모드 행은 비어있고 _calcPlanTs만 있어 폴백 처리
+    due_raw = str(col('plan') or '').strip()
+    due_date = None
+    if due_raw and due_raw != '-':
+        try:
+            due_date = datetime.strptime(due_raw[:10], '%Y-%m-%d').date()
+        except Exception:
+            due_date = None
+    if due_date is None and row_obj.get('_calcPlanTs'):
+        try:
+            due_date = datetime.fromtimestamp(row_obj['_calcPlanTs'] / 1000, KST).date()
+        except Exception:
+            due_date = None
+    if due_date is None:
+        return None
+
+    today     = datetime.now(KST).date()
+    diff_days = (due_date - today).days
+    due_str   = due_date.strftime('%Y-%m-%d')
+
+    # 업무명 — 레벨별 원본 이름(_origDev/_origT1~4) 우선, 없으면 그 레벨의 WBS 컬럼값으로 폴백
+    level = row_obj.get('_level')
+    orig_by_level = {
+        0: row_obj.get('_origDev'), 1: row_obj.get('_origT1'), 2: row_obj.get('_origT2'),
+        3: row_obj.get('_origT3'), 4: row_obj.get('_origT4'),
+    }.get(level)
+    wbs_col_name = {0: 'devStage', 1: 'taskType1', 2: 'taskType2', 3: 'taskType3', 4: 'taskType4'}.get(level, 'wbs')
+    task_name = str(orig_by_level or col(wbs_col_name) or '').strip() or '-'
+    task_name = re.sub(r'^🌐\s*', '', task_name)
+
+    content_raw = str(col('content') or '').strip()
+
+    # [발신인→수신인] 패턴 — 없으면 담당자(assignee) 컬럼을 발신인으로 취급
+    arrow_match = re.search(r'\[([^\]→]+)→((?:\[[^\]]*\]|[^\]])+)\]', content_raw)
+
+    def strip_tag(s):
+        return re.sub(r'^\[[^\]]*\]\s*', '', (s or '').strip()).strip()
+
+    sender_raw   = strip_tag(arrow_match.group(1)) if arrow_match else str(col('assignee') or '-').strip()
+    receiver_raw = strip_tag(arrow_match.group(2)) if arrow_match else ''
+
+    address_book   = _drive_load_address_book()
+    sender_names   = _addr_split_names(sender_raw)
+    receiver_names = _addr_split_names(receiver_raw)
+    all_people     = list(dict.fromkeys([n for n in (sender_names + receiver_names) if n]))
+
+    assignee        = ', '.join(sender_names) or '-'
+    assignee_email  = ','.join(dict.fromkeys([e for e in (_lookup_email(address_book, n) for n in sender_names) if e]))
+    receiver_str    = ', '.join(receiver_names) or '-'
+    receiver_emails = list(dict.fromkeys([e for e in (_lookup_email(address_book, n) for n in receiver_names) if e]))
+
+    status_val = str(col('status') or '').strip() if col_idx.get('status', -1) != -1 else ''
+
+    return {
+        'taskName': task_name, 'status': status_val,
+        'assignee': assignee, 'assigneeEmail': assignee_email,
+        'receiverStr': receiver_str, 'receiverEmails': receiver_emails,
+        'allPeopleNames': all_people,
+        'dueStr': due_str, 'diffDays': diff_days, 'content': content_raw,
+    }
 
 
 def _rule_active_today(rule: dict, today) -> bool:
@@ -766,8 +1076,8 @@ def _rule_today_buckets(rule: dict) -> list:
     return buckets
 
 
-def _fire_rule(rule: dict):
-    """규칙에 등록된 수신자 전원에게 실제 발송(메일/텔레그램)"""
+def _fire_notice_rule(rule: dict):
+    """공지(type='notice') 발송 — 규칙 저장 시점에 고정된 제목/내용을 등록된 수신자 전원에게 그대로 발송"""
     title      = rule.get('title', '')
     message    = rule.get('message', '')
     recipients = rule.get('recipients', []) or []
@@ -790,6 +1100,101 @@ def _fire_rule(rule: dict):
         except Exception as e:
             print(f"[예약발송 예외-텔레그램] {r.get('name','')}: {e}")
     print(f"[예약발송] '{title}' → 수신자 {len(recipients)}명 처리 ({datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')})")
+
+
+def _fire_alarm_rule(rule: dict):
+    """업무별 알람(type='alarm') 발송 — 저장된 내용이 아니라, 발송 직전 구글드라이브에서 해당 업무의
+       최신 담당자/완료예정일/업무내용을 다시 읽어 그 시점 값으로 발송한다 (_build_alarm_task_snapshot)."""
+    drive_file_id = rule.get('driveFileId')
+    row_idx       = rule.get('rowIdx')
+    label         = rule.get('taskNameSnapshot') or rule.get('title') or '(제목 없음)'
+    if not drive_file_id or row_idx is None:
+        print(f"[업무알람 실패] driveFileId/rowIdx가 없는 규칙입니다: {label}")
+        return
+    try:
+        project_data = _drive_read_json_file(drive_file_id)
+    except Exception as e:
+        print(f"[업무알람 실패] '{label}' — 프로젝트 파일 조회 실패: {e}")
+        return
+
+    try:
+        snap = _build_alarm_task_snapshot(project_data, int(row_idx))
+    except Exception as e:
+        print(f"[업무알람 실패] '{label}' — 업무 상태 계산 중 오류: {e}")
+        return
+    if not snap:
+        print(f"[업무알람 건너뜀] '{label}' — 업무를 찾을 수 없거나(삭제됨) 알림이 꺼져있거나 완료예정일이 없습니다.")
+        return
+
+    allowed_domains = rule.get('allowedExternalDomainsSnapshot') or []
+    assignee_email  = snap['assigneeEmail'] if _is_alarm_domain_allowed(snap['assigneeEmail'], allowed_domains) else ''
+    receiver_emails = [e for e in snap['receiverEmails'] if _is_alarm_domain_allowed(e, allowed_domains)]
+    to_email = ','.join(dict.fromkeys([e for e in ([assignee_email] + receiver_emails) if e]))
+    cc_mails = rule.get('ccMailsSnapshot', '')
+
+    project_meta = project_data.get('projectMeta') or {}
+    proj_title   = ' > '.join([x for x in [project_meta.get('고객사'), project_meta.get('고객모델명')] if x]) or '프로젝트'
+    d = snap['diffDays']
+    d_day_plain = 'D-Day' if d == 0 else (f'D+{abs(d)}' if d < 0 else f'D-{d}')
+
+    if not to_email:
+        print(f"[업무알람 건너뜀] '{snap['taskName']}' — 발송 가능한 이메일이 없습니다(담당자/수신인 이메일 미등록 또는 외부 도메인 차단).")
+    else:
+        subject = f'[Gantt 알람] {proj_title} — "{snap["taskName"]}" 완료일 {d_day_plain}'
+        content_html = html.escape(snap['content']).replace('\n', '<br>') if snap['content'] else ''
+        content_row = (
+            f'<tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; vertical-align:top; border:1px solid #dcdde1; width:90px; white-space:nowrap;">내용</td>'
+            f'<td style="padding:6px 12px; white-space:normal; border:1px solid #dcdde1; word-break:break-word;">{content_html}</td></tr>'
+        ) if content_html else ''
+        body = f"""<div style="font-family:'맑은 고딕',sans-serif; font-size:14px; color:#333;">
+  <p><b>{html.escape(snap['assignee'])}님께</b></p>
+  <p>아래 업무의 완료 예정일이 <b style="color:#e74c3c;">{d_day_plain}일 ({snap['dueStr']})</b>입니다.</p>
+  <table style="border-collapse:collapse; margin:12px 0; border:1px solid #dcdde1; width:100%; max-width:1000px;">
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">프로젝트</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">{html.escape(proj_title)}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">업무</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">{html.escape(snap['taskName'])}</td></tr>
+    {content_row}
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">담당자</td><td style="padding:6px 12px; border:1px solid #dcdde1; word-break:break-word;">{html.escape(snap['assignee'])}</td></tr>
+    <tr><td style="padding:6px 12px; background:#f0f8ff; font-weight:bold; border:1px solid #dcdde1; width:90px; white-space:nowrap;">완료 예정일</td><td style="padding:6px 12px; color:#e74c3c; border:1px solid #dcdde1;"><b>{snap['dueStr']}</b></td></tr>
+  </table>
+  <p style="color:#888; font-size:12px;">본 메일은 Gantt Chart 예약 발송(기간·반복) 알람에서 자동 발송되었습니다. 담당자/완료예정일/내용은 발송 시점 기준 최신 상태입니다.</p>
+</div>"""
+        ok, err, _ = _send_mail_core(to_email, subject, body, cc_mails)
+        if not ok:
+            print(f"[업무알람 실패-메일] '{snap['taskName']}': {err}")
+        else:
+            print(f"[업무알람] '{snap['taskName']}' → {to_email} 발송 완료 ({datetime.now(KST).strftime('%Y-%m-%d %H:%M:%S')})")
+
+    # 텔레그램 — 담당자/수신인 중 (이메일 미등록이라 판단 불가하거나) 도메인이 허용된 사람만
+    try:
+        address_book = _drive_load_address_book()
+        tg_msg = f"📌 [Gantt 알람] {proj_title}\n업무: {snap['taskName']}\n담당: {snap['assignee']}\n기한: {snap['dueStr']} ({d_day_plain})"
+        if snap['content']:
+            tg_msg += '\n내용: ' + snap['content'].replace('\n', ' ')[:2000]
+        sent_chat_ids = set()
+        for name in snap['allPeopleNames']:
+            person = _addr_find_by_name(address_book, name)
+            if not person or not person.get('telegramId'):
+                continue
+            email = person.get('email') or ''
+            if email and not _is_alarm_domain_allowed(email, allowed_domains):
+                continue
+            chat_id = person['telegramId']
+            if chat_id in sent_chat_ids:
+                continue
+            sent_chat_ids.add(chat_id)
+            res = send_telegram_msg(tg_msg, chat_id)
+            if not res.get('ok'):
+                print(f"[업무알람 실패-텔레그램] {name}: {res}")
+    except Exception as e:
+        print(f"[업무알람 텔레그램 예외] {snap['taskName']}: {e}")
+
+
+def _fire_rule(rule: dict):
+    """규칙 종류에 따라 실제 발송 로직을 분기한다."""
+    if rule.get('type') == 'alarm':
+        _fire_alarm_rule(rule)
+    else:
+        _fire_notice_rule(rule)
 
 
 def _scheduler_tick():
