@@ -209,30 +209,86 @@
         title="닫기">✕</button>
   </div>
 
- <!-- ══ 섹션 1: 서버 연결 (기본 접힘) ══ -->
+ <!-- ══ 섹션 1: 처음 사용자 — 설치 안내 (기본 접힘) ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-server')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-      <span id="sec-server-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📡 서버 연결</span>
+      <span id="sec-server-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📥 처음 사용자 — 설치 안내</span>
       <span id="sec-server-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
-      <button id="as-install-title" onclick="window.openInstallGuideModal('setup')"
-        style="width:100%; box-sizing:border-box; text-align:left; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:5px; padding:8px 12px; font-size:13px; font-weight:bold; cursor:pointer;">📥 처음 사용자 — 설치 안내</button>
+    <!-- 💡 [2026-08-31] 예전엔 이 안에 버튼 하나만 있고 클릭하면 별도 팝업(install-guide-modal)이 열렸는데,
+         이제 이 섹션 자체가 설치 안내라서 펼치면 바로 안내 내용이 보이도록 인라인으로 옮겼다.
+         ig-content-setup/ig-content-telegram id는 예전 팝업과 동일하게 유지 — 언어 전환(translateUI)
+         로직이 그 id를 그대로 참조하므로 그대로 재사용. -->
+    <div id="sec-server" style="display:none; padding:14px; border-top:1px solid #e8e8e8; font-size:11px; color:#555; line-height:1.9;">
+      <p id="ig-heading-setup" style="margin:0 0 10px; font-size:12.5px; font-weight:bold; color:#2c5f8a;">⚙️ KORTEK Backend 설치 (Step 1~4)</p>
+      <div id="ig-content-setup">
+        <div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">
+          🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.
+        </div>
+        <b>Step 1.</b> Python 설치
+        <a href="https://www.python.org/downloads/" target="_blank"
+          style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">python.org →</a><br>
+        　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br><br>
+        <b>Step 2.</b> KORTEK Backend 파일 설치<br>
+        　　<a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip','kortek_backend.zip')"
+          style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>
+        　　→ 압축 풀기 → 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br><br>
+        <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>
+        　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>
+        　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>
+        　　→ 검은 창은 <b>최소화</b>해두세요 (닫으면 서버 종료됨)<br><br>
+        <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b><br>
+        　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다.<br><br>
+        <div style="background:#f8f9fa; border:1px solid #e9ecef; border-radius:5px; padding:10px 12px;">
+          <b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>
+          　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>
+          　　② 키보드 <b>Win + R</b> → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>
+          　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>
+          　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>
+          　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅
+        </div>
       </div>
+
+      <p id="ig-heading-telegram" style="margin:16px 0 10px; padding-top:12px; border-top:1px solid #eee; font-size:12.5px; font-weight:bold; color:#2c5f8a;">📱 Telegram (Step 5)</p>
+      <div id="ig-content-telegram">
+        <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
+          💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>
+          　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호
+        </div>
+        <span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-pm-1">PM</span>
+        <b>5-1. 텔레그램 앱 설치</b><br>
+        　　<a href="https://telegram.org" target="_blank"
+          style="padding:2px 8px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">telegram.org →</a>　에서 PC 또는 모바일에서 설치<br><br>
+        <span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-pm-2">PM</span>
+        <b>5-2. Bot Token 발급 (@BotFather)</b><br>
+        　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>
+        　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>
+        　　③ 봇 사용자명 입력 (영문, _bot으로 끝나야 함 · 예: kortek_alarm_bot)<br>
+        　　④ BotFather가 <b>Token</b> (긴 문자열)을 발급 → 복사해두기<br>
+        　　⑤ 발급된 봇 링크(t.me/봇이름)를 팀원에게 공유 → 각자 <b>/start</b> 전송 요청<br><br>
+        <span style="display:inline-block; background:#2f9e44; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-team-1">팀원</span>
+        <b>5-3. Chat ID 확인 (@userinfobot)</b><br>
+        　　① 텔레그램에서 <b>@userinfobot</b> 검색 후 시작<br>
+        　　② <b>/start</b> 입력 → 봇이 나의 <b>Chat ID (숫자)</b> 를 알려줌<br>
+        　　③ 팀원도 동일하게 본인 Chat ID 확인 후 PM에게 전달<br><br>
+        <span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-pm-3">PM</span>
+        <b>5-4. 주소록에 등록 및 저장</b><br>
+        　　① 알람 설정 → Telegram 섹션 → <b>Bot Token</b> 입력 후 💾 저장<br>
+        　　② <b>주소록 탭</b> → 팀원 행에 Chat ID 입력<br>
+        　　③ 📨 테스트 버튼으로 수신 확인 ✅
+      </div>
+    </div>
   </div>
 
-  <!-- ══ 섹션 2: 이메일 알람 ══ -->
+  <!-- ══ 섹션 2: 이메일 서버 설정 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-email')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-      <span id="sec-email-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📧 이메일 알람</span>
+      <span id="sec-email-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🖥️ 이메일 서버 설정</span>
       <span id="sec-email-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
     <div id="sec-email" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
-
-      <!-- 이메일 서버 설정 -->
-      <p id="as-email-server-label" style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;">🖥️ 이메일 서버 설정</p>
       <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:8px;">
         <label id="as-lbl-host">서버 주소</label><input id="as-smtp-host" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;">
         <label id="as-lbl-port">포트</label><input id="as-smtp-port" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="25">
@@ -244,39 +300,46 @@
         <span id="as-smtp-save-msg" style="font-size:11px; color:#27ae60;"></span>
         <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
       </div>
+    </div>
+  </div>
 
-      <!-- 이메일 수신자 -->
-      <div style="margin-top:14px; padding-top:12px; border-top:1px solid #eee;">
-        <p style="margin:0 0 8px; font-size:12px; font-weight:bold; color:#555;"><span id="as-email-recv-label">👥 이메일 수신자</span> <span id="as-email-recv-sub" style="font-weight:normal; font-size:11px; color:#888;">(Summary 멤버 자동 반영)</span></p>
+  <!-- ══ 섹션 3: 이메일 수신자 선택 ══ -->
+  <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:10px; overflow:hidden;">
+    <div onclick="window._toggleAlarmSection('sec-email-recv')"
+         style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
+      <span id="sec-email-recv-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">👥 이메일 수신자 선택</span>
+      <span id="sec-email-recv-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+    </div>
+    <div id="sec-email-recv" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
+      <p style="margin:0 0 8px; font-size:11px; color:#888;"><span id="as-email-recv-sub">(Summary 멤버 자동 반영)</span></p>
 
-        <!-- 데이터 행과 동일한 grid 정의를 공유하는 일괄 제어 헤더
-             💡 [2026-08-31] id="alarm-cc-header" — 아래 목록(#alarm-cc-list)이 스크롤바가 생기면
-             그만큼 폭이 줄어 행의 ✓/✕ 위치가 이 헤더보다 왼쪽으로 밀리는 문제가 있어, JS가
-             매번 목록의 실제 스크롤바 폭을 재서 이 헤더에 같은 만큼 padding-right로 보정한다
-             (window._syncAlarmCcHeaderPad, js/22-tabs-summary-mctable.js). -->
-        <div id="alarm-cc-header" style="display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center; margin-bottom:4px;">
-          <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
-          <button type="button" onclick="window.toggleAllCc()" title="전체 발송 선택/해제"
-                  style="width:24px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:4px; cursor:pointer; font-size:11px; padding:0;">✓</button>
-          <button type="button" onclick="window._ccBulkRemoveAll()" title="수신자 전체 삭제"
-                  onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
-                  style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
-        </div>
+      <!-- 데이터 행과 동일한 grid 정의를 공유하는 일괄 제어 헤더
+           💡 [2026-08-31] id="alarm-cc-header" — 아래 목록(#alarm-cc-list)이 스크롤바가 생기면
+           그만큼 폭이 줄어 행의 ✓/✕ 위치가 이 헤더보다 왼쪽으로 밀리는 문제가 있어, JS가
+           매번 목록의 실제 스크롤바 폭을 재서 이 헤더에 같은 만큼 padding-right로 보정한다
+           (window._syncAlarmCcHeaderPad, js/22-tabs-summary-mctable.js). -->
+      <div id="alarm-cc-header" style="display:grid; grid-template-columns:90px 1fr 52px 24px 26px; column-gap:6px; align-items:center; margin-bottom:4px;">
+        <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
+        <button type="button" onclick="window.toggleAllCc()" title="전체 발송 선택/해제"
+                style="width:24px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:4px; cursor:pointer; font-size:11px; padding:0;">✓</button>
+        <button type="button" onclick="window._ccBulkRemoveAll()" title="수신자 전체 삭제"
+                onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
+                style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
+      </div>
 
-        <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;"></div>
-        <datalist id="alarm-cc-namelist"></datalist>
-        <div style="display:flex; justify-content:flex-end; margin-top:8px;">
-          <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:4px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
-        </div>
+      <div id="alarm-cc-list" style="display:flex; flex-direction:column; gap:6px; max-height:180px; overflow-y:auto; padding-right:2px;"></div>
+      <datalist id="alarm-cc-namelist"></datalist>
+      <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+        <button id="as-add-recv-btn" onclick="window.addAlarmCcRow()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:4px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
       </div>
     </div>
   </div>
 
-  <!-- ══ 섹션 3: 메신저 알람 ══ -->
+  <!-- ══ 섹션 4: 메신저 서버 설정 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-messenger')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-      <span id="sec-messenger-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">💬 메신저 알람</span>
+      <span id="sec-messenger-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">💬 메신저 서버 설정</span>
       <span id="sec-messenger-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
     <div id="sec-messenger" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
@@ -325,7 +388,7 @@
     </div>
   </div>
 
-  <!-- ══ 섹션 4: 외부 도메인 발송 허용 ══ -->
+  <!-- ══ 섹션 5: 외부 도메인 발송 허용 ══ -->
   <div style="border:1px solid #e0e0e0; border-radius:6px; margin-bottom:14px; overflow:hidden;">
     <div onclick="window._toggleAlarmSection('sec-domain')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
@@ -350,108 +413,6 @@
 <!-- 알람 상세 모달 -->
 <div id="alarm-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
 
-<!-- ── 처음 사용자 설치 안내 모달 ── -->
-<div id="install-guide-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
-<div class="history-modal" id="install-guide-modal" onclick="event.stopPropagation()"
-     style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-            width:min(560px, 95vw); height:auto; max-height:88vh; overflow:hidden;
-            flex-direction:column; font-family:'맑은 고딕',sans-serif;">
-  <!-- 헤더 (드래그 핸들) -->
-  <div id="install-guide-drag-handle" class="history-header"
-       style="display:flex; align-items:center; justify-content:space-between;
-              padding:13px 18px; border-bottom:1px solid #ffe08a; flex-shrink:0;
-              cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0;">
-    <span id="install-guide-title2" style="font-size:14px; font-weight:bold; color:#7a5210;">📥 처음 사용자 — 설치 안내</span>
-    <button onclick="window.closeInstallGuideModal()"
-        style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px;
-               color:#7a5210; font-size:16px; cursor:pointer;
-               width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
-               display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';"
-        onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';"
-        title="닫기">✕</button>
-  </div>
-  <!-- 탭 -->
-  <div style="display:flex; border-bottom:1px solid #eee; flex-shrink:0;">
-    <div id="ig-tab-setup" onclick="window.switchInstallTab('setup')"
-         style="flex:1; padding:10px; text-align:center; font-size:12px; font-weight:bold; cursor:pointer; color:#2c5f8a; border-bottom:2px solid #2c5f8a; background:#f8fbff;">
-      ⚙️ 설치 (Step 1~4)
-    </div>
-    <div id="ig-tab-telegram" onclick="window.switchInstallTab('telegram')"
-         style="flex:1; padding:10px; text-align:center; font-size:12px; font-weight:bold; cursor:pointer; color:#888; border-bottom:2px solid transparent; background:#fff;">
-      📱 Telegram (Step 5)
-    </div>
-  </div>
-  <!-- 탭 내용 -->
-  <div style="overflow-y:auto; padding:16px 20px; flex:1; font-size:11px; color:#555; line-height:1.9;">
-    <!-- Setup 탭 -->
-    <div id="ig-content-setup">
-      <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
-        💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>
-        　<b>kortek_backend.bat</b> 하나만 실행하면 됩니다.
-      </div>
-      <div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">
-        🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.
-      </div>
-      <b>Step 1.</b> Python 설치
-      <a href="https://www.python.org/downloads/" target="_blank"
-        style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">python.org →</a><br>
-      　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br><br>
-      <b>Step 2.</b> KORTEK Backend 파일 설치<br>
-      　　<a href="javascript:void(0)" onclick="window.downloadRawFile('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip','kortek_backend.zip')"
-        style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>
-      　　→ 압축 풀기 → 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br>
-      　　<span style="font-size:10.5px; color:#999;">⚠️ 보안 정책으로 다운로드가 안 되면 →</span><br>
-      　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py','kortek_backend.py')"
-        style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 kortek_backend.py 복사</a>
-      &nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard('https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat','kortek_backend.bat')"
-        style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 kortek_backend.bat 복사</a>
-      　　<span style="font-size:10.5px; color:#999;">메모장 붙여넣기 → 파일명 그대로 저장 → 같은 폴더</span><br><br>
-      <b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>
-      　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>
-      　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>
-      　　→ 검은 창은 <b>최소화</b>해두세요 (닫으면 서버 종료됨)<br><br>
-      <b>Step 4.</b> 앱 사용 중에는 <b>검은 창(서버)을 닫지 마세요</b><br>
-      　　→ 창을 닫으면 메일 발송·수신·Telegram 알람이 모두 중단됩니다.<br><br>
-      <div style="background:#f8f9fa; border:1px solid #e9ecef; border-radius:5px; padding:10px 12px;">
-        <b>💡 PC 켤 때마다 서버 자동 시작 설정 (선택)</b><br>
-        　　① <b>kortek_backend.bat</b> 파일 우클릭 → [바로가기 만들기]<br>
-        　　② 키보드 <b>Win + R</b> → 열기 창에 <b>shell:startup</b> 입력 → Enter<br>
-        　　　 (Windows 시작 프로그램 폴더가 열립니다)<br>
-        　　③ 열린 폴더에 ①의 바로가기 붙여넣기<br>
-        　　→ 이후 PC를 켤 때마다 백엔드 서버가 자동으로 시작됩니다 ✅
-      </div>
-    </div>
-    <!-- Telegram 탭 -->
-    <div id="ig-content-telegram" style="display:none;">
-      <div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">
-        💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>
-        　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호
-      </div>
-      <span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-pm-1">PM</span>
-      <b>5-1. 텔레그램 앱 설치</b><br>
-      　　<a href="https://telegram.org" target="_blank"
-        style="padding:2px 8px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">telegram.org →</a>　에서 PC · 모바일 설치<br><br>
-      <span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-pm-2">PM</span>
-      <b>5-2. Bot Token 발급 (@BotFather)</b><br>
-      　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>
-      　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>
-      　　③ 봇 사용자명 입력 (영문, _bot으로 끝나야 함 · 예: kortek_alarm_bot)<br>
-      　　④ BotFather가 <b>Token</b> (긴 문자열)을 발급 → 복사해두기<br>
-      　　⑤ 발급된 봇 링크(t.me/봇이름)를 팀원에게 공유 → 각자 <b>/start</b> 전송 요청<br><br>
-      <span style="display:inline-block; background:#2f9e44; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-team-1">팀원</span>
-      <b>5-3. Chat ID 확인 (@userinfobot)</b><br>
-      　　① 텔레그램에서 <b>@userinfobot</b> 검색 후 시작<br>
-      　　② <b>/start</b> 입력 → 봇이 나의 <b>Chat ID (숫자)</b> 를 알려줌<br>
-      　　③ 팀원도 동일하게 본인 Chat ID 확인 후 PM에게 전달<br><br>
-      <span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;" id="ig-badge-pm-3">PM</span>
-      <b>5-4. 주소록에 등록 및 저장</b><br>
-      　　① 알람 설정 → Telegram 섹션 → <b>Bot Token</b> 입력 후 💾 저장<br>
-      　　② <b>주소록 탭</b> → 팀원 행에 Chat ID 입력<br>
-      　　③ 📨 테스트 버튼으로 수신 확인 ✅
-    </div>
-  </div>
-</div>
 <div id="alarm-modal" style="display:none; pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
   width:520px; max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">

@@ -1289,9 +1289,10 @@ window._toggleAlarmSection = function(id) {
     el.style.display = open ? 'none' : 'block';
     const isEn = window._currentLang === 'en';
     if (arrow) arrow.textContent = open ? (isEn ? '▶ Expand' : '▶ 펼치기') : (isEn ? '▼ Collapse' : '▼ 접기');
-    // 💡 이메일 알람 섹션이 접혀있던 동안(offsetWidth=0) 행이 채워졌으면 스크롤바 폭 계산이
+    // 💡 이메일 수신자 섹션이 접혀있던 동안(offsetWidth=0) 행이 채워졌으면 스크롤바 폭 계산이
     //    부정확했을 수 있으므로, 이 섹션을 펼치는 순간 다시 정확히 맞춘다.
-    if (id === 'sec-email' && !open && window._syncAlarmCcHeaderPad) window._syncAlarmCcHeaderPad();
+    //    (2026-08-31 알람 설정 섹션 재구성으로 수신자 목록이 sec-email → sec-email-recv로 이동)
+    if (id === 'sec-email-recv' && !open && window._syncAlarmCcHeaderPad) window._syncAlarmCcHeaderPad();
 };
 
 // ── Drive 드롭다운 메뉴 토글 ──────────────────────────────────
@@ -2323,35 +2324,10 @@ window.openAlarmSettings = function() {
     window.bringModalToFront('alarm-settings-modal');
 };
 
-// 설정 모달 닫기
-window.openInstallGuideModal = function(tab) {
-    window._topModalZ = (window._topModalZ || 9999) + 1;
-    const overlay = document.getElementById('install-guide-modal-overlay');
-    const modal = document.getElementById('install-guide-modal');
-    overlay.style.zIndex = String(window._topModalZ);
-    overlay.style.display = 'flex';
-    modal.style.zIndex = String(window._topModalZ);
-    modal.style.display = 'flex';
-    modal.style.flexDirection = 'column';
-    window.switchInstallTab(tab || 'setup');
-};
-window.closeInstallGuideModal = function() {
-    document.getElementById('install-guide-modal-overlay').style.display = 'none';
-    document.getElementById('install-guide-modal').style.display = 'none';
-};
-window.switchInstallTab = function(tab) {
-    const isSetup = tab === 'setup';
-    document.getElementById('ig-content-setup').style.display = isSetup ? 'block' : 'none';
-    document.getElementById('ig-content-telegram').style.display = isSetup ? 'none' : 'block';
-    const tSetup = document.getElementById('ig-tab-setup');
-    const tTg = document.getElementById('ig-tab-telegram');
-    tSetup.style.color = isSetup ? '#2c5f8a' : '#888';
-    tSetup.style.borderBottom = isSetup ? '2px solid #2c5f8a' : '2px solid transparent';
-    tSetup.style.background = isSetup ? '#f8fbff' : '#fff';
-    tTg.style.color = isSetup ? '#888' : '#2c5f8a';
-    tTg.style.borderBottom = isSetup ? '2px solid transparent' : '2px solid #2c5f8a';
-    tTg.style.background = isSetup ? '#fff' : '#f8fbff';
-};
+// 💡 [2026-08-31] "처음 사용자 — 설치 안내"가 별도 팝업(install-guide-modal)이 아니라 알람 설정
+//    안의 한 섹션(sec-server, 펼치면 바로 내용이 보임)으로 옮겨지면서, 이 팝업을 열고 탭을 전환하던
+//    openInstallGuideModal/closeInstallGuideModal/switchInstallTab은 더 이상 아무 데서도 호출되지
+//    않아 제거함. 안내 내용 자체(ig-content-setup/ig-content-telegram id, 배지 등)는 그대로 재사용됨.
 window.closeAlarmSettings = function() {
     document.getElementById('alarm-settings-overlay').style.display = 'none';
     document.getElementById('alarm-settings-modal').style.display   = 'none';
