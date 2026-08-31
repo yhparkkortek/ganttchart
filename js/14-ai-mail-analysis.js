@@ -1682,7 +1682,7 @@ window._bindClickToFront = function(modalId) {
         el.style.zIndex = String(window._topModalZ);
     });
 };
-['alarm-settings-modal', 'install-guide-modal', 'mail-analyzer-modal', 'task-inbox-modal', 'alarm-modal', 'alarm-schedule-modal', 'notice-modal'].forEach(window._bindClickToFront);
+['alarm-settings-modal', 'mail-analyzer-modal', 'task-inbox-modal', 'alarm-modal', 'alarm-schedule-modal', 'notice-modal'].forEach(window._bindClickToFront);
 
 window.updateInboxBadge = function() {
     const badge = document.getElementById('inbox-badge');

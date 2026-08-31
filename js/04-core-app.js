@@ -9105,22 +9105,22 @@ window.deleteHistoryByDateRange = function() {
         // [알람설정 팝업] 섹션 서브라벨/버튼 텍스트 (id 기반)
         const _asIdTexts = {
             'as-modal-title':          { ko:'⚙️ 알람 설정',                       en:'⚙️ Alarm Settings' },
-            'sec-server-label':        { ko:'📡 서버 연결',                       en:'📡 Server Connection' },
-            'as-install-title':        { ko:'📥 처음 사용자 — 설치 안내',          en:'📥 First-time Setup Guide' },
-            'sec-email-label':         { ko:'📧 이메일 알람',                     en:'📧 Email Alarm' },
-            'as-email-server-label':   { ko:'🖥️ 이메일 서버 설정',                en:'🖥️ Email Server Settings' },
+            'sec-server-label':        { ko:'📥 처음 사용자 — 설치 안내',          en:'📥 First-time Setup Guide' },
+            'ig-heading-setup':        { ko:'⚙️ KORTEK Backend 설치 (Step 1~4)', en:'⚙️ Install KORTEK Backend (Step 1~4)' },
+            'ig-heading-telegram':     { ko:'📱 Telegram (Step 5)',               en:'📱 Telegram (Step 5)' },
+            'sec-email-label':         { ko:'🖥️ 이메일 서버 설정',                en:'🖥️ Email Server Settings' },
             'as-lbl-host':             { ko:'서버 주소',                          en:'Server' },
             'as-lbl-port':             { ko:'포트',                               en:'Port' },
             'as-lbl-user':             { ko:'계정',                               en:'Account' },
             'as-lbl-pass':             { ko:'비밀번호',                           en:'Password' },
             'as-smtp-privacy-note':    { ko:'🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장', en:'🔒 Stored in this browser · Not recommended on shared PCs' },
             'as-smtp-save-btn':        { ko:'💾 저장',                            en:'💾 Save' },
-            'as-email-recv-label':     { ko:'👥 이메일 수신자',                   en:'👥 Email Recipients' },
+            'sec-email-recv-label':    { ko:'👥 이메일 수신자 선택',              en:'👥 Select Email Recipients' },
             'as-email-recv-sub':       { ko:'(Summary 멤버 자동 반영)',           en:'(Auto from Summary members)' },
             'as-all-on-btn':           { ko:'전체 ON',                            en:'All ON' },
             'as-all-off-btn':          { ko:'전체 OFF',                           en:'All OFF' },
             'as-add-recv-btn':         { ko:'+ 수신자 추가',                      en:'+ Add Recipient' },
-            'sec-messenger-label':     { ko:'💬 메신저 알람',                     en:'💬 Messenger Alarm' },
+            'sec-messenger-label':     { ko:'💬 메신저 서버 설정',                en:'💬 Messenger Server Settings' },
             'as-messenger-server-lbl': { ko:'🖥️ 메신저 서버 설정',               en:'🖥️ Messenger Server Settings' },
             'as-tg-sub':               { ko:'(현재: Telegram)',                   en:'(Current: Telegram)' },
             'as-lbl-tgtoken':          { ko:'Bot Token',                          en:'Bot Token' },
@@ -9179,19 +9179,10 @@ window.deleteHistoryByDateRange = function() {
             + '　　② <b>메신저 수신자</b> → Chat ID 입력 후 추가<br>'
             + '　　③ 📨 테스트 버튼으로 수신 확인 ✅';
 
-        // [설치안내 모달] 제목/탭/내용 번역
-        const _igTitle = document.getElementById('install-guide-title2');
-        if (_igTitle) _igTitle.textContent = _en ? '📥 First-time Setup Guide' : '📥 처음 사용자 — 설치 안내';
-        const _igTabSetup = document.getElementById('ig-tab-setup');
-        if (_igTabSetup) _igTabSetup.textContent = _en ? '⚙️ Setup (Step 1~4)' : '⚙️ 설치 (Step 1~4)';
-        const _igTabTelegram = document.getElementById('ig-tab-telegram');
-        if (_igTabTelegram) _igTabTelegram.textContent = _en ? '📱 Telegram (Step 5)' : '📱 Telegram (Step 5)';
-
-        // [처음 사용자 설치 안내] 진입 버튼 (알람설정 / AI 팝업 2곳) 번역
-        // 💡 [2026-08-29] 라벨(span)+버튼 2개였던 걸 버튼 하나로 합쳐서 as/ms-install-guide-btn은 더는 없음
-        const _asInstallTitle = document.getElementById('as-install-title');
-        if (_asInstallTitle) _asInstallTitle.textContent = _en ? '📥 First-time Setup Guide' : '📥 처음 사용자 — 설치 안내';
-
+        // [처음 사용자 설치 안내] 섹션 안 텔레그램 배지 번역
+        // 💡 [2026-08-31] 이 안내가 별도 팝업(install-guide-modal)이 아니라 알람 설정 안의 섹션 하나로
+        //    옮겨지면서, 제목/헤딩(sec-server-label, ig-heading-setup, ig-heading-telegram)은 위
+        //    _asIdTexts에 통합됨 — 배지만 별도 forEach로 남아있음(ig-badge-* id는 그대로 재사용).
         ['ig-badge-pm-1','ig-badge-pm-2','ig-badge-pm-3'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? 'PM' : 'PM';
@@ -9202,17 +9193,12 @@ window.deleteHistoryByDateRange = function() {
         });
         const _igSetup = document.getElementById('ig-content-setup');
         if (_igSetup) _igSetup.innerHTML = _en
-            ? '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">💡 Mail alarm · Mail receive · Telegram alarm · AI Analysis are all integrated into one <b>KORTEK Backend server</b>.<br>　Just run <b>kortek_backend.bat</b> once.</div>'
-            + '<div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">🌐 <b>Chrome browser is recommended.</b> Some features (e.g. mail import) may not work in IE · Edge.</div>'
+            ? '<div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">🌐 <b>Chrome browser is recommended.</b> Some features (e.g. mail import) may not work in IE · Edge.</div>'
             + '<b>Step 1.</b> Install Python <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">python.org →</a><br>'
             + '　　Check <b>"Add Python to PATH"</b> during install (required — server won\'t run without it)<br><br>'
             + '<b>Step 2.</b> Install KORTEK Backend files<br>'
             + '　　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip\',\'kortek_backend.zip\')" style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px; white-space:nowrap;">⬇️ Download kortek_backend.zip</a><br>'
-            + '　　→ Unzip → Confirm 2 files (kortek_backend.py / kortek_backend.bat)<br>'
-            + '　　<span style="font-size:10.5px; color:#999;">⚠️ If blocked by security policy →</span><br>'
-            + '　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 Copy kortek_backend.py</a>'
-            + '&nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 Copy kortek_backend.bat</a>'
-            + '　　<span style="font-size:10.5px; color:#999;">Paste into Notepad → Save with the exact filename → Same folder</span><br><br>'
+            + '　　→ Unzip → Confirm 2 files (kortek_backend.py / kortek_backend.bat)<br><br>'
             + '<b>Step 3.</b> Double-click <b>kortek_backend.bat</b><br>'
             + '　　→ First run installs packages automatically (1~2 min, instant afterward)<br>'
             + '　　→ Ready when the black window shows <b>http://127.0.0.1:5000</b> ✅<br>'
@@ -9227,17 +9213,12 @@ window.deleteHistoryByDateRange = function() {
             + '　　③ Paste the shortcut from ① into that folder<br>'
             + '　　→ The backend server will now start automatically every time you boot ✅'
             + '</div>'
-            : '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">💡 메일 알람 · 메일 수신 · Telegram 알람 · AI 분석이 <b>KORTEK Backend 서버 하나</b>로 통합되었습니다.<br>　<b>kortek_backend.bat</b> 하나만 실행하면 됩니다.</div>'
-            + '<div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.</div>'
+            : '<div style="background:#fff3cd; border-left:3px solid #e6a817; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#7a5210;">🌐 <b>Chrome 브라우저 사용을 권장합니다.</b> IE · Edge에서는 메일 가져오기 등 일부 기능이 동작하지 않을 수 있습니다.</div>'
             + '<b>Step 1.</b> Python 설치 <a href="https://www.python.org/downloads/" target="_blank" style="margin-left:6px; padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">python.org →</a><br>'
             + '　　설치 시 <b>"Add Python to PATH"</b> 체크 필수 (미체크 시 서버 실행 안 됨)<br><br>'
             + '<b>Step 2.</b> KORTEK Backend 파일 설치<br>'
             + '　　<a href="javascript:void(0)" onclick="window.downloadRawFile(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.zip\',\'kortek_backend.zip\')" style="padding:2px 10px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px; white-space:nowrap;">⬇️ kortek_backend.zip 다운로드</a><br>'
-            + '　　→ 압축 풀기 → 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br>'
-            + '　　<span style="font-size:10.5px; color:#999;">⚠️ 보안 정책으로 다운로드가 안 되면 →</span><br>'
-            + '　　<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.py\',\'kortek_backend.py\')" style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 kortek_backend.py 복사</a>'
-            + '&nbsp;<a href="javascript:void(0)" onclick="window.copyRawFileToClipboard(\'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main/kortek_backend.bat\',\'kortek_backend.bat\')" style="padding:1px 7px; background:#777; color:#fff; border-radius:3px; font-size:10.5px; white-space:nowrap;">📋 kortek_backend.bat 복사</a>'
-            + '　　<span style="font-size:10.5px; color:#999;">메모장 붙여넣기 → 파일명 그대로 저장 → 같은 폴더</span><br><br>'
+            + '　　→ 압축 풀기 → 파일 2개 확인 (kortek_backend.py / kortek_backend.bat)<br><br>'
             + '<b>Step 3.</b> <b>kortek_backend.bat</b> 더블클릭<br>'
             + '　　→ 최초 실행 시 패키지 자동 설치 (1~2분 소요, 이후엔 바로 실행)<br>'
             + '　　→ 검은 창에 <b>http://127.0.0.1:5000</b> 이 보이면 준비 완료 ✅<br>'
@@ -9273,7 +9254,7 @@ window.deleteHistoryByDateRange = function() {
             + '　　③ Confirm with the 📨 Test button ✅'
             : '<div style="background:#e8f4fd; border-left:3px solid #2c5f8a; padding:6px 10px; margin-bottom:10px; border-radius:0 4px 4px 0; font-size:11px; color:#1a3a5c;">💡 Telegram 알람을 받으려면 <b>Bot Token</b>과 <b>Chat ID</b> 2가지가 필요합니다.<br>　Bot Token = 알람을 보내는 봇 계정 · Chat ID = 알람을 받을 내 계정 번호</div>'
             + '<span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;">PM</span> <b>5-1. 텔레그램 앱 설치</b><br>'
-            + '　　<a href="https://telegram.org" target="_blank" style="padding:2px 8px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">telegram.org →</a>　에서 PC · 모바일 설치<br><br>'
+            + '　　<a href="https://telegram.org" target="_blank" style="padding:2px 8px; background:#2c5f8a; color:#fff; border-radius:4px; text-decoration:none; font-size:11px;">telegram.org →</a>　에서 PC 또는 모바일에서 설치<br><br>'
             + '<span style="display:inline-block; background:#2c5f8a; color:#fff; font-size:9.5px; font-weight:bold; padding:1px 7px; border-radius:10px; margin-bottom:4px;">PM</span> <b>5-2. Bot Token 발급 (@BotFather)</b><br>'
             + '　　① 텔레그램에서 <b>@BotFather</b> 검색 후 시작<br>'
             + '　　② <b>/newbot</b> 입력 → 봇 이름 입력 (예: KORTEK Alarm)<br>'

@@ -81,7 +81,6 @@ window._makeDraggable = function(modalId, handleId) {
 window._makeDraggable('mail-analyzer-modal', 'mail-drag-handle');
 window._makeDraggable('task-inbox-modal',    'inbox-drag-handle');
 window._makeDraggable('alarm-settings-modal','alarm-settings-drag-handle');
-window._makeDraggable('install-guide-modal', 'install-guide-drag-handle');
 window._makeDraggable('alarm-modal',         'alarm-modal-drag-handle');
 window._makeDraggable('notice-modal',        'notice-modal-header');
 // 💡 [2026-08-31 버그 수정] 헤더에 cursor:grab 스타일만 있고 실제 이 등록이 빠져 있어서, 손 모양
