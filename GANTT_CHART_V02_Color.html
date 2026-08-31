@@ -9449,8 +9449,23 @@ ${question}
             const body = isUser
                 ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
                 : `<div style="word-break:break-word;">${window._mdToHtml(m.text)}</div>`;
-            return `<div style="display:flex; justify-content:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
+            // 💡 [2026-08-31 신규] AI 요약의 👍/👎 피드백 + 일괄개선과 동일한 개념을 AI 문답에도 적용 —
+            //    답변 하나하나(m.uid, sendGanttQaMessage에서 부여)에 평가를 남기면, 쌓인 👎 케이스를
+            //    [📝 프롬프트 → 🤖 일괄개선]에서 한 번에 모아 프롬프트 개선을 요청할 수 있다.
+            const feedbackHtml = (!isUser && !m.pending && !m.error && m.uid) ? (function() {
+                const fb = window._qaFeedbackFor(m.uid);
+                const goodActive = fb && fb.rating === 'good';
+                const badActive = fb && fb.rating === 'bad';
+                return `<div style="display:flex; justify-content:flex-end; gap:4px; margin-top:4px; align-items:center;">
+                    <span style="font-size:10px; color:#aaa; margin-right:2px;">도움이 되었나요?</span>
+                    <button onclick="window.saveGanttQaFeedback('${m.uid}','good')" style="font-size:11px; padding:2px 8px; border:1px solid #a8dab8; background:${goodActive ? '#c9ecd3' : '#e6f6ea'}; color:#1f7a3d; border-radius:5px; font-weight:bold; cursor:pointer;">👍</button>
+                    <button onclick="window.saveGanttQaFeedback('${m.uid}','bad')" style="font-size:11px; padding:2px 8px; border:1px solid #eeb0ac; background:${badActive ? '#f5c2bd' : '#fbe4e2'}; color:#b1432f; border-radius:5px; font-weight:bold; cursor:pointer;">👎</button>
+                    ${badActive ? `<button onclick="window.openQaImproveCommentModal('${m.uid}')" style="font-size:10.5px; padding:2px 8px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer; white-space:nowrap;">💡 의견</button>` : ''}
+                </div>`;
+            })() : '';
+            return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
+                ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;
@@ -9628,7 +9643,10 @@ ${question}
 
             text = window._applyGanttQaActions(text.trim());
             window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
-            window._ganttQaHistory.push({ role: 'ai', text: text.trim() });
+            // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
+            //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
+            //    AI에게 다시 보여줄 수 있게 한다.
+            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question });
         } catch (e) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
@@ -9638,6 +9656,267 @@ ${question}
             input.focus();
             if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = '전송'; }
         }
+    };
+
+    // ── 💡 [2026-08-31 신규] AI 문답 피드백(👍/👎) + AI 프롬프트 자동개선 요청 ─────────────
+    //    AI 프로젝트 요약의 피드백/개선 시스템(saveProjectSummaryFeedback / triggerProjectSummaryPromptImprove /
+    //    showPsImprovePreviewModal / applyImprovedPsPrompt)과 완전히 동일한 설계를 그대로 재사용하되,
+    //    요약은 "리포트 1건"을 평가하는 반면 문답은 "채팅 메시지 하나하나"를 평가한다는 차이만 있다.
+    //    diff 유틸(_simpleLineDiff/renderPromptDiffHtml)·관리자 비밀번호(verifyAdminPassword)는
+    //    이미 있는 범용 함수를 그대로 재사용한다.
+    const _QAF_KEY = 'gantt_qa_feedback';
+    window._lastQaFeedbackUid = null; // 방금 저장한 피드백의 대상 메시지 uid (개선 요청 시 코멘트를 채워넣을 대상)
+
+    window._qaFeedbackFor = function(uid) {
+        if (!uid) return null;
+        const log = JSON.parse(localStorage.getItem(_QAF_KEY) || '[]');
+        return log.find(function(x) { return x.uid === uid; }) || null;
+    };
+
+    window.saveGanttQaFeedback = function(uid, rating) {
+        const msg = (window._ganttQaHistory || []).find(function(m) { return m.uid === uid; });
+        if (!msg) return;
+        let log = JSON.parse(localStorage.getItem(_QAF_KEY) || '[]');
+        let entry = log.find(function(x) { return x.uid === uid; });
+        if (!entry) {
+            entry = { uid: uid, date: new Date().toISOString(), promptVersion: window._ganttQaPromptVersion || 1, question: msg.question || '', answer: msg.text || '', userComment: '', rating: rating, improved: false };
+            log.unshift(entry);
+            if (log.length > 200) log = log.slice(0, 200);
+        } else {
+            entry.rating = rating; // 재평가(마음이 바뀐 경우) — 기존 코멘트/기록은 유지
+        }
+        localStorage.setItem(_QAF_KEY, JSON.stringify(log));
+
+        if (rating === 'good') window._lastQaFeedbackUid = null;
+        else window._lastQaFeedbackUid = uid;
+
+        if (window.showToast && rating === 'good') window.showToast('👍 피드백이 저장되었습니다.', 'info');
+        window._renderGanttQaMessages(); // 버튼 활성 표시 + "💡 의견" 링크 노출 갱신
+    };
+
+    // ── 💡 개선 요청 코멘트 입력 모달 (AI 요약의 ps-improve-comment-modal과 별도 — id 충돌 방지) ──
+    window.openQaImproveCommentModal = function(uid) {
+        window._lastQaFeedbackUid = uid;
+        let modal = document.getElementById('gantt-qa-improve-comment-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'gantt-qa-improve-comment-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.22);';
+            modal.innerHTML = `
+            <div id="gantt-qa-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:200px;">
+                <div id="gantt-qa-improve-comment-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
+                    <span>✏️ 어떤 부분이 문제였나요?</span>
+                    <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-improve-comment-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                </div>
+                <div style="padding:18px;">
+                    <textarea id="gantt-qa-improve-comment-input" placeholder="예: 데이터에 있는 값인데도 '데이터에서 확인되지 않습니다'라고 답함 (선택 입력)"
+                        style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+                    <div style="display:flex; gap:8px; margin-top:12px;">
+                        <button onclick="window.submitQaImproveComment()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:9px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🤖 요청</button>
+                        <button onclick="document.getElementById('gantt-qa-improve-comment-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1; padding:9px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;">✖ 취소</button>
+                    </div>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            window._makeDraggable('gantt-qa-improve-comment-box', 'gantt-qa-improve-comment-drag');
+            window._bindClickToFront('gantt-qa-improve-comment-modal');
+        }
+        document.getElementById('gantt-qa-improve-comment-input').value = '';
+        modal.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('gantt-qa-improve-comment-modal');
+    };
+
+    window.submitQaImproveComment = function() {
+        const comment = document.getElementById('gantt-qa-improve-comment-input').value.trim();
+        document.getElementById('gantt-qa-improve-comment-modal').style.display = 'none';
+
+        if (window._lastQaFeedbackUid) {
+            const log = JSON.parse(localStorage.getItem(_QAF_KEY) || '[]');
+            const it = log.find(function(x) { return x.uid === window._lastQaFeedbackUid; });
+            if (it) { it.userComment = comment; localStorage.setItem(_QAF_KEY, JSON.stringify(log)); }
+        }
+        window.triggerGanttQaPromptImprove('instant', comment);
+    };
+
+    // 💡 다운스트림 코드가 의존하는 데이터 삽입 자리(${...})가 개선된 프롬프트에도 살아있는지 검사
+    //    (AI 요약의 validateProjectSummaryPromptStructure와 동일한 목적)
+    window.validateGanttQaPromptStructure = function(promptText) {
+        const requiredPlaceholders = ['${todayStr}', '${projectLine}', '${overviewText}', '${memberText}', '${materialText}',
+            '${customerSpecText}', '${mcTableText}', '${elecPartsText}', '${addressText}', '${totalTasks}', '${taskListText}',
+            '${mailSection}', '${recentLogsText}', '${historyText}', '${question}'];
+        const missing = [];
+        requiredPlaceholders.forEach(function(p) {
+            if (promptText.indexOf(p) === -1) missing.push('플레이스홀더: ' + p);
+        });
+        return missing; // 빈 배열이면 이상 없음
+    };
+
+    window.triggerGanttQaPromptImprove = async function(mode, instantComment) {
+        const currentPrompt = localStorage.getItem('gantt_qa_prompt') || window._defaultGanttQaPromptTemplate || '';
+        const apiKey = window.getActiveAiKey();
+        let casesText = '';
+        let targetUids = [];
+
+        if (mode === 'instant') {
+            const log = JSON.parse(localStorage.getItem(_QAF_KEY) || '[]');
+            const fb = window._lastQaFeedbackUid ? log.find(function(x) { return x.uid === window._lastQaFeedbackUid; }) : null;
+            targetUids = fb ? [fb.uid] : [];
+            casesText = `[케이스 1]\n질문: ${(fb && fb.question) || ''}\nAI 답변: ${(fb && fb.answer) || ''}\n\n사용자 코멘트: ${instantComment || '(없음)'}`;
+        } else {
+            // 💡 배치 모드 — 지금까지 쌓인 👎 피드백(improved:false) 케이스를 모아 한 번에 개선 요청
+            const log = JSON.parse(localStorage.getItem(_QAF_KEY) || '[]');
+            const pending = log.filter(function(x) { return x.rating === 'bad' && !x.improved; }).slice(0, 10);
+            targetUids = pending.map(function(x) { return x.uid; });
+            if (!pending.length) {
+                alert('⚠️ 개선할 피드백 케이스가 없습니다.\n먼저 AI 답변 아래 👎 버튼을 눌러 케이스를 쌓아주세요.');
+                return;
+            }
+            casesText = pending.map(function(fb, i) {
+                return `[케이스 ${i + 1}] (${fb.date ? fb.date.slice(0, 10) : ''})\n질문: ${fb.question || ''}\nAI 답변: ${fb.answer || ''}\n사용자 코멘트: ${fb.userComment || '(없음)'}`;
+            }).join('\n\n---\n\n');
+        }
+
+        const PROTECTED_STRUCTURE_RULE = `\n\n🔒 절대 변경 금지 규칙 (반드시 준수):\n프롬프트 내용을 개선하되, 아래 구조적 요소는 절대 이름/형식을 바꾸지 마세요. 이 값들은 다른 프로그램 코드가 그대로 파싱/치환하고 있어서, 조금이라도 바뀌면 시스템이 깨집니다.\n1. 아래 플레이스홀더는 정확히 이 이름 그대로 유지해야 합니다(삭제/이름변경/오타 금지, 정확히 한 번 이상씩): \${todayStr} \${projectLine} \${overviewText} \${memberText} \${materialText} \${customerSpecText} \${mcTableText} \${elecPartsText} \${addressText} \${totalTasks} \${taskListText} \${mailSection} \${recentLogsText} \${historyText} \${question}\n2. [[ACTION:SET_ALARM:번호]] / [[ACTION:CLEAR_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] 태그 형식과 그 사용 규칙 설명은 그대로 유지하세요(이 정확한 문자열 패턴을 다른 코드가 정규식으로 찾아서 실제 알람 설정/원문 조회 기능을 실행합니다).\n표현/지시문/설명 등 나머지는 자유롭게 개선해도 됩니다.`;
+
+        const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 "AI 문답(Gantt 프로젝트에 대해 자유 질문에 답하는 챗봇)" 프롬프트와, 이 프롬프트로 답변했을 때 사용자가 "나쁨"으로 평가한 사례입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}${PROTECTED_STRUCTURE_RULE}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n\n반드시 아래 형식 그대로만 응답하세요. JSON이나 코드블록(\`\`\`)은 절대 사용하지 마세요.\n\n===ANALYSIS===\n(여기에 문제점 분석을 3줄 이내로 작성)\n===PROMPT===\n(여기에 개선된 프롬프트 전문을 기존과 동일한 형식으로 작성)\n===END===`;
+
+        if (window.showToast) window.showToast('🤖 AI 개선 요청 중...', 'info');
+        try {
+            const callResult = await window.callAiBackend(apiKey, improvePrompt);
+            if (!callResult.ok) throw callResult.error;
+            const data = callResult.data;
+            const text = data.result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            const cleaned = text.replace(/```[a-z]*|```/gi, '').trim();
+            const analysisMatch = cleaned.match(/===ANALYSIS===([\s\S]*?)===PROMPT===/);
+            const promptMatch   = cleaned.match(/===PROMPT===([\s\S]*?)(===END===|$)/);
+            const analysis = analysisMatch ? analysisMatch[1].trim() : '';
+            const improvedPrompt = promptMatch ? promptMatch[1].trim() : '';
+            const isTruncated = !/===END===/.test(cleaned);
+
+            if (!improvedPrompt) throw new Error('AI 응답 형식을 해석하지 못했습니다.');
+            const structIssues = window.validateGanttQaPromptStructure(improvedPrompt);
+            window.showQaImprovePreviewModal(analysis, improvedPrompt, targetUids, currentPrompt, isTruncated, structIssues);
+        } catch (e) {
+            alert('❌ AI 개선 요청 실패: ' + (e && e.message ? e.message : e));
+        }
+    };
+
+    // ── 💡 개선 결과 미리보기 모달 (diff 유틸은 AI 요약과 공유, 모달 자체는 별도) ──────────
+    window.showQaImprovePreviewModal = function(analysis, improvedPrompt, targetUids, originalPrompt, isTruncated, structIssues) {
+        let modal = document.getElementById('gantt-qa-improve-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'gantt-qa-improve-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
+            modal.innerHTML = `
+            <div id="gantt-qa-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
+                <div id="gantt-qa-improve-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
+                    <span>🤖 AI 프롬프트 개선 제안 (AI 문답)</span>
+                    <button onclick="document.getElementById('gantt-qa-improve-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                </div>
+                <div id="gantt-qa-improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
+                <div id="gantt-qa-improve-struct-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#ffe3e3; border:1px solid #e03131; border-radius:6px; font-size:12px; color:#c92a2a;"></div>
+                <div style="padding:12px 16px; flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:10px;">
+                    <div>
+                        <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">🔍 문제점 분석</div>
+                        <div id="gantt-qa-improve-analysis-text" style="font-size:12px; color:#333; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; padding:10px; white-space:pre-wrap; line-height:1.6;"></div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">🔀 변경사항 (원본 대비)
+                            <span style="font-weight:normal; color:#999;">(빨강=삭제, 초록=추가)</span>
+                        </div>
+                        <div id="gantt-qa-improve-diff-view" style="max-height:220px; overflow-y:auto; font-size:11.5px; font-family:'Malgun Gothic',monospace; border:1px solid #e6e9ef; border-radius:6px; line-height:1.5; background:#fff;"></div>
+                    </div>
+                    <div style="flex:1; display:flex; flex-direction:column;">
+                        <div style="font-size:12px; font-weight:bold; color:#495057; margin-bottom:4px;">✏️ 개선된 프롬프트 (수정 가능)</div>
+                        <textarea id="gantt-qa-improve-prompt-textarea" style="flex:1; min-height:200px; font-size:12px; font-family:'Malgun Gothic',monospace; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:vertical; line-height:1.6;"></textarea>
+                    </div>
+                </div>
+                <div style="padding:12px 16px; display:flex; gap:8px; border-top:1px solid #eee;">
+                    <button onclick="window.applyImprovedQaPrompt()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✅ 채택</button>
+                    <button onclick="document.getElementById('gantt-qa-improve-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1; padding:10px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;">❌ 무시</button>
+                </div>
+            </div>`;
+            document.body.appendChild(modal);
+            window._makeDraggable('gantt-qa-improve-box', 'gantt-qa-improve-drag');
+            window._bindClickToFront('gantt-qa-improve-modal');
+        }
+
+        const warnBar = document.getElementById('gantt-qa-improve-truncate-warning');
+        warnBar.textContent = '⚠️ AI 응답이 중간에 잘렸을 수 있습니다 (종료 마커 없음). 채택 전 아래 프롬프트 끝부분을 꼭 확인하세요.';
+        warnBar.style.display = isTruncated ? 'block' : 'none';
+
+        const structBar = document.getElementById('gantt-qa-improve-struct-warning');
+        if (structIssues && structIssues.length) {
+            structBar.innerHTML = '🚨 다른 코드가 의존하는 필수 요소가 빠진 것 같습니다: <b>' + structIssues.join(', ') + '</b>';
+            structBar.style.display = 'block';
+        } else {
+            structBar.style.display = 'none';
+        }
+
+        document.getElementById('gantt-qa-improve-diff-view').innerHTML = window.renderPromptDiffHtml(originalPrompt || '', improvedPrompt);
+        document.getElementById('gantt-qa-improve-analysis-text').textContent = analysis;
+        document.getElementById('gantt-qa-improve-prompt-textarea').value = improvedPrompt;
+        modal._targetUids = targetUids || [];
+        modal.style.display = 'block';
+        window.bringModalToFront('gantt-qa-improve-modal');
+    };
+
+    // ── 💡 개선 프롬프트 채택 ───────────────────────────────────────────────
+    window.applyImprovedQaPrompt = async function() {
+        const text = document.getElementById('gantt-qa-improve-prompt-textarea').value.trim();
+        if (!text) { alert('프롬프트가 비어있습니다.'); return; }
+
+        if (!window.verifyAdminPassword('🔒 개선된 프롬프트를 채택하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
+            alert('❌ 비밀번호 인증 실패. 채택이 취소되었습니다.');
+            return;
+        }
+
+        const oldPrompt = localStorage.getItem('gantt_qa_prompt') || window._defaultGanttQaPromptTemplate || '';
+        window._ganttQaPromptVersion = (window._ganttQaPromptVersion || 1) + 1;
+        localStorage.setItem('gantt_qa_prompt_version', String(window._ganttQaPromptVersion));
+        localStorage.setItem('gantt_qa_prompt', text);
+
+        // ✅ 변경 이력 저장 — 이력 테이블(showQaPromptLogs)은 gantt_qa_prompt_logs를 읽으므로, 버전
+        //    스냅샷(versions)만 남기고 이 로그를 빼먹으면 AI 개선으로 채택한 버전이 이력 화면에 안 보인다.
+        let qaLogs = JSON.parse(localStorage.getItem('gantt_qa_prompt_logs') || '[]');
+        qaLogs.push({
+            time: new Date().toLocaleString('ko-KR'),
+            userName: (window.currentUserName || localStorage.getItem('gantt_local_user') || '알 수 없음') + ' (AI개선 채택 v' + window._ganttQaPromptVersion + ')',
+            oldPrompt: oldPrompt.substring(0, 200) + (oldPrompt.length > 200 ? '...' : ''),
+            newPrompt: text.substring(0, 200) + (text.length > 200 ? '...' : '')
+        });
+        if (qaLogs.length > 20) qaLogs = qaLogs.slice(-20);
+        localStorage.setItem('gantt_qa_prompt_logs', JSON.stringify(qaLogs));
+        window.saveQaPromptVersionSnapshot(text, 'AI개선 채택 v' + window._ganttQaPromptVersion);
+
+        const modal = document.getElementById('gantt-qa-improve-modal');
+        const uids = (modal && modal._targetUids) || [];
+        if (uids.length) {
+            const log = JSON.parse(localStorage.getItem(_QAF_KEY) || '[]');
+            uids.forEach(function(uid) {
+                const it = log.find(function(x) { return x.uid === uid; });
+                if (it) it.improved = true;
+            });
+            localStorage.setItem(_QAF_KEY, JSON.stringify(log));
+        }
+
+        if (window.isDriveConnected && window.saveGanttQaPromptToDrive) {
+            const ok = await window.saveGanttQaPromptToDrive(text);
+            if (ok) {
+                localStorage.removeItem('gantt_qa_prompt_pending_push');
+                alert('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._ganttQaPromptVersion + ')');
+            } else {
+                localStorage.setItem('gantt_qa_prompt_pending_push', '1');
+                alert('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.');
+            }
+        } else {
+            localStorage.setItem('gantt_qa_prompt_pending_push', '1');
+            alert('✅ 개선된 프롬프트가 채택되었습니다. (v' + window._ganttQaPromptVersion + ')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)');
+        }
+        modal.style.display = 'none';
+        if (document.getElementById('gantt-qa-prompt-textarea')) document.getElementById('gantt-qa-prompt-textarea').value = text;
     };
 
     window.clearGanttQaChat = function() {
@@ -9696,17 +9975,23 @@ ${question}
             <div id="gantt-qa-prompt-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
                 <div id="gantt-qa-prompt-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>📝 AI 문답 — 프롬프트 편집</span>
-                    <button onclick="document.getElementById('gantt-qa-prompt-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                    <div style="display:flex; gap:6px; align-items:center;">
+                        <button onclick="event.stopPropagation(); window.showQaPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
+                        <button onclick="document.getElementById('gantt-qa-prompt-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                    </div>
                 </div>
                 <div id="gantt-qa-prompt-notice" style="margin:10px 18px 0; padding:8px 12px; font-size:11px; color:#495057; background:#eef3f8; border-radius:6px; line-height:1.5;"></div>
                 <div id="gantt-qa-prompt-meta" style="padding:4px 18px 0; font-size:10.5px; color:#aaa;"></div>
                 <div style="flex:1; padding:10px 18px; overflow:hidden; display:flex; flex-direction:column;">
                     <textarea id="gantt-qa-prompt-textarea" readonly style="flex:1; width:100%; resize:none; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; line-height:1.5; background:#f8f9fa; color:#555;"></textarea>
+                    <input id="gantt-qa-save-memo" type="text" maxlength="40" placeholder="💬 이번 저장 메모 (선택, 예: 추론 허용 문구 추가 v1)"
+                        style="display:none; width:100%; margin-top:8px; padding:7px 10px; border:1px solid #ced4da; border-radius:6px; font-size:12px; box-sizing:border-box; flex-shrink:0;">
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">
                     <button id="gantt-qa-prompt-unlock-btn" onclick="window.unlockGanttQaPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔒 수정하기</button>
                     <button id="gantt-qa-prompt-save-btn" onclick="window.saveGanttQaPromptFromModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">💾 저장</button>
                     <button id="gantt-qa-prompt-reset-btn" onclick="window.resetGanttQaPromptInModal()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; min-width:120px; padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
+                    <button onclick="window.triggerGanttQaPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
                 </div>
             </div>`;
             document.body.appendChild(modal);
@@ -9731,6 +10016,8 @@ ${question}
         document.getElementById('gantt-qa-prompt-unlock-btn').style.display = 'block';
         document.getElementById('gantt-qa-prompt-save-btn').style.display = 'none';
         document.getElementById('gantt-qa-prompt-reset-btn').style.display = 'none';
+        const memoEl0 = document.getElementById('gantt-qa-save-memo');
+        if (memoEl0) memoEl0.style.display = 'none';
         const notice = document.getElementById('gantt-qa-prompt-notice');
         notice.style.background = '#eef3f8';
         notice.style.color = '#495057';
@@ -9752,6 +10039,8 @@ ${question}
         document.getElementById('gantt-qa-prompt-unlock-btn').style.display = 'none';
         document.getElementById('gantt-qa-prompt-save-btn').style.display = 'block';
         document.getElementById('gantt-qa-prompt-reset-btn').style.display = 'block';
+        const memoEl = document.getElementById('gantt-qa-save-memo');
+        if (memoEl) memoEl.style.display = 'block';
         const notice = document.getElementById('gantt-qa-prompt-notice');
         notice.textContent = '✏️ 프롬프트를 자유롭게 수정하세요. "${todayStr}"·"${taskListText}"·"${question}" 처럼 "${...}"로 표시된 자리는 실제 답변 생성 시 데이터로 자동 치환되니 그대로 유지하세요(지우거나 철자를 바꾸면 그 자리엔 데이터 대신 글자 그대로 나갑니다).';
         notice.style.color = '#0056b3';
@@ -9762,8 +10051,27 @@ ${question}
         const text = document.getElementById('gantt-qa-prompt-textarea').value.trim();
         if (!text) { alert('프롬프트 내용이 비어있습니다.'); return; }
 
-        window._ganttQaPromptVersion = (window._ganttQaPromptVersion || 1) + 1;
-        localStorage.setItem('gantt_qa_prompt_version', String(window._ganttQaPromptVersion));
+        // ✅ 변경 이력 저장 (AI 요약/AI 업무분석 프롬프트 편집과 동일한 이력 기능)
+        const oldPrompt = localStorage.getItem('gantt_qa_prompt') || window._defaultGanttQaPromptTemplate || '';
+        if (oldPrompt !== text) {
+            let logs = JSON.parse(localStorage.getItem('gantt_qa_prompt_logs') || '[]');
+            logs.push({
+                time: new Date().toLocaleString('ko-KR'),
+                userName: window.currentUserName || localStorage.getItem('gantt_local_user') || '알 수 없음',
+                oldPrompt: oldPrompt.substring(0, 200) + (oldPrompt.length > 200 ? '...' : ''),
+                newPrompt: text.substring(0, 200) + (text.length > 200 ? '...' : '')
+            });
+            if (logs.length > 20) logs = logs.slice(-20);
+            localStorage.setItem('gantt_qa_prompt_logs', JSON.stringify(logs));
+
+            window._ganttQaPromptVersion = (window._ganttQaPromptVersion || 1) + 1;
+            localStorage.setItem('gantt_qa_prompt_version', String(window._ganttQaPromptVersion));
+            const memoEl = document.getElementById('gantt-qa-save-memo');
+            const memo = memoEl && memoEl.value.trim() ? ': ' + memoEl.value.trim() : '';
+            window.saveQaPromptVersionSnapshot(text, '수동 저장 v' + window._ganttQaPromptVersion + memo);
+            if (memoEl) memoEl.value = '';
+        }
+
         localStorage.setItem('gantt_qa_prompt', text);
 
         // 💡 드라이브 미연동/업로드 실패 시 "아직 못 올린 로컬 변경"으로 표시 — 나중에 드라이브가 연결됐을
@@ -9780,8 +10088,102 @@ ${question}
     };
 
     window.resetGanttQaPromptInModal = function() {
-        if (!confirm('기본 프롬프트로 되돌릴까요? (지금까지의 수정 내용은 사라집니다)')) return;
+        if (!confirm('편집 중인 내용을 버리고 기본 프롬프트로 되돌릴까요?')) return;
+        // 💡 리셋도 되돌릴 수 있도록, 리셋 전 현재 프롬프트를 스냅샷으로 남김
+        const current = localStorage.getItem('gantt_qa_prompt');
+        if (current) window.saveQaPromptVersionSnapshot(current, '기본값 초기화 전 백업');
         document.getElementById('gantt-qa-prompt-textarea').value = window._defaultGanttQaPromptTemplate || '';
+    };
+
+    // ── 💡 프롬프트 변경 이력 모달 — AI 요약/AI 업무분석의 표준 패턴(단일 ✕, 드래그 가능,
+    //    배경 비차단)을 그대로 따름 ──────────────────────────────────────────────
+    window.saveQaPromptVersionSnapshot = function(promptText, note) {
+        window._ganttQaPromptVersion = (window._ganttQaPromptVersion || 1);
+        let versions = JSON.parse(localStorage.getItem('gantt_qa_prompt_versions') || '[]');
+        versions.push({
+            version: window._ganttQaPromptVersion,
+            time: new Date().toLocaleString('ko-KR'),
+            userName: (window.currentUserName || localStorage.getItem('gantt_local_user') || '알 수 없음') + (note ? ' (' + note + ')' : ''),
+            prompt: promptText
+        });
+        if (versions.length > 20) versions = versions.slice(-20);
+        localStorage.setItem('gantt_qa_prompt_versions', JSON.stringify(versions));
+    };
+
+    window.showQaPromptLogs = function() {
+        let logs = JSON.parse(localStorage.getItem('gantt_qa_prompt_logs') || '[]');
+        let versions = JSON.parse(localStorage.getItem('gantt_qa_prompt_versions') || '[]');
+        if (logs.length === 0) { alert('프롬프트 변경 이력이 없습니다.'); return; }
+
+        let logModal = document.getElementById('gantt-qa-prompt-log-modal');
+        if (!logModal) {
+            logModal = document.createElement('div');
+            logModal.id = 'gantt-qa-prompt-log-modal';
+            logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none; background:none; align-items:center; justify-content:center;';
+            logModal.innerHTML = `
+                <div id="gantt-qa-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
+                    <div id="gantt-qa-prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;color:#1971c2;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
+                        <span>🕒 AI 문답 — 프롬프트 변경 이력</span>
+                        <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-prompt-log-modal').style.display='none'"
+                            style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
+                                   color:#1a4f7a; font-size:16px; cursor:pointer;
+                                   width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
+                                   display:flex; align-items:center; justify-content:center; transition:0.15s;"
+                            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
+                            onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                            title="닫기">✕</button>
+                    </div>
+                    <div id="gantt-qa-prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
+                    <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">
+                        <button onclick="window.clearQaPromptLogs()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1;padding:10px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;transition:background .15s, border-color .15s;">🗑️ 이력 삭제</button>
+                        <button onclick="document.getElementById('gantt-qa-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">✖ 닫기</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(logModal);
+            window._makeDraggable('gantt-qa-prompt-log-box', 'gantt-qa-prompt-log-drag');
+            window._bindClickToFront('gantt-qa-prompt-log-modal');
+        }
+
+        let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;">';
+        html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
+        [...logs].reverse().forEach((log) => {
+            const matched = versions.find(v => v.time === log.time);
+            const restoreBtn = matched
+                ? `<button onclick="window.restoreQaPromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 복원</button>`
+                : `<span style="font-size:10px; color:#ccc;">-</span>`;
+            html += `<tr>
+                <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;color:#6c757d;">${log.time}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;white-space:nowrap;font-weight:bold;color:#0056b3;">${log.userName}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#dc3545;word-break:break-all;">${log.oldPrompt}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;font-size:11px;color:#0f5132;word-break:break-all;">${log.newPrompt}</td>
+                <td style="padding:8px;border:1px solid #dee2e6;text-align:center;">${restoreBtn}</td>
+            </tr>`;
+        });
+        html += '</table>';
+
+        document.getElementById('gantt-qa-prompt-log-content').innerHTML = html;
+        logModal.style.display = 'flex';
+        window.bringModalToFront('gantt-qa-prompt-log-modal');
+    };
+
+    // 💡 특정 버전으로 복원 — 즉시 저장하지 않고 편집창에 불러와서 검토 후 저장하도록 유도
+    window.restoreQaPromptVersion = function(version) {
+        const versions = JSON.parse(localStorage.getItem('gantt_qa_prompt_versions') || '[]');
+        const target = versions.find(v => v.version === version);
+        if (!target) { alert('해당 버전을 찾을 수 없습니다.'); return; }
+
+        document.getElementById('gantt-qa-prompt-log-modal').style.display = 'none';
+        const textarea = document.getElementById('gantt-qa-prompt-textarea');
+        if (textarea) textarea.value = target.prompt;
+        alert('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 저장] 버튼을 눌러야 최종 반영됩니다.');
+    };
+
+    window.clearQaPromptLogs = function() {
+        if (!confirm('프롬프트 변경 이력을 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+        localStorage.removeItem('gantt_qa_prompt_logs');
+        localStorage.removeItem('gantt_qa_prompt_versions');
+        document.getElementById('gantt-qa-prompt-log-modal').style.display = 'none';
+        alert('✅ 이력이 삭제되었습니다.');
     };
 
     // ═══════════════════════════════════════════════════════════
