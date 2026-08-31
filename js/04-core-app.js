@@ -9111,7 +9111,7 @@ window.deleteHistoryByDateRange = function() {
         const _asIdTexts = {
             'as-modal-title':          { ko:'⚙️ 알람 설정',                       en:'⚙️ Alarm Settings' },
             'sec-server-label':        { ko:'📥 처음 사용자 — 설치 안내',          en:'📥 First-time Setup Guide' },
-            'ig-tab-setup':            { ko:'⚙️ KORTEK Backend 설치 (Step 1~4)', en:'⚙️ Install KORTEK Backend (Step 1~4)' },
+            'ig-tab-setup':            { ko:'⚙️ Backend 설치 (Step 1~4)', en:'⚙️ Install Backend (Step 1~4)' },
             'ig-tab-telegram':         { ko:'📱 Telegram (Step 5)',               en:'📱 Telegram (Step 5)' },
             'sec-email-label':         { ko:'🖥️ 이메일 서버 설정',                en:'🖥️ Email Server Settings' },
             'as-lbl-host':             { ko:'서버 주소',                          en:'Server' },
