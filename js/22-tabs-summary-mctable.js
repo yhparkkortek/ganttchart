@@ -2357,7 +2357,9 @@ window.openAlarmSettings = function() {
     window.refreshAlarmAutoButtons(cfg.autoSend !== false);
     window.renderAlarmDomainList();
     document.getElementById('alarm-settings-overlay').style.display = 'flex';
-    document.getElementById('alarm-settings-modal').style.display  = 'block';
+    // 💡 반드시 'flex'로 열어야 헤더/본문 스크롤/푸터 3단 레이아웃(flex-direction:column)이 적용됨
+    //    ('block'으로 열면 CSS의 display:flex가 인라인 스타일에 덮여 무효화됨 — notice-modal과 동일 이슈)
+    document.getElementById('alarm-settings-modal').style.display  = 'flex';
     window.bringModalToFront('alarm-settings-modal');
 };
 
