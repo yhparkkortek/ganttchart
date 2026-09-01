@@ -2250,7 +2250,7 @@ ${mailText}`;
             }
             const label = fileName || (_en ? 'this project' : '이 프로젝트');
             modal.innerHTML = `
-                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(420px, 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
+                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
                     <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:10px;">💾 ${labels.title}</div>
                     <div style="font-size:13px; color:#666; line-height:1.6; margin-bottom:18px; white-space:pre-wrap;">${_en
                         ? `You have unsaved changes in "${escapeHtml(label)}".`
@@ -2285,7 +2285,7 @@ ${mailText}`;
             }
             const label = fileName || (_en ? 'this project' : '이 프로젝트');
             modal.innerHTML = `
-                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(460px, 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px; border-top:5px solid #e67e22;">
+                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px; border-top:5px solid #e67e22;">
                     <div style="font-size:15px; font-weight:bold; color:#b85c00; margin-bottom:10px;">⚠️ ${_en ? 'Someone else saved more recently' : '다른 사용자가 더 최근에 저장했습니다'}</div>
                     <div style="font-size:13px; color:#555; line-height:1.7; margin-bottom:18px; white-space:pre-wrap;">${_en
                         ? `Since you last opened/saved "${escapeHtml(label)}", another user has already saved changes to it.\n\nIf you continue, your save will overwrite their changes (only the task-distribution log is safely merged — everything else is not).`
@@ -2949,13 +2949,13 @@ ${mailText}`;
             modal.id = 'holiday-manager-modal';
             modal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:none; pointer-events:none; z-index:99999; align-items:center; justify-content:center;';
             modal.innerHTML =
-                '<div id="holiday-modal-box" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:480px; max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
+                '<div id="holiday-modal-box" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-sm); max-width:92vw; max-height:82vh; display:flex; flex-direction:column; box-shadow:0 4px 24px rgba(0,0,0,0.25);">'
                 + '<div id="holiday-drag-handle" style="padding:13px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a; display:flex; justify-content:space-between; align-items:center;">'
                 + '<span style="font-size:14px; font-weight:bold; color:#7a5210;">' + (_hEn ? '🗓️ Holiday Registration' : '🗓️ 휴일 등록 (추가 휴일)') + '</span>'
                 + '<button onclick="document.getElementById(\'holiday-manager-modal\').style.display=\'none\'"'
-                + ' style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"'
-                + ' onmouseover="this.style.background=\'#ffe9b8\'; this.style.borderColor=\'#e6c070\';"'
-                + ' onmouseout="this.style.background=\'#fff8e6\'; this.style.borderColor=\'#ffe08a\';"'
+                + ' style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"'
+                + ' onmouseover="this.style.background=\'var(--modal-icon-hover-bg)\'; this.style.borderColor=\'#adb5bd\';"'
+                + ' onmouseout="this.style.background=\'var(--modal-icon-bg)\'; this.style.borderColor=\'var(--modal-icon-border)\';"'
                 + ' title="닫기">✕</button>'
                 + '</div>'
                 + '<div id="holiday-sync-notice" style="padding:12px 18px; font-size:11px; color:#888; line-height:1.5; border-bottom:1px solid #f1f3f5;">'
@@ -5596,12 +5596,12 @@ ${recentLogs}
             modal.id = 'ai-summary-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="ai-summary-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:360px;">
+            <div id="ai-summary-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:360px;">
                 <div id="ai-summary-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>🤖 AI 프로젝트 요약</span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button onclick="event.stopPropagation(); window.openProjectSummaryPromptModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="이 리포트를 만들 때 AI에게 보내는 프롬프트(지시문)를 팀 공용으로 편집합니다" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">✏️ 프롬프트</button>
-                        <button onclick="document.getElementById('ai-summary-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                        <button onclick="document.getElementById('ai-summary-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div id="ai-summary-body" style="overflow-y:auto; flex:1; padding:16px 18px;"></div>
@@ -5630,12 +5630,12 @@ ${recentLogs}
             modal.id = 'ai-summary-prompt-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="ai-summary-prompt-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
+            <div id="ai-summary-prompt-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
                 <div id="ai-summary-prompt-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>✏️ AI 프로젝트 요약 — 프롬프트 편집</span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button onclick="event.stopPropagation(); window.showPsPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
-                        <button onclick="document.getElementById('ai-summary-prompt-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                        <button onclick="document.getElementById('ai-summary-prompt-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div id="ai-summary-prompt-notice" style="margin:10px 18px 0; padding:8px 12px; font-size:11px; color:#495057; background:#eef3f8; border-radius:6px; line-height:1.5;"></div>
@@ -5647,7 +5647,7 @@ ${recentLogs}
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">
                     <button id="ai-summary-unlock-btn" onclick="window.unlockPsPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔒 수정하기</button>
-                    <button id="ai-summary-save-btn" onclick="window.saveProjectSummaryPromptFromModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">💾 저장</button>
+                    <button id="ai-summary-save-btn" onclick="window.saveProjectSummaryPromptFromModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">저장</button>
                     <button id="ai-summary-reset-btn" onclick="window.resetProjectSummaryPromptInModal()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; min-width:120px; padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
                     <button onclick="window.triggerProjectSummaryPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
                 </div>
@@ -5787,22 +5787,22 @@ ${recentLogs}
             logModal.id = 'ps-prompt-log-modal';
             logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none; background:none; align-items:center; justify-content:center;';
             logModal.innerHTML = `
-                <div id="ps-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
+                <div id="ps-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                     <div id="ps-prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;color:#1971c2;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
                         <span>🕒 AI 프로젝트 요약 — 프롬프트 변경 이력</span>
                         <button onclick="event.stopPropagation(); document.getElementById('ps-prompt-log-modal').style.display='none'"
-                            style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
-                                   color:#1a4f7a; font-size:16px; cursor:pointer;
+                            style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+                                   color:var(--modal-icon-text); font-size:16px; cursor:pointer;
                                    width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                                    display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
-                            onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                            onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+                            onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
                             title="닫기">✕</button>
                     </div>
                     <div id="ps-prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
                     <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">
                         <button onclick="window.clearPsPromptLogs()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1;padding:10px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;transition:background .15s, border-color .15s;">🗑️ 이력 삭제</button>
-                        <button onclick="document.getElementById('ps-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">✖ 닫기</button>
+                        <button onclick="document.getElementById('ps-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">닫기</button>
                     </div>
                 </div>`;
             document.body.appendChild(logModal);
@@ -5918,10 +5918,10 @@ ${recentLogs}
             //    배경을 클릭했는데 모달이 닫혀버리는 게 불편하다는 피드백. 이제 ✕ 버튼으로만 닫힘.
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.22);';
             modal.innerHTML = `
-            <div id="ps-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:200px;">
+            <div id="ps-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:200px;">
                 <div id="ps-improve-comment-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>✏️ 어떤 부분이 문제였나요?</span>
-                    <button onclick="event.stopPropagation(); document.getElementById('ps-improve-comment-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                    <button onclick="event.stopPropagation(); document.getElementById('ps-improve-comment-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="padding:18px;">
                     <textarea id="ps-improve-comment-input" placeholder="예: 완료율이 높은데도 신호등을 🔴로 판단함 (선택 입력)"
@@ -6037,10 +6037,10 @@ ${recentLogs}
             modal.id = 'ps-improve-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="ps-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
+            <div id="ps-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                 <div id="ps-improve-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>🤖 AI 프롬프트 개선 제안 (프로젝트 요약)</span>
-                    <button onclick="document.getElementById('ps-improve-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                    <button onclick="document.getElementById('ps-improve-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div id="ps-improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
                 <div id="ps-improve-struct-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#ffe3e3; border:1px solid #e03131; border-radius:6px; font-size:12px; color:#c92a2a;"></div>
@@ -6796,10 +6796,10 @@ ${question}
             modal.id = 'ai-mail-view-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="ai-mail-view-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:280px;">
+            <div id="ai-mail-view-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:280px;">
                 <div id="ai-mail-view-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; color:#7a5210; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab;">
                     <span id="ai-mail-view-title">📧 ${_en ? 'Original mail' : '원본 메일'}</span>
-                    <button onclick="document.getElementById('ai-mail-view-modal').style.display='none'" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
+                    <button onclick="document.getElementById('ai-mail-view-modal').style.display='none'" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
                 </div>
                 <div id="ai-mail-view-body" style="padding:14px 18px; flex:1; overflow-y:auto; font-size:12.5px; white-space:pre-wrap; line-height:1.6; color:#333;"></div>
             </div>`;
@@ -7116,10 +7116,10 @@ ${question}
             modal.id = 'gantt-qa-improve-comment-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9250; background:rgba(255,218,185,0.22);';
             modal.innerHTML = `
-            <div id="gantt-qa-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:200px;">
+            <div id="gantt-qa-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:200px;">
                 <div id="gantt-qa-improve-comment-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>✏️ 어떤 부분이 문제였나요?</span>
-                    <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-improve-comment-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                    <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-improve-comment-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="padding:18px;">
                     <textarea id="gantt-qa-improve-comment-input" placeholder="예: 데이터에 있는 값인데도 '데이터에서 확인되지 않습니다'라고 답함 (선택 입력)"
@@ -7223,10 +7223,10 @@ ${question}
             modal.id = 'gantt-qa-improve-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="gantt-qa-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
+            <div id="gantt-qa-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                 <div id="gantt-qa-improve-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>🤖 AI 프롬프트 개선 제안 (AI 문답)</span>
-                    <button onclick="document.getElementById('gantt-qa-improve-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                    <button onclick="document.getElementById('gantt-qa-improve-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div id="gantt-qa-improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
                 <div id="gantt-qa-improve-struct-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#ffe3e3; border:1px solid #e03131; border-radius:6px; font-size:12px; color:#c92a2a;"></div>
@@ -7345,12 +7345,12 @@ ${question}
             modal.id = 'gantt-qa-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9150; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
+            <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
                 <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 Gantt AI 문답</span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">📝 프롬프트</button>
-                        <button onclick="document.getElementById('gantt-qa-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                        <button onclick="document.getElementById('gantt-qa-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div style="padding:8px 18px 0; font-size:10.5px; color:#999;">현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)</div>
@@ -7385,12 +7385,12 @@ ${question}
             modal.id = 'gantt-qa-prompt-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="gantt-qa-prompt-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
+            <div id="gantt-qa-prompt-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
                 <div id="gantt-qa-prompt-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>📝 AI 문답 — 프롬프트 편집</span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button onclick="event.stopPropagation(); window.showQaPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
-                        <button onclick="document.getElementById('gantt-qa-prompt-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                        <button onclick="document.getElementById('gantt-qa-prompt-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div id="gantt-qa-prompt-notice" style="margin:10px 18px 0; padding:8px 12px; font-size:11px; color:#495057; background:#eef3f8; border-radius:6px; line-height:1.5;"></div>
@@ -7402,7 +7402,7 @@ ${question}
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">
                     <button id="gantt-qa-prompt-unlock-btn" onclick="window.unlockGanttQaPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔒 수정하기</button>
-                    <button id="gantt-qa-prompt-save-btn" onclick="window.saveGanttQaPromptFromModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">💾 저장</button>
+                    <button id="gantt-qa-prompt-save-btn" onclick="window.saveGanttQaPromptFromModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">저장</button>
                     <button id="gantt-qa-prompt-reset-btn" onclick="window.resetGanttQaPromptInModal()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; min-width:120px; padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
                     <button onclick="window.triggerGanttQaPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
                 </div>
@@ -7534,22 +7534,22 @@ ${question}
             logModal.id = 'gantt-qa-prompt-log-modal';
             logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none; background:none; align-items:center; justify-content:center;';
             logModal.innerHTML = `
-                <div id="gantt-qa-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:600px; max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
+                <div id="gantt-qa-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                     <div id="gantt-qa-prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;color:#1971c2;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
                         <span>🕒 AI 문답 — 프롬프트 변경 이력</span>
                         <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-prompt-log-modal').style.display='none'"
-                            style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
-                                   color:#1a4f7a; font-size:16px; cursor:pointer;
+                            style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+                                   color:var(--modal-icon-text); font-size:16px; cursor:pointer;
                                    width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                                    display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
-                            onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                            onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+                            onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
                             title="닫기">✕</button>
                     </div>
                     <div id="gantt-qa-prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
                     <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">
                         <button onclick="window.clearQaPromptLogs()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1;padding:10px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;transition:background .15s, border-color .15s;">🗑️ 이력 삭제</button>
-                        <button onclick="document.getElementById('gantt-qa-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">✖ 닫기</button>
+                        <button onclick="document.getElementById('gantt-qa-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">닫기</button>
                     </div>
                 </div>`;
             document.body.appendChild(logModal);
@@ -7670,10 +7670,10 @@ ${question}
             modal.id = 'ai-tools-settings-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9160; pointer-events:none; background:none;';
             modal.innerHTML = `
-            <div id="ai-tools-settings-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:640px; max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
+            <div id="ai-tools-settings-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
                 <div id="ai-tools-settings-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2; flex-shrink:0;">
                     <span>⚙️ AI 분석 설정</span>
-                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">✕</button>
+                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
 
@@ -7795,8 +7795,8 @@ ${question}
 
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
-                    <button onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
-                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">✖ 닫기</button>
+                    <button onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
+                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
                 </div>
             </div>`;
             document.body.appendChild(modal);

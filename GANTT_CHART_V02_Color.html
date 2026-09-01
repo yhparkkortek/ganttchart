@@ -197,19 +197,19 @@
      저장/닫기 버튼을 보려면 끝까지 스크롤해야 했다(헤더도 같이 스크롤되어 사라짐). notice-modal과
      동일하게 헤더/푸터는 고정하고 가운데 섹션 영역만 스크롤되도록 3단 flex 레이아웃으로 변경. -->
 <div id="alarm-settings-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-  width:480px; max-width:94vw; height:80vh; max-height:90vh; overflow:hidden; resize:both; min-width:360px; min-height:300px;
+  width:var(--modal-w-sm); max-width:94vw; height:auto; max-height:90vh; overflow:hidden; resize:both; min-width:360px; min-height:300px;
   background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   font-family:'맑은 고딕',sans-serif; flex-direction:column;">
 
   <div id="alarm-settings-drag-handle" style="display:flex; align-items:center; justify-content:space-between; padding:13px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a; flex-shrink:0;">
     <h3 id="as-modal-title" style="margin:0; font-size:14px; color:#7a5210;">⚙️ 알람 설정</h3>
     <button onclick="window.closeAlarmSettings()"
-        style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px;
-               color:#7a5210; font-size:16px; cursor:pointer;
+        style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+               color:var(--modal-icon-text); font-size:16px; cursor:pointer;
                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';"
-        onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';"
+        onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+        onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
         title="닫기">✕</button>
   </div>
 
@@ -312,7 +312,7 @@
       <p id="as-smtp-privacy-note" style="margin:0 0 8px; font-size:11px; color:#999;">🔒 이 PC 브라우저에 저장 · 공용 PC 사용 비권장</p>
       <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px;">
         <span id="as-smtp-save-msg" style="font-size:11px; color:#27ae60;"></span>
-        <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">💾 저장</button>
+        <button id="as-smtp-save-btn" onclick="window.saveSmtpConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
       </div>
     </div>
   </div>
@@ -339,7 +339,7 @@
         <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)">
       </div>
       <div style="display:flex; gap:6px; align-items:center; justify-content:flex-end;">
-        <button id="as-tg-save-btn" onclick="window.saveTelegramConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">💾 저장</button>
+        <button id="as-tg-save-btn" onclick="window.saveTelegramConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">저장</button>
         <button id="as-tg-test-btn" onclick="window.testTelegram()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:5px 12px; border:1px solid #a8dab8; color:#1f7a3d; background:#e6f6ea; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📨 테스트</button>
         <div style="position:relative; display:inline-block;">
           <button onclick="window._toggleDriveMenu()"
@@ -399,17 +399,17 @@
 <div id="alarm-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
 
 <div id="alarm-modal" style="display:none; pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
-  width:520px; max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
+  width:var(--modal-w-md); max-width:92vw; background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   padding:28px 28px 20px; font-family:'맑은 고딕',sans-serif;">
   <div id="alarm-modal-drag-handle" style="display:flex; align-items:center; justify-content:space-between; margin:-28px -28px 18px; padding:13px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
     <h3 id="alarm-modal-title" style="margin:0; font-size:14px; color:#7a5210;">알람 상세</h3>
     <button onclick="window.closeAlarmModal()"
-        style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px;
-               color:#7a5210; font-size:16px; cursor:pointer;
+        style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+               color:var(--modal-icon-text); font-size:16px; cursor:pointer;
                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';"
-        onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';"
+        onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+        onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
         title="닫기">✕</button>
   </div>
   <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
@@ -427,21 +427,23 @@
 <div id="alarm-schedule-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
 <!-- 💡 [2026-08-31] 공지 등록(notice-modal)과 통일 — 헤더/본문/푸터 3단 flex 레이아웃(헤더·푸터
      고정, 본문만 스크롤) + 섹션 3개(업무 정보/발송 방식/수신 대상)를 알람 설정 모달과 같은 접기·펴기
-     방식으로 재구성. 기본은 전부 펼친 상태로 시작(예전과 동일하게 한 번에 다 보이되, 필요하면 접을 수
-     있음) — id="as-sec-*"는 window._toggleAlarmSection()을 그대로 재사용. -->
+     방식으로 재구성 — id="as-sec-*"는 window._toggleAlarmSection()을 그대로 재사용.
+     💡 [2026-09-01] 기본값을 전부 접힘으로 변경(모달을 열자마자 스크롤이 길어지는 걸 방지) + 모달
+     자체 높이를 height:80vh 고정에서 height:auto로 바꿔서, 접힌 상태에선 낮게·펼치면 내용만큼
+     늘어나도록(최대 max-height까지) 동적으로 조절되게 함. -->
 <div id="alarm-schedule-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-  width:460px; max-width:92vw; height:80vh; max-height:90vh; overflow:hidden; resize:both; min-width:340px; min-height:300px;
+  width:var(--modal-w-sm); max-width:92vw; height:auto; max-height:90vh; overflow:hidden; resize:both; min-width:340px; min-height:300px;
   background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   font-family:'맑은 고딕',sans-serif; flex-direction:column;">
   <div id="alarm-schedule-drag" style="display:flex; align-items:center; justify-content:space-between; padding:13px 18px; cursor:grab; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a; flex-shrink:0;">
     <h3 id="alarm-schedule-title" style="margin:0; font-size:14px; color:#7a5210;">⚙️ 알람 일정 설정</h3>
     <button onclick="window.closeAlarmScheduleModal()"
-        style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px;
-               color:#7a5210; font-size:16px; cursor:pointer;
+        style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+               color:var(--modal-icon-text); font-size:16px; cursor:pointer;
                width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
-        onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';"
-        onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';"
+        onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+        onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
         title="닫기">✕</button>
   </div>
 
@@ -452,9 +454,9 @@
     <div onclick="window._toggleAlarmSection('as-sec-info')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="as-sec-info-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📋 업무 정보</span>
-      <span id="as-sec-info-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="as-sec-info-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="as-sec-info" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="as-sec-info" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <div style="margin-bottom:10px;">
         <label style="font-size:11px; font-weight:bold; color:#555; display:block; margin-bottom:4px;">제목</label>
         <div id="as-info-title" style="padding:7px 10px; background:#f8f9fa; border:1px solid #eee; border-radius:4px; font-size:13px; color:#333;">-</div>
@@ -476,9 +478,9 @@
     <div onclick="window._toggleAlarmSection('as-sec-send')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="as-sec-send-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📤 발송 방식</span>
-      <span id="as-sec-send-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="as-sec-send-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="as-sec-send" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="as-sec-send" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 💡 [2026-08-31 신규] 발송 방식 — 기존 "D-day 목록"(완료예정일 역산) 외에, 공지 시스템과 동일하게
            서버(kortek_backend.py)가 직접 스케줄을 도는 "기간·반복" 방식을 추가. 단, 공지와 달리 이 업무
            알람은 저장 시점 내용을 고정하지 않고 발송 직전 담당자/완료예정일/업무내용을 다시 조회한다. -->
@@ -594,9 +596,9 @@
     <div onclick="window._toggleAlarmSection('as-sec-recip')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="as-sec-recip-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">👥 수신 대상</span>
-      <span id="as-sec-recip-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="as-sec-recip-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="as-sec-recip" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="as-sec-recip" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <div style="display:flex; gap:14px; align-items:center; margin-bottom:6px;">
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
           <input type="radio" name="as-recip-mode" id="as-recip-mode-default" value="default" checked onchange="window._asToggleRecipMode()"> 기본수신
@@ -768,7 +770,7 @@
 
 <!-- ── 공지 등록/수정 모달 ── -->
 <div id="notice-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%); z-index:10000;
-  width:520px; max-width:95vw; height:80vh; max-height:90vh; min-width:400px; min-height:360px;
+  width:var(--modal-w-md); max-width:95vw; height:auto; max-height:90vh; min-width:400px; min-height:360px;
   background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
   font-family:'맑은 고딕',sans-serif; resize:both; overflow:hidden; flex-direction:column;">
 
@@ -776,8 +778,8 @@
        style="display:flex; align-items:center; justify-content:space-between; padding:13px 18px; cursor:grab; user-select:none; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a; flex-shrink:0;">
     <h3 id="notice-modal-title" style="margin:0; font-size:14px; color:#7a5210;">📢 공지 등록</h3>
     <button onclick="window.closeNoticeModal()"
-            style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
-            onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';"
+            style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
+            onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
             onmousedown="event.stopPropagation()">✕</button>
   </div>
 
@@ -792,9 +794,9 @@
     <div onclick="window._toggleAlarmSection('nm-sec-content')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="nm-sec-content-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📝 공지 내용</span>
-      <span id="nm-sec-content-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="nm-sec-content-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="nm-sec-content" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="nm-sec-content" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 제목 -->
       <div style="margin-bottom:12px;">
         <label id="nm-lbl-title" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">제목 *</label>
@@ -816,9 +818,9 @@
     <div onclick="window._toggleAlarmSection('nm-sec-send')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="nm-sec-send-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📤 발송 방식</span>
-      <span id="nm-sec-send-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="nm-sec-send-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="nm-sec-send" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="nm-sec-send" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 💡 [2026-08-31 신규] 발송 방식 — 기존 "D-day 기준"(완료예정일 역산) 외에, 서버가 직접 스케줄을
            도는 "기간·반복" 방식을 추가. 브라우저 탭이 꺼져 있어도 kortek_backend.py만 켜져 있으면 동작함
            (자세한 설계는 대화 참고 — id/type이 있는 규칙은 /schedule API로 백엔드에 등록됨). -->
@@ -933,9 +935,9 @@
     <div onclick="window._toggleAlarmSection('nm-sec-recip')"
          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
       <span id="nm-sec-recip-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">👥 수신 대상</span>
-      <span id="nm-sec-recip-arrow" style="font-size:11px; color:#888;">▼ 접기</span>
+      <span id="nm-sec-recip-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
-    <div id="nm-sec-recip" style="display:block; padding:14px; border-top:1px solid #e8e8e8;">
+    <div id="nm-sec-recip" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <!-- 💡 [2026-08-31 신규] 기본수신(업무별 알람과 공유하는 전체 공용 명단) / 개별수신(이 공지만의
            명단, 기존 동작) — 신규 등록은 항상 개별수신으로 시작(기존과 동일한 자동입력 유지). -->
       <div style="display:flex; gap:14px; align-items:center; margin-bottom:8px;">
@@ -1586,7 +1588,7 @@
         <div class="history-modal" onclick="event.stopPropagation()" style="pointer-events:all;">
             <div class="history-header">
                 <span data-i18n="h-session-history">🕒 변경 이력 (Session History)</span>
-                <button onclick="closeHistoryModal()" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+                <button onclick="closeHistoryModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 20px; border-bottom:1px solid #e3e6ea; background:#f8f9fa; flex-wrap:wrap; font-size:12px; color:#555;">
                 <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
@@ -1599,10 +1601,10 @@
     </div>
 
     <div id="cal-day-popup-overlay" class="modal-overlay" style="pointer-events:none; background:none;" onclick="window.closeCalDayPopup(event)">
-        <div id="cal-day-popup-modal" class="history-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:15vh; left:50%; transform:translateX(-50%); width:420px; max-width:92vw; height:auto; max-height:70vh; min-width:320px; min-height:200px; resize:both; overflow:hidden;">
+        <div id="cal-day-popup-modal" class="history-modal" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:15vh; left:50%; transform:translateX(-50%); width:var(--modal-w-sm); max-width:92vw; height:auto; max-height:70vh; min-width:320px; min-height:200px; resize:both; overflow:hidden;">
             <div id="cal-day-popup-drag" class="history-header" style="cursor:grab; padding:13px 18px; font-size:14px; border-radius:10px 10px 0 0;">
                 <span id="cal-day-popup-title">업무 목록</span>
-                <button onclick="window.closeCalDayPopup()" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+                <button onclick="window.closeCalDayPopup()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div class="history-body" id="cal-day-popup-body" style="padding:14px; overflow-y:auto;"></div>
         </div>
@@ -1610,12 +1612,12 @@
 
     <div id="cal-sync-help-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
         <div id="cal-sync-help-modal" class="history-modal" onclick="event.stopPropagation()"
-             style="pointer-events:all; width:520px; max-width:92vw; height:auto; max-height:80vh;
+             style="pointer-events:all; width:var(--modal-w-md); max-width:92vw; height:auto; max-height:80vh;
                     position:fixed; top:8vh; left:50%; transform:translateX(-50%);
                     display:flex; flex-direction:column;">
             <div id="cal-sync-help-drag" class="history-header" style="cursor:grab; padding:13px 18px; font-size:14px; border-radius:10px 10px 0 0;">
                 <span id="cal-sync-help-title">🔗 Google 자동 동기화</span>
-                <button onclick="window.closeCalSyncHelp()" style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+                <button onclick="window.closeCalSyncHelp()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div style="padding:14px 16px 0; display:flex; gap:8px; flex-shrink:0;">
                 <button id="cal-sync-ics-btn" onclick="window.calExportICS()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; padding:7px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ICS 내보내기 (1회성)</button>
@@ -1645,7 +1647,7 @@
 <div id="drive-file-modal-overlay" class="modal-overlay" style="pointer-events:none; background:none;">
         <div class="history-modal" id="drive-file-modal" onclick="event.stopPropagation()"
              style="pointer-events:all; position:fixed; top:8vh; left:50%; transform:translateX(-50%);
-                    width:min(640px, 92vw); height:auto; max-width:96vw; max-height:82vh;
+                    width:min(var(--modal-w-lg), 92vw); height:auto; max-width:96vw; max-height:82vh;
                     min-width:480px; min-height:280px; resize:both; overflow:hidden;
                     display:flex; flex-direction:column;">
             <div id="drive-drag-handle" class="history-header"
@@ -1653,12 +1655,12 @@
                         cursor:grab; border-bottom:1px solid #ffe08a; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; gap:10px;">
                 <span id="drive-modal-title" style="white-space:nowrap;">📂 프로젝트 불러오기</span>
                 <button onclick="window.closeDriveModal()"
-                    style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px;
-                           color:#7a5210; font-size:16px; cursor:pointer;
+                    style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+                           color:var(--modal-icon-text); font-size:16px; cursor:pointer;
                            width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                    onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';"
-                    onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';"
+                    onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+                    onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
                     title="닫기">✕</button>
             </div>
             <div class="history-body" style="padding: 20px; overflow-y:auto; flex:1;">
@@ -1700,7 +1702,7 @@
 <div id="task-inbox-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
     <div class="history-modal" id="task-inbox-modal" onclick="event.stopPropagation()"
          style="pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-                width:min(704px, 92vw); height:auto; max-width:96vw; max-height:92vh;
+                width:min(var(--modal-w-lg), 92vw); height:auto; max-width:96vw; max-height:92vh;
                 min-width:528px; min-height:280px; resize:both; overflow:hidden;
                 display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
@@ -1716,12 +1718,12 @@
             <div style="display:flex; gap:6px; flex-shrink:0; align-items:center;">
                 <button id="inbox-batch-register-btn" onclick="window.inboxBatchRegisterMatched()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:12px; font-weight:bold; padding:0 10px; height:28px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s, border-color .15s;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
                 <button id="inbox-close-btn" onclick="window.closeTaskInbox()"
-                    style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
-                           color:#1a4f7a; font-size:16px; cursor:pointer;
-                           width:28px; height: 29px; padding:0; line-height:1; box-sizing:border-box;
+                    style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+                           color:var(--modal-icon-text); font-size:16px; cursor:pointer;
+                           width:28px; height:28px; padding:0; line-height:1; box-sizing:border-box;
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                    onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
-                    onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                    onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+                    onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
                     title="닫기">✕</button>
             </div>
         </div>
@@ -1764,7 +1766,7 @@
 <div id="inbox-dist-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
     <div class="history-modal" id="inbox-dist-modal" onclick="event.stopPropagation()"
          style="pointer-events:all; position:fixed; top:9vh; left:50%; transform:translateX(-50%);
-                width:min(640px, 92vw); height:auto; max-width:96vw; max-height:92vh;
+                width:min(var(--modal-w-lg), 92vw); height:auto; max-width:96vw; max-height:92vh;
                 min-width:480px; min-height:280px; resize:both; overflow:hidden;
                 display:flex; flex-direction:column;">
         <!-- 헤더 (드래그 핸들) -->
@@ -1776,12 +1778,12 @@
                 전송 시 📌 알림이 자동 설정되고, 대상 프로젝트의 수정이력과 배분 원장에 함께 기록됩니다.
             </span></span></span>
             <button id="inbox-dist-close-btn" onclick="window.closeInboxDist()"
-                style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px;
-                       color:#1a4f7a; font-size:16px; cursor:pointer;
+                style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
+                       color:var(--modal-icon-text); font-size:16px; cursor:pointer;
                        width:28px; height:28px; padding:0; line-height:1; flex-shrink:0;
                        display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
-                onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+                onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
                 title="닫기">✕</button>
         </div>
         <div style="padding:12px; flex:1; overflow-y:auto; min-height:0; display:flex; flex-direction:column;">
@@ -1806,7 +1808,7 @@
 </div>
 
 <div id="mc-add-unit-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;">
-    <div style="pointer-events:all; background:#fff; border-radius:8px; width:min(360px, 90vw); padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.2);">
+    <div style="pointer-events:all; background:#fff; border-radius:8px; width:min(var(--modal-w-sm), 90vw); padding:20px; box-shadow:0 8px 24px rgba(0,0,0,0.2);">
         <div id="mc-add-unit-title" style="font-size:14px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">➕ 제품구분자 추가</div>
         <div id="mc-add-unit-desc" style="font-size:11px; color:#888; margin-bottom:8px; line-height:1.5;">
             예시) BTN (Button Deck), MAIN (MVD), UPR (TVD,Upper), TPR (Topper)<br>
@@ -1844,8 +1846,8 @@
                 ✏️ 프롬프트
             </button>
             <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
-                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-                style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:16px; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.15s;"
+                onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
+                style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.15s;"
                 title="닫기">✕</button>
         </div>
         <!-- ===== 공통 좌우분할 컨테이너 ===== -->
@@ -2180,14 +2182,14 @@
      계산해 미리보기(실제 앱에는 적용 안 됨 — 순수 시각화용) -->
 <div id="color-palette-modal-overlay" class="modal-overlay" style="display:none; pointer-events:none; background:none;"></div>
 <div id="color-palette-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%);
-    width:760px; max-width:95vw; max-height:88vh; overflow-y:auto; resize:both; min-width:420px; min-height:300px;
+    width:var(--modal-w-lg); max-width:95vw; max-height:88vh; overflow-y:auto; resize:both; min-width:420px; min-height:300px;
     background:#fff; border-radius:10px; box-shadow:0 8px 32px rgba(0,0,0,0.22);
     font-family:'맑은 고딕',sans-serif; z-index:5000;">
     <div id="cp-modal-header" style="display:flex; align-items:center; justify-content:space-between; padding:13px 18px; cursor:grab; user-select:none; background:#fff8e6; border-radius:10px 10px 0 0; border-bottom:1px solid #ffe08a;">
         <h3 style="margin:0; font-size:14px; color:#7a5210;">🎨 컬러 팔레트</h3>
         <button onclick="window.closeColorPaletteModal()" onmousedown="event.stopPropagation()"
-            style="background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; color:#7a5210; font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
-            onmouseover="this.style.background='#ffe9b8'; this.style.borderColor='#e6c070';" onmouseout="this.style.background='#fff8e6'; this.style.borderColor='#ffe08a';">✕</button>
+            style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;"
+            onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
     </div>
     <div style="padding:20px 22px;">
         <div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:4px;">🎨 테마 색상 선택</div>

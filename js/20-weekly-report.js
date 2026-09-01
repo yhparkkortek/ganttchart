@@ -434,7 +434,7 @@
           }
           const curHex = window._cpLiveAppliedHex || '#19c3d6';
           modal.innerHTML = `
-              <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(420px, 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
+              <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
                   <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:14px;">🎨 ${_en ? 'Which theme color should the PPT use?' : 'PPT에 어떤 테마 색상을 쓸까요?'}</div>
                   <div style="display:flex; flex-direction:column; gap:8px;">
                       <button id="pcc-default" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#fff; border:1px solid #cfe3e5; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s; text-align:left;">
