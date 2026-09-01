@@ -1156,6 +1156,17 @@
                     </tr>
                 </tbody>
             </table>
+        </div>
+        </div>
+        <!-- 💡 [2026-09-03 수정] "address 페이지처럼 스크롤" 요청 — 예전엔 이 밑의 개발 진척 현황/
+             프로젝트 멤버/주요 자재/제품 사진/변경 이력까지 전부 #summary-table-scroll(내용에 맞춰
+             줄어드는 max-height 스크롤 상자) 안에 갇혀 있어서, 탭마다 실제 콘텐츠 양이 달라 하단
+             최소화 박스와의 간격이 페이지마다 제각각으로 보였다(Address/Gantt/M.C Table 등은 애초에
+             <table>만 스크롤 컨테이너로 감싸고 나머지는 일반 문서 흐름에 맡겨서 이 문제가 없었음).
+             바로 위에서 .summary-outer-box와 #summary-table-scroll을 표 바로 뒤에서 둘 다 닫도록
+             옮겨서(끝부분의 대응 닫기 태그 2개는 제거함) 다른 탭과 동일한 구조로 맞춘다 — 그 아래
+             내용은 이제 #app-main 자체 스크롤에 맡겨진다(#app-main의 padding-bottom이 하단 박스와
+             안 겹치게 보장, styles.css 참고). -->
         <div class="concept-section" style="margin-top:16px;">
             <h3 id="sum-h3-progress" style="margin:0 0 4px 0;">개발 진척 현황</h3>
             <div id="sum-level0-timeline" style="min-height:90px; margin-top:0;">
@@ -1286,8 +1297,6 @@
                 </div>
                 <table id="sum-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
             </div>
-        </div>
-        </div>
         </div>
     </div>
 </div>
