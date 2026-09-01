@@ -6673,6 +6673,8 @@ ${recentLogs}
      메일 본문 내용(여러 줄 가능, 한국어 존댓말, 인사말과 맺음말 포함)
      [[/MAIL_DRAFT]]
      - 본문 내용은 위 "🔒 요약/정리/분석 규칙"과 동일한 기준으로 작성하세요 — [내용:]/[대응:]을 읽고 실제 이슈를 설명하고, 업무명·날짜만 나열하지 마세요. 단, 메일 본문에는 "#G98" 같은 인용 번호를 넣지 마세요(받는 사람은 이 화면을 볼 수 없어 링크가 의미 없습니다) — 번호 대신 업무명을 그대로 풀어서 쓰세요.
+     - **서식(굵게/제목/소제목 등) 지원**: 사용자가 "제목은 굵게/Bold로 해줘", "소제목 강조해줘"처럼 서식을 요청하면(또는 여러 섹션으로 나뉜 요약이라 서식이 도움이 되면), 본문에 마크다운 문법을 쓰세요 — **텍스트**는 굵게, 줄 맨 앞 "# "/"## "는 소제목(굵고 크게), "- "는 글머리로 실제 발송 시 자동 변환됩니다(HTML 이메일). 별다른 요청이 없으면 평범한 문단(존댓말 인사말+본문+맺음말)으로 충분하며 억지로 서식을 넣지 마세요.
+     - 서식 요청이 "수정 요청"으로 들어오면(예: "제목 부분 Bold로 바꿔줘") 아래 "수정 요청" 절차와 동일하게 [[MAIL_DRAFT]] 블록 전체를 새 서식으로 다시 통째로 출력하세요.
      - "오늘 업무" 같은 상대 날짜 표현은 위 [오늘 날짜]·"오늘 업무 정리해줘" 판단 규칙을 그대로 따르세요.
      - 수신인을 못 찾았어도(주소록/담당자 목록에 없는 이름) 일단 그 이름 그대로 적으세요 — 시스템이 "이메일 없음"으로 표시하고 사용자가 직접 고를 수 있게 합니다. 절대 이 경우에 임의로 다른 사람으로 바꾸지 마세요.
      - 이 턴에는 절대 아래 3번의 발송 확정 태그를 같이 붙이지 마세요 — 초안만 보여주고 반드시 사용자 확인을 기다리세요.
@@ -7084,6 +7086,15 @@ ${question}
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const pd = await res.json();
+            // 💡 [2026-09-01 버그 수정] "다른 프로젝트 얘기하다가 그 프로젝트 사람에게 메일 보내달라"고
+            //    하면 발송은 "성공"이라고 뜨는데 실제로는 안 오는 문제 — 원인은 _aiResolveNameToEmail이
+            //    항상 "지금 화면에 열려있는(현재) 프로젝트"의 주소록/담당자만 보고 이메일을 찾았기
+            //    때문(다른 프로젝트 데이터는 AI에게 보여줄 요약 텍스트로만 쓰이고, 실제 이메일 조회에는
+            //    전혀 연결돼 있지 않았음 — 그래서 이름이 우연히 현재 프로젝트에도 있으면 엉뚱한/오래된
+            //    이메일로 "성공적으로" 보내지고, 없으면 조용히 실패했었다). 조회한 원본 데이터(pd)를
+            //    캐시해두고, 아래 _aiResolveNameToEmail이 여기도 함께 뒤지도록 확장한다.
+            window._aiOtherProjectDataCache = window._aiOtherProjectDataCache || {};
+            window._aiOtherProjectDataCache[no] = pd;
             return window._buildOtherProjectQaContext(pd, entry);
         } catch (e) { console.warn('다른 프로젝트(#P' + no + ') 조회 실패:', e.message); return null; }
     };
@@ -7231,6 +7242,29 @@ ${question}
         const m3 = members3.find(function(m) { return m && norm(m.name) === norm(name) && (m.email || '').trim(); });
         if (m3) return { name: m3.name, email: m3.email.trim() };
 
+        // 💡 [2026-09-01 신규 — 버그 수정] "다른 프로젝트 얘기하다가 메일 보내줘" 대응 — 지금 열려있는
+        //    이 프로젝트에서 못 찾았으면, 이번 대화에서 [[ACTION:LOAD_PROJECT:번호]]로 실제로 조회했던
+        //    다른 프로젝트들의 주소록/담당자도 마저 뒤진다(window._aiOtherProjectDataCache,
+        //    _aiFetchOtherProjectContext 참고). 이걸 안 하면 다른 프로젝트에만 등록된 사람은 이메일을
+        //    못 찾거나, 이름이 우연히 겹치는 현재 프로젝트의 다른 사람 이메일로 잘못 보내질 수 있었음.
+        const otherCache = window._aiOtherProjectDataCache || {};
+        for (const no in otherCache) {
+            const pd = otherCache[no];
+            if (!pd) continue;
+            const otherAddr = (pd.tabData && pd.tabData.addressBook) || [];
+            const addrHit = otherAddr.find(function(p) { return p && (p.email || '').trim()
+                && (norm(p.name) === norm(name) || norm(p.nameEn) === norm(name)); });
+            if (addrHit) return { name: addrHit.name || addrHit.nameEn || name, email: addrHit.email.trim() };
+
+            const otherPm = pd.projectMeta || {};
+            const otherFixedHit = fixedFields.find(function(f) { return otherPm[f] && norm(otherPm[f]) === norm(name) && (otherPm[f + '이메일'] || '').trim(); });
+            if (otherFixedHit) return { name: otherPm[otherFixedHit], email: otherPm[otherFixedHit + '이메일'].trim() };
+
+            const otherMembers3 = (pd.tabData && pd.tabData.projectMembers3) || [];
+            const otherM3 = otherMembers3.find(function(m) { return m && norm(m.name) === norm(name) && (m.email || '').trim(); });
+            if (otherM3) return { name: otherM3.name, email: otherM3.email.trim() };
+        }
+
         return { name: name, email: null };
     };
 
@@ -7261,13 +7295,39 @@ ${question}
         return md;
     };
 
+    // 💡 [2026-09-01 신규] "제목/소제목은 Bold로 해줘" 같은 서식 주문을 실제 발송 메일에도 반영하기
+    //    위한 변환기 — 채팅 미리보기(_aiMailDraftPreviewMd → _mdToHtml)와 같은 마크다운 문법(**굵게**,
+    //    #/##소제목, - 글머리)을 그대로 지원한다. AI는 사용자가 서식을 요청하면 본문에 이 문법을 써서
+    //    작성하고(위 프롬프트의 [[MAIL_DRAFT]] 규칙 참고), 여기서 실제 메일 클라이언트에서도 보이도록
+    //    인라인 스타일 HTML로 바꾼다(이메일은 외부 CSS/class를 못 쓰므로 항상 style="" 인라인만 사용).
+    window._aiMdToMailHtml = function(text) {
+        let escaped = escapeHtml(text || '');
+        escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
+        const lines = escaped.split('\n');
+        return lines.map(function(line) {
+            const heading = line.match(/^(#{1,3})\s+(.*)$/);
+            if (heading) {
+                const size = heading[1].length === 1 ? '16px' : (heading[1].length === 2 ? '15px' : '14px');
+                return `<div style="font-weight:bold; font-size:${size}; margin:12px 0 4px;">${heading[2]}</div>`;
+            }
+            const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
+            if (bullet) {
+                const depth = Math.floor(bullet[1].length / 2);
+                return `<div style="margin:0 0 3px; padding-left:${14 + depth * 16}px;">• ${bullet[2]}</div>`;
+            }
+            if (line.trim() === '') return '<div style="height:8px;"></div>';
+            return `<div style="margin:0 0 3px;">${line}</div>`;
+        }).join('');
+    };
+
     // 💡 실제 발송 — kortek_backend.py의 기존 /send-mail(SMTP)을 그대로 재사용(알람 메일 발송과 동일
-    //    엔드포인트). 여기서 본문 줄바꿈만 <br>로 바꿔 HTML 메일로 보낸다(백엔드가 MIMEText 'html' 고정).
+    //    엔드포인트). 위 _aiMdToMailHtml로 **굵게**/소제목 등 서식을 실제 HTML로 바꿔서 보낸다
+    //    (백엔드가 MIMEText 'html' 고정이라 이미 HTML 메일 — 이스케이프+태그 변환만 여기서 처리).
     window._aiSendMailFromDraft = async function(draft) {
         const toEmails = (draft.to || []).filter(function(p) { return p.email; }).map(function(p) { return p.email; });
         if (!toEmails.length) return { ok: false, error: '수신인 이메일을 찾지 못했습니다. 주소록에 등록한 뒤 다시 시도해주세요.' };
         const ccEmails = (draft.cc || []).filter(function(p) { return p.email; }).map(function(p) { return p.email; });
-        const bodyHtml = escapeHtml(draft.body || '').replace(/\n/g, '<br>');
+        const bodyHtml = window._aiMdToMailHtml(draft.body || '');
         try {
             const res = await fetch('http://127.0.0.1:5000/send-mail', {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -7719,6 +7779,7 @@ ${question}
         if (window._ganttQaHistory.length && !confirm('대화 내용을 모두 지울까요?')) return;
         window._ganttQaHistory = [];
         window._ganttQaPendingMailDraft = null; // 💡 대화를 지우면 남아있던 메일 초안도 함께 무효화
+        window._aiOtherProjectDataCache = {}; // 💡 이전 대화에서 조회했던 다른 프로젝트 데이터도 함께 비움
         window._renderGanttQaMessages();
     };
 
