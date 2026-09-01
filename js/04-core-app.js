@@ -6239,6 +6239,10 @@ ${recentLogs}
     // 💡 [2026-09-01 신규] "📤 메일 작성/발송" 기능이 [[MAIL_DRAFT]]로 만든, 아직 발송 확정 전인
     //    초안 1건(이름→이메일까지 resolve된 구조화 데이터) — 발송/취소/새 초안 생성 시 교체·소진됨.
     window._ganttQaPendingMailDraft = null;
+    // 💡 [2026-09-01 신규] "📢 공지 등록"/"📌 알람 세부 설정" 기능도 메일 초안과 동일한 2단계
+    //    (초안 → 사람 확인) 왕복 구조를 쓴다 — 각각 아직 확정 전인 초안 1건만 보관.
+    window._ganttQaPendingNoticeDraft = null;
+    window._ganttQaPendingAlarmDraft = null;
 
     // 💡 [2026-08-29 신규 — 버그 수정] "다른 프로젝트로 이동해서 물어보면 응답이 없다(⏳가 멈추지 않음).
     //    내용을 지우고 다시 물으면 답한다"는 제보 — 프로젝트를 전환한 직후엔 구글 드라이브 토큰이 막
@@ -6651,6 +6655,47 @@ ${recentLogs}
 3. 일치하는 업무가 여러 개거나 하나도 없으면 절대 저 태그를 쓰지 말고, 어떤 업무인지 되물어보거나 "해당 업무를 찾지 못했습니다"라고 답하세요.
 4. 이미 [알람ON]이 붙은 업무에 "켜줘"라고 하거나, [알람ON]이 없는(꺼져 있는) 업무에 "꺼줘"라고 하는 경우처럼 이미 원하는 상태인 경우엔 그 사실을 답변에 알려주고, 그래도 해당 태그는 그대로 붙이세요(중복 실행해도 안전하게 무시됨).
 5. 알람과 무관한 질문에는 두 태그 모두 절대 붙이지 마세요. 방향(켜기/끄기)을 헷갈리지 마세요 — "해제"를 "설정"으로, "설정"을 "해제"로 착각해 반대 태그를 붙이면 안 됩니다.
+6. 위 SET_ALARM/CLEAR_ALARM은 "그냥 켜줘/꺼줘"처럼 단순 요청일 때만 쓰세요. 알림 시점(D-day)·수신 대상·이 알람만의 제목/내용처럼 **세부 설정까지 지정한 요청**이면(예: "D-3, D-1로 알람 걸어줘", "김민수도 참조에 넣어서 알람 설정해줘") 대신 아래 "📌 알람 세부 설정(ALARM_DRAFT)" 규칙을 쓰세요 — 두 방식을 같은 답변에 섞어 쓰지 마세요.
+
+📌 "D-day/수신 대상/제목·내용까지 지정한" 알람 세부 설정 요청에 대한 필수 규칙 (실제로 앱 데이터를 바꾸는 기능 — 사람 확인을 거친 뒤에만 적용됩니다):
+이 기능도 메일 발송과 동일하게 항상 "① 초안 작성 → ② 사용자 확인 → ③ 적용"의 2단계 왕복으로만 동작합니다.
+1. **먼저 이 요청이 실제 프로젝트 업무를 가리키는지 확인하세요.** [업무 목록]에서 명확히 일치하는 업무를 정확히 하나만 찾을 수 있으면 아래 2번대로 진행하세요. 업무 목록과 무관한 개인적인 리마인더/할 일(예: "매주 월요일 아침에 주간보고 제출하라고 알려줘"처럼 이 프로젝트의 실제 업무가 아닌 요청)이면, 알람 대신 아래 "📢 공지 등록(NOTICE_DRAFT)" 규칙으로 처리하세요(알람은 반드시 실제 Gantt 업무 하나에 연결되어야 하는 기능이라 업무가 없으면 만들 수 없습니다 — 이 경우 조용히 공지로 바꿔 처리하고, 왜 공지로 등록했는지는 굳이 설명하지 않아도 됩니다).
+2. **[지금까지의 대화]에 직전 AI 답변으로 "📌 알람 설정 초안"이 이미 나와 있는지 먼저 확인하세요:**
+   - **없다면(새로운 세부 설정 요청)** — 아래 형식으로 초안을 작성해서 답변 맨 마지막에 붙이세요(태그 안 숫자는 그 업무의 "#G" 뒤 숫자만, G는 빼고 넣습니다):
+     [[ALARM_DRAFT:그업무의숫자]]
+     D-day: 7,3,1  (마감일 며칠 전에 알릴지, 쉼표로 구분한 정수만 — 언급 없으면 이 줄 자체를 생략해 기존 설정을 그대로 둡니다)
+     수신인: 이름1, 이름2  (언급 없으면 이 줄 자체를 생략해 기존 수신 대상을 그대로 둡니다 — 이름은 [담당자/프로젝트 멤버] 또는 [주소록]에 있는 이름 그대로만 적으세요, 이메일 주소를 직접 만들지 마세요)
+     제목: 이 알람에서만 쓸 제목(원래 업무명 대신 표시할 문구 — 언급 없으면 이 줄 자체를 생략)
+     내용: 이 알람에서만 쓸 내용(원래 업무 내용 대신 표시할 문구 — 언급 없으면 이 줄 자체를 생략)
+     [[/ALARM_DRAFT]]
+     - 사용자가 언급하지 않은 항목은 반드시 그 줄 자체를 생략하세요(빈 값으로 채우면 안 됩니다) — 시스템이 생략된 항목은 기존 설정을 그대로 유지합니다.
+     - 이 턴에는 절대 아래 3번의 적용 확정 태그를 같이 붙이지 마세요 — 초안만 보여주고 반드시 사용자 확인을 기다리세요.
+   - **있다면(이미 초안을 보여준 다음 턴)** — 사용자의 이번 메시지를 판단하세요:
+     - "적용해줘/이대로 해줘/그렇게 설정해줘/네"처럼 **명확한 적용 확정**이면 → 다른 말이나 설명 없이 답변으로 정확히 이 한 줄만 출력: [[ACTION:APPLY_ALARM:CONFIRM]] (시스템이 방금 보여준 초안 그대로 적용하고 결과를 답변에 붙여줍니다 — 내용을 다시 쓰지 마세요).
+     - 수정 요청이면 → 위 형식으로 수정된 내용 전체를 담아 [[ALARM_DRAFT:번호]] 블록을 처음부터 다시 통째로 출력하세요(이전 초안을 대체합니다).
+     - "취소해줘/그만할게"처럼 **취소**면 → 태그 없이 "네, 알람 설정을 취소했습니다"처럼만 답하세요.
+     - 무관한 새로운 질문이면 → 평소처럼 그 질문에만 답하고 알람 관련 태그는 아무것도 붙이지 마세요.
+3. [[ACTION:APPLY_ALARM:CONFIRM]] 태그는 오직 직전에 보여준 초안을 사용자가 명확히 확정했을 때만 쓰세요.
+
+📢 "공지 등록해줘/전체 공지로 알려줘" 유형 요청에 대한 필수 규칙 (실제로 공지 목록에 등록하는 기능 — Gantt 업무와 무관하게 독립적으로 동작하며, 사람 확인을 거친 뒤에만 등록됩니다):
+이 기능도 항상 "① 초안 작성 → ② 사용자 확인 → ③ 등록"의 2단계 왕복으로만 동작합니다.
+1. **[지금까지의 대화]에 직전 AI 답변으로 "📢 공지 초안"이 이미 나와 있는지 먼저 확인하세요:**
+   - **없다면(새로운 공지 요청)** — 아래 형식으로 초안을 작성해서 답변 맨 마지막에 붙이세요:
+     [[NOTICE_DRAFT]]
+     제목: 공지 제목
+     기준일: YYYY-MM-DD  (이 날짜를 기준으로 D-day 며칠 전에 알림 — 사용자가 날짜를 안 줬으면 문맥상 가장 합리적인 날짜를 정하고 답변에서 그 날짜를 정했다고 알려주세요)
+     D-day: 7,3,1,0  (기준일 며칠 전에 알릴지, 쉼표로 구분한 정수 — 언급 없으면 "0"만 사용, 즉 기준일 당일에만 발송)
+     수신인: 이름1, 이름2  (이름은 [담당자/프로젝트 멤버] 또는 [주소록]에 있는 이름 그대로만 적으세요, 이메일 주소를 직접 만들지 마세요. 언급 없으면 이 줄 자체를 생략하고, 등록 전 사람이 직접 수신자를 고르게 하세요)
+     내용:
+     공지 본문 내용(여러 줄 가능, 한국어 존댓말)
+     [[/NOTICE_DRAFT]]
+     - 이 턴에는 절대 아래 3번의 등록 확정 태그를 같이 붙이지 마세요 — 초안만 보여주고 반드시 사용자 확인을 기다리세요.
+   - **있다면(이미 초안을 보여준 다음 턴)** — 사용자의 이번 메시지를 판단하세요:
+     - "등록해줘/이대로 등록해줘/네"처럼 **명확한 등록 확정**이면 → 다른 말이나 설명 없이 답변으로 정확히 이 한 줄만 출력: [[ACTION:REGISTER_NOTICE:CONFIRM]] (시스템이 방금 보여준 초안 그대로 등록하고 결과를 답변에 붙여줍니다 — 내용을 다시 쓰지 마세요).
+     - 수정 요청이면 → 위 형식으로 수정된 내용 전체를 담아 [[NOTICE_DRAFT]] 블록을 처음부터 다시 통째로 출력하세요(이전 초안을 대체합니다).
+     - "취소해줘/그만할게"처럼 **취소**면 → 태그 없이 "네, 공지 등록을 취소했습니다"처럼만 답하세요.
+     - 무관한 새로운 질문이면 → 평소처럼 그 질문에만 답하고 공지 관련 태그는 아무것도 붙이지 마세요.
+2. [[ACTION:REGISTER_NOTICE:CONFIRM]] 태그는 오직 직전에 보여준 초안을 사용자가 명확히 확정했을 때만 쓰세요.
 
 📧 "원문/원본 메일 보여줘·읽어줘·확인해줘" 유형 요청에 대한 필수 규칙 (실제 메일 원문을 조회하는 기능):
 [업무 목록]에서 " [원문有]" 표시가 붙은 업무는 등록 당시의 원본 이메일 전문이 시스템에 별도로 저장되어 있습니다 — 다만 이 목록에는 "있다/없다" 표시만 있고 원문 내용 자체는 아직 포함되어 있지 않으니, 표시만 보고 원문 내용을 안다고 착각하거나 지어내지 마세요.
@@ -6973,10 +7018,26 @@ ${question}
                     <button onclick="window._aiCancelPendingMailDraft('${m.mailDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
                 </div>`
                 : '';
+            // 💡 [2026-09-01 신규] "📢 공지 등록"/"📌 알람 세부 설정" — 메일 초안과 동일한 방식으로,
+            //    이 메시지가 만든 초안이 아직 pending 중일 때만 버튼을 보여준다.
+            const noticeDraftHtml = (!isUser && m.noticeDraftId && window._ganttQaPendingNoticeDraft && window._ganttQaPendingNoticeDraft.id === m.noticeDraftId)
+                ? `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px;">
+                    <button onclick="window._aiRegisterPendingNoticeDraft('${m.noticeDraftId}', this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📢 이대로 등록</button>
+                    <button onclick="window._aiCancelPendingNoticeDraft('${m.noticeDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
+                </div>`
+                : '';
+            const alarmDraftHtml = (!isUser && m.alarmDraftId && window._ganttQaPendingAlarmDraft && window._ganttQaPendingAlarmDraft.id === m.alarmDraftId)
+                ? `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px;">
+                    <button onclick="window._aiApplyPendingAlarmDraft('${m.alarmDraftId}', this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📌 이대로 적용</button>
+                    <button onclick="window._aiCancelPendingAlarmDraft('${m.alarmDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
+                </div>`
+                : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
                 ${mailDraftHtml ? `<div style="max-width:82%; width:100%;">${mailDraftHtml}</div>` : ''}
+                ${noticeDraftHtml ? `<div style="max-width:82%; width:100%;">${noticeDraftHtml}</div>` : ''}
+                ${alarmDraftHtml ? `<div style="max-width:82%; width:100%;">${alarmDraftHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;
@@ -7367,6 +7428,243 @@ ${question}
         window._renderGanttQaMessages();
     };
 
+    // ── 💡 [2026-09-01 신규] "📢 공지 등록" — 위 프롬프트의 [[NOTICE_DRAFT]] 규칙 참고 ──────────
+    // Gantt 업무와 무관하게 독립적으로 동작(공지 탭 window._noticeItems에 바로 push)하므로 메일 초안보다
+    // 단순함. [[MAIL_DRAFT]] 파서와 동일한 관대한 파싱 방식을 그대로 따른다.
+    window._parseNoticeDraftBlock = function(blockText) {
+        const lines = String(blockText || '').split('\n');
+        let title = '', deadline = '', ddayLine, recipLine;
+        const contentLines = [];
+        let inContent = false;
+        lines.forEach(function(line) {
+            const mTitle    = !inContent && line.match(/^\s*제목\s*:\s*(.*)$/);
+            const mDeadline = !inContent && line.match(/^\s*기준일\s*:\s*(.*)$/);
+            const mDday     = !inContent && line.match(/^\s*D-day\s*:\s*(.*)$/i);
+            const mRecip    = !inContent && line.match(/^\s*수신인\s*:\s*(.*)$/);
+            const mContent  = !inContent && line.match(/^\s*내용\s*:\s*(.*)$/);
+            if (mTitle)    { title = mTitle[1].trim(); return; }
+            if (mDeadline) { deadline = mDeadline[1].trim(); return; }
+            if (mDday)     { ddayLine = mDday[1].trim(); return; }
+            if (mRecip)    { recipLine = mRecip[1].trim(); return; }
+            if (mContent)  { inContent = true; if (mContent[1].trim()) contentLines.push(mContent[1]); return; }
+            if (inContent) contentLines.push(line);
+        });
+        const splitNames = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return x.trim(); }).filter(Boolean); };
+        const parseDays  = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return parseInt(x.trim(), 10); }).filter(function(n) { return !isNaN(n); }); };
+        return {
+            title: title, deadline: deadline,
+            alarmDays: ddayLine ? parseDays(ddayLine) : [0],
+            recipientNames: recipLine !== undefined ? splitNames(recipLine) : [],
+            body: contentLines.join('\n').trim()
+        };
+    };
+
+    // 💡 수신인 이름 목록 → _nmCollectRecipients()와 동일한 모양의 행 배열(이메일까지 resolve됨).
+    //    메일 초안과 동일하게 window._aiResolveNameToEmail(로컬 데이터만 조회, AI에겐 이메일을 안 알려줌)을 재사용.
+    window._aiResolveNamesToRecipients = function(names) {
+        return (names || []).map(function(n) {
+            const r = window._aiResolveNameToEmail(n);
+            return { name: r.name, email: r.email || '', telegramId: '', emailOn: !!r.email, tgOn: false };
+        });
+    };
+
+    window._aiBuildNoticeDraftFromParsed = function(parsed) {
+        return {
+            id: 'noticedraft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            title: parsed.title || '',
+            deadline: parsed.deadline || '',
+            alarmDays: (parsed.alarmDays && parsed.alarmDays.length ? parsed.alarmDays : [0]).slice().sort(function(a, b) { return b - a; }),
+            recipients: window._aiResolveNamesToRecipients(parsed.recipientNames),
+            body: parsed.body || ''
+        };
+    };
+
+    window._aiNoticeDraftPreviewMd = function(draft) {
+        const fmtPerson = function(p) { return p.email ? `${p.name} (${p.email})` : `${p.name} ⚠️(이메일 없음)`; };
+        const recipStr = draft.recipients.length ? draft.recipients.map(fmtPerson).join(', ') : '(등록 후 직접 선택 필요)';
+        let md = `📢 **공지 초안**\n- **제목:** ${draft.title || '(제목 없음)'}\n- **기준일:** ${draft.deadline || '⚠️(기준일 없음)'}\n- **알림 시점:** ${draft.alarmDays.map(function(d) { return 'D-' + d; }).join(', ')}\n- **수신 대상:** ${recipStr}`;
+        md += `\n\n**내용**\n${draft.body || '(내용 없음)'}`;
+        if (!draft.deadline) md += `\n\n⚠️ 기준일이 없어 등록할 수 없습니다 — 기준일을 알려주세요.`;
+        else if (!draft.title) md += `\n\n⚠️ 제목이 없어 등록할 수 없습니다 — 제목을 알려주세요.`;
+        else if (draft.recipients.some(function(p) { return !p.email; })) md += `\n\n⚠️ 수신 대상 중 이메일을 찾지 못한 사람이 있습니다.`;
+        md += `\n\n💬 이대로 등록하려면 "등록해줘"라고 말씀해주시거나, 아래 [📢 이대로 등록] 버튼을 눌러주세요.`;
+        return md;
+    };
+
+    // 💡 실제 등록 — window.saveNoticeItem()의 "신규 등록" 분기와 동일한 데이터 모양으로 push.
+    //    recipientMode는 항상 'custom'으로 고정(AI가 만든 명단이 전역 공용 기본수신 명단을
+    //    조용히 덮어쓰지 않도록 — window._nmPersistRecipientMode의 'default' 분기 참고).
+    window._aiRegisterNoticeFromDraft = function(draft) {
+        if (!draft.title || !draft.deadline) return { ok: false, error: '제목 또는 기준일이 없습니다.' };
+        window._noticeItems.push({
+            id: 'notice_' + Date.now(), title: draft.title, body: draft.body, deadline: draft.deadline,
+            alarmDays: draft.alarmDays, recipients: draft.recipients, recipientMode: 'custom',
+            status: 'active', sentLog: [], createdAt: new Date().toISOString().slice(0, 10)
+        });
+        window._noticeSave();
+        if (window.renderNoticeTab) window.renderNoticeTab();
+        return { ok: true };
+    };
+
+    window._aiRegisterPendingNoticeDraft = async function(draftId, btn) {
+        const pending = window._ganttQaPendingNoticeDraft;
+        if (!pending || pending.id !== draftId) {
+            if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning');
+            window._renderGanttQaMessages();
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ 등록 중...'; }
+        const res = window._aiRegisterNoticeFromDraft(pending);
+        window._ganttQaPendingNoticeDraft = null;
+        window._ganttQaHistory.push({
+            role: 'ai',
+            text: res.ok ? `✅ "${pending.title}" 공지를 등록했습니다.` : `⚠️ 공지 등록 실패: ${res.error}`,
+            uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
+        });
+        window._renderGanttQaMessages();
+    };
+    window._aiCancelPendingNoticeDraft = function(draftId) {
+        if (window._ganttQaPendingNoticeDraft && window._ganttQaPendingNoticeDraft.id === draftId) window._ganttQaPendingNoticeDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: '📌 공지 등록을 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+
+    // ── 💡 [2026-09-01 신규] "📌 알람 세부 설정" — 위 프롬프트의 [[ALARM_DRAFT:번호]] 규칙 참고 ──────────
+    // 기존 window._aiAssistSetAlarm(단순 켜기/끄기, 확인 없이 즉시 실행)과 달리, D-day/수신 대상/제목·내용
+    // 오버라이드까지 바꾸는 경우엔 실제 발송 대상이 달라질 수 있어 메일 발송과 동일하게 미리보기 확인을 거친다.
+    // 언급되지 않은 필드는 undefined로 남겨 "기존 설정 유지"를 표현한다(빈 배열/빈 문자열과 구분).
+    window._parseAlarmDraftBlock = function(blockText) {
+        const lines = String(blockText || '').split('\n');
+        let ddayLine, recipLine, titleLine, contentLine;
+        const contentLines = [];
+        let inContent = false;
+        lines.forEach(function(line) {
+            const mDday    = !inContent && line.match(/^\s*D-day\s*:\s*(.*)$/i);
+            const mRecip   = !inContent && line.match(/^\s*수신인\s*:\s*(.*)$/);
+            const mTitle   = !inContent && line.match(/^\s*제목\s*:\s*(.*)$/);
+            const mContent = !inContent && line.match(/^\s*내용\s*:\s*(.*)$/);
+            if (mDday)    { ddayLine = mDday[1].trim(); return; }
+            if (mRecip)   { recipLine = mRecip[1].trim(); return; }
+            if (mTitle)   { titleLine = mTitle[1].trim(); return; }
+            if (mContent) { inContent = true; contentLine = ''; if (mContent[1].trim()) contentLines.push(mContent[1]); return; }
+            if (inContent) contentLines.push(line);
+        });
+        const splitNames = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return x.trim(); }).filter(Boolean); };
+        const parseDays  = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return parseInt(x.trim(), 10); }).filter(function(n) { return !isNaN(n); }); };
+        return {
+            alarmDays: ddayLine !== undefined ? parseDays(ddayLine) : undefined,
+            recipientNames: recipLine !== undefined ? splitNames(recipLine) : undefined,
+            titleOverride: titleLine !== undefined ? titleLine : undefined,
+            contentOverride: contentLine !== undefined ? contentLines.join('\n').trim() : undefined
+        };
+    };
+
+    // 💡 rowIndex가 실제로 "알람을 걸 수 있는" 업무인지(존재하는지 + 완료 예정일이 있는지) 확인.
+    //    ⚠️ window.collectAlarmItems()는 "이미 _알림이 켜진" 행만 돌려주므로(아직 한 번도 알람을 켠 적
+    //    없는 업무는 제외됨) 그 결과를 그대로 재사용하면 안 된다 — 여기서는 collectAlarmItems() 안의
+    //    완료예정일/업무명 추출 로직만 그대로 가져와 _알림 상태와 무관하게 직접 계산한다.
+    window._aiGetAlarmEligibleRowInfo = function(rowIndex) {
+        const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
+        if (!row || row._level === undefined) return null;
+        const ci = window.colIdx || {};
+        let dueRaw = String(row[ci.plan] || '').trim();
+        if ((!dueRaw || dueRaw === '-') && row._calcPlanTs && window.formatTsToYMD) dueRaw = window.formatTsToYMD(row._calcPlanTs);
+        if (!dueRaw || dueRaw === '-') return null;
+        const dueDate = new Date(dueRaw);
+        if (isNaN(dueDate)) return null;
+        const origByLevel = row._level === 0 ? row._origDev : (row._level === 1 ? row._origT1 : (row._level === 2 ? row._origT2 : (row._level === 3 ? row._origT3 : row._origT4)));
+        let wbsColIdx = (row._level === 0) ? ci.devStage : (row._level === 1 ? ci.taskType1 : (row._level === 2 ? ci.taskType2 : (row._level === 3 ? ci.taskType3 : ci.taskType4)));
+        if ((wbsColIdx === undefined || wbsColIdx === -1) && ci.wbs !== -1) wbsColIdx = ci.wbs;
+        let taskName = (origByLevel || '') || (wbsColIdx !== undefined && wbsColIdx > -1 ? row[wbsColIdx] : '') || '';
+        taskName = taskName.toString().trim().replace(/^🌐\s*/, '') || '-';
+        return { taskName: row._알림제목오버라이드 || taskName };
+    };
+
+    // 💡 위 정보로 대상 업무를 검증 — 여기서 걸러지면 채팅에 초안(pending state)을 아예 만들지 않고
+    //    바로 오류 안내만 붙인다.
+    window._aiBuildAlarmDraftFromParsed = function(rowIndex, parsed) {
+        const info = window._aiGetAlarmEligibleRowInfo(rowIndex);
+        if (!info) {
+            const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
+            return { ok: false, reason: (!row || row._level === undefined) ? 'not-found' : 'no-due-date' };
+        }
+        return {
+            ok: true,
+            id: 'alarmdraft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            rowIdx: rowIndex,
+            taskName: info.taskName,
+            alarmDays: parsed.alarmDays,       // undefined = 기존 설정 유지
+            recipients: parsed.recipientNames !== undefined ? window._aiResolveNamesToRecipients(parsed.recipientNames) : undefined,
+            titleOverride: parsed.titleOverride,
+            contentOverride: parsed.contentOverride
+        };
+    };
+
+    window._aiAlarmDraftPreviewMd = function(draft) {
+        const fmtPerson = function(p) { return p.email ? `${p.name} (${p.email})` : `${p.name} ⚠️(이메일 없음)`; };
+        let md = `📌 **알람 설정 초안 — "${draft.taskName}"**`;
+        md += draft.alarmDays !== undefined
+            ? `\n- **알림 시점:** ${draft.alarmDays.length ? draft.alarmDays.slice().sort(function(a, b) { return b - a; }).map(function(d) { return 'D-' + d; }).join(', ') : '(없음)'}`
+            : `\n- **알림 시점:** (기존 설정 유지)`;
+        md += draft.recipients !== undefined
+            ? `\n- **수신 대상:** ${draft.recipients.length ? draft.recipients.map(fmtPerson).join(', ') : '(없음)'}`
+            : `\n- **수신 대상:** (기존 설정 유지)`;
+        if (draft.titleOverride !== undefined) md += `\n- **제목 변경:** ${draft.titleOverride || '(원래 업무명으로 되돌림)'}`;
+        if (draft.contentOverride !== undefined) md += `\n- **내용 변경:** ${draft.contentOverride || '(원래 업무 내용으로 되돌림)'}`;
+        if (draft.recipients && draft.recipients.some(function(p) { return !p.email; })) md += `\n\n⚠️ 수신 대상 중 이메일을 찾지 못한 사람이 있습니다.`;
+        md += `\n\n💬 이대로 적용하려면 "적용해줘"라고 말씀해주시거나, 아래 [📌 이대로 적용] 버튼을 눌러주세요.`;
+        return md;
+    };
+
+    // 💡 실제 적용 — window._asPersistTitleContentOverride/saveAlarmSchedule과 동일한 row 속성들을
+    //    직접 채운다(알람 일정 모달을 거치지 않고도 결과는 완전히 동일). 언급 안 된 필드는 건드리지 않음.
+    window._aiApplyAlarmDraft = function(draft) {
+        const row = (typeof globalData !== 'undefined' && globalData) ? globalData[draft.rowIdx] : null;
+        if (!row) return { ok: false, error: '해당 업무를 더 이상 찾을 수 없습니다.' };
+        row._알림 = true;
+        if (draft.alarmDays !== undefined) row._알림일정 = draft.alarmDays.slice();
+        if (draft.recipients !== undefined) {
+            row._알림수신자모드 = 'custom';
+            row._알림수신자 = draft.recipients;
+        }
+        if (draft.titleOverride !== undefined) {
+            if (draft.titleOverride) row._알림제목오버라이드 = draft.titleOverride; else delete row._알림제목오버라이드;
+        }
+        if (draft.contentOverride !== undefined) {
+            if (draft.contentOverride) row._알림내용오버라이드 = draft.contentOverride; else delete row._알림내용오버라이드;
+        }
+        logChange(draft.rowIdx, -1, '알림 설정', '알람 세부 설정 적용', 'AI 문답으로 설정');
+        renderTable(globalData);
+        applyFilters();
+        if (window.paintRowSelection) window.paintRowSelection();
+        const alarmPanel = document.getElementById('tab-alarm');
+        if (alarmPanel && alarmPanel.classList.contains('active') && window.renderAlarmTab) window.renderAlarmTab();
+        return { ok: true };
+    };
+
+    window._aiApplyPendingAlarmDraft = async function(draftId, btn) {
+        const pending = window._ganttQaPendingAlarmDraft;
+        if (!pending || pending.id !== draftId) {
+            if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning');
+            window._renderGanttQaMessages();
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ 적용 중...'; }
+        const res = window._aiApplyAlarmDraft(pending);
+        window._ganttQaPendingAlarmDraft = null;
+        window._ganttQaHistory.push({
+            role: 'ai',
+            text: res.ok ? `✅ "${pending.taskName}" 업무의 알람 설정을 적용했습니다.` : `⚠️ 알람 설정 적용 실패: ${res.error}`,
+            uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
+        });
+        window._renderGanttQaMessages();
+    };
+    window._aiCancelPendingAlarmDraft = function(draftId) {
+        if (window._ganttQaPendingAlarmDraft && window._ganttQaPendingAlarmDraft.id === draftId) window._ganttQaPendingAlarmDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: '📌 알람 설정을 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+
     // AI 답변 텍스트에서 [[ACTION:SET_ALARM:번호]] 또는 [[ACTION:CLEAR_ALARM:번호]] 태그를 찾아 제거하고,
     // 실행 결과 안내문을 답변에 덧붙인다. 태그가 없으면 원문을 그대로 반환.
     // 💡 [2026-08-28 신규] "알람 해제해줘" 요청 대응 — CLEAR_ALARM 태그 처리를 추가(SET_ALARM과 대칭).
@@ -7498,11 +7796,70 @@ ${question}
                 }
             }
 
+            // 💡 [2026-09-01 신규] "📢 공지 등록" — 위 프롬프트의 [[NOTICE_DRAFT]] 규칙 참고. 메일과
+            //    동일한 초안→확인 왕복 패턴(Gantt 업무와 무관하게 항상 만들 수 있음).
+            let noticeDraftIdThisTurn = null;
+            const mNotice = text.match(/\[\[NOTICE_DRAFT\]\]([\s\S]*?)\[\[\/NOTICE_DRAFT\]\]/);
+            if (mNotice) {
+                const parsedNotice = window._parseNoticeDraftBlock(mNotice[1]);
+                const noticeDraft = window._aiBuildNoticeDraftFromParsed(parsedNotice);
+                window._ganttQaPendingNoticeDraft = noticeDraft;
+                noticeDraftIdThisTurn = noticeDraft.id;
+                text = text.replace(mNotice[0], window._aiNoticeDraftPreviewMd(noticeDraft)).trim();
+            }
+            const mRegisterConfirm = text.match(/\[\[ACTION:REGISTER_NOTICE:CONFIRM\]\]/);
+            if (mRegisterConfirm) {
+                text = text.replace(mRegisterConfirm[0], '').trim();
+                if (!window._ganttQaPendingNoticeDraft) {
+                    text += '\n\n⚠️ 아직 확정할 공지 초안이 없습니다. 먼저 공지 등록을 요청해주세요.';
+                } else {
+                    const pendingNotice = window._ganttQaPendingNoticeDraft;
+                    const regRes = window._aiRegisterNoticeFromDraft(pendingNotice);
+                    text += regRes.ok
+                        ? `\n\n✅ "${pendingNotice.title}" 공지를 등록했습니다.`
+                        : `\n\n⚠️ 공지 등록 실패: ${regRes.error}`;
+                    window._ganttQaPendingNoticeDraft = null;
+                }
+            }
+
+            // 💡 [2026-09-01 신규] "📌 알람 세부 설정" — 위 프롬프트의 [[ALARM_DRAFT:번호]] 규칙 참고.
+            //    대상 업무가 애초에 알람을 걸 수 없는 상태(존재하지 않거나 완료 예정일이 없음)면 초안
+            //    자체를 만들지 않고(pending state 없음) 바로 오류 안내만 붙인다.
+            let alarmDraftIdThisTurn = null;
+            const mAlarmDraft = text.match(/\[\[ALARM_DRAFT:(\d+)\]\]([\s\S]*?)\[\[\/ALARM_DRAFT\]\]/);
+            if (mAlarmDraft) {
+                const parsedAlarm = window._parseAlarmDraftBlock(mAlarmDraft[2]);
+                const alarmDraft = window._aiBuildAlarmDraftFromParsed(parseInt(mAlarmDraft[1], 10), parsedAlarm);
+                if (!alarmDraft.ok) {
+                    text = text.replace(mAlarmDraft[0], alarmDraft.reason === 'no-due-date'
+                        ? '⚠️ 이 업무는 완료 예정일이 없어 알람을 설정할 수 없습니다.'
+                        : '⚠️ 지정한 업무를 찾지 못해 알람을 설정하지 못했습니다.').trim();
+                } else {
+                    window._ganttQaPendingAlarmDraft = alarmDraft;
+                    alarmDraftIdThisTurn = alarmDraft.id;
+                    text = text.replace(mAlarmDraft[0], window._aiAlarmDraftPreviewMd(alarmDraft)).trim();
+                }
+            }
+            const mApplyConfirm = text.match(/\[\[ACTION:APPLY_ALARM:CONFIRM\]\]/);
+            if (mApplyConfirm) {
+                text = text.replace(mApplyConfirm[0], '').trim();
+                if (!window._ganttQaPendingAlarmDraft) {
+                    text += '\n\n⚠️ 아직 확정할 알람 설정 초안이 없습니다. 먼저 알람 설정을 요청해주세요.';
+                } else {
+                    const pendingAlarm = window._ganttQaPendingAlarmDraft;
+                    const applyRes = window._aiApplyAlarmDraft(pendingAlarm);
+                    text += applyRes.ok
+                        ? `\n\n✅ "${pendingAlarm.taskName}" 업무의 알람 설정을 적용했습니다.`
+                        : `\n\n⚠️ 알람 설정 적용 실패: ${applyRes.error}`;
+                    window._ganttQaPendingAlarmDraft = null;
+                }
+            }
+
             window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
             // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
             //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
             //    AI에게 다시 보여줄 수 있게 한다.
-            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn });
+            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn, noticeDraftId: noticeDraftIdThisTurn, alarmDraftId: alarmDraftIdThisTurn });
         } catch (e) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
@@ -7779,6 +8136,8 @@ ${question}
         if (window._ganttQaHistory.length && !confirm('대화 내용을 모두 지울까요?')) return;
         window._ganttQaHistory = [];
         window._ganttQaPendingMailDraft = null; // 💡 대화를 지우면 남아있던 메일 초안도 함께 무효화
+        window._ganttQaPendingNoticeDraft = null; // 💡 공지 초안도 함께 무효화
+        window._ganttQaPendingAlarmDraft = null; // 💡 알람 세부 설정 초안도 함께 무효화
         window._aiOtherProjectDataCache = {}; // 💡 이전 대화에서 조회했던 다른 프로젝트 데이터도 함께 비움
         window._renderGanttQaMessages();
     };
