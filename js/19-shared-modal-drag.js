@@ -192,7 +192,7 @@ function _syncTaskbarBounds(bar) {
 function _relayoutTaskbarChips(bar) {
     const chips = Array.prototype.slice.call(bar.children);
     const n = chips.length;
-    if (!n) return;
+    if (!n) { _updateTaskbarReserve(bar); return; }
     const available = bar.clientWidth;
     const neededAtDefault = n * MT_TAB_W + (n - 1) * MT_GAP;
     let chipW = MT_TAB_W;
@@ -208,6 +208,19 @@ function _relayoutTaskbarChips(bar) {
         const restoreBtn = chip.querySelector('.mtc-restore-btn');
         if (restoreBtn) restoreBtn.style.display = shrink ? 'none' : 'flex';
     });
+
+    _updateTaskbarReserve(bar);
+}
+
+// 💡 [2026-09-02 신규] "모든 페이지에서 하단 박스와 메인 상자가 겹치지 않도록" — 각 탭의 내부 스크롤
+//    영역(예: #gantt-table-scroll 등, styles.css의 has-multi-sheet-bar 규칙 + 각 요소 인라인
+//    max-height에 이미 걸려있는 var(--mt-reserve, 0px))에서 실시간으로 빼줄 여백을 문서 루트에
+//    설정한다. 간격 15px는 상단 "엑셀 시트탭 바"와 최상단 topbar 사이 간격과 동일하게 맞춘 값
+//    (직접 측정: #sheet-tabs-bar.top - #app-topbar.bottom === 15px).
+function _updateTaskbarReserve(bar) {
+    const hasChips = bar.children.length > 0;
+    const reserve = hasChips ? (bar.offsetHeight + 15) : 0;
+    document.documentElement.style.setProperty('--mt-reserve', reserve + 'px');
 }
 
 function _modalTaskbarEl() {

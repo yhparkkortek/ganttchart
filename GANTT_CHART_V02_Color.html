@@ -163,7 +163,7 @@
 
     <!-- 알람 목록 테이블 -->
     <div class="concept-section" style="padding:0; overflow:hidden; background:#e0f5f7; border-color:#a3d9e0;">
-      <div id="alarm-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 280px);">
+      <div id="alarm-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(100vh - 280px - var(--mt-reserve, 0px));"
       <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
         <thead style="position:sticky; top:0; z-index:10;">
           <tr style="background:#eef6f7;">
@@ -671,7 +671,7 @@
     <div id="print-header"><h2 id="print-title"></h2><div id="print-date"></div></div>
 
     <div class="container" id="table-container">
-        <div id="gantt-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px + 44px);">
+        <div id="gantt-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px + 44px - var(--mt-reserve, 0px));"
         <table id="myTable">
             <thead id="table-head"></thead>
             <tbody id="table-body">
@@ -1039,7 +1039,7 @@
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-address')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
-            <div id="addr-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+            <div id="addr-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px));"
                 <table class="concept-table">
                     <thead>
                         <tr>
@@ -1101,7 +1101,7 @@
             <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 Gantt 실적 연동</button></div>
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
-        <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px);">
+        <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px));"
         <div class="concept-section summary-outer-box" style="background:#e0f5f7; border-color:#a3d9e0;">
             <table class="concept-table">
                 <thead>
@@ -1302,7 +1302,7 @@
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-briefspec')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
-            <div id="briefspec-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+            <div id="briefspec-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px));"
             <table class="concept-table">
                 <thead>
                     <tr>
@@ -1371,7 +1371,7 @@
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="mc-normal-section">
-            <div id="mctable-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+            <div id="mctable-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px));"
             <table class="concept-table">
                 <colgroup>
                     <col id="mc-col-no">
@@ -1435,7 +1435,7 @@
             </div>
             </div>
             <div id="mc-comparison-section" style="display:none;">
-                <div id="mctable-compare-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px);">
+                <div id="mctable-compare-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px));"
                     <table class="concept-table" id="mc-comparison-table" style="min-width:900px;"></table>
                 </div>
             </div>
@@ -1484,7 +1484,7 @@
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="elec-view-panel" style="display:block;">
                 <div id="pc-empty-msg" style="display:none; padding:40px; text-align:center; color:#999; font-size:13px;">비교할 패널이 없습니다. [➕ 추가]로 시작하세요.</div>
-                <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px); border:1px solid #cfe3e5; border-radius:8px;">
+                <div id="pc-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 110px - var(--mt-reserve, 0px)); border:1px solid #cfe3e5; border-radius:8px;"
                     <table class="concept-table" id="pc-table" style="min-width:900px; border-collapse:collapse;">
                         <thead id="pc-thead"></thead>
                         <tbody id="pc-tbody"></tbody>
@@ -1507,7 +1507,7 @@
                 </div>
             </div>
             <div id="elec-view-adbd" style="display:none;">
-                <div id="ep-adbd-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px); border:1px solid #cfe3e5; border-radius:8px;">
+                <div id="ep-adbd-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px)); border:1px solid #cfe3e5; border-radius:8px;"
                     <table class="concept-table" id="ep-adbd-table" style="min-width:900px; border-collapse:collapse;">
                         <thead id="ep-adbd-thead"></thead>
                         <tbody id="ep-adbd-tbody"></tbody>
@@ -1530,7 +1530,7 @@
                 </div>
             </div>
             <div id="elec-view-convbd" style="display:none;">
-                <div id="ep-convbd-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px); border:1px solid #cfe3e5; border-radius:8px;">
+                <div id="ep-convbd-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px)); border:1px solid #cfe3e5; border-radius:8px;"
                     <table class="concept-table" id="ep-convbd-table" style="min-width:900px; border-collapse:collapse;">
                         <thead id="ep-convbd-thead"></thead>
                         <tbody id="ep-convbd-tbody"></tbody>
@@ -1578,7 +1578,7 @@
             <button data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
-        <div id="calendar-table-scroll" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px); background:#e0f5f7; border-color:#a3d9e0;">
+        <div id="calendar-table-scroll" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px)); background:#e0f5f7; border-color:#a3d9e0;"
             <div id="cal-page"></div>
         </div>
     </div>
@@ -1608,7 +1608,7 @@
             </div>
             <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-weekly')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
-       <div id="weekly-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px); background:#e0f5f7; border-color:#a3d9e0;"></div>
+       <div id="weekly-report-page" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px)); background:#e0f5f7; border-color:#a3d9e0;"></div>
     </div>
 </div>
 

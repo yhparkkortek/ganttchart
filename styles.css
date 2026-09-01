@@ -86,6 +86,11 @@
         --modal-icon-text: #666;
         --modal-icon-bg: transparent;
         --modal-icon-hover-bg: rgba(0,0,0,0.08);
+
+        /* 💡 [2026-09-02 신규] 하단 모달 최소화 taskbar가 떠 있는 동안 각 탭 콘텐츠와 안 겹치도록
+           빼줄 여백 — 기본은 0(타스크바 없음), js/19-shared-modal-drag.js가 타스크바 높이+간격(15px,
+           상단 시트탭 바와 topbar 사이 간격과 동일)만큼 실시간으로 갱신한다. */
+        --mt-reserve: 0px;
     }
 
 /* 차트 확장 모드 */
@@ -725,16 +730,20 @@
 /* 📑 [멀티시트] 시트탭 바가 차지한 높이(약 49px)만큼, 그 바가 보일 때만 각 탭의 내부 스크롤 영역을 줄여서
    전체 콘텐츠가 다시 화면(#app-main) 안에 들어오게 함 — 안 줄이면 탭 하단 콘텐츠가 화면 밖으로 밀려나서
    페이지 스크롤이 새로 생기고, 그 상태로 스크롤하면 sticky인 시트탭 바 밑으로 다른 요소가 파고듦.
-   (Gantt만 겪는 문제가 아니라, 탭마다 똑같은 calc(70vh/100vh ± Npx) 패턴을 각자 갖고 있어서 전부 대상) */
-body.has-multi-sheet-bar #gantt-table-scroll     { max-height: calc(70vh + 110px + 44px - 53px) !important; }
+   (Gantt만 겪는 문제가 아니라, 탭마다 똑같은 calc(70vh/100vh ± Npx) 패턴을 각자 갖고 있어서 전부 대상)
+   💡 [2026-09-02 신규] --mt-reserve(하단 모달 최소화 taskbar가 떠 있을 때만 그 높이+간격만큼,
+   js/19-shared-modal-drag.js가 문서 루트에 실시간으로 설정) 도 항상 함께 빼서, 시트탭 바 유무와
+   무관하게 하단 박스가 각 탭 콘텐츠와 겹치지 않게 한다 — 아래 각 탭의 기본(인라인) max-height에도
+   동일하게 적용되어 있음(GANTT_CHART_V02_Color.html 검색: var(--mt-reserve)). */
+body.has-multi-sheet-bar #gantt-table-scroll     { max-height: calc(70vh + 110px + 44px - 53px - var(--mt-reserve, 0px)) !important; }
 body.has-multi-sheet-bar #addr-table-scroll,
 body.has-multi-sheet-bar #briefspec-table-scroll,
 body.has-multi-sheet-bar #mctable-table-scroll,
-body.has-multi-sheet-bar #mctable-compare-scroll { max-height: calc(70vh + 160px - 53px) !important; }
-body.has-multi-sheet-bar #alarm-table-scroll     { max-height: calc(100vh - 280px - 53px) !important; }
+body.has-multi-sheet-bar #mctable-compare-scroll { max-height: calc(70vh + 160px - 53px - var(--mt-reserve, 0px)) !important; }
+body.has-multi-sheet-bar #alarm-table-scroll     { max-height: calc(100vh - 280px - 53px - var(--mt-reserve, 0px)) !important; }
 body.has-multi-sheet-bar #summary-table-scroll,
 body.has-multi-sheet-bar #calendar-table-scroll,
-body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160px - 53px) !important; }
+body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160px - 53px - var(--mt-reserve, 0px)) !important; }
 
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
