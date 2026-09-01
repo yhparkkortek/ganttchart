@@ -1101,7 +1101,13 @@
             <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 Gantt 실적 연동</button></div>
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
-        <div id="summary-table-scroll" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px));">
+        <!-- 💡 [2026-09-03 수정] "바깥 박스는 고정 크기, 안쪽 내용만 스크롤, 변경 이력 확인은 스크롤에서
+             제외하고 하단에 고정" 요청 — #summary-table-scroll을 max-height(내용에 맞춰 줄어드는 방식)
+             대신 고정 height의 flex 세로 컨테이너로 바꾸고, 실제 스크롤은 그 안의 #summary-scroll-inner
+             (변경 이력 확인 직전까지만 감싸는 새 div)가 담당하게 한다. #sum-history-box는 그 바깥
+             (flex-shrink:0)에 형제로 남아 있어서 스크롤해도 항상 보임. -->
+        <div id="summary-table-scroll" style="display:flex; flex-direction:column; height:calc(100vh - 160px - var(--mt-reserve, 0px)); overflow:hidden;">
+        <div id="summary-scroll-inner" style="flex:1; min-height:0; overflow-y:auto;">
         <div class="concept-section summary-outer-box" style="background:#e0f5f7; border-color:#a3d9e0;">
             <table class="concept-table">
                 <thead>
@@ -1272,7 +1278,9 @@
                 </div>
              </div>
         </div>
-        <div id="sum-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
+        </div>
+        </div>
+        <div id="sum-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff; flex-shrink:0;">
             <div id="sum-history-header" onclick="window.sumToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                 <span id="sum-history-toggle-icon">▶</span>
                 <span data-i18n="h-history">🕒 변경 이력 확인</span>
@@ -1286,7 +1294,6 @@
                 </div>
                 <table id="sum-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
             </div>
-        </div>
         </div>
         </div>
     </div>
