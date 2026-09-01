@@ -710,11 +710,6 @@
     height: calc(100vh - var(--topbar-h));
     min-height: 0;
     overflow-y: auto;
-    /* 💡 [2026-09-03 신규] 탭 내부의 개별 -table-scroll 컨테이너뿐 아니라, 그 바깥(예: 각 탭의
-       "변경 이력 확인" 박스처럼 스크롤 컨테이너 밖에 있는 일반 흐름 콘텐츠)까지 포함해서 #app-main
-       자체를 끝까지 스크롤해도 하단 최소화 taskbar와 겹치지 않도록 보편적으로 여백을 확보한다.
-       평소(--mt-reserve:0)엔 아무 영향 없음. */
-    padding-bottom: var(--mt-reserve, 0px);
 }
 #app-main.sb-collapsed { margin-left: var(--sb-w-collapsed); }
 
