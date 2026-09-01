@@ -1013,6 +1013,19 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
 
     content_raw = str(col('content') or '').strip()
 
+    # 💡 [2026-09-01 신규] 알람 일정 모달의 "업무 정보" 편집칸에서 이 알람만을 위해 제목/내용을
+    #    덮어썼으면(js/22-tabs-summary-mctable.js의 row._알림제목오버라이드/_알림내용오버라이드,
+    #    saveAlarmSchedule/_asSaveRecurRule에서 저장) 발신인/수신인 추출은 원본 content_raw 그대로 두고
+    #    실제 메일에 쓰이는 task_name/content만 덮어쓴다(collectAlarmItems의 파이썬 버전이라 동일하게 처리).
+    title_override = row_obj.get('_알림제목오버라이드')
+    if title_override and str(title_override).strip():
+        task_name = str(title_override).strip()
+    content_override = row_obj.get('_알림내용오버라이드')
+    if content_override and str(content_override).strip():
+        content_raw_for_mail = str(content_override).strip()
+    else:
+        content_raw_for_mail = content_raw
+
     # [발신인→수신인] 패턴 — 없으면 담당자(assignee) 컬럼을 발신인으로 취급
     arrow_match = re.search(r'\[([^\]→]+)→((?:\[[^\]]*\]|[^\]])+)\]', content_raw)
 
@@ -1039,7 +1052,7 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
         'assignee': assignee, 'assigneeEmail': assignee_email,
         'receiverStr': receiver_str, 'receiverEmails': receiver_emails,
         'allPeopleNames': all_people,
-        'dueStr': due_str, 'diffDays': diff_days, 'content': content_raw,
+        'dueStr': due_str, 'diffDays': diff_days, 'content': content_raw_for_mail,
     }
 
 

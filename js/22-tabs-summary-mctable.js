@@ -1503,7 +1503,7 @@ window._nmAddRecipientRow = function(name='', email='', telegramId='', emailOn=t
                list="nm-addr-namelist" oninput="window._nmRecipientAutofill(this)"
                style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
         <span style="font-size:10px; color:#2c5f8a; background:${auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${auto ? 'visible' : 'hidden'};">summary</span>
-        <span class="nm-rr-info" style="font-size:11.5px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${email || telegramId ? [email, telegramId ? 'TG:'+telegramId : ''].filter(Boolean).join(' · ') : '이름 입력 시 자동완성'}</span>
+        <span class="nm-rr-info" style="font-size:11px; color:#666; background:#f1f3f5; border-radius:10px; padding:2px 9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; box-sizing:border-box;">${email || telegramId ? [email, telegramId ? 'TG:'+telegramId : ''].filter(Boolean).join(' · ') : '이름 입력 시 자동완성'}</span>
         <button type="button" class="nm-rr-email-btn" onclick="window._nmToggleChannel(this)"
                 title="이메일 발송 on/off"
                 style="width:28px; height:26px; border:1px solid ${emailOn?'#27ae60':'#ccc'}; background:${emailOn?'#e8f7ee':'#fff'}; color:${emailOn?'#27ae60':'#aaa'}; border-radius:3px; cursor:pointer; font-size:12px; padding:0;">📧</button>
@@ -1577,12 +1577,15 @@ window._nmLoadRecipients = function(n) {
         n.recipients.forEach(r => window._nmAddRecipientRow(r.name, r.email, r.telegramId, r.emailOn !== false, r.tgOn !== false, !!r.auto));
         return;
     }
+    // 💡 [2026-09-01] 신규 개별수신 항목도 Summary 담당자를 자동으로 불러오되, 채널 체크(이메일/텔레그램)는
+    //    기본수신(_computeDefaultCcList)과 동일하게 꺼진 상태로 시작 — 예전엔 이메일이 자동으로 켜져 있어서
+    //    확인 없이 발송될 수 있었음. 사용자가 직접 켜야 그 사람에게 발송된다.
     const auto = window._autoRegisterCcFromMembers ? window._autoRegisterCcFromMembers() : [];
     const seen = new Set();
     auto.filter(m => { if (seen.has(m.email)) return false; seen.add(m.email); return true; })
         .forEach(m => {
             const p = window._addrFindByName ? window._addrFindByName(m.name) : null;
-            window._nmAddRecipientRow(m.name, m.email, p ? (p.telegramId || '') : '', true, !!(p && p.telegramId), true);
+            window._nmAddRecipientRow(m.name, m.email, p ? (p.telegramId || '') : '', false, false, true);
         });
 };
 
@@ -1635,8 +1638,10 @@ window._nmToggleDateMode = function() {
     const isSpecific = document.getElementById('nm-datemode-specific')?.checked;
     const rangeEl = document.getElementById('nm-daterange-fields');
     const specEl  = document.getElementById('nm-specific-dates-fields');
-    if (rangeEl) rangeEl.style.display = isSpecific ? 'none' : 'grid';
-    if (specEl)  specEl.style.display  = isSpecific ? 'block' : 'none';
+    // 💡 [2026-09-01] 두 필드 모두 발송 시각과 한 줄에 나란히 배치되는 flex 아이템이라 'grid'/'block'
+    //    대신 'flex'로 토글(위 HTML의 새 레이아웃 참고).
+    if (rangeEl) rangeEl.style.display = isSpecific ? 'none' : 'flex';
+    if (specEl)  specEl.style.display  = isSpecific ? 'flex' : 'none';
 };
 
 // ── 특정 날짜 태그 관리 (커스텀 D-day 패턴과 동일) ──────────────────────────
@@ -2109,8 +2114,8 @@ window._asRecipAddRow = function(containerId, r) {
         <input class="as-recip-name u-input" placeholder="이름 (자동완성)" value="${row0.name}"
                oninput="window._asRecipAutofill(this)"
                style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
-        <span style="font-size:10px; color:#2c5f8a; background:${row0.auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${row0.auto ? 'visible' : 'hidden'};">auto</span>
-        <span class="as-recip-info" style="font-size:11.5px; color:#888; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${row0.email || row0.telegramId ? [row0.email, row0.telegramId ? 'TG:'+row0.telegramId : ''].filter(Boolean).join(' · ') : '이름 입력 시 자동완성'}</span>
+        <span style="font-size:10px; color:#2c5f8a; background:${row0.auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${row0.auto ? 'visible' : 'hidden'};">summary</span>
+        <span class="as-recip-info" style="font-size:11px; color:#666; background:#f1f3f5; border-radius:10px; padding:2px 9px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; box-sizing:border-box;">${row0.email || row0.telegramId ? [row0.email, row0.telegramId ? 'TG:'+row0.telegramId : ''].filter(Boolean).join(' · ') : '이름 입력 시 자동완성'}</span>
         <button type="button" class="as-recip-email-btn" onclick="window._asRecipToggleChannel(this)" title="이메일 발송 on/off"
                 style="width:28px; height:26px; border:1px solid ${row0.emailOn?'#27ae60':'#ccc'}; background:${row0.emailOn?'#e8f7ee':'#fff'}; color:${row0.emailOn?'#27ae60':'#aaa'}; border-radius:3px; cursor:pointer; font-size:12px; padding:0;">📧</button>
         <button type="button" class="as-recip-tg-btn" onclick="window._asRecipToggleChannel(this)" title="텔레그램 발송 on/off"
@@ -2580,15 +2585,18 @@ window.collectAlarmItems = function() {
         const sentHidden = !!localStorage.getItem('gantt_alarm_' + rowId + '_hidden');
 
         const statusVal = ci.status >= 0 ? String(row[ci.status] || '').trim() : '';
+        // 💡 [2026-09-01 신규] 알람 일정 모달의 "업무 정보" 편집칸에서 이 알람만을 위해 제목/내용을
+        //    덮어썼으면(row._알림제목오버라이드/_알림내용오버라이드) 발신인/수신인 추출 등 나머지 계산은
+        //    전부 원본 contentRaw 기준 그대로 두고, 실제로 메일에 표시/발송되는 taskName/content만 덮어쓴다.
         items.push({
-            rowId, rowIdx, taskName,
+            rowId, rowIdx, taskName: row._알림제목오버라이드 || taskName,
             status: statusVal,
             assignee, assigneeEmail,
             receiverStr, receiverEmail,
             missingPeople, blockedByDomain,
             toEmail, allPeople, allowedPeople,
             ccMails, ccRecipients, dueStr, dueDate, diffDays, alarmDays,
-            content: contentRaw, sentLog, sentHidden, tr,
+            content: row._알림내용오버라이드 || contentRaw, sentLog, sentHidden, tr,
             mailRaw: row._mailRaw || null // 💡 메일분석으로 자동등록된 업무면 원문 메일(제목/발신/날짜/본문) 보관
         });
     });
@@ -2798,11 +2806,13 @@ window.openAlarmScheduleModal = async function(idx) {
     document.getElementById('as-recip-mode-custom').checked  = !!isCustomRecip;
     window._asRenderRecipList();
 
-    // 업무 정보 — Gantt 업무에서 그대로 가져와 표시(읽기 전용). 메일분석으로 자동등록된 업무면 원문보기 버튼도.
-    document.getElementById('as-info-title').textContent = item.taskName || '-';
-    document.getElementById('as-info-content').textContent = item.content
-        ? (window.alarmFormatContent ? window.alarmFormatContent(item.content) : item.content)
-        : '-';
+    // 💡 [2026-09-01] 업무 정보 — 예전엔 읽기 전용 표시였는데, 이 알람 발송에만 쓰일 제목/내용을 직접
+    //    다듬을 수 있게 편집 가능한 입력칸으로 변경. row._알림제목오버라이드/_알림내용오버라이드에 저장된
+    //    "이 알람만의 덮어쓰기"가 있으면 그걸 먼저 보여주고, 없으면 Gantt 업무에서 가져온 값을 기본값으로
+    //    보여준다(Gantt 원본 업무 자체는 건드리지 않음 — window.saveAlarmSchedule 참고).
+    document.getElementById('as-info-title').value = (recipRow && recipRow._알림제목오버라이드) || item.taskName || '';
+    document.getElementById('as-info-content').value = (recipRow && recipRow._알림내용오버라이드)
+        || (item.content ? (window.alarmFormatContent ? window.alarmFormatContent(item.content) : item.content) : '');
     document.getElementById('as-info-mailraw-wrap').style.display = item.mailRaw ? 'block' : 'none';
 
     document.getElementById('alarm-schedule-title').textContent = '⚙️ ' + item.taskName + (window._currentLang === 'en' ? ' — Alarm Schedule' : ' — 알람 일정');
@@ -2878,8 +2888,10 @@ window._asToggleDateMode = function() {
     const isSpecific = document.getElementById('as-datemode-specific')?.checked;
     const rangeEl = document.getElementById('as-daterange-fields');
     const specEl  = document.getElementById('as-specific-dates-fields');
-    if (rangeEl) rangeEl.style.display = isSpecific ? 'none' : 'grid';
-    if (specEl)  specEl.style.display  = isSpecific ? 'block' : 'none';
+    // 💡 [2026-09-01] 두 필드 모두 발송 시각과 한 줄에 나란히 배치되는 flex 아이템이라 'grid'/'block'
+    //    대신 'flex'로 토글(위 HTML의 새 레이아웃 참고, notice-modal의 _nmToggleDateMode와 동일 패턴).
+    if (rangeEl) rangeEl.style.display = isSpecific ? 'none' : 'flex';
+    if (specEl)  specEl.style.display  = isSpecific ? 'flex' : 'none';
 };
 
 // ── 수신 대상: 기본수신(전체 공용 CC 명단) / 개별수신(이 업무만의 명단) ─────────
@@ -2902,7 +2914,20 @@ window._asRenderRecipList = function() {
     } else {
         const item = window._alarmScheduleItem;
         const row  = item ? (window.globalData || [])[item.rowIdx] : null;
-        rows = ((row && row._알림수신자) || []).map(window._normalizeRecipRow);
+        if (row && Array.isArray(row._알림수신자) && row._알림수신자.length) {
+            rows = row._알림수신자.map(window._normalizeRecipRow);
+        } else {
+            // 💡 [2026-09-01] 예전엔 저장된 개별수신 명단이 없으면 완전히 빈 목록으로 시작했음(notice-modal의
+            //    개별수신은 Summary 담당자를 자동으로 불러왔는데 이쪽만 안 그랬음) — 통일: Summary 담당자를
+            //    자동으로 불러오되, 채널 체크(이메일/텔레그램)는 기본수신과 동일하게 꺼진 상태로 시작.
+            const seen = new Set();
+            rows = (window._autoRegisterCcFromMembers ? window._autoRegisterCcFromMembers() : [])
+                .filter(m => { if (seen.has(m.email)) return false; seen.add(m.email); return true; })
+                .map(m => {
+                    const p = window._addrFindByName ? window._addrFindByName(m.name) : null;
+                    return { name: m.name, email: m.email, telegramId: p ? (p.telegramId || '') : '', emailOn: false, tgOn: false, auto: true };
+                });
+        }
         if (descEl) descEl.textContent = '개별수신: 이 업무에만 적용되는 명단입니다.';
     }
     rows.forEach(r => window._asRecipAddRow('as-recip-list', r));
@@ -2996,6 +3021,10 @@ window._asSaveRecurRule = async function() {
     const hourInterval = 1;
     const ruleId       = document.getElementById('as-schedule-rule-id').value || undefined;
 
+    // 💡 업무 정보(제목/내용) 덮어쓰기도 D-day 저장과 동일하게 여기서 함께 반영
+    window._asPersistTitleContentOverride();
+    const rowForSnapshot = (window.globalData || [])[item.rowIdx];
+
     // 💡 수신 대상(기본수신/개별수신)을 지금 화면 상태로 저장(전역 CC 명단 갱신 또는 이 업무에만 기록)
     const ccRecipients = window._asPersistRecipients ? (window._asPersistRecipients() || []) : [];
 
@@ -3005,7 +3034,7 @@ window._asSaveRecurRule = async function() {
     const payload = {
         id: ruleId, type: 'alarm',
         driveFileId, rowIdx: item.rowIdx,
-        taskNameSnapshot: item.taskName,
+        taskNameSnapshot: (rowForSnapshot && rowForSnapshot._알림제목오버라이드) || item.taskName,
         ccRecipientsSnapshot: ccRecipients,
         allowedExternalDomainsSnapshot: cfg.allowedExternalDomains || [],
         dateMode, startDate, endDate, specificDates: window._asSpecificDates.slice(),
@@ -3047,6 +3076,25 @@ window._asDeleteRecurRule = async function() {
     window.renderAlarmTab();
 };
 
+// 💡 [2026-09-01 신규] "업무 정보" 제목/내용 입력칸을 다듬었으면(원본 업무 값과 다르면) row에
+//    "이 알람만의 덮어쓰기"로 저장 — 그대로 두면(원본과 동일/빈칸) 덮어쓰기를 지워서 항상 Gantt 원본을
+//    따라가게 함. D-day 저장(아래 saveAlarmSchedule)과 기간·반복 저장(_asSaveRecurRule) 양쪽에서 공용.
+window._asPersistTitleContentOverride = function() {
+    const item = window._alarmScheduleItem;
+    if (!item) return;
+    const row = (window.globalData || [])[item.rowIdx];
+    if (!row) return;
+    const titleEl = document.getElementById('as-info-title');
+    const contentEl = document.getElementById('as-info-content');
+    const titleVal = (titleEl?.value || '').trim();
+    const contentVal = (contentEl?.value || '').trim();
+    if (titleVal && titleVal !== (item.taskName || '').trim()) row._알림제목오버라이드 = titleVal;
+    else delete row._알림제목오버라이드;
+    const origContent = (item.content ? (window.alarmFormatContent ? window.alarmFormatContent(item.content) : item.content) : '').trim();
+    if (contentVal && contentVal !== origContent) row._알림내용오버라이드 = contentVal;
+    else delete row._알림내용오버라이드;
+};
+
 // 저장: D-day 목록 모드면 row._알림일정에 기록(기본값(7/3/1)과 완전히 같으면 커스텀 설정을 지워서
 // "기본값 사용" 상태로 되돌림), 기간·반복 모드면 백엔드 예약 규칙 저장으로 위임
 window.saveAlarmSchedule = function() {
@@ -3056,6 +3104,8 @@ window.saveAlarmSchedule = function() {
     if (!item) return;
     const row = (window.globalData || [])[item.rowIdx];
     if (!row) return;
+
+    window._asPersistTitleContentOverride();
 
     const checked = Array.from(document.querySelectorAll('.alarm-sched-cb:checked')).map(cb => Number(cb.value));
     const finalDays = Array.from(new Set([...checked, ...(window._asCustomDays || [])])).sort((a, b) => b - a);
