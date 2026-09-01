@@ -6236,6 +6236,9 @@ ${recentLogs}
     //    하나의 프롬프트로 합쳐서 보낸다(멀티턴을 흉내). 대화 내용은 저장하지 않는 휘발성 세션 상태.
     // ═══════════════════════════════════════════════════════════
     window._ganttQaHistory = [];
+    // 💡 [2026-09-01 신규] "📤 메일 작성/발송" 기능이 [[MAIL_DRAFT]]로 만든, 아직 발송 확정 전인
+    //    초안 1건(이름→이메일까지 resolve된 구조화 데이터) — 발송/취소/새 초안 생성 시 교체·소진됨.
+    window._ganttQaPendingMailDraft = null;
 
     // 💡 [2026-08-29 신규 — 버그 수정] "다른 프로젝트로 이동해서 물어보면 응답이 없다(⏳가 멈추지 않음).
     //    내용을 지우고 다시 물으면 답한다"는 제보 — 프로젝트를 전환한 직후엔 구글 드라이브 토큰이 막
@@ -6547,6 +6550,28 @@ ${recentLogs}
         });
         const addressOmitted = addressOmittedCount ? `\n...(그 외 ${addressOmittedCount}명 생략됨)` : '';
 
+        // 💡 [2026-09-01 신규] 다른 프로젝트 목록 — "OO 프로젝트는 어떻게 되고 있어?"처럼 지금 열려있지
+        //    않은 다른 프로젝트를 물었을 때 AI가 어떤 프로젝트들이 존재하는지 알고 그중 하나를 정확히
+        //    지목해 조회 요청(LOAD_PROJECT)할 수 있도록, 이름/고객사/담당자만 가벼운 인덱스로 보여준다.
+        //    무거운 업무 데이터는 여기 안 담고, 실제로 그 프로젝트를 물었을 때만 별도로 가져온다
+        //    (아래 "🌐 다른 프로젝트 조회" 규칙 참고 — mailTexts/VIEW_MAIL과 동일한 2단계 조회 패턴).
+        window._aiOtherProjectRefMap = [];
+        let otherProjectsText = '(없음)';
+        try {
+            const allProjects = window._msLoadProjectIndex ? await window._msLoadProjectIndex() : [];
+            const others = allProjects.filter(function(p) {
+                return p && p.drive_file_id && p.drive_file_id !== window.currentDriveFileId;
+            });
+            if (others.length) {
+                otherProjectsText = others.map(function(p, i) {
+                    const no = i + 1;
+                    window._aiOtherProjectRefMap[no] = p;
+                    return `- #P${no} ${p.model || p.customer || p.file_name}${p.inch ? ' (' + p.inch + '인치)' : ''}` +
+                        `${p.customer ? ' / 고객사:' + p.customer : ''}${p.assignee ? ' / 담당:' + p.assignee : ''}${p.completed ? ' [완료]' : ''}`;
+                }).join('\n');
+            }
+        } catch (e) { console.warn('다른 프로젝트 목록 로드 실패:', e.message); }
+
         return {
             todayStr: todayStr,
             projectLine: `[프로젝트] 고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}`,
@@ -6557,6 +6582,7 @@ ${recentLogs}
             mcTableText: (mcLines.length ? mcLines.join('\n') : '(없음)') + mcOmitted,
             elecPartsText: elecLines.length ? elecLines.join('\n') : '(없음)',
             addressText: (addressLines.length ? addressLines.join('\n') : '(없음)') + addressOmitted,
+            otherProjectsText: otherProjectsText,
             totalTasks: rows.length,
             taskListText: (lines.length ? lines.join('\n') : '(등록된 업무 없음)') + omittedNote,
             recentLogsText: recentLogs.length ? recentLogs.join('\n') : '(없음)'
@@ -6572,7 +6598,7 @@ ${recentLogs}
     //    실데이터 대신 "${토큰}" 문자열 그 자체로 호출해서 "편집 가능한 기본 프롬프트 텍스트"를 만드는 데
     //    재사용한다(AI 업무분석/AI 프로젝트 요약의 _defaultPromptTemplate 트릭과 동일 — 수동으로 다시
     //    타이핑하다 토큰을 빠뜨리거나 오타 낼 위험이 없음).
-    window._buildGanttQaPromptTemplateRaw = function(ctx, question, historyText, mailSection) {
+    window._buildGanttQaPromptTemplateRaw = function(ctx, question, historyText, mailSection, otherProjectSection) {
         return `당신은 아래 프로젝트(Gantt 일정 + Summary/Customer SPEC/M.C Table/Elec Parts/Address 등 프로젝트 파일 전체 데이터)를 잘 아는 보조 AI입니다.
 기본적으로 아래 데이터에 있는 내용에 근거해서 답하고, 데이터에 없는 구체적인 수치·값을 있는 사실처럼 지어내지 마세요 — 그런 경우 "데이터에서 확인되지 않습니다"라고 답하세요.
 🔎 추론 허용 규칙: 다만 사용자가 "추론해줘/추정해줘/네 생각은/일반적으로 어때/충족할 수 있어?"처럼 판단이나 추론을 명시적으로 요청하면, 데이터에 없는 내용이라도 당신이 아는 일반적인 전자/디스플레이/기구 엔지니어링 지식을 근거로 답변하세요 — 절대 "데이터에서 확인되지 않습니다"로 끝내지 마세요. 이때는 답변 앞에 "🔎 AI 추론(데이터 아님, 일반 지식 기반 추정)"이라고 표시를 붙여서 위 [데이터] 기반 사실과 명확히 구분하고, 추론에 사용한 전제·근거와 불확실성(예: 정확한 수치는 부품 데이터시트 확인 필요)도 함께 설명하세요. 지어낸 수치를 확정된 데이터처럼 단정하지 말고 "약 ~로 알려져 있음/일반적으로 ~하는 경향" 식으로 추정임을 드러내세요. 간결하고 실무적인 한국어로 답변하세요.
@@ -6633,6 +6659,39 @@ ${recentLogs}
 3. 그 업무에 [원문有] 표시가 있으면, 다른 말이나 설명 없이 답변으로 정확히 이 한 줄만 출력하세요: [[ACTION:VIEW_MAIL:그업무의숫자]]  (원문 조회도 Gantt 업무 전용 기능이라 항상 #G의 숫자만 대상이며, 태그 안에는 "G"를 빼고 숫자만 넣습니다. 예: #G12라면 [[ACTION:VIEW_MAIL:12]]) — 시스템이 원문을 찾아 자동으로 다시 물어봅니다.
 4. [원문有] 표시가 없는 업무면 태그를 쓰지 말고 "이 업무는 저장된 원본 메일이 없습니다"라고 답하세요. 일치하는 업무가 여러 개거나 하나도 없어도 태그를 쓰지 말고 되물어보세요.
 
+📤 "~에게 메일로 보내줘/메일 써줘/메일 작성해줘" 유형 요청에 대한 필수 규칙 (실제 메일을 발송하는 기능 — 반드시 사람 확인을 거친 뒤에만 발송되며, 절대 요청 즉시 바로 보내지지 않습니다):
+이 기능은 항상 "① 초안 작성 → ② 사용자 확인 → ③ 발송"의 2단계 왕복으로만 동작합니다. 아래 규칙을 반드시 지키세요.
+
+1. **이메일 주소를 절대 직접 만들어 쓰지 마세요.** 당신은 이메일 주소를 모릅니다(보안상 컨텍스트에 포함되지 않음) — 수신인/참조인은 [담당자/프로젝트 멤버] 또는 [주소록]에 있는 이름 그대로(또는 주소록이면 "#AD숫자"로) 적으면, 시스템이 실제 이메일을 찾아서 채워줍니다. 이름을 지어내지 말고, 목록에서 찾은 사람만 적으세요.
+2. **[지금까지의 대화]에 직전 AI 답변으로 "📧 메일 초안"이 이미 나와 있는지 먼저 확인하세요:**
+   - **없다면(새로운 메일 요청)** — 아래 형식으로 초안을 작성해서 답변 맨 마지막에 붙이세요(이 블록 앞에 "네, 아래 내용으로 초안을 준비했습니다" 같은 짧은 인사말 정도는 붙여도 되지만, 메일 내용 자체를 블록 밖에 또 쓰지는 마세요 — 중복됩니다):
+     [[MAIL_DRAFT]]
+     수신인: 이름1, 이름2
+     참조인: 이름3 (없으면 이 줄 자체를 생략)
+     제목: 메일 제목
+     본문:
+     메일 본문 내용(여러 줄 가능, 한국어 존댓말, 인사말과 맺음말 포함)
+     [[/MAIL_DRAFT]]
+     - 본문 내용은 위 "🔒 요약/정리/분석 규칙"과 동일한 기준으로 작성하세요 — [내용:]/[대응:]을 읽고 실제 이슈를 설명하고, 업무명·날짜만 나열하지 마세요. 단, 메일 본문에는 "#G98" 같은 인용 번호를 넣지 마세요(받는 사람은 이 화면을 볼 수 없어 링크가 의미 없습니다) — 번호 대신 업무명을 그대로 풀어서 쓰세요.
+     - "오늘 업무" 같은 상대 날짜 표현은 위 [오늘 날짜]·"오늘 업무 정리해줘" 판단 규칙을 그대로 따르세요.
+     - 수신인을 못 찾았어도(주소록/담당자 목록에 없는 이름) 일단 그 이름 그대로 적으세요 — 시스템이 "이메일 없음"으로 표시하고 사용자가 직접 고를 수 있게 합니다. 절대 이 경우에 임의로 다른 사람으로 바꾸지 마세요.
+     - 이 턴에는 절대 아래 3번의 발송 확정 태그를 같이 붙이지 마세요 — 초안만 보여주고 반드시 사용자 확인을 기다리세요.
+   - **있다면(이미 초안을 보여준 다음 턴)** — 사용자의 이번 메시지를 판단하세요:
+     - "보내줘/이대로 보내줘/발송해줘/네 보내주세요"처럼 **명확한 발송 확정**이면 → 다른 말이나 설명 없이 답변으로 정확히 이 한 줄만 출력: [[ACTION:SEND_MAIL:CONFIRM]] (시스템이 방금 보여준 초안 그대로 발송하고 결과를 답변에 붙여줍니다 — 내용을 다시 쓰지 마세요).
+     - "참조에 ~추가해줘/본문에 ~내용 넣어줘/제목 바꿔줘"처럼 **수정 요청**이면 → 위 1번 형식으로 수정된 내용 전체를 담아 [[MAIL_DRAFT]] 블록을 처음부터 다시 통째로 출력하세요(이전 초안을 대체합니다 — 바뀐 부분만 부분적으로 적으면 안 됩니다).
+     - "취소해줘/그만할게"처럼 **취소**면 → 태그 없이 "네, 메일 발송을 취소했습니다"처럼만 답하세요.
+     - 메일과 무관한 새로운 질문이면 → 평소처럼 그 질문에만 답하고 메일 관련 태그는 아무것도 붙이지 마세요.
+3. 위에서 설명한 [[ACTION:SEND_MAIL:CONFIRM]] 태그는 오직 직전에 보여준 초안을 사용자가 명확히 확정했을 때만 쓰세요 — 확신이 없으면 태그를 붙이지 말고 되물어보세요(실제로 메일이 발송되는 기능이므로 신중해야 합니다).
+
+🌐 다른 프로젝트 조회 규칙 (기본은 항상 지금 열려있는 이 프로젝트 기준으로 답변하되, 사용자가 다른 프로젝트를 물으면 전체 프로젝트를 열람해서 답할 수 있는 기능):
+아래 [다른 프로젝트 목록]은 지금 열려있는 이 프로젝트를 제외한, 전체 등록된 다른 프로젝트들의 가벼운 목록(이름/고객사/담당자)입니다 — 이 목록엔 업무 상세 데이터가 없으니, 목록만 보고 다른 프로젝트의 업무 내용을 안다고 착각하거나 지어내지 마세요.
+1. **기본값**: 질문에 특정 프로젝트를 콕 집어 언급하지 않았거나, [다른 프로젝트 목록]에 없는 "이 프로젝트"를 가리키는 표현(예: "이 프로젝트", "여기", 프로젝트명 언급 없음)이면 — 항상 지금까지처럼 위쪽 [프로젝트]/[업무 목록] 등 "지금 열려있는 이 프로젝트" 데이터만 근거로 답하세요. 다른 프로젝트 조회는 시도하지 마세요.
+2. **다른 프로젝트를 물었을 때**: 사용자의 질문이 [다른 프로젝트 목록]에 있는 것으로 보이는 이름(모델명/고객사 등)을 언급하면(예: "OO 프로젝트는 일정이 어떻게 돼?", "△△ 고객사 건 지연된 거 있어?"):
+   - 아래 [요청하신 다른 프로젝트 상세 데이터] 섹션에 그 프로젝트 데이터가 이미 포함되어 있다면, 그 내용을 근거로 바로 답변하세요(아래 절차를 다시 밟지 말고 태그도 다시 붙이지 마세요).
+   - 그 섹션이 아직 없다면, [다른 프로젝트 목록]에서 요청과 가장 일치하는 프로젝트를 정확히 하나만(또는 질문이 여러 프로젝트에 걸치면 그만큼 여러 개를) 찾아, 다른 말이나 설명 없이 답변으로 정확히 이 형식만 출력하세요: [[ACTION:LOAD_PROJECT:그프로젝트의번호]] (여러 개면 각각 한 줄씩, 예: [[ACTION:LOAD_PROJECT:3]]\n[[ACTION:LOAD_PROJECT:7]]) — "P"는 빼고 숫자만 넣습니다(#P3이면 LOAD_PROJECT:3). 시스템이 해당 프로젝트 데이터를 찾아 자동으로 다시 물어봅니다.
+   - 일치하는 프로젝트가 없으면 태그를 쓰지 말고 "그런 프로젝트를 찾지 못했습니다"라고 답하고, 비슷한 이름이 있으면 후보로 보여주며 되물어보세요. 여러 개가 애매하게 겹치면(예: 같은 이름의 프로젝트가 2개) 태그를 쓰지 말고 어느 쪽인지 되물어보세요.
+3. 다른 프로젝트의 업무를 언급할 때는 "#G숫자" 같은 클릭 인용 번호를 절대 붙이지 마세요(그 번호는 지금 열려있는 이 프로젝트의 업무에만 유효합니다 — 다른 프로젝트 업무는 그냥 업무명으로 설명하세요). 답변 안에서 지금 프로젝트 얘기와 다른 프로젝트 얘기가 섞이면 "(OO 프로젝트)"처럼 어느 프로젝트 얘기인지 매번 명확히 구분해서 헷갈리지 않게 하세요.
+
 [오늘 날짜]
 ${ctx.todayStr}
 
@@ -6659,6 +6718,9 @@ ${ctx.elecPartsText}
 [주소록 — 이름/부서/직함만 포함, 연락처는 미포함]
 ${ctx.addressText}
 
+[다른 프로젝트 목록 — 지금 열려있는 이 프로젝트 제외, 업무 상세 데이터 없음]
+${ctx.otherProjectsText}
+${otherProjectSection}
 전체 업무 수: ${ctx.totalTasks}건
 
 [업무 목록]
@@ -6673,7 +6735,7 @@ ${historyText}
 [사용자의 새 질문]
 ${question}
 
-위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람"/"📧 원문 메일" 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:CLEAR_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
+위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람"/"📧 원문 메일"/"📤 메일 작성/발송"/"🌐 다른 프로젝트 조회" 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:CLEAR_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] / [[MAIL_DRAFT]]...[[/MAIL_DRAFT]] / [[ACTION:SEND_MAIL:CONFIRM]] / [[ACTION:LOAD_PROJECT:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
     };
 
     // 💡 위 원본 함수를 실데이터 대신 "${토큰}" 문자열 그 자체로 호출해서, 사용자가 편집할 수 있는
@@ -6683,20 +6745,26 @@ ${question}
         todayStr: '${todayStr}', projectLine: '${projectLine}', overviewText: '${overviewText}',
         memberText: '${memberText}', materialText: '${materialText}', customerSpecText: '${customerSpecText}',
         mcTableText: '${mcTableText}', elecPartsText: '${elecPartsText}', addressText: '${addressText}',
+        otherProjectsText: '${otherProjectsText}',
         totalTasks: '${totalTasks}', taskListText: '${taskListText}', recentLogsText: '${recentLogsText}'
-    }, '${question}', '${historyText}', '${mailSection}');
+    }, '${question}', '${historyText}', '${mailSection}', '${otherProjectSection}');
 
     // 💡 [2026-08-31 신규] AI 문답 프롬프트도 AI 업무분석/AI 프로젝트 요약과 동일하게 "팀 공용(Drive)
     //    프롬프트 텍스트 + 데이터 토큰 치환" 구조로 전환 — 문구 수정이 이제 코드 변경 없이
     //    [💬 AI 문답 → 📝 프롬프트]에서 가능하다. ctx(표/목록 데이터) 자체는 여전히 코드가 매번 새로
     //    만든다(사용자가 직접 타이핑할 수 없는 부분이므로) — 편집 가능한 건 지시문/설명 텍스트뿐이다.
-    window._buildGanttQaPrompt = async function(question, priorHistory, mailTexts) {
+    window._buildGanttQaPrompt = async function(question, priorHistory, mailTexts, otherProjectTexts) {
         const ctx = await window._buildGanttQaContext();
         const historyText = (priorHistory && priorHistory.length)
             ? priorHistory.map(function(h) { return (h.role === 'user' ? '사용자' : 'AI') + ': ' + h.text; }).join('\n')
             : '(없음)';
         const mailSection = (mailTexts && mailTexts.length)
             ? `\n[요청하신 원문 메일 전문]\n${mailTexts.join('\n\n---\n\n')}\n`
+            : '';
+        // 💡 [2026-09-01 신규] "🌐 다른 프로젝트 조회" — [[ACTION:LOAD_PROJECT:번호]] 후속 호출에서만
+        //    채워짐(sendGanttQaMessage 참고, VIEW_MAIL의 mailTexts와 동일한 2단계 조회 패턴).
+        const otherProjectSection = (otherProjectTexts && otherProjectTexts.length)
+            ? `\n[요청하신 다른 프로젝트 상세 데이터]\n${otherProjectTexts.join('\n\n---\n\n')}\n`
             : '';
 
         const savedTemplate = localStorage.getItem('gantt_qa_prompt');
@@ -6715,9 +6783,11 @@ ${question}
         result = rep(result, '${mcTableText}', ctx.mcTableText);
         result = rep(result, '${elecPartsText}', ctx.elecPartsText);
         result = rep(result, '${addressText}', ctx.addressText);
+        result = rep(result, '${otherProjectsText}', ctx.otherProjectsText);
         result = rep(result, '${totalTasks}', ctx.totalTasks);
         result = rep(result, '${taskListText}', ctx.taskListText);
         result = rep(result, '${mailSection}', mailSection);
+        result = rep(result, '${otherProjectSection}', otherProjectSection);
         result = rep(result, '${recentLogsText}', ctx.recentLogsText);
         result = rep(result, '${historyText}', historyText);
         result = rep(result, '${question}', question);
@@ -6893,9 +6963,18 @@ ${question}
                     ${badActive ? `<button onclick="window.openQaImproveCommentModal('${m.uid}')" style="font-size:10.5px; padding:2px 8px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer; white-space:nowrap;">💡 의견</button>` : ''}
                 </div>`;
             })() : '';
+            // 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 이 메시지가 만든 초안이 아직 pending 중일 때만
+            //    버튼을 보여줌(그 사이 새 초안이 생기거나 이미 발송/취소됐으면 id가 안 맞아 자동으로 사라짐).
+            const mailDraftHtml = (!isUser && m.mailDraftId && window._ganttQaPendingMailDraft && window._ganttQaPendingMailDraft.id === m.mailDraftId)
+                ? `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px;">
+                    <button onclick="window._aiSendPendingMailDraft('${m.mailDraftId}', this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 이대로 보내기</button>
+                    <button onclick="window._aiCancelPendingMailDraft('${m.mailDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
+                </div>`
+                : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
+                ${mailDraftHtml ? `<div style="max-width:82%; width:100%;">${mailDraftHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;
@@ -6990,6 +7069,244 @@ ${question}
         return `#${rowIndex} "${label}"의 원본 메일\n제목: ${mr.subject || '-'}\n발신: ${mr.sender || '-'}\n날짜: ${mr.date || '-'}\n본문:\n${body || '(본문 없음)'}`;
     };
 
+    // ── 💡 [2026-09-01 신규] "🌐 다른 프로젝트 조회" — 위 프롬프트의 [[ACTION:LOAD_PROJECT:번호]]
+    //    규칙 참고. VIEW_MAIL과 동일한 2단계 조회 패턴: AI가 번호로 요청 → 여기서 그 프로젝트의
+    //    Drive 파일을 직접 읽어(현재 열려있는 프로젝트의 globalData/tabData는 절대 건드리지 않음 —
+    //    화면엔 아무 변화 없이 순수 조회만) 가벼운 텍스트 컨텍스트로 만들어 후속 프롬프트에 끼워 넣는다.
+    window._aiFetchOtherProjectContext = async function(no) {
+        const entry = window._aiOtherProjectRefMap && window._aiOtherProjectRefMap[no];
+        if (!entry || !entry.drive_file_id) return null;
+        try {
+            const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return null;
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${entry.drive_file_id}?alt=media&supportsAllDrives=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const pd = await res.json();
+            return window._buildOtherProjectQaContext(pd, entry);
+        } catch (e) { console.warn('다른 프로젝트(#P' + no + ') 조회 실패:', e.message); return null; }
+    };
+
+    // 💡 다른 프로젝트의 저장 파일(globalData/colIdx/projectMeta/tabData)을 가볍게 요약 텍스트로 변환.
+    //    현재 프로젝트용 _buildGanttQaContext처럼 DOM(rendered table)에서 읽지 않고 저장된 JSON 값만
+    //    사용한다(다른 프로젝트를 화면에 렌더링하지 않고 조회만 하기 위함) — 그래서 Customer SPEC/
+    //    M.C Table/Elec Parts/주소록처럼 DOM에만 의존하던 일부 탭은 여기서는 생략하고, 업무 목록/
+    //    개요/담당자/주요자재처럼 tabData·projectMeta에 이미 원본 값이 있는 부분만 다룬다.
+    window._buildOtherProjectQaContext = function(pd, indexEntry) {
+        const gd = (pd && pd.globalData) || [];
+        const ci = (pd && pd.colIdx) || {};
+        const pm = (pd && pd.projectMeta) || {};
+        const td = (pd && pd.tabData) || {};
+        const label = (indexEntry && (indexEntry.model || indexEntry.customer || indexEntry.file_name)) || pm.고객모델명 || '(이름 없음)';
+        const fld = function(key) { return (typeof ci[key] === 'number' && ci[key] !== -1) ? ci[key] : -1; };
+        const cStatus = fld('status'), cPlan = fld('plan'), cStart = fld('start'), cAssignee = fld('assignee'), cContent = fld('content');
+        const koMap = (typeof LANG !== 'undefined' && LANG.ko && LANG.ko.statusMap) ? LANG.ko.statusMap : {};
+        const normStatus = function(raw) {
+            const s = (raw || '').toString().trim(); if (!s) return '(미지정)';
+            const key = Object.keys(koMap).find(function(k) { return k.toLowerCase() === s.toLowerCase(); });
+            return key ? koMap[key] : s;
+        };
+        const taskLabel = function(row) {
+            if (row._level === 0) return row._origDev || '';
+            if (row._level === 1) return row._origT1 || '';
+            if (row._level === 2) return row._origT2 || '';
+            if (row._level === 3) return row._origT3 || '';
+            return row._origT4 || '';
+        };
+        const rows = gd.map(function(r, i) { return { row: r, idx: i }; }).slice(1).filter(function(x) { return x.row && x.row._level !== undefined; });
+        const MAX_OTHER_TASKS = 200; // 💡 다른 프로젝트 조회는 참고용이라 지금 프로젝트(300건)보다 낮은 상한으로 용량 보호
+        const maxLen = window.getAiContentMaxLen ? window.getAiContentMaxLen() : 500;
+        const lines = [];
+        rows.slice(0, MAX_OTHER_TASKS).forEach(function(x) {
+            const row = x.row;
+            const taskName = taskLabel(row) || '(제목없음)';
+            const status = normStatus(cStatus !== -1 ? row[cStatus] : '');
+            const assignee = (cAssignee !== -1 && row[cAssignee]) ? row[cAssignee] : '미지정';
+            const start = (cStart !== -1 && row[cStart]) ? row[cStart] : '';
+            const plan = (cPlan !== -1 && row[cPlan]) ? row[cPlan] : '';
+            const content = (cContent !== -1 && row[cContent]) ? String(row[cContent]).replace(/\s+/g, ' ').trim().slice(0, maxLen) : '';
+            const dateRange = (window._fmtDateRangeShort ? window._fmtDateRangeShort(start, plan) : (plan || start)) || '-';
+            let line = `- "${taskName}" | 담당:${assignee} | 상태:${status} | 기간:${dateRange}`;
+            if (content) line += ` | 내용:${content}`;
+            lines.push(line);
+        });
+        const omitted = rows.length > MAX_OTHER_TASKS ? `\n...(그 외 ${rows.length - MAX_OTHER_TASKS}건은 용량 제한으로 생략됨 — "#G숫자" 인용은 이 프로젝트에서는 쓸 수 없습니다)` : '';
+
+        const sd = td.summary || {};
+        const overview = [];
+        if (sd.purpose) overview.push(`적용 목적: ${sd.purpose}`);
+        if (sd.volume) overview.push(`연간 수요량: ${sd.volume}`);
+        if (sd.mpDate) overview.push(`목표 양산 일정: ${sd.mpDate}`);
+        if (pm.프로젝트코드) overview.push(`프로젝트 코드: ${pm.프로젝트코드}`);
+
+        const memberFieldDefs = [['프로젝트담당자', 'PM'], ['기구담당자', '기구'], ['HW담당자', 'HW'], ['FW담당자', 'FW'],
+            ['TSP담당자', 'TSP'], ['LCM담당자', 'LCM'], ['Slimming담당자', 'Slimming'], ['Cutting담당자', 'Cutting'],
+            ['Module담당자', 'Module'], ['Tooling담당자', 'Tooling']];
+        const memberLines = memberFieldDefs.filter(function(f) { return pm[f[0]]; }).map(function(f) { return `${f[1]}: ${pm[f[0]]}`; });
+
+        const materialLines = ((td.projectMaterials || [])
+            .filter(function(m) { return m && (m.category || m.ktkPn || m.description); })
+            .map(function(m) { return `- ${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}`; }));
+
+        return `[다른 프로젝트: ${label}]\n` +
+            `고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}\n` +
+            `[개요]\n${overview.length ? overview.join('\n') : '(없음)'}\n` +
+            `[담당자]\n${memberLines.length ? memberLines.join('\n') : '(없음)'}\n` +
+            `[주요 자재]\n${materialLines.length ? materialLines.join('\n') : '(없음)'}\n` +
+            `[업무 목록] (총 ${rows.length}건)\n${lines.length ? lines.join('\n') : '(등록된 업무 없음)'}${omitted}`;
+    };
+
+    // ── 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 위 프롬프트의 [[MAIL_DRAFT]] 규칙 참고 ──────────
+    // AI가 만든 [[MAIL_DRAFT]] 블록(수신인:/참조인:/제목:/본문:)을 구조로 쪼갠다. 형식이 살짝
+    // 어긋나도(예: 참조인 줄이 아예 없음) 최대한 관대하게 파싱하고, 못 알아본 줄은 무시한다.
+    window._parseMailDraftBlock = function(blockText) {
+        const lines = String(blockText || '').split('\n');
+        let toLine = '', ccLine = '', subject = '';
+        const bodyLines = [];
+        let inBody = false;
+        lines.forEach(function(line) {
+            const mTo = !inBody && line.match(/^\s*수신인\s*:\s*(.*)$/);
+            const mCc = !inBody && line.match(/^\s*참조인\s*:\s*(.*)$/);
+            const mSubj = !inBody && line.match(/^\s*제목\s*:\s*(.*)$/);
+            const mBody = !inBody && line.match(/^\s*본문\s*:\s*(.*)$/);
+            if (mTo) { toLine = mTo[1].trim(); return; }
+            if (mCc) { ccLine = mCc[1].trim(); return; }
+            if (mSubj) { subject = mSubj[1].trim(); return; }
+            if (mBody) { inBody = true; if (mBody[1].trim()) bodyLines.push(mBody[1]); return; }
+            if (inBody) bodyLines.push(line);
+        });
+        const splitNames = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return x.trim(); }).filter(Boolean); };
+        return { toNames: splitNames(toLine), ccNames: splitNames(ccLine), subject: subject, body: bodyLines.join('\n').trim() };
+    };
+
+    // 💡 이름(또는 "#AD숫자"/"AD숫자") → 실제 이메일 주소. AI는 이메일을 모르는 채로 이름만 적으므로,
+    //    여기서 [주소록] → [프로젝트 고정 담당자 필드] → [프로젝트 멤버-3(자유추가)] 순서로 로컬
+    //    데이터에서만 찾는다(외부로 나가는 게 아니라 이미 이 프로젝트 파일 안에 있는 정보이므로 안전).
+    //    못 찾으면 email:null로 반환 — 발송 전 미리보기에서 "이메일 없음"으로 표시되어 사람이 알아챈다.
+    window._aiResolveNameToEmail = function(rawName) {
+        const name = String(rawName || '').trim();
+        if (!name) return { name: name, email: null };
+        const norm = function(s) { return String(s || '').trim().toLowerCase(); };
+
+        const adMatch = name.match(/^#?\s*AD\s*(\d+)$/i);
+        if (adMatch) {
+            const no = parseInt(adMatch[1], 10);
+            let hit = null;
+            document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
+                if (hit) return;
+                const noEl = tr.querySelector('.bm-no');
+                if (noEl && parseInt(noEl.textContent, 10) === no) hit = tr;
+            });
+            if (hit) {
+                const g = function(f) { const el = hit.querySelector('input[data-field="' + f + '"]'); return el ? el.value.trim() : ''; };
+                const email = g('email');
+                if (email) return { name: g('name') || g('nameEn') || name, email: email };
+            }
+            return { name: name, email: null };
+        }
+
+        let found = null;
+        document.querySelectorAll('#address-table-body tr').forEach(function(tr) {
+            if (found) return;
+            const g = function(f) { const el = tr.querySelector('input[data-field="' + f + '"]'); return el ? el.value.trim() : ''; };
+            const nm = g('name'), nmEn = g('nameEn'), email = g('email');
+            if (!email) return;
+            if (norm(nm) === norm(name) || norm(nmEn) === norm(name)) found = { name: nm || nmEn, email: email };
+        });
+        if (found) return found;
+
+        const pm = window.projectMeta || {};
+        const fixedFields = ['프로젝트담당자', '기구담당자', 'HW담당자', 'FW담당자', 'TSP담당자', 'LCM담당자',
+            'Slimming담당자', 'Cutting담당자', 'Module담당자', 'Tooling담당자'];
+        for (let i = 0; i < fixedFields.length; i++) {
+            const f = fixedFields[i];
+            if (pm[f] && norm(pm[f]) === norm(name)) {
+                const email = (pm[f + '이메일'] || '').trim();
+                if (email) return { name: pm[f], email: email };
+            }
+        }
+
+        const members3 = (window.tabData && window.tabData.projectMembers3) || [];
+        const m3 = members3.find(function(m) { return m && norm(m.name) === norm(name) && (m.email || '').trim(); });
+        if (m3) return { name: m3.name, email: m3.email.trim() };
+
+        return { name: name, email: null };
+    };
+
+    // 💡 파싱된 이름 목록을 실제 이메일까지 resolve해서 하나의 "발송 가능한 초안" 객체로 만든다.
+    //    id는 채팅 메시지(m.mailDraftId)와 짝지어, 옛날 메시지의 [📤 보내기] 버튼이 그 사이 새로
+    //    생긴 다른 초안을 잘못 보내는 걸 막는 용도.
+    window._aiBuildMailDraftFromParsed = function(parsed) {
+        return {
+            id: 'maildraft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+            to: (parsed.toNames || []).map(window._aiResolveNameToEmail),
+            cc: (parsed.ccNames || []).map(window._aiResolveNameToEmail),
+            subject: parsed.subject || '',
+            body: parsed.body || ''
+        };
+    };
+
+    // 💡 초안을 채팅 말풍선에 보여줄 마크다운으로 변환 — _mdToHtml이 raw HTML은 이스케이프하므로
+    //    반드시 이미 지원되는 마크다운 문법(**굵게**, 줄바꿈)만 사용한다.
+    window._aiMailDraftPreviewMd = function(draft) {
+        const fmtPerson = function(p) { return p.email ? `${p.name} (${p.email})` : `${p.name} ⚠️(이메일 없음)`; };
+        const toStr = draft.to.length ? draft.to.map(fmtPerson).join(', ') : '(없음)';
+        let md = `📧 **메일 초안**\n- **수신인:** ${toStr}`;
+        if (draft.cc.length) md += `\n- **참조인:** ${draft.cc.map(fmtPerson).join(', ')}`;
+        md += `\n- **제목:** ${draft.subject || '(제목 없음)'}\n\n**본문**\n${draft.body || '(내용 없음)'}`;
+        md += draft.to.some(function(p) { return !p.email; })
+            ? `\n\n⚠️ 수신인 중 이메일을 찾지 못한 사람이 있습니다 — 주소록에 등록한 뒤 다시 요청해주세요.`
+            : `\n\n💬 이대로 보내려면 "보내줘"라고 말씀해주시거나, 아래 [📤 이대로 보내기] 버튼을 눌러주세요.`;
+        return md;
+    };
+
+    // 💡 실제 발송 — kortek_backend.py의 기존 /send-mail(SMTP)을 그대로 재사용(알람 메일 발송과 동일
+    //    엔드포인트). 여기서 본문 줄바꿈만 <br>로 바꿔 HTML 메일로 보낸다(백엔드가 MIMEText 'html' 고정).
+    window._aiSendMailFromDraft = async function(draft) {
+        const toEmails = (draft.to || []).filter(function(p) { return p.email; }).map(function(p) { return p.email; });
+        if (!toEmails.length) return { ok: false, error: '수신인 이메일을 찾지 못했습니다. 주소록에 등록한 뒤 다시 시도해주세요.' };
+        const ccEmails = (draft.cc || []).filter(function(p) { return p.email; }).map(function(p) { return p.email; });
+        const bodyHtml = escapeHtml(draft.body || '').replace(/\n/g, '<br>');
+        try {
+            const res = await fetch('http://127.0.0.1:5000/send-mail', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ to: toEmails.join(','), cc: ccEmails.join(','), subject: draft.subject || '(제목 없음)', body: bodyHtml })
+            });
+            const data = await res.json();
+            return data.ok ? { ok: true } : { ok: false, error: data.error || '알 수 없는 오류' };
+        } catch (e) {
+            return { ok: false, error: '메일 서버에 연결할 수 없습니다(kortek_backend.bat 실행 여부를 확인해주세요). ' + e.message };
+        }
+    };
+
+    // 💡 채팅의 [📤 이대로 보내기]/[❌ 취소] 버튼 클릭 핸들러 — draftId가 지금 pending 중인 초안과
+    //    같을 때만 동작(그 사이 새 초안/발송으로 이미 소진됐으면 안전하게 무시하고 안내).
+    window._aiSendPendingMailDraft = async function(draftId, btn) {
+        const pending = window._ganttQaPendingMailDraft;
+        if (!pending || pending.id !== draftId) {
+            if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning');
+            window._renderGanttQaMessages();
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ 발송 중...'; }
+        const sendRes = await window._aiSendMailFromDraft(pending);
+        window._ganttQaPendingMailDraft = null;
+        window._ganttQaHistory.push({
+            role: 'ai',
+            text: sendRes.ok
+                ? `✅ 메일을 발송했습니다. (수신: ${pending.to.filter(function(p){return p.email;}).map(function(p){return p.name;}).join(', ')})`
+                : `⚠️ 메일 발송 실패: ${sendRes.error}`,
+            uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
+        });
+        window._renderGanttQaMessages();
+    };
+    window._aiCancelPendingMailDraft = function(draftId) {
+        if (window._ganttQaPendingMailDraft && window._ganttQaPendingMailDraft.id === draftId) window._ganttQaPendingMailDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: '📌 메일 발송을 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+
     // AI 답변 텍스트에서 [[ACTION:SET_ALARM:번호]] 또는 [[ACTION:CLEAR_ALARM:번호]] 태그를 찾아 제거하고,
     // 실행 결과 안내문을 답변에 덧붙인다. 태그가 없으면 원문을 그대로 반환.
     // 💡 [2026-08-28 신규] "알람 해제해줘" 요청 대응 — CLEAR_ALARM 태그 처리를 추가(SET_ALARM과 대칭).
@@ -7071,12 +7388,61 @@ ${question}
                 }
             }
 
+            // 💡 [2026-09-01 신규] "🌐 다른 프로젝트 조회" 대응 — VIEW_MAIL과 동일한 2단계 왕복 패턴.
+            //    AI가 [[ACTION:LOAD_PROJECT:번호]]로 지금 안 열려있는 다른 프로젝트 데이터를 요청하면,
+            //    그 프로젝트 파일을 Drive에서 직접 읽어(화면엔 아무 변화 없음 — 순수 조회) 후속
+            //    프롬프트에 끼워 넣고 한 번 더 물어봐서, 사용자 눈에는 곧바로 그 데이터를 근거로
+            //    답한 것처럼 보이게 한다. 여러 프로젝트를 한 번에 요청했으면 전부 병렬로 가져온다.
+            const otherProjectNos = Array.from(text.matchAll(/\[\[ACTION:LOAD_PROJECT:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
+            if (otherProjectNos.length) {
+                const otherProjectTexts = (await Promise.all(otherProjectNos.map(window._aiFetchOtherProjectContext))).filter(Boolean);
+                if (otherProjectTexts.length) {
+                    const followupPrompt2 = await window._buildGanttQaPrompt(question, priorHistory, null, otherProjectTexts);
+                    const result3 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt2, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+                    if (result3.ok) text = window._extractGanttQaAiText(result3);
+                    else text = text.replace(/\[\[ACTION:LOAD_PROJECT:\d+\]\]/g, '').trim() + '\n\n⚠️ 다른 프로젝트 데이터를 불러오는 중 오류가 발생했습니다.';
+                } else {
+                    text = text.replace(/\[\[ACTION:LOAD_PROJECT:\d+\]\]/g, '').trim() + '\n\n⚠️ 해당 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
+                }
+            }
+
             text = window._applyGanttQaActions(text.trim());
+
+            // 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 위 프롬프트 규칙 참고. 이번 턴에 새 초안이
+            //    생겼는지(mailDraftIdThisTurn), 확정 발송을 시도했는지(sendResultNote)를 모두 여기서
+            //    처리하고 결과만 답변 텍스트에 반영한다(실제 발송은 window._ganttQaPendingMailDraft에
+            //    저장해둔 "코드가 이미 이메일까지 resolve해둔" 구조화 데이터로만 하고, AI가 CONFIRM
+            //    턴에 다시 적어 보낸 텍스트는 절대 신뢰하지 않음 — 사람이 본 초안과 실제 발송 내용이
+            //    100% 같아야 하므로).
+            let mailDraftIdThisTurn = null;
+            const mDraft = text.match(/\[\[MAIL_DRAFT\]\]([\s\S]*?)\[\[\/MAIL_DRAFT\]\]/);
+            if (mDraft) {
+                const parsed = window._parseMailDraftBlock(mDraft[1]);
+                const draft = window._aiBuildMailDraftFromParsed(parsed);
+                window._ganttQaPendingMailDraft = draft;
+                mailDraftIdThisTurn = draft.id;
+                text = text.replace(mDraft[0], window._aiMailDraftPreviewMd(draft)).trim();
+            }
+            const mSendConfirm = text.match(/\[\[ACTION:SEND_MAIL:CONFIRM\]\]/);
+            if (mSendConfirm) {
+                text = text.replace(mSendConfirm[0], '').trim();
+                if (!window._ganttQaPendingMailDraft) {
+                    text += '\n\n⚠️ 아직 확정할 메일 초안이 없습니다. 먼저 메일 작성을 요청해주세요.';
+                } else {
+                    const pending = window._ganttQaPendingMailDraft;
+                    const sendRes = await window._aiSendMailFromDraft(pending);
+                    text += sendRes.ok
+                        ? `\n\n✅ 메일을 발송했습니다. (수신: ${pending.to.filter(function(p){return p.email;}).map(function(p){return p.name;}).join(', ')})`
+                        : `\n\n⚠️ 메일 발송 실패: ${sendRes.error}`;
+                    window._ganttQaPendingMailDraft = null; // 성공/실패 모두 소진 — 같은 초안이 중복 발송되지 않게
+                }
+            }
+
             window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
             // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
             //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
             //    AI에게 다시 보여줄 수 있게 한다.
-            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question });
+            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn });
         } catch (e) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
@@ -7352,6 +7718,7 @@ ${question}
     window.clearGanttQaChat = function() {
         if (window._ganttQaHistory.length && !confirm('대화 내용을 모두 지울까요?')) return;
         window._ganttQaHistory = [];
+        window._ganttQaPendingMailDraft = null; // 💡 대화를 지우면 남아있던 메일 초안도 함께 무효화
         window._renderGanttQaMessages();
     };
 
