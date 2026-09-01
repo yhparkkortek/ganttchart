@@ -325,6 +325,8 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     const xBtn = _modalIconBtn('<i class="ti ti-x"></i>', '닫기');
     xBtn.addEventListener('click', function(e) {
         e.stopPropagation();
+        const info = window._modalMinimized[modalId];
+        if (info && info.observer) info.observer.disconnect();
         delete window._modalMinimized[modalId];
         if (chip.parentNode) chip.parentNode.removeChild(chip);
         _relayoutTaskbarChips(bar);
@@ -342,12 +344,32 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     _relayoutTaskbarChips(bar);
 
     toggleEl.style.display = 'none';
-    window._modalMinimized[modalId] = { toggleEl: toggleEl, prevDisplay: prevDisplay, chip: chip };
+
+    // 💡 [2026-09-02 신규] "최소화된 줄 모르고 메뉴 등에서 다시 열었을 때 중복으로 열리는" 문제 수정 —
+    //    최소화 중엔 이 요소의 style을 우리가 아닌 다른 코드(그 모달의 원래 openXxxModal 함수)가
+    //    다시 보이는 값으로 바꾸는 경우가 있다(같은 id의 DOM을 재사용해 display만 되돌리는 방식이라
+    //    "새로" 열리진 않지만, 하단 박스가 안 없어지고 그대로 남아 "열려있는데 또 떠 있다"는 인상을 줌).
+    //    style 속성 변화를 감시하다가 display가 'none'이 아닌 값으로 바뀌면, 우리가 직접 만든 restore가
+    //    아니어도 최소화 상태를 정리해서(하단 박스 제거) 원래 위치로 "돌아온 것"처럼 자연스럽게 맞춘다.
+    const observer = new MutationObserver(function() {
+        if (toggleEl.style.display === 'none') return; // 아직 안 보임 — 우리가 최소화한 상태 그대로
+        observer.disconnect();
+        const info = window._modalMinimized[modalId];
+        if (!info) return; // 이미 ▲복원/✕닫기로 우리 쪽에서 정리됨
+        if (info.chip && info.chip.parentNode) info.chip.parentNode.removeChild(info.chip);
+        delete window._modalMinimized[modalId];
+        _relayoutTaskbarChips(bar);
+        if (window.bringModalToFront) window.bringModalToFront(toggleEl.id);
+    });
+    observer.observe(toggleEl, { attributes: true, attributeFilter: ['style'] });
+
+    window._modalMinimized[modalId] = { toggleEl: toggleEl, prevDisplay: prevDisplay, chip: chip, observer: observer };
 };
 
 window._restoreModal = function(modalId) {
     const info = window._modalMinimized[modalId];
     if (!info) return;
+    if (info.observer) info.observer.disconnect();
     info.toggleEl.style.display = info.prevDisplay;
     if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
     const bar = info.chip && info.chip.parentNode;
