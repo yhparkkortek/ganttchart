@@ -164,28 +164,67 @@ function _modalIconBtn(html, title) {
 
 // 💡 [2026-09-02 버그 수정] 왼쪽 시작 위치가 화면(사이드바 아래)에 고정돼 있어서 메인 콘텐츠 박스
 //    시작 지점과 어긋나 보였다 — #app-main(사이드바 접힘/펼침에 따라 margin-left가 바뀌는 실제
-//    콘텐츠 영역)의 왼쪽 끝에 맞춰서 정렬하고, 사이드바를 접었다 펴도 계속 맞도록 ResizeObserver로
-//    추적한다.
-let _mtLeftSynced = false;
-function _syncTaskbarLeft(bar) {
+//    콘텐츠 영역)의 왼쪽 끝~오른쪽 끝 폭에 정확히 맞추고, 사이드바를 접었다 펴도 계속 맞도록
+//    ResizeObserver로 추적한다. [2026-09-02 추가] 오른쪽도 화면 끝이 아니라 #app-main 폭으로
+//    제한해서, 상단 시트탭 바처럼 "메인 콘텐츠 박스를 넘어가지 않게" 한다.
+const MT_TAB_W = 160;   // 상단 시트탭 바(renderSheetTabsBar)의 DEFAULT_TAB_W와 동일 — "엑셀 시트 너비"
+const MT_TAB_MIN_W = 70; // 〃 MIN_TAB_W와 동일
+const MT_GAP = 8;
+
+let _mtBoundsSynced = false;
+function _syncTaskbarBounds(bar) {
     const mainEl = document.getElementById('app-main');
-    bar.style.left = (mainEl ? mainEl.getBoundingClientRect().left : 10) + 'px';
+    if (mainEl) {
+        const r = mainEl.getBoundingClientRect();
+        bar.style.left = r.left + 'px';
+        bar.style.width = r.width + 'px';
+    } else {
+        bar.style.left = '10px';
+        bar.style.width = 'calc(100% - 20px)';
+    }
+    _relayoutTaskbarChips(bar);
 }
+
+// 💡 [2026-09-02 신규] 박스가 많아지면 2단으로 줄바꿈되던 걸 1단 유지로 바꾸고, 대신 제한된 폭 안에
+//    맞도록 각 박스 폭을 촘촘히 줄여간다(상단 시트탭 바의 자동 축소 로직과 동일한 방식). 기본 폭
+//    (MT_TAB_W)으로 다 안 들어가면 MT_TAB_MIN_W까지 균등하게 줄이고, 그 축소 모드에서는 복원(▲)
+//    버튼을 숨기고(더블클릭으로 복원 가능) 글자 크기도 줄여서 좁은 폭에서도 제목이 최대한 보이게 한다.
+function _relayoutTaskbarChips(bar) {
+    const chips = Array.prototype.slice.call(bar.children);
+    const n = chips.length;
+    if (!n) return;
+    const available = bar.clientWidth;
+    const neededAtDefault = n * MT_TAB_W + (n - 1) * MT_GAP;
+    let chipW = MT_TAB_W;
+    let shrink = false;
+    if (neededAtDefault > available && available > 0) {
+        chipW = Math.max(MT_TAB_MIN_W, Math.floor((available - (n - 1) * MT_GAP) / n));
+        shrink = true;
+    }
+    chips.forEach(function(chip) {
+        chip.style.width = chipW + 'px';
+        chip.style.flex = '0 0 ' + chipW + 'px';
+        chip.style.fontSize = shrink ? '11px' : '12.5px';
+        const restoreBtn = chip.querySelector('.mtc-restore-btn');
+        if (restoreBtn) restoreBtn.style.display = shrink ? 'none' : 'flex';
+    });
+}
+
 function _modalTaskbarEl() {
     let bar = document.getElementById('modal-taskbar');
     if (!bar) {
         bar = document.createElement('div');
         bar.id = 'modal-taskbar';
-        bar.style.cssText = 'position:fixed; left:10px; right:10px; bottom:0; z-index:99999; display:flex; gap:8px; flex-wrap:wrap; pointer-events:none;';
+        bar.style.cssText = 'position:fixed; bottom:0; z-index:99999; display:flex; gap:' + MT_GAP + 'px; flex-wrap:nowrap; overflow:hidden; pointer-events:none;';
         document.body.appendChild(bar);
     }
-    _syncTaskbarLeft(bar);
-    if (!_mtLeftSynced) {
-        _mtLeftSynced = true;
-        window.addEventListener('resize', function() { _syncTaskbarLeft(bar); });
+    _syncTaskbarBounds(bar);
+    if (!_mtBoundsSynced) {
+        _mtBoundsSynced = true;
+        window.addEventListener('resize', function() { _syncTaskbarBounds(bar); });
         const mainEl = document.getElementById('app-main');
         if (mainEl && window.ResizeObserver) {
-            new ResizeObserver(function() { _syncTaskbarLeft(bar); }).observe(mainEl);
+            new ResizeObserver(function() { _syncTaskbarBounds(bar); }).observe(mainEl);
         }
     }
     return bar;
@@ -241,26 +280,33 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     // 💡 [2026-09-02 신규] "엑셀 시트탭과 같은 색상" 요청 — 상단 시트탭 바(renderSheetTabsBar,
     //    js/04c-core-app-mail-pipeline.js)가 쓰는 것과 똑같이 window._cpRoleHex()로 지금 적용 중인
     //    테마 색을 그대로 읽어와 칠한다. 아직 팔레트를 한 번도 안 건드렸으면 기본 청록 팔레트로 대체.
-    const _cpHex = window._cpRoleHex || function(k) { return { bg: '#e0f5f7', border: '#a3d9e0', hoverBg: '#a3d9e0', hoverBorder: '#52a5af', darkText: '#00707d' }[k]; };
-    const tabBorder = _cpHex('hoverBg');
-    const tabHoverBg = _cpHex('bg');
+    //    [2026-09-02 수정] 기본 상태가 흰 배경이던 걸 "테마색(bg/border 롤)"로, hover는 그보다 한
+    //    단계 더 진한 색(hoverBg/hoverBorder 롤)으로 바꿔서 hover했을 때 확실히 진해지는 게 보이게 함.
+    const _cpHex = window._cpRoleHex || function(k) { return { bg: '#e0f5f7', border: '#cfe3e5', hoverBg: '#a3d9e0', hoverBorder: '#52a5af', darkText: '#00707d' }[k]; };
+    const tabBg = _cpHex('bg');
+    const tabBorder = _cpHex('border');
+    const tabHoverBg = _cpHex('hoverBg');
     const tabHoverBorder = _cpHex('hoverBorder');
     const tabText = _cpHex('darkText');
 
     const bar = _modalTaskbarEl();
     const chip = document.createElement('div');
     chip.className = 'modal-taskbar-chip';
-    chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:#fff; border:1px solid ' + tabBorder + '; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:' + tabText + '; font-weight:bold; max-width:220px;';
+    chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:' + tabBg + '; border:1px solid ' + tabBorder + '; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:' + tabText + '; font-weight:bold; box-sizing:border-box;';
     chip.style.setProperty('--mtc-hover-bg', tabHoverBg);
     chip.style.setProperty('--mtc-hover-border', tabHoverBorder);
     chip.title = '더블클릭하면 원래대로 복원됩니다';
 
+    // 💡 [2026-09-02 신규] 상자 기본 폭을 상단 시트탭과 같은 값(MT_TAB_W)으로 — 제목이 잘려도
+    //    title 속성(말풍선)으로 전체를 볼 수 있으니 자르는 걸 허용.
     const label = document.createElement('span');
+    label.className = 'mtc-label';
     label.textContent = _modalTitleFor(handle, modalId);
     label.title = label.textContent;
-    label.style.cssText = 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+    label.style.cssText = 'flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
 
     const restoreBtn = _modalIconBtn('<i class="ti ti-chevron-up"></i>', '복원');
+    restoreBtn.className += ' mtc-restore-btn';
     restoreBtn.addEventListener('click', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
 
     const xBtn = _modalIconBtn('<i class="ti ti-x"></i>', '닫기');
@@ -268,6 +314,7 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
         e.stopPropagation();
         delete window._modalMinimized[modalId];
         if (chip.parentNode) chip.parentNode.removeChild(chip);
+        _relayoutTaskbarChips(bar);
         // 완전히 닫기 — 저장/정리 로직이 있는 모달도 안전하도록, 원래 보이던 상태로 되돌린 뒤
         // 실제 ✕ 버튼을 그대로 눌러서(onclick 로직 그대로 재사용) 닫는다.
         toggleEl.style.display = prevDisplay;
@@ -279,6 +326,7 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     chip.appendChild(xBtn);
     chip.addEventListener('dblclick', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
     bar.appendChild(chip);
+    _relayoutTaskbarChips(bar);
 
     toggleEl.style.display = 'none';
     window._modalMinimized[modalId] = { toggleEl: toggleEl, prevDisplay: prevDisplay, chip: chip };
@@ -289,8 +337,10 @@ window._restoreModal = function(modalId) {
     if (!info) return;
     info.toggleEl.style.display = info.prevDisplay;
     if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
-    if (info.chip && info.chip.parentNode) info.chip.parentNode.removeChild(info.chip);
+    const bar = info.chip && info.chip.parentNode;
+    if (bar) bar.removeChild(info.chip);
     delete window._modalMinimized[modalId];
+    if (bar) _relayoutTaskbarChips(bar);
 };
 
 // 모달별 드래그 등록
