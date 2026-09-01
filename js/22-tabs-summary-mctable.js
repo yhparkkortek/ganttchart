@@ -3454,18 +3454,26 @@ window.renderMaterialRows = function(rows) {
         //    경우 모두 "붙여넣어 AI로 추출" 흐름으로 이어주지만, 버튼 노출 자체는 PANEL과 통일).
         //    구분명 → Elec Parts 타입 매핑이라 나중에 부품 종류가 늘어도 이 한 줄만 추가하면 됨.
         const _epRowType = { 'CONVERTER': 'convbd', 'AD BOARD': 'adbd' };
+        // 💡 [2026-09-01 신규] 돋보기 노출 조건을 "description 있음"에서 "description 또는 ktkPn 있음"으로
+        //    확장 — ktk pn만 먼저 적어놓고 이름은 아직 안 적은 경우에도 코드만으로 라이브러리 검색 가능.
+        //    검색 자체는 description(이름 식별자)은 그대로 두고 ktkPn을 별도 "코드 힌트"로 같이 넘겨서
+        //    showPanelSpecModal/showElecPartSpecModal 내부에서 "코드_이름" 조합으로 라이브러리를 찾게
+        //    한다(비교표 식별자로 쓰이는 model 문자열 자체는 안 건드려서, 이미 비교표에 등록된 항목과의
+        //    대조·재추출 흐름은 그대로 유지됨).
+        const _hasSpecKey = !!(r.description || r.ktkPn);
         const descInputCell = '<td style="padding:2px; border:1px solid #cfe3e5;"><div style="display:flex; align-items:center; gap:2px;">'
             + '<input type="text" data-idx="' + idx + '" data-field="description" class="u-input" value="' + _escTabVal(r.description) + '" placeholder="' + (_matEn ? 'e.g. MV315QHM-N41' : '예: MV315QHM-N41') + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;" '
             + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '>'
-            + ((r.category === 'PANEL' && r.description)
-                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
-                : ((_epRowType[r.category] && r.description)
-                    ? '<button type="button" onclick="window.showElecPartSpecModal(' + escapeHtml(JSON.stringify(_epRowType[r.category])) + ', ' + escapeHtml(JSON.stringify(r.description)) + ')" title="' + (_matEn ? 'Spec preview' : '스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+            + ((r.category === 'PANEL' && _hasSpecKey)
+                ? '<button type="button" onclick="window.showPanelSpecModal(' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Panel spec preview' : '패널 스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
+                : ((_epRowType[r.category] && _hasSpecKey)
+                    ? '<button type="button" onclick="window.showElecPartSpecModal(' + escapeHtml(JSON.stringify(_epRowType[r.category])) + ', ' + escapeHtml(JSON.stringify(r.description)) + ', ' + escapeHtml(JSON.stringify(r.ktkPn || '')) + ')" title="' + (_matEn ? 'Spec preview' : '스펙 미리보기') + '" style="flex-shrink:0; border:1px solid #2c5f8a; border-radius:3px; background:#fff; color:#2c5f8a; cursor:pointer; font-size:11px; width:20px; height:20px; line-height:1; padding:0;">🔎</button>'
                     : ''))
             + delBtn
             + '</div></td>';
         return '<tr style="background:' + _zebraBg + ';">' + catCell
-            + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box; background:transparent;"></td>'
+            + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="ktkPn" class="u-input" value="' + _escTabVal(r.ktkPn) + '" maxlength="6" style="border:none; width:100%; box-sizing:border-box; background:transparent;" '
+            + ((r.category === 'PANEL' || _epRowType[r.category]) ? 'onchange="window.renderMaterialRows(window.collectMaterialRows(true));"' : '') + '></td>'
             + descInputCell
             + '<td style="padding:2px; border:1px solid #cfe3e5;"><input type="text" data-idx="' + idx + '" data-field="cost" class="u-input" value="' + _escTabVal(r.cost) + '" style="border:none; width:100%; box-sizing:border-box; background:transparent;"></td>'
             + '<td style="border:1px solid #cfe3e5; text-align:center; white-space:nowrap;"><input type="checkbox" data-idx="' + idx + '" data-field="useForAnalysis" ' + (r.useForAnalysis ? 'checked' : '') + ' title="' + (_matEn ? 'Check to trust mentions of this PN as a project-identifying signal (uncheck for shared/common parts)' : '체크하면 이 PN 언급을 프로젝트 식별 신호로 신뢰함(공용 부품이면 체크 해제 권장)') + '"></td>'
@@ -4366,7 +4374,11 @@ window._pcSaveNewPanel = async function() {
 };
 
 // ─── Summary 주요자재 PANEL 행 🔎 버튼 → 패널 스펙 미리보기 모달 ───
-window.showPanelSpecModal = async function(model) {
+// 💡 [2026-09-01 신규] codeHint(주요자재 표의 ktk pn, 보통 6자리 관리코드) — 검색에만 쓰고 비교표
+//    등록/재추출 등 "식별자"로는 절대 안 씀(식별자는 항상 entry.model 또는 사용자가 적은 description
+//    그대로 — ktk pn이 섞여 들어가면 이미 비교표에 있는 같은 패널을 "없음"으로 오판하거나, 비교표에
+//    코드가 섞인 이름으로 등록되는 부작용이 생기므로 분리함).
+window.showPanelSpecModal = async function(model, codeHint) {
     const _en = window._currentLang === 'en';
     let modal = document.getElementById('pc-spec-modal');
     if (!modal) {
@@ -4391,15 +4403,22 @@ window.showPanelSpecModal = async function(model) {
     const bodyEl = document.getElementById('pc-spec-body');
     bodyEl.innerHTML = `<div style="text-align:center; color:#999; padding:20px;">${_en ? 'Loading…' : '불러오는 중...'}</div>`;
     const lib = await window.loadPanelLibrary();
-    const entry = window.findPanelInLibrary(lib, model);
-    const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model);
+    // 💡 ktk pn(codeHint)이 있으면 "코드_이름"으로 합쳐서 검색 — findPanelInLibrary가 이미
+    //    _epFlexibleFind로 코드/이름을 분리 대조하므로 이 조합만으로 ktk pn도 검색 근거가 된다.
+    const searchQuery = codeHint ? (codeHint + (model ? '_' + model : '')) : model;
+    const entry = window.findPanelInLibrary(lib, searchQuery);
+    // 💡 식별자(제목 표시/비교표 등록·재추출/URL)는 검색 성공 시 라이브러리의 정확한 모델명(entry.model)을,
+    //    실패 시 사용자가 적은 description(비어있으면 ktk pn)을 그대로 사용 — 검색용 codeHint 조합 문자열이
+    //    비교표 등 다른 곳으로 새어나가지 않게 분리함.
+    const model_display = entry ? entry.model : (model || codeHint || '');
+    const url = 'https://www.panelook.com/modelsearch.php?keyword=' + encodeURIComponent(model_display);
     if (!entry) {
         // 💡 [2026-08-25] 두 요소를 헷갈려서(링크=panelook.com 이동, 버튼=로컬 붙여넣기/AI추출) "추출하기를
         //    눌렀는데 홈페이지에서 멈춘다"는 문의가 있었음 — panelook.com은 자동화 접근을 막는 슬라이더
         //    캡차가 있어서(사람이 직접 풀어야 함), 저 링크는 "사람이 직접 확인·복사하러 가는 창구"일 뿐이고
         //    실제 추출은 아래 버튼(붙여넣기 → AI)에서만 일어난다는 걸 문구로 명확히 구분해뒀다.
         bodyEl.innerHTML = `
-            <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${escapeHtml(model)}</div>
+            <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${escapeHtml(model_display)}</div>
             <div style="color:#888; margin-bottom:14px;">${_en ? 'No spec has been extracted for this panel yet.' : '아직 이 패널의 스펙이 추출되지 않았습니다.'}</div>
             <div style="font-size:11.5px; color:#666; line-height:1.7; background:#f8f9fa; border-radius:6px; padding:8px 10px; margin-bottom:12px;">
                 ${_en
@@ -4407,18 +4426,18 @@ window.showPanelSpecModal = async function(model) {
                     : '① 아래 #1 panelook.com 페이지로 접속해서(최신은 없을 수도 있음), 검색된 패널명 앞의 <b>"+"</b> 버튼을 눌러 추가한 뒤(이미 눌려져 있을 수도 있음), 페이지 오른쪽 상단 "Panel Compare" 상자의 <b>"compare"</b> 버튼을 클릭하세요.<br>&nbsp;&nbsp;→ "사람인지 확인" 슬라이드 캡차가 뜰 수 있는데, 사람만 통과할 수 있어 자동화할 수 없습니다.<br>&nbsp;&nbsp;→ 통과하면 스펙 비교 페이지로 이동합니다. 그 페이지에서 <b>Ctrl+S</b>를 눌러 <mark style="background:#ffe066; color:#7a5210; padding:0 3px; border-radius:3px;">"웹페이지,전부 HTML"</mark>으로 저장하세요.<br>② 아래 #2 버튼을 누른 뒤, 저장한 <b>.html 파일</b>(폴더 제외)을 첨부하여 추출하면, AI가 처리합니다.'}
             </div>
             <a href="${url}" target="_blank" rel="noopener" style="display:inline-block; margin-bottom:10px; color:#2c5f8a;">🔗 #1 panelook.com${_en ? ' (open & copy manually)' : '에서 직접 확인·복사'}</a><br>
-            <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 #2 ${_en ? 'Attach the HTML file & extract with AI' : 'HTML 파일 첨부 후 AI로 추출'}</button>
+            <button onclick="document.getElementById('pc-spec-modal').style.display='none'; window.panelCompareReextract(${escapeHtml(JSON.stringify(model_display))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 #2 ${_en ? 'Attach the HTML file & extract with AI' : 'HTML 파일 첨부 후 AI로 추출'}</button>
         `;
         return;
     }
-    const inCompare = !!(window.tabData && window.tabData.panelCompare && window.tabData.panelCompare.selectedModels && window.tabData.panelCompare.selectedModels.indexOf(model) !== -1);
+    const inCompare = !!(window.tabData && window.tabData.panelCompare && window.tabData.panelCompare.selectedModels && window.tabData.panelCompare.selectedModels.indexOf(model_display) !== -1);
     let html = `<div style="font-size:13px; font-weight:bold; margin-bottom:2px;">${escapeHtml(entry.model)}</div>
         <div style="color:#888; margin-bottom:8px;">${escapeHtml(entry.brand || '')}</div>
         <a href="${escapeHtml(entry.sourceUrl || url)}" target="_blank" rel="noopener" style="color:#2c5f8a;">🔗 panelook.com ${_en ? 'search' : '검색'}</a>
         <div style="margin:10px 0;">
             ${inCompare
                 ? `<span style="color:#2f9e44; font-weight:bold;">✓ ${_en ? 'Already in this project\'s comparison table' : '이 프로젝트 비교표에 있음'}</span>`
-                : `<button onclick="window.panelCompareAddFromLibrary(${escapeHtml(JSON.stringify(model))}); document.getElementById('pc-spec-modal').style.display='none';" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">➕ ${_en ? 'Add to comparison table' : '비교표에 추가'}</button>`}
+                : `<button onclick="window.panelCompareAddFromLibrary(${escapeHtml(JSON.stringify(model_display))}); document.getElementById('pc-spec-modal').style.display='none';" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 12px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">➕ ${_en ? 'Add to comparison table' : '비교표에 추가'}</button>`}
         </div>
         <div style="font-size:10px; color:#aaa; margin-bottom:8px;">${_en ? 'Updated' : '갱신'}: ${escapeHtml(entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : '-')}</div>`;
     window.PANEL_SPEC_SCHEMA.forEach(function(sec) {
@@ -5602,7 +5621,9 @@ window.showElecPinMapModal = async function(type, model) {
 };
 
 // ─── Summary 주요자재 CONVERTER 행 🔎 버튼 → 전기부품 스펙 미리보기 모달 (showPanelSpecModal과 동일 패턴) ───
-window.showElecPartSpecModal = async function(type, model) {
+// 💡 [2026-09-01 신규] codeHint(ktk pn) — 검색에만 쓰고, "찾지 못했을 때"의 표시/재추출용 식별자로만
+//    보조적으로 쓴다(찾았을 때의 비교표 등록/핀맵 등은 이미 entry.model을 쓰고 있어서 그대로 안전함).
+window.showElecPartSpecModal = async function(type, model, codeHint) {
     const _en = window._currentLang === 'en';
     const cfg = window.ELEC_PART_TYPES[type];
     let modal = document.getElementById('ep-spec-modal');
@@ -5631,16 +5652,20 @@ window.showElecPartSpecModal = async function(type, model) {
     bodyEl.innerHTML = `<div style="text-align:center; color:#999; padding:20px;">${_en ? 'Loading…' : '불러오는 중...'}</div>`;
     const lib = await window.loadElecPartLibrary(type);
     window._epLibCache[type] = lib;
-    const entry = model ? window.findElecPartInLibrary(lib, model) : null;
+    // 💡 ktk pn(codeHint)이 있으면 "코드_이름"으로 합쳐서 검색 — findElecPartInLibrary도 PANEL과 동일하게
+    //    _epFlexibleFind로 코드/이름을 분리 대조하므로 이 조합만으로 ktk pn도 검색 근거가 된다.
+    const searchQuery = codeHint ? (codeHint + (model ? '_' + model : '')) : model;
+    const entry = searchQuery ? window.findElecPartInLibrary(lib, searchQuery) : null;
+    const model_display = model || codeHint || '';
     if (!entry) {
         // 💡 Panel Compare의 showPanelSpecModal과 동일한 자리 — 값이 비어있든(설명 미입력) 라이브러리에
         //    없는 값이든, 여기선 똑같이 "붙여넣어 AI로 추출" 흐름(elecCompareReextract)으로 이어준다.
         bodyEl.innerHTML = `
-            <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${model ? escapeHtml(model) : (_en ? '(No description entered)' : '(설명 미입력)')}</div>
-            <div style="color:#888; margin-bottom:14px;">${model
-                ? (_en ? `No spec has been extracted for "${model}" yet.` : `"${model}"의 스펙이 아직 추출되지 않았습니다.`)
+            <div style="font-size:13px; font-weight:bold; margin-bottom:8px;">${model_display ? escapeHtml(model_display) : (_en ? '(No description entered)' : '(설명 미입력)')}</div>
+            <div style="color:#888; margin-bottom:14px;">${model_display
+                ? (_en ? `No spec has been extracted for "${model_display}" yet.` : `"${model_display}"의 스펙이 아직 추출되지 않았습니다.`)
                 : (_en ? 'Not extracted yet — search the library or extract a new one below.' : '아직 추출된 스펙이 없습니다 — 아래에서 라이브러리를 검색하거나 새로 추출하세요.')}</div>
-            <button onclick="document.getElementById('ep-spec-modal').style.display='none'; window.elecCompareReextract(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(model || ''))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 ${_en ? 'Paste spec text & extract with AI' : '스펙 텍스트 붙여넣고 AI로 추출'}</button>
+            <button onclick="document.getElementById('ep-spec-modal').style.display='none'; window.elecCompareReextract(${escapeHtml(JSON.stringify(type))}, ${escapeHtml(JSON.stringify(model_display))});" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:8px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">🤖 ${_en ? 'Paste spec text & extract with AI' : '스펙 텍스트 붙여넣고 AI로 추출'}</button>
         `;
         return;
     }
