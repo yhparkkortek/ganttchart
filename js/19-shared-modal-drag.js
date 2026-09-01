@@ -219,6 +219,13 @@ window._makeMinimizable = function(modalId, handleId) {
     closeBtn.parentNode.insertBefore(group, closeBtn);
     group.appendChild(minBtn);
     group.appendChild(closeBtn);
+
+    // 💡 [2026-09-02 신규] 열려있는 모달의 헤더를 더블클릭해도 ▼ 버튼을 누른 것처럼 바로 최소화되게.
+    //    버튼(▼/✕/프롬프트 편집 등) 위에서의 더블클릭은 각 버튼 자신의 클릭 동작에 맡기고 건드리지 않음.
+    handle.addEventListener('dblclick', function(e) {
+        if (e.target.closest('button')) return;
+        window._minimizeModal(modalId, handleId, closeBtn, handle);
+    });
 };
 
 window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
