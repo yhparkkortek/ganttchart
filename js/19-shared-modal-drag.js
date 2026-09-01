@@ -144,7 +144,11 @@ function _modalToggleTarget(modalId, closeBtn) {
 if (!document.getElementById('modal-taskbar-style')) {
     const _mtStyle = document.createElement('style');
     _mtStyle.id = 'modal-taskbar-style';
-    _mtStyle.textContent = '.modal-icon-btn:hover { background: var(--modal-icon-hover-bg) !important; }\n.modal-taskbar-chip:hover { background: #f3f6fa !important; }';
+    // 💡 [2026-09-02 신규] 하단 박스도 상단 시트탭(엑셀 시트탭처럼 색이 있는 프로젝트 탭)과 같은
+    //    "지금 적용 중인 테마 색"을 따르도록, hover 색은 칩마다 --mtc-hover-bg/--mtc-hover-border로
+    //    주입해서 쓴다(고정값이 아니라 칩 생성 시점의 실제 테마 색 — renderSheetTabsBar와 동일한 방식).
+    _mtStyle.textContent = '.modal-icon-btn:hover { background: var(--modal-icon-hover-bg) !important; }\n'
+        + '.modal-taskbar-chip:hover { background: var(--mtc-hover-bg, #f3f6fa) !important; border-color: var(--mtc-hover-border, #ccd5dd) !important; }';
     document.head.appendChild(_mtStyle);
 }
 
@@ -234,10 +238,21 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     if (!toggleEl) return;
     const prevDisplay = toggleEl.style.display || getComputedStyle(toggleEl).display;
 
+    // 💡 [2026-09-02 신규] "엑셀 시트탭과 같은 색상" 요청 — 상단 시트탭 바(renderSheetTabsBar,
+    //    js/04c-core-app-mail-pipeline.js)가 쓰는 것과 똑같이 window._cpRoleHex()로 지금 적용 중인
+    //    테마 색을 그대로 읽어와 칠한다. 아직 팔레트를 한 번도 안 건드렸으면 기본 청록 팔레트로 대체.
+    const _cpHex = window._cpRoleHex || function(k) { return { bg: '#e0f5f7', border: '#a3d9e0', hoverBg: '#a3d9e0', hoverBorder: '#52a5af', darkText: '#00707d' }[k]; };
+    const tabBorder = _cpHex('hoverBg');
+    const tabHoverBg = _cpHex('bg');
+    const tabHoverBorder = _cpHex('hoverBorder');
+    const tabText = _cpHex('darkText');
+
     const bar = _modalTaskbarEl();
     const chip = document.createElement('div');
     chip.className = 'modal-taskbar-chip';
-    chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:#fff; border:1px solid #ccd5dd; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:#333; max-width:220px;';
+    chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:#fff; border:1px solid ' + tabBorder + '; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:' + tabText + '; font-weight:bold; max-width:220px;';
+    chip.style.setProperty('--mtc-hover-bg', tabHoverBg);
+    chip.style.setProperty('--mtc-hover-border', tabHoverBorder);
     chip.title = '더블클릭하면 원래대로 복원됩니다';
 
     const label = document.createElement('span');
