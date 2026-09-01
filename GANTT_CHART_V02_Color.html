@@ -1701,7 +1701,18 @@
 
 <script src="js/03-drive-modal-drag.js"></script>
 
-<script src="js/04-core-app.js"></script>
+<!-- 04-core-app.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
+<script src="js/04a-core-app-globals.js"></script>
+<script src="js/04b-core-app-drive-sync.js"></script>
+<script src="js/04c-core-app-mail-pipeline.js"></script>
+<script src="js/04d-core-app-gantt-core.js"></script>
+<script src="js/04e-core-app-undo-redo.js"></script>
+<script src="js/04f-core-app-upload-utils-1.js"></script>
+<script src="js/04g-core-app-upload-utils-2.js"></script>
+<script src="js/04h-core-app-upload-utils-3.js"></script>
+<script src="js/04i-core-app-upload-utils-4.js"></script>
+<script src="js/04j-core-app-upload-utils-5.js"></script>
+<script src="js/04k-core-app-filter-export.js"></script>
 
 <script src="js/05-drive-sync-optimize.js"></script>
 
@@ -1722,7 +1733,11 @@
 
 <script src="js/13-mobile-touch-timer.js"></script>
 
-<script src="js/14-ai-mail-analysis.js"></script>
+<!-- 14-ai-mail-analysis.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
+<script src="js/14a-ai-mail-analysis-1.js"></script>
+<script src="js/14b-ai-mail-analysis-2.js"></script>
+<script src="js/14c-task-inbox.js"></script>
+<script src="js/14d-distribution-ledger.js"></script>
 
 
 
@@ -2188,7 +2203,10 @@
 </div>
 </div>
 
-<script src="js/15-mail-attachment-tab.js"></script>
+<!-- 15-mail-attachment-tab.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
+<script src="js/15a-mail-attachment-tab.js"></script>
+<script src="js/15b-mail-server-tab-1.js"></script>
+<script src="js/15c-mail-server-tab-2.js"></script>
 
 
 
@@ -2244,7 +2262,16 @@
 
 <script src="js/21-color-palette.js"></script>
 
-<script src="js/22-tabs-summary-mctable.js"></script>
+<!-- 22-tabs-summary-mctable.js 분리 (토큰 절약 · 협업용): 로딩 순서는 기존과 동일하게 유지 -->
+<script src="js/22a-summary-mctable-parse.js"></script>
+<script src="js/22b-summary-mctable-core1.js"></script>
+<script src="js/22c-summary-mctable-core2.js"></script>
+<script src="js/22d-summary-mctable-core3.js"></script>
+<script src="js/22e-summary-mctable-core4.js"></script>
+<script src="js/22f-address-book.js"></script>
+<script src="js/22g-name-autocomplete.js"></script>
+<script src="js/22h-brief-mc-common-1.js"></script>
+<script src="js/22i-brief-mc-common-2.js"></script>
 
 <script src="js/23-sidebar-tabs.js"></script>
 
