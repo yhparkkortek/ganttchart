@@ -98,7 +98,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `16-wbs-level-colors.js` | WBS 레벨별 고정 회색 계조 |
 | `17-weekly-report-modal-drag.js` | 주간 업무 보고 모달 드래그 |
 | `18-mail-analyzer-modal-drag.js` | 메일 분석기 모달 드래그 |
-| `19-shared-modal-drag.js` | 공통 모달 드래그 함수 (화면 경계 clamp 포함) |
+| `19-shared-modal-drag.js` | 공통 모달 드래그 함수 (화면 경계 clamp 포함) + 모달 최소화(하단 taskbar). `_makeDraggable()`을 호출하는 모든 모달(30개+)에 자동 적용됨 — 새 모달도 이 함수만 호출하면 최소화 버튼이 자동으로 붙는다 |
 | `20-weekly-report.js` | 주간 업무 보고 기능 본체 |
 | `21-color-palette.js` | 컬러 팔레트 모달 (hex↔HSL 변환) |
 | `22a-summary-mctable-parse.js` | 엑셀 파싱: Summary/Brief SPEC/M.C Table 등 (원래 `22-tabs-summary-mctable.js`) |

@@ -75,6 +75,164 @@ window._makeDraggable = function(modalId, handleId) {
     }, { passive: false });
     document.addEventListener('touchend', endDrag);
     document.addEventListener('touchcancel', endDrag);
+
+    // 💡 [2026-09-02 신규] 모달 최소화(하단 taskbar) — 드래그를 등록하는 모든 모달에 자동으로 함께
+    //    적용된다(별도로 각 모달마다 등록할 필요 없음. 새 모달을 추가해도 _makeDraggable만 호출하면
+    //    자동으로 최소화 버튼이 붙는다).
+    window._makeMinimizable(modalId, handleId);
+};
+
+// ── 공통 모달 최소화(하단 taskbar) 함수 ──────────────────────
+// 💡 [2026-09-02 신규] 모달이 여러 개 뜨면 화면을 가려서 불편하다는 요청으로 추가.
+//    헤더의 ✕ 닫기 버튼 왼쪽에 ▼(최소화) 버튼을 자동으로 끼워 넣는다. 각 모달이 실제로 어떤 요소의
+//    display를 토글해서 열고 닫는지(오버레이 wrapper와 실제 박스가 분리된 모달도 있고, 박스 자신이
+//    곧 토글 대상인 모달도 있음)는 모달마다 제각각이라, 이미 있는 ✕ 버튼의 onclick 문자열에서
+//    getElementById(...) 대상을 그대로 읽어내는 방식으로 알아낸다 — 그래서 모달 39개+ 각각의 내부
+//    구조를 일일이 알 필요 없이 이 파일 하나만으로 전체에 적용됨.
+window._modalMinimized = window._modalMinimized || {};
+
+// 핸들(헤더) 안에서 실제 ✕ 닫기 버튼을 찾는다. 모든 모달이 --modal-icon-bg 스타일을 공용으로 쓰는
+// 규칙(styles.css 참고)을 이용 — 못 찾으면 텍스트가 ✕/×/X인 버튼으로 한 번 더 시도.
+function _findModalCloseBtn(handle) {
+    if (!handle) return null;
+    const all = Array.prototype.slice.call(handle.querySelectorAll('button'));
+    let cands = all.filter(function(b) { return (b.getAttribute('style') || '').indexOf('modal-icon-bg') !== -1; });
+    if (!cands.length) {
+        cands = all.filter(function(b) {
+            const t = (b.textContent || '').trim();
+            return t === '✕' || t === '×' || t.toLowerCase() === 'x';
+        });
+    }
+    return cands.length ? cands[cands.length - 1] : null;
+}
+
+// 헤더의 제목 텍스트만 뽑아낸다(도움말 아이콘/툴팁처럼 중첩된 요소의 텍스트는 제외).
+function _modalTitleFor(handle, modalId) {
+    if (!handle) return modalId;
+    const cand = handle.querySelector('span, h3, strong');
+    let text = '';
+    if (cand) {
+        for (let i = 0; i < cand.childNodes.length; i++) {
+            const n = cand.childNodes[i];
+            if (n.nodeType === Node.TEXT_NODE && n.textContent.trim()) { text = n.textContent; break; }
+        }
+        if (!text) text = cand.textContent;
+    } else {
+        text = handle.textContent;
+    }
+    text = text.replace(/\s+/g, ' ').trim();
+    return text ? text.slice(0, 20) : modalId;
+}
+
+// ✕ 버튼의 onclick에서 실제 토글 대상 id를 읽어낸다. 못 찾으면 modalId 자신을 토글 대상으로 가정
+// (박스 자신이 곧 열고 닫는 대상인 모달들이 이 경우에 해당).
+function _modalToggleTarget(modalId, closeBtn) {
+    const onclickAttr = closeBtn ? (closeBtn.getAttribute('onclick') || '') : '';
+    const m = /getElementById\(\s*['"]([\w-]+)['"]\s*\)/.exec(onclickAttr);
+    if (m) {
+        const el = document.getElementById(m[1]);
+        if (el) return el;
+    }
+    return document.getElementById(modalId);
+}
+
+function _modalIconBtn(html, title) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.title = title;
+    btn.innerHTML = html;
+    btn.style.cssText = 'background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:14px; cursor:pointer; width:24px; height:24px; padding:0; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;';
+    btn.addEventListener('mouseover', function() { btn.style.background = 'var(--modal-icon-hover-bg)'; });
+    btn.addEventListener('mouseout', function() { btn.style.background = 'var(--modal-icon-bg)'; });
+    return btn;
+}
+
+function _modalTaskbarEl() {
+    let bar = document.getElementById('modal-taskbar');
+    if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'modal-taskbar';
+        bar.style.cssText = 'position:fixed; left:10px; right:10px; bottom:0; z-index:99999; display:flex; gap:8px; flex-wrap:wrap; pointer-events:none;';
+        document.body.appendChild(bar);
+    }
+    return bar;
+}
+
+// 헤더에 ▼ 최소화 버튼을 끼워 넣는다. ✕ 버튼 패턴을 못 찾으면 조용히 건너뜀(해당 모달은 최소화
+// 미적용 — 앱이 깨지지 않도록 안전하게 실패).
+window._makeMinimizable = function(modalId, handleId) {
+    const handle = document.getElementById(handleId);
+    if (!handle || handle.querySelector('.modal-min-btn')) return;
+    const closeBtn = _findModalCloseBtn(handle);
+    if (!closeBtn) { console.warn('[modal-taskbar] 닫기 버튼을 못 찾아 최소화 미적용:', modalId); return; }
+
+    const minBtn = document.createElement('button');
+    minBtn.type = 'button';
+    minBtn.className = 'modal-min-btn';
+    minBtn.title = '최소화';
+    minBtn.innerHTML = '<i class="ti ti-chevron-down"></i>';
+    minBtn.setAttribute('style', closeBtn.getAttribute('style') || '');
+    minBtn.addEventListener('mouseover', function() { minBtn.style.background = 'var(--modal-icon-hover-bg)'; });
+    minBtn.addEventListener('mouseout', function() { minBtn.style.background = 'var(--modal-icon-bg)'; });
+    // 헤더(드래그 손잡이) 안에 있으므로 mousedown/touchstart가 드래그 시작으로 번지지 않게 막는다.
+    minBtn.addEventListener('mousedown', function(e) { e.stopPropagation(); });
+    minBtn.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
+    minBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        window._minimizeModal(modalId, handleId, closeBtn, handle);
+    });
+    closeBtn.parentNode.insertBefore(minBtn, closeBtn);
+};
+
+window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
+    if (window._modalMinimized[modalId]) return;
+    const toggleEl = _modalToggleTarget(modalId, closeBtn);
+    if (!toggleEl) return;
+    const prevDisplay = toggleEl.style.display || getComputedStyle(toggleEl).display;
+
+    const bar = _modalTaskbarEl();
+    const chip = document.createElement('div');
+    chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:#fff; border:1px solid #ccd5dd; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:#333; max-width:220px; transition:background .15s;';
+    chip.title = '더블클릭하면 원래대로 복원됩니다';
+    chip.addEventListener('mouseover', function() { chip.style.background = '#f3f6fa'; });
+    chip.addEventListener('mouseout', function() { chip.style.background = '#fff'; });
+
+    const label = document.createElement('span');
+    label.textContent = _modalTitleFor(handle, modalId);
+    label.title = label.textContent;
+    label.style.cssText = 'white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+
+    const restoreBtn = _modalIconBtn('<i class="ti ti-chevron-up"></i>', '복원');
+    restoreBtn.addEventListener('click', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
+
+    const xBtn = _modalIconBtn('<i class="ti ti-x"></i>', '닫기');
+    xBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        delete window._modalMinimized[modalId];
+        if (chip.parentNode) chip.parentNode.removeChild(chip);
+        // 완전히 닫기 — 저장/정리 로직이 있는 모달도 안전하도록, 원래 보이던 상태로 되돌린 뒤
+        // 실제 ✕ 버튼을 그대로 눌러서(onclick 로직 그대로 재사용) 닫는다.
+        toggleEl.style.display = prevDisplay;
+        if (closeBtn) closeBtn.click(); else toggleEl.style.display = 'none';
+    });
+
+    chip.appendChild(label);
+    chip.appendChild(restoreBtn);
+    chip.appendChild(xBtn);
+    chip.addEventListener('dblclick', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
+    bar.appendChild(chip);
+
+    toggleEl.style.display = 'none';
+    window._modalMinimized[modalId] = { toggleEl: toggleEl, prevDisplay: prevDisplay, chip: chip };
+};
+
+window._restoreModal = function(modalId) {
+    const info = window._modalMinimized[modalId];
+    if (!info) return;
+    info.toggleEl.style.display = info.prevDisplay;
+    if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
+    if (info.chip && info.chip.parentNode) info.chip.parentNode.removeChild(info.chip);
+    delete window._modalMinimized[modalId];
 };
 
 // 모달별 드래그 등록
