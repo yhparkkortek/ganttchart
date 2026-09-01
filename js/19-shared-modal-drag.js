@@ -136,17 +136,37 @@ function _modalToggleTarget(modalId, closeBtn) {
     return document.getElementById(modalId);
 }
 
+// 💡 [2026-09-02 버그 수정] mouseover/mouseout으로 배경색을 직접 칠하는 방식은, 마우스가 버튼
+//    위에 있는 상태에서 모달이 최소화(display:none)되면 mouseout이 아예 발생하지 않아 "hover 배경색이
+//    입혀진 채로 굳어버리는" 문제가 있었다(복원해도 실제로 마우스를 다시 올렸다 떼야만 정상화됨).
+//    JS로 배경을 직접 칠하는 대신 CSS :hover로 처리하면 DOM이 안 보이는 동안 상태가 아예 존재하지
+//    않으므로 이 문제가 원천적으로 발생하지 않는다.
+if (!document.getElementById('modal-taskbar-style')) {
+    const _mtStyle = document.createElement('style');
+    _mtStyle.id = 'modal-taskbar-style';
+    _mtStyle.textContent = '.modal-icon-btn:hover { background: var(--modal-icon-hover-bg) !important; }\n.modal-taskbar-chip:hover { background: #f3f6fa !important; }';
+    document.head.appendChild(_mtStyle);
+}
+
 function _modalIconBtn(html, title) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.title = title;
+    btn.className = 'modal-icon-btn';
     btn.innerHTML = html;
     btn.style.cssText = 'background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:14px; cursor:pointer; width:24px; height:24px; padding:0; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;';
-    btn.addEventListener('mouseover', function() { btn.style.background = 'var(--modal-icon-hover-bg)'; });
-    btn.addEventListener('mouseout', function() { btn.style.background = 'var(--modal-icon-bg)'; });
     return btn;
 }
 
+// 💡 [2026-09-02 버그 수정] 왼쪽 시작 위치가 화면(사이드바 아래)에 고정돼 있어서 메인 콘텐츠 박스
+//    시작 지점과 어긋나 보였다 — #app-main(사이드바 접힘/펼침에 따라 margin-left가 바뀌는 실제
+//    콘텐츠 영역)의 왼쪽 끝에 맞춰서 정렬하고, 사이드바를 접었다 펴도 계속 맞도록 ResizeObserver로
+//    추적한다.
+let _mtLeftSynced = false;
+function _syncTaskbarLeft(bar) {
+    const mainEl = document.getElementById('app-main');
+    bar.style.left = (mainEl ? mainEl.getBoundingClientRect().left : 10) + 'px';
+}
 function _modalTaskbarEl() {
     let bar = document.getElementById('modal-taskbar');
     if (!bar) {
@@ -154,6 +174,15 @@ function _modalTaskbarEl() {
         bar.id = 'modal-taskbar';
         bar.style.cssText = 'position:fixed; left:10px; right:10px; bottom:0; z-index:99999; display:flex; gap:8px; flex-wrap:wrap; pointer-events:none;';
         document.body.appendChild(bar);
+    }
+    _syncTaskbarLeft(bar);
+    if (!_mtLeftSynced) {
+        _mtLeftSynced = true;
+        window.addEventListener('resize', function() { _syncTaskbarLeft(bar); });
+        const mainEl = document.getElementById('app-main');
+        if (mainEl && window.ResizeObserver) {
+            new ResizeObserver(function() { _syncTaskbarLeft(bar); }).observe(mainEl);
+        }
     }
     return bar;
 }
@@ -168,12 +197,10 @@ window._makeMinimizable = function(modalId, handleId) {
 
     const minBtn = document.createElement('button');
     minBtn.type = 'button';
-    minBtn.className = 'modal-min-btn';
+    minBtn.className = 'modal-min-btn modal-icon-btn';
     minBtn.title = '최소화';
     minBtn.innerHTML = '<i class="ti ti-chevron-down"></i>';
     minBtn.setAttribute('style', closeBtn.getAttribute('style') || '');
-    minBtn.addEventListener('mouseover', function() { minBtn.style.background = 'var(--modal-icon-hover-bg)'; });
-    minBtn.addEventListener('mouseout', function() { minBtn.style.background = 'var(--modal-icon-bg)'; });
     // 헤더(드래그 손잡이) 안에 있으므로 mousedown/touchstart가 드래그 시작으로 번지지 않게 막는다.
     minBtn.addEventListener('mousedown', function(e) { e.stopPropagation(); });
     minBtn.addEventListener('touchstart', function(e) { e.stopPropagation(); }, { passive: true });
@@ -181,7 +208,17 @@ window._makeMinimizable = function(modalId, handleId) {
         e.stopPropagation();
         window._minimizeModal(modalId, handleId, closeBtn, handle);
     });
-    closeBtn.parentNode.insertBefore(minBtn, closeBtn);
+
+    // 💡 [2026-09-02 버그 수정] 헤더가 justify-content:space-between이고 원래 자식이 제목/✕ 버튼
+    //    2개뿐인 경우, 여기에 최소화 버튼을 끼워 넣어 3개가 되면 space-between이 가운데 아이템을
+    //    양옆 여백이 같아지는 위치(제목과 ✕ 사이 중간쯤)로 밀어버려서 ✕와 멀리 떨어져 보였다.
+    //    ✕ 버튼과 최소화 버튼을 작은 그룹으로 함께 묶어서, 헤더가 어떤 flex 배치를 쓰든 항상 ✕
+    //    바로 옆에 붙어 있도록 한다.
+    const group = document.createElement('span');
+    group.style.cssText = 'display:inline-flex; align-items:center; gap:6px; flex-shrink:0;';
+    closeBtn.parentNode.insertBefore(group, closeBtn);
+    group.appendChild(minBtn);
+    group.appendChild(closeBtn);
 };
 
 window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
@@ -192,10 +229,9 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
 
     const bar = _modalTaskbarEl();
     const chip = document.createElement('div');
-    chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:#fff; border:1px solid #ccd5dd; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:#333; max-width:220px; transition:background .15s;';
+    chip.className = 'modal-taskbar-chip';
+    chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:#fff; border:1px solid #ccd5dd; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:#333; max-width:220px;';
     chip.title = '더블클릭하면 원래대로 복원됩니다';
-    chip.addEventListener('mouseover', function() { chip.style.background = '#f3f6fa'; });
-    chip.addEventListener('mouseout', function() { chip.style.background = '#fff'; });
 
     const label = document.createElement('span');
     label.textContent = _modalTitleFor(handle, modalId);
