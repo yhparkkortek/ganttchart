@@ -1649,7 +1649,8 @@ window.msFetchMail = async function() {
                     _alarmWorthy: !!(scoreResult && priorityConfig && scoreResult.total >= priorityConfig.cutline),
                     selected: !!task,
                     registered: false,
-                    error: !task ? 'AI분석실패' : null
+                    error: !task ? 'AI분석실패' : null,
+                    matchReason: (task && task['매칭근거']) || '' // 💡 [2026-09-01 신규] "왜 이 프로젝트로(또는 미분류로) 판단했는지" AI 근거 — 미분류 큐에서 노출
                 };
             } catch(e) {
                 item = {
@@ -2558,7 +2559,8 @@ window._autoMailFetchTick = async function() {
                         subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
                         project: window._msProjectTagLabel(resolvedProjectTag), _projectTag: resolvedProjectTag,
                         task, selected: !!task, registered: false,
-                        error: !task ? 'AI분석실패' : null
+                        error: !task ? 'AI분석실패' : null,
+                        matchReason: (task && task['매칭근거']) || '' // 💡 [2026-09-01 신규] "왜 이 프로젝트로(또는 미분류로) 판단했는지" AI 근거 — 미분류 큐에서 노출
                     };
                 } catch(e) {
                     item = {
@@ -2733,6 +2735,10 @@ window._msQueueDeleteAll = function(type) {
 };
 
 // 💡 filteredReason(예: 'subject_kw:[광고]', 'unknown_domain:xxx.com')을 사람이 읽을 문구로 변환
+// 💡 [2026-09-01 개선] 'unmatched'는 예전엔 "신뢰도 낮음/해당없음"이라는 뭉뚱그린 고정 문구만 보여줘서,
+//    사용자가 "왜" 미분류됐는지 실제 근거를 알 수 없었음 — AI가 매칭 판단 시 함께 만든 실제 근거
+//    (r.matchReason, msCallGemini 프롬프트의 "매칭근거" 필드)가 있으면 그걸 그대로 보여주고,
+//    옛날에 분석돼서 이 필드가 없는 항목만 예전 고정 문구로 폴백한다.
 window._msQueueRowHint = function(type, r) {
     const reason = r.filteredReason || '';
     if (reason.startsWith('subject_kw:')) return `제목 키워드 "${reason.slice(11)}" 규칙에 걸려 자동폐기됨`;
@@ -2740,7 +2746,8 @@ window._msQueueRowHint = function(type, r) {
     if (reason.startsWith('blocked_domain:')) return `차단 등록된 도메인(${reason.slice(15)})이라 자동폐기됨`;
     if (reason.startsWith('unknown_domain:')) return `주소록에 없는 발신자 도메인(${reason.slice(15)}) — 정상 거래처면 주소록에 추가 필요`;
     if (reason === 'whitelist_empty') return '주소록이 비어있어 전부 신규발신자로 분류됨';
-    return type === 'unmatched' ? '등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음)' : '';
+    if (type === 'unmatched') return r.matchReason || '등록된 프로젝트 후보 중 AI가 확신 있게 고르지 못함(신뢰도 낮음/해당없음) — 이 메일은 옛날 버전 분석이라 상세 근거가 없습니다. 🔄 재분석 요청으로 다시 분석하면 근거가 표시됩니다.';
+    return '';
 };
 
 // 💡 [2026-08-25 신규] 큐 종류(type) → 모달 헤더 문구. 예전엔 호출부(msShowUnmatchedModal 등)가
@@ -2775,6 +2782,13 @@ window._msRenderQueueModal = function(type) {
                         onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';"
                         title="이 발신자 도메인을 자동폐기 규칙에 영구 등록" style="display:inline-flex; align-items:center; justify-content:center; background:#fbead9; border:1px solid #edbf85; color:#a85d0a; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🚫</button>`
                 : '';
+            // 💡 [2026-09-01 신규] 미분류 메일 전용 — 위 💡 근거를 읽어보고, 사람이 판단한 의견(힌트)을 남겨서
+            //    AI에게 그 메일 하나만 다시 판단시킴(_msQueueReanalyze). 근거 없이 "그냥 다시 해봐"도 가능.
+            const reanalyzeBtn = (type === 'unmatched')
+                ? `<button class="ms-queue-reanalyze-btn" data-filename="${_msQEsc(r.fileName)}"
+                        onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
+                        title="사용자 의견을 참고해서 프로젝트 매칭 재분석 요청" style="display:inline-flex; align-items:center; justify-content:center; background:#e6f6ea; border:1px solid #a8dab8; color:#1f7a3d; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🔄</button>`
+                : '';
             return `
             <div style="padding:8px 10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
                 <div style="min-width:0; flex:1;">
@@ -2787,6 +2801,7 @@ window._msRenderQueueModal = function(type) {
                         onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                         title="원문 보기" style="display:inline-flex; align-items:center; justify-content:center; background:#e8f4fd; border:1px solid #a5c8f0; color:#1a4f7a; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">📧</button>
                     ${ruleBtn}
+                    ${reanalyzeBtn}
                     <button class="ms-queue-del-btn" data-filename="${_msQEsc(r.fileName)}"
                         onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
                         title="삭제" style="display:inline-flex; align-items:center; justify-content:center; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f; border-radius:6px; width:26px; height:26px; padding:0; cursor:pointer; font-size:12px; transition:background .15s, border-color .15s;">🗑</button>
@@ -2825,6 +2840,9 @@ window._msRenderQueueModal = function(type) {
                 if (r && window.showMailRawModal) window.showMailRawModal({ subject: r.subject, sender: r.sender, date: r.date, body2000: r.body });
                 return;
             }
+            // 💡 [2026-09-01 신규] "🔄 재분석 요청" — 미분류 사유를 읽고 사용자 의견(선택)을 남긴 뒤 그 메일만 다시 판단
+            const reanalyzeBtn = e.target.closest('.ms-queue-reanalyze-btn');
+            if (reanalyzeBtn) { window._msOpenReanalyzeHintModal(reanalyzeBtn.dataset.filename); return; }
             // 💡 [자동 등록] 신규발신자 검토 중 "이 도메인 영구차단" — 필터 규칙에 추가 + 큐에서도 제거
             const ruleBtn = e.target.closest('.ms-queue-rule-btn');
             if (ruleBtn) {
@@ -2874,6 +2892,122 @@ window._msQueueClearAll = function() {
     window._msQueueDeleteAll(type);
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
     window._msRenderQueueModal(type);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// 💡 [2026-09-01 신규] "📭 미분류 메일" 재분석 요청 — 왜 미분류됐는지(💡 근거, matchReason)를 사용자가
+//    읽어보고, 자기 판단(예: "관리번호는 다르지만 실제로 이 프로젝트 맞음")을 남겨서 그 메일 1건만
+//    다시 AI에게 판단시킨다. 힌트는 선택 입력 — 비워도 그냥 재시도로 동작한다(msCallGemini의 5번째
+//    인자 userHint로 전달되어 프롬프트에서 최우선 근거로 취급됨. 위 msCallGemini 프롬프트 수정 참고).
+window._msOpenReanalyzeHintModal = function(fileName) {
+    const r = (window._msResults || []).find(x => x.fileName === fileName);
+    if (!r) return;
+    window._msReanalyzeTarget = fileName;
+    let modal = document.getElementById('ms-reanalyze-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'ms-reanalyze-modal';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; background:rgba(0,0,0,0.25);';
+        modal.innerHTML = `
+        <div id="ms-reanalyze-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
+            <div id="ms-reanalyze-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
+                <span>🔄 프로젝트 매칭 재분석 요청</span>
+                <button onclick="event.stopPropagation(); document.getElementById('ms-reanalyze-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
+            </div>
+            <div style="padding:18px;">
+                <div id="ms-reanalyze-subject" style="font-size:12px; color:#555; margin-bottom:6px; overflow-wrap:break-word;"></div>
+                <div id="ms-reanalyze-prev-reason" style="font-size:11.5px; color:#a85d0a; background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:8px 10px; margin-bottom:10px; display:none;"></div>
+                <label style="font-size:11.5px; color:#888; display:block; margin-bottom:4px;">위 근거를 참고해서, 실제로 어느 프로젝트 건인지(또는 왜 미분류가 맞는지) 의견을 남겨주세요 — 선택 입력, 비워두면 힌트 없이 그냥 다시 판단합니다.</label>
+                <textarea id="ms-reanalyze-hint" placeholder="예: 관리번호는 다르지만 실제로는 STELLAR32 건 맞음 / 예: 회의록이라 여러 프로젝트가 섞여있어서 미분류가 맞음"
+                    style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+                <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
+                    <button onclick="window._msSubmitReanalyze()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 18px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">재분석 요청</button>
+                    <button onclick="document.getElementById('ms-reanalyze-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">취소</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.appendChild(modal);
+        window._makeDraggable('ms-reanalyze-box', 'ms-reanalyze-drag');
+        window._bindClickToFront('ms-reanalyze-modal');
+    }
+    document.getElementById('ms-reanalyze-subject').textContent = '📧 ' + (r.subject || '(제목없음)');
+    const prevReasonEl = document.getElementById('ms-reanalyze-prev-reason');
+    if (r.matchReason) { prevReasonEl.style.display = 'block'; prevReasonEl.textContent = '💡 이전 판단 근거: ' + r.matchReason; }
+    else { prevReasonEl.style.display = 'none'; }
+    document.getElementById('ms-reanalyze-hint').value = '';
+    modal.style.display = 'block';
+    window.bringModalToFront('ms-reanalyze-modal');
+};
+
+window._msSubmitReanalyze = async function() {
+    const fileName = window._msReanalyzeTarget;
+    const hint = (document.getElementById('ms-reanalyze-hint').value || '').trim();
+    document.getElementById('ms-reanalyze-modal').style.display = 'none';
+    await window._msQueueReanalyze(fileName, hint);
+};
+
+// 💡 미분류 메일 1건을 (선택적 사용자 힌트와 함께) 다시 분석해서 그 자리에서 결과를 갱신한다.
+//    새로 매칭되면 다른 자동 경로(자동틱/배치분석)와 동일하게 업무 보관함(TaskInbox)에도 추가한다
+//    (이미 보관함에 있으면 중복 추가하지 않음 — fileName 기준 대조, 기존 자동 경로와 동일 규칙).
+window._msQueueReanalyze = async function(fileName, hint) {
+    const r = (window._msResults || []).find(x => x.fileName === fileName);
+    if (!r) return;
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
+    if (window.showToast) window.showToast('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', 'info');
+    try {
+        const candidateList = window._msFilterCandidateProjects(await window._msLoadProjectIndex());
+        const candidatesForAI = candidateList.length ? candidateList : null;
+        const task = await msCallGemini(apiKey, {
+            subject: r.subject, sender: r.sender, date: r.date, body: r.body, fileName: r.fileName
+        }, candidatesForAI, null, hint || null);
+
+        const projectTag = window._msResolveAiProjectMatch(task, candidatesForAI);
+        const wasUnmatched = !r.project;
+        r.task = task;
+        r.project = window._msProjectTagLabel(projectTag);
+        r._projectTag = projectTag;
+        r.matchReason = (task && task['매칭근거']) || '';
+        r.error = !task ? 'AI분석실패' : null;
+        r.selected = !!task;
+        r.reanalyzedAt = new Date().toISOString();
+        r.reanalyzeHint = hint || '';
+
+        if (task) {
+            const priorityConfig = await window.loadPriorityConfig();
+            const scoreResult = window._msComputeTotalScore(r, task, priorityConfig);
+            r._score = scoreResult.total;
+            r._scoreGrade = window._msScoreGrade(scoreResult.total, priorityConfig.cutline);
+            r._scoreBreakdown = scoreResult.breakdown;
+            r._alarmWorthy = scoreResult.total >= priorityConfig.cutline;
+        }
+
+        if (wasUnmatched && projectTag && task && window.TaskInbox) {
+            const alreadyInInbox = window.TaskInbox.load().some(it => it.mailRaw && it.mailRaw.fileName === r.fileName);
+            if (!alreadyInInbox) {
+                const grade = r._scoreGrade || '⚪';
+                const candidateNames = projectTag.candidates.map(c => c.model || c.customer).join(', ');
+                const sourceLabel = `${grade}${r._score || 0}점 메일자동분석(재분석` + (projectTag.status === 'ambiguous' ? `, AI판단 후보: ${candidateNames})` : `, ${candidateNames})`);
+                const mailRawObj = { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName };
+                window.TaskInbox.add(task, { source: sourceLabel, mailRaw: mailRawObj, matchedProject: projectTag, alarmWorthy: !!r._alarmWorthy });
+            }
+        }
+
+        window._msSaveQueueToStorage();
+        if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+        window._msRenderQueueModal('unmatched');
+        if (window.showToast) {
+            if (task && projectTag && projectTag.status === 'matched') {
+                window.showToast(`✅ 재분석 완료 — "${window._msProjectTagLabel(projectTag)}"로 매칭되어 업무 보관함에 추가됨`, 'info');
+            } else if (task) {
+                window.showToast('🔄 재분석 완료 — 여전히 미분류입니다(근거를 다시 확인해보세요)', 'warning');
+            } else {
+                window.showToast('⚠️ 재분석 실패(AI 분석에 실패했습니다)', 'error');
+            }
+        }
+    } catch (e) {
+        if (window.showToast) window.showToast('⚠️ 재분석 중 오류: ' + e.message, 'error');
+    }
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -4287,7 +4421,7 @@ window._msExtractCodeTokens = function(text) {
     return Array.from(found);
 };
 
-async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOverride) {
+async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOverride, userHint) {
     const GAS_URL = localStorage.getItem("gas_server_url") || "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
     // 💡 [2026-08-21][긴급 버그 수정] 예전엔 매칭된 프로젝트 정보가 없으면 "현재 열린 프로젝트" 기준으로
@@ -4345,7 +4479,14 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
             }
         }
 
-        prompt += `\n\n--- 프로젝트 매칭 판단 요청 (현재 등록된 활성 프로젝트 전체 목록) ---\n` +
+        // 💡 [2026-09-01 신규] 사용자가 "📭 미분류 메일" 큐에서 [🔄 재분석 요청]으로 남긴 힌트(사람의 판단) —
+        //    있으면 프로젝트 후보 목록보다도 먼저 보여줘서 최우선 근거로 삼게 한다. 위 관리번호 규칙과
+        //    상충하면(예: 사용자가 지목한 프로젝트에 그 관리번호가 없음) 사용자 힌트를 우선하되, 그 사실을
+        //    "매칭근거"에 남기도록 유도한다(아래 매칭근거 필드 설명 참고).
+        const userHintBlock = userHint
+            ? `\n⚠️ [사용자 재분석 요청 — 사람의 판단, 최우선 근거] 이 메일은 한 번 미분류로 판정됐고, 사용자가 아래처럼 직접 의견을 남기며 다시 판단해달라고 요청했습니다:\n"${userHint}"\n이 의견을 다른 어떤 근거보다도 우선해서 반영하세요. 사용자가 특정 프로젝트를 지목했다면 아래 후보 목록에서 그 프로젝트를 찾아 그 번호로 응답하고 신뢰도를 "상"으로 두세요(후보 목록에 없는 프로젝트를 말하는 것 같으면 0으로 두고 매칭근거에 그렇게 적으세요).\n`
+            : '';
+        prompt += `\n\n--- 프로젝트 매칭 판단 요청 (현재 등록된 활성 프로젝트 전체 목록) ---\n` + userHintBlock +
             `후보 프로젝트 목록:\n${numbered}\n` + codeHint +
             `이 메일이 실제로 다루는 "핵심 주제"가 위 목록 중 하나로 명확한지 판단하세요. 목록의 "참고 키워드"는 힌트일 뿐이니,\n` +
             `본문 맥락상 명백히 그 프로젝트 얘기면 키워드가 없어도 선택하세요. 반대로 키워드가 우연히 겹쳐도 실제 핵심 주제가 아니면 고르지 마세요.\n` +
@@ -4358,9 +4499,10 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
             ` 그만큼 확실한 프로젝트가 더 있다면 그 번호(들)를 "추가매칭프로젝트번호목록" 배열에 적으세요. 각 번호는 반드시 "상" 신뢰도에 준하는` +
             ` 확신이 있을 때만 넣고, 조금이라도 애매하면 절대 넣지 마세요. 단순히 다른 프로젝트가 언급되거나(참고·비교 목적), 회의록처럼 여러` +
             ` 프로젝트가 대등하게 나열만 된 경우는 포함하지 마세요 — 그럴 땐 이 배열을 반드시 빈 배열 []로 두세요.\n` +
-            `위 JSON에 아래 세 필드를 추가로 포함해서 응답하세요:\n` +
+            `위 JSON에 아래 네 필드를 추가로 포함해서 응답하세요:\n` +
             `"주매칭프로젝트번호": 1 (해당 번호, 애매하거나 목록에 없으면 0),\n` +
             `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)",\n` +
+            `"매칭근거": "왜 이 번호를(또는 왜 0을) 선택했는지 1~2문장으로 구체적으로 설명 — 관리번호 일치/불일치, 본문의 어떤 문장·키워드가 결정적이었는지, 후보들과 왜 헷갈렸는지 등을 담아서. 사용자가 이 근거만 보고 재분석 여부를 판단할 수 있게 구체적으로 쓰세요.",\n` +
             `"추가매칭프로젝트번호목록": [] (독립적인 실행 항목이 있는 추가 프로젝트 번호만, 없으면 반드시 빈 배열 [])`;
     }
 
