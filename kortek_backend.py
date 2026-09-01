@@ -86,7 +86,7 @@ POP3_HOST      = "gw.kortek.co.kr"
 POP3_PORT      = 110
 
 # ── 업무별(개별 태스크) 예약 알람 — 구글드라이브 서비스계정 읽기전용 접근 ──
-#    GANTT_CHART_V02_Color.html(js/04-core-app.js의 SHARED_FOLDER_ID)과 동일한 폴더.
+#    GANTT_CHART_V02_Color.html(js/04a-core-app-globals.js의 SHARED_FOLDER_ID)과 동일한 폴더.
 #    이 폴더 밑에 프로젝트 파일들과 App_Config/AddressBook_Shared.json이 들어있다.
 GANTT_SHARED_FOLDER_ID     = '1ldb3Bc7dNNSKKgmNviw43aCgrvxQG9bS'
 GOOGLE_SERVICE_ACCOUNT_FILE = os.environ.get(
@@ -777,8 +777,8 @@ def schedule_delete_api(rule_id):
 # ══════════════════════════════════════════════════════════════
 # 📂 업무별(개별 태스크) 알람용 — 구글드라이브 실시간 조회 (서비스계정, 읽기전용)
 #    GANTT_CHART_V02_Color.html은 구글시트가 아니라, 이 폴더(GANTT_SHARED_FOLDER_ID) 안의
-#    JSON 파일 1개(프로젝트당 1개)에 전체 데이터를 저장한다 — js/04-core-app.js 참고.
-#    여기서는 그 JSON을 그대로 읽어 collectAlarmItems()(js/22-tabs-summary-mctable.js:2357)와
+#    JSON 파일 1개(프로젝트당 1개)에 전체 데이터를 저장한다 — js/04a~04k-core-app-*.js 참고.
+#    여기서는 그 JSON을 그대로 읽어 collectAlarmItems()(js/22c-summary-mctable-core2.js:3)와
 #    동등한 로직으로 딱 한 업무(행)의 "지금 이 순간" 상태를 재계산한다.
 # ══════════════════════════════════════════════════════════════
 _drive_creds = None
@@ -863,7 +863,7 @@ def _drive_load_address_book(force: bool = False) -> list:
     return _address_book_cache['data']
 
 
-# ── 이름 매칭 유틸 (js/22-tabs-summary-mctable.js의 _addrSplitNames/_addrStripTitleSuffix/
+# ── 이름 매칭 유틸 (js/22b-summary-mctable-core1.js의 _addrSplitNames/_addrStripTitleSuffix/
 #    _addrFindByName과 동일 로직 — 메일 본문에서 뽑힌 발신/수신인 이름을 주소록과 매칭하기 위함) ──
 ADDR_KO_TITLE_WORDS = [
     '회장', '부회장', '사장', '부사장', '대표', '전무', '상무', '이사', '감사',
@@ -961,7 +961,7 @@ def _is_alarm_domain_allowed(email: str, allowed_external_domains: list) -> bool
 def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
     """딱 한 업무(row_idx)의 "지금 이 순간" 상태를 계산한다 — collectAlarmItems()의 파이썬 버전.
        프로젝트 JSON은 저장 시점에 globalData의 모든 _밑줄필드(_level, _origDev 등)를 그대로
-       보존하므로(js/04-core-app.js:1802 serializedGlobalData), 화면 렌더링 로직을 다시 짤 필요
+       보존하므로(js/04c-core-app-mail-pipeline.js:628 serializedGlobalData), 화면 렌더링 로직을 다시 짤 필요
        없이 저장된 값을 그대로 읽으면 된다. 대상이 아니면(알림 꺼짐/완료예정일 없음/행 없음) None."""
     global_data = project_data.get('globalData') or []
     if row_idx < 0 or row_idx >= len(global_data):
@@ -1014,7 +1014,7 @@ def _build_alarm_task_snapshot(project_data: dict, row_idx: int):
     content_raw = str(col('content') or '').strip()
 
     # 💡 [2026-09-01 신규] 알람 일정 모달의 "업무 정보" 편집칸에서 이 알람만을 위해 제목/내용을
-    #    덮어썼으면(js/22-tabs-summary-mctable.js의 row._알림제목오버라이드/_알림내용오버라이드,
+    #    덮어썼으면(js/22c-summary-mctable-core2.js의 row._알림제목오버라이드/_알림내용오버라이드,
     #    saveAlarmSchedule/_asSaveRecurRule에서 저장) 발신인/수신인 추출은 원본 content_raw 그대로 두고
     #    실제 메일에 쓰이는 task_name/content만 덮어쓴다(collectAlarmItems의 파이썬 버전이라 동일하게 처리).
     title_override = row_obj.get('_알림제목오버라이드')
