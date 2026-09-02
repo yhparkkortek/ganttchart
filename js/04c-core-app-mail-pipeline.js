@@ -820,8 +820,12 @@
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
             if (!token) { alert("🔒 구글 인증이 필요합니다. 상단의 연동 버튼을 눌러주세요."); return; }
             const folderId = await window.getOrCreateBackupFolder(token);
+            // 💡 'in ancestors' 미지원 → Backups/ 바로 아래 팀 서브폴더까지 포함해 OR 쿼리 구성
+            const backupParentsQ = window._buildParentsQuery
+                ? await window._buildParentsQuery(folderId)
+                : `'${folderId}' in parents`;
             let response = await gapi.client.drive.files.list({
-                q: `mimeType='application/json' and trashed=false and '${folderId}' in ancestors`,
+                q: `mimeType='application/json' and trashed=false and (${backupParentsQ})`,
                 fields: 'files(id, name, createdTime, appProperties)', orderBy: 'createdTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             let files = response.result.files;

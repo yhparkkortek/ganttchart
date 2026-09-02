@@ -294,10 +294,49 @@
         tokenClient.requestAccessToken({prompt: 'consent'}); 
     }
 
+    // ── Drive 쿼리 헬퍼 ─────────────────────────────────────────────────────────
+    // Google Drive API v3는 'in ancestors' 를 지원하지 않음 — 'in parents' 만 유효.
+    // 팀 하위 폴더까지 탐색하려면 직속 자식 폴더 ID 를 먼저 구한 뒤 OR 조건으로 묶어야 한다.
+
+    var _childFolderCache = {}; // { parentId: { ids, ts } }  — 5분 TTL
+
+    /**
+     * parentId 바로 아래 자식 폴더 ID 목록 반환.
+     * excludeNames 배열에 이름이 있는 폴더는 제외 (예: 'Backups', 'App_Config').
+     */
+    window._getChildFolderIds = async function(parentId, excludeNames) {
+        var cached = _childFolderCache[parentId];
+        if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
+            return excludeNames ? cached.ids.filter(function(o) { return !excludeNames.includes(o.name); }).map(function(o) { return o.id; })
+                                : cached.ids.map(function(o) { return o.id; });
+        }
+        try {
+            var res = await gapi.client.drive.files.list({
+                q: `mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`,
+                fields: 'files(id, name)', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
+            });
+            var items = (res.result.files || []).map(function(f) { return { id: f.id, name: f.name }; });
+            _childFolderCache[parentId] = { ids: items, ts: Date.now() };
+            return excludeNames ? items.filter(function(o) { return !excludeNames.includes(o.name); }).map(function(o) { return o.id; })
+                                : items.map(function(o) { return o.id; });
+        } catch(e) { return []; }
+    };
+
+    /**
+     * parentId + 그 직속 자식 폴더(팀 폴더)들을 포함하는 Drive `in parents` OR 쿼리 조각 반환.
+     * excludeNames: 'Backups', 'App_Config' 같이 포함하지 않을 폴더 이름 목록.
+     */
+    window._buildParentsQuery = async function(parentId, excludeNames) {
+        var subIds = await window._getChildFolderIds(parentId, excludeNames);
+        var allIds = [parentId].concat(subIds);
+        return allIds.map(function(id) { return `'${id}' in parents`; }).join(' or ');
+    };
+
     window.findSaveFile = async function(dynamicFileName) {
         try {
+            var parentsQ = await window._buildParentsQuery(SHARED_FOLDER_ID, ['Backups', 'App_Config']);
             let response = await gapi.client.drive.files.list({
-                q: `name='${dynamicFileName}' and trashed=false and '${SHARED_FOLDER_ID}' in ancestors`,
+                q: `name='${dynamicFileName}' and trashed=false and (${parentsQ})`,
                 fields: 'files(id, name)', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             return response.result.files && response.result.files.length > 0 ? response.result.files[0].id : null;
@@ -368,8 +407,11 @@
     //    (project_index.json·PriorityScore_Shared.json 등)는 프로젝트가 아니므로 제외.
     //    loadFromGoogleDrive(열기)와 deleteProjectFlow(삭제) 양쪽에서 같은 필터 기준을 공유한다.
     window._listProjectFiles = async function() {
+        // 💡 'in ancestors' 는 Drive API 미지원 → 직속 팀 폴더를 먼저 구한 뒤 OR 로 묶음
+        //    Backups·App_Config 폴더는 제외 (프로젝트 파일이 없는 시스템 폴더)
+        var parentsQ = await window._buildParentsQuery(SHARED_FOLDER_ID, ['Backups', 'App_Config']);
         let response = await gapi.client.drive.files.list({
-            q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in ancestors`,
+            q: `mimeType='application/json' and trashed=false and (${parentsQ})`,
             fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
         });
         return (response.result.files || []).filter(function(f) {
