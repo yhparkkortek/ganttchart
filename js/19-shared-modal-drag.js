@@ -221,18 +221,19 @@ function _updateTaskbarReserve(bar) {
     const hasChips = bar.children.length > 0;
     const reserve = hasChips ? (bar.offsetHeight + 15) : 0;
     document.documentElement.style.setProperty('--mt-reserve', reserve + 'px');
-    _syncSummaryScrollHeight(reserve);
+    _syncSummaryScrollHeight();
 }
 
-// 💡 [2026-09-02 신규] #summary-table-scroll 높이를 실측으로 계산해 설정
-//    CSS 하드코딩(160px) 대신 getBoundingClientRect().top 을 써서
-//    멀티시트 바 유무에 관계없이 항상 올바른 높이로 유지한다.
-function _syncSummaryScrollHeight(reserve) {
+// 💡 [2026-09-02 신규] #summary-table-scroll 시작 위치(top)를 CSS 변수로 기록
+//    height 는 calc(100vh - var(--summary-scroll-top) - var(--mt-reserve)) 로 HTML에 지정하여
+//    창 크기·줌 변화 시에도 100vh 가 자동 추적 → 갭이 항상 일정하게 유지됨.
+//    JS 는 레이아웃 구조가 바뀔 때(멀티시트 바 추가/제거)만 변수를 갱신.
+function _syncSummaryScrollHeight() {
     var el = document.getElementById('summary-table-scroll');
     if (!el) return;
     var top = el.getBoundingClientRect().top;
     if (top < 10) return; // 탭이 숨겨진 상태(display:none)면 스킵
-    el.style.height = Math.max(100, window.innerHeight - top - reserve) + 'px';
+    document.documentElement.style.setProperty('--summary-scroll-top', Math.round(top) + 'px');
 }
 
 function _modalTaskbarEl() {
@@ -437,7 +438,7 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         new MutationObserver(function() {
             var bar = _modalTaskbarEl();
             var reserve = bar.children.length > 0 ? (bar.offsetHeight + 15) : 0;
-            _syncSummaryScrollHeight(reserve);
+            _syncSummaryScrollHeight();
         }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     });
 })();

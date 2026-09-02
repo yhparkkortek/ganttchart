@@ -741,8 +741,9 @@ body.has-multi-sheet-bar #briefspec-table-scroll,
 body.has-multi-sheet-bar #mctable-table-scroll,
 body.has-multi-sheet-bar #mctable-compare-scroll { max-height: calc(70vh + 160px - 53px - var(--mt-reserve, 0px)) !important; }
 body.has-multi-sheet-bar #alarm-table-scroll     { max-height: calc(100vh - 280px - 53px - var(--mt-reserve, 0px)) !important; }
-/* #summary-table-scroll 시작 위치: topbar(70)+개념헤더(52)+멀티시트(53)=175px → height로 덮어씀 */
-body.has-multi-sheet-bar #summary-table-scroll   { height: calc(100vh - 175px - var(--mt-reserve, 0px)) !important; }
+/* #summary-table-scroll 높이: JS _syncSummaryScrollHeight 가 --summary-scroll-top 변수로 제어.
+   inline style calc(100vh - var(--summary-scroll-top) - var(--mt-reserve)) 가 자동 추적하므로
+   has-multi-sheet-bar 별도 height 규칙 불필요 — 제거 */
 body.has-multi-sheet-bar #calendar-table-scroll,
 body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160px - 53px - var(--mt-reserve, 0px)) !important; }
 
