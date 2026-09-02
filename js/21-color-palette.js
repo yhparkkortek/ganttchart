@@ -158,6 +158,7 @@ window._cpApplyLive = function(hex, skipSave) {
     // 더 구체적인 규칙이 이걸 덮어쓰도록 순서를 지킨다(동일 특이도라 나중 규칙이 이김).
     css += '.concept-section { border-color: ' + gen.border + ' !important; }\n'
         + '.concept-section:hover:not(.summary-outer-box) { border-color: ' + gen.hoverBorder + ' !important; }\n'
+        + '#sum-history-box:hover { border-color: ' + gen.border + ' !important; box-shadow: none !important; }\n'
         + '.concept-grid label { border-color: ' + gen.border + ' !important; }\n'
         + '.concept-grid label:hover, .concept-grid input:hover, .concept-grid textarea:hover, #sum-background:hover { border-color: ' + gen.hoverBorder + ' !important; background-color: ' + gen.headerTint + ' !important; }\n'
         + '.concept-grid input, .concept-grid textarea { border-color: ' + gen.border + ' !important; }\n'

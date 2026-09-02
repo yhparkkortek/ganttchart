@@ -755,6 +755,8 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
    안쪽 어느 박스에 마우스를 올려도(이벤트가 항상 이 박스를 거쳐가므로) 바깥 테두리까지 같이
    반응해버려 "어느 박스에 올렸는지" 구분이 안 됨 — 안쪽 개별 박스만 반응하도록 제외. */
 .concept-section:hover:not(.summary-outer-box) { border-color:#52a5af; box-shadow:0 1px 6px rgba(0,0,0,0.08); }
+/* 변경이력 확인 박스는 hover 테두리 강조 미적용 */
+#sum-history-box:hover { border-color: #cfe3e5 !important; box-shadow: none !important; }
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
 .concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
