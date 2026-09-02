@@ -672,20 +672,29 @@
             // 💡 [2026-08-30 신규] themeColor도 appProperties에 같이 태운다 — "프로젝트 열기/삭제/복원"
             // 목록이 파일 내용을 통째로 안 받아도(가벼운 메타데이터 조회만으로) 그 프로젝트의 저장된
             // 테마 색을 바로 알 수 있게 하기 위함(showDriveFileModal/showBackupFileModal에서 사용).
-            let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '', completed: (window.projectMeta || {}).완료여부 === '완료' ? '1' : '', themeColor: (window.tabData || {}).themeColor || '', team: (window.projectMeta || {}).팀 || '' } };
-            if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
-
-            let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
-
-            // 💡 [이중 방어선 구축] 토큰 추출 실패를 원천 봉쇄합니다.
+            // 💡 [이중 방어선 구축] 토큰 추출 실패를 원천 봉쇄합니다. (팀 폴더 생성에도 필요하므로 먼저 추출)
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-            
+
             if (!token) {
                 window.showToast(_svEn ? "🔒 Auth token lost. Please reconnect Google Drive." : "🔒 구글 인증 토큰을 확보하지 못했습니다. 연동 버튼을 다시 클릭해 주세요.", 'error');
                 window._handleDriveDisconnected('save-no-token');
                 return false;
             }
+
+            let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '', completed: (window.projectMeta || {}).완료여부 === '완료' ? '1' : '', themeColor: (window.tabData || {}).themeColor || '', team: (window.projectMeta || {}).팀 || '' } };
+            // 💡 [팀 폴더 자동 배치] 신규 파일 → 팀 폴더에 직접 생성 / 기존 파일 → 저장 후 fire-and-forget 이동
+            if (!fileId) {
+                const _pmTeam = (window.projectMeta || {}).팀 || '';
+                let _targetParent = SHARED_FOLDER_ID;
+                if (_pmTeam && window._getOrCreateNamedFolder) {
+                    try { _targetParent = (await window._getOrCreateNamedFolder(token, _pmTeam)) || SHARED_FOLDER_ID; }
+                    catch(e) { console.warn('[팀 폴더] 신규 파일 팀 폴더 생성 실패 — 루트에 저장:', e); }
+                }
+                metadata.parents = [_targetParent];
+            }
+
+            let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
 
             // 💡 [성능 수정] fields=id,modifiedTime을 붙여서 저장 응답에 modifiedTime을 함께 받는다 —
             //    mergeRemoteDistributions()가 "마지막으로 내가 저장한 시점" 캐시로 쓰기 위함(별도 호출 불필요).
@@ -757,6 +766,11 @@
                     window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
                 } else {
                     console.info('[저장 계측] 변경사항 없음 — project_index.json 갱신 생략');
+                }
+                // 💡 [팀 폴더] 기존 파일(fileId 있음) 재저장 시 — 팀 폴더로 이동 (fire-and-forget, 저장 결과에 영향 없음)
+                const _existingFileTeam = (window.projectMeta || {}).팀 || '';
+                if (fileId && _existingFileTeam && window._moveFileToTeamFolder) {
+                    window._moveFileToTeamFolder(token, file.id, _existingFileTeam);
                 }
                 window.showToast(window._currentLang === 'en'
                     ? `🎉 Saved as [${dynamicFileName}] in the shared team folder!`

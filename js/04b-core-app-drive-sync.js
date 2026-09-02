@@ -297,7 +297,7 @@
     window.findSaveFile = async function(dynamicFileName) {
         try {
             let response = await gapi.client.drive.files.list({
-                q: `name='${dynamicFileName}' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+                q: `name='${dynamicFileName}' and trashed=false and '${SHARED_FOLDER_ID}' in ancestors`,
                 fields: 'files(id, name)', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             return response.result.files && response.result.files.length > 0 ? response.result.files[0].id : null;
@@ -369,11 +369,12 @@
     //    loadFromGoogleDrive(열기)와 deleteProjectFlow(삭제) 양쪽에서 같은 필터 기준을 공유한다.
     window._listProjectFiles = async function() {
         let response = await gapi.client.drive.files.list({
-            q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
+            q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in ancestors`,
             fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
         });
         return (response.result.files || []).filter(function(f) {
-            return !f.name.startsWith('TaskInbox_')
+            return !f.name.startsWith('백업_')
+                && !f.name.startsWith('TaskInbox_')
                 && f.name !== PROMPT_DRIVE_FILENAME
                 && f.name !== HOLIDAY_DRIVE_FILENAME
                 && f.name !== PRIORITY_CONFIG_FILENAME
@@ -586,6 +587,39 @@
     };
     window.getOrCreateConfigFolder    = function(token) { return window._getOrCreateNamedFolder(token, 'App_Config'); };
     window.getOrCreateTaskInboxFolder = function(token) { return window._getOrCreateNamedFolder(token, 'TaskInbox_Backups'); };
+    // 💡 [팀 폴더] 팀명으로 Drive 하위 폴더를 가져오거나 생성. _getOrCreateNamedFolder와 동일하나 의도를 명시.
+    window.getOrCreateTeamFolder = function(token, teamName) { return window._getOrCreateNamedFolder(token, teamName); };
+
+    // 💡 [팀 폴더 이동] Drive 파일을 해당 팀 폴더로 이동(아직 팀 폴더에 없을 때만). 저장 자체를 막지 않도록
+    //    fire-and-forget으로 호출하며, 실패해도 console.warn만 남긴다.
+    window._moveFileToTeamFolder = async function(token, fileId, teamName) {
+        if (!token || !fileId || !teamName) return;
+        try {
+            const teamFolderId = await window._getOrCreateNamedFolder(token, teamName);
+            if (!teamFolderId) return;
+            // 현재 파일 위치 조회
+            const metaRes = await fetch(
+                `https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`,
+                { headers: { 'Authorization': `Bearer ${token}` } }
+            );
+            const meta = await metaRes.json();
+            const currentParents = meta.parents || [];
+            if (currentParents.includes(teamFolderId)) return; // 이미 팀 폴더 안에 있음
+            const removeParents = currentParents.join(',');
+            const patchUrl = `https://www.googleapis.com/drive/v3/files/${fileId}`
+                + `?addParents=${encodeURIComponent(teamFolderId)}`
+                + `&removeParents=${encodeURIComponent(removeParents)}`
+                + `&supportsAllDrives=true&fields=id`;
+            await fetch(patchUrl, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                body: '{}'
+            });
+            console.info(`[팀 폴더] 이동 완료: ${fileId} → ${teamName}`);
+        } catch(e) {
+            console.warn('[팀 폴더] 파일 이동 실패 (저장 자체는 정상 완료):', e);
+        }
+    };
 
     // 💡 [마이그레이션 포함 조회] 이미 팀이 루트에 저장해둔 기존 설정 파일을 "새로 만든 것처럼" 못 찾아서
     //    빈 기본값으로 초기화되는 사고를 막기 위해: 새 하위 폴더에서 먼저 찾고, 없으면 예전 위치(루트)에서
