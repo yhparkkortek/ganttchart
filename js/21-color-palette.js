@@ -340,6 +340,12 @@ window._cpApplyLive = function(hex, skipSave) {
     // "완료" 행에서만 회색으로 바뀌는 예외는 더 구체적인 선택자라 그대로 유지됨.
     css += '.trans-btn-hide-print { color: ' + gen.darkText + ' !important; }\n';
     document.documentElement.style.setProperty('--trans-text', gen.darkText);
+    // 💡 [2026-09-02 추가] 하단 taskbar 칩(최소화된 모달 칩 + 기본 바로가기 런처)이 프로젝트/테마 전환
+    // 시 색이 안 바뀌던 문제 — 칩의 인라인 style hex는 [style*="#hex"] 규칙에 안 잡히는 경우가 있어서
+    // (이전 테마의 bg hex가 CP_CURRENT_TEAL 맵에 없으면 매핑 자체가 없음) 클래스 기반 명시 규칙을
+    // 별도로 추가해 항상 현재 테마로 강제 덮어씀. hover 배경도 CSS custom property 대신 여기서 직접 처리.
+    css += '.modal-taskbar-chip { background: ' + gen.bg + ' !important; border-color: ' + gen.border + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '.modal-taskbar-chip:hover { background: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서

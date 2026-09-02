@@ -1279,7 +1279,9 @@
              </div>
         </div>
         </div>
-        </div>
+        <!-- 💡 [2026-09-02 수정] sum-history-box를 summary-table-scroll 안(summary-scroll-inner의 형제)으로
+             이동 — 이전엔 summary-table-scroll 바깥에 있어서 외부 박스 아래로 삐져나왔음.
+             flex-shrink:0으로 summary-scroll-inner가 줄어들어도 변경이력 확인이 항상 하단에 붙어 있게 함. -->
         <div id="sum-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff; flex-shrink:0;">
             <div id="sum-history-header" onclick="window.sumToggleHistoryBox()" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
                 <span id="sum-history-toggle-icon">▶</span>
@@ -1295,9 +1297,10 @@
                 <table id="sum-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
             </div>
         </div>
-        </div>
-    </div>
-</div>
+        </div><!-- /summary-table-scroll -->
+        </div><!-- /concept-tab-wrap -->
+    </div><!-- /tab-summary -->
+</div><!-- extra wrapper -->
 
 <div id="tab-briefspec" class="tab-panel">
     <div class="concept-tab-wrap">

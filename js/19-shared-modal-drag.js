@@ -388,3 +388,53 @@ window._makeDraggable('notice-modal',        'notice-modal-header');
 //    커서는 보이는데 눌러서 끌어도 전혀 움직이지 않았다("손 표시는 있는데 이동이 안 됨").
 window._makeDraggable('alarm-schedule-modal','alarm-schedule-drag');
 window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
+
+// 💡 [2026-09-02 신규] 하단 taskbar에 기본 바로가기 4개 고정 배치
+// AI 도구처럼 자주 쓰는 모달을 매번 상단 메뉴에서 찾지 않아도 하단 바에서 바로 열 수 있게.
+// 최소화 칩과 같은 .modal-taskbar-chip 클래스를 써서 테마 색상 연동도 자동으로 적용됨.
+// ✕ 버튼 없이 항상 고정 표시 — 클릭 시 해당 모달 열기.
+(function() {
+    var LAUNCHERS = [
+        { label: '💬 AI 문답',        open: function() { if (window.openGanttQaModal) window.openGanttQaModal(); } },
+        { label: '🤖 AI 업무 분석',   open: function() { if (window.showMailAnalyzer) window.showMailAnalyzer(); } },
+        { label: '📦 AI 업무 보관함', open: function() { if (window.openTaskInbox) window.openTaskInbox(); } },
+        { label: '🤖 AI 요약',        open: function() { if (window.openAiProjectSummaryModal) window.openAiProjectSummaryModal(); } }
+    ];
+
+    function _createLaunchers() {
+        var bar = _modalTaskbarEl();
+        // 이미 생성된 경우 건너뜀 (중복 방어)
+        if (bar.querySelector('[data-launcher]')) return;
+        LAUNCHERS.forEach(function(l) {
+            var chip = document.createElement('div');
+            chip.className = 'modal-taskbar-chip modal-taskbar-launcher';
+            chip.setAttribute('data-launcher', '1');
+            chip.title = l.label + ' — 클릭하면 열립니다';
+            // 인라인 스타일은 초기 기본값(청록). _cpApplyLive가 실행되면 .modal-taskbar-chip
+            // 클래스 규칙이 덮어써서 항상 현재 프로젝트 테마 색으로 표시됨.
+            chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px;'
+                + ' background:#e0f5f7; border:1px solid #cfe3e5; border-bottom:none;'
+                + ' border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.12);'
+                + ' padding:6px 8px 6px 12px; font-size:12.5px; font-weight:bold;'
+                + ' color:#00707d; cursor:pointer; box-sizing:border-box;';
+
+            var label = document.createElement('span');
+            label.className = 'mtc-label';
+            label.textContent = l.label;
+            label.title = l.label;
+            label.style.cssText = 'flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
+            chip.appendChild(label);
+
+            chip.addEventListener('click', l.open);
+            bar.appendChild(chip);
+        });
+        _relayoutTaskbarChips(bar);
+    }
+
+    // 스크립트 실행 시점에 body/app-main이 이미 있으므로 바로 생성.
+    // DOMContentLoaded 후 한 번 더 bounds 동기화 (초기 getBoundingClientRect 교정).
+    _createLaunchers();
+    document.addEventListener('DOMContentLoaded', function() {
+        _syncTaskbarBounds(_modalTaskbarEl());
+    });
+})();
