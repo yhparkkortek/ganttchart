@@ -16,6 +16,10 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
   설정 암복호화, 예약 발송 스케줄러. 로컬 실행은 `kortek_backend.bat`, 의존성은 `requirements.txt`.
 - **데이터 저장**: 구글시트가 아니라 Google Drive 폴더(`SHARED_FOLDER_ID`, `js/04a-core-app-globals.js`)
   안의 프로젝트당 JSON 파일 1개에 전체 데이터(`globalData`, `changeLogs`, `tabData` 등)를 저장합니다.
+  - **팀별 폴더 구조(신규)**: 프로젝트 JSON은 `SHARED_FOLDER_ID/개발N팀/project.json` 으로 저장됨.
+    백업 파일은 `SHARED_FOLDER_ID/Backups/개발N팀/백업_*.json`.
+  - `findSaveFile` / `_listProjectFiles`는 `in parents`(직속 자식만) 대신 **`in ancestors`(하위 폴더 포함 재귀)**
+    쿼리를 사용 — 팀 폴더로 이동한 파일도 조회됨.
 - **로컬 구동**: `.claude/launch.json` — `python -m http.server 8934` 로 정적 파일 서빙.
 - 자동화 테스트 없음. 브라우저에서 직접 열어 눈으로 확인하는 방식으로 검증합니다.
 
@@ -71,7 +75,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | 파일 | 담당 |
 |---|---|
 | `04a-core-app-globals.js` | 전역 변수 선언 (TDZ 에러 방지를 위해 최상단에 몰아둠) |
-| `04b-core-app-drive-sync.js` | 구글 드라이브 연동 로직 (저장/불러오기/백업 폴더) |
+| `04b-core-app-drive-sync.js` | 구글 드라이브 연동 로직 (저장/불러오기/백업 폴더). 팀별 폴더 헬퍼: `getOrCreateTeamFolder(token,name)`, `_moveFileToTeamFolder(token,fileId,name)` (저장 후 fire-and-forget 이동), `_getOrCreateBackupTeamFolder(token,name)` |
 | `04c-core-app-mail-pipeline.js` | `project_index.json` 메일 자동처리 파이프라인, 프로젝트 저장(`serializedGlobalData`) |
 | `04d-core-app-gantt-core.js` | 날짜/일정(Gantt) 코어 로직, 공휴일 |
 | `04e-core-app-undo-redo.js` | Undo/Redo (recalculateSchedules 종료 시 자동 스냅샷) |
@@ -90,11 +94,11 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `11-mobile-detect.js` | 모바일/카카오톡 인앱 브라우저 감지 |
 | `12-mobile-longpress.js` | 모바일 롱탭 → 텍스트 수정 모드 |
 | `13-mobile-touch-timer.js` | 모바일 터치 타이머 |
-| `14a`/`14b-ai-mail-analysis-N.js` | 메일 분석 → 간트차트 자동 추가 (Gemini AI), 원래 `14-ai-mail-analysis.js` 1/2 |
+| `14a`/`14b-ai-mail-analysis-N.js` | 메일 분석 → 간트차트 자동 추가 (Gemini AI), 원래 `14-ai-mail-analysis.js` 1/2. `14a`에 Phase 6 토픽프로파일 배지 갱신 훅 + Phase 7 다중 프로젝트 배분 함수(`_initMultiProjectArea`, `mailDistributeToProject`) 포함 |
 | `14c-task-inbox.js` | [Phase 1] 업무 보관함 (Task Inbox) — 프로젝트 독립 스테이징 |
 | `14d-distribution-ledger.js` | [Phase 2/2.5] 드라이브 배분 원장 + 저장 시 자동 병합 |
-| `15a-mail-attachment-tab.js` | 메일 파일 첨부 탭 (좌우분할 UI) |
-| `15b`/`15c-mail-server-tab-N.js` | 메일 서버 탭 기능 1/2 |
+| `15a-mail-attachment-tab.js` | 메일 파일 첨부 탭 (좌우분할 UI). Phase 5 신뢰도 배지 헬퍼 `_confBadge(conf)` 전역 선언(여기서만 정의) — 🟢/🟡/🔴/⚪ 뱃지 HTML 반환; `pasteRenderResultList`·`mfRenderList`에도 배지 삽입. Phase 7 `mailShowRightDetail`에서 `_initMultiProjectArea()` 호출 |
+| `15b`/`15c-mail-server-tab-N.js` | 메일 서버 탭 기능 1/2. `15c`의 `msRenderList`에 Phase 5 `_confBadge` 배지 삽입 |
 | `16-wbs-level-colors.js` | WBS 레벨별 고정 회색 계조 |
 | `17-weekly-report-modal-drag.js` | 주간 업무 보고 모달 드래그 |
 | `18-mail-analyzer-modal-drag.js` | 메일 분석기 모달 드래그 |
@@ -110,10 +114,24 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `22h`/`22i-brief-mc-common-N.js` | Brief SPEC / M.C Table 공용 (NO 클릭 팝업, 묶음 선택/이동/추가/삭제) 1/2, 2/2 |
 | `23-sidebar-tabs.js` | 사이드바 접기/펴기 + 탭 전환 |
 | `24-calendar-tab.js` | Calendar 탭 — 간트차트 업무를 월간 캘린더로 표시 |
+| `25-ai-learning.js` | AI 학습 시스템. Phase 3(학습 로그 저장) + **Phase 4 재시도 엔진**: `_alTriggerRetry()` → 저신뢰도(`_aiConfidence≠'상'`) 행 탐지 → 우측 배너 표시 → `_alRunRetry()` → `callAiBackend` 재분석 → 개선 시 `recalculateSchedules()` |
+| `26-topic-profile.js` | **Phase 6 토픽 프로파일**: 간트 업무명 → Gemini AI → `{keywords,topics,patterns,summary}` → `localStorage('gantt_topic_profile_v1')` 저장. `_generateTopicProfile()` / `_getTopicProfile()` / `_topicProfileSnippet()` / `_clearTopicProfile()` / `_refreshTopicProfileBadge()`. `getSystemPrompt`를 래핑해 프로파일 스니펫을 자동 주입 |
+| `26-gantt-search.js` | 간트차트 내 키워드 검색 |
 
 > `04`, `14`, `15`, `22`는 각각 원래 하나의 거대 파일(최대 11,915줄)이었고, 협업 편의와 토큰 절약을
-> 위해 여러 조각으로 나눈 것입니다. 나머지(05~13, 16~21, 23, 24) 번호는 이미 세분화된 단일 파일이라
+> 위해 여러 조각으로 나눈 것입니다. 나머지(05~13, 16~21, 23~26) 번호는 이미 세분화된 단일 파일이라
 > 대부분 추가로 쪼갤 필요가 없습니다.
+
+### Phase 4~7 AI 학습 시스템 요약
+| Phase | 내용 | 주요 파일 |
+|---|---|---|
+| 1 | 업무 보관함 (Task Inbox) | `14c-task-inbox.js` |
+| 2/2.5 | 드라이브 배분 원장 | `14d-distribution-ledger.js` |
+| 3 | AI 학습 로그 저장 (`_writeLearningEntry`) | `25-ai-learning.js` |
+| 4 | 재시도 엔진 — 저신뢰도 행 배너·재분석 | `25-ai-learning.js` |
+| 5 | 신뢰도 배지 (`_confBadge`) — 세 목록 모두 | `15a`, `15c` |
+| 6 | 토픽 프로파일 생성·주입 | `26-topic-profile.js` |
+| 7 | 다중 프로젝트 배분 (`gantt_ai_reassign_queue_v1`) | `14a`, `15a`, HTML |
 
 ### 백엔드
 | 파일 | 역할 |
