@@ -386,13 +386,17 @@
     window.loadFromGoogleDrive = async function() {
         const _ldEn = window._currentLang === 'en';
         try {
-            let files = await window._listProjectFiles();
+            // 💡 [팀 그룹핑] 파일 목록 + project_index(팀 정보) 병렬 로드 — 직렬보다 빠르고 추가 지연 없음
+            const [files, indexProjects] = await Promise.all([
+                window._listProjectFiles(),
+                window._loadProjectIndexForModal ? window._loadProjectIndexForModal().catch(function() { return []; }) : Promise.resolve([])
+            ]);
             if (!files || files.length === 0) {
                 window.showToast(_ldEn ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.", 'error');
                 return;
             }
             window.closeAllTopbarMenus(); // ✅ 드라이브 파일 목록 팝업 뜨기 전, 열려있던 파일 드롭다운 자동 닫기
-            window.showDriveFileModal(files);
+            window.showDriveFileModal(files, 'open', indexProjects);
             window.showToast(_ldEn ? "✅ Project list loaded. Please select a file." : "✅ 공용 프로젝트 목록을 불러왔습니다. 화면에서 파일을 선택해 주세요.");
         } catch (err) { alert(_ldEn ? "Failed to load list: insufficient permissions or invalid folder ID." : "목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
     }
@@ -409,12 +413,16 @@
         }
         window.closeAllTopbarMenus();
         try {
-            const files = await window._listProjectFiles();
+            // 💡 [팀 그룹핑] 파일 목록 + project_index 병렬 로드
+            const [files, indexProjects] = await Promise.all([
+                window._listProjectFiles(),
+                window._loadProjectIndexForModal ? window._loadProjectIndexForModal().catch(function() { return []; }) : Promise.resolve([])
+            ]);
             if (!files || files.length === 0) {
                 window.showToast(_en ? "No project files found in the shared team folder." : "팀 공용 폴더에 저장된 간트차트 프로젝트 파일이 없습니다.", 'error');
                 return;
             }
-            window.showDriveFileModal(files, 'delete');
+            window.showDriveFileModal(files, 'delete', indexProjects);
         } catch (err) {
             alert((_en ? "Failed to load list: " : "목록 호출 실패: ") + err.message);
         }
@@ -502,9 +510,9 @@
 
             if (window.showToast) window.showToast(_en ? `🗑️ Deleted: ${file.name}` : `🗑️ 삭제 완료: ${file.name}`, 'info');
 
-            // 같은 모달에서 이어서 다른 프로젝트도 지울 수 있도록 목록을 새로고침
+            // 같은 모달에서 이어서 다른 프로젝트도 지울 수 있도록 목록을 새로고침 (캐시된 인덱스 재사용)
             const remaining = await window._listProjectFiles();
-            if (remaining.length) window.showDriveFileModal(remaining, 'delete'); else window.closeDriveModal();
+            if (remaining.length) window.showDriveFileModal(remaining, 'delete', window._piModalCache || []); else window.closeDriveModal();
         } catch (err) {
             alert((_en ? 'Delete failed: ' : '삭제 실패: ') + err.message);
         }

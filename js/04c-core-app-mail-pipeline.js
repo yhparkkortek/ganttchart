@@ -193,6 +193,31 @@
         };
     };
 
+    // 💡 [팀 그룹핑] 모달 열기 시 project_index.json을 가볍게 읽어 팀 정보를 보강.
+    //    appProperties.team이 없는 기존 파일도 인덱스에서 팀을 찾아 표시할 수 있게 함.
+    //    5분 캐시 — 같은 세션에서 여러 번 모달을 열어도 중복 API 호출 없음.
+    window._piModalCache    = null;
+    window._piModalCacheTs  = 0;
+    window._loadProjectIndexForModal = async function() {
+        const TTL = 5 * 60 * 1000;
+        if (window._piModalCache && (Date.now() - window._piModalCacheTs < TTL)) return window._piModalCache;
+        try {
+            const tokenObj = gapi.client.getToken ? gapi.client.getToken() : null;
+            const token = (tokenObj && tokenObj.access_token) || window.googleAccessToken;
+            if (!token) return [];
+            const indexFileId = await window.findProjectIndexFile(token);
+            if (!indexFileId) return [];
+            const res = await fetch('https://www.googleapis.com/drive/v3/files/' + indexFileId + '?alt=media&supportsAllDrives=true', { headers: { Authorization: 'Bearer ' + token } });
+            if (!res.ok) return [];
+            const data = await res.json();
+            window._piModalCache   = (data && data.projects) || [];
+            window._piModalCacheTs = Date.now();
+            return window._piModalCache;
+        } catch(e) { return []; }
+    };
+    // project_index.json 저장 성공 시 캐시 무효화 (updateProjectIndexEntry 뒤에서 호출)
+    window._invalidatePiModalCache = function() { window._piModalCache = null; window._piModalCacheTs = 0; };
+
     // project_index.json을 통째로 읽어와서 해당 프로젝트 항목만 upsert 후 다시 통째로 저장
     // (프로젝트 수가 많지 않은 전제 — 수백 개 넘어가면 서버 사이드 부분갱신 방식으로 전환 필요)
     window.updateProjectIndexEntry = async function(driveFileId, dynamicFileName) {
@@ -244,6 +269,7 @@
                 const created = await createRes.json();
                 if (created && created.id) window._projectIndexFileId = created.id; // 💡 방금 만든 파일 ID를 캐시에 반영
             }
+            if (window._invalidatePiModalCache) window._invalidatePiModalCache(); // 팀 그룹핑 캐시 무효화
             return true;
         } catch (err) { console.error('project_index.json 갱신 실패 (메일 자동처리 매칭에 영향 — 저장 자체는 정상 완료됨):', err); return false; }
     };
@@ -646,7 +672,7 @@
             // 💡 [2026-08-30 신규] themeColor도 appProperties에 같이 태운다 — "프로젝트 열기/삭제/복원"
             // 목록이 파일 내용을 통째로 안 받아도(가벼운 메타데이터 조회만으로) 그 프로젝트의 저장된
             // 테마 색을 바로 알 수 있게 하기 위함(showDriveFileModal/showBackupFileModal에서 사용).
-            let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '', completed: (window.projectMeta || {}).완료여부 === '완료' ? '1' : '', themeColor: (window.tabData || {}).themeColor || '' } };
+            let metadata = { name: dynamicFileName, mimeType: 'application/json', appProperties: { pm: (window.projectMeta || {}).프로젝트담당자 || '', completed: (window.projectMeta || {}).완료여부 === '완료' ? '1' : '', themeColor: (window.tabData || {}).themeColor || '', team: (window.projectMeta || {}).팀 || '' } };
             if (!fileId) { metadata.parents = [SHARED_FOLDER_ID]; }
 
             let multipartRequestBody = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata) + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData) + "\r\n--" + boundary + "--";
@@ -1464,8 +1490,12 @@
         } catch (err) { alert("파일 로드 실패: " + err.message); }
     }
 
-    window.showDriveFileModal = function(files, mode) {
+    // 💡 [팀 그룹핑] showDriveFileModal — 팀(외부 아코디온) → 담당자(내부 아코디온) → 파일 행
+    //    3rd param indexProjects: project_index.json entries (team 보강용).
+    //    appProperties.team이 없는 기존 파일도 index 기준으로 팀을 표시할 수 있음.
+    window.showDriveFileModal = function(files, mode, indexProjects) {
         mode = mode || 'open'; // 'open' | 'delete'
+        indexProjects = Array.isArray(indexProjects) ? indexProjects : (window._piModalCache || []);
         let listContainer = document.getElementById('drive-file-list');
         if(!listContainer) return;
         listContainer.innerHTML = '';
@@ -1479,36 +1509,69 @@
             ? (_dmEn ? '⚠️ Select a project file to delete. This cannot be undone from within the app.' : '⚠️ 삭제할 프로젝트 파일을 선택해 주세요. 앱 안에서는 되돌릴 수 없습니다.')
             : (_dmEn ? 'Select a project file to open.' : '불러올 프로젝트 파일을 선택해 주세요.');
 
-        // 💡 [성능] 목록 조회 응답에는 이미 modifiedTime이 들어있다(fields=files(id,name,modifiedTime,...)).
-        //    이걸 기억해뒀다가 프로젝트를 열 때 배분 병합 캐시의 기준값으로 삼는다 — 안 그러면 파일을 연
-        //    직후 첫 저장에서 캐시가 항상 비어 있어(저장할 때만 채워졌음) "메타 조회 + 전체 다운로드"로
-        //    왕복이 오히려 한 번 더 늘었다. 하필 "프로젝트 열기"가 곧바로 저장을 한 번 하기 때문에,
-        //    지금 느리다고 하신 바로 그 경로에서 매번 손해를 보고 있었다.
+        // 💡 modifiedTime 캐시 (기존 성능 최적화 유지)
         window._driveListModifiedTimes = window._driveListModifiedTimes || {};
         files.forEach(function(f) { if (f && f.id && f.modifiedTime) window._driveListModifiedTimes[f.id] = f.modifiedTime; });
 
-        // 담당자(appProperties.pm) 기준 그룹핑 — 없으면 "미지정"
-        const UNASSIGNED = _dmEn ? 'Unassigned' : '미지정';
-        const groups = {};
-        files.forEach(file => {
-            const pm = (file.appProperties && file.appProperties.pm) ? file.appProperties.pm.trim() : '';
-            const key = pm || UNASSIGNED;
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(file);
+        // ── 팀 팔레트 (개발N팀 번호 기준, 나머지는 해시) ──────────────────────────────────
+        const _TEAM_PAL = [
+            { h:'#cfe6fa', b:'#a5c8f0', t:'#1a4f7a', hv:'#b8d8f0' }, // 1 파랑
+            { h:'#c9ecd3', b:'#a8dab8', t:'#1a6640', hv:'#b0dfc0' }, // 2 초록
+            { h:'#ffe3b3', b:'#ffc078', t:'#7a4800', hv:'#ffd090' }, // 3 주황
+            { h:'#e0d8ff', b:'#b8a9f0', t:'#3a2080', hv:'#cec4ff' }, // 4 보라
+            { h:'#ffd6d0', b:'#f0a9a5', t:'#7a2020', hv:'#ffc0b8' }, // 5 빨강
+            { h:'#c8f0e8', b:'#80d0c0', t:'#005040', hv:'#b0e8dc' }, // 6 청록
+            { h:'#fdf0b0', b:'#f0d060', t:'#604800', hv:'#fbe898' }, // 7 노랑
+            { h:'#e8d8f0', b:'#c0a0d8', t:'#501060', hv:'#d8c4e8' }, // 8 자주
+            { h:'#d8f0d8', b:'#90d090', t:'#205020', hv:'#c4e8c4' }, // 9 연두
+        ];
+        function _pal(teamName) {
+            if (!teamName) return { h:'#e9ecef', b:'#ced4da', t:'#495057', hv:'#dee2e6' };
+            const m = teamName.match(/(\d+)/);
+            if (m) return _TEAM_PAL[(parseInt(m[1], 10) - 1) % _TEAM_PAL.length];
+            let hsh = 0;
+            for (let i = 0; i < teamName.length; i++) hsh = (hsh * 31 + teamName.charCodeAt(i)) & 0xffff;
+            return _TEAM_PAL[hsh % _TEAM_PAL.length];
+        }
+
+        // ── 팀 결정 헬퍼 (appProperties.team → index → 없으면 '') ────────────────────────
+        function _fileTeam(file) {
+            const t = file.appProperties && file.appProperties.team;
+            if (t) return t;
+            if (indexProjects.length) {
+                const e = indexProjects.find(function(p) { return p.drive_file_id === file.id; });
+                if (e && e.team) return e.team;
+            }
+            return '';
+        }
+
+        const UNASSIGNED_TEAM = _dmEn ? '(No Team)' : '미지정 팀';
+        const UNASSIGNED_PM   = _dmEn ? 'Unassigned' : '미지정';
+
+        // ── 팀 → { pm → [files] } 2단 맵 구성 ──────────────────────────────────────────
+        const teamMap = {};
+        files.forEach(function(file) {
+            const team = _fileTeam(file) || UNASSIGNED_TEAM;
+            const pm   = (file.appProperties && file.appProperties.pm) ? file.appProperties.pm.trim() : UNASSIGNED_PM;
+            if (!teamMap[team]) teamMap[team] = {};
+            if (!teamMap[team][pm]) teamMap[team][pm] = [];
+            teamMap[team][pm].push(file);
         });
-        // 담당자 이름순 정렬, 미지정은 항상 맨 뒤
-        const groupNames = Object.keys(groups).sort((a, b) => {
-            if (a === UNASSIGNED) return 1;
-            if (b === UNASSIGNED) return -1;
+
+        // 팀 정렬: 개발N팀 번호순, 미지정은 맨 뒤
+        const teamNames = Object.keys(teamMap).sort(function(a, b) {
+            if (a === UNASSIGNED_TEAM) return 1;
+            if (b === UNASSIGNED_TEAM) return -1;
+            const na = parseInt((a.match(/\d+/) || ['0'])[0], 10);
+            const nb = parseInt((b.match(/\d+/) || ['0'])[0], 10);
+            if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
             return a.localeCompare(b, 'ko');
         });
 
-        // 💡 [멀티시트] 담당자별 "한 번에 열기"와 동일한 방식으로, 목록 전체(모든 담당자)를 한 번에 여는 버튼.
-        //    executeLoadFile(..., true)를 그대로 재사용 — 이미 열려있는 시트는 다시 안 받아오고 전환만 됨.
+        // ── 상단 "전체 열기" + "새 프로젝트" 버튼 (open 모드 전용) ─────────────────────
         if (files.length > 1 && mode === 'open') {
             const topActionsRow = document.createElement('div');
             topActionsRow.style.cssText = 'display:flex; gap:8px; align-items:stretch;';
-
             const allBar = document.createElement('div');
             allBar.style.cssText = 'flex:2 1 0; padding:8px 14px; border:1px solid #a5c8f0; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#1a4f7a; background:#e8f4fd; transition:background .15s, border-color .15s;';
             allBar.textContent = _dmEn ? `🗂️ Open all ${files.length} project(s) at once` : `🗂️ 전체 프로젝트 ${files.length}개 한 번에 열기`;
@@ -1518,123 +1581,157 @@
                 const msg = _dmEn ? `Open all ${files.length} project(s) as separate sheets?` : `전체 프로젝트 ${files.length}개를 모두 새 시트로 여시겠습니까?`;
                 if (!confirm(msg)) return;
                 window.closeDriveModal();
-                // 💡 [성능] 같은 파일이 목록에 두 번 들어와도 두 번 받지 않도록 id 기준으로 중복 제거.
-                //    프로젝트 하나를 여는 데 파일 전체를 통째로 받으므로(1개당 1~2초), 중복 한 번이 그대로 낭비가 된다.
                 const _seen = {};
-                const _uniqueFiles = files.filter(function(f) {
-                    if (!f || !f.id || _seen[f.id]) return false;
-                    _seen[f.id] = true; return true;
-                });
-                // 💡 담당자별 열기와 동일하게, 여러 개를 한 번에 열 때는 파일별 토스트를 생략(silent)하고 끝나면 요약 토스트만 표시
-                for (const file of _uniqueFiles) {
-                    await window.executeLoadFile(file.id, file.name, true);
-                }
+                const _uniqueFiles = files.filter(function(f) { if (!f || !f.id || _seen[f.id]) return false; _seen[f.id] = true; return true; });
+                for (const file of _uniqueFiles) { await window.executeLoadFile(file.id, file.name, true); }
                 if (window.showToast) window.showToast(_dmEn ? `✅ Opened all ${files.length} project(s)` : `✅ 전체 프로젝트 ${files.length}개 열기 완료`, 'info');
             };
             topActionsRow.appendChild(allBar);
-
-            // 💡 목록에서 기존 프로젝트를 고르지 않고, 곧바로 "새 프로젝트 시작" 흐름으로 갈 수 있는 지름길.
-            //    새 기능을 따로 만들지 않고 기존 startNewProject()(확인창 → 초기화 → 참조 엑셀 안내 팝업)를
-            //    그대로 재사용한다 — 새 프로젝트 버튼과 동작이 100% 동일하게 유지됨.
             const newProjectBar = document.createElement('div');
             newProjectBar.style.cssText = 'flex:1 1 0; padding:8px 14px; border:1px solid #a8dab8; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#1f7a3d; background:#e6f6ea; transition:background .15s, border-color .15s;';
             newProjectBar.textContent = _dmEn ? '➕ New Project' : '➕ 새 프로젝트 등록';
             newProjectBar.onmouseover = function() { this.style.background = '#c9ecd3'; this.style.borderColor = '#7cc494'; };
             newProjectBar.onmouseout  = function() { this.style.background = '#e6f6ea'; this.style.borderColor = '#a8dab8'; };
-            newProjectBar.onclick = function() {
-                window.closeDriveModal();
-                window.startNewProject();
-            };
+            newProjectBar.onclick = function() { window.closeDriveModal(); window.startNewProject(); };
             topActionsRow.appendChild(newProjectBar);
-
             listContainer.appendChild(topActionsRow);
         }
 
-        groupNames.forEach((pmName, gi) => {
-            const groupFiles = groups[pmName];
-            const groupWrap = document.createElement('div');
-            groupWrap.style.cssText = 'border:1px solid #eee; border-radius:8px; overflow:hidden;';
-
-            const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none; transition:background .15s;';
-            headerRow.onmouseover = function() { headerRow.style.background = '#eef0f2'; };
-            headerRow.onmouseout  = function() { headerRow.style.background = '#f8f9fa'; };
-            const arrow = document.createElement('span');
-            arrow.textContent = '▸'; // 💡 기본은 접힌 상태 — 담당자 이름만 먼저 보이게
-            arrow.style.cssText = 'font-size:11px; transition:0.15s;';
-            headerRow.appendChild(arrow);
-            const label = document.createElement('span');
-            label.textContent = `${pmName} (${groupFiles.length})`;
-            // 💡 [멀티시트] 담당자 이름을 클릭하면 그 담당자의 프로젝트를 전부 시트로 한 번에 열기 (삭제 모드에선 비활성)
-            if (pmName !== UNASSIGNED && mode === 'open') {
-                label.style.cssText = 'text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px;';
-                label.title = _dmEn ? `Open all ${groupFiles.length} project(s) for ${pmName} at once` : `[${pmName}] 담당 프로젝트 ${groupFiles.length}개를 한 번에 엽니다`;
-                label.onclick = async function(e) {
-                    e.stopPropagation(); // 화살표(접기/펴기) 클릭과 안 겹치게
-                    const msg = _dmEn ? `Open all ${groupFiles.length} project(s) for [${pmName}] as separate sheets?` : `[${pmName}] 담당 프로젝트 ${groupFiles.length}개를 전부 새 시트로 여시겠습니까?`;
-                    if (!confirm(msg)) return;
-                    window.closeDriveModal();
-                    // 💡 여러 프로젝트를 한 번에 열 때는 파일별 개별 토스트를 생략(silent)하고, 끝나면 요약 토스트 하나만 표시
-                    for (const file of groupFiles) {
-                        await window.executeLoadFile(file.id, file.name, true);
-                    }
-                    if (window.showToast) window.showToast((_dmEn ? `✅ Opened ${groupFiles.length} project(s) for ` : `✅ [${pmName}] 프로젝트 ${groupFiles.length}개 열기 완료`) + (_dmEn ? pmName : ''), 'info');
-                };
+        // ── 파일 행(fileBtn) 생성 공통 헬퍼 ────────────────────────────────────────────
+        function _makeFileRow(file) {
+            const d = new Date(file.modifiedTime);
+            const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+            const isCompleted = !!(file.appProperties && file.appProperties.completed === '1');
+            const doneBadge = isCompleted ? ` <span style="font-size:10.5px; font-weight:bold; color:#2f9e44; background:#e7f6ec; border-radius:9px; padding:1px 8px; vertical-align:middle;">✅ ${_dmEn ? 'Done' : '완료'}</span>` : '';
+            const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd' };
+            const fileBtn = document.createElement('div');
+            if (mode === 'delete') {
+                const delBg = isCompleted ? '#fff' : rowC.bg, delBorder = isCompleted ? '#ced4da' : rowC.border;
+                fileBtn.style.cssText = 'padding:9px 14px; border:1px solid ' + delBorder + '; border-radius:8px; display:flex; justify-content:space-between; align-items:center; gap:10px; background:' + delBg + '; transition:background .15s, border-color .15s;';
+                const infoWrap = document.createElement('div');
+                infoWrap.style.cssText = 'flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:12px;';
+                infoWrap.innerHTML = '<div style="font-weight:bold; color:#333; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96; flex-shrink:0;">' + dateStr + '</div>';
+                const delBtn = document.createElement('button');
+                delBtn.textContent = _dmEn ? '🗑 Delete' : '🗑 삭제';
+                delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;';
+                delBtn.onmouseover = function() { this.style.background = '#f5c2bd'; this.style.borderColor = '#e08f87'; };
+                delBtn.onmouseout  = function() { this.style.background = '#fbe4e2'; this.style.borderColor = '#eeb0ac'; };
+                delBtn.onclick = function(e) { e.stopPropagation(); window._confirmDeleteProjectFile(file); };
+                fileBtn.appendChild(infoWrap); fileBtn.appendChild(delBtn);
+            } else {
+                const openBg = isCompleted ? '#f8f9fa' : rowC.bg, openBorder = isCompleted ? '#ced4da' : rowC.border;
+                const openHoverBg = isCompleted ? '#e9ecef' : rowC.hoverBg, openHoverBorder = isCompleted ? '#adb5bd' : rowC.hoverBorder;
+                fileBtn.style.cssText = 'padding:9px 14px; border:1px solid ' + openBorder + '; border-radius:8px; cursor:pointer; transition:background .15s, border-color .15s; display:flex; justify-content:space-between; align-items:center; background:' + openBg + ';';
+                fileBtn.onmouseover = function() { this.style.background = openHoverBg; this.style.borderColor = openHoverBorder; };
+                fileBtn.onmouseout  = function() { this.style.background = openBg;      this.style.borderColor = openBorder; };
+                fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
+                fileBtn.innerHTML = '<div style="font-weight:bold; color:' + (isCompleted ? '#868e96' : '#333') + '; font-size:14px;">📄 ' + escapeHtml(file.name) + doneBadge + '</div><div style="font-size:12px; color:#868e96;">' + dateStr + '</div>';
             }
-            headerRow.appendChild(label);
+            return fileBtn;
+        }
 
-            const body = document.createElement('div');
-            body.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:10px;'; // 💡 기본 접힘
+        // ── 팀 아코디온 렌더링 ─────────────────────────────────────────────────────────
+        // 팀이 1개(또는 모두 미지정)이면 팀 헤더를 열어서 보여줌, 여러 팀이면 기본 열림(▾)
+        const expandTeam = true; // 기본 펼침 — 팀 목록 스캔이 더 직관적임
+        teamNames.forEach(function(teamName) {
+            const pmMap = teamMap[teamName];
+            const teamFiles = [].concat.apply([], Object.values(pmMap));
+            const pal = teamName === UNASSIGNED_TEAM ? { h:'#e9ecef', b:'#ced4da', t:'#495057', hv:'#dee2e6' } : _pal(teamName);
 
-            groupFiles.forEach(file => {
-                let d = new Date(file.modifiedTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-                // 💡 [2026-08-29 신규] 완료된 프로젝트 구분 표시 — appProperties에 저장 시 같이 태운 값이라
-                //    파일 내용을 안 받아도(목록 조회만으로) 바로 알 수 있다(위 saveToGoogleDrive 참고).
-                const isCompleted = !!(file.appProperties && file.appProperties.completed === '1');
-                const doneBadge = isCompleted ? ` <span style="font-size:10.5px; font-weight:bold; color:#2f9e44; background:#e7f6ec; border-radius:9px; padding:1px 8px; vertical-align:middle;">✅ ${_dmEn ? 'Done' : '완료'}</span>` : '';
-                // 💡 [2026-08-30 신규] "이 파일 자신이 저장해둔" 테마 색으로 행을 표시 — 완료된 프로젝트는
-                //    기존처럼 회색으로 흐리게(테마色보다 "끝난 것" 표시가 우선하도록 그대로 둠).
-                const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd', darkText: '#333' };
-                let fileBtn = document.createElement('div');
-                if (mode === 'delete') {
-                    const delBg = isCompleted ? '#fff' : rowC.bg, delBorder = isCompleted ? '#ced4da' : rowC.border;
-                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + delBorder + "; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; gap: 10px; background: " + delBg + "; transition: background .15s, border-color .15s;";
-                    const infoWrap = document.createElement('div');
-                    // 💡 [정렬 수정] 예전엔 파일명/날짜가 각자 <div>라 세로로 쌓였음 — "파일 열기"처럼 같은 줄에
-                    //    나란히(파일명 왼쪽, 날짜는 삭제 버튼 바로 왼쪽) 보이도록 이 wrap 자체를 flex row로 변경.
-                    infoWrap.style.cssText = 'flex:1; min-width:0; display:flex; justify-content:space-between; align-items:center; gap:12px;';
-                    infoWrap.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96; flex-shrink:0;">${dateStr}</div>`;
-                    const delBtn = document.createElement('button');
-                    delBtn.textContent = _dmEn ? '🗑 Delete' : '🗑 삭제';
-                    delBtn.style.cssText = 'flex-shrink:0; padding:6px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;';
-                    delBtn.onmouseover = function() { this.style.background = '#f5c2bd'; this.style.borderColor = '#e08f87'; };
-                    delBtn.onmouseout  = function() { this.style.background = '#fbe4e2'; this.style.borderColor = '#eeb0ac'; };
-                    delBtn.onclick = function(e) { e.stopPropagation(); window._confirmDeleteProjectFile(file); };
-                    fileBtn.appendChild(infoWrap);
-                    fileBtn.appendChild(delBtn);
-                } else {
-                    // 💡 완료된 프로젝트는 회색 톤(글자색/배경)으로 흐리게 — 목록에서 계속 눈에 띄되
-                    //    "이건 이미 끝난 것"이라는 게 한눈에 구분되도록. 클릭해서 여는 동작 자체는 그대로 유지.
-                    const openBg = isCompleted ? '#f8f9fa' : rowC.bg, openBorder = isCompleted ? '#ced4da' : rowC.border;
-                    const openHoverBg = isCompleted ? '#e9ecef' : rowC.hoverBg, openHoverBorder = isCompleted ? '#adb5bd' : rowC.hoverBorder;
-                    fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + openBorder + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + openBg + ";";
-                    fileBtn.onmouseover = function() { this.style.background = openHoverBg; this.style.borderColor = openHoverBorder; };
-                    fileBtn.onmouseout = function() { this.style.background = openBg; this.style.borderColor = openBorder; };
-                    fileBtn.onclick = function() { window.executeLoadFile(file.id, file.name); };
-                    fileBtn.innerHTML = `<div style="font-weight: bold; color: ${isCompleted ? '#868e96' : '#333'}; font-size: 14px;">📄 ${escapeHtml(file.name)}${doneBadge}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
-                }
-                body.appendChild(fileBtn);
-            });
+            // 팀 외부 래퍼
+            const teamWrap = document.createElement('div');
+            teamWrap.style.cssText = 'border:1.5px solid ' + pal.b + '; border-radius:10px; overflow:hidden;';
 
-            headerRow.onclick = function() {
-                const collapsed = body.style.display === 'none';
-                body.style.display = collapsed ? 'flex' : 'none';
-                arrow.textContent = collapsed ? '▾' : '▸';
+            // 팀 헤더
+            const teamHdr = document.createElement('div');
+            teamHdr.style.cssText = 'padding:10px 14px; background:' + pal.h + '; cursor:pointer; display:flex; align-items:center; gap:8px; user-select:none;';
+            teamHdr.onmouseover = function() { teamHdr.style.background = pal.hv; };
+            teamHdr.onmouseout  = function() { teamHdr.style.background = pal.h; };
+            const teamArrow = document.createElement('span');
+            teamArrow.style.cssText = 'font-size:12px; color:' + pal.t + '; width:14px; display:inline-block;';
+            teamArrow.textContent = expandTeam ? '▾' : '▸';
+            const teamLbl = document.createElement('span');
+            teamLbl.style.cssText = 'font-size:14px; font-weight:bold; color:' + pal.t + '; flex:1;';
+            teamLbl.textContent = '🏢 ' + teamName + ' (' + teamFiles.length + (_dmEn ? ' projects)' : '개)');
+            teamHdr.appendChild(teamArrow);
+            teamHdr.appendChild(teamLbl);
+            // 팀 전체 열기 버튼 (open 모드, 2개 이상)
+            if (mode === 'open' && teamFiles.length > 1) {
+                const tBtn = document.createElement('span');
+                tBtn.style.cssText = 'font-size:11.5px; color:' + pal.t + '; opacity:0.75; cursor:pointer; padding:2px 8px; border:1px solid ' + pal.b + '; border-radius:9px; transition:opacity .15s; flex-shrink:0;';
+                tBtn.textContent = _dmEn ? 'Open all ' + teamFiles.length : '전체 ' + teamFiles.length + '개 열기';
+                tBtn.title = _dmEn ? 'Open all ' + teamName + ' projects as separate sheets' : '[' + teamName + '] 전체 ' + teamFiles.length + '개를 한 번에 열기';
+                tBtn.onmouseover = function() { this.style.opacity = '1'; };
+                tBtn.onmouseout  = function() { this.style.opacity = '0.75'; };
+                tBtn.onclick = async function(e) {
+                    e.stopPropagation();
+                    if (!confirm(_dmEn ? 'Open all ' + teamFiles.length + ' project(s) in [' + teamName + '] as separate sheets?' : '[' + teamName + '] 전체 프로젝트 ' + teamFiles.length + '개를 모두 새 시트로 여시겠습니까?')) return;
+                    window.closeDriveModal();
+                    for (const f of teamFiles) { await window.executeLoadFile(f.id, f.name, true); }
+                    if (window.showToast) window.showToast(_dmEn ? '✅ Opened all ' + teamFiles.length + ' project(s) in ' + teamName : '✅ [' + teamName + '] 프로젝트 ' + teamFiles.length + '개 열기 완료', 'info');
+                };
+                teamHdr.appendChild(tBtn);
+            }
+
+            // 팀 바디 (PM 서브 아코디온 포함)
+            const teamBody = document.createElement('div');
+            teamBody.style.cssText = 'display:' + (expandTeam ? 'flex' : 'none') + '; flex-direction:column; gap:6px; padding:8px; background:#fafafa;';
+
+            // 팀 헤더 클릭 → 팀 접기/펴기
+            teamHdr.onclick = function() {
+                const c = teamBody.style.display === 'none';
+                teamBody.style.display = c ? 'flex' : 'none';
+                teamArrow.textContent = c ? '▾' : '▸';
             };
 
-            groupWrap.appendChild(headerRow);
-            groupWrap.appendChild(body);
-            listContainer.appendChild(groupWrap);
+            // ── PM 서브 아코디온 ────────────────────────────────────────────────────────
+            const pmNames = Object.keys(pmMap).sort(function(a, b) {
+                if (a === UNASSIGNED_PM) return 1;
+                if (b === UNASSIGNED_PM) return -1;
+                return a.localeCompare(b, 'ko');
+            });
+
+            pmNames.forEach(function(pmName) {
+                const pmFiles = pmMap[pmName];
+                const pmWrap = document.createElement('div');
+                pmWrap.style.cssText = 'border:1px solid #e0e0e0; border-radius:8px; overflow:hidden;';
+                const pmHdr = document.createElement('div');
+                pmHdr.style.cssText = 'padding:8px 12px; background:#f2f4f6; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:12.5px; color:#444; user-select:none; transition:background .15s;';
+                pmHdr.onmouseover = function() { pmHdr.style.background = '#e8eaed'; };
+                pmHdr.onmouseout  = function() { pmHdr.style.background = '#f2f4f6'; };
+                const pmArrow = document.createElement('span');
+                pmArrow.style.cssText = 'font-size:10px; width:12px; display:inline-block;';
+                pmArrow.textContent = '▸';
+                const pmLbl = document.createElement('span');
+                pmLbl.textContent = '👤 ' + pmName + ' (' + pmFiles.length + ')';
+                // PM 이름 클릭 → PM 전체 열기 (open 모드, 미지정 아닐 때)
+                if (pmName !== UNASSIGNED_PM && mode === 'open') {
+                    pmLbl.style.cssText = 'text-decoration:underline; text-decoration-style:dotted; text-underline-offset:3px; cursor:pointer;';
+                    pmLbl.title = _dmEn ? 'Open all ' + pmFiles.length + ' project(s) for ' + pmName : '[' + pmName + '] 담당 프로젝트 ' + pmFiles.length + '개를 한 번에 엽니다';
+                    pmLbl.onclick = async function(e) {
+                        e.stopPropagation();
+                        if (!confirm(_dmEn ? 'Open all ' + pmFiles.length + ' project(s) for [' + pmName + ']?' : '[' + pmName + '] 담당 프로젝트 ' + pmFiles.length + '개를 전부 새 시트로 여시겠습니까?')) return;
+                        window.closeDriveModal();
+                        for (const f of pmFiles) { await window.executeLoadFile(f.id, f.name, true); }
+                        if (window.showToast) window.showToast(_dmEn ? '✅ Opened ' + pmFiles.length + ' project(s) for ' + pmName : '✅ [' + pmName + '] 프로젝트 ' + pmFiles.length + '개 열기 완료', 'info');
+                    };
+                }
+                pmHdr.appendChild(pmArrow); pmHdr.appendChild(pmLbl);
+                const pmBody = document.createElement('div');
+                pmBody.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:8px;'; // 기본 접힘
+                pmHdr.onclick = function() {
+                    const c = pmBody.style.display === 'none';
+                    pmBody.style.display = c ? 'flex' : 'none';
+                    pmArrow.textContent = c ? '▾' : '▸';
+                };
+                pmFiles.forEach(function(file) { pmBody.appendChild(_makeFileRow(file)); });
+                pmWrap.appendChild(pmHdr); pmWrap.appendChild(pmBody);
+                teamBody.appendChild(pmWrap);
+            });
+
+            teamWrap.appendChild(teamHdr);
+            teamWrap.appendChild(teamBody);
+            listContainer.appendChild(teamWrap);
         });
 
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
