@@ -23,7 +23,7 @@
             logModal.innerHTML = `
                 <div id="ps-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                     <div id="ps-prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;color:#1971c2;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
-                        <span>🕒 AI 프로젝트 요약 — 프롬프트 변경 이력</span>
+                        <span>🕒 AI 요약 — 프롬프트 변경 이력</span>
                         <button onclick="event.stopPropagation(); document.getElementById('ps-prompt-log-modal').style.display='none'"
                             style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
                                    color:var(--modal-icon-text); font-size:16px; cursor:pointer;
@@ -398,7 +398,7 @@
         const pm = window.projectMeta || {};
         const title = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
         printArea.innerHTML = `<div style="padding:10px; font-family:'맑은 고딕',sans-serif; color:#333;">
-            <h2 style="margin:0 0 4px; color:#2c5f8a;">🤖 AI 프로젝트 요약 — ${escapeHtml(title)}</h2>
+            <h2 style="margin:0 0 4px; color:#2c5f8a;">🤖 AI 요약 — ${escapeHtml(title)}</h2>
             <div>${content.innerHTML}</div>
         </div>`;
         document.body.classList.add('ai-summary-printing-mode');
@@ -421,7 +421,7 @@
         const SKY = '2C5F8A';
 
         const slide = pptx.addSlide();
-        slide.addText(`🤖 AI 프로젝트 요약 — ${title}`, { x: 0.4, y: 0.3, w: 12.5, h: 0.6, fontSize: 22, bold: true, color: SKY });
+        slide.addText(`🤖 AI 요약 — ${title}`, { x: 0.4, y: 0.3, w: 12.5, h: 0.6, fontSize: 22, bold: true, color: SKY });
         slide.addText(`${r.신호등 || ''}  ${r.총평 || ''}`, { x: 0.4, y: 1.0, w: 12.5, h: 0.6, fontSize: 16, bold: true, color: '333333' });
 
         const statLabels = ['완료', '진행', '대기', '지연'];
