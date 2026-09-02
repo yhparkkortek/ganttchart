@@ -314,7 +314,11 @@ window._makeMinimizable = function(modalId, handleId) {
 };
 
 window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
-    if (window._modalMinimized[modalId]) return;
+    if (window._modalMinimized[modalId]) {
+        // 💡 칩이 있는 상태에서 모달의 ▼를 다시 누르면 → _restoreModal이 재최소화 처리
+        if (window._modalMinimized[modalId].isRestored) window._restoreModal(modalId);
+        return;
+    }
     const toggleEl = _modalToggleTarget(modalId, closeBtn);
     if (!toggleEl) return;
     const prevDisplay = toggleEl.style.display || getComputedStyle(toggleEl).display;
@@ -395,16 +399,52 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     window._modalMinimized[modalId] = { toggleEl: toggleEl, prevDisplay: prevDisplay, chip: chip, observer: observer };
 };
 
+// 💡 [2026-09-02 개선] ▲ 클릭 시 모달을 열되 칩은 유지 — 잘못 열었을 때 ▼를 다시 누르면
+//    칩을 그대로 두고 모달만 다시 접힌다. 칩은 ✕를 눌러야 사라진다(완전히 닫기).
 window._restoreModal = function(modalId) {
     const info = window._modalMinimized[modalId];
     if (!info) return;
+    const bar = _modalTaskbarEl();
+    const restoreBtn = info.chip && info.chip.querySelector('.mtc-restore-btn');
+
+    if (info.isRestored) {
+        // ▼ 다시 클릭(또는 더블클릭) → 모달 재최소화, 칩 유지
+        if (info.observer) info.observer.disconnect();
+        info.toggleEl.style.display = 'none';
+        info.isRestored = false;
+        if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-up"></i>'; restoreBtn.title = '복원'; }
+        // 외부 코드가 모달을 다시 열면 칩 자동 제거
+        info.observer = new MutationObserver(function() {
+            if (info.toggleEl.style.display === 'none') return;
+            info.observer.disconnect();
+            if (!window._modalMinimized[modalId]) return;
+            const chip = window._modalMinimized[modalId].chip;
+            if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
+            delete window._modalMinimized[modalId];
+            _relayoutTaskbarChips(bar);
+            if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
+        });
+        info.observer.observe(info.toggleEl, { attributes: true, attributeFilter: ['style'] });
+        return;
+    }
+
+    // 최초 복원: 모달 열기, 칩 유지, 아이콘 ▲ → ▼
     if (info.observer) info.observer.disconnect();
     info.toggleEl.style.display = info.prevDisplay;
     if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
-    const bar = info.chip && info.chip.parentNode;
-    if (bar) bar.removeChild(info.chip);
-    delete window._modalMinimized[modalId];
-    if (bar) _relayoutTaskbarChips(bar);
+    info.isRestored = true;
+    if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-down"></i>'; restoreBtn.title = '최소화'; }
+    // 모달이 자체 ✕로 닫히면 칩도 자동 제거
+    info.observer = new MutationObserver(function() {
+        if (info.toggleEl.style.display !== 'none') return;
+        info.observer.disconnect();
+        if (!window._modalMinimized[modalId]) return;
+        const chip = window._modalMinimized[modalId].chip;
+        if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
+        delete window._modalMinimized[modalId];
+        _relayoutTaskbarChips(bar);
+    });
+    info.observer.observe(info.toggleEl, { attributes: true, attributeFilter: ['style'] });
 };
 
 // 모달별 드래그 등록
