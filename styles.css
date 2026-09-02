@@ -740,8 +740,8 @@
 /* #summary-table-scroll 높이: JS _syncSummaryScrollHeight 가 --summary-scroll-top 변수로 제어.
    inline style calc(100vh - var(--summary-scroll-top) - var(--mt-reserve)) 가 자동 추적하므로
    has-multi-sheet-bar 별도 height 규칙 불필요 — 제거 */
-body.has-multi-sheet-bar #calendar-table-scroll,
-body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160px - 53px - var(--mt-reserve, 0px)) !important; }
+/* Calendar/Weekly 스크롤 컨테이너: flex 방식으로 뷰포트를 채우도록 변경됨
+   (아래 "뷰포트 채우기 — flex 레이아웃" 블록 참고). has-multi-sheet-bar 별도 규칙 불필요 — 제거. */
 
 /* 💡 [2026-09-02 신규] 뷰포트 채우기 — flex 레이아웃 (Address / BriefSpec / MCTable / Alarm)
    Summary 탭과 같은 원리: --tab-wrap-top(#app-main.top + sheet-tabs-bar.height) + --mt-reserve 로
@@ -823,7 +823,27 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
     max-height: none !important;
 }
 
-/* 8. Elec Parts 탭: concept-tab-wrap 뷰포트 채우기 (PANEL/ADBD/CONVBD 3-way 서브뷰) */
+/* 8. Calendar + Weekly Report 탭: flex column 으로 뷰포트 채우기
+   기존 max-height:calc(100vh - 160px) 하드코딩 → --tab-wrap-top 기반 동적 calc 로 전환.
+   .concept-tab-wrap 에 고정 높이가 없어 뷰포트를 초과하던 문제(Calendar +113px, Weekly +51px) 해소. */
+#tab-calendar > .concept-tab-wrap,
+#tab-weekly   > .concept-tab-wrap {
+    height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#tab-calendar > .concept-tab-wrap > .concept-header-box,
+#tab-weekly   > .concept-tab-wrap > .concept-header-box { flex-shrink: 0; }
+#calendar-table-scroll,
+#weekly-report-page {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+    margin-bottom: 0 !important;
+}
+
+/* 9. Elec Parts 탭: concept-tab-wrap 뷰포트 채우기 (PANEL/ADBD/CONVBD 3-way 서브뷰) */
 #tab-elecparts > .concept-tab-wrap {
     height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
     display: flex;
