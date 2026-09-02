@@ -113,6 +113,7 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti, onPick) {
 };
 
 // 🪪 멤버-1/2 (고정 10칸) — 콤마로 여러 명 입력 가능하므로 isMulti=true
+// 🏢 sum-pm은 주소록에서 이름 선택 시 dept → projectMeta.팀 자동 감지
 [['sum-pm','sum-pm-email'], ['sum-mech','sum-mech-email'], ['sum-hw','sum-hw-email'],
  ['sum-fw','sum-fw-email'], ['sum-module','sum-module-email'],
  ['sum-tsp','sum-tsp-email'], ['sum-lcm','sum-lcm-email'], ['sum-slimming','sum-slimming-email'],
@@ -120,8 +121,31 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti, onPick) {
 ].forEach(function(pair) {
     const nameEl  = document.getElementById(pair[0]);
     const emailEl = document.getElementById(pair[1]);
-    if (nameEl) window.attachAddressAutocomplete(nameEl, emailEl, true);
+    if (!nameEl) return;
+    // sum-pm 자동완성 선택 시 주소록 dept를 팀으로 자동 채우기
+    const onPick = (pair[0] === 'sum-pm') ? function(person) {
+        if (person && person.dept) {
+            window.projectMeta = window.projectMeta || {};
+            window.projectMeta.팀 = person.dept;
+        }
+    } : null;
+    window.attachAddressAutocomplete(nameEl, emailEl, true, onPick);
 });
+
+// 🏢 sum-pm에 직접 타이핑 후 포커스 이동 시에도 주소록 dept로 팀 자동 감지
+(function() {
+    const pmEl = document.getElementById('sum-pm');
+    if (!pmEl) return;
+    pmEl.addEventListener('blur', function() {
+        const firstName = (pmEl.value || '').split(',')[0].trim();
+        if (!firstName) return;
+        const person = window._addrFindByName ? window._addrFindByName(firstName) : null;
+        if (person && person.dept) {
+            window.projectMeta = window.projectMeta || {};
+            window.projectMeta.팀 = person.dept;
+        }
+    });
+})();
 
 // 🪪 멤버-3 (자유 추가, 2열 구조 — 두 컬럼 각각에 이벤트 위임 연결)
 (function() {
@@ -205,7 +229,7 @@ window.collectTabData = function() {
     bind('sum-pm', '프로젝트담당자');
     bind('sum-project-status', '완료여부'); // 💡 값: "" = 진행중, "완료" = 완료
     bind('sum-mail-keywords', '메일키워드');
-    bind('sum-team', '팀'); // ✅ [폴더 로드맵] 담당 팀 — project_index.json team 필드로 저장됨
+    // 💡 팀(pm.팀)은 sum-pm blur/자동완성 선택 시 주소록 dept에서 자동 감지 — 수동 입력 없음
     bind('sum-mech', '기구담당자');
     bind('sum-hw', 'HW담당자');
     bind('sum-fw', 'FW담당자');
@@ -295,7 +319,7 @@ window.populateTabData = function() {
     setVal('sum-pm', pm.프로젝트담당자);
     setVal('sum-project-status', pm.완료여부);
     setVal('sum-mail-keywords', pm.메일키워드);
-    setVal('sum-team', pm.팀); // ✅ [폴더 로드맵] 담당 팀 복원
+    // pm.팀은 sum-pm 자동완성/blur 시 자동 감지 — UI 복원 불필요
     setVal('sum-mech', pm.기구담당자);
     setVal('sum-hw', pm.HW담당자);
     setVal('sum-fw', pm.FW담당자);
