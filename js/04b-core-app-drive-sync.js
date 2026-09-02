@@ -541,6 +541,32 @@
         return window._backupFolderId;
     };
 
+    // 💡 [팀별 백업 폴더] Backups/ 안에 팀명 서브폴더를 찾거나 생성.
+    //    구조: SHARED_FOLDER_ID/Backups/개발N팀/백업_*.json
+    window._backupTeamFolderCache = window._backupTeamFolderCache || {};
+    window._getOrCreateBackupTeamFolder = async function(token, teamName) {
+        if (window._backupTeamFolderCache[teamName]) return window._backupTeamFolderCache[teamName];
+        const backupFolderId = await window.getOrCreateBackupFolder(token);
+        if (!backupFolderId) return backupFolderId;
+        const q = `mimeType='application/vnd.google-apps.folder' and name='${teamName}' and trashed=false and '${backupFolderId}' in parents`;
+        const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const listData = await listRes.json();
+        if (listData.files && listData.files.length > 0) {
+            window._backupTeamFolderCache[teamName] = listData.files[0].id;
+            return window._backupTeamFolderCache[teamName];
+        }
+        const createRes = await fetch(`https://www.googleapis.com/drive/v3/files?supportsAllDrives=true`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name: teamName, mimeType: 'application/vnd.google-apps.folder', parents: [backupFolderId] })
+        });
+        const created = await createRes.json();
+        window._backupTeamFolderCache[teamName] = created.id;
+        return window._backupTeamFolderCache[teamName];
+    };
+
     // ═══════════════════════════════════════════════════════════
     // 📁 [Drive 폴더 정리] 공용 폴더 루트에 흩어져 있던 설정/백업류 파일을 하위 폴더로 정리.
     //    프로젝트 *.json 파일은 지금처럼 그대로 루트에 둔다(파일 탐색기에서 바로 보이게).
@@ -655,7 +681,11 @@
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
             if (!token) return;
-            const folderId = await window.getOrCreateBackupFolder(token);
+            // 💡 [팀별 백업] pm.팀이 설정돼 있으면 Backups/팀명/ 서브폴더에, 없으면 Backups/ 루트에 저장
+            const _backupTeam = (window.projectMeta || {}).팀 || '';
+            const folderId = (_backupTeam && window._getOrCreateBackupTeamFolder)
+                ? await window._getOrCreateBackupTeamFolder(token, _backupTeam)
+                : await window.getOrCreateBackupFolder(token);
 
             const now = new Date();
             const ts = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0')

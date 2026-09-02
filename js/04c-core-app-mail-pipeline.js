@@ -821,7 +821,7 @@
             if (!token) { alert("🔒 구글 인증이 필요합니다. 상단의 연동 버튼을 눌러주세요."); return; }
             const folderId = await window.getOrCreateBackupFolder(token);
             let response = await gapi.client.drive.files.list({
-                q: `mimeType='application/json' and trashed=false and '${folderId}' in parents`,
+                q: `mimeType='application/json' and trashed=false and '${folderId}' in ancestors`,
                 fields: 'files(id, name, createdTime, appProperties)', orderBy: 'createdTime desc', corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
             });
             let files = response.result.files;
