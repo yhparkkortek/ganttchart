@@ -196,7 +196,7 @@
         const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd' };
         Object.keys(sections).forEach(function(v) {
             const sec = document.getElementById(sections[v]);
-            if (sec) sec.style.display = (v === view) ? 'block' : 'none';
+            if (sec) sec.style.display = (v === view) ? 'flex' : 'none'; // 💡 [2026-09-02] 'block'→'flex': CSS flex 레이아웃과 연동
         });
         const meta = window.ELEC_VIEW_META[view];
         const label = document.getElementById('elec-view-trigger-label');

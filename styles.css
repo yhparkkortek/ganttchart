@@ -735,8 +735,7 @@
    js/19-shared-modal-drag.js가 문서 루트에 실시간으로 설정) 도 항상 함께 빼서, 시트탭 바 유무와
    무관하게 하단 박스가 각 탭 콘텐츠와 겹치지 않게 한다 — 아래 각 탭의 기본(인라인) max-height에도
    동일하게 적용되어 있음(GANTT_CHART_V02_Color.html 검색: var(--mt-reserve)). */
-body.has-multi-sheet-bar #gantt-table-scroll     { max-height: calc(70vh + 110px + 44px - 53px - var(--mt-reserve, 0px)) !important; }
-/* addr/briefspec/mctable/alarm 스크롤 컨테이너: flex 방식으로 뷰포트를 채우도록 변경됨
+/* Gantt/addr/briefspec/mctable/alarm 스크롤 컨테이너: flex 방식으로 뷰포트를 채우도록 변경됨
    (아래 "뷰포트 채우기 — flex 레이아웃" 블록 참고). has-multi-sheet-bar 별도 규칙 불필요 — 제거. */
 /* #summary-table-scroll 높이: JS _syncSummaryScrollHeight 가 --summary-scroll-top 변수로 제어.
    inline style calc(100vh - var(--summary-scroll-top) - var(--mt-reserve)) 가 자동 추적하므로
@@ -823,6 +822,61 @@ body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160p
     overflow-y: auto !important;
     max-height: none !important;
 }
+
+/* 8. Elec Parts 탭: concept-tab-wrap 뷰포트 채우기 (PANEL/ADBD/CONVBD 3-way 서브뷰) */
+#tab-elecparts > .concept-tab-wrap {
+    height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#tab-elecparts > .concept-tab-wrap > .concept-header-box { flex-shrink: 0; }
+#tab-elecparts > .concept-tab-wrap > .concept-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0 !important;
+}
+/* 3개 서브뷰: 활성화 시 JS(_switchElecView)가 display:'flex'/'none' 으로 전환 (23-sidebar-tabs.js 동시 수정) */
+#elec-view-panel, #elec-view-adbd, #elec-view-convbd {
+    flex: 1;
+    flex-direction: column;
+    overflow: hidden;
+}
+#pc-table-scroll, #ep-adbd-table-scroll, #ep-convbd-table-scroll {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+}
+#pc-history-box, #ep-adbd-history-box, #ep-convbd-history-box { flex-shrink: 0; }
+
+/* 9. Gantt Chart 탭: flex column 으로 뷰포트 채우기
+   .tab-panel.active { display:block } 보다 높은 명시도(ID+class)로 display:flex 를 강제.
+   --tab-wrap-top 은 _syncTabWrapTop() 이 실시간 갱신하므로 has-multi-sheet-bar 별도 규칙 불필요. */
+#tab-gantt.active {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
+}
+#tab-gantt > #table-info,
+#tab-gantt > #dynamic-filters,
+#tab-gantt > #print-header { flex-shrink: 0; }
+#table-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* .container 클래스의 overflow:visible 덮어씀 */
+    min-height: 0;
+}
+#gantt-table-scroll {
+    flex: 1 !important;
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+}
+#gantt-history-box { flex-shrink: 0; }
 
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
