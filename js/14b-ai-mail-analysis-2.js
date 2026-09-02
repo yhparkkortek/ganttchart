@@ -541,6 +541,20 @@ window.buildMailTaskRow = function(r, gd, ci, mailRaw) {
     //    완료일을 AI가 못 뽑은 경우(_aiOrigPlan이 없음)는 원래도 자동계산에 맡겨진 상태이므로 정상이다.
     newRow._aiOrigStart = r['시작일'] ? _fixYear(r['시작일']) : null;
     newRow._aiOrigPlan  = r['완료일'] ? _fixYear(r['완료일']) : null;
+
+    // ✅ [AI 학습 Phase 1] _aiMeta가 첨부된 경우 AI 등록 표식과 매칭 정보를 row에 저장.
+    //    오매칭 삭제 시 window._showAiDeleteFeedback()이 이 필드들을 읽어 학습 데이터를 기록한다.
+    if (r['_aiMeta']) {
+        newRow._aiRegistered        = true;
+        newRow._aiConfidence        = r['_aiMeta'].confidence        || '';
+        newRow._aiMatchedProjectId  = r['_aiMeta'].matchedProjectId  || '';
+        newRow._aiMatchedProjectName= r['_aiMeta'].matchedProjectName|| '';
+        newRow._aiMatchBasis        = r['_aiMeta'].matchBasis        || '';
+        newRow._aiMatchKeywords     = r['_aiMeta'].keywords          || [];
+        newRow._aiSourceSnippet     = r['_aiMeta'].snippet           || '';
+        newRow._aiRegisteredAt      = new Date().toISOString();
+    }
+
     return { row: newRow, taskName: taskName };
 };
 

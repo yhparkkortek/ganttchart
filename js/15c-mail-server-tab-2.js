@@ -1465,6 +1465,22 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
         const catTag = (result['담당구분'] && result['담당구분'] !== '미분류') ? `[담당구분]${result['담당구분']}` : '';
         const srcTag = `[출처]${parsed.subject || ''}_${window.cleanMailDateForTag(parsed.date)}_${parsed.sender || ''}`;
         result['상세내용'] = (result['상세내용'] || '') + (catTag ? '\n' + catTag : '') + '\n' + srcTag;
+
+        // ✅ [AI 학습 Phase 1] AI 등록 메타데이터 첨부 — buildMailTaskRow()가 읽어서 row._aiRegistered 등으로 저장.
+        //    재배치/오매칭 삭제 피드백 시 이 데이터로 학습 항목을 기록한다.
+        if (candidateProjects && candidateProjects.length > 0) {
+            const _mIdx = parseInt(result['주매칭프로젝트번호'] || 0, 10) - 1;
+            const _mProj = (_mIdx >= 0 && _mIdx < candidateProjects.length) ? candidateProjects[_mIdx] : null;
+            result['_aiMeta'] = {
+                confidence      : result['매칭신뢰도'] || '',
+                matchedProjectId  : _mProj ? (_mProj.drive_file_id || '') : '',
+                matchedProjectName: _mProj ? (_mProj.file_name || '') : '',
+                matchBasis      : result['매칭근거'] || '',
+                keywords        : _mProj ? (_mProj.keywords || []).slice(0, 8) : [],
+                snippet         : ((parsed && parsed.subject) || '') + ' | ' +
+                                  ((parsed && parsed.body) || '').substring(0, 150)
+            };
+        }
     }
     return result;
 }

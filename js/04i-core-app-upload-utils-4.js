@@ -562,6 +562,14 @@ window.deleteHistoryByDateRange = function() {
 
     window.deleteRow = function(index) {
         if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
+
+        // ✅ [AI 학습 Phase 1] AI가 자동 등록한 업무면 오매칭/재배치 피드백 팝업 표시
+        //    피드백 팝업이 직접 행 삭제까지 처리하므로 여기서 바로 return.
+        if (globalData[index] && globalData[index]._aiRegistered && window._showAiDeleteFeedback) {
+            window._showAiDeleteFeedback(index);
+            return;
+        }
+
         let tr = document.querySelector(`tr[data-row-index="${index}"]`); let rowName = index;
         if (tr) {
             let noTd = tr.querySelector('.no-td');

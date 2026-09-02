@@ -134,6 +134,8 @@
         if (window.mcNormalizeAfterLoad) window.mcNormalizeAfterLoad();
         if (window.populateTabData) window.populateTabData();
         window.recalculateSchedules();
+        // ✅ [AI 학습 Phase 1] 재배치 대기 알림 — 이 프로젝트로 재배치 요청이 와 있으면 배너 표시
+        if (window._checkReassignQueueOnLoad) window._checkReassignQueueOnLoad();
     };
 
     window._handleDriveDisconnected = function(reason) {
