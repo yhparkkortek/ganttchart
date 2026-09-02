@@ -510,6 +510,9 @@
             window.recomputeGanttViewRange();
 
             renderTable(globalData); applyFilters();
+            // ✅ [AI 검색 Phase 2] 렌더 완료 후 검색 초기화 (기존 쿼리 있으면 재적용, 옵저버 연결)
+            if (window.ganttSearchInit) window.ganttSearchInit();
+            if (window.ganttSearchObserve) window.ganttSearchObserve();
             window.pushUndoSnapshot();
             
             window.showToast(window._currentLang === 'en' ? "✅ Schedule updated." : "✅ 일정이 업데이트 되었습니다.");

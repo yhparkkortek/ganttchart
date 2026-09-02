@@ -739,6 +739,13 @@
     <div class="btn-group">
         <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🛠️ 일정 도구</button>
         </div>
+        <div class="btn-group">
+            <button id="gantt-ai-search-btn"
+                onclick="window.ganttSearchQuery && (window.ganttSearchQuery('#ai'), document.getElementById('gantt-ai-search-input')&&document.getElementById('gantt-ai-search-input').focus())"
+                onmouseover="this.style.background='#c8b4f0';" onmouseout="this.style.background='#e8d8ff';"
+                title="AI 등록 업무 검색 / #키워드 @프로젝트 검색 (Ctrl+Shift+F)"
+                style="padding:6px 12px; background:#e8d8ff; border:none; color:#6930c3; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🤖 AI검색</button>
+        </div>
 
         <div class="btn-group" style="margin-left: auto;">
             <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
@@ -2283,6 +2290,8 @@
 <script src="js/24-calendar-tab.js"></script>
 
 <script src="js/25-ai-learning.js"></script>
+
+<script src="js/26-gantt-search.js"></script>
 
 </body>
 </html>
