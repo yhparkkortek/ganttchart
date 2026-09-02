@@ -391,50 +391,32 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
 
 // 💡 [2026-09-02 신규] 하단 taskbar에 기본 바로가기 4개 고정 배치
 // AI 도구처럼 자주 쓰는 모달을 매번 상단 메뉴에서 찾지 않아도 하단 바에서 바로 열 수 있게.
-// 최소화 칩과 같은 .modal-taskbar-chip 클래스를 써서 테마 색상 연동도 자동으로 적용됨.
-// ✕ 버튼 없이 항상 고정 표시 — 클릭 시 해당 모달 열기.
+// ── [2026-09-02 개정] 자주 쓰는 4개 모달 — 페이지 로드 시 최소화 상태로 자동 열기 ──
+// 런처 칩(클릭해서 여는 고정 버튼) 대신, 실제 모달을 열고 즉시 최소화해
+// B 영역(taskbar)에 실제 최소화 칩으로 표시. ^ 버튼으로 바로 펼칠 수 있음.
 (function() {
-    var LAUNCHERS = [
-        { label: '💬 AI 문답',        open: function() { if (window.openGanttQaModal) window.openGanttQaModal(); } },
-        { label: '🤖 AI 업무 분석',   open: function() { if (window.showMailAnalyzer) window.showMailAnalyzer(); } },
-        { label: '📦 AI 업무 보관함', open: function() { if (window.openTaskInbox) window.openTaskInbox(); } },
-        { label: '🤖 AI 요약',        open: function() { if (window.openAiProjectSummaryModal) window.openAiProjectSummaryModal(); } }
+    var DEFAULTS = [
+        { open: function() { if (window.openGanttQaModal)         window.openGanttQaModal(); },          handleId: 'gantt-qa-drag' },
+        { open: function() { if (window.showMailAnalyzer)          window.showMailAnalyzer(); },           handleId: 'mail-drag-handle' },
+        { open: function() { if (window.openTaskInbox)             window.openTaskInbox(); },              handleId: 'inbox-drag-handle' },
+        { open: function() { if (window.openAiProjectSummaryModal) window.openAiProjectSummaryModal(); }, handleId: 'ai-summary-drag' }
     ];
 
-    function _createLaunchers() {
-        var bar = _modalTaskbarEl();
-        // 이미 생성된 경우 건너뜀 (중복 방어)
-        if (bar.querySelector('[data-launcher]')) return;
-        LAUNCHERS.forEach(function(l) {
-            var chip = document.createElement('div');
-            chip.className = 'modal-taskbar-chip modal-taskbar-launcher';
-            chip.setAttribute('data-launcher', '1');
-            chip.title = l.label + ' — 클릭하면 열립니다';
-            // 인라인 스타일은 초기 기본값(청록). _cpApplyLive가 실행되면 .modal-taskbar-chip
-            // 클래스 규칙이 덮어써서 항상 현재 프로젝트 테마 색으로 표시됨.
-            chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px;'
-                + ' background:#e0f5f7; border:1px solid #cfe3e5; border-bottom:none;'
-                + ' border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.12);'
-                + ' padding:6px 8px 6px 12px; font-size:12.5px; font-weight:bold;'
-                + ' color:#00707d; cursor:pointer; box-sizing:border-box;';
-
-            var label = document.createElement('span');
-            label.className = 'mtc-label';
-            label.textContent = l.label;
-            label.title = l.label;
-            label.style.cssText = 'flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
-            chip.appendChild(label);
-
-            chip.addEventListener('click', l.open);
-            bar.appendChild(chip);
-        });
-        _relayoutTaskbarChips(bar);
+    function _openAndMinimize(entry) {
+        try {
+            entry.open();
+            var handle = document.getElementById(entry.handleId);
+            if (!handle) return;
+            var minBtn = handle.querySelector('.modal-min-btn');
+            if (minBtn) minBtn.click();
+        } catch (e) {}
     }
 
-    // 스크립트 실행 시점에 body/app-main이 이미 있으므로 바로 생성.
-    // DOMContentLoaded 후 한 번 더 bounds 동기화 (초기 getBoundingClientRect 교정).
-    _createLaunchers();
+    // DOMContentLoaded 후 300ms — 모든 스크립트 초기화가 끝난 뒤 실행
     document.addEventListener('DOMContentLoaded', function() {
-        _syncTaskbarBounds(_modalTaskbarEl());
+        setTimeout(function() {
+            DEFAULTS.forEach(_openAndMinimize);
+            _syncTaskbarBounds(_modalTaskbarEl());
+        }, 300);
     });
 })();
