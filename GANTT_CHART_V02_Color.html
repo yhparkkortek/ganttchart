@@ -1106,7 +1106,7 @@
              대신 고정 height의 flex 세로 컨테이너로 바꾸고, 실제 스크롤은 그 안의 #summary-scroll-inner
              (변경 이력 확인 직전까지만 감싸는 새 div)가 담당하게 한다. #sum-history-box는 그 바깥
              (flex-shrink:0)에 형제로 남아 있어서 스크롤해도 항상 보임. -->
-        <div id="summary-table-scroll" style="display:flex; flex-direction:column; height:calc(100vh - 160px - var(--mt-reserve, 0px)); overflow:hidden;">
+        <div id="summary-table-scroll" style="display:flex; flex-direction:column; height:calc(100vh - 122px - var(--mt-reserve, 0px)); overflow:hidden;">
         <div id="summary-scroll-inner" style="flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column;">
         <div class="concept-section summary-outer-box" style="background:#e0f5f7; border-color:#a3d9e0; flex:1; min-height:0; display:flex; flex-direction:column; overflow:hidden;">
         <div id="sum-content-scroll" style="flex:1; min-height:0; overflow-y:auto;">
