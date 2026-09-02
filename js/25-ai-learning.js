@@ -44,8 +44,111 @@
         store[projectKey].unshift(entry);                          // 최신순 prepend
         if (store[projectKey].length > 200) store[projectKey] = store[projectKey].slice(0, 200);
         _saveStore(store);
-        // Phase 2: Drive 동기화 훅 예정
         console.log('[AI학습] 기록 완료:', entry.type, '/', projectKey, '/', entry.taskName);
+        // Phase 4: 학습 갱신 시 저신뢰도 큐 재분석 트리거
+        _alTriggerRetry();
+    };
+
+    // ─── Phase 4: 재시도 엔진 — 저신뢰도(중/하/미분류) AI 업무 자동 재분석 ────────
+
+    /**
+     * globalData에서 AI 등록 + 저신뢰도 행을 스캔하여, 재분석 배너를 표시한다.
+     * _writeLearningEntry 호출 직후 자동으로 실행됨.
+     */
+    function _alTriggerRetry() {
+        // globalData가 없거나 비어있으면 스킵
+        if (typeof globalData === 'undefined' || !globalData || globalData.length <= 1) return;
+        var lowRows = [];
+        for (var i = 1; i < globalData.length; i++) {
+            var row = globalData[i];
+            if (!row || !row._aiRegistered) continue;
+            var conf = row._aiConfidence || '';
+            if (conf === '상') continue; // 상은 이미 확정
+            lowRows.push({ idx: i, taskName: row._origT3 || row._origT2 || row._origT1 || row._origT4 || row._origDev || '업무', conf: conf, snippet: row._aiSourceSnippet || '' });
+        }
+        if (!lowRows.length) return;
+        _showRetryBanner(lowRows);
+    }
+
+    /** 재분석 제안 배너 (비침습적 — 자동 닫힘 15초, 수동 닫기 또는 실행 가능) */
+    function _showRetryBanner(lowRows) {
+        var existing = document.getElementById('al-retry-banner');
+        if (existing) existing.remove();
+
+        var banner = document.createElement('div');
+        banner.id = 'al-retry-banner';
+        banner.style.cssText =
+            'position:fixed;top:56px;right:16px;z-index:99500;max-width:340px;' +
+            'background:#fff8e1;border:1px solid #ffe082;border-radius:10px;' +
+            'padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,0.14);font-family:sans-serif;';
+        banner.innerHTML =
+            '<div style="font-size:13px;font-weight:700;color:#856404;margin-bottom:6px;">📊 AI 학습 갱신됨</div>' +
+            '<div style="font-size:12px;color:#6c4a00;margin-bottom:10px;">저신뢰도 AI 업무 <b>' + lowRows.length + '건</b>을 재분석해 정확도를 높일 수 있습니다.</div>' +
+            '<div style="display:flex;gap:8px;">' +
+              '<button id="al-retry-run-btn" style="flex:1;padding:7px 0;background:#ffe082;color:#4a3500;border:1px solid #ffc107;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">🔄 재분석 실행</button>' +
+              '<button id="al-retry-close-btn" style="padding:7px 12px;background:#f8f9fa;color:#888;border:1px solid #dee2e6;border-radius:6px;font-size:12px;cursor:pointer;">닫기</button>' +
+            '</div>';
+        document.body.appendChild(banner);
+
+        document.getElementById('al-retry-close-btn').addEventListener('click', function() { banner.remove(); });
+        document.getElementById('al-retry-run-btn').addEventListener('click', function() {
+            banner.remove();
+            _alRunRetry(lowRows);
+        });
+        setTimeout(function() { if (banner.parentNode) banner.remove(); }, 15000);
+    }
+
+    /**
+     * 저신뢰도 행을 AI로 재분석하여 신뢰도가 올라오면 row._aiConfidence를 갱신한다.
+     * snippet(_aiSourceSnippet)이 있는 행만 재분석 가능.
+     */
+    window._alRunRetry = async function(lowRows) {
+        var apiKey = window.getActiveAiKey && window.getActiveAiKey();
+        if (!apiKey) { _showToast('⚠️ AI API 키를 먼저 설정해주세요'); return; }
+
+        var rows = (lowRows || []).filter(function(r) { return r.snippet && r.snippet.length > 10; });
+        if (!rows.length) { _showToast('재분석할 수 있는 업무(원문 있음)가 없습니다'); return; }
+
+        _showToast('🔄 저신뢰도 ' + rows.length + '건 재분석 중...', 6000);
+
+        var improved = 0;
+        for (var ri = 0; ri < rows.length; ri++) {
+            var item = rows[ri];
+            try {
+                var candidatesForAI = null;
+                if (window._msLoadProjectIndex && window._msFilterCandidateProjects) {
+                    candidatesForAI = window._msFilterCandidateProjects(await window._msLoadProjectIndex()) || null;
+                }
+                var prompt = window.getSystemPrompt
+                    ? window.getSystemPrompt('', '', '', '', item.snippet.substring(0, 2000), null)
+                    : item.snippet;
+                if (candidatesForAI && candidatesForAI.length && window._msBuildProjectMatchSection) {
+                    prompt += window._msBuildProjectMatchSection(candidatesForAI);
+                }
+                var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
+                if (!result || !result.ok) continue;
+                var text = (result.data && result.data.result && result.data.result.candidates &&
+                            result.data.result.candidates[0] &&
+                            result.data.result.candidates[0].content &&
+                            result.data.result.candidates[0].content.parts &&
+                            result.data.result.candidates[0].content.parts[0].text) || '';
+                var parsed = window.parseGeminiTask ? window.parseGeminiTask(text) : null;
+                if (!parsed) continue;
+                var newConf = parsed['매칭신뢰도'] || parsed['_aiMeta']?.confidence || '';
+                var row = typeof globalData !== 'undefined' && globalData[item.idx];
+                if (row && row._aiRegistered && newConf && newConf !== item.conf) {
+                    row._aiConfidence = newConf;
+                    improved++;
+                    console.info('[재시도 엔진] 신뢰도 갱신:', item.taskName, item.conf, '→', newConf);
+                }
+            } catch(e) { console.warn('[재시도 엔진] 실패:', item.taskName, e); }
+        }
+        if (improved > 0) {
+            if (window.recalculateSchedules) window.recalculateSchedules();
+            _showToast('✅ ' + improved + '건 신뢰도 갱신 완료');
+        } else {
+            _showToast('재분석 완료 — 신뢰도 변경 없음');
+        }
     };
 
     // ─── 재배치 큐 ──────────────────────────────────────────────────────────

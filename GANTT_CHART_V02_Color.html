@@ -1968,6 +1968,20 @@
                     </div>
                     <div id="mail-error" style="display:none; color:#e03131; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-top:6px;"></div>
 
+                    <!-- Phase 6: 토픽 프로파일 생성 버튼 -->
+                    <div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+                        <button onclick="window._generateTopicProfile && window._generateTopicProfile()"
+                            title="현재 프로젝트의 간트 업무를 AI로 분석하여 키워드·토픽 프로파일을 저장합니다. 이후 메일 분석 정확도가 향상됩니다."
+                            onmouseover="this.style.background='#d8f3d8';this.style.borderColor='#7cc494';"
+                            onmouseout="this.style.background='#eaf7ea';this.style.borderColor='#a8dab8';"
+                            style="flex:1;height:26px;font-size:11px;font-weight:bold;cursor:pointer;
+                                   background:#eaf7ea;color:#1f6a3a;border:1px solid #a8dab8;
+                                   border-radius:6px;transition:background .15s,border-color .15s;">
+                            📊 토픽 프로파일 생성
+                        </button>
+                        <span id="topic-profile-badge" style="font-size:10px;color:#888;white-space:nowrap;"></span>
+                    </div>
+
                     <!-- 직접입력 분석 결과 목록 (누적) — 파일첨부/메일서버와 동일한 체크박스+일괄등록 구조 -->
                     <div id="paste-result-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; margin-bottom:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;">
@@ -2207,7 +2221,26 @@
                             <span id="mail-right-inbox-btn-label">📥 보관함</span>
                         </button>
                     </div>
-                    
+
+                    <!-- Phase 7: 다중 프로젝트 동시 등록 영역 -->
+                    <div id="mail-multi-project-area" style="display:none; margin-top:8px; padding:10px 12px; background:#f0f4ff; border:1px solid #b8c8f0; border-radius:8px; flex-shrink:0;">
+                        <div style="font-size:11px; font-weight:700; color:#3a5199; margin-bottom:7px;">🔀 다른 프로젝트로 배분</div>
+                        <div style="display:flex; gap:6px; align-items:center;">
+                            <select id="mail-multi-target-project"
+                                style="flex:1; height:30px; padding:0 8px; border:1px solid #b8c8f0; border-radius:6px; font-size:12px; background:#fff;">
+                                <option value="">-- 대상 프로젝트 선택 --</option>
+                            </select>
+                            <button onclick="window.mailDistributeToProject()"
+                                onmouseover="this.style.background='#c0d0f8';" onmouseout="this.style.background='#d6e2ff';"
+                                style="height:30px; padding:0 14px; background:#d6e2ff; color:#2b44a0; border:1px solid #b8c8f0; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .15s;">
+                                📤 배분
+                            </button>
+                        </div>
+                        <div style="font-size:10px; color:#6c757d; margin-top:5px;">
+                            선택한 프로젝트를 열면 수신 대기 알림이 표시됩니다
+                        </div>
+                    </div>
+
                 </div>
 
             </div><!-- end 오른쪽 패널 -->
@@ -2293,6 +2326,8 @@
 <script src="js/24-calendar-tab.js"></script>
 
 <script src="js/25-ai-learning.js"></script>
+
+<script src="js/26-topic-profile.js"></script>
 
 <script src="js/26-gantt-search.js"></script>
 

@@ -839,11 +839,12 @@ function msRenderList(results) {
                             white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                     ${canSel ? escapeHtml(taskName) + ' 📧' : escapeHtml(r.subject.substring(0,35))}
                 </div>
-                <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap;">
+                <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap; align-items:center;">
                     <span style="font-size:10px; color:#aaa;">${r.date||''}</span>
                     ${r.project
                         ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r.project}</span>`
                         : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
+                    ${(window._confBadge && r.task) ? window._confBadge((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도'] || '') : ''}
                     ${r.registered
                         ? `<span style="color:#28a745; font-size:10px; font-weight:bold;">✅등록완료</span>`
                         : `<span style="color:#999; font-size:10px;">⬜미등록</span>`}

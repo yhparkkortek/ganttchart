@@ -23,6 +23,8 @@ window.showMailAnalyzer = function() {
     document.getElementById('mail-error').style.display = 'none';
     document.getElementById('mail-analyzer-overlay').style.display = 'flex';
     window.bringModalToFront('mail-analyzer-overlay');
+    // Phase 6: 토픽 프로파일 배지 갱신
+    if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();
 
     // 💡 새로 열 때는 "AI 분석" 버튼이 다시 전체 폭 단일 버튼으로 시작
     const analyzeBtn = document.getElementById('mail-analyze-btn');
@@ -765,6 +767,102 @@ window.resetPrompt = function() {
     localStorage.removeItem('gantt_mail_prompt');
     document.getElementById('prompt-edit-textarea').value = window._defaultPromptTemplate || '';
     alert('✅ 기본 프롬프트로 초기화되었습니다.\n(초기화 전 프롬프트는 "변경 이력"에서 복원할 수 있습니다)');
+};
+
+// ── Phase 7: 다중 프로젝트 동시 등록 ─────────────────────────────────────
+
+/**
+ * 오른쪽 패널(mailShowRightDetail)이 열릴 때 "다른 프로젝트로 배분" 영역을 초기화.
+ * projectList를 비동기로 로드해 드롭다운을 채운다.
+ */
+window._initMultiProjectArea = async function() {
+    var area = document.getElementById('mail-multi-project-area');
+    var sel  = document.getElementById('mail-multi-target-project');
+    if (!area || !sel) return;
+
+    // 현재 프로젝트 제외
+    var curId   = window.currentDriveFileId   || '';
+    var curName = window.currentDriveFileName || '';
+
+    sel.innerHTML = '<option value="">-- 대상 프로젝트 선택 --</option>';
+    area.style.display = '';
+
+    try {
+        var idx = window._msLoadProjectIndex ? await window._msLoadProjectIndex() : [];
+        var list = (idx || []).filter(function(p) { return p && !p.completed; });
+        list.forEach(function(p) {
+            var pid = p.drive_file_id || p.file_name || '';
+            if (pid === curId || p.file_name === curName) return; // 현재 프로젝트 제외
+            var opt = document.createElement('option');
+            opt.value = pid;
+            opt.textContent = (p.file_name || '').replace(/\.json$/i, '') +
+                              (p.inch ? ' (' + p.inch + '인치)' : '');
+            sel.appendChild(opt);
+        });
+    } catch(e) {
+        var opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = '(프로젝트 목록 로드 실패)';
+        opt.disabled = true;
+        sel.appendChild(opt);
+    }
+};
+
+/**
+ * "📤 배분" 버튼 클릭 — 현재 분석 결과를 선택한 프로젝트의 재배치 큐에 넣는다.
+ * 대상 프로젝트를 열면 수신 알림이 표시됨.
+ */
+window.mailDistributeToProject = async function() {
+    var sel = document.getElementById('mail-multi-target-project');
+    if (!sel || !sel.value) { alert('대상 프로젝트를 선택해주세요.'); return; }
+
+    var task = window._mailAnalyzedResult;
+    if (!task) { alert('배분할 분석 결과가 없습니다.'); return; }
+
+    var targetId = sel.value;
+    var targetName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : targetId;
+
+    // 재배치 큐에 추가 (25-ai-learning.js의 _pushReassignQueue와 동일 구조)
+    var taskName = (task['업무명'] || '새업무').replace(/\s*＊AI📧\s*$/, '').trim();
+    var queueItem = {
+        id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+        ts: new Date().toISOString(),
+        targetProjectId: targetId,
+        targetProjectName: targetName,
+        taskData: {
+            업무명: taskName,
+            상세내용: task['상세내용'] || '',
+            시작일: task['시작일'] || '',
+            완료일: task['완료일'] || '',
+            상태: task['상태'] || '진행',
+            개발단계: task['개발단계'] || '',
+            담당구분: task['담당구분'] || '',
+            wbs레벨: task['wbs레벨'] != null ? String(task['wbs레벨']) : '3',
+            _aiMeta: {
+                confidence: (task['_aiMeta'] && task['_aiMeta'].confidence) || task['매칭신뢰도'] || '',
+                matchBasis: '다중 프로젝트 배분 (Phase 7)',
+                keywords: [],
+                snippet: (task['상세내용'] || '').substring(0, 150)
+            }
+        },
+        status: 'pending'
+    };
+
+    try {
+        var queue = [];
+        try { queue = JSON.parse(localStorage.getItem('gantt_ai_reassign_queue_v1') || '[]'); } catch(e) {}
+        queue.push(queueItem);
+        localStorage.setItem('gantt_ai_reassign_queue_v1', JSON.stringify(queue));
+    } catch(e) {
+        alert('큐 저장 실패: ' + e.message); return;
+    }
+
+    if (window.showToast) {
+        window.showToast('📤 "' + taskName + '" → ' + targetName + ' 배분 완료 — 해당 프로젝트를 열면 알림이 표시됩니다');
+    }
+
+    // 배분 후 드롭다운 초기화
+    sel.value = '';
 };
 
 // ── 💡 [Phase2/3] 프롬프트 피드백 로그 ──────────────────────────────

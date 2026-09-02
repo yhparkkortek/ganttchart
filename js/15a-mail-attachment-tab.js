@@ -202,6 +202,8 @@ function mailShowRightDetail(subject, sender, date, body, project, task, onInser
     // 분석결과 렌더링
     window._mailAnalyzedResult = JSON.parse(JSON.stringify(task));
     window.renderMailResult(task);
+    // Phase 7: 다중 프로젝트 배분 드롭다운 초기화 (비동기, 렌더링 차단 안 함)
+    if (window._initMultiProjectArea) window._initMultiProjectArea();
     // 삽입 위치
     window.populateInsertPosition();
     const hasDate = task['시작일'] && !task['시작일'].includes('날짜확인필요');
@@ -249,6 +251,17 @@ function pasteAddResult(task, mailText) {
     pasteRenderResultList();
 }
 
+// ─── 신뢰도 배지 헬퍼 (파일첨부 · 직접입력 · 메일서버 공용) ───────────────────
+function _confBadge(conf) {
+    if (!conf) return '';
+    const cfg = conf === '상' ? { bg:'#d4edda', color:'#155724', icon:'🟢' }
+              : conf === '중' ? { bg:'#fff3cd', color:'#856404', icon:'🟡' }
+              : conf === '하' ? { bg:'#f8d7da', color:'#721c24', icon:'🔴' }
+              :                 { bg:'#f1f3f5', color:'#6c757d', icon:'⚪' };
+    return `<span style="flex-shrink:0;font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;background:${cfg.bg};color:${cfg.color};">${cfg.icon}${conf}</span>`;
+}
+window._confBadge = _confBadge; // 전역 노출 (msRenderList 등 다른 파일에서도 사용)
+
 // ─── 직접입력 누적 결과 목록 렌더링 (파일첨부/메일서버와 동일한 UI: 체크박스+번호+이름+상태pill+×삭제) ─────
 function pasteRenderResultList() {
     const list = document.getElementById('paste-result-list');
@@ -281,6 +294,7 @@ function pasteRenderResultList() {
                   title="${escapeHtml(r.task['업무명']||'새업무')}">
                 ${escapeHtml(r.task['업무명']||'새업무')} 📧
             </span>
+            ${_confBadge((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도'] || '')}
             <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:3px 8px; border-radius:12px;
                          ${r.registered ? 'background:#28a745; color:#fff;' : 'background:#f1f3f5; color:#888;'}">
                 ${r.registered ? '✅ 완료' : '⬜ 미등록'}
@@ -1160,12 +1174,13 @@ function mfRenderList(results) {
                         ? escapeHtml(taskName) + ' 📧'
                         : escapeHtml(r.subject.substring(0,35))}
                 </div>
-                <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap;">
+                <div style="display:flex; gap:4px; margin-top:2px; flex-wrap:wrap; align-items:center;">
                     ${r.project
                         ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px;
                                         border-radius:3px; font-size:10px; font-weight:bold;">
                                ${r.project}</span>`
                         : `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>`}
+                    ${_confBadge(r.task && ((r.task['_aiMeta'] && r.task['_aiMeta'].confidence) || r.task['매칭신뢰도']) || '')}
                     ${r.task && r.task['시작일']
                         ? `<span style="font-size:10px; color:#888;">
                                ${r.task['시작일'].includes('날짜확인필요')
