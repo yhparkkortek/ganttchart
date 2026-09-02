@@ -187,6 +187,85 @@
       </div>
     </div>
     </div>
+
+    <!-- 💡 [2026-09-02 버그 수정] tab-notice 를 tab-alarm > .concept-tab-wrap 안으로 이동 —
+         이전엔 app-main 내 tab-gantt 뒤에 형제 요소로 있어서, tab-alarm 이 뷰포트를 꽉 채운(height:calc(100vh...))
+         이후 위치(offsetTop: 671)에 렌더링되어 Notice 뷰로 전환해도 스크롤해야만 보이는 버그 -->
+    <div id="tab-notice" style="display:none;">
+      <div class="concept-header-box" id="notice-header-box">
+        <span data-i18n="notice-desc" style="font-size:12px; color:#888;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
+        <div class="btn-group">
+          <button data-i18n="btn-notice-add" onclick="window.openNoticeModal()"
+                  onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+                  style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">+ 공지 등록</button>
+          <button data-i18n="btn-notice-sendall" onclick="window.checkAndSendNotices(true)"
+                  onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+                  style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📢 전체 즉시 발송</button>
+        </div>
+      </div>
+
+      <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
+      <!-- 공지 목록 테이블 -->
+      <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+          <thead>
+            <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+              <th style="padding:10px 12px; text-align:center; width:54px;" data-i18n="th-notice-status">상태</th>
+              <th style="padding:10px 12px; text-align:left;" data-i18n="th-notice-title">제목</th>
+              <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-target">발송 채널</th>
+              <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-date">기준일</th>
+              <th style="padding:10px 12px; text-align:center; width:90px;">D-day</th>
+              <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-lastsent">마지막 발송</th>
+              <th style="padding:10px 12px; text-align:center; width:150px;" data-i18n="th-notice-action">액션</th>
+            </tr>
+          </thead>
+          <tbody id="notice-table-body">
+            <tr>
+              <td colspan="7" style="padding:30px; text-align:center; color:#aaa; font-size:13px;">
+                <span id="notice-empty-msg">등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
+        <div style="padding:10px 12px; background:#eef6f7; border-bottom:2px solid #cfe3e5; display:flex; align-items:center; justify-content:space-between;">
+          <span style="font-size:12.5px; font-weight:bold; color:#444;">⏰ 예약 발송 규칙 (기간·반복 — 서버가 직접 스케줄을 돕니다)</span>
+          <button onclick="window.loadScheduleRulesFromBackend()" title="새로고침"
+                  onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                  style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 새로고침</button>
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+          <thead>
+            <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+              <th style="padding:10px 12px; text-align:center; width:54px;">상태</th>
+              <th style="padding:10px 12px; text-align:left;">제목</th>
+              <th style="padding:10px 12px; text-align:center; width:120px;">종류</th>
+              <th style="padding:10px 12px; text-align:center; width:200px;">날짜</th>
+              <th style="padding:10px 12px; text-align:center; width:130px;">시간</th>
+              <th style="padding:10px 12px; text-align:center; width:150px;">액션</th>
+            </tr>
+          </thead>
+          <tbody id="schedule-rule-table-body">
+            <tr><td colspan="6" style="padding:24px; text-align:center; color:#aaa; font-size:13px;">불러오는 중...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- 발송 로그 (접기/펼치기) -->
+      <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden;">
+        <div onclick="const b=document.getElementById('notice-log-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.notice-log-arrow').textContent=b.style.display==='none'?'▶':'▼'"
+             style="padding:12px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; background:#f8f9fa;">
+          <span id="notice-log-title" style="font-size:12.5px; font-weight:bold; color:#444;">📋 발송 로그</span>
+          <span class="notice-log-arrow" style="font-size:11px; color:#888;">▶</span>
+        </div>
+        <div id="notice-log-body" style="display:none; padding:12px 16px; max-height:200px; overflow-y:auto;">
+          <div id="notice-log-list" style="font-size:12px; color:#888;">발송 로그가 없습니다.</div>
+        </div>
+      </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -696,89 +775,6 @@
         </div>
     </div>
 </div> <!-- /#tab-gantt -->
-
-<div id="tab-notice" style="display:none;">
-  <div class="concept-tab-wrap" style="max-width:1100px; padding:22px 26px;">
-    <div class="concept-header-box" id="notice-header-box">
-      <span data-i18n="notice-desc" style="font-size:12px; color:#888;">D-day 알람과 별개로 운영되는 반복 공지 시스템</span>
-      <div class="btn-group">
-        <button data-i18n="btn-notice-add" onclick="window.openNoticeModal()"
-                onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">+ 공지 등록</button>
-        <button data-i18n="btn-notice-sendall" onclick="window.checkAndSendNotices(true)"
-                onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
-                style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📢 전체 즉시 발송</button>
-      </div>
-    </div>
-
-    <!-- 💡 [2026-08-29] 다른 탭들처럼 전체를 감싸는 청록 파스텔 외곽 박스 추가 — 안쪽 공지 목록/발송
-         로그 박스는 흰 카드로 유지(다른 탭의 서브 박스와 동일한 패턴) -->
-    <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
-    <!-- 공지 목록 테이블 -->
-    <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
-      <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-        <thead>
-          <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
-            <th style="padding:10px 12px; text-align:center; width:54px;" data-i18n="th-notice-status">상태</th>
-            <th style="padding:10px 12px; text-align:left;" data-i18n="th-notice-title">제목</th>
-            <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-target">발송 채널</th>
-            <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-date">기준일</th>
-            <th style="padding:10px 12px; text-align:center; width:90px;">D-day</th>
-            <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-lastsent">마지막 발송</th>
-            <th style="padding:10px 12px; text-align:center; width:150px;" data-i18n="th-notice-action">액션</th>
-          </tr>
-        </thead>
-        <tbody id="notice-table-body">
-          <tr>
-            <td colspan="7" style="padding:30px; text-align:center; color:#aaa; font-size:13px;">
-              <span id="notice-empty-msg">등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.</span>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 💡 [2026-08-31 신규] 예약 발송(기간·반복) 규칙 목록 — kortek_backend.py의 /schedule API에
-         등록된 규칙을 보여준다. 공지 목록(위 표)과는 완전히 다른 저장소(로컬 백엔드)에서 온다 —
-         "+ 공지 등록" 모달에서 발송 방식을 "기간·반복"으로 선택하면 여기에 나타난다. -->
-    <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
-      <div style="padding:10px 12px; background:#eef6f7; border-bottom:2px solid #cfe3e5; display:flex; align-items:center; justify-content:space-between;">
-        <span style="font-size:12.5px; font-weight:bold; color:#444;">⏰ 예약 발송 규칙 (기간·반복 — 서버가 직접 스케줄을 돕니다)</span>
-        <button onclick="window.loadScheduleRulesFromBackend()" title="새로고침"
-                onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
-                style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 새로고침</button>
-      </div>
-      <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
-        <thead>
-          <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
-            <th style="padding:10px 12px; text-align:center; width:54px;">상태</th>
-            <th style="padding:10px 12px; text-align:left;">제목</th>
-            <th style="padding:10px 12px; text-align:center; width:120px;">종류</th>
-            <th style="padding:10px 12px; text-align:center; width:200px;">날짜</th>
-            <th style="padding:10px 12px; text-align:center; width:130px;">시간</th>
-            <th style="padding:10px 12px; text-align:center; width:150px;">액션</th>
-          </tr>
-        </thead>
-        <tbody id="schedule-rule-table-body">
-          <tr><td colspan="6" style="padding:24px; text-align:center; color:#aaa; font-size:13px;">불러오는 중...</td></tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 발송 로그 (접기/펼치기) -->
-    <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden;">
-      <div onclick="const b=document.getElementById('notice-log-body');b.style.display=b.style.display==='none'?'block':'none';this.querySelector('.notice-log-arrow').textContent=b.style.display==='none'?'▶':'▼'"
-           style="padding:12px 16px; cursor:pointer; display:flex; align-items:center; justify-content:space-between; background:#f8f9fa;">
-        <span id="notice-log-title" style="font-size:12.5px; font-weight:bold; color:#444;">📋 발송 로그</span>
-        <span class="notice-log-arrow" style="font-size:11px; color:#888;">▶</span>
-      </div>
-      <div id="notice-log-body" style="display:none; padding:12px 16px; max-height:200px; overflow-y:auto;">
-        <div id="notice-log-list" style="font-size:12px; color:#888;">발송 로그가 없습니다.</div>
-      </div>
-    </div>
-    </div>
-  </div>
-</div>
 
 <!-- ── 공지 등록/수정 모달 ── -->
 <div id="notice-modal" style="display:none; pointer-events:all; position:fixed; top:6vh; left:50%; transform:translateX(-50%); z-index:10000;

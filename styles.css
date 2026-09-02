@@ -776,6 +776,22 @@
 }
 #alarm-view-alarm > .concept-header-box { flex-shrink: 0; }
 
+/* 💡 [2026-09-02 버그 수정] Notice 뷰 — tab-alarm > concept-tab-wrap 안으로 이동 후 flex 레이아웃 적용.
+   JS(_switchAlarmView)가 display:flex/'none' 으로 뷰 전환. */
+#tab-alarm > .concept-tab-wrap > #tab-notice {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+}
+#tab-alarm > .concept-tab-wrap > #tab-notice > .concept-header-box { flex-shrink: 0; }
+#tab-alarm > .concept-tab-wrap > #tab-notice > .concept-section {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 0 !important;
+}
+
 /* 3. 테이블을 감싼 .concept-section: 남은 공간 전체 차지 (flex:1) */
 #tab-address   > .concept-tab-wrap > .concept-section,
 #tab-briefspec > .concept-tab-wrap > .concept-section,

@@ -372,7 +372,9 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     chip.appendChild(label);
     chip.appendChild(restoreBtn);
     chip.appendChild(xBtn);
-    chip.addEventListener('dblclick', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
+    // 💡 [2026-09-02 개선] 축소 모드에서 ▲ 버튼이 사라지므로, 칩 라벨 단일 클릭으로도 복원.
+    //    ✕·▲ 버튼은 각자 stopPropagation()이 있어 중복 호출 없음.
+    chip.addEventListener('click', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
     bar.appendChild(chip);
     _relayoutTaskbarChips(bar);
 
