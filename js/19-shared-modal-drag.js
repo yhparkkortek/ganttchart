@@ -227,12 +227,29 @@ function _updateTaskbarReserve(bar) {
 //    height 는 calc(100vh - var(--summary-scroll-top) - var(--mt-reserve)) 로 HTML에 지정하여
 //    창 크기·줌 변화 시에도 100vh 가 자동 추적 → 갭이 항상 일정하게 유지됨.
 //    JS 는 레이아웃 구조가 바뀔 때(멀티시트 바 추가/제거)만 변수를 갱신.
+//    [2026-09-02 확장] --tab-wrap-top 도 함께 갱신 (Address/BriefSpec/MCTable/Alarm 탭 flex 높이 기준).
 function _syncSummaryScrollHeight() {
     var el = document.getElementById('summary-table-scroll');
-    if (!el) return;
-    var top = el.getBoundingClientRect().top;
-    if (top < 10) return; // 탭이 숨겨진 상태(display:none)면 스킵
-    document.documentElement.style.setProperty('--summary-scroll-top', Math.round(top) + 'px');
+    if (el) {
+        var top = el.getBoundingClientRect().top;
+        if (top >= 10) { // 탭이 숨겨진 상태(display:none)면 스킵
+            document.documentElement.style.setProperty('--summary-scroll-top', Math.round(top) + 'px');
+        }
+    }
+    _syncTabWrapTop();
+}
+
+// 💡 [2026-09-02 신규] Address/BriefSpec/MCTable/Alarm 탭의 .concept-tab-wrap 시작 y좌표를
+//    CSS 변수 --tab-wrap-top 으로 기록. 이 탭들의 wrap 시작점 = #app-main.top + #sheet-tabs-bar.height
+//    이므로, 탭이 숨겨져 있어도 언제나 정확히 계산 가능. CSS 쪽에서는
+//    height: calc(100vh - var(--tab-wrap-top) - var(--mt-reserve)) 로 각 wrap을 뷰포트에 꽉 채운다.
+function _syncTabWrapTop() {
+    var appMain = document.getElementById('app-main');
+    if (!appMain) return;
+    var mainTop = Math.round(appMain.getBoundingClientRect().top);
+    var sheetBar = document.getElementById('sheet-tabs-bar');
+    var sheetH = (sheetBar && sheetBar.offsetHeight) ? sheetBar.offsetHeight : 0;
+    document.documentElement.style.setProperty('--tab-wrap-top', (mainTop + sheetH) + 'px');
 }
 
 function _modalTaskbarEl() {
@@ -429,6 +446,15 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         setTimeout(function() {
             DEFAULTS.forEach(_openAndMinimize);
             _syncTaskbarBounds(_modalTaskbarEl());
+            // 💡 window.switchTab 후킹: 탭 전환 후 Summary·TabWrap 높이 변수 재계산
+            //    - Summary: display:none → active 될 때 --summary-scroll-top 실측 갱신
+            //    - 나머지 탭: --tab-wrap-top 은 #app-main 기준이라 탭과 무관하지만,
+            //      has-multi-sheet-bar 클래스 변화 없이도 탭 이동 시 최신값 유지.
+            var _origSwitchTab = window.switchTab;
+            window.switchTab = function(tabName) {
+                if (_origSwitchTab) _origSwitchTab.apply(this, arguments);
+                setTimeout(_syncSummaryScrollHeight, 50);
+            };
         }, 300);
 
         // 💡 프로젝트 로딩 시 body.has-multi-sheet-bar 클래스가 추가/제거될 때

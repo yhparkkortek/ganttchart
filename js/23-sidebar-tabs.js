@@ -78,7 +78,7 @@
         window._alarmView = view;
         const alarmSec  = document.getElementById('alarm-view-alarm');
         const noticeSec = document.getElementById('tab-notice');
-        if (alarmSec)  alarmSec.style.display  = view === 'alarm'  ? 'block' : 'none';
+        if (alarmSec)  alarmSec.style.display  = view === 'alarm'  ? 'flex' : 'none'; // 💡 [2026-09-02] flex 레이아웃 뷰포트 채우기 대응
         if (noticeSec) noticeSec.style.display = view === 'notice' ? 'block' : 'none';
         // 💡 [멀티시트 UI 통일] 알람/공지 토글을 지금 보이는 뷰의 헤더박스 맨 앞으로 옮겨서,
         //    두 뷰 모두 "토글 | 상태·설명  ...버튼들" 한 줄짜리 통합 헤더로 보이게 함

@@ -736,16 +736,93 @@
    무관하게 하단 박스가 각 탭 콘텐츠와 겹치지 않게 한다 — 아래 각 탭의 기본(인라인) max-height에도
    동일하게 적용되어 있음(GANTT_CHART_V02_Color.html 검색: var(--mt-reserve)). */
 body.has-multi-sheet-bar #gantt-table-scroll     { max-height: calc(70vh + 110px + 44px - 53px - var(--mt-reserve, 0px)) !important; }
-body.has-multi-sheet-bar #addr-table-scroll,
-body.has-multi-sheet-bar #briefspec-table-scroll,
-body.has-multi-sheet-bar #mctable-table-scroll,
-body.has-multi-sheet-bar #mctable-compare-scroll { max-height: calc(70vh + 160px - 53px - var(--mt-reserve, 0px)) !important; }
-body.has-multi-sheet-bar #alarm-table-scroll     { max-height: calc(100vh - 280px - 53px - var(--mt-reserve, 0px)) !important; }
+/* addr/briefspec/mctable/alarm 스크롤 컨테이너: flex 방식으로 뷰포트를 채우도록 변경됨
+   (아래 "뷰포트 채우기 — flex 레이아웃" 블록 참고). has-multi-sheet-bar 별도 규칙 불필요 — 제거. */
 /* #summary-table-scroll 높이: JS _syncSummaryScrollHeight 가 --summary-scroll-top 변수로 제어.
    inline style calc(100vh - var(--summary-scroll-top) - var(--mt-reserve)) 가 자동 추적하므로
    has-multi-sheet-bar 별도 height 규칙 불필요 — 제거 */
 body.has-multi-sheet-bar #calendar-table-scroll,
 body.has-multi-sheet-bar #weekly-report-page     { max-height: calc(100vh - 160px - 53px - var(--mt-reserve, 0px)) !important; }
+
+/* 💡 [2026-09-02 신규] 뷰포트 채우기 — flex 레이아웃 (Address / BriefSpec / MCTable / Alarm)
+   Summary 탭과 같은 원리: --tab-wrap-top(#app-main.top + sheet-tabs-bar.height) + --mt-reserve 로
+   calc(100vh - ...) 를 맞춰 창 크기·줌·멀티시트 바 변화 시에도 항상 일정한 하단 간격 유지.
+   JS(_syncTabWrapTop)가 --tab-wrap-top 을 실시간 갱신하므로 has-multi-sheet-bar 별도 규칙 불필요. */
+
+/* 1. 각 탭의 .concept-tab-wrap 을 뷰포트 전체 높이로 확장 (flex column) */
+#tab-address   > .concept-tab-wrap,
+#tab-briefspec > .concept-tab-wrap,
+#tab-mctable   > .concept-tab-wrap,
+#tab-alarm     > .concept-tab-wrap {
+    height: calc(100vh - var(--tab-wrap-top, 70px) - var(--mt-reserve, 0px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* 2. 타이틀 헤더 박스: 항상 고정 크기 (flex-shrink 방지) */
+#tab-address   > .concept-tab-wrap > .concept-header-box,
+#tab-briefspec > .concept-tab-wrap > .concept-header-box,
+#tab-mctable   > .concept-tab-wrap > .concept-header-box {
+    flex-shrink: 0;
+}
+
+/* Alarm 탭: 추가 #alarm-view-alarm 래퍼가 사이에 있어 별도 처리.
+   JS(_switchAlarmView)가 display:flex/'none' 으로 뷰 전환 — 'flex'를 직접 지정하므로 !important 불필요. */
+#alarm-view-alarm {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#alarm-view-alarm > .concept-header-box { flex-shrink: 0; }
+
+/* 3. 테이블을 감싼 .concept-section: 남은 공간 전체 차지 (flex:1) */
+#tab-address   > .concept-tab-wrap > .concept-section,
+#tab-briefspec > .concept-tab-wrap > .concept-section,
+#tab-mctable   > .concept-tab-wrap > .concept-section,
+#alarm-view-alarm > .concept-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    margin-bottom: 0 !important;
+}
+
+/* 4. 실제 스크롤 컨테이너: 남은 공간 채우기 (max-height 고정값 해제) */
+#addr-table-scroll,
+#briefspec-table-scroll,
+#alarm-table-scroll {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+}
+
+/* 5. 변경 이력 박스: 접혀 있을 때 아래 고정, 펼쳐도 스크롤 올라가지 않도록 */
+#addr-history-box,
+#bs-history-box { flex-shrink: 0; }
+
+/* 6. MCTable: #mc-normal-section 래퍼 처리 */
+#mc-normal-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#mctable-table-scroll {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    max-height: none !important;
+}
+#mc-history-box { flex-shrink: 0; }
+
+/* 7. MCTable 비교 뷰(VS): 비교 섹션이 표시될 때 남은 공간 채우기 */
+#mc-comparison-section { flex: 1; overflow: hidden; }
+#mctable-compare-scroll {
+    height: 100%;
+    overflow-y: auto !important;
+    max-height: none !important;
+}
 
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
