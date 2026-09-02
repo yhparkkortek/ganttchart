@@ -205,6 +205,7 @@ window.collectTabData = function() {
     bind('sum-pm', '프로젝트담당자');
     bind('sum-project-status', '완료여부'); // 💡 값: "" = 진행중, "완료" = 완료
     bind('sum-mail-keywords', '메일키워드');
+    bind('sum-team', '팀'); // ✅ [폴더 로드맵] 담당 팀 — project_index.json team 필드로 저장됨
     bind('sum-mech', '기구담당자');
     bind('sum-hw', 'HW담당자');
     bind('sum-fw', 'FW담당자');
@@ -294,6 +295,7 @@ window.populateTabData = function() {
     setVal('sum-pm', pm.프로젝트담당자);
     setVal('sum-project-status', pm.완료여부);
     setVal('sum-mail-keywords', pm.메일키워드);
+    setVal('sum-team', pm.팀); // ✅ [폴더 로드맵] 담당 팀 복원
     setVal('sum-mech', pm.기구담당자);
     setVal('sum-hw', pm.HW담당자);
     setVal('sum-fw', pm.FW담당자);

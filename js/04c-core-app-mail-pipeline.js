@@ -184,6 +184,11 @@
             inch: pm.인치 || '',
             keywords: keywords,          // Stage 1 AI 매칭에 사용할 전체 키워드 (4필드 + 커스텀)
             completed: pm.완료여부 === '완료', // 💡 [2026-08-29 신규] 완료 프로젝트 메일 자동매칭 제외용 — _msMatchProjects 참고
+            // ✅ [폴더 로드맵] team 필드 — 지금은 Drive 폴더를 건드리지 않고 인덱스에만 팀 구분을 심어둠.
+            //    물리적 폴더 분리 전에도 팀별 그룹핑·필터링을 UI에서 쓸 수 있게 하고,
+            //    나중에 폴더 분리가 확정되면 이 필드 값을 기준으로 일괄 이동(migration)하면 된다.
+            //    Summary 탭 "팀" 항목(pm.팀 또는 pm.개발팀)이 있으면 그 값을 사용한다.
+            team: pm.팀 || pm.개발팀 || '',
             updated_at: new Date().toISOString()
         };
     };
@@ -631,7 +636,9 @@
                 return obj;
             });
 
-            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || []) };
+            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || []),
+                // ✅ [AI 학습 Phase 3] 학습 데이터를 프로젝트 JSON에 포함 → 저장마다 Drive에 자동 동기화
+                aiLearning: window._alGetEntriesForSave ? window._alGetEntriesForSave(window.currentDriveFileName || window.currentDriveFileId || '') : [] };
             let boundary = 'foo_bar_baz';
             // 💡 [2026-08-29 신규] completed appProperty — "프로젝트 불러오기" 목록이 파일 내용을 통째로
             //    안 받고도(가벼운 메타데이터 조회만으로) 완료된 프로젝트를 구분 표시할 수 있게, pm과 같은
@@ -1443,6 +1450,13 @@
                 if (_seedMt) { window._distMergeModifiedTime = window._distMergeModifiedTime || {}; window._distMergeModifiedTime[fileId] = _seedMt; }
                 console.info(`[프로젝트 열기 계측] "${fileName}" 화면 렌더링: ${Math.round(performance.now() - _tRender0)}ms`);
                 if (!silent) window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
+                // ✅ [AI 학습 Phase 3] Drive에서 받아온 학습 데이터를 localStorage와 병합 (팀 공유)
+                if (saveData.aiLearning && saveData.aiLearning.length && window._alMergeFromDrive) {
+                    window._alMergeFromDrive(saveData.aiLearning, fileName);
+                }
+                // ✅ [AI 학습 Phase 1] 재배치 대기 알림 (Phase 1에서는 04b에도 있지만 주 로드 경로는 여기)
+                if (window._checkReassignQueueOnLoad) window._checkReassignQueueOnLoad();
+
                 // 💡 [2026-08-25 신규] 이 프로젝트에 대해 이 브라우저에 남은(=연결 끊김 등으로 저장 못 했던)
                 //    로컬 백업이 있으면 복원 여부를 물어봄 — 방금 받아온 원격 내용이 이미 최신이면 자동 정리됨.
                 if (window._checkLocalBackupOnOpen) window._checkLocalBackupOnOpen(fileId, window.changeLogs.length);

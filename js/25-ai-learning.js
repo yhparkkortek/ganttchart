@@ -2,13 +2,16 @@
    25-ai-learning.js
    AI 학습 데이터 관리 — 오매칭/재배치 피드백 저장, 삭제 피드백 팝업
    ================================================================
-   · window._writeLearningEntry(projectKey, entry)  학습 데이터 기록
-   · window._alGetEntries(projectKey)               학습 데이터 조회
-   · window._showAiDeleteFeedback(index)            AI 업무 삭제 피드백 팝업
-   · window._getPendingReassignQueue()              재배치 대기 큐 조회 (로드 시 호출)
+   · window._writeLearningEntry(projectKey, entry)    학습 데이터 기록
+   · window._alGetEntries(projectKey)                 학습 데이터 조회
+   · window._alGetEntriesForSave(projectKey)          저장 시 직렬화용 항목 배열 반환
+   · window._alMergeFromDrive(driveEntries, key)      Drive 로드 후 병합
+   · window._showAiDeleteFeedback(index)              AI 업무 삭제 피드백 팝업
+   · window._getPendingReassignQueue()                재배치 대기 큐 조회 (로드 시 호출)
+   · window._checkReassignQueueOnLoad()               프로젝트 로드 시 재배치 알림
 */
 
-// ─── 1. 학습 데이터 저장 (localStorage, Phase 2에서 Drive 동기화 예정) ─────────
+// ─── 1. 학습 데이터 저장 (localStorage ↔ Drive 동기화, Phase 3) ───────────────
 
 (function() {
     var _AL_KEY  = 'gantt_ai_learning_v1';
@@ -365,4 +368,49 @@
 
     // 전역 노출 (다른 파일에서 사용 가능하게)
     window._showAiToast = _showToast;
+
+    // ─── Phase 3: Drive 동기화 헬퍼 ─────────────────────────────────────────
+
+    /**
+     * 저장 시 호출 — 현재 프로젝트의 학습 항목 배열을 반환하여 saveData.aiLearning에 담음.
+     * Drive JSON에 포함되어 다음 로드 시 팀원과 공유됨.
+     */
+    window._alGetEntriesForSave = function(projectKey) {
+        var key = projectKey || window.currentDriveFileName || window.currentDriveFileId || '';
+        return window._alGetEntries(key);
+    };
+
+    /**
+     * 프로젝트 로드 시 호출 — Drive에서 받아온 항목을 localStorage와 병합.
+     * id 기준으로 중복 제거 후 최신 ts 우선, 최대 200건 유지.
+     * @param {Array}  driveEntries  saveData.aiLearning (Drive에서 받은 항목 배열)
+     * @param {string} projectKey   로드된 파일명 (window.currentDriveFileName 설정 전에 호출하면 직접 전달)
+     */
+    window._alMergeFromDrive = function(driveEntries, projectKey) {
+        if (!driveEntries || !driveEntries.length) return;
+        var key = projectKey || window.currentDriveFileName || window.currentDriveFileId || '';
+        if (!key) return;
+
+        var local = _getStore()[key] || [];
+
+        // id 기준 union — 같은 id면 ts가 더 최신인 쪽 채택
+        var byId = {};
+        local.forEach(function(e) { if (e && e.id) byId[e.id] = e; });
+        driveEntries.forEach(function(e) {
+            if (!e || !e.id) return;
+            var existing = byId[e.id];
+            if (!existing || ((e.ts || '') > (existing.ts || ''))) byId[e.id] = e;
+        });
+
+        // ts 내림차순 정렬, 최대 200건
+        var merged = Object.values(byId).sort(function(a, b) {
+            return (b.ts || '') > (a.ts || '') ? 1 : -1;
+        }).slice(0, 200);
+
+        var store = _getStore();
+        store[key] = merged;
+        _saveStore(store);
+        console.log('[AI학습 Phase 3] Drive 병합 완료:', merged.length, '건 /', key,
+                    '(Drive:', driveEntries.length, '+ Local:', local.length, ')');
+    };
 })();
