@@ -815,7 +815,9 @@
                 window.showToast(window._currentLang === 'en' ? "No backup files found. Save once to create a backup." : "저장된 백업이 없습니다. 저장을 한 번 하면 백업이 생성됩니다.", 'error');
                 return;
             }
-            window.showBackupFileModal(files);
+            // 💡 [팀 그룹핑] project_index 캐시 로드 (병렬 — 백업 목록 조회와 겹쳐서 지연 없음)
+            const indexProjects = window._loadProjectIndexForModal ? await window._loadProjectIndexForModal().catch(function() { return []; }) : [];
+            window.showBackupFileModal(files, indexProjects);
             window.showToast(window._currentLang === 'en' ? "🔄 Backup list loaded. Select a point to restore." : "🔄 백업 목록을 불러왔습니다. 복원할 시점을 선택해 주세요.");
         } catch (err) { alert("백업 목록 조회 실패: " + err.message); }
     };
@@ -825,63 +827,147 @@
         return backupFileName.replace(/^백업_/, '').replace(/_\d{8}_\d{4}\.json$/i, '') + '.json';
     };
 
-    // 💡 [버그 수정] 예전엔 Backups 폴더 안의 "모든 프로젝트" 백업이 한 줄로 뒤섞여서 나왔음 —
-    //    원본 프로젝트 이름별로 그룹핑해서(프로젝트 열기 모달의 담당자 그룹핑과 동일한 패턴) 원하는
-    //    프로젝트의 백업만 펼쳐서 찾을 수 있게 함.
-    window.showBackupFileModal = function(files) {
+    // 💡 [프로젝트 복원] 팀(외부) → 프로젝트(내부) → 백업 시점 행 — showDriveFileModal과 동일한 2단 구조.
+    //    indexProjects: project_index entries (팀 정보 조회용, 없으면 빈 배열 전달)
+    window.showBackupFileModal = function(files, indexProjects) {
+        indexProjects = Array.isArray(indexProjects) ? indexProjects : (window._piModalCache || []);
+        const _en = window._currentLang === 'en';
         let listContainer = document.getElementById('drive-file-list');
         if (!listContainer) return;
         listContainer.innerHTML = '';
 
-        const groups = {};
+        // 모달 제목/설명 설정 (showDriveFileModal과 같은 요소 공유)
+        const _title = document.getElementById('drive-modal-title');
+        if (_title) _title.textContent = _en ? '🔄 Project Restore' : '🔄 프로젝트 복원';
+        const _desc = document.getElementById('drive-modal-desc');
+        if (_desc) _desc.textContent = _en ? 'Select a backup to restore. Opens as a new sheet — press [Save] to apply.' : '복원할 백업 시점을 선택해 주세요. 새 시트로 열리며, 확인 후 [저장]을 눌러야 드라이브에 반영됩니다.';
+        const _actionSlot = document.getElementById('drive-modal-action-slot');
+        if (_actionSlot) _actionSlot.innerHTML = ''; // 복원 모달엔 액션 버튼 없음
+
+        // ── 팀 팔레트 (showDriveFileModal과 동일한 상수) ─────────────────────────────────
+        const _TEAM_PAL = [
+            { h:'#cfe6fa', b:'#a5c8f0', t:'#1a4f7a', hv:'#b8d8f0' },
+            { h:'#c9ecd3', b:'#a8dab8', t:'#1a6640', hv:'#b0dfc0' },
+            { h:'#ffe3b3', b:'#ffc078', t:'#7a4800', hv:'#ffd090' },
+            { h:'#e0d8ff', b:'#b8a9f0', t:'#3a2080', hv:'#cec4ff' },
+            { h:'#ffd6d0', b:'#f0a9a5', t:'#7a2020', hv:'#ffc0b8' },
+            { h:'#c8f0e8', b:'#80d0c0', t:'#005040', hv:'#b0e8dc' },
+            { h:'#fdf0b0', b:'#f0d060', t:'#604800', hv:'#fbe898' },
+            { h:'#e8d8f0', b:'#c0a0d8', t:'#501060', hv:'#d8c4e8' },
+            { h:'#d8f0d8', b:'#90d090', t:'#205020', hv:'#c4e8c4' },
+        ];
+        function _pal(teamName) {
+            if (!teamName) return { h:'#e9ecef', b:'#ced4da', t:'#495057', hv:'#dee2e6' };
+            const m = teamName.match(/(\d+)/);
+            if (m) return _TEAM_PAL[(parseInt(m[1], 10) - 1) % _TEAM_PAL.length];
+            let hsh = 0;
+            for (let i = 0; i < teamName.length; i++) hsh = (hsh * 31 + teamName.charCodeAt(i)) & 0xffff;
+            return _TEAM_PAL[hsh % _TEAM_PAL.length];
+        }
+        const UNASSIGNED_TEAM = _en ? '(No Team)' : '미지정 팀';
+
+        // ── 팀 → { origName → {pm, files[]} } 구조 구성 ────────────────────────────────
+        const teamMap = {};
         files.forEach(function(file) {
             const origName = window._backupOrigFileName(file.name);
-            (groups[origName] = groups[origName] || []).push(file);
+            // project_index에서 원본 파일명으로 팀 조회
+            let team = '', pm = '';
+            if (indexProjects.length) {
+                const entry = indexProjects.find(function(p) { return p.file_name === origName; });
+                if (entry) { team = entry.team || ''; pm = entry.assignee || ''; }
+            }
+            team = team || UNASSIGNED_TEAM;
+            if (!teamMap[team]) teamMap[team] = {};
+            if (!teamMap[team][origName]) teamMap[team][origName] = { pm: pm, files: [] };
+            teamMap[team][origName].files.push(file);
         });
-        const groupNames = Object.keys(groups).sort(function(a, b) { return a.localeCompare(b, 'ko'); });
 
-        groupNames.forEach(function(origName) {
-            const groupFiles = groups[origName];
-            const groupWrap = document.createElement('div');
-            groupWrap.style.cssText = 'border:1px solid #eee; border-radius:8px; overflow:hidden;';
+        // 팀 정렬
+        const teamNames = Object.keys(teamMap).sort(function(a, b) {
+            if (a === UNASSIGNED_TEAM) return 1;
+            if (b === UNASSIGNED_TEAM) return -1;
+            const na = parseInt((a.match(/\d+/) || ['0'])[0], 10);
+            const nb = parseInt((b.match(/\d+/) || ['0'])[0], 10);
+            if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+            return a.localeCompare(b, 'ko');
+        });
 
-            const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'padding:9px 14px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:13px; color:#444; user-select:none; transition:background .15s;';
-            headerRow.onmouseover = function() { headerRow.style.background = '#eef0f2'; };
-            headerRow.onmouseout  = function() { headerRow.style.background = '#f8f9fa'; };
-            const arrow = document.createElement('span');
-            arrow.textContent = '▸';
-            arrow.style.cssText = 'font-size:11px; transition:0.15s;';
-            const label = document.createElement('span');
-            label.textContent = `📄 ${origName} (${groupFiles.length})`;
-            headerRow.appendChild(arrow);
-            headerRow.appendChild(label);
+        // ── 팀 아코디온 렌더링 ─────────────────────────────────────────────────────────
+        teamNames.forEach(function(teamName) {
+            const projMap = teamMap[teamName];
+            const teamAllFiles = Object.values(projMap).reduce(function(acc, g) { return acc.concat(g.files); }, []);
+            const pal = teamName === UNASSIGNED_TEAM ? { h:'#e9ecef', b:'#ced4da', t:'#495057', hv:'#dee2e6' } : _pal(teamName);
 
-            const body = document.createElement('div');
-            body.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:10px;';
+            const teamWrap = document.createElement('div');
+            teamWrap.style.cssText = 'border:1.5px solid ' + pal.b + '; border-radius:10px; overflow:hidden;';
 
-            groupFiles.forEach(function(file) {
-                let d = new Date(file.createdTime); let dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-                // 💡 [2026-08-30 신규] 백업 당시 저장돼 있던 테마 색으로 행 표시
-                const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg: '#e8f4fd', border: '#a5c8f0', hoverBg: '#cfe6fa', hoverBorder: '#7fb0dd', darkText: '#333' };
-                let fileBtn = document.createElement('div');
-                fileBtn.style.cssText = "padding: 9px 14px; border: 1px solid " + rowC.border + "; border-radius: 8px; cursor: pointer; transition: background .15s, border-color .15s; display: flex; justify-content: space-between; align-items: center; background: " + rowC.bg + ";";
-                fileBtn.onmouseover = function() { this.style.background = rowC.hoverBg; this.style.borderColor = rowC.hoverBorder; };
-                fileBtn.onmouseout = function() { this.style.background = rowC.bg; this.style.borderColor = rowC.border; };
-                fileBtn.onclick = function() { window.executeRestoreBackup(file.id, file.name); };
-                fileBtn.innerHTML = `<div style="font-weight: bold; color: #333; font-size: 14px;">🗄 ${file.name}</div><div style="font-size: 12px; color: #868e96;">${dateStr}</div>`;
-                body.appendChild(fileBtn);
-            });
+            const teamHdr = document.createElement('div');
+            teamHdr.style.cssText = 'padding:10px 14px; background:' + pal.h + '; cursor:pointer; display:flex; align-items:center; gap:8px; user-select:none;';
+            teamHdr.onmouseover = function() { teamHdr.style.background = pal.hv; };
+            teamHdr.onmouseout  = function() { teamHdr.style.background = pal.h; };
+            const teamArrow = document.createElement('span');
+            teamArrow.style.cssText = 'font-size:12px; color:' + pal.t + '; width:14px; display:inline-block;';
+            teamArrow.textContent = '▾';
+            const teamLbl = document.createElement('span');
+            teamLbl.style.cssText = 'font-size:14px; font-weight:bold; color:' + pal.t + '; flex:1;';
+            teamLbl.textContent = '🏢 ' + teamName + ' (' + Object.keys(projMap).length + (_en ? ' projects)' : '개 프로젝트)');
+            teamHdr.appendChild(teamArrow);
+            teamHdr.appendChild(teamLbl);
 
-            headerRow.onclick = function() {
-                const collapsed = body.style.display === 'none';
-                body.style.display = collapsed ? 'flex' : 'none';
-                arrow.textContent = collapsed ? '▾' : '▸';
+            const teamBody = document.createElement('div');
+            teamBody.style.cssText = 'display:flex; flex-direction:column; gap:6px; padding:8px; background:#fafafa;';
+
+            teamHdr.onclick = function() {
+                const c = teamBody.style.display === 'none';
+                teamBody.style.display = c ? 'flex' : 'none';
+                teamArrow.textContent = c ? '▾' : '▸';
             };
 
-            groupWrap.appendChild(headerRow);
-            groupWrap.appendChild(body);
-            listContainer.appendChild(groupWrap);
+            // ── 프로젝트 서브 아코디온 ────────────────────────────────────────────────────
+            const projNames = Object.keys(projMap).sort(function(a, b) { return a.localeCompare(b, 'ko'); });
+            projNames.forEach(function(origName) {
+                const grp = projMap[origName];
+                const projWrap = document.createElement('div');
+                projWrap.style.cssText = 'border:1px solid #e0e0e0; border-radius:8px; overflow:hidden;';
+                const projHdr = document.createElement('div');
+                projHdr.style.cssText = 'padding:8px 12px; background:#f2f4f6; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:12.5px; color:#444; user-select:none; transition:background .15s;';
+                projHdr.onmouseover = function() { projHdr.style.background = '#e8eaed'; };
+                projHdr.onmouseout  = function() { projHdr.style.background = '#f2f4f6'; };
+                const projArrow = document.createElement('span');
+                projArrow.style.cssText = 'font-size:10px; width:12px; display:inline-block;';
+                projArrow.textContent = '▸';
+                const projLbl = document.createElement('span');
+                // 담당자(PM)가 있으면 괄호 안에 표시
+                projLbl.textContent = '📄 ' + origName + ' (' + grp.files.length + ')' + (grp.pm ? ' · 👤 ' + grp.pm : '');
+                projHdr.appendChild(projArrow);
+                projHdr.appendChild(projLbl);
+                const projBody = document.createElement('div');
+                projBody.style.cssText = 'display:none; flex-direction:column; gap:8px; padding:8px;';
+                projHdr.onclick = function() {
+                    const c = projBody.style.display === 'none';
+                    projBody.style.display = c ? 'flex' : 'none';
+                    projArrow.textContent = c ? '▾' : '▸';
+                };
+                grp.files.forEach(function(file) {
+                    const d = new Date(file.createdTime);
+                    const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+                    const rowC = window._driveRowThemeColors ? window._driveRowThemeColors(file) : { bg:'#e8f4fd', border:'#a5c8f0', hoverBg:'#cfe6fa', hoverBorder:'#7fb0dd' };
+                    const fileBtn = document.createElement('div');
+                    fileBtn.style.cssText = 'padding:9px 14px; border:1px solid ' + rowC.border + '; border-radius:8px; cursor:pointer; transition:background .15s, border-color .15s; display:flex; justify-content:space-between; align-items:center; background:' + rowC.bg + ';';
+                    fileBtn.onmouseover = function() { this.style.background = rowC.hoverBg; this.style.borderColor = rowC.hoverBorder; };
+                    fileBtn.onmouseout  = function() { this.style.background = rowC.bg;      this.style.borderColor = rowC.border; };
+                    fileBtn.onclick = function() { window.executeRestoreBackup(file.id, file.name); };
+                    fileBtn.innerHTML = '<div style="font-weight:bold; color:#333; font-size:14px;">🗄 ' + escapeHtml(file.name) + '</div><div style="font-size:12px; color:#868e96;">' + dateStr + '</div>';
+                    projBody.appendChild(fileBtn);
+                });
+                projWrap.appendChild(projHdr);
+                projWrap.appendChild(projBody);
+                teamBody.appendChild(projWrap);
+            });
+
+            teamWrap.appendChild(teamHdr);
+            teamWrap.appendChild(teamBody);
+            listContainer.appendChild(teamWrap);
         });
 
         document.getElementById('drive-file-modal-overlay').style.display = 'flex';
@@ -1568,33 +1654,19 @@
             return a.localeCompare(b, 'ko');
         });
 
-        // ── 상단 "전체 열기" + "새 프로젝트" 버튼 (open 모드 전용) ─────────────────────
-        if (files.length > 1 && mode === 'open') {
-            const topActionsRow = document.createElement('div');
-            topActionsRow.style.cssText = 'display:flex; gap:8px; align-items:stretch;';
-            const allBar = document.createElement('div');
-            allBar.style.cssText = 'flex:2 1 0; padding:8px 14px; border:1px solid #a5c8f0; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#1a4f7a; background:#e8f4fd; transition:background .15s, border-color .15s;';
-            allBar.textContent = _dmEn ? `🗂️ Open all ${files.length} project(s) at once` : `🗂️ 전체 프로젝트 ${files.length}개 한 번에 열기`;
-            allBar.onmouseover = function() { this.style.background = '#cfe6fa'; this.style.borderColor = '#7fb0dd'; };
-            allBar.onmouseout  = function() { this.style.background = '#e8f4fd'; this.style.borderColor = '#a5c8f0'; };
-            allBar.onclick = async function() {
-                const msg = _dmEn ? `Open all ${files.length} project(s) as separate sheets?` : `전체 프로젝트 ${files.length}개를 모두 새 시트로 여시겠습니까?`;
-                if (!confirm(msg)) return;
-                window.closeDriveModal();
-                const _seen = {};
-                const _uniqueFiles = files.filter(function(f) { if (!f || !f.id || _seen[f.id]) return false; _seen[f.id] = true; return true; });
-                for (const file of _uniqueFiles) { await window.executeLoadFile(file.id, file.name, true); }
-                if (window.showToast) window.showToast(_dmEn ? `✅ Opened all ${files.length} project(s)` : `✅ 전체 프로젝트 ${files.length}개 열기 완료`, 'info');
-            };
-            topActionsRow.appendChild(allBar);
-            const newProjectBar = document.createElement('div');
-            newProjectBar.style.cssText = 'flex:1 1 0; padding:8px 14px; border:1px solid #a8dab8; border-radius:8px; cursor:pointer; text-align:center; font-size:12.5px; font-weight:bold; color:#1f7a3d; background:#e6f6ea; transition:background .15s, border-color .15s;';
-            newProjectBar.textContent = _dmEn ? '➕ New Project' : '➕ 새 프로젝트 등록';
-            newProjectBar.onmouseover = function() { this.style.background = '#c9ecd3'; this.style.borderColor = '#7cc494'; };
-            newProjectBar.onmouseout  = function() { this.style.background = '#e6f6ea'; this.style.borderColor = '#a8dab8'; };
-            newProjectBar.onclick = function() { window.closeDriveModal(); window.startNewProject(); };
-            topActionsRow.appendChild(newProjectBar);
-            listContainer.appendChild(topActionsRow);
+        // ── action-slot 정리: open 모드면 "새 프로젝트 등록" 버튼, delete면 비움 ─────────
+        const _actionSlot = document.getElementById('drive-modal-action-slot');
+        if (_actionSlot) {
+            _actionSlot.innerHTML = '';
+            if (mode === 'open') {
+                const newProjectBtn = document.createElement('div');
+                newProjectBtn.style.cssText = 'padding:6px 14px; border:1px solid #a8dab8; border-radius:8px; cursor:pointer; font-size:12.5px; font-weight:bold; color:#1f7a3d; background:#e6f6ea; transition:background .15s, border-color .15s; white-space:nowrap;';
+                newProjectBtn.textContent = _dmEn ? '➕ New Project' : '➕ 새 프로젝트 등록';
+                newProjectBtn.onmouseover = function() { this.style.background = '#c9ecd3'; this.style.borderColor = '#7cc494'; };
+                newProjectBtn.onmouseout  = function() { this.style.background = '#e6f6ea'; this.style.borderColor = '#a8dab8'; };
+                newProjectBtn.onclick = function() { window.closeDriveModal(); window.startNewProject(); };
+                _actionSlot.appendChild(newProjectBtn);
+            }
         }
 
         // ── 파일 행(fileBtn) 생성 공통 헬퍼 ────────────────────────────────────────────

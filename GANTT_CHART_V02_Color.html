@@ -1704,7 +1704,10 @@
                     title="닫기">✕</button>
             </div>
             <div class="history-body" style="padding: 20px; overflow-y:auto; flex:1;">
-                <p id="drive-modal-desc" style="margin-top:0; margin-bottom:15px; font-size: 14px; color: #555;">불러올 프로젝트 파일을 선택해 주세요.</p>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; gap:12px;">
+                    <p id="drive-modal-desc" style="margin:0; font-size:14px; color:#555; flex:1;">불러올 프로젝트 파일을 선택해 주세요.</p>
+                    <div id="drive-modal-action-slot" style="flex-shrink:0;"></div>
+                </div>
                 <div id="drive-file-list" style="display:flex; flex-direction:column; gap:10px;">
                 </div>
             </div>
