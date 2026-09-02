@@ -889,6 +889,7 @@
     flex-direction: column;
     overflow: hidden; /* .container 클래스의 overflow:visible 덮어씀 */
     min-height: 0;
+    margin-bottom: 0 !important; /* 💡 [2026-09-02] .container 클래스 기본 여백 제거 — 하단 흰 공간 통일 */
 }
 #gantt-table-scroll {
     flex: 1 !important;
@@ -896,7 +897,10 @@
     overflow-y: auto !important;
     max-height: none !important;
 }
-#gantt-history-box { flex-shrink: 0; }
+#gantt-history-box {
+    flex-shrink: 0;
+    margin-bottom: 0 !important; /* 💡 [2026-09-02] inline margin:14px의 하단 여백 제거 — 하단 흰 공간 통일 */
+}
 
 /* 컨셉 단계 신규 탭 공용 스타일 */
 .concept-tab-wrap { padding: 22px 26px; max-width: 1100px; }
@@ -910,6 +914,9 @@
 .concept-section:hover:not(.summary-outer-box) { border-color:#52a5af; box-shadow:0 1px 6px rgba(0,0,0,0.08); }
 /* 변경이력 확인 박스는 hover 테두리 강조 미적용 */
 #sum-history-box:hover { border-color: #cfe3e5 !important; box-shadow: none !important; }
+/* 💡 [2026-09-02] .concept-section 기본 margin-bottom(16px)이 flex:1로 채워야 할 영역을 잡아먹어
+   하단에 흰 공간이 생기는 문제 수정 — 바깥 박스(summary-outer-box)만 margin-bottom 제거 */
+.concept-section.summary-outer-box { margin-bottom: 0 !important; }
 .concept-section h3 { margin:0 0 12px 0; font-size:14px; color:#444; }
 .concept-grid { display:grid; grid-template-columns: 140px 1fr; gap:8px 12px; align-items:center; }
 .concept-grid-mem { grid-template-columns: 140px 1fr 1fr; column-gap: 12px; row-gap: 10px; }
