@@ -215,11 +215,10 @@ function _relayoutTaskbarChips(bar) {
 // 💡 [2026-09-02 신규] "모든 페이지에서 하단 박스와 메인 상자가 겹치지 않도록" — 각 탭의 내부 스크롤
 //    영역(예: #gantt-table-scroll 등, styles.css의 has-multi-sheet-bar 규칙 + 각 요소 인라인
 //    max-height에 이미 걸려있는 var(--mt-reserve, 0px))에서 실시간으로 빼줄 여백을 문서 루트에
-//    설정한다. 간격 15px는 상단 "엑셀 시트탭 바"와 최상단 topbar 사이 간격과 동일하게 맞춘 값
-//    (직접 측정: #sheet-tabs-bar.top - #app-topbar.bottom === 15px).
+//    설정한다. 간격 12px는 UI 기본 여백 단위(.concept-section margin-bottom)와 동일하게 맞춘 값.
 function _updateTaskbarReserve(bar) {
     const hasChips = bar.children.length > 0;
-    const reserve = hasChips ? (bar.offsetHeight + 15) : 0;
+    const reserve = hasChips ? (bar.offsetHeight + 12) : 0;
     document.documentElement.style.setProperty('--mt-reserve', reserve + 'px');
     _syncSummaryScrollHeight();
 }
