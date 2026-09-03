@@ -41,11 +41,14 @@
 // 그래서 이제 클릭하면 먼저 조용한 방식을 시도하고, 그게 진짜 실패할 때만(최초 연동이거나
 // 권한이 실제로 취소된 경우) 무거운 전체 동의 화면으로 넘어가도록 순서를 바꿨다 — 성공/실패 처리
 // 로직 자체는 그대로 두고 "어떤 prompt로 시도할지"만 authSuccessHandler/onFinalFailure로 분리.
-window.handleAuthClick = function() {
+window.handleAuthClick = function(event) {
         if (!tokenClient) {
             alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
             return;
         }
+        // 💡 [2026-09-03] Shift+클릭 = 계정 전환 모드.
+        //    이전 이메일 hint가 있어서 항상 같은 계정으로만 자동 연결되던 문제 해결.
+        const _isAccountSwitch = !!(event && event.shiftKey);
 
         const authBtn = document.getElementById('auth_button');
         authBtn.innerText = window._currentLang === 'en' ? "🔄 Connecting..." : "🔄 연동 진행 중...";
@@ -176,21 +179,42 @@ window.handleAuthClick = function() {
 
         // 💡 이전 로그인에서 기억해둔 이메일이 있으면 hint로 같이 넘겨서, 브라우저에 구글 계정이
         //    여러 개 로그인돼 있어도 "계정 선택" 창 없이 바로 그 계정으로 조용히 시도하게 한다.
-        const _emailHint = window.currentUserEmail || (function() { try { return localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) { return ''; } })();
+        //    단, Shift+클릭(계정 전환)이면 hint를 초기화해서 계정 선택창이 나오게 한다.
+        if (_isAccountSwitch) {
+            window.currentUserEmail = '';
+            try { localStorage.removeItem('gantt_google_email_hint'); } catch(e) {}
+            console.info('[구글 인증] Shift+클릭 — hint 초기화 후 계정 선택창 표시');
+        }
+        const _emailHint = _isAccountSwitch ? '' :
+            (window.currentUserEmail || (function() { try { return localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) { return ''; } })());
 
-        // 1차: 조용한 시도(prompt:'') — 이미 로그인+권한이 살아있으면 화면에 아무것도 안 띄우고 성공한다.
-        tokenClient.callback = async (resp) => {
-            if (resp.error !== undefined) {
-                console.info('[구글 인증] 조용한 재연동 실패 → 전체 동의 화면으로 전환:', resp.error);
-                // 2차: 조용한 시도가 실패했을 때만 무거운 전체 동의 화면으로 넘어간다.
-                tokenClient.callback = async (resp2) => {
-                    if (resp2.error !== undefined) { onFinalFailure(resp2); return; }
-                    await onAuthSuccess(resp2);
-                };
-                tokenClient.requestAccessToken(_emailHint ? { prompt: 'consent', hint: _emailHint } : { prompt: 'consent' });
-                return;
-            }
-            await onAuthSuccess(resp);
-        };
-        tokenClient.requestAccessToken(_emailHint ? { prompt: '', hint: _emailHint } : { prompt: '' });
+        // ── 케이스별 인증 흐름 ──────────────────────────────────────────────────────────
+        // [A] Shift+클릭 또는 hint 없음(첫 방문) → 계정 선택창(select_account) 바로 표시
+        //     - select_account: 계정 목록만 보여주고, 이미 권한을 허락했으면 동의창은 안 뜸
+        //     - consent: 권한 동의까지 모두 다시 보여주는 무거운 화면 — 여기선 쓰지 않음
+        // [B] 일반 클릭 + hint 있음 → 조용한 시도(prompt:'') → 실패 시 계정 선택창
+        if (_isAccountSwitch || !_emailHint) {
+            // [A] 계정 선택창 바로 표시
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) { onFinalFailure(resp); return; }
+                await onAuthSuccess(resp);
+            };
+            tokenClient.requestAccessToken({ prompt: 'select_account' });
+        } else {
+            // [B] 1차: 조용한 시도(prompt:'') — 이미 로그인+권한이 살아있으면 화면에 아무것도 안 띄우고 성공한다.
+            tokenClient.callback = async (resp) => {
+                if (resp.error !== undefined) {
+                    console.info('[구글 인증] 조용한 재연동 실패 → 계정 선택창으로 전환:', resp.error);
+                    // 2차: 조용한 시도가 실패했을 때만 계정 선택창으로 넘어간다(consent 전체화면보다 가볍고 깔끔).
+                    tokenClient.callback = async (resp2) => {
+                        if (resp2.error !== undefined) { onFinalFailure(resp2); return; }
+                        await onAuthSuccess(resp2);
+                    };
+                    tokenClient.requestAccessToken(_emailHint ? { prompt: 'select_account', hint: _emailHint } : { prompt: 'select_account' });
+                    return;
+                }
+                await onAuthSuccess(resp);
+            };
+            tokenClient.requestAccessToken({ prompt: '', hint: _emailHint });
+        }
     };

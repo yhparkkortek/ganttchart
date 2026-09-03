@@ -26,7 +26,7 @@
         <div style="position:relative; display:inline-block;">
             <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this);">📁 프로젝트</button>
             <div id="file-menu-popup" class="topbar-popup" style="display:none;">
-                <button id="auth_button" class="topbar-menu-item" onclick="handleAuthClick()" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요.">🔵 드라이브 연동하기</button>
+                <button id="auth_button" class="topbar-menu-item" onclick="handleAuthClick(event)" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요. | Shift+클릭: 계정 전환">🔵 드라이브 연동하기</button>
                 <button id="drive_load_btn" class="topbar-menu-item" onclick="window.selectProject()" disabled>📂 프로젝트 열기</button>
                 <button id="drive_save_btn" class="topbar-menu-item" onclick="saveToGoogleDrive()" disabled>💾 프로젝트 저장</button>
                 <button id="backup_restore_btn" class="topbar-menu-item" onclick="window.loadBackupList()" disabled title="드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)">🔄 프로젝트 복원</button>
