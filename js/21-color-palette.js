@@ -348,6 +348,20 @@ window._cpApplyLive = function(hex, skipSave) {
     css += '.modal-taskbar-chip { background: ' + gen.bg + ' !important; border-color: ' + gen.border + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.modal-taskbar-chip:hover { background: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
+    // 💡 [2026-09-03 신규] 사이드바 업무 필터 버튼의 활성 상태(.btn.active, .filter-label.active)가
+    //    styles.css에 #2c5f8a로 하드코딩되어 있어서 팔레트를 바꿔도 항상 원래 파란색 그대로였음.
+    //    클래스 기반 규칙이라 [style*="#hex"] 인라인 매칭 방식으로는 절대 잡히지 않으므로
+    //    여기서 명시 오버라이드 CSS를 직접 추가한다. box-shadow용 RGB도 gen.darkText에서 동적 추출.
+    const _dtRgb = (function(h) {
+        h = h.replace('#', '');
+        return parseInt(h.slice(0,2),16) + ', ' + parseInt(h.slice(2,4),16) + ', ' + parseInt(h.slice(4,6),16);
+    })(gen.darkText);
+    const genDarkHover = window._cpHslToHex(hue, 100, 18); // darkText(l=25)보다 약간 더 진한 hover 색
+    css += '.btn.active { background-color: ' + gen.darkText + ' !important; border-color: ' + gen.darkText + ' !important; box-shadow: 0 0 5px rgba(' + _dtRgb + ', 0.4) !important; }\n'
+        + '.btn.active:hover { background-color: ' + genDarkHover + ' !important; border-color: ' + genDarkHover + ' !important; }\n'
+        + '.btn.active .badge { color: ' + gen.darkText + ' !important; }\n'
+        + '.filter-label.active { background-color: ' + gen.darkText + ' !important; border-color: ' + gen.darkText + ' !important; box-shadow: 0 0 5px rgba(' + _dtRgb + ', 0.4) !important; }\n';
+
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
     //    문서 전체에서 가장 마지막 스타일이 되도록 보장한다(매번 다시 appendChild해서 위치 유지).
