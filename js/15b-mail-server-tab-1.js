@@ -1398,6 +1398,7 @@ window._msRenderQueueModal = function(type) {
             <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
                 <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"></button>
+                <button id="ms-queue-reanalyze-all-btn" onclick="window._msBulkReanalyzeUnmatched()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="display:none; flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 전체 재분석</button>
                 <button id="ms-queue-clear-all-btn" onclick="window._msQueueClearAll()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1; padding:7px 14px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;"></button>
             </div>
         </div>`;
@@ -1444,6 +1445,11 @@ window._msRenderQueueModal = function(type) {
     }
     const clearAllBtn = document.getElementById('ms-queue-clear-all-btn');
     if (clearAllBtn) clearAllBtn.textContent = _msQEn ? '🗑 Clear All' : '🗑 일괄삭제';
+    const reanalyzeAllBtn = document.getElementById('ms-queue-reanalyze-all-btn');
+    if (reanalyzeAllBtn) {
+        reanalyzeAllBtn.style.display = (type === 'unmatched' && rows.length) ? '' : 'none';
+        reanalyzeAllBtn.textContent = _msQEn ? `🔄 Reanalyze All (${rows.length})` : `🔄 전체 재분석 (${rows.length}건)`;
+    }
     modal.style.display = 'block';
     window.bringModalToFront('ms-queue-modal'); // 💡 열 때 즉시 맨 앞으로 (클릭 안 해도)
 };
@@ -1466,6 +1472,109 @@ window._msQueueClearAll = function() {
     window._msQueueDeleteAll(type);
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
     window._msRenderQueueModal(type);
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// 💡 [2026-09-03 신규] 미분류 큐 전체 일괄 재분석
+//    - 현재 큐의 미분류 메일 전부를 최신 토픽 프로파일+프로젝트 인덱스로 순차 재분석
+//    - 토픽 프로파일 갱신 직후 자동 제안 or 큐 모달 하단 "🔄 전체 재분석" 버튼으로 수동 실행
+//    ※ 토픽 학습 자체가 자동 재스캔을 일으키지 않음 — 이 함수 호출 시에만 재분석이 시작됨
+// ═══════════════════════════════════════════════════════════════════
+window._msBulkReanalyzeUnmatched = async function() {
+    const unmatched = (window._msResults || []).filter(r => !r.project);
+    if (!unmatched.length) {
+        if (window.showToast) window.showToast('미분류 메일이 없습니다.', 'info');
+        return;
+    }
+
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) { alert('AI API 키를 먼저 설정해주세요.'); return; }
+
+    if (!confirm(`미분류 메일 ${unmatched.length}건을 최신 토픽 프로파일로 재분석합니다.\n시간이 걸릴 수 있습니다 (건당 약 3~5초) — 계속할까요?`)) return;
+
+    const btn = document.getElementById('ms-queue-reanalyze-all-btn');
+    const origBtnText = btn ? btn.textContent : '';
+    let matched = 0, failed = 0;
+
+    try {
+        // 프로젝트 인덱스·설정은 한 번만 로드 (5분 캐시 활용)
+        const projectList     = await window._msLoadProjectIndex();
+        const candidates      = window._msFilterCandidateProjects(projectList || []);
+        const candidatesForAI = candidates.length ? candidates : null;
+
+        if (!candidatesForAI) {
+            if (window.showToast) window.showToast(
+                '⚠️ 매칭 가능한 진행 중 프로젝트가 없습니다. project_index.json 및 완료 여부를 확인해주세요.',
+                'error', 6000);
+            return;
+        }
+
+        const priorityConfig = await window.loadPriorityConfig();
+
+        for (let i = 0; i < unmatched.length; i++) {
+            const r = unmatched[i];
+            if (btn) btn.textContent = `⏳ ${i + 1}/${unmatched.length} 재분석 중...`;
+
+            try {
+                const task = await msCallGemini(apiKey,
+                    { subject: r.subject, sender: r.sender, date: r.date, body: r.body, fileName: r.fileName },
+                    candidatesForAI, null, null);
+
+                const projectTag   = window._msResolveAiProjectMatch(task, candidatesForAI);
+                const wasUnmatched = !r.project;
+                r.task        = task || r.task;
+                r.project     = window._msProjectTagLabel(projectTag);
+                r._projectTag = projectTag;
+                r.matchReason = (task && task['매칭근거']) || r.matchReason || '';
+                r.error       = !task ? 'AI분석실패' : null;
+                r.selected    = !!task;
+                r.reanalyzedAt = new Date().toISOString();
+
+                if (task && priorityConfig) {
+                    const scoreResult = window._msComputeTotalScore(r, task, priorityConfig);
+                    r._score          = scoreResult.total;
+                    r._scoreGrade     = window._msScoreGrade(scoreResult.total, priorityConfig.cutline);
+                    r._scoreBreakdown = scoreResult.breakdown;
+                    r._alarmWorthy    = scoreResult.total >= priorityConfig.cutline;
+                }
+
+                if (wasUnmatched && projectTag && task && window.TaskInbox) {
+                    const alreadyInInbox = window.TaskInbox.load().some(
+                        it => it.mailRaw && it.mailRaw.fileName === r.fileName);
+                    if (!alreadyInInbox) {
+                        const grade          = r._scoreGrade || '⚪';
+                        const candidateNames = projectTag.candidates.map(c => c.model || c.customer).join(', ');
+                        const sourceLabel    = `${grade}${r._score || 0}점 메일자동분석(일괄재분석` +
+                            (projectTag.status === 'ambiguous'
+                                ? `, AI판단 후보: ${candidateNames})` : `, ${candidateNames})`);
+                        const mailRawObj = { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName };
+                        window.TaskInbox.add(task, { source: sourceLabel, mailRaw: mailRawObj, matchedProject: projectTag, alarmWorthy: !!r._alarmWorthy });
+                    }
+                }
+
+                if (r.project) matched++;
+            } catch (e) {
+                failed++;
+                console.warn('[일괄재분석 오류]', r.fileName, e);
+            }
+
+            // API 과부하 방지: 연속 호출 간 짧은 텀
+            if (i < unmatched.length - 1) await new Promise(res => setTimeout(res, 500));
+        }
+    } finally {
+        window._msSaveQueueToStorage();
+        if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+        if (window._msQueueCurrentType === 'unmatched') window._msRenderQueueModal('unmatched');
+        if (btn) btn.textContent = origBtnText;
+        const remaining = (window._msResults || []).filter(r => !r.project).length;
+        if (window.showToast) {
+            window.showToast(
+                `🔄 일괄 재분석 완료 — ${unmatched.length}건 중 ${matched}건 매칭됨` +
+                (remaining ? `, ${remaining}건 여전히 미분류` : ', 모두 매칭됨! 🎉') +
+                (failed ? ` (${failed}건 오류)` : ''),
+                matched > 0 ? 'info' : 'warning', 6000);
+        }
+    }
 };
 
 // ═══════════════════════════════════════════════════════════════════

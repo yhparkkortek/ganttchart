@@ -141,6 +141,18 @@
             window.showToast('✅ 토픽 프로파일 생성 완료 — 키워드 ' + (profile.keywords || []).length + '개', 'info', 4000);
         }
         console.info('[토픽 프로파일]', profile);
+
+        // 💡 [2026-09-03] 미분류 메일이 쌓여있으면 새 프로파일로 재분석 제안
+        //    (자동으로는 재스캔되지 않으므로 사용자에게 직접 제안)
+        var unmatchedCount = (window._msResults || []).filter(function(r) { return !r.project; }).length;
+        if (unmatchedCount > 0 && typeof window._msBulkReanalyzeUnmatched === 'function') {
+            setTimeout(function() {
+                if (confirm('토픽 프로파일이 갱신됐습니다.\n현재 미분류 메일 ' + unmatchedCount + '건을 새 프로파일로 재분석할까요?')) {
+                    window._msBulkReanalyzeUnmatched();
+                }
+            }, 600);
+        }
+
         return profile;
     };
 
