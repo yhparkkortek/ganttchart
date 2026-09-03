@@ -1099,8 +1099,8 @@
                  값: ''=DV, '완료'=EOL, 'MP(EC)'=MP(EC). 기존 저장 파일 호환 유지. -->
             <select id="sum-project-status" title="EOL로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다. MP(EC)는 메일 분석 생성 임시 프로젝트 — 메일 자동매칭 포함, 완료 처리 시 EOL로 전환하세요." onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; padding:6px 12px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
                 <option value="">🔵 DV</option>
-                <option value="MP(EC)">🟠 MP(EC)</option>
-                <option value="완료">✅ EOL</option>
+                <option value="MP(EC)">🟢 MP(EC)</option>
+                <option value="완료">🔴 EOL</option>
             </select>
             <div class="btn-group"><button type="button" data-i18n="btn-sync-gantt" onclick="window.syncSummaryActualsFromGantt()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🔄 Gantt 실적 연동</button></div>
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-summary')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="margin-left:8px; padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>

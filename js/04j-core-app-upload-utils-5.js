@@ -597,8 +597,8 @@
                 : "EOL로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, 새 메일 자동매칭 대상에서도 제외됩니다. MP(EC)는 메일 분석 임시 프로젝트로 매칭 포함. 클릭: DV→EOL→MP(EC) 순환.";
             const _sumStatusOpts = _sumStatusSel.options;
             if (_sumStatusOpts[0]) _sumStatusOpts[0].textContent = _en ? '🔵 DV' : '🔵 DV';
-            if (_sumStatusOpts[1]) _sumStatusOpts[1].textContent = _en ? '🟠 MP(EC)' : '🟠 MP(EC)';
-            if (_sumStatusOpts[2]) _sumStatusOpts[2].textContent = _en ? '✅ EOL' : '✅ EOL';
+            if (_sumStatusOpts[1]) _sumStatusOpts[1].textContent = _en ? '🟢 MP(EC)' : '🟢 MP(EC)';
+            if (_sumStatusOpts[2]) _sumStatusOpts[2].textContent = _en ? '🔴 EOL' : '🔴 EOL';
         }
         // 💡 주요 자재 표의 칸 placeholder/버튼 title도 언어에 맞춰 다시 그림(값은 collectMaterialRows(true)로
         //    빈 자유추가 행까지 그대로 보존한 채 다시 렌더링해서, 언어만 바뀌고 입력 중이던 내용은 안 날아감)
