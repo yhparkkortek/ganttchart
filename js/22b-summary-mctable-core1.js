@@ -519,10 +519,15 @@ window.loadScheduleRulesFromBackend = async function() {
     if (!tbody) return; // 공지 탭이 아직 렌더되지 않은 시점이면 스킵
     try {
         const res = await fetch(`${MAIL_SERVER}/schedule`, { signal: AbortSignal.timeout(3000) });
-        const data = await res.json();
-        window._scheduleRules = (data && data.rules) || [];
+        if (!res.ok) {
+            // 서버는 살아있지만 /schedule 엔드포인트가 없는 경우 (구버전 백엔드)
+            window._scheduleRules = res.status === 404 ? 'outdated' : null;
+        } else {
+            const data = await res.json();
+            window._scheduleRules = (data && data.rules) || [];
+        }
     } catch (e) {
-        window._scheduleRules = null; // 서버 연결 불가 상태 표시용
+        window._scheduleRules = null; // 서버 자체가 꺼져있는 경우
     }
     window.renderScheduleRuleTable();
 };
@@ -530,6 +535,10 @@ window.loadScheduleRulesFromBackend = async function() {
 window.renderScheduleRuleTable = function() {
     const tbody = document.getElementById('schedule-rule-table-body');
     if (!tbody) return;
+    if (window._scheduleRules === 'outdated') {
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#e67e22;font-size:12.5px;">⚠️ 백엔드(kortek_backend.py)가 구버전입니다 — 최신 파일로 교체 후 재실행해주세요.</td></tr>`;
+        return;
+    }
     if (window._scheduleRules === null) {
         tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#e67e22;font-size:12.5px;">⚠️ 메일 서버(kortek_backend.py)에 연결할 수 없습니다 — 실행 후 새로고침해주세요.</td></tr>`;
         return;
