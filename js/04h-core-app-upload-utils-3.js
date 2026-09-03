@@ -341,7 +341,7 @@
     // 단순함. [[MAIL_DRAFT]] 파서와 동일한 관대한 파싱 방식을 그대로 따른다.
     window._parseNoticeDraftBlock = function(blockText) {
         const lines = String(blockText || '').split('\n');
-        let title = '', deadline = '', ddayLine, recipLine;
+        let title = '', deadlineLine = '', ddayLine, recipLine;
         const contentLines = [];
         let inContent = false;
         lines.forEach(function(line) {
@@ -351,7 +351,7 @@
             const mRecip    = !inContent && line.match(/^\s*수신인\s*:\s*(.*)$/);
             const mContent  = !inContent && line.match(/^\s*내용\s*:\s*(.*)$/);
             if (mTitle)    { title = mTitle[1].trim(); return; }
-            if (mDeadline) { deadline = mDeadline[1].trim(); return; }
+            if (mDeadline) { deadlineLine = mDeadline[1].trim(); return; }
             if (mDday)     { ddayLine = mDday[1].trim(); return; }
             if (mRecip)    { recipLine = mRecip[1].trim(); return; }
             if (mContent)  { inContent = true; if (mContent[1].trim()) contentLines.push(mContent[1]); return; }
@@ -359,8 +359,12 @@
         });
         const splitNames = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return x.trim(); }).filter(Boolean); };
         const parseDays  = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return parseInt(x.trim(), 10); }).filter(function(n) { return !isNaN(n); }); };
+        // 💡 기준일은 쉼표로 구분된 여러 날짜를 허용 — 날짜마다 별도 공지가 등록됨
+        const deadlines = deadlineLine ? deadlineLine.split(/[,，、]/).map(function(d) { return d.trim(); }).filter(Boolean) : [];
         return {
-            title: title, deadline: deadline,
+            title: title,
+            deadline: deadlines[0] || '',    // 하위호환 — 단일 날짜 경로도 유지
+            deadlines: deadlines,            // 다중 날짜 배열 (0개면 빈 배열)
             alarmDays: ddayLine ? parseDays(ddayLine) : [0],
             recipientNames: recipLine !== undefined ? splitNames(recipLine) : [],
             body: contentLines.join('\n').trim()
@@ -377,10 +381,12 @@
     };
 
     window._aiBuildNoticeDraftFromParsed = function(parsed) {
+        const deadlines = (parsed.deadlines && parsed.deadlines.length) ? parsed.deadlines : (parsed.deadline ? [parsed.deadline] : []);
         return {
             id: 'noticedraft_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
             title: parsed.title || '',
-            deadline: parsed.deadline || '',
+            deadline: deadlines[0] || '',    // 하위호환
+            deadlines: deadlines,            // 다중 날짜 배열
             alarmDays: (parsed.alarmDays && parsed.alarmDays.length ? parsed.alarmDays : [0]).slice().sort(function(a, b) { return b - a; }),
             recipients: window._aiResolveNamesToRecipients(parsed.recipientNames),
             body: parsed.body || ''
@@ -390,9 +396,11 @@
     window._aiNoticeDraftPreviewMd = function(draft) {
         const fmtPerson = function(p) { return p.email ? `${p.name} (${p.email})` : `${p.name} ⚠️(이메일 없음)`; };
         const recipStr = draft.recipients.length ? draft.recipients.map(fmtPerson).join(', ') : '(등록 후 직접 선택 필요)';
-        let md = `📢 **공지 초안**\n- **제목:** ${draft.title || '(제목 없음)'}\n- **기준일:** ${draft.deadline || '⚠️(기준일 없음)'}\n- **알림 시점:** ${draft.alarmDays.map(function(d) { return 'D-' + d; }).join(', ')}\n- **수신 대상:** ${recipStr}`;
+        const dls = (draft.deadlines && draft.deadlines.length) ? draft.deadlines : (draft.deadline ? [draft.deadline] : []);
+        const dlStr = dls.length > 1 ? `${dls.join(', ')} (${dls.length}개 날짜 → 공지 ${dls.length}건 등록)` : (dls[0] || '⚠️(기준일 없음)');
+        let md = `📢 **공지 초안**\n- **제목:** ${draft.title || '(제목 없음)'}\n- **기준일:** ${dlStr}\n- **알림 시점:** ${draft.alarmDays.map(function(d) { return 'D-' + d; }).join(', ')}\n- **수신 대상:** ${recipStr}`;
         md += `\n\n**내용**\n${draft.body || '(내용 없음)'}`;
-        if (!draft.deadline) md += `\n\n⚠️ 기준일이 없어 등록할 수 없습니다 — 기준일을 알려주세요.`;
+        if (!dls.length) md += `\n\n⚠️ 기준일이 없어 등록할 수 없습니다 — 기준일을 알려주세요.`;
         else if (!draft.title) md += `\n\n⚠️ 제목이 없어 등록할 수 없습니다 — 제목을 알려주세요.`;
         else if (draft.recipients.some(function(p) { return !p.email; })) md += `\n\n⚠️ 수신 대상 중 이메일을 찾지 못한 사람이 있습니다.`;
         md += `\n\n💬 이대로 등록하려면 "등록해줘"라고 말씀해주시거나, 아래 [📢 이대로 등록] 버튼을 눌러주세요.`;
@@ -403,15 +411,19 @@
     //    recipientMode는 항상 'custom'으로 고정(AI가 만든 명단이 전역 공용 기본수신 명단을
     //    조용히 덮어쓰지 않도록 — window._nmPersistRecipientMode의 'default' 분기 참고).
     window._aiRegisterNoticeFromDraft = function(draft) {
-        if (!draft.title || !draft.deadline) return { ok: false, error: '제목 또는 기준일이 없습니다.' };
-        window._noticeItems.push({
-            id: 'notice_' + Date.now(), title: draft.title, body: draft.body, deadline: draft.deadline,
-            alarmDays: draft.alarmDays, recipients: draft.recipients, recipientMode: 'custom',
-            status: 'active', sentLog: [], createdAt: new Date().toISOString().slice(0, 10)
+        const dls = (draft.deadlines && draft.deadlines.length) ? draft.deadlines : (draft.deadline ? [draft.deadline] : []);
+        if (!draft.title || !dls.length) return { ok: false, error: '제목 또는 기준일이 없습니다.' };
+        // 💡 날짜마다 별도 공지 1건씩 등록 — 여러 날짜를 한 번에 처리
+        dls.forEach(function(dl, i) {
+            window._noticeItems.push({
+                id: 'notice_' + Date.now() + '_' + i, title: draft.title, body: draft.body, deadline: dl,
+                alarmDays: draft.alarmDays, recipients: draft.recipients, recipientMode: 'custom',
+                status: 'active', sentLog: [], createdAt: new Date().toISOString().slice(0, 10)
+            });
         });
         window._noticeSave();
         if (window.renderNoticeTab) window.renderNoticeTab();
-        return { ok: true };
+        return { ok: true, count: dls.length };
     };
 
     window._aiRegisterPendingNoticeDraft = async function(draftId, btn) {
@@ -426,7 +438,7 @@
         window._ganttQaPendingNoticeDraft = null;
         window._ganttQaHistory.push({
             role: 'ai',
-            text: res.ok ? `✅ "${pending.title}" 공지를 등록했습니다.` : `⚠️ 공지 등록 실패: ${res.error}`,
+            text: res.ok ? `✅ "${pending.title}" 공지를 등록했습니다.${res.count > 1 ? ` (${res.count}개 날짜 → ${res.count}건 등록)` : ''}` : `⚠️ 공지 등록 실패: ${res.error}`,
             uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
         });
         window._renderGanttQaMessages();
@@ -933,7 +945,7 @@
                     const pendingNotice = window._ganttQaPendingNoticeDraft;
                     const regRes = window._aiRegisterNoticeFromDraft(pendingNotice);
                     text += regRes.ok
-                        ? `\n\n✅ "${pendingNotice.title}" 공지를 등록했습니다.`
+                        ? `\n\n✅ "${pendingNotice.title}" 공지를 등록했습니다.${regRes.count > 1 ? ` (${regRes.count}개 날짜 → ${regRes.count}건 등록)` : ''}`
                         : `\n\n⚠️ 공지 등록 실패: ${regRes.error}`;
                     window._ganttQaPendingNoticeDraft = null;
                 }
