@@ -175,6 +175,106 @@
         }
     };
 
+    // ── 토픽 프로파일 뷰어 모달 ─────────────────────────────────────────────────
+    window._showTopicProfileViewer = async function() {
+        var existing = document.getElementById('tp-viewer-overlay');
+        if (existing) { existing.remove(); return; }
+
+        var overlay = document.createElement('div');
+        overlay.id = 'tp-viewer-overlay';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99997;display:flex;align-items:center;justify-content:center;';
+        overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
+
+        var box = document.createElement('div');
+        box.style.cssText = 'background:#fff;border:1.5px solid #a5c8f0;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.18);' +
+            'width:520px;max-width:96vw;max-height:82vh;display:flex;flex-direction:column;font-family:\'Malgun Gothic\',sans-serif;overflow:hidden;';
+        overlay.appendChild(box);
+
+        // ── 헤더 ──
+        var hdr = document.createElement('div');
+        hdr.style.cssText = 'background:#e7f3ff;color:#1971c2;padding:13px 18px;font-size:14px;font-weight:bold;border-bottom:1px solid #a5c8f0;' +
+            'border-radius:12px 12px 0 0;display:flex;align-items:center;gap:10px;flex-shrink:0;';
+        hdr.innerHTML = '<span style="flex:1;">📊 토픽 프로파일 뷰어</span>';
+        var closeBtn = document.createElement('button');
+        closeBtn.textContent = '✕';
+        closeBtn.style.cssText = 'background:none;border:none;font-size:16px;cursor:pointer;color:#888;padding:0 4px;';
+        closeBtn.onclick = function() { overlay.remove(); };
+        hdr.appendChild(closeBtn);
+        box.appendChild(hdr);
+
+        // ── 스크롤 영역 ──
+        var body = document.createElement('div');
+        body.style.cssText = 'flex:1;overflow-y:auto;padding:16px 18px;';
+        box.appendChild(body);
+
+        // 모든 프로젝트 프로파일 로드
+        var store = _getStore();
+        var keys = Object.keys(store);
+
+        // project_index에서 이름 매핑 시도
+        var nameMap = {};
+        try {
+            var pi = await window._msLoadProjectIndex();
+            if (pi && pi.projects) {
+                pi.projects.forEach(function(p) {
+                    if (p.drive_file_id) nameMap[p.drive_file_id] = (p.model || p.customer || p.file_name || p.drive_file_id);
+                });
+            }
+        } catch(e) {}
+
+        if (!keys.length) {
+            body.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px;">⚪ 저장된 토픽 프로파일이 없습니다.<br><br>' +
+                '<button onclick="window._generateTopicProfile && window._generateTopicProfile()" ' +
+                'style="padding:8px 18px;background:#eaf7ea;color:#1f6a3a;border:1px solid #a8dab8;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;">📊 현재 프로젝트 프로파일 생성</button></div>';
+            document.body.appendChild(overlay);
+            return;
+        }
+
+        var curKey = _currentKey();
+        // 현재 프로젝트를 맨 위로
+        keys.sort(function(a, b) {
+            if (a === curKey) return -1;
+            if (b === curKey) return 1;
+            return 0;
+        });
+
+        var html = '';
+        keys.forEach(function(k) {
+            var p = store[k];
+            if (!p) return;
+            var isCur = k === curKey;
+            var projName = nameMap[k] || k;
+            var d = p.ts ? new Date(p.ts) : null;
+            var ago = d ? (function() {
+                var min = Math.round((Date.now() - d) / 60000);
+                return min < 60 ? min + '분 전' : min < 1440 ? Math.round(min/60) + '시간 전' : Math.round(min/1440) + '일 전';
+            })() : '';
+            var kwChips = (p.keywords || []).map(function(kw) {
+                return '<span style="display:inline-block;padding:2px 8px;margin:2px 2px 2px 0;background:#e8f4fd;color:#1a4f7a;border-radius:10px;font-size:11.5px;">' + kw + '</span>';
+            }).join('');
+            var topics = (p.topics || []).map(function(t) {
+                return '<span style="display:block;font-size:12px;color:#333;padding:2px 0;">• ' + t + '</span>';
+            }).join('');
+            var patterns = (p.patterns || []).map(function(t) {
+                return '<span style="display:block;font-size:11.5px;color:#666;padding:2px 0;">↳ ' + t + '</span>';
+            }).join('');
+
+            html += '<div style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
+                '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+                  '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + projName + '</span>' +
+                  (isCur ? '<button onclick="window._clearTopicProfile();document.getElementById(\'tp-viewer-overlay\').remove();window._refreshTopicProfileBadge();" title="이 프로파일 삭제" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;">🗑 삭제</button>' : '') +
+                  '<span style="font-size:10px;color:#aaa;">' + (ago ? ago + ' 생성' : '') + (p.taskCount ? ' · ' + p.taskCount + '개 업무' : '') + '</span>' +
+                '</div>' +
+                (p.summary ? '<div style="font-size:12px;color:#2c5f8a;background:#e7f3ff;padding:6px 10px;border-radius:6px;margin-bottom:8px;">' + p.summary + '</div>' : '') +
+                (kwChips ? '<div style="margin-bottom:6px;"><div style="font-size:11px;color:#888;margin-bottom:3px;">🔑 키워드</div>' + kwChips + '</div>' : '') +
+                (topics ? '<div style="margin-bottom:4px;"><div style="font-size:11px;color:#888;margin-bottom:2px;">📂 업무 유형</div>' + topics + '</div>' : '') +
+                (patterns ? '<div><div style="font-size:11px;color:#888;margin-bottom:2px;">💡 패턴</div>' + patterns + '</div>' : '') +
+                '</div>';
+        });
+        body.innerHTML = html;
+        document.body.appendChild(overlay);
+    };
+
     // ── 토픽 프로파일을 getSystemPrompt에 자동 주입 ───────────────────────────
     // getSystemPrompt가 이미 정의된 뒤에 래핑 (04a-core-app-globals.js가 먼저 로드됨)
     (function() {

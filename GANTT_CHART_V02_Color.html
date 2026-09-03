@@ -1806,7 +1806,13 @@
                                border-radius:6px;transition:background .15s,border-color .15s;">
                         📊 토픽 프로파일 생성
                     </button>
-                    <span id="topic-profile-badge" style="font-size:10px;color:#888;white-space:nowrap;"></span>
+                    <span id="topic-profile-badge" onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()"
+                        style="font-size:10px;color:#888;white-space:nowrap;cursor:pointer;"
+                        title="클릭하면 저장된 토픽 프로파일을 열람합니다"></span>
+                    <button onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()"
+                        title="저장된 토픽 프로파일 열람"
+                        onmouseover="this.style.background='#d8eafd';" onmouseout="this.style.background='#e8f4fd';"
+                        style="flex-shrink:0;padding:2px 7px;font-size:11px;background:#e8f4fd;color:#1a4f7a;border:1px solid #a5c8f0;border-radius:6px;cursor:pointer;transition:background .15s;">🔍</button>
                 </div>
                 <div id="inbox-subqueue-header" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
                 <div style="display:flex; gap:6px;">

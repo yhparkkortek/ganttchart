@@ -1384,9 +1384,35 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
         // 💡 [버그 수정] 후보 프로젝트명이 서로 같을 수 있어(예: SHUFFLER 3인치/4.3인치 둘 다 "SHUFFLER")
         //    이름이 아니라 "번호"로 답하게 해서 확실히 구별함. 인치 정보 + 등록된 키워드도 참고용으로 같이 제공
         //    (키워드는 더 이상 매칭 게이트가 아니라, AI 판단을 돕는 힌트일 뿐 — 없어도 다른 근거로 고를 수 있음).
-        const numbered = candidateProjects.map((c, i) =>
-            `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''} [파일: ${c.file_name}]`
-        ).join('\n');
+        // 💡 [하이브리드-B] 토픽 프로파일 스토어 로드 — 각 프로젝트에 저장된 AI 토픽 키워드를 후보 목록에 주입
+        const _tpStore = (function() {
+            try { return JSON.parse(localStorage.getItem('gantt_topic_profile_v1')) || {}; }
+            catch(e) { return {}; }
+        })();
+        const numbered = candidateProjects.map((c, i) => {
+            const _prof = _tpStore[c.drive_file_id] || null;
+            const _tpKw = (_prof && _prof.keywords && _prof.keywords.length)
+                ? ' | 🔑토픽: ' + _prof.keywords.slice(0, 8).join(', ')
+                : '';
+            return `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''}${_tpKw} [파일: ${c.file_name}]`;
+        }).join('\n');
+        // 💡 [하이브리드-A] 키워드 사전매칭 힌트 — 모델명·키워드가 메일 본문에 직접 등장하는 후보를
+        //    AI에게 알려줌(강제 override 아님 — 맥락이 다르면 무시 가능). 후보의 40% 이하일 때만 표시
+        //    (너무 많이 걸리면 힌트 의미 없어짐 — 전부 다 매칭이면 정보가 아님).
+        const _mailBodyLow = mailText.toLowerCase();
+        const _kwCertain = candidateProjects.map(function(c, i) {
+            const _frags = (c.model || '').toLowerCase().split(/[\s\-\_\/]+/).filter(function(f) { return f.length >= 3; });
+            const _kws   = (c.keywords || []).map(function(k) { return String(k).toLowerCase().trim(); });
+            const _hit   = _frags.some(function(f) { return _mailBodyLow.includes(f); }) ||
+                           _kws.some(function(k)   { return k.length >= 3 && _mailBodyLow.includes(k); });
+            return _hit ? (i + 1) + '번(' + (c.model || c.customer) + ')' : null;
+        }).filter(Boolean);
+        let kwPreHint = '';
+        if (_kwCertain.length > 0 && _kwCertain.length <= Math.ceil(candidateProjects.length * 0.4)) {
+            kwPreHint = '\n⭐ [키워드 사전매칭 힌트] 메일 본문에 모델명·키워드가 직접 등장하는 후보: ' +
+                _kwCertain.join(', ') +
+                ' — 우선 검토하되, 실제 메일 맥락이 다르면 무시하고 0으로 답해도 됩니다.\n';
+        }
 
         // 💡 [2026-08-28 신규] 브랜드명(고객사)+크기(인치)만 같으면 실제 관리번호(#502319류)가 어느
         //    후보에도 등록 안 돼 있어도 AI가 "이름/크기가 비슷하니까" 매칭해버리는 오탐이 실제로
@@ -1419,7 +1445,7 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
             ? `\n⚠️ [사용자 재분석 요청 — 사람의 판단, 최우선 근거] 이 메일은 한 번 미분류로 판정됐고, 사용자가 아래처럼 직접 의견을 남기며 다시 판단해달라고 요청했습니다:\n"${userHint}"\n이 의견을 다른 어떤 근거보다도 우선해서 반영하세요. 사용자가 특정 프로젝트를 지목했다면 아래 후보 목록에서 그 프로젝트를 찾아 그 번호로 응답하고 신뢰도를 "상"으로 두세요(후보 목록에 없는 프로젝트를 말하는 것 같으면 0으로 두고 매칭근거에 그렇게 적으세요).\n`
             : '';
         prompt += `\n\n--- 프로젝트 매칭 판단 요청 (현재 등록된 활성 프로젝트 전체 목록) ---\n` + userHintBlock +
-            `후보 프로젝트 목록:\n${numbered}\n` + codeHint +
+            `후보 프로젝트 목록:\n${numbered}\n` + codeHint + kwPreHint +
             `이 메일이 실제로 다루는 "핵심 주제"가 위 목록 중 하나로 명확한지 판단하세요. 목록의 "참고 키워드"는 힌트일 뿐이니,\n` +
             `본문 맥락상 명백히 그 프로젝트 얘기면 키워드가 없어도 선택하세요. 반대로 키워드가 우연히 겹쳐도 실제 핵심 주제가 아니면 고르지 마세요.\n` +
             `※ 브랜드명(고객사)이나 크기(인치)가 같다는 이유만으로 매칭하지 마세요 — 같은 브랜드가 여러 프로젝트를 가질 수 있습니다. 본문의 구체적 내용(모델 고유 코드, 요청 사항 등)까지 확인하세요.\n` +
