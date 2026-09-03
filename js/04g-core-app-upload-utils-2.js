@@ -1143,14 +1143,16 @@ ${question}
         EP: ['window._aiJumpToEpRow', 'Click to jump to this Elec Parts spec column', '클릭하면 이 Elec Parts 스펙 열로 이동합니다'],
         MT: ['window._aiJumpToMtRow', 'Click to jump to this material row', '클릭하면 이 주요 자재 행으로 이동합니다'],
         AD: ['window._aiJumpToAdRow', 'Click to jump to this address book row', '클릭하면 이 주소록 행으로 이동합니다'] };
-    window._renderOneAiRef = function(p, n) {
+    // 💡 [2026-09-03 수정] wrapBefore/wrapAfter 파라미터 추가 — _linkifyTaskRefs 가 ref 전후에
+    //    붙어있는 괄호/마침표 등의 구두점을 캡처해서 chip 안에 같이 포함시킴(chip 숨김 시 함께 숨겨짐).
+    window._renderOneAiRef = function(p, n, wrapBefore, wrapAfter) {
         const _en = window._currentLang === 'en';
         const idx = parseInt(n, 10);
+        const wb = wrapBefore || '';
+        const wa = wrapAfter || '';
         if (_simpleRefJump[p]) {
             const def = _simpleRefJump[p];
-            // 💡 [2026-09-03 신규] CS/MC/EP/MT/AD ref도 .ai-ref-chip 으로 감싸서 기본 숨김
-            //    — 문장 클릭(window._aiToggleLineRefs) 시 함께 나타남
-            return `<span class="ai-ref-chip" style="display:none"><span class="ai-task-ref" onclick="${def[0]}(${idx}); event.stopPropagation();" title="${_en ? def[1] : def[2]}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${p}${n}</span></span>`;
+            return `<span class="ai-ref-chip" style="display:none">${wb}<span class="ai-task-ref" onclick="${def[0]}(${idx}); event.stopPropagation();" title="${_en ? def[1] : def[2]}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${p}${n}</span>${wa}</span>`;
         }
         const rowIndex = idx;
         const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
@@ -1171,17 +1173,16 @@ ${question}
                 extra += `<span style="color:#888; font-size:11px; margin-left:4px;">${escapeHtml(mailPeople.sender)}</span>`;
             }
         }
-        // 💡 [2026-09-03 신규] 기간 배지 — globalData 에서 시작일/마감일을 읽어
-        //    "(9/3~9/4)" 형태로 #G{n} 바로 옆에 붙여줌.
-        //    AI 문답은 AI가 답변 텍스트에 기간을 직접 쓰지만, AI 요약(JSON 구조)에선
-        //    생략될 때가 많아서 코드 레벨에서 항상 표시하도록 통일함.
+        // 💡 [2026-09-03 수정] 기간 배지를 chip 바깥으로 이동 — 항상 작은 회색 글씨로 표시되어
+        //    chip 숨김/보임 여부와 무관하게 날짜를 확인할 수 있음. AI 응답 텍스트의 "기간:X~Y" 중복은
+        //    _mdToHtml 에서 제거한다(아래 주석 참고).
         const s2 = (typeof colIdx !== 'undefined' && colIdx.start !== -1 && row) ? (row[colIdx.start] || '') : '';
         const e2 = (typeof colIdx !== 'undefined' && colIdx.plan !== -1 && row) ? (row[colIdx.plan] || '') : '';
         const dateStr2 = (window._fmtDateRangeShort && (s2 || e2)) ? window._fmtDateRangeShort(s2, e2) : '';
-        const dateBadge = dateStr2 ? `<span style="color:#888; font-size:10.5px; margin-left:3px;">(${dateStr2})</span>` : '';
-        // 💡 [2026-09-03 신규] G-ref 전체(.ai-ref-chip)를 기본 숨김으로 — 문장을 클릭하면
-        //    window._aiToggleLineRefs 가 이 chip 들의 display 를 토글함.
-        return `<span class="ai-ref-chip" style="display:none"><span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#G${n}</span>${dateBadge}<span class="ai-ref-toggle" onclick="window._aiToggleRefExtra(this); event.stopPropagation();" title="${_en ? 'Show/hide alarm · mail · sender' : '펼치기/접기(알람·원문·발신인)'}">▶</span><span class="ai-ref-extra">${extra}</span></span>`;
+        // 기간 배지는 chip 밖에 위치 — display:inline-block 으로 chip 숨김과 무관하게 항상 보임
+        const dateBadge = dateStr2 ? `<span class="ai-ref-date-badge" style="color:#999; font-size:10.5px; margin-left:2px;">(${dateStr2})</span>` : '';
+        // chip 구조: [wb구두점][#G링크][▶토글][extra][wa구두점]  /  chip 밖: [기간 배지 — 항상 보임]
+        return `<span class="ai-ref-chip" style="display:none">${wb}<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#G${n}</span><span class="ai-ref-toggle" onclick="window._aiToggleRefExtra(this); event.stopPropagation();" title="${_en ? 'Show/hide alarm · mail · sender' : '펼치기/접기(알람·원문·발신인)'}">▶</span><span class="ai-ref-extra">${extra}</span>${wa}</span>${dateBadge}`;
     };
     window._linkifyTaskRefs = function(escapedText) {
         // 💡 [2026-08-30 확장] 표별 접두사(#G=Gantt, #CS=Customer SPEC, #MC=M.C Table, #EP=Elec Parts SPEC,
@@ -1192,13 +1193,20 @@ ${question}
         // 에 둬서, "#G1~G6"이 "#G1"(단일)로 잘못 먼저 매칭되고 "~G6"만 텍스트로 남는 일이 없게 한다.
         // 양 끝(G1/G6)만 실제 클릭 가능한 번호+화살표로 그리고, 그 사이(G2~G5)는 숫자 자체를 아예
         // 만들지 않는다(사용자가 필요하면 G1이나 G6으로 가서 확인).
-        return String(escapedText || '').replace(/#(G|CS|MC|EP|MT|AD)(\d+)~#?(?:G|CS|MC|EP|MT|AD)?(\d+)\b|#(G|CS|MC|EP|MT|AD)?(\d+)\b/g,
-            function(m, rPrefix, rStart, rEnd, sPrefix, sNum) {
+        // 💡 [2026-09-03 신규] ref 직전 '(' / 직후 ')' '.' 를 chip 안에 포함 — chip이 숨겨질 때
+        //    이 구두점도 같이 사라져서 ", ." 등이 홀로 남아 어색해 보이는 문제를 방지.
+        //    캡처 그룹이 늘어난 만큼 콜백 인자 순서도 변경됨: preR, rPrefix, rStart, rEnd, postR,
+        //    preS, sPrefix, sNum, postS.
+        return String(escapedText || '').replace(
+            /(\()?#(G|CS|MC|EP|MT|AD)(\d+)~#?(?:G|CS|MC|EP|MT|AD)?(\d+)\b([).]*)?|(\()?#(G|CS|MC|EP|MT|AD)?(\d+)\b([).]*)?/g,
+            function(m, preR, rPrefix, rStart, rEnd, postR, preS, sPrefix, sNum, postS) {
                 if (rPrefix !== undefined) {
-                    return window._renderOneAiRef(rPrefix, rStart) + '~' + window._renderOneAiRef(rPrefix, rEnd);
+                    // range: '('는 첫 번째 chip 에, ').' 등은 마지막 chip 에 포함
+                    return window._renderOneAiRef(rPrefix, rStart, preR||'', '') + '~' + window._renderOneAiRef(rPrefix, rEnd, '', postR||'');
                 }
-                return window._renderOneAiRef(sPrefix || 'G', sNum);
-            });
+                return window._renderOneAiRef(sPrefix || 'G', sNum, preS||'', postS||'');
+            }
+        );
     };
     // 💡 위 "#G숫자 ▶" 화살표 클릭 시, 바로 옆 .ai-ref-extra(📌/📧/발신인)를 슬라이드로 펼치거나 접는다
     // (M.C Table의 mcToggleUnitActions와 동일한 max-width 트랜지션 패턴).
@@ -1208,15 +1216,18 @@ ${question}
         const open = extra.classList.toggle('ai-ref-extra-open');
         toggleEl.textContent = open ? '◀' : '▶';
     };
-    // 💡 [2026-09-03 신규] 문장/항목 클릭 시 그 안의 .ai-ref-chip(기본 숨김 상태인 #G{n} 뱃지)을
-    //    일괄 토글. 이미 chip 내부 요소(링크·토글화살표)를 클릭한 경우엔 stopPropagation으로
-    //    이 함수까지 이벤트가 올라오지 않으므로 별도 예외 처리 불필요.
+    // 💡 [2026-09-03 신규/수정] 문장/항목 클릭 시 그 안의 .ai-ref-chip(기본 숨김 상태인 #G{n} 뱃지)을
+    //    일괄 토글. chip 내부 요소(링크·▶) 클릭은 stopPropagation 으로 막혀 있으므로 별도 예외 불필요.
+    //    클릭 시 문장 하이라이트(연한 파랑 배경)를 주고, 닫으면 다시 제거한다.
     window._aiToggleLineRefs = function(el, event) {
         if (event) event.stopPropagation();
         const chips = el.querySelectorAll('.ai-ref-chip');
         if (!chips.length) return;
-        const showing = chips[0].style.display !== 'none';
-        chips.forEach(function(c) { c.style.display = showing ? 'none' : 'inline'; });
+        const nowShowing = chips[0].style.display === 'none'; // 현재 숨김 → 열기
+        chips.forEach(function(c) { c.style.display = nowShowing ? 'inline' : 'none'; });
+        // 열려있는 동안 문장 배경 하이라이트
+        el.dataset.refsShown = nowShowing ? '1' : '';
+        el.style.background = nowShowing ? 'rgba(44,95,138,0.07)' : '';
     };
     // 💡 위 "원문" 링크 클릭 시 뜨는 가벼운 읽기전용 모달 — Elec Parts 라이트박스(ep-lightbox-modal)와
     // 동일한 드래그 가능 팝업 패턴 재사용. Mail Analyzer 전체 작업공간을 여는 mailShowRightDetail은
@@ -1262,10 +1273,17 @@ ${question}
     window._mdToHtml = function(raw) {
         let escaped = escapeHtml(raw || '');
         escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
-        escaped = window._linkifyTaskRefs(escaped); // #98 → 클릭 이동 링크
+        // 💡 [2026-09-03 신규] AI가 답변 텍스트에 직접 쓰는 "기간:X/Y~X/Y" 또는 "기간:X/Y" 패턴을
+        //    제거 — ref chip 바깥에 항상 표시되는 기간 배지(ai-ref-date-badge)와 중복되기 때문.
+        //    앞의 ", " 또는 " " 도 같이 제거해서 "읽다가 (, 기간:...) 가 남는" 어색함을 방지.
+        escaped = escaped.replace(/,?\s*기간:\d+\/\d+(?:~\d+\/\d+)?/g, '');
+        escaped = window._linkifyTaskRefs(escaped); // #G{n} → 클릭 이동 링크(chip 포함)
         const lines = escaped.split('\n');
-        // 💡 [2026-09-03 신규] 문장/글머리 div에 onclick(_aiToggleLineRefs) + cursor:pointer 를 추가,
-        //    클릭하면 그 줄 안의 숨겨진 .ai-ref-chip(#G{n} 뱃지)을 토글해서 보여줌/숨김.
+        // 💡 [2026-09-03 신규/수정] 문장/글머리 div 에 onclick(_aiToggleLineRefs) + hover 하이라이트 추가.
+        //    — 마우스 올리면 연한 파랑, 클릭해서 ref 가 열리면 약간 더 진한 파랑 배경 유지.
+        const _lineOnClick = 'window._aiToggleLineRefs(this, event);';
+        const _lineHover   = "this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.12)':'rgba(44,95,138,0.04)';";
+        const _lineOut     = "this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.07)':'';";
         return lines.map(function(line) {
             const heading = line.match(/^(#{1,4})\s+(.*)$/);
             if (heading) return `<div style="font-weight:bold; margin:8px 0 3px;">${heading[2]}</div>`;
@@ -1274,10 +1292,10 @@ ${question}
                 const depth = Math.floor(bullet[1].length / 2);
                 const mark = depth > 0 ? '◦' : '•';
                 const pad = 14 + depth * 16;
-                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${mark}&nbsp;${bullet[2]}</div>`;
+                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${mark}&nbsp;${bullet[2]}</div>`;
             }
             if (line.trim() === '') return '<div style="height:6px;"></div>';
-            return `<div style="margin-bottom:2px; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${line}</div>`;
+            return `<div style="margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`;
         }).join('');
     };
 
