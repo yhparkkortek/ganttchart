@@ -573,30 +573,239 @@
         window._renderGanttQaMessages();
     };
 
-    // AI 답변 텍스트에서 [[ACTION:SET_ALARM:번호]] 또는 [[ACTION:CLEAR_ALARM:번호]] 태그를 찾아 제거하고,
-    // 실행 결과 안내문을 답변에 덧붙인다. 태그가 없으면 원문을 그대로 반환.
-    // 💡 [2026-08-28 신규] "알람 해제해줘" 요청 대응 — CLEAR_ALARM 태그 처리를 추가(SET_ALARM과 대칭).
-    //    한 답변에 두 태그가 동시에 나올 일은 없지만(프롬프트가 방향당 하나만 붙이도록 지시), 방어적으로
-    //    SET_ALARM을 먼저 찾고 없으면 CLEAR_ALARM을 찾는다.
+    // ── 💡 [2026-09-03 신규] Gantt 수정 초안(GANTT_EDIT_DRAFT) / 새 행 추가 초안(GANTT_ADD_DRAFT) ──────────
+    //    알람 세부 설정(ALARM_DRAFT)·메일 초안(MAIL_DRAFT)과 동일한 "초안→확인→적용" 2단계 왕복 패턴.
+
+    window._ganttQaPendingEditDraft = null; // 현재 pending 중인 수정 초안 (1건만 유지)
+    window._ganttQaPendingAddDraft  = null; // 현재 pending 중인 추가 초안 (1건만 유지)
+
+    // ── GANTT_EDIT_DRAFT 파서 ──
+    window._parseGanttEditDraftBlock = function(blockText) {
+        const lines = String(blockText || '').split('\n');
+        let taskName, assignee, startDate, endDate, status;
+        const contentLines = []; let inContent = false;
+        lines.forEach(function(line) {
+            if (inContent) { contentLines.push(line); return; }
+            const m = line.match(/^\s*(업무명|담당|시작일|완료일|상태|내용)\s*:\s*(.*)$/);
+            if (!m) return;
+            const key = m[1].trim(); const val = m[2].trim();
+            if (key === '업무명') taskName = val;
+            else if (key === '담당') assignee = val;
+            else if (key === '시작일') startDate = val;
+            else if (key === '완료일') endDate = val;
+            else if (key === '상태') status = val;
+            else if (key === '내용') { inContent = true; if (val) contentLines.push(val); }
+        });
+        return { taskName, assignee, startDate, endDate, status, content: inContent ? contentLines.join('\n').trim() : undefined };
+    };
+
+    window._aiBuildGanttEditDraft = function(rowIndex, parsed) {
+        const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
+        if (!row || row._level === undefined) return { ok: false };
+        const lv = row._level;
+        const currentLabel = (lv === 0 ? row._origDev : lv === 1 ? row._origT1 : lv === 2 ? row._origT2 : lv === 3 ? row._origT3 : row._origT4) || '(제목없음)';
+        return { ok: true, id: 'ganttEdit_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), rowIdx: rowIndex, currentLabel, taskName: parsed.taskName, assignee: parsed.assignee, startDate: parsed.startDate, endDate: parsed.endDate, status: parsed.status, content: parsed.content };
+    };
+
+    window._aiGanttEditDraftPreviewMd = function(draft) {
+        let md = `✏️ **Gantt 수정 초안 — "${draft.currentLabel}"**`;
+        if (draft.taskName !== undefined) md += `\n- **업무명:** ${draft.taskName}`;
+        if (draft.assignee !== undefined) md += `\n- **담당자:** ${draft.assignee}`;
+        if (draft.startDate !== undefined) md += `\n- **시작일:** ${draft.startDate}`;
+        if (draft.endDate !== undefined) md += `\n- **완료일:** ${draft.endDate}`;
+        if (draft.status !== undefined) md += `\n- **상태:** ${draft.status}`;
+        if (draft.content !== undefined) md += `\n- **내용:** ${String(draft.content).slice(0, 80)}${String(draft.content).length > 80 ? '...' : ''}`;
+        md += `\n\n💬 이대로 반영하려면 "적용해줘"라고 말씀해주시거나, 아래 [✏️ 이대로 적용] 버튼을 눌러주세요.`;
+        return md;
+    };
+
+    window._aiApplyGanttEditDraft = function(draft) {
+        const row = (typeof globalData !== 'undefined' && globalData) ? globalData[draft.rowIdx] : null;
+        if (!row || row._level === undefined) return { ok: false, error: '해당 업무를 더 이상 찾을 수 없습니다.' };
+        const ci = window.colIdx || {};
+        if (draft.taskName !== undefined && draft.taskName) {
+            const lv = row._level;
+            row._origDev = ''; row._origT1 = ''; row._origT2 = ''; row._origT3 = ''; row._origT4 = '';
+            if (lv === 0) row._origDev = draft.taskName; else if (lv === 1) row._origT1 = draft.taskName; else if (lv === 2) row._origT2 = draft.taskName; else if (lv === 3) row._origT3 = draft.taskName; else row._origT4 = draft.taskName;
+        }
+        if (draft.assignee !== undefined && ci.assignee !== undefined && ci.assignee !== -1) row[ci.assignee] = draft.assignee;
+        if (draft.startDate !== undefined && ci.start !== undefined && ci.start !== -1) { row[ci.start] = draft.startDate; row._explicitStartTs = draft.startDate ? new Date(draft.startDate).getTime() : null; row._startForced = !!draft.startDate; }
+        if (draft.endDate !== undefined && ci.plan !== undefined && ci.plan !== -1) { row[ci.plan] = draft.endDate; row._explicitPlanTs = draft.endDate ? new Date(draft.endDate).getTime() : null; row._planForced = !!draft.endDate; }
+        if (draft.status !== undefined && ci.status !== undefined && ci.status !== -1) row[ci.status] = draft.status;
+        if (draft.content !== undefined && ci.content !== undefined && ci.content !== -1) row[ci.content] = draft.content;
+        logChange(draft.rowIdx, -1, '업무 수정', `"${draft.currentLabel}" AI 문답으로 수정`, 'AI 문답');
+        window.recalculateSchedules();
+        return { ok: true };
+    };
+
+    window._aiApplyPendingGanttEditDraft = function(draftId, btn) {
+        const pending = window._ganttQaPendingEditDraft;
+        if (!pending || pending.id !== draftId) { if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning'); window._renderGanttQaMessages(); return; }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ 적용 중...'; }
+        const res = window._aiApplyGanttEditDraft(pending);
+        window._ganttQaPendingEditDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: res.ok ? `✅ "${pending.currentLabel}" 업무 수정을 적용했습니다.` : `⚠️ 수정 실패: ${res.error}`, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+    window._aiCancelPendingGanttEditDraft = function(draftId) {
+        if (window._ganttQaPendingEditDraft && window._ganttQaPendingEditDraft.id === draftId) window._ganttQaPendingEditDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: '✏️ 수정을 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+
+    // ── GANTT_ADD_DRAFT 파서 ──
+    window._parseGanttAddDraftBlock = function(blockText) {
+        const lines = String(blockText || '').split('\n');
+        let position, taskName, level, assignee, startDate, endDate, status;
+        const contentLines = []; let inContent = false;
+        lines.forEach(function(line) {
+            if (inContent) { contentLines.push(line); return; }
+            const m = line.match(/^\s*(위치|업무명|레벨|담당|시작일|완료일|상태|내용)\s*:\s*(.*)$/);
+            if (!m) return;
+            const key = m[1].trim(); const val = m[2].trim();
+            if (key === '위치') position = parseInt(val, 10);
+            else if (key === '업무명') taskName = val;
+            else if (key === '레벨') level = parseInt(val, 10);
+            else if (key === '담당') assignee = val;
+            else if (key === '시작일') startDate = val;
+            else if (key === '완료일') endDate = val;
+            else if (key === '상태') status = val;
+            else if (key === '내용') { inContent = true; if (val) contentLines.push(val); }
+        });
+        return { position: isNaN(position) ? null : position, taskName: taskName || '새로운 업무', level: isNaN(level) ? 1 : Math.max(0, Math.min(4, level)), assignee: assignee || '', startDate: startDate || '', endDate: endDate || '', status: status || '진행', content: contentLines.join('\n').trim() };
+    };
+
+    window._aiGanttAddDraftPreviewMd = function(draft) {
+        const lvNames = ['대분류(Lv0)', '소요1(Lv1)', '소요2(Lv2)', '소요3(Lv3)', '소요4(Lv4)'];
+        let md = `➕ **새 행 추가 초안**\n- **업무명:** ${draft.taskName}\n- **레벨:** ${lvNames[draft.level] || draft.level}`;
+        if (draft.assignee) md += `\n- **담당자:** ${draft.assignee}`;
+        if (draft.startDate) md += `\n- **시작일:** ${draft.startDate}`;
+        if (draft.endDate) md += `\n- **완료일:** ${draft.endDate}`;
+        if (draft.status) md += `\n- **상태:** ${draft.status}`;
+        if (draft.content) md += `\n- **내용:** ${String(draft.content).slice(0, 80)}${String(draft.content).length > 80 ? '...' : ''}`;
+        md += `\n- **삽입 위치:** ${draft.position !== null ? '#G' + draft.position + ' 아래' : '마지막'}`;
+        md += `\n\n💬 이대로 추가하려면 "추가해줘"라고 말씀해주시거나, 아래 [➕ 이대로 추가] 버튼을 눌러주세요.`;
+        return md;
+    };
+
+    window._aiApplyGanttAddDraft = function(draft) {
+        const gd = typeof globalData !== 'undefined' ? globalData : null;
+        if (!gd || gd.length < 1) return { ok: false, error: '데이터 없음' };
+        const ci = window.colIdx || {};
+        const insertAfterIdx = (draft.position !== null && draft.position >= 1 && draft.position < gd.length) ? draft.position : gd.length - 1;
+        const refRow = gd[insertAfterIdx] || gd[1];
+        const newRow = new Array((gd[0] || []).length).fill('');
+        if (refRow) {
+            const skipCols = [ci.no, ci.bogo, ci.start, ci.plan, ci.period, ci.dur1, ci.dur2, ci.dur3, ci.dur4, ci.chart, ci.content, ci.answer, ci.devStage, ci.taskType1, ci.taskType2, ci.taskType3, ci.taskType4];
+            for (let i = 0; i < newRow.length; i++) { if (skipCols.includes(i)) continue; newRow[i] = refRow[i] || ''; }
+        }
+        const lv = draft.level;
+        newRow._level = lv; newRow._origDev = ''; newRow._origT1 = ''; newRow._origT2 = ''; newRow._origT3 = ''; newRow._origT4 = '';
+        if (lv === 0) newRow._origDev = draft.taskName; else if (lv === 1) newRow._origT1 = draft.taskName; else if (lv === 2) newRow._origT2 = draft.taskName; else if (lv === 3) newRow._origT3 = draft.taskName; else newRow._origT4 = draft.taskName;
+        if (ci.assignee !== undefined && ci.assignee !== -1 && draft.assignee) newRow[ci.assignee] = draft.assignee;
+        if (ci.status !== undefined && ci.status !== -1) newRow[ci.status] = draft.status || '진행';
+        if (ci.content !== undefined && ci.content !== -1 && draft.content) newRow[ci.content] = draft.content;
+        newRow._explicitStartTs = null; newRow._explicitPlanTs = null; newRow._startForced = false; newRow._planForced = false; newRow._finalDuration = 1;
+        if (draft.startDate && ci.start !== undefined && ci.start !== -1) { newRow[ci.start] = draft.startDate; newRow._explicitStartTs = new Date(draft.startDate).getTime() || null; newRow._startForced = true; }
+        if (draft.endDate && ci.plan !== undefined && ci.plan !== -1) { newRow[ci.plan] = draft.endDate; newRow._explicitPlanTs = new Date(draft.endDate).getTime() || null; newRow._planForced = true; }
+        if (ci.period !== undefined && ci.period !== -1) newRow[ci.period] = '1';
+        if (lv === 1 && ci.dur1 !== undefined && ci.dur1 !== -1) newRow[ci.dur1] = '1';
+        if (lv === 2 && ci.dur2 !== undefined && ci.dur2 !== -1) newRow[ci.dur2] = '1';
+        if (lv === 3 && ci.dur3 !== undefined && ci.dur3 !== -1) newRow[ci.dur3] = '1';
+        if (lv === 4 && ci.dur4 !== undefined && ci.dur4 !== -1) newRow[ci.dur4] = '1';
+        gd.splice(insertAfterIdx + 1, 0, newRow);
+        logChange(insertAfterIdx + 1, -1, '없음', '행 추가됨 (AI 문답으로 추가)');
+        window.recalculateSchedules();
+        return { ok: true };
+    };
+
+    window._aiApplyPendingGanttAddDraft = function(draftId, btn) {
+        const pending = window._ganttQaPendingAddDraft;
+        if (!pending || pending.id !== draftId) { if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning'); window._renderGanttQaMessages(); return; }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ 추가 중...'; }
+        const res = window._aiApplyGanttAddDraft(pending);
+        window._ganttQaPendingAddDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: res.ok ? `✅ "${pending.taskName}" 업무를 새로 추가했습니다.` : `⚠️ 추가 실패: ${res.error}`, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+    window._aiCancelPendingGanttAddDraft = function(draftId) {
+        if (window._ganttQaPendingAddDraft && window._ganttQaPendingAddDraft.id === draftId) window._ganttQaPendingAddDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: '➕ 행 추가를 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+
+    // 💡 [2026-09-03 확장] 기존 SET_ALARM/CLEAR_ALARM 처리에 Gantt 직접 조작 태그 6종을 추가.
+    //    한 답변에 여러 태그가 올 수 있도록 replace+루프 방식으로 전환 — 처리 결과는 텍스트 끝에 모아 붙임.
     window._applyGanttQaActions = function(text) {
-        const mSet = text.match(/\[\[ACTION:SET_ALARM:(\d+)\]\]/);
-        if (mSet) {
-            const cleaned = text.replace(mSet[0], '').trim();
-            const res = window._aiAssistSetAlarm(parseInt(mSet[1], 10));
-            if (!res.ok) return cleaned + '\n\n⚠️ 지정한 업무를 찾지 못해 알람을 설정하지 못했습니다.';
-            return cleaned + (res.alreadyOn
-                ? `\n\n📌 "${res.taskName}" 업무는 이미 알람이 켜져 있었습니다.`
-                : `\n\n✅ "${res.taskName}" 업무에 알람을 설정했습니다.`);
-        }
-        const mClear = text.match(/\[\[ACTION:CLEAR_ALARM:(\d+)\]\]/);
-        if (mClear) {
-            const cleaned = text.replace(mClear[0], '').trim();
-            const res = window._aiAssistClearAlarm(parseInt(mClear[1], 10));
-            if (!res.ok) return cleaned + '\n\n⚠️ 지정한 업무를 찾지 못해 알람을 해제하지 못했습니다.';
-            return cleaned + (res.alreadyOff
-                ? `\n\n📌 "${res.taskName}" 업무는 이미 알람이 꺼져 있었습니다.`
-                : `\n\n✅ "${res.taskName}" 업무의 알람을 해제했습니다.`);
-        }
+        const results = [];
+
+        // SET_ALARM (한 답변에 여러 행 가능)
+        text = text.replace(/\[\[ACTION:SET_ALARM:(\d+)\]\]/g, function(_, n) {
+            const res = window._aiAssistSetAlarm(parseInt(n, 10));
+            if (!res.ok) { results.push('⚠️ 알람을 설정하지 못했습니다 (#G' + n + ').'); return ''; }
+            results.push(res.alreadyOn ? `📌 "${res.taskName}" 업무는 이미 알람이 켜져 있었습니다.` : `✅ "${res.taskName}" 업무에 알람을 설정했습니다.`);
+            return '';
+        });
+
+        // CLEAR_ALARM
+        text = text.replace(/\[\[ACTION:CLEAR_ALARM:(\d+)\]\]/g, function(_, n) {
+            const res = window._aiAssistClearAlarm(parseInt(n, 10));
+            if (!res.ok) { results.push('⚠️ 알람을 해제하지 못했습니다 (#G' + n + ').'); return ''; }
+            results.push(res.alreadyOff ? `📌 "${res.taskName}" 업무는 이미 알람이 꺼져 있었습니다.` : `✅ "${res.taskName}" 업무의 알람을 해제했습니다.`);
+            return '';
+        });
+
+        // DELETE_ROW — 즉시 실행 (Undo로 복구 가능)
+        text = text.replace(/\[\[ACTION:DELETE_ROW:(\d+)\]\]/g, function(_, n) {
+            const res = window._aiAssistDeleteRow(parseInt(n, 10));
+            if (!res.ok) { results.push('⚠️ 행을 삭제하지 못했습니다 (#G' + n + ').'); return ''; }
+            results.push(`🗑️ "${res.taskName}" 업무 (#G${n})를 삭제했습니다. (되돌리려면 Ctrl+Z)`);
+            return '';
+        });
+
+        // SET_STATUS — 상태 변경
+        text = text.replace(/\[\[ACTION:SET_STATUS:(\d+):([^\]]+)\]\]/g, function(_, n, status) {
+            const res = window._aiAssistSetStatus(parseInt(n, 10), status.trim());
+            if (!res.ok) { results.push('⚠️ 상태를 변경하지 못했습니다 (#G' + n + ').'); return ''; }
+            results.push(`✅ "${res.taskName}" 상태: **${res.from || '(없음)'} → ${res.to}**`);
+            return '';
+        });
+
+        // TOGGLE_KEY — 일정 잠금 토글
+        text = text.replace(/\[\[ACTION:TOGGLE_KEY:(\d+)\]\]/g, function(_, n) {
+            const res = window._aiAssistToggleKey(parseInt(n, 10));
+            if (!res.ok) { results.push('⚠️ 잠금 상태를 변경하지 못했습니다 (#G' + n + ').'); return ''; }
+            results.push(`✅ "${res.taskName}" 일정: ${res.locked ? '🔒 고정으로 설정' : '🔓 자동으로 해제'}`);
+            return '';
+        });
+
+        // SET_LEVEL — WBS 레벨 변경
+        text = text.replace(/\[\[ACTION:SET_LEVEL:(\d+):(\d+)\]\]/g, function(_, n, lv) {
+            const res = window._aiAssistSetLevel(parseInt(n, 10), parseInt(lv, 10));
+            if (!res.ok) { results.push('⚠️ 레벨을 변경하지 못했습니다 (#G' + n + ').'); return ''; }
+            if (res.sameLevel) results.push(`📌 "${res.taskName}" 업무는 이미 레벨 ${lv}입니다.`);
+            else results.push(`✅ "${res.taskName}" 레벨: **Lv${res.from} → Lv${res.to}**`);
+            return '';
+        });
+
+        // MOVE_ROW — N칸 이동
+        text = text.replace(/\[\[ACTION:MOVE_ROW:(\d+):(UP|DOWN)(?::(\d+))?\]\]/gi, function(_, n, dir, steps) {
+            const res = window._aiAssistMoveRow(parseInt(n, 10), dir.toUpperCase(), steps ? parseInt(steps, 10) : 1);
+            if (!res.ok) { results.push('⚠️ 행을 이동하지 못했습니다 (#G' + n + ').'); return ''; }
+            results.push(`✅ "${res.taskName}" 업무를 ${dir.toUpperCase() === 'UP' ? '위' : '아래'}로 ${steps || 1}칸 이동했습니다.`);
+            return '';
+        });
+
+        // MOVE_ROW_BEFORE — 특정 행 앞에 배치
+        text = text.replace(/\[\[ACTION:MOVE_ROW_BEFORE:(\d+):(\d+)\]\]/g, function(_, src, tgt) {
+            const res = window._aiAssistMoveRowBefore(parseInt(src, 10), parseInt(tgt, 10));
+            if (!res.ok) { results.push('⚠️ 행 순서를 변경하지 못했습니다 (#G' + src + ' → #G' + tgt + ').'); return ''; }
+            results.push(`✅ "${res.srcName}" 업무를 "${res.tgtName}" 업무 앞으로 이동했습니다.`);
+            return '';
+        });
+
+        text = text.trim();
+        if (results.length) text += '\n\n' + results.join('\n');
         return text;
     };
 
@@ -763,11 +972,65 @@
                 }
             }
 
+            // 💡 [2026-09-03 신규] "✏️ Gantt 수정 초안" — [[GANTT_EDIT_DRAFT:번호]] 파싱 → pending 저장 → 미리보기
+            let ganttEditDraftIdThisTurn = null;
+            const mGanttEdit = text.match(/\[\[GANTT_EDIT_DRAFT:(\d+)\]\]([\s\S]*?)\[\[\/GANTT_EDIT_DRAFT\]\]/);
+            if (mGanttEdit) {
+                const parsedGEdit = window._parseGanttEditDraftBlock(mGanttEdit[2]);
+                const gEditDraft = window._aiBuildGanttEditDraft(parseInt(mGanttEdit[1], 10), parsedGEdit);
+                if (!gEditDraft.ok) {
+                    text = text.replace(mGanttEdit[0], '⚠️ 해당 업무 행을 찾지 못해 수정 초안을 만들 수 없습니다.').trim();
+                } else {
+                    window._ganttQaPendingEditDraft = gEditDraft;
+                    ganttEditDraftIdThisTurn = gEditDraft.id;
+                    text = text.replace(mGanttEdit[0], window._aiGanttEditDraftPreviewMd(gEditDraft)).trim();
+                }
+            }
+            const mApplyEditConfirm = text.match(/\[\[ACTION:APPLY_GANTT_EDIT:CONFIRM\]\]/);
+            if (mApplyEditConfirm) {
+                text = text.replace(mApplyEditConfirm[0], '').trim();
+                if (!window._ganttQaPendingEditDraft) {
+                    text += '\n\n⚠️ 아직 확정할 Gantt 수정 초안이 없습니다. 먼저 수정 내용을 말씀해주세요.';
+                } else {
+                    const pendingGEdit = window._ganttQaPendingEditDraft;
+                    const applyGEditRes = window._aiApplyGanttEditDraft(pendingGEdit);
+                    text += applyGEditRes.ok
+                        ? `\n\n✅ "${pendingGEdit.currentLabel}" 업무 수정을 적용했습니다.`
+                        : `\n\n⚠️ 수정 실패: ${applyGEditRes.error}`;
+                    window._ganttQaPendingEditDraft = null;
+                }
+            }
+
+            // 💡 [2026-09-03 신규] "➕ 새 행 추가 초안" — [[GANTT_ADD_DRAFT]] 파싱 → pending 저장 → 미리보기
+            let ganttAddDraftIdThisTurn = null;
+            const mGanttAdd = text.match(/\[\[GANTT_ADD_DRAFT\]\]([\s\S]*?)\[\[\/GANTT_ADD_DRAFT\]\]/);
+            if (mGanttAdd) {
+                const parsedGAdd = window._parseGanttAddDraftBlock(mGanttAdd[1]);
+                const gAddDraft = { ok: true, id: 'ganttAdd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), ...parsedGAdd };
+                window._ganttQaPendingAddDraft = gAddDraft;
+                ganttAddDraftIdThisTurn = gAddDraft.id;
+                text = text.replace(mGanttAdd[0], window._aiGanttAddDraftPreviewMd(gAddDraft)).trim();
+            }
+            const mApplyAddConfirm = text.match(/\[\[ACTION:APPLY_GANTT_ADD:CONFIRM\]\]/);
+            if (mApplyAddConfirm) {
+                text = text.replace(mApplyAddConfirm[0], '').trim();
+                if (!window._ganttQaPendingAddDraft) {
+                    text += '\n\n⚠️ 아직 확정할 새 행 추가 초안이 없습니다. 먼저 추가 내용을 말씀해주세요.';
+                } else {
+                    const pendingGAdd = window._ganttQaPendingAddDraft;
+                    const applyGAddRes = window._aiApplyGanttAddDraft(pendingGAdd);
+                    text += applyGAddRes.ok
+                        ? `\n\n✅ "${pendingGAdd.taskName}" 업무를 새로 추가했습니다.`
+                        : `\n\n⚠️ 추가 실패: ${applyGAddRes.error}`;
+                    window._ganttQaPendingAddDraft = null;
+                }
+            }
+
             window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
             // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
             //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
             //    AI에게 다시 보여줄 수 있게 한다.
-            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn, noticeDraftId: noticeDraftIdThisTurn, alarmDraftId: alarmDraftIdThisTurn });
+            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn, noticeDraftId: noticeDraftIdThisTurn, alarmDraftId: alarmDraftIdThisTurn, ganttEditDraftId: ganttEditDraftIdThisTurn, ganttAddDraftId: ganttAddDraftIdThisTurn });
         } catch (e) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });

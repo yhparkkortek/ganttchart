@@ -947,6 +947,69 @@
      - 메일과 무관한 새로운 질문이면 → 평소처럼 그 질문에만 답하고 메일 관련 태그는 아무것도 붙이지 마세요.
 3. 위에서 설명한 [[ACTION:SEND_MAIL:CONFIRM]] 태그는 오직 직전에 보여준 초안을 사용자가 명확히 확정했을 때만 쓰세요 — 확신이 없으면 태그를 붙이지 말고 되물어보세요(실제로 메일이 발송되는 기능이므로 신중해야 합니다).
 
+✏️ "행 추가/삭제/이동/상태·레벨·날짜·이름·담당 변경" 유형 요청에 대한 필수 규칙 (실제로 Gantt 데이터를 바꾸는 기능):
+[업무 목록]의 "#G숫자"에서 G 뒤 숫자가 그 행의 고유 번호입니다. 아래 기능들은 Gantt 업무에만 적용됩니다.
+
+🗑️ 행 삭제 ("삭제해줘", "지워줘"):
+평소처럼 자연스럽게 답변한 뒤, 답변 맨 마지막 줄에 정확히 이 형식만 추가하세요(태그 안 숫자는 G 빼고 숫자만):
+[[ACTION:DELETE_ROW:번호]]
+여러 행 삭제 요청 시 각각 한 줄씩. 이 태그는 즉시 실행됩니다 — 되돌리려면 Ctrl+Z/Undo가 필요하다고 안내하세요.
+
+📊 상태 변경 ("진행/완료/대기/보류로 바꿔줘"):
+[[ACTION:SET_STATUS:번호:완료]]  (상태값은 반드시 진행/완료/대기/보류 중 정확히 하나)
+여러 행은 각각 한 줄씩.
+
+🔒 일정 잠금 토글 ("잠금/고정 걸어줘", "열쇠 표시해줘", "자동으로 바꿔줘", "잠금 해제해줘"):
+[[ACTION:TOGGLE_KEY:번호]]
+이미 잠겨있으면 자동으로 해제, 자동이면 잠금으로 전환합니다.
+
+📐 WBS 레벨 변경 ("레벨 2로 바꿔줘", "한 단계 낮춰줘/높여줘"):
+[[ACTION:SET_LEVEL:번호:레벨]]  (레벨은 정수 0~4)
+현재 레벨에서 "한 단계"는 ±1, 절대값 지정이면 그 숫자를 바로 넣으세요.
+
+⬆️⬇️ 행 이동 ("위로/아래로 N칸 이동해줘", "10칸 위로"):
+[[ACTION:MOVE_ROW:번호:UP:칸수]]  또는  [[ACTION:MOVE_ROW:번호:DOWN:칸수]]
+칸수 생략 시 1칸으로 처리. 예: "#G176을 3칸 위로" → [[ACTION:MOVE_ROW:176:UP:3]]
+
+🔀 특정 행 앞(위)에 배치 ("176을 190 위에/앞에 놓아줘", "190번 전에 넣어줘"):
+[[ACTION:MOVE_ROW_BEFORE:이동할번호:기준번호]]
+예: "#G176을 #G190 위에" → [[ACTION:MOVE_ROW_BEFORE:176:190]]
+주의: 두 행이 같은 WBS 트리 내에 있을 때만 의도대로 작동합니다.
+
+위 6가지 태그(DELETE_ROW/SET_STATUS/TOGGLE_KEY/SET_LEVEL/MOVE_ROW/MOVE_ROW_BEFORE)는 확인 없이 즉시 실행됩니다. 요청이 불분명하면 먼저 확인을 구하세요.
+
+📝 행 추가 / 업무명·날짜·담당 수정 (사람 확인을 거친 뒤에만 적용):
+아래 두 기능은 "① 초안 작성 → ② 사용자 확인 → ③ 적용"의 2단계 왕복으로만 동작합니다.
+
+**새 행 추가 요청** — 아래 형식으로 초안을 작성해 답변 맨 마지막에 붙이세요:
+[[GANTT_ADD_DRAFT]]
+위치: 번호 (이 번호의 행 바로 아래에 삽입 — 생략하면 마지막에 추가)
+업무명: 새 업무명
+레벨: 1 (0~4, 생략하면 1)
+담당: 담당자 이름 (생략 가능)
+시작일: YYYY-MM-DD (생략 가능)
+완료일: YYYY-MM-DD (생략 가능)
+상태: 진행 (생략하면 진행)
+내용: 업무 상세 내용 (생략 가능)
+[[/GANTT_ADD_DRAFT]]
+- 이 턴에는 확정 태그를 붙이지 마세요 — 초안만 보여주고 사용자 확인을 기다리세요.
+- 사용자가 "추가해줘/이대로 해줘/네" 등으로 확정하면 → [[ACTION:APPLY_GANTT_ADD:CONFIRM]]
+
+**기존 행 수정 요청 (업무명·담당·날짜·상태·내용 변경)** — 아래 형식으로 초안을 작성해 답변 맨 마지막에 붙이세요:
+[[GANTT_EDIT_DRAFT:번호]]
+업무명: 바꿀 이름 (생략하면 변경 안 함)
+담당: 바꿀 담당자 (생략하면 변경 안 함)
+시작일: YYYY-MM-DD (생략하면 변경 안 함)
+완료일: YYYY-MM-DD (생략하면 변경 안 함)
+상태: 완료 (생략하면 변경 안 함)
+내용: 바꿀 내용 (생략하면 변경 안 함)
+[[/GANTT_EDIT_DRAFT]]
+- 사용자가 명시한 항목만 적고, 변경 안 할 항목의 줄은 통째로 생략하세요.
+- 이 턴에는 확정 태그를 붙이지 마세요 — 초안만 보여주고 사용자 확인을 기다리세요.
+- 사용자가 "적용해줘/이대로 해줘/네" 등으로 확정하면 → [[ACTION:APPLY_GANTT_EDIT:CONFIRM]]
+- 수정 요청이 오면 → 해당 블록을 처음부터 다시 통째로 출력하세요(이전 초안 대체).
+- 취소 요청이면 → 태그 없이 "네, 수정을 취소했습니다"라고만 답하세요.
+
 🌐 다른 프로젝트 조회 규칙 (기본은 항상 지금 열려있는 이 프로젝트 기준으로 답변하되, 사용자가 다른 프로젝트를 물으면 전체 프로젝트를 열람해서 답할 수 있는 기능):
 아래 [다른 프로젝트 목록]은 지금 열려있는 이 프로젝트를 제외한, 전체 등록된 다른 프로젝트들의 가벼운 목록(이름/고객사/담당자)입니다 — 이 목록엔 업무 상세 데이터가 없으니, 목록만 보고 다른 프로젝트의 업무 내용을 안다고 착각하거나 지어내지 마세요.
 1. **기본값**: 질문에 특정 프로젝트를 콕 집어 언급하지 않았거나, [다른 프로젝트 목록]에 없는 "이 프로젝트"를 가리키는 표현(예: "이 프로젝트", "여기", 프로젝트명 언급 없음)이면 — 항상 지금까지처럼 위쪽 [프로젝트]/[업무 목록] 등 "지금 열려있는 이 프로젝트" 데이터만 근거로 답하세요. 다른 프로젝트 조회는 시도하지 마세요.
@@ -999,7 +1062,7 @@ ${historyText}
 [사용자의 새 질문]
 ${question}
 
-위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 "🔔 알람"/"📧 원문 메일"/"📤 메일 작성/발송"/"🌐 다른 프로젝트 조회" 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:CLEAR_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] / [[MAIL_DRAFT]]...[[/MAIL_DRAFT]] / [[ACTION:SEND_MAIL:CONFIRM]] / [[ACTION:LOAD_PROJECT:번호]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
+위 질문에 대한 답변만 작성하세요. 데이터 값을 담는 JSON 응답은 쓰지 마세요(단, 위 규칙에 따른 [[ACTION:SET_ALARM:번호]] / [[ACTION:CLEAR_ALARM:번호]] / [[ACTION:VIEW_MAIL:번호]] / [[MAIL_DRAFT]]...[[/MAIL_DRAFT]] / [[ACTION:SEND_MAIL:CONFIRM]] / [[ACTION:LOAD_PROJECT:번호]] / [[ACTION:DELETE_ROW:번호]] / [[ACTION:SET_STATUS:번호:상태]] / [[ACTION:TOGGLE_KEY:번호]] / [[ACTION:SET_LEVEL:번호:레벨]] / [[ACTION:MOVE_ROW:번호:방향:칸수]] / [[ACTION:MOVE_ROW_BEFORE:번호:번호]] / [[GANTT_EDIT_DRAFT:번호]]...[[/GANTT_EDIT_DRAFT]] / [[ACTION:APPLY_GANTT_EDIT:CONFIRM]] / [[GANTT_ADD_DRAFT]]...[[/GANTT_ADD_DRAFT]] / [[ACTION:APPLY_GANTT_ADD:CONFIRM]] 태그는 예외입니다). 가독성을 위한 마크다운은 적극 사용하세요: 굵게(**제목**)로 소제목을 달고, "- " 글머리 기호로 항목을 나열하고, 필요하면 그 아래 두 칸 들여쓴 "  - "로 하위 항목(내용/조치 사항 등)을 붙이세요. 여러 이슈를 정리할 때는 이슈별로 소제목(굵게) 하나 + 하위 글머리 기호 여러 개 구조를 기본으로 쓰세요.`;
     };
 
     // 💡 위 원본 함수를 실데이터 대신 "${토큰}" 문자열 그 자체로 호출해서, 사용자가 편집할 수 있는
@@ -1249,12 +1312,28 @@ ${question}
                     <button onclick="window._aiCancelPendingAlarmDraft('${m.alarmDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
                 </div>`
                 : '';
+            // 💡 [2026-09-03 신규] Gantt 수정 초안 버튼 (✏️ 이대로 적용 / 취소)
+            const ganttEditDraftHtml = (!isUser && m.ganttEditDraftId && window._ganttQaPendingEditDraft && window._ganttQaPendingEditDraft.id === m.ganttEditDraftId)
+                ? `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px;">
+                    <button onclick="window._aiApplyPendingGanttEditDraft('${m.ganttEditDraftId}', this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✏️ 이대로 적용</button>
+                    <button onclick="window._aiCancelPendingGanttEditDraft('${m.ganttEditDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
+                </div>`
+                : '';
+            // 💡 [2026-09-03 신규] Gantt 새 행 추가 초안 버튼 (➕ 이대로 추가 / 취소)
+            const ganttAddDraftHtml = (!isUser && m.ganttAddDraftId && window._ganttQaPendingAddDraft && window._ganttQaPendingAddDraft.id === m.ganttAddDraftId)
+                ? `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px;">
+                    <button onclick="window._aiApplyPendingGanttAddDraft('${m.ganttAddDraftId}', this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➕ 이대로 추가</button>
+                    <button onclick="window._aiCancelPendingGanttAddDraft('${m.ganttAddDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
+                </div>`
+                : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
                 ${mailDraftHtml ? `<div style="max-width:82%; width:100%;">${mailDraftHtml}</div>` : ''}
                 ${noticeDraftHtml ? `<div style="max-width:82%; width:100%;">${noticeDraftHtml}</div>` : ''}
                 ${alarmDraftHtml ? `<div style="max-width:82%; width:100%;">${alarmDraftHtml}</div>` : ''}
+                ${ganttEditDraftHtml ? `<div style="max-width:82%; width:100%;">${ganttEditDraftHtml}</div>` : ''}
+                ${ganttAddDraftHtml ? `<div style="max-width:82%; width:100%;">${ganttAddDraftHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;
@@ -1301,6 +1380,138 @@ ${question}
             if (alarmPanel && alarmPanel.classList.contains('active') && window.renderAlarmTab) window.renderAlarmTab();
         }
         return { ok: true, alreadyOff: alreadyOff, taskName: label };
+    };
+
+    // ── 💡 [2026-09-03 신규] AI 문답 Gantt 직접 조작 헬퍼 ──────────────────────────────────────
+    //    알람(SET/CLEAR_ALARM)과 동일한 설계 — globalData를 직접 수정하고 recalculateSchedules 호출.
+    //    오류 시 { ok: false } 반환, 성공 시 { ok: true, taskName, ... } 반환.
+
+    // 공통: 레벨별 업무명 추출 (내부 유틸 — 아래 함수들이 공유)
+    const _aiGetTaskLabel = function(row) {
+        if (!row) return '(알 수 없음)';
+        return (row._level === 0 ? row._origDev : row._level === 1 ? row._origT1
+            : row._level === 2 ? row._origT2 : row._level === 3 ? row._origT3 : row._origT4) || '(제목없음)';
+    };
+
+    // 🗑️ 행 삭제 — 확인 모달 없이 즉시 삭제 (AI 문답 전용 경로 / Undo로 복구 가능)
+    window._aiAssistDeleteRow = function(rowIndex) {
+        const row = typeof globalData !== 'undefined' && globalData && globalData[rowIndex];
+        if (!row || row._level === undefined) return { ok: false };
+        const label = _aiGetTaskLabel(row);
+        globalData.splice(rowIndex, 1);
+        window.changeLogs.push({
+            time: new Date().toLocaleString('ko-KR'),
+            userName: window.currentUserName || '비로그인',
+            rowName: rowIndex,
+            colName: '행 조작',
+            oldVal: label,
+            newVal: 'AI 문답으로 삭제됨'
+        });
+        window.recalculateSchedules();
+        return { ok: true, taskName: label };
+    };
+
+    // 📊 상태 변경 (진행/완료/대기/보류)
+    window._aiAssistSetStatus = function(rowIndex, status) {
+        const row = typeof globalData !== 'undefined' && globalData && globalData[rowIndex];
+        if (!row || row._level === undefined) return { ok: false };
+        if (typeof colIdx === 'undefined' || colIdx.status === -1) return { ok: false, error: '상태 열 없음' };
+        const label = _aiGetTaskLabel(row);
+        const oldStatus = row[colIdx.status] || '';
+        row[colIdx.status] = status;
+        logChange(rowIndex, colIdx.status, '상태 변경', `${oldStatus} → ${status}`, 'AI 문답으로 변경');
+        window.recalculateSchedules();
+        return { ok: true, taskName: label, from: oldStatus, to: status };
+    };
+
+    // 🔒 일정 잠금/해제 토글 (열쇠 표시)
+    window._aiAssistToggleKey = function(rowIndex) {
+        const row = typeof globalData !== 'undefined' && globalData && globalData[rowIndex];
+        if (!row || row._level === undefined) return { ok: false };
+        const label = _aiGetTaskLabel(row);
+        const wasLocked = !!(row._startForced && row._planForced);
+        if (window._applyScheduleLockToIndices) {
+            window._applyScheduleLockToIndices([rowIndex], !wasLocked, true);
+        } else {
+            // 폴백: 직접 처리
+            if (!wasLocked) {
+                if (typeof colIdx !== 'undefined' && colIdx.start !== -1 && row._calcStartTs) row[colIdx.start] = formatTsToYMD(row._calcStartTs);
+                if (typeof colIdx !== 'undefined' && colIdx.plan !== -1 && row._calcPlanTs) row[colIdx.plan] = formatTsToYMD(row._calcPlanTs);
+                row._startForced = true; row._planForced = true;
+            } else {
+                row._startForced = false; row._planForced = false;
+            }
+        }
+        logChange(rowIndex, -1, '일정 모드', (!wasLocked ? '🔒 고정' : '🔓 자동') + ' (AI 문답으로 변경)');
+        window.recalculateSchedules();
+        return { ok: true, taskName: label, locked: !wasLocked };
+    };
+
+    // 📐 WBS 레벨 변경 (0~4)
+    window._aiAssistSetLevel = function(rowIndex, newLevel) {
+        const row = typeof globalData !== 'undefined' && globalData && globalData[rowIndex];
+        if (!row || row._level === undefined) return { ok: false };
+        newLevel = Math.max(0, Math.min(4, parseInt(newLevel, 10)));
+        if (isNaN(newLevel)) return { ok: false, error: '잘못된 레벨 값' };
+        const oldLevel = row._level;
+        if (oldLevel === newLevel) return { ok: true, taskName: _aiGetTaskLabel(row), sameLevel: true };
+        const taskTxt = (_aiGetTaskLabel(row) || '새로운 업무').trim();
+        row._level = newLevel;
+        row._origDev = ''; row._origT1 = ''; row._origT2 = ''; row._origT3 = ''; row._origT4 = '';
+        if (newLevel === 0) row._origDev = taskTxt;
+        else if (newLevel === 1) row._origT1 = taskTxt;
+        else if (newLevel === 2) row._origT2 = taskTxt;
+        else if (newLevel === 3) row._origT3 = taskTxt;
+        else row._origT4 = taskTxt;
+        const dur = row._finalDuration || 1;
+        if (typeof colIdx !== 'undefined') {
+            if (colIdx.dur1 !== -1) row[colIdx.dur1] = (newLevel === 1) ? dur.toString() : '';
+            if (colIdx.dur2 !== -1) row[colIdx.dur2] = (newLevel === 2) ? dur.toString() : '';
+            if (colIdx.dur3 !== -1) row[colIdx.dur3] = (newLevel === 3) ? dur.toString() : '';
+            if (colIdx.dur4 !== -1) row[colIdx.dur4] = (newLevel === 4) ? dur.toString() : '';
+        }
+        logChange(rowIndex, -1, '계층 변경', `Lv${oldLevel} → Lv${newLevel}`, 'AI 문답으로 변경');
+        window.recalculateSchedules();
+        return { ok: true, taskName: taskTxt, from: oldLevel, to: newLevel };
+    };
+
+    // ⬆️⬇️ 행 N칸 이동 (direction: 'UP'|'DOWN', steps: 칸 수)
+    window._aiAssistMoveRow = function(rowIndex, direction, steps) {
+        if (typeof globalData === 'undefined' || !globalData || !globalData[rowIndex]) return { ok: false };
+        const label = _aiGetTaskLabel(globalData[rowIndex]);
+        steps = Math.max(1, Math.min(50, parseInt(steps, 10) || 1));
+        const dir = String(direction).toUpperCase() === 'DOWN' ? 1 : -1;
+        let cur = rowIndex;
+        for (let i = 0; i < steps; i++) {
+            const next = window.moveRow(cur, dir);
+            if (next == null) break;
+            cur = next;
+        }
+        return { ok: true, taskName: label };
+    };
+
+    // 🔀 행 srcIdx를 targetIdx 바로 앞으로 이동 (서브트리 포함)
+    window._aiAssistMoveRowBefore = function(srcIdx, targetIdx) {
+        if (typeof globalData === 'undefined' || !globalData) return { ok: false };
+        const srcRow = globalData[srcIdx]; const tgtRow = globalData[targetIdx];
+        if (!srcRow || srcRow._level === undefined || !tgtRow || tgtRow._level === undefined) return { ok: false };
+        if (srcIdx === targetIdx) return { ok: false, error: '같은 행입니다' };
+        const srcLabel = _aiGetTaskLabel(srcRow); const tgtLabel = _aiGetTaskLabel(tgtRow);
+        // src 서브트리 범위 계산
+        const srcLv = srcRow._level;
+        let srcEnd = srcIdx;
+        for (let j = srcIdx + 1; j < globalData.length; j++) {
+            if (typeof globalData[j]._level === 'number' && globalData[j]._level > srcLv) srcEnd = j;
+            else break;
+        }
+        const srcBlock = globalData.splice(srcIdx, srcEnd - srcIdx + 1);
+        // 제거 후 targetIdx 재계산
+        let newTarget = targetIdx > srcIdx ? targetIdx - srcBlock.length : targetIdx;
+        newTarget = Math.max(1, Math.min(globalData.length, newTarget)); // 0번(헤더) 앞엔 불가
+        globalData.splice(newTarget, 0, ...srcBlock);
+        logChange(srcIdx, -1, '행 이동', `"${srcLabel}" → "${tgtLabel}" 앞으로 이동`, 'AI 문답으로 변경');
+        window.recalculateSchedules();
+        return { ok: true, srcName: srcLabel, tgtName: tgtLabel };
     };
 
     // 💡 [2026-08-28 신규 → 같은 날 수정] 위 window._linkifyTaskRefs가 "#98" 옆에 붙여주는 📌 아이콘의
