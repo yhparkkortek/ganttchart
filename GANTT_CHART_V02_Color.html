@@ -1970,17 +1970,24 @@
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
                                font-family:'Malgun Gothic',sans-serif; margin-bottom:8px;"></textarea>
-                    <div style="display:flex; gap:8px;">
-                        <div id="mail-analyze-wrap" style="flex:1; min-width:0;">
-                        <button onclick="window.analyzeMailContent()" id="mail-analyze-btn" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="width:100%; box-sizing:border-box; height:28px; margin:0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
+                    <div id="mail-error" style="display:none; color:#e03131; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-bottom:6px;"></div>
+                    <!-- AI 분석 버튼 — 📥 선택항목 보관함 이동 버튼과 동일 크기/위치 -->
+                    <div id="mail-analyze-wrap">
+                        <button onclick="window.analyzeMailContent()" id="mail-analyze-btn"
+                            onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';"
+                            onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
+                            style="width:100%; box-sizing:border-box; height:36px; margin:0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
                             🤖 AI 분석
                         </button>
-                        </div>
-                        <div id="mail-loading" style="display:none; flex:1; min-width:0;">
-                            <button id="mail-reset-btn" onclick="window.mailResetAnalysis()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="width:100%; box-sizing:border-box; height:28px; padding:0 10px; margin:0; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">⏹ 중단/초기화</button>
-                        </div>
                     </div>
-                    <div id="mail-error" style="display:none; color:#e03131; font-size:11px; padding:8px; background:#fff5f5; border-radius:6px; border:1px solid #f5c6cb; margin-top:6px;"></div>
+                    <div id="mail-loading" style="display:none;">
+                        <button id="mail-reset-btn" onclick="window.mailResetAnalysis()"
+                            onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';"
+                            onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                            style="width:100%; box-sizing:border-box; height:36px; padding:0 10px; margin:0; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">
+                            ⏹ 중단/초기화
+                        </button>
+                    </div>
 
                     <!-- Phase 8: 토픽 오염 감지 배지 + AI 진단 버튼 -->
                     <div style="margin-top:4px; display:flex; gap:6px; align-items:center; min-height:22px;">
