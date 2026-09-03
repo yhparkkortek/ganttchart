@@ -275,6 +275,106 @@
         document.body.appendChild(overlay);
     };
 
+    // ── 메일 매칭 신호 → project_index.json 실시간 갱신 ────────────────────────
+    // 메일이 Project X에 배치될 때마다 키워드를 Drive에 기록 → PC꺼도 소멸 없음.
+    // 다른 사용자가 project_index 읽으면 즉시 반영 (project_index.json은 공유 Drive 파일).
+    var _tpSignalBuffer = {};   // { driveFileId: Set<keyword> }
+    var _tpSignalTimer  = null;
+
+    // 메일 업무명·제목에서 의미 있는 단어 추출 (AI 없음, 결정론적)
+    function _tpExtractMailKw(task, mailRaw) {
+        var kws = [];
+        var push = function(str) {
+            String(str || '').replace(/[<>【】\[\]\(\)「」『』\/\\|,;:]/g, ' ')
+                .split(/\s+/).forEach(function(w) {
+                    w = w.trim();
+                    // 숫자만·1글자·불용어 제외
+                    if (w.length >= 2 && !/^\d+$/.test(w)) kws.push(w);
+                });
+        };
+        push(task && task['업무명']);
+        push(mailRaw && mailRaw.subject);
+        return Array.from(new Set(kws)).slice(0, 8);
+    }
+
+    window._tpAppendMailSignal = function(driveFileId, task, mailRaw) {
+        if (!driveFileId) return;
+        var kws = _tpExtractMailKw(task, mailRaw);
+        if (!kws.length) return;
+        _tpSignalBuffer[driveFileId] = _tpSignalBuffer[driveFileId] || new Set();
+        kws.forEach(function(k) { _tpSignalBuffer[driveFileId].add(k); });
+        // localStorage 즉시 갱신 — 현재 세션에서 바로 효과
+        try {
+            var store = JSON.parse(localStorage.getItem('gantt_topic_profile_v1')) || {};
+            if (store[driveFileId]) {
+                var m = new Set(store[driveFileId].keywords || []);
+                kws.forEach(function(k) { m.add(k); });
+                store[driveFileId].keywords = Array.from(m).slice(0, 15);
+                localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(store));
+            }
+        } catch(e) {}
+        // Drive 갱신 디바운스 30초 — 메일마다 Drive 호출하지 않고 묶어서 처리
+        clearTimeout(_tpSignalTimer);
+        _tpSignalTimer = setTimeout(_tpFlushSignals, 30000);
+    };
+
+    async function _tpFlushSignals() {
+        var buf = _tpSignalBuffer;
+        _tpSignalBuffer = {};
+        var fids = Object.keys(buf);
+        if (!fids.length) return;
+        try {
+            var tokenObj = gapi.client.getToken && gapi.client.getToken();
+            var token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return;
+            var indexFileId = await window.findProjectIndexFile(token);
+            if (!indexFileId) return;
+            var res = await fetch('https://www.googleapis.com/drive/v3/files/' + indexFileId +
+                '?alt=media&supportsAllDrives=true', { headers: { 'Authorization': 'Bearer ' + token } });
+            var indexData = await res.json();
+            if (!indexData || !Array.isArray(indexData.projects)) return;
+            var changed = false;
+            fids.forEach(function(fid) {
+                var entry = indexData.projects.find(function(p) { return p.drive_file_id === fid; });
+                if (!entry) return;
+                var merged = new Set(entry.topicKeywords || []);
+                buf[fid].forEach(function(k) { merged.add(k); });
+                entry.topicKeywords = Array.from(merged).slice(0, 15);
+                changed = true;
+            });
+            if (!changed) return;
+            await fetch('https://www.googleapis.com/upload/drive/v3/files/' + indexFileId +
+                '?uploadType=media&supportsAllDrives=true', {
+                method: 'PATCH',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+                body: JSON.stringify(indexData)
+            });
+            if (window._invalidatePiModalCache) window._invalidatePiModalCache();
+            var totalKw = fids.reduce(function(s, f) { return s + buf[f].size; }, 0);
+            console.log('[토픽 신호] project_index.json 갱신 완료:', fids.length + '개 프로젝트, ' + totalKw + '개 키워드');
+        } catch(e) { console.warn('[토픽 신호] project_index 갱신 실패:', e); }
+    }
+
+    // ── A: 현재 프로젝트 AI 업무 추가 시 자동 프로파일 갱신 ─────────────────────
+    // AI가 등록한 업무가 5개 이상 새로 추가될 때마다 프로파일 백그라운드 재생성
+    window._tpCheckAutoRegen = function() {
+        if (!window._generateTopicProfile || !window.globalData) return;
+        var aiCount = (window.globalData || []).filter(function(r) { return r && r._aiRegistered; }).length;
+        var lastCount = window._tpLastRegenCount || 0;
+        if (aiCount < lastCount + 5) return;  // 아직 +5개 미만
+        window._tpLastRegenCount = aiCount;
+        setTimeout(function() {
+            var apiKey = window.getActiveAiKey && window.getActiveAiKey();
+            if (!apiKey) return;
+            console.log('[토픽 자동갱신] AI 업무 ' + aiCount + '개 증가 → 프로파일 재생성');
+            window._generateTopicProfile().then(function(prof) {
+                if (prof && window.currentDriveFileId && window.saveToGoogleDrive) {
+                    window.saveToGoogleDrive({ suppressAlert: true });
+                }
+            }).catch(function(e) { console.warn('[토픽 자동갱신] 실패', e); });
+        }, 5000); // 5초 딜레이 (렌더링 먼저 완료 후)
+    };
+
     // ── 토픽 프로파일을 getSystemPrompt에 자동 주입 ───────────────────────────
     // getSystemPrompt가 이미 정의된 뒤에 래핑 (04a-core-app-globals.js가 먼저 로드됨)
     (function() {

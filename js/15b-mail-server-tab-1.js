@@ -856,6 +856,8 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
                 logChange(pos, -1, "없음", `메일 자동처리(완전자동)로 배치: ${built.taskName}`);
                 window.recalculateSchedules();
                 if (window.renderGantt) window.renderGantt();
+                // ✅ [A: 토픽 자동갱신] AI 업무 5개 추가마다 현재 프로젝트 프로파일 백그라운드 재생성
+                if (window._tpCheckAutoRegen) window._tpCheckAutoRegen();
                 await window.saveToGoogleDrive(); // 💡 화면에 즉시 반영 + 곧바로 Drive 저장까지
                 return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0 };
             } catch (e) { return { ok: false, reason: 'current_project_insert_failed: ' + e.message }; }
@@ -956,6 +958,9 @@ window._msRegisterToProjectTargets = function(targets, task, mailRawObj, sourceL
             .then(function(result) {
                 if (result.ok) {
                     window.TaskInbox.setStatus(newUid, '자동배치됨', { type: historyType, target: target.file_name, at: new Date().toISOString() });
+                    // ✅ [토픽 신호] 배치 성공 → 해당 프로젝트의 topicKeywords Drive 갱신 (30초 디바운스)
+                    //    PC가 꺼져도 Drive에 남아있어 다른 사용자도 혜택을 받음
+                    if (window._tpAppendMailSignal) window._tpAppendMailSignal(target.drive_file_id, task, mailRawObj);
                 } else {
                     console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태로 유지:', result.reason);
                 }
