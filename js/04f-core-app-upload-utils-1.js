@@ -1078,18 +1078,20 @@ ${recentLogs}
 
         // 💡 [2026-08-28 신규] 리스크/액션추천/총평에 AI가 적어주는 "#98"을 클릭하면 그 업무로 이동할 수
         //    있게 링크로 바꿔준다(window._linkifyTaskRefs — AI 문답 채팅창과 공용 로직).
+        // 💡 [2026-09-03 신규] 각 <li>에 onclick(_aiToggleLineRefs) + cursor:pointer 추가 —
+        //    클릭 시 그 항목 안의 .ai-ref-chip(#G{n} 기간 뱃지)을 토글해서 보여줌/숨김.
         const riskHtml = (r.리스크 && r.리스크.length)
-            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.리스크.map(function(x) { return `<li style="margin-bottom:4px;">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul>'
+            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.리스크.map(function(x) { return `<li style="margin-bottom:4px; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul>'
             : '<div style="color:#999; font-size:12px;">특별한 리스크가 감지되지 않았습니다.</div>';
         const actionHtml = (r.액션추천 && r.액션추천.length)
-            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.액션추천.map(function(x) { return `<li style="margin-bottom:4px;">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul>'
+            ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.액션추천.map(function(x) { return `<li style="margin-bottom:4px; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul>'
             : '<div style="color:#999; font-size:12px;">추천 액션이 없습니다.</div>';
         // 💡 [2026-08-31 신규] "업무 요약" — 기본 프롬프트엔 없는 선택적 항목이라, 커스텀 프롬프트를
         // 안 쓰는 사람에겐 이 값이 항상 빈 배열이다. 그런 경우 리스크/액션추천처럼 "없습니다" 문구를
         // 굳이 보여주지 않고 섹션 자체를 통째로 생략한다(안 쓰는 기능이 빈 칸으로 계속 보이면 어색함).
         const taskSummaryHtml = (r.업무요약 && r.업무요약.length)
             ? '<div style="margin-bottom:14px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">📋 업무 요약</div>'
-                + '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.업무요약.map(function(x) { return `<li style="margin-bottom:4px;">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul></div>'
+                + '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.업무요약.map(function(x) { return `<li style="margin-bottom:4px; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${window._linkifyTaskRefs(escapeHtml(x))}</li>`; }).join('') + '</ul></div>'
             : '';
 
         body.innerHTML = `
@@ -1097,7 +1099,7 @@ ${recentLogs}
             <div style="font-size:11px; color:#999; margin-bottom:12px;">생성 시각: ${genStr}</div>
             <div style="display:flex; align-items:center; gap:10px; padding:14px; background:#f8f9fa; border-radius:8px; margin-bottom:14px;">
                 <span style="font-size:28px;">${r.신호등 || '🟡'}</span>
-                <span style="font-size:13px; font-weight:bold; color:#333;">${window._linkifyTaskRefs(escapeHtml(r.총평 || ''))}</span>
+                <span style="font-size:13px; font-weight:bold; color:#333; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${window._linkifyTaskRefs(escapeHtml(r.총평 || ''))}</span>
             </div>
             <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; text-align:center; font-size:12px;">
                 <div style="padding:8px; background:#e7f6ec; border-radius:6px;"><b style="font-size:16px; color:#2f9e44;">${d.counts.완료 || 0}</b><br>완료</div>

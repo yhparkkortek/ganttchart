@@ -1148,7 +1148,9 @@ ${question}
         const idx = parseInt(n, 10);
         if (_simpleRefJump[p]) {
             const def = _simpleRefJump[p];
-            return `<span class="ai-task-ref" onclick="${def[0]}(${idx}); event.stopPropagation();" title="${_en ? def[1] : def[2]}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${p}${n}</span>`;
+            // 💡 [2026-09-03 신규] CS/MC/EP/MT/AD ref도 .ai-ref-chip 으로 감싸서 기본 숨김
+            //    — 문장 클릭(window._aiToggleLineRefs) 시 함께 나타남
+            return `<span class="ai-ref-chip" style="display:none"><span class="ai-task-ref" onclick="${def[0]}(${idx}); event.stopPropagation();" title="${_en ? def[1] : def[2]}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#${p}${n}</span></span>`;
         }
         const rowIndex = idx;
         const row = (typeof globalData !== 'undefined' && globalData) ? globalData[rowIndex] : null;
@@ -1169,7 +1171,17 @@ ${question}
                 extra += `<span style="color:#888; font-size:11px; margin-left:4px;">${escapeHtml(mailPeople.sender)}</span>`;
             }
         }
-        return `<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#G${n}</span><span class="ai-ref-toggle" onclick="window._aiToggleRefExtra(this); event.stopPropagation();" title="${_en ? 'Show/hide alarm · mail · sender' : '펼치기/접기(알람·원문·발신인)'}">▶</span><span class="ai-ref-extra">${extra}</span>`;
+        // 💡 [2026-09-03 신규] 기간 배지 — globalData 에서 시작일/마감일을 읽어
+        //    "(9/3~9/4)" 형태로 #G{n} 바로 옆에 붙여줌.
+        //    AI 문답은 AI가 답변 텍스트에 기간을 직접 쓰지만, AI 요약(JSON 구조)에선
+        //    생략될 때가 많아서 코드 레벨에서 항상 표시하도록 통일함.
+        const s2 = (typeof colIdx !== 'undefined' && colIdx.start !== -1 && row) ? (row[colIdx.start] || '') : '';
+        const e2 = (typeof colIdx !== 'undefined' && colIdx.plan !== -1 && row) ? (row[colIdx.plan] || '') : '';
+        const dateStr2 = (window._fmtDateRangeShort && (s2 || e2)) ? window._fmtDateRangeShort(s2, e2) : '';
+        const dateBadge = dateStr2 ? `<span style="color:#888; font-size:10.5px; margin-left:3px;">(${dateStr2})</span>` : '';
+        // 💡 [2026-09-03 신규] G-ref 전체(.ai-ref-chip)를 기본 숨김으로 — 문장을 클릭하면
+        //    window._aiToggleLineRefs 가 이 chip 들의 display 를 토글함.
+        return `<span class="ai-ref-chip" style="display:none"><span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#G${n}</span>${dateBadge}<span class="ai-ref-toggle" onclick="window._aiToggleRefExtra(this); event.stopPropagation();" title="${_en ? 'Show/hide alarm · mail · sender' : '펼치기/접기(알람·원문·발신인)'}">▶</span><span class="ai-ref-extra">${extra}</span></span>`;
     };
     window._linkifyTaskRefs = function(escapedText) {
         // 💡 [2026-08-30 확장] 표별 접두사(#G=Gantt, #CS=Customer SPEC, #MC=M.C Table, #EP=Elec Parts SPEC,
@@ -1195,6 +1207,16 @@ ${question}
         if (!extra || !extra.classList.contains('ai-ref-extra')) return;
         const open = extra.classList.toggle('ai-ref-extra-open');
         toggleEl.textContent = open ? '◀' : '▶';
+    };
+    // 💡 [2026-09-03 신규] 문장/항목 클릭 시 그 안의 .ai-ref-chip(기본 숨김 상태인 #G{n} 뱃지)을
+    //    일괄 토글. 이미 chip 내부 요소(링크·토글화살표)를 클릭한 경우엔 stopPropagation으로
+    //    이 함수까지 이벤트가 올라오지 않으므로 별도 예외 처리 불필요.
+    window._aiToggleLineRefs = function(el, event) {
+        if (event) event.stopPropagation();
+        const chips = el.querySelectorAll('.ai-ref-chip');
+        if (!chips.length) return;
+        const showing = chips[0].style.display !== 'none';
+        chips.forEach(function(c) { c.style.display = showing ? 'none' : 'inline'; });
     };
     // 💡 위 "원문" 링크 클릭 시 뜨는 가벼운 읽기전용 모달 — Elec Parts 라이트박스(ep-lightbox-modal)와
     // 동일한 드래그 가능 팝업 패턴 재사용. Mail Analyzer 전체 작업공간을 여는 mailShowRightDetail은
@@ -1242,6 +1264,8 @@ ${question}
         escaped = escaped.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>'); // **굵게**
         escaped = window._linkifyTaskRefs(escaped); // #98 → 클릭 이동 링크
         const lines = escaped.split('\n');
+        // 💡 [2026-09-03 신규] 문장/글머리 div에 onclick(_aiToggleLineRefs) + cursor:pointer 를 추가,
+        //    클릭하면 그 줄 안의 숨겨진 .ai-ref-chip(#G{n} 뱃지)을 토글해서 보여줌/숨김.
         return lines.map(function(line) {
             const heading = line.match(/^(#{1,4})\s+(.*)$/);
             if (heading) return `<div style="font-weight:bold; margin:8px 0 3px;">${heading[2]}</div>`;
@@ -1250,10 +1274,10 @@ ${question}
                 const depth = Math.floor(bullet[1].length / 2);
                 const mark = depth > 0 ? '◦' : '•';
                 const pad = 14 + depth * 16;
-                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px;">${mark}&nbsp;${bullet[2]}</div>`;
+                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${mark}&nbsp;${bullet[2]}</div>`;
             }
             if (line.trim() === '') return '<div style="height:6px;"></div>';
-            return `<div style="margin-bottom:2px;">${line}</div>`;
+            return `<div style="margin-bottom:2px; cursor:pointer;" onclick="window._aiToggleLineRefs(this, event);">${line}</div>`;
         }).join('');
     };
 
