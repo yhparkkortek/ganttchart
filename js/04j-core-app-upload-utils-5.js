@@ -589,15 +589,16 @@
         if (_sumMailKwLbl) _sumMailKwLbl.title = _en
             ? "Aliases/abbreviations to match new mail to this project during auto-collection & analysis. Comma-separated (e.g. S32, STELLAR)\n\n⚠️ Don't enter a person's name — every mail that person sends will auto-match this project regardless of content (their own name always appears in their signature). Names already in the address book are auto-excluded from matching, but it's safest not to add them in the first place."
             : "메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)\n\n⚠️ 사람 이름은 넣지 마세요 — 그 사람이 보내는 모든 메일이 내용과 무관하게 이 프로젝트로 자동 매칭됩니다(서명란에 항상 본인 이름이 들어가기 때문). 주소록에 등록된 이름은 매칭 시 자동으로 제외되지만, 안전하게 처음부터 넣지 않는 걸 권장합니다.";
-        // [Summary 탭] "프로젝트 상태" select — title 툴팁 + 옵션(진행중/완료) 텍스트
+        // [Summary 탭] "프로젝트 상태" select — title 툴팁 + 옵션(DV/MP(EC)/EOL) 텍스트
         const _sumStatusSel = document.getElementById('sum-project-status');
         if (_sumStatusSel) {
             _sumStatusSel.title = _en
-                ? 'Marking a project "Done" grays it out in the "Load Project" list, and — unless turned off in [Settings → Mail Auto-Assign Settings] — also excludes it from new mail auto-matching.'
-                : "완료로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다.";
+                ? 'EOL: grays out in project list and excludes from mail auto-matching. MP(EC): mail-analysis temp project — included in matching. Click cycles DV→EOL→MP(EC)→DV.'
+                : "EOL로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, 새 메일 자동매칭 대상에서도 제외됩니다. MP(EC)는 메일 분석 임시 프로젝트로 매칭 포함. 클릭: DV→EOL→MP(EC) 순환.";
             const _sumStatusOpts = _sumStatusSel.options;
-            if (_sumStatusOpts[0]) _sumStatusOpts[0].textContent = _en ? '🔵 In Progress' : '🔵 진행중';
-            if (_sumStatusOpts[1]) _sumStatusOpts[1].textContent = _en ? '✅ Done' : '✅ 완료';
+            if (_sumStatusOpts[0]) _sumStatusOpts[0].textContent = _en ? '🔵 DV' : '🔵 DV';
+            if (_sumStatusOpts[1]) _sumStatusOpts[1].textContent = _en ? '🟠 MP(EC)' : '🟠 MP(EC)';
+            if (_sumStatusOpts[2]) _sumStatusOpts[2].textContent = _en ? '✅ EOL' : '✅ EOL';
         }
         // 💡 주요 자재 표의 칸 placeholder/버튼 title도 언어에 맞춰 다시 그림(값은 collectMaterialRows(true)로
         //    빈 자유추가 행까지 그대로 보존한 채 다시 렌더링해서, 언어만 바뀌고 입력 중이던 내용은 안 날아감)

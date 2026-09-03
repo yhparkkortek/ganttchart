@@ -525,9 +525,9 @@ window.openMailAutoConfigModal = async function() {
                              mac-interval과 동일하게 localStorage에 개인별로 저장한다(_macSave/getMailAutoCollectCompleted 참고). -->
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
                             <input id="mac-collect-completed" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
-                            <span style="flex:1;">완료 프로젝트도 수집 대상에 포함</span>
+                            <span style="flex:1;">EOL 프로젝트도 수집 대상에 포함</span>
                         </label>
-                        <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 Summary 탭에서 "완료"로 표시한 프로젝트를 새 메일 자동매칭에서 제외합니다(이미 끝난 프로젝트에 실수로 새 업무가 등록되는 걸 방지). 체크하면 완료 프로젝트도 계속 매칭 대상에 포함됩니다.</div>
+                        <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 Summary 탭에서 "EOL"로 표시한 프로젝트를 새 메일 자동매칭에서 제외합니다(이미 끝난 프로젝트에 실수로 새 업무가 등록되는 걸 방지). 체크하면 EOL 프로젝트도 계속 매칭 대상에 포함됩니다. MP(EC) 프로젝트는 이 설정과 무관하게 항상 매칭 대상에 포함됩니다.</div>
                         <!-- 💡 [2026-08-29 이동] AI 업무 보관함 헤더에 있던 "🟠 처리됨 보관 / 🟢 처리됨 자동삭제" 토글을 여기로 옮김 -->
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-top:10px;">
                             <input id="mac-cleanup-auto" type="checkbox" style="width:15px; height:15px; cursor:pointer;">

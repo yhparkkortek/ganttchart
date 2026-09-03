@@ -298,9 +298,10 @@
     //    타이핑하거나 엑셀을 드래그해 저장하면 비밀번호 확인 없이 새 프로젝트가 등록되는 구멍이 있었다.
     //    "새 프로젝트 만들기"라는 화면 초기화 자체는 아직 아무것도 만든 게 아니므로(저장 전까지는
     //    로컬 뷰만 비우는 것) 여기서는 더 이상 비밀번호를 묻지 않고, 실제로 등록(첫 저장)될 때 막는다.
+    // 💡 [2026-09-03] startNewProject는 28-new-project-wizard.js가 로드된 후 래핑됨.
+    //    여기서는 래핑 전 기본 구현만 정의 — 위자드 없이도 동작하도록 폴백으로 유지.
     window.startNewProject = function() {
         if (!confirm(window._t('현재 화면의 내용을 모두 지우고(간트/Summary/Customer SPEC/M.C Table/Address 포함) 새 프로젝트를 시작하시겠습니까?\n(저장하지 않은 변경사항은 사라집니다)', 'Clear all data (Gantt/Summary/Customer SPEC/M.C Table/Address) and start a new project?\n(Unsaved changes will be lost)'))) return;
-
         window._openAsNewSheet('new_' + Date.now(), null, null);
         window._resetToBlankNoConfirm();
     };

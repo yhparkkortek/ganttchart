@@ -1661,7 +1661,15 @@ window._msToggleProjPicker = async function() {
             return;
         }
 
-        listEl.innerHTML = candidates.map(function(c, i) {
+        // 💡 [2026-09-03] 맨 위에 "새 프로젝트 AI 추출" 고정 항목 추가
+        const newProjItem = '<div onclick="window._msPickNewProject()"'
+            + ' onmouseover="this.style.background=\'#e6f6ea\';" onmouseout="this.style.background=\'#f6fff8\';"'
+            + ' style="padding:8px 12px; cursor:pointer; border-bottom:2px solid #a8dab8; background:#f6fff8; transition:background .1s;">'
+            + '<span style="font-weight:bold; color:#1f7a3d; font-size:12.5px;">➕ 새 프로젝트 AI 추출 — 이 메일로 프로젝트 정보 자동 분석</span>'
+            + '<div style="font-size:10.5px; color:#888; margin-top:2px;">Gemini가 메일 내용을 분석해 프로젝트 정보를 채워줍니다. 검토 후 등록하세요.</div>'
+            + '</div>';
+
+        listEl.innerHTML = newProjItem + candidates.map(function(c, i) {
             // 표시 레이블: 모델명+인치 (없으면 파일명), 부제: 고객사 · 담당자
             const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '(프로젝트)';
             const sub   = [c.customer, c.assignee ? '담당: ' + c.assignee : ''].filter(Boolean).join(' · ');
@@ -1690,6 +1698,47 @@ window._msSelectProjPickerItem = function(idx) {
     const btn    = document.getElementById('ms-proj-picker-btn');
     if (listEl) listEl.style.display = 'none';
     if (btn) btn.textContent = '📋 프로젝트 선택 ▾';
+};
+
+// ─── 💡 [2026-09-03] "새 프로젝트 AI 추출" — 미분류 메일 재분석 모달에서 선택 시
+//    1. 드롭다운 닫기
+//    2. Gemini로 메일 내용 분석 → 프로젝트 필드 추출
+//    3. 28-new-project-wizard.js의 _npwOpen으로 위자드 열기 (MP(EC) 상태, AI pre-fill)
+window._msPickNewProject = async function() {
+    // 드롭다운 닫기
+    const listEl = document.getElementById('ms-proj-picker-list');
+    const btn    = document.getElementById('ms-proj-picker-btn');
+    if (listEl) listEl.style.display = 'none';
+    if (btn) btn.textContent = '📋 프로젝트 선택 ▾';
+
+    const fileName = window._msReanalyzeTarget;
+    const r = (window._msResults || []).find(function(x) { return x.fileName === fileName; });
+    if (!r) {
+        if (window._npwOpen) window._npwOpen({}, 'MP(EC)');
+        return;
+    }
+
+    // 로딩 표시
+    if (btn) { btn.textContent = '⏳ AI 분석 중...'; btn.disabled = true; }
+    try {
+        let prefill = {};
+        if (window._npwExtractFromMail) {
+            prefill = await window._npwExtractFromMail(r);
+        }
+        if (btn) { btn.textContent = '📋 프로젝트 선택 ▾'; btn.disabled = false; }
+
+        // 위자드 열기 (MP(EC) 상태 자동 설정)
+        if (window._npwOpen) {
+            window._npwOpen(prefill, 'MP(EC)');
+        } else {
+            alert('위자드 모듈이 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도해주세요.');
+        }
+    } catch (e) {
+        if (btn) { btn.textContent = '📋 프로젝트 선택 ▾'; btn.disabled = false; }
+        console.warn('[_msPickNewProject]', e);
+        // 추출 실패 시 빈 위자드라도 열기
+        if (window._npwOpen) window._npwOpen({}, 'MP(EC)');
+    }
 };
 
 // 💡 미분류 메일 1건을 (선택적 사용자 힌트와 함께) 다시 분석해서 그 자리에서 결과를 갱신한다.

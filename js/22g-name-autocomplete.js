@@ -175,13 +175,15 @@ window.attachAddressAutocomplete = function(inputEl, emailEl, isMulti, onPick) {
     bindMember3Autocomplete('sum-member3-col-b');
 })();
 
-// 💡 [2026-08-29 신규] Summary "진행중/완료" — 클릭 한 번에 바로 뒤바뀌는 토글. select 태그의 onmousedown이
-//    기본 드롭다운 펼치기를 막아둔 상태에서 이 함수가 값을 직접 뒤집고, change 이벤트를 수동으로 쏴서
-//    document 레벨 dirty-tracking(2604줄 부근, #tab-summary 안 change/input 감지)이 그대로 잡게 한다.
+// 💡 [2026-09-03] 3-State 순환: DV('') → EOL('완료') → MP(EC)('MP(EC)') → DV
+//    기존 DV↔EOL 근육기억 보존(첫 클릭은 항상 완료 처리), MP(EC)는 세 번째 상태.
+//    change 이벤트를 수동으로 쏴서 dirty-tracking이 그대로 잡게 한다.
 window._toggleProjectStatus = function() {
     const sel = document.getElementById('sum-project-status');
     if (!sel) return;
-    sel.value = sel.value === '완료' ? '' : '완료';
+    if (sel.value === '') { sel.value = '완료'; }           // DV → EOL
+    else if (sel.value === '완료') { sel.value = 'MP(EC)'; } // EOL → MP(EC)
+    else { sel.value = ''; }                                 // MP(EC) → DV
     sel.dispatchEvent(new Event('change', { bubbles: true }));
 };
 
