@@ -19,6 +19,9 @@
     window.updateWorkFilterBtnState = function() {
         const btn = document.getElementById('work-filter-btn');
         if (!btn) return;
+        const _cpHex = window._cpRoleHex || function(k) {
+            return { bg: '#e0f5f7', hoverBg: '#a3d9e0', border: '#cfe3e5', darkText: '#00707d' }[k];
+        };
         let activeCount = 0;
         for (const k in currentFilters) {
             if (currentFilters[k] && !currentFilters[k].has('All')) activeCount++;
@@ -27,10 +30,10 @@
             ? '🎛️ 업무필터 (' + activeCount + ') ▾'
             : '🎛️ 업무필터 ▾';
         btn.textContent = label;
-        btn.style.background = activeCount > 0 ? '#b2edd8' : '';
-        btn.style.color      = activeCount > 0 ? '#0b6e4f' : '';
-        btn.onmouseover = () => btn.style.background = '#a3d9e0';
-        btn.onmouseout  = () => btn.style.background = activeCount > 0 ? '#b2edd8' : '#e0f5f7';
+        btn.style.background = activeCount > 0 ? '#b2edd8' : _cpHex('bg');
+        btn.style.color      = activeCount > 0 ? '#0b6e4f' : _cpHex('darkText');
+        btn.onmouseover = () => btn.style.background = _cpHex('hoverBg');
+        btn.onmouseout  = () => btn.style.background = activeCount > 0 ? '#b2edd8' : _cpHex('bg');
     };
 
     // 2b. 개별 팝업 토글 (Calendar·Weekly Report WBS 팝업 호환 — 그대로 유지)
@@ -188,8 +191,11 @@
             'max-height:75vh;overflow-y:auto;';
 
         // 패널 제목
+        const _cpHexP = window._cpRoleHex || function(k) {
+            return { darkText: '#00707d', border: '#cfe3e5' }[k];
+        };
         const title = document.createElement('div');
-        title.style.cssText = 'font-size:11px;font-weight:700;color:#00707d;margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase;';
+        title.style.cssText = 'font-size:11px;font-weight:700;color:' + (_cpHexP('darkText') || '#00707d') + ';margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase;';
         title.textContent = '업무 필터 (LEVEL · 업무상태 · 개발단계)';
         panel.appendChild(title);
 

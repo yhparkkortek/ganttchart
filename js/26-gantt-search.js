@@ -22,32 +22,75 @@
 
     // ─── 검색바 삽입 (테이블 위 분리 렌더링 — 기본 숨김, AI검색 버튼으로 토글) ──
 
+    // 현재 테마 색상 조회 (21-color-palette.js 의 _cpRoleHex / CP_CURRENT_TEAL 활용)
+    function _getThemeColors() {
+        var _cpHex = window._cpRoleHex || function(k) {
+            return { bg: '#e0f5f7', hoverBg: '#a3d9e0', border: '#cfe3e5',
+                     hoverBorder: '#52a5af', darkText: '#00707d' }[k];
+        };
+        var teal = window.CP_CURRENT_TEAL || {};
+        return {
+            barBg:       teal.headerTint || '#eef6f7',  // bgRoles 에 포함된 headerTint
+            barBorder:   _cpHex('border')   || '#cfe3e5',
+            inputBorder: _cpHex('hoverBg')  || '#a3d9e0',
+            btnBg:       _cpHex('bg')        || '#e0f5f7',
+            text:        _cpHex('darkText')  || '#00707d'
+        };
+    }
+
+    // 검색바 + 내부 요소에 현재 테마 색 즉시 반영
+    function _updateSearchBarColors() {
+        var c = _getThemeColors();
+        var bar = document.getElementById('gantt-ai-searchbar');
+        if (!bar) return;
+        bar.style.background = c.barBg;
+        bar.style.borderBottomColor = c.barBorder;
+        var inp = document.getElementById('gantt-ai-search-input');
+        if (inp) { inp.style.borderColor = c.inputBorder; inp.style.color = c.text; }
+        var lbl = bar.querySelector('span:first-child');
+        if (lbl) lbl.style.color = c.text;
+        var countEl = document.getElementById('gantt-ai-search-count');
+        if (countEl) countEl.style.color = c.text;
+        ['gantt-search-prev', 'gantt-search-next', 'gantt-ai-search-clear'].forEach(function(id) {
+            var btn = document.getElementById(id);
+            if (!btn) return;
+            btn.style.background = c.btnBg;
+            btn.style.borderColor = c.inputBorder;
+            btn.style.color = c.text;
+        });
+        // accent-color(checkbox)도 테마 텍스트 색으로
+        var fcb = document.getElementById('gantt-ai-search-filtermode');
+        if (fcb) fcb.style.accentColor = c.text;
+    }
+
     function _ensureSearchBar() {
         if (document.getElementById('gantt-ai-searchbar')) return;
 
         var container = document.getElementById('table-container');
         if (!container) return;
 
+        var c = _getThemeColors(); // 생성 시점 테마 색
+
         var bar = document.createElement('div');
         bar.id = 'gantt-ai-searchbar';
         bar.style.cssText =
-            'display:none;padding:6px 10px;background:#eef8f9;border-bottom:1px solid #c5dde0;' +
+            'display:none;padding:6px 10px;background:' + c.barBg + ';border-bottom:1px solid ' + c.barBorder + ';' +
             'align-items:center;gap:7px;flex-wrap:wrap;font-size:13px;';
         bar.innerHTML =
-            '<span style="color:#00707d;font-weight:700;white-space:nowrap;font-size:12px;">🔍 검색</span>' +
+            '<span style="color:' + c.text + ';font-weight:700;white-space:nowrap;font-size:12px;">🔍 검색</span>' +
             '<input id="gantt-ai-search-input" type="text"' +
             '  placeholder="이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)"' +
-            '  style="flex:1;min-width:200px;padding:4px 10px;border-radius:6px;border:1px solid #a3d9e0;' +
-            '  font-size:13px;outline:none;background:#fff;color:#00707d;">' +
+            '  style="flex:1;min-width:200px;padding:4px 10px;border-radius:6px;border:1px solid ' + c.inputBorder + ';' +
+            '  font-size:13px;outline:none;background:#fff;color:' + c.text + ';">' +
             '<button id="gantt-search-prev" title="이전 결과 (Shift+Enter)"' +
-            '  style="padding:3px 9px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:13px;cursor:pointer;color:#00707d;">↑</button>' +
+            '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↑</button>' +
             '<button id="gantt-search-next" title="다음 결과 (Enter)"' +
-            '  style="padding:3px 9px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:13px;cursor:pointer;color:#00707d;">↓</button>' +
-            '<span id="gantt-ai-search-count" style="color:#00707d;font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
+            '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↓</button>' +
+            '<span id="gantt-ai-search-count" style="color:' + c.text + ';font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
             '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
-            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:#00707d;"> 비매칭 숨기기</label>' +
+            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:' + c.text + ';"> 비매칭 숨기기</label>' +
             '<button id="gantt-ai-search-clear" title="검색 초기화 (Esc)"' +
-            '  style="padding:4px 10px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:12px;cursor:pointer;color:#00707d;">✕ 초기화</button>';
+            '  style="padding:4px 10px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:12px;cursor:pointer;color:' + c.text + ';">✕ 초기화</button>';
 
         container.insertBefore(bar, container.firstChild);
 
@@ -83,6 +126,19 @@
             }
             if (e.key === 'Escape' && _query) _clearSearch();
         });
+
+        // 생성 직후 현재 테마 색 반영
+        _updateSearchBarColors();
+
+        // 테마 변경 시 검색바 색 실시간 갱신 (21-color-palette.js _cpApplyLive 훅 — 최초 1회)
+        if (!window._ganttSearchColorHookAdded) {
+            window._ganttSearchColorHookAdded = true;
+            var _origApplyLive = window._cpApplyLive;
+            window._cpApplyLive = function(hex, skipSave) {
+                if (_origApplyLive) _origApplyLive.call(this, hex, skipSave);
+                _updateSearchBarColors();
+            };
+        }
     }
 
     function _showSearchBar() {
