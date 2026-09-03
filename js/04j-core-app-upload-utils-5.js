@@ -744,7 +744,7 @@
         // 💡 [2026-08-25] childNodes[0]만 바꾸는 이유 — 이 span 안엔 ℹ️ 도움말 아이콘(nested span)이
         //    같이 들어있어서, textContent를 통째로 덮으면 그 아이콘/툴팁까지 같이 사라진다.
         const _ibxTitle = document.getElementById('inbox-modal-title');
-        if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? 'AI Task Inbox' : 'AI 업무 보관함';
+        if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? '📦 AI Task Inbox' : '📦 AI 업무 보관함';
         const _ibxHelpTip = document.getElementById('inbox-help-tip-text');
         if (_ibxHelpTip) _ibxHelpTip.innerHTML = _en
             ? `📧 Tasks added via [📥 Inbox] in mail analysis are kept independent of any project (persists across project switches).<br><br>
