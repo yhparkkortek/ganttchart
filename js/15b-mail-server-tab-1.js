@@ -1590,9 +1590,9 @@ window._msOpenReanalyzeHintModal = function(fileName) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'ms-reanalyze-modal';
-        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; background:rgba(0,0,0,0.25);';
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none;';
         modal.innerHTML = `
-        <div id="ms-reanalyze-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px;">
+        <div id="ms-reanalyze-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px; pointer-events:auto;">
             <div id="ms-reanalyze-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                 <span>🔄 프로젝트 매칭 재분석 요청</span>
                 <button onclick="event.stopPropagation(); document.getElementById('ms-reanalyze-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
