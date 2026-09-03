@@ -2,7 +2,7 @@
    27-topic-contamination.js
    Phase 8: 토픽 오염 감지 + AI 자가진단
    ================================================================
-   · window._tcGetScore(key?)          오염 지수 계산 → {score, level, negCount, totalCount, hiConfNeg}
+   · window._tcGetScore(key?)          오염 지수 계산 → {score, level, negCount, noMatchCount, totalCount, hiConfNeg}
    · window._tcCheckAndAlert(key?)     지수 체크 → 배지·토스트 갱신 (자동 연동)
    · window._tcRunDiagnosis(key?)      AI 진단 실행 → 결과 모달 표시
    · window._tcGetStats(key?)          현황 통계 반환 (감독용 뷰어)
@@ -10,8 +10,13 @@
 
    [연동]
    · _writeLearningEntry 완료 시 자동 _tcCheckAndAlert 호출 (래핑)
+   · _msResolveAiProjectMatch 래핑: null 반환(미분류) 시 'no_match' 자동 기록
    · showMailAnalyzer 호출 시 _tcRefreshBadge 호출 (14a에서 이미 호출)
    · Phase 3 학습 데이터(_alGetEntries) 재사용 — 별도 저장소 없음
+
+   [두 가지 신호 분리]
+   · negative_match: 오염 (토픽이 너무 넓어서 엉뚱한 메일 흡수)
+   · no_match:       커버리지 갭 (토픽이 너무 좁아서 관련 메일을 못 잡음)
 */
 
 (function() {
@@ -44,7 +49,7 @@
      */
     window._tcGetScore = function(key) {
         key = key || _key();
-        var result = { score: 0, level: 'ok', negCount: 0, totalCount: 0,
+        var result = { score: 0, level: 'ok', negCount: 0, noMatchCount: 0, totalCount: 0,
                        hiConfNeg: 0, consecutive: 0, sampleOk: false };
         if (!key) return result;
 
@@ -62,10 +67,12 @@
         result.totalCount = recent.length;
         result.sampleOk   = recent.length >= MIN_SAMPLES;
 
-        // 오매칭(negative_match) 집계
+        // 오매칭(negative_match) + 미분류(no_match) 집계
         var weightedNeg = 0;
         var weightedTotal = 0;
         recent.forEach(function(e) {
+            // no_match는 오염 지수 계산에서 제외 (별도 커버리지 갭 지표로 관리)
+            if (e.type === 'no_match') { result.noMatchCount++; return; }
             var w = _weight(e.confidence);
             weightedTotal += w;
             if (e.type === 'negative_match') {
@@ -136,12 +143,16 @@
             icon = '🔴'; text = '위험 — 오염 ' + Math.round(st.score * 100) + '% (오매칭 ' + st.negCount + '건, 연속 ' + st.consecutive + '건)'; color = '#b91c1c';
         }
 
-        badge.innerHTML = icon + ' ' + text;
+        // 미분류(커버리지 갭) 정보 suffix
+        var noMatchSuffix = st.noMatchCount > 0 ? ' · 📭미분류 ' + st.noMatchCount + '건' : '';
+
+        badge.innerHTML = icon + ' ' + text + noMatchSuffix;
         badge.style.color = color;
 
-        // 진단 버튼 노출
+        // 진단 버튼 노출 (오매칭 OR 미분류 많을 때)
         if (diagBtn) {
-            var showBtn = st.sampleOk && st.level !== 'ok' && st.level !== 'insufficient';
+            var showBtn = (st.sampleOk && st.level !== 'ok' && st.level !== 'insufficient')
+                       || st.noMatchCount >= 5;
             diagBtn.style.display = showBtn ? 'inline-block' : 'none';
         }
     };
@@ -179,6 +190,17 @@
                 window.showToast('🟡 고신뢰도 오매칭 ' + st.hiConfNeg + '건 — 토픽 프로파일 점검을 권장합니다.', 'info', 4000);
             }
         }
+
+        // 커버리지 갭 알람: 미분류 누적 5/10건 시 별도 토스트
+        // (오염과 반대 방향 — 토픽이 너무 좁아서 관련 메일을 못 잡음)
+        if (st.noMatchCount === 5 || st.noMatchCount === 10) {
+            if (window.showToast) {
+                window.showToast(
+                    '📭 미분류 누적 ' + st.noMatchCount + '건 — 토픽 키워드가 실제 메일 패턴을 못 잡고 있을 수 있습니다. AI 진단으로 보완 키워드를 확인해보세요.',
+                    'warn', 6000
+                );
+            }
+        }
     };
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -202,10 +224,16 @@
         var negEntries = entries.filter(function(e) {
             return e.type === 'negative_match' &&
                    e.ts && (now - new Date(e.ts).getTime()) < LOOKBACK_MS;
-        }).slice(0, 20); // 최대 20건
+        }).slice(0, 15); // 최대 15건
 
-        if (!negEntries.length) {
-            alert('30일 이내 오매칭 기록이 없습니다.'); return;
+        // 💡 미분류(no_match) 항목도 함께 진단 — 토픽 커버리지 갭 분석
+        var noMatchEntries = entries.filter(function(e) {
+            return e.type === 'no_match' &&
+                   e.ts && (now - new Date(e.ts).getTime()) < LOOKBACK_MS;
+        }).slice(0, 10); // 최대 10건
+
+        if (!negEntries.length && !noMatchEntries.length) {
+            alert('30일 이내 오매칭·미분류 기록이 없습니다.'); return;
         }
 
         var st = window._tcGetScore(key);
@@ -216,23 +244,42 @@
             '=== 현재 토픽 프로파일 ===\n' +
             '요약: ' + (profile.summary || '') + '\n' +
             '키워드: ' + (profile.keywords || []).join(', ') + '\n' +
-            '업무 유형: ' + (profile.topics || []).join('; ') + '\n\n' +
-            '=== 최근 30일 오매칭 리턴 로그 (' + negEntries.length + '건) ===\n' +
-            negEntries.map(function(e, i) {
-                return (i + 1) + '. 업무명: "' + (e.taskName || '') + '"' +
-                    ', AI신뢰도: ' + (e.confidence || '?') +
-                    ', 매칭근거: ' + (e.matchBasis || '') +
-                    (e.matchKeywords && e.matchKeywords.length ? ', 매칭키워드: [' + e.matchKeywords.join(', ') + ']' : '');
-            }).join('\n') + '\n\n' +
-            '=== 오염 통계 ===\n' +
-            '오염 지수: ' + Math.round(st.score * 100) + '%, 고신뢰도 오탐: ' + st.hiConfNeg + '건, 연속 오매칭: ' + st.consecutive + '건\n\n' +
-            '위 패턴을 분석하여 다음 JSON 형식으로만 답해주세요:\n' +
+            '업무 유형: ' + (profile.topics || []).join('; ') + '\n\n';
+
+        if (negEntries.length) {
+            prompt +=
+                '=== [오염 신호] 최근 30일 오매칭 리턴 로그 (' + negEntries.length + '건) ===\n' +
+                '(이 프로젝트로 잘못 배치된 후 사용자가 수거한 메일 — 토픽이 너무 넓거나 잘못된 키워드를 포함)\n' +
+                negEntries.map(function(e, i) {
+                    return (i + 1) + '. 업무명: "' + (e.taskName || '') + '"' +
+                        ', AI신뢰도: ' + (e.confidence || '?') +
+                        ', 매칭근거: ' + (e.matchBasis || '') +
+                        (e.matchKeywords && e.matchKeywords.length ? ', 매칭키워드: [' + e.matchKeywords.join(', ') + ']' : '');
+                }).join('\n') + '\n\n';
+        }
+
+        if (noMatchEntries.length) {
+            prompt +=
+                '=== [커버리지 갭] 최근 30일 미분류 로그 (' + noMatchEntries.length + '건) ===\n' +
+                '(어느 프로젝트에도 매칭되지 않아 미분류 큐에 남은 메일 — 토픽 키워드가 실제 메일 패턴을 못 잡음)\n' +
+                noMatchEntries.map(function(e, i) {
+                    return (i + 1) + '. 업무명: "' + (e.taskName || '') + '"' +
+                        ', AI 판단 근거: ' + (e.matchBasis || '없음') +
+                        (e.sourceSnippet ? ', 메일 요약: ' + e.sourceSnippet.substring(0, 80) : '');
+                }).join('\n') + '\n\n';
+        }
+
+        prompt +=
+            '=== 통계 ===\n' +
+            '오염 지수: ' + Math.round(st.score * 100) + '%, 고신뢰도 오탐: ' + st.hiConfNeg + '건, 연속 오매칭: ' + st.consecutive + '건, 미분류: ' + st.noMatchCount + '건\n\n' +
+            '두 가지 문제를 모두 진단하여 다음 JSON 형식으로만 답해주세요:\n' +
             '{\n' +
-            '  "diagnosis": "오탐 원인을 한 문장으로 진단",\n' +
-            '  "root_cause": "토픽의 어느 부분이 AI를 잘못 유도했는지 구체적으로",\n' +
-            '  "remove_keywords": ["제거해야 할 키워드 목록"],\n' +
-            '  "add_keywords": ["보완해야 할 구체적 키워드 목록"],\n' +
+            '  "diagnosis": "문제 원인을 한 문장으로 진단 (오염·커버리지 갭 중 더 심각한 것 우선)",\n' +
+            '  "root_cause": "토픽의 어느 부분이 문제인지 구체적으로",\n' +
+            '  "remove_keywords": ["오탐 유발 키워드 — 제거해야 할 목록"],\n' +
+            '  "add_keywords": ["미분류 메일을 잡으려면 추가해야 할 구체적 키워드"],\n' +
             '  "remove_topics": ["제거할 업무 유형"],\n' +
+            '  "coverage_gap": "미분류가 많은 원인 한 문장 (없으면 빈 문자열)",\n' +
             '  "confidence": "high|medium|low"\n' +
             '}';
 
@@ -320,6 +367,12 @@
             '</div>' +
 
             '</div>' +
+
+            (suggestion.coverage_gap ?
+                '<div style="background:#e3f2fd;border:1px solid #90caf9;border-radius:8px;padding:10px;margin-bottom:14px;">' +
+                '<div style="font-size:11px;font-weight:bold;color:#0d47a1;margin-bottom:4px;">📭 커버리지 갭</div>' +
+                '<div style="font-size:12px;color:#333;line-height:1.6;">' + esc(suggestion.coverage_gap) + '</div>' +
+                '</div>' : '') +
 
             '<div style="display:flex;gap:8px;justify-content:flex-end;">' +
             '<button id="tc-diag-reject" style="padding:8px 18px;background:#f1f3f5;color:#495057;border:1px solid #dee2e6;border-radius:6px;font-size:13px;cursor:pointer;">취소</button>' +
@@ -431,8 +484,8 @@
         if (typeof _orig !== 'function') return;
         window._writeLearningEntry = function(projectKey, entry) {
             _orig.call(this, projectKey, entry);
-            // 오매칭 유형 기록 후에만 오염 체크 실행 (성능 최적화)
-            if (entry && entry.type === 'negative_match') {
+            // 오매칭·미분류 기록 후 오염 체크 + 배지 갱신
+            if (entry && (entry.type === 'negative_match' || entry.type === 'no_match')) {
                 setTimeout(function() {
                     window._tcCheckAndAlert(projectKey);
                 }, 300);
@@ -449,6 +502,34 @@
         window.showMailAnalyzer = function() {
             _orig.apply(this, arguments);
             setTimeout(function() { window._tcRefreshBadge(); }, 50);
+        };
+    })();
+
+    // ── _msResolveAiProjectMatch 래핑 — 미분류(null 반환) 시 no_match 자동 기록 ──
+    // 15b-mail-server-tab-1.js의 _msResolveAiProjectMatch가 null 반환하는 경우:
+    //   → AI가 주매칭프로젝트번호=0 으로 판단 (어떤 프로젝트도 적합하지 않음)
+    //   → task에 '매칭근거' 필드가 있다면 AI가 분석은 했으나 매칭을 못한 것 → no_match 기록
+    (function() {
+        var _origResolve = window._msResolveAiProjectMatch;
+        if (typeof _origResolve !== 'function') return;
+        window._msResolveAiProjectMatch = function(task, candidatesForAI) {
+            var result = _origResolve.call(this, task, candidatesForAI);
+            // 반환값이 null(미분류) & task에 '매칭근거'(AI가 분석했음)가 있을 때만 기록
+            if (!result && task && (task['매칭근거'] || task['업무명'])) {
+                var projectKey = window.currentDriveFileId || window.currentDriveFileName || '';
+                if (projectKey && typeof window._writeLearningEntry === 'function') {
+                    window._writeLearningEntry(projectKey, {
+                        type:         'no_match',
+                        reason:       '미분류',
+                        taskName:     task['업무명'] || '',
+                        confidence:   task['매칭신뢰도'] || '',
+                        matchBasis:   task['매칭근거'] || '',
+                        matchKeywords: [],
+                        sourceSnippet: (task['_aiMeta'] && task['_aiMeta'].snippet) || ''
+                    });
+                }
+            }
+            return result;
         };
     })();
 
