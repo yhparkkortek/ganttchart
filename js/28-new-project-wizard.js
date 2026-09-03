@@ -100,25 +100,43 @@ function _renderStep() {
 
 // ─── Step 1: MC Table 구분자 ──────────────────────────────────────────
 const _MC_UNITS = [
-    { key: 'BTN',  label: 'BTN', desc: 'Button Deck — 버튼 데크' },
+    { key: 'BTN',  label: 'BTN',  desc: 'Button Deck — 버튼 데크' },
     { key: 'MAIN', label: 'MAIN', desc: 'Main Display — 메인 디스플레이 (MVD)' },
-    { key: 'UPR',  label: 'UPR', desc: 'Upper Display — 상단 디스플레이 (TVD)' },
-    { key: 'TPR',  label: 'TPR', desc: 'Topper — 토퍼 (TPD)' },
+    { key: 'UPR',  label: 'UPR',  desc: 'Upper Display — 상단 디스플레이 (TVD)' },
+    { key: 'TPR',  label: 'TPR',  desc: 'Topper — 토퍼 디스플레이 (TPR)' },
+    { key: 'PTD',  label: 'PTD',  desc: 'Player Tracking Display — Info 디스플레이' },
 ];
 function _renderStep1(body) {
-    const saved = window._npwData && window._npwData.mcUnits ? window._npwData.mcUnits : (_prefill.mcUnits || []);
+    const saved = (window._npwData && window._npwData.mcUnits) ? window._npwData.mcUnits : (_prefill.mcUnits || []);
+    const customVal = (window._npwData && window._npwData.mcCustom) || '';
     body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">MC Table 제품 구분자 선택</div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:14px;">이 프로젝트에 해당하는 디스플레이 종류를 선택하세요.<br>나중에 M.C Table 탭에서도 추가/삭제할 수 있습니다.</div>' +
         _MC_UNITS.map(function(u) {
             const chk = saved.indexOf(u.key) >= 0 ? 'checked' : '';
-            return '<label style="display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid #dee2e6; border-radius:8px; margin-bottom:8px; cursor:pointer; transition:background .15s;" onmouseover="this.style.background=\'#f0f7ff\'" onmouseout="this.style.background=\'\'"><input type="checkbox" value="' + u.key + '" ' + chk + ' style="width:16px;height:16px;cursor:pointer;"><div><div style="font-weight:bold; font-size:13px;">' + u.label + '</div><div style="font-size:11px; color:#888;">' + u.desc + '</div></div></label>';
+            return '<label style="display:flex; align-items:center; gap:10px; padding:9px 12px; border:1px solid #dee2e6; border-radius:8px; margin-bottom:8px; cursor:pointer; transition:background .15s;" onmouseover="this.style.background=\'#f0f7ff\'" onmouseout="this.style.background=\'\'"><input type="checkbox" class="npw-unit-chk" value="' + u.key + '" ' + chk + ' style="width:16px;height:16px;cursor:pointer;"><div><div style="font-weight:bold; font-size:13px;">' + u.label + '</div><div style="font-size:11px; color:#888;">' + u.desc + '</div></div></label>';
         }).join('') +
+        // 직접 입력 행
+        '<label style="display:flex; align-items:flex-start; gap:10px; padding:9px 12px; border:1px dashed #ced4da; border-radius:8px; margin-bottom:8px; cursor:pointer; background:#fafafa; transition:background .15s;" onmouseover="this.style.background=\'#f5f5f5\'" onmouseout="this.style.background=\'#fafafa\'">' +
+        '<input type="checkbox" id="npw-custom-chk" style="width:16px;height:16px;cursor:pointer;margin-top:2px;" onchange="var inp=document.getElementById(\'npw-custom-input\');inp.disabled=!this.checked;if(this.checked)inp.focus();">' +
+        '<div style="flex:1;"><div style="font-weight:bold; font-size:13px; color:#555;">직접 입력</div>' +
+        '<input id="npw-custom-input" type="text" disabled placeholder="예: PDU, SBD" value="' + customVal + '" onclick="event.stopPropagation();" ' +
+        'style="margin-top:5px; width:100%; box-sizing:border-box; padding:5px 8px; font-size:12px; border:1px solid #ced4da; border-radius:5px;"></div></label>' +
         '<div style="font-size:11px; color:#aaa; margin-top:4px;">※ 선택하지 않아도 등록은 가능합니다 — 건너뛰기로 넘어가세요.</div>';
 }
 function _collectStep1() {
-    const checks = document.querySelectorAll('#npw-body input[type=checkbox]');
+    const checks = document.querySelectorAll('#npw-body .npw-unit-chk');
     window._npwData = window._npwData || {};
     window._npwData.mcUnits = Array.from(checks).filter(function(c) { return c.checked; }).map(function(c) { return c.value; });
+    // 직접 입력 처리
+    const customChk   = document.getElementById('npw-custom-chk');
+    const customInput = document.getElementById('npw-custom-input');
+    if (customChk && customChk.checked && customInput && customInput.value.trim()) {
+        const extras = customInput.value.split(/[,\s]+/).map(function(s) { return s.trim().toUpperCase(); }).filter(Boolean);
+        extras.forEach(function(k) { if (window._npwData.mcUnits.indexOf(k) < 0) window._npwData.mcUnits.push(k); });
+        window._npwData.mcCustom = customInput.value;
+    } else {
+        window._npwData.mcCustom = '';
+    }
 }
 
 // ─── Step 2: 프로젝트 시작일 ─────────────────────────────────────────
@@ -158,7 +176,9 @@ window._npwCustAC = function(q) {
     const ac = document.getElementById('npw-cust-ac');
     if (!ac) return;
     if (!q) { ac.style.display = 'none'; return; }
-    const ab = (window.getAddressBook && window.getAddressBook()) || [];
+    // Drive 캐시 우선(Step5에서 이미 로드된 경우), 없으면 tabData 폴백
+    const ab = (window.tabData && window.tabData.addressBook) ||
+               (window.AddressBook && window.AddressBook.load && window.AddressBook.load()) || [];
     const seen = {};
     const hits = [];
     ab.forEach(function(r) {
@@ -209,14 +229,12 @@ function _validateStep4() {
 }
 
 // ─── Step 5: 담당자 + 메일 키워드 ────────────────────────────────────
-function _renderStep5(body) {
+//    주소록은 Google Drive에서 로딩: AddressBook.loadFromDrive() 우선, 없으면 tabData.addressBook 폴백
+function _buildPmHtml(ab) {
     const pm  = (window._npwData && window._npwData.pm)  || _prefill.assignee || '';
     const kws = (window._npwData && window._npwData.keywords) || (_prefill.keywords ? _prefill.keywords.join(', ') : '');
-    // 주소록에서 담당자 목록 생성
-    const ab = (window.getAddressBook && window.getAddressBook()) || [];
-    const seen = {};
-    const members = [];
-    ab.forEach(function(r) {
+    const seen = {}; const members = [];
+    (ab || []).forEach(function(r) {
         const n = (r.name || r.이름 || '').trim();
         if (n && !seen[n]) { seen[n] = 1; members.push({ name: n, dept: (r.department || r.부서 || '') }); }
     });
@@ -225,7 +243,7 @@ function _renderStep5(body) {
             const sel = (pm && m.name === pm) ? ' selected' : '';
             return '<option value="' + m.name + '"' + sel + '>' + m.name + (m.dept ? ' (' + m.dept + ')' : '') + '</option>';
         }).join('');
-    body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:8px;">프로젝트 담당자 <span style="color:#e03131;">*</span></div>' +
+    return '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:8px;">프로젝트 담당자 <span style="color:#e03131;">*</span></div>' +
         '<select id="npw-pm" style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; background:#fff;">' + opts + '</select>' +
         '<div style="font-size:11.5px; color:#888; margin:4px 0 0 2px;">주소록에 없으면 아래에 직접 입력하세요.</div>' +
         '<input id="npw-pm-manual" type="text" placeholder="직접 입력 (주소록 선택 시 무시됨)" value="" ' +
@@ -234,6 +252,28 @@ function _renderStep5(body) {
         '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">이 프로젝트로 메일을 자동 매칭할 키워드. 쉼표로 구분.</div>' +
         '<input id="npw-kw" type="text" placeholder="예: S32, STELLAR, 에스삼투" value="' + kws + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:13px; border:1.5px solid #a5c8f0; border-radius:8px;">';
+}
+async function _renderStep5(body) {
+    // 로딩 중 표시
+    body.innerHTML = '<div style="text-align:center; padding:30px; color:#888; font-size:13px;">⏳ 주소록을 Drive에서 불러오는 중...</div>';
+    let ab = [];
+    try {
+        // 1) Drive에서 최신 주소록 로드
+        if (window.AddressBook && window.AddressBook.loadFromDrive) {
+            const driveList = await window.AddressBook.loadFromDrive();
+            if (driveList && driveList.length) {
+                ab = driveList;
+                // tabData에도 반영
+                if (window.tabData) window.tabData.addressBook = driveList;
+            }
+        }
+        // 2) Drive 실패 시 tabData 폴백
+        if (!ab.length) ab = (window.tabData && window.tabData.addressBook) || [];
+    } catch(e) {
+        console.warn('[npw Step5] 주소록 Drive 로딩 실패:', e);
+        ab = (window.tabData && window.tabData.addressBook) || [];
+    }
+    body.innerHTML = _buildPmHtml(ab);
 }
 function _collectStep5() {
     window._npwData = window._npwData || {};
