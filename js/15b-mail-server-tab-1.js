@@ -1491,9 +1491,13 @@ window._msOpenReanalyzeHintModal = function(fileName) {
             <div style="padding:18px;">
                 <div id="ms-reanalyze-subject" style="font-size:12px; color:#555; margin-bottom:6px; overflow-wrap:break-word;"></div>
                 <div id="ms-reanalyze-prev-reason" style="font-size:11.5px; color:#a85d0a; background:#fff8e6; border:1px solid #ffe08a; border-radius:6px; padding:8px 10px; margin-bottom:10px; display:none;"></div>
-                <label style="font-size:11.5px; color:#888; display:block; margin-bottom:4px;">위 근거를 참고해서, 실제로 어느 프로젝트 건인지(또는 왜 미분류가 맞는지) 의견을 남겨주세요 — 선택 입력, 비워두면 힌트 없이 그냥 다시 판단합니다.</label>
+                <label style="font-size:11.5px; color:#888; display:block; margin-bottom:6px;">위 근거를 참고해서, 실제로 어느 프로젝트 건인지(또는 왜 미분류가 맞는지) 의견을 남겨주세요 — 선택 입력, 비워두면 힌트 없이 그냥 다시 판단합니다.</label>
+                <div style="margin-bottom:6px;">
+                    <button id="ms-proj-picker-btn" onclick="window._msToggleProjPicker()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:12px; padding:4px 12px; height:28px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">📋 프로젝트 선택 ▾</button>
+                    <div id="ms-proj-picker-list" style="display:none; margin-top:4px; border:1px solid #ced4da; border-radius:6px; max-height:160px; overflow-y:auto; background:#fff; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
+                </div>
                 <textarea id="ms-reanalyze-hint" placeholder="예: 관리번호는 다르지만 실제로는 STELLAR32 건 맞음 / 예: 회의록이라 여러 프로젝트가 섞여있어서 미분류가 맞음"
-                    style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
+                    style="width:100%; min-height:70px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
                     <button onclick="window._msSubmitReanalyze()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 18px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">재분석 요청</button>
                     <button onclick="document.getElementById('ms-reanalyze-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">취소</button>
@@ -1518,6 +1522,65 @@ window._msSubmitReanalyze = async function() {
     const hint = (document.getElementById('ms-reanalyze-hint').value || '').trim();
     document.getElementById('ms-reanalyze-modal').style.display = 'none';
     await window._msQueueReanalyze(fileName, hint);
+};
+
+// 💡 [2026-09-03 신규] 재분석 모달 "프로젝트 선택 ▾" 드롭다운 — Drive 프로젝트 목록을 로딩해서 보여주고
+//    클릭 한 번으로 textarea 힌트 자동 채움 (직접 입력보다 빠르고 오타 없음)
+window._msToggleProjPicker = async function() {
+    const listEl = document.getElementById('ms-proj-picker-list');
+    const btn    = document.getElementById('ms-proj-picker-btn');
+    if (!listEl) return;
+
+    // 이미 열려있으면 닫기
+    if (listEl.style.display !== 'none') {
+        listEl.style.display = 'none';
+        if (btn) btn.textContent = '📋 프로젝트 선택 ▾';
+        return;
+    }
+
+    listEl.style.display = 'block';
+    listEl.innerHTML = '<div style="padding:10px; text-align:center; color:#888; font-size:12px;">⏳ 목록 로딩 중...</div>';
+    if (btn) btn.textContent = '📋 프로젝트 선택 ▴';
+
+    try {
+        const projects   = await window._msLoadProjectIndex();
+        const candidates = window._msFilterCandidateProjects(projects || []);
+        window._msProjPickerCache = candidates; // _msSelectProjPickerItem에서 참조
+
+        if (!candidates || !candidates.length) {
+            listEl.innerHTML = '<div style="padding:10px; text-align:center; color:#aaa; font-size:12px;">등록된 프로젝트가 없습니다.</div>';
+            return;
+        }
+
+        listEl.innerHTML = candidates.map(function(c, i) {
+            // 표시 레이블: 모델명+인치 (없으면 파일명), 부제: 고객사 · 담당자
+            const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '(프로젝트)';
+            const sub   = [c.customer, c.assignee ? '담당: ' + c.assignee : ''].filter(Boolean).join(' · ');
+            return '<div onclick="window._msSelectProjPickerItem(' + i + ')"'
+                + ' onmouseover="this.style.background=\'#e8f4fd\';" onmouseout="this.style.background=\'#fff\';"'
+                + ' style="padding:7px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; line-height:1.4;">'
+                + '<span style="font-weight:bold; color:#1a4f7a;">' + escapeHtml(label) + '</span>'
+                + (sub ? '&nbsp;<span style="font-size:11px; color:#888;">· ' + escapeHtml(sub) + '</span>' : '')
+                + '</div>';
+        }).join('');
+    } catch(e) {
+        listEl.innerHTML = '<div style="padding:10px; text-align:center; color:#e03131; font-size:12px;">로딩 실패 — 드라이브 연동 상태 확인 필요</div>';
+        console.warn('[재분석 프로젝트 선택]', e);
+    }
+};
+
+// 선택된 프로젝트 → textarea에 힌트 자동 삽입 후 드롭다운 닫기
+window._msSelectProjPickerItem = function(idx) {
+    const c = window._msProjPickerCache && window._msProjPickerCache[idx];
+    if (!c) return;
+    const label    = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '해당 프로젝트';
+    const hintText = '이 메일은 ' + label + (c.customer ? ' (' + c.customer + ')' : '') + ' 건임';
+    const ta = document.getElementById('ms-reanalyze-hint');
+    if (ta) { ta.value = hintText; ta.focus(); }
+    const listEl = document.getElementById('ms-proj-picker-list');
+    const btn    = document.getElementById('ms-proj-picker-btn');
+    if (listEl) listEl.style.display = 'none';
+    if (btn) btn.textContent = '📋 프로젝트 선택 ▾';
 };
 
 // 💡 미분류 메일 1건을 (선택적 사용자 힌트와 함께) 다시 분석해서 그 자리에서 결과를 갱신한다.
