@@ -93,11 +93,37 @@
         if (pm.모델명)         metaParts.push('모델: ' + pm.모델명);
         var metaLine = metaParts.length ? '프로젝트 정보: ' + metaParts.join(', ') + '\n' : '';
 
+        // ③ project_index.json에 누적된 mail 신호 키워드 주입
+        //    다른 사용자가 메일 분류 시 기록한 키워드들 — Gantt 업무명만으로 못 잡는 실제 메일 언어 반영
+        //    _projectIndexCache(5분 캐시)가 있으면 재사용, 없으면 Drive에서 직접 조회
+        var mailSignalLine = '';
+        try {
+            var _myKey = _currentKey();
+            // 캐시 우선 → 없으면 _msLoadProjectIndex() 호출 (이미 async 함수 안이므로 await 가능)
+            var _piAll = (window._projectIndexCache && window._projectIndexCache.data)
+                ? window._projectIndexCache.data
+                : (window._msLoadProjectIndex ? await window._msLoadProjectIndex() : []);
+            var _piEntry = (_piAll || []).find(function(p) { return p.drive_file_id === _myKey; });
+            var _piKws = (_piEntry && _piEntry.topicKeywords && _piEntry.topicKeywords.length)
+                ? _piEntry.topicKeywords.slice()
+                : [];
+            // project_index에 신호가 없으면 기존 프로파일 keywords를 참고 (이미 학습된 것 유지)
+            if (!_piKws.length) {
+                var _oldProf = _getStore()[_myKey];
+                _piKws = (_oldProf && _oldProf.keywords) ? _oldProf.keywords.slice() : [];
+            }
+            if (_piKws.length) {
+                mailSignalLine = '\n\n※ 참고: 실제 수신된 메일에서 이 프로젝트와 연관되어 관찰된 키워드 (mail 신호, Drive 누적):\n' +
+                    _piKws.join(', ') + '\n위 키워드를 keywords 생성 시 참고하되, 간트 업무 목록이 우선입니다.';
+            }
+        } catch(_piE) { console.warn('[토픽 프로파일] mail 신호 조회 실패 (무시):', _piE); }
+
         var prompt = metaLine +
             '아래는 제품 개발 프로젝트 간트차트의 업무 목록입니다.\n' +
             '이 프로젝트를 특징짓는 핵심 정보를 아래 JSON 형식으로만 반환해 주세요.\n\n' +
             '업무 목록(' + taskNames.length + '개):\n' +
-            taskNames.map(function(n, i) { return (i+1) + '. ' + n; }).join('\n') + '\n\n' +
+            taskNames.map(function(n, i) { return (i+1) + '. ' + n; }).join('\n') +
+            mailSignalLine + '\n\n' +
             '{\n' +
             '  "keywords": ["이 프로젝트에서 자주 언급될 핵심 단어 12~15개"],\n' +
             '  "topics":   ["반복되는 업무 유형·카테고리 4~6가지"],\n' +
