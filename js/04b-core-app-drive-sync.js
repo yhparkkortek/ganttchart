@@ -298,7 +298,20 @@
     // Google Drive API v3는 'in ancestors' 를 지원하지 않음 — 'in parents' 만 유효.
     // 팀 하위 폴더까지 탐색하려면 직속 자식 폴더 ID 를 먼저 구한 뒤 OR 조건으로 묶어야 한다.
 
-    var _childFolderCache = {}; // { parentId: { ids, ts } }  — 5분 TTL
+    // 💡 [2026-09-03 성능 개선] _childFolderCache를 localStorage에 영속화 (30분 TTL).
+    //    팀 폴더 도입 이후 로그인 직후 _getChildFolderIds API 호출이 추가되어 파일 목록까지
+    //    체감 대기 시간이 ~400ms 늘었다. localStorage에 저장해두면 재방문 시 이 API 호출을
+    //    건너뛰어 대기 시간이 사라진다. 팀 폴더 구조는 자주 바뀌지 않으므로 30분 TTL은 안전하다.
+    var _childFolderCache = {}; // { parentId: { ids, ts } }  — 메모리 캐시 (30분 TTL)
+    var _FOLDER_CACHE_KEY = 'gantt_folder_cache_v1';
+    var _FOLDER_CACHE_TTL = 30 * 60 * 1000; // 30분
+    try {
+        var _persisted = JSON.parse(localStorage.getItem(_FOLDER_CACHE_KEY) || '{}');
+        var _now = Date.now();
+        Object.keys(_persisted).forEach(function(k) {
+            if (_now - _persisted[k].ts < _FOLDER_CACHE_TTL) _childFolderCache[k] = _persisted[k];
+        });
+    } catch(e) {}
 
     /**
      * parentId 바로 아래 자식 폴더 ID 목록 반환.
@@ -306,7 +319,7 @@
      */
     window._getChildFolderIds = async function(parentId, excludeNames) {
         var cached = _childFolderCache[parentId];
-        if (cached && Date.now() - cached.ts < 5 * 60 * 1000) {
+        if (cached && Date.now() - cached.ts < _FOLDER_CACHE_TTL) {
             return excludeNames ? cached.ids.filter(function(o) { return !excludeNames.includes(o.name); }).map(function(o) { return o.id; })
                                 : cached.ids.map(function(o) { return o.id; });
         }
@@ -317,9 +330,17 @@
             });
             var items = (res.result.files || []).map(function(f) { return { id: f.id, name: f.name }; });
             _childFolderCache[parentId] = { ids: items, ts: Date.now() };
+            // localStorage에 영속화 — 다음 페이지 로드 시 API 호출 없이 바로 사용
+            try { localStorage.setItem(_FOLDER_CACHE_KEY, JSON.stringify(_childFolderCache)); } catch(e) {}
             return excludeNames ? items.filter(function(o) { return !excludeNames.includes(o.name); }).map(function(o) { return o.id; })
                                 : items.map(function(o) { return o.id; });
         } catch(e) { return []; }
+    };
+    // 팀 폴더 구조가 실제로 바뀐 경우(폴더 추가/이름 변경) 수동으로 캐시를 무효화하는 함수.
+    window._clearFolderCache = function() {
+        _childFolderCache = {};
+        try { localStorage.removeItem(_FOLDER_CACHE_KEY); } catch(e) {}
+        console.info('[폴더 캐시] 초기화됨 — 다음 파일 목록 조회 시 Drive API로 재조회');
     };
 
     /**

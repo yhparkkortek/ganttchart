@@ -66,7 +66,9 @@ window.handleAuthClick = function() {
             //    한 번 더 gapi.load를 재요청해서 콜백이 드물게 안 불리는 경우도 방어한다.
             let retries = 0;
             while (!(window.gapi && gapi.client && gapi.client.drive) && retries < 60) {
-                if (retries === 10 && window.intializeGapiClient) {
+                // 💡 [2026-09-03] 재시도를 5회(1.25s)와 10회(2.5s) 두 차례 시도 — 한 번만 하는 것보다
+                //    콜백이 드물게 묵살되는 경우를 더 잘 방어한다.
+                if ((retries === 5 || retries === 10) && window.intializeGapiClient) {
                     try { gapi.load('client', window.intializeGapiClient); } catch (e) {}
                 }
                 await new Promise(r => setTimeout(r, 250));
@@ -81,7 +83,17 @@ window.handleAuthClick = function() {
             }
 
             try {
-                let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
+                // 💡 [2026-09-03 성능 개선] about.get과 동시에 팀 폴더 캐시 워밍을 시작한다.
+                //    팀 폴더 도입 이후 _getChildFolderIds API 호출이 파일 목록 조회 직전에 직렬로
+                //    붙어 ~400ms가 추가됐다. localStorage 캐시가 있으면 이 Promise는 즉시 resolve
+                //    되고, 없어도 about.get과 병렬로 실행되어 숨겨진 시간에 처리된다.
+                var _folderCacheWarm = (window._getChildFolderIds && typeof SHARED_FOLDER_ID !== 'undefined')
+                    ? window._getChildFolderIds(SHARED_FOLDER_ID, ['Backups', 'App_Config']).catch(function(){})
+                    : Promise.resolve();
+                let [aboutResp] = await Promise.all([
+                    gapi.client.drive.about.get({fields: 'user'}),
+                    _folderCacheWarm
+                ]);
                 window.currentUserName = aboutResp.result.user.displayName || "알 수 없는 사용자";
                 // 💡 [2026-08-31 신규] 조용한 토큰 갱신 시 계정을 못 정해 "계정 선택" 창이 뜬 채 안 닫히는
                 //    문제 방지용 — 로그인 성공 시 이메일을 기억해뒀다가, 이후 조용한 갱신 요청에 hint로
@@ -130,10 +142,12 @@ window.handleAuthClick = function() {
                     });
                 }
 
-                // 💡 [수정됨] 대기 시간을 0.6초(600ms)로 늘려 브라우저 렌더링 충돌을 방지합니다.
+                // 💡 [2026-09-03] 600ms → 50ms: 팀 폴더 도입 이후 캐시 워밍을 about.get과 병렬로
+                //    올려서 파일 목록까지의 직렬 지연이 크게 줄었다. 50ms는 버튼 상태 업데이트가
+                //    화면에 반영될 충분한 여유이면서도 불필요한 대기를 없앤다.
                 setTimeout(() => {
                     loadFromGoogleDrive();
-                }, 600);
+                }, 50);
 
             } catch(e) {
                 console.error("사용자 정보 가져오기 에러:", e);
