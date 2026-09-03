@@ -1390,10 +1390,16 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
             catch(e) { return {}; }
         })();
         const numbered = candidateProjects.map((c, i) => {
-            const _prof = _tpStore[c.drive_file_id] || null;
-            const _tpKw = (_prof && _prof.keywords && _prof.keywords.length)
-                ? ' | 🔑토픽: ' + _prof.keywords.slice(0, 8).join(', ')
-                : '';
+            // ✅ [토픽 프로파일] 1순위: project_index.json topicKeywords (모든 프로젝트, Drive에서 사전 저장됨)
+            //                   2순위: localStorage 캐시 (이 세션에서 로드한 프로젝트)
+            const _tpKw = (function() {
+                if (c.topicKeywords && c.topicKeywords.length)
+                    return ' | 🔑토픽: ' + c.topicKeywords.slice(0, 8).join(', ');
+                const _cached = _tpStore[c.drive_file_id];
+                if (_cached && _cached.keywords && _cached.keywords.length)
+                    return ' | 🔑토픽: ' + _cached.keywords.slice(0, 8).join(', ');
+                return '';
+            })();
             return `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''}${_tpKw} [파일: ${c.file_name}]`;
         }).join('\n');
         // 💡 [하이브리드-A] 키워드 사전매칭 힌트 — 모델명·키워드가 메일 본문에 직접 등장하는 후보를

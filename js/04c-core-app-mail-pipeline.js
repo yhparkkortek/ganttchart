@@ -189,7 +189,12 @@
             //    나중에 폴더 분리가 확정되면 이 필드 값을 기준으로 일괄 이동(migration)하면 된다.
             //    Summary 탭 "팀" 항목(pm.팀 또는 pm.개발팀)이 있으면 그 값을 사용한다.
             team: pm.팀 || pm.개발팀 || '',
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
+            // ✅ [토픽 프로파일] project_index.json에 키워드 압축 저장 — 메일 분류 시 추가 Drive 조회 없이 활용
+            topicKeywords: (function() {
+                var _prof = window._getTopicProfile && window._getTopicProfile(driveFileId);
+                return (_prof && _prof.keywords && _prof.keywords.length) ? _prof.keywords.slice(0, 10) : [];
+            })()
         };
     };
 
@@ -665,7 +670,9 @@
 
             let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || []),
                 // ✅ [AI 학습 Phase 3] 학습 데이터를 프로젝트 JSON에 포함 → 저장마다 Drive에 자동 동기화
-                aiLearning: window._alGetEntriesForSave ? window._alGetEntriesForSave(window.currentDriveFileName || window.currentDriveFileId || '') : [] };
+                aiLearning: window._alGetEntriesForSave ? window._alGetEntriesForSave(window.currentDriveFileName || window.currentDriveFileId || '') : [],
+                // ✅ [토픽 프로파일] Drive JSON에 포함 — 로드 시 localStorage 캐시로 복원됨
+                topicProfile: (window._getTopicProfile && window._getTopicProfile()) || null };
             let boundary = 'foo_bar_baz';
             // 💡 [2026-08-29 신규] completed appProperty — "프로젝트 불러오기" 목록이 파일 내용을 통째로
             //    안 받고도(가벼운 메타데이터 조회만으로) 완료된 프로젝트를 구분 표시할 수 있게, pm과 같은
@@ -1584,6 +1591,32 @@
                 // ✅ [AI 학습 Phase 3] Drive에서 받아온 학습 데이터를 localStorage와 병합 (팀 공유)
                 if (saveData.aiLearning && saveData.aiLearning.length && window._alMergeFromDrive) {
                     window._alMergeFromDrive(saveData.aiLearning, fileName);
+                }
+                // ✅ [토픽 프로파일] Drive JSON에서 복원 → localStorage 런타임 캐시에 적재
+                //    처음 로딩·마지막 저장은 Drive(server), 실제 동작은 캐시 — 추가 Drive 호출 없음
+                if (saveData.topicProfile && fileId) {
+                    try {
+                        var _tpCacheLoad = JSON.parse(localStorage.getItem('gantt_topic_profile_v1')) || {};
+                        _tpCacheLoad[fileId] = saveData.topicProfile;
+                        localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(_tpCacheLoad));
+                        console.log('[토픽 프로파일] Drive JSON → 캐시 복원:', fileId, '키워드 수:', (saveData.topicProfile.keywords || []).length);
+                    } catch(_tpE) { console.warn('[토픽 프로파일] 캐시 복원 실패', _tpE); }
+                    if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();
+                } else {
+                    // 프로파일 없는 프로젝트 → 백그라운드 자동 생성 (2.5초 딜레이, UI 블로킹 없음)
+                    setTimeout(function() {
+                        var _apiKey = window.getActiveAiKey && window.getActiveAiKey();
+                        var _gd = window.globalData;
+                        if (!_apiKey || !_gd || _gd.length <= 3 || !window._generateTopicProfile) return;
+                        console.log('[토픽 프로파일] 자동 생성 시작 (Drive에 프로파일 없음):', fileName);
+                        window._generateTopicProfile().then(function(prof) {
+                            if (prof && window.currentDriveFileId && window.saveToGoogleDrive) {
+                                // 생성 완료 즉시 Drive에 반영 (topicProfile 포함 저장, 알림 없이)
+                                console.log('[토픽 프로파일] 자동 생성 완료 → Drive 즉시 반영');
+                                window.saveToGoogleDrive({ suppressAlert: true });
+                            }
+                        }).catch(function(e) { console.warn('[토픽 프로파일] 자동 생성 오류', e); });
+                    }, 2500);
                 }
                 // ✅ [AI 학습 Phase 1] 재배치 대기 알림 (Phase 1에서는 04b에도 있지만 주 로드 경로는 여기)
                 if (window._checkReassignQueueOnLoad) window._checkReassignQueueOnLoad();
