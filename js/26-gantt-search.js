@@ -20,15 +20,38 @@
     var _navIndex = -1;        // 현재 네비게이션 위치 (-1=미선택)
     var _debounceTimer = null; // 검색 debounce 타이머
 
-    // ─── 이벤트 초기화 (검색 요소는 HTML에 #gantt-search-inline 으로 이미 정의) ──
+    // ─── 검색바 삽입 (테이블 위 분리 렌더링 — 기본 숨김, AI검색 버튼으로 토글) ──
 
     function _ensureSearchBar() {
-        // HTML에 #gantt-search-inline 이 정의되어 있으므로 이벤트 리스너만 연결.
-        // _listenerAttached 플래그로 중복 등록 방지.
-        var inp = document.getElementById('gantt-ai-search-input');
-        if (!inp || inp._gsListenerAttached) return;
-        inp._gsListenerAttached = true;
+        if (document.getElementById('gantt-ai-searchbar')) return;
 
+        var container = document.getElementById('table-container');
+        if (!container) return;
+
+        var bar = document.createElement('div');
+        bar.id = 'gantt-ai-searchbar';
+        bar.style.cssText =
+            'display:none;padding:6px 10px;background:#eef8f9;border-bottom:1px solid #c5dde0;' +
+            'align-items:center;gap:7px;flex-wrap:wrap;font-size:13px;';
+        bar.innerHTML =
+            '<span style="color:#00707d;font-weight:700;white-space:nowrap;font-size:12px;">🔍 검색</span>' +
+            '<input id="gantt-ai-search-input" type="text"' +
+            '  placeholder="이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)"' +
+            '  style="flex:1;min-width:200px;padding:4px 10px;border-radius:6px;border:1px solid #a3d9e0;' +
+            '  font-size:13px;outline:none;background:#fff;color:#00707d;">' +
+            '<button id="gantt-search-prev" title="이전 결과 (Shift+Enter)"' +
+            '  style="padding:3px 9px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:13px;cursor:pointer;color:#00707d;">↑</button>' +
+            '<button id="gantt-search-next" title="다음 결과 (Enter)"' +
+            '  style="padding:3px 9px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:13px;cursor:pointer;color:#00707d;">↓</button>' +
+            '<span id="gantt-ai-search-count" style="color:#00707d;font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
+            '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
+            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:#00707d;"> 비매칭 숨기기</label>' +
+            '<button id="gantt-ai-search-clear" title="검색 초기화 (Esc)"' +
+            '  style="padding:4px 10px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:12px;cursor:pointer;color:#00707d;">✕ 초기화</button>';
+
+        container.insertBefore(bar, container.firstChild);
+
+        var inp = document.getElementById('gantt-ai-search-input');
         inp.addEventListener('input', function() {
             _query = this.value.trim();
             _selected.clear();
@@ -36,27 +59,19 @@
             clearTimeout(_debounceTimer);
             _debounceTimer = setTimeout(_applySearch, 150);
         });
-
-        // Enter/Shift+Enter → 결과 네비게이션
         inp.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 if (e.shiftKey) _navGo(-1); else _navGo(1);
             }
         });
-
-        var prevBtn = document.getElementById('gantt-search-prev');
-        var nextBtn = document.getElementById('gantt-search-next');
-        var clrBtn  = document.getElementById('gantt-ai-search-clear');
-        var fmChk   = document.getElementById('gantt-ai-search-filtermode');
-
-        if (prevBtn) prevBtn.addEventListener('click', function() { _navGo(-1); });
-        if (nextBtn) nextBtn.addEventListener('click', function() { _navGo(1); });
-        if (clrBtn)  clrBtn.addEventListener('click', _clearSearch);
-        if (fmChk)   fmChk.addEventListener('change', function() {
+        document.getElementById('gantt-search-prev').addEventListener('click', function() { _navGo(-1); });
+        document.getElementById('gantt-search-next').addEventListener('click', function() { _navGo(1); });
+        document.getElementById('gantt-ai-search-filtermode').addEventListener('change', function() {
             _mode = this.checked ? 'filter' : 'highlight';
             _applySearch();
         });
+        document.getElementById('gantt-ai-search-clear').addEventListener('click', _clearSearch);
 
         // 전역 단축키 Ctrl+Shift+F → 검색 포커스
         document.addEventListener('keydown', function(e) {
@@ -71,8 +86,13 @@
     }
 
     function _showSearchBar() {
-        var inline = document.getElementById('gantt-search-inline');
-        if (inline) inline.style.display = 'flex';
+        var bar = document.getElementById('gantt-ai-searchbar');
+        if (bar) bar.style.display = 'flex';
+    }
+
+    function _hideSearchBar() {
+        var bar = document.getElementById('gantt-ai-searchbar');
+        if (bar) bar.style.display = 'none';
     }
 
     function _clearSearch() {
@@ -83,9 +103,6 @@
         var tbody = document.getElementById('table-body');
         if (tbody) tbody.querySelectorAll('tr.gantt-search-focus').forEach(function(r) { r.classList.remove('gantt-search-focus'); });
         _applySearch();
-        // 검색어 없으면 인라인 영역 숨기기
-        var inline = document.getElementById('gantt-search-inline');
-        if (inline) inline.style.display = 'none';
     }
 
     // ─── 검색 실행 ─────────────────────────────────────────────────────────────
@@ -94,26 +111,57 @@
         if (!row) return false;
         if (isAiAll) return !!row._aiRegistered;
 
-        var haystack = [
-            row._origDev  || '', row._origT1 || '', row._origT2 || '',
-            row._origT3   || '', row._origT4 || ''
-        ].join(' ').toLowerCase();
+        var kwL = kw.toLowerCase();
 
         if (isProject) {
-            // @프로젝트명 검색 → AI 매칭 프로젝트명에서
-            var pName = (row._aiMatchedProjectName || '').toLowerCase();
-            return pName.includes(kw.toLowerCase());
+            // @프로젝트명 검색 → AI 매칭 프로젝트명
+            return (row._aiMatchedProjectName || '').toLowerCase().includes(kwL);
         }
 
-        // #키워드 → 업무명 + AI 키워드 + 상세내용 + 매칭근거
-        if (haystack.includes(kw.toLowerCase())) return true;
+        // ── 업무명 (WBS 각 레벨) ──
+        var taskNames = [
+            row._origDev || '', row._origT1 || '', row._origT2 || '',
+            row._origT3  || '', row._origT4 || ''
+        ].join(' ').toLowerCase();
+        if (taskNames.includes(kwL)) return true;
+
+        // ── 담당자 이름 (colIdx.assignee) ──
+        if (typeof colIdx !== 'undefined' && colIdx.assignee !== -1) {
+            var assigneeVal = row[colIdx.assignee];
+            if (assigneeVal && String(assigneeVal).toLowerCase().includes(kwL)) return true;
+        }
+
+        // ── 업무 상세내용 (colIdx.content) — 메일 원문 스니펫 포함 ──
+        if (typeof colIdx !== 'undefined' && colIdx.content !== -1) {
+            var contentVal = row[colIdx.content];
+            if (contentVal && String(contentVal).toLowerCase().includes(kwL)) return true;
+        }
+
+        // ── 모델명 (colIdx.model) ──
+        if (typeof colIdx !== 'undefined' && colIdx.model !== -1) {
+            var modelVal = row[colIdx.model];
+            if (modelVal && String(modelVal).toLowerCase().includes(kwL)) return true;
+        }
+
+        // ── 고객사 (colIdx.customer) ──
+        if (typeof colIdx !== 'undefined' && colIdx.customer !== -1) {
+            var customerVal = row[colIdx.customer];
+            if (customerVal && String(customerVal).toLowerCase().includes(kwL)) return true;
+        }
+
+        // ── 업무 상태 (colIdx.status) ──
+        if (typeof colIdx !== 'undefined' && colIdx.status !== -1) {
+            var statusVal = row[colIdx.status];
+            if (statusVal && String(statusVal).toLowerCase().includes(kwL)) return true;
+        }
+
+        // ── AI 등록 업무 추가 필드 ──
         if (row._aiMatchKeywords && row._aiMatchKeywords.some(function(k) {
-            return String(k).toLowerCase().includes(kw.toLowerCase());
+            return String(k).toLowerCase().includes(kwL);
         })) return true;
-        var src = (row._aiSourceSnippet || '').toLowerCase();
-        if (src.includes(kw.toLowerCase())) return true;
-        var basis = (row._aiMatchBasis || '').toLowerCase();
-        if (basis.includes(kw.toLowerCase())) return true;
+        if ((row._aiSourceSnippet || '').toLowerCase().includes(kwL)) return true;
+        if ((row._aiMatchBasis   || '').toLowerCase().includes(kwL)) return true;
+
         return false;
     }
 
@@ -425,20 +473,22 @@
     };
 
     /**
-     * AI검색 버튼 클릭 — 인라인 검색 영역 토글 + 이벤트 초기화.
+     * AI검색 버튼 클릭 — 테이블 위 검색바 표시/숨김 토글.
+     * 처음 열릴 때 이벤트 리스너 초기화 + 포커스.
+     * 닫을 때 검색 초기화.
      */
     window.ganttAiSearchToggle = function() {
-        _ensureSearchBar(); // 이벤트 리스너 첫 연결
-        var inline = document.getElementById('gantt-search-inline');
-        if (!inline) return;
-        var isVisible = inline.style.display === 'flex';
-        inline.style.display = isVisible ? 'none' : 'flex';
-        if (!isVisible) {
-            var inp = document.getElementById('gantt-ai-search-input');
-            if (inp) inp.focus();
-        } else {
-            // 닫을 때 검색 초기화
+        _ensureSearchBar(); // DOM 삽입 + 이벤트 연결 (최초 1회)
+        var bar = document.getElementById('gantt-ai-searchbar');
+        if (!bar) return;
+        var isVisible = bar.style.display === 'flex';
+        if (isVisible) {
             _clearSearch();
+            _hideSearchBar();
+        } else {
+            _showSearchBar();
+            var inp = document.getElementById('gantt-ai-search-input');
+            if (inp) { inp.focus(); inp.select(); }
         }
     };
 
