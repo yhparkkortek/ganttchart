@@ -18,7 +18,11 @@
         try { localStorage.setItem(_TP_KEY, JSON.stringify(store)); } catch(e) {}
     }
     function _currentKey() {
-        return window.currentDriveFileName || window.currentDriveFileId || '';
+        // 💡 [버그 수정] fileName 우선 → fileId 우선으로 변경.
+        //    팀 폴더 구조에서 다른 팀의 파일이 같은 이름('project.json')을 가질 수 있어,
+        //    fileName을 키로 쓰면 서로 다른 프로젝트가 같은 토픽 프로파일을 공유하는 버그 발생.
+        //    fileId는 Drive에서 전역 고유값이므로 항상 안전.
+        return window.currentDriveFileId || window.currentDriveFileName || '';
     }
 
     /** 저장된 토픽 프로파일 반환 (없으면 null) */
@@ -168,8 +172,14 @@
             var base = _orig.call(this, assignee, customer, model, inch, mailText, mailDate);
             var snippet = window._topicProfileSnippet ? window._topicProfileSnippet() : '';
             if (!snippet) return base;
-            // 프롬프트의 메일 본문 삽입 구역 바로 앞에 토픽 프로파일 주입
-            return base + '\n\n' + snippet;
+            // 💡 [버그 수정] 이전엔 base 맨 끝에 붙여서 메일 본문 이후(97% 위치)에 삽입됐음.
+            //    AI가 이미 JSON 형식을 준비한 후 컨텍스트를 보게 되는 문제 발생.
+            //    → '\n이메일:' 마커를 찾아 메일 본문 바로 앞(시스템 컨텍스트 구역)에 주입.
+            //    마커를 못 찾으면 기존 방식(맨 끝 추가)으로 폴백.
+            var marker = '\n이메일:';
+            var idx = base.lastIndexOf(marker);
+            if (idx === -1) return base + '\n\n' + snippet;
+            return base.substring(0, idx) + '\n\n' + snippet + base.substring(idx);
         };
     })();
 })();
