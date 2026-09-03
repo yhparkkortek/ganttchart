@@ -140,7 +140,10 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 |---|---|
 | `kortek_backend.py` | Flask 서버. 메일 SMTP/POP3, Telegram 알람, 설정 암복호화, 예약 발송 스케줄러 (`/schedule` API) |
 | `kortek_backend.bat` | 로컬에서 백엔드 실행하는 배치 스크립트 |
+| `kortek_backend.zip` | **다른 사용자 배포용 압축 파일** (`kortek_backend.py` + `kortek_backend.bat` 포함). `kortek_backend.py` 수정 시 `.claude/settings.json`의 PostToolUse 훅이 자동으로 재생성함 (`Compress-Archive` 사용) |
 | `requirements.txt` | flask, flask-cors, requests, cryptography, google-auth |
+
+> **Notice 탭 오류 진단**: `kortek_backend.py`의 `/schedule` 엔드포인트는 나중에 추가된 기능이라 구버전 백엔드를 가진 사용자에게는 없음. 구버전은 `/schedule` 요청 시 404 반환 → `renderScheduleRuleTable()`이 `_scheduleRules = 'outdated'` 상태로 "구버전" 경고 메시지 표시. AI·메일 기능은 정상(다른 엔드포인트 사용)하면서 Notice만 안 되면 백엔드 구버전 의심.
 
 ### 스타일
 | 파일 | 역할 |
