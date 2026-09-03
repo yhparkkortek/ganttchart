@@ -741,17 +741,32 @@
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🎛️ 업무필터 ▾</button>
     </div>
     <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-    <div class="btn-group">
-        <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🛠️ 일정 도구</button>
+    <div class="btn-group" style="flex:1;align-items:center;gap:4px;">
+        <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;">🛠️ 일정 도구</button>
         <button id="gantt-ai-search-btn"
             onclick="window.ganttAiSearchToggle && window.ganttAiSearchToggle()"
             onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
             title="간트 내 검색 — #키워드 @프로젝트 #ai (Ctrl+Shift+F)"
-            style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:4px;">🔍 AI검색</button>
+            style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;">🔍 AI검색</button>
+        <!-- ── 인라인 검색 영역 (AI검색 클릭 시 표시) ── -->
+        <div id="gantt-search-inline" style="display:none;align-items:center;gap:4px;flex:1;">
+            <input id="gantt-ai-search-input" type="text"
+                placeholder="#키워드  @프로젝트  #ai (AI 등록 전체)"
+                style="flex:1;min-width:180px;max-width:400px;padding:4px 10px;border-radius:5px;border:1px solid #a3d9e0;font-size:12px;outline:none;color:#00707d;background:#fff;">
+            <button id="gantt-search-prev" title="이전 결과 (Shift+Enter)"
+                style="padding:3px 8px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:12px;cursor:pointer;color:#00707d;">↑</button>
+            <button id="gantt-search-next" title="다음 결과 (Enter)"
+                style="padding:3px 8px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:12px;cursor:pointer;color:#00707d;">↓</button>
+            <span id="gantt-ai-search-count" style="color:#00707d;font-size:11px;white-space:nowrap;min-width:52px;text-align:center;"></span>
+            <label style="font-size:12px;cursor:pointer;white-space:nowrap;color:#00707d;">
+                <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:#00707d;"> 비매칭숨기기</label>
+            <button id="gantt-ai-search-clear" title="검색 초기화 (Esc)"
+                style="padding:3px 8px;background:#e0f5f7;border:1px solid #a3d9e0;border-radius:5px;font-size:12px;cursor:pointer;color:#00707d;white-space:nowrap;">✕ 초기화</button>
+        </div>
     </div>
 
-    <div class="btn-group" style="margin-left: auto;">
-        <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
+    <div class="btn-group" style="margin-left: auto;flex-shrink:0;">
+        <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;">🖨️ 인쇄 (PDF)</button>
     </div>
     </div>
 

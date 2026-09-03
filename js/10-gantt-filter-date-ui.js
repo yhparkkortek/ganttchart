@@ -49,6 +49,7 @@
             popup.style.top = (rect.bottom + 4) + 'px';
         }
         popup.style.display = willShow ? 'block' : 'none';
+        // Calendar/WR 팝업용 바깥 클릭 닫기 리스너 (gantt-filter-popup 클래스 대상)
         if (!window._ganttFilterPopupListenerAdded) {
             window._ganttFilterPopupListenerAdded = true;
             document.addEventListener('click', function(e) {
@@ -58,15 +59,6 @@
                         p.style.display = 'none';
                     }
                 });
-                // 업무필터 통합 패널 바깥 클릭 시 닫기
-                const wfp = document.getElementById('work-filter-panel');
-                const wfb = document.getElementById('work-filter-btn');
-                if (wfp && wfp.style.display === 'block') {
-                    if (!wfp.contains(e.target) && e.target !== wfb && !(wfb && wfb.contains(e.target))) {
-                        wfp.style.display = 'none';
-                        if (wfb) wfb.textContent = wfb.textContent.replace('▴', '▾');
-                    }
-                }
             });
         }
     };
@@ -121,10 +113,14 @@
         const orderMap = { 'LEVEL(WBS)': 1, '업무상태': 2, '개발단계': 3 };
         filterColumns.sort((a, b) => (orderMap[a.name] || 99) - (orderMap[b.name] || 99));
 
+        // 💡 [핵심] groupDiv를 배열에 수집 후 _buildWorkFilterPanel에 전달.
+        //    이전 구현에서 groupDiv를 DOM에 추가하지 않아 업무상태·개발단계가 사라지던 버그 수정.
+        const groupList = [];
+
         filterColumns.forEach(col => {
             let uniqueValues = new Set();
             for(let i = 1; i < data.length; i++) {
-                if (!data[i] || data[i].join('').trim() === '') continue; 
+                if (!data[i] || data[i].join('').trim() === '') continue;
                 let val = data[i][col.index]; if (val !== undefined && val !== null && val.toString().trim() !== '') { uniqueValues.add(val.toString().trim()); }
             }
             let valuesArray = Array.from(uniqueValues);
@@ -132,33 +128,23 @@
             else if (col.name === '업무상태') { valuesArray = ['진행', '완료', '대기', '지연']; }
             else { valuesArray.sort(); }
 
-            // 💡 [2026-08-29 되돌림] LEVEL(WBS) 트리거 버튼만 기본 상태에서 강조색(filter-active)으로
-            //    보여서 업무상태/개발단계 트리거와 색이 안 맞는다는 피드백 — 세 필터 모두 저장된 선택이
-            //    없는 첫 상태(기본값)에서 동일하게 'All'로 시작하도록 통일. 필터링 결과(전체 표시)는
-            //    이전과 동일하고, 트리거 버튼 강조 여부(updateGanttFilterTriggerState의 has('All') 체크)만
-            //    옆 버튼들과 같아짐. (0/1/2/3/4 버튼이 처음부터 개별 active로 안 보이는 대신, 라벨
-            //    자체가 active로 표시되어 "전체 선택됨"이 여전히 드러남 — 다른 두 필터와 동일한 패턴.)
             currentFilters[col.index] = savedFilters[col.index] || new Set(['All']);
             let groupDiv = document.createElement('div');
-            // 💡 [2026-08-27] LEVEL(WBS)만 색상/클릭 동작을 다르게 하려던 예외 처리(구 filter-group-wbs /
-            //    filter-label-static)는 업무상태·개발단계와 UI가 안 맞는다는 피드백으로 걷어냄 — 이제
-            //    세 필터 모두 완전히 같은 코드 경로(공통 .filter-group/.filter-label)를 씀. 레벨 0~4가
-            //    기본값으로 전체 선택되어 시작하는 동작(currentFilters 초기값)은 그대로 유지.
             groupDiv.className = 'filter-group';
             groupDiv.id = 'filter-group-' + col.index;
 
             let label = document.createElement('div');
             label.className = 'filter-label';
-            label.dataset.colName = col.name; label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
+            label.dataset.colName = col.name;
+            label.textContent = LANG[window._currentLang].filterLabel[col.name] || col.name;
             if (currentFilters[col.index].has('All')) label.classList.add('active');
-            label.onclick = () => { window.toggleAllFilter(col.index, groupDiv); window.updateGanttFilterTriggerState(col.index); window.updateWorkFilterBtnState(); };
+            label.onclick = () => { window.toggleAllFilter(col.index, groupDiv); window.updateGanttFilterTriggerState(col.index); };
             groupDiv.appendChild(label);
 
             valuesArray.forEach(val => {
                 let btn = document.createElement('button'); btn.className = 'btn'; btn.dataset.value = val;
                 if (currentFilters[col.index] && currentFilters[col.index].has(val)) { btn.classList.add('active'); }
 
-                // 💡 자바스크립트로 정확히 10글자 측정 후 넘치면 자르고 '~' 붙이기
                 if (col.name === '개발단계') {
                     btn.title = val;
                     let displayVal = val.length > 10 ? val.substring(0, 10) + "~" : val;
@@ -171,22 +157,22 @@
                     btn.textContent = statusMap[val] || val;
                 }
 
-                btn.onclick = (e) => { updateFilter(e, col.index, val, groupDiv); window.updateGanttFilterTriggerState(col.index); window.updateWorkFilterBtnState(); };
+                btn.onclick = (e) => { updateFilter(e, col.index, val, groupDiv); window.updateGanttFilterTriggerState(col.index); };
                 groupDiv.appendChild(btn);
             });
 
-            // 💡 [통합 드롭다운] 개별 트리거 버튼 대신 "업무필터" 통합 패널에 filter-group을 쌓는다.
-            //    하위 호환을 위해 col.index 기반 id는 그대로 유지.
+            groupList.push(groupDiv); // ← DOM에 붙이지 않고 배열에 수집
         });
 
-        // 업무필터 통합 패널 생성 / 갱신
-        _buildWorkFilterPanel();
+        // 업무필터 통합 패널 생성 (groups 배열 전달)
+        _buildWorkFilterPanel(groupList);
         window.updateWorkFilterBtnState();
     };
 
     // 업무필터 통합 패널 DOM 구성
-    function _buildWorkFilterPanel() {
-        // 기존 패널 제거
+    // groups: generateFilters가 만든 filter-group 엘리먼트 배열 (순서: LEVEL→업무상태→개발단계)
+    function _buildWorkFilterPanel(groups) {
+        // 기존 패널 제거 (프로젝트 전환 시 재구성)
         let old = document.getElementById('work-filter-panel');
         if (old) old.remove();
 
@@ -198,28 +184,18 @@
         panel.style.cssText =
             'display:none;position:absolute;top:calc(100% + 6px);left:0;z-index:1300;' +
             'background:#fff;border:1px solid #c5dde0;border-radius:10px;' +
-            'box-shadow:0 6px 20px rgba(0,0,0,.14);padding:12px 14px;min-width:340px;' +
-            'max-height:70vh;overflow-y:auto;';
+            'box-shadow:0 6px 20px rgba(0,0,0,.14);padding:12px 14px;min-width:360px;' +
+            'max-height:75vh;overflow-y:auto;';
 
         // 패널 제목
         const title = document.createElement('div');
-        title.style.cssText = 'font-size:11px;font-weight:700;color:#00707d;margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase;';
-        title.textContent = '업무 필터';
+        title.style.cssText = 'font-size:11px;font-weight:700;color:#00707d;margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase;';
+        title.textContent = '업무 필터 (LEVEL · 업무상태 · 개발단계)';
         panel.appendChild(title);
 
-        // 각 filter-group을 순서대로 패널 안에 이동
-        const orderMap = { 'LEVEL(WBS)': 1, '업무상태': 2, '개발단계': 3 };
-        const sorted = Array.from(document.querySelectorAll('.filter-group'))
-            .filter(g => g.closest('#work-filter-panel') === null) // 이미 패널 안에 있는 것 제외
-            .sort((a, b) => {
-                const na = (a.querySelector('.filter-label') || {}).dataset || {};
-                const nb = (b.querySelector('.filter-label') || {}).dataset || {};
-                return (orderMap[na.colName] || 99) - (orderMap[nb.colName] || 99);
-            });
-
-        sorted.forEach(g => {
-            // 개발단계는 구분선 위에 한 줄 더
-            if ((g.querySelector('.filter-label') || {}).dataset.colName === '개발단계') {
+        // groups 배열을 순서대로 패널에 추가 (각 사이에 구분선)
+        (groups || []).forEach((g, idx) => {
+            if (idx > 0) {
                 const sep = document.createElement('hr');
                 sep.style.cssText = 'border:none;border-top:1px solid #e0eef0;margin:8px 0;';
                 panel.appendChild(sep);
@@ -227,7 +203,22 @@
             panel.appendChild(g);
         });
 
-        // 패널을 btn-group 안에 절대위치로 삽입
         triggerGroup.style.position = 'relative';
         triggerGroup.appendChild(panel);
+
+        // 바깥 클릭 시 패널 닫기 — 한 번만 등록
+        if (!window._workFilterClickListenerAdded) {
+            window._workFilterClickListenerAdded = true;
+            document.addEventListener('click', function(e) {
+                const wfp = document.getElementById('work-filter-panel');
+                const wfb = document.getElementById('work-filter-btn');
+                if (wfp && wfp.style.display === 'block') {
+                    if (!wfp.contains(e.target) && e.target !== wfb && !(wfb && wfb.contains(e.target))) {
+                        wfp.style.display = 'none';
+                        // 버튼 텍스트 ▴ → ▾
+                        if (wfb) wfb.textContent = wfb.textContent.replace('▴', '▾');
+                    }
+                }
+            });
+        }
     }
