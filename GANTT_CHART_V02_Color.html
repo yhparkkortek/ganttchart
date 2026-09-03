@@ -732,24 +732,27 @@
     <div id="table-info">
     <span id="table-info-text">📊 Gantt Chart</span>
     <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
-    <div class="btn-group" id="gantt-filter-btn-group">
-        <!-- LEVEL(WBS) / 업무상태 / 개발단계 드롭다운 버튼은 generateFilters()가 여기 채웁니다 -->
+    <!-- 업무필터 통합 드롭다운 (LEVEL(WBS) / 업무상태 / 개발단계) -->
+    <div class="btn-group" id="gantt-filter-btn-group" style="position:relative;">
+        <button id="work-filter-btn"
+            onclick="window.toggleWorkFilterPanel(event)"
+            onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+            title="LEVEL(WBS) · 업무상태 · 개발단계 필터"
+            style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🎛️ 업무필터 ▾</button>
     </div>
     <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
     <div class="btn-group">
         <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🛠️ 일정 도구</button>
-        </div>
-        <div class="btn-group">
-            <button id="gantt-ai-search-btn"
-                onclick="window.ganttSearchQuery && (window.ganttSearchQuery('#ai'), document.getElementById('gantt-ai-search-input')&&document.getElementById('gantt-ai-search-input').focus())"
-                onmouseover="this.style.background='#c8b4f0';" onmouseout="this.style.background='#e8d8ff';"
-                title="AI 등록 업무 검색 / #키워드 @프로젝트 검색 (Ctrl+Shift+F)"
-                style="padding:6px 12px; background:#e8d8ff; border:none; color:#6930c3; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🤖 AI검색</button>
-        </div>
+        <button id="gantt-ai-search-btn"
+            onclick="window.ganttAiSearchToggle && window.ganttAiSearchToggle()"
+            onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+            title="간트 내 검색 — #키워드 @프로젝트 #ai (Ctrl+Shift+F)"
+            style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:4px;">🔍 AI검색</button>
+    </div>
 
-        <div class="btn-group" style="margin-left: auto;">
-            <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
-        </div>
+    <div class="btn-group" style="margin-left: auto;">
+        <button id="print-btn" onclick="window.smartPrint()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
+    </div>
     </div>
 
     <div id="dynamic-filters"></div>
