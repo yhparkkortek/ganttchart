@@ -412,6 +412,10 @@ window.analyzeMailContent = async function() {
     //    (미리보기는 목록에서 항목을 클릭했을 때만 표시됨)
     const mailInput = document.getElementById('mail-content-input');
     const mailTextDisplay = mailInput ? mailInput.value : '';
+    // 🔧 Bug 3 수정: 직접입력 분석도 _mailParsedRaw 를 설정해야
+    //    pasteAddResult → r.mailRaw 가 null 이 아닌 실제 원문을 보존할 수 있음
+    //    (메일서버 탭은 15c 에서, 파일첨부 탭은 15a mailShowRightDetail 에서 각각 설정함)
+    window._mailParsedRaw = { subject: '', sender: '', date: '', body2000: mailTextDisplay.substring(0, 2000) };
     pasteAddResult(parsed, mailTextDisplay);
 };
 
