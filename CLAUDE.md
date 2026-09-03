@@ -115,7 +115,8 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `23-sidebar-tabs.js` | 사이드바 접기/펴기 + 탭 전환 |
 | `24-calendar-tab.js` | Calendar 탭 — 간트차트 업무를 월간 캘린더로 표시 |
 | `25-ai-learning.js` | AI 학습 시스템. Phase 3(학습 로그 저장) + **Phase 4 재시도 엔진**: `_alTriggerRetry()` → 저신뢰도(`_aiConfidence≠'상'`) 행 탐지 → 우측 배너 표시 → `_alRunRetry()` → `callAiBackend` 재분석 → 개선 시 `recalculateSchedules()` |
-| `26-topic-profile.js` | **Phase 6 토픽 프로파일**: 간트 업무명 → Gemini AI → `{keywords,topics,patterns,summary}` → `localStorage('gantt_topic_profile_v1')` 저장. `_generateTopicProfile()` / `_getTopicProfile()` / `_topicProfileSnippet()` / `_clearTopicProfile()` / `_refreshTopicProfileBadge()`. `getSystemPrompt`를 래핑해 프로파일 스니펫을 자동 주입 |
+| `26-topic-profile.js` | **Phase 6 토픽 프로파일**: 간트 업무명 → Gemini AI → `{keywords,topics,patterns,summary}` → `localStorage('gantt_topic_profile_v1')` 저장. `_generateTopicProfile()` / `_getTopicProfile()` / `_topicProfileSnippet()` / `_clearTopicProfile()` / `_refreshTopicProfileBadge()`. `getSystemPrompt`를 래핑해 **메일 본문 직전**에 스니펫 주입. `_currentKey()`는 `fileId` 우선(fileName 공유 충돌 방지). |
+| `27-topic-contamination.js` | **Phase 8 토픽 오염 감지·AI 자가진단**: Phase 3 학습 로그(`_alGetEntries`) 재사용 → 30일 가중 오염 지수 계산 → 4단계 레벨(ok/warn/caution/critical) → 메일 분석기 배지·토스트 알람. `_writeLearningEntry` 래핑: 오매칭 기록 후 300ms 자동 체크. `_tcRunDiagnosis()` → Gemini AI에 오염 패턴 전송 → 진단 모달(제거/추가 키워드 제안) → `_tcApplyFix()` 사용자 승인 시 토픽 갱신 + 진단 이력(`_diagHistory`) 보존. |
 | `26-gantt-search.js` | 간트차트 내 키워드 검색 |
 
 > `04`, `14`, `15`, `22`는 각각 원래 하나의 거대 파일(최대 11,915줄)이었고, 협업 편의와 토큰 절약을
@@ -132,6 +133,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | 5 | 신뢰도 배지 (`_confBadge`) — 세 목록 모두 | `15a`, `15c` |
 | 6 | 토픽 프로파일 생성·주입 | `26-topic-profile.js` |
 | 7 | 다중 프로젝트 배분 (`gantt_ai_reassign_queue_v1`) | `14a`, `15a`, HTML |
+| 8 | 토픽 오염 감지·AI 자가진단 (`_tcGetScore`, `_tcRunDiagnosis`, `_tcApplyFix`) | `27-topic-contamination.js` |
 
 ### 백엔드
 | 파일 | 역할 |

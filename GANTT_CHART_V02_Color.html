@@ -2000,6 +2000,22 @@
                         <span id="topic-profile-badge" style="font-size:10px;color:#888;white-space:nowrap;"></span>
                     </div>
 
+                    <!-- Phase 8: 토픽 오염 감지 배지 + AI 진단 버튼 -->
+                    <div style="margin-top:4px; display:flex; gap:6px; align-items:center; min-height:22px;">
+                        <span id="topic-contamination-badge" style="font-size:10px;color:#aaa;flex:1;"></span>
+                        <button id="topic-diagnosis-btn"
+                            onclick="window._tcRunDiagnosis && window._tcRunDiagnosis()"
+                            title="오매칭 패턴을 AI로 분석하여 토픽 프로파일의 오염 원인을 진단하고 수정안을 제시합니다."
+                            onmouseover="this.style.background='#fcd5d5';this.style.borderColor='#e8857a';"
+                            onmouseout="this.style.background='#fde8e8';this.style.borderColor='#f0a8a0';"
+                            style="display:none; height:22px; padding:0 10px; font-size:11px; font-weight:bold;
+                                   cursor:pointer; background:#fde8e8; color:#b91c1c;
+                                   border:1px solid #f0a8a0; border-radius:6px;
+                                   transition:background .15s,border-color .15s; white-space:nowrap;">
+                            🔬 AI 진단
+                        </button>
+                    </div>
+
                     <!-- 직접입력 분석 결과 목록 (누적) — 파일첨부/메일서버와 동일한 체크박스+일괄등록 구조 -->
                     <div id="paste-result-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; margin-bottom:4px;">
                         <div style="display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;">
@@ -2346,6 +2362,8 @@
 <script src="js/25-ai-learning.js"></script>
 
 <script src="js/26-topic-profile.js"></script>
+
+<script src="js/27-topic-contamination.js"></script>
 
 <script src="js/26-gantt-search.js"></script>
 
