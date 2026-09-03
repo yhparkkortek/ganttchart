@@ -736,7 +736,7 @@
     <div class="btn-group" id="gantt-filter-btn-group" style="position:relative;">
         <button id="work-filter-btn"
             onclick="window.toggleWorkFilterPanel(event)"
-            onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
+            onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');"
             title="LEVEL(WBS) · 업무상태 · 개발단계 필터"
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🎛️ 업무필터 ▾</button>
     </div>

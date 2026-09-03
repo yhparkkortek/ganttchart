@@ -19,6 +19,7 @@
     var _selected = new Set(); // 체크박스 선택된 인덱스 목록
     var _navIndex = -1;        // 현재 네비게이션 위치 (-1=미선택)
     var _debounceTimer = null; // 검색 debounce 타이머
+    var _lastAutoNavQuery = ''; // 자동 이동 마지막 적용 쿼리
 
     // ─── 검색바 삽입 (테이블 위 분리 렌더링 — 기본 숨김, AI검색 버튼으로 토글) ──
 
@@ -151,13 +152,91 @@
         if (bar) bar.style.display = 'none';
     }
 
+    // ─── 텍스트 하이라이트 헬퍼 ───────────────────────────────────────────────────
+
+    // 텍스트 노드를 재귀 탐색해 매칭 문자열을 <mark> 로 래핑 (innerHTML 미사용 → 이벤트 핸들러 보존)
+    var _HL_SKIP_TAGS = { MARK:1, SCRIPT:1, STYLE:1, BUTTON:1, INPUT:1, SELECT:1, TEXTAREA:1, SVG:1 };
+    function _wrapTextNodes(node, regex) {
+        if (node.nodeType === 3) { // Text node
+            regex.lastIndex = 0;
+            if (!regex.test(node.textContent)) return;
+            regex.lastIndex = 0;
+            var text = node.textContent;
+            var frag = document.createDocumentFragment();
+            var last = 0; var m;
+            while ((m = regex.exec(text)) !== null) {
+                if (m.index > last) frag.appendChild(document.createTextNode(text.slice(last, m.index)));
+                var mark = document.createElement('mark');
+                mark.className = 'gantt-search-hl';
+                mark.textContent = m[0];
+                frag.appendChild(mark);
+                last = regex.lastIndex;
+                if (m[0].length === 0) { regex.lastIndex++; break; }
+            }
+            if (last < text.length) frag.appendChild(document.createTextNode(text.slice(last)));
+            node.parentNode.replaceChild(frag, node);
+        } else if (node.nodeType === 1 && !_HL_SKIP_TAGS[node.tagName]) {
+            Array.from(node.childNodes).forEach(function(c) { _wrapTextNodes(c, regex); });
+        }
+    }
+
+    // 매칭 행에 텍스트 하이라이트 삽입 (td 단위)
+    function _highlightTextInRow(tr, kw) {
+        if (!kw) return;
+        var escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        var regex = new RegExp(escaped, 'gi');
+        tr.querySelectorAll('td').forEach(function(td) {
+            if (!td.hasAttribute('data-hl-done')) {
+                td.setAttribute('data-hl-done', '1');
+                _wrapTextNodes(td, regex);
+            }
+        });
+    }
+
+    // 모든 텍스트 하이라이트 제거 (<mark> 제거 + 텍스트노드 병합)
+    function _clearAllHighlights() {
+        var tbody = document.getElementById('table-body');
+        if (!tbody) return;
+        tbody.querySelectorAll('mark.gantt-search-hl').forEach(function(m) {
+            var p = m.parentNode; if (!p) return;
+            p.replaceChild(document.createTextNode(m.textContent), m);
+            p.normalize();
+        });
+        tbody.querySelectorAll('td[data-hl-done]').forEach(function(td) {
+            td.removeAttribute('data-hl-done');
+        });
+    }
+
+    // ─── 오늘 날짜 기준 네비게이션 위치 계산 ────────────────────────────────────────
+    // ↓(미래) / ↑(과거) 방향으로 화살표가 작동하도록 오름차순 정렬 기준으로 가장 가까운 결과 선택
+    function _findTodayNavIndex() {
+        if (!_matchedIndices.length) return 0;
+        var today = new Date(); today.setHours(0, 0, 0, 0);
+        var todayMs = today.getTime();
+        var bestPos = 0;
+        var bestScore = Infinity;
+        _matchedIndices.forEach(function(gIdx, arrPos) {
+            var row = (typeof globalData !== 'undefined') ? globalData[gIdx] : null;
+            if (!row) return;
+            var raw = (typeof colIdx !== 'undefined' && colIdx.start !== -1) ? row[colIdx.start] : null;
+            if (!raw) return;
+            var d = new Date(raw); if (isNaN(d.getTime())) return;
+            var diff = d.getTime() - todayMs;
+            // 미래(diff≥0)를 과거보다 우선; 같은 방향이면 절대값 작은 것
+            var score = diff >= 0 ? diff : (Math.abs(diff) + 365 * 24 * 3600 * 1000);
+            if (score < bestScore) { bestScore = score; bestPos = arrPos; }
+        });
+        return bestPos;
+    }
+
     function _clearSearch() {
-        _query = ''; _selected.clear(); _navIndex = -1;
+        _query = ''; _selected.clear(); _navIndex = -1; _lastAutoNavQuery = '';
         clearTimeout(_debounceTimer);
         var inp = document.getElementById('gantt-ai-search-input');
         if (inp) inp.value = '';
         var tbody = document.getElementById('table-body');
         if (tbody) tbody.querySelectorAll('tr.gantt-search-focus').forEach(function(r) { r.classList.remove('gantt-search-focus'); });
+        _clearAllHighlights();
         _applySearch();
     }
 
@@ -233,7 +312,10 @@
         var kw = isProject ? raw.slice(1) : isHash ? raw.slice(1) : raw;
         var active = kw.length > 0;
 
-        // 카운트
+        // 검색어가 바뀌면 기존 하이라이트 전체 제거
+        var queryChanged = _query !== _lastAutoNavQuery;
+        if (queryChanged) _clearAllHighlights();
+
         var matchCount = 0;
 
         var rows = tbody.querySelectorAll('tr[data-row-index]');
@@ -249,6 +331,8 @@
                     tr.classList.remove('gantt-search-dim');
                     _matchedIndices.push(idx);
                     matchCount++;
+                    // ── 텍스트 하이라이트 (행 테두리 대신) ──
+                    if (!isAiAll) _highlightTextInRow(tr, kw);
                 } else if (_mode === 'filter') {
                     tr.style.display = 'none';
                     tr.classList.remove('gantt-search-match');
@@ -259,7 +343,6 @@
             } else {
                 tr.classList.remove('gantt-search-match', 'gantt-search-dim');
                 tr.style.display = '';
-                // 필터 모드 해제 시 행 다시 보이게
             }
 
             // 필터 해제 시 display 복원
@@ -269,8 +352,14 @@
             _updateRowCheckbox(tr, idx, matches && active);
         });
 
-        // 카운트 표시 (네비게이션 위치 포함)
-        _navIndex = Math.min(_navIndex, _matchedIndices.length - 1);
+        // 네비게이션: 검색어가 바뀌면 오늘 날짜 가장 가까운 위치로 자동 이동
+        if (active && _matchedIndices.length && queryChanged) {
+            _lastAutoNavQuery = _query;
+            _navIndex = _findTodayNavIndex();
+            _scrollToMatch(_navIndex);
+        } else {
+            _navIndex = Math.min(_navIndex, _matchedIndices.length - 1);
+        }
         _updateNavCount(matchCount);
 
         // 일괄처리 툴바 업데이트
@@ -347,20 +436,21 @@
         var bar = document.createElement('div');
         bar.id = 'gantt-ai-bulk-bar';
         bar.style.cssText =
-            'display:none;position:sticky;top:0;z-index:1200;background:#2d2d2d;color:#fff;' +
-            'padding:8px 14px;display:none;align-items:center;gap:10px;flex-wrap:wrap;font-size:13px;';
+            'display:none;position:sticky;top:0;z-index:1200;' +
+            'background:#f0f5f6;border-bottom:1px solid #cde6e9;' +
+            'padding:7px 14px;align-items:center;gap:9px;flex-wrap:wrap;font-size:13px;';
         bar.innerHTML =
-            '<span id="gantt-ai-bulk-count" style="font-weight:700;white-space:nowrap;"></span>' +
+            '<span id="gantt-ai-bulk-count" style="font-weight:700;white-space:nowrap;color:#2d5a63;"></span>' +
             '<button id="gantt-ai-bulk-selall"' +
-            '  style="padding:5px 12px;background:#555;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">전체 선택</button>' +
+            '  style="padding:4px 11px;background:#dceef0;color:#2d5a63;border:1px solid #b4d8dc;border-radius:5px;cursor:pointer;font-size:12px;">전체 선택</button>' +
             '<button id="gantt-ai-bulk-dellearn"' +
-            '  style="padding:5px 14px;background:#d63384;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;">📚 오매칭 삭제+학습</button>' +
+            '  style="padding:4px 13px;background:#fadadd;color:#8b1a4a;border:1px solid #f0b0c0;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;">📚 오매칭 삭제+학습</button>' +
             '<button id="gantt-ai-bulk-del"' +
-            '  style="padding:5px 14px;background:#dc3545;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🗑️ 일괄 삭제</button>' +
+            '  style="padding:4px 13px;background:#ffd6d6;color:#8b1a2a;border:1px solid #f0b0b0;border-radius:6px;cursor:pointer;font-size:13px;">🗑️ 일괄 삭제</button>' +
             '<button id="gantt-ai-bulk-untag"' +
-            '  style="padding:5px 14px;background:#6c757d;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🏷️ AI 태그 해제</button>' +
+            '  style="padding:4px 13px;background:#dde8f0;color:#2c4a6a;border:1px solid #b4cede;border-radius:6px;cursor:pointer;font-size:13px;">🏷️ AI 태그 해제</button>' +
             '<button id="gantt-ai-bulk-cancel"' +
-            '  style="padding:5px 10px;background:#444;color:#fff;border:none;border-radius:5px;cursor:pointer;font-size:12px;">취소</button>';
+            '  style="padding:4px 10px;background:#ebebeb;color:#555;border:1px solid #ccc;border-radius:5px;cursor:pointer;font-size:12px;">취소</button>';
 
         var container = document.getElementById('table-container');
         if (container) container.insertBefore(bar, container.firstChild);
@@ -491,13 +581,18 @@
         var s = document.createElement('style');
         s.id = 'gantt-ai-search-css';
         s.textContent =
-            'tr.gantt-search-match { outline: 2px solid #00b4c6; outline-offset: -1px; background: #eaf8f9 !important; }' +
-            'tr.gantt-search-focus { outline: 3px solid #00707d !important; outline-offset: -2px; background: #d0f2f5 !important; }' +
-            'tr.gantt-search-dim   { opacity: 0.25; pointer-events: none; }' +
+            // 매칭 행: 테두리 없음 — 텍스트 <mark> 하이라이트로 대체
+            'tr.gantt-search-match { /* outline 제거 */ }' +
+            // 현재 포커스 행: 매우 연한 배경만
+            'tr.gantt-search-focus { background: rgba(0,112,125,.06) !important; }' +
+            'tr.gantt-search-dim   { opacity: 0.2; pointer-events: none; }' +
             '#gantt-ai-searchbar   { border-radius: 0; }' +
             '#gantt-ai-search-input:focus { border-color: #00707d !important; box-shadow: 0 0 0 2px rgba(0,112,125,.15); }' +
-            '#gantt-ai-bulk-bar button:hover { filter: brightness(1.15); }' +
-            '#gantt-search-prev:hover, #gantt-search-next:hover { background: #a3d9e0 !important; }';
+            '#gantt-ai-bulk-bar button:hover { filter: brightness(0.93); }' +
+            '#gantt-search-prev:hover, #gantt-search-next:hover { background: rgba(0,112,125,.15) !important; }' +
+            // 텍스트 하이라이트 mark
+            'mark.gantt-search-hl { background: #fff176; color: #333; border-radius: 2px;' +
+            '  padding: 0 1px; font-weight: inherit; font-style: inherit; }';
         document.head.appendChild(s);
     }
 
