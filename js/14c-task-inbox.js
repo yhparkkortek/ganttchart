@@ -244,6 +244,7 @@ window.renderTaskInbox = function() {
                     ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
                     : ''}
                 <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
+                ${it.status !== '대기' ? `<button onclick="window.inboxReportFalseMatch('${it.uid}')" onmouseover="this.style.background='#ffe0b2'; this.style.borderColor='#ef8c25';" onmouseout="this.style.background='#fff3e0'; this.style.borderColor='#ffca75';" title="${_ibEn ? 'Report as false match — logs to topic learning, removes from current Gantt if placed here' : '오매칭으로 신고 — 토픽 학습에 기록 · 현재 Proj 배치됨이면 간트에서도 삭제'}" style="flex:1.2 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #ffca75; border-radius:6px; background:#fff3e0; color:#b05000; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🚨 ${_ibEn ? 'False match' : '오매칭 신고'}</button>` : ''}
                 <button onclick="window._ibExpandedUids.delete('${it.uid}'); window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
@@ -778,5 +779,140 @@ window.toggleMailOriginal = function() {
     const open = b.style.display !== 'none';
     b.style.display = open ? 'none' : 'block';
     a.textContent = open ? '▼' : '▲';
+};
+
+// ─── 💡 [Phase 8 연동] 오매칭 신고 — 보관함에서 전송된 업무의 오탐을 즉시 학습 시스템에 반영 ─────
+// · 배치됨 / 자동배치됨: 현재 열린 globalData에서 해당 업무를 찾아 삭제 + negative_match 기록
+// · 전송됨:              토픽 학습 기록만 → 그 파일에서는 직접 삭제하도록 안내
+window.inboxReportFalseMatch = function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const _en = window._currentLang === 'en';
+    const t = it.task || {};
+    const taskName = t['업무명'] || (_en ? '(untitled)' : '(제목없음)');
+
+    // ① 대상 프로젝트 키 + 레이블 추론
+    var projectKey = '';
+    var targetLabel = '';
+    var isCurrentProject = (it.status === '배치됨' || it.status === '자동배치됨');
+    if (isCurrentProject) {
+        projectKey = window.currentDriveFileId || window.currentDriveFileName || '';
+        targetLabel = (window.projectMeta && window.projectMeta.프로젝트명) || (_en ? 'Current Project' : '현재 프로젝트');
+    } else if (it.status === '전송됨') {
+        // matchedProject의 candidates[0]에 drive_file_id가 있으면 가장 신뢰도 높음
+        const mc = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
+        if (mc) {
+            projectKey = mc.drive_file_id || mc.file_name || '';
+            targetLabel = mc.file_name || mc.model || mc.customer || (_en ? 'Target Project' : '대상 프로젝트');
+        }
+        // fallback: history 마지막 항목의 target(fileName)
+        if (!projectKey) {
+            const lastH = (it.history || []).slice(-1)[0];
+            if (lastH && lastH.target) { projectKey = lastH.target; targetLabel = lastH.target; }
+        }
+    }
+
+    if (!projectKey) {
+        alert(_en
+            ? '⚠️ Cannot determine the target project.\nPlease delete the task directly from the Gantt chart.'
+            : '⚠️ 대상 프로젝트를 특정할 수 없습니다.\n간트차트에서 직접 오매칭 삭제해주세요.');
+        return;
+    }
+
+    // ② 확인
+    const confirmMsg = isCurrentProject
+        ? (_en
+            ? `Report "${taskName}" as a false match?\n✅ Will also be removed from the current Gantt chart.`
+            : `"${taskName}"\n오매칭으로 신고할까요?\n✅ 현재 간트차트에서도 해당 업무를 삭제합니다.`)
+        : (_en
+            ? `Report "${taskName}" as a false match for [${targetLabel}]?\n(Please delete it from that project manually.)`
+            : `"${taskName}"\n[${targetLabel}] 프로젝트의 오매칭으로 신고할까요?\n(해당 프로젝트에서는 직접 삭제해주세요.)`);
+    if (!confirm(confirmMsg)) return;
+
+    // ③ 매칭 메타 수집 → 학습 품질 향상
+    const mc2 = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
+    const matchKeywords = (mc2 && mc2.keywords) ? mc2.keywords.slice(0, 8) : [];
+    const matchBasis    = (mc2 && (mc2.model || mc2.customer)) || targetLabel;
+    const confidence    = (mc2 && mc2.confidence) || t['매칭신뢰도'] || '';
+
+    // ④ negative_match 학습 기록 (Phase 3 → Phase 8 연동)
+    if (window._writeLearningEntry) {
+        window._writeLearningEntry(projectKey, {
+            type:             'negative_match',
+            reason:           _en ? 'False match (inbox report)' : '오매칭(보관함 신고)',
+            taskName:         taskName,
+            confidence:       confidence,
+            matchedProjectId: projectKey,
+            matchBasis:       matchBasis,
+            matchKeywords:    matchKeywords,
+            sourceSnippet:    ''
+        });
+    }
+
+    // ⑤ 현재 프로젝트이면 globalData에서 해당 업무 찾아 삭제
+    var removedFromGantt = false;
+    if (isCurrentProject && typeof globalData !== 'undefined' && globalData && globalData.length > 1) {
+        // 우선순위: ① mailRaw.subject 일치 (가장 확실), ② 업무명 + 시작일 일치
+        const mailSubject = it.mailRaw && it.mailRaw.subject ? it.mailRaw.subject.trim() : '';
+        const startDate   = (t['시작일'] || '').trim();
+
+        for (var i = 1; i < globalData.length; i++) {
+            const row = globalData[i];
+            if (!row) continue;
+            // mailRaw 비교 (buildMailTaskRow가 _mailRaw를 그대로 첨부)
+            if (mailSubject && row._mailRaw && (row._mailRaw.subject || '').trim() === mailSubject) {
+                typeof logChange === 'function' && logChange(i, -1, taskName, '삭제', '오매칭 수거(보관함)');
+                globalData.splice(i, 1);
+                removedFromGantt = true;
+                break;
+            }
+            // fallback: 업무명 + 시작일 매칭
+            var cols = typeof colIdx !== 'undefined' ? colIdx : {};
+            var rowNameCells = [
+                cols.task1 !== undefined && cols.task1 !== -1 ? row[cols.task1] : null,
+                cols.task2 !== undefined && cols.task2 !== -1 ? row[cols.task2] : null,
+                cols.task3 !== undefined && cols.task3 !== -1 ? row[cols.task3] : null,
+                cols.task4 !== undefined && cols.task4 !== -1 ? row[cols.task4] : null,
+                row._origT1, row._origT2, row._origT3, row._origT4, row._origDev
+            ].filter(Boolean).map(function(v) { return String(v).replace(/\s*＊AI📧\s*$/, '').trim(); });
+            const rowStart  = cols.start !== undefined && cols.start !== -1 ? (row[cols.start] || '') : '';
+            const nameMatch = rowNameCells.some(function(n) { return n === taskName || n.startsWith(taskName.slice(0, 8)); });
+            if (nameMatch && (!startDate || rowStart === startDate)) {
+                typeof logChange === 'function' && logChange(i, -1, taskName, '삭제', '오매칭 수거(보관함)');
+                globalData.splice(i, 1);
+                removedFromGantt = true;
+                break;
+            }
+        }
+        if (removedFromGantt && typeof window.recalculateSchedules === 'function') {
+            window.recalculateSchedules();
+        }
+    }
+
+    // ⑥ 보관함 이력 기록
+    window.TaskInbox.setStatus(uid, it.status, {
+        type:             '오매칭 신고',
+        target:           targetLabel,
+        removedFromGantt: removedFromGantt,
+        at:               new Date().toISOString()
+    });
+
+    // ⑦ 결과 토스트
+    if (window.showToast) {
+        if (removedFromGantt) {
+            window.showToast(
+                _en ? '🚨 Removed from Gantt + topic learning recorded.' : '🚨 간트에서 삭제 + 토픽 학습 기록 완료',
+                'info', 4000
+            );
+        } else {
+            window.showToast(
+                _en
+                    ? `🚨 Learning recorded — please delete from [${targetLabel}] manually.`
+                    : `🚨 학습 기록 완료 — [${targetLabel}]에서 직접 삭제해주세요.`,
+                'warn', 5000
+            );
+        }
+    }
+    window.renderTaskInbox();
 };
 
