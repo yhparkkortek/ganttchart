@@ -339,13 +339,14 @@
                 } else {
                     tr.classList.remove('gantt-search-match');
                     tr.classList.add('gantt-search-dim');
+                    tr.style.display = ''; // 🐛 filter→highlight 전환 시 숨겨진 행 복원
                 }
             } else {
                 tr.classList.remove('gantt-search-match', 'gantt-search-dim');
                 tr.style.display = '';
             }
 
-            // 필터 해제 시 display 복원
+            // 매칭 행은 항상 보이게
             if (!active || matches) tr.style.display = '';
 
             // 체크박스
@@ -437,20 +438,20 @@
         bar.id = 'gantt-ai-bulk-bar';
         bar.style.cssText =
             'display:none;position:sticky;top:0;z-index:1200;' +
-            'background:#f0f5f6;border-bottom:1px solid #cde6e9;' +
+            'background:#3a5561;border-bottom:2px solid #2a4250;' +  // 어두운 파스텔 틸
             'padding:7px 14px;align-items:center;gap:9px;flex-wrap:wrap;font-size:13px;';
         bar.innerHTML =
-            '<span id="gantt-ai-bulk-count" style="font-weight:700;white-space:nowrap;color:#2d5a63;"></span>' +
-            '<button id="gantt-ai-bulk-selall"' +
-            '  style="padding:4px 11px;background:#dceef0;color:#2d5a63;border:1px solid #b4d8dc;border-radius:5px;cursor:pointer;font-size:12px;">전체 선택</button>' +
-            '<button id="gantt-ai-bulk-dellearn"' +
-            '  style="padding:4px 13px;background:#fadadd;color:#8b1a4a;border:1px solid #f0b0c0;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;">📚 오매칭 삭제+학습</button>' +
-            '<button id="gantt-ai-bulk-del"' +
-            '  style="padding:4px 13px;background:#ffd6d6;color:#8b1a2a;border:1px solid #f0b0b0;border-radius:6px;cursor:pointer;font-size:13px;">🗑️ 일괄 삭제</button>' +
-            '<button id="gantt-ai-bulk-untag"' +
-            '  style="padding:4px 13px;background:#dde8f0;color:#2c4a6a;border:1px solid #b4cede;border-radius:6px;cursor:pointer;font-size:13px;">🏷️ AI 태그 해제</button>' +
+            '<span id="gantt-ai-bulk-count" style="font-weight:700;white-space:nowrap;color:#e8f4f6;"></span>' +
+            '<button id="gantt-ai-bulk-selall"' +  // 🔵 Blue 파스텔
+            '  style="padding:4px 12px;background:#b8d4f8;color:#1a3a6e;border:1px solid #8ab4e8;border-radius:5px;cursor:pointer;font-size:12px;font-weight:600;">전체 선택</button>' +
+            '<button id="gantt-ai-bulk-dellearn"' +  // 🟠 Orange 파스텔
+            '  style="padding:4px 13px;background:#fde8c0;color:#7a3e00;border:1px solid #f5c070;border-radius:6px;font-weight:700;cursor:pointer;font-size:13px;">📚 오매칭 삭제+학습</button>' +
+            '<button id="gantt-ai-bulk-del"' +  // 🔴 Red 파스텔
+            '  style="padding:4px 13px;background:#fccfcf;color:#8b1a2a;border:1px solid #f09090;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🗑️ 일괄 삭제</button>' +
+            '<button id="gantt-ai-bulk-untag"' +  // 🟢 Green 파스텔
+            '  style="padding:4px 13px;background:#c8f0d5;color:#1a5a2a;border:1px solid #88d4a0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;">🏷️ AI 태그 해제</button>' +
             '<button id="gantt-ai-bulk-cancel"' +
-            '  style="padding:4px 10px;background:#ebebeb;color:#555;border:1px solid #ccc;border-radius:5px;cursor:pointer;font-size:12px;">취소</button>';
+            '  style="padding:4px 10px;background:#6a8a96;color:#e8f4f6;border:1px solid #4a6878;border-radius:5px;cursor:pointer;font-size:12px;">취소</button>';
 
         var container = document.getElementById('table-container');
         if (container) container.insertBefore(bar, container.firstChild);
