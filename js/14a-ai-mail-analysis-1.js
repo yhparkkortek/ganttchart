@@ -585,13 +585,19 @@ window.renderMailResult = function(result) {
         let bestIndex = -1;
         for (let i = 1; i < globalData.length; i++) {
             let row = globalData[i]; if (!row) continue;
+            // 🔧 [버그수정] _calcStartTs 우선, 없으면 셀 값에서 직접 파싱
+            // (Drive 불러온 직후·신규 행 등 recalculateSchedules 전엔 _calcStartTs가 미세팅 상태)
             let rowStartTs = row._calcStartTs;
+            if (!rowStartTs && colIdx.start !== -1 && row[colIdx.start]) {
+                const _p = parseDateValue(row[colIdx.start]);
+                if (_p) rowStartTs = _p.ts;
+            }
             if (rowStartTs && rowStartTs > startTs) {
                 bestIndex = i - 1;
                 break;
             }
         }
-    
+
         select.value = bestIndex !== -1 ? String(bestIndex) : '-1';
     };
 

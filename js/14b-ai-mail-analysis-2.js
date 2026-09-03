@@ -767,7 +767,12 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
     let bestIndex = -1;
     for (let i = first; i <= last; i++) {
         const row = rows[i]; if (!row) continue;
-        const rowStartTs = row._calcStartTs;
+        // 🔧 [버그수정] _calcStartTs 우선, 없으면 셀 값에서 직접 파싱
+        let rowStartTs = row._calcStartTs;
+        if (!rowStartTs && ci.start !== -1 && row[ci.start]) {
+            const _p = (typeof parseDateValue === 'function') ? parseDateValue(row[ci.start]) : null;
+            if (_p) rowStartTs = _p.ts;
+        }
         if (rowStartTs && rowStartTs > startTs) { bestIndex = i - 1; break; }
     }
     if (bestIndex === -1) return fallback; // 구간 내 모든 행보다 늦은 날짜 → 결과적으로 구간 끝과 동일

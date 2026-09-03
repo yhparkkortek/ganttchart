@@ -222,7 +222,10 @@
                         let span = noTd.querySelector('.row-num-span');
                         if(span) span.textContent = visibleCount++; else noTd.textContent = visibleCount++; 
                     } else if (tr.cells.length > 0) { tr.cells[0].textContent = visibleCount++; }
-                    let chartTd = tr.querySelector('.chart-td'); if (chartTd) { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level, window.getRowCompareInfo ? window.getRowCompareInfo(rowData) : null); }
+                    // 🔧 [버그수정] 차트 렌더링 오류가 외부 try-catch를 타면 이후 행들의 NO 번호 세팅이
+                    //    전부 중단됨 → 차트만 개별 보호해서 한 행이 실패해도 나머지 NO 번호는 보장
+                    let chartTd = tr.querySelector('.chart-td');
+                    if (chartTd) { try { chartTd.innerHTML = createStatusChart(rowData._calcStartTs, rowData._calcPlanTs, rowData[colIdx.status], rowData._level, window.getRowCompareInfo ? window.getRowCompareInfo(rowData) : null); } catch(ce) { console.warn('chart render skip:', ce); } }
                 } else { tr.style.display = "none"; }
             }
             // 💡 전역 타이틀 및 파일명 동적 주입 스케줄러 명시 호출
