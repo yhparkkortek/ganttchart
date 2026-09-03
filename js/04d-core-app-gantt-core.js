@@ -514,8 +514,13 @@
             if (window.ganttSearchInit) window.ganttSearchInit();
             if (window.ganttSearchObserve) window.ganttSearchObserve();
             window.pushUndoSnapshot();
-            
-            window.showToast(window._currentLang === 'en' ? "✅ Schedule updated." : "✅ 일정이 업데이트 되었습니다.");
+
+            // 🔧 행 이동 연속 클릭 시 토스트 도배 방지:
+            //    moveRow / moveSelectedRows 가 _rowMoving=true 로 표시하면 이 토스트를 생략하고,
+            //    연속 이동이 끝난 뒤 debounce 타이머가 대신 마지막에 한 번만 표시한다.
+            if (!window._rowMoving) {
+                window.showToast(window._currentLang === 'en' ? "✅ Schedule updated." : "✅ 일정이 업데이트 되었습니다.");
+            }
 
             if (typeof window.syncRowHighlight === 'function') {
                 window.syncRowHighlight();

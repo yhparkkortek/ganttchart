@@ -956,6 +956,24 @@
         for (let k = 0; k < picked.length; k++) newSel.add(insertAt + k);
         window._selectedRows = newSel;
         logChange(top, -1, '행 이동', `선택 ${selIdx.length}개 ${direction > 0 ? '아래' : '위'}로 이동(하위 포함)`);
+
+        // 🔧 연속 이동 감지 debounce (moveRow와 동일한 로직 — _lastRowMoveTime 공유)
+        const _now2 = Date.now();
+        const _isRapid2 = window._lastRowMoveTime && (_now2 - window._lastRowMoveTime < 500);
+        window._lastRowMoveTime = _now2;
+        if (_isRapid2) {
+            window._rowMoving = true;
+            clearTimeout(window._rowMoveToastTimer);
+            window._rowMoveToastTimer = setTimeout(function() {
+                window._rowMoving = false;
+                if (window.showToast) window.showToast(window._currentLang === 'en' ? "✅ Schedule updated." : "✅ 일정이 업데이트 되었습니다.");
+            }, 500);
+        } else {
+            window._rowMoving = false;
+            clearTimeout(window._rowMoveToastTimer);
+            window._rowMoveToastTimer = null;
+        }
+
         window.recalculateSchedules();
         window.paintRowSelection();
         return insertAt;

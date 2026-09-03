@@ -641,6 +641,28 @@ window.deleteHistoryByDateRange = function() {
             newStart = index + nextLen;
         }
         logChange(index, -1, '행 이동', `${direction > 0 ? '아래' : '위'}로 이동 (하위 포함)`);
+
+        // 🔧 연속 이동 감지 debounce — 500ms 이내 재클릭이 감지되면 "연속 이동 중"으로 판정.
+        //    recalculateSchedules 내부의 토스트를 억제하고, 연속이 끝난 후 한 번만 표시한다.
+        //    첫 클릭은 빠르게 토스트가 표시되고, 이후 연속 클릭 구간은 마지막에 한 번만 표시됨.
+        const _now = Date.now();
+        const _isRapid = window._lastRowMoveTime && (_now - window._lastRowMoveTime < 500);
+        window._lastRowMoveTime = _now;
+        if (_isRapid) {
+            // 연속 이동 중: 토스트 억제 플래그 유지 + debounce 타이머 리셋
+            window._rowMoving = true;
+            clearTimeout(window._rowMoveToastTimer);
+            window._rowMoveToastTimer = setTimeout(function() {
+                window._rowMoving = false;
+                if (window.showToast) window.showToast(window._currentLang === 'en' ? "✅ Schedule updated." : "✅ 일정이 업데이트 되었습니다.");
+            }, 500);
+        } else {
+            // 첫 이동 또는 간격이 충분히 벌어진 이동: 토스트 억제 없이 즉시 표시
+            window._rowMoving = false;
+            clearTimeout(window._rowMoveToastTimer);
+            window._rowMoveToastTimer = null;
+        }
+
         window.recalculateSchedules();
         return newStart;
     };
