@@ -65,14 +65,21 @@
      */
     window._generateTopicProfile = async function() {
         var key = _currentKey();
-        if (!key) { alert('프로젝트를 먼저 불러오세요.'); return null; }
+        if (!key) {
+            if (window.showToast) window.showToast('⚠️ 프로젝트를 먼저 불러오세요.', 'error');
+            return null;
+        }
 
         if (typeof globalData === 'undefined' || !globalData || globalData.length <= 1) {
-            alert('간트차트에 업무 데이터가 없습니다.'); return null;
+            if (window.showToast) window.showToast('⚠️ 간트차트에 업무 데이터가 없습니다.', 'error');
+            return null;
         }
 
         var apiKey = window.getActiveAiKey && window.getActiveAiKey();
-        if (!apiKey) { alert('AI API 키를 먼저 설정해주세요.'); return null; }
+        if (!apiKey) {
+            if (window.showToast) window.showToast('⚠️ AI API 키를 먼저 설정해주세요.', 'error');
+            return null;
+        }
 
         // ① Gantt 업무명 수집 — 2-레이어 방식
         //    · allTaskNames  : 전체 (최대 120개) — 모델명·고객사 등 고유 식별자 추출용
@@ -109,7 +116,10 @@
             }
         }
         var taskNames = allTaskNames; // 이하 기존 코드 호환성 유지
-        if (!taskNames.length) { alert('수집할 업무명이 없습니다.'); return null; }
+        if (!taskNames.length) {
+            if (window.showToast) window.showToast('⚠️ 간트차트에 업무명이 없습니다.', 'error');
+            return null;
+        }
 
         // ② 프로젝트 메타 요약
         var pm = window.projectMeta || {};
@@ -218,15 +228,15 @@
         }
         console.info('[토픽 프로파일]', profile);
 
-        // 💡 [2026-09-03] 미분류 메일이 쌓여있으면 새 프로파일로 재분석 제안
-        //    (자동으로는 재스캔되지 않으므로 사용자에게 직접 제안)
+        // 💡 [2026-09-04] 미분류 메일이 있으면 새 프로파일로 자동 재분석 시작 (팝업 없음)
         var unmatchedCount = (window._msResults || []).filter(function(r) { return !r.project; }).length;
         if (unmatchedCount > 0 && typeof window._msBulkReanalyzeUnmatched === 'function') {
+            if (window.showToast) {
+                window.showToast('🔄 토픽 갱신 완료 — 미분류 ' + unmatchedCount + '건 자동 재분석 시작...', 'info', 3000);
+            }
             setTimeout(function() {
-                if (confirm('토픽 프로파일이 갱신됐습니다.\n현재 미분류 메일 ' + unmatchedCount + '건을 새 프로파일로 재분석할까요?')) {
-                    window._msBulkReanalyzeUnmatched();
-                }
-            }, 600);
+                window._msBulkReanalyzeUnmatched({ noConfirm: true });
+            }, 800);
         }
 
         return profile;

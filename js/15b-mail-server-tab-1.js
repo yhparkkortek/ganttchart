@@ -1485,17 +1485,25 @@ window._msQueueClearAll = function() {
 //    - 토픽 프로파일 갱신 직후 자동 제안 or 큐 모달 하단 "🔄 전체 재분석" 버튼으로 수동 실행
 //    ※ 토픽 학습 자체가 자동 재스캔을 일으키지 않음 — 이 함수 호출 시에만 재분석이 시작됨
 // ═══════════════════════════════════════════════════════════════════
-window._msBulkReanalyzeUnmatched = async function() {
+// opts.noConfirm = true : 토픽 프로파일 갱신 후 자동 호출 경로 — confirm/alert 없이 시작
+window._msBulkReanalyzeUnmatched = async function(opts) {
+    const _noConfirm = !!(opts && opts.noConfirm);
     const unmatched = (window._msResults || []).filter(r => !r.project);
     if (!unmatched.length) {
-        if (window.showToast) window.showToast('미분류 메일이 없습니다.', 'info');
+        if (!_noConfirm && window.showToast) window.showToast('미분류 메일이 없습니다.', 'info');
         return;
     }
 
     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-    if (!apiKey) { alert('AI API 키를 먼저 설정해주세요.'); return; }
+    if (!apiKey) {
+        if (window.showToast) window.showToast('⚠️ AI API 키를 먼저 설정해주세요.', 'error');
+        return;
+    }
 
-    if (!confirm(`미분류 메일 ${unmatched.length}건을 최신 토픽 프로파일로 재분석합니다.\n시간이 걸릴 수 있습니다 (건당 약 3~5초) — 계속할까요?`)) return;
+    // 수동 버튼 클릭(noConfirm=false)일 때만 confirm — 자동 흐름에서는 생략
+    if (!_noConfirm) {
+        if (!confirm(`미분류 메일 ${unmatched.length}건을 최신 토픽 프로파일로 재분석합니다.\n시간이 걸릴 수 있습니다 (건당 약 3~5초) — 계속할까요?`)) return;
+    }
 
     const btn = document.getElementById('ms-queue-reanalyze-all-btn');
     const origBtnText = btn ? btn.textContent : '';
