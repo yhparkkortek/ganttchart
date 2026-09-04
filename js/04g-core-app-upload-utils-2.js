@@ -1232,7 +1232,16 @@ ${question}
         const chips = el.querySelectorAll('.ai-ref-chip');
         if (!chips.length) return;
         const nowShowing = chips[0].style.display === 'none'; // 현재 숨김 → 열기
-        chips.forEach(function(c) { c.style.display = nowShowing ? 'inline' : 'none'; });
+        chips.forEach(function(c) {
+            c.style.display = nowShowing ? 'inline' : 'none';
+            // 💡 [2026-09-04 개선] 펼칠 때 extra(📌📧발신인)도 함께 자동 확장 — 클릭 1번으로 모두 보이게
+            if (nowShowing) {
+                var extra = c.querySelector('.ai-ref-extra');
+                var toggle = c.querySelector('.ai-ref-toggle');
+                if (extra) extra.classList.add('ai-ref-extra-open');
+                if (toggle) toggle.textContent = '◀';
+            }
+        });
         // 열려있는 동안 문장 배경 하이라이트
         el.dataset.refsShown = nowShowing ? '1' : '';
         el.style.background = nowShowing ? 'rgba(44,95,138,0.07)' : '';
@@ -1300,10 +1309,21 @@ ${question}
                 const depth = Math.floor(bullet[1].length / 2);
                 const mark = depth > 0 ? '◦' : '•';
                 const pad = 14 + depth * 16;
-                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${mark}&nbsp;${bullet[2]}</div>`;
+                // 💡 [2026-09-04 버그수정] chip이 없는 라인에도 cursor:pointer+onclick을 붙이면
+                //    클릭해도 아무 변화 없어서 사용자가 "동작 안 함"으로 느낌 — chip 있는 라인만 interactive 처리
+                const hasChips = bullet[2].includes('ai-ref-chip');
+                if (hasChips) {
+                    return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${mark}&nbsp;${bullet[2]}</div>`;
+                }
+                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px;">${mark}&nbsp;${bullet[2]}</div>`;
             }
             if (line.trim() === '') return '<div style="height:6px;"></div>';
-            return `<div style="margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`;
+            // 💡 [2026-09-04 버그수정] 일반 문장도 chip 유무 확인 후 interactive 처리
+            const hasLineChips = line.includes('ai-ref-chip');
+            if (hasLineChips) {
+                return `<div style="margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`;
+            }
+            return `<div style="margin-bottom:2px;">${line}</div>`;
         }).join('');
     };
 
