@@ -97,6 +97,15 @@
             if (!row) continue;
             var name = row._origT1 || row._origT2 || row._origT3 || row._origT4 || row._origDev || '';
             name = (name || '').replace(/\s*＊AI📧\s*$/, '').trim();
+            // 폴백: _origT* 필드가 없는 구버전 프로젝트 (엑셀 임포트 전 코드로 저장된 파일)
+            // colIdx에서 row._level에 해당하는 열 값을 대신 사용
+            if (!name && typeof colIdx !== 'undefined' && typeof row._level === 'number') {
+                var _fallCols = [colIdx.wbs, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
+                var _fi = _fallCols[Math.min(row._level, 4)];
+                if (_fi !== undefined && _fi >= 0) {
+                    name = ((row[_fi] != null ? row[_fi] : '') + '').replace(/\s*＊AI📧\s*$/, '').trim();
+                }
+            }
             if (!name) continue;
 
             // 최근 업무 판별: 계획 완료일(_calcPlanTs)이 cutoff 이후 OR 아직 완료일 미설정(진행중)
@@ -117,7 +126,17 @@
         }
         var taskNames = allTaskNames; // 이하 기존 코드 호환성 유지
         if (!taskNames.length) {
-            if (window.showToast) window.showToast('⚠️ 간트차트에 업무명이 없습니다.', 'error');
+            var _rowCount = globalData.length - 1;
+            var _hasColIdx = typeof colIdx !== 'undefined';
+            var _diagMsg = _rowCount > 0
+                ? ('간트차트 행 ' + _rowCount + '개에서 업무명을 추출하지 못했습니다. '
+                   + (_hasColIdx ? '' : '(colIdx 없음) ')
+                   + '엑셀로 다시 임포트 후 저장하면 해결될 수 있습니다.')
+                : '간트차트에 데이터가 없습니다. 프로젝트를 불러온 뒤 다시 시도하세요.';
+            if (window.showToast) window.showToast('⚠️ ' + _diagMsg, 'error', 6000);
+            console.warn('[토픽 프로파일] 업무명 추출 실패',
+                { rowCount: _rowCount, colIdx: _hasColIdx ? colIdx : '없음',
+                  sampleRow: globalData[1] || null });
             return null;
         }
 
