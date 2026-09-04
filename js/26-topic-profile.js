@@ -74,19 +74,41 @@
         var apiKey = window.getActiveAiKey && window.getActiveAiKey();
         if (!apiKey) { alert('AI API 키를 먼저 설정해주세요.'); return null; }
 
-        // ① Gantt 업무명 수집 (최대 120개, 중복 제거)
+        // ① Gantt 업무명 수집 — 2-레이어 방식
+        //    · allTaskNames  : 전체 (최대 120개) — 모델명·고객사 등 고유 식별자 추출용
+        //    · recentTaskNames: 최근 90일 이내 종료 또는 현재 진행 중인 업무 — 현재 단계 파악용
+        //    두 레이어를 AI 프롬프트에 명확히 분리해서 전달
+        var _RECENT_DAYS   = 90;  // 현재 단계로 간주할 최대 업무 기간 (일)
+        var _recentCutoff  = Date.now() - _RECENT_DAYS * 24 * 60 * 60 * 1000;
         var seen = {};
-        var taskNames = [];
+        var allTaskNames    = []; // 전체 업무명 (고유 식별자·키워드용)
+        var recentTaskNames = []; // 최근 90일 종료/진행 업무 (현재 단계 파악용)
+        var _recentSeenInAll = {}; // recentTaskNames가 allTaskNames와 겹치는지 추적
+
         for (var i = 1; i < globalData.length; i++) {
             var row = globalData[i];
             if (!row) continue;
             var name = row._origT1 || row._origT2 || row._origT3 || row._origT4 || row._origDev || '';
             name = (name || '').replace(/\s*＊AI📧\s*$/, '').trim();
-            if (!name || seen[name]) continue;
-            seen[name] = true;
-            taskNames.push(name);
-            if (taskNames.length >= 120) break;
+            if (!name) continue;
+
+            // 최근 업무 판별: 계획 완료일(_calcPlanTs)이 cutoff 이후 OR 아직 완료일 미설정(진행중)
+            var planTs  = row._calcPlanTs  || 0;
+            var startTs = row._calcStartTs || 0;
+            var isRecent = (planTs >= _recentCutoff)   // 90일 이내에 끝나는/끝난 업무
+                        || (startTs >= _recentCutoff)  // 90일 이내에 시작한 업무
+                        || (!planTs && !startTs);      // 날짜 미입력(자동계산 대기) → 현재 업무로 간주
+
+            if (!seen[name]) {
+                seen[name] = true;
+                if (allTaskNames.length < 120) allTaskNames.push(name);
+            }
+            if (isRecent && !_recentSeenInAll[name] && recentTaskNames.length < 60) {
+                _recentSeenInAll[name] = true;
+                recentTaskNames.push(name);
+            }
         }
+        var taskNames = allTaskNames; // 이하 기존 코드 호환성 유지
         if (!taskNames.length) { alert('수집할 업무명이 없습니다.'); return null; }
 
         // ② 프로젝트 메타 요약
@@ -122,30 +144,31 @@
             }
         } catch(_piE) { console.warn('[토픽 프로파일] mail 신호 조회 실패 (무시):', _piE); }
 
-        // ④ 현재 진행 단계(Phase) 추정 — Gantt 업무명의 마지막 30개 기준
-        //    Proto B 빌드, EMC 디버깅, MP 준비 등 현재 어느 단계에 있는지 AI에게 알려줌
-        var recentTaskNames = taskNames.slice(-30);
+        // ④ 프롬프트 조립 — 전체 업무(식별자용) + 최근 90일 업무(현 단계용) 분리
+        var recentLabel = recentTaskNames.length
+            ? '【최근 ' + _RECENT_DAYS + '일 이내 업무 — 현재 단계 파악용 (' + recentTaskNames.length + '개)】\n' +
+              recentTaskNames.map(function(n) { return '- ' + n; }).join('\n')
+            : '(최근 ' + _RECENT_DAYS + '일 이내 업무 없음 — 전체 목록으로 단계 추정)';
 
         var prompt = metaLine +
             '아래는 제품 개발 프로젝트 간트차트의 업무 목록입니다.\n\n' +
             '⚠️ 중요 지시사항:\n' +
             '① keywords에는 "이 프로젝트를 다른 하드웨어 개발 프로젝트와 구분하는 고유 식별자"를 우선 포함해 주세요.\n' +
             '   → 모델명(STELLAR32 등), 고객사명, 공급사·협력사명, 부품 코드, 특정 테스트 표준, 프로젝트 고유 약어 등\n' +
-            '   → "RFQ, PROTO, TOOLING, DESIGN, SPEC, MP" 같이 모든 하드웨어 프로젝트에 공통인 일반 용어는 keywords에서 제외하세요.\n' +
-            '② current_phase에는 업무 목록을 보고 현재 어느 개발 단계에 있는지 짧게 서술해 주세요 (예: "Proto B 빌드 완료, EMC 디버깅 진행 중").\n' +
-            '③ distinguishers에는 수신 메일에서 이 프로젝트임을 판별하는 구체적인 단서를 적어주세요 (예: 메일 제목에 자주 등장하는 고유 코드나 명칭).\n\n' +
-            '전체 업무 목록(' + taskNames.length + '개):\n' +
-            taskNames.map(function(n, i) { return (i+1) + '. ' + n; }).join('\n') +
-            (recentTaskNames.length < taskNames.length
-                ? '\n\n【최근 업무 (현 단계 파악용)】\n' + recentTaskNames.map(function(n) { return '- ' + n; }).join('\n')
-                : '') +
+            '   → "RFQ, PROTO, TOOLING, DESIGN, SPEC, MP, EMC, 신뢰성" 같이 모든 하드웨어 프로젝트에 공통인\n' +
+            '     일반 용어는 keywords에서 제외하세요 (→ topics에는 써도 됩니다).\n' +
+            '② current_phase는 【최근 ' + _RECENT_DAYS + '일 이내 업무】 섹션을 기준으로 현재 어느 단계인지 서술해 주세요.\n' +
+            '③ distinguishers에는 수신 메일에서 이 프로젝트임을 판별하는 구체적 단서를 적어주세요.\n\n' +
+            '【전체 업무 목록 — 고유 식별자·키워드 추출용 (' + taskNames.length + '개)】\n' +
+            taskNames.map(function(n, i) { return (i+1) + '. ' + n; }).join('\n') + '\n\n' +
+            recentLabel +
             mailSignalLine + '\n\n' +
             '아래 JSON 형식으로만 반환해 주세요:\n' +
             '{\n' +
             '  "keywords":       ["이 프로젝트 고유 식별자·명칭 (일반 하드웨어 용어 제외) 10~15개"],\n' +
             '  "topics":         ["반복되는 업무 유형·카테고리 4~6가지"],\n' +
             '  "patterns":       ["이 프로젝트의 특이점·패턴 2~3가지"],\n' +
-            '  "current_phase":  "현재 개발 단계 한 문장",\n' +
+            '  "current_phase":  "현재 개발 단계 한 문장 (최근 ' + _RECENT_DAYS + '일 업무 기준)",\n' +
             '  "distinguishers": ["메일에서 이 프로젝트임을 판별하는 고유 단서 3~5가지"],\n' +
             '  "summary":        "한 문장으로 이 프로젝트를 설명"\n' +
             '}';
@@ -175,8 +198,16 @@
             return null;
         }
 
-        profile.ts        = new Date().toISOString();
-        profile.taskCount = taskNames.length;
+        profile.ts           = new Date().toISOString();
+        profile.taskCount    = taskNames.length;
+        // 수집 기간 메타데이터 — 배지·신선도 경고에 사용
+        profile.collectedPeriod = {
+            recentDays:   _RECENT_DAYS,
+            recentCount:  recentTaskNames.length,
+            totalCount:   taskNames.length,
+            from:         new Date(_recentCutoff).toISOString().slice(0, 10),
+            to:           new Date().toISOString().slice(0, 10)
+        };
 
         var store = _getStore();
         store[key] = profile;
@@ -207,13 +238,26 @@
         if (!badge) return;
         var profile = window._getTopicProfile();
         if (profile && profile.ts) {
-            var d = new Date(profile.ts);
-            var ago = Math.round((Date.now() - d) / 60000);
-            var label = ago < 60 ? ago + '분 전'
-                      : ago < 1440 ? Math.round(ago/60) + '시간 전'
-                      : Math.round(ago/1440) + '일 전';
-            badge.textContent = '✅ 프로파일 있음 (' + label + ')';
-            badge.style.color = '#1f6a3a';
+            var d    = new Date(profile.ts);
+            var ageMin  = Math.round((Date.now() - d) / 60000);
+            var ageDays = Math.round(ageMin / 1440);
+            var ageLabel = ageMin < 60  ? ageMin + '분 전'
+                         : ageMin < 1440 ? Math.round(ageMin / 60) + '시간 전'
+                         :                 ageDays + '일 전';
+
+            // 수집 기간 메타 (구버전 프로파일엔 없을 수 있음)
+            var cp = profile.collectedPeriod;
+            var periodLabel = cp
+                ? ' · 최근 ' + cp.recentDays + '일/' + cp.recentCount + '건 + 전체 ' + cp.totalCount + '건'
+                : (profile.taskCount ? ' · ' + profile.taskCount + '개 업무' : '');
+
+            // 신선도 경고: 30일 초과 시 ⚠️
+            var stale = ageDays >= 30;
+            badge.innerHTML = (stale ? '⚠️ ' : '✅ ') + ageLabel + '에 생성됨' + periodLabel;
+            badge.style.color = stale ? '#a85d0a' : '#1f6a3a';
+            badge.title = stale
+                ? '프로파일이 ' + ageDays + '일 지났습니다. 재생성을 권장합니다.'
+                : '생성: ' + d.toLocaleDateString() + (cp ? ' (최근 ' + cp.recentDays + '일 업무 기준)' : '');
         } else {
             badge.textContent = '⚪ 프로파일 없음';
             badge.style.color = '#aaa';
