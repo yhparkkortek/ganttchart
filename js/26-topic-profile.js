@@ -206,7 +206,11 @@
 
         var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
         if (!result || !result.ok) {
-            if (window.showToast) window.showToast('❌ 토픽 프로파일 생성 실패', 'error');
+            var _errDetail = (result && result.data && result.data.error)
+                ? String(result.data.error).slice(0, 80)
+                : (result && result.status ? 'HTTP ' + result.status : '네트워크/API 오류');
+            if (window.showToast) window.showToast('❌ 토픽 프로파일 생성 실패: ' + _errDetail, 'error', 6000);
+            console.warn('[토픽 프로파일] API 실패:', result);
             return null;
         }
 
@@ -300,18 +304,22 @@
 
         var overlay = document.createElement('div');
         overlay.id = 'tp-viewer-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:99997;display:flex;align-items:center;justify-content:center;';
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,0.35);';
         overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 
         var box = document.createElement('div');
-        box.style.cssText = 'background:#fff;border:1.5px solid #a5c8f0;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.18);' +
-            'width:520px;max-width:96vw;max-height:82vh;display:flex;flex-direction:column;font-family:\'Malgun Gothic\',sans-serif;overflow:hidden;';
+        box.style.cssText = 'position:absolute;background:#fff;border:1.5px solid #a5c8f0;border-radius:12px;' +
+            'box-shadow:0 8px 40px rgba(0,0,0,0.22);width:520px;min-width:320px;min-height:200px;' +
+            'max-width:96vw;max-height:88vh;display:flex;flex-direction:column;' +
+            'font-family:\'Malgun Gothic\',sans-serif;overflow:hidden;' +
+            'left:50%;top:50%;transform:translate(-50%,-50%);';
         overlay.appendChild(box);
 
-        // ── 헤더 ──
+        // ── 헤더 (드래그 핸들) ──
         var hdr = document.createElement('div');
         hdr.style.cssText = 'background:#e7f3ff;color:#1971c2;padding:13px 18px;font-size:14px;font-weight:bold;border-bottom:1px solid #a5c8f0;' +
-            'border-radius:12px 12px 0 0;display:flex;align-items:center;gap:10px;flex-shrink:0;';
+            'border-radius:12px 12px 0 0;display:flex;align-items:center;gap:10px;flex-shrink:0;' +
+            'cursor:grab;user-select:none;';
         hdr.innerHTML = '<span style="flex:1;">📊 토픽 프로파일 뷰어</span>';
         var closeBtn = document.createElement('button');
         closeBtn.textContent = '✕';
@@ -319,6 +327,63 @@
         closeBtn.onclick = function() { overlay.remove(); };
         hdr.appendChild(closeBtn);
         box.appendChild(hdr);
+
+        // ── 드래그 이동 ──
+        (function() {
+            var dragging = false, ox = 0, oy = 0;
+            hdr.addEventListener('mousedown', function(e) {
+                if (e.target === closeBtn) return;
+                // transform 제거 후 절대 좌표로 전환
+                var r = box.getBoundingClientRect();
+                box.style.left = r.left + 'px';
+                box.style.top  = r.top  + 'px';
+                box.style.transform = 'none';
+                dragging = true;
+                ox = e.clientX - r.left;
+                oy = e.clientY - r.top;
+                hdr.style.cursor = 'grabbing';
+                e.preventDefault();
+            });
+            document.addEventListener('mousemove', function(e) {
+                if (!dragging) return;
+                var nx = e.clientX - ox;
+                var ny = e.clientY - oy;
+                // 화면 경계 clamp
+                nx = Math.max(0, Math.min(nx, window.innerWidth  - box.offsetWidth));
+                ny = Math.max(0, Math.min(ny, window.innerHeight - box.offsetHeight));
+                box.style.left = nx + 'px';
+                box.style.top  = ny + 'px';
+            });
+            document.addEventListener('mouseup', function() {
+                if (dragging) { dragging = false; hdr.style.cursor = 'grab'; }
+            });
+        })();
+
+        // ── 우측 하단 리사이즈 핸들 ──
+        var resizer = document.createElement('div');
+        resizer.style.cssText = 'position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:se-resize;' +
+            'background:linear-gradient(135deg,transparent 50%,#a5c8f0 50%);border-radius:0 0 12px 0;z-index:1;';
+        box.appendChild(resizer);
+        (function() {
+            var resizing = false, startW, startH, startX, startY;
+            resizer.addEventListener('mousedown', function(e) {
+                resizing = true;
+                var r = box.getBoundingClientRect();
+                startW = r.width; startH = r.height;
+                startX = e.clientX; startY = e.clientY;
+                e.preventDefault(); e.stopPropagation();
+            });
+            document.addEventListener('mousemove', function(e) {
+                if (!resizing) return;
+                var nw = Math.max(320, startW + (e.clientX - startX));
+                var nh = Math.max(200, startH + (e.clientY - startY));
+                box.style.width  = Math.min(nw, window.innerWidth  * 0.95) + 'px';
+                box.style.height = Math.min(nh, window.innerHeight * 0.95) + 'px';
+                box.style.maxHeight = 'none';
+                box.style.maxWidth  = 'none';
+            });
+            document.addEventListener('mouseup', function() { resizing = false; });
+        })();
 
         // ── 스크롤 영역 ──
         var body = document.createElement('div');
