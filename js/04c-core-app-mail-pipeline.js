@@ -668,7 +668,18 @@
                 return obj;
             });
 
-            let saveData = { globalData: serializedGlobalData, changeLogs: window.changeLogs, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || []),
+            // 💡 [2026-09-03 성능] changeLogs 상한 — 무제한 누적 시 파일이 커져 업로드가 느려짐.
+            //    저장 페이로드에는 최신 1,000건만 포함 (메모리 내 전체 배열은 그대로 유지 — 이번 세션
+            //    내 undo/redo 등엔 계속 쓰임). 복구 목적으로는 최신 1,000건으로 충분하다.
+            const _CHANGE_LOG_SAVE_LIMIT = 1000;
+            const _changeLogsToSave = window.changeLogs && window.changeLogs.length > _CHANGE_LOG_SAVE_LIMIT
+                ? window.changeLogs.slice(-_CHANGE_LOG_SAVE_LIMIT)
+                : window.changeLogs;
+            if (window.changeLogs && window.changeLogs.length > _CHANGE_LOG_SAVE_LIMIT) {
+                console.info(`[저장 계측] changeLogs ${window.changeLogs.length}건 → 최신 ${_CHANGE_LOG_SAVE_LIMIT}건만 저장 (${window.changeLogs.length - _CHANGE_LOG_SAVE_LIMIT}건 트림)`);
+            }
+
+            let saveData = { globalData: serializedGlobalData, changeLogs: _changeLogsToSave, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || []),
                 // ✅ [AI 학습 Phase 3] 학습 데이터를 프로젝트 JSON에 포함 → 저장마다 Drive에 자동 동기화
                 aiLearning: window._alGetEntriesForSave ? window._alGetEntriesForSave(window.currentDriveFileName || window.currentDriveFileId || '') : [],
                 // ✅ [토픽 프로파일] Drive JSON에 포함 — 로드 시 localStorage 캐시로 복원됨

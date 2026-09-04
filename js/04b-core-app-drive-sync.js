@@ -714,11 +714,20 @@
 
     // 💡 [팀 폴더 이동] Drive 파일을 해당 팀 폴더로 이동(아직 팀 폴더에 없을 때만). 저장 자체를 막지 않도록
     //    fire-and-forget으로 호출하며, 실패해도 console.warn만 남긴다.
+    //
+    // 💡 [2026-09-03 성능] 세션 캐시(_teamPlacedFiles)로 중복 parents 조회 제거.
+    //    파일이 팀 폴더로 이미 이동됐다고 확인된 뒤에는 같은 세션에서 매 저장마다
+    //    files.get?fields=parents API를 다시 호출할 이유가 없다 — 폴더 위치가 앱 밖에서
+    //    바뀌는 경우는 극히 드물고, 바뀌어도 다음 세션(새로고침)에서 자동 감지된다.
+    //    캐시 형태: { fileId: teamFolderId }  — 세션 내 메모리 only.
+    window._teamPlacedFiles = window._teamPlacedFiles || {};
     window._moveFileToTeamFolder = async function(token, fileId, teamName) {
         if (!token || !fileId || !teamName) return;
         try {
             const teamFolderId = await window._getOrCreateNamedFolder(token, teamName);
             if (!teamFolderId) return;
+            // 세션 캐시 히트: 이미 이 세션에서 이 파일이 팀 폴더에 있음을 확인한 경우 → API 호출 없이 바로 종료
+            if (window._teamPlacedFiles[fileId] === teamFolderId) return;
             // 현재 파일 위치 조회
             const metaRes = await fetch(
                 `https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents&supportsAllDrives=true`,
@@ -726,7 +735,10 @@
             );
             const meta = await metaRes.json();
             const currentParents = meta.parents || [];
-            if (currentParents.includes(teamFolderId)) return; // 이미 팀 폴더 안에 있음
+            if (currentParents.includes(teamFolderId)) {
+                window._teamPlacedFiles[fileId] = teamFolderId; // 이미 팀 폴더 안에 있음 → 캐시에 기록
+                return;
+            }
             const removeParents = currentParents.join(',');
             const patchUrl = `https://www.googleapis.com/drive/v3/files/${fileId}`
                 + `?addParents=${encodeURIComponent(teamFolderId)}`
@@ -737,6 +749,7 @@
                 headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 body: '{}'
             });
+            window._teamPlacedFiles[fileId] = teamFolderId; // 이동 성공 → 캐시에 기록
             console.info(`[팀 폴더] 이동 완료: ${fileId} → ${teamName}`);
         } catch(e) {
             console.warn('[팀 폴더] 파일 이동 실패 (저장 자체는 정상 완료):', e);
