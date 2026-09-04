@@ -534,6 +534,12 @@ window.openMailAutoConfigModal = async function() {
                             <span style="flex:1;">처리된 업무는 보관함에서 자동삭제</span>
                         </label>
                         <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.</div>
+                        <!-- 💡 [무료 API 절약] 토픽 프로파일 자동 생성 완전 비활성화 옵션 -->
+                        <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-top:10px;">
+                            <input id="mac-topic-auto-disable" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
+                            <span style="flex:1;">🧠 토픽 프로파일 자동 생성 끄기</span>
+                        </label>
+                        <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">체크하면 프로젝트 로드 시 및 AI 업무 누적 시 자동 토픽 프로파일 생성을 완전히 끕니다. 수동 생성(토픽 프로파일 뷰어 내 버튼)은 계속 사용할 수 있습니다. 무료 API 한도가 빠듯할 때 권장.</div>
                     </div>
                 </div>
 
@@ -623,6 +629,7 @@ window.openMailAutoConfigModal = async function() {
     document.getElementById('mac-interval').value = window.getMailAutoInterval ? window.getMailAutoInterval() : 30;
     document.getElementById('mac-collect-completed').checked = window.getMailAutoCollectCompleted ? window.getMailAutoCollectCompleted() : false;
     document.getElementById('mac-cleanup-auto').checked = (window.getInboxCleanupMode ? window.getInboxCleanupMode() : 'keep') === 'auto';
+    document.getElementById('mac-topic-auto-disable').checked = window.getTopicProfileAutoDisabled ? window.getTopicProfileAutoDisabled() : false;
     document.getElementById('mac-external').value   = cfg.externalCustomerScore;
     document.getElementById('mac-tome').value       = cfg.toMeScore;
     document.getElementById('mac-ccme').value       = cfg.ccMeScore;
@@ -731,6 +738,10 @@ window._macSave = async function() {
     // 처리됨 업무 자동삭제 여부 (예전엔 업무 보관함 헤더의 토글 버튼 — 2026-08-29 여기로 이동)
     const cleanupAutoEl = document.getElementById('mac-cleanup-auto');
     if (cleanupAutoEl) localStorage.setItem('inbox_cleanup_mode', cleanupAutoEl.checked ? 'auto' : 'keep');
+
+    // 토픽 프로파일 자동 생성 비활성화
+    const topicAutoDisableEl = document.getElementById('mac-topic-auto-disable');
+    if (topicAutoDisableEl) localStorage.setItem('topic_profile_auto_disabled', topicAutoDisableEl.checked ? '1' : '0');
 
     // 우선순위 점수
     const titleScores = {};

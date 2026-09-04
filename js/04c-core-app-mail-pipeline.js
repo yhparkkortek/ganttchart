@@ -1646,10 +1646,15 @@
                     // 프로파일 없는 프로젝트 → 백그라운드 자동 생성 (2.5초 딜레이, UI 블로킹 없음)
                     // 💡 [무료 API 절약] AI 등록 업무가 5개 이상인 프로젝트만 자동 생성
                     //    순수 수동 입력 프로젝트(_aiRegistered 없음)는 생성 불필요 → API 낭비 방지
+                    //    사용자가 "토픽 프로파일 자동 생성 끄기"를 체크한 경우에도 스킵
                     setTimeout(function() {
                         var _apiKey = window.getActiveAiKey && window.getActiveAiKey();
                         var _gd = window.globalData;
                         if (!_apiKey || !_gd || !window._generateTopicProfile) return;
+                        if (window.getTopicProfileAutoDisabled && window.getTopicProfileAutoDisabled()) {
+                            console.log('[토픽 프로파일] 자동 생성 스킵 — 사용자 설정으로 비활성화');
+                            return;
+                        }
                         var _aiCount = (_gd || []).filter(function(r) { return r && r._aiRegistered; }).length;
                         if (_aiCount < 5) {
                             console.log('[토픽 프로파일] 자동 생성 스킵 — AI 등록 업무 ' + _aiCount + '개 (5개 미만)');

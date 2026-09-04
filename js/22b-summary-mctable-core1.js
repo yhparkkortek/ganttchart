@@ -1073,6 +1073,13 @@ window.getMailAutoCollectCompleted = function() {
     return localStorage.getItem('mail_auto_collect_completed') === '1';
 };
 
+// 💡 [무료 API 절약] 토픽 프로파일 자동 생성 비활성화 여부 — 개인별 로컬 설정
+//    true이면 프로젝트 로드 시 자동 생성 및 _tpCheckAutoRegen 자동 재생성을 모두 건너뜀.
+//    수동 생성(뷰어 버튼)은 이 설정에 관계없이 항상 동작.
+window.getTopicProfileAutoDisabled = function() {
+    return localStorage.getItem('topic_profile_auto_disabled') === '1';
+};
+
 window.onMailIntervalChange = function() {
     const sel = document.getElementById('mail-process-interval');
     if (!sel) return;

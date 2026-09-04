@@ -596,6 +596,8 @@
     var _tpLastRegenTs = 0; // 마지막 자동 재생성 타임스탬프
     window._tpCheckAutoRegen = function() {
         if (!window._generateTopicProfile || !window.globalData) return;
+        // 사용자가 "토픽 프로파일 자동 생성 끄기"를 체크한 경우 완전 스킵
+        if (window.getTopicProfileAutoDisabled && window.getTopicProfileAutoDisabled()) return;
         var aiCount = (window.globalData || []).filter(function(r) { return r && r._aiRegistered; }).length;
         var lastCount = window._tpLastRegenCount || 0;
         if (aiCount < lastCount + 10) return;  // 아직 +10개 미만
