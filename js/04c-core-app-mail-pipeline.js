@@ -1644,11 +1644,18 @@
                     if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();
                 } else {
                     // 프로파일 없는 프로젝트 → 백그라운드 자동 생성 (2.5초 딜레이, UI 블로킹 없음)
+                    // 💡 [무료 API 절약] AI 등록 업무가 5개 이상인 프로젝트만 자동 생성
+                    //    순수 수동 입력 프로젝트(_aiRegistered 없음)는 생성 불필요 → API 낭비 방지
                     setTimeout(function() {
                         var _apiKey = window.getActiveAiKey && window.getActiveAiKey();
                         var _gd = window.globalData;
-                        if (!_apiKey || !_gd || _gd.length <= 3 || !window._generateTopicProfile) return;
-                        console.log('[토픽 프로파일] 자동 생성 시작 (Drive에 프로파일 없음):', fileName);
+                        if (!_apiKey || !_gd || !window._generateTopicProfile) return;
+                        var _aiCount = (_gd || []).filter(function(r) { return r && r._aiRegistered; }).length;
+                        if (_aiCount < 5) {
+                            console.log('[토픽 프로파일] 자동 생성 스킵 — AI 등록 업무 ' + _aiCount + '개 (5개 미만)');
+                            return;
+                        }
+                        console.log('[토픽 프로파일] 자동 생성 시작 (Drive에 프로파일 없음, AI 업무 ' + _aiCount + '개):', fileName);
                         window._generateTopicProfile().then(function(prof) {
                             if (prof && window.currentDriveFileId && window.saveToGoogleDrive) {
                                 // 생성 완료 즉시 Drive에 반영 (topicProfile 포함 저장, 알림 없이)

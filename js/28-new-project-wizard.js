@@ -457,8 +457,16 @@ window._npwExtractFromMail = async function(mailRecord) {
     ].filter(Boolean).join('\n');
 
     try {
-        const result = await window.callAiBackend({ prompt: prompt, maxTokens: 256 });
-        const text = (result && (result.text || result.content || result.response || result)) || '';
+        // 💡 [버그 수정] 이전엔 callAiBackend({ prompt, maxTokens }) 형태로 호출 — apiKey가 객체로 들어가
+        //    GAS 서버에 인증 없이 요청 → 항상 실패 → {} 반환. 올바른 시그니처로 수정.
+        const apiKey = window.getActiveAiKey && window.getActiveAiKey();
+        if (!apiKey) { console.warn('[npw] AI API 키 없음 — 추출 스킵'); return {}; }
+        const result = await window.callAiBackend(apiKey, prompt, {});
+        const text = (result && result.ok && result.data && result.data.result &&
+            result.data.result.candidates && result.data.result.candidates[0] &&
+            result.data.result.candidates[0].content &&
+            result.data.result.candidates[0].content.parts &&
+            result.data.result.candidates[0].content.parts[0].text) || '';
         const jsonStr = text.match(/\{[\s\S]*\}/);
         if (jsonStr) return JSON.parse(jsonStr[0]);
     } catch (e) {

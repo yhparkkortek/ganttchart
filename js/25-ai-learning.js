@@ -111,9 +111,13 @@
 
         _showToast('🔄 저신뢰도 ' + rows.length + '건 재분석 중...', 6000);
 
+        // 💡 [무료 API 절약] 건당 2000ms 딜레이 — 무료 Gemini 한도 준수 (메일 분석의 4000ms 기준 완화)
+        var _RETRY_DELAY_MS = 2000;
         var improved = 0;
         for (var ri = 0; ri < rows.length; ri++) {
             var item = rows[ri];
+            // 첫 번째 건은 딜레이 없이 바로, 이후 건부터 딜레이
+            if (ri > 0) await new Promise(function(res) { setTimeout(res, _RETRY_DELAY_MS); });
             try {
                 var candidatesForAI = null;
                 if (window._msLoadProjectIndex && window._msFilterCandidateProjects) {

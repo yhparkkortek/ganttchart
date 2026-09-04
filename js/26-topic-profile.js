@@ -589,13 +589,25 @@
     }
 
     // ── A: 현재 프로젝트 AI 업무 추가 시 자동 프로파일 갱신 ─────────────────────
-    // AI가 등록한 업무가 5개 이상 새로 추가될 때마다 프로파일 백그라운드 재생성
+    // AI가 등록한 업무가 10개 이상 새로 추가될 때마다 프로파일 백그라운드 재생성
+    // 💡 [무료 API 절약] +5→+10으로 기준 상향 + 10분 쿨다운 추가
+    //    메일 대량 분석 시 반복 호출 방지 (이전엔 쿨다운 없어서 50건 → 최대 10회 호출)
+    var _TP_REGEN_COOLDOWN_MS = 10 * 60 * 1000; // 10분
+    var _tpLastRegenTs = 0; // 마지막 자동 재생성 타임스탬프
     window._tpCheckAutoRegen = function() {
         if (!window._generateTopicProfile || !window.globalData) return;
         var aiCount = (window.globalData || []).filter(function(r) { return r && r._aiRegistered; }).length;
         var lastCount = window._tpLastRegenCount || 0;
-        if (aiCount < lastCount + 5) return;  // 아직 +5개 미만
+        if (aiCount < lastCount + 10) return;  // 아직 +10개 미만
+        // 쿨다운 체크 — 마지막 재생성으로부터 10분 이내면 스킵
+        var now = Date.now();
+        if (now - _tpLastRegenTs < _TP_REGEN_COOLDOWN_MS) {
+            console.log('[토픽 자동갱신] 쿨다운 중 스킵 (마지막 재생성 후 ' +
+                Math.round((now - _tpLastRegenTs) / 60000) + '분 경과)');
+            return;
+        }
         window._tpLastRegenCount = aiCount;
+        _tpLastRegenTs = now;
         setTimeout(function() {
             var apiKey = window.getActiveAiKey && window.getActiveAiKey();
             if (!apiKey) return;
