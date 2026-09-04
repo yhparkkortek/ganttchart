@@ -20,7 +20,7 @@
         --badge-text: #0f5132;
         --badge-border: #badbcc;
         --today-line: rgba(224, 49, 49, 0.9); 
-        --trans-text: #00707d; /* 💡 [2026-08-30 수정] 번역 결과 글자색 — 정적 기본값 teal, 라이브 테마일 땐 _cpApplyLive가 덮어씀(document.documentElement.style.setProperty) */
+        --trans-text: #004580; /* 💡 [2026-08-30 수정] 번역 결과 글자색 — 정적 기본값 blue(darkText, #2c5f8a 기준), 라이브 테마일 땐 _cpApplyLive가 덮어씀(document.documentElement.style.setProperty). [2026-09-04] teal→blue로 FOUC 방지 */
 
         --w-no: 45px;        /* No 열 */
         --w-date: 60px;       /* 시작일, 완료일 열 */
@@ -387,7 +387,7 @@
        #myTable/.concept-table th 규칙이 이미 있어서 문제 없었음). th 자체에 직접 재선언해서 해결. */
     #tab-notice thead th { background: #eef6f7 !important; }
 
-    .container { height: auto; overflow: visible; border: 1px solid #a3d9e0; border-radius: 6px; position: relative; background: #e0f5f7; }
+    .container { height: auto; overflow: visible; border: 1px solid #a1c2de; border-radius: 6px; position: relative; background: #e7f0f9; } /* 💡 [2026-09-04] teal→blue FOUC 방지 */
     #file-input { margin-bottom: 10px; font-size: 15px; padding: 5px; }
     #file-status { display: none; }
     #print-header { display: none; }
@@ -589,7 +589,7 @@
 }
 #app-topbar {
     position: fixed; top: 0; left: 0; width: 100%; height: var(--topbar-h);
-    background: #aedae0; color: #00636e; z-index: 700;
+    background: #aec9e0; color: #003c6e; z-index: 700; /* 💡 [2026-09-04] teal→blue FOUC 방지 */
     display: flex; align-items: center; gap: 0; padding: 0 18px 0 0;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     box-sizing: border-box;
@@ -670,7 +670,7 @@
 
 #app-sidebar {
     position: fixed; top: var(--topbar-h); left: 0; height: calc(100vh - var(--topbar-h)); width: var(--sb-w);
-    background: #aedae0;
+    background: #aec9e0; /* 💡 [2026-09-04] teal→blue FOUC 방지 */
     display: flex; flex-direction: column;
     transition: width 0.18s ease;
     overflow: hidden;

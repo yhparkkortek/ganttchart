@@ -369,6 +369,10 @@ window._cpApplyLive = function(hex, skipSave) {
     if (!styleTag) { styleTag = document.createElement('style'); styleTag.id = 'cp-live-style'; }
     document.body.appendChild(styleTag);
     styleTag.textContent = css;
+    // 💡 [2026-09-04 FOUC 방지] 적용된 CSS를 localStorage에 캐시 — <head>의 인라인 스크립트
+    //    (GANTT_CHART_V02_Color.html)가 다음 페이지 로드 시 styles.css 이후, body 렌더 이전에
+    //    이 CSS를 즉시 주입해 "청록 → 파랑" 깜빡임을 원천 차단한다.
+    try { localStorage.setItem('gantt_theme_css_v1', css); } catch(e) {}
 
     // 🐛 [버그 수정] 이 두 트리거 버튼은 인라인 style에 직접 !important가 박혀 있어서(HTML 원본에
     // style="background:#e0f5f7 !important; ..."), 어떤 <style> 규칙도(설령 !important를 걸어도)
@@ -480,12 +484,14 @@ window._cpApplyStoredTheme = function() {
 };
 if (!window._cpPopulateTabDataWrapped) {
     window._cpPopulateTabDataWrapped = true;
+    // 💡 [2026-09-04 FOUC 수정] DOMContentLoaded를 기다리지 않고 스크립트 실행 즉시 테마 적용.
+    //    이 <script>는 <body> 안 line 2340에 있어서 앞의 모든 HTML이 이미 파싱된 상태임 —
+    //    document.body가 존재하고 _cpApplyLive가 <style>을 즉시 삽입할 수 있다.
+    //    (기존엔 DOMContentLoaded 안에 있어서 22~26번 스크립트까지 모두 로드된 후에야 적용됐고,
+    //     그 사이 수 초간 청록 기본색이 보이는 FOUC가 발생했음.)
+    //    ※ populateTabData 래핑은 22~26번 스크립트가 정의한 함수를 래핑해야 하므로 DOMContentLoaded 유지.
+    window._cpApplyStoredTheme();
     window.addEventListener('DOMContentLoaded', function() {
-        // 💡 [2026-08-31 신규] populateTabData는 프로젝트를 실제로 열었을 때만 호출된다 — 그래서 기본값
-        //    적용을 그 안에서만 하면, 아직 프로젝트를 안 연 "빈 화면"(사이드바/상단바 등)은 새로고침(F5)
-        //    직후에도 계속 하드코딩된 청록으로 보였다. 여기서 한 번 더 즉시 호출해서, 프로젝트를 열기
-        //    전부터 기본값(파랑)이 곧바로 적용되게 한다(tabData가 비어 있으면 CP_DEFAULT_HEX로 대체됨).
-        window._cpApplyStoredTheme();
         const _origPopulateTabData = window.populateTabData;
         window.populateTabData = function() {
             const ret = _origPopulateTabData ? _origPopulateTabData.apply(this, arguments) : undefined;

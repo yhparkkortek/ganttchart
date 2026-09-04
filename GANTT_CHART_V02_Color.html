@@ -16,6 +16,22 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css">
 
 <link rel="stylesheet" href="styles.css">
+<!-- 💡 [2026-09-04] FOUC 방지: 저장된 테마 CSS를 첫 렌더 전에 즉시 주입.
+     styles.css가 파싱된 직후, <body>가 렌더되기 전에 실행되므로
+     "청록 → 파랑" 깜빡임 없이 바로 올바른 테마색이 적용된다.
+     CSS 캐시는 _cpApplyLive(js/21-color-palette.js)가 localStorage('gantt_theme_css_v1')에 저장. -->
+<script>
+(function() {
+    try {
+        var css = localStorage.getItem('gantt_theme_css_v1');
+        if (css && typeof css === 'string' && css.length > 200) {
+            var s = document.getElementById('cp-live-style');
+            if (!s) { s = document.createElement('style'); s.id = 'cp-live-style'; document.head.appendChild(s); }
+            s.textContent = css;
+        }
+    } catch(e) {}
+})();
+</script>
 </head>
 <body>
 
