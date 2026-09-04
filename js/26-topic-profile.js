@@ -347,7 +347,12 @@
         hdr.innerHTML = '<span style="flex:1;">📊 토픽 프로파일 뷰어</span>';
         var clearAllBtn = document.createElement('button');
         clearAllBtn.textContent = '🗑 전체 삭제';
-        clearAllBtn.style.cssText = 'background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;font-size:11.5px;cursor:pointer;color:#e03131;padding:3px 10px;';
+        // 💡 [2026-09-04] 테마 색상 적용 + 테두리 없음
+        var _caBg   = window._cpRoleHex ? window._cpRoleHex('bg')       : '#e7f3ff';
+        var _caText = window._cpRoleHex ? window._cpRoleHex('darkText')  : '#1971c2';
+        clearAllBtn.style.cssText = 'background:' + _caBg + ';border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:' + _caText + ';padding:3px 10px;transition:background .15s;';
+        clearAllBtn.addEventListener('mouseover', function() { this.style.background = window._cpRoleHex ? window._cpRoleHex('hoverBg') : '#a5c8f0'; });
+        clearAllBtn.addEventListener('mouseout',  function() { this.style.background = window._cpRoleHex ? window._cpRoleHex('bg')      : '#e7f3ff'; });
         clearAllBtn.onclick = function(e) { e.stopPropagation(); window._tpClearAll(); };
         hdr.appendChild(clearAllBtn);
         var closeBtn = document.createElement('button');
@@ -389,9 +394,15 @@
         })();
 
         // ── 우측 하단 리사이즈 핸들 ──
+        // 💡 [2026-09-04] 평면 삼각형 → SVG 그립 2선 + 테마색 적용
         var resizer = document.createElement('div');
-        resizer.style.cssText = 'position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:se-resize;' +
-            'background:linear-gradient(135deg,transparent 50%,#a5c8f0 50%);border-radius:0 0 12px 0;z-index:1;';
+        var _rsColor = window._cpRoleHex ? window._cpRoleHex('hoverBorder') : '#7fb0dd';
+        resizer.style.cssText = 'position:absolute;right:0;bottom:0;width:22px;height:22px;cursor:se-resize;z-index:2;' +
+            'display:flex;align-items:flex-end;justify-content:flex-end;padding:4px 4px;box-sizing:border-box;';
+        resizer.innerHTML = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+            '<line x1="9.5" y1="2" x2="2" y2="9.5" stroke="' + _rsColor + '" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>' +
+            '<line x1="9.5" y1="6" x2="6" y2="9.5" stroke="' + _rsColor + '" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>' +
+            '</svg>';
         box.appendChild(resizer);
         (function() {
             var resizing = false, startW, startH, startX, startY;
