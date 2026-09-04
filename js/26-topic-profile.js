@@ -202,15 +202,17 @@
             '  "summary":        "한 문장으로 이 프로젝트를 설명"\n' +
             '}';
 
-        if (window.showToast) window.showToast('🔍 토픽 프로파일 생성 중...', 'info', 20000);
+        console.info('[토픽 프로파일] 생성 시작', { key: key, allCount: allTaskNames.length, recentCount: recentTaskNames.length });
+        if (window.showToast) window.showToast('🔍 토픽 프로파일 생성 중... (업무 ' + allTaskNames.length + '건)', 'info', 20000);
 
         var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
         if (!result || !result.ok) {
-            var _errDetail = (result && result.data && result.data.error)
-                ? String(result.data.error).slice(0, 80)
-                : (result && result.status ? 'HTTP ' + result.status : '네트워크/API 오류');
-            if (window.showToast) window.showToast('❌ 토픽 프로파일 생성 실패: ' + _errDetail, 'error', 6000);
-            console.warn('[토픽 프로파일] API 실패:', result);
+            // result.error 는 Error 객체 — .message에 실제 메시지가 있음
+            var _errDetail = result && result.error
+                ? (result.error.message || String(result.error)).slice(0, 120)
+                : '응답 없음';
+            if (window.showToast) window.showToast('❌ 토픽 프로파일 생성 실패: ' + _errDetail, 'error', 8000);
+            console.warn('[토픽 프로파일] API 실패 상세:', { result: result, error: result && result.error });
             return null;
         }
 
@@ -483,10 +485,15 @@
                 return '<span style="display:block;font-size:11.5px;color:#666;padding:2px 0;">↳ ' + t + '</span>';
             }).join('');
 
+            // 키 타입 판별: Google Drive fileId = 33자 이상 영문숫자, 그 외는 fileName
+            var _isFileId = /^[A-Za-z0-9_\-]{25,}$/.test(k);
+            var _keyBadge = _isFileId
+                ? '<span style="font-size:9px;color:#888;background:#e8f0fe;border:1px solid #c5d5f8;border-radius:4px;padding:1px 5px;margin-left:4px;" title="Drive fileId: ' + k + '">ID</span>'
+                : '<span style="font-size:9px;color:#a05000;background:#fff3e0;border:1px solid #ffcc80;border-radius:4px;padding:1px 5px;margin-left:4px;" title="구버전 fileName 키: ' + k + '">⚠️파일명</span>';
             var safeCardId = 'tp-card-' + k.replace(/[^a-zA-Z0-9]/g, '_');
             html += '<div id="' + safeCardId + '" style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
-                  '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + projName + '</span>' +
+                  '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + projName + _keyBadge + '</span>' +
                   '<button onclick="window._tpDeleteOne(\'' + k.replace(/'/g, '') + '\')" title="이 프로파일 삭제" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;">🗑 삭제</button>' +
                   '<span style="font-size:10px;color:#aaa;">' + (ago ? ago + ' 생성' : '') + (p.taskCount ? ' · ' + p.taskCount + '개 업무' : '') + '</span>' +
                 '</div>' +
