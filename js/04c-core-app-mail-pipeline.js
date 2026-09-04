@@ -621,52 +621,67 @@
             //    💡 [2026-08-25 신규] 이 호출이 이미 "원격 파일이 마지막 확인 이후 바뀌었는지" 알아내므로,
             //    같은 정보로 "다른 사용자가 먼저 저장한 것 같은데 그래도 덮어쓸까?" 경고를 함께 띄운다
             //    (멀티유저 동시편집 최소 안전장치 — 배분 이력 외 나머지 내용은 병합되지 않고 덮어써지므로).
-            if (fileId) {
-                const _mergeResult = await window.mergeRemoteDistributions(fileId);
-                if (_mergeResult && _mergeResult.hadBaseline && _mergeResult.remoteChanged && !opts.skipConflictCheck) {
-                    // 🔀 [2026-08-27 신규] 통째로 막기 전에, 먼저 필드/셀 단위 3-way 병합을 시도한다.
-                    //    base(_mergeBaselines — 마지막 저장 성공 시점 스냅샷)가 있어야 시도 가능하고,
-                    //    없거나(이번 세션 첫 저장) 헤더 구조가 달라졌으면 병합을 포기하고 기존처럼
-                    //    "그래도 저장/취소" 확인모달로 안전하게 폴백한다.
-                    const _tokenObjEarly = gapi.client.getToken();
-                    const _tokenEarly = (_tokenObjEarly ? _tokenObjEarly.access_token : null) || window.googleAccessToken;
-                    const _merge3 = _tokenEarly ? await window._tryThreeWayMergeOnConflict(fileId, _tokenEarly) : { applied: false };
-                    if (_merge3.applied) {
-                        const _hasTrueConflict = _merge3.merge.cellConflicts.length || _merge3.merge.editVsDeleteConflicts.length;
-                        if (_hasTrueConflict) {
-                            // 진짜 충돌(같은 칸을 서로 다르게 고침/삭제-수정 충돌)은 놓치면 안 되므로 alert로 확실히 보여줌
-                            alert(_merge3.summaryMsg + '\n\n(자세한 내용은 하단 [🕒 변경 이력 확인]에서 확인할 수 있습니다)');
-                        } else {
-                            window.showToast(_merge3.summaryMsg, 'info');
-                        }
-                    } else {
-                        const _proceed = await window._showSaveConflictModal(dynamicFileName);
-                        if (!_proceed) {
-                            const _conflictMsg = window._t(
-                                '⚠️ 다른 사용자가 마지막 확인 이후 이 프로젝트를 저장하여, 충돌을 피하기 위해 저장을 취소했습니다.\n(최신 내용을 받으려면 이 프로젝트를 다시 열어주세요)',
-                                '⚠️ Save cancelled — another user saved this project since your last check.\n(Reopen the project to pick up the latest content.)'
-                            );
-                            window._lastSaveBlockReason = _conflictMsg;
-                            if (!opts.suppressAlert) alert(_conflictMsg);
-                            return false;
-                        }
-                    }
-                }
-            }
+            // 💡 [2026-09-03 성능] mergeRemoteDistributions 메타체크와 globalData 직렬화를 병렬 실행.
+            //    JS는 싱글스레드이므로 진짜 병렬이 아닌 "gapi 네트워크 대기 중 CPU 직렬화" 형태.
+            //    1) _mergePromise를 먼저 시작 → 함수 안 첫 await(gapi 메타체크)로 넘어가며 제어 반환
+            //    2) 그 사이 _registerNewProjectInitialPlan(신규) + globalData 직렬화(CPU) 실행
+            //    3) await _mergePromise로 merge 결과 수령, 충돌 처리
+            //    4) merge slow path(원격 변경 있음)에서만 globalData 재직렬화
+            //    → fast path(99% 이상 저장)에서 gapi 메타체크 응답 대기 시간(~300ms) 절약
+            const _mergePromise = fileId
+                ? window.mergeRemoteDistributions(fileId)
+                : Promise.resolve({ remoteChanged: false, hadBaseline: false });
 
-            // 🆕 [새 프로젝트 최초 등록] 드라이브에 아직 없던(=fileId가 없는) 프로젝트를 처음 등록하는 순간,
-            //    Summary 탭 PROTO Start(계획) 날짜를 Gantt Chart 시작일 기준(anchor)으로 반영해 전체 일정을
-            //    자동 계산하고, 그 결과를 "최초 계획"으로 저장한다. 이미 계획이 하나라도 있으면(=재등록/이후
-            //    저장) 건드리지 않고 딱 1회, 최초 등록 시점에만 실행됨.
+            // 🆕 [새 프로젝트 최초 등록] merge 대기 중(gapi 네트워크 왕복 전) 실행 — 순서 보장: !fileId 시
+            //    _mergePromise는 이미 resolved Promise이지만 await 하기 전까지 then 콜백은 안 실행됨.
             if (!fileId && (!window._scheduleBaselines || window._scheduleBaselines.length === 0) && window._registerNewProjectInitialPlan) {
                 window._registerNewProjectInitialPlan();
             }
 
-            let serializedGlobalData = globalData.map(row => {
-                let obj = { data: Array.from(row) };
-                for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
-                return obj;
-            });
+            // merge가 첫 gapi await로 넘어간 사이 CPU 직렬화 실행 (동기 블로킹 — 네트워크 대기 시간 재활용)
+            const _serializeGD = function() {
+                return globalData.map(function(row) {
+                    let obj = { data: Array.from(row) };
+                    for (let key in row) { if (key.startsWith('_')) obj[key] = row[key]; }
+                    return obj;
+                });
+            };
+            let serializedGlobalData = _serializeGD();
+
+            const _mergeResult = await _mergePromise;
+            if (_mergeResult && _mergeResult.hadBaseline && _mergeResult.remoteChanged && !opts.skipConflictCheck) {
+                // 🔀 [2026-08-27 신규] 통째로 막기 전에, 먼저 필드/셀 단위 3-way 병합을 시도한다.
+                //    base(_mergeBaselines — 마지막 저장 성공 시점 스냅샷)가 있어야 시도 가능하고,
+                //    없거나(이번 세션 첫 저장) 헤더 구조가 달라졌으면 병합을 포기하고 기존처럼
+                //    "그래도 저장/취소" 확인모달로 안전하게 폴백한다.
+                const _tokenObjEarly = gapi.client.getToken();
+                const _tokenEarly = (_tokenObjEarly ? _tokenObjEarly.access_token : null) || window.googleAccessToken;
+                const _merge3 = _tokenEarly ? await window._tryThreeWayMergeOnConflict(fileId, _tokenEarly) : { applied: false };
+                if (_merge3.applied) {
+                    const _hasTrueConflict = _merge3.merge.cellConflicts.length || _merge3.merge.editVsDeleteConflicts.length;
+                    if (_hasTrueConflict) {
+                        // 진짜 충돌(같은 칸을 서로 다르게 고침/삭제-수정 충돌)은 놓치면 안 되므로 alert로 확실히 보여줌
+                        alert(_merge3.summaryMsg + '\n\n(자세한 내용은 하단 [🕒 변경 이력 확인]에서 확인할 수 있습니다)');
+                    } else {
+                        window.showToast(_merge3.summaryMsg, 'info');
+                    }
+                } else {
+                    const _proceed = await window._showSaveConflictModal(dynamicFileName);
+                    if (!_proceed) {
+                        const _conflictMsg = window._t(
+                            '⚠️ 다른 사용자가 마지막 확인 이후 이 프로젝트를 저장하여, 충돌을 피하기 위해 저장을 취소했습니다.\n(최신 내용을 받으려면 이 프로젝트를 다시 열어주세요)',
+                            '⚠️ Save cancelled — another user saved this project since your last check.\n(Reopen the project to pick up the latest content.)'
+                        );
+                        window._lastSaveBlockReason = _conflictMsg;
+                        if (!opts.suppressAlert) alert(_conflictMsg);
+                        return false;
+                    }
+                }
+            }
+            // merge slow path에서 mergeRemoteDistributions 또는 3-way 병합이 globalData를 수정했을 수 있음 → 재직렬화
+            if (_mergeResult && _mergeResult.remoteChanged) {
+                serializedGlobalData = _serializeGD();
+            }
 
             // 💡 [2026-09-03 성능] changeLogs 상한 — 무제한 누적 시 파일이 커져 업로드가 느려짐.
             //    저장 페이로드에는 최신 1,000건만 포함 (메모리 내 전체 배열은 그대로 유지 — 이번 세션
@@ -774,17 +789,31 @@
                 //    더 업로드할 필요는 없다. (Backups 폴더는 실수 복구용이라, 내용이 같은 백업이 계속
                 //    쌓이는 건 용량/API 호출만 낭비하고 복구에는 도움이 안 됨)
                 if (_preSaveHadChanges || !fileId) {
-                    window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (48시간 보관)
+                    // 💡 [2026-09-03 성능] 주 저장 업로드 직후 즉시 백업을 올리면 같은 대역폭을 두 요청이
+                    //    경쟁해 둘 다 느려진다. 5초 뒤로 미뤄서 대역폭을 분산한다.
+                    setTimeout(function() { window.backupToDrive(saveData, dynamicFileName); }, 5000); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (48시간 보관)
                 } else {
                     console.info('[저장 계측] 변경사항 없음 — 백업 생략');
                 }
                 // 💡 [성능 수정] 백업과 동일한 이유 — 바뀐 게 없으면 담당자/주요자재 등 인덱스에 들어가는
                 //    내용도 지난 저장 때와 같을 수밖에 없다. 변경 없이 재저장할 때마다 공용 인덱스 파일을
                 //    통째로 내려받고 다시 올릴 필요는 없다.
-                if (_preSaveHadChanges || !fileId) {
-                    window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget, 저장 완료 자체는 막지 않음)
+                // 💡 [2026-09-03 성능] 인덱스 관련 필드(모델명·고객사·담당자·키워드·완료여부·팀·
+                //    주요자재·토픽)가 실제로 바뀐 경우에만 project_index.json 갱신.
+                //    간트 행 편집(가장 흔한 저장 이유)과 무관하므로, 평상시 저장의 ~70%는 인덱스 업로드 생략.
+                const _IDX_WATCH_FIELDS = ['모델명', '고객모델명', '고객사', '프로젝트담당자', '인치', '메일키워드', '완료여부', '팀', '개발팀'];
+                const _idxSnap = JSON.stringify({
+                    pm: _IDX_WATCH_FIELDS.map(function(f) { return (window.projectMeta || {})[f]; }),
+                    mat: ((window.tabData || {}).projectMaterials || []).filter(function(m) { return m && m.useForAnalysis; }).map(function(m) { return [m.ktkPn, m.description]; }),
+                    topic: window._getTopicProfile ? window._getTopicProfile(file.id) : null
+                });
+                window._lastIndexedSnap = window._lastIndexedSnap || {};
+                const _idxChanged = !fileId || window._lastIndexedSnap[file.id] !== _idxSnap;
+                if ((_preSaveHadChanges || !fileId) && _idxChanged) {
+                    window._lastIndexedSnap[file.id] = _idxSnap;
+                    window.updateProjectIndexEntry(file.id, dynamicFileName); // 💡 메일 자동처리용 project_index.json 갱신 (fire-and-forget)
                 } else {
-                    console.info('[저장 계측] 변경사항 없음 — project_index.json 갱신 생략');
+                    console.info('[저장 계측]', _idxChanged ? '변경사항 없음' : '인덱스 관련 필드 불변', '— project_index.json 갱신 생략');
                 }
                 // 💡 [팀 폴더] 기존 파일(fileId 있음) 재저장 시 — 팀 폴더로 이동 (fire-and-forget, 저장 결과에 영향 없음)
                 const _existingFileTeam = (window.projectMeta || {}).팀 || '';
