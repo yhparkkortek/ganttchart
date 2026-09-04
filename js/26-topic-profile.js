@@ -36,13 +36,17 @@
     window._topicProfileSnippet = function(key) {
         var profile = window._getTopicProfile(key);
         if (!profile) return '';
-        var kw      = (profile.keywords || []).slice(0, 12).join(', ');
-        var topics  = (profile.topics   || []).slice(0,  4).join('; ');
-        var summary = profile.summary   || '';
-        var parts   = [];
-        if (summary) parts.push('📌 ' + summary);
-        if (kw)      parts.push('🔑 키워드: ' + kw);
-        if (topics)  parts.push('📂 주요 업무 유형: ' + topics);
+        var kw            = (profile.keywords       || []).slice(0, 12).join(', ');
+        var topics        = (profile.topics         || []).slice(0,  4).join('; ');
+        var distinguish   = (profile.distinguishers || []).slice(0,  5).join('; ');
+        var currentPhase  = profile.current_phase   || '';
+        var summary       = profile.summary         || '';
+        var parts         = [];
+        if (summary)       parts.push('📌 ' + summary);
+        if (currentPhase)  parts.push('🔄 현재 단계: ' + currentPhase);
+        if (kw)            parts.push('🔑 고유 식별 키워드: ' + kw);
+        if (distinguish)   parts.push('📧 메일 판별 단서: ' + distinguish);
+        if (topics)        parts.push('📂 주요 업무 유형: ' + topics);
         return parts.length ? '[프로젝트 토픽 프로파일]\n' + parts.join('\n') : '';
     };
 
@@ -118,17 +122,32 @@
             }
         } catch(_piE) { console.warn('[토픽 프로파일] mail 신호 조회 실패 (무시):', _piE); }
 
+        // ④ 현재 진행 단계(Phase) 추정 — Gantt 업무명의 마지막 30개 기준
+        //    Proto B 빌드, EMC 디버깅, MP 준비 등 현재 어느 단계에 있는지 AI에게 알려줌
+        var recentTaskNames = taskNames.slice(-30);
+
         var prompt = metaLine +
-            '아래는 제품 개발 프로젝트 간트차트의 업무 목록입니다.\n' +
-            '이 프로젝트를 특징짓는 핵심 정보를 아래 JSON 형식으로만 반환해 주세요.\n\n' +
-            '업무 목록(' + taskNames.length + '개):\n' +
+            '아래는 제품 개발 프로젝트 간트차트의 업무 목록입니다.\n\n' +
+            '⚠️ 중요 지시사항:\n' +
+            '① keywords에는 "이 프로젝트를 다른 하드웨어 개발 프로젝트와 구분하는 고유 식별자"를 우선 포함해 주세요.\n' +
+            '   → 모델명(STELLAR32 등), 고객사명, 공급사·협력사명, 부품 코드, 특정 테스트 표준, 프로젝트 고유 약어 등\n' +
+            '   → "RFQ, PROTO, TOOLING, DESIGN, SPEC, MP" 같이 모든 하드웨어 프로젝트에 공통인 일반 용어는 keywords에서 제외하세요.\n' +
+            '② current_phase에는 업무 목록을 보고 현재 어느 개발 단계에 있는지 짧게 서술해 주세요 (예: "Proto B 빌드 완료, EMC 디버깅 진행 중").\n' +
+            '③ distinguishers에는 수신 메일에서 이 프로젝트임을 판별하는 구체적인 단서를 적어주세요 (예: 메일 제목에 자주 등장하는 고유 코드나 명칭).\n\n' +
+            '전체 업무 목록(' + taskNames.length + '개):\n' +
             taskNames.map(function(n, i) { return (i+1) + '. ' + n; }).join('\n') +
+            (recentTaskNames.length < taskNames.length
+                ? '\n\n【최근 업무 (현 단계 파악용)】\n' + recentTaskNames.map(function(n) { return '- ' + n; }).join('\n')
+                : '') +
             mailSignalLine + '\n\n' +
+            '아래 JSON 형식으로만 반환해 주세요:\n' +
             '{\n' +
-            '  "keywords": ["이 프로젝트에서 자주 언급될 핵심 단어 12~15개"],\n' +
-            '  "topics":   ["반복되는 업무 유형·카테고리 4~6가지"],\n' +
-            '  "patterns": ["이 프로젝트의 특이점·패턴 2~3가지"],\n' +
-            '  "summary":  "한 문장으로 이 프로젝트를 설명"\n' +
+            '  "keywords":       ["이 프로젝트 고유 식별자·명칭 (일반 하드웨어 용어 제외) 10~15개"],\n' +
+            '  "topics":         ["반복되는 업무 유형·카테고리 4~6가지"],\n' +
+            '  "patterns":       ["이 프로젝트의 특이점·패턴 2~3가지"],\n' +
+            '  "current_phase":  "현재 개발 단계 한 문장",\n' +
+            '  "distinguishers": ["메일에서 이 프로젝트임을 판별하는 고유 단서 3~5가지"],\n' +
+            '  "summary":        "한 문장으로 이 프로젝트를 설명"\n' +
             '}';
 
         if (window.showToast) window.showToast('🔍 토픽 프로파일 생성 중...', 'info', 20000);

@@ -29,6 +29,11 @@
     var THRESHOLD_CRIT = 0.55;  // 🔴 위험
     var MIN_SAMPLES    = 3;     // 최소 학습 데이터 수 (미달 시 N/A)
 
+    // ── 토스트 쿨다운 (프로젝트 키 → 마지막 알람 타임스탬프) ──────────────────
+    // 같은 프로젝트에 대해 5분 이내 중복 알람 억제 — 연속 스캔·일괄재분석 시 폭탄 방지
+    var _TC_ALERT_COOLDOWN_MS = 5 * 60 * 1000; // 5분
+    var _tcLastAlertTs = {}; // { projectKey: Date.now() }
+
     // ── 프로젝트 키 헬퍼 ──────────────────────────────────────────────────────
     function _key() {
         // Phase 6와 동일: fileId 우선 (fileName 공유 충돌 방지)
@@ -171,36 +176,51 @@
 
         if (!st.sampleOk) return;
 
-        if (st.level === 'critical') {
-            if (window.showToast) {
-                window.showToast(
-                    '🔴 토픽 오염 위험 — 최근 오매칭 ' + st.negCount + '건 (연속 ' + st.consecutive + '건). AI 진단을 권장합니다.',
-                    'error', 8000
-                );
-            }
-        } else if (st.level === 'caution' && st.consecutive >= 2) {
-            if (window.showToast) {
-                window.showToast(
-                    '🟠 토픽 오염 경고 — 오매칭이 반복되고 있습니다 (' + st.negCount + '건). 메일 분석기에서 AI 진단을 실행해주세요.',
-                    'warn', 5000
-                );
-            }
-        } else if (st.level === 'warn' && st.hiConfNeg >= 2) {
-            if (window.showToast) {
-                window.showToast('🟡 고신뢰도 오매칭 ' + st.hiConfNeg + '건 — 토픽 프로파일 점검을 권장합니다.', 'info', 4000);
+        // ── 쿨다운 체크: 5분 이내 이미 알람을 표시했으면 배지만 갱신하고 토스트는 생략 ──
+        // 연속 메일 스캔·일괄 재분석 시 수십 개 토스트 폭탄 방지
+        var _now = Date.now();
+        var _inCooldown = (_now - (_tcLastAlertTs[key] || 0)) < _TC_ALERT_COOLDOWN_MS;
+
+        var _alerted = false;
+
+        if (!_inCooldown) {
+            if (st.level === 'critical') {
+                if (window.showToast) {
+                    window.showToast(
+                        '🔴 토픽 오염 위험 — 최근 오매칭 ' + st.negCount + '건 (연속 ' + st.consecutive + '건). AI 진단을 권장합니다.',
+                        'error', 8000
+                    );
+                    _alerted = true;
+                }
+            } else if (st.level === 'caution' && st.consecutive >= 2) {
+                if (window.showToast) {
+                    window.showToast(
+                        '🟠 토픽 오염 경고 — 오매칭이 반복되고 있습니다 (' + st.negCount + '건). 메일 분석기에서 AI 진단을 실행해주세요.',
+                        'warn', 5000
+                    );
+                    _alerted = true;
+                }
+            } else if (st.level === 'warn' && st.hiConfNeg >= 2) {
+                if (window.showToast) {
+                    window.showToast('🟡 고신뢰도 오매칭 ' + st.hiConfNeg + '건 — 토픽 프로파일 점검을 권장합니다.', 'info', 4000);
+                    _alerted = true;
+                }
             }
         }
 
         // 커버리지 갭 알람: 미분류 누적 5/10건 시 별도 토스트
-        // (오염과 반대 방향 — 토픽이 너무 좁아서 관련 메일을 못 잡음)
-        if (st.noMatchCount === 5 || st.noMatchCount === 10) {
+        // (exact equality라 자연적으로 1회성 — 쿨다운과 별도로 항상 허용)
+        if (!_inCooldown && (st.noMatchCount === 5 || st.noMatchCount === 10)) {
             if (window.showToast) {
                 window.showToast(
                     '📭 미분류 누적 ' + st.noMatchCount + '건 — 토픽 키워드가 실제 메일 패턴을 못 잡고 있을 수 있습니다. AI 진단으로 보완 키워드를 확인해보세요.',
                     'warn', 6000
                 );
+                _alerted = true;
             }
         }
+
+        if (_alerted) _tcLastAlertTs[key] = _now;
     };
 
     // ─────────────────────────────────────────────────────────────────────────
