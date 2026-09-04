@@ -386,7 +386,11 @@ window._cpApplyLive = function(hex, skipSave) {
     });
 
     window._cpLiveAppliedHex = hex;
-    window._cpUpdateApplyStatus();
+    // 💡 [2026-09-04 버그 수정] _cpUpdateApplyStatus는 이 파일 하단(line 521)에 정의됨.
+    //    _cpApplyLive가 스크립트 로드 중(line 493 즉시 실행)에 호출되면 아직 미정의 상태라
+    //    TypeError 발생 → line 494 이후 DOMContentLoaded 리스너·openColorPaletteModal 등
+    //    모두 정의 안 됨 → 테마 팔레트 기능 완전 먹통. null 가드로 방어.
+    if (window._cpUpdateApplyStatus) window._cpUpdateApplyStatus();
     if (window.renderSheetTabsBar) window.renderSheetTabsBar(); // 💡 이미 그려진 시트 탭도 새 테마색으로 다시 그림
 
     // 💡 [2026-08-30 신규] "이전에 고른 테마 색을 저장해달라"는 요청 — 로그인 계정별 별도 저장소를 새로
