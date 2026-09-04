@@ -546,24 +546,29 @@
         } catch (err) { console.warn('project_index.json 항목 제거 실패:', err.message); return false; }
     };
 
-    // 실제 삭제 실행 — ①파일명 직접 입력 확인(오클릭 방지) ②관리자 비밀번호 확인 ③드라이브 휴지통 이동
+    // 실제 삭제 실행 — ①관리자 비밀번호 확인 ②최종 confirm(삭제 대상 파일명 표시) ③드라이브 휴지통 이동
     // ④project_index.json 정리 ⑤열려있는 시트 탭 정리, 순서로 진행. 완전삭제가 아니라 "휴지통 이동"이라
     // 구글 드라이브 휴지통에서 30일 내 복구는 가능함(실수 대비 최소 안전장치).
+    //
+    // 💡 [2026-09-03 UX 개선] 기존 "파일명 직접 타이핑 → 비밀번호" 순서를 뒤집어 "비밀번호 → 확인" 으로.
+    //    구 방식에서 첫 번째 창(파일명 입력)을 비밀번호 창으로 오해해 비밀번호를 입력하면
+    //    "파일명이 일치하지 않습니다" 오류가 연속으로 발생 → 삭제를 아예 못 하는 문제가 있었음.
+    //    비밀번호가 이미 진짜 보안 관문이므로 파일명 타이핑은 불필요하게 복잡하기만 했다.
+    //    이제는 ①비밀번호(먼저, 사용자가 기대하는 순서) → ②confirm으로 삭제 대상 명시 → ③실행.
     window._confirmDeleteProjectFile = async function(file) {
         const _en = window._currentLang === 'en';
-        const typed = prompt(_en
-            ? `⚠️ This permanently removes the project from the shared folder (recoverable from Google Drive Trash for a limited time).\nType the exact file name to confirm:\n\n${file.name}`
-            : `⚠️ 이 프로젝트를 공용 폴더에서 삭제합니다 (구글 드라이브 휴지통에서 일정 기간 복구 가능).\n확인을 위해 파일명을 정확히 입력하세요:\n\n${file.name}`);
-        if (typed !== file.name) {
-            if (typed !== null) alert(_en ? '❌ File name did not match. Cancelled.' : '❌ 파일명이 일치하지 않습니다. 삭제가 취소되었습니다.');
-            return;
-        }
+        // ① 비밀번호 먼저 — 사용자가 기대하는 첫 번째 관문
         if (!verifyAdminPassword(_en
             ? '🔒 Enter the admin password to delete this project.\n(case-insensitive)'
             : '🔒 프로젝트를 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
             alert(_en ? '❌ Authentication failed. Deletion cancelled.' : '❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.');
             return;
         }
+        // ② 최종 confirm — 삭제 대상 파일명을 명시하여 실수 방지 (타이핑 불필요)
+        const ok = confirm(_en
+            ? `⚠️ Delete this project?\n\n📄 ${file.name}\n\nThe file will be moved to Google Drive Trash (recoverable for 30 days).`
+            : `⚠️ 이 프로젝트를 삭제할까요?\n\n📄 ${file.name}\n\n구글 드라이브 휴지통으로 이동합니다 (30일 내 복구 가능).`);
+        if (!ok) return;
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
