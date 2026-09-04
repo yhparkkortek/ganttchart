@@ -256,8 +256,11 @@
         // 💡 [2026-09-04] 미분류 메일이 있으면 새 프로파일로 자동 재분석 시작 (팝업 없음)
         var unmatchedCount = (window._msResults || []).filter(function(r) { return !r.project; }).length;
         if (unmatchedCount > 0 && typeof window._msBulkReanalyzeUnmatched === 'function') {
+            var _estMin = Math.round(unmatchedCount * 4 / 60 * 10) / 10; // 4초/건 기준 예상 분
             if (window.showToast) {
-                window.showToast('🔄 토픽 갱신 완료 — 미분류 ' + unmatchedCount + '건 자동 재분석 시작...', 'info', 3000);
+                window.showToast(
+                    '🔄 토픽 갱신 완료 — 미분류 ' + unmatchedCount + '건 자동 재분석 시작 (예상 ' + _estMin + '분)...',
+                    'info', 5000);
             }
             setTimeout(function() {
                 window._msBulkReanalyzeUnmatched({ noConfirm: true });

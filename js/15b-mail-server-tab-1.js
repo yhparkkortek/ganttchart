@@ -1571,8 +1571,9 @@ window._msBulkReanalyzeUnmatched = async function(opts) {
                 console.warn('[일괄재분석 오류]', r.fileName, e);
             }
 
-            // API 과부하 방지: 연속 호출 간 짧은 텀
-            if (i < unmatched.length - 1) await new Promise(res => setTimeout(res, 500));
+            // API 과부하 방지: 무료 티어 15 RPM = 4초에 1회 허용
+            // 이전 500ms(=120 RPM)는 무료 한도 8배 초과 → 4000ms로 조정
+            if (i < unmatched.length - 1) await new Promise(res => setTimeout(res, 4000));
         }
     } finally {
         window._msSaveQueueToStorage();
