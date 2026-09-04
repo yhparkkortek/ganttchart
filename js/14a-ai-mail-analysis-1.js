@@ -794,7 +794,7 @@ window._initMultiProjectArea = async function() {
     var curId   = window.currentDriveFileId   || '';
     var curName = window.currentDriveFileName || '';
 
-    sel.innerHTML = '<option value="">-- 대상 프로젝트 선택 --</option>';
+    sel.innerHTML = ''; // 💡 [2026-09-04] multiple select — placeholder 없이 바로 목록
     area.style.display = '';
 
     try {
@@ -824,55 +824,67 @@ window._initMultiProjectArea = async function() {
  */
 window.mailDistributeToProject = async function() {
     var sel = document.getElementById('mail-multi-target-project');
-    if (!sel || !sel.value) { alert('대상 프로젝트를 선택해주세요.'); return; }
+    if (!sel) { alert('배분 영역을 찾을 수 없습니다.'); return; }
+
+    // 💡 [2026-09-04] 다중 선택 지원 — 선택된 모든 옵션 처리
+    var selected = Array.from(sel.options).filter(function(o) { return o.selected && o.value; });
+    if (!selected.length) { alert('대상 프로젝트를 1개 이상 선택해주세요.\n(Ctrl+클릭으로 여러 개 선택 가능)'); return; }
 
     var task = window._mailAnalyzedResult;
     if (!task) { alert('배분할 분석 결과가 없습니다.'); return; }
 
-    var targetId = sel.value;
-    var targetName = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].textContent : targetId;
-
-    // 재배치 큐에 추가 (25-ai-learning.js의 _pushReassignQueue와 동일 구조)
     var taskName = (task['업무명'] || '새업무').replace(/\s*＊AI📧\s*$/, '').trim();
-    var queueItem = {
-        id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
-        ts: new Date().toISOString(),
-        targetProjectId: targetId,
-        targetProjectName: targetName,
-        taskData: {
-            업무명: taskName,
-            상세내용: task['상세내용'] || '',
-            시작일: task['시작일'] || '',
-            완료일: task['완료일'] || '',
-            상태: task['상태'] || '진행',
-            개발단계: task['개발단계'] || '',
-            담당구분: task['담당구분'] || '',
-            wbs레벨: task['wbs레벨'] != null ? String(task['wbs레벨']) : '3',
-            _aiMeta: {
-                confidence: (task['_aiMeta'] && task['_aiMeta'].confidence) || task['매칭신뢰도'] || '',
-                matchBasis: '다중 프로젝트 배분 (Phase 7)',
-                keywords: [],
-                snippet: (task['상세내용'] || '').substring(0, 150)
-            }
-        },
-        status: 'pending'
-    };
+    var succeededNames = [];
 
-    try {
-        var queue = [];
-        try { queue = JSON.parse(localStorage.getItem('gantt_ai_reassign_queue_v1') || '[]'); } catch(e) {}
-        queue.push(queueItem);
-        localStorage.setItem('gantt_ai_reassign_queue_v1', JSON.stringify(queue));
-    } catch(e) {
-        alert('큐 저장 실패: ' + e.message); return;
+    for (var _i = 0; _i < selected.length; _i++) {
+        var targetId   = selected[_i].value;
+        var targetName = selected[_i].textContent;
+
+        // 재배치 큐에 추가 (25-ai-learning.js의 _pushReassignQueue와 동일 구조)
+        var queueItem = {
+            id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            ts: new Date().toISOString(),
+            targetProjectId: targetId,
+            targetProjectName: targetName,
+            taskData: {
+                업무명: taskName,
+                상세내용: task['상세내용'] || '',
+                시작일: task['시작일'] || '',
+                완료일: task['완료일'] || '',
+                상태: task['상태'] || '진행',
+                개발단계: task['개발단계'] || '',
+                담당구분: task['담당구분'] || '',
+                wbs레벨: task['wbs레벨'] != null ? String(task['wbs레벨']) : '3',
+                _aiMeta: {
+                    confidence: (task['_aiMeta'] && task['_aiMeta'].confidence) || task['매칭신뢰도'] || '',
+                    matchBasis: '다중 프로젝트 배분 (Phase 7)',
+                    keywords: [],
+                    snippet: (task['상세내용'] || '').substring(0, 150)
+                }
+            },
+            status: 'pending'
+        };
+
+        try {
+            var queue = [];
+            try { queue = JSON.parse(localStorage.getItem('gantt_ai_reassign_queue_v1') || '[]'); } catch(e) {}
+            queue.push(queueItem);
+            localStorage.setItem('gantt_ai_reassign_queue_v1', JSON.stringify(queue));
+            succeededNames.push(targetName);
+        } catch(e) {
+            alert('큐 저장 실패 (' + targetName + '): ' + e.message);
+        }
     }
 
-    if (window.showToast) {
-        window.showToast('📤 "' + taskName + '" → ' + targetName + ' 배분 완료 — 해당 프로젝트를 열면 알림이 표시됩니다');
+    if (succeededNames.length && window.showToast) {
+        var msg = succeededNames.length === 1
+            ? '📤 "' + taskName + '" → ' + succeededNames[0] + ' 배분 완료 — 해당 프로젝트를 열면 알림이 표시됩니다'
+            : '📤 "' + taskName + '" → ' + succeededNames.length + '개 프로젝트 배분 완료 — 각 프로젝트를 열면 알림이 표시됩니다';
+        window.showToast(msg);
     }
 
-    // 배분 후 드롭다운 초기화
-    sel.value = '';
+    // 배분 후 선택 초기화
+    Array.from(sel.options).forEach(function(o) { o.selected = false; });
 };
 
 // ── 💡 [Phase2/3] 프롬프트 피드백 로그 ──────────────────────────────

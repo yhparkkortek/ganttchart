@@ -1724,6 +1724,17 @@ window._msPickNewProject = async function() {
     if (listEl) listEl.style.display = 'none';
     if (btn) btn.textContent = '📋 프로젝트 선택 ▾';
 
+    // 💡 [2026-09-04 버그 수정] 새 시트 분리 확인 — 현재 프로젝트를 덮어쓰지 않도록 사전 확인
+    if (!confirm('이 메일로 새 프로젝트를 생성합니다.\n현재 프로젝트는 탭에 유지됩니다.\n\n계속하시겠습니까?')) return;
+
+    // 새 시트 생성 + 화면 초기화 (startNewProject와 동일 패턴)
+    if (window._openAsNewSheet) window._openAsNewSheet('new_' + Date.now(), null, null);
+    if (window._resetToBlankNoConfirm) window._resetToBlankNoConfirm(true);
+
+    // 재분석 모달 닫기 (위자드가 별도 창으로 열림)
+    var _reanalModal = document.getElementById('ms-reanalyze-modal');
+    if (_reanalModal) _reanalModal.style.display = 'none';
+
     const fileName = window._msReanalyzeTarget;
     const r = (window._msResults || []).find(function(x) { return x.fileName === fileName; });
     if (!r) {

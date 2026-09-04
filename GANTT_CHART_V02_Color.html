@@ -2270,19 +2270,18 @@
                     <!-- Phase 7: 다중 프로젝트 동시 등록 영역 -->
                     <div id="mail-multi-project-area" style="display:none; margin-top:8px; padding:10px 12px; background:#f0f4ff; border:1px solid #b8c8f0; border-radius:8px; flex-shrink:0;">
                         <div style="font-size:11px; font-weight:700; color:#3a5199; margin-bottom:7px;">🔀 다른 프로젝트로 배분</div>
-                        <div style="display:flex; gap:6px; align-items:center;">
-                            <select id="mail-multi-target-project"
-                                style="flex:1; height:30px; padding:0 8px; border:1px solid #b8c8f0; border-radius:6px; font-size:12px; background:#fff;">
-                                <option value="">-- 대상 프로젝트 선택 --</option>
+                        <div style="display:flex; flex-direction:column; gap:6px;">
+                            <select id="mail-multi-target-project" multiple
+                                style="width:100%; height:80px; padding:4px 8px; border:1px solid #b8c8f0; border-radius:6px; font-size:12px; background:#fff; box-sizing:border-box;">
                             </select>
                             <button onclick="window.mailDistributeToProject()"
                                 onmouseover="this.style.background='#c0d0f8';" onmouseout="this.style.background='#d6e2ff';"
                                 style="height:30px; padding:0 14px; background:#d6e2ff; color:#2b44a0; border:1px solid #b8c8f0; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .15s;">
-                                📤 배분
+                                📤 선택 프로젝트 배분
                             </button>
                         </div>
                         <div style="font-size:10px; color:#6c757d; margin-top:5px;">
-                            선택한 프로젝트를 열면 수신 대기 알림이 표시됩니다
+                            Ctrl(⌘)+클릭으로 여러 프로젝트 선택 가능 · 선택한 프로젝트를 열면 수신 대기 알림이 표시됩니다
                         </div>
                     </div>
 

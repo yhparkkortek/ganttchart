@@ -349,12 +349,10 @@
         hdr.innerHTML = '<span style="flex:1;">📊 토픽 프로파일 뷰어</span>';
         var clearAllBtn = document.createElement('button');
         clearAllBtn.textContent = '🗑 전체 삭제';
-        // 💡 [2026-09-04] 테마 색상 적용 + 테두리 없음
-        var _caBg   = window._cpRoleHex ? window._cpRoleHex('bg')       : '#e7f3ff';
-        var _caText = window._cpRoleHex ? window._cpRoleHex('darkText')  : '#1971c2';
-        clearAllBtn.style.cssText = 'background:' + _caBg + ';border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:' + _caText + ';padding:3px 10px;transition:background .15s;';
-        clearAllBtn.addEventListener('mouseover', function() { this.style.background = window._cpRoleHex ? window._cpRoleHex('hoverBg') : '#a5c8f0'; });
-        clearAllBtn.addEventListener('mouseout',  function() { this.style.background = window._cpRoleHex ? window._cpRoleHex('bg')      : '#e7f3ff'; });
+        // 💡 [2026-09-04] 헤더와 동일 배경색(#e7f3ff/#1971c2) + hover + 테두리 없음
+        clearAllBtn.style.cssText = 'background:#e7f3ff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:#1971c2;padding:3px 10px;transition:background .15s;';
+        clearAllBtn.addEventListener('mouseover', function() { this.style.background = '#cce0ff'; });
+        clearAllBtn.addEventListener('mouseout',  function() { this.style.background = '#e7f3ff'; });
         clearAllBtn.onclick = function(e) { e.stopPropagation(); window._tpClearAll(); };
         hdr.appendChild(clearAllBtn);
         var closeBtn = document.createElement('button');
