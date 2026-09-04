@@ -1795,8 +1795,19 @@
             <!-- 💡 [버그 수정] 아래 배지 id가 설정 모달(⚙️ 메일 자동배치 설정)의 동일 id와 중복돼서
                  document.getElementById가 항상 먼저 나온 쪽만 갱신하고 있었음 — "-2" 접미사로 분리 -->
             <div style="flex-shrink:0; border:1px solid #dee2e6; border-radius:8px; margin:10px 12px 12px 12px; padding:12px 14px; background:#fff; box-shadow:0 -6px 10px -8px rgba(0,0,0,0.25); position:relative; z-index:1;">
-                <!-- Phase 6: 토픽 프로파일 생성 버튼 -->
-                <div style="margin-bottom:8px; display:flex; gap:6px; align-items:center;">
+                <!-- Phase 6+8: 토픽 프로파일 생성 + AI 진단 버튼 -->
+                <div style="margin-bottom:4px; display:flex; gap:6px; align-items:center;">
+                    <button id="topic-diagnosis-btn"
+                        onclick="window._tcRunDiagnosis && window._tcRunDiagnosis()"
+                        title="오매칭 패턴을 AI로 분석하여 토픽 프로파일의 오염 원인을 진단하고 수정안을 제시합니다."
+                        onmouseover="this.style.background='#fcd5d5';this.style.borderColor='#e8857a';"
+                        onmouseout="this.style.background='#fde8e8';this.style.borderColor='#f0a8a0';"
+                        style="flex-shrink:0;height:26px;padding:0 10px;font-size:11px;font-weight:bold;
+                               cursor:pointer;background:#fde8e8;color:#b91c1c;
+                               border:1px solid #f0a8a0;border-radius:6px;
+                               transition:background .15s,border-color .15s;white-space:nowrap;">
+                        🔬 AI 진단
+                    </button>
                     <button onclick="window._generateTopicProfile && window._generateTopicProfile()"
                         title="현재 프로젝트의 간트 업무를 AI로 분석하여 키워드·토픽 프로파일을 저장합니다. 이후 메일 분석 정확도가 향상됩니다."
                         onmouseover="this.style.background='#d8f3d8';this.style.borderColor='#7cc494';"
@@ -1813,6 +1824,10 @@
                         title="저장된 토픽 프로파일 열람"
                         onmouseover="this.style.background='#d8eafd';" onmouseout="this.style.background='#e8f4fd';"
                         style="flex-shrink:0;padding:2px 7px;font-size:11px;background:#e8f4fd;color:#1a4f7a;border:1px solid #a5c8f0;border-radius:6px;cursor:pointer;transition:background .15s;">🔍</button>
+                </div>
+                <!-- Phase 8: 오염 상태 배지 (항상 표시) -->
+                <div style="margin-bottom:8px; padding:0 2px;">
+                    <span id="topic-contamination-badge" style="font-size:10px;color:#aaa;"></span>
                 </div>
                 <div id="inbox-subqueue-header" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📬 미분류 / 신규발신자 / 자동폐기</div>
                 <div style="display:flex; gap:6px;">
@@ -1995,21 +2010,6 @@
                         </button>
                     </div>
 
-                    <!-- Phase 8: 토픽 오염 감지 배지 + AI 진단 버튼 -->
-                    <div style="margin-top:4px; display:flex; gap:6px; align-items:center;">
-                        <span id="topic-contamination-badge" style="font-size:10px;color:#aaa;flex:1;"></span>
-                        <button id="topic-diagnosis-btn"
-                            onclick="window._tcRunDiagnosis && window._tcRunDiagnosis()"
-                            title="오매칭 패턴을 AI로 분석하여 토픽 프로파일의 오염 원인을 진단하고 수정안을 제시합니다."
-                            onmouseover="this.style.background='#fcd5d5';this.style.borderColor='#e8857a';"
-                            onmouseout="this.style.background='#fde8e8';this.style.borderColor='#f0a8a0';"
-                            style="display:none; height:22px; padding:0 10px; font-size:11px; font-weight:bold;
-                                   cursor:pointer; background:#fde8e8; color:#b91c1c;
-                                   border:1px solid #f0a8a0; border-radius:6px;
-                                   transition:background .15s,border-color .15s; white-space:nowrap;">
-                            🔬 AI 진단
-                        </button>
-                    </div>
 
                     <!-- 직접입력 분석 결과 목록 (누적) — 파일첨부/메일서버와 동일한 체크박스+일괄등록 구조 -->
                     <div id="paste-result-header" style="display:none; padding:6px 12px; background:#f8f9fa; border-bottom:1px solid #dee2e6; flex-shrink:0; margin-bottom:4px;">

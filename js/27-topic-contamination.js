@@ -123,7 +123,7 @@
 
     // ─────────────────────────────────────────────────────────────────────────
     /**
-     * 오염 배지 DOM 갱신 (메일 분석기 열릴 때 호출)
+     * 오염 배지 DOM 갱신 (AI 업무 보관함 토픽 영역에 항상 표시)
      */
     window._tcRefreshBadge = function(key) {
         var badge = document.getElementById('topic-contamination-badge');
@@ -154,12 +154,8 @@
         badge.innerHTML = icon + ' ' + text + noMatchSuffix;
         badge.style.color = color;
 
-        // 진단 버튼 노출 (오매칭 OR 미분류 많을 때)
-        if (diagBtn) {
-            var showBtn = (st.sampleOk && st.level !== 'ok' && st.level !== 'insufficient')
-                       || st.noMatchCount >= 5;
-            diagBtn.style.display = showBtn ? 'inline-block' : 'none';
-        }
+        // 💡 [2026-09-04] 진단 버튼은 항상 표시 — 조건부 show/hide 제거
+        // (버튼은 Task Inbox 토픽 영역에 고정 위치로 이동)
     };
 
     // ─────────────────────────────────────────────────────────────────────────
