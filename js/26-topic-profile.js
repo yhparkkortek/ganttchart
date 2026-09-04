@@ -297,6 +297,30 @@
         }
     };
 
+    // ── 뷰어 내부에서 호출하는 삭제 헬퍼 ────────────────────────────────────────
+    window._tpDeleteOne = function(k) {
+        window._clearTopicProfile(k);
+        window._refreshTopicProfileBadge();
+        // 카드만 제거 (모달 유지)
+        var safeId = 'tp-card-' + k.replace(/[^a-zA-Z0-9]/g, '_');
+        var card = document.getElementById(safeId);
+        if (card) card.remove();
+        // 남은 카드 없으면 빈 상태 표시
+        var body = document.getElementById('tp-viewer-body');
+        if (body && !body.querySelector('[id^="tp-card-"]')) {
+            body.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px;">⚪ 저장된 토픽 프로파일이 없습니다.</div>';
+        }
+    };
+    window._tpClearAll = function() {
+        var total = Object.keys(JSON.parse(localStorage.getItem('gantt_topic_profile_v1') || '{}')).length;
+        if (!confirm('저장된 토픽 프로파일 ' + total + '개를 모두 삭제할까요?')) return;
+        localStorage.removeItem('gantt_topic_profile_v1');
+        window._refreshTopicProfileBadge();
+        var ov = document.getElementById('tp-viewer-overlay');
+        if (ov) ov.remove();
+        if (window.showToast) window.showToast('🗑 토픽 프로파일 전체 삭제 완료', 'info', 3000);
+    };
+
     // ── 토픽 프로파일 뷰어 모달 ─────────────────────────────────────────────────
     window._showTopicProfileViewer = async function() {
         var existing = document.getElementById('tp-viewer-overlay');
@@ -321,6 +345,11 @@
             'border-radius:12px 12px 0 0;display:flex;align-items:center;gap:10px;flex-shrink:0;' +
             'cursor:grab;user-select:none;';
         hdr.innerHTML = '<span style="flex:1;">📊 토픽 프로파일 뷰어</span>';
+        var clearAllBtn = document.createElement('button');
+        clearAllBtn.textContent = '🗑 전체 삭제';
+        clearAllBtn.style.cssText = 'background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;font-size:11.5px;cursor:pointer;color:#e03131;padding:3px 10px;';
+        clearAllBtn.onclick = function(e) { e.stopPropagation(); window._tpClearAll(); };
+        hdr.appendChild(clearAllBtn);
         var closeBtn = document.createElement('button');
         closeBtn.textContent = '✕';
         closeBtn.style.cssText = 'background:none;border:none;font-size:16px;cursor:pointer;color:#888;padding:0 4px;';
@@ -387,6 +416,7 @@
 
         // ── 스크롤 영역 ──
         var body = document.createElement('div');
+        body.id = 'tp-viewer-body';
         body.style.cssText = 'flex:1;overflow-y:auto;padding:16px 18px;';
         box.appendChild(body);
 
@@ -442,10 +472,11 @@
                 return '<span style="display:block;font-size:11.5px;color:#666;padding:2px 0;">↳ ' + t + '</span>';
             }).join('');
 
-            html += '<div style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
+            var safeCardId = 'tp-card-' + k.replace(/[^a-zA-Z0-9]/g, '_');
+            html += '<div id="' + safeCardId + '" style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
                   '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + projName + '</span>' +
-                  (isCur ? '<button onclick="window._clearTopicProfile();document.getElementById(\'tp-viewer-overlay\').remove();window._refreshTopicProfileBadge();" title="이 프로파일 삭제" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;">🗑 삭제</button>' : '') +
+                  '<button onclick="window._tpDeleteOne(\'' + k.replace(/'/g, '') + '\')" title="이 프로파일 삭제" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;">🗑 삭제</button>' +
                   '<span style="font-size:10px;color:#aaa;">' + (ago ? ago + ' 생성' : '') + (p.taskCount ? ' · ' + p.taskCount + '개 업무' : '') + '</span>' +
                 '</div>' +
                 (p.summary ? '<div style="font-size:12px;color:#2c5f8a;background:#e7f3ff;padding:6px 10px;border-radius:6px;margin-bottom:8px;">' + p.summary + '</div>' : '') +
