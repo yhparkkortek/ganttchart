@@ -763,7 +763,7 @@
                 //    더 업로드할 필요는 없다. (Backups 폴더는 실수 복구용이라, 내용이 같은 백업이 계속
                 //    쌓이는 건 용량/API 호출만 낭비하고 복구에는 도움이 안 됨)
                 if (_preSaveHadChanges || !fileId) {
-                    window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (1주 보관)
+                    window.backupToDrive(saveData, dynamicFileName); // 💡 드라이브 Backups 폴더에 타임스탬프 백업 (48시간 보관)
                 } else {
                     console.info('[저장 계측] 변경사항 없음 — 백업 생략');
                 }

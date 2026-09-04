@@ -801,13 +801,13 @@
                 body: body
             });
 
-            // 💡 7일(604800000ms) 지난 백업은 자동 정리
+            // 💡 48시간(172800000ms) 지난 백업은 자동 정리 (변경: 7일 → 48시간)
             const listQ = `'${folderId}' in parents and trashed=false`;
             const listRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(listQ)}&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,createdTime)`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             const listData = await listRes.json();
-            const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
+            const cutoff = Date.now() - 48 * 60 * 60 * 1000;
             const oldFiles = (listData.files || []).filter(function(f) { return new Date(f.createdTime).getTime() < cutoff; });
             for (const f of oldFiles) {
                 await fetch(`https://www.googleapis.com/drive/v3/files/${f.id}?supportsAllDrives=true`, {
