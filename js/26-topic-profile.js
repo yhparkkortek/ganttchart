@@ -170,12 +170,29 @@
         }
 
         // ② 프로젝트 메타 요약
+        // 💡 [버그 수정 2026-09-06] 사용자 제보: "SHUFFLER 3.0"/4.3"가 프로젝트 2개로 분리돼 있는데
+        //    토픽 프로파일이 하나로 얘기한다" — 원인 확인 결과 두 가지가 겹쳐 있었음.
+        //    ① 필드명 오타: Summary 탭 실제 필드는 pm.고객사인데 여기선 존재한 적 없는 pm.고객사명을
+        //      읽고 있어서 고객사 정보가 프롬프트에 아예 빠지고 있었음.
+        //    ② 인치가 통째로 누락: pm.인치를 아예 안 읽어서, 모델명이 같고 크기만 다른 형제
+        //      프로젝트(SHUFFLER 3.0/4.3 등)를 AI가 구분할 근거가 프로젝트 정보에 전혀 없었음
+        //      (project_index.json 실측 결과 SHUFFLER 두 항목 모두 inch가 빈 값이었던 것도 한몫함 —
+        //      04c-core-app-mail-pipeline.js의 _inchFromFileName 폴백으로 별도 수정).
         var pm = window.projectMeta || {};
         var metaParts = [];
         if (pm.프로젝트담당자) metaParts.push('PM: ' + pm.프로젝트담당자);
-        if (pm.고객사명)       metaParts.push('고객사: ' + pm.고객사명);
+        if (pm.고객사)         metaParts.push('고객사: ' + pm.고객사);
         if (pm.모델명)         metaParts.push('모델: ' + pm.모델명);
+        if (pm.인치)           metaParts.push('인치: ' + pm.인치);
         var metaLine = metaParts.length ? '프로젝트 정보: ' + metaParts.join(', ') + '\n' : '';
+        // 💡 모델명이 같고 인치만 다른 "형제 프로젝트"(SHUFFLER 3.0/4.3 등)를 keywords 자체에서도
+        //    구분할 수 있도록 명시 지시 — 프로젝트 정보 줄만으로는 사람이 읽을 땐 충분해도, AI가
+        //    "고유 식별 키워드"를 뽑을 때 인치를 안 붙이면 두 형제 프로젝트의 키워드가 사실상 똑같아진다.
+        var siblingNote = (pm.모델명 && pm.인치)
+            ? ('\n⚠️ 이 프로젝트와 모델명은 같고 인치(크기)만 다른 다른 프로젝트가 있을 수 있습니다. ' +
+               'keywords에 모델명만 단독으로 넣지 말고 "' + pm.모델명 + ' ' + pm.인치 + '" 처럼 인치를 ' +
+               '붙인 조합도 반드시 포함해서, 크기만 다른 형제 프로젝트와 구분되게 해주세요.\n')
+            : '';
 
         // ③ project_index.json에 누적된 mail 신호 키워드 주입
         //    다른 사용자가 메일 분류 시 기록한 키워드들 — Gantt 업무명만으로 못 잡는 실제 메일 언어 반영
@@ -237,6 +254,7 @@
             : '(최근 ' + _RECENT_DAYS + '일 이내 업무 없음 — 전체 목록으로 단계 추정)';
 
         var prompt = metaLine +
+            siblingNote +
             '아래는 제품 개발 프로젝트 간트차트의 업무 목록입니다.\n\n' +
             '⚠️ 중요 지시사항:\n' +
             '① keywords에는 "이 프로젝트를 다른 하드웨어 개발 프로젝트와 구분하는 고유 식별자"만 포함해 주세요.\n' +
@@ -425,6 +443,32 @@
         return { changed: changedCount, removed: removedCount };
     };
 
+    // 💡 [2026-09-06 신규] 사용자 제보: "토픽 프로파일이 같은 프로젝트를 계속 새로 만드는 것 같다".
+    //    _currentKey()가 예전엔 fileName 우선이었다가 fileId 우선으로 고쳐진 이력이 있는데(위 주석
+    //    참고), 그 전환 시점 이전에 fileName으로 저장된 구버전 항목이 그대로 남아있으면, 같은 실제
+    //    프로젝트가 fileId 키(최신)와 fileName 키(구버전) 두 장의 카드로 각각 보여서 "같은 프로젝트가
+    //    중복 생성된다"는 착시를 일으킨다(뷰어의 "⚠️파일명" 배지가 이 구버전 항목을 가리킴). 이미
+    //    존재하는 fileId를 project_index에서 찾아 구버전 항목을 병합/정리한다 — fileId 카드가 없으면
+    //    구버전 내용을 그 fileId로 옮겨 살리고, 이미 있으면(최신이 이미 생성됨) 구버전은 버린다.
+    window._tpMigrateLegacyKeys = async function() {
+        var store = _getStore();
+        var pi = [];
+        try { pi = (window._msLoadProjectIndex ? await window._msLoadProjectIndex() : []) || []; } catch(e) {}
+        var byFileName = {};
+        pi.forEach(function(p) { if (p && p.file_name) byFileName[p.file_name] = p.drive_file_id; });
+
+        var migrated = 0, dropped = 0, unresolved = 0;
+        Object.keys(store).forEach(function(k) {
+            if (/^[A-Za-z0-9_\-]{25,}$/.test(k)) return; // 이미 fileId 키 — 정상
+            var targetId = byFileName[k];
+            if (!targetId) { unresolved++; return; } // project_index에서 못 찾음(삭제된 프로젝트 등) — 그대로 둠
+            if (store[targetId]) { dropped++; } else { store[targetId] = store[k]; migrated++; }
+            delete store[k];
+        });
+        if (migrated || dropped) _saveStore(store);
+        return { migrated: migrated, dropped: dropped, unresolved: unresolved };
+    };
+
     // ── 토픽 프로파일 뷰어 모달 ─────────────────────────────────────────────────
     window._showTopicProfileViewer = async function() {
         var existing = document.getElementById('tp-viewer-overlay');
@@ -466,6 +510,25 @@
             window._showTopicProfileViewer();
         };
         hdr.appendChild(reFilterBtn);
+        // 💡 [2026-09-06 신규] "같은 프로젝트가 중복 생성되는 것 같다" 제보 대응 — 구버전 fileName 키를
+        //    최신 fileId 키로 병합/정리(AI 재호출 없음). 카드에 "⚠️파일명" 배지가 보이면 이 버튼으로 정리.
+        var migrateBtn = document.createElement('button');
+        migrateBtn.textContent = '🔀 중복 정리';
+        migrateBtn.title = '"⚠️파일명" 배지가 붙은 구버전 항목을 최신 프로젝트(ID)로 병합하거나 정리합니다 (AI 재호출 없음)';
+        migrateBtn.style.cssText = 'background:#e7f3ff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:#1971c2;padding:3px 10px;transition:background .15s;';
+        migrateBtn.addEventListener('mouseover', function() { this.style.background = '#cce0ff'; });
+        migrateBtn.addEventListener('mouseout',  function() { this.style.background = '#e7f3ff'; });
+        migrateBtn.onclick = async function(e) {
+            e.stopPropagation();
+            var r = await window._tpMigrateLegacyKeys();
+            var msg = (r.migrated || r.dropped)
+                ? ('🔀 병합 ' + r.migrated + '건, 중복 제거 ' + r.dropped + '건' + (r.unresolved ? (' · 미해결 ' + r.unresolved + '건(프로젝트 못 찾음)') : ''))
+                : '정리할 구버전 항목이 없습니다';
+            if (window.showToast) window.showToast(msg, 'info', 4000);
+            overlay.remove();
+            window._showTopicProfileViewer();
+        };
+        hdr.appendChild(migrateBtn);
         var clearAllBtn = document.createElement('button');
         clearAllBtn.textContent = '🗑 전체 삭제';
         // 💡 [2026-09-04] 헤더와 동일 배경색(#e7f3ff/#1971c2) + hover + 테두리 없음
@@ -555,14 +618,21 @@
         var keys = Object.keys(store);
 
         // project_index에서 이름 매핑 시도
+        // 💡 [버그 수정 2026-09-06] _msLoadProjectIndex()는 배열을 그대로 반환하는데(`{projects:[...]}`가
+        //    아님) 여기선 pi.projects를 읽고 있어서 nameMap이 항상 빈 채로 있었다 — 그 결과 카드 제목이
+        //    전부 원시 키(fileId 또는 구버전 fileName)로만 표시돼서, 사람이 보기엔 "SHUFFLER"인지
+        //    구분이 안 되고 다 비슷비슷해 보였을 것("같은 프로젝트가 계속 생성되는 것 같다"는 제보와
+        //    관련 가능성). 배열로 바로 순회하도록 고치고, 모델명이 같고 인치만 다른 형제 프로젝트를
+        //    카드 제목에서도 구분할 수 있게 인치를 함께 표시한다.
         var nameMap = {};
         try {
             var pi = await window._msLoadProjectIndex();
-            if (pi && pi.projects) {
-                pi.projects.forEach(function(p) {
-                    if (p.drive_file_id) nameMap[p.drive_file_id] = (p.model || p.customer || p.file_name || p.drive_file_id);
-                });
-            }
+            (Array.isArray(pi) ? pi : []).forEach(function(p) {
+                if (!p || !p.drive_file_id) return;
+                var label = p.model || p.customer || p.file_name || p.drive_file_id;
+                if (p.inch) label += ' (' + p.inch + '인치)';
+                nameMap[p.drive_file_id] = label;
+            });
         } catch(e) {}
 
         if (!keys.length) {

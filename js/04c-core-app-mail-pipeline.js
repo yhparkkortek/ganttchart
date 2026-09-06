@@ -157,6 +157,22 @@
     //    전환되면 "옛 프로젝트의 driveFileId"에 "이미 바뀐 새 프로젝트의 projectMeta"가 합쳐져
     //    project_index.json에 저장되는 사고가 실제로 있었음(파일명↔모델명이 서로 안 맞는 항목들로 확인됨).
     //    호출부에서 await 전에 미리 캡처한 스냅샷을 pmOverride로 넘겨서 이 드리프트를 원천 차단한다.
+    // 💡 [버그 수정 2026-09-06] 사용자 제보: "SHUFFLER는 4.3"/3.0"로 프로젝트가 2개 분리돼 있는데
+    //    토픽 프로파일이 하나의 프로젝트로 얘기한다". 실제 project_index.json을 확인한 결과 두 SHUFFLER
+    //    항목 모두 inch 필드가 빈 문자열("")이었음(Summary 탭 "인치"를 안 채워서) — 그러면
+    //    _msBuildProjectMatchSection의 후보 목록에 "(4.3인치)"/"(3.0인치)" 표시가 아예 안 붙어서,
+    //    모델명이 똑같은 "SHUFFLER" 두 후보를 AI가 구별할 유일한 공식 근거("인치로 구별하세요" 지시)가
+    //    무력화된다. 다른 프로젝트도 대부분 inch가 비어있었지만(STELLAR32만 유일하게 채워져 있었음)
+    //    모델명이 서로 달라 지금까지는 우연히 문제가 안 드러났을 뿐 — 같은 모델명을 크기만 다르게 쓰는
+    //    프로젝트가 또 생기면 언제든 재발할 수 있는 구조적 위험이었음.
+    //    → Summary 탭에 인치를 안 채워도, 파일명 규칙("고객사_모델_인치.json")에서 마지막 숫자를
+    //    최소한의 안전망으로 추출해 채운다(Summary 탭 값이 있으면 그게 항상 우선).
+    function _inchFromFileName(fileName) {
+        const m = String(fileName || '').match(/_([0-9]+(?:\.[0-9]+)?)\.json$/i);
+        if (!m) return '';
+        const n = parseFloat(m[1]);
+        return isNaN(n) ? '' : String(n);
+    }
     window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride) {
         const pm = pmOverride || window.projectMeta || {};
         // 💡 고객사명은 매칭 키워드에서 제외 — 한 고객사가 여러 프로젝트를 가진 경우
@@ -181,7 +197,7 @@
             model: pm.모델명 || pm.고객모델명 || '',
             customer: pm.고객사 || '',
             assignee: pm.프로젝트담당자 || '',
-            inch: pm.인치 || '',
+            inch: pm.인치 || _inchFromFileName(dynamicFileName) || '',
             keywords: keywords,          // Stage 1 AI 매칭에 사용할 전체 키워드 (4필드 + 커스텀)
             completed: pm.완료여부 === '완료', // 💡 [2026-08-29 신규] 완료 프로젝트 메일 자동매칭 제외용 — _msMatchProjects 참고
             // ✅ [폴더 로드맵] team 필드 — 지금은 Drive 폴더를 건드리지 않고 인덱스에만 팀 구분을 심어둠.
