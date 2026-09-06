@@ -428,7 +428,32 @@
         setTimeout(function() { if (banner.parentNode) banner.remove(); }, 12000);
     };
 
-    /** 재배치 업무를 현재 프로젝트 globalData에 바로 삽입 */
+    /**
+     * "📬 재배치 대기" 알림 배너의 [확인] 클릭 시 호출됨(_checkReassignQueueOnLoad 참고).
+     * 💡 [버그 수정 2026-09-06] 사용자 제보: "다른 프로젝트를 열었을 때 AI 업무 보관함 모달이
+     *    안 열림 / 상단 AI 도구로 들어가면 열림". 원인 확인 — 이 함수(window._openReassignInbox)가
+     *    처음부터 정의된 적이 없었다(_checkReassignQueueOnLoad에서 `if (window._openReassignInbox)`로
+     *    존재 여부만 체크하고 있어서 에러 없이 조용히 `else _applyReassignedTasks(mine)` 폴백으로
+     *    빠졌음). 그 결과 다른 프로젝트를 열어 재배치 알림 배너가 뜨고 [확인]을 눌러도, 보관함
+     *    모달은 전혀 안 열리고 업무가 Gantt 맨 끝에 조용히 꽂히기만 했다 — "AI 도구" 메뉴로 직접
+     *    열면 되는 이유는 그건 이 버그와 무관하게 openTaskInbox()를 곧장 호출하는 별개 경로이기 때문.
+     *    → 재배치 업무를 즉시 Gantt에 꽂는 대신 업무 보관함(TaskInbox)에 "대기"로 담아, 사용자가
+     *    L0 구간 등을 직접 확인하고 배치할 수 있도록 모달을 바로 열어준다.
+     */
+    window._openReassignInbox = function(items) {
+        (items || []).forEach(function(item) {
+            if (!item.taskData) return;
+            window.TaskInbox.add(item.taskData, {
+                source: '🔀 오매칭 재배치' + (item.targetProjectName ? '(' + item.targetProjectName + ')' : ''),
+                matchedProject: item.targetProjectId
+                    ? { status: 'matched', candidates: [{ drive_file_id: item.targetProjectId, file_name: item.targetProjectName || '' }] }
+                    : null
+            });
+        });
+        if (window.openTaskInbox) window.openTaskInbox();
+    };
+
+    /** 재배치 업무를 현재 프로젝트 globalData에 바로 삽입 (위 _openReassignInbox가 없을 때의 폴백) */
     function _applyReassignedTasks(items) {
         if (!items || !items.length) return;
         var added = 0;
