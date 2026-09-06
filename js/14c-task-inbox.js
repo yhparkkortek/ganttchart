@@ -222,33 +222,35 @@ window._tiBuildSummaryHtml = function(items) {
             `${escapeHtml(label)} <b>${count}</b></span>`;
     }
 
+    // 💡 [2026-09-06 개선] "전체 N건" 자체를 클릭하면 필터가 해제되도록(➜ 기존 "✕ 해제" 버튼은 제거,
+    //    전체보기로 돌아가는 길이 이거 하나로 통일돼서 더 직관적) — class="ti-clear-filter"를 그대로 재사용.
     const statusTop = topCount(items, x => x.status, 10);
     let html = `<div id="inbox-summary-box" style="padding:10px 12px;background:#f8faff;border:1px solid #e3ecfa;border-radius:8px;font-size:11.5px;color:#333;">` +
-        `<div><b>${_en ? 'Total' : '전체'} ${items.length}${_en ? '' : '건'}</b> — ` +
+        `<div><span class="ti-clear-filter" title="${_en ? 'Click to show all (clear filter)' : '클릭하면 전체보기(필터 해제)'}" ` +
+        `style="cursor:pointer;text-decoration:underline dotted;"><b>${_en ? 'Total' : '전체'} ${items.length}${_en ? '' : '건'}</b></span> — ` +
         statusTop.map(e => {
             const sc = _TI_STATUS_STYLE[e[0]] || { bg: '#eef3ff', fg: '#1a4f7a' };
             return chip(e[0], e[1], sc.bg, sc.fg, e[0], null);
         }).join('') + `</div>`;
 
-    Object.keys(_TI_STATUS_STYLE).forEach(function(st) {
-        const subset = items.filter(x => x.status === st);
-        if (!subset.length) return;
-        const byProject = topCount(subset, x => _tiProjectOf(x, noMatchLabel), 8);
-        if (byProject.length <= 1) return; // 프로젝트가 하나뿐이면 세분화해서 보여줄 필요 없음
-        const dates = subset.map(x => (x.addedAt || '').slice(0, 10)).filter(Boolean).sort();
-        const range = dates.length ? `${dates[0]} ~ ${dates[dates.length - 1]}` : '';
-        const sc = _TI_STATUS_STYLE[st];
-        html += `<div style="margin-top:6px;"><b>${sc.emoji} ${st} ${subset.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
-            byProject.map(e => chip(e[0], e[1], sc.bg, sc.fg, st, e[0])).join('') +
-            (range ? `<span style="color:#999;margin-left:4px;">(${escapeHtml(range)})</span>` : '') + `</div>`;
-    });
-
+    // 💡 [2026-09-06 개선] "자리를 많이 차지한다"는 피드백 — 기본으로는 위 상태별 건수 줄만 보이고,
+    //    상태 칩을 클릭해 그 상태로 필터링된 동안에만(=아코디언, 한 번에 하나) 그 상태의 프로젝트별
+    //    세부 집계를 펼쳐 보여준다. 별도 펼침 상태를 안 두고 window._tiFilter.status를 그대로 재사용 —
+    //    필터 해제(=전체보기)로 돌아가면 자동으로 전부 접힌다.
     if (filter) {
+        const st = filter.status;
+        const subset = items.filter(x => x.status === st);
+        const byProject = topCount(subset, x => _tiProjectOf(x, noMatchLabel), 8);
+        if (subset.length && byProject.length > 1) {
+            const dates = subset.map(x => (x.addedAt || '').slice(0, 10)).filter(Boolean).sort();
+            const range = dates.length ? `${dates[0]} ~ ${dates[dates.length - 1]}` : '';
+            const sc = _TI_STATUS_STYLE[st] || { bg: '#eef3ff', fg: '#1a4f7a', emoji: '🔹' };
+            html += `<div style="margin-top:6px;"><b>${sc.emoji} ${st} ${subset.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
+                byProject.map(e => chip(e[0], e[1], sc.bg, sc.fg, st, e[0])).join('') +
+                (range ? `<span style="color:#999;margin-left:4px;">(${escapeHtml(range)})</span>` : '') + `</div>`;
+        }
         const filterLabel = filter.project ? `${filter.status} · ${filter.project}` : filter.status;
-        html += `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">` +
-            `<span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 ${_en ? 'Filtered' : '필터링 중'}: ${escapeHtml(filterLabel)}</span>` +
-            `<button class="ti-clear-filter" style="font-size:11px;padding:2px 10px;background:#fff;border:1px solid #ccc;border-radius:12px;cursor:pointer;color:#555;">✕ ${_en ? 'Clear' : '해제'}</button>` +
-            `</div>`;
+        html += `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 ${_en ? 'Filtered' : '필터링 중'}: ${escapeHtml(filterLabel)}</span></div>`;
     }
     html += `</div>`;
     return html;
@@ -443,7 +445,11 @@ window.inboxBatchRegisterMatched = async function() {
         try {
             const result = await window._msAutoRegisterToProject(it.uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
             if (result.ok) {
-                window.TaskInbox.setStatus(it.uid, '자동배치됨', { type: '일괄전송', target: target.file_name, at: new Date().toISOString() });
+                // 💡 [버그 수정 2026-09-06] 이 함수는 사람이 "🚀 매칭건 일괄전송" 버튼을 누르고 확인창까지
+                //    거치는 수동 액션인데 '자동배치됨'으로 기록되고 있었음 — 진짜 자동(사람 개입 0, 완전자동
+                //    메일모드의 커트라인 배치)과 구분이 안 돼서 "몇 건이 진짜 자동으로 처리됐는지" 집계가
+                //    부정확해짐. 단건 버전(inboxQuickRegisterMatched)과 성격이 같으므로 '배치됨'으로 통일.
+                window.TaskInbox.setStatus(it.uid, '배치됨', { type: '일괄전송', target: target.file_name, at: new Date().toISOString() });
                 okCount++;
             } else {
                 fails.push(`${it.task['업무명'] || (_en ? '(untitled)' : '(제목없음)')}: ${result.reason || (_en ? 'unknown' : '알수없음')}`);
