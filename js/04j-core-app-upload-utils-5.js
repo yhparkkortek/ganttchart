@@ -774,9 +774,6 @@
             'inbox-unmatched-unit':      { ko:'건',                     en:'' },
             'inbox-newsender-unit':      { ko:'건',                     en:'' },
             'inbox-discarded-unit':      { ko:'건',                     en:'' },
-            'inbox-reset-unmatched-btn': { ko:'🗑 미분류 초기화',       en:'🗑 Reset Unclassified' },
-            'inbox-reset-newsender-btn': { ko:'🗑 신규발신자 초기화',   en:'🗑 Reset New Senders' },
-            'inbox-reset-discarded-btn': { ko:'🗑 자동폐기 초기화',     en:'🗑 Reset Discarded' },
         };
         Object.entries(_ibxSubTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);

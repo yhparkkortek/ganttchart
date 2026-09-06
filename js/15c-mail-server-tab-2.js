@@ -672,21 +672,6 @@ window._macRenderKeywordRows = function(kws) {
     (kws || []).forEach(k => window._macAddKeywordRow(k.word, k.score));
 };
 
-window._macClearQueue = function(type) {
-    const label = type === 'unmatched' ? '미분류' : type === 'discarded' ? '자동폐기' : '신규발신자';
-    if (!confirm(`${label} 큐를 초기화할까요?`)) return;
-    if (type === 'unmatched') {
-        window._msResults = (window._msResults || []).filter(r => r.project);
-        window._msSaveQueueToStorage();
-    } else if (type === 'discarded') {
-        localStorage.removeItem('ms_discard_queue');
-    } else {
-        localStorage.removeItem('ms_new_sender_queue');
-    }
-    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
-    if (window.showToast) window.showToast(`✅ ${label} 초기화 완료`, 'info');
-};
-
 // 💡 [신규] 필터 규칙 3종(제목키워드/발신자패턴/도메인차단)을 칩 형태로 렌더링 + 개별 삭제
 window._macRenderFilterRules = function() {
     const rules = window._msGetFilterRules();
