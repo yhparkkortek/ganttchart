@@ -732,9 +732,12 @@ function bmAlertModal(message) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'bm-alert-modal';
-        modal.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+        // 💡 [버그 수정 2026-09-06] 배경 조작 안 되던 문제 — 이 앱 표준 패턴(오버레이 pointer-events:none
+        //    + 배경 없음, 박스만 pointer-events:all)으로 통일. 단순 알림(선택지 없음)이라 배경 상태에
+        //    의존하는 위험이 없음.
+        modal.style.cssText = 'position:fixed;inset:0;z-index:100000;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
         modal.innerHTML =
-            '<div style="background:#fff;border-radius:10px;padding:26px 30px;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">'
+            '<div style="pointer-events:all;background:#fff;border-radius:10px;padding:26px 30px;min-width:280px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">'
             + '<div id="bm-alert-msg" style="font-size:14px;color:#333;margin-bottom:18px;"></div>'
             + '<button id="bm-alert-ok" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="padding:9px 26px;background:#e8f4fd;color:#1a4f7a;border:1px solid #a5c8f0;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;transition:background .15s, border-color .15s;">' + (window._currentLang === 'en' ? 'OK' : '확인') + '</button></div>';
         document.body.appendChild(modal);

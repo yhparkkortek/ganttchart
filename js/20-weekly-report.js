@@ -429,12 +429,15 @@
           if (!modal) {
               modal = document.createElement('div');
               modal.id = 'ppt-color-choice-modal';
-              modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,0.35); align-items:center; justify-content:center;';
+              // 💡 [버그 수정 2026-09-06] 배경 조작 안 되던 문제 — 색상 선택은 배경 데이터 변화와
+              //    무관(내보내기 시점 데이터는 어차피 실제 내보낼 때 새로 읽음)해서 안전하게 표준
+              //    패턴(오버레이 pointer-events:none, 박스만 pointer-events:all)으로 통일 가능.
+              modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; background:none; pointer-events:none; align-items:center; justify-content:center;';
               document.body.appendChild(modal);
           }
           const curHex = window._cpLiveAppliedHex || '#19c3d6';
           modal.innerHTML = `
-              <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
+              <div onclick="event.stopPropagation()" style="pointer-events:all; background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
                   <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:14px;">🎨 ${_en ? 'Which theme color should the PPT use?' : 'PPT에 어떤 테마 색상을 쓸까요?'}</div>
                   <div style="display:flex; flex-direction:column; gap:8px;">
                       <button id="pcc-default" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:#fff; border:1px solid #cfe3e5; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s; text-align:left;">

@@ -476,11 +476,15 @@
 
         var overlay = document.createElement('div');
         overlay.id = 'tp-viewer-overlay';
-        overlay.style.cssText = 'position:fixed;inset:0;z-index:99997;background:rgba(0,0,0,0.35);';
+        // 💡 [버그 수정 2026-09-06] "모달이 열려있어도 배경 조작이 돼야 하는데 안 된다" 제보 — 이
+        //    모달은 어두운 backdrop(background:rgba)에 pointer-events:none이 없어서 뒤 화면 전체가
+        //    막혀있었음. task-inbox-overlay 등 이 앱의 다른 모달들이 쓰는 표준 패턴(오버레이는
+        //    pointer-events:none + 배경 없음, 실제 박스만 pointer-events:all)으로 통일.
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:99997;background:none;pointer-events:none;';
         overlay.addEventListener('click', function(e) { if (e.target === overlay) overlay.remove(); });
 
         var box = document.createElement('div');
-        box.style.cssText = 'position:absolute;background:#fff;border:1.5px solid #a5c8f0;border-radius:12px;' +
+        box.style.cssText = 'position:absolute;pointer-events:all;background:#fff;border:1.5px solid #a5c8f0;border-radius:12px;' +
             'box-shadow:0 8px 40px rgba(0,0,0,0.22);width:520px;min-width:320px;min-height:200px;' +
             'max-width:96vw;max-height:88vh;display:flex;flex-direction:column;' +
             'font-family:\'Malgun Gothic\',sans-serif;overflow:hidden;' +

@@ -367,10 +367,13 @@
 
         var modal = document.createElement('div');
         modal.id = 'tc-diagnosis-modal';
-        modal.style.cssText = 'position:fixed;inset:0;z-index:200000;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;';
+        // 💡 [버그 수정 2026-09-06] "모달이 열려있어도 배경 조작이 돼야 하는데 안 된다" — 이 앱의
+        //    다른 모달들(task-inbox-overlay 등)과 같은 표준 패턴으로 통일: 오버레이는
+        //    pointer-events:none + 배경 없음, 실제 박스(아래 첫 자식 div)만 pointer-events:all.
+        modal.style.cssText = 'position:fixed;inset:0;z-index:200000;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
 
         modal.innerHTML =
-            '<div style="background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.28);' +
+            '<div style="pointer-events:all;background:#fff;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.28);' +
             'max-width:560px;width:95%;max-height:90vh;overflow-y:auto;padding:24px;font-family:\'Malgun Gothic\',sans-serif;">' +
 
             '<div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">' +
