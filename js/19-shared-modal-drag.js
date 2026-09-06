@@ -133,7 +133,20 @@ function _modalToggleTarget(modalId, closeBtn) {
         const el = document.getElementById(m[1]);
         if (el) return el;
     }
-    return document.getElementById(modalId);
+    const modalEl = document.getElementById(modalId);
+    // 💡 [버그 수정 2026-09-06] "AI 업무 보관함이 안 열림(특히 다른 모달을 이미 열어본 뒤)" 제보의
+    //    원인 — task-inbox-modal처럼 ✕ 버튼이 onclick에 getElementById(...)를 직접 안 쓰고 이름
+    //    있는 도우미 함수(window.closeTaskInbox() 등)만 호출하는 모달은, 위 정규식이 못 찾아서
+    //    modalId 자신(오버레이의 자식인 내부 박스)을 최소화 대상으로 잘못 골랐다. 이 앱의 실제
+    //    open/closeXxx() 로직은 항상 부모(.modal-overlay 오버레이 wrapper)의 display만 토글하고
+    //    자식 박스 자신의 인라인 display는 절대 건드리지 않으므로, 최소화가 자식만 display:none으로
+    //    숨긴 뒤엔 그 뒤로 openXxx()를 아무리 다시 불러도(부모만 flex로 "재확인"될 뿐 자식은 그대로
+    //    none) 화면에 아무것도 안 보여 "모달이 안 열리는" 것처럼 보였다. 부모가 .modal-overlay면
+    //    그 부모를 실제 토글 대상으로 삼는다.
+    if (modalEl && modalEl.parentElement && modalEl.parentElement.classList.contains('modal-overlay')) {
+        return modalEl.parentElement;
+    }
+    return modalEl;
 }
 
 // 💡 [2026-09-02 버그 수정] mouseover/mouseout으로 배경색을 직접 칠하는 방식은, 마우스가 버튼
