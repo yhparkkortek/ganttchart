@@ -242,11 +242,31 @@
                    e.ts && (now - new Date(e.ts).getTime()) < LOOKBACK_MS;
         }).slice(0, 15); // 최대 15건
 
+        // 💡 [버그 수정 2026-09-06] no_match 자동기록 버그(위 _msResolveAiProjectMatch 래핑 주석 참고)로
+        //    이미 쌓인 로그에는 이 프로젝트와 전혀 무관한 다른 프로젝트 얘기가 섞여있을 수 있다. 진단
+        //    프롬프트에 넣기 전에 "이 프로젝트 자신의 키워드/요약/판별단서가 실제로 스니펫·업무명에
+        //    등장하는" 항목만 남기고 걸러낸다 — 안 그러면 무관한 프로젝트(Amusnet 등) 얘기가 "이
+        //    프로젝트의 커버리지 갭"으로 오진단되는 사고가 재현된다.
+        var _selfTerms = (profile.keywords || [])
+            .concat(profile.distinguishers || [])
+            .map(function(k) { return String(k).toLowerCase().trim(); })
+            .filter(function(k) { return k.length >= 2; });
+        function _looksRelevantToThisProject(e) {
+            if (!_selfTerms.length) return true; // 자기 키워드가 아예 없으면 걸러낼 기준이 없으니 통과
+            var text = ((e.sourceSnippet || '') + ' ' + (e.taskName || '')).toLowerCase();
+            return _selfTerms.some(function(t) { return text.includes(t); });
+        }
+
         // 💡 미분류(no_match) 항목도 함께 진단 — 토픽 커버리지 갭 분석
-        var noMatchEntries = entries.filter(function(e) {
+        var _noMatchAll = entries.filter(function(e) {
             return e.type === 'no_match' &&
                    e.ts && (now - new Date(e.ts).getTime()) < LOOKBACK_MS;
-        }).slice(0, 10); // 최대 10건
+        });
+        var noMatchEntries = _noMatchAll.filter(_looksRelevantToThisProject).slice(0, 10); // 최대 10건
+        var _noMatchFilteredOutCount = _noMatchAll.length - noMatchEntries.length;
+        if (_noMatchFilteredOutCount > 0) {
+            console.info('[토픽 오염 진단] 이 프로젝트와 무관해 보이는 미분류 로그 ' + _noMatchFilteredOutCount + '건 제외됨 (오귀속 의심)');
+        }
 
         if (!negEntries.length && !noMatchEntries.length) {
             alert('30일 이내 오매칭·미분류 기록이 없습니다.'); return;
@@ -325,12 +345,12 @@
         }
 
         if (window.showToast) window.showToast('🔬 진단 완료', 'info', 2000);
-        _showDiagnosisModal(suggestion, profile, key);
+        _showDiagnosisModal(suggestion, profile, key, _noMatchFilteredOutCount);
     };
 
     // ─────────────────────────────────────────────────────────────────────────
     /** AI 진단 결과 모달 표시 */
-    function _showDiagnosisModal(suggestion, profile, key) {
+    function _showDiagnosisModal(suggestion, profile, key, filteredOutCount) {
         var existing = document.getElementById('tc-diagnosis-modal');
         if (existing) existing.remove();
 
@@ -358,6 +378,12 @@
             '<h3 style="margin:0;font-size:16px;color:#1a1a2e;">토픽 오염 AI 진단 결과</h3>' +
             '<span style="margin-left:auto;font-size:11px;font-weight:bold;color:' + confColor + ';">진단 신뢰도: ' + confLabel + '</span>' +
             '</div>' +
+
+            (filteredOutCount > 0 ?
+              '<div style="background:#e8f4fd;border:1px solid #a5c8f0;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:11.5px;color:#1a4f7a;">' +
+              '🧹 이 프로젝트와 무관해 보이는 미분류 로그 ' + filteredOutCount + '건은 진단에서 제외했습니다 ' +
+              '(예전 버전의 자동기록 버그로 다른 프로젝트 관련 메일이 잘못 섞여있던 것 — 지금은 수정됨).' +
+              '</div>' : '') +
 
             '<div style="background:#fff8e1;border:1px solid #ffe082;border-radius:8px;padding:12px;margin-bottom:14px;">' +
             '<div style="font-size:12px;font-weight:bold;color:#5d4037;margin-bottom:4px;">📋 진단 요약</div>' +
@@ -532,18 +558,39 @@
             var result = _origResolve.call(this, task, candidatesForAI);
             // 반환값이 null(미분류) & task에 '매칭근거'(AI가 분석했음)가 있을 때만 기록
             if (!result && task && (task['매칭근거'] || task['업무명'])) {
-                var projectKey = window.currentDriveFileId || window.currentDriveFileName || '';
-                if (projectKey && typeof window._writeLearningEntry === 'function') {
-                    window._writeLearningEntry(projectKey, {
-                        type:         'no_match',
-                        reason:       '미분류',
-                        taskName:     task['업무명'] || '',
-                        confidence:   task['매칭신뢰도'] || '',
-                        matchBasis:   task['매칭근거'] || '',
-                        matchKeywords: [],
-                        sourceSnippet: (task['_aiMeta'] && task['_aiMeta'].snippet) || ''
-                    });
-                }
+                // 💡 [버그 수정 2026-09-06] 예전엔 이 no_match를 "지금 화면에 열려있는 프로젝트"
+                //    (window.currentDriveFileId)로 무조건 기록했음. 그런데 자동수집/배치분석은 열려있는
+                //    프로젝트와 무관하게 전체 후보를 대상으로 도는 백그라운드 작업이라, 미분류 메일이
+                //    화면에 열려있는 프로젝트와 아무 상관이 없는 경우가 대부분이었다. 실제로 이 버그 때문에
+                //    "STELLAR32를 열어둔 채 자동수집이 돌면 Amusnet 관련 미분류 메일까지 STELLAR32의
+                //    학습 로그에 쌓이고, 나중에 🔬AI 진단이 그 오염된 로그를 보고 STELLAR32에게 엉뚱하게
+                //    Amusnet/ZITRO 등 다른 프로젝트 키워드를 추가하라고 제안하는" 사고가 실제로 확인됨.
+                //    → candidatesForAI 중 메일 스니펫에 그 프로젝트 자신의 모델명/키워드가 실제로 등장하는
+                //    "근접 후보"에만 기록한다(하이브리드-A와 동일한 문자열 포함 판정). 근접 후보가 하나도
+                //    없으면(정말 시스템 전체에 등록 안 된 신규 건) 아예 기록하지 않는다 — 엉뚱한 프로젝트에
+                //    잘못 붙이는 것보다 기록을 포기하는 편이 안전하다.
+                var snippet    = (task['_aiMeta'] && task['_aiMeta'].snippet) || '';
+                var snippetLow = snippet.toLowerCase();
+                var nearCandidates = (candidatesForAI || []).filter(function(c) {
+                    var frags = (c.model || '').toLowerCase().split(/[\s\-_\/]+/).filter(function(f) { return f.length >= 3; });
+                    var kws   = (c.keywords || []).map(function(k) { return String(k).toLowerCase().trim(); });
+                    return frags.some(function(f) { return snippetLow.includes(f); }) ||
+                           kws.some(function(k) { return k.length >= 3 && snippetLow.includes(k); });
+                });
+                nearCandidates.forEach(function(c) {
+                    var projectKey = c.drive_file_id || c.file_name || '';
+                    if (projectKey && typeof window._writeLearningEntry === 'function') {
+                        window._writeLearningEntry(projectKey, {
+                            type:         'no_match',
+                            reason:       '미분류(근접 후보)',
+                            taskName:     task['업무명'] || '',
+                            confidence:   task['매칭신뢰도'] || '',
+                            matchBasis:   task['매칭근거'] || '',
+                            matchKeywords: [],
+                            sourceSnippet: snippet
+                        });
+                    }
+                });
             }
             return result;
         };
