@@ -367,7 +367,7 @@ window.renderTaskInbox = function() {
                     ? `<button onclick="window.inboxQuickRegisterMatched('${it.uid}')" title="${escapeHtml((it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer || '') + ' (' + (it.matchedProject.candidates[0].assignee || '') + ')')}" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a8dab8; border-radius:6px; background:#e6f6ea; color:#1f7a3d; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">✅ ${_ibEn ? 'Send to matched' : '매칭 Proj 전송'}</button>`
                     : ''}
                 <button onclick="window.inboxOpenDistribute('${it.uid}')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #edbf85; border-radius:6px; background:#fbead9; color:#a85d0a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Other Proj' : '다른 Proj 선택'}</button>
-                <button onclick="window._ibExpandedUids.delete('${it.uid}'); window.TaskInbox.remove('${it.uid}'); window.renderTaskInbox();" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
+                <button onclick="window.inboxDeleteWithFeedback('${it.uid}')" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:0 0 auto; font-size:13px; padding:0 12px; height:31px; box-sizing:border-box; border:1px solid #eeb0ac; border-radius:6px; background:#fbe4e2; color:#b1432f; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑</button>
             </div>
             <div id="inbox-dist-inline-${it.uid}" style="display:none; margin-top:8px; padding:8px; background:#fff8f0; border:1px solid #f5c68a; border-radius:8px; max-height:260px; overflow-y:auto;"></div>
             <div id="inbox-cur-auto-row-${it.uid}" style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; color:#555;">
@@ -1083,5 +1083,83 @@ window.inboxReportFalseMatch = function(uid) {
         }
     }
     window.renderTaskInbox();
+};
+
+// ─── 💡 [버그 수정 2026-09-07] 업무 보관함 카드의 🗑 버튼이 이유 없이 곧장 TaskInbox.remove()만
+//    호출해서 AI 학습(gantt_ai_learning_v1)에 전혀 기록되지 않고 있었음. 사용자 제보: "AI 업무
+//    보관함에서 보다가 지웠는데 [학습+삭제] 기능(Gantt 행 삭제 시 뜨는 사유 선택 팝업)없이
+//    삭제되는데?" — Gantt 행 삭제(_showAiDeleteFeedback)와 같은 취지로, 지우기 전에 사유
+//    (오매칭/중복/불필요/기타)를 물어 학습 로그에 남긴다. 아직 어느 프로젝트에도 배치 전이라
+//    globalData splice가 필요 없어(=Gantt 재배치 대상 드롭다운 불필요) _showAiDeleteFeedback을
+//    그대로 재사용하지 않고 더 단순한 전용 팝업으로 분리했다 — 재배치가 필요하면 이미 있는
+//    [📤 다른 Proj 선택] 버튼(inboxOpenDistribute)을 쓰면 되므로 여기서 중복 구현하지 않음.
+window.inboxDeleteWithFeedback = function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const _en = window._currentLang === 'en';
+    const t = it.task || {};
+    const taskName = t['업무명'] || (_en ? '(untitled)' : '(제목없음)');
+    const mc = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
+
+    const existing = document.getElementById('inbox-delete-feedback-modal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'inbox-delete-feedback-modal';
+    // 💡 다른 확인용 팝업들과 동일하게 배경 조작 허용(pointer-events:none 오버레이 + 내부 박스만 all).
+    modal.style.cssText = 'position:fixed;inset:0;z-index:100010;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML =
+        '<div style="pointer-events:all;background:#fff;border-radius:14px;padding:26px 30px;min-width:340px;max-width:440px;' +
+        'box-shadow:0 10px 44px rgba(0,0,0,0.22);font-family:sans-serif;max-height:88vh;overflow-y:auto;">' +
+          '<div style="font-size:17px;font-weight:700;margin-bottom:4px;">🗑 ' + (_en ? 'Delete Inbox Item' : '업무 보관함 항목 삭제') + '</div>' +
+          '<div style="font-size:12px;color:#888;margin-bottom:14px;">' + (_en ? 'Let us know why — it helps improve future analysis.' : '이유를 알려주시면 다음 분석 정확도가 높아집니다.') + '</div>' +
+          '<div style="background:#f8f9fa;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;font-weight:600;">' + escapeHtml(taskName) + '</div>' +
+          '<div style="font-size:13px;font-weight:600;margin-bottom:8px;">' + (_en ? 'Reason' : '삭제 이유') + '</div>' +
+          '<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;">' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="오매칭"> ❌ ' + (_en ? 'False match — not this project' : '오매칭 — 이 프로젝트 업무가 아님') + '</label>' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="중복"> ♻️ ' + (_en ? 'Duplicate — already registered' : '중복 — 이미 등록된 업무') + '</label>' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="불필요"> 🚫 ' + (_en ? 'Irrelevant' : '불필요 — 등록할 필요 없는 내용') + '</label>' +
+            '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;"><input type="radio" name="ib-del-reason" value="기타"> 💬 ' + (_en ? 'Other' : '기타') + '</label>' +
+          '</div>' +
+          '<div style="display:flex;gap:10px;justify-content:flex-end;">' +
+            '<button id="ib-del-cancel-btn" style="padding:9px 18px;background:#dee2e6;color:#333;border:none;border-radius:7px;font-size:13px;cursor:pointer;">' + (_en ? 'Cancel' : '취소') + '</button>' +
+            '<button id="ib-del-plain-btn" style="padding:9px 16px;background:#f8f9fa;color:#495057;border:1px solid #ced4da;border-radius:7px;font-size:13px;cursor:pointer;">' + (_en ? 'Just delete' : '그냥 삭제') + '</button>' +
+            '<button id="ib-del-learn-btn" style="padding:9px 18px;background:#d63384;color:#fff;border:none;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">📚 ' + (_en ? 'Learn + Delete' : '학습+삭제') + '</button>' +
+          '</div>' +
+        '</div>';
+    document.body.appendChild(modal);
+
+    function closeModal() { modal.remove(); }
+    function doRemove() {
+        window._ibExpandedUids.delete(uid);
+        window.TaskInbox.remove(uid);
+        window.renderTaskInbox();
+    }
+    document.getElementById('ib-del-cancel-btn').onclick = closeModal;
+    document.getElementById('ib-del-plain-btn').onclick = function() { closeModal(); doRemove(); };
+    document.getElementById('ib-del-learn-btn').onclick = function() {
+        const reasonEl = modal.querySelector('input[name="ib-del-reason"]:checked');
+        const reason = reasonEl ? reasonEl.value : '';
+        if (!reason) { alert(_en ? 'Please choose a reason.' : '사유를 선택해주세요.'); return; }
+        const projectKey = (mc && mc.drive_file_id) || window.currentDriveFileId || window.currentDriveFileName || '__unclassified__';
+        if (window._writeLearningEntry) {
+            window._writeLearningEntry(projectKey, {
+                type: reason === '오매칭' ? 'negative_match' :
+                      reason === '중복'   ? 'duplicate' :
+                      reason === '불필요' ? 'irrelevant' : 'other',
+                reason: reason,
+                taskName: taskName,
+                confidence: (mc && mc.confidence) || t['매칭신뢰도'] || '',
+                matchedProjectId: (mc && mc.drive_file_id) || '',
+                matchedProjectName: (mc && (mc.file_name || mc.model || mc.customer)) || '',
+                matchBasis: (mc && (mc.model || mc.customer)) || '',
+                matchKeywords: (mc && mc.keywords) ? mc.keywords.slice(0, 8) : [],
+                sourceSnippet: (it.mailRaw && it.mailRaw.body2000 ? it.mailRaw.body2000.slice(0, 300) : '')
+            });
+        }
+        closeModal();
+        doRemove();
+        if (window.showToast) window.showToast(_en ? '📚 Learning recorded' : '📚 학습 데이터가 기록됐습니다', 'info');
+    };
 };
 
