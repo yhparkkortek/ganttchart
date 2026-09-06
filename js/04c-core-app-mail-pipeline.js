@@ -696,7 +696,10 @@
 
             let saveData = { globalData: serializedGlobalData, changeLogs: _changeLogsToSave, colIdx: colIdx, filterColumns: filterColumns, projectMeta: window.projectMeta || {}, tabData: window.collectTabData ? window.collectTabData() : (window.tabData || {}), distributions: window.projectDistributions || [], scheduleBaselines: window._scheduleBaselinesForSave ? window._scheduleBaselinesForSave() : (window._scheduleBaselines || []),
                 // ✅ [AI 학습 Phase 3] 학습 데이터를 프로젝트 JSON에 포함 → 저장마다 Drive에 자동 동기화
-                aiLearning: window._alGetEntriesForSave ? window._alGetEntriesForSave(window.currentDriveFileName || window.currentDriveFileId || '') : [],
+                // 💡 [버그 수정 2026-09-06] fileId 우선으로 통일 — 25-ai-learning.js 상단 주석 참고.
+                //    fileName 우선으로 남아있던 이 호출부가 실제 학습 기록(대부분 fileId 키에 쌓임)을
+                //    거의 못 읽어와서, Drive에 저장되는 aiLearning 배열이 사실상 항상 텅 비어있던 원인이었음.
+                aiLearning: window._alGetEntriesForSave ? window._alGetEntriesForSave(window.currentDriveFileId || window.currentDriveFileName || '') : [],
                 // ✅ [토픽 프로파일] Drive JSON에 포함 — 로드 시 localStorage 캐시로 복원됨
                 topicProfile: (window._getTopicProfile && window._getTopicProfile()) || null };
             let boundary = 'foo_bar_baz';
@@ -1629,8 +1632,10 @@
                 console.info(`[프로젝트 열기 계측] "${fileName}" 화면 렌더링: ${Math.round(performance.now() - _tRender0)}ms`);
                 if (!silent) window.showToast(window._currentLang === 'en' ? `✅ Drive sync complete: ${fileName}` : `✅ 공용 드라이브 동기화 완료: ${fileName}`);
                 // ✅ [AI 학습 Phase 3] Drive에서 받아온 학습 데이터를 localStorage와 병합 (팀 공유)
+                // 💡 [버그 수정 2026-09-06] fileName → fileId로 변경 — 25-ai-learning.js 상단 주석 참고.
+                //    토픽 프로파일(바로 아래 topicProfile 복원)은 이미 fileId를 쓰고 있어 이쪽만 어긋나 있었음.
                 if (saveData.aiLearning && saveData.aiLearning.length && window._alMergeFromDrive) {
-                    window._alMergeFromDrive(saveData.aiLearning, fileName);
+                    window._alMergeFromDrive(saveData.aiLearning, fileId);
                 }
                 // ✅ [토픽 프로파일] Drive JSON에서 복원 → localStorage 런타임 캐시에 적재
                 //    처음 로딩·마지막 저장은 Drive(server), 실제 동작은 캐시 — 추가 Drive 호출 없음

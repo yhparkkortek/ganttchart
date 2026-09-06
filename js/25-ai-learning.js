@@ -323,7 +323,14 @@
             }) || null;
 
             // ① 학습 데이터 기록
-            var projectKey = window.currentDriveFileName || window.currentDriveFileId || '__unknown__';
+            // 💡 [버그 수정 2026-09-06] fileId 우선 → fileName 우선을 뒤집었던 걸 되돌림. 26-topic-profile.js/
+            //    27-topic-contamination.js는 처음부터 "fileId 우선"(팀 폴더 구조에서 파일명 충돌 방지)인데
+            //    여기만 fileName을 먼저 봐서, 학습 기록과 오염 진단/저장(Drive aiLearning 직렬화)이 서로 다른
+            //    키를 보게 되는 사고가 실제로 확인됨(같은 프로젝트인데 fileId 키 130건 vs fileName 키 1건으로
+            //    쪼개짐 → 저장 시 fileName 키만 반영돼 나머지 130건이 Drive에 영영 안 실림). 아래 4곳
+            //    (25-ai-learning.js 나머지 2곳, 26-gantt-search.js, 04c-core-app-mail-pipeline.js 2곳) 전부
+            //    동일하게 fileId 우선으로 통일.
+            var projectKey = window.currentDriveFileId || window.currentDriveFileName || '__unknown__';
             window._writeLearningEntry(projectKey, {
                 type: reason === '오매칭' ? 'negative_match' :
                       reason === '중복'   ? 'duplicate' :
@@ -487,7 +494,8 @@
      * Drive JSON에 포함되어 다음 로드 시 팀원과 공유됨.
      */
     window._alGetEntriesForSave = function(projectKey) {
-        var key = projectKey || window.currentDriveFileName || window.currentDriveFileId || '';
+        // 💡 [버그 수정 2026-09-06] fileId 우선으로 통일 (위 "학습+삭제" 핸들러 주석 참고)
+        var key = projectKey || window.currentDriveFileId || window.currentDriveFileName || '';
         return window._alGetEntries(key);
     };
 
@@ -495,11 +503,12 @@
      * 프로젝트 로드 시 호출 — Drive에서 받아온 항목을 localStorage와 병합.
      * id 기준으로 중복 제거 후 최신 ts 우선, 최대 200건 유지.
      * @param {Array}  driveEntries  saveData.aiLearning (Drive에서 받은 항목 배열)
-     * @param {string} projectKey   로드된 파일명 (window.currentDriveFileName 설정 전에 호출하면 직접 전달)
+     * @param {string} projectKey   로드된 프로젝트의 fileId 권장(window.currentDriveFileId 설정 전에 호출하면 직접 전달) — fileName은 팀 폴더 간 충돌 위험이 있어 비권장
      */
     window._alMergeFromDrive = function(driveEntries, projectKey) {
         if (!driveEntries || !driveEntries.length) return;
-        var key = projectKey || window.currentDriveFileName || window.currentDriveFileId || '';
+        // 💡 [버그 수정 2026-09-06] fileId 우선으로 통일 (위 "학습+삭제" 핸들러 주석 참고)
+        var key = projectKey || window.currentDriveFileId || window.currentDriveFileName || '';
         if (!key) return;
 
         var local = _getStore()[key] || [];

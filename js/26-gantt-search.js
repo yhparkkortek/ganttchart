@@ -539,7 +539,8 @@
             var taskName = (l===0?row._origDev:l===1?row._origT1:l===2?row._origT2:l===3?row._origT3:row._origT4) || '업무';
 
             if (withLearning && row._aiRegistered) {
-                var projectKey = window.currentDriveFileName || window.currentDriveFileId || '__unknown__';
+                // 💡 [버그 수정 2026-09-06] fileId 우선으로 통일 — 25-ai-learning.js 상단 주석 참고.
+                var projectKey = window.currentDriveFileId || window.currentDriveFileName || '__unknown__';
                 if (window._writeLearningEntry) {
                     window._writeLearningEntry(projectKey, {
                         type: 'negative_match',
