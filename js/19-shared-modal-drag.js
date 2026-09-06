@@ -509,3 +509,61 @@ window._makeDraggable('cal-day-popup-modal', 'cal-day-popup-drag');
         }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     });
 })();
+
+// ── 공통: 새로 열리는 모달을 무조건 최상단으로 ──────────────────────────────
+// 💡 [2026-09-06 신규] 사용자 제보 — "새 모달을 열었는데 안 열린 것처럼 보인다"는 증상이 반복됨
+//    (직전에 고친 _openReassignInbox 버그도 처음엔 이게 원인인가 의심했었음). 실제 원인은 앱 전체
+//    모달이 30개+ 있는데, 여는 함수마다 매번 bringModalToFront()를 직접 호출해줘야 맨 앞으로
+//    올라오는 구조라 — 실제로 이 호출을 빠뜨린 open 함수가 있으면, 새 모달이 먼저 열려있던 다른
+//    모달 "뒤에" 깔린 채로 화면에 뜨는 사고가 난다(모달 자체는 열렸지만 안 보이니 "안 열렸다"로 오인).
+//    이 파일이 이미 "모달마다 내부 구조를 몰라도 되는" 범용 처리 철학(위 최소화 기능 참고)이라
+//    같은 접근으로 해결: 각 open 함수를 일일이 찾아 고치는 대신, "모달처럼 생긴 요소가 화면에
+//    보이기 시작하는 순간"을 전역에서 자동으로 감지해서 최상단으로 올린다 — 이후 새로 추가되는
+//    모달도 별도 등록 없이 자동으로 이 규칙을 따른다.
+(function() {
+    // 모달 오버레이 판별: body의 직계 자식 + position:fixed + 뷰포트를 거의 다 덮는 크기
+    // (토스트·배너처럼 작은 고정요소는 제외하기 위한 크기 조건)
+    function _looksLikeModalRoot(el) {
+        if (!el || el.nodeType !== 1 || el.parentElement !== document.body) return false;
+        var cs = getComputedStyle(el);
+        if (cs.position !== 'fixed') return false;
+        var r = el.getBoundingClientRect();
+        return r.width >= window.innerWidth * 0.9 && r.height >= window.innerHeight * 0.9;
+    }
+    function _isVisible(el) {
+        var d = el.style.display || getComputedStyle(el).display;
+        return !!d && d !== 'none';
+    }
+    var _wasVisible = new WeakSet(); // 안 보임 → 보임으로 "전환되는 순간"에만 올리기 위한 기억
+    function _handle(el) {
+        if (!_looksLikeModalRoot(el)) return;
+        var vis = _isVisible(el);
+        if (vis && !_wasVisible.has(el)) {
+            _wasVisible.add(el);
+            if (window.bringModalToFront) {
+                // bringModalToFront는 id로 찾으므로 id가 없는 동적 요소는 즉석에서 직접 처리
+                if (el.id) window.bringModalToFront(el.id);
+                else { window._topModalZ = (window._topModalZ || 9999) + 1; el.style.zIndex = String(window._topModalZ); }
+            }
+        } else if (!vis) {
+            _wasVisible.delete(el);
+        }
+    }
+    new MutationObserver(function(mutations) {
+        mutations.forEach(function(m) {
+            if (m.type === 'attributes') {
+                _handle(m.target);
+            } else if (m.type === 'childList') {
+                m.addedNodes.forEach(function(n) { _handle(n); });
+            }
+        });
+    // 💡 [버그 수정] attributes 관찰은 subtree:false면 "document.body 자신"의 속성 변화만 잡고
+    //    자식 요소(실제 모달들)의 style 변화는 전혀 못 본다(MutationObserver 명세상 subtree는
+    //    "자손의 속성/자식목록까지 볼지"를 결정함) — 그래서 이미 DOM에 있던 모달을 display만
+    //    토글해서 열 때(대부분의 실제 모달 패턴)는 이 관찰자가 전혀 반응하지 않는 사각지대가
+    //    있었다(테스트로 재현 확인: 새로 append되는 경우만 잡히고 기존 요소 토글은 안 잡힘).
+    //    subtree:true로 전체 문서의 속성 변화를 보되, _looksLikeModalRoot의 첫 검사(부모가
+    //    document.body인지)가 몸통 비교 한 번으로 즉시 걸러내므로 나머지 무관한 변화(간트 셀
+    //    스타일 등)에 대한 추가 비용은 사실상 없다.
+    }).observe(document.body, { attributes: true, attributeFilter: ['style', 'class'], childList: true, subtree: true });
+})();
