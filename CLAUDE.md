@@ -140,7 +140,9 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 |---|---|
 | `kortek_backend.py` | Flask 서버. 메일 SMTP/POP3, Telegram 알람, 설정 암복호화, 예약 발송 스케줄러 (`/schedule` API) |
 | `kortek_backend.bat` | 로컬에서 백엔드 실행하는 배치 스크립트 |
-| `kortek_backend.zip` | **다른 사용자 배포용 압축 파일** (`kortek_backend.py` + `kortek_backend.bat` 포함). `kortek_backend.py` 수정 시 `.claude/settings.json`의 PostToolUse 훅이 자동으로 재생성함 (`Compress-Archive` 사용) |
+| `kortek_backend_install.bat` | **원클릭 설치 스크립트** — Windows 시작프로그램(`shell:startup`)에 자동 시작 바로가기 등록 + 지금 바로 최소화 실행까지 한 번에 처리. 내부적으로 PowerShell(`New-Object -ComObject WScript.Shell`)로 `.lnk` 생성, 인라인 `-Command` 대신 임시 `.ps1` 파일을 생성해 실행(따옴표/캐럿 이스케이프 문제 회피) |
+| `kortek_backend_start_minimized.vbs` | 위 설치 스크립트가 만드는 바로가기가 실제로 가리키는 대상 — `kortek_backend.bat`을 `WScript.Shell.Run(..., 7, False)`로 최소화 상태로 조용히 실행 (콘솔 창이 화면에 튀어나오지 않음) |
+| `kortek_backend.zip` | **다른 사용자 배포용 압축 파일** (`kortek_backend.py` + `.bat` + `_install.bat` + `_start_minimized.vbs` 4개 포함). `kortek_backend.py` 수정 시 `.claude/settings.json`의 PostToolUse 훅이 자동으로 재생성함 (`Compress-Archive` 사용) — 단, 설치 스크립트 2개만 수정한 경우엔 훅이 안 걸리므로 수동으로 `Compress-Archive`를 다시 돌려야 함 |
 | `requirements.txt` | flask, flask-cors, requests, cryptography, google-auth |
 
 > **Notice 탭 오류 진단**: `kortek_backend.py`의 `/schedule` 엔드포인트는 나중에 추가된 기능이라 구버전 백엔드를 가진 사용자에게는 없음. 구버전은 `/schedule` 요청 시 404 반환 → `renderScheduleRuleTable()`이 `_scheduleRules = 'outdated'` 상태로 "구버전" 경고 메시지 표시. AI·메일 기능은 정상(다른 엔드포인트 사용)하면서 Notice만 안 되면 백엔드 구버전 의심.

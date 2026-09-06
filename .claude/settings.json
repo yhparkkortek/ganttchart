@@ -7,7 +7,7 @@
           {
             "type": "command",
             "shell": "powershell",
-            "command": "$j = [Console]::In.ReadToEnd() | ConvertFrom-Json; if ($j.tool_input.file_path -match 'kortek_backend\\.py$') { Set-Location 'C:\\Users\\YHPARK\\Documents\\GitHub\\ganttchart'; Compress-Archive -Path kortek_backend.py,kortek_backend.bat -DestinationPath kortek_backend.zip -Force; Write-Host '[훅] kortek_backend.zip 자동 갱신 완료' }; exit 0",
+            "command": "$j = [Console]::In.ReadToEnd() | ConvertFrom-Json; if ($j.tool_input.file_path -match 'kortek_backend\\.py$') { Set-Location 'C:\\Users\\YHPARK\\Documents\\GitHub\\ganttchart'; Compress-Archive -Path kortek_backend.py,kortek_backend.bat,kortek_backend_install.bat,kortek_backend_start_minimized.vbs -DestinationPath kortek_backend.zip -Force; Write-Host '[훅] kortek_backend.zip 자동 갱신 완료' }; exit 0",
             "statusMessage": "kortek_backend.zip 갱신 중..."
           }
         ]
