@@ -575,6 +575,9 @@ document.addEventListener('DOMContentLoaded', function() {
     if (window.refreshAutoRegisterButton) window.refreshAutoRegisterButton();
     if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
     if (window.refreshInboxCleanupModeButton) window.refreshInboxCleanupModeButton();
+    // 💡 [2026-09-06 신규] 자동로그인 — 드롭다운 토글 버튼 초기 표시 동기화 + (켜져 있으면) 조용한 재연동 시도
+    if (window.refreshAutoLoginButton) window.refreshAutoLoginButton(window.isAutoLoginEnabled && window.isAutoLoginEnabled());
+    if (window._tryAutoLogin) window._tryAutoLogin();
 });
 
 function _escTabVal(v) { return (v === undefined || v === null) ? '' : String(v).replace(/"/g, '&quot;'); }

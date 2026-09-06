@@ -34,6 +34,7 @@
             ui: {
                 'file-menu-btn':     '📁 프로젝트',
                 'settings-menu-btn': '⚙️ 설정',
+                'auto-login-toggle-btn': '🔴 자동로그인 OFF',
                 'alarm-toggle-btn':  '🟢 자동알람 ON',
                 'alarm-settings-menu-btn': '⚙️ 자동알람 설정',
                 'holiday-btn':       '🗓️ 휴일 등록',
@@ -143,6 +144,7 @@
             ui: {
                 'file-menu-btn':     '📁 Project',
                 'settings-menu-btn': '⚙️ Settings',
+                'auto-login-toggle-btn': '🔴 Auto Sign-in OFF',
                 'alarm-toggle-btn':  '🟢 Auto Alarm ON',
                 'alarm-settings-menu-btn': '⚙️ Auto Alarm Settings',
                 'holiday-btn':       '🗓️ Holiday Setup',
@@ -275,6 +277,9 @@
         const cfg  = window.loadAlarmSettings ? window.loadAlarmSettings() : {};
         const isOn = cfg.autoSend !== false;
         window.refreshAlarmAutoButtons(isOn);
+
+        // auto-login-toggle-btn 상태 언어 동기화
+        if (window.refreshAutoLoginButton) window.refreshAutoLoginButton(window.isAutoLoginEnabled && window.isAutoLoginEnabled());
 
         // mail-process-toggle-btn 상태 언어 동기화
         if (window.refreshMailProcessButton) window.refreshMailProcessButton();

@@ -41,18 +41,26 @@
 // 그래서 이제 클릭하면 먼저 조용한 방식을 시도하고, 그게 진짜 실패할 때만(최초 연동이거나
 // 권한이 실제로 취소된 경우) 무거운 전체 동의 화면으로 넘어가도록 순서를 바꿨다 — 성공/실패 처리
 // 로직 자체는 그대로 두고 "어떤 prompt로 시도할지"만 authSuccessHandler/onFinalFailure로 분리.
-window.handleAuthClick = function(event) {
+// 💡 [2026-09-06 신규] silentOnly=true(자동로그인 — window._tryAutoLogin에서만 넘김)면:
+//    ① 버튼 텍스트/비활성화 등 화면을 건드리지 않고 조용히 시도만 하고
+//    ② 실패해도 계정선택/동의화면으로 절대 확전하지 않으며(사용자 클릭 없이 뜨는 팝업은 브라우저가
+//       차단할 수도 있고, 예고 없이 튀어나오면 UX도 나쁨) 그냥 지금까지처럼 수동 버튼을 눌러야 하는
+//       상태로 조용히 남는다. 일반 클릭(silentOnly 생략)의 기존 동작은 전혀 바뀌지 않는다.
+window.handleAuthClick = function(event, silentOnly) {
         if (!tokenClient) {
+            if (silentOnly) { setTimeout(function() { window.handleAuthClick(null, true); }, 500); return; }
             alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
             return;
         }
         // 💡 [2026-09-03] Shift+클릭 = 계정 전환 모드.
         //    이전 이메일 hint가 있어서 항상 같은 계정으로만 자동 연결되던 문제 해결.
-        const _isAccountSwitch = !!(event && event.shiftKey);
+        const _isAccountSwitch = !silentOnly && !!(event && event.shiftKey);
 
         const authBtn = document.getElementById('auth_button');
-        authBtn.innerText = window._currentLang === 'en' ? "🔄 Connecting..." : "🔄 연동 진행 중...";
-        authBtn.disabled = true;
+        if (!silentOnly) {
+            authBtn.innerText = window._currentLang === 'en' ? "🔄 Connecting..." : "🔄 연동 진행 중...";
+            authBtn.disabled = true;
+        }
 
         // 💡 조용한 시도/전체 동의 시도 둘 다 성공하면 완전히 동일한 후처리를 거쳐야 하므로 공용 함수로 뺌.
         const onAuthSuccess = async (resp) => {
@@ -79,9 +87,15 @@ window.handleAuthClick = function(event) {
             }
 
             if (!(window.gapi && gapi.client && gapi.client.drive)) {
-                alert("❌ 구글 드라이브 연결 준비가 너무 오래 걸립니다 (네트워크가 느리거나 일시적 오류일 수 있습니다).\n잠시 후 [🔵 드라이브 연동하기]를 다시 눌러주세요. 계속 안 되면 그때 Ctrl+F5로 강력 새로고침 후 시도해 주세요.");
-                authBtn.innerText = window._currentLang === 'en' ? "🔵 Connect Google Drive" : "🔵 구글 드라이브 연동하기";
-                authBtn.disabled = false;
+                // 💡 자동로그인(silentOnly)은 인증 자체는 성공했지만 gapi 초기화가 느린 드문 경우인데,
+                //    사용자가 아무 조작도 안 했는데 alert가 튀어나오면 놀라니 로그만 남기고 조용히 물러난다.
+                if (!silentOnly) {
+                    alert("❌ 구글 드라이브 연결 준비가 너무 오래 걸립니다 (네트워크가 느리거나 일시적 오류일 수 있습니다).\n잠시 후 [🔵 드라이브 연동하기]를 다시 눌러주세요. 계속 안 되면 그때 Ctrl+F5로 강력 새로고침 후 시도해 주세요.");
+                    authBtn.innerText = window._currentLang === 'en' ? "🔵 Connect Google Drive" : "🔵 구글 드라이브 연동하기";
+                    authBtn.disabled = false;
+                } else {
+                    console.warn('[자동로그인] 인증은 성공했지만 Drive API 초기화가 오래 걸려 중단됨');
+                }
                 return;
             }
 
@@ -154,14 +168,20 @@ window.handleAuthClick = function(event) {
 
             } catch(e) {
                 console.error("사용자 정보 가져오기 에러:", e);
-                alert("❌ 권한 정보를 가져오는데 실패했습니다. 팝업 차단 여부를 확인해 주세요.");
-                authBtn.innerText = "🔵 구글 드라이브 연동하기";
-                authBtn.disabled = false;
+                if (!silentOnly) {
+                    alert("❌ 권한 정보를 가져오는데 실패했습니다. 팝업 차단 여부를 확인해 주세요.");
+                    authBtn.innerText = "🔵 구글 드라이브 연동하기";
+                    authBtn.disabled = false;
+                }
             }
         };
 
         // 💡 전체 동의 화면(prompt:'consent')까지 실패/취소한 경우에만 버튼을 원래 상태로 되돌린다.
         const onFinalFailure = (resp) => {
+            if (silentOnly) {
+                console.info('[자동로그인] 조용한 시도 실패 — 수동으로 [🔵 드라이브 연동하기]를 눌러주세요:', resp.error);
+                return; // 확전 없이 조용히 종료 (버튼 상태도 건드리지 않음)
+            }
             console.error("인증 실패 또는 취소:", resp.error);
             // ✅ 로컬 이름이 있으면 복원, 없으면 기본값
             const savedName = localStorage.getItem('gantt_local_user');
@@ -188,11 +208,16 @@ window.handleAuthClick = function(event) {
         const _emailHint = _isAccountSwitch ? '' :
             (window.currentUserEmail || (function() { try { return localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) { return ''; } })());
 
+        // 💡 자동로그인은 힌트(예전에 연동했던 계정)가 없으면 조용히 포기한다 — window._tryAutoLogin에서도
+        //    이미 걸러지지만, 이 함수 자체가 실수로 다른 silentOnly 호출부에서 쓰일 가능성까지 방어.
+        if (silentOnly && !_emailHint) return;
+
         // ── 케이스별 인증 흐름 ──────────────────────────────────────────────────────────
         // [A] Shift+클릭 또는 hint 없음(첫 방문) → 계정 선택창(select_account) 바로 표시
         //     - select_account: 계정 목록만 보여주고, 이미 권한을 허락했으면 동의창은 안 뜸
         //     - consent: 권한 동의까지 모두 다시 보여주는 무거운 화면 — 여기선 쓰지 않음
         // [B] 일반 클릭 + hint 있음 → 조용한 시도(prompt:'') → 실패 시 계정 선택창
+        //     (silentOnly는 위에서 걸러져 항상 hint가 있으므로 여기선 무조건 [B] 경로만 탄다)
         if (_isAccountSwitch || !_emailHint) {
             // [A] 계정 선택창 바로 표시
             tokenClient.callback = async (resp) => {
@@ -204,6 +229,7 @@ window.handleAuthClick = function(event) {
             // [B] 1차: 조용한 시도(prompt:'') — 이미 로그인+권한이 살아있으면 화면에 아무것도 안 띄우고 성공한다.
             tokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
+                    if (silentOnly) { onFinalFailure(resp); return; } // 자동로그인은 여기서 확전하지 않고 종료
                     console.info('[구글 인증] 조용한 재연동 실패 → 계정 선택창으로 전환:', resp.error);
                     // 2차: 조용한 시도가 실패했을 때만 계정 선택창으로 넘어간다(consent 전체화면보다 가볍고 깔끔).
                     tokenClient.callback = async (resp2) => {
@@ -217,4 +243,39 @@ window.handleAuthClick = function(event) {
             };
             tokenClient.requestAccessToken({ prompt: '', hint: _emailHint });
         }
+    };
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // 💡 [2026-09-06 신규] 자동로그인 — "새로고침/새 탭마다 드라이브 연동하기를 눌러야 하는" 번거로움
+    //    개선. 기본값 OFF(기존 동작 그대로) — 켜고 싶은 사람만 ⚙️ 설정에서 개별로 켠다.
+    //    켜져 있어도 "예전에 연동했던 계정 힌트"가 있을 때만, 딱 "조용한 방식"까지만 시도하고, 실패하면
+    //    절대 계정선택/동의화면으로 확전하지 않는다(handleAuthClick의 silentOnly 인자 참고) — 클릭 없이
+    //    뜨는 팝업은 브라우저가 차단할 수 있고, 예고 없이 튀어나오면 UX도 나쁘기 때문. 실패해도 사용자
+    //    입장에서는 지금까지와 똑같이 [🔵 드라이브 연동하기]가 그대로 남아있을 뿐이다.
+    window.isAutoLoginEnabled = function() {
+        try { return localStorage.getItem('gantt_auto_drive_login') === 'on'; } catch(e) { return false; }
+    };
+    window.setAutoLogin = function(enabled) {
+        try { localStorage.setItem('gantt_auto_drive_login', enabled ? 'on' : 'off'); } catch(e) {}
+        window.refreshAutoLoginButton(enabled);
+    };
+    window.toggleAutoLogin = function() {
+        window.setAutoLogin(!window.isAutoLoginEnabled());
+    };
+    window.refreshAutoLoginButton = function(enabled) {
+        const btn = document.getElementById('auto-login-toggle-btn');
+        if (!btn) return;
+        const isEn = window._currentLang === 'en';
+        btn.textContent = enabled
+            ? (isEn ? '🟢 Auto Sign-in ON'  : '🟢 자동로그인 ON')
+            : (isEn ? '🔴 Auto Sign-in OFF' : '🔴 자동로그인 OFF');
+    };
+    /** 페이지 로드 시 1회 호출 — DOMContentLoaded 초기화 블록(22a-summary-mctable-parse.js)에서 실행 */
+    window._tryAutoLogin = function() {
+        if (window.isDriveConnected) return; // 이미 연결됨
+        if (!window.isAutoLoginEnabled()) return;
+        let emailHint = '';
+        try { emailHint = localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) {}
+        if (!emailHint) return; // 한 번도 연동한 적 없으면 애초에 실패할 게 뻔하므로 시도 자체를 안 함
+        window.handleAuthClick(null, true); // silentOnly=true
     };
