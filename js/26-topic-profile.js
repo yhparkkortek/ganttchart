@@ -262,16 +262,24 @@
         (function() {
             var entries = (window._alGetEntries && window._alGetEntries(key)) || [];
             if (!entries.length) return;
+            // 💡 [2026-09-07] "AI 분석 설정 > 학습 로그 반영 범위"에서 사용자가 조절 — 학습 로그가
+            //    쌓일수록(200건 캡) 오래된 것도 섞여 들어갈 수 있어, 최근 N일 이내만 쓰도록 기간 제한을
+            //    추가하고 건수도 하드코딩(15) 대신 설정값을 따른다.
+            var maxDays  = (window.getTopicLearningDays  && window.getTopicLearningDays())  || 90;
+            var maxCount = (window.getTopicLearningCount && window.getTopicLearningCount()) || 15;
+            var cutoffTs = Date.now() - maxDays * 24 * 60 * 60 * 1000;
             var pos = [], neg = [], seenPos = {}, seenNeg = {};
             entries.forEach(function(e) {
                 if (!e) return;
+                var ts = e.ts ? new Date(e.ts).getTime() : 0;
+                if (ts && ts < cutoffTs) return; // 기간 밖 — 오래된 학습 로그 제외
                 if ((e.type === 'rationale_review' && !e.looksMismatch) || e.type === 'reanalyze_hint') {
                     var ptxt = (e.sourceSnippet || e.userHint || e.aiVerdict || '').trim().slice(0, 150);
-                    if (ptxt && !seenPos[ptxt] && pos.length < 15) { seenPos[ptxt] = true; pos.push(ptxt); }
+                    if (ptxt && !seenPos[ptxt] && pos.length < maxCount) { seenPos[ptxt] = true; pos.push(ptxt); }
                 } else if (e.type === 'negative_match' || e.type === 'no_match' || e.type === 'duplicate' ||
                            e.type === 'irrelevant' || (e.type === 'rationale_review' && e.looksMismatch)) {
                     var ntxt = (e.taskName || e.matchBasis || e.sourceSnippet || '').trim().slice(0, 100);
-                    if (ntxt && !seenNeg[ntxt] && neg.length < 15) { seenNeg[ntxt] = true; neg.push(ntxt); }
+                    if (ntxt && !seenNeg[ntxt] && neg.length < maxCount) { seenNeg[ntxt] = true; neg.push(ntxt); }
                 }
             });
             if (pos.length) {

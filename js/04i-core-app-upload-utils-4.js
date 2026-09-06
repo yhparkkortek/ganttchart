@@ -31,6 +31,27 @@
         localStorage.setItem('gantt_ai_urgent_days', String(v));
     };
 
+    // 💡 [2026-09-07 신규] "AI 학습 로그(오매칭 신고·AI 근거문의·재분석힌트 등)를 토픽 프로파일
+    //    생성에 반영"(26-topic-profile.js _generateTopicProfile 참고)의 범위 설정 — 학습 로그가
+    //    쌓일수록(프로젝트당 최대 200건 캡) 오래된 것도 섞여 들어갈 수 있어, "최근 N일 이내"만
+    //    쓰도록 기간을 두고, 프롬프트가 너무 길어지지 않도록 긍정/부정 각각 최대 건수도 별도로 둔다.
+    window._TOPIC_LEARNING_DAYS_DEFAULT = 90;
+    window.getTopicLearningDays = function() {
+        const v = parseInt(localStorage.getItem('gantt_topic_learning_days'), 10);
+        return (v && v >= 1) ? v : window._TOPIC_LEARNING_DAYS_DEFAULT;
+    };
+    window.setTopicLearningDays = function(v) {
+        localStorage.setItem('gantt_topic_learning_days', String(v));
+    };
+    window._TOPIC_LEARNING_COUNT_DEFAULT = 15;
+    window.getTopicLearningCount = function() {
+        const v = parseInt(localStorage.getItem('gantt_topic_learning_count'), 10);
+        return (v && v >= 1) ? v : window._TOPIC_LEARNING_COUNT_DEFAULT;
+    };
+    window.setTopicLearningCount = function(v) {
+        localStorage.setItem('gantt_topic_learning_count', String(v));
+    };
+
     // 💡 [2026-08-28 개편] "AI 도구 → 설정"에서 흩어져 있던 AI 관련 설정을 한 곳으로 모음 —
     //    ① AI 모델 선택(원래 AI 업무분석 팝업에 있던 AI 선택/모델/API 키를 이리로 이동)
     //    ② AI 글자 수 설정(기존 메일 분석/요약·문답 최대 글자 수)
@@ -166,6 +187,32 @@
                         </div>
                     </div>
 
+                    <!-- ══ 그룹4: 학습 로그 반영 범위 (기본 접힘, 신규) — 오매칭 신고·AI 근거문의·
+                         재분석힌트 등이 토픽 프로파일 생성에 얼마나 반영될지 조절 ══ -->
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                        <div onclick="window._toggleAlarmSection('ai-set-sec-learning')"
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
+                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📚 학습 로그 반영 범위</span>
+                            <span id="ai-set-sec-learning-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                        </div>
+                        <div id="ai-set-sec-learning" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🧠 토픽 프로파일을 생성할 때, 오매칭 신고·[📋 추출사유] AI 근거문의·미분류 재분석 힌트로 쌓인 학습 로그(사람 또는 AI가 검토를 마친 확정적 판단만 기록됨)를 keywords 추출에 함께 참고합니다. 아래 두 값으로 "얼마나 오래된 것까지, 몇 건까지" 반영할지 정할 수 있습니다.</div>
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🗓 최근 며칠 이내 기록만 반영</label>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-topic-learning-days-input" type="number" min="1" max="365" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('ai-topic-learning-days-input').value=window._TOPIC_LEARNING_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 90일 (기본값) — 값을 줄이면 오래된(철 지난) 기록이 새 프로파일에 섞여 들어가는 것을 막을 수 있습니다.</div>
+                            <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🔢 최대 건수 (긍정·부정 사례 각각)</label>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-topic-learning-count-input" type="number" min="1" max="50" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('ai-topic-learning-count-input').value=window._TOPIC_LEARNING_COUNT_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 15건 (기본값) — "이 프로젝트로 확인된 사례"와 "이 프로젝트가 아니었던 사례"에 각각 적용됩니다. 너무 크면 프롬프트가 길어져 응답이 느려지거나 실패할 수 있습니다.</div>
+                        </div>
+                    </div>
+
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
                     <button onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
@@ -180,6 +227,8 @@
         document.getElementById('ai-content-maxlen-input').value = window.getAiContentMaxLen();
         document.getElementById('ai-summary-range-days-input').value = window.getAiSummaryRangeDays();
         document.getElementById('ai-summary-urgent-days-input').value = window.getAiUrgentDays();
+        document.getElementById('ai-topic-learning-days-input').value = window.getTopicLearningDays();
+        document.getElementById('ai-topic-learning-count-input').value = window.getTopicLearningCount();
         // 💡 이 모달로 옮겨온 mail-ai-provider/mail-ai-model/mail-gemini-key 등은 원래 AI 업무분석
         //    팝업이 열릴 때만 채워지던 값들이라, 여기서도 열릴 때마다 새로 채워줘야 함.
         if (window.refreshAiKeyPanel) window.refreshAiKeyPanel();
@@ -219,7 +268,21 @@
         urgentInput.value = ud;
         window.setAiUrgentDays(ud);
 
-        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ')', 'info');
+        const learnDaysInput = document.getElementById('ai-topic-learning-days-input');
+        let ld = parseInt(learnDaysInput.value, 10);
+        if (!ld || ld < 1) ld = 1;
+        if (ld > 365) ld = 365;
+        learnDaysInput.value = ld;
+        window.setTopicLearningDays(ld);
+
+        const learnCountInput = document.getElementById('ai-topic-learning-count-input');
+        let lc = parseInt(learnCountInput.value, 10);
+        if (!lc || lc < 1) lc = 1;
+        if (lc > 50) lc = 50;
+        learnCountInput.value = lc;
+        window.setTopicLearningCount(lc);
+
+        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ' · 학습 로그 반영 최근 ' + ld + '일/' + lc + '건)', 'info');
     };
 
     // 🤖 [2026-08-27] "AI 요약"/"AI 문답"/"AI 분석 설정"은 상단 메뉴 "🤖 AI 도구"(및 "⚙️ 설정")로
