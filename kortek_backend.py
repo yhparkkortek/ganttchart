@@ -522,8 +522,15 @@ def fetch_mail():
                 importance_high = importance_raw in ("high", "1", "1 (highest)", "2 (high)")
 
                 # 💡 [우선순위 점수] 내가 To(직접수신)인지 Cc(참조)인지 — mail_user 계정 기준으로 판별
-                to_header = decode_str(msg.get("To", "")).lower()
-                cc_header = decode_str(msg.get("Cc", "")).lower()
+                # 💡 [2026-09-06 신규] 위 판별용으로만 쓰던 디코딩 결과(소문자)와 별개로, 원본 대소문자를
+                #    보존한 값을 "to"/"cc"로도 함께 내려준다 — 프런트에서 AI 프롬프트의 수신자/참조 배경
+                #    정보로 사용(본문에 "수신:" 줄이 없는 메일의 폴백 근거). 헤더값은 보통 이메일 주소라
+                #    "받는사람" 표시로는 body에 적힌 사람 이름보다 덜 직관적이지만, 문맥 단서가 전혀 없을
+                #    때 "수신자 미지정"보다는 실제 주소를 보여주는 편이 낫다는 판단.
+                to_raw    = decode_str(msg.get("To", ""))
+                cc_raw    = decode_str(msg.get("Cc", ""))
+                to_header = to_raw.lower()
+                cc_header = cc_raw.lower()
                 my_addr   = mail_user.lower()
                 is_to_me  = my_addr in to_header
                 is_cc_me  = (not is_to_me) and (my_addr in cc_header)
@@ -531,6 +538,8 @@ def fetch_mail():
                 results.append({
                     "subject":    subject,
                     "sender":     sender,
+                    "to":         to_raw,
+                    "cc":         cc_raw,
                     "date":       msg_dt.strftime("%Y-%m-%d %H:%M"),
                     "body":       body,
                     "fileName":   f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml",

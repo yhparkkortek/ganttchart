@@ -690,6 +690,8 @@ function mfParseFile(file) {
             const text = (ext === 'eml') ? bytesToLatin1String(e.target.result) : e.target.result;
             let subject = file.name.replace(/\.[^.]+$/, '');
             let sender  = '';
+            let to      = ''; // 💡 [2026-09-06 신규] To/Cc 헤더 — msCallGemini 수신자 판별 폴백 근거
+            let cc      = '';
             let date    = ''; // ✅ date 변수 선언 추가
             let body    = '';
 
@@ -798,6 +800,10 @@ function mfParseFile(file) {
                 subject = decodeMimeHeader(headers['subject'] || subject);
                 sender  = decodeMimeHeader(headers['from']    || '');
                 date    = headers['date'] || ''; // ✅ 헤더에서 날짜 정보 추출
+                // 💡 [2026-09-06 신규] To/Cc 헤더도 함께 추출 — 본문에 "수신:" 줄이 없는 메일에서
+                //    msCallGemini가 수신자 판별의 폴백 근거로 사용(_msExtractRecipientHint 주석 참고)
+                to      = decodeMimeHeader(headers['to'] || '');
+                cc      = decodeMimeHeader(headers['cc'] || '');
 
                 const ct = headers['content-type'] || '';
                 const te = (headers['content-transfer-encoding'] || '').trim().toLowerCase();
@@ -856,7 +862,7 @@ function mfParseFile(file) {
             // 💡 [2026-08-24] "원문 보기"용 저장 한도(6000→15000, 메일서버 탭 kortek_backend.py와 동일 기준으로 통일).
             //    AI 분석 입력은 msCallGemini가 이 값과 무관하게 항상 별도로 window.getAiMailMaxLen()
             //    (⚙️ 설정 → AI 분석 설정, 기본 2000자)으로 다시 잘라 쓰므로 영향 없음.
-            resolve({ subject, sender, date, body: body.substring(0, 15000), fileName: file.name });
+            resolve({ subject, sender, to, cc, date, body: body.substring(0, 15000), fileName: file.name });
         };
         if (ext === 'eml') reader.readAsArrayBuffer(file);
         else reader.readAsText(file, 'utf-8');

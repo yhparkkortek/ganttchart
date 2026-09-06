@@ -1502,7 +1502,12 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     const _msDateYMD = window.parseMailDateToYMD(parsed.date);
     // 💡 [2026-09-06] cleanMailBody가 본문의 "수신/참조" 줄을 지우기 전에 먼저 뽑아 별도 필드로 전달
     //    (근거: window._msExtractRecipientHint 주석 참고 — 발신자→수신자 판별의 "수신자 미지정" 오남용 완화)
+    //    본문에 "수신:" 줄이 없으면(_recipHint가 빈 값) 실제 SMTP To/Cc 헤더(parsed.to/cc, 서버 자동수집·
+    //    eml 첨부 양쪽에서 이제 함께 전달됨)로 폴백 — 이메일 주소라 사람 이름보다 덜 직관적이지만, 문맥
+    //    단서가 전혀 없을 때는 "수신자 미지정"보다 실제 주소를 보여주는 편이 낫다는 판단.
     const _recipHint = window._msExtractRecipientHint ? window._msExtractRecipientHint(parsed.body) : { to: '', cc: '' };
+    if (!_recipHint.to && parsed.to) _recipHint.to = parsed.to;
+    if (!_recipHint.cc && parsed.cc) _recipHint.cc = parsed.cc;
     const _recipLine = (_recipHint.to || _recipHint.cc)
         ? ('받는사람: ' + (_recipHint.to || '(본문에 명시 안 됨)') + (_recipHint.cc ? '\n참조: ' + _recipHint.cc : '') + '\n')
         : '';

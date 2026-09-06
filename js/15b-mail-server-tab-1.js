@@ -196,6 +196,8 @@ window.msFetchMail = async function() {
                 const task = await msCallGemini(apiKey, {
                     subject: mail.subject,
                     sender:  mail.sender,
+                    to:      mail.to,   // 💡 [2026-09-06 신규] 본문에 "수신:" 줄이 없을 때의 폴백 근거
+                    cc:      mail.cc,
                     date:    mail.date,
                     body:    mail.body,
                     fileName: mail.fileName
@@ -1123,7 +1125,7 @@ window._autoMailFetchTick = async function() {
             } else {
                 try {
                     const task = await msCallGemini(apiKey, {
-                        subject: mail.subject, sender: mail.sender, date: mail.date,
+                        subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
                         body: mail.body, fileName: mail.fileName
                     }, candidatesForAI, null);
 
