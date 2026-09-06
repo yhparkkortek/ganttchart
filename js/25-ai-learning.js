@@ -229,7 +229,11 @@
 
         var modal = document.createElement('div');
         modal.id = 'ai-delete-feedback-modal';
-        modal.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.52);display:flex;align-items:center;justify-content:center;';
+        // 💡 [2026-09-06] 사용자 확인 후 "배경조작 허용"으로 결정 — 이 팝업이 뜬 동안 배경에서
+        //    같은 행이 삭제/이동되면 "그냥 삭제"/"학습+삭제" 클릭이 옛 인덱스를 참조할 수 있다는
+        //    점은 감수하기로 함(사용자 승인). 배경 클릭으로 안 닫히는 기존 동작(아래 "의도적으로
+        //    닫기 막음")은 그대로 유지 — 버튼으로만 닫힘.
+        modal.style.cssText = 'position:fixed;inset:0;z-index:100000;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
 
         var confBadge = row._aiConfidence === '상' ? '🟢 상' :
                         row._aiConfidence === '중' ? '🟡 중' :
@@ -255,7 +259,7 @@
         }
 
         modal.innerHTML =
-            '<div style="background:#fff;border-radius:14px;padding:28px 32px;min-width:380px;max-width:500px;' +
+            '<div style="pointer-events:all;background:#fff;border-radius:14px;padding:28px 32px;min-width:380px;max-width:500px;' +
             'box-shadow:0 10px 44px rgba(0,0,0,0.22);font-family:sans-serif;max-height:90vh;overflow-y:auto;">' +
               '<div style="font-size:18px;font-weight:700;margin-bottom:4px;">🤖 AI 등록 업무 삭제</div>' +
               '<div style="font-size:12px;color:#888;margin-bottom:14px;">이유를 알려주시면 다음 분석 정확도가 높아집니다.</div>' +

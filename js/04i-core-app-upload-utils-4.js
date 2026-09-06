@@ -540,9 +540,13 @@ window.deleteHistoryByDateRange = function() {
             let modal = document.getElementById('confirm-level0-modal');
             if (!modal) {
                 modal = document.createElement('div'); modal.id = 'confirm-level0-modal';
-                modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+                // 💡 [2026-09-06] 사용자 확인 후 "배경조작 허용"으로 결정 — 이 앱 표준 패턴(오버레이
+                //    pointer-events:none, 박스만 pointer-events:all)으로 통일. 단, 이 확인창이 뜬
+                //    동안 배경에서 같은 행이 삭제/이동되면 아래 "이동" 클릭이 옛 인덱스를 참조할 수
+                //    있다는 점은 감수하기로 함(사용자 승인).
+                modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
                 modal.innerHTML = `
-                    <div style="background:#fff;border-radius:10px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
+                    <div style="pointer-events:all;background:#fff;border-radius:10px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
                         <div style="font-size:20px;margin-bottom:8px;">⚠️ 최상위 레벨 이동</div>
                         <div style="font-size:14px;color:#495057;margin-bottom:20px;">해당 업무를 대분류(개발단계)로 이동하시겠습니까?<br><span style="color:#e03131;font-size:12px;">이동 시 기존 필터 기준이 변경될 수 있습니다.</span></div>
                         <div style="display:flex;gap:12px;justify-content:center;">
@@ -582,9 +586,10 @@ window.deleteHistoryByDateRange = function() {
         let modal = document.getElementById('confirm-delete-modal');
         if (!modal) {
             modal = document.createElement('div'); modal.id = 'confirm-delete-modal';
-            modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+            // 💡 [2026-09-06] 사용자 확인 후 "배경조작 허용"으로 결정(위 confirm-level0-modal과 동일 근거).
+            modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
             modal.innerHTML = `
-                <div style="background:#fff;border-radius:10px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
+                <div style="pointer-events:all;background:#fff;border-radius:10px;padding:28px 32px;min-width:320px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">
                     <div style="font-size:20px;margin-bottom:8px;">🗑️ 행 삭제</div>
                     <div id="confirm-delete-msg" style="font-size:14px;color:#495057;margin-bottom:20px;"></div>
                     <div style="display:flex;gap:12px;justify-content:center;">

@@ -1270,12 +1270,15 @@
             if (!modal) {
                 modal = document.createElement('div');
                 modal.id = 'sheet-close-choice-modal';
-                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; background:rgba(0,0,0,0.35); align-items:center; justify-content:center;';
+                // 💡 [2026-09-06] 사용자 확인 후 "배경조작 허용"으로 결정 — 저장 여부를 묻는 동안
+                //    배경에서 추가로 변경사항이 생기면 "저장 안 함"이 그 추가분까지 버릴 수 있다는
+                //    점은 감수하기로 함(사용자 승인).
+                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9500; background:none; pointer-events:none; align-items:center; justify-content:center;';
                 document.body.appendChild(modal);
             }
             const label = fileName || (_en ? 'this project' : '이 프로젝트');
             modal.innerHTML = `
-                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
+                <div onclick="event.stopPropagation()" style="pointer-events:all; background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px;">
                     <div style="font-size:15px; font-weight:bold; color:#333; margin-bottom:10px;">💾 ${labels.title}</div>
                     <div style="font-size:13px; color:#666; line-height:1.6; margin-bottom:18px; white-space:pre-wrap;">${_en
                         ? `You have unsaved changes in "${escapeHtml(label)}".`
@@ -1305,12 +1308,13 @@
             if (!modal) {
                 modal = document.createElement('div');
                 modal.id = 'save-conflict-modal';
-                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9600; background:rgba(0,0,0,0.4); align-items:center; justify-content:center;';
+                // 💡 [2026-09-06] 사용자 확인 후 "배경조작 허용"으로 결정(위 sheet-close-choice-modal과 동일 근거).
+                modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9600; background:none; pointer-events:none; align-items:center; justify-content:center;';
                 document.body.appendChild(modal);
             }
             const label = fileName || (_en ? 'this project' : '이 프로젝트');
             modal.innerHTML = `
-                <div onclick="event.stopPropagation()" style="background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px; border-top:5px solid #e67e22;">
+                <div onclick="event.stopPropagation()" style="pointer-events:all; background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); padding:22px 24px; border-top:5px solid #e67e22;">
                     <div style="font-size:15px; font-weight:bold; color:#b85c00; margin-bottom:10px;">⚠️ ${_en ? 'Someone else saved more recently' : '다른 사용자가 더 최근에 저장했습니다'}</div>
                     <div style="font-size:13px; color:#555; line-height:1.7; margin-bottom:18px; white-space:pre-wrap;">${_en
                         ? `Since you last opened/saved "${escapeHtml(label)}", another user has already saved changes to it.\n\nIf you continue, your save will overwrite their changes (only the task-distribution log is safely merged — everything else is not).`

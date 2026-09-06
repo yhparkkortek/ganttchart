@@ -693,9 +693,11 @@ function bmConfirmModal(message, onYes, okLabel, okColor) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'bm-confirm-modal';
-        modal.style.cssText = 'position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,0.45);display:flex;align-items:center;justify-content:center;';
+        // 💡 [2026-09-06] 사용자 확인 후 "배경조작 허용"으로 결정 — 이 확인창이 뜬 동안 배경에서
+        //    데이터가 바뀌면 확인 클릭이 옛 대상을 참조할 수 있다는 점은 감수하기로 함(사용자 승인).
+        modal.style.cssText = 'position:fixed;inset:0;z-index:100000;background:none;pointer-events:none;display:flex;align-items:center;justify-content:center;';
         modal.innerHTML =
-            '<div style="background:#fff;border-radius:10px;padding:26px 30px;min-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">'
+            '<div style="pointer-events:all;background:#fff;border-radius:10px;padding:26px 30px;min-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.18);text-align:center;">'
             + '<div id="bm-confirm-msg" style="font-size:14px;color:#333;margin-bottom:20px;"></div>'
             + '<div style="display:flex;gap:12px;justify-content:center;">'
             + '<button id="bm-confirm-ok" style="padding:9px 26px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:7px;font-size:14px;font-weight:700;cursor:pointer;">삭제</button>'
