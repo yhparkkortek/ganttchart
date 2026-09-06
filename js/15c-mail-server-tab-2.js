@@ -447,8 +447,22 @@ window._msApplyAllAddressSuggestions = function() {
     if (window.showToast) window.showToast(`✅ 주소록에 ${added}명 추가 완료`, 'info');
 };
 
+// 💡 [2026-09-07 신규] "미분류/신규발신자/자동폐기" 버튼을 한 번 더 누르면 모달이 닫히도록(토글) —
+//    세 버튼 모두 같은 모달(ms-queue-modal)을 type만 바꿔서 재사용하므로, "지금 열려있는 게 방금
+//    누른 버튼과 같은 type"일 때만 닫고, 그 외(닫혀있거나 다른 type이 열려있음)엔 그대로 열어서
+//    내용만 바뀌게 한다 — 다른 카테고리 버튼을 눌렀을 때 한 번 더 눌러야 전환되는 불편을 피함.
+window._msToggleQueueModal = function(type) {
+    const modal = document.getElementById('ms-queue-modal');
+    const isOpen = modal && modal.style.display !== 'none';
+    if (isOpen && window._msQueueCurrentType === type) {
+        modal.style.display = 'none';
+        return;
+    }
+    window._msRenderQueueModal(type);
+};
+
 window.msShowUnmatchedModal = function() {
-    window._msRenderQueueModal('unmatched');
+    window._msToggleQueueModal('unmatched');
 };
 
 // 💡 [테스트용] 캐시 초기화 후 즉시 재수집 — 그동안 콘솔에서 반복 실행하던 스크립트를 버튼화
@@ -754,11 +768,11 @@ window._macSave = async function() {
 };
 
 window.msShowNewSenderModal = function() {
-    window._msRenderQueueModal('newsender');
+    window._msToggleQueueModal('newsender');
 };
 
 window.msShowDiscardedModal = function() {
-    window._msRenderQueueModal('discarded');
+    window._msToggleQueueModal('discarded');
 };
 
 // ─── [메일 자동처리 ①] 스케줄러 — 1분마다 체크, 설정된 주기(기본 30분) 경과 시에만 실행 ──
