@@ -123,11 +123,15 @@
                 if (window._msLoadProjectIndex && window._msFilterCandidateProjects) {
                     candidatesForAI = window._msFilterCandidateProjects(await window._msLoadProjectIndex()) || null;
                 }
+                var _retrySnippet = item.snippet.substring(0, 2000);
                 var prompt = window.getSystemPrompt
-                    ? window.getSystemPrompt('', '', '', '', item.snippet.substring(0, 2000), null)
-                    : item.snippet;
+                    ? window.getSystemPrompt('', '', '', '', _retrySnippet, null)
+                    : _retrySnippet;
+                // 💡 [버그 수정 2026-09-06] _msBuildProjectMatchSection이 실제로 정의된 적이 없어서(15c-mail-server-tab-2.js
+                //    참고) 이 조건이 항상 false로 빠져 재시도가 후보 목록 없이 돌아갔다 — 함수 정의 후 두 번째
+                //    인자(mailText)를 반드시 같이 넘겨야 "키워드 사전매칭/관리번호" 하이브리드 힌트가 계산된다.
                 if (candidatesForAI && candidatesForAI.length && window._msBuildProjectMatchSection) {
-                    prompt += window._msBuildProjectMatchSection(candidatesForAI);
+                    prompt += window._msBuildProjectMatchSection(candidatesForAI, _retrySnippet, null);
                 }
                 var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
                 if (!result || !result.ok) continue;

@@ -1364,6 +1364,125 @@ window._msExtractCodeTokens = function(text) {
     return Array.from(found);
 };
 
+// 💡 [2026-09-06 신규] 국내 비즈니스 메일 관행상 본문 맨 위에 "수신 : OOO님" / "참조 : OOO"처럼
+//    수신인·참조인을 직접 적어두는 경우가 흔한데, cleanMailBody()가 "발신자는 이미 별도 전달되니
+//    본문엔 불필요"라는 이유로 이 줄을 통째로 삭제해버려서(15a-mail-attachment-tab.js의 헤더 라인
+//    제거 규칙) AI가 수신자를 판별할 유일한 단서를 못 받는 경우가 실제로 확인됨(→ "수신자 미지정"
+//    "수신자 제위" 남발의 원인 중 하나). cleanMailBody가 지우기 전에 먼저 뽑아서 발신자와 동일한
+//    방식으로 별도 필드로 AI에게 명시 전달한다. 인용/포워딩 체인 안의 옛 헤더를 잘못 집지 않도록
+//    본문 맨 위 12줄까지만 확인한다.
+window._msExtractRecipientHint = function(rawBody) {
+    const lines = String(rawBody || '').split(/\r?\n/).slice(0, 12);
+    let to = '', cc = '';
+    for (const line of lines) {
+        const m = line.match(/^\s*(수신|참조|To|Cc)\s*[:：]\s*(.+)$/i);
+        if (!m) continue;
+        const label = m[1].toLowerCase();
+        const val = m[2].trim();
+        if (!val) continue;
+        if ((label === '수신' || label === 'to') && !to) to = val;
+        else if ((label === '참조' || label === 'cc') && !cc) cc = val;
+    }
+    return { to, cc };
+};
+
+// 💡 [버그 수정 2026-09-06] 후보 프로젝트 매칭 섹션(하이브리드 힌트 4종 + 매칭 필드 요청)을 프롬프트에
+//    덧붙이는 로직 — 원래 msCallGemini 안에 인라인으로만 있었는데, 25-ai-learning.js의 Phase 4 재시도
+//    엔진이 도입 시점(커밋 00bf23a)부터 이 이름의 함수를 호출하도록 작성돼 있었음에도 실제로는 정의된
+//    적이 없었다. 그 결과 재시도 엔진이 후보 목록 없이 AI를 호출해 매칭신뢰도 필드 자체를 못 받고
+//    "재분석 완료 — 신뢰도 변경 없음"만 반복하는, 처음부터 죽어있던 기능이었음. msCallGemini의 인라인
+//    로직을 이 함수로 그대로 옮기고 양쪽(msCallGemini / 재시도 엔진)에서 공용으로 쓰게 한다.
+window._msBuildProjectMatchSection = function(candidateProjects, mailText, userHint) {
+    if (!candidateProjects || !candidateProjects.length) return '';
+    mailText = mailText || '';
+
+    // 💡 [하이브리드-B] 토픽 프로파일 스토어 로드 — 각 프로젝트에 저장된 AI 토픽 키워드를 후보 목록에 주입
+    const _tpStore = (function() {
+        try { return JSON.parse(localStorage.getItem('gantt_topic_profile_v1')) || {}; }
+        catch(e) { return {}; }
+    })();
+    const numbered = candidateProjects.map((c, i) => {
+        // ✅ [토픽 프로파일] 1순위: project_index.json topicKeywords (모든 프로젝트, Drive에서 사전 저장됨)
+        //                   2순위: localStorage 캐시 (이 세션에서 로드한 프로젝트)
+        const _tpKw = (function() {
+            if (c.topicKeywords && c.topicKeywords.length)
+                return ' | 🔑토픽: ' + c.topicKeywords.slice(0, 8).join(', ');
+            const _cached = _tpStore[c.drive_file_id];
+            if (_cached && _cached.keywords && _cached.keywords.length)
+                return ' | 🔑토픽: ' + _cached.keywords.slice(0, 8).join(', ');
+            return '';
+        })();
+        return `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''}${_tpKw} [파일: ${c.file_name}]`;
+    }).join('\n');
+    // 💡 [하이브리드-A] 키워드 사전매칭 힌트 — 모델명·키워드가 메일 본문에 직접 등장하는 후보를
+    //    AI에게 알려줌(강제 override 아님 — 맥락이 다르면 무시 가능). 후보의 40% 이하일 때만 표시
+    //    (너무 많이 걸리면 힌트 의미 없어짐 — 전부 다 매칭이면 정보가 아님).
+    const _mailBodyLow = mailText.toLowerCase();
+    const _kwCertain = candidateProjects.map(function(c, i) {
+        const _frags = (c.model || '').toLowerCase().split(/[\s\-\_\/]+/).filter(function(f) { return f.length >= 3; });
+        const _kws   = (c.keywords || []).map(function(k) { return String(k).toLowerCase().trim(); });
+        const _hit   = _frags.some(function(f) { return _mailBodyLow.includes(f); }) ||
+                       _kws.some(function(k)   { return k.length >= 3 && _mailBodyLow.includes(k); });
+        return _hit ? (i + 1) + '번(' + (c.model || c.customer) + ')' : null;
+    }).filter(Boolean);
+    let kwPreHint = '';
+    if (_kwCertain.length > 0 && _kwCertain.length <= Math.ceil(candidateProjects.length * 0.4)) {
+        kwPreHint = '\n⭐ [키워드 사전매칭 힌트] 메일 본문에 모델명·키워드가 직접 등장하는 후보: ' +
+            _kwCertain.join(', ') +
+            ' — 우선 검토하되, 실제 메일 맥락이 다르면 무시하고 0으로 답해도 됩니다.\n';
+    }
+
+    // 💡 [2026-08-28 신규] 브랜드명(고객사)+크기(인치)만 같으면 실제 관리번호(#502319류)가 어느
+    //    후보에도 등록 안 돼 있어도 AI가 "이름/크기가 비슷하니까" 매칭해버리는 오탐이 실제로
+    //    확인됨(예: "LNW 27 UHD #502319"가 다른 27인치 LNW 프로젝트로 오매칭). 메일 본문에서
+    //    "#숫자" 관리번호를 결정론적으로 뽑아, 등록된 후보가 있으면 그쪽을 우선하도록, 없으면
+    //    브랜드/크기만으로 섣불리 매칭하지 말라고 명시적으로 경고한다(강제 override는 아니고
+    //    AI 판단을 돕는 강한 힌트 — 이 앱의 기존 "키워드는 힌트일 뿐" 철학과 동일).
+    const mailCodes = window._msExtractCodeTokens ? window._msExtractCodeTokens(mailText) : [];
+    let codeHint = '';
+    if (mailCodes.length) {
+        const hasCode = function(c, code) { return (c.keywords || []).some(function(k) { return String(k).includes(code); }); };
+        const withCode = candidateProjects
+            .map(function(c, i) { return { no: i + 1, c: c }; })
+            .filter(function(x) { return mailCodes.some(function(code) { return hasCode(x.c, code); }); });
+        if (withCode.length) {
+            codeHint = `\n⚠️ [관리번호 우선 근거] 메일에 등장하는 관리번호(${mailCodes.map(function(c){return '#'+c;}).join(', ')})가 등록된 후보: ` +
+                withCode.map(function(x) { return x.no + '번(' + x.c.file_name + ')'; }).join(', ') +
+                ' — 브랜드명·크기만 비슷한 다른 후보보다 이 근거를 우선하세요.\n';
+        } else {
+            codeHint = `\n⚠️ [관리번호 불일치 주의] 메일에 관리번호(${mailCodes.map(function(c){return '#'+c;}).join(', ')})가 등장하지만 아래 후보 중 이 번호가 등록된 곳이 없습니다. ` +
+                '이럴 땐 브랜드명(고객사)·크기(인치)만 비슷하다고 섣불리 매칭하지 마세요 — 본문에 다른 확실한 근거가 없으면 매칭신뢰도를 "중" 이하로 낮추거나 0(해당없음)으로 답하세요.\n';
+        }
+    }
+
+    // 💡 [2026-09-01 신규] 사용자가 "📭 미분류 메일" 큐에서 [🔄 재분석 요청]으로 남긴 힌트(사람의 판단) —
+    //    있으면 프로젝트 후보 목록보다도 먼저 보여줘서 최우선 근거로 삼게 한다. 위 관리번호 규칙과
+    //    상충하면(예: 사용자가 지목한 프로젝트에 그 관리번호가 없음) 사용자 힌트를 우선하되, 그 사실을
+    //    "매칭근거"에 남기도록 유도한다(아래 매칭근거 필드 설명 참고).
+    const userHintBlock = userHint
+        ? `\n⚠️ [사용자 재분석 요청 — 사람의 판단, 최우선 근거] 이 메일은 한 번 미분류로 판정됐고, 사용자가 아래처럼 직접 의견을 남기며 다시 판단해달라고 요청했습니다:\n"${userHint}"\n이 의견을 다른 어떤 근거보다도 우선해서 반영하세요. 사용자가 특정 프로젝트를 지목했다면 아래 후보 목록에서 그 프로젝트를 찾아 그 번호로 응답하고 신뢰도를 "상"으로 두세요(후보 목록에 없는 프로젝트를 말하는 것 같으면 0으로 두고 매칭근거에 그렇게 적으세요).\n`
+        : '';
+
+    return `\n\n--- 프로젝트 매칭 판단 요청 (현재 등록된 활성 프로젝트 전체 목록) ---\n` + userHintBlock +
+        `후보 프로젝트 목록:\n${numbered}\n` + codeHint + kwPreHint +
+        `이 메일이 실제로 다루는 "핵심 주제"가 위 목록 중 하나로 명확한지 판단하세요. 목록의 "참고 키워드"는 힌트일 뿐이니,\n` +
+        `본문 맥락상 명백히 그 프로젝트 얘기면 키워드가 없어도 선택하세요. 반대로 키워드가 우연히 겹쳐도 실제 핵심 주제가 아니면 고르지 마세요.\n` +
+        `※ 브랜드명(고객사)이나 크기(인치)가 같다는 이유만으로 매칭하지 마세요 — 같은 브랜드가 여러 프로젝트를 가질 수 있습니다. 본문의 구체적 내용(모델 고유 코드, 요청 사항 등)까지 확인하세요.\n` +
+        `※ 후보 중 이름이 같은 것들은 인치(크기)로 구별하세요.\n` +
+        `- 핵심 주제가 명확하면: 해당 후보의 번호를 아래 필드에 적으세요.\n` +
+        `- 목록 어디에도 해당 안 되거나(신규/미등록 프로젝트), 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: 0으로 적으세요.\n` +
+        `- ⚠️ [복수 프로젝트] 이 메일이 서로 다른 프로젝트 여러 개에 대해 "각각 명확하고 독립적인" 실행 항목(To do)을 담고 있을 때만` +
+        `(예: 한 메일 안에 프로젝트 A 용건과 프로젝트 B 용건이 완전히 별개의 문단으로 따로 존재) — 위 "주매칭프로젝트번호"로 답한 것 외에` +
+        ` 그만큼 확실한 프로젝트가 더 있다면 그 번호(들)를 "추가매칭프로젝트번호목록" 배열에 적으세요. 각 번호는 반드시 "상" 신뢰도에 준하는` +
+        ` 확신이 있을 때만 넣고, 조금이라도 애매하면 절대 넣지 마세요. 단순히 다른 프로젝트가 언급되거나(참고·비교 목적), 회의록처럼 여러` +
+        ` 프로젝트가 대등하게 나열만 된 경우는 포함하지 마세요 — 그럴 땐 이 배열을 반드시 빈 배열 []로 두세요.\n` +
+        `위 JSON에 아래 네 필드를 추가로 포함해서 응답하세요:\n` +
+        `"주매칭프로젝트번호": 1 (해당 번호, 애매하거나 목록에 없으면 0),\n` +
+        `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)",\n` +
+        `"매칭근거": "왜 이 번호를(또는 왜 0을) 선택했는지 1~2문장으로 구체적으로 설명 — 관리번호 일치/불일치, 본문의 어떤 문장·키워드가 결정적이었는지, 후보들과 왜 헷갈렸는지 등을 담아서. 사용자가 이 근거만 보고 재분석 여부를 판단할 수 있게 구체적으로 쓰세요.",\n` +
+        `"추가매칭프로젝트번호목록": [] (독립적인 실행 항목이 있는 추가 프로젝트 번호만, 없으면 반드시 빈 배열 [])`;
+};
+
 async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOverride, userHint) {
     const GAS_URL = localStorage.getItem("gas_server_url") || "https://script.google.com/macros/s/AKfycbzB1f7lKdYRmJM5Iu38qUVGKat_51ggZR3_4aOsITjiqBuXN1wBAzixNp1CmgO_eJICfg/exec";
 
@@ -1381,8 +1500,14 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     let inch = (projectContextOverride && projectContextOverride.inch) || '';
 
     const _msDateYMD = window.parseMailDateToYMD(parsed.date);
+    // 💡 [2026-09-06] cleanMailBody가 본문의 "수신/참조" 줄을 지우기 전에 먼저 뽑아 별도 필드로 전달
+    //    (근거: window._msExtractRecipientHint 주석 참고 — 발신자→수신자 판별의 "수신자 미지정" 오남용 완화)
+    const _recipHint = window._msExtractRecipientHint ? window._msExtractRecipientHint(parsed.body) : { to: '', cc: '' };
+    const _recipLine = (_recipHint.to || _recipHint.cc)
+        ? ('받는사람: ' + (_recipHint.to || '(본문에 명시 안 됨)') + (_recipHint.cc ? '\n참조: ' + _recipHint.cc : '') + '\n')
+        : '';
     // 💡 [2026-08-27] 하드코딩된 2000자를 "⚙️ 설정 → AI 분석 설정"에서 조절 가능하도록 변경
-    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, window.getAiMailMaxLen());
+    const mailText = parsed.subject + '\n' + parsed.sender + '\n' + _recipLine + (_msDateYMD ? '발송일: ' + _msDateYMD + '\n' : '') + cleanMailBody(parsed.body).substring(0, window.getAiMailMaxLen());
     // 💡 파싱 원문 전역 보관
     window._mailParsedRaw = { subject: parsed.subject || '', sender: parsed.sender || '', date: parsed.date || '', body2000: mailText };
     let prompt = window.getSystemPrompt(assignee, customer, model, inch, mailText, _msDateYMD || null);
@@ -1391,95 +1516,11 @@ async function msCallGemini(apiKey, parsed, candidateProjects, projectContextOve
     //    맥락 판단을 맡겼음 — project_index.json 키워드 목록이 노후화되면 AI가 애초에 이 판단 기회조차
     //    못 받는 구조적 병목이었음. → 이제 활성 프로젝트 전체를 항상 후보로 주고 AI가 직접 판단(+신뢰도).
     //    오탐 방지를 위해 "상" 신뢰도일 때만 자동확정에 사용(호출부에서 처리), 그 외엔 사람 확인으로 넘김.
-    if (candidateProjects && candidateProjects.length > 0) {
-        // 💡 [버그 수정] 후보 프로젝트명이 서로 같을 수 있어(예: SHUFFLER 3인치/4.3인치 둘 다 "SHUFFLER")
-        //    이름이 아니라 "번호"로 답하게 해서 확실히 구별함. 인치 정보 + 등록된 키워드도 참고용으로 같이 제공
-        //    (키워드는 더 이상 매칭 게이트가 아니라, AI 판단을 돕는 힌트일 뿐 — 없어도 다른 근거로 고를 수 있음).
-        // 💡 [하이브리드-B] 토픽 프로파일 스토어 로드 — 각 프로젝트에 저장된 AI 토픽 키워드를 후보 목록에 주입
-        const _tpStore = (function() {
-            try { return JSON.parse(localStorage.getItem('gantt_topic_profile_v1')) || {}; }
-            catch(e) { return {}; }
-        })();
-        const numbered = candidateProjects.map((c, i) => {
-            // ✅ [토픽 프로파일] 1순위: project_index.json topicKeywords (모든 프로젝트, Drive에서 사전 저장됨)
-            //                   2순위: localStorage 캐시 (이 세션에서 로드한 프로젝트)
-            const _tpKw = (function() {
-                if (c.topicKeywords && c.topicKeywords.length)
-                    return ' | 🔑토픽: ' + c.topicKeywords.slice(0, 8).join(', ');
-                const _cached = _tpStore[c.drive_file_id];
-                if (_cached && _cached.keywords && _cached.keywords.length)
-                    return ' | 🔑토픽: ' + _cached.keywords.slice(0, 8).join(', ');
-                return '';
-            })();
-            return `${i + 1}. ${c.model || c.customer}${c.inch ? ' (' + c.inch + '인치)' : ''}${c.customer && c.model ? ' / 고객사: ' + c.customer : ''}${(c.keywords && c.keywords.length) ? ' — 참고 키워드: ' + c.keywords.slice(0, 6).join(', ') : ''}${_tpKw} [파일: ${c.file_name}]`;
-        }).join('\n');
-        // 💡 [하이브리드-A] 키워드 사전매칭 힌트 — 모델명·키워드가 메일 본문에 직접 등장하는 후보를
-        //    AI에게 알려줌(강제 override 아님 — 맥락이 다르면 무시 가능). 후보의 40% 이하일 때만 표시
-        //    (너무 많이 걸리면 힌트 의미 없어짐 — 전부 다 매칭이면 정보가 아님).
-        const _mailBodyLow = mailText.toLowerCase();
-        const _kwCertain = candidateProjects.map(function(c, i) {
-            const _frags = (c.model || '').toLowerCase().split(/[\s\-\_\/]+/).filter(function(f) { return f.length >= 3; });
-            const _kws   = (c.keywords || []).map(function(k) { return String(k).toLowerCase().trim(); });
-            const _hit   = _frags.some(function(f) { return _mailBodyLow.includes(f); }) ||
-                           _kws.some(function(k)   { return k.length >= 3 && _mailBodyLow.includes(k); });
-            return _hit ? (i + 1) + '번(' + (c.model || c.customer) + ')' : null;
-        }).filter(Boolean);
-        let kwPreHint = '';
-        if (_kwCertain.length > 0 && _kwCertain.length <= Math.ceil(candidateProjects.length * 0.4)) {
-            kwPreHint = '\n⭐ [키워드 사전매칭 힌트] 메일 본문에 모델명·키워드가 직접 등장하는 후보: ' +
-                _kwCertain.join(', ') +
-                ' — 우선 검토하되, 실제 메일 맥락이 다르면 무시하고 0으로 답해도 됩니다.\n';
-        }
-
-        // 💡 [2026-08-28 신규] 브랜드명(고객사)+크기(인치)만 같으면 실제 관리번호(#502319류)가 어느
-        //    후보에도 등록 안 돼 있어도 AI가 "이름/크기가 비슷하니까" 매칭해버리는 오탐이 실제로
-        //    확인됨(예: "LNW 27 UHD #502319"가 다른 27인치 LNW 프로젝트로 오매칭). 메일 본문에서
-        //    "#숫자" 관리번호를 결정론적으로 뽑아, 등록된 후보가 있으면 그쪽을 우선하도록, 없으면
-        //    브랜드/크기만으로 섣불리 매칭하지 말라고 명시적으로 경고한다(강제 override는 아니고
-        //    AI 판단을 돕는 강한 힌트 — 이 앱의 기존 "키워드는 힌트일 뿐" 철학과 동일).
-        const mailCodes = window._msExtractCodeTokens ? window._msExtractCodeTokens(mailText) : [];
-        let codeHint = '';
-        if (mailCodes.length) {
-            const hasCode = function(c, code) { return (c.keywords || []).some(function(k) { return String(k).includes(code); }); };
-            const withCode = candidateProjects
-                .map(function(c, i) { return { no: i + 1, c: c }; })
-                .filter(function(x) { return mailCodes.some(function(code) { return hasCode(x.c, code); }); });
-            if (withCode.length) {
-                codeHint = `\n⚠️ [관리번호 우선 근거] 메일에 등장하는 관리번호(${mailCodes.map(function(c){return '#'+c;}).join(', ')})가 등록된 후보: ` +
-                    withCode.map(function(x) { return x.no + '번(' + x.c.file_name + ')'; }).join(', ') +
-                    ' — 브랜드명·크기만 비슷한 다른 후보보다 이 근거를 우선하세요.\n';
-            } else {
-                codeHint = `\n⚠️ [관리번호 불일치 주의] 메일에 관리번호(${mailCodes.map(function(c){return '#'+c;}).join(', ')})가 등장하지만 아래 후보 중 이 번호가 등록된 곳이 없습니다. ` +
-                    '이럴 땐 브랜드명(고객사)·크기(인치)만 비슷하다고 섣불리 매칭하지 마세요 — 본문에 다른 확실한 근거가 없으면 매칭신뢰도를 "중" 이하로 낮추거나 0(해당없음)으로 답하세요.\n';
-            }
-        }
-
-        // 💡 [2026-09-01 신규] 사용자가 "📭 미분류 메일" 큐에서 [🔄 재분석 요청]으로 남긴 힌트(사람의 판단) —
-        //    있으면 프로젝트 후보 목록보다도 먼저 보여줘서 최우선 근거로 삼게 한다. 위 관리번호 규칙과
-        //    상충하면(예: 사용자가 지목한 프로젝트에 그 관리번호가 없음) 사용자 힌트를 우선하되, 그 사실을
-        //    "매칭근거"에 남기도록 유도한다(아래 매칭근거 필드 설명 참고).
-        const userHintBlock = userHint
-            ? `\n⚠️ [사용자 재분석 요청 — 사람의 판단, 최우선 근거] 이 메일은 한 번 미분류로 판정됐고, 사용자가 아래처럼 직접 의견을 남기며 다시 판단해달라고 요청했습니다:\n"${userHint}"\n이 의견을 다른 어떤 근거보다도 우선해서 반영하세요. 사용자가 특정 프로젝트를 지목했다면 아래 후보 목록에서 그 프로젝트를 찾아 그 번호로 응답하고 신뢰도를 "상"으로 두세요(후보 목록에 없는 프로젝트를 말하는 것 같으면 0으로 두고 매칭근거에 그렇게 적으세요).\n`
-            : '';
-        prompt += `\n\n--- 프로젝트 매칭 판단 요청 (현재 등록된 활성 프로젝트 전체 목록) ---\n` + userHintBlock +
-            `후보 프로젝트 목록:\n${numbered}\n` + codeHint + kwPreHint +
-            `이 메일이 실제로 다루는 "핵심 주제"가 위 목록 중 하나로 명확한지 판단하세요. 목록의 "참고 키워드"는 힌트일 뿐이니,\n` +
-            `본문 맥락상 명백히 그 프로젝트 얘기면 키워드가 없어도 선택하세요. 반대로 키워드가 우연히 겹쳐도 실제 핵심 주제가 아니면 고르지 마세요.\n` +
-            `※ 브랜드명(고객사)이나 크기(인치)가 같다는 이유만으로 매칭하지 마세요 — 같은 브랜드가 여러 프로젝트를 가질 수 있습니다. 본문의 구체적 내용(모델 고유 코드, 요청 사항 등)까지 확인하세요.\n` +
-            `※ 후보 중 이름이 같은 것들은 인치(크기)로 구별하세요.\n` +
-            `- 핵심 주제가 명확하면: 해당 후보의 번호를 아래 필드에 적으세요.\n` +
-            `- 목록 어디에도 해당 안 되거나(신규/미등록 프로젝트), 회의록처럼 여러 프로젝트가 대등하게 다뤄지거나, 판단이 애매하면: 0으로 적으세요.\n` +
-            `- ⚠️ [복수 프로젝트] 이 메일이 서로 다른 프로젝트 여러 개에 대해 "각각 명확하고 독립적인" 실행 항목(To do)을 담고 있을 때만` +
-            `(예: 한 메일 안에 프로젝트 A 용건과 프로젝트 B 용건이 완전히 별개의 문단으로 따로 존재) — 위 "주매칭프로젝트번호"로 답한 것 외에` +
-            ` 그만큼 확실한 프로젝트가 더 있다면 그 번호(들)를 "추가매칭프로젝트번호목록" 배열에 적으세요. 각 번호는 반드시 "상" 신뢰도에 준하는` +
-            ` 확신이 있을 때만 넣고, 조금이라도 애매하면 절대 넣지 마세요. 단순히 다른 프로젝트가 언급되거나(참고·비교 목적), 회의록처럼 여러` +
-            ` 프로젝트가 대등하게 나열만 된 경우는 포함하지 마세요 — 그럴 땐 이 배열을 반드시 빈 배열 []로 두세요.\n` +
-            `위 JSON에 아래 네 필드를 추가로 포함해서 응답하세요:\n` +
-            `"주매칭프로젝트번호": 1 (해당 번호, 애매하거나 목록에 없으면 0),\n` +
-            `"매칭신뢰도": "상 또는 중 또는 하 (핵심 주제가 명확할수록 상)",\n` +
-            `"매칭근거": "왜 이 번호를(또는 왜 0을) 선택했는지 1~2문장으로 구체적으로 설명 — 관리번호 일치/불일치, 본문의 어떤 문장·키워드가 결정적이었는지, 후보들과 왜 헷갈렸는지 등을 담아서. 사용자가 이 근거만 보고 재분석 여부를 판단할 수 있게 구체적으로 쓰세요.",\n` +
-            `"추가매칭프로젝트번호목록": [] (독립적인 실행 항목이 있는 추가 프로젝트 번호만, 없으면 반드시 빈 배열 [])`;
-    }
+    // 💡 [버그 수정] 후보 프로젝트명이 서로 같을 수 있어(예: SHUFFLER 3인치/4.3인치 둘 다 "SHUFFLER")
+    //    이름이 아니라 "번호"로 답하게 해서 확실히 구별함. 인치 정보 + 등록된 키워드도 참고용으로 같이 제공
+    //    (키워드는 더 이상 매칭 게이트가 아니라, AI 판단을 돕는 힌트일 뿐 — 없어도 다른 근거로 고를 수 있음).
+    //    → 실제 힌트 조립 로직은 window._msBuildProjectMatchSection()으로 분리(재시도 엔진과 공용).
+    prompt += window._msBuildProjectMatchSection(candidateProjects, mailText, userHint);
 
     const callResult = await window.callAiBackend(apiKey, prompt);
     if (!callResult.ok) {

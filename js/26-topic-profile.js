@@ -25,6 +25,35 @@
         return window.currentDriveFileId || window.currentDriveFileName || '';
     }
 
+    // ── [2026-09-06 신규] 범용 WBS/개발단계 용어 블록리스트 ─────────────────────
+    //    04a-core-app-globals.js의 개발단계 enum(RFI/RFQ/.../EOL) + 담당구분 enum(PM/기구/.../미분류)에
+    //    실사용 데이터에서 관찰된 범용 빌드·공정 용어(PROTO, DVR, PRA/PRI, E1~E3, METAL, PLASTIC 등)를
+    //    더해 구성. _generateTopicProfile()의 후처리 필터와, 필요 시 다른 곳에서도 재사용 가능하도록 전역 노출.
+    var _TP_GENERIC_TERMS = [
+        // 개발단계 enum
+        'RFI','RFQ','NRE','AWARD','KICK-OFF','KICKOFF','DESIGN','SAMPLE','EVT','ES','DVT','PVT','FAI',
+        'PP','SOP','MP','EC','RMA','EOL',
+        // 담당구분 enum
+        'PM','기구','HW','FW','BLU','TSP','LCM','SLIMMING','CUTTING','TOOLING','영업','CS','FA','미분류',
+        // 실사용 관찰된 범용 빌드/공정 용어
+        'PROTO','BUILD','DVR','PRA','PRI','E1','E2','E3','P0','P1','P2','METAL','PLASTIC',
+        'QUOTE','REVIEW','SUBMIT','SPEC','INITIAL','CONFORMATION','Q&A',
+        '신뢰성','인증','견적','발주','계약','샘플','양산','시제품','디자인','승인','검토','요청','회신','회의'
+    ];
+    function _tpNormalize(s) {
+        return String(s || '').toUpperCase().replace(/[^A-Z0-9가-힣&]/g, '');
+    }
+    var _TP_GENERIC_SET = {};
+    _TP_GENERIC_TERMS.forEach(function(t) { _TP_GENERIC_SET[_tpNormalize(t)] = true; });
+    /** keyword가 "범용 용어(+순번/알파벳 단독 접미사)"뿐인지 판별 — true면 고유 식별자로 부적합 */
+    window._tpIsGenericKeyword = function(kw) {
+        var norm = String(kw || '').trim();
+        if (!norm) return true;
+        // 끝에 붙은 순번/알파벳 단독 접미사(A~E, 1ST/2ND/3RD, 숫자, "N차")를 떼어내고 다시 검사
+        var stem = norm.replace(/\s*(1ST|2ND|3RD|[0-9]+(ST|ND|RD)?|[A-E]|\d+차)\s*$/i, '').trim();
+        return !!_TP_GENERIC_SET[_tpNormalize(norm)] || (!!stem && !!_TP_GENERIC_SET[_tpNormalize(stem)]);
+    };
+
     /** 저장된 토픽 프로파일 반환 (없으면 null) */
     window._getTopicProfile = function(key) {
         key = key || _currentKey();
@@ -173,6 +202,34 @@
             }
         } catch(_piE) { console.warn('[토픽 프로파일] mail 신호 조회 실패 (무시):', _piE); }
 
+        // ③-2 [2026-09-06 신규] 실제 메일에서 추출된 "핵심내용" 샘플 수집
+        //    사용자 피드백: 이 함수가 업무명(=WBS 단계명, ①에서 만든 taskNames)만 보고 keywords를 뽑다 보니
+        //    "PROTO A/B", "TOOLING 2ND", "DVR", "PRA/PRI", "METAL", "PLASTIC", "BLU" 같이 어느 프로젝트에나
+        //    있는 간트차트 뼈대(WBS) 용어가 "고유 식별 키워드"로 다수 등록되는 문제가 실제로 관찰됨.
+        //    → AI가 이미 등록한 업무의 "상세내용"([핵심내용] 줄, 실제 메일 맥락이 담긴 원문)을 별도로 뽑아
+        //    추가 원문으로 제공한다 — WBS 업무명보다 훨씬 구체적인 고객 요청/부품 코드/특이 사양이 들어있음.
+        var contentSamples = [];
+        (function() {
+            var seenC = {};
+            var contentIdx = (typeof colIdx !== 'undefined' && colIdx.content >= 0) ? colIdx.content : -1;
+            for (var ci = 1; ci < globalData.length && contentIdx >= 0 && contentSamples.length < 40; ci++) {
+                var crow = globalData[ci];
+                if (!crow || !crow._aiRegistered) continue;
+                // 💡 globalData 행은 배열 자체에 속성을 붙인 형태(row[colIdx.content])다 — Drive 저장용
+                //    직렬화({data:[...]}) 형태가 아니라 04d/04k 등 다른 파일과 동일한 접근 방식을 따른다.
+                var m = String(crow[contentIdx] || '').match(/\[핵심내용\]([^\n]+)/);
+                if (!m) continue;
+                var line = m[1].trim().slice(0, 120);
+                if (!line || seenC[line]) continue;
+                seenC[line] = true;
+                contentSamples.push(line);
+            }
+        })();
+        var contentSampleBlock = contentSamples.length
+            ? '\n\n【실제 수신 메일 핵심내용 샘플 — 진짜 고유 식별 정보는 여기서 우선 찾으세요 (' + contentSamples.length + '건)】\n' +
+              contentSamples.map(function(s) { return '- ' + s; }).join('\n')
+            : '';
+
         // ④ 프롬프트 조립 — 전체 업무(식별자용) + 최근 90일 업무(현 단계용) 분리
         var recentLabel = recentTaskNames.length
             ? '【최근 ' + _RECENT_DAYS + '일 이내 업무 — 현재 단계 파악용 (' + recentTaskNames.length + '개)】\n' +
@@ -182,15 +239,21 @@
         var prompt = metaLine +
             '아래는 제품 개발 프로젝트 간트차트의 업무 목록입니다.\n\n' +
             '⚠️ 중요 지시사항:\n' +
-            '① keywords에는 "이 프로젝트를 다른 하드웨어 개발 프로젝트와 구분하는 고유 식별자"를 우선 포함해 주세요.\n' +
-            '   → 모델명(STELLAR32 등), 고객사명, 공급사·협력사명, 부품 코드, 특정 테스트 표준, 프로젝트 고유 약어 등\n' +
-            '   → "RFQ, PROTO, TOOLING, DESIGN, SPEC, MP, EMC, 신뢰성" 같이 모든 하드웨어 프로젝트에 공통인\n' +
-            '     일반 용어는 keywords에서 제외하세요 (→ topics에는 써도 됩니다).\n' +
+            '① keywords에는 "이 프로젝트를 다른 하드웨어 개발 프로젝트와 구분하는 고유 식별자"만 포함해 주세요.\n' +
+            '   → 포함할 것: 모델명(STELLAR32 등), 고객사명, 공급사·협력사명, 프로젝트 전용 코드/약어, 특정 테스트 표준\n' +
+            '   → 【전체 업무 목록】은 대부분 어느 프로젝트에나 있는 간트차트 뼈대(WBS 단계명)입니다. 아래처럼\n' +
+            '     "일반 용어 + 알파벳/숫자/순번" 조합도 여전히 일반 용어이니 keywords에서 반드시 제외하세요\n' +
+            '     (topics/patterns에는 써도 됩니다) — 예: PROTO A/B/C, DVR, PRA, PRI, E1/E2/E3 BUILD, TOOLING 1차/2차,\n' +
+            '     METAL, PLASTIC, BLU, TSP, LCM, RFQ, RFI, NRE, AWARD, KICK-OFF, DESIGN, SAMPLE, EVT, DVT, PVT, FAI,\n' +
+            '     PP, SOP, MP, EC, RMA, EOL, 신뢰성, 인증, 견적, 검토, 승인, 발주, 회의.\n' +
+            '   → 아래 "실제 수신 메일 핵심내용 샘플"이 있다면 거기 등장하는 진짜 고유 명칭(부품 코드, 특이 사양,\n' +
+            '     고객측 담당자명 등)을 keywords 후보로 우선 사용하세요 — 업무 목록(WBS)보다 신뢰도가 높습니다.\n' +
             '② current_phase는 【최근 ' + _RECENT_DAYS + '일 이내 업무】 섹션을 기준으로 현재 어느 단계인지 서술해 주세요.\n' +
             '③ distinguishers에는 수신 메일에서 이 프로젝트임을 판별하는 구체적 단서를 적어주세요.\n\n' +
-            '【전체 업무 목록 — 고유 식별자·키워드 추출용 (' + taskNames.length + '개)】\n' +
+            '【전체 업무 목록 — 고유 식별자·키워드 추출용(WBS 단계명 위주라 일반 용어가 많음, ' + taskNames.length + '개)】\n' +
             taskNames.map(function(n, i) { return (i+1) + '. ' + n; }).join('\n') + '\n\n' +
             recentLabel +
+            contentSampleBlock +
             mailSignalLine + '\n\n' +
             '아래 JSON 형식으로만 반환해 주세요:\n' +
             '{\n' +
@@ -231,6 +294,21 @@
         if (!profile || !profile.keywords) {
             if (window.showToast) window.showToast('❌ AI 응답을 파싱할 수 없습니다', 'error');
             return null;
+        }
+
+        // 💡 [안전망 2026-09-06] 위 프롬프트 지시(①)를 AI가 완벽히 지키지 못해 범용 WBS 용어가 그대로
+        //    keywords에 섞여 나오는 경우를 대비한 결정론적 후처리. "일반 용어(+순번/알파벳 접미사)"로만
+        //    이뤄진 keyword는 저장 직전에 제거한다 — 이 목록이 하이브리드-A(키워드 사전매칭 힌트)/토픽
+        //    프로파일 스니펫에 그대로 주입되기 때문에, 여기서 걸러야 오탐 확산을 막을 수 있다.
+        var _tpBeforeFilter = profile.keywords.slice();
+        if (window._tpIsGenericKeyword) {
+            profile.keywords = profile.keywords.filter(function(k) { return !window._tpIsGenericKeyword(k); });
+            // 필터링이 과해서 다 날아가면(예: 예외적으로 프로젝트명 자체가 일반 용어와 겹침) 원본 유지
+            if (!profile.keywords.length && _tpBeforeFilter.length) profile.keywords = _tpBeforeFilter;
+            else if (profile.keywords.length !== _tpBeforeFilter.length) {
+                console.info('[토픽 프로파일] 범용 WBS 용어 ' + (_tpBeforeFilter.length - profile.keywords.length) + '개 필터링됨:',
+                    _tpBeforeFilter.filter(function(k) { return profile.keywords.indexOf(k) === -1; }));
+            }
         }
 
         profile.ts           = new Date().toISOString();
@@ -326,6 +404,27 @@
         if (window.showToast) window.showToast('🗑 토픽 프로파일 전체 삭제 완료', 'info', 3000);
     };
 
+    // 💡 [2026-09-06 신규] 이미 저장돼 있는(구버전 프롬프트로 생성된) 프로파일에서 PROTO/TOOLING/METAL
+    //    같은 범용 WBS 용어를 keywords에서 제거 — AI 재호출 없이 로컬에서 즉시 정리. _generateTopicProfile()의
+    //    새 프롬프트/후처리 필터는 "새로 생성"할 때만 적용되므로, 기존 프로파일은 이 버튼으로 한 번 정리해야 함.
+    window._tpReapplyGenericFilter = function() {
+        if (!window._tpIsGenericKeyword) return { changed: 0, removed: 0 };
+        var store = _getStore();
+        var changedCount = 0, removedCount = 0;
+        Object.keys(store).forEach(function(k) {
+            var p = store[k];
+            if (!p || !p.keywords || !p.keywords.length) return;
+            var before = p.keywords.slice();
+            var after = before.filter(function(kw) { return !window._tpIsGenericKeyword(kw); });
+            if (!after.length || after.length === before.length) return; // 전부 제거되면 과잉 필터링으로 보고 원본 유지
+            p.keywords = after;
+            changedCount++;
+            removedCount += before.length - after.length;
+        });
+        if (changedCount) _saveStore(store);
+        return { changed: changedCount, removed: removedCount };
+    };
+
     // ── 토픽 프로파일 뷰어 모달 ─────────────────────────────────────────────────
     window._showTopicProfileViewer = async function() {
         var existing = document.getElementById('tp-viewer-overlay');
@@ -350,6 +449,23 @@
             'border-radius:12px 12px 0 0;display:flex;align-items:center;gap:10px;flex-shrink:0;' +
             'cursor:grab;user-select:none;';
         hdr.innerHTML = '<span style="flex:1;">📊 토픽 프로파일 뷰어</span>';
+        // 💡 [2026-09-06 신규] AI 재호출 없이 로컬에서 즉시 범용 WBS 용어(PROTO/TOOLING/METAL 등) 제거
+        var reFilterBtn = document.createElement('button');
+        reFilterBtn.textContent = '🧹 범용용어 정리';
+        reFilterBtn.title = '이미 저장된 프로파일에서 PROTO·TOOLING·METAL 같은 범용 WBS 용어를 keywords에서 제거합니다 (AI 재호출 없음)';
+        reFilterBtn.style.cssText = 'background:#e7f3ff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:#1971c2;padding:3px 10px;transition:background .15s;';
+        reFilterBtn.addEventListener('mouseover', function() { this.style.background = '#cce0ff'; });
+        reFilterBtn.addEventListener('mouseout',  function() { this.style.background = '#e7f3ff'; });
+        reFilterBtn.onclick = function(e) {
+            e.stopPropagation();
+            var r = window._tpReapplyGenericFilter();
+            if (window.showToast) window.showToast(
+                r.changed ? ('🧹 프로젝트 ' + r.changed + '개에서 범용 키워드 ' + r.removed + '개 제거됨') : '제거할 범용 키워드가 없습니다',
+                'info', 3500);
+            overlay.remove();
+            window._showTopicProfileViewer();
+        };
+        hdr.appendChild(reFilterBtn);
         var clearAllBtn = document.createElement('button');
         clearAllBtn.textContent = '🗑 전체 삭제';
         // 💡 [2026-09-04] 헤더와 동일 배경색(#e7f3ff/#1971c2) + hover + 테두리 없음
