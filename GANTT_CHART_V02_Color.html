@@ -1809,6 +1809,9 @@
         </div>
         <!-- 💡 [UX 개선] 아래 "미분류/신규발신자" 구간은 고정하고, 업무 목록(#inbox-list)만 자체 스크롤 -->
         <div style="flex:1; min-height:120px; display:flex; flex-direction:column; overflow:hidden;">
+            <!-- 💡 [2026-09-06] 집계 요약(_tiBuildSummaryHtml)도 하단 미분류 박스처럼 스크롤 안 되게 고정 —
+                 예전엔 #inbox-list 맨 위에 같이 그려서 목록을 스크롤하면 같이 밀려 올라갔음 -->
+            <div id="inbox-summary" style="flex-shrink:0; padding:10px 12px 0 12px;"></div>
             <div style="padding:12px; flex:1; overflow-y:auto;">
                 <div id="inbox-list"></div>
             </div>

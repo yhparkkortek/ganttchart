@@ -169,34 +169,86 @@ window._ibToggleDetail = function(uid, linkEl) {
 };
 
 // 💡 [2026-09-06 신규] 업무 보관함 상단 집계 요약 — 사용자 피드백: "대기가 너무 많아서 뭐가 문제인지
-//    분별이 안 됨" → 카드 42개를 하나씩 읽지 않고도 "대기"가 어느 프로젝트에 몰려있는지 바로 보이게 함.
+//    분별이 안 됨" → 카드 수십 개를 하나씩 읽지 않고도 어느 프로젝트에 몰려있는지 바로 보이게 함.
+// 💡 [2026-09-06 개선] ①상태별(자동배치됨/대기/전송됨/배치됨) 전부 프로젝트별 세부 집계 추가
+//    ②칩을 클릭하면 그 상태(+프로젝트)만 걸러서 아래 목록에 표시(window._tiFilter) ③이 요약 자체는
+//    스크롤 안 되는 고정 영역(#inbox-summary, HTML 쪽 변경)에 그려짐.
+var _TI_STATUS_STYLE = {
+    '대기':       { bg: '#fff3e0', fg: '#a85d0a', emoji: '🟠' },
+    '자동배치됨': { bg: '#f3f0ff', fg: '#5f3dc4', emoji: '🟣' },
+    '전송됨':     { bg: '#e7f3ff', fg: '#1971c2', emoji: '🔵' },
+    '배치됨':     { bg: '#e6f6ea', fg: '#1f7a3d', emoji: '🟢' }
+};
+
+/** 업무 1건이 매칭된 프로젝트명 (없으면 noMatchLabel) — 요약 집계·필터 양쪽에서 재사용 */
+function _tiProjectOf(it, noMatchLabel) {
+    return (it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0])
+        ? (it.matchedProject.candidates[0].model || it.matchedProject.candidates[0].customer)
+        : noMatchLabel;
+}
+
+window._tiFilter = window._tiFilter || null; // { status, project(선택, null=그 상태 전체) }
+/** 요약 칩 클릭 핸들러 — 같은 칩을 다시 누르면 필터 해제(토글) */
+window._tiSetFilter = function(status, project) {
+    project = project || null;
+    if (window._tiFilter && window._tiFilter.status === status && (window._tiFilter.project || null) === project) {
+        window._tiFilter = null;
+    } else {
+        window._tiFilter = { status: status, project: project };
+    }
+    window.renderTaskInbox();
+};
+window._tiClearFilter = function() {
+    window._tiFilter = null;
+    window.renderTaskInbox();
+};
+
 window._tiBuildSummaryHtml = function(items) {
     if (!items || !items.length) return '';
     const _en = window._currentLang === 'en';
+    const noMatchLabel = _en ? '(no match)' : '(매칭없음)';
     function topCount(arr, keyFn, limit) {
         const m = {};
         arr.forEach(x => { const k = keyFn(x) || (_en ? '(unknown)' : '(알수없음)'); m[k] = (m[k] || 0) + 1; });
-        return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, limit || 6);
+        return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, limit || 8);
     }
-    function chip(label, count, bg, fg) {
-        return `<span style="display:inline-block;background:${bg};color:${fg};border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;font-size:11px;white-space:nowrap;">${escapeHtml(label)} <b>${count}</b></span>`;
+    const filter = window._tiFilter;
+    function chip(label, count, bg, fg, status, project) {
+        const active = filter && filter.status === status && (filter.project || null) === (project || null);
+        return `<span class="ti-chip" data-status="${escapeHtml(status)}" data-project="${escapeHtml(project || '')}" ` +
+            `title="${_en ? 'Click to filter the list below' : '클릭하면 아래 목록을 이 항목만 보여줍니다'}" ` +
+            `style="display:inline-block;background:${bg};color:${fg};border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
+            `font-size:11px;white-space:nowrap;cursor:pointer;${active ? 'outline:2px solid ' + fg + ';' : ''}">` +
+            `${escapeHtml(label)} <b>${count}</b></span>`;
     }
-    const statusTop = topCount(items, x => x.status, 10);
-    const waiting = items.filter(x => x.status === '대기');
-    const waitingByProject = topCount(waiting, x => {
-        return (x.matchedProject && x.matchedProject.candidates && x.matchedProject.candidates[0])
-            ? (x.matchedProject.candidates[0].model || x.matchedProject.candidates[0].customer)
-            : (_en ? '(no match)' : '(매칭없음)');
-    }, 6);
-    const waitDates = waiting.map(x => (x.addedAt || '').slice(0, 10)).filter(Boolean).sort();
-    const waitRange = waitDates.length ? `${waitDates[0]} ~ ${waitDates[waitDates.length - 1]}` : '';
 
-    let html = `<div style="padding:10px 12px;background:#f8faff;border:1px solid #e3ecfa;border-radius:8px;margin-bottom:10px;font-size:11.5px;color:#333;">` +
-        `<div><b>${_en ? 'Total' : '전체'} ${items.length}${_en ? '' : '건'}</b> — ${statusTop.map(e => chip(e[0], e[1], '#eef3ff', '#1a4f7a')).join('')}</div>`;
-    if (waiting.length) {
-        html += `<div style="margin-top:6px;"><b>🟠 ${_en ? 'Pending' : '대기'} ${waiting.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
-            waitingByProject.map(e => chip(e[0], e[1], '#fff3e0', '#a85d0a')).join('') +
-            (waitRange ? `<span style="color:#999;margin-left:4px;">(${escapeHtml(waitRange)})</span>` : '') + `</div>`;
+    const statusTop = topCount(items, x => x.status, 10);
+    let html = `<div id="inbox-summary-box" style="padding:10px 12px;background:#f8faff;border:1px solid #e3ecfa;border-radius:8px;font-size:11.5px;color:#333;">` +
+        `<div><b>${_en ? 'Total' : '전체'} ${items.length}${_en ? '' : '건'}</b> — ` +
+        statusTop.map(e => {
+            const sc = _TI_STATUS_STYLE[e[0]] || { bg: '#eef3ff', fg: '#1a4f7a' };
+            return chip(e[0], e[1], sc.bg, sc.fg, e[0], null);
+        }).join('') + `</div>`;
+
+    Object.keys(_TI_STATUS_STYLE).forEach(function(st) {
+        const subset = items.filter(x => x.status === st);
+        if (!subset.length) return;
+        const byProject = topCount(subset, x => _tiProjectOf(x, noMatchLabel), 8);
+        if (byProject.length <= 1) return; // 프로젝트가 하나뿐이면 세분화해서 보여줄 필요 없음
+        const dates = subset.map(x => (x.addedAt || '').slice(0, 10)).filter(Boolean).sort();
+        const range = dates.length ? `${dates[0]} ~ ${dates[dates.length - 1]}` : '';
+        const sc = _TI_STATUS_STYLE[st];
+        html += `<div style="margin-top:6px;"><b>${sc.emoji} ${st} ${subset.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
+            byProject.map(e => chip(e[0], e[1], sc.bg, sc.fg, st, e[0])).join('') +
+            (range ? `<span style="color:#999;margin-left:4px;">(${escapeHtml(range)})</span>` : '') + `</div>`;
+    });
+
+    if (filter) {
+        const filterLabel = filter.project ? `${filter.status} · ${filter.project}` : filter.status;
+        html += `<div style="margin-top:8px;display:flex;align-items:center;gap:8px;">` +
+            `<span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 ${_en ? 'Filtered' : '필터링 중'}: ${escapeHtml(filterLabel)}</span>` +
+            `<button class="ti-clear-filter" style="font-size:11px;padding:2px 10px;background:#fff;border:1px solid #ccc;border-radius:12px;cursor:pointer;color:#555;">✕ ${_en ? 'Clear' : '해제'}</button>` +
+            `</div>`;
     }
     html += `</div>`;
     return html;
@@ -214,17 +266,51 @@ window.renderTaskInbox = function() {
     }
     const items = window.TaskInbox.load();
     const _ibEn = window._currentLang === 'en';
+    const noMatchLabel = _ibEn ? '(no match)' : '(매칭없음)';
+
+    // 💡 [2026-09-06] 요약 패널은 스크롤 안 되는 고정 영역(#inbox-summary)에 항상 "전체 items" 기준으로
+    //    그린다 — 필터가 걸려도 다른 칩으로 바로 갈아탈 수 있어야 하므로 요약 자체는 필터링하지 않음.
+    const summaryEl = document.getElementById('inbox-summary');
+    if (summaryEl) {
+        summaryEl.innerHTML = window._tiBuildSummaryHtml(items);
+        if (!summaryEl._tiDelegated) {
+            summaryEl._tiDelegated = true; // 렌더할 때마다 innerHTML을 통째로 새로 그리므로, 리스너는 한 번만 위임 바인딩
+            summaryEl.addEventListener('click', function(e) {
+                if (e.target.closest('.ti-clear-filter')) { window._tiClearFilter(); return; }
+                const chipEl = e.target.closest('.ti-chip');
+                if (!chipEl) return;
+                window._tiSetFilter(chipEl.dataset.status || null, chipEl.dataset.project || null);
+            });
+        }
+    }
+
     if (items.length === 0) {
         listEl.innerHTML = '<div style="padding:40px 0; text-align:center; color:#aaa; font-size:13px;">' + (_ibEn ? 'Inbox is empty.<br>Use the [📥 Inbox] button in the mail analysis screen to add tasks.' : '보관함이 비어 있습니다.<br>메일 분석 화면에서 [📥 보관함] 버튼으로 업무를 담아주세요.') + '</div>';
         return;
     }
+
+    // 💡 [2026-09-06] 요약 칩 클릭으로 설정된 필터(window._tiFilter)를 여기서 실제로 적용
+    const _tiF = window._tiFilter;
+    const filteredItems = _tiF
+        ? items.filter(function(it) {
+            if (_tiF.status && it.status !== _tiF.status) return false;
+            if (_tiF.project && _tiProjectOf(it, noMatchLabel) !== _tiF.project) return false;
+            return true;
+        })
+        : items;
+    if (!filteredItems.length) {
+        listEl.innerHTML = '<div style="padding:40px 0; text-align:center; color:#aaa; font-size:13px;">' +
+            (_ibEn ? 'No items match the current filter.' : '이 필터에 해당하는 업무가 없습니다.') + '</div>';
+        return;
+    }
+
     const l0List = window.getCurrentL0List();
     const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;', '자동배치됨': 'background:#f3f0ff;color:#7048e8;' };
     const statusLabel = _ibEn
         ? { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed' }
         : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨', '자동배치됨': '자동배치됨' };
-    let html = window._tiBuildSummaryHtml(items);
-    items.forEach(function(it) {
+    let html = '';
+    filteredItems.forEach(function(it) {
         const t = it.task || {};
         // 💡 업무의 개발단계 값이 실제 구간명과 정확히 일치하면 그걸 우선 쓰고,
         //    아니면(AI분석 업무는 대부분 여기 해당) 날짜 기반으로 알맞은 구간을 자동 선택
@@ -292,7 +378,7 @@ window.renderTaskInbox = function() {
         </div>`;
     });
     listEl.innerHTML = html;
-    items.forEach(function(it) { window.inboxRecomputePreview(it.uid); }); // 초기 미리보기 계산
+    filteredItems.forEach(function(it) { window.inboxRecomputePreview(it.uid); }); // 초기 미리보기 계산
 };
 
 // 💡 [매칭/점수 통일화] Stage1이 단일 프로젝트로 확정한 항목은 "다른 프로젝트" 모달로 전체 목록을
