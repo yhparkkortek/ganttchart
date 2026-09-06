@@ -354,14 +354,29 @@
 
             // ② 재배치 큐에 추가 (오매칭 + 프로젝트 선택됨)
             if (reason === '오매칭' && targetProjectVal) {
+                // 💡 [버그 수정 2026-09-07] 사용자 제보 — "타 프로젝트 오매칭 재배치 건인데 원문보기
+                //    버튼도 없고 내용도 엉망"(AI 업무 보관함에서 확인). 원인 둘:
+                //    ① 상세내용에 row._aiSourceSnippet(=제목+본문 앞 150자, 매칭근거 기록용 짧은
+                //       증거 문자열일 뿐)을 그대로 꽂아넣고 있었음 — 전달 메일처럼 본문 맨 앞이
+                //       "보낸사람/보낸날짜/받는사람" 헤더 블록인 경우, 150자가 전부 헤더로만 채워져
+                //       실제 내용이 하나도 안 보이는 "엉망"인 상태가 됨. 원래 행에 저장돼있는 실제
+                //       상세내용 컬럼(row[colIdx.content] — buildMailTaskRow가 원본 그대로 넣어둔 값)을
+                //       대신 쓴다.
+                //    ② mailRaw를 아예 안 넘겨서 TaskInbox.add()가 mailRaw:null로 저장 → 카드에 "📧 원문
+                //       보기" 버튼 자체가 안 뜸(showInboxMailRaw는 it.mailRaw가 있어야만 노출됨). 행이
+                //       원래 갖고 있던 row._mailRaw(원문 원본, buildMailTaskRow가 등록 시점에 저장해둔
+                //       것)를 큐 항목에 같이 실어서, 재배치 후에도 원문을 그대로 볼 수 있게 한다.
+                var _realContent = (typeof colIdx !== 'undefined' && colIdx.content !== -1 && row[colIdx.content])
+                    ? row[colIdx.content] : (row._aiSourceSnippet || '');
                 _pushReassignQueue({
                     id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
                     ts: new Date().toISOString(),
                     targetProjectId: targetProjectVal,
                     targetProjectName: targetProject ? (targetProject.file_name || targetProjectVal) : targetProjectVal,
+                    mailRaw: row._mailRaw || null,
                     taskData: {
                         업무명: taskName.replace(/\s*＊AI📧\s*$/, '').trim(),
-                        상세내용: row._aiSourceSnippet || '',
+                        상세내용: _realContent,
                         시작일: row._aiOrigStart || '',
                         완료일: row._aiOrigPlan  || '',
                         wbs레벨: row._level != null ? String(row._level) : '3',
@@ -447,8 +462,11 @@
     window._openReassignInbox = function(items) {
         (items || []).forEach(function(item) {
             if (!item.taskData) return;
+            // 💡 [버그 수정 2026-09-07] item.mailRaw(위 "학습+삭제" 핸들러가 row._mailRaw를 실어 보냄)를
+            //    안 넘기고 있어서, 재배치된 업무 카드에 "📧 원문 보기" 버튼이 아예 안 뜨는 문제가 있었음.
             window.TaskInbox.add(item.taskData, {
                 source: '🔀 오매칭 재배치' + (item.targetProjectName ? '(' + item.targetProjectName + ')' : ''),
+                mailRaw: item.mailRaw || null,
                 matchedProject: item.targetProjectId
                     ? { status: 'matched', candidates: [{ drive_file_id: item.targetProjectId, file_name: item.targetProjectName || '' }] }
                     : null
@@ -464,7 +482,10 @@
         items.forEach(function(item) {
             if (!item.taskData) return;
             try {
-                var built = window.buildMailTaskRow(item.taskData, undefined, undefined, item.taskData.상세내용 || '');
+                // 💡 [버그 수정 2026-09-07] buildMailTaskRow의 4번째 인자는 mailRaw 객체({subject,sender,
+                //    date,body2000})인데 상세내용 문자열을 잘못 넘기고 있었음 — row._mailRaw가 문자열이
+                //    되어버려 "원문 보기"를 열면 깨진 화면이 됨(이 폴백 경로도 위와 동일하게 수정).
+                var built = window.buildMailTaskRow(item.taskData, undefined, undefined, item.mailRaw || null);
                 if (!built || !built.row) return;
                 globalData.push(built.row);
                 added++;
