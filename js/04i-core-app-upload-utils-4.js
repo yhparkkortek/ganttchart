@@ -35,7 +35,7 @@
     //    생성에 반영"(26-topic-profile.js _generateTopicProfile 참고)의 범위 설정 — 학습 로그가
     //    쌓일수록(프로젝트당 최대 200건 캡) 오래된 것도 섞여 들어갈 수 있어, "최근 N일 이내"만
     //    쓰도록 기간을 두고, 프롬프트가 너무 길어지지 않도록 긍정/부정 각각 최대 건수도 별도로 둔다.
-    window._TOPIC_LEARNING_DAYS_DEFAULT = 90;
+    window._TOPIC_LEARNING_DAYS_DEFAULT = 45;
     window.getTopicLearningDays = function() {
         const v = parseInt(localStorage.getItem('gantt_topic_learning_days'), 10);
         return (v && v >= 1) ? v : window._TOPIC_LEARNING_DAYS_DEFAULT;
@@ -202,7 +202,7 @@
                                 <input id="ai-topic-learning-days-input" type="number" min="1" max="365" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
                                 <button onclick="document.getElementById('ai-topic-learning-days-input').value=window._TOPIC_LEARNING_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 90일 (기본값) — 값을 줄이면 오래된(철 지난) 기록이 새 프로파일에 섞여 들어가는 것을 막을 수 있습니다.</div>
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 45일 (기본값) — 값을 줄이면 오래된(철 지난) 기록이 새 프로파일에 섞여 들어가는 것을 막을 수 있습니다.</div>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
                             <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🔢 최대 건수 (긍정·부정 사례 각각)</label>
                             <div style="display:flex; gap:8px; align-items:center;">

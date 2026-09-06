@@ -265,7 +265,7 @@
             // 💡 [2026-09-07] "AI 분석 설정 > 학습 로그 반영 범위"에서 사용자가 조절 — 학습 로그가
             //    쌓일수록(200건 캡) 오래된 것도 섞여 들어갈 수 있어, 최근 N일 이내만 쓰도록 기간 제한을
             //    추가하고 건수도 하드코딩(15) 대신 설정값을 따른다.
-            var maxDays  = (window.getTopicLearningDays  && window.getTopicLearningDays())  || 90;
+            var maxDays  = (window.getTopicLearningDays  && window.getTopicLearningDays())  || 45;
             var maxCount = (window.getTopicLearningCount && window.getTopicLearningCount()) || 15;
             var cutoffTs = Date.now() - maxDays * 24 * 60 * 60 * 1000;
             var pos = [], neg = [], seenPos = {}, seenNeg = {};
