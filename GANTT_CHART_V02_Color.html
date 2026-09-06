@@ -1860,14 +1860,16 @@
                      하단에 있는 "🗑 일괄삭제" 버튼과 완전히 동일한 동작(_msQueueClearAll → 결국
                      _msQueueDeleteAll과 같은 로직)이라 중복이었음 — 제거하고 모달 열기 버튼만 남김.
                      (예전엔 _macClearQueue를 여기서만 썼는데, 이제 호출부가 없어져 그 함수도 함께 정리함) -->
+                <!-- 💡 [2026-09-06 버그 수정] 3개 버튼 전부 호버 효과가 아예 없었음("신규발신자는 호버
+                     미적용" 제보 — 확인해보니 미분류/자동폐기도 마찬가지로 없었음, 3개 다 추가) -->
                 <div style="display:flex; gap:6px;">
-                    <button onclick="window.msShowUnmatchedModal()" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    <button onclick="window.msShowUnmatchedModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s, border-color .15s;">
                         <span id="inbox-unmatched-label">📭 미분류</span> <span id="ms-unmatched-count-2">0</span><span id="inbox-unmatched-unit">건</span>
                     </button>
-                    <button onclick="window.msShowNewSenderModal()" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    <button onclick="window.msShowNewSenderModal()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s, border-color .15s;">
                         <span id="inbox-newsender-label">👤 신규발신자</span> <span id="ms-newsender-count-2">0</span><span id="inbox-newsender-unit">건</span>
                     </button>
-                    <button onclick="window.msShowDiscardedModal()" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    <button onclick="window.msShowDiscardedModal()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#f8f1e8'; this.style.borderColor='#e0c8a5';" style="flex:1; box-sizing:border-box; height:26px; padding:0 4px; background:#f8f1e8; color:#7a5210; border:1px solid #e0c8a5; border-radius:6px; font-size:11px; font-weight:bold; cursor:pointer; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; transition:background .15s, border-color .15s;">
                         <span id="inbox-discarded-label">🗑 자동폐기</span> <span id="ms-discarded-count-2">0</span><span id="inbox-discarded-unit">건</span>
                     </button>
                 </div>

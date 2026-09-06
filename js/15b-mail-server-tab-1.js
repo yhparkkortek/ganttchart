@@ -1287,6 +1287,40 @@ const _msQEsc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':
 // 💡 [2026-09-06 신규] 미분류/신규발신자/자동폐기 큐 상단에 붙는 집계 요약 — 사용자 피드백:
 //    "미분류 업무가 너무 많고 대기도 너무 많아서 뭐가 문제인지 분석 조차도 분별이 힘든 상황"
 //    → 카드를 하나씩 읽지 않고도 발신 도메인·미분류 사유 패턴이 상위 몇 개에 몰려있는지 한눈에 보이게 함.
+// 💡 [2026-09-06 개선] "필터 버튼 아니냐"는 피드백 — 실제로 AI 업무 보관함 요약과 같은 클릭 필터로
+//    동작하게 함. window._msQueueFilter = { kind:'domain'|'reason', value } 를 window._msApplyQueueFilter가
+//    아래 목록에 적용하고, 요약 자체는 항상 전체(rows) 기준으로 그려서 다른 칩으로 바로 갈아탈 수 있게 유지.
+window._msQueueFilter = window._msQueueFilter || null;
+window._msSetQueueFilter = function(kind, value) {
+    if (window._msQueueFilter && window._msQueueFilter.kind === kind && window._msQueueFilter.value === value) {
+        window._msQueueFilter = null; // 같은 칩 다시 클릭 → 토글 해제
+    } else {
+        window._msQueueFilter = { kind: kind, value: value };
+    }
+    window._msRenderQueueModal(window._msQueueCurrentType);
+};
+window._msClearQueueFilter = function() {
+    window._msQueueFilter = null;
+    window._msRenderQueueModal(window._msQueueCurrentType);
+};
+/** 사유 칩 값 계산 — 요약 집계와 필터 적용 양쪽에서 동일 규칙을 써야 하므로 공용 함수로 뺌 */
+window._msQueueReasonBucket = function(r) {
+    const s = (r.matchReason || '').trim();
+    return s ? s.slice(0, 34) + (s.length > 34 ? '…' : '') : '(근거없음/구버전분석 — 🔄 재분석하면 근거 표시됨)';
+};
+/** 도메인 칩 값 계산 — 위와 동일한 이유로 공용 함수 */
+window._msQueueDomain = function(r) {
+    const m = (r.sender || '').match(/@([\w.-]+)/);
+    return m ? m[1] : '(파싱안됨)';
+};
+/** 현재 필터를 rows에 적용해서 아래 목록에 실제로 보여줄 부분집합을 반환 */
+window._msApplyQueueFilter = function(rows) {
+    const f = window._msQueueFilter;
+    if (!f) return rows;
+    if (f.kind === 'domain') return rows.filter(r => window._msQueueDomain(r) === f.value);
+    if (f.kind === 'reason') return rows.filter(r => window._msQueueReasonBucket(r) === f.value);
+    return rows;
+};
 window._msBuildQueueSummaryHtml = function(type, rows) {
     if (!rows || !rows.length) return '';
     function topCount(arr, keyFn, limit) {
@@ -1294,13 +1328,15 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
         arr.forEach(x => { const k = keyFn(x) || '(없음)'; m[k] = (m[k] || 0) + 1; });
         return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, limit || 5);
     }
-    function chip(label, count) {
-        return `<span style="display:inline-block;background:#eef3ff;color:#1a4f7a;border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;font-size:11px;white-space:nowrap;">${_msQEsc(label)} <b>${count}</b></span>`;
+    const filter = window._msQueueFilter;
+    function chip(label, count, kind) {
+        const active = filter && filter.kind === kind && filter.value === label;
+        return `<span class="ms-queue-chip" data-kind="${_msQEsc(kind)}" data-value="${_msQEsc(label)}" ` +
+            `title="클릭하면 아래 목록을 이 항목만 보여줍니다" ` +
+            `style="display:inline-block;background:#eef3ff;color:#1a4f7a;border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;` +
+            `font-size:11px;white-space:nowrap;cursor:pointer;${active ? 'outline:2px solid #1a4f7a;' : ''}">${_msQEsc(label)} <b>${count}</b></span>`;
     }
-    const domainTop = topCount(rows, r => {
-        const m = (r.sender || '').match(/@([\w.-]+)/);
-        return m ? m[1] : null;
-    }, 5);
+    const domainTop = topCount(rows, r => window._msQueueDomain(r), 5);
     const dates = rows.map(r => (r.date || '').slice(0, 10)).filter(Boolean).sort();
     const dateRange = dates.length ? `${dates[0]} ~ ${dates[dates.length - 1]}` : '';
 
@@ -1309,19 +1345,22 @@ window._msBuildQueueSummaryHtml = function(type, rows) {
         // 💡 매칭근거 앞부분 34자로 뭉뚱그려 dedup — 완전히 같은 문장은 드물어도 "메일 본문에 XX 언급"류
         //    패턴이 반복되면 상위에 잡혀서, 사유 없이 뭉뚱그려진 문구인지/특정 프로젝트가 등록 안 된 건지 등을
         //    카드를 일일이 열어보지 않고도 짐작할 수 있게 해줌.
-        const reasonTop = topCount(rows, r => {
-            const s = (r.matchReason || '').trim();
-            return s ? s.slice(0, 34) + (s.length > 34 ? '…' : '') : '(근거없음/구버전분석 — 🔄 재분석하면 근거 표시됨)';
-        }, 6);
+        const reasonTop = topCount(rows, r => window._msQueueReasonBucket(r), 6);
         reasonHtml = reasonTop.length
-            ? `<div style="margin-top:6px;"><b>사유 상위:</b><br>${reasonTop.map(e => chip(e[0], e[1])).join('')}</div>`
+            ? `<div style="margin-top:6px;"><b>사유 상위:</b><br>${reasonTop.map(e => chip(e[0], e[1], 'reason')).join('')}</div>`
             : '';
     }
 
+    let filterHtml = '';
+    if (filter) {
+        filterHtml = `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 필터링 중: ${_msQEsc(filter.value)}</span></div>`;
+    }
+
     return `<div id="ms-queue-summary-inner" style="padding:10px 14px;background:#f8faff;border-bottom:1px solid #e3ecfa;font-size:11.5px;color:#333;">` +
-        `<div><b>총 ${rows.length}건</b>${dateRange ? ' · ' + _msQEsc(dateRange) : ''}</div>` +
-        (domainTop.length ? `<div style="margin-top:6px;"><b>발신 도메인:</b> ${domainTop.map(e => chip(e[0], e[1])).join('')}</div>` : '') +
+        `<div><span class="ms-queue-clear-filter" title="클릭하면 전체보기(필터 해제)" style="cursor:pointer;text-decoration:underline dotted;"><b>총 ${rows.length}건</b></span>${dateRange ? ' · ' + _msQEsc(dateRange) : ''}</div>` +
+        (domainTop.length ? `<div style="margin-top:6px;"><b>발신 도메인:</b> ${domainTop.map(e => chip(e[0], e[1], 'domain')).join('')}</div>` : '') +
         reasonHtml +
+        filterHtml +
         `</div>`;
 };
 
@@ -1385,8 +1424,13 @@ window._msQueueTypeLabel = function(type) {
 
 window._msRenderQueueModal = function(type) {
     const _msQEn = window._currentLang === 'en';
+    // 💡 [2026-09-06 신규] 다른 큐(미분류→신규발신자 등)로 전환하면 이전 필터는 의미가 없으니 초기화.
+    //    같은 타입으로 다시 그리는 경우(삭제/재분석 등 액션 후 재렌더)는 필터를 유지해야 하므로
+    //    "타입이 바뀌었을 때만" 초기화한다.
+    if (window._msQueueCurrentType && window._msQueueCurrentType !== type) window._msQueueFilter = null;
     const title = window._msQueueTypeLabel(type);
-    const rows = window._msQueueGetRows(type);
+    const allRows = window._msQueueGetRows(type);
+    const rows = window._msApplyQueueFilter(allRows); // 필터가 적용된, 실제로 카드로 그릴 목록
 
     window._msQueueRows = rows; // 💡 "원문 보기" 클릭 시 참조용 (onclick 문자열에 본문을 직접 못 넣으니 인덱스로 조회)
     const bodyHtml = rows.length
@@ -1430,7 +1474,10 @@ window._msRenderQueueModal = function(type) {
                 </div>
             </div>`;
         }).join('')
-        : '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">' + (_msQEn ? 'No pending items.' : '대기 중인 항목이 없습니다') + '</div>';
+        : '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">' +
+          (window._msQueueFilter
+              ? (_msQEn ? 'No items match the current filter.' : '이 필터에 해당하는 항목이 없습니다')
+              : (_msQEn ? 'No pending items.' : '대기 중인 항목이 없습니다')) + '</div>';
 
     let modal = document.getElementById('ms-queue-modal');
     if (!modal) {
@@ -1479,11 +1526,18 @@ window._msRenderQueueModal = function(type) {
                 if (window.showToast) window.showToast(`🚫 "${domain}" 도메인 자동폐기 규칙에 등록됨`, 'info');
             }
         });
+        // 💡 [2026-09-06 신규] 요약 칩(발신 도메인/사유 상위) 클릭 필터 — AI 업무 보관함 요약과 동일한 방식
+        document.getElementById('ms-queue-summary').addEventListener('click', function(e) {
+            if (e.target.closest('.ms-queue-clear-filter')) { window._msClearQueueFilter(); return; }
+            const chipEl = e.target.closest('.ms-queue-chip');
+            if (chipEl) window._msSetQueueFilter(chipEl.dataset.kind, chipEl.dataset.value);
+        });
     }
 
     window._msQueueCurrentType = type;
     document.getElementById('ms-queue-title').textContent = title + (_msQEn ? ' (' + rows.length + ')' : ' (' + rows.length + '건)');
-    document.getElementById('ms-queue-summary').innerHTML = window._msBuildQueueSummaryHtml(type, rows);
+    // 💡 요약은 항상 전체(allRows) 기준으로 그린다 — 필터가 걸려 있어도 다른 칩으로 바로 갈아탈 수 있어야 함
+    document.getElementById('ms-queue-summary').innerHTML = window._msBuildQueueSummaryHtml(type, allRows);
     document.getElementById('ms-queue-body').innerHTML = bodyHtml;
     const suggestBtn = document.getElementById('ms-queue-suggest-btn');
     if (suggestBtn) {
