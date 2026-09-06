@@ -168,6 +168,40 @@ window._ibToggleDetail = function(uid, linkEl) {
     if (open) window._ibExpandedUids.add(uid); else window._ibExpandedUids.delete(uid);
 };
 
+// 💡 [2026-09-06 신규] 업무 보관함 상단 집계 요약 — 사용자 피드백: "대기가 너무 많아서 뭐가 문제인지
+//    분별이 안 됨" → 카드 42개를 하나씩 읽지 않고도 "대기"가 어느 프로젝트에 몰려있는지 바로 보이게 함.
+window._tiBuildSummaryHtml = function(items) {
+    if (!items || !items.length) return '';
+    const _en = window._currentLang === 'en';
+    function topCount(arr, keyFn, limit) {
+        const m = {};
+        arr.forEach(x => { const k = keyFn(x) || (_en ? '(unknown)' : '(알수없음)'); m[k] = (m[k] || 0) + 1; });
+        return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, limit || 6);
+    }
+    function chip(label, count, bg, fg) {
+        return `<span style="display:inline-block;background:${bg};color:${fg};border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;font-size:11px;white-space:nowrap;">${escapeHtml(label)} <b>${count}</b></span>`;
+    }
+    const statusTop = topCount(items, x => x.status, 10);
+    const waiting = items.filter(x => x.status === '대기');
+    const waitingByProject = topCount(waiting, x => {
+        return (x.matchedProject && x.matchedProject.candidates && x.matchedProject.candidates[0])
+            ? (x.matchedProject.candidates[0].model || x.matchedProject.candidates[0].customer)
+            : (_en ? '(no match)' : '(매칭없음)');
+    }, 6);
+    const waitDates = waiting.map(x => (x.addedAt || '').slice(0, 10)).filter(Boolean).sort();
+    const waitRange = waitDates.length ? `${waitDates[0]} ~ ${waitDates[waitDates.length - 1]}` : '';
+
+    let html = `<div style="padding:10px 12px;background:#f8faff;border:1px solid #e3ecfa;border-radius:8px;margin-bottom:10px;font-size:11.5px;color:#333;">` +
+        `<div><b>${_en ? 'Total' : '전체'} ${items.length}${_en ? '' : '건'}</b> — ${statusTop.map(e => chip(e[0], e[1], '#eef3ff', '#1a4f7a')).join('')}</div>`;
+    if (waiting.length) {
+        html += `<div style="margin-top:6px;"><b>🟠 ${_en ? 'Pending' : '대기'} ${waiting.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
+            waitingByProject.map(e => chip(e[0], e[1], '#fff3e0', '#a85d0a')).join('') +
+            (waitRange ? `<span style="color:#999;margin-left:4px;">(${escapeHtml(waitRange)})</span>` : '') + `</div>`;
+    }
+    html += `</div>`;
+    return html;
+};
+
 window.renderTaskInbox = function() {
     const listEl = document.getElementById('inbox-list');
     if (!listEl) return;
@@ -189,7 +223,7 @@ window.renderTaskInbox = function() {
     const statusLabel = _ibEn
         ? { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed' }
         : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨', '자동배치됨': '자동배치됨' };
-    let html = '';
+    let html = window._tiBuildSummaryHtml(items);
     items.forEach(function(it) {
         const t = it.task || {};
         // 💡 업무의 개발단계 값이 실제 구간명과 정확히 일치하면 그걸 우선 쓰고,

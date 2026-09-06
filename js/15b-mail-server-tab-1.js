@@ -1282,6 +1282,47 @@ window._msRefreshQueueBadges = function() {
 
 const _msQEsc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
+// 💡 [2026-09-06 신규] 미분류/신규발신자/자동폐기 큐 상단에 붙는 집계 요약 — 사용자 피드백:
+//    "미분류 업무가 너무 많고 대기도 너무 많아서 뭐가 문제인지 분석 조차도 분별이 힘든 상황"
+//    → 카드를 하나씩 읽지 않고도 발신 도메인·미분류 사유 패턴이 상위 몇 개에 몰려있는지 한눈에 보이게 함.
+window._msBuildQueueSummaryHtml = function(type, rows) {
+    if (!rows || !rows.length) return '';
+    function topCount(arr, keyFn, limit) {
+        const m = {};
+        arr.forEach(x => { const k = keyFn(x) || '(없음)'; m[k] = (m[k] || 0) + 1; });
+        return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, limit || 5);
+    }
+    function chip(label, count) {
+        return `<span style="display:inline-block;background:#eef3ff;color:#1a4f7a;border-radius:10px;padding:2px 8px;margin:2px 4px 2px 0;font-size:11px;white-space:nowrap;">${_msQEsc(label)} <b>${count}</b></span>`;
+    }
+    const domainTop = topCount(rows, r => {
+        const m = (r.sender || '').match(/@([\w.-]+)/);
+        return m ? m[1] : null;
+    }, 5);
+    const dates = rows.map(r => (r.date || '').slice(0, 10)).filter(Boolean).sort();
+    const dateRange = dates.length ? `${dates[0]} ~ ${dates[dates.length - 1]}` : '';
+
+    let reasonHtml = '';
+    if (type === 'unmatched') {
+        // 💡 매칭근거 앞부분 34자로 뭉뚱그려 dedup — 완전히 같은 문장은 드물어도 "메일 본문에 XX 언급"류
+        //    패턴이 반복되면 상위에 잡혀서, 사유 없이 뭉뚱그려진 문구인지/특정 프로젝트가 등록 안 된 건지 등을
+        //    카드를 일일이 열어보지 않고도 짐작할 수 있게 해줌.
+        const reasonTop = topCount(rows, r => {
+            const s = (r.matchReason || '').trim();
+            return s ? s.slice(0, 34) + (s.length > 34 ? '…' : '') : '(근거없음/구버전분석 — 🔄 재분석하면 근거 표시됨)';
+        }, 6);
+        reasonHtml = reasonTop.length
+            ? `<div style="margin-top:6px;"><b>사유 상위:</b><br>${reasonTop.map(e => chip(e[0], e[1])).join('')}</div>`
+            : '';
+    }
+
+    return `<div id="ms-queue-summary-inner" style="padding:10px 14px;background:#f8faff;border-bottom:1px solid #e3ecfa;font-size:11.5px;color:#333;">` +
+        `<div><b>총 ${rows.length}건</b>${dateRange ? ' · ' + _msQEsc(dateRange) : ''}</div>` +
+        (domainTop.length ? `<div style="margin-top:6px;"><b>발신 도메인:</b> ${domainTop.map(e => chip(e[0], e[1])).join('')}</div>` : '') +
+        reasonHtml +
+        `</div>`;
+};
+
 // 💡 타입별 데이터 소스 — 'unmatched'는 세션큐+로컬스토리지, 'newsender'/'discarded'는 로컬스토리지 전용
 window._msQueueGetRows = function(type) {
     if (type === 'unmatched') {
@@ -1400,6 +1441,7 @@ window._msRenderQueueModal = function(type) {
                 <span id="ms-queue-title">📭 미분류 메일</span>
                 <button onclick="document.getElementById('ms-queue-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
+            <div id="ms-queue-summary" style="flex-shrink:0;"></div>
             <div id="ms-queue-body" style="overflow-y:auto; flex:1; background:#fafafa;"></div>
             <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
                 <button id="ms-queue-suggest-btn" onclick="window._msQueueSuggestClick()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:7px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"></button>
@@ -1439,6 +1481,7 @@ window._msRenderQueueModal = function(type) {
 
     window._msQueueCurrentType = type;
     document.getElementById('ms-queue-title').textContent = title + (_msQEn ? ' (' + rows.length + ')' : ' (' + rows.length + '건)');
+    document.getElementById('ms-queue-summary').innerHTML = window._msBuildQueueSummaryHtml(type, rows);
     document.getElementById('ms-queue-body').innerHTML = bodyHtml;
     const suggestBtn = document.getElementById('ms-queue-suggest-btn');
     if (suggestBtn) {
