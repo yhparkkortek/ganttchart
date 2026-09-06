@@ -78,6 +78,7 @@
             <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정</button>
             <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="auto-login-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleAutoLogin()" style="font-weight:bold;" title="켜두면 새로고침·새 탭에서 예전에 연동했던 계정으로 조용히(팝업 없이) 자동 재연동을 시도합니다. 실패해도 지금처럼 [드라이브 연동하기]를 누르면 됩니다.">🔴 자동로그인 OFF</button>
+                <button id="my-team-menu-btn" class="topbar-menu-item" onclick="window.openMyTeamModal(); window.closeTopbarMenu('settings-menu-popup');" title="이 컴퓨터(브라우저)가 속한 팀 — 로그인 이름을 주소록과 대조해 자동 추정되며, 여기서 직접 바꿀 수 있습니다. 앞으로 AI 메일 매칭 범위 제한 등에 사용될 예정입니다.">👥 내 팀: <span id="my-team-label">미설정</span></button>
                 <div class="tb-menu-sep"></div>
                 <button id="alarm-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>

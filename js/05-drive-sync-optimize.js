@@ -154,8 +154,12 @@ window.handleAuthClick = function(event, silentOnly) {
                 if (window.AddressBook && window.AddressBook.loadFromDrive) {
                     window.tabData = window.tabData || {};
                     window.tabData.addressBook = window.AddressBook.load();
+                    // 💡 [2026-09-07 신규] "내 팀" 자동 인식 1차 시도 — 로컬 캐시 주소록 기준
+                    if (window._autoDetectMyTeam) window._autoDetectMyTeam();
                     window.AddressBook.loadFromDrive().then(function(list) {
                         if (list) { window.tabData.addressBook = list; if (window.renderAddressTable) window.renderAddressTable(); }
+                        // 💡 Drive 최신 주소록 기준으로 재시도(로컬 캐시가 없거나 오래됐을 수 있어서)
+                        if (window._autoDetectMyTeam) window._autoDetectMyTeam();
                     });
                 }
 

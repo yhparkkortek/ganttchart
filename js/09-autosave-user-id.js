@@ -2,6 +2,118 @@
     // ⏰ 1분 자동 저장, 👤 로컬 사용자 식별, 🛡️ 안전장치 통합
     // =========================================================
 
+    // =========================================================
+    // 👥 [2026-09-07 신규] "내 팀" 자동 인식 — 팀별 업무 범위 제한(AI 매칭 등)의 기초 데이터.
+    //    로그인 이메일(개인 Gmail)과 주소록 이메일(회사 메일 @kortek.co.kr)이 서로 다른 체계라
+    //    이메일로는 매칭이 안 됨 — 대신 로그인 시 확보되는 실명(currentUserName, Drive about.get의
+    //    displayName)을 주소록(Address Book)의 name/nameEn과 대조해서 dept(부서/팀)를 가져온다.
+    //    자동 인식은 어디까지나 "기본값 추정"이고, 사람이 ⚙️ 설정 > 👥 내 팀에서 언제든 직접
+    //    바꿀 수 있다 — 한 번이라도 수동으로 정하면(gantt_my_team_manual) 그 뒤로는 로그인해도
+    //    자동 인식이 덮어쓰지 않는다.
+    // =========================================================
+    window.getMyTeam = function() {
+        try { return localStorage.getItem('gantt_my_team') || ''; } catch(e) { return ''; }
+    };
+    window.setMyTeam = function(team, isManual) {
+        try {
+            localStorage.setItem('gantt_my_team', team || '');
+            if (isManual) localStorage.setItem('gantt_my_team_manual', '1');
+        } catch(e) {}
+        window._updateMyTeamLabel();
+    };
+    window._updateMyTeamLabel = function() {
+        const el = document.getElementById('my-team-label');
+        if (el) el.textContent = window.getMyTeam() || (window._currentLang === 'en' ? 'Not set' : '미설정');
+    };
+    /** 로그인 성공 직후(또는 주소록이 새로 로드된 직후) 호출 — 이름으로 주소록을 찾아 팀을 추정 */
+    window._autoDetectMyTeam = function() {
+        try {
+            let isManual = false;
+            try { isManual = localStorage.getItem('gantt_my_team_manual') === '1'; } catch(e) {}
+            if (isManual) return; // 사람이 이미 직접 정해뒀으면 자동 인식이 덮어쓰지 않음
+            const myName = (window.currentUserName || '').trim();
+            if (!myName || myName === '비로그인 (로컬)' || myName === '익명 사용자') return;
+            const list = (window.AddressBook && window.AddressBook.load) ? window.AddressBook.load() : [];
+            const hit = list.find(function(p) {
+                return p && ((p.name || '').trim() === myName || (p.nameEn || '').trim() === myName);
+            });
+            if (hit && hit.dept && hit.dept.trim()) {
+                window.setMyTeam(hit.dept.trim(), false); // 자동 추정 — manual 플래그는 안 세움
+                console.info('[내 팀 자동인식] "' + myName + '" → "' + hit.dept.trim() + '"');
+            }
+        } catch(e) { console.warn('[내 팀 자동인식] 실패:', e); }
+    };
+    window._updateMyTeamLabel(); // 페이지 로드 시 저장된 값 즉시 표시
+
+    // 💡 팀 선택 모달 — project_index.json에서 실제 존재하는 팀 목록을 뽑아 고르기 쉽게 하고,
+    //    목록에 없는 팀(신설팀 등)은 직접 입력도 허용한다. 자동/직접입력 여부와 무관하게 저장하면
+    //    항상 "수동 설정"으로 취급(gantt_my_team_manual=1) — 이후 로그인해도 자동인식이 안 덮어씀.
+    window.openMyTeamModal = async function() {
+        const _en = window._currentLang === 'en';
+        let modal = document.getElementById('my-team-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'my-team-modal';
+            modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9270; pointer-events:none; background:none; align-items:center; justify-content:center;';
+            document.body.appendChild(modal);
+            window._bindClickToFront && window._bindClickToFront('my-team-modal');
+        }
+        const isManual = (function() { try { return localStorage.getItem('gantt_my_team_manual') === '1'; } catch(e) { return false; } })();
+        const current = window.getMyTeam();
+        modal.innerHTML = `
+            <div id="my-team-drag" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); top:50%; left:50%; transform:translate(-50%,-50%);">
+                <div style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
+                    <span>👥 ${_en ? 'My Team' : '내 팀 설정'}</span>
+                    <button onclick="document.getElementById('my-team-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
+                </div>
+                <div style="padding:18px;">
+                    <div style="font-size:11.5px; color:#888; margin-bottom:12px; line-height:1.6;">${_en
+                        ? 'This computer/browser\'s team. Used later to scope AI mail matching, etc. Auto-guessed from your login name via the Address Book — you can override it here any time.'
+                        : '이 컴퓨터(브라우저)가 속한 팀입니다. 앞으로 AI 메일 매칭 범위 제한 등에 쓰일 예정입니다. 로그인 이름을 주소록과 대조해 자동으로 추정되며, 여기서 언제든 직접 바꿀 수 있습니다.'}</div>
+                    <div style="font-size:12px; font-weight:bold; color:#333; margin-bottom:6px;">${_en ? 'Current' : '현재 설정'}: <span style="color:#1971c2;">${escapeHtml(current || (_en ? '(not set)' : '(미설정)'))}</span> ${isManual ? '' : (_en ? '(auto-guessed)' : '(자동 추정)')}</div>
+                    <div id="my-team-options" style="display:flex; flex-direction:column; gap:6px; margin:10px 0; max-height:180px; overflow-y:auto;">
+                        <div style="font-size:11px; color:#aaa;">${_en ? 'Loading team list...' : '팀 목록 불러오는 중...'}</div>
+                    </div>
+                    <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">${_en ? 'Or type directly' : '또는 직접 입력'}</label>
+                    <input id="my-team-custom-input" type="text" value="${escapeHtml(current)}" placeholder="${_en ? 'e.g. Dev Team 3' : '예: 개발3팀'}" style="width:100%; box-sizing:border-box; padding:7px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px;">
+                    <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:16px;">
+                        <button onclick="document.getElementById('my-team-modal').style.display='none'" style="padding:7px 16px; background:#f8f9fa; color:#666; border:1px solid #ccc; border-radius:6px; font-size:12.5px; cursor:pointer;">${_en ? 'Cancel' : '취소'}</button>
+                        <button onclick="window._saveMyTeamFromModal()" style="padding:7px 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">${_en ? 'Save' : '저장'}</button>
+                    </div>
+                </div>
+            </div>`;
+        modal.style.display = 'flex';
+        window.bringModalToFront && window.bringModalToFront('my-team-modal');
+
+        // 팀 목록은 project_index.json에서 비동기로 채움(모달은 먼저 열어서 반응성 확보)
+        try {
+            const idx = window._msLoadProjectIndex ? await window._msLoadProjectIndex() : [];
+            const teams = Array.from(new Set((idx || []).map(function(p) { return (p && p.team || '').trim(); }).filter(Boolean)))
+                .sort(function(a, b) {
+                    const na = parseInt((a.match(/\d+/) || ['0'])[0], 10), nb = parseInt((b.match(/\d+/) || ['0'])[0], 10);
+                    if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+                    return a.localeCompare(b, 'ko');
+                });
+            const optWrap = document.getElementById('my-team-options');
+            if (optWrap) {
+                optWrap.innerHTML = teams.length ? teams.map(function(t) {
+                    const active = t === current;
+                    return `<div onclick="document.getElementById('my-team-custom-input').value='${escapeHtml(t).replace(/'/g, "\\'")}'"
+                        style="padding:7px 10px; border-radius:6px; cursor:pointer; font-size:12.5px; border:1px solid ${active ? '#a5c8f0' : '#e0e0e0'}; background:${active ? '#e8f4fd' : '#fff'}; color:${active ? '#1a4f7a' : '#333'};"
+                        onmouseover="this.style.background='#f0f6fc';" onmouseout="this.style.background='${active ? '#e8f4fd' : '#fff'}';">${escapeHtml(t)}</div>`;
+                }).join('') : `<div style="font-size:11px; color:#aaa;">${_en ? 'No team found in Drive projects.' : 'Drive 프로젝트에서 확인된 팀이 없습니다.'}</div>`;
+            }
+        } catch(e) { console.warn('[내 팀 설정] 팀 목록 로드 실패:', e); }
+    };
+    window._saveMyTeamFromModal = function() {
+        const input = document.getElementById('my-team-custom-input');
+        const val = (input ? input.value : '').trim();
+        window.setMyTeam(val, true); // 모달에서 저장하면 항상 수동 설정으로 취급
+        const modal = document.getElementById('my-team-modal');
+        if (modal) modal.style.display = 'none';
+        if (window.showToast) window.showToast((window._currentLang === 'en' ? '✅ My team set to: ' : '✅ 내 팀이 저장되었습니다: ') + (val || (window._currentLang === 'en' ? '(none)' : '(없음)')), 'info');
+    };
+
     // 로컬 이름 묻기
     window.getActiveUserName = function() {
         if (window.currentUserName && window.currentUserName !== "비로그인 (로컬)" && window.currentUserName !== "익명 사용자") {
