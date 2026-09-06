@@ -1598,11 +1598,32 @@ window._msQueueClearAll = function() {
 //    ※ 토픽 학습 자체가 자동 재스캔을 일으키지 않음 — 이 함수 호출 시에만 재분석이 시작됨
 // ═══════════════════════════════════════════════════════════════════
 // opts.noConfirm = true : 토픽 프로파일 갱신 후 자동 호출 경로 — confirm/alert 없이 시작
+// 💡 [2026-09-07 무료 API 절약] 토픽 프로파일이 자동 재생성될 때마다(26-topic-profile.js의
+//    _tpCheckAutoRegen, +10업무·쿨다운10분 기준) 이 함수가 noConfirm:true로 무조건 자동 호출돼
+//    "그 순간 미분류인 메일 전부"를 처음부터 다시 AI에 태웠다 — 새 프로파일이 나온다고 방금 전에도
+//    실패한 미분류 메일이 갑자기 풀리는 경우는 드문데, 프로젝트가 여러 개 활발히 돌아가면 이 자동
+//    재생성이 하루에도 여러 번 발생해서 "미분류 30건 × 매번 재분석"처럼 API 호출이 기하급수로
+//    낭비됨(실제 사용자 제보: 무료 한도 초과 오류). 자동 호출(noConfirm)일 때만, 최근에 이미
+//    재분석을 시도했는데도 여전히 미분류인 건은 건너뛴다 — r.reanalyzedAt은 ms_pending_queue에
+//    저장돼 새로고침에도 살아남으므로, 세션이 끊겨도(쿨다운 변수가 초기화돼도) 계속 보호된다.
+//    수동 [🔄 전체 재분석] 버튼(noConfirm:false)은 사용자가 명시적으로 원한 것이므로 그대로 전량 처리.
+var MS_AUTO_REANALYZE_SKIP_MS = 60 * 60 * 1000; // 1시간 이내 재시도 이력 있으면 자동 흐름에서 스킵
 window._msBulkReanalyzeUnmatched = async function(opts) {
     const _noConfirm = !!(opts && opts.noConfirm);
-    const unmatched = (window._msResults || []).filter(r => !r.project);
+    let unmatched = (window._msResults || []).filter(r => !r.project);
+    let skippedRecent = 0;
+    if (_noConfirm) {
+        const _now = Date.now();
+        unmatched = unmatched.filter(function(r) {
+            if (!r.reanalyzedAt) return true;
+            const isRecent = (_now - new Date(r.reanalyzedAt).getTime()) < MS_AUTO_REANALYZE_SKIP_MS;
+            if (isRecent) skippedRecent++;
+            return !isRecent;
+        });
+    }
     if (!unmatched.length) {
         if (!_noConfirm && window.showToast) window.showToast('미분류 메일이 없습니다.', 'info');
+        else if (skippedRecent && window.showToast) window.showToast('🔄 자동 재분석 — 전부 최근에 이미 시도한 건이라 건너뜁니다(' + skippedRecent + '건, API 절약).', 'info', 4000);
         return;
     }
 

@@ -395,13 +395,19 @@
         }
         console.info('[토픽 프로파일]', profile);
 
-        // 💡 [2026-09-04] 미분류 메일이 있으면 새 프로파일로 자동 재분석 시작 (팝업 없음)
+        // 💡 [2026-09-04 → 2026-09-07 무료 API 절약] 미분류 메일이 있으면 새 프로파일로 자동 재분석
+        //    시작(팝업 없음). 실제로 이 자동 트리거가 토픽 프로파일 재생성마다(+10업무·10분 쿨다운
+        //    기준, 하루에도 여러 번 가능) 무조건 미분류 전체를 다시 AI에 태우고 있어서, 미분류가
+        //    쌓여있는 상태에서는 API 호출이 기하급수로 낭비되는 게 확인됨(사용자 제보: 무료 한도
+        //    초과). 실제 스킵 여부는 _msBulkReanalyzeUnmatched 내부(최근 1시간 내 재시도 이력 있으면
+        //    자동 흐름에서 제외)가 판단하므로, 여기 예상 건수/시간 안내는 "최대치" 추정으로 남겨두고
+        //    실제 처리 결과 토스트는 그 함수가 별도로 띄운다.
         var unmatchedCount = (window._msResults || []).filter(function(r) { return !r.project; }).length;
         if (unmatchedCount > 0 && typeof window._msBulkReanalyzeUnmatched === 'function') {
-            var _estMin = Math.round(unmatchedCount * 4 / 60 * 10) / 10; // 4초/건 기준 예상 분
+            var _estMin = Math.round(unmatchedCount * 4 / 60 * 10) / 10; // 4초/건 기준 예상 분(최대치)
             if (window.showToast) {
                 window.showToast(
-                    '🔄 토픽 갱신 완료 — 미분류 ' + unmatchedCount + '건 자동 재분석 시작 (예상 ' + _estMin + '분)...',
+                    '🔄 토픽 갱신 완료 — 미분류 최대 ' + unmatchedCount + '건 자동 재분석 확인 중 (최대 ' + _estMin + '분, 최근 재시도한 건은 건너뜀)...',
                     'info', 5000);
             }
             setTimeout(function() {
