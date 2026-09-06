@@ -707,6 +707,11 @@ window._ibSaveRationaleAsLearning = function(uid, aiText) {
     const mc = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
     const projectKey = (mc && mc.drive_file_id) || window.currentDriveFileId || window.currentDriveFileName || '__unclassified__';
 
+    // 💡 [2026-09-07] 오매칭을 지적하는 답변인지 미리 판정해서 entry에 같이 저장해둔다 — 아래 신호
+    //    반영뿐 아니라, 나중에 _generateTopicProfile()이 이 로그를 "긍정/부정 사례"로 나눠 재사용할 때
+    //    매번 텍스트를 다시 정규식 검사할 필요 없이 이 플래그 하나로 바로 구분할 수 있게 하기 위함.
+    const looksLikeMismatch = /오매칭|잘못|불일치|아닙니다|아니에요|다른 프로젝트|mismatch|incorrect|wrong project/i.test(aiText);
+
     window._writeLearningEntry(projectKey, {
         type: 'rationale_review',
         reason: 'AI 분석 근거 문의',
@@ -717,12 +722,12 @@ window._ibSaveRationaleAsLearning = function(uid, aiText) {
         matchBasis: (mc && (mc.model || mc.customer)) || '',
         matchKeywords: (mc && mc.keywords) ? mc.keywords.slice(0, 8) : [],
         sourceSnippet: (it.mailRaw && it.mailRaw.body2000 ? it.mailRaw.body2000.slice(0, 300) : ''),
-        aiVerdict: aiText.slice(0, 500)
+        aiVerdict: aiText.slice(0, 500),
+        looksMismatch: looksLikeMismatch
     });
 
     // 💡 AI 답변이 오매칭을 지적하는 경우엔 잘못된 키워드를 강화하지 않도록 신호 반영을 건너뜀 —
     //    그런 경우는 사용자가 별도로 [🚨 오매칭 신고]를 눌러야 실제 데이터(간트 삭제 등)가 정리됨.
-    const looksLikeMismatch = /오매칭|잘못|불일치|아닙니다|아니에요|다른 프로젝트|mismatch|incorrect|wrong project/i.test(aiText);
     if (!looksLikeMismatch && mc && mc.drive_file_id && window._tpAppendMailSignal) {
         window._tpAppendMailSignal(mc.drive_file_id, t, it.mailRaw);
     }

@@ -1905,29 +1905,33 @@ window._msQueueReanalyze = async function(fileName, hint) {
         r.reanalyzedAt = new Date().toISOString();
         r.reanalyzeHint = hint || '';
 
-        // 💡 [2026-09-06 신규] 사용자가 직접 입력한 힌트("이 메일은 실제로 STELLAR32 건 맞음" 등)는
-        //    이 1회 재분석 호출의 프롬프트에만 쓰이고 끝나면 그냥 버려지고 있었음 — 실제로는 사람이
-        //    직접 확인해준 정답에 가까운 데이터라, 학습 로그(오매칭 신고와 같은 저장소)에 남기고,
-        //    확정 매칭이면 그 프로젝트의 토픽 키워드에도 반영한다(_tpAppendMailSignal — 메일 자동배치
-        //    성공 시와 동일한, 이미 검증된 파이프라인 재사용). 힌트 없이 그냥 재시도한 경우는 사람이
-        //    추가로 준 정보가 없으므로 기록하지 않는다.
-        if (hint && window._writeLearningEntry) {
-            const _rc = projectTag && projectTag.candidates && projectTag.candidates[0];
-            const _pk = (_rc && _rc.drive_file_id) || '__unclassified__';
-            window._writeLearningEntry(_pk, {
-                type: 'reanalyze_hint',
-                reason: '미분류 재분석 힌트',
-                taskName: (task && task['업무명']) || '',
-                confidence: (task && task['매칭신뢰도']) || '',
-                matchedProjectId: (_rc && _rc.drive_file_id) || '',
-                matchedProjectName: (_rc && (_rc.file_name || _rc.model || _rc.customer)) || '',
-                matchBasis: (_rc && (_rc.model || _rc.customer)) || '',
-                matchKeywords: (_rc && _rc.keywords) ? _rc.keywords.slice(0, 8) : [],
-                sourceSnippet: (r.body || '').slice(0, 300),
-                userHint: hint
-            });
-            if (_rc && _rc.drive_file_id && projectTag.status === 'matched' && window._tpAppendMailSignal) {
-                window._tpAppendMailSignal(_rc.drive_file_id, task, { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName });
+        // 💡 [2026-09-06 신규 → 2026-09-07 보완] 사용자가 직접 입력한 힌트("이 메일은 실제로 STELLAR32
+        //    건 맞음" 등)는 이 1회 재분석 호출의 프롬프트에만 쓰이고 끝나면 그냥 버려지고 있었음 —
+        //    실제로는 사람이 직접 확인해준 정답에 가까운 데이터라, 학습 로그(오매칭 신고와 같은 저장소)에
+        //    남기고, 그 프로젝트의 토픽 키워드에도 반영한다(_tpAppendMailSignal — 메일 자동배치 성공 시와
+        //    동일한, 이미 검증된 파이프라인 재사용).
+        //    💡 [2026-09-07 사용자 피드백] "중/하로 분류돼 대기로 남는 업무는 확정이 아니니 학습에 쓰면
+        //    안 될 것 같다" — 전적으로 동의. status==='matched'(AI 신뢰도 '상')로 확정된 경우에만 기록
+        //    한다. 힌트를 줬는데도 여전히 애매(ambiguous)하거나 미분류로 남았다면, 사람이 준 정보조차
+        //    AI를 확신시키지 못한 것이므로 확정된 사실로 취급하지 않고 아예 기록하지 않는다.
+        if (hint && window._writeLearningEntry && projectTag && projectTag.status === 'matched') {
+            const _rc = projectTag.candidates[0];
+            if (_rc && _rc.drive_file_id) {
+                window._writeLearningEntry(_rc.drive_file_id, {
+                    type: 'reanalyze_hint',
+                    reason: '미분류 재분석 힌트(확정)',
+                    taskName: (task && task['업무명']) || '',
+                    confidence: (task && task['매칭신뢰도']) || '',
+                    matchedProjectId: _rc.drive_file_id,
+                    matchedProjectName: _rc.file_name || _rc.model || _rc.customer || '',
+                    matchBasis: _rc.model || _rc.customer || '',
+                    matchKeywords: _rc.keywords ? _rc.keywords.slice(0, 8) : [],
+                    sourceSnippet: (r.body || '').slice(0, 300),
+                    userHint: hint
+                });
+                if (window._tpAppendMailSignal) {
+                    window._tpAppendMailSignal(_rc.drive_file_id, task, { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName });
+                }
             }
         }
 

@@ -247,6 +247,43 @@
               contentSamples.map(function(s) { return '- ' + s; }).join('\n')
             : '';
 
+        // ③-3 [2026-09-07 신규] AI 학습 로그(gantt_ai_learning_v1) 반영 — 사용자 피드백: "상으로 매칭돼
+        //    간트에 꽂힌 업무를 쓰는 건 맞지만, 중/하로 대기 중인 건 확정이 아니니 안 될 것 같고 / 미분류
+        //    및 추출사유 등 기타 사용자가 결정한 데이터(=학습 로그)는 프로파일을 풍부하게 하니 포함하면
+        //    좋겠다"는 요청 대응. 이 저장소에 실제로 기록되는 항목은 전부 "검토가 끝난" 확정적 판단만
+        //    이라 안전하게 포함할 수 있다:
+        //      · 긍정 사례(이 프로젝트가 맞다고 확인됨) — AI 분석 근거 문의(rationale_review, 오매칭
+        //        지적 아닌 경우)/미분류 재분석 힌트(reanalyze_hint, AI 신뢰도 '상' 확정 시에만 기록됨)
+        //      · 부정 사례(이 프로젝트가 아니라고 확인됨) — 오매칭 신고/학습삭제(negative_match)/중복
+        //        (duplicate)/불필요(irrelevant)/미분류 근접후보(no_match)/근거문의 중 오매칭으로 판정된 것
+        //    긍정 사례는 실제 메일 핵심내용 샘플과 같은 자리에서 keywords 후보로, 부정 사례는 "이런
+        //    이유만으로 keywords를 뽑지 말라"는 반례로 프롬프트에 함께 제공한다.
+        var learningBlock = '';
+        (function() {
+            var entries = (window._alGetEntries && window._alGetEntries(key)) || [];
+            if (!entries.length) return;
+            var pos = [], neg = [], seenPos = {}, seenNeg = {};
+            entries.forEach(function(e) {
+                if (!e) return;
+                if ((e.type === 'rationale_review' && !e.looksMismatch) || e.type === 'reanalyze_hint') {
+                    var ptxt = (e.sourceSnippet || e.userHint || e.aiVerdict || '').trim().slice(0, 150);
+                    if (ptxt && !seenPos[ptxt] && pos.length < 15) { seenPos[ptxt] = true; pos.push(ptxt); }
+                } else if (e.type === 'negative_match' || e.type === 'no_match' || e.type === 'duplicate' ||
+                           e.type === 'irrelevant' || (e.type === 'rationale_review' && e.looksMismatch)) {
+                    var ntxt = (e.taskName || e.matchBasis || e.sourceSnippet || '').trim().slice(0, 100);
+                    if (ntxt && !seenNeg[ntxt] && neg.length < 15) { seenNeg[ntxt] = true; neg.push(ntxt); }
+                }
+            });
+            if (pos.length) {
+                learningBlock += '\n\n【사용자/AI가 실제로 이 프로젝트로 확인한 사례 — keywords 후보로 함께 참고 (' + pos.length + '건)】\n' +
+                    pos.map(function(s) { return '- ' + s; }).join('\n');
+            }
+            if (neg.length) {
+                learningBlock += '\n\n【⚠️ 검토 결과 이 프로젝트가 아니었던 것으로 확인된 사례 — 이와 비슷하다는 이유만으로 keywords를 뽑지 마세요 (' + neg.length + '건)】\n' +
+                    neg.map(function(s) { return '- ' + s; }).join('\n');
+            }
+        })();
+
         // ④ 프롬프트 조립 — 전체 업무(식별자용) + 최근 90일 업무(현 단계용) 분리
         var recentLabel = recentTaskNames.length
             ? '【최근 ' + _RECENT_DAYS + '일 이내 업무 — 현재 단계 파악용 (' + recentTaskNames.length + '개)】\n' +
@@ -272,6 +309,7 @@
             taskNames.map(function(n, i) { return (i+1) + '. ' + n; }).join('\n') + '\n\n' +
             recentLabel +
             contentSampleBlock +
+            learningBlock +
             mailSignalLine + '\n\n' +
             '아래 JSON 형식으로만 반환해 주세요:\n' +
             '{\n' +
