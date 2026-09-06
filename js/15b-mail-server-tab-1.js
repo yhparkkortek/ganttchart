@@ -502,6 +502,19 @@ window._msLoadProjectIndex = async function() {
             }
         } catch (e) { console.warn('project_index.json 유효성 검증 실패 — 원본 목록 그대로 사용:', e.message); }
 
+        // 💡 [2026-09-06] 실사용 데이터 확인 결과 — Summary 탭에 인치를 채운 뒤 저장(buildProjectIndexEntry의
+        //    파일명 폴백 포함)해야만 project_index.json의 inch가 갱신되는데, 그 프로젝트를 다시 저장하기
+        //    전까지는 예전에 저장된 빈 inch("")가 그대로 남아있다(SHUFFLER 3.0"/4.3", POLED 등 대부분 해당 —
+        //    STELLAR32만 우연히 Summary 탭에 인치를 채워놔서 비어있지 않았을 뿐). 그 결과 매칭 프롬프트
+        //    (_msBuildProjectMatchSection)의 "(N인치)" 표시와 토픽 프로파일 뷰어 카드 제목 양쪽 다 인치가
+        //    안 보여서, 모델명이 같은 형제 프로젝트를 구분할 근거가 사라진다. 원본 저장을 기다리지 않고
+        //    "읽는 시점"에 즉석으로 파일명에서 보정해서, 재저장 전에도 항상 정확히 표시/매칭되게 한다.
+        if (window._inchFromFileName) {
+            validProjects.forEach(function(p) {
+                if (p && !p.inch) p.inch = window._inchFromFileName(p.file_name) || '';
+            });
+        }
+
         window._projectIndexCache = { data: validProjects, at: now };
         return validProjects;
     } catch(e) { console.warn('project_index.json 로드 실패:', e); return []; }
@@ -1891,6 +1904,32 @@ window._msQueueReanalyze = async function(fileName, hint) {
         r.selected = !!task;
         r.reanalyzedAt = new Date().toISOString();
         r.reanalyzeHint = hint || '';
+
+        // 💡 [2026-09-06 신규] 사용자가 직접 입력한 힌트("이 메일은 실제로 STELLAR32 건 맞음" 등)는
+        //    이 1회 재분석 호출의 프롬프트에만 쓰이고 끝나면 그냥 버려지고 있었음 — 실제로는 사람이
+        //    직접 확인해준 정답에 가까운 데이터라, 학습 로그(오매칭 신고와 같은 저장소)에 남기고,
+        //    확정 매칭이면 그 프로젝트의 토픽 키워드에도 반영한다(_tpAppendMailSignal — 메일 자동배치
+        //    성공 시와 동일한, 이미 검증된 파이프라인 재사용). 힌트 없이 그냥 재시도한 경우는 사람이
+        //    추가로 준 정보가 없으므로 기록하지 않는다.
+        if (hint && window._writeLearningEntry) {
+            const _rc = projectTag && projectTag.candidates && projectTag.candidates[0];
+            const _pk = (_rc && _rc.drive_file_id) || '__unclassified__';
+            window._writeLearningEntry(_pk, {
+                type: 'reanalyze_hint',
+                reason: '미분류 재분석 힌트',
+                taskName: (task && task['업무명']) || '',
+                confidence: (task && task['매칭신뢰도']) || '',
+                matchedProjectId: (_rc && _rc.drive_file_id) || '',
+                matchedProjectName: (_rc && (_rc.file_name || _rc.model || _rc.customer)) || '',
+                matchBasis: (_rc && (_rc.model || _rc.customer)) || '',
+                matchKeywords: (_rc && _rc.keywords) ? _rc.keywords.slice(0, 8) : [],
+                sourceSnippet: (r.body || '').slice(0, 300),
+                userHint: hint
+            });
+            if (_rc && _rc.drive_file_id && projectTag.status === 'matched' && window._tpAppendMailSignal) {
+                window._tpAppendMailSignal(_rc.drive_file_id, task, { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName });
+            }
+        }
 
         if (task) {
             const priorityConfig = await window.loadPriorityConfig();

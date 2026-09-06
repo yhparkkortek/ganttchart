@@ -344,7 +344,7 @@ window.renderTaskInbox = function() {
                 <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
                     <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</span>
                     <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibExpandedUids.has(it.uid) ? (_ibEn ? '▲ Collapse' : '▲ 상세 접기') : (_ibEn ? '▼ Details' : '▼ 상세 보기')}</a>
-                    <button onclick="window.extractInboxForAI('${it.uid}')" onmouseover="this.style.background='#e4dbff'; this.style.borderColor='#b8a4f0';" onmouseout="this.style.background='#f3f0ff'; this.style.borderColor='#d0bfff';" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#5f3dc4; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📋 ${_ibEn ? 'Extract' : '추출'}</button>
+                    <button onclick="window.extractInboxForAI('${it.uid}')" onmouseover="this.style.background='#e4dbff'; this.style.borderColor='#b8a4f0';" onmouseout="this.style.background='#f3f0ff'; this.style.borderColor='#d0bfff';" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#5f3dc4; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📋 ${_ibEn ? 'Extract reason' : '추출사유'}</button>
                     ${it.status !== '대기' ? `<button onclick="window.inboxReportFalseMatch('${it.uid}')" onmouseover="this.style.background='#ffe0b2'; this.style.borderColor='#ef8c25';" onmouseout="this.style.background='#fff3e0'; this.style.borderColor='#ffca75';" title="${_ibEn ? 'Report as false match — logs to topic learning, removes from current Gantt if placed here' : '오매칭으로 신고 — 토픽 학습에 기록 · 현재 Proj 배치됨이면 간트에서도 삭제'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#fff3e0; color:#b05000; border:1px solid #ffca75; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">🚨 ${_ibEn ? 'False match' : '오매칭 신고'}</button>` : ''}
                 </div>
                 <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
@@ -686,8 +686,46 @@ window._ibSendAiChatTurn = async function(uid, userText) {
     } else {
         const text = result.data.result?.candidates?.[0]?.content?.parts?.[0]?.text || (_en ? '(empty response)' : '(응답 없음)');
         state.messages.push({ role: 'ai', text: text.trim() });
+        window._ibSaveRationaleAsLearning(uid, text.trim()); // 💡 [2026-09-06] 아래 참고 — 대화가 버려지지 않도록 학습 기록
     }
     window._ibSetAiChatLoading(uid, false);
+};
+
+// 💡 [2026-09-06 신규] "AI 분석 근거 문의" 대화가 그동안 단순 1회성 채팅으로 끝나고 아무 데도
+//    반영되지 않았다는 지적 — 사람이 메일 원문까지 같이 보면서 "이 매칭이 맞는지" 검토한 결과물이라
+//    실제 매칭보다 신뢰도가 높은 데이터인데 화면을 닫으면 그냥 사라졌음. 매 턴마다 ①AI 학습 로그
+//    (gantt_ai_learning_v1, 오매칭 신고와 같은 저장소 — 나중에 오염 진단·재검토 시 참고 가능)에
+//    기록하고, ②AI 답변이 명백히 "오매칭"이라고 말한 게 아니면(그 경우는 키워드를 넣으면 오히려
+//    틀린 신호가 됨) 현재 매칭된 프로젝트의 토픽 키워드에도 반영한다(_tpAppendMailSignal — 메일이
+//    실제 프로젝트에 배치될 때와 동일한, 이미 검증된 파이프라인 재사용). 턴마다 기록하되 프로젝트
+//    키별 200건 캡(_writeLearningEntry 자체 로직)이 있어 무한히 쌓이지 않는다.
+window._ibSaveRationaleAsLearning = function(uid, aiText) {
+    if (!window._writeLearningEntry) return;
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const t = it.task || {};
+    const mc = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0];
+    const projectKey = (mc && mc.drive_file_id) || window.currentDriveFileId || window.currentDriveFileName || '__unclassified__';
+
+    window._writeLearningEntry(projectKey, {
+        type: 'rationale_review',
+        reason: 'AI 분석 근거 문의',
+        taskName: t['업무명'] || '',
+        confidence: (mc && mc.confidence) || t['매칭신뢰도'] || '',
+        matchedProjectId: (mc && mc.drive_file_id) || '',
+        matchedProjectName: (mc && (mc.file_name || mc.model || mc.customer)) || '',
+        matchBasis: (mc && (mc.model || mc.customer)) || '',
+        matchKeywords: (mc && mc.keywords) ? mc.keywords.slice(0, 8) : [],
+        sourceSnippet: (it.mailRaw && it.mailRaw.body2000 ? it.mailRaw.body2000.slice(0, 300) : ''),
+        aiVerdict: aiText.slice(0, 500)
+    });
+
+    // 💡 AI 답변이 오매칭을 지적하는 경우엔 잘못된 키워드를 강화하지 않도록 신호 반영을 건너뜀 —
+    //    그런 경우는 사용자가 별도로 [🚨 오매칭 신고]를 눌러야 실제 데이터(간트 삭제 등)가 정리됨.
+    const looksLikeMismatch = /오매칭|잘못|불일치|아닙니다|아니에요|다른 프로젝트|mismatch|incorrect|wrong project/i.test(aiText);
+    if (!looksLikeMismatch && mc && mc.drive_file_id && window._tpAppendMailSignal) {
+        window._tpAppendMailSignal(mc.drive_file_id, t, it.mailRaw);
+    }
 };
 
 window._ibSubmitAiChatInput = function(textarea) {

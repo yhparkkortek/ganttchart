@@ -173,6 +173,10 @@
         const n = parseFloat(m[1]);
         return isNaN(n) ? '' : String(n);
     }
+    // 💡 [2026-09-06] 15b-mail-server-tab-1.js의 _msLoadProjectIndex()가 "이미 Drive에 저장된 채로
+    //    남아있는" 구버전 인덱스 항목(인치를 채우기 전에 저장된 것들 — 이 파일이 다시 저장돼야만
+    //    갱신됨)의 inch를 읽기 시점에 즉석으로 보정할 수 있도록 전역에 노출.
+    window._inchFromFileName = _inchFromFileName;
     window.buildProjectIndexEntry = function(driveFileId, dynamicFileName, pmOverride, materialsOverride) {
         const pm = pmOverride || window.projectMeta || {};
         // 💡 고객사명은 매칭 키워드에서 제외 — 한 고객사가 여러 프로젝트를 가진 경우
