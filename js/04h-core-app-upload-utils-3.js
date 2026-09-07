@@ -1601,6 +1601,13 @@
                     <select id="gantt-qa-target-project" onchange="window._ganttQaOnTargetChange()" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
                         <option value="">${_qEn ? 'Current project' : '현재 프로젝트'}</option>
                     </select>
+                    <!-- 💡 [2026-09-07 신규] "질문 대상"만 고르면 왕복 없이 답하는 가벼운 조회 경로와 별개로,
+                         진짜로 그 프로젝트를 열어서(=현재 프로젝트로 전환) 100% 동일한 조건으로 묻고 싶을
+                         때를 위한 지름길 — AI가 실행형 요청에서만 띄우던 [[ACTION:OPEN_PROJECT_TO_EDIT]]
+                         확인카드와 똑같이 executeLoadFile을 그대로 재사용한다. 다른 프로젝트가 선택된
+                         동안에만 보임(현재 프로젝트일 땐 열 대상이 없으므로 숨김).
+                    -->
+                    <button id="gantt-qa-target-open-btn" onclick="window._ganttQaOpenTargetProject(this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_qEn ? 'Open this project (switch the current tab to it) and ask exactly as if it were already open' : '이 프로젝트를 열어서(현재 탭이 이 프로젝트로 전환됨) 실제로 열람 중인 것과 동일한 조건으로 질문합니다'}" style="display:none; flex-shrink:0; font-size:11px; padding:3px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? '🔓 Open' : '🔓 열기'}</button>
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px; align-items:stretch;">
@@ -1663,6 +1670,14 @@
         const stillExists = target && Array.from(sel.options).some(function(o) { return o.value === target.drive_file_id; });
         sel.value = stillExists ? target.drive_file_id : '';
         if (!stillExists && target) window._ganttQaTargetProject = null; // 목록에서 사라진 프로젝트를 조용히 가리키고 있지 않도록
+        window._ganttQaUpdateOpenBtnVisibility();
+    };
+
+    // 💡 [2026-09-07 신규] "🔓 열기" 버튼 — 다른 프로젝트가 선택된 동안에만 보임(현재 프로젝트 선택 시 숨김)
+    window._ganttQaUpdateOpenBtnVisibility = function() {
+        const btn = document.getElementById('gantt-qa-target-open-btn');
+        if (!btn) return;
+        btn.style.display = window._ganttQaTargetProject ? 'block' : 'none';
     };
 
     // 💡 [2026-09-07 신규] "질문 대상" 드롭다운 변경 — 프로젝트를 바꾸면 이전 대화가 다른 프로젝트
@@ -1681,6 +1696,7 @@
             newTarget = { drive_file_id: val, file_name: (opt && opt.dataset.filename) || '', label: (opt && opt.dataset.label) || val };
         }
         window._ganttQaTargetProject = newTarget;
+        window._ganttQaUpdateOpenBtnVisibility();
 
         window._ganttQaHistory = [];
         window._ganttQaPendingMailDraft = null;
@@ -1705,6 +1721,49 @@
         //    동안 Drive 조회가 끝나 있으면, 실제로 전송을 누를 때는 이미 캐시에 있어 지연이 거의 안 느껴짐.
         //    실패해도 여기선 조용히 넘어가고(에러 UI 없음) sendGanttQaMessage가 그때 다시 시도한다.
         if (newTarget) window._aiFetchManualTargetContext(newTarget).catch(function() {});
+    };
+
+    // 💡 [2026-09-07 신규] "🔓 열기" 버튼 — "질문 대상"으로 고른 다른 프로젝트를 실제로 열어(=현재 탭을
+    //    그 프로젝트로 전환) executeLoadFile 100% 동일 경로(autosave/실행취소/변경이력/저장충돌감지가
+    //    그대로 적용됨)로 진짜 "현재 프로젝트"로 만든다. AI가 실행형 요청에서만 스스로 판단해 띄우던
+    //    [[ACTION:OPEN_PROJECT_TO_EDIT]] 확인카드(_aiOpenProjectAndReask)와 완전히 같은 open 경로를
+    //    재사용하되, 여기선 "이어서 다시 물어볼 질문"이 아직 없으므로(사람이 먼저 대상만 고른 상태)
+    //    재질문 없이 열기만 하고 안내 메시지를 남긴다 — 이후엔 평소 sendGanttQaMessage와 완전히 동일.
+    window._ganttQaOpenTargetProject = async function(btn) {
+        const target = window._ganttQaTargetProject;
+        if (!target) return;
+        const _oEn = window._currentLang === 'en';
+        const openBtn = btn || document.getElementById('gantt-qa-target-open-btn');
+        const prevLabel = openBtn ? openBtn.textContent : '';
+        if (openBtn) { openBtn.disabled = true; openBtn.textContent = _oEn ? '⏳ Opening...' : '⏳ 여는 중...'; }
+        try {
+            if (!window.executeLoadFile) throw new Error(_oEn ? 'Could not find the project-open function.' : '프로젝트 열기 기능을 찾을 수 없습니다.');
+            await window.executeLoadFile(target.drive_file_id, target.file_name, true); // silent=true — 안내는 아래서 직접 표시
+
+            // 이제 이 프로젝트가 "현재 프로젝트"가 됐으므로 질문 대상 드롭다운을 되돌리고 버튼도 숨긴다.
+            window._ganttQaTargetProject = null;
+            const sel = document.getElementById('gantt-qa-target-project');
+            if (sel) sel.value = '';
+            window._ganttQaUpdateOpenBtnVisibility();
+            window._ganttQaHistory = [];
+            window._ganttQaPendingMailDraft = null;
+            window._ganttQaPendingNoticeDraft = null;
+            window._ganttQaPendingAlarmDraft = null;
+            const input = document.getElementById('gantt-qa-input');
+            if (input) input.placeholder = _oEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)';
+
+            window._ganttQaHistory.push({
+                role: 'ai',
+                text: _oEn
+                    ? `🔓 Opened **[${target.label}]** — it is now the current project. Ask about it exactly as you would any open project. (New chat started)`
+                    : `🔓 **[${target.label}]** 프로젝트를 열었습니다 — 이제 현재 프로젝트가 되었습니다. 실제로 열람 중인 프로젝트와 동일한 조건으로 자유롭게 질문해주세요. (새 대화 시작)`
+            });
+        } catch (e) {
+            window._ganttQaHistory.push({ role: 'ai', text: (window._currentLang === 'en' ? '⚠️ Error: ' : '⚠️ 오류: ') + (e && e.message ? e.message : e), error: true });
+        } finally {
+            if (openBtn) { openBtn.disabled = false; openBtn.textContent = prevLabel; }
+            window._renderGanttQaMessages();
+        }
     };
 
     // ═══════════════════════════════════════════════════════════

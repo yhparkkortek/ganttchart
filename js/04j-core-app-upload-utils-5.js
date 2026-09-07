@@ -755,6 +755,13 @@
         // 드롭다운은 선택된 값을 잃지 않도록 옵션 텍스트만 다시 채움(재조회 없이 즉시 반영)
         const _qaSel = document.getElementById('gantt-qa-target-project');
         if (_qaSel && window._ganttQaPopulateProjectSelect) window._ganttQaPopulateProjectSelect();
+        const _qaOpenBtn = document.getElementById('gantt-qa-target-open-btn');
+        if (_qaOpenBtn) {
+            _qaOpenBtn.textContent = _en ? '🔓 Open' : '🔓 열기';
+            _qaOpenBtn.title = _en
+                ? 'Open this project (switch the current tab to it) and ask exactly as if it were already open'
+                : '이 프로젝트를 열어서(현재 탭이 이 프로젝트로 전환됨) 실제로 열람 중인 것과 동일한 조건으로 질문합니다';
+        }
         const _qaInput = document.getElementById('gantt-qa-input');
         if (_qaInput && !_qaInput.value) {
             const _qaTarget = window._ganttQaTargetProject;
