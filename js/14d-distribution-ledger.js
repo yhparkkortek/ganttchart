@@ -60,21 +60,11 @@ window.inboxOpenDistribute = async function(uid) {
     inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#888; font-size:12px;">📂 프로젝트 목록을 불러오는 중...</div>';
 
     try {
-        const resp = await gapi.client.drive.files.list({
-            q: `mimeType='application/json' and trashed=false and '${SHARED_FOLDER_ID}' in parents`,
-            fields: 'files(id, name, modifiedTime, appProperties)', orderBy: 'modifiedTime desc',
-            corpora: 'allDrives', includeItemsFromAllDrives: true, supportsAllDrives: true
-        });
-        // 💡 업무 보관함 백업 / AI프롬프트 / 휴일 / 주소록 / 우선순위설정 / 프로젝트인덱스 등 비-프로젝트 파일은 전송 대상에서 제외
-        const files = (resp.result.files || []).filter(function(f) {
-            return !f.name.startsWith('TaskInbox_')
-                && f.name !== PROMPT_DRIVE_FILENAME
-                && f.name !== HOLIDAY_DRIVE_FILENAME
-                && f.name !== PRIORITY_CONFIG_FILENAME
-                && f.name !== PROJECT_INDEX_FILENAME
-                && f.name !== MS_FILTER_RULES_DRIVE_FILENAME
-                && f.name !== (window.AddressBook ? window.AddressBook.FILE_NAME : 'AddressBook_Shared.json');
-        });
+        // 🐛 [2026-09-07 버그수정] 예전엔 '${SHARED_FOLDER_ID}' in parents로 루트 직속 파일만 찾아서,
+        //    팀별 폴더(개발N팀) 도입 이후 그 하위로 이동한 프로젝트들이 목록에서 빠지는 문제가 있었다
+        //    ("다른 프로젝트 선택 시 특정 프로젝트만 보임"). 루트+모든 팀 폴더를 병렬 조회하고 비-프로젝트
+        //    파일도 동일 기준으로 걸러주는 공용 헬퍼(_listProjectFiles, 04b-core-app-drive-sync.js)를 재사용.
+        const files = await window._listProjectFiles();
         inlineEl.innerHTML = '';
         if (!files.length) {
             inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#aaa; font-size:12px;">공용 폴더에 프로젝트 파일이 없습니다.</div>';
