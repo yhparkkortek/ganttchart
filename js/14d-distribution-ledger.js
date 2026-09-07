@@ -71,93 +71,160 @@ window.inboxOpenDistribute = async function(uid) {
             return;
         }
 
-        // 💡 담당자(appProperties.pm) 기준 그룹핑 — "프로젝트 불러오기"와 동일한 방식
-        const UNASSIGNED = '미지정';
-        const groups = {};
+        // 💡 [2026-09-07 UI 개선] "이름만 보고 클릭해야 세부 프로젝트가 보이는" "프로젝트 불러오기"와
+        //    같은 방식으로 통일 — 팀(appProperties.team) → 담당자(appProperties.pm) 2단 아코디언.
+        //    팀은 기본 펼침(담당자 이름까지는 바로 보임), 담당자는 기본 접힘(파일명은 클릭해야 보임) —
+        //    예전엔 담당자 그룹이 기본 펼침이라 파일명이 한 번에 와르르 보여서 "세부 프로젝트 확인"
+        //    단계 없이 목록만 길어 보였다.
+        const UNASSIGNED_TEAM = '미지정 팀';
+        const UNASSIGNED_PM   = '미지정';
+        const _TEAM_PAL = [
+            { h:'#cfe6fa', b:'#a5c8f0', t:'#1a4f7a', hv:'#b8d8f0' }, // 1 파랑
+            { h:'#c9ecd3', b:'#a8dab8', t:'#1a6640', hv:'#b0dfc0' }, // 2 초록
+            { h:'#ffe3b3', b:'#ffc078', t:'#7a4800', hv:'#ffd090' }, // 3 주황
+            { h:'#e0d8ff', b:'#b8a9f0', t:'#3a2080', hv:'#cec4ff' }, // 4 보라
+            { h:'#ffd6d0', b:'#f0a9a5', t:'#7a2020', hv:'#ffc0b8' }, // 5 빨강
+            { h:'#c8f0e8', b:'#80d0c0', t:'#005040', hv:'#b0e8dc' }, // 6 청록
+            { h:'#fdf0b0', b:'#f0d060', t:'#604800', hv:'#fbe898' }, // 7 노랑
+            { h:'#e8d8f0', b:'#c0a0d8', t:'#501060', hv:'#d8c4e8' }, // 8 자주
+            { h:'#d8f0d8', b:'#90d090', t:'#205020', hv:'#c4e8c4' }, // 9 연두
+        ];
+        function _pal(teamName) {
+            if (!teamName || teamName === UNASSIGNED_TEAM) return { h:'#e9ecef', b:'#ced4da', t:'#495057', hv:'#dee2e6' };
+            const m = teamName.match(/(\d+)/);
+            if (m) return _TEAM_PAL[(parseInt(m[1], 10) - 1) % _TEAM_PAL.length];
+            let hsh = 0;
+            for (let i = 0; i < teamName.length; i++) hsh = (hsh * 31 + teamName.charCodeAt(i)) & 0xffff;
+            return _TEAM_PAL[hsh % _TEAM_PAL.length];
+        }
+
+        // 팀 → 담당자 → 파일 2단 맵
+        const teamMap = {};
         files.forEach(function(f) {
-            const pmName = (f.appProperties && f.appProperties.pm) ? f.appProperties.pm.trim() : '';
-            const key = pmName || UNASSIGNED;
-            if (!groups[key]) groups[key] = [];
-            groups[key].push(f);
+            const team = (f.appProperties && f.appProperties.team && f.appProperties.team.trim()) || UNASSIGNED_TEAM;
+            const pm   = (f.appProperties && f.appProperties.pm   && f.appProperties.pm.trim())   || UNASSIGNED_PM;
+            if (!teamMap[team]) teamMap[team] = {};
+            if (!teamMap[team][pm]) teamMap[team][pm] = [];
+            teamMap[team][pm].push(f);
         });
-        const groupNames = Object.keys(groups).sort(function(a, b) {
-            if (a === UNASSIGNED) return 1;
-            if (b === UNASSIGNED) return -1;
+        const teamNames = Object.keys(teamMap).sort(function(a, b) {
+            if (a === UNASSIGNED_TEAM) return 1;
+            if (b === UNASSIGNED_TEAM) return -1;
+            const na = parseInt((a.match(/\d+/) || ['0'])[0], 10);
+            const nb = parseInt((b.match(/\d+/) || ['0'])[0], 10);
+            if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
             return a.localeCompare(b, 'ko');
         });
 
-        groupNames.forEach(function(pmName) {
-            const groupFiles = groups[pmName];
-            const groupWrap = document.createElement('div');
-            groupWrap.style.cssText = 'border:1px solid #eee; border-radius:6px; overflow:hidden; margin-bottom:6px;';
-
-            const headerRow = document.createElement('div');
-            headerRow.style.cssText = 'padding:6px 10px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:11.5px; color:#555; user-select:none; transition:background .15s;';
-            headerRow.onmouseover = function() { headerRow.style.background = '#eef0f2'; };
-            headerRow.onmouseout  = function() { headerRow.style.background = '#f8f9fa'; };
-            const arrow = document.createElement('span');
-            arrow.textContent = '▾';
-            arrow.style.cssText = 'font-size:10px;';
-            const label = document.createElement('span');
-            label.textContent = pmName + ' (' + groupFiles.length + ')';
-            headerRow.appendChild(arrow); headerRow.appendChild(label);
-
-            const body = document.createElement('div');
-            body.style.cssText = 'display:flex; flex-direction:column; gap:5px; padding:6px;';
-
-            groupFiles.forEach(function(f) {
-                const d = new Date(f.modifiedTime);
-                const div = document.createElement('div');
-                div.className = 'dist-file-item';
-                // 💡 [2026-08-24 UX 개선] 클릭해서 고른 항목이 "지금 마우스가 올려진 것"과 구분이 안 돼서
-                //    선택됐는지 헷갈린다는 피드백 — hover는 옅은 파란색, 선택은 진한 파란색 배경+굵은 테두리
-                //    +체크마크로 시각적으로 확실히 다르게 하고, 마우스를 치워도(mouseout) 선택 상태는 유지한다.
-                div.style.cssText = 'padding:8px 10px; border:2px solid #ced4da; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
-                div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'
-                    + '<span class="dist-file-check" style="display:none; color:#1971c2;">✅ </span>📄 ' + escapeHtml(f.name) + '</span>'
-                    + '<span style="color:#999; white-space:nowrap; margin-left:8px; font-size:11px;">' + d.toLocaleString() + '</span>';
-                const checkEl = div.querySelector('.dist-file-check');
-                const applyStyle = function() {
-                    if (div.classList.contains('dist-file-selected')) {
-                        div.style.background = '#d0ebff'; div.style.borderColor = '#1971c2';
-                        checkEl.style.display = 'inline';
-                    } else {
-                        div.style.background = '#fff'; div.style.borderColor = '#ced4da';
-                        checkEl.style.display = 'none';
-                    }
-                };
-                div.onmouseover = function() { if (!div.classList.contains('dist-file-selected')) { this.style.background = '#eef6ff'; this.style.borderColor = '#74b3f0'; } };
-                div.onmouseout  = applyStyle;
-                div.addEventListener('click', function() {
-                    // 같은 목록(모든 그룹 포함) 안의 이전 선택은 해제 — 한 번에 하나만 선택된 상태로 보이게
-                    inlineEl.querySelectorAll('.dist-file-item.dist-file-selected').forEach(function(prev) {
-                        prev.classList.remove('dist-file-selected');
-                        const prevCheck = prev.querySelector('.dist-file-check');
-                        if (prevCheck) prevCheck.style.display = 'none';
-                        prev.style.background = '#fff'; prev.style.borderColor = '#ced4da';
-                    });
-                    div.classList.add('dist-file-selected');
-                    applyStyle();
-                    // 💡 [2026-08-24 UX 개선] "대상 선택 + 전송 실행" 패널(dist-step2)이 항상 목록 맨 끝에
-                    //    붙어 있어서, 그룹이 여러 개거나 목록이 길면 방금 고른 항목과 실제 조작할 패널이
-                    //    화면상 멀리 떨어져 "선택은 됐는데 뭘 눌러야 하는지" 헷갈렸다. 클릭한 항목 바로
-                    //    아래로 옮겨서, 선택 즉시 그 자리에서 이어서 조작할 수 있게 한다.
-                    const step2El = document.getElementById('dist-step2');
-                    if (step2El) { div.insertAdjacentElement('afterend', step2El); step2El.style.display = 'none'; }
-                    window.inboxDistPickFile(f.id, f.name);
+        // 파일 1건짜리 선택 가능한 행(row) 생성 — 기존 선택 하이라이트/클릭 동작 그대로 유지
+        function _makeDistFileRow(f) {
+            const d = new Date(f.modifiedTime);
+            const div = document.createElement('div');
+            div.className = 'dist-file-item';
+            // 💡 [2026-08-24 UX 개선] 클릭해서 고른 항목이 "지금 마우스가 올려진 것"과 구분이 안 돼서
+            //    선택됐는지 헷갈린다는 피드백 — hover는 옅은 파란색, 선택은 진한 파란색 배경+굵은 테두리
+            //    +체크마크로 시각적으로 확실히 다르게 하고, 마우스를 치워도(mouseout) 선택 상태는 유지한다.
+            div.style.cssText = 'padding:8px 10px; border:2px solid #ced4da; border-radius:6px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fff; font-size:12px; transition:0.15s;';
+            div.innerHTML = '<span style="font-weight:bold; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">'
+                + '<span class="dist-file-check" style="display:none; color:#1971c2;">✅ </span>📄 ' + escapeHtml(f.name) + '</span>'
+                + '<span style="color:#999; white-space:nowrap; margin-left:8px; font-size:11px;">' + d.toLocaleString() + '</span>';
+            const checkEl = div.querySelector('.dist-file-check');
+            const applyStyle = function() {
+                if (div.classList.contains('dist-file-selected')) {
+                    div.style.background = '#d0ebff'; div.style.borderColor = '#1971c2';
+                    checkEl.style.display = 'inline';
+                } else {
+                    div.style.background = '#fff'; div.style.borderColor = '#ced4da';
+                    checkEl.style.display = 'none';
+                }
+            };
+            div.onmouseover = function() { if (!div.classList.contains('dist-file-selected')) { this.style.background = '#eef6ff'; this.style.borderColor = '#74b3f0'; } };
+            div.onmouseout  = applyStyle;
+            div.addEventListener('click', function() {
+                // 같은 목록(모든 그룹 포함) 안의 이전 선택은 해제 — 한 번에 하나만 선택된 상태로 보이게
+                inlineEl.querySelectorAll('.dist-file-item.dist-file-selected').forEach(function(prev) {
+                    prev.classList.remove('dist-file-selected');
+                    const prevCheck = prev.querySelector('.dist-file-check');
+                    if (prevCheck) prevCheck.style.display = 'none';
+                    prev.style.background = '#fff'; prev.style.borderColor = '#ced4da';
                 });
-                body.appendChild(div);
+                div.classList.add('dist-file-selected');
+                applyStyle();
+                // 💡 [2026-08-24 UX 개선] "대상 선택 + 전송 실행" 패널(dist-step2)이 항상 목록 맨 끝에
+                //    붙어 있어서, 그룹이 여러 개거나 목록이 길면 방금 고른 항목과 실제 조작할 패널이
+                //    화면상 멀리 떨어져 "선택은 됐는데 뭘 눌러야 하는지" 헷갈렸다. 클릭한 항목 바로
+                //    아래로 옮겨서, 선택 즉시 그 자리에서 이어서 조작할 수 있게 한다.
+                const step2El = document.getElementById('dist-step2');
+                if (step2El) { div.insertAdjacentElement('afterend', step2El); step2El.style.display = 'none'; }
+                window.inboxDistPickFile(f.id, f.name);
             });
+            return div;
+        }
 
-            headerRow.onclick = function() {
-                const collapsed = body.style.display === 'none';
-                body.style.display = collapsed ? 'flex' : 'none';
-                arrow.textContent = collapsed ? '▾' : '▸';
+        teamNames.forEach(function(teamName) {
+            const pmMap = teamMap[teamName];
+            const teamFileCount = Object.keys(pmMap).reduce(function(sum, k) { return sum + pmMap[k].length; }, 0);
+            const pal = _pal(teamName);
+
+            const teamWrap = document.createElement('div');
+            teamWrap.style.cssText = 'border:1.5px solid ' + pal.b + '; border-radius:8px; overflow:hidden; margin-bottom:6px;';
+
+            const teamHdr = document.createElement('div');
+            teamHdr.style.cssText = 'padding:6px 10px; background:' + pal.h + '; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:12px; color:' + pal.t + '; user-select:none; transition:background .15s;';
+            teamHdr.onmouseover = function() { teamHdr.style.background = pal.hv; };
+            teamHdr.onmouseout  = function() { teamHdr.style.background = pal.h; };
+            const teamArrow = document.createElement('span');
+            teamArrow.style.cssText = 'font-size:10px; width:12px; display:inline-block;';
+            teamArrow.textContent = '▾'; // 팀 이름은 기본 펼침 — 그 아래 담당자 이름들이 바로 보이게
+            const teamLbl = document.createElement('span');
+            teamLbl.textContent = '🏢 ' + teamName + ' (' + teamFileCount + ')';
+            teamHdr.appendChild(teamArrow); teamHdr.appendChild(teamLbl);
+
+            const teamBody = document.createElement('div');
+            teamBody.style.cssText = 'display:flex; flex-direction:column; gap:5px; padding:6px; background:#fafafa;';
+            teamHdr.onclick = function() {
+                const collapsed = teamBody.style.display === 'none';
+                teamBody.style.display = collapsed ? 'flex' : 'none';
+                teamArrow.textContent = collapsed ? '▾' : '▸';
             };
 
-            groupWrap.appendChild(headerRow);
-            groupWrap.appendChild(body);
-            inlineEl.appendChild(groupWrap);
+            const pmNames = Object.keys(pmMap).sort(function(a, b) {
+                if (a === UNASSIGNED_PM) return 1;
+                if (b === UNASSIGNED_PM) return -1;
+                return a.localeCompare(b, 'ko');
+            });
+
+            pmNames.forEach(function(pmName) {
+                const pmFiles = pmMap[pmName];
+                const pmWrap = document.createElement('div');
+                pmWrap.style.cssText = 'border:1px solid #e0e0e0; border-radius:6px; overflow:hidden; background:#fff;';
+
+                const pmHdr = document.createElement('div');
+                pmHdr.style.cssText = 'padding:6px 10px; background:#f8f9fa; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold; font-size:11.5px; color:#555; user-select:none; transition:background .15s;';
+                pmHdr.onmouseover = function() { pmHdr.style.background = '#eef0f2'; };
+                pmHdr.onmouseout  = function() { pmHdr.style.background = '#f8f9fa'; };
+                const pmArrow = document.createElement('span');
+                pmArrow.style.cssText = 'font-size:10px; width:12px; display:inline-block;';
+                pmArrow.textContent = '▸'; // 💡 담당자 이름만 초기 노출 — 세부 프로젝트(파일)는 클릭해야 펼쳐짐
+                const pmLbl = document.createElement('span');
+                pmLbl.textContent = '👤 ' + pmName + ' (' + pmFiles.length + ')';
+                pmHdr.appendChild(pmArrow); pmHdr.appendChild(pmLbl);
+
+                const pmBody = document.createElement('div');
+                pmBody.style.cssText = 'display:none; flex-direction:column; gap:5px; padding:6px;'; // 기본 접힘
+                pmHdr.onclick = function() {
+                    const collapsed = pmBody.style.display === 'none';
+                    pmBody.style.display = collapsed ? 'flex' : 'none';
+                    pmArrow.textContent = collapsed ? '▾' : '▸';
+                };
+                pmFiles.forEach(function(f) { pmBody.appendChild(_makeDistFileRow(f)); });
+
+                pmWrap.appendChild(pmHdr); pmWrap.appendChild(pmBody);
+                teamBody.appendChild(pmWrap);
+            });
+
+            teamWrap.appendChild(teamHdr); teamWrap.appendChild(teamBody);
+            inlineEl.appendChild(teamWrap);
         });
 
         // 💡 상세 배치 단계(개발단계 선택 + 전송실행)를 팝업이 아니라 이 카드 안으로 이동
