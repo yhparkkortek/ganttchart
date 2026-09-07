@@ -448,6 +448,15 @@ window._restoreModal = function(modalId) {
     info.toggleEl.style.display = info.prevDisplay;
     if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
     info.isRestored = true;
+    // 🐛 [2026-09-07 버그수정] "페이지 로드 시 자동 최소화"(아래 DEFAULTS)로 열린 모달은 로그인/
+    //    프로젝트 로드가 끝나기 전(300ms 시점)에 딱 한 번만 내용을 채운 채로 계속 최소화 상태였다 —
+    //    이후 로그인하고 프로젝트를 열어도, 타스크바 칩을 눌러 복원하는 건 그냥 display만 되돌릴 뿐
+    //    내용을 다시 채우지 않아서 옛날(로그인 전) 빈 상태 그대로 보였다(AI 문답의 "질문 대상"
+    //    드롭다운이 대표적 — 상단 메뉴로 새로 열면 그 모달의 open 함수가 매번 다시 채워서 멀쩡했음).
+    //    모달마다 내부 구조를 몰라도 되는 이 파일의 범용 철학을 유지하면서, 복원 시 다시 채워야 하는
+    //    모달만 opt-in으로 등록해두면(window._modalRefreshOnRestore) 여기서 공통으로 호출해준다.
+    const refreshFn = window._modalRefreshOnRestore && window._modalRefreshOnRestore[modalId];
+    if (refreshFn) { try { refreshFn(); } catch (e) { console.warn('[modal-taskbar] 복원 시 새로고침 실패:', modalId, e); } }
     if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-down"></i>'; restoreBtn.title = '최소화'; }
     // 모달이 자체 ✕로 닫히면 칩도 자동 제거
     info.observer = new MutationObserver(function() {

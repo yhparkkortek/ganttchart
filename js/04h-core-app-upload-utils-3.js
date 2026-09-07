@@ -1594,6 +1594,19 @@
         setTimeout(function() { const inp = document.getElementById('gantt-qa-input'); if (inp) inp.focus(); }, 50);
     };
 
+    // 🐛 [2026-09-07 버그수정] "새로고침 후 로그인+프로젝트 열기 전에 이미 하단 taskbar에 AI 문답이
+    //    최소화돼 있고, 그 칩으로 복원하면 질문 대상 드롭다운이 비어있음" — 페이지 로드 시 자동으로
+    //    최소화되는 4개 모달(19-shared-modal-drag.js의 DEFAULTS)은 로그인/프로젝트 로드가 끝나기
+    //    전(300ms 시점)에 이 모달을 열어 드롭다운을 딱 한 번 채운다 — 그 시점엔 구글 토큰이 없어
+    //    _msLoadProjectIndex()가 빈 목록을 반환하므로 "현재 프로젝트"만 있는 채로 굳어버린다.
+    //    상단 메뉴로 새로 열면(openGanttQaModal이 매번 _ganttQaPopulateProjectSelect를 다시 부름)
+    //    멀쩡했던 이유가 이거였음. 타스크바 칩으로 "복원"만 하는 경로는 openGanttQaModal을 다시
+    //    거치지 않으므로, 복원 시 다시 채우도록 공용 훅(window._modalRefreshOnRestore)에 등록해둔다.
+    window._modalRefreshOnRestore = window._modalRefreshOnRestore || {};
+    window._modalRefreshOnRestore['gantt-qa-modal'] = function() {
+        if (window._ganttQaPopulateProjectSelect) window._ganttQaPopulateProjectSelect();
+    };
+
     // 💡 [2026-09-07 신규] "질문 대상" 드롭다운 채우기 — project_index.json의 가벼운 목록만 사용(전체
     //    프로젝트 데이터를 미리 다 불러오지 않음). 현재 열려있는 프로젝트는 어차피 기본값(현재 프로젝트)과
     //    같으므로 목록에서 제외.
