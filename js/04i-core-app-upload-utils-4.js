@@ -52,6 +52,30 @@
         localStorage.setItem('gantt_topic_learning_count', String(v));
     };
 
+    // 💡 [2026-09-07 신규] "Request too large ... tokens per minute (TPM): Limit 8000, Requested
+    //    65649" — Groq 무료 등급처럼 요청 1건의 크기(토큰 수) 자체에 낮은 상한이 걸린 제공사에서는,
+    //    업무가 많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을
+    //    넘어 매번 실패한다(Gemini 일일 quota처럼 "기다리면 풀리는" 문제가 아니라, 요청 자체를
+    //    줄여야만 해결됨). 기존엔 "몇 건까지 담을지"가 하드코딩(_buildGanttQaContext MAX_TASKS=300,
+    //    _buildOtherProjectQaContext MAX_OTHER_TASKS=200)이라 사용자가 직접 조절할 방법이 없었음 —
+    //    설정으로 빼서, 크기 제한이 낮은 제공사를 쓸 때 직접 줄일 수 있게 한다.
+    window._AI_QA_MAX_TASKS_DEFAULT = 300;
+    window.getAiQaMaxTasks = function() {
+        const v = parseInt(localStorage.getItem('gantt_ai_qa_max_tasks'), 10);
+        return (v && v >= 10) ? v : window._AI_QA_MAX_TASKS_DEFAULT;
+    };
+    window.setAiQaMaxTasks = function(v) {
+        localStorage.setItem('gantt_ai_qa_max_tasks', String(v));
+    };
+    window._AI_QA_MAX_OTHER_TASKS_DEFAULT = 200;
+    window.getAiQaMaxOtherTasks = function() {
+        const v = parseInt(localStorage.getItem('gantt_ai_qa_max_other_tasks'), 10);
+        return (v && v >= 10) ? v : window._AI_QA_MAX_OTHER_TASKS_DEFAULT;
+    };
+    window.setAiQaMaxOtherTasks = function(v) {
+        localStorage.setItem('gantt_ai_qa_max_other_tasks', String(v));
+    };
+
     // 💡 [2026-08-28 개편] "AI 도구 → 설정"에서 흩어져 있던 AI 관련 설정을 한 곳으로 모음 —
     //    ① AI 모델 선택(원래 AI 업무분석 팝업에 있던 AI 선택/모델/API 키를 이리로 이동)
     //    ② AI 글자 수 설정(기존 메일 분석/요약·문답 최대 글자 수)
@@ -160,6 +184,41 @@
                         </div>
                     </div>
 
+                    <!-- ══ 그룹2.5: 📉 AI 요청 크기 제한 (무료 등급 대응, 기본 접힘, 신규) —
+                         "Request too large ... tokens per minute" 같은 오류는 quota(하루/분당 횟수)와
+                         달리 기다려도 안 풀리고 요청 자체를 줄여야만 해결되므로, 그 레버(참고 업무
+                         건수)와 무료 등급별 제약 안내를 한곳에 모음 ══ -->
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                        <div onclick="window._toggleAlarmSection('ai-set-sec-reqsize')"
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
+                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📉 AI 요청 크기 제한 (무료 등급 대응)</span>
+                            <span id="ai-set-sec-reqsize-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                        </div>
+                        <div id="ai-set-sec-reqsize" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                            <div style="font-size:11px; color:#555; background:#fff8e6; border:1px solid #ffe066; border-radius:6px; padding:8px 10px; margin-bottom:12px; line-height:1.6;">
+                                ⚠️ <b>무료 등급 제약 안내</b> — AI 제공사마다 무료로 쓸 수 있는 범위가 다르고 수시로 바뀔 수 있어, 정확한 수치는 각 콘솔에서 확인하는 게 가장 정확합니다. 알려진 제약 종류는 크게 두 가지입니다:<br>
+                                · <b>횟수형(quota)</b> — 하루/분당 몇 번까지만 요청 가능(예: Gemini). 한도에 걸리면 시간이 지나야 풀립니다.<br>
+                                · <b>크기형(TPM 등)</b> — 요청 1건의 토큰 수 자체에 상한(예: Groq 무료 등급). 업무가 많은 프로젝트에서 AI 요약·문답을 돌리면 프롬프트가 이 상한을 넘어 <b>기다려도 계속 실패</b>합니다 — 아래 값을 줄이거나 다른 제공사로 바꿔야 풀립니다.<br>
+                                · OpenAI는 무료 등급이 아예 없습니다(카드 등록 필요).
+                            </div>
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">💬 AI 문답 최대 참고 업무 건수</label>
+                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">AI 문답이 현재 프로젝트 업무 목록을 프롬프트에 담을 때 최대 몇 건까지 포함할지 정합니다. 업무가 많은 프로젝트에서 "요청 크기 초과" 오류가 나면 이 값을 줄여보세요(초과분은 건수만 알리고 생략됩니다).</div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-qa-max-tasks-input" type="number" min="10" max="1000" step="10" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('ai-qa-max-tasks-input').value=window._AI_QA_MAX_TASKS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 300건 (기본값) — Groq 등 크기 제한이 낮은 제공사라면 50~100건대로 줄이는 걸 권장합니다.</div>
+                            <div style="border-top:1px solid #eee; margin:16px 0;"></div>
+                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🌐 다른 프로젝트 조회 시 최대 업무 건수</label>
+                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">AI 문답에서 "질문 대상"으로 다른 프로젝트를 골랐을 때(또는 AI가 스스로 다른 프로젝트를 조회할 때), 그 프로젝트의 업무 목록을 몇 건까지 포함할지 정합니다.</div>
+                            <div style="display:flex; gap:8px; align-items:center;">
+                                <input id="ai-qa-max-other-tasks-input" type="number" min="10" max="1000" step="10" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                                <button onclick="document.getElementById('ai-qa-max-other-tasks-input').value=window._AI_QA_MAX_OTHER_TASKS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                            </div>
+                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 200건 (기본값)</div>
+                        </div>
+                    </div>
+
                     <!-- ══ 그룹3: AI 요약 기간 설정 (기본 접힘) — "검색 범위"(며칠치를 볼지)와 "임박(긴급)
                          기준"(그중 특히 급한 것)은 서로 다른 개념이라 두 값을 분리해서 둠 ══ -->
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
@@ -225,6 +284,8 @@
         }
         document.getElementById('ai-mail-maxlen-input').value = window.getAiMailMaxLen();
         document.getElementById('ai-content-maxlen-input').value = window.getAiContentMaxLen();
+        document.getElementById('ai-qa-max-tasks-input').value = window.getAiQaMaxTasks();
+        document.getElementById('ai-qa-max-other-tasks-input').value = window.getAiQaMaxOtherTasks();
         document.getElementById('ai-summary-range-days-input').value = window.getAiSummaryRangeDays();
         document.getElementById('ai-summary-urgent-days-input').value = window.getAiUrgentDays();
         document.getElementById('ai-topic-learning-days-input').value = window.getTopicLearningDays();
@@ -251,6 +312,20 @@
         if (v > 3000) v = 3000;
         input.value = v;
         window.setAiContentMaxLen(v);
+
+        const qaMaxTasksInput = document.getElementById('ai-qa-max-tasks-input');
+        let qmt = parseInt(qaMaxTasksInput.value, 10);
+        if (!qmt || qmt < 10) qmt = 10;
+        if (qmt > 1000) qmt = 1000;
+        qaMaxTasksInput.value = qmt;
+        window.setAiQaMaxTasks(qmt);
+
+        const qaMaxOtherInput = document.getElementById('ai-qa-max-other-tasks-input');
+        let qmo = parseInt(qaMaxOtherInput.value, 10);
+        if (!qmo || qmo < 10) qmo = 10;
+        if (qmo > 1000) qmo = 1000;
+        qaMaxOtherInput.value = qmo;
+        window.setAiQaMaxOtherTasks(qmo);
 
         const rangeInput = document.getElementById('ai-summary-range-days-input');
         let rd = parseInt(rangeInput.value, 10);
@@ -282,7 +357,7 @@
         learnCountInput.value = lc;
         window.setTopicLearningCount(lc);
 
-        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ' · 학습 로그 반영 최근 ' + ld + '일/' + lc + '건)', 'info');
+        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · AI 문답 참고 업무 최대 ' + qmt + '/' + qmo + '건 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ' · 학습 로그 반영 최근 ' + ld + '일/' + lc + '건)', 'info');
     };
 
     // 🤖 [2026-08-27] "AI 요약"/"AI 문답"/"AI 분석 설정"은 상단 메뉴 "🤖 AI 도구"(및 "⚙️ 설정")로

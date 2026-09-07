@@ -525,7 +525,10 @@
         const today = new Date(); today.setHours(0, 0, 0, 0);
         const _weekdayKo = ['일', '월', '화', '수', '목', '금', '토'][today.getDay()];
         const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')} (${_weekdayKo}요일)`;
-        const MAX_TASKS = 300; // 프롬프트 크기 보호 — 이보다 많으면 뒤는 생략하고 건수만 알림
+        // 💡 [2026-09-07] 하드코딩 300 → 사용자 설정(⚙️ AI 분석 설정 → 📉 요청 크기 제한)으로 뺌 —
+        //    Groq 무료 등급처럼 요청 1건의 토큰 한도가 낮은 제공사에서 "Request too large" 실패가
+        //    나면 이 값을 줄여서 대응할 수 있게 함.
+        const MAX_TASKS = window.getAiQaMaxTasks ? window.getAiQaMaxTasks() : 300; // 프롬프트 크기 보호 — 이보다 많으면 뒤는 생략하고 건수만 알림
         const lines = [];
         rows.slice(0, MAX_TASKS).forEach(function(x) {
             const row = x.row;

@@ -127,7 +127,10 @@
             return row._origT4 || '';
         };
         const rows = gd.map(function(r, i) { return { row: r, idx: i }; }).slice(1).filter(function(x) { return x.row && x.row._level !== undefined; });
-        const MAX_OTHER_TASKS = 200; // 💡 다른 프로젝트 조회는 참고용이라 지금 프로젝트(300건)보다 낮은 상한으로 용량 보호
+        // 💡 [2026-09-07] 하드코딩 200 → 사용자 설정(⚙️ AI 분석 설정 → 📉 요청 크기 제한)으로 뺌(위
+        //    MAX_TASKS와 동일한 이유). 다른 프로젝트 조회는 참고용이라 지금 프로젝트보다 낮은
+        //    상한이 기본값이지만, Groq 등에서 여전히 크면 이 값도 같이 줄일 수 있게 함.
+        const MAX_OTHER_TASKS = window.getAiQaMaxOtherTasks ? window.getAiQaMaxOtherTasks() : 200; // 💡 다른 프로젝트 조회는 참고용이라 지금 프로젝트(300건)보다 낮은 상한으로 용량 보호
         const maxLen = window.getAiContentMaxLen ? window.getAiContentMaxLen() : 500;
         const lines = [];
         rows.slice(0, MAX_OTHER_TASKS).forEach(function(x) {

@@ -179,6 +179,13 @@ window._AI_MODEL_DEPRECATED_RE = /does not exist|no longer available|decommissio
 //    에러 메시지에 덧붙여 사용자가 "왜 새 키를 받아도 안 되는지" 바로 알 수 있게 한다.
 window._AI_QUOTA_EXCEEDED_RE = /quota exceeded|exceeded your current quota|rate.?limit|429|resource_exhausted/i;
 window._AI_QUOTA_HINT = '\n\n💡 무료 등급의 요청 한도(quota)는 API 키 문자열이 아니라 그 키가 속한 구글 클라우드 "프로젝트" 단위로 관리됩니다. 같은 구글 계정으로 키를 새로 발급해도 보통 기존 프로젝트를 그대로 재사용해서 한도가 초기화되지 않습니다.\n→ ① 몇 시간 뒤(태평양시간 자정 리셋) 다시 시도 ② aistudio.google.com에서 키 발급 시 "새 프로젝트"를 선택 ③ ⚙️ 설정에서 AI 제공사를 Groq/Mistral로 임시 전환 ④ 유료 결제 등급으로 전환';
+// 🐛 [2026-09-07] "Request too large ... tokens per minute (TPM): Limit 8000, Requested 65649"
+//    — Groq 무료 등급처럼 "요청 1건의 크기(토큰 수)" 자체에 낮은 상한이 걸린 제공사에서는, 업무가
+//    많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을 넘어 매번
+//    실패한다 — 위 quota(하루/분당 "횟수") 문제와 달리 시간을 둬도 소용없고, 요청 자체를 줄여야
+//    해결됨. ⚙️ AI 분석 설정에 새로 생긴 "최대 참고 업무 건수" 설정으로 유도한다.
+window._AI_REQUEST_TOO_LARGE_RE = /request too large|tokens per minute|context length exceeded|maximum context length|too many tokens|context_length_exceeded/i;
+window._AI_REQUEST_TOO_LARGE_HINT = '\n\n💡 무료 등급은 보통 "요청 1건의 토큰 수" 자체에도 낮은 상한이 걸려 있습니다(예: Groq 무료 등급의 분당 토큰(TPM) 한도). 업무가 많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을 넘어버려서, 시간을 두고 재시도해도 소용없고 요청 크기 자체를 줄여야 합니다.\n→ ① ⚙️ AI 분석 설정 → 📉 요청 크기 제한에서 "최대 참고 업무 건수"·"최대 글자 수"를 줄이기 ② 요청 크기 제한이 더 넉넉한 제공사(Gemini 등)로 임시 전환 ③ 유료 등급으로 전환';
 
 window.callAiBackend = async function(apiKey, prompt, opts) {
     opts = opts || {};
@@ -220,7 +227,8 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                 lastErr = err;
                 const isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
                 const isQuota = window._AI_QUOTA_EXCEEDED_RE.test(err.message || '');
-                if (isDeprecated || isQuota) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
+                const isTooLarge = window._AI_REQUEST_TOO_LARGE_RE.test(err.message || '');
+                if (isDeprecated || isQuota || isTooLarge) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
                 if (attempt < maxRetryPerModel && !(opts.isCancelled && opts.isCancelled())) {
                     await new Promise(r => setTimeout(r, retryDelayMs));
                 }
@@ -230,9 +238,11 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
         //    다른 모델로 바꿔봐야 소용없으므로 후보를 계속 순회하지 않고 여기서 바로 실패 처리
         if (!skipRemainingRetries) return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
     }
-    // 모든 후보 모델이 실패 — 마지막 에러가 할당량 초과라면 원인·대응법을 메시지에 덧붙여준다.
+    // 모든 후보 모델이 실패 — 마지막 에러가 할당량 초과/요청 크기 초과라면 원인·대응법을 메시지에 덧붙여준다.
     if (lastErr && window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_QUOTA_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_QUOTA_HINT);
+    } else if (lastErr && window._AI_REQUEST_TOO_LARGE_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_REQUEST_TOO_LARGE_HINT) === -1) {
+        lastErr = new Error(lastErr.message + window._AI_REQUEST_TOO_LARGE_HINT);
     }
     return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
 };
