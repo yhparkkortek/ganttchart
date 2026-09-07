@@ -1187,8 +1187,12 @@ ${recentLogs}
     //    이후 로그인해서 실제 저장된 요약이 있어도, 타스크바 칩으로 "복원"만 하면 내용을 다시 안
     //    읽어서 옛 빈 상태가 그대로 보였음. _renderAiProjectSummaryBody는 다시 불러도 안전(읽기 전용
     //    렌더라 사용자 입력을 지우지 않음)하므로 복원 시 재실행 훅에 등록.
+    // 🐛 [2026-09-07 버그수정 2] 키를 'ai-summary-modal'로 등록했었는데, 실제 최소화 시스템은
+    //    window._makeDraggable('ai-summary-box', 'ai-summary-drag')에 넘긴 박스 id를 키로 쓴다
+    //    (AI 문답의 'gantt-qa-modal'→'gantt-qa-box' 오타와 동일한 유형의 버그 — 실측으로 확인:
+    //    window._modalMinimized의 실제 키는 'ai-summary-box'). 그래서 이 훅도 영영 매칭 안 됨.
     window._modalRefreshOnRestore = window._modalRefreshOnRestore || {};
-    window._modalRefreshOnRestore['ai-summary-modal'] = function() {
+    window._modalRefreshOnRestore['ai-summary-box'] = function() {
         if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
     };
 

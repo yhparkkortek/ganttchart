@@ -1621,8 +1621,15 @@
     //    상단 메뉴로 새로 열면(openGanttQaModal이 매번 _ganttQaPopulateProjectSelect를 다시 부름)
     //    멀쩡했던 이유가 이거였음. 타스크바 칩으로 "복원"만 하는 경로는 openGanttQaModal을 다시
     //    거치지 않으므로, 복원 시 다시 채우도록 공용 훅(window._modalRefreshOnRestore)에 등록해둔다.
+    // 🐛 [2026-09-07 버그수정 2] 위 등록의 키를 'gantt-qa-modal'로 썼었는데, 최소화/복원 시스템은
+    //    실제로 window._makeDraggable('gantt-qa-box', 'gantt-qa-drag')에 넘긴 첫 인자(박스 id)를
+    //    키로 쓴다(19-shared-modal-drag.js의 window._modalMinimized/_modalRefreshOnRestore 조회 모두
+    //    이 modalId로 이뤄짐) — 'gantt-qa-modal'은 실제로 표시/숨김 되는 오버레이 id일 뿐, 최소화
+    //    시스템이 내부적으로 관리하는 키가 아니었다. 그래서 복원해도 이 훅이 영영 매칭되지 않아
+    //    드롭다운이 계속 비어있었다("여전히 미해결" 재현 결과 실측 확인). 실제 키인 'gantt-qa-box'로
+    //    수정.
     window._modalRefreshOnRestore = window._modalRefreshOnRestore || {};
-    window._modalRefreshOnRestore['gantt-qa-modal'] = function() {
+    window._modalRefreshOnRestore['gantt-qa-box'] = function() {
         if (window._ganttQaPopulateProjectSelect) window._ganttQaPopulateProjectSelect();
     };
 
