@@ -14,8 +14,26 @@ window.TaskInbox = {
     load: function() {
         try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch(e) { return []; }
     },
+    // 🐛 [2026-09-07 버그수정] "Setting the value of 'gantt_task_inbox' exceeded the quota" —
+    //    처리완료(배치됨/전송됨) 항목도 '보관' 모드(기본값)에선 사람이 하나씩 🗑로 지우기 전까진
+    //    영원히 목록에 남고, 각 항목이 메일 원문(mailRaw.body2000, 최대 2000자)까지 그대로 들고
+    //    있어서 자동처리로 오래 쌓이면 localStorage 용량(브라우저별 5~10MB)을 넘길 수 있었다.
+    //    이 상태에서 setItem이 그대로 throw하면 이후의 모든 add/setStatus 호출(메일 자동처리 파이프라인
+    //    포함)이 연쇄로 실패해 화면엔 브라우저 원문 에러만 노출됐다 — 자동 경량화 후 재시도하도록 방어.
     save: function(list, skipSync) {
-        localStorage.setItem(this.KEY, JSON.stringify(list));
+        try {
+            localStorage.setItem(this.KEY, JSON.stringify(list));
+        } catch (e) {
+            if (!this._isQuotaError(e)) throw e;
+            console.warn('[업무 보관함] localStorage 용량 초과 — 완료 항목부터 자동 정리 후 재시도합니다.', e);
+            list = this._shrinkForQuota(list);
+            try {
+                localStorage.setItem(this.KEY, JSON.stringify(list));
+            } catch (e2) {
+                if (window.showToast) window.showToast('⚠️ 업무 보관함 저장 공간이 가득 찼습니다. [업무 보관함] 헤더의 🧹 저장공간 정리 버튼을 눌러주세요.', 'error');
+                throw e2; // 자동 정리로도 부족하면 호출자에게 계속 알림 (기존 동작 유지)
+            }
+        }
         window.updateInboxBadge();
         if (!skipSync) this.scheduleDriveSync(); // 💡 저장할 때마다 드라이브 자동 동기화 (3초 디바운스)
         // 💡 [실시간 반영] add/remove/setStatus 등 어디서 저장이 일어나든, 업무 보관함 모달이 지금 열려있으면
@@ -23,6 +41,25 @@ window.TaskInbox = {
         //    자동틱처럼 다른 경로로 담긴 항목은 모달을 닫았다 다시 열어야만 보였음
         const ov = document.getElementById('task-inbox-overlay');
         if (ov && ov.style.display === 'flex' && window.renderTaskInbox) window.renderTaskInbox();
+    },
+    _isQuotaError: function(e) {
+        return !!e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014);
+    },
+    // 💡 용량 초과 시 자동 경량화. 순서:
+    //    ① 처리완료(상태≠'대기') 항목의 메일 원문(mailRaw)부터 제거 — 이미 배치된 프로젝트의 해당
+    //       업무 행(row._mailRaw)에도 같은 원문이 저장돼 있어(buildMailTaskRow), 여기서 지워도 안 사라짐.
+    //    ② 그래도 부족하면(항목 수 자체가 너무 많음) 오래된 완료 항목부터 정리(최근 N건만 유지) — '대기'
+    //       항목은 아직 사람이 처리해야 할 것들이라 개수와 무관하게 전부 보존한다.
+    _shrinkForQuota: function(list) {
+        const KEEP_DONE_MAX = 300;
+        let shrunk = list.map(function(it) {
+            return (it.status !== '대기' && it.mailRaw) ? Object.assign({}, it, { mailRaw: null, _mailRawStripped: true }) : it;
+        });
+        const pending = shrunk.filter(function(it) { return it.status === '대기'; });
+        const done = shrunk.filter(function(it) { return it.status !== '대기'; })
+            .sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
+        if (done.length > KEEP_DONE_MAX) shrunk = pending.concat(done.slice(0, KEEP_DONE_MAX));
+        return shrunk;
     },
     add: function(task, meta) {
         const list = this.load();
@@ -925,6 +962,32 @@ window.inboxPlaceToCurrent = function(uid) {
 //    설정 → ⏱️ 수집설정)의 체크박스(mac-cleanup-auto)로 이동함 — 값은 그대로 localStorage 사용.
 window.getInboxCleanupMode = function() {
     return localStorage.getItem('inbox_cleanup_mode') || 'keep'; // 기본값: 보관(기존 동작 유지)
+};
+
+// 💡 [2026-09-07] 사용자가 직접 누르는 "🧹 저장공간 정리" — quota 초과로 저장이 막히기 전에
+//    미리(또는 이미 막힌 뒤에라도) 완료 항목의 무거운 메일 원문을 비우고 오래된 완료 항목을 정리한다.
+//    TaskInbox.save()의 자동 quota 복구(_shrinkForQuota)와 같은 로직을 그대로 재사용.
+window.inboxCleanupStorage = function() {
+    const _en = window._currentLang === 'en';
+    const before = window.TaskInbox.load();
+    const beforeBytes = JSON.stringify(before).length;
+    const strippedCount = before.filter(function(it) { return it.status !== '대기' && it.mailRaw; }).length;
+    const doneCount = before.filter(function(it) { return it.status !== '대기'; }).length;
+    if (!strippedCount && doneCount <= 300) {
+        alert(_en ? 'Nothing to clean up — no bulky completed items found.' : '정리할 항목이 없습니다. (완료 항목에 남은 메일 원문이 없거나 이미 정리돼 있습니다)');
+        return;
+    }
+    if (!confirm(_en
+        ? `Clear the stored mail source from ${strippedCount} completed item(s) (kept in their placed project already), and if there are more than 300 completed items, keep only the most recent 300?`
+        : `완료(배치됨/전송됨) 항목 ${strippedCount}건의 저장된 메일 원문을 지우고(이미 배치된 프로젝트 쪽엔 그대로 남아있습니다), 완료 항목이 300건을 넘으면 최근 300건만 남기고 정리할까요?`)) return;
+    const after = window.TaskInbox._shrinkForQuota(before);
+    window.TaskInbox.save(after);
+    const afterBytes = JSON.stringify(after).length;
+    const freedKb = Math.max(0, Math.round((beforeBytes - afterBytes) / 1024));
+    const msg = _en
+        ? `🧹 Cleanup done — freed about ${freedKb}KB (${before.length - after.length} old item(s) removed).`
+        : `🧹 정리 완료 — 약 ${freedKb}KB 확보 (오래된 항목 ${before.length - after.length}건 삭제).`;
+    if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
 };
 
 window.mailRightToInbox = function() {
