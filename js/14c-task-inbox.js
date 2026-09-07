@@ -183,6 +183,19 @@ window.openTaskInbox = function() {
 window.closeTaskInbox = function() {
     document.getElementById('task-inbox-overlay').style.display = 'none';
 };
+// 🐛 [2026-09-07 버그수정 — AI 문답과 동일 패턴] 페이지 로드 시 자동으로 최소화되는 4개 모달 중
+//    하나(19-shared-modal-drag.js DEFAULTS) — 로그인 완료 전에 한 번 렌더된 채 최소화된다. 이후
+//    로그인해서 드라이브 보관함 동기화(TaskInbox.loadFromDrive)가 병합돼도, 그 완료 핸들러가
+//    "모달이 지금 열려있을 때만" 다시 그려주는데(display==='flex' 조건) 최소화 중엔 안 열려있어서
+//    건너뛴다 — 그 상태로 타스크바 칩으로 복원만 하면 옛 로컬 상태가 계속 보였음. 아래 3개 함수는
+//    전부 "현재 상태 기준 재렌더"라 다시 불러도 안전(입력 중이던 내용을 지우지 않음)하므로 복원
+//    훅에 등록.
+window._modalRefreshOnRestore = window._modalRefreshOnRestore || {};
+window._modalRefreshOnRestore['task-inbox-overlay'] = function() {
+    if (window.renderTaskInbox) window.renderTaskInbox();
+    if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+    if (window.refreshInboxCleanupModeButton) window.refreshInboxCleanupModeButton();
+};
 
 // 현재 프로젝트의 개발단계(L0) 목록 수집
 window.getCurrentL0List = function() {

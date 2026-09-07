@@ -1181,6 +1181,16 @@ ${recentLogs}
         modal.style.display = 'block';
         window.bringModalToFront('ai-summary-modal');
     };
+    // 🐛 [2026-09-07 버그수정 — AI 문답과 동일 패턴] 페이지 로드 시 자동으로 최소화되는 4개 모달 중
+    //    하나(19-shared-modal-drag.js DEFAULTS) — 로그인/프로젝트 로드가 끝나기 전에 한 번 열려서
+    //    projectMeta.aiSummaryReport가 비어있는 채로("아직 생성한 요약이 없습니다") 최소화된다.
+    //    이후 로그인해서 실제 저장된 요약이 있어도, 타스크바 칩으로 "복원"만 하면 내용을 다시 안
+    //    읽어서 옛 빈 상태가 그대로 보였음. _renderAiProjectSummaryBody는 다시 불러도 안전(읽기 전용
+    //    렌더라 사용자 입력을 지우지 않음)하므로 복원 시 재실행 훅에 등록.
+    window._modalRefreshOnRestore = window._modalRefreshOnRestore || {};
+    window._modalRefreshOnRestore['ai-summary-modal'] = function() {
+        if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+    };
 
     // 💡 [2026-08-24 신규] "✏️ 프롬프트" 편집 모달 — 메일분석 프롬프트 편집(✏️ 프롬프트 탭)과 동일한
     //    저장/초기화 개념을 작은 모달로 옮긴 버전. 팀 공용(Drive)으로 저장되어 여러 명이 이어서

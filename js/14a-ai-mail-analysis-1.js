@@ -37,6 +37,18 @@ window.showMailAnalyzer = function() {
     const loadingDiv = document.getElementById('mail-loading');
     if (loadingDiv) loadingDiv.style.display = 'none';
 };
+// 🐛 [2026-09-07 버그수정 — AI 문답과 동일 패턴] 페이지 로드 시 자동으로 최소화되는 4개 모달 중
+//    하나(19-shared-modal-drag.js DEFAULTS) — 프로젝트 로드가 끝나기 전에 한 번 열려서
+//    populateInsertPosition()의 "위치 선택" 드롭다운이 globalData 없이 "맨 마지막에 추가"
+//    옵션 하나만 채운 채 최소화된다. 이후 프로젝트를 열어도, 타스크바 칩으로 "복원"만 하면
+//    다시 채우지 않아 실제 업무 위치들이 계속 안 보였음. showMailAnalyzer() 전체를 다시 부르면
+//    입력 중이던 메일 본문/분석 결과가 지워지므로(위 "초기화" 부분), 안전한(비파괴적) 부분만
+//    골라 복원 훅에 등록 — 위치 드롭다운 + API 키 패널(로컬 설정 반영, 마찬가지로 무해함).
+window._modalRefreshOnRestore = window._modalRefreshOnRestore || {};
+window._modalRefreshOnRestore['mail-analyzer-modal'] = function() {
+    if (window.populateInsertPosition) window.populateInsertPosition();
+    if (window.refreshAiKeyPanel) window.refreshAiKeyPanel();
+};
 
 // 💡 텍스트박스에 다시 타이핑 시작하면, 이전 분석 결과 표시(✅완료/⚠️실패)로 남아있던
 //    AI 분석 버튼을 원래 상태로 되돌림 (한 번만 등록되도록 플래그로 방지)
