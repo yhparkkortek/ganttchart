@@ -159,6 +159,14 @@ window.getActiveAiModel = function() {
 //      (사람이 코드를 고치기 전까지 매번 실패→전환을 반복하지 않도록 자가치유).
 //    - 그 외 에러(키 오류/네트워크 일시 오류 등)는 같은 모델로 기존처럼 짧게 재시도.
 window._AI_MODEL_DEPRECATED_RE = /does not exist|no longer available|decommissioned|not found|deprecated/i;
+// 🐛 [2026-09-07] "새 API 키를 발급받아도 quota exceeded가 그대로"라는 문의 대응.
+//    무료 등급 일일/분당 한도(quota)는 API 키 문자열이 아니라 그 키가 속한 구글 클라우드 "프로젝트" 단위로
+//    집계된다 — 같은 구글 계정으로 aistudio.google.com에서 키만 새로 발급하면 대부분 기존 기본 프로젝트를
+//    그대로 재사용하므로, 키를 바꿔도 한도가 초기화되지 않는다. 이 패턴을 감지해 ①같은 provider의 다른
+//    모델로 자동 전환을 시도하고(모델별로 별도 한도인 경우가 많음) ②그래도 다 막히면 원인과 대응법을
+//    에러 메시지에 덧붙여 사용자가 "왜 새 키를 받아도 안 되는지" 바로 알 수 있게 한다.
+window._AI_QUOTA_EXCEEDED_RE = /quota exceeded|exceeded your current quota|rate.?limit|429|resource_exhausted/i;
+window._AI_QUOTA_HINT = '\n\n💡 무료 등급의 요청 한도(quota)는 API 키 문자열이 아니라 그 키가 속한 구글 클라우드 "프로젝트" 단위로 관리됩니다. 같은 구글 계정으로 키를 새로 발급해도 보통 기존 프로젝트를 그대로 재사용해서 한도가 초기화되지 않습니다.\n→ ① 몇 시간 뒤(태평양시간 자정 리셋) 다시 시도 ② aistudio.google.com에서 키 발급 시 "새 프로젝트"를 선택 ③ ⚙️ 설정에서 AI 제공사를 Groq/Mistral로 임시 전환 ④ 유료 결제 등급으로 전환';
 
 window.callAiBackend = async function(apiKey, prompt, opts) {
     opts = opts || {};
@@ -177,7 +185,7 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
 
     for (let ci = 0; ci < candidates.length; ci++) {
         const model = candidates[ci];
-        let isDeprecated = false;
+        let skipRemainingRetries = false; // 모델 사용중단 또는 할당량 초과 — 같은 모델로 더 재시도해도 소용없음
         for (let attempt = 1; attempt <= maxRetryPerModel; attempt++) {
             if (opts.isCancelled && opts.isCancelled()) return { ok: false, error: new Error('사용자가 중단함') };
             try {
@@ -198,16 +206,21 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                 return { ok: true, data, modelUsed: model, switched: model !== activeModel };
             } catch (err) {
                 lastErr = err;
-                isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
-                if (isDeprecated) break; // 이 모델은 재시도해도 소용없음 → 바로 다음 후보 모델로
+                const isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
+                const isQuota = window._AI_QUOTA_EXCEEDED_RE.test(err.message || '');
+                if (isDeprecated || isQuota) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
                 if (attempt < maxRetryPerModel && !(opts.isCancelled && opts.isCancelled())) {
                     await new Promise(r => setTimeout(r, retryDelayMs));
                 }
             }
         }
-        // 💡 모델 자체가 죽은 게 아니라 키 오류/네트워크 등 다른 이유로 실패했다면,
+        // 💡 모델 자체가 죽거나(사용중단) 한도가 찬 게 아니라 키 오류/네트워크 등 다른 이유로 실패했다면,
         //    다른 모델로 바꿔봐야 소용없으므로 후보를 계속 순회하지 않고 여기서 바로 실패 처리
-        if (!isDeprecated) return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
+        if (!skipRemainingRetries) return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
+    }
+    // 모든 후보 모델이 실패 — 마지막 에러가 할당량 초과라면 원인·대응법을 메시지에 덧붙여준다.
+    if (lastErr && window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_QUOTA_HINT) === -1) {
+        lastErr = new Error(lastErr.message + window._AI_QUOTA_HINT);
     }
     return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
 };
