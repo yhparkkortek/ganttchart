@@ -460,6 +460,12 @@
     //    (초안 → 사람 확인) 왕복 구조를 쓴다 — 각각 아직 확정 전인 초안 1건만 보관.
     window._ganttQaPendingNoticeDraft = null;
     window._ganttQaPendingAlarmDraft = null;
+    // 💡 [2026-09-07 신규] "다른 프로젝트를 직접 골라서 물어보기" — AI가 질문을 보고 스스로
+    //    [[ACTION:LOAD_PROJECT:번호]]를 요청하는 자동 경로(아래 🌐 다른 프로젝트 조회)와 별개로,
+    //    사람이 드롭다운으로 미리 프로젝트를 지정해두는 수동 경로. null이면 "현재 프로젝트" 기준.
+    //    { drive_file_id, file_name, label } — sendGanttQaMessage가 이 값을 보고 해당 프로젝트
+    //    데이터를 먼저 가져와(_aiFetchManualTargetContext) 왕복 없이 첫 호출에 바로 실어 보낸다.
+    window._ganttQaTargetProject = null;
 
     // 💡 [2026-08-29 신규 — 버그 수정] "다른 프로젝트로 이동해서 물어보면 응답이 없다(⏳가 멈추지 않음).
     //    내용을 지우고 다시 물으면 답한다"는 제보 — 프로젝트를 전환한 직후엔 구글 드라이브 토큰이 막

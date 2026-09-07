@@ -68,6 +68,32 @@
         } catch (e) { console.warn('다른 프로젝트(#P' + no + ') 조회 실패:', e.message); return null; }
     };
 
+    // ── 💡 [2026-09-07 신규] "AI 문답에서 프로젝트를 직접 골라서 물어보기" ──────────────────────────
+    //    위 _aiFetchOtherProjectContext(AI가 스스로 [[ACTION:LOAD_PROJECT:번호]]로 요청하는 자동 경로)와
+    //    달리, 사람이 채팅창 상단 드롭다운으로 미리 프로젝트를 지정해두면 AI의 번호 매칭 판단을 거치지
+    //    않고 그 프로젝트 데이터를 곧바로 첫 프롬프트에 실어 보낸다 — 왕복이 1번으로 줄어(자동경로는
+    //    "번호만 응답" 1번 + "실제 답변" 1번, 총 2번 AI 호출) 지연시간·실패 지점이 절반이 된다.
+    //    같은 프로젝트를 다시 물으면 이번 대화 세션 안에서는(_aiOtherProjectDataCache 재사용) 다시
+    //    Drive에서 읽지 않는다 — 자동 경로(_aiFetchOtherProjectContext)는 매번 새로 읽으므로 여기서만
+    //    캐시를 추가로 검사한다(둘 다 같은 캐시 객체를 쓰지만 키가 문자열 drive_file_id라 서로 충돌하지 않음).
+    window._aiFetchManualTargetContext = async function(entry) {
+        if (!entry || !entry.drive_file_id) return null;
+        window._aiOtherProjectDataCache = window._aiOtherProjectDataCache || {};
+        const cached = window._aiOtherProjectDataCache[entry.drive_file_id];
+        if (cached) return window._buildOtherProjectQaContext(cached, entry);
+        try {
+            const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+            const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+            if (!token) return null;
+            const res = await fetch(`https://www.googleapis.com/drive/v3/files/${entry.drive_file_id}?alt=media&supportsAllDrives=true`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const pd = await res.json();
+            window._aiOtherProjectDataCache[entry.drive_file_id] = pd;
+            return window._buildOtherProjectQaContext(pd, entry);
+        } catch (e) { console.warn('[AI 문답] 선택한 프로젝트(' + (entry.file_name || entry.label || '') + ') 조회 실패:', e.message); return null; }
+    };
+
     // 💡 다른 프로젝트의 저장 파일(globalData/colIdx/projectMeta/tabData)을 가볍게 요약 텍스트로 변환.
     //    현재 프로젝트용 _buildGanttQaContext처럼 DOM(rendered table)에서 읽지 않고 저장된 JSON 값만
     //    사용한다(다른 프로젝트를 화면에 렌더링하지 않고 조회만 하기 위함) — 그래서 Customer SPEC/
@@ -848,8 +874,33 @@
         window._ganttQaHistory.push({ role: 'ai', text: '⏳ 답변 생성 중...', pending: true });
         window._renderGanttQaMessages();
 
+        // 💡 [2026-09-07 신규] 채팅창 상단 드롭다운으로 다른 프로젝트를 미리 골라둔 상태면, AI가
+        //    스스로 [[ACTION:LOAD_PROJECT:번호]]를 요청하고 되돌아올 때까지 기다리지 않고 그 프로젝트
+        //    데이터를 먼저 가져와 첫 프롬프트에 바로 실어 보낸다(왕복 1번으로 단축).
+        const qaTarget = window._ganttQaTargetProject;
+        let manualOtherProjectTexts = null;
+        let qaQuestionForPrompt = question;
+        if (qaTarget) {
+            const pendingIdx = window._ganttQaHistory.length - 1;
+            if (window._ganttQaHistory[pendingIdx]) {
+                window._ganttQaHistory[pendingIdx].text = `⏳ [${qaTarget.label}] 프로젝트 데이터를 불러오는 중...`;
+                window._renderGanttQaMessages();
+            }
+            const otherCtx = await window._aiFetchManualTargetContext(qaTarget);
+            if (otherCtx) {
+                manualOtherProjectTexts = [otherCtx];
+                qaQuestionForPrompt = `[질문 대상: 다른 프로젝트 "${qaTarget.label}"] ${question}`;
+            } else if (window.showToast) {
+                window.showToast(`⚠️ [${qaTarget.label}] 데이터를 불러오지 못해 현재 프로젝트 기준으로 답합니다.`, 'warning');
+            }
+            if (window._ganttQaHistory[pendingIdx]) {
+                window._ganttQaHistory[pendingIdx].text = '⏳ 답변 생성 중...';
+                window._renderGanttQaMessages();
+            }
+        }
+
         try {
-            const prompt = await window._buildGanttQaPrompt(question, priorHistory);
+            const prompt = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, manualOtherProjectTexts);
             // 💡 위 window._withTimeout 참고 — GAS 호출(callAiBackend)이 네트워크 문제 등으로 응답도
             //    오류도 없이 멈춰버리면 "⏳ 답변 생성 중..."이 영원히 안 바뀌어 "응답 없음"으로 보인다.
             //    60초 안에 안 끝나면 오류로 처리해서 사용자가 재시도할 수 있게 한다.
@@ -866,7 +917,7 @@
             if (mailRowIdxs.length) {
                 const mailTexts = mailRowIdxs.map(window._aiAssistGetMailRaw).filter(Boolean);
                 if (mailTexts.length) {
-                    const followupPrompt = await window._buildGanttQaPrompt(question, priorHistory, mailTexts);
+                    const followupPrompt = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, mailTexts, manualOtherProjectTexts);
                     const result2 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
                     if (result2.ok) text = window._extractGanttQaAiText(result2);
                     else text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 원문 메일을 불러오는 중 오류가 발생했습니다.';
@@ -884,7 +935,10 @@
             if (otherProjectNos.length) {
                 const otherProjectTexts = (await Promise.all(otherProjectNos.map(window._aiFetchOtherProjectContext))).filter(Boolean);
                 if (otherProjectTexts.length) {
-                    const followupPrompt2 = await window._buildGanttQaPrompt(question, priorHistory, null, otherProjectTexts);
+                    // 💡 수동으로 골라둔 프로젝트 데이터가 이미 있으면(manualOtherProjectTexts) 같이 실어 보낸다 —
+                    //    "선택한 프로젝트" 얘기 중에 AI가 세 번째 프로젝트까지 추가로 참조를 요청한 드문 경우 대비.
+                    const combinedOtherProjectTexts = (manualOtherProjectTexts || []).concat(otherProjectTexts);
+                    const followupPrompt2 = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, combinedOtherProjectTexts);
                     const result3 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt2, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
                     if (result3.ok) text = window._extractGanttQaAiText(result3);
                     else text = text.replace(/\[\[ACTION:LOAD_PROJECT:\d+\]\]/g, '').trim() + '\n\n⚠️ 다른 프로젝트 데이터를 불러오는 중 오류가 발생했습니다.';
@@ -1341,10 +1395,18 @@
                     </div>
                 </div>
                 <div style="padding:8px 18px 0; font-size:10.5px; color:#999;">현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)</div>
+                <!-- 💡 [2026-09-07 신규] 다른 프로젝트를 직접 골라서 물어보기 — AI가 스스로 판단해 찾아가는
+                     자동 경로(🌐 다른 프로젝트 조회 규칙)와 별개로, 사람이 미리 지정해두면 왕복 없이 바로 답한다. -->
+                <div style="padding:6px 18px 0; display:flex; align-items:center; gap:6px;">
+                    <label for="gantt-qa-target-project" style="font-size:10.5px; color:#888; white-space:nowrap;">📂 질문 대상</label>
+                    <select id="gantt-qa-target-project" onchange="window._ganttQaOnTargetChange()" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
+                        <option value="">현재 프로젝트</option>
+                    </select>
+                </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px; align-items:stretch;">
+                    <button onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="현재 대화 내용을 모두 지웁니다" style="flex-shrink:0; width:40px; padding:0 2px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; line-height:1.3; white-space:normal; transition:background .15s, border-color .15s;">🗑️대화<br>삭제</button>
                     <textarea id="gantt-qa-input" rows="3" placeholder="이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)" style="flex:1; resize:none; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
-                    <button onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="현재 대화 내용을 모두 지웁니다" style="padding:0 12px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🗑️ 대화삭제</button>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">전송</button>
                 </div>
             </div>`;
@@ -1353,9 +1415,69 @@
             window._bindClickToFront('gantt-qa-modal');
         }
         window._renderGanttQaMessages();
+        window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
         modal.style.display = 'block';
         window.bringModalToFront('gantt-qa-modal');
         setTimeout(function() { const inp = document.getElementById('gantt-qa-input'); if (inp) inp.focus(); }, 50);
+    };
+
+    // 💡 [2026-09-07 신규] "질문 대상" 드롭다운 채우기 — project_index.json의 가벼운 목록만 사용(전체
+    //    프로젝트 데이터를 미리 다 불러오지 않음). 현재 열려있는 프로젝트는 어차피 기본값(현재 프로젝트)과
+    //    같으므로 목록에서 제외.
+    window._ganttQaPopulateProjectSelect = async function() {
+        const sel = document.getElementById('gantt-qa-target-project');
+        if (!sel) return;
+        try {
+            const all = window._msLoadProjectIndex ? await window._msLoadProjectIndex() : [];
+            const others = all.filter(function(p) { return p && p.drive_file_id && p.drive_file_id !== window.currentDriveFileId; });
+            sel.innerHTML = '<option value="">현재 프로젝트</option>' + others.map(function(p) {
+                const label = [p.model, p.customer].filter(Boolean).join(' · ') || p.file_name || '(이름없음)';
+                return `<option value="${escapeHtml(p.drive_file_id)}" data-label="${escapeHtml(label)}" data-filename="${escapeHtml(p.file_name || '')}">🌐 ${escapeHtml(label)}${p.completed ? ' [완료]' : ''}</option>`;
+            }).join('');
+        } catch (e) {
+            console.warn('[AI 문답] 질문 대상 프로젝트 목록 로드 실패:', e.message);
+        }
+        // 이전에 골라둔 프로젝트가 새로 채운 목록에도 있으면 선택 유지, 없으면(삭제됐거나 첫 로드) 현재 프로젝트로
+        const target = window._ganttQaTargetProject;
+        const stillExists = target && Array.from(sel.options).some(function(o) { return o.value === target.drive_file_id; });
+        sel.value = stillExists ? target.drive_file_id : '';
+        if (!stillExists && target) window._ganttQaTargetProject = null; // 목록에서 사라진 프로젝트를 조용히 가리키고 있지 않도록
+    };
+
+    // 💡 [2026-09-07 신규] "질문 대상" 드롭다운 변경 — 프로젝트를 바꾸면 이전 대화가 다른 프로젝트
+    //    얘기와 섞여 혼란스러우므로 대화를 새로 시작한다(대화는 애초에 저장되지 않는 휘발성이라 손실 없음).
+    window._ganttQaOnTargetChange = function() {
+        const sel = document.getElementById('gantt-qa-target-project');
+        if (!sel) return;
+        const val = sel.value;
+        const prevId = window._ganttQaTargetProject ? window._ganttQaTargetProject.drive_file_id : '';
+        if (val === prevId) return; // 실제로 안 바뀜
+
+        let newTarget = null;
+        if (val) {
+            const opt = sel.selectedOptions[0];
+            newTarget = { drive_file_id: val, file_name: (opt && opt.dataset.filename) || '', label: (opt && opt.dataset.label) || val };
+        }
+        window._ganttQaTargetProject = newTarget;
+
+        window._ganttQaHistory = [];
+        window._ganttQaPendingMailDraft = null;
+        window._ganttQaPendingNoticeDraft = null;
+        window._ganttQaPendingAlarmDraft = null;
+
+        const input = document.getElementById('gantt-qa-input');
+        if (input) {
+            input.placeholder = newTarget
+                ? `[${newTarget.label}] 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)`
+                : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)';
+        }
+        window._ganttQaHistory.push({
+            role: 'ai',
+            text: newTarget
+                ? `🔀 이제부터 **[${newTarget.label}]** 프로젝트에 대해 질문할 수 있습니다. (새 대화 시작)`
+                : `🔀 다시 **현재 열려있는 프로젝트**에 대해 질문합니다. (새 대화 시작)`
+        });
+        window._renderGanttQaMessages();
     };
 
     // ═══════════════════════════════════════════════════════════
