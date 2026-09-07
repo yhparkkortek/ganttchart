@@ -411,6 +411,21 @@ window.renderTaskInbox = function() {
                 ${it.mailRaw ? `<div style="margin-top:6px;"><button onclick="window.showInboxMailRaw('${it.uid}')" style="font-size:11px; padding:3px 10px; background:#e7f3ff; color:#1971c2; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer;">📧 ${_ibEn ? 'View Mail Source' : '원문 보기'}</button></div>` : ''}
             </div>
             ${(it.history && it.history.length) ? `<div style="font-size:10px; color:#1971c2; margin-top:2px;">↳ ${it.history.map(function(h){ return escapeHtml((h.type || '') + ': ' + (h.target || '')); }).join(' / ')}</div>` : ''}
+            ${(it.matchedProject && it.matchedProject.status === 'ambiguous' && it.matchedProject.candidates && it.matchedProject.candidates.length > 1) ? `
+            <div id="inbox-multi-${it.uid}" style="margin-top:8px; padding:8px 10px; background:#eef6ff; border:1px solid #a5c8f0; border-radius:6px;">
+                <div style="font-size:11px; font-weight:bold; color:#1a4f7a; margin-bottom:5px;">🔀 ${_ibEn ? 'May belong to several projects at once (check all that apply, then distribute)' : '여러 프로젝트에 공통으로 해당될 수 있는 후보 — 체크한 곳에 모두 배분'}</div>
+                <div style="display:flex; flex-direction:column; gap:3px; max-height:120px; overflow-y:auto;">
+                    ${it.matchedProject.candidates.map(function(c, ci) {
+                        const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '(이름없음)';
+                        const sub = [c.customer, c.assignee ? '담당:' + c.assignee : ''].filter(Boolean).join(' · ');
+                        return `<label style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:#333; cursor:pointer;">
+                            <input type="checkbox" data-idx="${ci}" checked style="cursor:pointer; flex-shrink:0;">
+                            <span style="font-weight:bold;">${escapeHtml(label)}</span>${sub ? `<span style="color:#888;">${escapeHtml(sub)}</span>` : ''}
+                        </label>`;
+                    }).join('')}
+                </div>
+                <button onclick="window.inboxDistributeToMultiCandidates('${it.uid}')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="margin-top:6px; width:100%; height:28px; box-sizing:border-box; font-size:11.5px; font-weight:bold; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; transition:background .15s, border-color .15s;">📤 ${_ibEn ? 'Distribute to checked projects' : '체크한 프로젝트에 배분'}</button>
+            </div>` : ''}
             <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; align-items:center;">
                 <select id="inbox-l0-${it.uid}" onchange="window.inboxRecomputePreview('${it.uid}')" style="flex:0 1 200px; min-width:60px; max-width:220px; padding:0 3px; height:31px; box-sizing:border-box; border:1px solid #ced4da; border-radius:6px; font-size:11px; background:#fff;">${l0Options}</select>
                 <button onclick="window.inboxPlaceToCurrent('${it.uid}')" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1.6 1 0; min-width:0; font-size:12px; white-space:nowrap; padding:0 6px; height:31px; box-sizing:border-box; border:1px solid #a5c8f0; border-radius:6px; background:#e8f4fd; color:#1a4f7a; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">➡️ ${_ibEn ? 'Current Proj' : '현재 Proj 전송'}</button>
@@ -432,6 +447,80 @@ window.renderTaskInbox = function() {
     });
     listEl.innerHTML = html;
     filteredItems.forEach(function(it) { window.inboxRecomputePreview(it.uid); }); // 초기 미리보기 계산
+};
+
+// 💡 [2026-09-07 신규] "복수 프로젝트 — 공통 이슈" 매칭(_msResolveAiProjectMatch 참고) — AI가 "이 메일은
+//    같은 제품군 여러 모델(예: AMUSNET 32/43/55인치)에 다같이 해당될 수 있다"고 폭넓게 후보를 짚어준
+//    경우, 카드에 체크박스로 후보를 보여주고 사람이 실제로 해당되는 것만 골라 한 번에 배분한다.
+//    실제 배분은 Phase 7의 다중 프로젝트 배분(mailDistributeToProject, 14a-ai-mail-analysis-1.js)과
+//    동일한 재배치 큐(gantt_ai_reassign_queue_v1)를 그대로 재사용 — 대상 프로젝트를 열면 똑같이 알림이 뜬다.
+window.inboxDistributeToMultiCandidates = function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it || !it.matchedProject || !it.matchedProject.candidates) return;
+    const container = document.getElementById('inbox-multi-' + uid);
+    if (!container) return;
+    const _en = window._currentLang === 'en';
+    const checked = Array.from(container.querySelectorAll('input[type=checkbox]:checked'))
+        .map(function(cb) { return it.matchedProject.candidates[parseInt(cb.dataset.idx, 10)]; })
+        .filter(function(c) { return c && c.drive_file_id; });
+    if (!checked.length) {
+        alert(_en ? 'Select at least one project to distribute to.' : '배분할 프로젝트를 1개 이상 선택해주세요.');
+        return;
+    }
+    const taskName = (it.task && it.task['업무명']) || (_en ? '(untitled)' : '새 업무');
+    // 💡 후보들이 같은 모델명(예: AMUSNET)에 인치만 다른 경우가 흔하므로, 확인창/이력에서도 구별되도록 인치를 함께 표기
+    const targetNames = checked.map(function(c) {
+        return ([c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ')) || c.customer || c.file_name || '';
+    });
+    if (!confirm(_en
+        ? `Distribute "${taskName}" to ${checked.length} project(s)?\n(${targetNames.join(', ')})`
+        : `"${taskName}"\n선택한 ${checked.length}개 프로젝트에 전부 배분할까요?\n(${targetNames.join(', ')})`)) return;
+
+    let queue = [];
+    try { queue = JSON.parse(localStorage.getItem('gantt_ai_reassign_queue_v1') || '[]'); } catch(e) {}
+    checked.forEach(function(c) {
+        queue.push({
+            id: Date.now() + '_' + Math.random().toString(36).slice(2, 7),
+            ts: new Date().toISOString(),
+            targetProjectId: c.drive_file_id,
+            targetProjectName: c.file_name || c.model || c.customer || '',
+            taskData: {
+                업무명: taskName,
+                상세내용: (it.task && it.task['상세내용']) || '',
+                시작일: (it.task && it.task['시작일']) || '',
+                완료일: (it.task && it.task['완료일']) || '',
+                상태: (it.task && it.task['상태']) || '진행',
+                개발단계: (it.task && it.task['개발단계']) || '',
+                담당구분: (it.task && it.task['담당구분']) || '',
+                wbs레벨: (it.task && it.task['wbs레벨'] != null) ? String(it.task['wbs레벨']) : '3',
+                _aiMeta: {
+                    confidence: '하',
+                    matchBasis: '복수 프로젝트 공통 이슈(업무 보관함에서 배분)',
+                    keywords: [],
+                    snippet: ((it.task && it.task['상세내용']) || '').substring(0, 150)
+                }
+            },
+            status: 'pending'
+        });
+    });
+    try {
+        localStorage.setItem('gantt_ai_reassign_queue_v1', JSON.stringify(queue));
+    } catch (e) {
+        alert((_en ? 'Failed to queue: ' : '배분 큐 저장 실패: ') + e.message);
+        return;
+    }
+
+    window.TaskInbox.setStatus(uid, '전송됨', {
+        type: '복수 배분',
+        target: targetNames.join(', '),
+        at: new Date().toISOString()
+    });
+    if (window.showToast) {
+        window.showToast(_en
+            ? `📤 "${taskName}" → ${checked.length} project(s) queued — a notice will show when each is opened`
+            : `📤 "${taskName}" → ${checked.length}개 프로젝트에 배분 완료 — 각 프로젝트를 열면 알림이 표시됩니다`, 'info');
+    }
+    window.renderTaskInbox();
 };
 
 // 💡 [매칭/점수 통일화] Stage1이 단일 프로젝트로 확정한 항목은 "다른 프로젝트" 모달로 전체 목록을

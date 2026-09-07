@@ -556,6 +556,27 @@ window._msResolveAiProjectMatch = function(task, candidatesForAI) {
     if (!task || !candidatesForAI || !candidatesForAI.length) return null;
     const conf = task['매칭신뢰도'];
     const pickedIdx = parseInt(task['주매칭프로젝트번호'], 10);
+
+    // 💡 [2026-09-07 신규 — 복수 프로젝트 공통 이슈] 주매칭을 0(단일 프로젝트로 못 좁힘)으로 두고도,
+    //    AI가 "복수매칭후보목록"에 "같은 제품군 여러 모델처럼 공통으로 해당될 법한 후보"를 넓게
+    //    짚어줬다면 그 후보 전부를 candidates로 살려 ambiguous 상태로 넘긴다 — 예전엔 pickedIdx가
+    //    0이면 바로 아래에서 그냥 버려져(null 반환) "AMUSNET 3종 공통 이슈" 같은 메일이 후보를 하나도
+    //    못 건진 채 미분류로 떨어졌다. 사람이 업무 보관함에서 후보들을 보고 체크박스로 골라 여러
+    //    프로젝트에 한 번에 배분할 수 있게(다중 배분 UI 참고), 여기서는 정확히 하나로 좁히기보다
+    //    관련 있을 법한 후보를 넓게 유지하는 쪽을 우선한다.
+    if ((!pickedIdx || !conf) && Array.isArray(task['복수매칭후보목록']) && task['복수매칭후보목록'].length) {
+        const multi = [];
+        const seenMulti = new Set();
+        task['복수매칭후보목록'].forEach(function(n) {
+            const idx = parseInt(n, 10);
+            if (idx >= 1 && idx <= candidatesForAI.length && !seenMulti.has(idx)) {
+                seenMulti.add(idx);
+                multi.push(candidatesForAI[idx - 1]);
+            }
+        });
+        if (multi.length) return { status: 'ambiguous', candidates: multi, extraCandidates: [], multi: true };
+    }
+
     if (!conf || !pickedIdx) return null;
     const picked = (pickedIdx >= 1 && pickedIdx <= candidatesForAI.length) ? candidatesForAI[pickedIdx - 1] : null;
     if (!picked) return null;
