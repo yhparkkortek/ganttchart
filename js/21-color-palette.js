@@ -408,6 +408,9 @@ window._cpApplyLive = function(hex, skipSave) {
     //    모두 정의 안 됨 → 테마 팔레트 기능 완전 먹통. null 가드로 방어.
     if (window._cpUpdateApplyStatus) window._cpUpdateApplyStatus();
     if (window.renderSheetTabsBar) window.renderSheetTabsBar(); // 💡 이미 그려진 시트 탭도 새 테마색으로 다시 그림
+    // 💡 [2026-09-07] 업무필터/일정도구/AI검색/인쇄 버튼 통일화 — 테마가 바뀔 때마다 즉시 같이 갱신.
+    if (window._paintActionBarButtons) window._paintActionBarButtons();
+    if (window.updateWorkFilterBtnState) window.updateWorkFilterBtnState();
 
     // 💡 [2026-08-30 신규] "이전에 고른 테마 색을 저장해달라"는 요청 — 로그인 계정별 별도 저장소를 새로
     // 만들 필요 없이, 이미 프로젝트 파일 저장/불러오기에 실려다니는 tabData에 그냥 값 하나(themeColor)로

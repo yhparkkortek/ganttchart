@@ -43,6 +43,29 @@
         btn.onmouseout  = () => btn.style.background = restBg;
     };
 
+    // 🐛 [2026-09-07 버그수정 2] "업무필터 버튼만 팔레트 테마 미적용" 제보 — 사실은 반대였다. 업무필터는
+    //    바로 위 updateWorkFilterBtnState()가 매번 _cpRoleHex로 색을 직접 다시 칠하는데, 옆에 나란히
+    //    있는 일정 도구(#schedule-tools-btn)/AI검색(#gantt-ai-search-btn)/인쇄(#print-btn) 3개는 HTML에
+    //    박힌 하드코딩 hex(#e0f5f7/#a3d9e0)가 _cpApplyLive의 "그 hex 문자열을 가진 요소를 통째로
+    //    찾아 덮어쓰는" 별도 매커니즘에만 의존하고 있어서, 방식 자체가 서로 달랐다(실사용 화면에서
+    //    업무필터만 튀어 보인 원인). 업무필터와 똑같이 _cpRoleHex를 직접 호출하는 방식으로 통일해서
+    //    매커니즘을 하나로 합친다 — _cpApplyLive가 호출될 때마다(테마 변경/프로젝트 로드) 같이 갱신됨.
+    window._paintActionBarButtons = function() {
+        const _cpHex = window._cpRoleHex || function(k) {
+            return { bg: '#e0f5f7', hoverBg: '#a3d9e0', darkText: '#00707d' }[k];
+        };
+        const bg = _cpHex('bg'), hoverBg = _cpHex('hoverBg'), darkText = _cpHex('darkText');
+        ['schedule-tools-btn', 'gantt-ai-search-btn', 'print-btn'].forEach(function(id) {
+            const btn = document.getElementById(id);
+            if (!btn) return;
+            btn.style.background = bg;
+            btn.style.color = darkText;
+            btn.onmouseover = function() { btn.style.background = hoverBg; };
+            btn.onmouseout  = function() { btn.style.background = bg; };
+        });
+    };
+    document.addEventListener('DOMContentLoaded', window._paintActionBarButtons);
+
     // 2b. 개별 팝업 토글 (Calendar·Weekly Report WBS 팝업 호환 — 그대로 유지)
     window.toggleGanttFilterPopup = function(colIndex, ev) {
         if (ev) ev.stopPropagation();

@@ -745,6 +745,78 @@
         const _mfDropSub = document.getElementById('mf-drop-sub');
         if (_mfDropSub) _mfDropSub.textContent = _en ? '.eml / .html / .txt up to 500 files' : '.eml / .html / .txt 최대 500개';
 
+        // [AI 문답 모달] 정적 UI (2026-09-07 신설) — 열려있는 상태로 언어 전환해도 즉시 반영
+        const _qaDesc = document.getElementById('gantt-qa-desc');
+        if (_qaDesc) _qaDesc.textContent = _en
+            ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Chat is not saved)'
+            : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)';
+        const _qaTargetLabel = document.getElementById('gantt-qa-target-label');
+        if (_qaTargetLabel) _qaTargetLabel.textContent = _en ? '📂 Target' : '📂 질문 대상';
+        // 드롭다운은 선택된 값을 잃지 않도록 옵션 텍스트만 다시 채움(재조회 없이 즉시 반영)
+        const _qaSel = document.getElementById('gantt-qa-target-project');
+        if (_qaSel && window._ganttQaPopulateProjectSelect) window._ganttQaPopulateProjectSelect();
+        const _qaInput = document.getElementById('gantt-qa-input');
+        if (_qaInput && !_qaInput.value) {
+            const _qaTarget = window._ganttQaTargetProject;
+            _qaInput.placeholder = _qaTarget
+                ? (_en ? `Ask about [${_qaTarget.label}]... (Enter=Send, Shift+Enter=New line)` : `[${_qaTarget.label}] 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)`)
+                : (_en ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)');
+        }
+        const _qaSendBtn = document.getElementById('gantt-qa-send-btn');
+        if (_qaSendBtn) _qaSendBtn.textContent = _en ? 'Send' : '전송';
+        const _qaClearBtn = document.getElementById('gantt-qa-input') && document.getElementById('gantt-qa-input').previousElementSibling;
+        if (_qaClearBtn && _qaClearBtn.tagName === 'BUTTON') {
+            _qaClearBtn.innerHTML = _en ? '🗑️Clear<br>Chat' : '🗑️대화<br>삭제';
+            _qaClearBtn.title = _en ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다';
+        }
+
+        // [AI 분석 설정] "📉 AI 요청 크기 제한" 섹션 (2026-09-07 신설)
+        const _reqsizeTexts = {
+            'ai-set-sec-reqsize-label': {
+                ko: '📉 AI 요청 크기 제한 (무료 등급 대응)', en: '📉 AI Request Size Limits (free-tier)'
+            },
+            'ai-qa-max-tasks-label': { ko: '💬 AI 문답 최대 참고 업무 건수', en: '💬 AI Q&A — Max referenced tasks' },
+            'ai-qa-max-tasks-hint': {
+                ko: '권장값: 300건 (기본값) — Groq 등 크기 제한이 낮은 제공사라면 50~100건대로 줄이는 걸 권장합니다.',
+                en: 'Recommended: 300 (default) — for providers with lower size limits (e.g. Groq), consider lowering to 50~100.'
+            },
+            'ai-qa-max-other-tasks-label': { ko: '🌐 다른 프로젝트 조회 시 최대 업무 건수', en: '🌐 Other-project lookup — Max tasks' },
+            'ai-qa-max-other-tasks-hint': { ko: '권장값: 200건 (기본값)', en: 'Recommended: 200 (default)' },
+        };
+        Object.entries(_reqsizeTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+        const _reqsizeDescs = {
+            'ai-qa-max-tasks-desc': {
+                ko: 'AI 문답이 현재 프로젝트 업무 목록을 프롬프트에 담을 때 최대 몇 건까지 포함할지 정합니다. 업무가 많은 프로젝트에서 "요청 크기 초과" 오류가 나면 이 값을 줄여보세요(초과분은 건수만 알리고 생략됩니다).',
+                en: 'Sets the max number of tasks from the current project included in the AI Q&A prompt. If you see a "request too large" error on a project with many tasks, try lowering this (the excess is summarized as a count only).'
+            },
+            'ai-qa-max-other-tasks-desc': {
+                ko: 'AI 문답에서 "질문 대상"으로 다른 프로젝트를 골랐을 때(또는 AI가 스스로 다른 프로젝트를 조회할 때), 그 프로젝트의 업무 목록을 몇 건까지 포함할지 정합니다.',
+                en: 'Sets the max number of tasks included when AI Q&A looks at another project — either one you pick as "Target", or one the AI looks up on its own.'
+            },
+        };
+        Object.entries(_reqsizeDescs).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+        const _reqsizeResetBtns = ['ai-qa-max-tasks-reset-btn', 'ai-qa-max-other-tasks-reset-btn'];
+        _reqsizeResetBtns.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? '🔄 Reset' : '🔄 기본값';
+        });
+        const _reqsizeNotice = document.getElementById('ai-set-reqsize-notice');
+        if (_reqsizeNotice) _reqsizeNotice.innerHTML = _en
+            ? `⚠️ <b>Free-tier constraint notice</b> — Free-tier limits vary by AI provider and can change without notice, so the console for each provider is the most accurate source. There are broadly two kinds of limits:<br>
+               · <b>Count-based (quota)</b> — a cap on requests per day/minute (e.g. Gemini). Once hit, it clears after some time.<br>
+               · <b>Size-based (TPM etc.)</b> — a cap on tokens per single request (e.g. Groq's free tier). On a project with many tasks, AI Summary/Q&A prompts can exceed this cap and <b>keep failing no matter how long you wait</b> — lower the values below or switch provider to fix it.<br>
+               · OpenAI has no free tier at all (a card is required).`
+            : `⚠️ <b>무료 등급 제약 안내</b> — AI 제공사마다 무료로 쓸 수 있는 범위가 다르고 수시로 바뀔 수 있어, 정확한 수치는 각 콘솔에서 확인하는 게 가장 정확합니다. 알려진 제약 종류는 크게 두 가지입니다:<br>
+               · <b>횟수형(quota)</b> — 하루/분당 몇 번까지만 요청 가능(예: Gemini). 한도에 걸리면 시간이 지나야 풀립니다.<br>
+               · <b>크기형(TPM 등)</b> — 요청 1건의 토큰 수 자체에 상한(예: Groq 무료 등급). 업무가 많은 프로젝트에서 AI 요약·문답을 돌리면 프롬프트가 이 상한을 넘어 <b>기다려도 계속 실패</b>합니다 — 아래 값을 줄이거나 다른 제공사로 바꿔야 풀립니다.<br>
+               · OpenAI는 무료 등급이 아예 없습니다(카드 등록 필요).`;
+
         // [업무 보관함 모달] 헤더 번역
         // 💡 [2026-08-25] childNodes[0]만 바꾸는 이유 — 이 span 안엔 ℹ️ 도움말 아이콘(nested span)이
         //    같이 들어있어서, textContent를 통째로 덮으면 그 아이콘/툴팁까지 같이 사라진다.
@@ -770,6 +842,15 @@
         }
         const _ibxCloseBtn = document.getElementById('inbox-close-btn');
         if (_ibxCloseBtn) _ibxCloseBtn.title = _en ? 'Close' : '닫기';
+        // 💡 [2026-09-07 신규 버튼] "🧹 저장공간 정리" — 09-07에 새로 추가됐는데 이 정적 버튼 라벨 자체는
+        //    toggleLang() 등록이 빠져있었음(클릭 시 뜨는 확인창/토스트는 처음부터 이미 이중언어였음).
+        const _ibxCleanupBtn = document.getElementById('inbox-cleanup-storage-btn');
+        if (_ibxCleanupBtn) {
+            _ibxCleanupBtn.textContent = _en ? '🧹 Clean Up Storage' : '🧹 저장공간 정리';
+            _ibxCleanupBtn.title = _en
+                ? 'Clears the stored mail source from completed (placed/sent) items, and trims old items if too many have piled up, to free storage space.'
+                : '완료(배치됨/전송됨) 항목의 저장된 메일 원문을 지우고, 너무 많이 쌓였으면 오래된 항목을 정리해 저장 공간을 확보합니다.';
+        }
 
         const _ibxSubTexts = {
             'inbox-subqueue-header':     { ko:'📬 미분류 / 신규발신자 / 자동폐기', en:'📬 Unclassified / New Senders / Auto-discarded' },

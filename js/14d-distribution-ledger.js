@@ -57,7 +57,8 @@ window.inboxOpenDistribute = async function(uid) {
     // 💡 "다른 프로젝트" 패널이 펼쳐진 동안은 "현재 프로젝트"용 자동위치 줄을 숨겨 중복처럼 안 보이게 함
     const curAutoRow = document.getElementById('inbox-cur-auto-row-' + uid);
     if (curAutoRow) curAutoRow.style.display = 'none';
-    inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#888; font-size:12px;">📂 프로젝트 목록을 불러오는 중...</div>';
+    const _distEn = window._currentLang === 'en';
+    inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#888; font-size:12px;">' + (_distEn ? '📂 Loading project list...' : '📂 프로젝트 목록을 불러오는 중...') + '</div>';
 
     try {
         // 🐛 [2026-09-07 버그수정] 예전엔 '${SHARED_FOLDER_ID}' in parents로 루트 직속 파일만 찾아서,
@@ -67,7 +68,7 @@ window.inboxOpenDistribute = async function(uid) {
         const files = await window._listProjectFiles();
         inlineEl.innerHTML = '';
         if (!files.length) {
-            inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#aaa; font-size:12px;">공용 폴더에 프로젝트 파일이 없습니다.</div>';
+            inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#aaa; font-size:12px;">' + (_distEn ? 'No project files in the shared folder.' : '공용 폴더에 프로젝트 파일이 없습니다.') + '</div>';
             return;
         }
 
@@ -76,8 +77,8 @@ window.inboxOpenDistribute = async function(uid) {
         //    팀은 기본 펼침(담당자 이름까지는 바로 보임), 담당자는 기본 접힘(파일명은 클릭해야 보임) —
         //    예전엔 담당자 그룹이 기본 펼침이라 파일명이 한 번에 와르르 보여서 "세부 프로젝트 확인"
         //    단계 없이 목록만 길어 보였다.
-        const UNASSIGNED_TEAM = '미지정 팀';
-        const UNASSIGNED_PM   = '미지정';
+        const UNASSIGNED_TEAM = _distEn ? 'Unassigned team' : '미지정 팀';
+        const UNASSIGNED_PM   = _distEn ? 'Unassigned' : '미지정';
         const _TEAM_PAL = [
             { h:'#cfe6fa', b:'#a5c8f0', t:'#1a4f7a', hv:'#b8d8f0' }, // 1 파랑
             { h:'#c9ecd3', b:'#a8dab8', t:'#1a6640', hv:'#b0dfc0' }, // 2 초록
@@ -230,7 +231,7 @@ window.inboxOpenDistribute = async function(uid) {
         // 💡 상세 배치 단계(개발단계 선택 + 전송실행)를 팝업이 아니라 이 카드 안으로 이동
         inlineEl.appendChild(document.getElementById('dist-step2'));
     } catch (err) {
-        inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#e03131; font-size:12px;">❌ 목록 호출 실패: 드라이브 연동 상태 또는 권한을 확인해주세요.</div>';
+        inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#e03131; font-size:12px;">' + (_distEn ? '❌ Failed to load list: please check your Drive connection and permissions.' : '❌ 목록 호출 실패: 드라이브 연동 상태 또는 권한을 확인해주세요.') + '</div>';
     }
 };
 

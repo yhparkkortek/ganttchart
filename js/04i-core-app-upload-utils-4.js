@@ -191,31 +191,31 @@
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-reqsize')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📉 AI 요청 크기 제한 (무료 등급 대응)</span>
+                            <span id="ai-set-sec-reqsize-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📉 AI 요청 크기 제한 (무료 등급 대응)</span>
                             <span id="ai-set-sec-reqsize-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
                         <div id="ai-set-sec-reqsize" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                            <div style="font-size:11px; color:#555; background:#fff8e6; border:1px solid #ffe066; border-radius:6px; padding:8px 10px; margin-bottom:12px; line-height:1.6;">
+                            <div id="ai-set-reqsize-notice" style="font-size:11px; color:#555; background:#fff8e6; border:1px solid #ffe066; border-radius:6px; padding:8px 10px; margin-bottom:12px; line-height:1.6;">
                                 ⚠️ <b>무료 등급 제약 안내</b> — AI 제공사마다 무료로 쓸 수 있는 범위가 다르고 수시로 바뀔 수 있어, 정확한 수치는 각 콘솔에서 확인하는 게 가장 정확합니다. 알려진 제약 종류는 크게 두 가지입니다:<br>
                                 · <b>횟수형(quota)</b> — 하루/분당 몇 번까지만 요청 가능(예: Gemini). 한도에 걸리면 시간이 지나야 풀립니다.<br>
                                 · <b>크기형(TPM 등)</b> — 요청 1건의 토큰 수 자체에 상한(예: Groq 무료 등급). 업무가 많은 프로젝트에서 AI 요약·문답을 돌리면 프롬프트가 이 상한을 넘어 <b>기다려도 계속 실패</b>합니다 — 아래 값을 줄이거나 다른 제공사로 바꿔야 풀립니다.<br>
                                 · OpenAI는 무료 등급이 아예 없습니다(카드 등록 필요).
                             </div>
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">💬 AI 문답 최대 참고 업무 건수</label>
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">AI 문답이 현재 프로젝트 업무 목록을 프롬프트에 담을 때 최대 몇 건까지 포함할지 정합니다. 업무가 많은 프로젝트에서 "요청 크기 초과" 오류가 나면 이 값을 줄여보세요(초과분은 건수만 알리고 생략됩니다).</div>
+                            <label id="ai-qa-max-tasks-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">💬 AI 문답 최대 참고 업무 건수</label>
+                            <div id="ai-qa-max-tasks-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">AI 문답이 현재 프로젝트 업무 목록을 프롬프트에 담을 때 최대 몇 건까지 포함할지 정합니다. 업무가 많은 프로젝트에서 "요청 크기 초과" 오류가 나면 이 값을 줄여보세요(초과분은 건수만 알리고 생략됩니다).</div>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-qa-max-tasks-input" type="number" min="10" max="1000" step="10" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-qa-max-tasks-input').value=window._AI_QA_MAX_TASKS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-qa-max-tasks-reset-btn" onclick="document.getElementById('ai-qa-max-tasks-input').value=window._AI_QA_MAX_TASKS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 300건 (기본값) — Groq 등 크기 제한이 낮은 제공사라면 50~100건대로 줄이는 걸 권장합니다.</div>
+                            <div id="ai-qa-max-tasks-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 300건 (기본값) — Groq 등 크기 제한이 낮은 제공사라면 50~100건대로 줄이는 걸 권장합니다.</div>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🌐 다른 프로젝트 조회 시 최대 업무 건수</label>
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">AI 문답에서 "질문 대상"으로 다른 프로젝트를 골랐을 때(또는 AI가 스스로 다른 프로젝트를 조회할 때), 그 프로젝트의 업무 목록을 몇 건까지 포함할지 정합니다.</div>
+                            <label id="ai-qa-max-other-tasks-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🌐 다른 프로젝트 조회 시 최대 업무 건수</label>
+                            <div id="ai-qa-max-other-tasks-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">AI 문답에서 "질문 대상"으로 다른 프로젝트를 골랐을 때(또는 AI가 스스로 다른 프로젝트를 조회할 때), 그 프로젝트의 업무 목록을 몇 건까지 포함할지 정합니다.</div>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-qa-max-other-tasks-input" type="number" min="10" max="1000" step="10" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-qa-max-other-tasks-input').value=window._AI_QA_MAX_OTHER_TASKS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-qa-max-other-tasks-reset-btn" onclick="document.getElementById('ai-qa-max-other-tasks-input').value=window._AI_QA_MAX_OTHER_TASKS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 200건 (기본값)</div>
+                            <div id="ai-qa-max-other-tasks-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 200건 (기본값)</div>
                         </div>
                     </div>
 

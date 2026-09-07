@@ -786,7 +786,7 @@
     // ── 💡 [2026-09-07 신규] "다른 프로젝트에 대한 실행 요청" 확인/취소 ─────────────────────────
     window._aiCancelPendingOpenExecDraft = function(draftId) {
         if (window._ganttQaPendingOpenExecDraft && window._ganttQaPendingOpenExecDraft.id === draftId) window._ganttQaPendingOpenExecDraft = null;
-        window._ganttQaHistory.push({ role: 'ai', text: '🔓 프로젝트 열기를 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._ganttQaHistory.push({ role: 'ai', text: window._currentLang === 'en' ? '🔓 Canceled opening the project.' : '🔓 프로젝트 열기를 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
         window._renderGanttQaMessages();
     };
     // 💡 확인 버튼을 누르면: ① 그 프로젝트를 새 탭으로 실제로 열어(executeLoadFile — 프로젝트 열기와
@@ -797,18 +797,19 @@
     //    프로젝트를 고르는 것도 결국 그 프로젝트를 연 것과 동일한 조건"이라는 목표대로, 열고 난 뒤에는
     //    VIEW_MAIL(원문보기)·Gantt 이동·메일/공지/알람/행추가·수정 초안까지 전부 평소와 똑같이 동작한다.
     window._aiOpenProjectAndReask = async function(draftId, btn) {
+        const _oEn = window._currentLang === 'en';
         const pending = window._ganttQaPendingOpenExecDraft;
         if (!pending || pending.id !== draftId) {
-            if (window.showToast) window.showToast('⚠️ 이 요청은 이미 처리되었거나 새 요청으로 대체되었습니다.', 'warning');
+            if (window.showToast) window.showToast(_oEn ? '⚠️ This request was already handled or replaced by a newer one.' : '⚠️ 이 요청은 이미 처리되었거나 새 요청으로 대체되었습니다.', 'warning');
             window._renderGanttQaMessages();
             return;
         }
-        if (btn) { btn.disabled = true; btn.textContent = '⏳ 여는 중...'; }
+        if (btn) { btn.disabled = true; btn.textContent = _oEn ? '⏳ Opening...' : '⏳ 여는 중...'; }
         window._ganttQaPendingOpenExecDraft = null;
         const entry = pending.entry;
 
         try {
-            if (!window.executeLoadFile) throw new Error('프로젝트 열기 기능을 찾을 수 없습니다.');
+            if (!window.executeLoadFile) throw new Error(_oEn ? 'Could not find the project-open function.' : '프로젝트 열기 기능을 찾을 수 없습니다.');
             await window.executeLoadFile(entry.drive_file_id, entry.file_name, true); // silent=true — 안내는 아래서 직접 표시
 
             // 이제 그 프로젝트가 "현재 프로젝트"가 됐으므로 질문 대상 드롭다운도 되돌린다.
@@ -816,24 +817,24 @@
             const sel = document.getElementById('gantt-qa-target-project');
             if (sel) sel.value = '';
             const input = document.getElementById('gantt-qa-input');
-            if (input) input.placeholder = '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)';
+            if (input) input.placeholder = _oEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)';
 
-            window._ganttQaHistory.push({ role: 'ai', text: `🔓 **[${entry.label}]** 프로젝트를 새 탭으로 열었습니다. 이어서 요청하신 작업을 처리합니다...`, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+            window._ganttQaHistory.push({ role: 'ai', text: _oEn ? `🔓 Opened **[${entry.label}]** in a new tab. Continuing with your request...` : `🔓 **[${entry.label}]** 프로젝트를 새 탭으로 열었습니다. 이어서 요청하신 작업을 처리합니다...`, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
             window._renderGanttQaMessages();
 
             const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-            if (!apiKey) throw new Error('AI API 키가 설정되어 있지 않습니다.');
+            if (!apiKey) throw new Error(_oEn ? 'No AI API key is configured.' : 'AI API 키가 설정되어 있지 않습니다.');
             const priorHistory = window._ganttQaHistory.slice();
             // 💡 이제 진짜 현재 프로젝트이므로 다른 프로젝트 컨텍스트(manualOtherProjectTexts) 없이 평소와 동일하게 질문
             const prompt = await window._buildGanttQaPrompt(pending.question, priorHistory);
-            const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
-            if (!result.ok) throw result.error || new Error('알 수 없는 오류');
+            const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, _oEn ? '⏱️ No AI response within 60 seconds. Check your network and try again.' : '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+            if (!result.ok) throw result.error || new Error(_oEn ? 'Unknown error' : '알 수 없는 오류');
             const text = window._extractGanttQaAiText(result);
 
             const processed = await window._aiProcessGanttQaTurn(text, pending.question, pending.question, priorHistory, apiKey, null);
             window._ganttQaHistory.push({ role: 'ai', text: processed.text, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: pending.question, mailDraftId: processed.mailDraftId, noticeDraftId: processed.noticeDraftId, alarmDraftId: processed.alarmDraftId, ganttEditDraftId: processed.ganttEditDraftId, ganttAddDraftId: processed.ganttAddDraftId, openExecDraftId: processed.openExecDraftId });
         } catch (e) {
-            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
+            window._ganttQaHistory.push({ role: 'ai', text: (_oEn ? '⚠️ Error: ' : '⚠️ 오류: ') + (e && e.message ? e.message : e), error: true });
         } finally {
             window._renderGanttQaMessages();
         }
@@ -1065,12 +1066,14 @@
                 const draftId = 'openexec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
                 window._ganttQaPendingOpenExecDraft = {
                     id: draftId,
-                    entry: { drive_file_id: entry.drive_file_id, file_name: entry.file_name, label: entry.model || entry.customer || entry.file_name || '(이름없음)' },
+                    entry: { drive_file_id: entry.drive_file_id, file_name: entry.file_name, label: entry.model || entry.customer || entry.file_name || (window._currentLang === 'en' ? '(untitled)' : '(이름없음)') },
                     question: plainQuestion
                 };
                 openExecDraftIdThisTurn = draftId;
             } else {
-                text += '\n\n⚠️ 대상 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
+                text += window._currentLang === 'en'
+                    ? '\n\n⚠️ Could not find the target project (it may have been deleted, or you may not have access).'
+                    : '\n\n⚠️ 대상 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
             }
         }
 
@@ -1577,6 +1580,10 @@
             modal = document.createElement('div');
             modal.id = 'gantt-qa-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9150; pointer-events:none; background:none;';
+            // 💡 [2026-09-07 신규] "질문 대상" UI는 이 모달이 처음 만들어질 때 딱 한 번만 그려지고, 이후엔
+            //    toggleLang()이 id 기반으로 다시 패치해줘야 언어 전환 시에도 즉시 반영된다(04j-core-app-
+            //    upload-utils-5.js의 toggleLang() 안 'gantt-qa-target-label'/'gantt-qa-desc' 참고).
+            const _qEn = window._currentLang === 'en';
             modal.innerHTML = `
             <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
                 <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
@@ -1586,20 +1593,20 @@
                         <button onclick="document.getElementById('gantt-qa-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
-                <div style="padding:8px 18px 0; font-size:10.5px; color:#999;">현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)</div>
+                <div id="gantt-qa-desc" style="padding:8px 18px 0; font-size:10.5px; color:#999;">${_qEn ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Chat is not saved)' : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)'}</div>
                 <!-- 💡 [2026-09-07 신규] 다른 프로젝트를 직접 골라서 물어보기 — AI가 스스로 판단해 찾아가는
                      자동 경로(🌐 다른 프로젝트 조회 규칙)와 별개로, 사람이 미리 지정해두면 왕복 없이 바로 답한다. -->
                 <div style="padding:6px 18px 0; display:flex; align-items:center; gap:6px;">
-                    <label for="gantt-qa-target-project" style="font-size:10.5px; color:#888; white-space:nowrap;">📂 질문 대상</label>
+                    <label id="gantt-qa-target-label" for="gantt-qa-target-project" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '📂 Target' : '📂 질문 대상'}</label>
                     <select id="gantt-qa-target-project" onchange="window._ganttQaOnTargetChange()" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
-                        <option value="">현재 프로젝트</option>
+                        <option value="">${_qEn ? 'Current project' : '현재 프로젝트'}</option>
                     </select>
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px; align-items:stretch;">
-                    <button onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="현재 대화 내용을 모두 지웁니다" style="flex-shrink:0; width:40px; padding:0 2px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; line-height:1.3; white-space:normal; transition:background .15s, border-color .15s;">🗑️대화<br>삭제</button>
-                    <textarea id="gantt-qa-input" rows="3" placeholder="이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)" style="flex:1; resize:none; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
-                    <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">전송</button>
+                    <button onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; width:40px; padding:0 2px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; line-height:1.3; white-space:normal; transition:background .15s, border-color .15s;">${_qEn ? '🗑️Clear<br>Chat' : '🗑️대화<br>삭제'}</button>
+                    <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
+                    <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>
             </div>`;
             document.body.appendChild(modal);
@@ -1639,13 +1646,14 @@
     window._ganttQaPopulateProjectSelect = async function() {
         const sel = document.getElementById('gantt-qa-target-project');
         if (!sel) return;
+        const _pEn = window._currentLang === 'en';
         try {
             const all = window._msLoadProjectIndex ? await window._msLoadProjectIndex() : [];
             const others = all.filter(function(p) { return p && p.drive_file_id && p.drive_file_id !== window.currentDriveFileId; });
-            sel.innerHTML = '<option value="">현재 프로젝트</option>' + others.map(function(p) {
+            sel.innerHTML = '<option value="">' + (_pEn ? 'Current project' : '현재 프로젝트') + '</option>' + others.map(function(p) {
                 // 💡 [2026-09-07] 모델명만으로는 같은 모델의 다른 인치가 헷갈려서 인치도 같이 표시.
-                const label = [p.model ? (p.model + (p.inch ? ' ' + p.inch + '"' : '')) : '', p.customer].filter(Boolean).join(' · ') || p.file_name || '(이름없음)';
-                return `<option value="${escapeHtml(p.drive_file_id)}" data-label="${escapeHtml(label)}" data-filename="${escapeHtml(p.file_name || '')}">🌐 ${escapeHtml(label)}${p.completed ? ' [완료]' : ''}</option>`;
+                const label = [p.model ? (p.model + (p.inch ? ' ' + p.inch + '"' : '')) : '', p.customer].filter(Boolean).join(' · ') || p.file_name || (_pEn ? '(untitled)' : '(이름없음)');
+                return `<option value="${escapeHtml(p.drive_file_id)}" data-label="${escapeHtml(label)}" data-filename="${escapeHtml(p.file_name || '')}">🌐 ${escapeHtml(label)}${p.completed ? (_pEn ? ' [Done]' : ' [완료]') : ''}</option>`;
             }).join('');
         } catch (e) {
             console.warn('[AI 문답] 질문 대상 프로젝트 목록 로드 실패:', e.message);
@@ -1662,6 +1670,7 @@
     window._ganttQaOnTargetChange = function() {
         const sel = document.getElementById('gantt-qa-target-project');
         if (!sel) return;
+        const _tcEn = window._currentLang === 'en';
         const val = sel.value;
         const prevId = window._ganttQaTargetProject ? window._ganttQaTargetProject.drive_file_id : '';
         if (val === prevId) return; // 실제로 안 바뀜
@@ -1681,14 +1690,14 @@
         const input = document.getElementById('gantt-qa-input');
         if (input) {
             input.placeholder = newTarget
-                ? `[${newTarget.label}] 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)`
-                : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)';
+                ? (_tcEn ? `Ask about [${newTarget.label}]... (Enter=Send, Shift+Enter=New line)` : `[${newTarget.label}] 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)`)
+                : (_tcEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)');
         }
         window._ganttQaHistory.push({
             role: 'ai',
             text: newTarget
-                ? `🔀 이제부터 **[${newTarget.label}]** 프로젝트에 대해 질문할 수 있습니다. (새 대화 시작)`
-                : `🔀 다시 **현재 열려있는 프로젝트**에 대해 질문합니다. (새 대화 시작)`
+                ? (_tcEn ? `🔀 You can now ask about **[${newTarget.label}]**. (New chat started)` : `🔀 이제부터 **[${newTarget.label}]** 프로젝트에 대해 질문할 수 있습니다. (새 대화 시작)`)
+                : (_tcEn ? `🔀 Back to asking about the **currently open project**. (New chat started)` : `🔀 다시 **현재 열려있는 프로젝트**에 대해 질문합니다. (새 대화 시작)`)
         });
         window._renderGanttQaMessages();
 
