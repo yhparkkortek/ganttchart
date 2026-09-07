@@ -1146,6 +1146,48 @@ window.inboxReportFalseMatch = function(uid) {
         }
     }
     window.renderTaskInbox();
+
+    // ⑧ [2026-09-07 신규] "오매칭"은 "이 프로젝트 것이 아니다"이지 "존재하지 않는 메일이다"는 아님 —
+    //    아직 등록 안 된 새 프로젝트 건일 수 있으므로, 삭제 직후 메일 내용으로 새 프로젝트를 만들지 물어본다.
+    //    이미 등록된 "다른" 프로젝트 건이면 이 대화상자 대신 [📤 다른 Proj 선택]을 쓰는 게 맞으므로
+    //    안내 문구에 그 구분을 명시해서 오남용(신규 아닌데 새 프로젝트 중복 생성)을 줄인다.
+    const offerMsg = _en
+        ? `Deleted. Was this actually mail for a NEW project that hasn't been registered yet?\n(If it belongs to a project that already exists, use [📤 Other Project] instead — this opens a separate blank sheet with AI-prefilled fields for you to review.)`
+        : `삭제했습니다. 혹시 아직 등록되지 않은 새 프로젝트 건인가요?\n(이미 등록된 다른 프로젝트 건이라면 이 창 대신 [📤 다른 Proj 선택]을 이용해주세요 — 여기서는 별도의 빈 시트를 열고 AI가 메일에서 추출한 정보로 미리 채워드립니다.)`;
+    if (confirm(offerMsg)) {
+        window._ibStartNewProjectFromMismatch(it);
+    }
+};
+
+// 💡 [2026-09-07 신규] 오매칭 신고 직후 "새 프로젝트로 등록"을 고르면 — 15b-mail-server-tab-1.js의
+//    _msPickNewProject와 동일한 흐름(새 빈 시트 분리 → AI로 메일 필드 추출 → 위자드를 MP(EC) 상태로
+//    오픈)을 업무 보관함 항목(mailRaw 기반) 소스로 재사용한다. _msPickNewProject 자체를 그대로 부르지
+//    않는 이유: 그쪽은 window._msReanalyzeTarget/_msResults(메일서버 탭 전용 전역상태)를 참조해서 이
+//    경로엔 안 맞고, 위에서 이미 한 번 confirm을 받았으니 거기서 또 뜨는 "계속하시겠습니까?" 확인을
+//    중복으로 띄우고 싶지 않다.
+window._ibStartNewProjectFromMismatch = async function(it) {
+    const _en2 = window._currentLang === 'en';
+    // 현재 프로젝트는 그대로 탭에 유지되고, 새 빈 시트로 전환된다 (startNewProject/_msPickNewProject와 동일 패턴)
+    if (window._openAsNewSheet) window._openAsNewSheet('new_' + Date.now(), null, null);
+    if (window._resetToBlankNoConfirm) window._resetToBlankNoConfirm(true);
+
+    const mr = it.mailRaw || {};
+    const mailRecord = {
+        subject: mr.subject || (it.task && it.task['업무명']) || '',
+        from:    mr.sender || '',
+        body:    mr.body2000 || (it.task && it.task['상세내용']) || ''
+    };
+
+    let prefill = {};
+    if (window._npwExtractFromMail && window.getActiveAiKey && window.getActiveAiKey() && (mailRecord.subject || mailRecord.body)) {
+        if (window.showToast) window.showToast(_en2 ? '⏳ AI is extracting project info from the mail...' : '⏳ AI가 메일에서 프로젝트 정보를 추출하는 중...', 'info', 3000);
+        try { prefill = await window._npwExtractFromMail(mailRecord); } catch (e) { console.warn('[오매칭→새 프로젝트] AI 추출 실패:', e); }
+    }
+    if (window._npwOpen) {
+        window._npwOpen(prefill, 'MP(EC)');
+    } else {
+        alert(_en2 ? 'Wizard module not loaded. Please reload the page and try again.' : '위자드 모듈이 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도해주세요.');
+    }
 };
 
 // ─── 💡 [버그 수정 2026-09-07] 업무 보관함 카드의 🗑 버튼이 이유 없이 곧장 TaskInbox.remove()만
