@@ -466,6 +466,12 @@
     //    { drive_file_id, file_name, label } — sendGanttQaMessage가 이 값을 보고 해당 프로젝트
     //    데이터를 먼저 가져와(_aiFetchManualTargetContext) 왕복 없이 첫 호출에 바로 실어 보낸다.
     window._ganttQaTargetProject = null;
+    // 💡 [2026-09-07 신규] "다른 프로젝트에 대한 실행 요청" — AI가 [[ACTION:OPEN_PROJECT_TO_EDIT:번호]]로
+    //    응답하면(다른 프로젝트엔 #G번호가 없어 즉시실행 태그를 못 쓰므로), 메일/공지/알람 초안과 동일한
+    //    "① 초안 제시 → ② 사람이 버튼으로 확인" 2단계로 처리한다 — 화면 전체가 그 프로젝트로 바뀌는
+    //    큰 동작(executeLoadFile로 새 탭 오픈)이라 자동 실행하지 않고 반드시 확인을 거친다.
+    //    { entry: {drive_file_id,file_name,label}, question: 원래 질문, id } — 확인/취소 시 소진됨.
+    window._ganttQaPendingOpenExecDraft = null;
 
     // 💡 [2026-08-29 신규 — 버그 수정] "다른 프로젝트로 이동해서 물어보면 응답이 없다(⏳가 멈추지 않음).
     //    내용을 지우고 다시 물으면 답한다"는 제보 — 프로젝트를 전환한 직후엔 구글 드라이브 토큰이 막
@@ -1032,6 +1038,7 @@
    - 그 섹션이 아직 없다면, [다른 프로젝트 목록]에서 요청과 가장 일치하는 프로젝트를 정확히 하나만(또는 질문이 여러 프로젝트에 걸치면 그만큼 여러 개를) 찾아, 다른 말이나 설명 없이 답변으로 정확히 이 형식만 출력하세요: [[ACTION:LOAD_PROJECT:그프로젝트의번호]] (여러 개면 각각 한 줄씩, 예: [[ACTION:LOAD_PROJECT:3]]\n[[ACTION:LOAD_PROJECT:7]]) — "P"는 빼고 숫자만 넣습니다(#P3이면 LOAD_PROJECT:3). 시스템이 해당 프로젝트 데이터를 찾아 자동으로 다시 물어봅니다.
    - 일치하는 프로젝트가 없으면 태그를 쓰지 말고 "그런 프로젝트를 찾지 못했습니다"라고 답하고, 비슷한 이름이 있으면 후보로 보여주며 되물어보세요. 여러 개가 애매하게 겹치면(예: 같은 이름의 프로젝트가 2개) 태그를 쓰지 말고 어느 쪽인지 되물어보세요.
 3. 다른 프로젝트의 업무를 언급할 때는 "#G숫자" 같은 클릭 인용 번호를 절대 붙이지 마세요(그 번호는 지금 열려있는 이 프로젝트의 업무에만 유효합니다 — 다른 프로젝트 업무는 그냥 업무명으로 설명하세요). 답변 안에서 지금 프로젝트 얘기와 다른 프로젝트 얘기가 섞이면 "(OO 프로젝트)"처럼 어느 프로젝트 얘기인지 매번 명확히 구분해서 헷갈리지 않게 하세요.
+4. **다른 프로젝트에 대한 실행(삭제/상태변경/알람/레벨/이동/추가/수정 등) 요청을 받았을 때**: #G숫자가 없어 위 실행 태그들을 그 프로젝트에 쓸 수 없으므로, 대신 그 프로젝트를 화면에 여는 절차를 거쳐야 합니다 — 평소처럼 자연스럽게 답한 뒤(예: "OO 프로젝트를 열어서 처리하려면 확인이 필요합니다"), 다른 말 없이 답변 마지막 줄에 정확히 이 형식만 추가하세요: [[ACTION:OPEN_PROJECT_TO_EDIT:그프로젝트의번호]] ("P"는 빼고 숫자만, [다른 프로젝트 목록] 기준 — 그 번호는 [질문 대상] 드롭다운에서 고른 프로젝트일 수도, 방금 이름으로 언급한 다른 프로젝트일 수도 있습니다). 이 태그는 위 6가지 즉시실행 태그와 달리 곧바로 실행되지 않고, 사람이 채팅창의 확인 버튼을 눌러야만 그 프로젝트를 새 탭으로 열고 요청하신 작업을 이어서 처리합니다 — 화면 전체가 그 프로젝트로 바뀌는 큰 동작이라 반드시 사람 확인을 거칩니다.
 
 [오늘 날짜]
 ${ctx.todayStr}
@@ -1402,6 +1409,14 @@ ${question}
                     <button onclick="window._aiCancelPendingGanttAddDraft('${m.ganttAddDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
                 </div>`
                 : '';
+            // 💡 [2026-09-07 신규] "다른 프로젝트를 열어서 실행" 확인 카드 — 화면 전체가 그 프로젝트로
+            //    바뀌는 큰 동작이라 다른 초안(메일/공지/알람/Gantt수정)과 똑같이 확인 버튼을 거친다.
+            const openExecDraftHtml = (!isUser && m.openExecDraftId && window._ganttQaPendingOpenExecDraft && window._ganttQaPendingOpenExecDraft.id === m.openExecDraftId)
+                ? `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px;">
+                    <button onclick="window._aiOpenProjectAndReask('${m.openExecDraftId}', this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔓 프로젝트 열어서 처리</button>
+                    <button onclick="window._aiCancelPendingOpenExecDraft('${m.openExecDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">취소</button>
+                </div>`
+                : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
@@ -1410,6 +1425,7 @@ ${question}
                 ${alarmDraftHtml ? `<div style="max-width:82%; width:100%;">${alarmDraftHtml}</div>` : ''}
                 ${ganttEditDraftHtml ? `<div style="max-width:82%; width:100%;">${ganttEditDraftHtml}</div>` : ''}
                 ${ganttAddDraftHtml ? `<div style="max-width:82%; width:100%;">${ganttAddDraftHtml}</div>` : ''}
+                ${openExecDraftHtml ? `<div style="max-width:82%; width:100%;">${openExecDraftHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;

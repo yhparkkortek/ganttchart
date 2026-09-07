@@ -780,6 +780,69 @@
         window._renderGanttQaMessages();
     };
 
+    // ── 💡 [2026-09-07 신규] "다른 프로젝트에 대한 실행 요청" 확인/취소 ─────────────────────────
+    window._aiCancelPendingOpenExecDraft = function(draftId) {
+        if (window._ganttQaPendingOpenExecDraft && window._ganttQaPendingOpenExecDraft.id === draftId) window._ganttQaPendingOpenExecDraft = null;
+        window._ganttQaHistory.push({ role: 'ai', text: '🔓 프로젝트 열기를 취소했습니다.', uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+        window._renderGanttQaMessages();
+    };
+    // 💡 확인 버튼을 누르면: ① 그 프로젝트를 새 탭으로 실제로 열어(executeLoadFile — 프로젝트 열기와
+    //    100% 동일한 코드경로라 autosave/실행취소/변경이력/저장충돌감지가 전부 그대로 적용됨) 진짜
+    //    "현재 프로젝트"로 만든 다음 ② 같은 질문을 다시 물어서(이번엔 다른 프로젝트 컨텍스트 없이,
+    //    평소와 동일한 프롬프트로) #G번호 기반 실행 태그가 정상적으로 나오게 하고 _applyGanttQaActions로
+    //    실제 반영한다. 단, 이 재질문 경로는 즉시실행 태그(삭제/상태/레벨/이동/알람 등)만 처리하고
+    //    2단계 확인이 필요한 초안(메일 작성/공지 등록/알람 세부설정/행 추가·수정, VIEW_MAIL·LOAD_PROJECT
+    //    연쇄조회)까지는 아직 잇지 않았다 — 그런 요청이면 텍스트로 답은 오되 태그는 무시되므로,
+    //    "프로젝트를 열어드렸으니 화면에서 직접 진행해주세요" 안내를 덧붙인다.
+    window._aiOpenProjectAndReask = async function(draftId, btn) {
+        const pending = window._ganttQaPendingOpenExecDraft;
+        if (!pending || pending.id !== draftId) {
+            if (window.showToast) window.showToast('⚠️ 이 요청은 이미 처리되었거나 새 요청으로 대체되었습니다.', 'warning');
+            window._renderGanttQaMessages();
+            return;
+        }
+        if (btn) { btn.disabled = true; btn.textContent = '⏳ 여는 중...'; }
+        window._ganttQaPendingOpenExecDraft = null;
+        const entry = pending.entry;
+
+        try {
+            if (!window.executeLoadFile) throw new Error('프로젝트 열기 기능을 찾을 수 없습니다.');
+            await window.executeLoadFile(entry.drive_file_id, entry.file_name, true); // silent=true — 안내는 아래서 직접 표시
+
+            // 이제 그 프로젝트가 "현재 프로젝트"가 됐으므로 질문 대상 드롭다운도 되돌린다.
+            window._ganttQaTargetProject = null;
+            const sel = document.getElementById('gantt-qa-target-project');
+            if (sel) sel.value = '';
+            const input = document.getElementById('gantt-qa-input');
+            if (input) input.placeholder = '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)';
+
+            window._ganttQaHistory.push({ role: 'ai', text: `🔓 **[${entry.label}]** 프로젝트를 새 탭으로 열었습니다. 이어서 요청하신 작업을 처리합니다...`, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6) });
+            window._renderGanttQaMessages();
+
+            const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+            if (!apiKey) throw new Error('AI API 키가 설정되어 있지 않습니다.');
+            const priorHistory = window._ganttQaHistory.slice();
+            const prompt = await window._buildGanttQaPrompt(pending.question, priorHistory);
+            const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+            if (!result.ok) throw result.error || new Error('알 수 없는 오류');
+            let text = window._extractGanttQaAiText(result);
+            // 💡 2단계 확인 초안 태그가 남아있으면(아직 이 경로에서 처리 못 함) 화면에 원문 태그가
+            //    그대로 노출되지 않도록 지우고 안내를 붙인다.
+            const hasUnhandledDraftTag = /\[\[(MAIL_DRAFT|GANTT_EDIT_DRAFT|GANTT_ADD_DRAFT)/.test(text) || /\[\[ACTION:(SEND_MAIL|APPLY_GANTT_EDIT|APPLY_GANTT_ADD):CONFIRM\]\]/.test(text);
+            text = text.replace(/\[\[MAIL_DRAFT\]\][\s\S]*?\[\[\/MAIL_DRAFT\]\]/g, '')
+                       .replace(/\[\[GANTT_EDIT_DRAFT:\d+\]\][\s\S]*?\[\[\/GANTT_EDIT_DRAFT\]\]/g, '')
+                       .replace(/\[\[GANTT_ADD_DRAFT\]\][\s\S]*?\[\[\/GANTT_ADD_DRAFT\]\]/g, '')
+                       .replace(/\[\[ACTION:(SEND_MAIL|APPLY_GANTT_EDIT|APPLY_GANTT_ADD):CONFIRM\]\]/g, '');
+            text = window._applyGanttQaActions(text.trim());
+            if (hasUnhandledDraftTag) text += '\n\n💡 이 작업은 확인 절차가 더 필요해 여기서 자동으로 이어가지 못했습니다 — 프로젝트를 열어드렸으니 화면에서 직접 진행해주세요.';
+            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: pending.question });
+        } catch (e) {
+            window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
+        } finally {
+            window._renderGanttQaMessages();
+        }
+    };
+
     // ── GANTT_ADD_DRAFT 파서 ──
     window._parseGanttAddDraftBlock = function(blockText) {
         const lines = String(blockText || '').split('\n');
@@ -1036,6 +1099,27 @@
                 }
             }
 
+            // 💡 [2026-09-07 신규] "다른 프로젝트에 대한 실행 요청" — 위 프롬프트 규칙 4번 참고.
+            //    #G번호가 없는 다른 프로젝트라 즉시실행 태그 대신 이 태그가 나온다. 곧바로 실행하지
+            //    않고 채팅에 확인 카드만 띄우고, 실제 실행은 사람이 버튼을 눌러야 window._aiOpenProjectAndReask가 처리.
+            const openExecMatch = text.match(/\[\[ACTION:OPEN_PROJECT_TO_EDIT:(\d+)\]\]/);
+            let openExecDraftIdThisTurn = null;
+            if (openExecMatch) {
+                const entry = window._aiOtherProjectRefMap && window._aiOtherProjectRefMap[parseInt(openExecMatch[1], 10)];
+                text = text.replace(openExecMatch[0], '').trim();
+                if (entry && entry.drive_file_id) {
+                    const draftId = 'openexec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                    window._ganttQaPendingOpenExecDraft = {
+                        id: draftId,
+                        entry: { drive_file_id: entry.drive_file_id, file_name: entry.file_name, label: entry.model || entry.customer || entry.file_name || '(이름없음)' },
+                        question: question
+                    };
+                    openExecDraftIdThisTurn = draftId;
+                } else {
+                    text += '\n\n⚠️ 실행 대상 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
+                }
+            }
+
             text = window._applyGanttQaActions(text.trim());
 
             // 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 위 프롬프트 규칙 참고. 이번 턴에 새 초안이
@@ -1185,7 +1269,7 @@
             // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
             //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
             //    AI에게 다시 보여줄 수 있게 한다.
-            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn, noticeDraftId: noticeDraftIdThisTurn, alarmDraftId: alarmDraftIdThisTurn, ganttEditDraftId: ganttEditDraftIdThisTurn, ganttAddDraftId: ganttAddDraftIdThisTurn });
+            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn, noticeDraftId: noticeDraftIdThisTurn, alarmDraftId: alarmDraftIdThisTurn, ganttEditDraftId: ganttEditDraftIdThisTurn, ganttAddDraftId: ganttAddDraftIdThisTurn, openExecDraftId: openExecDraftIdThisTurn });
         } catch (e) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
