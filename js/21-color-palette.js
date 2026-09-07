@@ -89,7 +89,23 @@ window._cpRenderPreview = function(hex) {
     //    조용히 그 기본값으로 바뀌고 저장 안 한 변경사항으로 표시되는 사고가 있었다(openColorPaletteModal
     //    이 이 함수를 호출할 때 그 칸 값을 지금 라이브 테마로 먼저 맞춰두므로, 아무것도 안 골랐으면
     //    hex===_cpLiveAppliedHex라 여기서 걸러진다 — 실제로 다른 색을 고르면 정상적으로 통과).
-    if (window._cpLiveAppliedHex && hex !== window._cpLiveAppliedHex) window._cpApplyLive(hex);
+    // 🐛 [2026-09-07 버그수정] "팔레트 직접 선택 색상 스크롤(드래그)하면 엄청 느림" — 네이티브
+    //    <input type="color"> 색상선택기에서 그라디언트를 드래그하면 input 이벤트가 초당 수십 번
+    //    발생하는데, 그때마다 즉시(디바운스 없이) _cpApplyLive를 불렀다. _cpApplyLive는 [style*="..."]
+    //    속성선택자로 문서 전체(수천 개 인라인 스타일 요소를 가진 Gantt 표 포함)를 다시 매칭하는 무거운
+    //    <style> 태그를 매번 새로 주입하고, 시트 탭바까지 다시 그리고, localStorage에도 매번 쓴다 —
+    //    이게 드래그 중 초당 수십 번 실행되며 브라우저를 멈추게 했다. 여기서는 디바운스(80ms)로 미뤄서
+    //    드래그가 실제로 멈췄을 때만 한 번 적용되게 하고, 스와치/미리보기 표(이 함수의 위쪽 절반, 작은
+    //    DOM 일부만 갱신)는 지금처럼 매 이벤트마다 즉시 갱신해 "실시간으로 보인다"는 체감은 유지한다.
+    if (window._cpLiveAppliedHex && hex !== window._cpLiveAppliedHex) window._cpApplyLiveDebounced(hex);
+};
+window._cpApplyLiveTimer = null;
+window._cpApplyLiveDebounced = function(hex) {
+    if (window._cpApplyLiveTimer) clearTimeout(window._cpApplyLiveTimer);
+    window._cpApplyLiveTimer = setTimeout(function() {
+        window._cpApplyLiveTimer = null;
+        window._cpApplyLive(hex);
+    }, 80);
 };
 
 // 🎨 [실제 적용] 청록 작업에 실제로 쓰인 hex 상수들을, 페이지 전체에서 "그 hex 문자열을 inline

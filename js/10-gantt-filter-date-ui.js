@@ -16,11 +16,17 @@
     };
 
     // 업무필터 버튼 활성 상태(적용 중인 필터 수) 갱신
+    // 🐛 [2026-09-07 버그수정] "Gantt 업무 필터 버튼 배경이 이전 팔레트 색으로 초기값이 적용됨" —
+    //    필터 미적용 상태(else 분기)는 이미 _cpHex(팔레트 반영)를 쓰고 있었는데, 필터 적용중
+    //    (activeCount>0) 상태만 '#b2edd8'/'#0b6e4f'로 고정 하드코딩돼 있어서 팔레트를 바꿔도 필터가
+    //    걸리는 순간 항상 이 고정 민트그린(원래 청록 테마와 톤이 비슷해 "이전 팔레트 그대로"로 보임)
+    //    으로 돌아갔다. 미적용 상태와 같은 _cpHex 팔레트 함수를 쓰되, 눈에 띄게 hoverBg/hoverBorder
+    //    역할(평소 bg보다 진한 톤)로 강조해 "필터 적용중"임은 여전히 구분되게 한다.
     window.updateWorkFilterBtnState = function() {
         const btn = document.getElementById('work-filter-btn');
         if (!btn) return;
         const _cpHex = window._cpRoleHex || function(k) {
-            return { bg: '#e0f5f7', hoverBg: '#a3d9e0', border: '#cfe3e5', darkText: '#00707d' }[k];
+            return { bg: '#e0f5f7', hoverBg: '#a3d9e0', hoverBorder: '#52a5af', border: '#cfe3e5', darkText: '#00707d' }[k];
         };
         let activeCount = 0;
         for (const k in currentFilters) {
@@ -30,10 +36,11 @@
             ? '🎛️ 업무필터 (' + activeCount + ') ▾'
             : '🎛️ 업무필터 ▾';
         btn.textContent = label;
-        btn.style.background = activeCount > 0 ? '#b2edd8' : _cpHex('bg');
-        btn.style.color      = activeCount > 0 ? '#0b6e4f' : _cpHex('darkText');
-        btn.onmouseover = () => btn.style.background = _cpHex('hoverBg');
-        btn.onmouseout  = () => btn.style.background = activeCount > 0 ? '#b2edd8' : _cpHex('bg');
+        const restBg = activeCount > 0 ? _cpHex('hoverBg') : _cpHex('bg');
+        btn.style.background = restBg;
+        btn.style.color      = _cpHex('darkText');
+        btn.onmouseover = () => btn.style.background = activeCount > 0 ? _cpHex('hoverBorder') : _cpHex('hoverBg');
+        btn.onmouseout  = () => btn.style.background = restBg;
     };
 
     // 2b. 개별 팝업 토글 (Calendar·Weekly Report WBS 팝업 호환 — 그대로 유지)
