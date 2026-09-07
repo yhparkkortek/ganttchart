@@ -199,15 +199,33 @@ window.mcAddNewRevision = function() {
         if (m && window._mcHasRealMoney(td.mcRevisions[k])) maxN = Math.max(maxN, parseInt(m[1], 10));
     });
     const curM = curRev.match(/^R(\d+)$/);
-    if (curM && window._mcHasRealMoney(curRows)) maxN = Math.max(maxN, parseInt(curM[1], 10));
+    const curHasMoney = window._mcHasRealMoney(curRows);
+    if (curM && curHasMoney) maxN = Math.max(maxN, parseInt(curM[1], 10));
 
     let nextN = maxN + 1;
     // 💡 계산된 다음 번호가 "지금 이미 서 있는(빈) 리비전"과 같다면(예: 이 함수로 막 만든 빈 슬롯에서
     //    아무것도 입력하지 않고 ➕를 한 번 더 누른 경우) 제자리 그대로면 버튼이 안 눌리는 것처럼
     //    보이므로, 그때만 한 단계 더 진행한다.
     if (curM && nextN === parseInt(curM[1], 10)) nextN += 1;
+    const newRev = 'R' + nextN;
 
-    window.mcSwitchRevision('R' + nextN);
+    // 💡 [2026-09-07 신규] "R1/R2 견적이 이미 있는데 R3는 보통 그중 일부만 고쳐서 만든다"는 요청 —
+    //    새 리비전을 완전히 빈 표로 시작하는 대신, 직전 견적 내용을 복사해서 바뀐 칸만 수정할 수 있게
+    //    물어본다. 복사 원본은 "지금 화면(curRev)에 금액이 있으면 그 내용"(아직 저장 전인 최신 수정
+    //    분까지 포함) — 없으면(예: 빈 리비전을 보다가 ➕를 누른 경우) 금액이 있는 리비전 중 가장
+    //    최근 것을 원본으로 삼는다.
+    const sourceRev = curHasMoney ? curRev : window._mcLatestRevWithData(td.mcRevisions);
+    const sourceRows = (sourceRev === curRev) ? curRows : (td.mcRevisions[sourceRev] || []);
+    if (sourceRows && sourceRows.length && window._mcHasRealMoney(sourceRows)) {
+        if (confirm(window._t(
+            `[${sourceRev}] 내용을 복사해서 [${newRev}]을(를) 만들까요? (바뀐 부분만 고치면 됩니다)\n(취소를 누르면 빈 표로 시작합니다)`,
+            `Copy [${sourceRev}] into new revision [${newRev}] so you only need to edit what changed?\n(Cancel starts ${newRev} blank instead)`
+        ))) {
+            td.mcRevisions[newRev] = JSON.parse(JSON.stringify(sourceRows));
+        }
+    }
+
+    window.mcSwitchRevision(newRev);
 };
 
 // 💡 R1~R5 리비전 전환: 현재 화면 내용을 활성 리비전에 저장하고, 선택한 리비전 데이터로 다시 그림
