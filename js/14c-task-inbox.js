@@ -395,6 +395,7 @@ window.renderTaskInbox = function() {
                     <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</span>
                     <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibExpandedUids.has(it.uid) ? (_ibEn ? '▲ Collapse' : '▲ 상세 접기') : (_ibEn ? '▼ Details' : '▼ 상세 보기')}</a>
                     <button onclick="window.extractInboxForAI('${it.uid}')" onmouseover="this.style.background='#e4dbff'; this.style.borderColor='#b8a4f0';" onmouseout="this.style.background='#f3f0ff'; this.style.borderColor='#d0bfff';" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#5f3dc4; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📋 ${_ibEn ? 'Extract reason' : '추출사유'}</button>
+                    ${it.status === '대기' ? `<button onclick="window.inboxCreateNewProjectFromPending('${it.uid}')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_ibEn ? 'No project matched (or matched project is wrong) — register this mail as a new project (AI-prefilled)' : '아직 어느 프로젝트에도 배치되지 않은 건 — 이 메일로 새 프로젝트를 등록합니다(AI 자동 추출)'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">➕ ${_ibEn ? 'New Proj' : '새 Proj 생성'}</button>` : ''}
                     ${it.status !== '대기' ? `<button onclick="window.inboxReportFalseMatch('${it.uid}')" onmouseover="this.style.background='#ffe0b2'; this.style.borderColor='#ef8c25';" onmouseout="this.style.background='#fff3e0'; this.style.borderColor='#ffca75';" title="${_ibEn ? 'Report as false match — logs to topic learning, removes from current Gantt if placed here' : '오매칭으로 신고 — 토픽 학습에 기록 · 현재 Proj 배치됨이면 간트에서도 삭제'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#fff3e0; color:#b05000; border:1px solid #ffca75; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">🚨 ${_ibEn ? 'False match' : '오매칭 신고'}</button>` : ''}
                 </div>
                 <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
@@ -1202,6 +1203,23 @@ window._ibStartNewProjectFromMismatch = async function(it) {
     } else {
         alert(_en2 ? 'Wizard module not loaded. Please reload the page and try again.' : '위자드 모듈이 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도해주세요.');
     }
+};
+
+// 💡 [2026-09-07 신규] "새 Proj 생성"을 오매칭 신고(자동배치됨/전송됨) 흐름에만 붙여놨었는데,
+//    생각해보니 실제로 더 필요한 건 아직 어느 프로젝트에도 안 놓인 "대기" 상태다 — 이미 매칭돼서
+//    간트에 들어가 있는 걸 "오매칭이니 새 프로젝트로" 바꾸는 경우보다, 애초에 매칭될 프로젝트가
+//    없어서(또는 매칭이 틀려서) "대기"에 계속 쌓여있는 신규 건이 훨씬 흔한 케이스이므로. 오매칭
+//    신고와 달리 여기는 학습로그 기록·간트 삭제가 필요 없어(아직 어디에도 안 놓였으므로)
+//    _ibStartNewProjectFromMismatch를 곧바로 재사용하되 확인창만 이 흐름에 맞게 새로 붙인다.
+window.inboxCreateNewProjectFromPending = function(uid) {
+    const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
+    if (!it) return;
+    const _en = window._currentLang === 'en';
+    const taskName = (it.task && it.task['업무명']) || (_en ? '(untitled)' : '(제목없음)');
+    if (!confirm(_en
+        ? `Register "${taskName}" as a new project?\n(Opens a separate blank sheet with AI-prefilled fields for you to review — the current project stays in its own tab.)`
+        : `"${taskName}"\n이 메일 내용으로 새 프로젝트를 등록할까요?\n(별도의 빈 시트를 열고 AI가 메일에서 추출한 정보로 미리 채워드립니다 — 현재 프로젝트는 탭에 그대로 유지됩니다.)`)) return;
+    window._ibStartNewProjectFromMismatch(it);
 };
 
 // ─── 💡 [버그 수정 2026-09-07] 업무 보관함 카드의 🗑 버튼이 이유 없이 곧장 TaskInbox.remove()만
