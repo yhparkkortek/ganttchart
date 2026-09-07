@@ -1051,14 +1051,17 @@ window.inboxReportFalseMatch = function(uid) {
         return;
     }
 
-    // ② 확인
+    // ② 확인 — [2026-09-07] "오매칭 신고" + "새 프로젝트로 등록할지"를 확인창 2번으로 나눠 물었더니
+    //    번거롭다는 피드백 → 하나로 합침. 확인하면 삭제까지 하고 곧바로 새 프로젝트 등록(AI 추출)
+    //    위자드를 이어서 연다. 이미 등록된 "다른" 프로젝트 건이면 취소하고 [📤 다른 Proj 선택]을
+    //    쓰라고 문구에 명시해서, 신규가 아닌데 새 프로젝트가 중복 생성되는 오남용을 줄인다.
     const confirmMsg = isCurrentProject
         ? (_en
-            ? `Report "${taskName}" as a false match?\n✅ Will also be removed from the current Gantt chart.`
-            : `"${taskName}"\n오매칭으로 신고할까요?\n✅ 현재 간트차트에서도 해당 업무를 삭제합니다.`)
+            ? `Report "${taskName}" as a false match?\n✅ Removes it from the current Gantt chart, then opens the new-project registration screen (AI-extracted) right after.\n(If it belongs to a project that already exists, cancel and use [📤 Other Project] instead.)`
+            : `"${taskName}"\n오매칭으로 신고할까요?\n✅ 현재 간트차트에서도 삭제하고, 곧바로 새 프로젝트 등록 화면(AI 추출)을 이어서 엽니다.\n(이미 등록된 다른 프로젝트 건이면 취소하고 [📤 다른 Proj 선택]을 이용해주세요)`)
         : (_en
-            ? `Report "${taskName}" as a false match for [${targetLabel}]?\n(Please delete it from that project manually.)`
-            : `"${taskName}"\n[${targetLabel}] 프로젝트의 오매칭으로 신고할까요?\n(해당 프로젝트에서는 직접 삭제해주세요.)`);
+            ? `Report "${taskName}" as a false match for [${targetLabel}]?\n(Please delete it from that project manually.)\n✅ Also opens the new-project registration screen (AI-extracted) right after.\n(If it belongs to a project that already exists, cancel and use [📤 Other Project] instead.)`
+            : `"${taskName}"\n[${targetLabel}] 프로젝트의 오매칭으로 신고할까요?\n(해당 프로젝트에서는 직접 삭제해주세요.)\n✅ 신고 후 곧바로 새 프로젝트 등록 화면(AI 추출)을 이어서 엽니다.\n(이미 등록된 다른 프로젝트 건이면 취소하고 [📤 다른 Proj 선택]을 이용해주세요)`);
     if (!confirm(confirmMsg)) return;
 
     // ③ 매칭 메타 수집 → 학습 품질 향상
@@ -1147,16 +1150,9 @@ window.inboxReportFalseMatch = function(uid) {
     }
     window.renderTaskInbox();
 
-    // ⑧ [2026-09-07 신규] "오매칭"은 "이 프로젝트 것이 아니다"이지 "존재하지 않는 메일이다"는 아님 —
-    //    아직 등록 안 된 새 프로젝트 건일 수 있으므로, 삭제 직후 메일 내용으로 새 프로젝트를 만들지 물어본다.
-    //    이미 등록된 "다른" 프로젝트 건이면 이 대화상자 대신 [📤 다른 Proj 선택]을 쓰는 게 맞으므로
-    //    안내 문구에 그 구분을 명시해서 오남용(신규 아닌데 새 프로젝트 중복 생성)을 줄인다.
-    const offerMsg = _en
-        ? `Deleted. Was this actually mail for a NEW project that hasn't been registered yet?\n(If it belongs to a project that already exists, use [📤 Other Project] instead — this opens a separate blank sheet with AI-prefilled fields for you to review.)`
-        : `삭제했습니다. 혹시 아직 등록되지 않은 새 프로젝트 건인가요?\n(이미 등록된 다른 프로젝트 건이라면 이 창 대신 [📤 다른 Proj 선택]을 이용해주세요 — 여기서는 별도의 빈 시트를 열고 AI가 메일에서 추출한 정보로 미리 채워드립니다.)`;
-    if (confirm(offerMsg)) {
-        window._ibStartNewProjectFromMismatch(it);
-    }
+    // ⑧ [2026-09-07 신규 → 같은날 확인창 통합] 위 ②에서 이미 "신고 후 새 프로젝트 등록 화면을
+    //    이어서 연다"는 것까지 한 번에 확인받았으므로, 여기서 다시 묻지 않고 곧바로 이어간다.
+    window._ibStartNewProjectFromMismatch(it);
 };
 
 // 💡 [2026-09-07 신규] 오매칭 신고 직후 "새 프로젝트로 등록"을 고르면 — 15b-mail-server-tab-1.js의
