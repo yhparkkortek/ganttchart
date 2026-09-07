@@ -512,7 +512,12 @@ window.showMailRawModal = function(r) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'inbox-mailraw-modal';
-        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
+        // 💡 [2026-09-07] 다른 모달들과 달리 이 모달은 배경 클릭으로도 닫히길 원한다는 요청 —
+        //    그러려면 오버레이 자체가 클릭을 받아야 하므로 pointer-events:none(배경 클릭이 뒤로
+        //    그냥 통과되던 기존 패턴)이 아니라 auto로 바꾸고, 오버레이에 직접 onclick(닫기)을 단다.
+        //    안쪽 박스(inbox-mailraw-box)는 그대로 stopPropagation을 유지해 내부 클릭으론 안 닫힘.
+        modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:auto; background:none;';
+        modal.onclick = function() { modal.style.display = 'none'; };
         modal.innerHTML = `
         <div id="inbox-mailraw-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:400px;">
             <div id="inbox-mailraw-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
