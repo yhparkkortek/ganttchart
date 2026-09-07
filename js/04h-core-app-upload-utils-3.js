@@ -792,11 +792,10 @@
     // 💡 확인 버튼을 누르면: ① 그 프로젝트를 새 탭으로 실제로 열어(executeLoadFile — 프로젝트 열기와
     //    100% 동일한 코드경로라 autosave/실행취소/변경이력/저장충돌감지가 전부 그대로 적용됨) 진짜
     //    "현재 프로젝트"로 만든 다음 ② 같은 질문을 다시 물어서(이번엔 다른 프로젝트 컨텍스트 없이,
-    //    평소와 동일한 프롬프트로) #G번호 기반 실행 태그가 정상적으로 나오게 하고 _applyGanttQaActions로
-    //    실제 반영한다. 단, 이 재질문 경로는 즉시실행 태그(삭제/상태/레벨/이동/알람 등)만 처리하고
-    //    2단계 확인이 필요한 초안(메일 작성/공지 등록/알람 세부설정/행 추가·수정, VIEW_MAIL·LOAD_PROJECT
-    //    연쇄조회)까지는 아직 잇지 않았다 — 그런 요청이면 텍스트로 답은 오되 태그는 무시되므로,
-    //    "프로젝트를 열어드렸으니 화면에서 직접 진행해주세요" 안내를 덧붙인다.
+    //    평소와 동일한 프롬프트로) #G번호 기반 태그가 정상적으로 나오게 하고, sendGanttQaMessage와
+    //    완전히 같은 후속 처리(window._aiProcessGanttQaTurn)를 거친다 — 그래서 "질문 대상으로 다른
+    //    프로젝트를 고르는 것도 결국 그 프로젝트를 연 것과 동일한 조건"이라는 목표대로, 열고 난 뒤에는
+    //    VIEW_MAIL(원문보기)·Gantt 이동·메일/공지/알람/행추가·수정 초안까지 전부 평소와 똑같이 동작한다.
     window._aiOpenProjectAndReask = async function(draftId, btn) {
         const pending = window._ganttQaPendingOpenExecDraft;
         if (!pending || pending.id !== draftId) {
@@ -825,20 +824,14 @@
             const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
             if (!apiKey) throw new Error('AI API 키가 설정되어 있지 않습니다.');
             const priorHistory = window._ganttQaHistory.slice();
+            // 💡 이제 진짜 현재 프로젝트이므로 다른 프로젝트 컨텍스트(manualOtherProjectTexts) 없이 평소와 동일하게 질문
             const prompt = await window._buildGanttQaPrompt(pending.question, priorHistory);
             const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
             if (!result.ok) throw result.error || new Error('알 수 없는 오류');
-            let text = window._extractGanttQaAiText(result);
-            // 💡 2단계 확인 초안 태그가 남아있으면(아직 이 경로에서 처리 못 함) 화면에 원문 태그가
-            //    그대로 노출되지 않도록 지우고 안내를 붙인다.
-            const hasUnhandledDraftTag = /\[\[(MAIL_DRAFT|GANTT_EDIT_DRAFT|GANTT_ADD_DRAFT)/.test(text) || /\[\[ACTION:(SEND_MAIL|APPLY_GANTT_EDIT|APPLY_GANTT_ADD):CONFIRM\]\]/.test(text);
-            text = text.replace(/\[\[MAIL_DRAFT\]\][\s\S]*?\[\[\/MAIL_DRAFT\]\]/g, '')
-                       .replace(/\[\[GANTT_EDIT_DRAFT:\d+\]\][\s\S]*?\[\[\/GANTT_EDIT_DRAFT\]\]/g, '')
-                       .replace(/\[\[GANTT_ADD_DRAFT\]\][\s\S]*?\[\[\/GANTT_ADD_DRAFT\]\]/g, '')
-                       .replace(/\[\[ACTION:(SEND_MAIL|APPLY_GANTT_EDIT|APPLY_GANTT_ADD):CONFIRM\]\]/g, '');
-            text = window._applyGanttQaActions(text.trim());
-            if (hasUnhandledDraftTag) text += '\n\n💡 이 작업은 확인 절차가 더 필요해 여기서 자동으로 이어가지 못했습니다 — 프로젝트를 열어드렸으니 화면에서 직접 진행해주세요.';
-            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: pending.question });
+            const text = window._extractGanttQaAiText(result);
+
+            const processed = await window._aiProcessGanttQaTurn(text, pending.question, pending.question, priorHistory, apiKey, null);
+            window._ganttQaHistory.push({ role: 'ai', text: processed.text, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: pending.question, mailDraftId: processed.mailDraftId, noticeDraftId: processed.noticeDraftId, alarmDraftId: processed.alarmDraftId, ganttEditDraftId: processed.ganttEditDraftId, ganttAddDraftId: processed.ganttAddDraftId, openExecDraftId: processed.openExecDraftId });
         } catch (e) {
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
         } finally {
@@ -1011,6 +1004,232 @@
             && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '(빈 응답)';
     };
 
+    // 💡 [2026-09-07 리팩터링] AI 응답 1건에 대한 후속 처리(VIEW_MAIL/LOAD_PROJECT 왕복, 실행 태그,
+    //    메일/공지/알람/Gantt수정/Gantt추가 초안 파싱)를 sendGanttQaMessage에서 분리 — "다른 프로젝트를
+    //    실제로 열어서 재질문"하는 _aiOpenProjectAndReask도 완전히 같은 처리를 거쳐야 "질문 대상으로
+    //    다른 프로젝트를 고르는 것도 결국 그 프로젝트를 연 것과 동일한 조건"이 되기 때문이다(원문보기·
+    //    Gantt 이동·초안 확인 등 모든 기능이 프로젝트를 연 뒤에는 동일하게 동작해야 함). 이 함수 하나만
+    //    고치면 두 진입점 모두에 반영된다.
+    //    promptQuestion: 후속 프롬프트 재구성에 쓰는 질문(다른 프로젝트 접두사가 붙어있을 수 있음).
+    //    plainQuestion: 사람이 실제로 입력한 원래 질문(히스토리 저장·초안의 재질문 용도).
+    window._aiProcessGanttQaTurn = async function(text, promptQuestion, plainQuestion, priorHistory, apiKey, manualOtherProjectTexts) {
+        // 💡 [2026-08-28 신규] "원문 메일도 봐줘" 대응 — AI가 [[ACTION:VIEW_MAIL:번호]] 태그로
+        //    특정 업무의 원문을 요청하면(위 프롬프트의 "📧 원문 메일" 규칙), 그 태그를 사용자에게
+        //    그대로 보여주는 대신 원문을 조회해 후속 프롬프트에 끼워 넣고 한 번 더 물어봐서, 사용자
+        //    눈에는 "바로 원문 내용을 근거로 답한 것"처럼 보이게 한다(SET_ALARM처럼 즉시 실행되는
+        //    액션이 아니라, 답을 만들기 위한 추가 조회이므로 왕복이 한 번 더 필요함).
+        const mailRowIdxs = Array.from(text.matchAll(/\[\[ACTION:VIEW_MAIL:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
+        if (mailRowIdxs.length) {
+            const mailTexts = mailRowIdxs.map(window._aiAssistGetMailRaw).filter(Boolean);
+            if (mailTexts.length) {
+                const followupPrompt = await window._buildGanttQaPrompt(promptQuestion, priorHistory, mailTexts, manualOtherProjectTexts);
+                const result2 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+                if (result2.ok) text = window._extractGanttQaAiText(result2);
+                else text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 원문 메일을 불러오는 중 오류가 발생했습니다.';
+            } else {
+                text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 해당 업무의 원문 메일을 찾지 못했습니다.';
+            }
+        }
+
+        // 💡 [2026-09-01 신규] "🌐 다른 프로젝트 조회" 대응 — VIEW_MAIL과 동일한 2단계 왕복 패턴.
+        //    AI가 [[ACTION:LOAD_PROJECT:번호]]로 지금 안 열려있는 다른 프로젝트 데이터를 요청하면,
+        //    그 프로젝트 파일을 Drive에서 직접 읽어(화면엔 아무 변화 없음 — 순수 조회) 후속
+        //    프롬프트에 끼워 넣고 한 번 더 물어봐서, 사용자 눈에는 곧바로 그 데이터를 근거로
+        //    답한 것처럼 보이게 한다. 여러 프로젝트를 한 번에 요청했으면 전부 병렬로 가져온다.
+        const otherProjectNos = Array.from(text.matchAll(/\[\[ACTION:LOAD_PROJECT:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
+        if (otherProjectNos.length) {
+            const otherProjectTexts = (await Promise.all(otherProjectNos.map(window._aiFetchOtherProjectContext))).filter(Boolean);
+            if (otherProjectTexts.length) {
+                // 💡 수동으로 골라둔 프로젝트 데이터가 이미 있으면(manualOtherProjectTexts) 같이 실어 보낸다 —
+                //    "선택한 프로젝트" 얘기 중에 AI가 세 번째 프로젝트까지 추가로 참조를 요청한 드문 경우 대비.
+                const combinedOtherProjectTexts = (manualOtherProjectTexts || []).concat(otherProjectTexts);
+                const followupPrompt2 = await window._buildGanttQaPrompt(promptQuestion, priorHistory, null, combinedOtherProjectTexts);
+                const result3 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt2, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+                if (result3.ok) text = window._extractGanttQaAiText(result3);
+                else text = text.replace(/\[\[ACTION:LOAD_PROJECT:\d+\]\]/g, '').trim() + '\n\n⚠️ 다른 프로젝트 데이터를 불러오는 중 오류가 발생했습니다.';
+            } else {
+                text = text.replace(/\[\[ACTION:LOAD_PROJECT:\d+\]\]/g, '').trim() + '\n\n⚠️ 해당 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
+            }
+        }
+
+        // 💡 [2026-09-07 신규] "다른 프로젝트에 대한 원문보기/Gantt이동/실행 요청" — 위 프롬프트 규칙
+        //    4번 참고. #G번호가 없는 다른 프로젝트라 즉시실행·원문보기 태그를 못 쓰므로 이 태그가
+        //    나온다. 곧바로 처리하지 않고 채팅에 확인 카드만 띄우고, 실제 처리는 사람이 버튼을 눌러야
+        //    window._aiOpenProjectAndReask가 그 프로젝트를 실제로 연 뒤 이 함수를 다시 거쳐 처리한다.
+        const openExecMatch = text.match(/\[\[ACTION:OPEN_PROJECT_TO_EDIT:(\d+)\]\]/);
+        let openExecDraftIdThisTurn = null;
+        if (openExecMatch) {
+            const entry = window._aiOtherProjectRefMap && window._aiOtherProjectRefMap[parseInt(openExecMatch[1], 10)];
+            text = text.replace(openExecMatch[0], '').trim();
+            if (entry && entry.drive_file_id) {
+                const draftId = 'openexec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+                window._ganttQaPendingOpenExecDraft = {
+                    id: draftId,
+                    entry: { drive_file_id: entry.drive_file_id, file_name: entry.file_name, label: entry.model || entry.customer || entry.file_name || '(이름없음)' },
+                    question: plainQuestion
+                };
+                openExecDraftIdThisTurn = draftId;
+            } else {
+                text += '\n\n⚠️ 대상 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
+            }
+        }
+
+        text = window._applyGanttQaActions(text.trim());
+
+        // 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 위 프롬프트 규칙 참고. 이번 턴에 새 초안이
+        //    생겼는지(mailDraftIdThisTurn), 확정 발송을 시도했는지(sendResultNote)를 모두 여기서
+        //    처리하고 결과만 답변 텍스트에 반영한다(실제 발송은 window._ganttQaPendingMailDraft에
+        //    저장해둔 "코드가 이미 이메일까지 resolve해둔" 구조화 데이터로만 하고, AI가 CONFIRM
+        //    턴에 다시 적어 보낸 텍스트는 절대 신뢰하지 않음 — 사람이 본 초안과 실제 발송 내용이
+        //    100% 같아야 하므로).
+        let mailDraftIdThisTurn = null;
+        const mDraft = text.match(/\[\[MAIL_DRAFT\]\]([\s\S]*?)\[\[\/MAIL_DRAFT\]\]/);
+        if (mDraft) {
+            const parsed = window._parseMailDraftBlock(mDraft[1]);
+            const draft = window._aiBuildMailDraftFromParsed(parsed);
+            window._ganttQaPendingMailDraft = draft;
+            mailDraftIdThisTurn = draft.id;
+            text = text.replace(mDraft[0], window._aiMailDraftPreviewMd(draft)).trim();
+        }
+        const mSendConfirm = text.match(/\[\[ACTION:SEND_MAIL:CONFIRM\]\]/);
+        if (mSendConfirm) {
+            text = text.replace(mSendConfirm[0], '').trim();
+            if (!window._ganttQaPendingMailDraft) {
+                text += '\n\n⚠️ 아직 확정할 메일 초안이 없습니다. 먼저 메일 작성을 요청해주세요.';
+            } else {
+                const pending = window._ganttQaPendingMailDraft;
+                const sendRes = await window._aiSendMailFromDraft(pending);
+                text += sendRes.ok
+                    ? `\n\n✅ 메일을 발송했습니다. (수신: ${pending.to.filter(function(p){return p.email;}).map(function(p){return p.name;}).join(', ')})`
+                    : `\n\n⚠️ 메일 발송 실패: ${sendRes.error}`;
+                window._ganttQaPendingMailDraft = null; // 성공/실패 모두 소진 — 같은 초안이 중복 발송되지 않게
+            }
+        }
+
+        // 💡 [2026-09-01 신규] "📢 공지 등록" — 위 프롬프트의 [[NOTICE_DRAFT]] 규칙 참고. 메일과
+        //    동일한 초안→확인 왕복 패턴(Gantt 업무와 무관하게 항상 만들 수 있음).
+        let noticeDraftIdThisTurn = null;
+        const mNotice = text.match(/\[\[NOTICE_DRAFT\]\]([\s\S]*?)\[\[\/NOTICE_DRAFT\]\]/);
+        if (mNotice) {
+            const parsedNotice = window._parseNoticeDraftBlock(mNotice[1]);
+            const noticeDraft = window._aiBuildNoticeDraftFromParsed(parsedNotice);
+            window._ganttQaPendingNoticeDraft = noticeDraft;
+            noticeDraftIdThisTurn = noticeDraft.id;
+            text = text.replace(mNotice[0], window._aiNoticeDraftPreviewMd(noticeDraft)).trim();
+        }
+        const mRegisterConfirm = text.match(/\[\[ACTION:REGISTER_NOTICE:CONFIRM\]\]/);
+        if (mRegisterConfirm) {
+            text = text.replace(mRegisterConfirm[0], '').trim();
+            if (!window._ganttQaPendingNoticeDraft) {
+                text += '\n\n⚠️ 아직 확정할 공지 초안이 없습니다. 먼저 공지 등록을 요청해주세요.';
+            } else {
+                const pendingNotice = window._ganttQaPendingNoticeDraft;
+                const regRes = window._aiRegisterNoticeFromDraft(pendingNotice);
+                text += regRes.ok
+                    ? `\n\n✅ "${pendingNotice.title}" 공지를 등록했습니다.${regRes.count > 1 ? ` (${regRes.count}개 날짜 → ${regRes.count}건 등록)` : ''}`
+                    : `\n\n⚠️ 공지 등록 실패: ${regRes.error}`;
+                window._ganttQaPendingNoticeDraft = null;
+            }
+        }
+
+        // 💡 [2026-09-01 신규] "📌 알람 세부 설정" — 위 프롬프트의 [[ALARM_DRAFT:번호]] 규칙 참고.
+        //    대상 업무가 애초에 알람을 걸 수 없는 상태(존재하지 않거나 완료 예정일이 없음)면 초안
+        //    자체를 만들지 않고(pending state 없음) 바로 오류 안내만 붙인다.
+        let alarmDraftIdThisTurn = null;
+        const mAlarmDraft = text.match(/\[\[ALARM_DRAFT:(\d+)\]\]([\s\S]*?)\[\[\/ALARM_DRAFT\]\]/);
+        if (mAlarmDraft) {
+            const parsedAlarm = window._parseAlarmDraftBlock(mAlarmDraft[2]);
+            const alarmDraft = window._aiBuildAlarmDraftFromParsed(parseInt(mAlarmDraft[1], 10), parsedAlarm);
+            if (!alarmDraft.ok) {
+                text = text.replace(mAlarmDraft[0], alarmDraft.reason === 'no-due-date'
+                    ? '⚠️ 이 업무는 완료 예정일이 없어 알람을 설정할 수 없습니다.'
+                    : '⚠️ 지정한 업무를 찾지 못해 알람을 설정하지 못했습니다.').trim();
+            } else {
+                window._ganttQaPendingAlarmDraft = alarmDraft;
+                alarmDraftIdThisTurn = alarmDraft.id;
+                text = text.replace(mAlarmDraft[0], window._aiAlarmDraftPreviewMd(alarmDraft)).trim();
+            }
+        }
+        const mApplyConfirm = text.match(/\[\[ACTION:APPLY_ALARM:CONFIRM\]\]/);
+        if (mApplyConfirm) {
+            text = text.replace(mApplyConfirm[0], '').trim();
+            if (!window._ganttQaPendingAlarmDraft) {
+                text += '\n\n⚠️ 아직 확정할 알람 설정 초안이 없습니다. 먼저 알람 설정을 요청해주세요.';
+            } else {
+                const pendingAlarm = window._ganttQaPendingAlarmDraft;
+                const applyRes = window._aiApplyAlarmDraft(pendingAlarm);
+                text += applyRes.ok
+                    ? `\n\n✅ "${pendingAlarm.taskName}" 업무의 알람 설정을 적용했습니다.`
+                    : `\n\n⚠️ 알람 설정 적용 실패: ${applyRes.error}`;
+                window._ganttQaPendingAlarmDraft = null;
+            }
+        }
+
+        // 💡 [2026-09-03 신규] "✏️ Gantt 수정 초안" — [[GANTT_EDIT_DRAFT:번호]] 파싱 → pending 저장 → 미리보기
+        let ganttEditDraftIdThisTurn = null;
+        const mGanttEdit = text.match(/\[\[GANTT_EDIT_DRAFT:(\d+)\]\]([\s\S]*?)\[\[\/GANTT_EDIT_DRAFT\]\]/);
+        if (mGanttEdit) {
+            const parsedGEdit = window._parseGanttEditDraftBlock(mGanttEdit[2]);
+            const gEditDraft = window._aiBuildGanttEditDraft(parseInt(mGanttEdit[1], 10), parsedGEdit);
+            if (!gEditDraft.ok) {
+                text = text.replace(mGanttEdit[0], '⚠️ 해당 업무 행을 찾지 못해 수정 초안을 만들 수 없습니다.').trim();
+            } else {
+                window._ganttQaPendingEditDraft = gEditDraft;
+                ganttEditDraftIdThisTurn = gEditDraft.id;
+                text = text.replace(mGanttEdit[0], window._aiGanttEditDraftPreviewMd(gEditDraft)).trim();
+            }
+        }
+        const mApplyEditConfirm = text.match(/\[\[ACTION:APPLY_GANTT_EDIT:CONFIRM\]\]/);
+        if (mApplyEditConfirm) {
+            text = text.replace(mApplyEditConfirm[0], '').trim();
+            if (!window._ganttQaPendingEditDraft) {
+                text += '\n\n⚠️ 아직 확정할 Gantt 수정 초안이 없습니다. 먼저 수정 내용을 말씀해주세요.';
+            } else {
+                const pendingGEdit = window._ganttQaPendingEditDraft;
+                const applyGEditRes = window._aiApplyGanttEditDraft(pendingGEdit);
+                text += applyGEditRes.ok
+                    ? `\n\n✅ "${pendingGEdit.currentLabel}" 업무 수정을 적용했습니다.`
+                    : `\n\n⚠️ 수정 실패: ${applyGEditRes.error}`;
+                window._ganttQaPendingEditDraft = null;
+            }
+        }
+
+        // 💡 [2026-09-03 신규] "➕ 새 행 추가 초안" — [[GANTT_ADD_DRAFT]] 파싱 → pending 저장 → 미리보기
+        let ganttAddDraftIdThisTurn = null;
+        const mGanttAdd = text.match(/\[\[GANTT_ADD_DRAFT\]\]([\s\S]*?)\[\[\/GANTT_ADD_DRAFT\]\]/);
+        if (mGanttAdd) {
+            const parsedGAdd = window._parseGanttAddDraftBlock(mGanttAdd[1]);
+            const gAddDraft = { ok: true, id: 'ganttAdd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), ...parsedGAdd };
+            window._ganttQaPendingAddDraft = gAddDraft;
+            ganttAddDraftIdThisTurn = gAddDraft.id;
+            text = text.replace(mGanttAdd[0], window._aiGanttAddDraftPreviewMd(gAddDraft)).trim();
+        }
+        const mApplyAddConfirm = text.match(/\[\[ACTION:APPLY_GANTT_ADD:CONFIRM\]\]/);
+        if (mApplyAddConfirm) {
+            text = text.replace(mApplyAddConfirm[0], '').trim();
+            if (!window._ganttQaPendingAddDraft) {
+                text += '\n\n⚠️ 아직 확정할 새 행 추가 초안이 없습니다. 먼저 추가 내용을 말씀해주세요.';
+            } else {
+                const pendingGAdd = window._ganttQaPendingAddDraft;
+                const applyGAddRes = window._aiApplyGanttAddDraft(pendingGAdd);
+                text += applyGAddRes.ok
+                    ? `\n\n✅ "${pendingGAdd.taskName}" 업무를 새로 추가했습니다.`
+                    : `\n\n⚠️ 추가 실패: ${applyGAddRes.error}`;
+                window._ganttQaPendingAddDraft = null;
+            }
+        }
+
+        return {
+            text: text.trim(),
+            mailDraftId: mailDraftIdThisTurn,
+            noticeDraftId: noticeDraftIdThisTurn,
+            alarmDraftId: alarmDraftIdThisTurn,
+            ganttEditDraftId: ganttEditDraftIdThisTurn,
+            ganttAddDraftId: ganttAddDraftIdThisTurn,
+            openExecDraftId: openExecDraftIdThisTurn
+        };
+    };
+
     window.sendGanttQaMessage = async function() {
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
@@ -1061,218 +1280,15 @@
             //    60초 안에 안 끝나면 오류로 처리해서 사용자가 재시도할 수 있게 한다.
             const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
             if (!result.ok) throw result.error || new Error('알 수 없는 오류');
-            let text = window._extractGanttQaAiText(result);
+            const text = window._extractGanttQaAiText(result);
 
-            // 💡 [2026-08-28 신규] "원문 메일도 봐줘" 대응 — AI가 [[ACTION:VIEW_MAIL:번호]] 태그로
-            //    특정 업무의 원문을 요청하면(위 프롬프트의 "📧 원문 메일" 규칙), 그 태그를 사용자에게
-            //    그대로 보여주는 대신 원문을 조회해 후속 프롬프트에 끼워 넣고 한 번 더 물어봐서, 사용자
-            //    눈에는 "바로 원문 내용을 근거로 답한 것"처럼 보이게 한다(SET_ALARM처럼 즉시 실행되는
-            //    액션이 아니라, 답을 만들기 위한 추가 조회이므로 왕복이 한 번 더 필요함).
-            const mailRowIdxs = Array.from(text.matchAll(/\[\[ACTION:VIEW_MAIL:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
-            if (mailRowIdxs.length) {
-                const mailTexts = mailRowIdxs.map(window._aiAssistGetMailRaw).filter(Boolean);
-                if (mailTexts.length) {
-                    const followupPrompt = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, mailTexts, manualOtherProjectTexts);
-                    const result2 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
-                    if (result2.ok) text = window._extractGanttQaAiText(result2);
-                    else text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 원문 메일을 불러오는 중 오류가 발생했습니다.';
-                } else {
-                    text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 해당 업무의 원문 메일을 찾지 못했습니다.';
-                }
-            }
-
-            // 💡 [2026-09-01 신규] "🌐 다른 프로젝트 조회" 대응 — VIEW_MAIL과 동일한 2단계 왕복 패턴.
-            //    AI가 [[ACTION:LOAD_PROJECT:번호]]로 지금 안 열려있는 다른 프로젝트 데이터를 요청하면,
-            //    그 프로젝트 파일을 Drive에서 직접 읽어(화면엔 아무 변화 없음 — 순수 조회) 후속
-            //    프롬프트에 끼워 넣고 한 번 더 물어봐서, 사용자 눈에는 곧바로 그 데이터를 근거로
-            //    답한 것처럼 보이게 한다. 여러 프로젝트를 한 번에 요청했으면 전부 병렬로 가져온다.
-            const otherProjectNos = Array.from(text.matchAll(/\[\[ACTION:LOAD_PROJECT:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
-            if (otherProjectNos.length) {
-                const otherProjectTexts = (await Promise.all(otherProjectNos.map(window._aiFetchOtherProjectContext))).filter(Boolean);
-                if (otherProjectTexts.length) {
-                    // 💡 수동으로 골라둔 프로젝트 데이터가 이미 있으면(manualOtherProjectTexts) 같이 실어 보낸다 —
-                    //    "선택한 프로젝트" 얘기 중에 AI가 세 번째 프로젝트까지 추가로 참조를 요청한 드문 경우 대비.
-                    const combinedOtherProjectTexts = (manualOtherProjectTexts || []).concat(otherProjectTexts);
-                    const followupPrompt2 = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, combinedOtherProjectTexts);
-                    const result3 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt2, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
-                    if (result3.ok) text = window._extractGanttQaAiText(result3);
-                    else text = text.replace(/\[\[ACTION:LOAD_PROJECT:\d+\]\]/g, '').trim() + '\n\n⚠️ 다른 프로젝트 데이터를 불러오는 중 오류가 발생했습니다.';
-                } else {
-                    text = text.replace(/\[\[ACTION:LOAD_PROJECT:\d+\]\]/g, '').trim() + '\n\n⚠️ 해당 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
-                }
-            }
-
-            // 💡 [2026-09-07 신규] "다른 프로젝트에 대한 실행 요청" — 위 프롬프트 규칙 4번 참고.
-            //    #G번호가 없는 다른 프로젝트라 즉시실행 태그 대신 이 태그가 나온다. 곧바로 실행하지
-            //    않고 채팅에 확인 카드만 띄우고, 실제 실행은 사람이 버튼을 눌러야 window._aiOpenProjectAndReask가 처리.
-            const openExecMatch = text.match(/\[\[ACTION:OPEN_PROJECT_TO_EDIT:(\d+)\]\]/);
-            let openExecDraftIdThisTurn = null;
-            if (openExecMatch) {
-                const entry = window._aiOtherProjectRefMap && window._aiOtherProjectRefMap[parseInt(openExecMatch[1], 10)];
-                text = text.replace(openExecMatch[0], '').trim();
-                if (entry && entry.drive_file_id) {
-                    const draftId = 'openexec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-                    window._ganttQaPendingOpenExecDraft = {
-                        id: draftId,
-                        entry: { drive_file_id: entry.drive_file_id, file_name: entry.file_name, label: entry.model || entry.customer || entry.file_name || '(이름없음)' },
-                        question: question
-                    };
-                    openExecDraftIdThisTurn = draftId;
-                } else {
-                    text += '\n\n⚠️ 실행 대상 프로젝트를 찾지 못했습니다(삭제되었거나 접근 권한이 없을 수 있습니다).';
-                }
-            }
-
-            text = window._applyGanttQaActions(text.trim());
-
-            // 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 위 프롬프트 규칙 참고. 이번 턴에 새 초안이
-            //    생겼는지(mailDraftIdThisTurn), 확정 발송을 시도했는지(sendResultNote)를 모두 여기서
-            //    처리하고 결과만 답변 텍스트에 반영한다(실제 발송은 window._ganttQaPendingMailDraft에
-            //    저장해둔 "코드가 이미 이메일까지 resolve해둔" 구조화 데이터로만 하고, AI가 CONFIRM
-            //    턴에 다시 적어 보낸 텍스트는 절대 신뢰하지 않음 — 사람이 본 초안과 실제 발송 내용이
-            //    100% 같아야 하므로).
-            let mailDraftIdThisTurn = null;
-            const mDraft = text.match(/\[\[MAIL_DRAFT\]\]([\s\S]*?)\[\[\/MAIL_DRAFT\]\]/);
-            if (mDraft) {
-                const parsed = window._parseMailDraftBlock(mDraft[1]);
-                const draft = window._aiBuildMailDraftFromParsed(parsed);
-                window._ganttQaPendingMailDraft = draft;
-                mailDraftIdThisTurn = draft.id;
-                text = text.replace(mDraft[0], window._aiMailDraftPreviewMd(draft)).trim();
-            }
-            const mSendConfirm = text.match(/\[\[ACTION:SEND_MAIL:CONFIRM\]\]/);
-            if (mSendConfirm) {
-                text = text.replace(mSendConfirm[0], '').trim();
-                if (!window._ganttQaPendingMailDraft) {
-                    text += '\n\n⚠️ 아직 확정할 메일 초안이 없습니다. 먼저 메일 작성을 요청해주세요.';
-                } else {
-                    const pending = window._ganttQaPendingMailDraft;
-                    const sendRes = await window._aiSendMailFromDraft(pending);
-                    text += sendRes.ok
-                        ? `\n\n✅ 메일을 발송했습니다. (수신: ${pending.to.filter(function(p){return p.email;}).map(function(p){return p.name;}).join(', ')})`
-                        : `\n\n⚠️ 메일 발송 실패: ${sendRes.error}`;
-                    window._ganttQaPendingMailDraft = null; // 성공/실패 모두 소진 — 같은 초안이 중복 발송되지 않게
-                }
-            }
-
-            // 💡 [2026-09-01 신규] "📢 공지 등록" — 위 프롬프트의 [[NOTICE_DRAFT]] 규칙 참고. 메일과
-            //    동일한 초안→확인 왕복 패턴(Gantt 업무와 무관하게 항상 만들 수 있음).
-            let noticeDraftIdThisTurn = null;
-            const mNotice = text.match(/\[\[NOTICE_DRAFT\]\]([\s\S]*?)\[\[\/NOTICE_DRAFT\]\]/);
-            if (mNotice) {
-                const parsedNotice = window._parseNoticeDraftBlock(mNotice[1]);
-                const noticeDraft = window._aiBuildNoticeDraftFromParsed(parsedNotice);
-                window._ganttQaPendingNoticeDraft = noticeDraft;
-                noticeDraftIdThisTurn = noticeDraft.id;
-                text = text.replace(mNotice[0], window._aiNoticeDraftPreviewMd(noticeDraft)).trim();
-            }
-            const mRegisterConfirm = text.match(/\[\[ACTION:REGISTER_NOTICE:CONFIRM\]\]/);
-            if (mRegisterConfirm) {
-                text = text.replace(mRegisterConfirm[0], '').trim();
-                if (!window._ganttQaPendingNoticeDraft) {
-                    text += '\n\n⚠️ 아직 확정할 공지 초안이 없습니다. 먼저 공지 등록을 요청해주세요.';
-                } else {
-                    const pendingNotice = window._ganttQaPendingNoticeDraft;
-                    const regRes = window._aiRegisterNoticeFromDraft(pendingNotice);
-                    text += regRes.ok
-                        ? `\n\n✅ "${pendingNotice.title}" 공지를 등록했습니다.${regRes.count > 1 ? ` (${regRes.count}개 날짜 → ${regRes.count}건 등록)` : ''}`
-                        : `\n\n⚠️ 공지 등록 실패: ${regRes.error}`;
-                    window._ganttQaPendingNoticeDraft = null;
-                }
-            }
-
-            // 💡 [2026-09-01 신규] "📌 알람 세부 설정" — 위 프롬프트의 [[ALARM_DRAFT:번호]] 규칙 참고.
-            //    대상 업무가 애초에 알람을 걸 수 없는 상태(존재하지 않거나 완료 예정일이 없음)면 초안
-            //    자체를 만들지 않고(pending state 없음) 바로 오류 안내만 붙인다.
-            let alarmDraftIdThisTurn = null;
-            const mAlarmDraft = text.match(/\[\[ALARM_DRAFT:(\d+)\]\]([\s\S]*?)\[\[\/ALARM_DRAFT\]\]/);
-            if (mAlarmDraft) {
-                const parsedAlarm = window._parseAlarmDraftBlock(mAlarmDraft[2]);
-                const alarmDraft = window._aiBuildAlarmDraftFromParsed(parseInt(mAlarmDraft[1], 10), parsedAlarm);
-                if (!alarmDraft.ok) {
-                    text = text.replace(mAlarmDraft[0], alarmDraft.reason === 'no-due-date'
-                        ? '⚠️ 이 업무는 완료 예정일이 없어 알람을 설정할 수 없습니다.'
-                        : '⚠️ 지정한 업무를 찾지 못해 알람을 설정하지 못했습니다.').trim();
-                } else {
-                    window._ganttQaPendingAlarmDraft = alarmDraft;
-                    alarmDraftIdThisTurn = alarmDraft.id;
-                    text = text.replace(mAlarmDraft[0], window._aiAlarmDraftPreviewMd(alarmDraft)).trim();
-                }
-            }
-            const mApplyConfirm = text.match(/\[\[ACTION:APPLY_ALARM:CONFIRM\]\]/);
-            if (mApplyConfirm) {
-                text = text.replace(mApplyConfirm[0], '').trim();
-                if (!window._ganttQaPendingAlarmDraft) {
-                    text += '\n\n⚠️ 아직 확정할 알람 설정 초안이 없습니다. 먼저 알람 설정을 요청해주세요.';
-                } else {
-                    const pendingAlarm = window._ganttQaPendingAlarmDraft;
-                    const applyRes = window._aiApplyAlarmDraft(pendingAlarm);
-                    text += applyRes.ok
-                        ? `\n\n✅ "${pendingAlarm.taskName}" 업무의 알람 설정을 적용했습니다.`
-                        : `\n\n⚠️ 알람 설정 적용 실패: ${applyRes.error}`;
-                    window._ganttQaPendingAlarmDraft = null;
-                }
-            }
-
-            // 💡 [2026-09-03 신규] "✏️ Gantt 수정 초안" — [[GANTT_EDIT_DRAFT:번호]] 파싱 → pending 저장 → 미리보기
-            let ganttEditDraftIdThisTurn = null;
-            const mGanttEdit = text.match(/\[\[GANTT_EDIT_DRAFT:(\d+)\]\]([\s\S]*?)\[\[\/GANTT_EDIT_DRAFT\]\]/);
-            if (mGanttEdit) {
-                const parsedGEdit = window._parseGanttEditDraftBlock(mGanttEdit[2]);
-                const gEditDraft = window._aiBuildGanttEditDraft(parseInt(mGanttEdit[1], 10), parsedGEdit);
-                if (!gEditDraft.ok) {
-                    text = text.replace(mGanttEdit[0], '⚠️ 해당 업무 행을 찾지 못해 수정 초안을 만들 수 없습니다.').trim();
-                } else {
-                    window._ganttQaPendingEditDraft = gEditDraft;
-                    ganttEditDraftIdThisTurn = gEditDraft.id;
-                    text = text.replace(mGanttEdit[0], window._aiGanttEditDraftPreviewMd(gEditDraft)).trim();
-                }
-            }
-            const mApplyEditConfirm = text.match(/\[\[ACTION:APPLY_GANTT_EDIT:CONFIRM\]\]/);
-            if (mApplyEditConfirm) {
-                text = text.replace(mApplyEditConfirm[0], '').trim();
-                if (!window._ganttQaPendingEditDraft) {
-                    text += '\n\n⚠️ 아직 확정할 Gantt 수정 초안이 없습니다. 먼저 수정 내용을 말씀해주세요.';
-                } else {
-                    const pendingGEdit = window._ganttQaPendingEditDraft;
-                    const applyGEditRes = window._aiApplyGanttEditDraft(pendingGEdit);
-                    text += applyGEditRes.ok
-                        ? `\n\n✅ "${pendingGEdit.currentLabel}" 업무 수정을 적용했습니다.`
-                        : `\n\n⚠️ 수정 실패: ${applyGEditRes.error}`;
-                    window._ganttQaPendingEditDraft = null;
-                }
-            }
-
-            // 💡 [2026-09-03 신규] "➕ 새 행 추가 초안" — [[GANTT_ADD_DRAFT]] 파싱 → pending 저장 → 미리보기
-            let ganttAddDraftIdThisTurn = null;
-            const mGanttAdd = text.match(/\[\[GANTT_ADD_DRAFT\]\]([\s\S]*?)\[\[\/GANTT_ADD_DRAFT\]\]/);
-            if (mGanttAdd) {
-                const parsedGAdd = window._parseGanttAddDraftBlock(mGanttAdd[1]);
-                const gAddDraft = { ok: true, id: 'ganttAdd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), ...parsedGAdd };
-                window._ganttQaPendingAddDraft = gAddDraft;
-                ganttAddDraftIdThisTurn = gAddDraft.id;
-                text = text.replace(mGanttAdd[0], window._aiGanttAddDraftPreviewMd(gAddDraft)).trim();
-            }
-            const mApplyAddConfirm = text.match(/\[\[ACTION:APPLY_GANTT_ADD:CONFIRM\]\]/);
-            if (mApplyAddConfirm) {
-                text = text.replace(mApplyAddConfirm[0], '').trim();
-                if (!window._ganttQaPendingAddDraft) {
-                    text += '\n\n⚠️ 아직 확정할 새 행 추가 초안이 없습니다. 먼저 추가 내용을 말씀해주세요.';
-                } else {
-                    const pendingGAdd = window._ganttQaPendingAddDraft;
-                    const applyGAddRes = window._aiApplyGanttAddDraft(pendingGAdd);
-                    text += applyGAddRes.ok
-                        ? `\n\n✅ "${pendingGAdd.taskName}" 업무를 새로 추가했습니다.`
-                        : `\n\n⚠️ 추가 실패: ${applyGAddRes.error}`;
-                    window._ganttQaPendingAddDraft = null;
-                }
-            }
+            const processed = await window._aiProcessGanttQaTurn(text, qaQuestionForPrompt, question, priorHistory, apiKey, manualOtherProjectTexts);
 
             window._ganttQaHistory.pop(); // "⏳ 답변 생성 중..." placeholder 제거
             // 💡 uid/question을 함께 저장 — 아래 👍/👎 피드백(window.saveGanttQaFeedback)이 이 답변을
             //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
             //    AI에게 다시 보여줄 수 있게 한다.
-            window._ganttQaHistory.push({ role: 'ai', text: text.trim(), uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: mailDraftIdThisTurn, noticeDraftId: noticeDraftIdThisTurn, alarmDraftId: alarmDraftIdThisTurn, ganttEditDraftId: ganttEditDraftIdThisTurn, ganttAddDraftId: ganttAddDraftIdThisTurn, openExecDraftId: openExecDraftIdThisTurn });
+            window._ganttQaHistory.push({ role: 'ai', text: processed.text, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: processed.mailDraftId, noticeDraftId: processed.noticeDraftId, alarmDraftId: processed.alarmDraftId, ganttEditDraftId: processed.ganttEditDraftId, ganttAddDraftId: processed.ganttAddDraftId, openExecDraftId: processed.openExecDraftId });
         } catch (e) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
