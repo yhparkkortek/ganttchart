@@ -64,7 +64,7 @@
             //    캐시해두고, 아래 _aiResolveNameToEmail이 여기도 함께 뒤지도록 확장한다.
             window._aiOtherProjectDataCache = window._aiOtherProjectDataCache || {};
             window._aiOtherProjectDataCache[no] = pd;
-            return window._buildOtherProjectQaContext(pd, entry);
+            return await window._buildOtherProjectQaContext(pd, entry);
         } catch (e) { console.warn('다른 프로젝트(#P' + no + ') 조회 실패:', e.message); return null; }
     };
 
@@ -80,7 +80,7 @@
         if (!entry || !entry.drive_file_id) return null;
         window._aiOtherProjectDataCache = window._aiOtherProjectDataCache || {};
         const cached = window._aiOtherProjectDataCache[entry.drive_file_id];
-        if (cached) return window._buildOtherProjectQaContext(cached, entry);
+        if (cached) return await window._buildOtherProjectQaContext(cached, entry);
         try {
             const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -90,16 +90,22 @@
             });
             const pd = await res.json();
             window._aiOtherProjectDataCache[entry.drive_file_id] = pd;
-            return window._buildOtherProjectQaContext(pd, entry);
+            return await window._buildOtherProjectQaContext(pd, entry);
         } catch (e) { console.warn('[AI 문답] 선택한 프로젝트(' + (entry.file_name || entry.label || '') + ') 조회 실패:', e.message); return null; }
     };
 
-    // 💡 다른 프로젝트의 저장 파일(globalData/colIdx/projectMeta/tabData)을 가볍게 요약 텍스트로 변환.
-    //    현재 프로젝트용 _buildGanttQaContext처럼 DOM(rendered table)에서 읽지 않고 저장된 JSON 값만
-    //    사용한다(다른 프로젝트를 화면에 렌더링하지 않고 조회만 하기 위함) — 그래서 Customer SPEC/
-    //    M.C Table/Elec Parts/주소록처럼 DOM에만 의존하던 일부 탭은 여기서는 생략하고, 업무 목록/
-    //    개요/담당자/주요자재처럼 tabData·projectMeta에 이미 원본 값이 있는 부분만 다룬다.
-    window._buildOtherProjectQaContext = function(pd, indexEntry) {
+    // 💡 [2026-09-07 확장] 다른 프로젝트의 저장 파일(globalData/colIdx/projectMeta/tabData)을 가볍게
+    //    요약 텍스트로 변환. 현재 프로젝트용 _buildGanttQaContext처럼 DOM(rendered table)에서 읽지
+    //    않고 저장된 JSON 값만 사용한다(다른 프로젝트를 화면에 렌더링하지 않고 조회만 하기 위함) —
+    //    그런데 Customer SPEC/M.C Table/주소록은 사실 DOM이 아니라 tabData(briefSpec/mcRevisions/
+    //    addressBook)에 이미 저장돼 있어(collectTabData 참고) DOM 없이도 그대로 읽을 수 있고,
+    //    Elec Parts/PANEL도 tabData(elecCompare/panelCompare)의 "선택된 모델명"만 있으면 현재
+    //    프로젝트와 동일하게 팀 공용 라이브러리(_epLibCache)에서 스펙을 다시 조회할 수 있다 —
+    //    "질문 대상 프로젝트를 고르는 것도 결국 그 파일을 열어보는 것과 같다"는 점에서, 이 탭들을
+    //    굳이 생략할 이유가 없어 전부 포함한다. 다만 #CS/#MC/#EP/#MT처럼 클릭하면 그 프로젝트
+    //    화면으로 이동하는 인용 번호는 다른 프로젝트엔 붙이지 않는다(그 프로젝트가 실제로 렌더링돼
+    //    있지 않아 클릭 이동이 불가능하므로) — 업무 목록의 "#G숫자" 인용 금지 규칙과 같은 이유.
+    window._buildOtherProjectQaContext = async function(pd, indexEntry) {
         const gd = (pd && pd.globalData) || [];
         const ci = (pd && pd.colIdx) || {};
         const pm = (pd && pd.projectMeta) || {};
@@ -155,12 +161,95 @@
             .filter(function(m) { return m && (m.category || m.ktkPn || m.description); })
             .map(function(m) { return `- ${m.category || '(구분없음)'} | PN:${m.ktkPn || '-'} | ${m.description || '-'}`; }));
 
+        // [Customer SPEC] — tabData.briefSpec에 이미 저장된 값(collectTabData 참고), DOM 불필요.
+        const MAX_OTHER_TABLE_ROWS = 100;
+        const csRows = (td.briefSpec || []).filter(function(r) { return r && (r.modelA || r.modelB || r.modelC || r.type); });
+        const csLines = csRows.slice(0, MAX_OTHER_TABLE_ROWS).map(function(r) {
+            return `- [${r.type || '-'}${r.sub ? '/' + r.sub : ''}] A:${r.modelA || '-'} | B:${r.modelB || '-'} | C:${r.modelC || '-'}` + (r.note ? ` | 비고:${r.note}` : '');
+        });
+        const csOmitted = csRows.length > MAX_OTHER_TABLE_ROWS ? `\n...(그 외 ${csRows.length - MAX_OTHER_TABLE_ROWS}건 생략됨)` : '';
+
+        // [M.C Table] — 현재 활성 리비전(mcActiveRevision) 기준, 없으면 R1/구버전 mcTable로 폴백.
+        const mcRev = td.mcActiveRevision || 'R1';
+        const mcRowsRaw = (td.mcRevisions && td.mcRevisions[mcRev]) || td.mcTable || [];
+        const mcRows = mcRowsRaw.filter(function(r) { return r && (r.item || r.pn || r.type); });
+        const mcLinesOther = mcRows.slice(0, MAX_OTHER_TABLE_ROWS).map(function(r) {
+            return `- [${r.type || '-'}] ${r.item || '-'} (${r.group || '-'}) PN:${r.pn || '-'} SPEC:${r.spec || '-'}`
+                + ` | Proto:${r.protoCost || '-'}/${r.protoNre || '-'} ProtoB:${r.protoBCost || '-'}/${r.protoBNre || '-'} MP:${r.mpCost || '-'}/${r.mpNre || '-'}`
+                + (r.note ? ` | 비고:${r.note}` : '');
+        });
+        const mcOmittedOther = mcRows.length > MAX_OTHER_TABLE_ROWS ? `\n...(그 외 ${mcRows.length - MAX_OTHER_TABLE_ROWS}건 생략됨, 리비전:${mcRev})` : '';
+
+        // [주소록] — 그 프로젝트가 마지막으로 저장될 당시의 스냅샷(tabData.addressBook). 개인정보
+        // 최소 수집 원칙에 따라 이름/부서/직함까지만(연락처 제외) — 현재 프로젝트 컨텍스트와 동일 기준.
+        const addrRows = (td.addressBook || []).filter(function(p) { return p && (p.name || p.nameEn); });
+        const addrLinesOther = addrRows.slice(0, MAX_OTHER_TABLE_ROWS).map(function(p) {
+            const nm = (p.name && p.nameEn) ? `${p.name} (${p.nameEn})` : (p.name || p.nameEn || '');
+            return `- ${nm}${p.dept ? ' / ' + p.dept : ''}${p.title ? ' / ' + p.title : ''}`;
+        });
+        const addrOmittedOther = addrRows.length > MAX_OTHER_TABLE_ROWS ? `\n...(그 외 ${addrRows.length - MAX_OTHER_TABLE_ROWS}명 생략됨)` : '';
+
+        // [Elec Parts / PANEL] — tabData.elecCompare/panelCompare엔 "선택된 모델명"만 있고 실제 스펙은
+        // 팀 공용 라이브러리에 있음(현재 프로젝트와 같은 소스) — 그 라이브러리는 프로젝트 무관 공용
+        // 자원이라 그대로 재조회 가능. 현재 프로젝트 컨텍스트 빌더와 동일한 캐시(_epLibCache) 공유.
+        const otherElecLines = [];
+        const elecCompareOther = td.elecCompare || {};
+        const elecTypeLabelsOther = { convbd: 'CONVERTER', adbd: 'AD BOARD' };
+        for (const type of Object.keys(elecTypeLabelsOther)) {
+            const ec = elecCompareOther[type];
+            if (!ec || !ec.selectedModels || !ec.selectedModels.length) continue;
+            let lib = window._epLibCache && window._epLibCache[type];
+            if (!lib && window.loadElecPartLibrary) {
+                try { lib = await window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과'); window._epLibCache = window._epLibCache || {}; window._epLibCache[type] = lib; } catch (e) { lib = null; }
+            }
+            const items = (lib && lib.items) || [];
+            const notes = ec.notes || {};
+            ec.selectedModels.forEach(function(m) {
+                const entry = items.find(function(it) { return it.model === m; });
+                const specs = entry && entry.specs;
+                const partName = (window._epPartNameOf && specs) ? (window._epPartNameOf(specs) || m) : m;
+                let specLine = '(라이브러리에서 상세 스펙을 찾지 못함 — 모델명만 있음)';
+                if (specs) {
+                    const fields = window._epFlatFields ? window._epFlatFields(type) : [];
+                    const kv = fields.map(function(f) { const v = specs[f[0]]; return (v && v !== '-') ? `${f[0]}:${v}` : null; }).filter(Boolean);
+                    specLine = kv.length ? kv.join(' | ') : '(등록된 상세 스펙 없음)';
+                }
+                otherElecLines.push(`- [${elecTypeLabelsOther[type]}] ${partName} (모델:${m})\n  ${specLine}` + (notes[m] ? ` | 메모:${notes[m]}` : ''));
+            });
+        }
+        const panelCompareOther = td.panelCompare || {};
+        if (panelCompareOther.selectedModels && panelCompareOther.selectedModels.length && window.loadPanelLibrary && window.findPanelInLibrary) {
+            let panelLib = window._epLibCache && window._epLibCache.panel;
+            if (!panelLib) {
+                try { panelLib = await window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과'); window._epLibCache = window._epLibCache || {}; window._epLibCache.panel = panelLib; } catch (e) { panelLib = null; }
+            }
+            const panelFields = [];
+            (window.PANEL_SPEC_SCHEMA || []).forEach(function(sec) { sec.fields.forEach(function(f) { panelFields.push(f); }); });
+            const notes = panelCompareOther.notes || {};
+            panelCompareOther.selectedModels.forEach(function(m) {
+                const entry = panelLib ? window.findPanelInLibrary(panelLib, m) : null;
+                const specs = entry && entry.specs;
+                const partName = (window._epPartNameOf && specs) ? (window._epPartNameOf(specs) || m) : m;
+                let specLine = '(라이브러리에서 상세 스펙을 찾지 못함 — 모델명만 있음)';
+                if (specs) {
+                    const kv = panelFields.map(function(f) { const v = specs[f[0]]; return (v && v !== '-') ? `${f[0]}:${v}` : null; }).filter(Boolean);
+                    specLine = kv.length ? kv.join(' | ') : '(등록된 상세 스펙 없음)';
+                }
+                otherElecLines.push(`- [PANEL] ${partName} (모델:${m})\n  ${specLine}` + (notes[m] ? ` | 메모:${notes[m]}` : ''));
+            });
+        }
+
         return `[다른 프로젝트: ${label}]\n` +
             `고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}\n` +
             `[개요]\n${overview.length ? overview.join('\n') : '(없음)'}\n` +
             `[담당자]\n${memberLines.length ? memberLines.join('\n') : '(없음)'}\n` +
             `[주요 자재]\n${materialLines.length ? materialLines.join('\n') : '(없음)'}\n` +
-            `[업무 목록] (총 ${rows.length}건)\n${lines.length ? lines.join('\n') : '(등록된 업무 없음)'}${omitted}`;
+            `[Customer SPEC]\n${csLines.length ? csLines.join('\n') : '(없음)'}${csOmitted}\n` +
+            `[M.C Table] (리비전:${mcRev})\n${mcLinesOther.length ? mcLinesOther.join('\n') : '(없음)'}${mcOmittedOther}\n` +
+            `[Elec Parts / PANEL SPEC]\n${otherElecLines.length ? otherElecLines.join('\n') : '(없음)'}\n` +
+            `[주소록]\n${addrLinesOther.length ? addrLinesOther.join('\n') : '(없음)'}${addrOmittedOther}\n` +
+            `[업무 목록] (총 ${rows.length}건)\n${lines.length ? lines.join('\n') : '(등록된 업무 없음)'}${omitted}\n` +
+            `※ 이 프로젝트의 업무/표 항목에는 "#G"/"#CS"/"#MC"/"#EP"/"#MT" 같은 클릭 인용 번호를 절대 붙이지 마세요(그 프로젝트가 화면에 열려있지 않아 클릭 이동이 불가능합니다) — 항목 이름으로만 설명하세요.`;
     };
 
     // ── 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 위 프롬프트의 [[MAIL_DRAFT]] 규칙 참고 ──────────
@@ -1431,7 +1520,8 @@
             const all = window._msLoadProjectIndex ? await window._msLoadProjectIndex() : [];
             const others = all.filter(function(p) { return p && p.drive_file_id && p.drive_file_id !== window.currentDriveFileId; });
             sel.innerHTML = '<option value="">현재 프로젝트</option>' + others.map(function(p) {
-                const label = [p.model, p.customer].filter(Boolean).join(' · ') || p.file_name || '(이름없음)';
+                // 💡 [2026-09-07] 모델명만으로는 같은 모델의 다른 인치가 헷갈려서 인치도 같이 표시.
+                const label = [p.model ? (p.model + (p.inch ? ' ' + p.inch + '"' : '')) : '', p.customer].filter(Boolean).join(' · ') || p.file_name || '(이름없음)';
                 return `<option value="${escapeHtml(p.drive_file_id)}" data-label="${escapeHtml(label)}" data-filename="${escapeHtml(p.file_name || '')}">🌐 ${escapeHtml(label)}${p.completed ? ' [완료]' : ''}</option>`;
             }).join('');
         } catch (e) {
@@ -1478,6 +1568,11 @@
                 : `🔀 다시 **현재 열려있는 프로젝트**에 대해 질문합니다. (새 대화 시작)`
         });
         window._renderGanttQaMessages();
+
+        // 💡 [2026-09-07 신규] 선택한 순간 미리 가져와둔다(fire-and-forget) — 사용자가 질문을 타이핑하는
+        //    동안 Drive 조회가 끝나 있으면, 실제로 전송을 누를 때는 이미 캐시에 있어 지연이 거의 안 느껴짐.
+        //    실패해도 여기선 조용히 넘어가고(에러 UI 없음) sendGanttQaMessage가 그때 다시 시도한다.
+        if (newTarget) window._aiFetchManualTargetContext(newTarget).catch(function() {});
     };
 
     // ═══════════════════════════════════════════════════════════
