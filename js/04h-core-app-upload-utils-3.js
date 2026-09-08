@@ -2177,6 +2177,11 @@
                     </div>
                 </div>
                 <div id="gantt-qa-desc" style="padding:8px 18px 0; font-size:10.5px; color:#999;">${_qEn ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Conversation content isn\'t saved — only the question text is kept, anonymously, to power the "Frequently asked" suggestions)' : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화 내용 자체는 저장되지 않으며, 질문 문구만 "자주 묻는 질문" 추천에 쓰입니다)'}</div>
+                <!-- 💡 [2026-09-08 신규] "답변이 늦어지면 사용자가 문제라고 오해하지 않게, 미리 안내해두면
+                     좋겠다"는 요청 — 질문하기 전부터 "늦어질 수도 있다"는 기대치를 심어둬서, 실제로 늦어질
+                     때 뜨는 단계별 안내(_ganttQaStartWaitingHints)가 "어? 왜 이러지"가 아니라 "아, 미리
+                     말해준 그거구나"로 받아들여지게 한다. -->
+                <div id="gantt-qa-delay-notice" style="padding:4px 18px 0; font-size:10.5px; color:#adb5bd;">${_qEn ? '⏱️ Some questions may take a bit longer to answer — if so, we\'ll keep you posted on screen.' : '⏱️ 질문에 따라 답변이 조금 늦어질 수 있어요 — 그럴 땐 화면에 진행 상황을 안내해드려요.'}</div>
                 <!-- 💡 [2026-09-07 신규] 다른 프로젝트를 직접 골라서 물어보기 — AI가 스스로 판단해 찾아가는
                      자동 경로(🌐 다른 프로젝트 조회 규칙)와 별개로, 사람이 미리 지정해두면 왕복 없이 바로 답한다. -->
                 <div style="padding:6px 18px 0; display:flex; align-items:center; gap:6px;">

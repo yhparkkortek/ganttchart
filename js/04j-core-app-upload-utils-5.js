@@ -750,6 +750,10 @@
         if (_qaDesc) _qaDesc.textContent = _en
             ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Conversation content isn\'t saved — only the question text is kept, anonymously, to power the "Frequently asked" suggestions)'
             : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화 내용 자체는 저장되지 않으며, 질문 문구만 "자주 묻는 질문" 추천에 쓰입니다)';
+        const _qaDelayNotice = document.getElementById('gantt-qa-delay-notice');
+        if (_qaDelayNotice) _qaDelayNotice.textContent = _en
+            ? '⏱️ Some questions may take a bit longer to answer — if so, we\'ll keep you posted on screen.'
+            : '⏱️ 질문에 따라 답변이 조금 늦어질 수 있어요 — 그럴 땐 화면에 진행 상황을 안내해드려요.';
         const _qaTargetLabel = document.getElementById('gantt-qa-target-label');
         if (_qaTargetLabel) _qaTargetLabel.textContent = _en ? '📂 Target' : '📂 질문 대상';
         // 드롭다운은 선택된 값을 잃지 않도록 옵션 텍스트만 다시 채움(재조회 없이 즉시 반영)
