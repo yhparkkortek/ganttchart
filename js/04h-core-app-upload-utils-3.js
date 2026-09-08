@@ -1370,9 +1370,16 @@
             // 💡 위 window._withTimeout 참고 — GAS 호출(callAiBackend)이 네트워크 문제 등으로 응답도
             //    오류도 없이 멈춰버리면 "⏳ 답변 생성 중..."이 영원히 안 바뀌어 "응답 없음"으로 보인다.
             //    60초 안에 안 끝나면 오류로 처리해서 사용자가 재시도할 수 있게 한다.
-            const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
-            const _tQa2 = performance.now();
-            console.info(`[AI 문답 계측] AI 응답 생성(네트워크 왕복 포함): ${Math.round(_tQa2 - _tQa1)}ms`);
+            // 🐛 [2026-09-08 버그수정] 위 계측 로그가 타임아웃(reject)일 땐 안 찍히던 문제 — await가
+            //    던진 예외가 바로 아래 catch로 튀어서 그 사이의 console.info를 건너뛰었다. 정작 "왜
+            //    느린지" 가장 궁금한 순간(타임아웃으로 실패한 순간)에 로그가 안 남는 건 계측 자체의
+            //    의미가 없으므로, try/finally로 감싸 성공/실패 어느 쪽이든 걸린 시간이 항상 찍히게 한다.
+            let result;
+            try {
+                result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+            } finally {
+                console.info(`[AI 문답 계측] AI 응답 생성(네트워크 왕복 포함): ${Math.round(performance.now() - _tQa1)}ms`);
+            }
             if (!result.ok) throw result.error || new Error('알 수 없는 오류');
             const text = window._extractGanttQaAiText(result);
 
