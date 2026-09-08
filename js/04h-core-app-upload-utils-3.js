@@ -1300,6 +1300,15 @@
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
 
+        // 💡 [2026-09-08 신규] AI 호출 없이 로컬에서만 처리 — 재질문 패턴 감지(위 규칙 참고)는 이번
+        //    질문을 히스토리에 넣기 "전"에 검사해야 자기 자신과 비교되지 않는다. 질문 문구 빈도 기록도
+        //    실제로 AI에게 보내는 "진짜 질문"에 대해서만(음성/실행취소 같은 로컬 명령 제외) 남긴다.
+        const reaskTarget = window._ganttQaCheckReaskPattern ? window._ganttQaCheckReaskPattern(question) : null;
+        if (reaskTarget && !reaskTarget.possibleDissatisfaction && !window._qaFeedbackFor(reaskTarget.uid)) {
+            reaskTarget.possibleDissatisfaction = true;
+        }
+        if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+
         window._ganttQaSending = true;
         const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
         window._ganttQaHistory.push({ role: 'user', text: question });
@@ -1817,6 +1826,119 @@
         return _urEn ? '↩️ Undone (same as Ctrl+Z).' : '↩️ 실행 취소했습니다. (Ctrl+Z와 동일)';
     };
 
+    // ═══════════════════════════════════════════════════════════
+    // 💡 [2026-09-08 신규] "대화가 그냥 버려지는 게 아깝다"는 피드백 대응 — 다만 매 턴마다 AI에게
+    //    통째로 다시 분석시키면 토큰·속도만 늘어나므로(사용자와 상의해 결정), 여기선 AI 호출이
+    //    전혀 없는 두 가지만 한다:
+    //      1) 재질문 패턴 감지 — 방금 질문이 최근 대화 속 질문과 거의 같으면 "그 답변에 문제가
+    //         있었을 수 있다"는 힌트만 표시(최종 👎 확정은 사람이 버튼으로). 기존 피드백/일괄개선
+    //         파이프라인을 그대로 재사용 — 새 AI 호출 없음.
+    //      2) 질문 문구 빈도 기록(gantt_qa_question_freq, localStorage) — "자주 묻는 질문"을
+    //         AI 문답 빈 화면에 보여줘서 다른 사람이 뭘 물어봤는지 발견하기 쉽게 한다. 저장하는 건
+    //         "질문 문구"뿐이고 답변 내용은 저장하지 않는다(모달 설명 문구에도 명시).
+    // ═══════════════════════════════════════════════════════════
+    window._ganttQaNormalizeQ = function(s) {
+        return (s || '').toString().trim().toLowerCase().replace(/\s+/g, ' ').replace(/[?!.,~，。！]+$/g, '');
+    };
+
+    // 두 질문이 "거의 같은 질문"인지 판단 — 공백 기준 단어 비교는 한국어 조사("수요량이"/"수요량은"/
+    // "수요량을")가 단어 끝에 그대로 붙어버려 같은 단어를 다른 단어로 오판하기 쉽다(실측 결과 "얼마야?"
+    // vs "얼마입니까?"처럼 흔한 표현 차이에도 유사도가 절반 이하로 뚝 떨어짐). 형태소 분석기 없이도
+    // 조사/어미 차이에 덜 민감하도록, 공백을 없앤 뒤 글자 2-그램(bigram) 집합의 자카드 유사도로 판단.
+    // 🐛 [실측 검증 중 발견] 순수 bigram만 쓰면 "김철수님 지연 업무 있어?" ↔ "이철수님 지연 업무
+    //    있어?"(사람이 다름!)가 0.82로 오히려 "김철수님"↔"김철수님 지연 업무 있나요?"(진짜 같은
+    //    질문, 0.54)보다 더 비슷하다고 나옴 — 문장 틀이 같으면 이름 한 글자만 달라도 나머지 글자가
+    //    다 겹쳐서 점수가 튀는 bigram의 약점. "OOO님"(이름)·"#G번호/번호"(행 번호)처럼 이 질문이
+    //    "누구/무엇을 가리키는지" 결정하는 핵심 단서가 서로 다르면, 문장 형태가 아무리 비슷해도
+    //    먼저 완전히 다른 질문으로 판정하고(0 반환), 그런 단서가 없거나 서로 같을 때만 bigram으로 비교.
+    window._ganttQaQuestionSimilarity = function(a, b) {
+        const na = window._ganttQaNormalizeQ(a);
+        const nb = window._ganttQaNormalizeQ(b);
+        if (!na || !nb) return 0;
+        if (na === nb) return 1;
+
+        const names = function(s) { return (s.match(/[가-힣]{2,4}님/g) || []).sort(); };
+        const numbers = function(s) { return (s.match(/#?g?\d+/gi) || []).map(function(x) { return x.replace(/[^\d]/g, ''); }).sort(); };
+        const eq = function(x, y) { return JSON.stringify(x) === JSON.stringify(y); };
+        const namesA = names(na), namesB = names(nb);
+        if (namesA.length && namesB.length && !eq(namesA, namesB)) return 0;
+        const numsA = numbers(na), numsB = numbers(nb);
+        if (numsA.length && numsB.length && !eq(numsA, numsB)) return 0;
+
+        const flatA = na.replace(/\s+/g, ''), flatB = nb.replace(/\s+/g, '');
+        const bigrams = function(s) {
+            const set = new Set();
+            for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+            return set;
+        };
+        const ga = bigrams(flatA), gb = bigrams(flatB);
+        if (!ga.size || !gb.size) return 0;
+        let inter = 0;
+        ga.forEach(function(g) { if (gb.has(g)) inter++; });
+        const union = ga.size + gb.size - inter;
+        return union ? inter / union : 0;
+    };
+
+    // 최근 대화(최대 4턴=8메시지) 안에서 지금 질문과 비슷한 이전 질문 + 그 답변을 찾는다 — 너무
+    // 옛날 대화까지 뒤지면 "그냥 관심사가 겹치는 것"까지 오탐할 위험이 있어 최근 것만 본다.
+    window._ganttQaCheckReaskPattern = function(question) {
+        const hist = window._ganttQaHistory || [];
+        const RECENT_WINDOW = 8;
+        const start = Math.max(0, hist.length - RECENT_WINDOW);
+        for (let i = hist.length - 1; i >= start; i--) {
+            const m = hist[i];
+            if (m.role !== 'user') continue;
+            // 💡 임계값 0.5 — 이 힌트는 잘못 떠도 사람이 클릭 한 번으로 넘기면 그만이라(AI 호출도,
+            //    데이터 변경도 없음) 놓치는 것보다 조금 과하게 잡는 쪽이 낫다고 보고 다소 낮게 잡음.
+            if (window._ganttQaQuestionSimilarity(question, m.text) >= 0.5) {
+                for (let j = i + 1; j < hist.length; j++) {
+                    if (hist[j].role === 'ai' && hist[j].uid && !hist[j].pending && !hist[j].error) return hist[j];
+                }
+            }
+        }
+        return null;
+    };
+
+    // "아니에요" 클릭 — 힌트만 조용히 지움(피드백을 남기지 않음, AI 호출도 없음)
+    window._ganttQaDismissReaskHint = function(uid) {
+        const m = (window._ganttQaHistory || []).find(function(x) { return x.uid === uid; });
+        if (m) m.possibleDissatisfaction = false;
+        window._renderGanttQaMessages();
+    };
+
+    const _QA_FREQ_KEY = 'gantt_qa_question_freq';
+    const _QA_FREQ_MAX = 150; // localStorage 무한 증가 방지용 상한
+
+    window._ganttQaRecordQuestionFreq = function(question) {
+        const norm = window._ganttQaNormalizeQ(question);
+        if (!norm || norm.length < 2) return;
+        let list = [];
+        try { list = JSON.parse(localStorage.getItem(_QA_FREQ_KEY) || '[]'); } catch (e) { list = []; }
+        const entry = list.find(function(x) { return x.norm === norm; });
+        if (entry) {
+            entry.count = (entry.count || 1) + 1;
+            entry.lastAsked = Date.now();
+            entry.sample = question; // 화면 표시용 — 가장 최근에 입력된 자연스러운 원문 표기를 씀
+        } else {
+            list.push({ norm: norm, sample: question, count: 1, lastAsked: Date.now() });
+        }
+        if (list.length > _QA_FREQ_MAX) {
+            list.sort(function(a, b) { return (b.lastAsked || 0) - (a.lastAsked || 0); });
+            list = list.slice(0, _QA_FREQ_MAX);
+        }
+        try { localStorage.setItem(_QA_FREQ_KEY, JSON.stringify(list)); } catch (e) {}
+    };
+
+    // "2번 이상" 물어본 것만 "자주"로 인정 — 한 번만 물어본 걸 예시로 보여주는 건 의미가 없음
+    window._ganttQaGetTopQuestions = function(n) {
+        let list = [];
+        try { list = JSON.parse(localStorage.getItem(_QA_FREQ_KEY) || '[]'); } catch (e) { list = []; }
+        return list
+            .filter(function(x) { return (x.count || 1) >= 2; })
+            .sort(function(a, b) { return (b.count - a.count) || ((b.lastAsked || 0) - (a.lastAsked || 0)); })
+            .slice(0, n || 6);
+    };
+
     // 🎙️ [2026-09-08 수정] "음성문답" 버튼 — 한 번 말하면 풀리던 것을 "모드"로 바꿔 고정시킴.
     //    한 번 켜면(음성문답 모드 ON) 질문 → 자동전송 → 답변 수신까지 끝난 뒤 알아서 다시 듣기를
     //    시작해서, 사용자가 "글자문답"을 눌러 직접 끄기 전까지는 계속 음성으로 주고받을 수 있다.
@@ -1983,7 +2105,7 @@
                         <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
-                <div id="gantt-qa-desc" style="padding:8px 18px 0; font-size:10.5px; color:#999;">${_qEn ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Chat is not saved)' : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)'}</div>
+                <div id="gantt-qa-desc" style="padding:8px 18px 0; font-size:10.5px; color:#999;">${_qEn ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Conversation content isn\'t saved — only the question text is kept, anonymously, to power the "Frequently asked" suggestions)' : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화 내용 자체는 저장되지 않으며, 질문 문구만 "자주 묻는 질문" 추천에 쓰입니다)'}</div>
                 <!-- 💡 [2026-09-07 신규] 다른 프로젝트를 직접 골라서 물어보기 — AI가 스스로 판단해 찾아가는
                      자동 경로(🌐 다른 프로젝트 조회 규칙)와 별개로, 사람이 미리 지정해두면 왕복 없이 바로 답한다. -->
                 <div style="padding:6px 18px 0; display:flex; align-items:center; gap:6px;">

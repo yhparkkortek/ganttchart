@@ -1397,11 +1397,41 @@ ${question}
         }).join('');
     };
 
+    // 채팅창이 비어있을 때 보여주는 예시 질문 칩 — 클릭하면 입력창에 그대로 채워짐(바로 전송은 안 함,
+    // 보내기 전에 수정할 수 있게). window._ganttQaGetTopQuestions(04h)에 2번 이상 물어본 기록이 있으면
+    // 그걸 우선 보여주고(다른 사람이 뭘 자주 물어보는지 발견하기 쉽게), 없으면 고정 예시로 대체한다.
+    window._ganttQaFillQuestion = function(text) {
+        const input = document.getElementById('gantt-qa-input');
+        if (!input) return;
+        input.value = text;
+        input.focus();
+    };
+
     window._renderGanttQaMessages = function() {
         const box = document.getElementById('gantt-qa-messages');
         if (!box) return;
         if (!window._ganttQaHistory.length) {
-            box.innerHTML = '<div style="padding:30px 10px; text-align:center; color:#999; font-size:12px; line-height:1.6;">이 프로젝트의 Gantt 업무 · 개요 · 멤버 · 주요 자재에 대해 자유롭게 질문해보세요.<br>예) "김철수님 담당 업무 중 지연된 게 있어?"<br>예) "이 프로젝트 연간 수요량이 얼마야?"<br>예) "기구 담당자가 누구야?"</div>';
+            const _emEn = window._currentLang === 'en';
+            const chipStyle = 'display:block; width:100%; text-align:left; margin:4px 0; padding:6px 10px; background:#f1f3f5; border:1px solid #dee2e6; border-radius:6px; color:#495057; font-size:11.5px; cursor:pointer; white-space:normal; word-break:break-word;';
+            const top = window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(5) : [];
+            let examplesHtml;
+            if (top.length) {
+                examplesHtml = `<div style="font-size:11px; color:#888; margin-bottom:4px;">${_emEn ? '💡 Frequently asked' : '💡 자주 묻는 질문'}</div>` +
+                    top.map(function(t) {
+                        return `<button type="button" onclick="window._ganttQaFillQuestion(${escapeHtml(JSON.stringify(t.sample))})" style="${chipStyle}">${escapeHtml(t.sample)}</button>`;
+                    }).join('');
+            } else {
+                const examples = _emEn
+                    ? ['Any delayed tasks assigned to Kim Cheol-su?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
+                    : ['김철수님 담당 업무 중 지연된 게 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
+                examplesHtml = examples.map(function(t) {
+                    return `<button type="button" onclick="window._ganttQaFillQuestion(${escapeHtml(JSON.stringify(t))})" style="${chipStyle}">${_emEn ? '' : '예) '}"${escapeHtml(t)}"</button>`;
+                }).join('');
+            }
+            box.innerHTML = `<div style="padding:20px 10px; color:#999; font-size:12px; line-height:1.6;">
+                <div style="text-align:center; margin-bottom:10px;">${_emEn ? "Ask anything about this project's Gantt tasks · overview · members · key materials." : '이 프로젝트의 Gantt 업무 · 개요 · 멤버 · 주요 자재에 대해 자유롭게 질문해보세요.'}</div>
+                ${examplesHtml}
+            </div>`;
             return;
         }
         box.innerHTML = window._ganttQaHistory.map(function(m) {
@@ -1430,6 +1460,16 @@ ${question}
                     ${badActive ? `<button onclick="window.openQaImproveCommentModal('${m.uid}')" style="font-size:10.5px; padding:2px 8px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer; white-space:nowrap;">💡 의견</button>` : ''}
                 </div>`;
             })() : '';
+            // 💡 [2026-09-08 신규] 재질문 패턴 감지 힌트 — 방금 질문이 이 답변 직후에 나온 이전 질문과
+            //    거의 같으면(window._ganttQaCheckReaskPattern) "이 답변에 문제가 있었을 수도 있다"고
+            //    알려주고, 사람이 확인하면 그대로 👎 피드백으로 기록한다(AI 호출 없이 기존 피드백/
+            //    일괄개선 파이프라인 재사용). 이미 피드백이 남아있으면(호불호 어느 쪽이든) 중복 표시 안 함.
+            const reaskHintHtml = (!isUser && m.possibleDissatisfaction && !window._qaFeedbackFor(m.uid)) ? `
+                <div style="display:flex; justify-content:flex-end; align-items:center; gap:6px; margin-top:4px; font-size:10.5px; color:#e8590c;">
+                    <span>🔁 비슷한 질문을 다시 물어보신 것 같아요 — 이 답변에 문제가 있었나요?</span>
+                    <button onclick="window.saveGanttQaFeedback('${m.uid}','bad')" style="font-size:10.5px; padding:2px 7px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-weight:bold; cursor:pointer; white-space:nowrap;">👎 네</button>
+                    <button onclick="window._ganttQaDismissReaskHint('${m.uid}')" style="font-size:10.5px; padding:2px 7px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:5px; cursor:pointer; white-space:nowrap;">아니에요</button>
+                </div>` : '';
             // 💡 [2026-09-01 신규] "📤 메일 작성/발송" — 이 메시지가 만든 초안이 아직 pending 중일 때만
             //    버튼을 보여줌(그 사이 새 초안이 생기거나 이미 발송/취소됐으면 id가 안 맞아 자동으로 사라짐).
             const mailDraftHtml = (!isUser && m.mailDraftId && window._ganttQaPendingMailDraft && window._ganttQaPendingMailDraft.id === m.mailDraftId)
@@ -1477,6 +1517,7 @@ ${question}
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
+                ${reaskHintHtml ? `<div style="max-width:82%; width:100%;">${reaskHintHtml}</div>` : ''}
                 ${mailDraftHtml ? `<div style="max-width:82%; width:100%;">${mailDraftHtml}</div>` : ''}
                 ${noticeDraftHtml ? `<div style="max-width:82%; width:100%;">${noticeDraftHtml}</div>` : ''}
                 ${alarmDraftHtml ? `<div style="max-width:82%; width:100%;">${alarmDraftHtml}</div>` : ''}

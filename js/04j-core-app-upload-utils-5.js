@@ -748,8 +748,8 @@
         // [AI 문답 모달] 정적 UI (2026-09-07 신설) — 열려있는 상태로 언어 전환해도 즉시 반영
         const _qaDesc = document.getElementById('gantt-qa-desc');
         if (_qaDesc) _qaDesc.textContent = _en
-            ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Chat is not saved)'
-            : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)';
+            ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Conversation content isn\'t saved — only the question text is kept, anonymously, to power the "Frequently asked" suggestions)'
+            : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화 내용 자체는 저장되지 않으며, 질문 문구만 "자주 묻는 질문" 추천에 쓰입니다)';
         const _qaTargetLabel = document.getElementById('gantt-qa-target-label');
         if (_qaTargetLabel) _qaTargetLabel.textContent = _en ? '📂 Target' : '📂 질문 대상';
         // 드롭다운은 선택된 값을 잃지 않도록 옵션 텍스트만 다시 채움(재조회 없이 즉시 반영)
