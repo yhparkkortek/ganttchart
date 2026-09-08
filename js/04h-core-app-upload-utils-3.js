@@ -1892,6 +1892,34 @@
         if (modal) modal.style.display = 'none';
     };
 
+    // 📱 [2026-09-08 신규] 모바일(특히 iOS Safari)에서 "질문하고 답을 받을 때 화면이 크게 확대되어
+    //    보이고, 직접 손가락으로 다시 줄여야 하는" 불편 대응. 이 앱은 <meta viewport>가 이미
+    //    "width=1200, initial-scale=0.35"로 축소돼 있는데(데스크톱 레이아웃을 모바일 화면에 맞춰
+    //    통째로 줄여 보여주는 방식), 그 위에서 글자 크기가 작은 입력창(gantt-qa-input, 12.5px)에
+    //    포커스하면 브라우저가 "글자를 읽을 수 있는 배율까지" 자동으로 확대한다 — 이미 0.35배로
+    //    축소된 상태라 그 보정폭이 매우 커 보이고(예: 1.2배 이상), blur해도 iOS는 배율을 자동으로
+    //    되돌려주지 않아 사용자가 직접 핀치줌으로 축소해야 했다.
+    //    포커스하는 동안 최대 배율을 "정상(1:1) 배율" 근처로만 제한해서 과도한 확대를 막고, blur 시
+    //    원래 배율 지시문을 재적용해 확대 상태가 남지 않게 한다(blur 직전에 이미 최대 배율로 눌려
+    //    있던 걸 그대로 복원하는 것이라 다시 튀어오르지 않음). 대부분의 휴대폰(화면 폭 <600px)에서는
+    //    아래 계산식이 항상 1.0으로 수렴해 딱 정상 배율까지만 확대되고, 화면이 넓은 태블릿에서는
+    //    AI 문답 모달(--modal-w-md: 600px)이 화면을 채우는 정도까지 좀 더 여유 있게 허용한다.
+    window._ganttQaGuardMobileZoom = function(el) {
+        if (!el || el._zoomGuardAttached) return;
+        el._zoomGuardAttached = true;
+        const viewportMeta = document.querySelector('meta[name="viewport"]');
+        if (!viewportMeta) return;
+        const original = viewportMeta.getAttribute('content');
+        const screenW = (window.screen && window.screen.width) || window.innerWidth || 400;
+        const idealScale = Math.max(1, Math.min(3, screenW / 600)); // 600 = --modal-w-md, 휴대폰에선 사실상 항상 1.0
+        el.addEventListener('focus', function() {
+            viewportMeta.setAttribute('content', original + ', maximum-scale=' + idealScale.toFixed(2));
+        });
+        el.addEventListener('blur', function() {
+            setTimeout(function() { viewportMeta.setAttribute('content', original); }, 300);
+        });
+    };
+
     window.openGanttQaModal = function() {
         let modal = document.getElementById('gantt-qa-modal');
         if (!modal) {
@@ -1939,6 +1967,7 @@
             document.body.appendChild(modal);
             window._makeDraggable('gantt-qa-box', 'gantt-qa-drag');
             window._bindClickToFront('gantt-qa-modal');
+            window._ganttQaGuardMobileZoom(document.getElementById('gantt-qa-input')); // 📱 모바일 과도확대 방지
         }
         window._renderGanttQaMessages();
         window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
