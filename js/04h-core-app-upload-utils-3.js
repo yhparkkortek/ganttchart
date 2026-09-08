@@ -1571,7 +1571,169 @@
         window._ganttQaPendingNoticeDraft = null; // 💡 공지 초안도 함께 무효화
         window._ganttQaPendingAlarmDraft = null; // 💡 알람 세부 설정 초안도 함께 무효화
         window._aiOtherProjectDataCache = {}; // 💡 이전 대화에서 조회했던 다른 프로젝트 데이터도 함께 비움
+        window._ganttQaLastSpokenUid = null; // 🎙️ 대화를 지우면 "이미 읽어준 답변" 기록도 초기화
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
         window._renderGanttQaMessages();
+    };
+
+    // ═══════════════════════════════════════════════════════════
+    // 🎙️ [2026-09-08 신규] AI 문답 음성 챗 — 브라우저 내장 Web Speech API만 사용(백엔드/추가
+    //    라이브러리 없음). 서버 API 키가 필요 없는 두 축:
+    //      1) 🎤 음성 입력(STT) — webkitSpeechRecognition으로 말한 내용을 받아쓰기 → 자동 전송
+    //      2) 🔊 음성 출력(TTS) — speechSynthesis로 AI 답변을 소리 내어 읽어줌(토글, localStorage 기억)
+    //    Chrome/Edge 계열에서만 완전히 동작(Safari는 SpeechRecognition 미지원 브라우저가 많음) —
+    //    미지원 브라우저에선 마이크 버튼 클릭 시 안내만 하고 조용히 실패.
+    // ═══════════════════════════════════════════════════════════
+    window._ganttQaVoiceOutputEnabled = localStorage.getItem('gantt_qa_voice_output') === '1';
+    window._ganttQaLastSpokenUid = null;
+    window._ganttQaRecognition = null;
+    window._ganttQaMicActive = false;
+
+    // 마크다운 기호·내부 액션 태그를 읽었을 때 "별표", "샵" 같은 잡음 없이 자연스럽게 들리도록 정리
+    window._ganttQaStripForSpeech = function(text) {
+        return (text || '')
+            .replace(/\[\[ACTION:[^\]]*\]\]/g, '')
+            .replace(/```[\s\S]*?```/g, ' ')
+            .replace(/`([^`]+)`/g, '$1')
+            .replace(/\*\*([^*]+)\*\*/g, '$1')
+            .replace(/\*([^*]+)\*/g, '$1')
+            .replace(/^#{1,6}\s+/gm, '')
+            .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+            .replace(/^[-*]\s+/gm, '')
+            .replace(/\n{2,}/g, '. ')
+            .replace(/\n/g, ' ')
+            .trim();
+    };
+
+    window._ganttQaSpeak = function(text) {
+        if (!window._ganttQaVoiceOutputEnabled || !window.speechSynthesis) return;
+        const clean = window._ganttQaStripForSpeech(text);
+        if (!clean) return;
+        window.speechSynthesis.cancel(); // 이전에 읽던 문장이 남아있으면 끊고 새로 읽음
+        const utter = new SpeechSynthesisUtterance(clean);
+        utter.lang = window._currentLang === 'en' ? 'en-US' : 'ko-KR';
+        utter.rate = 1.0;
+        window.speechSynthesis.speak(utter);
+    };
+
+    // _renderGanttQaMessages()가 매번 다시 그릴 때 호출 — 아직 안 읽어준 최신 AI 답변(uid 있는 것 =
+    //    실제 질문에 대한 답변만, "새 대화 시작" 같은 시스템 메시지는 uid가 없어 자동으로 제외됨)을 찾아 읽는다.
+    window._ganttQaMaybeSpeakLatest = function() {
+        if (!window._ganttQaVoiceOutputEnabled) return;
+        const hist = window._ganttQaHistory || [];
+        const last = hist[hist.length - 1];
+        if (!last || last.role !== 'ai' || last.pending || last.error || !last.uid) return;
+        if (last.uid === window._ganttQaLastSpokenUid) return;
+        window._ganttQaLastSpokenUid = last.uid;
+        window._ganttQaSpeak(last.text);
+    };
+
+    window._ganttQaUpdateVoiceBtn = function() {
+        const btn = document.getElementById('gantt-qa-voice-toggle-btn');
+        if (!btn) return;
+        const on = window._ganttQaVoiceOutputEnabled;
+        const _vEn = window._currentLang === 'en';
+        btn.textContent = on ? '🔊' : '🔇';
+        btn.style.background = on ? '#c9ecd3' : '#e8f4fd';
+        btn.style.borderColor = on ? '#a8dab8' : '#a5c8f0';
+        btn.style.color = on ? '#1f7a3d' : '#1a4f7a';
+        btn.title = on
+            ? (_vEn ? 'Voice replies: ON (click to mute)' : '음성 답변: 켜짐 (클릭하면 끄기)')
+            : (_vEn ? 'Voice replies: OFF (click to read answers aloud)' : '음성 답변: 꺼짐 (클릭하면 AI 답변을 소리내어 읽어줌)');
+    };
+
+    window._ganttQaToggleVoiceOutput = function() {
+        window._ganttQaVoiceOutputEnabled = !window._ganttQaVoiceOutputEnabled;
+        localStorage.setItem('gantt_qa_voice_output', window._ganttQaVoiceOutputEnabled ? '1' : '0');
+        window._ganttQaUpdateVoiceBtn();
+        if (!window._ganttQaVoiceOutputEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+        if (window._ganttQaVoiceOutputEnabled && window.showToast) {
+            window.showToast(window._currentLang === 'en' ? '🔊 AI answers will now be read aloud.' : '🔊 이제부터 AI 답변을 음성으로 읽어줍니다.', 'info');
+        }
+    };
+
+    window._ganttQaUpdateMicBtn = function() {
+        const btn = document.getElementById('gantt-qa-mic-btn');
+        if (!btn) return;
+        const _mEn = window._currentLang === 'en';
+        if (window._ganttQaMicActive) {
+            btn.textContent = '⏹️';
+            btn.style.background = '#fdecec';
+            btn.style.borderColor = '#f0b8b8';
+            btn.style.color = '#b03a3a';
+            btn.title = _mEn ? 'Stop recording' : '녹음 중지';
+        } else {
+            btn.textContent = '🎤';
+            btn.style.background = '#e8f4fd';
+            btn.style.borderColor = '#a5c8f0';
+            btn.style.color = '#1a4f7a';
+            btn.title = _mEn ? 'Ask by voice' : '음성으로 질문하기';
+        }
+    };
+
+    // 🎤 마이크 버튼 — 눌러서 시작, 다시 누르거나 말이 끝나면(무음 감지) 자동 종료 → 받아쓴 내용을
+    //    바로 전송한다(실제 "대화"처럼 말하면 바로 물어보고 답이 음성으로 돌아오는 흐름을 위해 자동전송).
+    window._ganttQaToggleMic = function() {
+        if (window._ganttQaMicActive) {
+            if (window._ganttQaRecognition) { try { window._ganttQaRecognition.stop(); } catch (e) {} }
+            return;
+        }
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SR) {
+            alert(window._currentLang === 'en'
+                ? '⚠️ This browser does not support voice input. Please use Chrome or Edge.'
+                : '⚠️ 이 브라우저는 음성 인식을 지원하지 않습니다. Chrome이나 Edge를 사용해주세요.');
+            return;
+        }
+        const rec = new SR();
+        rec.lang = window._currentLang === 'en' ? 'en-US' : 'ko-KR';
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.maxAlternatives = 1;
+        let finalTranscript = '';
+
+        rec.onresult = function(e) {
+            let interim = '';
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+                const t = e.results[i][0].transcript;
+                if (e.results[i].isFinal) finalTranscript += t;
+                else interim += t;
+            }
+            const input = document.getElementById('gantt-qa-input');
+            if (input) input.value = finalTranscript + interim;
+        };
+        rec.onerror = function(e) {
+            if (e.error !== 'aborted' && e.error !== 'no-speech' && window.showToast) {
+                window.showToast((window._currentLang === 'en' ? '🎤 Voice recognition error: ' : '🎤 음성 인식 오류: ') + e.error, 'error');
+            }
+        };
+        rec.onend = function() {
+            window._ganttQaMicActive = false;
+            window._ganttQaUpdateMicBtn();
+            const input = document.getElementById('gantt-qa-input');
+            if (finalTranscript.trim() && input) {
+                input.value = finalTranscript.trim();
+                window.sendGanttQaMessage();
+            }
+        };
+
+        window._ganttQaRecognition = rec;
+        try {
+            rec.start();
+            window._ganttQaMicActive = true;
+            window._ganttQaUpdateMicBtn();
+        } catch (e) {
+            window._ganttQaMicActive = false;
+            window._ganttQaUpdateMicBtn();
+        }
+    };
+
+    // ✕ 닫기 — 모달을 닫을 때 켜져 있던 마이크/읽어주던 음성도 함께 정리
+    window._ganttQaCloseModal = function() {
+        if (window._ganttQaMicActive && window._ganttQaRecognition) { try { window._ganttQaRecognition.stop(); } catch (e) {} }
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+        const modal = document.getElementById('gantt-qa-modal');
+        if (modal) modal.style.display = 'none';
     };
 
     window.openGanttQaModal = function() {
@@ -1589,8 +1751,9 @@
                 <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 AI 문답</span>
                     <div style="display:flex; gap:6px; align-items:center;">
+                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" style="border:1px solid #a5c8f0; border-radius:6px; font-size:13px; cursor:pointer; padding:0 9px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🔇</button>
                         <button onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
-                        <button onclick="document.getElementById('gantt-qa-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
+                        <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div id="gantt-qa-desc" style="padding:8px 18px 0; font-size:10.5px; color:#999;">${_qEn ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Chat is not saved)' : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화는 저장되지 않습니다)'}</div>
@@ -1611,7 +1774,8 @@
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px; align-items:stretch;">
-                    <button onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; width:40px; padding:0 2px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; line-height:1.3; white-space:normal; transition:background .15s, border-color .15s;">${_qEn ? '🗑️Clear<br>Chat' : '🗑️대화<br>삭제'}</button>
+                    <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; width:40px; padding:0 2px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:10px; font-weight:bold; cursor:pointer; line-height:1.3; white-space:normal; transition:background .15s, border-color .15s;">${_qEn ? '🗑️Clear<br>Chat' : '🗑️대화<br>삭제'}</button>
+                    <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Ask by voice' : '음성으로 질문하기'}" style="flex-shrink:0; width:38px; padding:0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:15px; cursor:pointer; transition:background .15s, border-color .15s;">🎤</button>
                     <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>
@@ -1622,6 +1786,8 @@
         }
         window._renderGanttQaMessages();
         window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
+        window._ganttQaUpdateVoiceBtn(); // 🔊/🔇 저장된 상태(localStorage) 반영
+        window._ganttQaUpdateMicBtn();
         modal.style.display = 'block';
         window.bringModalToFront('gantt-qa-modal');
         setTimeout(function() { const inp = document.getElementById('gantt-qa-input'); if (inp) inp.focus(); }, 50);

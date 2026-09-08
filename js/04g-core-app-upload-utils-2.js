@@ -1432,6 +1432,7 @@ ${question}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;
+        if (window._ganttQaMaybeSpeakLatest) window._ganttQaMaybeSpeakLatest(); // 🎙️ 음성 답변 켜져있으면 새 답변 자동으로 읽어줌
     };
 
     // 💡 [2026-08-28 신규] AI 문답이 실제로 앱 데이터를 바꿀 수 있는 유일한 통로 — AI 답변 끝에 붙는

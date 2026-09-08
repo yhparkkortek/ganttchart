@@ -771,11 +771,14 @@
         }
         const _qaSendBtn = document.getElementById('gantt-qa-send-btn');
         if (_qaSendBtn) _qaSendBtn.textContent = _en ? 'Send' : '전송';
-        const _qaClearBtn = document.getElementById('gantt-qa-input') && document.getElementById('gantt-qa-input').previousElementSibling;
-        if (_qaClearBtn && _qaClearBtn.tagName === 'BUTTON') {
+        const _qaClearBtn = document.getElementById('gantt-qa-clear-btn');
+        if (_qaClearBtn) {
             _qaClearBtn.innerHTML = _en ? '🗑️Clear<br>Chat' : '🗑️대화<br>삭제';
             _qaClearBtn.title = _en ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다';
         }
+        // 🎙️ [2026-09-08 신규] 음성 챗 버튼 — 아이콘은 그대로, title(툴팁)만 언어에 맞게 갱신
+        if (window._ganttQaUpdateVoiceBtn) window._ganttQaUpdateVoiceBtn();
+        if (window._ganttQaUpdateMicBtn) window._ganttQaUpdateMicBtn();
 
         // [AI 분석 설정] "📉 AI 요청 크기 제한" 섹션 (2026-09-07 신설)
         const _reqsizeTexts = {
