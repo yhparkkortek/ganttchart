@@ -242,8 +242,13 @@ window._cpApplyLive = function(hex, skipSave) {
         // 둘 다)이라 테마가 안 먹혔음 — 같은 상단바 안의 .topbar-btn과 같은 톤(genNav)으로 통일.
         + '#current-project-filename { color: ' + genNav.text + ' !important; }\n'
         + '#current-project-filename:hover { background: ' + genNav.hover + ' !important; }\n'
-        // 💡 [2026-08-30 추가] Elec Parts "🔌 핀맵 보기"/"🔌 보기" 버튼 호버도 다른 테마 추적 호버와
-        // 동일하게(.concept-add-row-btn:hover와 같은 gen 팔레트 사용).
+        // 💡 [2026-08-30 추가 → 2026-09-08 버그수정] Elec Parts "🔌 핀맵 보기"/"🔌 보기" 버튼 —
+        // 호버 상태만 여기 있고 평소(rest) 상태는 HTML에 박힌 하드코딩 인라인(#e8f4fd/#a5c8f0/#1a4f7a,
+        // 22e-summary-mctable-core4.js)에만 의존하고 있었다. 호버는 클래스 선택자(:hover, !important)라
+        // 팔레트를 따라갔지만 인라인 style은 이 규칙이 안 건드려서, 마우스를 안 올린 평소 상태는 팔레트가
+        // 뭐든 항상 원래 파란색 그대로였다("팔레트 테마 적용이 안 된 것처럼 보인다"는 신고 원인).
+        // .concept-add-row-btn과 동일한 공식(bg/hoverBg/darkText)으로 평소 상태도 명시 오버라이드한다.
+        + '.ep-theme-hover-btn { background-color: ' + gen.bg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '.ep-theme-hover-btn:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBorder + ' !important; color: ' + gen.darkText + ' !important; }\n'
         + '#app-topbar .tb-logo { background-color: ' + genLogo + ' !important; }\n'
         + '.concept-header-box, .concept-header-box h2, #table-info, #table-info-text { color: ' + gen.darkText + ' !important; }\n'

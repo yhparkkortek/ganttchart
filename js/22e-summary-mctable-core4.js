@@ -452,6 +452,34 @@ window.elecCompareOpenAddModal = async function(type) {
 //    (업로드 시 최대 1000px로 리사이즈 + JPEG 0.8 압축해 base64로 tabData 대신 라이브러리 항목에 저장).
 //    모델과 무관하게 모달 DOM은 한 번만 만들어지므로, 리스너도 한 번만 붙이고 이후엔 항상
 //    window._epPendingImages(현재 편집 중인 항목의 사진)만 읽고 쓴다.
+// 💡 [2026-09-08 신규] 파일 하나(클릭으로 고른 것이든 드래그로 떨어뜨린 것이든)를 리사이즈+압축해서
+//    슬롯 i에 저장 — change 이벤트/드롭 이벤트 양쪽이 이 함수 하나만 공유하도록 리팩터링(원래는 change
+//    핸들러 안에 이 로직이 그대로 박혀있어서 드롭 경로가 재사용할 수 없었음).
+window._epProcessDroppedImage = function(file, i) {
+    if (!file || !file.type || file.type.indexOf('image/') !== 0) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+        const tempImg = new Image();
+        tempImg.onload = function() {
+            const MAX = 1000;
+            let w = tempImg.width, h = tempImg.height;
+            if (w > MAX || h > MAX) {
+                if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
+                else        { w = Math.round(w * MAX / h); h = MAX; }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w; canvas.height = h;
+            canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
+            const b64 = canvas.toDataURL('image/jpeg', 0.80);
+            window._epPendingImages = window._epPendingImages || [null, null];
+            window._epPendingImages[i] = { data: b64, w: w, h: h };
+            window._epSyncImageSlotsUI();
+        };
+        tempImg.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+};
+
 window._epInitImageSlots = function() {
     document.querySelectorAll('#ep-add-modal .ep-img-slot').forEach(function(slot) {
         const i = parseInt(slot.dataset.slot, 10);
@@ -463,29 +491,32 @@ window._epInitImageSlots = function() {
         });
         fileInput.addEventListener('change', function() {
             const file = fileInput.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = function(ev) {
-                const tempImg = new Image();
-                tempImg.onload = function() {
-                    const MAX = 1000;
-                    let w = tempImg.width, h = tempImg.height;
-                    if (w > MAX || h > MAX) {
-                        if (w >= h) { h = Math.round(h * MAX / w); w = MAX; }
-                        else        { w = Math.round(w * MAX / h); h = MAX; }
-                    }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = w; canvas.height = h;
-                    canvas.getContext('2d').drawImage(tempImg, 0, 0, w, h);
-                    const b64 = canvas.toDataURL('image/jpeg', 0.80);
-                    window._epPendingImages = window._epPendingImages || [null, null];
-                    window._epPendingImages[i] = { data: b64, w: w, h: h };
-                    window._epSyncImageSlotsUI();
-                };
-                tempImg.src = ev.target.result;
-            };
-            reader.readAsDataURL(file);
+            if (file) window._epProcessDroppedImage(file, i);
             fileInput.value = ''; // 같은 파일 재선택 허용
+        });
+        // 🐛 [2026-09-08 버그수정] "사진을 드래그해서 놓으면 관리자 비밀번호를 물어본다" — 이 슬롯엔
+        //    지금까지 드래그앤드롭 자체가 구현돼 있지 않아서(클릭해서 파일 선택만 가능), 사진을
+        //    드롭하면 이벤트가 그대로 버블링되어 04f-core-app-upload-utils-1.js의 전역
+        //    window.addEventListener("drop", ...)(엑셀 파일 로드용)까지 올라가 "엑셀로 프로젝트를
+        //    덮어쓰려는 시도"로 오인되고 있었다. stopPropagation()으로 버블링을 막고, 같은 change
+        //    핸들러가 쓰는 처리 로직(_epProcessDroppedImage)을 그대로 재사용해 실제 드래그앤드롭
+        //    업로드를 구현한다.
+        slot.addEventListener('dragover', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            slot.style.borderColor = '#2c5f8a';
+            slot.style.background = '#e9eef3';
+        });
+        slot.addEventListener('dragleave', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            slot.style.borderColor = '#ced4da';
+            slot.style.background = '#f8f9fa';
+        });
+        slot.addEventListener('drop', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            slot.style.borderColor = '#ced4da';
+            slot.style.background = '#f8f9fa';
+            const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+            if (file) window._epProcessDroppedImage(file, i);
         });
         del.addEventListener('click', function(e) {
             e.stopPropagation();
