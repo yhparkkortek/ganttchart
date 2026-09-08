@@ -435,7 +435,37 @@ window.deleteBsHistoryByDateRange = function() {
     else if (confirm(confirmMsg)) doDelete();
 };
 
-// 💡 Brief SPEC 입력칸 변경 감지 (사유 입력 팝업 + 취소 시 원복)
+// 🐛 [2026-09-08 버그수정] "칸 하나 고칠 때마다 즉시 사유 팝업이 떠서 번거롭다" — M.C Table은 이미
+//    같은 문제를 "변경 내역만 쌓아뒀다가(mcQueueChange) 나중에 한 번에 사유를 묻는(mcFlushChangeReasons)"
+//    방식으로 풀어뒀으므로, Customer SPEC(Brief SPEC)도 동일한 패턴으로 통일한다. 이 탭을 나갈 때
+//    (switchTab, 23-sidebar-tabs.js)만 window.bsFlushChangeReasons()를 호출해 쌓인 변경사항 전부에
+//    사유를 한 번만 묻는다 — 아래 참고.
+//    ⚠️ 값 되돌리기(취소 시 원복) 동작은 이 패턴에서 빠진다: M.C Table과 동일하게, 셀 값 자체는
+//    입력하는 즉시 반영되고(별도 되돌리기 없음), 나중에 뜨는 사유 팝업에서 취소해도 "사유 미기재"로
+//    기록될 뿐 값은 그대로 유지된다(여러 칸이 쌓인 뒤라 특정 한 칸만 되돌리는 것 자체가 모호해짐).
+window._bsPendingChanges = [];
+
+window.bsQueueChange = function(rowLabel, field, oldVal, newVal) {
+    if (String(oldVal) === String(newVal)) return;
+    window._bsPendingChanges.push({ rowLabel: rowLabel, field: field, oldVal: oldVal, newVal: newVal });
+};
+
+window.bsFlushChangeReasons = function() {
+    if (!window._bsPendingChanges || !window._bsPendingChanges.length) return;
+    const list = window._bsPendingChanges;
+    window._bsPendingChanges = [];
+    const fieldLabelMap = { type: 'TYPE', sub: 'TYPE2', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' };
+    const label = list.length === 1
+        ? `[${list[0].rowLabel}] ${fieldLabelMap[list[0].field] || list[0].field}`
+        : `Customer SPEC ${list.length}건`;
+    const reasonInput = window.promptOptionalReason(`${label} 변경`);
+    const reason = (reasonInput === null) ? '' : reasonInput; // 취소해도 값은 되돌리지 않고, 사유만 비워서 기록
+    list.forEach(function(c) {
+        window.bsLogChange(c.rowLabel, c.field, c.oldVal, c.newVal, reason);
+    });
+};
+
+// 💡 Brief SPEC 입력칸 변경 감지 — 매번 즉시 묻지 않고 변경 내역만 쌓아둠(위 bsQueueChange)
 (function() {
     const tbody = document.getElementById('briefspec-body');
     if (tbody) {
@@ -451,10 +481,7 @@ window.deleteBsHistoryByDateRange = function() {
             const rowLabel = (typeInp && typeInp.value) ? typeInp.value.trim() : '행';
             const oldVal = el.dataset._histOld !== undefined ? el.dataset._histOld : '';
             if (String(oldVal) === String(el.value)) return;
-            const fieldLabelMap = { type: 'TYPE', sub: 'TYPE2', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' };
-            const reason = window.promptOptionalReason(`[${rowLabel}] ${fieldLabelMap[el.dataset.field] || el.dataset.field} 변경`);
-            if (reason === null) { el.value = oldVal; return; }
-            window.bsLogChange(rowLabel, el.dataset.field, oldVal, el.value, reason);
+            window.bsQueueChange(rowLabel, el.dataset.field, oldVal, el.value);
             el.dataset._histOld = el.value;
         });
     }

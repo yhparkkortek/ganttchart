@@ -26,6 +26,17 @@
     };
 
     window.switchTab = function(tabName) {
+        // 🐛 [2026-09-08 버그수정] Customer SPEC/M.C Table 칸을 고칠 때마다 즉시 사유를 묻지 않고
+        //    쌓아뒀다가 한 번에 묻는 방식(bsFlushChangeReasons/mcFlushChangeReasons — 22h/22i 참고)인데,
+        //    M.C Table은 리비전/종류/비교화면 전환 시에만 이걸 불러서 "완전히 다른 탭으로 이동"하는
+        //    가장 흔한 이탈 경로에서는 쌓인 변경사항이 사유 확인 없이 조용히 넘어갔다(Customer SPEC은
+        //    애초에 이걸 부르는 곳이 하나도 없었음). 그 탭을 실제로 나갈 때만(같은 탭 재클릭 제외)
+        //    호출 — 쌓인 게 없으면 각 함수 내부에서 조용히 리턴하므로 다른 탭 전환엔 영향 없음.
+        const prevActive = document.querySelector('.tab-panel.active');
+        const prevTab = prevActive ? prevActive.id.replace(/^tab-/, '') : null;
+        if (prevTab === 'briefspec' && tabName !== 'briefspec' && window.bsFlushChangeReasons) window.bsFlushChangeReasons();
+        if (prevTab === 'mctable' && tabName !== 'mctable' && window.mcFlushChangeReasons) window.mcFlushChangeReasons();
+
         document.querySelectorAll('.tab-panel').forEach(function(el) { el.classList.remove('active'); });
         document.querySelectorAll('#sb-nav .sb-item[data-tab]').forEach(function(el) { el.classList.remove('active'); });
         const panel = document.getElementById('tab-' + tabName);
