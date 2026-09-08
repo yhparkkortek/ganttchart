@@ -501,6 +501,29 @@
         const rows = (typeof globalData !== 'undefined' && globalData)
             ? globalData.map(function(r, i) { return { row: r, idx: i }; }).slice(1).filter(function(x) { return x.row && x.row._level !== undefined; })
             : [];
+        // 🐛 [2026-09-08 버그수정] "No." 칸은 WBS 접기/필터에 따라 화면에 보이는 순서대로 매번 다시
+        //    매겨지는 "표시용" 번호라서(applyFilters의 visibleCount), AI가 답변/태그에 쓰는 실제
+        //    globalData 인덱스(#G숫자, 위 idx)와 값이 다를 수 있다 — 사용자는 화면의 "No."를 보고
+        //    "42번 행으로 이동해줘"라고 말하는데, AI는 자기 번호 체계(#G)로 실행해서 엉뚱한 행이
+        //    움직이는 버그가 있었다. DOM에 이미 계산되어 있는 "표시 No."를 그대로 읽어와 각 업무 줄에
+        //    "(표시No.X)"로 같이 보여주고, 아래 프롬프트 규칙에서 AI가 이 값을 우선 참고하게 한다
+        //    (실제 실행은 여전히 #G의 진짜 인덱스로 하므로 태그 파싱/실행 코드는 전혀 안 건드림).
+        const visibleNoMap = (function() {
+            const map = {};
+            const tbody = document.getElementById('table-body');
+            if (!tbody) return map;
+            const trs = tbody.getElementsByTagName('tr');
+            for (let i = 0; i < trs.length; i++) {
+                const tr = trs[i];
+                if (tr.style.display === 'none') continue; // 필터/WBS접힘으로 숨겨진 행은 "표시 No." 자체가 없음
+                const realIdx = parseInt(tr.dataset.rowIndex, 10);
+                if (isNaN(realIdx)) continue;
+                const span = tr.querySelector('.no-td .row-num-span');
+                const visibleNo = span && span.textContent ? parseInt(span.textContent, 10) : NaN;
+                if (!isNaN(visibleNo)) map[realIdx] = visibleNo;
+            }
+            return map;
+        })();
         const koMap = (typeof LANG !== 'undefined' && LANG.ko && LANG.ko.statusMap) ? LANG.ko.statusMap : {};
 
         const normStatus = function(raw) {
@@ -569,7 +592,8 @@
             // 💡 [2026-08-28 신규] "담당자/발신인/수신인 기준으로 검색해줘"에 답 못하던 문제 수정 —
             //    window._extractMailSenderReceiver 참고.
             const mailPeople = window._extractMailSenderReceiver(colIdx.content !== -1 ? row[colIdx.content] : '');
-            let line = `- #G${x.idx} Lv${row._level} "${label}" | 담당:${assignee} | 상태:${status}${dueTag}${alarmTag}${mailTag} | 기간:${dateRange}`;
+            const visibleNoTag = visibleNoMap[x.idx] !== undefined ? ` (표시No.${visibleNoMap[x.idx]})` : '';
+            let line = `- #G${x.idx}${visibleNoTag} Lv${row._level} "${label}" | 담당:${assignee} | 상태:${status}${dueTag}${alarmTag}${mailTag} | 기간:${dateRange}`;
             if (mailPeople.sender) line += ` | 발신:${mailPeople.sender}`;
             if (mailPeople.receiver) line += ` | 수신:${mailPeople.receiver}`;
             if (content) line += ` | 내용:${content}`;
@@ -876,6 +900,18 @@
 접두사를 다시 붙이지 마세요 — "#G1~G6"이 맞고 "#G1~#G6"·"#G1~G6"의 G 생략은 틀립니다). 번호가 중간에
 하나라도 끊기면(예: #G1, #G2, #G4처럼 #G3이 빠짐) 압축하지 말고 있는 그대로 각각 나열하세요. 번호가
 2개뿐이면(예: #G1, #G2) 굳이 압축하지 말고 그대로 두 개 다 적어도 됩니다(압축은 3개 이상부터).
+
+⚠️ [업무 목록]의 "표시No." 혼동 주의 (매우 중요 — 틀리면 엉뚱한 업무가 실행됩니다):
+Gantt 표 화면의 맨 왼쪽 "No." 열은 WBS 접기/필터 상태에 따라 보이는 행 순서대로 매번 새로 매겨지는
+"화면 표시용" 번호일 뿐, 아래 [업무 목록]의 "#G숫자"(실제 고유 번호, 항상 고정)와 다른 번호 체계입니다.
+사용자가 "#G" 없이 그냥 "42번", "No.42", "42번 행"처럼 숫자만 말하면, 그건 대부분 화면에 지금 보이는
+"No."를 말하는 것이지 "#G42"가 아닙니다. [업무 목록] 각 줄에 "(표시No.X)"가 있으면 그게 바로 그 업무의
+현재 화면 No.이니, 사용자가 말한 숫자와 일치하는 "(표시No.X)"를 가진 줄을 찾아 그 줄의 "#G" 번호를 실제
+대상으로 삼아 태그를 만드세요("(표시No.X)"가 없는 업무는 지금 화면에서 숨겨져 있어 사용자가 그 번호를
+볼 수 없었을 것이므로 후보에서 제외). 일치하는 "(표시No.X)"가 없으면(그런 표시 번호가 아예 없거나 여러
+개 후보처럼 보이면) 절대 숫자를 "#G"로 착각해서 넘겨짚지 말고, 어떤 업무를 말하는 건지 되물어보세요.
+단, 사용자가 "#G42"·"G42"처럼 "G"를 명시했으면 그건 이미 실제 고유 번호이므로 그대로 42를 쓰세요(표시No.
+변환 불필요).
 
 🔔 "알람 걸어줘/알림 설정해줘/알람 켜줘" 또는 "알람 해제해줘/꺼줘/취소해줘" 유형 요청에 대한 필수 규칙 (실제로 앱 데이터를 바꾸는 기능):
 [업무 목록]의 각 줄 맨 앞 "#G숫자"에서 G 뒤의 숫자가 그 업무의 고유 번호입니다(알람/원문 조회는 Gantt
