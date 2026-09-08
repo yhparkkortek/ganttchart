@@ -1019,16 +1019,20 @@
         //    그대로 보여주는 대신 원문을 조회해 후속 프롬프트에 끼워 넣고 한 번 더 물어봐서, 사용자
         //    눈에는 "바로 원문 내용을 근거로 답한 것"처럼 보이게 한다(SET_ALARM처럼 즉시 실행되는
         //    액션이 아니라, 답을 만들기 위한 추가 조회이므로 왕복이 한 번 더 필요함).
-        const mailRowIdxs = Array.from(text.matchAll(/\[\[ACTION:VIEW_MAIL:(\d+)\]\]/g)).map(function(m) { return parseInt(m[1], 10); });
+        // 🐛 [2026-09-08 버그수정] AI가 태그 안에 공백을 넣는 등(예: "[[ ACTION : VIEW_MAIL : 199 ]]")
+        //    미묘하게 다르게 써서 기존의 딱 맞아떨어지는 정규식이 매칭 못 하고, 그 결과 태그가 아무
+        //    처리도 안 된 채 사용자에게 그대로 노출되던 문제 — 콜론/공백 변형을 허용하도록 완화.
+        const VIEW_MAIL_RE = /\[\[\s*ACTION\s*:\s*VIEW_MAIL\s*:\s*(\d+)\s*\]\]/g;
+        const mailRowIdxs = Array.from(text.matchAll(VIEW_MAIL_RE)).map(function(m) { return parseInt(m[1], 10); });
         if (mailRowIdxs.length) {
             const mailTexts = mailRowIdxs.map(window._aiAssistGetMailRaw).filter(Boolean);
             if (mailTexts.length) {
                 const followupPrompt = await window._buildGanttQaPrompt(promptQuestion, priorHistory, mailTexts, manualOtherProjectTexts);
                 const result2 = await window._withTimeout(window.callAiBackend(apiKey, followupPrompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
                 if (result2.ok) text = window._extractGanttQaAiText(result2);
-                else text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 원문 메일을 불러오는 중 오류가 발생했습니다.';
+                else text = text.replace(VIEW_MAIL_RE, '').trim() + '\n\n⚠️ 원문 메일을 불러오는 중 오류가 발생했습니다.';
             } else {
-                text = text.replace(/\[\[ACTION:VIEW_MAIL:\d+\]\]/g, '').trim() + '\n\n⚠️ 해당 업무의 원문 메일을 찾지 못했습니다.';
+                text = text.replace(VIEW_MAIL_RE, '').trim() + '\n\n⚠️ 해당 업무의 원문 메일을 찾지 못했습니다.';
             }
         }
 
@@ -1222,6 +1226,21 @@
             }
         }
 
+        // 🛡️ [2026-09-08 신규] 최종 방어선 — 위 규칙들이 어떤 이유로든(형식이 살짝 다르거나 새로운
+        //    태그를 AI가 즉흥적으로 만들어내는 등) 걸러내지 못한 내부 태그가 남아있으면, 사용자에게
+        //    "[[ACTION:...]]" 같은 개발자용 문법을 그대로 노출하는 대신 조용히 지우고 안내 문구로
+        //    대체한다("G199 메일 보여줘"에 AI가 태그를 냈는데 형식이 안 맞아 그대로 노출됐던 문제 대응).
+        const LEFTOVER_TAG_RE = /\[\[\/?\s*(?:ACTION|MAIL_DRAFT|NOTICE_DRAFT|ALARM_DRAFT|GANTT_EDIT_DRAFT|GANTT_ADD_DRAFT)\b[^\]]*\]\]/gi;
+        if (LEFTOVER_TAG_RE.test(text)) {
+            console.warn('[AI 문답] 처리되지 못한 내부 태그가 남아있어 제거합니다:', text);
+            text = text.replace(LEFTOVER_TAG_RE, '').trim();
+            if (!text) {
+                text = window._currentLang === 'en'
+                    ? '⚠️ Something went wrong while handling this request. Could you try asking again (maybe with slightly different wording)?'
+                    : '⚠️ 요청을 처리하는 중 문제가 발생했습니다. 표현을 조금 바꿔서 다시 한 번 질문해주시겠어요?';
+            }
+        }
+
         return {
             text: text.trim(),
             mailDraftId: mailDraftIdThisTurn,
@@ -1238,6 +1257,18 @@
         if (!input) return;
         const question = input.value.trim();
         if (!question) return;
+
+        // 🎙️ [2026-09-08 신규] "음성기능 꺼줘"/"음성 답변 켜줘" 같은 음성 제어 명령은 AI에게 물어보지
+        //    않고 여기서 바로 처리하고 끝낸다(API 키 없어도 동작, AI가 깜빡할 위험도 없음).
+        const voiceCmdReply = window._ganttQaTryHandleVoiceCommand ? window._ganttQaTryHandleVoiceCommand(question) : null;
+        if (voiceCmdReply) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: voiceCmdReply });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
 
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
@@ -1648,6 +1679,58 @@
         if (window._ganttQaVoiceOutputEnabled && window.showToast) {
             window.showToast(window._currentLang === 'en' ? '🔊 AI answers will now be read aloud.' : '🔊 이제부터 AI 답변을 음성으로 읽어줍니다.', 'info');
         }
+    };
+
+    // 🎙️ [2026-09-08 신규] "음성기능 꺼줘"/"음성 답변 켜줘/꺼줘"처럼 채팅창에 직접 타이핑(또는 말)한
+    //    명령으로도 음성 관련 기능을 켜고 끌 수 있게 함 — AI에게 물어봐서 태그로 처리하게 하면 AI가
+    //    깜빡하거나 다른 식으로 답할 위험이 있으므로, AI 호출 없이 여기서 바로 100% 확실하게 처리한다
+    //    (sendGanttQaMessage 맨 앞에서 호출 — 매치되면 그 자리에서 끝내고 AI 호출 자체를 생략함).
+    //    "음성문답/음성입력/마이크"가 함께 언급되면 🎤 듣기 모드(_ganttQaVoiceMode)를, 그 외엔
+    //    기본적으로 🔊 답변 읽어주기(_ganttQaVoiceOutputEnabled)를 대상으로 한다.
+    //    매치 안 되면 null을 반환해서 평소처럼 AI에게 물어보는 흐름으로 그대로 진행된다.
+    window._ganttQaTryHandleVoiceCommand = function(question) {
+        const text = (question || '').trim();
+        if (!/음성/.test(text)) return null;
+        const _vcEn = window._currentLang === 'en';
+        const voiceIdx = text.indexOf('음성');
+        const offMatch = text.match(/(꺼|끄|중지|정지|멈춰)/);
+        const onMatch = text.match(/(켜|시작)/);
+        // "음성"이라는 단어와 켜기/끄기 동사가 가까이 붙어있을 때만 명령으로 인식 — 멀리 떨어져 있으면
+        // (예: 완전히 다른 얘기하다 우연히 "음성"과 "켜다"가 각각 등장) 오작동 방지 차원에서 무시
+        // 🐛 [2026-09-08 버그수정] `m && ...`는 m이 null이면 boolean false가 아니라 null을 그대로
+        //    반환한다(단락평가) — 그 null이 아래 turnOn·_ganttQaVoiceOutputEnabled까지 흘러들어가
+        //    "꺼짐" 상태가 실제로는 false가 아닌 null로 저장되던 문제가 있어 !!로 boolean화한다.
+        const near = function(m) { return !!(m && Math.abs(m.index - voiceIdx) <= 14); };
+        const isOff = near(offMatch);
+        const isOn = near(onMatch);
+        if (!isOff && !isOn) return null;
+        const turnOn = !!(isOn && (!isOff || onMatch.index < offMatch.index));
+        const isMicMode = /문답|입력|마이크/.test(text);
+
+        if (isMicMode) {
+            if (turnOn === window._ganttQaVoiceMode) {
+                return turnOn
+                    ? (_vcEn ? '🎙️ Voice Q&A mode is already on.' : '🎙️ 이미 음성문답 모드가 켜져 있어요.')
+                    : (_vcEn ? '⌨️ Voice Q&A mode is already off.' : '⌨️ 이미 글자문답 모드예요.');
+            }
+            window._ganttQaToggleMic(); // 내부적으로 현재 상태의 반대로 전환 + 필요시 듣기 시작/중지
+            return turnOn
+                ? (_vcEn ? '🎙️ Voice Q&A mode is now ON — go ahead and speak.' : '🎙️ 음성문답 모드를 켰습니다 — 말씀해주세요.')
+                : (_vcEn ? '⌨️ Switched back to Text Q&A mode.' : '⌨️ 글자문답 모드로 돌아왔습니다.');
+        }
+
+        if (window._ganttQaVoiceOutputEnabled === turnOn) {
+            return turnOn
+                ? (_vcEn ? '🔊 Voice replies are already on.' : '🔊 이미 음성 답변이 켜져 있어요.')
+                : (_vcEn ? '🔇 Voice replies are already off.' : '🔇 이미 음성 답변이 꺼져 있어요.');
+        }
+        window._ganttQaVoiceOutputEnabled = turnOn;
+        localStorage.setItem('gantt_qa_voice_output', turnOn ? '1' : '0');
+        window._ganttQaUpdateVoiceBtn();
+        if (!turnOn && window.speechSynthesis) window.speechSynthesis.cancel();
+        return turnOn
+            ? (_vcEn ? '🔊 Voice replies are now ON — I will read answers aloud.' : '🔊 이제부터 AI 답변을 음성으로 읽어드릴게요.')
+            : (_vcEn ? '🔇 Voice replies are now OFF.' : '🔇 음성 답변 기능을 껐습니다.');
     };
 
     // 🎙️ [2026-09-08 수정] "음성문답" 버튼 — 한 번 말하면 풀리던 것을 "모드"로 바꿔 고정시킴.
