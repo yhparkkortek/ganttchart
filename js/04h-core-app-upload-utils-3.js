@@ -1285,6 +1285,18 @@
             return;
         }
 
+        // ↩️↪️ [2026-09-08 신규] "이전으로/앞으로 되돌려줘"(Ctrl+Z/Ctrl+Y) — 위 음성 명령과 동일한
+        //    이유로 AI에게 묻지 않고 여기서 바로 처리한다(window._ganttQaTryHandleUndoRedoCommand 참고).
+        const undoRedoReply = window._ganttQaTryHandleUndoRedoCommand ? window._ganttQaTryHandleUndoRedoCommand(question) : null;
+        if (undoRedoReply) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: undoRedoReply });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
 
@@ -1772,6 +1784,37 @@
         return turnOn
             ? (_vcEn ? '🔊 Voice replies are now ON — I will read answers aloud.' : '🔊 이제부터 AI 답변을 음성으로 읽어드릴게요.')
             : (_vcEn ? '🔇 Voice replies are now OFF.' : '🔇 음성 답변 기능을 껐습니다.');
+    };
+
+    // ↩️↪️ [2026-09-08 신규] "이전으로/앞으로 되돌려줘"(Ctrl+Z/Ctrl+Y와 동일) — AI에게 물어서 판단하게
+    //    하면 이미 정의된 태그 체계와 안 맞아 애매하게 추론하다 실패하거나 응답이 느려지므로, 음성 제어
+    //    명령과 똑같이 AI 호출 자체를 생략하고 여기서 window.undoLastAction/redoLastAction을 바로
+    //    호출한다(sendGanttQaMessage 맨 앞에서 호출). 되돌리기/다시실행과 무관한 문장에서 오작동하지
+    //    않도록, "취소"/"복원"처럼 이 앱의 다른 기능(메일/공지/알람 초안 취소, 프롬프트 버전 복원 등)에서
+    //    이미 쓰이는 단어는 트리거로 넣지 않고, "이전으로 되돌려/실행취소/undo/ctrl+z"처럼 뜻이 분명한
+    //    표현만 인식한다. 매치 안 되면 null을 반환해 평소처럼 AI에게 물어보는 흐름으로 진행된다.
+    window._ganttQaTryHandleUndoRedoCommand = function(question) {
+        const text = (question || '').trim();
+        if (!text) return null;
+        const _urEn = window._currentLang === 'en';
+        const redoPattern = /다시\s*실행|앞으로\s*되돌려|리두|\bredo\b|ctrl\s*\+?\s*y\b|ctrl\s*\+?\s*shift\s*\+?\s*z\b/i;
+        const undoPattern = /이전(으로|\s*상태로)?\s*되돌려|뒤로\s*되돌려|실행\s*취소|되돌리기\s*해줘|언두|\bundo\b|ctrl\s*\+?\s*z\b/i;
+        const isRedo = redoPattern.test(text);
+        const isUndo = !isRedo && undoPattern.test(text); // "ctrl+shift+z"가 undo의 "ctrl+z"와도 겹쳐 보일 수 있어 redo를 먼저 판정
+        if (!isUndo && !isRedo) return null;
+
+        if (isRedo) {
+            if (!window._redoStack || window._redoStack.length === 0) {
+                return _urEn ? '↪️ Nothing to redo.' : '↪️ 다시 실행할 작업이 없습니다.';
+            }
+            window.redoLastAction();
+            return _urEn ? '↪️ Redone (same as Ctrl+Y).' : '↪️ 다시 실행했습니다. (Ctrl+Y와 동일)';
+        }
+        if (!window._undoStack || window._undoStack.length < 2) {
+            return _urEn ? '↩️ Nothing to undo.' : '↩️ 더 이상 실행 취소할 작업이 없습니다.';
+        }
+        window.undoLastAction();
+        return _urEn ? '↩️ Undone (same as Ctrl+Z).' : '↩️ 실행 취소했습니다. (Ctrl+Z와 동일)';
     };
 
     // 🎙️ [2026-09-08 수정] "음성문답" 버튼 — 한 번 말하면 풀리던 것을 "모드"로 바꿔 고정시킴.
