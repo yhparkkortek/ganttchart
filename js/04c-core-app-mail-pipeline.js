@@ -458,6 +458,12 @@
     };
 
     window.showToast = function(message, type, duration) {
+        // 💡 [2026-09-08 버그수정] "연속된 변화(예: 드래그로 여러 업무가 순차 재계산됨)가 생기면
+        //    '일정이 업데이트 되었습니다' 토스트가 너무 많이 뜬다" — 원인은 showToast가 매번 무조건
+        //    새 토스트를 쌓기만 해서, 똑같은 문구가 화면에 떠 있는 동안(=아직 안 사라졌는데) 같은
+        //    문구가 또 오면 그대로 겹쳐 쌓였다. 지금 이미 같은 메시지의 토스트가 떠 있으면 새로
+        //    만들지 않고 조용히 건너뛴다 — 어차피 사용자에게 새로 전달할 정보가 없는 반복 알림이므로.
+        if (window._toastStack.some(function(el) { return el.dataset.msg === message; })) return;
         type = type || 'success';
         // 💡 [2026-08-29 파스텔 통일] 채도 높은 solid 배경(빨강/주황/진남색)+흰 글자 대신, 다른 곳과 동일한
         //    4색 파스텔 기준(옅은 배경 + 진한 글자 + 옅은 테두리)으로 교체.
@@ -471,6 +477,7 @@
         const ms = duration || (type === 'error' ? 5000 : type === 'info' ? 2500 : 3000);
         const toast = document.createElement('div');
         toast.textContent = message;
+        toast.dataset.msg = message; // 위 중복 방지 체크용
         const initBottom = 24 + window._toastStack.length * (window._toastH + 8);
         // 💡 [2026-08-29 크기 통일] min/max-width 범위 + 줄 수 제한 없음이라 메시지 길이에 따라 토스트마다
         //    폭·높이가 들쭉날쭉했다(길게 줄바꿈되면 아래 토스트와 겹치기도 함). width 고정 + 최대 2줄까지만
