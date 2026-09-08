@@ -1421,25 +1421,25 @@ ${question}
         if (!box) return;
         if (!window._ganttQaHistory.length) {
             const _emEn = window._currentLang === 'en';
-            const chipStyle = 'display:block; width:100%; text-align:left; margin:4px 0; padding:6px 10px; background:#f1f3f5; border:1px solid #dee2e6; border-radius:6px; color:#495057; font-size:11.5px; cursor:pointer; white-space:normal; word-break:break-word;';
-            const top = window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(5) : [];
-            let examplesHtml;
-            if (top.length) {
-                examplesHtml = `<div style="font-size:11px; color:#888; margin-bottom:4px;">${_emEn ? '💡 Frequently asked' : '💡 자주 묻는 질문'}</div>` +
-                    top.map(function(t) {
-                        return `<button type="button" onclick="window._ganttQaFillQuestion(${escapeHtml(JSON.stringify(t.sample))})" style="${chipStyle}">${escapeHtml(t.sample)}</button>`;
-                    }).join('');
-            } else {
-                const examples = _emEn
-                    ? ['Any delayed tasks assigned to Kim Cheol-su?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
-                    : ['김철수님 담당 업무 중 지연된 게 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
-                examplesHtml = examples.map(function(t) {
-                    return `<button type="button" onclick="window._ganttQaFillQuestion(${escapeHtml(JSON.stringify(t))})" style="${chipStyle}">${_emEn ? '' : '예) '}"${escapeHtml(t)}"</button>`;
-                }).join('');
-            }
+            // 💡 [2026-09-08 수정] 예전엔 예시/자주 묻는 질문을 세로로 쌓인 버튼 목록으로 보여줬는데,
+            //    "자주 묻는 질문이 늘어나면 채팅창을 도배할 수 있다"는 지적으로 한 줄짜리 드롭다운으로
+            //    바꿈 — 몇 개가 쌓이든 항상 한 줄만 차지한다. 고른 뒤에는 selectedIndex를 다시 0으로
+            //    돌려서(같은 항목을 또 고를 수 있게) "선택됨" 상태로 안 남게 함.
+            //    또한 예시 문구에서 특정 인물명("김철수님") 지칭을 빼고 일반적인 표현으로 교체.
+            const top = window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(10) : [];
+            const examples = _emEn
+                ? ['Any delayed tasks?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
+                : ['지연된 업무가 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
+            const options = top.length ? top.map(function(t) { return t.sample; }) : examples;
+            const label = top.length ? (_emEn ? '💡 Frequently asked' : '💡 자주 묻는 질문') : (_emEn ? '💡 Example questions' : '💡 예시 질문');
+            const optionsHtml = options.map(function(t) { return `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; }).join('');
             box.innerHTML = `<div style="padding:20px 10px; color:#999; font-size:12px; line-height:1.6;">
                 <div style="text-align:center; margin-bottom:10px;">${_emEn ? "Ask anything about this project's Gantt tasks · overview · members · key materials." : '이 프로젝트의 Gantt 업무 · 개요 · 멤버 · 주요 자재에 대해 자유롭게 질문해보세요.'}</div>
-                ${examplesHtml}
+                <div style="font-size:11px; color:#888; margin-bottom:4px;">${label}</div>
+                <select onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="width:100%; padding:7px 8px; border:1px solid #dee2e6; border-radius:6px; background:#fff; color:#495057; font-size:11.5px; cursor:pointer;">
+                    <option value="">${_emEn ? '(select a question)' : '(질문 선택하기)'}</option>
+                    ${optionsHtml}
+                </select>
             </div>`;
             return;
         }
