@@ -1043,7 +1043,16 @@ Gantt 표 화면의 맨 왼쪽 "No." 열은 WBS 접기/필터 상태에 따라 �
 예: "#G212로 이동해줘" / "212번 보여줘" / "김철수님 업무로 가줘"(그 담당자 업무가 하나뿐일 때) → [[ACTION:GOTO_ROW:212]]
 일치하는 업무가 여러 개거나 하나도 없으면 태그를 쓰지 말고 어떤 업무인지 되물어보세요.
 
-위 7가지 태그(DELETE_ROW/SET_STATUS/TOGGLE_KEY/SET_LEVEL/MOVE_ROW/MOVE_ROW_BEFORE/GOTO_ROW)는 확인 없이 즉시 실행됩니다(GOTO_ROW는 데이터를 전혀 바꾸지 않는 화면 이동일 뿐이라 더더욱 안전합니다). 요청이 불분명하면 먼저 확인을 구하세요.
+🗂️ 다른 탭으로 이동 ("Summary 탭 보여줘", "캘린더 열어줘", "주간보고서 보여줘", "고객사양/M.C Table/
+Elec Parts/알람·공지/주소록 탭으로 이동해줘"처럼 Gantt 업무가 아니라 화면 좌측의 다른 탭 자체를
+열어달라는 요청 — 데이터는 전혀 안 건드리고 화면 전환만 합니다):
+[[ACTION:SWITCH_TAB:탭이름]]  (탭이름은 반드시 아래 중 정확히 하나만: summary(Summary) / briefspec
+(Customer SPEC) / mctable(M.C Table) / elecparts(Elec Parts) / gantt(Gantt chart) / calendar(Calendar)
+/ weekly(Weekly Report) / alarm(Alarm/Notice) / address(Address))
+예: "주간보고서 보여줘" → [[ACTION:SWITCH_TAB:weekly]], "캘린더로 가줘" → [[ACTION:SWITCH_TAB:calendar]]
+어느 탭인지 애매하면(예: 그냥 "다른 데 보여줘") 태그를 쓰지 말고 되물어보세요.
+
+위 8가지 태그(DELETE_ROW/SET_STATUS/TOGGLE_KEY/SET_LEVEL/MOVE_ROW/MOVE_ROW_BEFORE/GOTO_ROW/SWITCH_TAB)는 확인 없이 즉시 실행됩니다(GOTO_ROW·SWITCH_TAB은 데이터를 전혀 바꾸지 않는 화면 이동/전환일 뿐이라 더더욱 안전합니다). 요청이 불분명하면 먼저 확인을 구하세요.
 
 📝 행 추가 / 업무명·날짜·담당 수정 (사람 확인을 거친 뒤에만 적용):
 아래 두 기능은 "① 초안 작성 → ② 사용자 확인 → ③ 적용"의 2단계 왕복으로만 동작합니다.
@@ -1674,6 +1683,18 @@ ${question}
         const label = _aiGetTaskLabel(globalData[rowIndex]);
         if (window._aiJumpToRow) window._aiJumpToRow(rowIndex);
         return { ok: true, taskName: label };
+    };
+
+    // 🗂️ [2026-09-08 신규] "Summary 탭 보여줘"처럼 Gantt 업무와 무관하게 다른 탭 자체를 열어달라는
+    //    요청 — 사이드바 탭 버튼(GANTT_CHART_V02_Color.html의 data-tab)을 클릭했을 때와 완전히 동일한
+    //    window.switchTab(23-sidebar-tabs.js)을 그대로 재사용. 목록에 없는 이름이 오면(AI가 잘못된
+    //    영문명을 지어낸 경우 대비) 실행하지 않고 실패로 반환.
+    window._aiAssistSwitchTab = function(tabName) {
+        const VALID_TABS = ['summary', 'briefspec', 'mctable', 'elecparts', 'gantt', 'calendar', 'weekly', 'alarm', 'address'];
+        const t = (tabName || '').toString().trim().toLowerCase();
+        if (!VALID_TABS.includes(t) || !window.switchTab) return { ok: false };
+        window.switchTab(t);
+        return { ok: true, tabName: t };
     };
 
     // ⬆️⬇️ 행 N칸 이동 (direction: 'UP'|'DOWN', steps: 칸 수)

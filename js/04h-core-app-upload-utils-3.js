@@ -1000,6 +1000,16 @@
             return '';
         });
 
+        // 🗂️ [2026-09-08 신규] SWITCH_TAB — Gantt 업무와 무관하게 다른 탭 자체를 열어달라는 요청
+        //    (사이드바 탭 버튼 클릭과 동일한 window.switchTab 재사용, window._aiAssistSwitchTab 참고)
+        text = text.replace(/\[\[ACTION:SWITCH_TAB:([a-z]+)\]\]/gi, function(_, tabName) {
+            const TAB_LABELS = { summary: 'Summary', briefspec: 'Customer SPEC', mctable: 'M.C Table', elecparts: 'Elec Parts', gantt: 'Gantt chart', calendar: 'Calendar', weekly: 'Weekly Report', alarm: 'Alarm/Notice', address: 'Address' };
+            const res = window._aiAssistSwitchTab(tabName);
+            if (!res.ok) { results.push('⚠️ 해당 탭을 찾지 못해 이동하지 못했습니다.'); return ''; }
+            results.push(`🗂️ ${TAB_LABELS[res.tabName] || res.tabName} 탭으로 이동했습니다.`);
+            return '';
+        });
+
         text = text.trim();
         if (results.length) text += '\n\n' + results.join('\n');
         return text;
