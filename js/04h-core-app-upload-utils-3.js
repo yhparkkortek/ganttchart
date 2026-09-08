@@ -1355,11 +1355,24 @@
         }
 
         try {
+            // 💡 [2026-09-08 신규] "느리다"는 신고가 반복돼서, 어디가 느린지(코드가 컨텍스트를
+            //    조립하는 단계 vs AI가 실제로 답을 생성하는 단계) 바로 구분할 수 있게 계측 로그를
+            //    남긴다(executeLoadFile의 "[프로젝트 열기 계측]"과 동일한 패턴). 다음에 또 느리면
+            //    브라우저 개발자도구 콘솔에서 "[AI 문답 계측]"으로 검색 — 프롬프트 조립이 오래
+            //    걸렸으면 코드/Drive 조회 문제, AI 응답 생성이 오래 걸렸으면 AI 백엔드(무료 등급
+            //    등)가 느린 것이라 코드로는 더 손댈 부분이 없다는 뜻.
+            const _tQa0 = performance.now();
             const prompt = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, manualOtherProjectTexts);
+            const _tQa1 = performance.now();
+            const _ctxMs = Math.round(_tQa1 - _tQa0);
+            console.info(`[AI 문답 계측] 컨텍스트/프롬프트 조립: ${_ctxMs}ms (프롬프트 길이: ${prompt.length.toLocaleString()}자)`);
+            if (_ctxMs > 5000) console.warn(`[AI 문답 계측] ⚠️ 컨텍스트 조립이 ${_ctxMs}ms나 걸림 — Drive 조회(전기부품 라이브러리·다른 프로젝트 목록 등)가 느린 것으로 의심됨`);
             // 💡 위 window._withTimeout 참고 — GAS 호출(callAiBackend)이 네트워크 문제 등으로 응답도
             //    오류도 없이 멈춰버리면 "⏳ 답변 생성 중..."이 영원히 안 바뀌어 "응답 없음"으로 보인다.
             //    60초 안에 안 끝나면 오류로 처리해서 사용자가 재시도할 수 있게 한다.
             const result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+            const _tQa2 = performance.now();
+            console.info(`[AI 문답 계측] AI 응답 생성(네트워크 왕복 포함): ${Math.round(_tQa2 - _tQa1)}ms`);
             if (!result.ok) throw result.error || new Error('알 수 없는 오류');
             const text = window._extractGanttQaAiText(result);
 
