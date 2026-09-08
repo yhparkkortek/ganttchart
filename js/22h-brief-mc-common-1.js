@@ -349,6 +349,43 @@ window.bsRefreshColumnVisibility = function() {
     }
 })();
 
+// 💡 [신규] Customer SPEC "Model A/B/C" 헤더를 프로젝트마다 실제 쓰는 이름(예: MVD/TVD/TPR)으로
+//    바꿀 수 있게 함 — 기본 영문 라벨이 고정 텍스트였는데, 실제로는 프로젝트/고객사마다 이 3개 열이
+//    가리키는 대상이 다르다는 제보. tabData.bsColLabels에 커스텀 이름을 저장하고(없으면 기본값
+//    Model A/B/C), 프로젝트 저장/불러오기에 자동으로 함께 실림(다른 tabData.* 필드와 동일).
+window.BS_COL_DEFAULT_LABEL = { modelA: 'Model A', modelB: 'Model B', modelC: 'Model C' };
+window.bsColLabel = function(field) {
+    const custom = window.tabData && window.tabData.bsColLabels && window.tabData.bsColLabels[field];
+    return (custom && String(custom).trim()) ? String(custom).trim() : (window.BS_COL_DEFAULT_LABEL[field] || field);
+};
+
+// 저장된 커스텀 라벨을 헤더 입력칸에 반영 — populateTabData(22g)가 프로젝트 로드마다 호출
+window.bsApplyColLabels = function() {
+    Object.keys(window.BS_COL_DEFAULT_LABEL).forEach(function(field) {
+        const inp = document.querySelector('.bs-col-label-input[data-col-field="' + field + '"]');
+        if (inp) inp.value = window.bsColLabel(field);
+    });
+};
+
+(function() {
+    const thead = document.querySelector('#tab-briefspec thead');
+    if (!thead) return;
+    thead.addEventListener('change', function(e) {
+        const inp = e.target;
+        if (!inp.matches || !inp.matches('.bs-col-label-input')) return;
+        const field = inp.dataset.colField;
+        const val = inp.value.trim();
+        window.tabData = window.tabData || {};
+        window.tabData.bsColLabels = window.tabData.bsColLabels || {};
+        if (val && val !== window.BS_COL_DEFAULT_LABEL[field]) {
+            window.tabData.bsColLabels[field] = val;
+        } else {
+            delete window.tabData.bsColLabels[field]; // 기본값으로 되돌리면 굳이 저장할 필요 없음
+            inp.value = window.BS_COL_DEFAULT_LABEL[field];
+        }
+    });
+})();
+
 window.bsToggleHistoryBox = function() {
     const body = document.getElementById('bs-history-body');
     const icon = document.getElementById('bs-history-toggle-icon');
@@ -375,7 +412,9 @@ window.bsRenderHistoryTable = function() {
     if (!table) return;
     const logs = (window.tabData && window.tabData.bsChangeLog) || [];
     if (!logs.length) { table.innerHTML = '<tr><td style="padding:10px; color:#999;">수정 이력이 없습니다.</td></tr>'; return; }
-    const fieldLabel = { type: 'TYPE', sub: 'TYPE2', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' };
+    // 💡 modelA/B/C는 사용자가 헤더에서 이름을 바꿨을 수 있으므로(bsColLabel) 고정 문구 대신 지금 헤더에
+    //    표시 중인 이름을 그대로 씀 — 과거 로그도 항상 "지금 부르는 이름"으로 보여준다(단순화, 아래 참고).
+    const fieldLabel = { type: 'TYPE', sub: 'TYPE2', modelA: window.bsColLabel('modelA'), modelB: window.bsColLabel('modelB'), modelC: window.bsColLabel('modelC'), note: 'Note' };
     const _hisEn = window._currentLang === 'en';
     let html = '<thead><tr>'
         + '<th style="padding:4px 8px;">' + (_hisEn ? 'Time' : '시간') + '</th>'
@@ -454,7 +493,7 @@ window.bsFlushChangeReasons = function() {
     if (!window._bsPendingChanges || !window._bsPendingChanges.length) return;
     const list = window._bsPendingChanges;
     window._bsPendingChanges = [];
-    const fieldLabelMap = { type: 'TYPE', sub: 'TYPE2', modelA: 'Model A', modelB: 'Model B', modelC: 'Model C', note: 'Note' };
+    const fieldLabelMap = { type: 'TYPE', sub: 'TYPE2', modelA: window.bsColLabel('modelA'), modelB: window.bsColLabel('modelB'), modelC: window.bsColLabel('modelC'), note: 'Note' };
     const label = list.length === 1
         ? `[${list[0].rowLabel}] ${fieldLabelMap[list[0].field] || list[0].field}`
         : `Customer SPEC ${list.length}건`;

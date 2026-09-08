@@ -404,7 +404,10 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
         // ── Brief SPEC 시트 (컨셉 단계) ──
-        const briefSpecData = [['NO', 'TYPE', '', 'Model A', 'Model B', 'Model C', 'Note']];
+        // 💡 Model A/B/C는 사용자가 헤더에서 이름을 바꿨을 수 있으므로(bsColLabel, 22h 참고) 고정
+        //    영문 라벨 대신 지금 화면에 표시 중인 이름을 엑셀 헤더에도 그대로 반영한다.
+        const _bsColLabel = window.bsColLabel || function(f) { return { modelA: 'Model A', modelB: 'Model B', modelC: 'Model C' }[f]; };
+        const briefSpecData = [['NO', 'TYPE', '', _bsColLabel('modelA'), _bsColLabel('modelB'), _bsColLabel('modelC'), 'Note']];
         (tabData.briefSpec || []).forEach((r, i) => { briefSpecData.push([i + 1, r.type || '', r.sub || '', r.modelA || r.desc || '', r.modelB || '', r.modelC || '', r.note || '']); });
         const wsBrief = XLSX.utils.aoa_to_sheet(briefSpecData);
         // 💡 스타일은 공통 applyExcelStyles가 일괄 처리 (헤더 흰색/남색, 지브라 등)

@@ -394,6 +394,9 @@ window.populateTabData = function() {
     // 계산되므로, 날짜를 채운 직후 다시 계산해서 표에 반영한다.
     if (window.sumRecalcDevDays) window.sumRecalcDevDays();
     
+    // 💡 Model A/B/C 헤더 커스텀 이름(예: MVD/TVD/TPR) 복원 — 행 유무와 무관하게 항상 적용
+    if (window.bsApplyColLabels) window.bsApplyColLabels();
+
     // Brief SPEC 탭 렌더링
     if (td.briefSpec && td.briefSpec.length) {
         const tbody = document.getElementById('briefspec-body');

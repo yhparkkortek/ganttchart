@@ -444,6 +444,9 @@
             const el = document.getElementById(id); if (el) el.innerHTML = '';
         });
         if (window.renderMember3Rows) window.renderMember3Rows([]);
+        // 💡 Model A/B/C 헤더 커스텀 이름(bsColLabels)은 tbody가 아니라 thead에 있어서 위 innerHTML='' 로는
+        //    안 지워짐 — 새 프로젝트 시작 시(이 시점엔 window.tabData가 이미 {}로 초기화됨) 기본값으로 복원.
+        if (window.bsApplyColLabels) window.bsApplyColLabels();
     };
 
     // 💡 저장 성공처럼 "확인" 없이 넘어가도 되는 알림 — 잠깐 떴다가 자동으로 사라짐

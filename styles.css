@@ -1363,6 +1363,16 @@ tr.alarm-on > td:first-child { border-left: 3px solid #2c5f8a !important; }
                 #tab-briefspec .concept-table thead th {
                     background-color: #eef6f7 !important;
                 }
+                /* 💡 [신규] Model A/B/C 헤더를 사용자가 직접 원하는 이름(예: MVD/TVD/TPR)으로 바꿀 수 있도록
+                   input으로 변경 — 평소엔 일반 th 텍스트처럼 보이다가, hover/focus 시에만 편집 가능함을
+                   점선 밑줄로 살짝 힌트 */
+                .bs-col-label-input {
+                    width: 100%; border: none; background: transparent; padding: 0;
+                    font: inherit; font-weight: 600; color: inherit; text-align: center;
+                    border-bottom: 1px dashed transparent; cursor: text;
+                }
+                .bs-col-label-input:hover { border-bottom-color: #8fb8bb; }
+                .bs-col-label-input:focus { outline: none; border-bottom-color: #00707d; background: #fff; }
 
 /* ───── 5. M.C Table 탭 scoped 스타일 (원본 줄 2223~2274) ───── */
                 /* M.C Table 탭 내의 표 머릿글(th) 중앙 정렬 강제 적용 */
