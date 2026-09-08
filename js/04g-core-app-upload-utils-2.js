@@ -711,17 +711,47 @@
         // "열"이라(스펙 항목이 행, 비교 모델이 열) Gantt/CS/MC처럼 tr 하나를 통째로 찾는 게 아니라
         // type+model로 해당 열(column)의 <th>와 그 아래 칸들을 찾아 반짝여준다(_aiJumpToEpRow 참고).
         window._aiEpRefMap = [];
+        const pc = td.panelCompare || {};
+
+        // 🐛 [2026-09-08 버그수정] "AD BD 정보 알려줘" 같은 질문이 거의 1분씩 걸리던 문제의 주요
+        //    원인 — 아래에서 조회하는 CONVERTER/AD BOARD/PANEL 부품 라이브러리(각각 Drive에서
+        //    "폴더 찾기 → 파일 찾기 → 파일 다운로드"로 이어지는 별도 왕복)와, 그 아래 "다른 프로젝트
+        //    목록"(_msLoadProjectIndex) 조회를 전부 하나씩 순서대로(하나가 끝나야 다음 시작) 기다리고
+        //    있었다. 이 세션에서 처음 묻는 질문이라 전부 캐시가 비어있으면, 최대 네 번의 조회 사슬을
+        //    전부 순서대로 기다려야 했던 것 — 서로 전혀 의존관계가 없는 조회들이므로 Promise.all로
+        //    동시에 실행해서, 전체 대기 시간을 "합"이 아니라 "가장 느린 조회 하나" 수준으로 줄인다.
+        //    (질문 내용과 무관하게 선택된 모델이 있는 라이브러리는 항상 다 가져온다 — "AD BD만 물었으니
+        //    CONVERTER는 건너뛰자" 같은 최적화는 어떤 질문에도 필요한 데이터를 안정적으로 쓸 수 있어야
+        //    하는 이 컨텍스트 빌더의 목적과 안 맞아 하지 않음. 이미 캐시된 것은 재조회하지 않음.)
+        window._epLibCache = window._epLibCache || {};
+        const typesToFetch = Object.keys(elecTypeLabels).filter(function(type) {
+            const ec = elecCompare[type];
+            return ec && ec.selectedModels && ec.selectedModels.length && !window._epLibCache[type];
+        });
+        const needsPanel = !!(pc.selectedModels && pc.selectedModels.length && window.loadPanelLibrary && window.findPanelInLibrary && !window._epLibCache.panel);
+        let otherProjectsRaw = [];
+        await Promise.all(
+            typesToFetch.map(function(type) {
+                return window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과')
+                    .then(function(lib) { window._epLibCache[type] = lib; })
+                    .catch(function() { window._epLibCache[type] = { items: [] }; });
+            }).concat(needsPanel ? [
+                window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과')
+                    .then(function(lib) { window._epLibCache.panel = lib; })
+                    .catch(function() { window._epLibCache.panel = { items: [] }; })
+            ] : []).concat([
+                (window._msLoadProjectIndex ? window._msLoadProjectIndex() : Promise.resolve([]))
+                    .then(function(list) { otherProjectsRaw = list || []; })
+                    .catch(function(e) { console.warn('다른 프로젝트 목록 로드 실패:', e.message); })
+            ])
+        );
+
         for (const type of Object.keys(elecTypeLabels)) {
             const ec = elecCompare[type];
             if (!ec || !ec.selectedModels || !ec.selectedModels.length) continue;
             const models = ec.selectedModels;
             const notes = ec.notes || {};
-            let lib = window._epLibCache && window._epLibCache[type];
-            if (!lib && window.loadElecPartLibrary) {
-                // 💡 위 _withTimeout 참고 — 라이브러리 조회가 안 끝나도 8초면 포기하고 "스펙 없음"으로
-                //    넘어간다(전체 AI 문답 자체가 이거 하나 때문에 무한정 멈추면 안 됨).
-                try { lib = await window._withTimeout(window.loadElecPartLibrary(type), 8000, '전기부품 라이브러리 조회 시간 초과'); window._epLibCache[type] = lib; } catch (e) { lib = null; }
-            }
+            const lib = window._epLibCache[type];
             const items = (lib && lib.items) || [];
             models.forEach(function(m) {
                 const entry = items.find(function(it) { return it.model === m; });
@@ -749,14 +779,10 @@
         // ELEC_PART_TYPES와 별개) 같은 루프에 못 끼워서, 이 부분을 만들 때 실수로 빠뜨린 것으로 보인다.
         // 실제로 Dot Resolution 등 패널 스펙 데이터는 등록돼 있는데 AI 컨텍스트에 아예 전달이 안 됐던
         // 것 — #EP 번호 체계·클릭 이동(_aiJumpToEpRow)도 그대로 이어서 쓸 수 있게 같은 방식으로 추가.
-        const pc = td.panelCompare || {};
         if (pc.selectedModels && pc.selectedModels.length && window.loadPanelLibrary && window.findPanelInLibrary) {
             const models = pc.selectedModels;
             const notes = pc.notes || {};
-            let panelLib = window._epLibCache && window._epLibCache.panel;
-            if (!panelLib) {
-                try { panelLib = await window._withTimeout(window.loadPanelLibrary(), 8000, '패널 라이브러리 조회 시간 초과'); window._epLibCache = window._epLibCache || {}; window._epLibCache.panel = panelLib; } catch (e) { panelLib = null; }
-            }
+            const panelLib = window._epLibCache.panel;
             const panelFields = [];
             (window.PANEL_SPEC_SCHEMA || []).forEach(function(sec) { sec.fields.forEach(function(f) { panelFields.push(f); }); });
             models.forEach(function(m) {
@@ -815,22 +841,21 @@
         //    지목해 조회 요청(LOAD_PROJECT)할 수 있도록, 이름/고객사/담당자만 가벼운 인덱스로 보여준다.
         //    무거운 업무 데이터는 여기 안 담고, 실제로 그 프로젝트를 물었을 때만 별도로 가져온다
         //    (아래 "🌐 다른 프로젝트 조회" 규칙 참고 — mailTexts/VIEW_MAIL과 동일한 2단계 조회 패턴).
+        // 💡 [2026-09-08 수정] 위 Promise.all에서 이미 병렬로 받아온 otherProjectsRaw를 그대로 씀
+        //    (여기서 다시 await window._msLoadProjectIndex()를 부르면 순차 대기가 되살아남).
         window._aiOtherProjectRefMap = [];
         let otherProjectsText = '(없음)';
-        try {
-            const allProjects = window._msLoadProjectIndex ? await window._msLoadProjectIndex() : [];
-            const others = allProjects.filter(function(p) {
-                return p && p.drive_file_id && p.drive_file_id !== window.currentDriveFileId;
-            });
-            if (others.length) {
-                otherProjectsText = others.map(function(p, i) {
-                    const no = i + 1;
-                    window._aiOtherProjectRefMap[no] = p;
-                    return `- #P${no} ${p.model || p.customer || p.file_name}${p.inch ? ' (' + p.inch + '인치)' : ''}` +
-                        `${p.customer ? ' / 고객사:' + p.customer : ''}${p.assignee ? ' / 담당:' + p.assignee : ''}${p.completed ? ' [완료]' : ''}`;
-                }).join('\n');
-            }
-        } catch (e) { console.warn('다른 프로젝트 목록 로드 실패:', e.message); }
+        const others = (otherProjectsRaw || []).filter(function(p) {
+            return p && p.drive_file_id && p.drive_file_id !== window.currentDriveFileId;
+        });
+        if (others.length) {
+            otherProjectsText = others.map(function(p, i) {
+                const no = i + 1;
+                window._aiOtherProjectRefMap[no] = p;
+                return `- #P${no} ${p.model || p.customer || p.file_name}${p.inch ? ' (' + p.inch + '인치)' : ''}` +
+                    `${p.customer ? ' / 고객사:' + p.customer : ''}${p.assignee ? ' / 담당:' + p.assignee : ''}${p.completed ? ' [완료]' : ''}`;
+            }).join('\n');
+        }
 
         return {
             todayStr: todayStr,
