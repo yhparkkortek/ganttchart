@@ -1517,6 +1517,11 @@
                 <button class="concept-add-row-btn" id="ep-convbd-toggle-btn" onclick="window.elecCompareToggleExpand('convbd')" style="margin:0; background:#e0f5f7; color:#00707d; border:none;">🔽 펼치기</button>
                 <div class="btn-group"><button id="ep-convbd-export-btn" onclick="window.exportElecCompareToExcel('convbd')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🟩 엑셀로 내보내기</button></div>
             </span>
+            <span id="eh-touchctrl-btns" style="display:none;">
+                <button class="concept-add-row-btn" id="ep-touchctrl-add-btn" onclick="window.elecCompareOpenAddModal('touchctrl')" style="margin:0 6px 0 0; background:#e0f5f7; color:#00707d; border:none;">➕ 추가</button>
+                <button class="concept-add-row-btn" id="ep-touchctrl-toggle-btn" onclick="window.elecCompareToggleExpand('touchctrl')" style="margin:0; background:#e0f5f7; color:#00707d; border:none;">🔽 펼치기</button>
+                <div class="btn-group"><button id="ep-touchctrl-export-btn" onclick="window.exportElecCompareToExcel('touchctrl')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🟩 엑셀로 내보내기</button></div>
+            </span>
         </div>
         <div class="concept-section" style="background:#e0f5f7; border-color:#a3d9e0;">
             <div id="elec-view-panel" style="display:block;">
@@ -1586,6 +1591,29 @@
                             <button onclick="window.deleteEpHistoryByDateRange('convbd')" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="padding:6px 12px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑️ 구간 삭제</button>
                         </div>
                         <table id="ep-convbd-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
+                    </div>
+                </div>
+            </div>
+            <div id="elec-view-touchctrl" style="display:none;">
+                <div id="ep-touchctrl-table-scroll" style="overflow-x:auto; overflow-y:auto; max-height:calc(70vh + 160px - var(--mt-reserve, 0px)); border:1px solid #cfe3e5; border-radius:8px;">
+                    <table class="concept-table" id="ep-touchctrl-table" style="min-width:900px; border-collapse:collapse;">
+                        <thead id="ep-touchctrl-thead"></thead>
+                        <tbody id="ep-touchctrl-tbody"></tbody>
+                    </table>
+                </div>
+                <div id="ep-touchctrl-history-box" style="margin-top:14px; border:1px solid #cfe3e5; border-radius:6px; overflow:hidden; background:#fff;">
+                    <div id="ep-touchctrl-history-header" onclick="window.epToggleHistoryBox('touchctrl')" style="padding:10px 15px; background:#f8f9fa; font-weight:bold; color:#2c5f8a; display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;">
+                        <span id="ep-touchctrl-history-toggle-icon">▶</span>
+                        <span data-i18n="h-history">🕒 변경 이력 확인</span>
+                    </div>
+                    <div id="ep-touchctrl-history-body" style="display:none; max-height:320px; overflow-y:auto;">
+                        <div onclick="event.stopPropagation()" style="display:flex; gap:8px; align-items:center; padding:10px 15px; margin-bottom:0; border-bottom:1px solid #e3e6ea; flex-wrap:wrap; font-size:12px; color:#555;">
+                            <label>시작일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="ep-touchctrl-history-del-from" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                            <label>종료일 <input type="date" readonly onclick="window.showGenericCalendar(this)" id="ep-touchctrl-history-del-to" class="u-input" style="width:130px; margin-left:4px; cursor:pointer;"></label>
+                            <input type="password" id="ep-touchctrl-history-del-pw" placeholder="삭제 비밀번호" class="u-input" style="width:120px;">
+                            <button onclick="window.deleteEpHistoryByDateRange('touchctrl')" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="padding:6px 12px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🗑️ 구간 삭제</button>
+                        </div>
+                        <table id="ep-touchctrl-history-table" class="history-table" style="width:100%; font-size:12px;"></table>
                     </div>
                 </div>
             </div>

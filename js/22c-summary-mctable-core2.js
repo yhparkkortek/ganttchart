@@ -1065,7 +1065,7 @@ window.renderMaterialRows = function(rows) {
         //    규칙 — 값이 있을 때만 돋보기를 보여준다(showElecPartSpecModal 내부에서 빈칸/미등록 두
         //    경우 모두 "붙여넣어 AI로 추출" 흐름으로 이어주지만, 버튼 노출 자체는 PANEL과 통일).
         //    구분명 → Elec Parts 타입 매핑이라 나중에 부품 종류가 늘어도 이 한 줄만 추가하면 됨.
-        const _epRowType = { 'CONVERTER': 'convbd', 'AD BOARD': 'adbd' };
+        const _epRowType = { 'CONVERTER': 'convbd', 'AD BOARD': 'adbd', 'TOUCH CTRL': 'touchctrl' };
         // 💡 [2026-09-01 신규] 돋보기 노출 조건을 "description 있음"에서 "description 또는 ktkPn 있음"으로
         //    확장 — ktk pn만 먼저 적어놓고 이름은 아직 안 적은 경우에도 코드만으로 라이브러리 검색 가능.
         //    검색 자체는 description(이름 식별자)은 그대로 두고 ktkPn을 별도 "코드 힌트"로 같이 넘겨서

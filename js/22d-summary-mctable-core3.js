@@ -1000,9 +1000,37 @@ window.AD_BD_SPEC_SCHEMA = [
     ]},
 ];
 
+// 💡 [2026-09-08 신규] Touch Controller Board 스펙 스키마 — 첨부된 실제 데이터시트(Kortek
+// "Customer Approval Sheet" — XP43EX9984S_V13, PBA-T 터치 컨트롤러 보드) 기준으로 필드 구성.
+// CONV BD/AD BD와 완전히 같은 엔진(window.ep*/elecCompare*)을 그대로 타므로 스키마만 추가하면
+// 끝난다(바로 위 "나중에 AD BD를 추가할 때는 스키마만 채우고..." 주석 참고 — 같은 방식).
+window.TOUCH_CTRL_SPEC_SCHEMA = [
+    { section: 'Basic Information', fields: [
+        ['Brand', 1], ['Item Code', 1], ['Part Name', 1], ['Revision', 1], ['Item Description', 2],
+    ]},
+    { section: 'Performance', fields: [
+        ['Touch Resolution', 1], ['Interface', 1], ['Multi Touch', 1],
+        ['Scan Speed', 1], ['Response Time', 1],
+        ['Linearity', 2], ['Accuracy', 1], ['Accuracy at Edge', 2],
+    ]},
+    { section: 'Electrical Specification', fields: [
+        ['Input Voltage', 1], ['Operating Temperature (Min/Max)', 1], ['Storage Temperature (Min/Max)', 2],
+    ]},
+    { section: 'Dimension', fields: [
+        ['Board Size (WxH)', 1], ['Thickness', 1],
+    ]},
+    { section: 'Interface', fields: [
+        ['Connector (Model/Pins)', 2],
+    ]},
+    { section: 'Other', fields: [
+        ['Expected Price', 1], ['Note', 1],
+    ]},
+];
+
 window.ELEC_PART_TYPES = {
     convbd: { label: 'CONV', icon: '🔌', domain: 'LED 드라이버/컨버터 보드', libFilename: 'ElecPartLib_CONVBD_Shared.json', schema: window.CONV_BD_SPEC_SCHEMA },
     adbd: { label: 'AD BD', icon: '🔲', domain: '스케일러(A/D) 보드', libFilename: 'ElecPartLib_ADBD_Shared.json', schema: window.AD_BD_SPEC_SCHEMA },
+    touchctrl: { label: 'TOUCH CTRL', icon: '👆', domain: '터치 컨트롤러 보드', libFilename: 'ElecPartLib_TOUCHCTRL_Shared.json', schema: window.TOUCH_CTRL_SPEC_SCHEMA },
 };
 
 // 💡 [2026-08-26] 예전엔 라벨 문자열만 뽑았는데, enum 필드(Resize Function 등)의 허용값을 AI 프롬프트에도

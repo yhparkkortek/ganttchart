@@ -130,16 +130,18 @@
     //    스펙표 정의(도표 설계)를 나중에 만들어서 아래 ELEC_CATEGORY_TO_VIEW에 한 줄만 추가하면
     //    자동으로 드롭다운에 나타난다 — HTML/드롭다운 코드는 손댈 필요 없음.
     window.ELEC_VIEW_META = {
-        panel:  { label: 'PANEL', icon: '🖥️' },
-        adbd:   { label: 'AD BD', icon: '🔲' },
-        convbd: { label: 'CONV',  icon: '🔌' },
+        panel:     { label: 'PANEL', icon: '🖥️' },
+        adbd:      { label: 'AD BD', icon: '🔲' },
+        convbd:    { label: 'CONV',  icon: '🔌' },
+        touchctrl: { label: 'TOUCH CTRL', icon: '👆' },
     };
     // Summary 주요자재 구분명 → Elec Parts 뷰 키. 아직 스펙표가 없는 구분(SLIM/CUT, TOUCH / GLASS,
-    // TOUCH CTRL, BLU, POWER, METAL, MOLD, DIE CAST, PACKING, ETC)은 의도적으로 비워둠.
+    // BLU, POWER, METAL, MOLD, DIE CAST, PACKING, ETC)은 의도적으로 비워둠.
     window.ELEC_CATEGORY_TO_VIEW = {
         'PANEL': 'panel',
         'AD BOARD': 'adbd',
         'CONVERTER': 'convbd',
+        'TOUCH CTRL': 'touchctrl',
     };
     // Summary 순서 기준으로, 실제 등록된(=ELEC_VIEW_META에 있는) 뷰만 걸러서 드롭다운 옵션 목록 생성
     window._getElecDropdownOptions = function() {
@@ -193,7 +195,7 @@
         // 💡 등록 안 된 뷰(예: 옛 localStorage 값이 가리키는 뷰가 사라졌거나 아직 없는 경우)는 PANEL로 폴백
         if (!window.ELEC_VIEW_META[view]) view = 'panel';
         window._elecView = view;
-        const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd' };
+        const sections = { panel: 'elec-view-panel', adbd: 'elec-view-adbd', convbd: 'elec-view-convbd', touchctrl: 'elec-view-touchctrl' };
         Object.keys(sections).forEach(function(v) {
             const sec = document.getElementById(sections[v]);
             if (sec) sec.style.display = (v === view) ? 'flex' : 'none'; // 💡 [2026-09-02] 'block'→'flex': CSS flex 레이아웃과 연동
@@ -204,12 +206,15 @@
         const panelBtns = document.getElementById('eh-panel-btns');
         const adbdBtns = document.getElementById('eh-adbd-btns');
         const convbdBtns = document.getElementById('eh-convbd-btns');
+        const touchctrlBtns = document.getElementById('eh-touchctrl-btns');
         if (panelBtns) panelBtns.style.display = (view === 'panel') ? 'contents' : 'none';
         if (adbdBtns) adbdBtns.style.display = (view === 'adbd') ? 'contents' : 'none';
         if (convbdBtns) convbdBtns.style.display = (view === 'convbd') ? 'contents' : 'none';
+        if (touchctrlBtns) touchctrlBtns.style.display = (view === 'touchctrl') ? 'contents' : 'none';
         if (view === 'panel' && window.renderPanelCompareTab) window.renderPanelCompareTab();
         if (view === 'adbd' && window.renderElecCompareTab) window.renderElecCompareTab('adbd');
         if (view === 'convbd' && window.renderElecCompareTab) window.renderElecCompareTab('convbd');
+        if (view === 'touchctrl' && window.renderElecCompareTab) window.renderElecCompareTab('touchctrl');
         try { localStorage.setItem('gantt_elec_view', view); } catch(e) {}
     };
 

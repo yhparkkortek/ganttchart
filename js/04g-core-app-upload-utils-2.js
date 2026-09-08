@@ -705,7 +705,7 @@
         //    원자재의 상세 스펙)을 프롬프트에서 확실히 분리해서, AI가 "SPEC 질문"을 받았을 때 어느 쪽을
         //    찾아야 하는지 헷갈리지 않게 한다(아래 프롬프트 본문의 안내 문구 참고).
         const elecCompare = td.elecCompare || {};
-        const elecTypeLabels = { convbd: 'CONVERTER', adbd: 'AD BOARD' };
+        const elecTypeLabels = { convbd: 'CONVERTER', adbd: 'AD BOARD', touchctrl: 'TOUCH CTRL' };
         const elecLinesArr = [];
         // 💡 [2026-08-30 신규] Elec Parts도 #EP숫자로 인용 가능하게 — 단, 이 표는 모델이 "행"이 아니라
         // "열"이라(스펙 항목이 행, 비교 모델이 열) Gantt/CS/MC처럼 tr 하나를 통째로 찾는 게 아니라

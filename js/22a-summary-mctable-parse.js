@@ -355,10 +355,10 @@ function _parseElecPartsSheetFromWorkbook(workbook) {
     const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1, defval: '' });
     if (!json.length) return false;
 
-    const typeKeyOf = { 'PANEL': 'panel', 'CONV': 'convbd', 'AD BD': 'adbd' };
-    const selByType = { panel: [], convbd: [], adbd: [] };
-    const notesByType = { panel: {}, convbd: {}, adbd: {} };
-    const logsByType = { panel: [], convbd: [], adbd: [] };
+    const typeKeyOf = { 'PANEL': 'panel', 'CONV': 'convbd', 'AD BD': 'adbd', 'TOUCH CTRL': 'touchctrl' };
+    const selByType = { panel: [], convbd: [], adbd: [], touchctrl: [] };
+    const notesByType = { panel: {}, convbd: {}, adbd: {}, touchctrl: {} };
+    const logsByType = { panel: [], convbd: [], adbd: [], touchctrl: [] };
 
     let section = null;
     json.forEach(function(row) {
@@ -383,10 +383,12 @@ function _parseElecPartsSheetFromWorkbook(workbook) {
     window.tabData.elecCompare = window.tabData.elecCompare || {};
     window.tabData.elecCompare.convbd = { selectedModels: selByType.convbd, notes: notesByType.convbd };
     window.tabData.elecCompare.adbd = { selectedModels: selByType.adbd, notes: notesByType.adbd };
+    window.tabData.elecCompare.touchctrl = { selectedModels: selByType.touchctrl, notes: notesByType.touchctrl };
     window.tabData.panelCompareChangeLog = logsByType.panel;
     window.tabData.elecCompareChangeLog = window.tabData.elecCompareChangeLog || {};
     window.tabData.elecCompareChangeLog.convbd = logsByType.convbd;
     window.tabData.elecCompareChangeLog.adbd = logsByType.adbd;
+    window.tabData.elecCompareChangeLog.touchctrl = logsByType.touchctrl;
     return true;
 }
 

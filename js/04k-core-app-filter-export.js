@@ -667,23 +667,26 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
         //    여기 없으면 엑셀로 백업→복원 시 통째로 사라진다. ## 구획 표시로 섹션을 나누고,
         //    가져오기(_parseElecPartsSheetFromWorkbook)도 이 구조를 그대로 되읽는다.
         (function() {
-            const epTypeLabel = { panel: 'PANEL', convbd: 'CONV', adbd: 'AD BD' };
+            const epTypeLabel = { panel: 'PANEL', convbd: 'CONV', adbd: 'AD BD', touchctrl: 'TOUCH CTRL' };
             const pc = tabData.panelCompare || { selectedModels: [], notes: {} };
             const ecAll = tabData.elecCompare || {};
             const selByType = {
                 panel: pc.selectedModels || [],
                 convbd: (ecAll.convbd && ecAll.convbd.selectedModels) || [],
-                adbd: (ecAll.adbd && ecAll.adbd.selectedModels) || []
+                adbd: (ecAll.adbd && ecAll.adbd.selectedModels) || [],
+                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.selectedModels) || []
             };
             const notesByType = {
                 panel: pc.notes || {},
                 convbd: (ecAll.convbd && ecAll.convbd.notes) || {},
-                adbd: (ecAll.adbd && ecAll.adbd.notes) || {}
+                adbd: (ecAll.adbd && ecAll.adbd.notes) || {},
+                touchctrl: (ecAll.touchctrl && ecAll.touchctrl.notes) || {}
             };
             const logsByType = {
                 panel: tabData.panelCompareChangeLog || [],
                 convbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.convbd) || [],
-                adbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.adbd) || []
+                adbd: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.adbd) || [],
+                touchctrl: (tabData.elecCompareChangeLog && tabData.elecCompareChangeLog.touchctrl) || []
             };
             const epData = [
                 ['ELEC PARTS DATA'],
@@ -692,25 +695,26 @@ exportData.push([rowNumCounter, lv, startVal, planVal, days, statusVal, indent +
                 ['PANEL', selByType.panel.join(',')],
                 ['CONV', selByType.convbd.join(',')],
                 ['AD BD', selByType.adbd.join(',')],
+                ['TOUCH CTRL', selByType.touchctrl.join(',')],
                 [],
                 ['## NOTES'],
                 ['TYPE', 'LABEL', 'NOTE'],
             ];
-            ['panel', 'convbd', 'adbd'].forEach(function(t) {
+            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
                 Object.keys(notesByType[t]).forEach(function(label) {
                     const v = notesByType[t][label];
                     if (v) epData.push([epTypeLabel[t], label, v]);
                 });
             });
             epData.push([], ['## CHANGE LOG'], ['TYPE', '변경 일시', '수정자', '항목', '필드', '변경 전 (Old)', '변경 후 (New)']);
-            ['panel', 'convbd', 'adbd'].forEach(function(t) {
+            ['panel', 'convbd', 'adbd', 'touchctrl'].forEach(function(t) {
                 logsByType[t].forEach(function(log) {
                     epData.push([epTypeLabel[t], log.time, log.userName || '알 수 없음', log.row, log.field, log.oldVal, log.newVal]);
                 });
             });
-            const hasAnyData = selByType.panel.length || selByType.convbd.length || selByType.adbd.length
-                || Object.keys(notesByType.panel).length || Object.keys(notesByType.convbd).length || Object.keys(notesByType.adbd).length
-                || logsByType.panel.length || logsByType.convbd.length || logsByType.adbd.length;
+            const hasAnyData = selByType.panel.length || selByType.convbd.length || selByType.adbd.length || selByType.touchctrl.length
+                || Object.keys(notesByType.panel).length || Object.keys(notesByType.convbd).length || Object.keys(notesByType.adbd).length || Object.keys(notesByType.touchctrl).length
+                || logsByType.panel.length || logsByType.convbd.length || logsByType.adbd.length || logsByType.touchctrl.length;
             if (hasAnyData) {
                 const wsEp = XLSX.utils.aoa_to_sheet(epData);
                 wsEp['!cols'] = [{wch: 10}, {wch: 40}, {wch: 16}, {wch: 20}, {wch: 12}, {wch: 26}, {wch: 26}];

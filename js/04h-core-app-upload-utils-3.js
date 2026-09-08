@@ -197,7 +197,7 @@
         // 자원이라 그대로 재조회 가능. 현재 프로젝트 컨텍스트 빌더와 동일한 캐시(_epLibCache) 공유.
         const otherElecLines = [];
         const elecCompareOther = td.elecCompare || {};
-        const elecTypeLabelsOther = { convbd: 'CONVERTER', adbd: 'AD BOARD' };
+        const elecTypeLabelsOther = { convbd: 'CONVERTER', adbd: 'AD BOARD', touchctrl: 'TOUCH CTRL' };
         for (const type of Object.keys(elecTypeLabelsOther)) {
             const ec = elecCompareOther[type];
             if (!ec || !ec.selectedModels || !ec.selectedModels.length) continue;
