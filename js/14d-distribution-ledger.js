@@ -51,7 +51,9 @@ window.inboxOpenDistribute = async function(uid) {
     });
     if (alreadyOpen) { const r2 = document.getElementById('inbox-cur-auto-row-' + uid); if (r2) r2.style.display = 'flex'; return; }
 
-    window._distCtx = { uid: uid, task: JSON.parse(JSON.stringify(r)), taskName: (r['업무명'] || '새 업무') };
+    // 💡 [다수 프로젝트 선택] selectedFiles: {fileId: fileName} — 체크된(선택된) 모든 대상 파일을 추적.
+    //    0개=패널 숨김, 1개=기존 단일모드(L0 수동 지정) 그대로, 2개 이상=자동위치 일괄전송 모드로 전환.
+    window._distCtx = { uid: uid, task: JSON.parse(JSON.stringify(r)), taskName: (r['업무명'] || '새 업무'), selectedFiles: {} };
     inlineEl.dataset.uid = uid;
     inlineEl.style.display = 'block';
     // 💡 "다른 프로젝트" 패널이 펼쳐진 동안은 "현재 프로젝트"용 자동위치 줄을 숨겨 중복처럼 안 보이게 함
@@ -142,22 +144,29 @@ window.inboxOpenDistribute = async function(uid) {
             div.onmouseover = function() { if (!div.classList.contains('dist-file-selected')) { this.style.background = '#eef6ff'; this.style.borderColor = '#74b3f0'; } };
             div.onmouseout  = applyStyle;
             div.addEventListener('click', function() {
-                // 같은 목록(모든 그룹 포함) 안의 이전 선택은 해제 — 한 번에 하나만 선택된 상태로 보이게
-                inlineEl.querySelectorAll('.dist-file-item.dist-file-selected').forEach(function(prev) {
-                    prev.classList.remove('dist-file-selected');
-                    const prevCheck = prev.querySelector('.dist-file-check');
-                    if (prevCheck) prevCheck.style.display = 'none';
-                    prev.style.background = '#fff'; prev.style.borderColor = '#ced4da';
-                });
-                div.classList.add('dist-file-selected');
+                // 🐛 [다수 프로젝트 선택 업그레이드] 예전엔 여기서 클릭한 항목 외의 모든 선택을 강제
+                //    해제해서(=라디오버튼처럼 한 번에 하나만) 여러 프로젝트에 동시 전송할 수 없었다.
+                //    이제는 클릭할 때마다 그 항목 하나만 토글(체크박스처럼)하고, 다른 항목의 선택 상태는
+                //    그대로 유지한다 — window._distCtx.selectedFiles에 선택된 {fileId: fileName} 전부를
+                //    누적하고, 그 개수에 따라 패널 모드를 바꾸는 판단은 _distRefreshStep2()가 맡는다.
+                const ctx = window._distCtx;
+                if (!ctx) return;
+                const nowSelecting = !div.classList.contains('dist-file-selected');
+                if (nowSelecting) {
+                    div.classList.add('dist-file-selected');
+                    ctx.selectedFiles[f.id] = f.name;
+                } else {
+                    div.classList.remove('dist-file-selected');
+                    delete ctx.selectedFiles[f.id];
+                }
                 applyStyle();
                 // 💡 [2026-08-24 UX 개선] "대상 선택 + 전송 실행" 패널(dist-step2)이 항상 목록 맨 끝에
                 //    붙어 있어서, 그룹이 여러 개거나 목록이 길면 방금 고른 항목과 실제 조작할 패널이
                 //    화면상 멀리 떨어져 "선택은 됐는데 뭘 눌러야 하는지" 헷갈렸다. 클릭한 항목 바로
                 //    아래로 옮겨서, 선택 즉시 그 자리에서 이어서 조작할 수 있게 한다.
                 const step2El = document.getElementById('dist-step2');
-                if (step2El) { div.insertAdjacentElement('afterend', step2El); step2El.style.display = 'none'; }
-                window.inboxDistPickFile(f.id, f.name);
+                if (step2El) div.insertAdjacentElement('afterend', step2El);
+                window._distRefreshStep2();
             });
             return div;
         }
@@ -233,6 +242,43 @@ window.inboxOpenDistribute = async function(uid) {
     } catch (err) {
         inlineEl.innerHTML = '<div style="padding:12px; text-align:center; color:#e03131; font-size:12px;">' + (_distEn ? '❌ Failed to load list: please check your Drive connection and permissions.' : '❌ 목록 호출 실패: 드라이브 연동 상태 또는 권한을 확인해주세요.') + '</div>';
     }
+};
+
+// 💡 [다수 프로젝트 선택] 선택된 파일 개수에 따라 dist-step2 패널의 모드를 결정한다.
+//    0개: 패널 숨김. 1개: 기존 단일모드(L0 수동 지정 가능, inboxDistPickFile 그대로 재사용).
+//    2개 이상: 프로젝트마다 개발단계(L0) 구조가 달라 한 화면에서 전부 수동 지정하기 어려우므로,
+//    자동위치(시작일 기준) 일괄전송 전용 간소화 패널(dist-step2-multi)로 전환한다.
+window._distRefreshStep2 = function() {
+    const ctx = window._distCtx;
+    const step2 = document.getElementById('dist-step2');
+    const single = document.getElementById('dist-step2-single');
+    const multi = document.getElementById('dist-step2-multi');
+    if (!ctx || !step2) return;
+    const ids = Object.keys(ctx.selectedFiles || {});
+
+    if (ids.length === 0) {
+        step2.style.display = 'none';
+        ctx.fileId = null; ctx.saveData = null; ctx.rows = null;
+        return;
+    }
+    if (ids.length === 1) {
+        if (multi) multi.style.display = 'none';
+        if (single) single.style.display = '';
+        window.inboxDistPickFile(ids[0], ctx.selectedFiles[ids[0]]); // 내부에서 step2.style.display='block' 처리
+        return;
+    }
+
+    // 2개 이상 — 단일모드에서 쓰던 잔여 상태(fileId 등)는 정리하고 다중모드로 전환
+    if (single) single.style.display = 'none';
+    ctx.fileId = null; ctx.saveData = null; ctx.rows = null;
+    if (multi) {
+        multi.style.display = '';
+        const countEl = document.getElementById('dist-multi-count');
+        const namesEl = document.getElementById('dist-multi-names');
+        if (countEl) countEl.textContent = String(ids.length);
+        if (namesEl) namesEl.textContent = ids.map(function(id) { return ctx.selectedFiles[id]; }).join(', ');
+    }
+    step2.style.display = 'block';
 };
 
 // 대상 파일 선택 → 내용/시점 확보 → L0 선택 단계 표시
@@ -437,6 +483,140 @@ window.inboxDistExecute = async function(attempt) {
         alert('전송 시스템 에러: ' + err.message);
     } finally {
         btn.disabled = false; btn.textContent = '🚀 전송 실행';
+    }
+};
+
+// ═══════════════════════════════════════════════════════════
+// 🔀 [다수 프로젝트 선택] 업무 1건을 여러 대상 프로젝트에 자동위치(시작일 기준)로 동시 배분하는
+//    공용 헬퍼. Task Inbox "다른 프로젝트로 전송" 다중선택(inboxDistExecuteMulti)과, 메일서버 탭
+//    "미분류 → 프로젝트 매칭 재분석 요청"의 다수 프로젝트 선택(15b-mail-server-tab-1.js의
+//    _msQueueReanalyzeMulti) 양쪽에서 재사용한다 — 같은 "Drive 파일 읽기→행 삽입→PATCH 저장" 로직을
+//    두 파일에 중복 구현하지 않기 위함.
+//    - task: buildMailTaskRow가 받는 업무 객체(업무명/시작일/완료일/상세내용 등 한글 키)
+//    - targets: [{ id: <Drive fileId>, name: <파일명> }, ...]
+//    - opts: { inboxUid, source, onProgress(i, n, name) } 전부 선택
+//    ⚠️ inboxDistExecute(단일모드)와 달리 "이전에 받아둔 내용이 그새 바뀌었는지" 사전 대조를 하지
+//    않는다 — 대상마다 실행 직전에 매번 새로 fetch해서 바로 건축→저장하므로 충돌 창(window) 자체가
+//    이미 최소화되어 있고, N개 대상 각각에 재시도 루프까지 넣으면 복잡도만 커진다. 만에 하나 그 짧은
+//    순간에 다른 사용자가 같은 파일을 저장했다면 이 배분은 실패로 집계되어 failNames에 남으므로,
+//    사용자가 결과를 보고 그 프로젝트만 다시 시도하면 된다.
+window.distSendTaskToTargets = async function(task, targets, opts) {
+    opts = opts || {};
+    const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
+    const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
+    if (!token) {
+        alert('🔒 구글 인증 토큰이 유실되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.');
+        return { okNames: [], failNames: (targets || []).map(function(t) { return t.name; }) };
+    }
+
+    const okNames = [], failNames = [];
+    for (let i = 0; i < targets.length; i++) {
+        const fileId = targets[i].id, fileName = targets[i].name;
+        if (opts.onProgress) opts.onProgress(i + 1, targets.length, fileName);
+        try {
+            const [metaResp, contentResp] = await Promise.all([
+                gapi.client.drive.files.get({ fileId: fileId, fields: 'modifiedTime', supportsAllDrives: true }),
+                gapi.client.drive.files.get({ fileId: fileId, alt: 'media', supportsAllDrives: true })
+            ]);
+            void metaResp; // 다중모드에선 충돌 사전대조를 하지 않으므로 modifiedTime 자체는 쓰지 않음(위 주석 참고)
+            const saveData = contentResp.result;
+            if (!saveData || !saveData.globalData || !saveData.colIdx) { failNames.push(fileName + ' (구조 해석 실패)'); continue; }
+            const rows = saveData.globalData.map(function(obj) {
+                let row = obj.data;
+                for (let k in obj) { if (k !== 'data') row[k] = obj[k]; }
+                return row;
+            });
+            window.computeCalcDatesForRows(rows.slice(1), saveData.colIdx);
+
+            const tCol = saveData.colIdx;
+            const l0s = window.buildL0SectionInfo(rows, tCol);
+            const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '');
+
+            const built = window.buildMailTaskRow(task, rows, tCol);
+            built.row._알림 = true;
+            const posInfo = window.computeL0InsertPos(rows, tCol, chosenL0, task['시작일'], true);
+            const pos = posInfo.pos;
+            if (chosenL0 !== '__END__' && tCol.devStage !== -1) built.row[tCol.devStage] = chosenL0;
+            rows.splice(pos, 0, built.row);
+
+            const nowIso = new Date().toISOString();
+            const userName = window.currentUserName || '비로그인 (로컬)';
+            saveData.distributions = saveData.distributions || [];
+            const distUid = 'd_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7);
+            saveData.distributions.push({
+                uid: distUid, inboxUid: opts.inboxUid || null,
+                task: JSON.parse(JSON.stringify(task)),
+                taskName: built.taskName, targetL0: chosenL0,
+                insertedAt: nowIso, by: userName, source: opts.source || '다중전송', processed: false
+            });
+            saveData.changeLogs = saveData.changeLogs || [];
+            saveData.changeLogs.push({
+                time: new Date().toLocaleString('ko-KR'), userName: userName,
+                rowName: pos, colName: '행 조작', oldVal: '없음',
+                newVal: `${opts.source || '다중전송'}: ${built.taskName}`
+            });
+            saveData.globalData = rows.map(function(row) {
+                let o = { data: Array.from(row) };
+                for (let k in row) { if (k.startsWith('_')) o[k] = row[k]; }
+                return o;
+            });
+
+            const boundary = 'dist_multi_boundary';
+            const metadata = { name: fileName, mimeType: 'application/json' };
+            const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
+                       + "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(saveData)
+                       + "\r\n--" + boundary + "--";
+            const resp = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + fileId + '?uploadType=multipart&supportsAllDrives=true', {
+                method: 'PATCH',
+                headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary="' + boundary + '"' },
+                body: body
+            });
+            const file = await resp.json();
+            if (resp.ok && file && file.id) {
+                okNames.push(fileName + ' (' + posInfo.previewLabel + ')');
+            } else {
+                const status = resp.status || (file && file.error ? file.error.code : 0);
+                failNames.push(fileName + ' (오류 ' + status + ')');
+            }
+        } catch (err) {
+            failNames.push(fileName + ' (' + err.message + ')');
+        }
+    }
+    return { okNames: okNames, failNames: failNames };
+};
+
+// [다수 프로젝트 선택] Task Inbox "다른 프로젝트로 전송" — 2개 이상 체크된 상태에서 실행
+window.inboxDistExecuteMulti = async function() {
+    const ctx = window._distCtx;
+    if (!ctx) return;
+    const ids = Object.keys(ctx.selectedFiles || {});
+    if (ids.length < 2) return;
+    const btn = document.getElementById('dist-exec-multi-btn');
+    btn.disabled = true;
+    const targets = ids.map(function(id) { return { id: id, name: ctx.selectedFiles[id] }; });
+
+    const result = await window.distSendTaskToTargets(ctx.task, targets, {
+        inboxUid: ctx.uid, source: '업무보관함(다중전송)',
+        onProgress: function(i, n) { btn.textContent = '⏳ 전송 중... (' + i + '/' + n + ')'; }
+    });
+
+    btn.disabled = false; btn.textContent = '🚀 일괄 전송 실행';
+
+    if (result.okNames.length) {
+        window.TaskInbox.setStatus(ctx.uid, '전송됨', {
+            type: '드라이브전송(다중)',
+            target: targets.map(function(t) { return t.name; }).join(', '),
+            at: new Date().toISOString()
+        });
+    }
+    let msg = '';
+    if (result.okNames.length) msg += `🎉 ${result.okNames.length}개 프로젝트로 전송 완료!\n· ` + result.okNames.join('\n· ');
+    if (result.failNames.length) msg += (msg ? '\n\n' : '') + `❌ ${result.failNames.length}건 실패\n· ` + result.failNames.join('\n· ');
+    alert(msg || '전송할 항목이 없습니다.');
+
+    if (result.okNames.length) {
+        window.closeInboxDist();
+        window.renderTaskInbox();
     }
 };
 

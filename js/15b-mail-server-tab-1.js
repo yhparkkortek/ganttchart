@@ -1771,7 +1771,9 @@ window._msOpenReanalyzeHintModal = function(fileName) {
                 <label style="font-size:11.5px; color:#888; display:block; margin-bottom:6px;">위 근거를 참고해서, 실제로 어느 프로젝트 건인지(또는 왜 미분류가 맞는지) 의견을 남겨주세요 — 선택 입력, 비워두면 힌트 없이 그냥 다시 판단합니다.</label>
                 <div style="margin-bottom:6px;">
                     <button id="ms-proj-picker-btn" onclick="window._msToggleProjPicker()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:12px; padding:4px 12px; height:28px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">📋 프로젝트 선택 ▾</button>
+                    <span id="ms-proj-picker-selected-summary" style="display:inline-block; margin-left:6px; font-size:11px; color:#1971c2; vertical-align:middle;"></span>
                     <div id="ms-proj-picker-list" style="display:none; margin-top:4px; border:1px solid #ced4da; border-radius:6px; max-height:160px; overflow-y:auto; background:#fff; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
+                    <div id="ms-proj-picker-hint" style="display:none; font-size:10.5px; color:#888; margin-top:2px;">💡 2개 이상 선택하면 AI 단일 매칭 없이 선택한 프로젝트 전부로 곧바로 배분됩니다.</div>
                 </div>
                 <textarea id="ms-reanalyze-hint" placeholder="예: 관리번호는 다르지만 실제로는 STELLAR32 건 맞음 / 예: 회의록이라 여러 프로젝트가 섞여있어서 미분류가 맞음"
                     style="width:100%; min-height:70px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
@@ -1790,6 +1792,11 @@ window._msOpenReanalyzeHintModal = function(fileName) {
     if (r.matchReason) { prevReasonEl.style.display = 'block'; prevReasonEl.textContent = '💡 이전 판단 근거: ' + r.matchReason; }
     else { prevReasonEl.style.display = 'none'; }
     document.getElementById('ms-reanalyze-hint').value = '';
+    // 💡 [다수 프로젝트 선택] 항목을 열 때마다 이전 메일에서 남은 선택을 초기화 — 서로 다른 메일 사이에
+    //    선택 상태가 새어들면 엉뚱한 메일이 엉뚱한 프로젝트로 배분될 수 있어 반드시 비워야 한다.
+    window._msReanalyzeSelectedProjects = {};
+    const summaryEl = document.getElementById('ms-proj-picker-selected-summary');
+    if (summaryEl) summaryEl.textContent = '';
     modal.style.display = 'block';
     window.bringModalToFront('ms-reanalyze-modal');
 };
@@ -1797,7 +1804,21 @@ window._msOpenReanalyzeHintModal = function(fileName) {
 window._msSubmitReanalyze = async function() {
     const fileName = window._msReanalyzeTarget;
     const hint = (document.getElementById('ms-reanalyze-hint').value || '').trim();
+    const selectedMap = window._msReanalyzeSelectedProjects || {};
+    const selectedList = Object.keys(selectedMap).map(function(k) { return selectedMap[k]; });
     document.getElementById('ms-reanalyze-modal').style.display = 'none';
+
+    // 💡 [다수 프로젝트 선택] 사람이 직접 2개 이상의 프로젝트를 콕 집었다면, AI의 단일 매칭 판단보다
+    //    그 선택을 우선해서 전부에 곧바로 등록한다(AI는 업무 필드 정규화 용도로만 호출됨).
+    //    0개나 1개만 선택했을 때는 기존 동작(힌트 기반 AI 단일 매칭)을 그대로 유지한다.
+    if (selectedList.length >= 2) {
+        const targets = selectedList
+            .map(function(c) { return { id: c.drive_file_id, name: c.file_name }; })
+            .filter(function(t) { return t.id && t.name; });
+        if (!targets.length) { alert('선택한 프로젝트에 드라이브 파일 정보가 없어 전송할 수 없습니다.'); return; }
+        await window._msQueueReanalyzeMulti(fileName, hint, targets);
+        return;
+    }
     await window._msQueueReanalyze(fileName, hint);
 };
 
@@ -1822,50 +1843,84 @@ window._msToggleProjPicker = async function() {
     try {
         const projects   = await window._msLoadProjectIndex();
         const candidates = window._msFilterCandidateProjects(projects || []);
-        window._msProjPickerCache = candidates; // _msSelectProjPickerItem에서 참조
-
-        if (!candidates || !candidates.length) {
-            listEl.innerHTML = '<div style="padding:10px; text-align:center; color:#aaa; font-size:12px;">등록된 프로젝트가 없습니다.</div>';
-            return;
-        }
-
-        // 💡 [2026-09-03] 맨 위에 "새 프로젝트 AI 추출" 고정 항목 추가
-        const newProjItem = '<div onclick="window._msPickNewProject()"'
-            + ' onmouseover="this.style.background=\'#e6f6ea\';" onmouseout="this.style.background=\'#f6fff8\';"'
-            + ' style="padding:8px 12px; cursor:pointer; border-bottom:2px solid #a8dab8; background:#f6fff8; transition:background .1s;">'
-            + '<span style="font-weight:bold; color:#1f7a3d; font-size:12.5px;">➕ 새 프로젝트 AI 추출 — 이 메일로 프로젝트 정보 자동 분석</span>'
-            + '<div style="font-size:10.5px; color:#888; margin-top:2px;">Gemini가 메일 내용을 분석해 프로젝트 정보를 채워줍니다. 검토 후 등록하세요.</div>'
-            + '</div>';
-
-        listEl.innerHTML = newProjItem + candidates.map(function(c, i) {
-            // 표시 레이블: 모델명+인치 (없으면 파일명), 부제: 고객사 · 담당자
-            const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '(프로젝트)';
-            const sub   = [c.customer, c.assignee ? '담당: ' + c.assignee : ''].filter(Boolean).join(' · ');
-            return '<div onclick="window._msSelectProjPickerItem(' + i + ')"'
-                + ' onmouseover="this.style.background=\'#e8f4fd\';" onmouseout="this.style.background=\'#fff\';"'
-                + ' style="padding:7px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; line-height:1.4;">'
-                + '<span style="font-weight:bold; color:#1a4f7a;">' + escapeHtml(label) + '</span>'
-                + (sub ? '&nbsp;<span style="font-size:11px; color:#888;">· ' + escapeHtml(sub) + '</span>' : '')
-                + '</div>';
-        }).join('');
+        window._msProjPickerCache = candidates; // _msToggleProjPickerItem/_msRenderProjPickerList에서 참조
+        window._msRenderProjPickerList();
     } catch(e) {
         listEl.innerHTML = '<div style="padding:10px; text-align:center; color:#e03131; font-size:12px;">로딩 실패 — 드라이브 연동 상태 확인 필요</div>';
         console.warn('[재분석 프로젝트 선택]', e);
     }
 };
 
-// 선택된 프로젝트 → textarea에 힌트 자동 삽입 후 드롭다운 닫기
-window._msSelectProjPickerItem = function(idx) {
+// 💡 [다수 프로젝트 선택] 후보 목록 HTML을 (다시) 그린다 — 체크 토글 시마다 선택 상태(✅)를 갱신하기
+//    위해 _msToggleProjPicker에서 분리. window._msReanalyzeSelectedProjects(선택된 후보 idx→객체 맵)를
+//    기준으로 각 항목의 체크 표시를 그린다.
+window._msRenderProjPickerList = function() {
+    const listEl = document.getElementById('ms-proj-picker-list');
+    if (!listEl) return;
+    const candidates = window._msProjPickerCache || [];
+    const selected = window._msReanalyzeSelectedProjects || {};
+
+    if (!candidates.length) {
+        listEl.innerHTML = '<div style="padding:10px; text-align:center; color:#aaa; font-size:12px;">등록된 프로젝트가 없습니다.</div>';
+        return;
+    }
+
+    // 💡 [2026-09-03] 맨 위에 "새 프로젝트 AI 추출" 고정 항목 추가 (다중선택 대상 아님 — 단독 액션)
+    const newProjItem = '<div onclick="window._msPickNewProject()"'
+        + ' onmouseover="this.style.background=\'#e6f6ea\';" onmouseout="this.style.background=\'#f6fff8\';"'
+        + ' style="padding:8px 12px; cursor:pointer; border-bottom:2px solid #a8dab8; background:#f6fff8; transition:background .1s;">'
+        + '<span style="font-weight:bold; color:#1f7a3d; font-size:12.5px;">➕ 새 프로젝트 AI 추출 — 이 메일로 프로젝트 정보 자동 분석</span>'
+        + '<div style="font-size:10.5px; color:#888; margin-top:2px;">Gemini가 메일 내용을 분석해 프로젝트 정보를 채워줍니다. 검토 후 등록하세요.</div>'
+        + '</div>';
+
+    listEl.innerHTML = newProjItem + candidates.map(function(c, i) {
+        // 표시 레이블: 모델명+인치 (없으면 파일명), 부제: 고객사 · 담당자
+        const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '(프로젝트)';
+        const sub   = [c.customer, c.assignee ? '담당: ' + c.assignee : ''].filter(Boolean).join(' · ');
+        const isSel = !!selected[i];
+        return '<div onclick="window._msToggleProjPickerItem(' + i + ')"'
+            + ' onmouseover="this.style.background=\'' + (isSel ? '#d0ebff' : '#e8f4fd') + '\';" onmouseout="this.style.background=\'' + (isSel ? '#d0ebff' : '#fff') + '\';"'
+            + ' style="padding:7px 12px; cursor:pointer; border-bottom:1px solid #f0f0f0; transition:background .1s; line-height:1.4; background:' + (isSel ? '#d0ebff' : '#fff') + ';">'
+            + '<span style="color:#1971c2; margin-right:2px;">' + (isSel ? '☑' : '☐') + '</span>'
+            + '<span style="font-weight:bold; color:#1a4f7a;">' + escapeHtml(label) + '</span>'
+            + (sub ? '&nbsp;<span style="font-size:11px; color:#888;">· ' + escapeHtml(sub) + '</span>' : '')
+            + '</div>';
+    }).join('');
+};
+
+// 💡 [다수 프로젝트 선택] 항목 클릭 시 체크박스처럼 토글(선택/해제) — 드롭다운은 열어둔 채로 여러 개를
+//    이어서 고를 수 있게 한다(예전엔 클릭 즉시 닫히고 힌트가 덮어써지는 단일선택이었음).
+window._msToggleProjPickerItem = function(idx) {
     const c = window._msProjPickerCache && window._msProjPickerCache[idx];
     if (!c) return;
-    const label    = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '해당 프로젝트';
-    const hintText = '이 메일은 ' + label + (c.customer ? ' (' + c.customer + ')' : '') + ' 건임';
+    window._msReanalyzeSelectedProjects = window._msReanalyzeSelectedProjects || {};
+    if (window._msReanalyzeSelectedProjects[idx]) delete window._msReanalyzeSelectedProjects[idx];
+    else window._msReanalyzeSelectedProjects[idx] = c;
+
+    window._msRenderProjPickerList();
+    window._msSyncReanalyzeHintFromSelection();
+};
+
+// 선택된 프로젝트 목록 → textarea 힌트 자동 채움 + 상단 요약 갱신.
+// 1개 선택: 예전과 동일한 단일 힌트 문구(하위호환). 2개 이상: 여러 프로젝트를 나열하는 문구로
+// 바뀌지만, 실제 배분 대상은 이 텍스트가 아니라 _msReanalyzeSelectedProjects 자체를 그대로 쓴다
+// (window._msSubmitReanalyze 참고) — 텍스트는 AI 힌트 겸 사용자에게 보여주는 확인용.
+window._msSyncReanalyzeHintFromSelection = function() {
+    const selected = window._msReanalyzeSelectedProjects || {};
+    const list = Object.keys(selected).map(function(k) { return selected[k]; });
+    const labelOf = function(c) { return [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '해당 프로젝트'; };
+
+    const summaryEl = document.getElementById('ms-proj-picker-selected-summary');
+    const hintNoteEl = document.getElementById('ms-proj-picker-hint');
+    if (summaryEl) summaryEl.textContent = list.length ? ('✅ ' + list.length + '개 선택됨: ' + list.map(labelOf).join(', ')) : '';
+    if (hintNoteEl) hintNoteEl.style.display = list.length >= 2 ? 'block' : 'none';
+
     const ta = document.getElementById('ms-reanalyze-hint');
-    if (ta) { ta.value = hintText; ta.focus(); }
-    const listEl = document.getElementById('ms-proj-picker-list');
-    const btn    = document.getElementById('ms-proj-picker-btn');
-    if (listEl) listEl.style.display = 'none';
-    if (btn) btn.textContent = '📋 프로젝트 선택 ▾';
+    if (!ta || !list.length) return;
+    ta.value = list.length === 1
+        ? ('이 메일은 ' + labelOf(list[0]) + (list[0].customer ? ' (' + list[0].customer + ')' : '') + ' 건임')
+        : ('이 메일은 다음 프로젝트들에 공통으로 해당할 수 있음: ' + list.map(labelOf).join(', '));
+    ta.focus();
 };
 
 // ─── 💡 [2026-09-03] "새 프로젝트 AI 추출" — 미분류 메일 재분석 모달에서 선택 시
@@ -2009,6 +2064,59 @@ window._msQueueReanalyze = async function(fileName, hint) {
                 window.showToast('⚠️ 재분석 실패(AI 분석에 실패했습니다)', 'error');
             }
         }
+    } catch (e) {
+        if (window.showToast) window.showToast('⚠️ 재분석 중 오류: ' + e.message, 'error');
+    }
+};
+
+// 💡 [다수 프로젝트 선택] 미분류 메일 1건을 사용자가 직접 고른 2개 이상의 프로젝트에 곧바로 배분한다.
+//    위 window._msQueueReanalyze와 달리 AI 매칭신뢰도/주매칭프로젝트번호로 라우팅을 결정하지 않고,
+//    AI(msCallGemini)는 업무 필드(제목/일정/상세내용) 정규화 용도로만 호출한다 — 사람이 명시적으로
+//    여러 프로젝트를 콕 집었다는 신호가 AI의 단일 매칭 판단보다 확실하기 때문이다. 실제 Drive 배분은
+//    14d-distribution-ledger.js의 공용 헬퍼(distSendTaskToTargets)를 그대로 재사용한다.
+window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
+    const r = (window._msResults || []).find(x => x.fileName === fileName);
+    if (!r) return;
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
+    if (window.showToast) window.showToast('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', 'info');
+    try {
+        const candidateList = window._msFilterCandidateProjects(await window._msLoadProjectIndex());
+        const candidatesForAI = candidateList.length ? candidateList : null;
+        const task = await msCallGemini(apiKey, {
+            subject: r.subject, sender: r.sender, date: r.date, body: r.body, fileName: r.fileName
+        }, candidatesForAI, null, hint || null);
+
+        r.task = task;
+        r.reanalyzedAt = new Date().toISOString();
+        r.reanalyzeHint = hint || '';
+
+        if (!task) {
+            r.error = 'AI분석실패';
+            window._msSaveQueueToStorage();
+            window._msRenderQueueModal('unmatched');
+            if (window.showToast) window.showToast('⚠️ 재분석 실패(AI가 업무 정보를 추출하지 못했습니다)', 'error');
+            return;
+        }
+
+        if (window.showToast) window.showToast('📤 ' + targets.length + '개 프로젝트로 전송 중...', 'info');
+        const result = await window.distSendTaskToTargets(task, targets, { source: '미분류 재분석(다중전송)' });
+
+        r.error = null;
+        if (result.okNames.length) {
+            r.selected = true;
+            r.project = result.okNames.length + '개 프로젝트로 직접 배분됨: ' + targets.map(function(t) { return t.name; }).join(', ');
+            r.matchReason = '사용자가 직접 선택한 ' + targets.length + '개 프로젝트로 배분';
+        }
+
+        window._msSaveQueueToStorage();
+        if (window._msRefreshQueueBadges) window._msRefreshQueueBadges();
+        window._msRenderQueueModal('unmatched');
+
+        let msg = '';
+        if (result.okNames.length) msg += `🎉 ${result.okNames.length}개 프로젝트로 전송 완료!\n· ` + result.okNames.join('\n· ');
+        if (result.failNames.length) msg += (msg ? '\n\n' : '') + `❌ ${result.failNames.length}건 실패\n· ` + result.failNames.join('\n· ');
+        alert(msg || '전송할 항목이 없습니다.');
     } catch (e) {
         if (window.showToast) window.showToast('⚠️ 재분석 중 오류: ' + e.message, 'error');
     }

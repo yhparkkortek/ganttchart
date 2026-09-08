@@ -96,9 +96,9 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `13-mobile-touch-timer.js` | 모바일 터치 타이머 |
 | `14a`/`14b-ai-mail-analysis-N.js` | 메일 분석 → 간트차트 자동 추가 (Gemini AI), 원래 `14-ai-mail-analysis.js` 1/2. `14a`에 Phase 6 토픽프로파일 배지 갱신 훅 + Phase 7 다중 프로젝트 배분 함수(`_initMultiProjectArea`, `mailDistributeToProject`) 포함 |
 | `14c-task-inbox.js` | [Phase 1] 업무 보관함 (Task Inbox) — 프로젝트 독립 스테이징 |
-| `14d-distribution-ledger.js` | [Phase 2/2.5] 드라이브 배분 원장 + 저장 시 자동 병합 |
+| `14d-distribution-ledger.js` | [Phase 2/2.5] 드라이브 배분 원장 + 저장 시 자동 병합. **다수 프로젝트 선택**: `window.distSendTaskToTargets(task, targets, opts)` — 업무 1건을 여러 대상 프로젝트에 자동위치(시작일 기준)로 동시 배분하는 공용 헬퍼(대상마다 Drive fetch→행 삽입→PATCH, 사전 충돌대조 없이 실행 직전 fetch로 충돌창 최소화). Task Inbox "다른 프로젝트로 전송"(`inboxOpenDistribute`)에서 2개 이상 체크 시 `inboxDistExecuteMulti`가 이 헬퍼를 호출(1개면 기존 `inboxDistPickFile`+`inboxDistExecute` 단일모드 그대로 유지 — `_distRefreshStep2`가 선택 개수로 분기) |
 | `15a-mail-attachment-tab.js` | 메일 파일 첨부 탭 (좌우분할 UI). Phase 5 신뢰도 배지 헬퍼 `_confBadge(conf)` 전역 선언(여기서만 정의) — 🟢/🟡/🔴/⚪ 뱃지 HTML 반환; `pasteRenderResultList`·`mfRenderList`에도 배지 삽입. Phase 7 `mailShowRightDetail`에서 `_initMultiProjectArea()` 호출 |
-| `15b`/`15c-mail-server-tab-N.js` | 메일 서버 탭 기능 1/2. `15c`의 `msRenderList`에 Phase 5 `_confBadge` 배지 삽입 |
+| `15b`/`15c-mail-server-tab-N.js` | 메일 서버 탭 기능 1/2. `15c`의 `msRenderList`에 Phase 5 `_confBadge` 배지 삽입. `15b`의 "📭 미분류 메일 → 🔄 프로젝트 매칭 재분석 요청" 모달(`_msOpenReanalyzeHintModal`)도 **다수 프로젝트 선택** 지원 — "📋 프로젝트 선택" 목록이 체크박스형 다중토글(`_msToggleProjPickerItem`/`_msRenderProjPickerList`)이라 열어둔 채 여러 개 고를 수 있고, 0~1개 선택 시엔 기존처럼 힌트 기반 AI 단일매칭(`_msQueueReanalyze`)을 그대로 쓰지만 2개 이상 선택하면 AI 단일판단 대신 사용자가 고른 프로젝트 전부로 곧바로 배분(`_msQueueReanalyzeMulti` → 위 `distSendTaskToTargets` 재사용, AI는 업무 필드 정규화용으로만 1회 호출) |
 | `16-wbs-level-colors.js` | WBS 레벨별 고정 회색 계조 |
 | `17-weekly-report-modal-drag.js` | 주간 업무 보고 모달 드래그 |
 | `18-mail-analyzer-modal-drag.js` | 메일 분석기 모달 드래그 |
