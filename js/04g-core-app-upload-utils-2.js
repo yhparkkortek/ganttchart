@@ -990,7 +990,7 @@
 [[ACTION:SET_LEVEL:번호:레벨]]  (레벨은 정수 0~4)
 현재 레벨에서 "한 단계"는 ±1, 절대값 지정이면 그 숫자를 바로 넣으세요.
 
-⬆️⬇️ 행 이동 ("위로/아래로 N칸 이동해줘", "10칸 위로"):
+⬆️⬇️ 행 이동 ("위로/아래로 N칸 이동해줘", "10칸 위로" — 방향(위/아래)이 명시된 경우에만 이 태그를 쓰세요):
 [[ACTION:MOVE_ROW:번호:UP:칸수]]  또는  [[ACTION:MOVE_ROW:번호:DOWN:칸수]]
 칸수 생략 시 1칸으로 처리. 예: "#G176을 3칸 위로" → [[ACTION:MOVE_ROW:176:UP:3]]
 
@@ -999,7 +999,15 @@
 예: "#G176을 #G190 위에" → [[ACTION:MOVE_ROW_BEFORE:176:190]]
 주의: 두 행이 같은 WBS 트리 내에 있을 때만 의도대로 작동합니다.
 
-위 6가지 태그(DELETE_ROW/SET_STATUS/TOGGLE_KEY/SET_LEVEL/MOVE_ROW/MOVE_ROW_BEFORE)는 확인 없이 즉시 실행됩니다. 요청이 불분명하면 먼저 확인을 구하세요.
+🎯 화면에서 그 업무로 찾아가기/보여주기 ("212번으로 이동해줘", "#G212 보여줘", "그 업무 어디있는지 찾아줘",
+"스크롤해줘"처럼 위/아래 방향 없이 특정 업무 자체를 보고 싶다는 요청 — 위 "행 이동"과 완전히 다른 기능입니다:
+데이터 순서는 전혀 바꾸지 않고, 화면만 그 업무 위치로 스크롤 이동 + 하이라이트합니다. 사용자가 "#G212"처럼
+직접 번호를 언급했거나, [업무 목록]에서 설명만으로 정확히 하나의 업무를 특정할 수 있으면 이 태그를 쓰세요):
+[[ACTION:GOTO_ROW:번호]]
+예: "#G212로 이동해줘" / "212번 보여줘" / "김철수님 업무로 가줘"(그 담당자 업무가 하나뿐일 때) → [[ACTION:GOTO_ROW:212]]
+일치하는 업무가 여러 개거나 하나도 없으면 태그를 쓰지 말고 어떤 업무인지 되물어보세요.
+
+위 7가지 태그(DELETE_ROW/SET_STATUS/TOGGLE_KEY/SET_LEVEL/MOVE_ROW/MOVE_ROW_BEFORE/GOTO_ROW)는 확인 없이 즉시 실행됩니다(GOTO_ROW는 데이터를 전혀 바꾸지 않는 화면 이동일 뿐이라 더더욱 안전합니다). 요청이 불분명하면 먼저 확인을 구하세요.
 
 📝 행 추가 / 업무명·날짜·담당 수정 (사람 확인을 거친 뒤에만 적용):
 아래 두 기능은 "① 초안 작성 → ② 사용자 확인 → ③ 적용"의 2단계 왕복으로만 동작합니다.
@@ -1579,6 +1587,16 @@ ${question}
         logChange(rowIndex, -1, '계층 변경', `Lv${oldLevel} → Lv${newLevel}`, 'AI 문답으로 변경');
         window.recalculateSchedules();
         return { ok: true, taskName: taskTxt, from: oldLevel, to: newLevel };
+    };
+
+    // 🎯 [2026-09-08 신규] "G212로 이동해줘"처럼 방향 없이 화면에서 그 업무로 찾아가기만 하는 요청 —
+    //    데이터는 전혀 안 건드리고 표의 #G{n} 인용을 클릭했을 때와 완전히 동일한 window._aiJumpToRow
+    //    (08-filter-ui.js)를 그대로 재사용한다(Gantt 탭 전환 + WBS 펼침 + 스크롤 + 하이라이트).
+    window._aiAssistGotoRow = function(rowIndex) {
+        if (typeof globalData === 'undefined' || !globalData || !globalData[rowIndex] || globalData[rowIndex]._level === undefined) return { ok: false };
+        const label = _aiGetTaskLabel(globalData[rowIndex]);
+        if (window._aiJumpToRow) window._aiJumpToRow(rowIndex);
+        return { ok: true, taskName: label };
     };
 
     // ⬆️⬇️ 행 N칸 이동 (direction: 'UP'|'DOWN', steps: 칸 수)

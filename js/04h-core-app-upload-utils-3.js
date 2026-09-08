@@ -991,6 +991,15 @@
             return '';
         });
 
+        // 🎯 [2026-09-08 신규] GOTO_ROW — 데이터 변경 없이 화면에서 그 업무로 스크롤+하이라이트만
+        //    (#G{n} 인용 클릭과 동일한 window._aiJumpToRow 재사용, window._aiAssistGotoRow 참고)
+        text = text.replace(/\[\[ACTION:GOTO_ROW:(\d+)\]\]/g, function(_, n) {
+            const res = window._aiAssistGotoRow(parseInt(n, 10));
+            if (!res.ok) { results.push('⚠️ 해당 업무를 찾지 못해 이동하지 못했습니다 (#G' + n + ').'); return ''; }
+            results.push(`📍 "${res.taskName}" 업무(#G${n})로 이동했습니다.`);
+            return '';
+        });
+
         text = text.trim();
         if (results.length) text += '\n\n' + results.join('\n');
         return text;
@@ -1775,7 +1784,7 @@
         if (!btn) return;
         const _mEn = window._currentLang === 'en';
         const on = window._ganttQaVoiceMode;
-        btn.textContent = on ? (_mEn ? 'Text Q&A' : '글자문답') : (_mEn ? 'Voice Q&A' : '음성문답');
+        btn.innerHTML = on ? (_mEn ? 'Text<br>Q&A' : '글자<br>문답') : (_mEn ? 'Voice<br>Q&A' : '음성<br>문답');
         btn.style.background = on ? '#c9ecd3' : '#e8f4fd';
         btn.style.borderColor = on ? '#a8dab8' : '#a5c8f0';
         btn.style.color = on ? '#1f7a3d' : '#1a4f7a';
@@ -1921,8 +1930,8 @@
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px; align-items:stretch;">
-                    <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; padding:0 16px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Clear Chat' : '대화삭제'}</button>
-                    <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Voice Q&A' : '음성문답'}</button>
+                    <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; padding:0 16px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear<br>Chat' : '대화<br>삭제'}</button>
+                    <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Voice<br>Q&A' : '음성<br>문답'}</button>
                     <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>

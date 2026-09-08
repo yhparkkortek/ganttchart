@@ -773,7 +773,7 @@
         if (_qaSendBtn) _qaSendBtn.textContent = _en ? 'Send' : '전송';
         const _qaClearBtn = document.getElementById('gantt-qa-clear-btn');
         if (_qaClearBtn) {
-            _qaClearBtn.textContent = _en ? 'Clear Chat' : '대화삭제';
+            _qaClearBtn.innerHTML = _en ? 'Clear<br>Chat' : '대화<br>삭제';
             _qaClearBtn.title = _en ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다';
         }
         // 🎙️ [2026-09-08 신규] 음성 챗 버튼 — 🔊/🔇는 아이콘 그대로 title만, 음성문답/글자문답은
