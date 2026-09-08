@@ -1271,6 +1271,38 @@
         };
     };
 
+    // ⏳ [2026-09-08 신규] AI 응답을 기다리는 동안 "⏳ 답변 생성 중..."이 아무 변화 없이 계속 떠
+    //    있으면 사용자는 멈춘 건지 진행 중인 건지 알 수 없어 불안해한다 — 특히 무료 API 등급처럼
+    //    응답이 몇십 초씩 걸릴 수 있는 환경에서는 더더욱. 아직 요청이 살아있는 동안(취소된 게
+    //    아니라 실제로 응답을 기다리는 중) 시간이 지날수록 "문제가 생겼다"가 아니라 "그냥 시간이
+    //    좀 걸리고 있다"는 톤으로 안내 문구를 단계적으로 바꿔서 안심시킨다. 응답이 오거나(성공)
+    //    실패하는 즉시(호출부 finally에서) stop()으로 남은 타이머를 정리한다.
+    window._ganttQaStartWaitingHints = function() {
+        const _wEn = window._currentLang === 'en';
+        const steps = _wEn ? [
+            { at: 7000, text: '⏳ Still working on your answer...' },
+            { at: 18000, text: "⏳ Taking a little longer than usual — I'm still on it, hang tight..." },
+            { at: 32000, text: '⏳ Still waiting on a response (this can happen with bigger questions or a busy AI service). Thanks for your patience...' },
+            { at: 48000, text: "⏳ Almost there, or the connection may be a bit slow right now — just a bit longer..." }
+        ] : [
+            { at: 7000, text: '⏳ 답변을 준비하고 있어요...' },
+            { at: 18000, text: '⏳ 평소보다 조금 걸리고 있어요. 계속 진행 중이니 잠시만 더 기다려주세요...' },
+            { at: 32000, text: '⏳ 아직 응답을 기다리는 중이에요(질문이 크거나 AI 서버가 붐빌 때 이럴 수 있어요). 조금만 더요...' },
+            { at: 48000, text: '⏳ 거의 다 됐거나 연결이 살짝 느린 상황일 수 있어요 — 곧 끝날 거예요...' }
+        ];
+        const timers = steps.map(function(step) {
+            return setTimeout(function() {
+                const hist = window._ganttQaHistory || [];
+                const last = hist[hist.length - 1];
+                if (last && last.pending) {
+                    last.text = step.text;
+                    window._renderGanttQaMessages();
+                }
+            }, step.at);
+        });
+        return function stop() { timers.forEach(clearTimeout); };
+    };
+
     window.sendGanttQaMessage = async function() {
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
@@ -1374,10 +1406,19 @@
             //    던진 예외가 바로 아래 catch로 튀어서 그 사이의 console.info를 건너뛰었다. 정작 "왜
             //    느린지" 가장 궁금한 순간(타임아웃으로 실패한 순간)에 로그가 안 남는 건 계측 자체의
             //    의미가 없으므로, try/finally로 감싸 성공/실패 어느 쪽이든 걸린 시간이 항상 찍히게 한다.
+            // 💡 [2026-09-08 신규] "계속 진행 중인데 실패한 것처럼 보인다"는 지적 — AI 응답이 늦어질
+            //    때 "⏳ 답변 생성 중..."이 계속 그대로 떠 있으면 사용자는 "멈췄나?" 걱정하게 된다.
+            //    실제로 아직 요청이 살아있는(취소된 게 아닌) 동안엔 시간이 지날수록 안심시키는 문구로
+            //    바꿔가며 "아직 진행 중"임을 알려준다 — 마지막 60초 시점의 실패 메시지도 덜 놀라도록
+            //    "문제"보다는 "시간이 좀 걸린다"는 톤으로 통일.
+            const stopWaitingHints = window._ganttQaStartWaitingHints ? window._ganttQaStartWaitingHints() : function() {};
             let result;
             try {
-                result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, '⏱️ AI 응답이 60초 안에 오지 않았습니다. 네트워크 상태를 확인하고 다시 시도해주세요.');
+                result = await window._withTimeout(window.callAiBackend(apiKey, prompt, {}), 60000, window._currentLang === 'en'
+                    ? '⏱️ Still no response after 60 seconds. Please check your connection and try again.'
+                    : '⏱️ 60초가 지나도 응답이 오지 않고 있어요. 네트워크 상태를 확인하고 다시 시도해주세요.');
             } finally {
+                stopWaitingHints();
                 console.info(`[AI 문답 계측] AI 응답 생성(네트워크 왕복 포함): ${Math.round(performance.now() - _tQa1)}ms`);
             }
             if (!result.ok) throw result.error || new Error('알 수 없는 오류');
