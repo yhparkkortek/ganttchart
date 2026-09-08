@@ -492,17 +492,19 @@ window.mergeRemoteDistributions = async function(fileId) {
             knownUids[d.uid] = true;
             if (d.processed === true || !d.task) return;
 
-            // 내 데이터에 없는 배분 업무 행 재삽입 (L0 일치 구간 끝)
+            // 🐛 [2026-09-08 버그수정] "자동 배치될 때 날짜 매칭 없이 항상 맨 아래(또는 구간 끝)에
+            //    꽂힌다"는 제보 — 원인은 이 자동 병합 경로가 "그 L0 구간의 마지막 행 뒤"에만 넣을 뿐,
+            //    같은 구간 안에서 실제 시작일을 비교해 알맞은 위치를 찾는 로직(computeL0InsertPos)을
+            //    아예 안 부르고 있었다. 사람이 직접 "업무 보관함 → 배분" 버튼을 눌러 배분할 때
+            //    (inboxDistExecute, 위 window.computeL0InsertPos 참고)는 이미 날짜 매칭을 정상적으로
+            //    하고 있었으므로, 그 함수를 그대로 재사용해서 자동 병합 경로도 동일하게 맞춘다.
+            //    L0 구간 자체를 못 찾거나(로컬에 그 개발단계가 없음) targetL0이 '__END__'/미지정이면
+            //    기존과 동일하게 맨 끝으로 자연스럽게 fallback된다(computeL0InsertPos 내부 처리).
             const built = window.buildMailTaskRow(d.task);
             built.row._알림 = true;
-            let pos = globalData.length;
+            const posInfo = window.computeL0InsertPos(globalData, colIdx, d.targetL0 || '__END__', d.task && d.task['시작일'], true);
+            const pos = posInfo.pos;
             if (d.targetL0 && d.targetL0 !== '__END__' && colIdx.devStage !== -1) {
-                let last = -1;
-                for (let i = 1; i < globalData.length; i++) {
-                    const row = globalData[i]; if (!row) continue;
-                    if ((row[colIdx.devStage] || '').toString().trim() === d.targetL0) last = i;
-                }
-                if (last !== -1) pos = last + 1;
                 built.row[colIdx.devStage] = d.targetL0;
             }
             globalData.splice(pos, 0, built.row);
