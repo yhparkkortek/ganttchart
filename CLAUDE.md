@@ -79,7 +79,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `04c-core-app-mail-pipeline.js` | `project_index.json` 메일 자동처리 파이프라인, 프로젝트 저장(`serializedGlobalData`) |
 | `04d-core-app-gantt-core.js` | 날짜/일정(Gantt) 코어 로직, 공휴일 |
 | `04e-core-app-undo-redo.js` | Undo/Redo (recalculateSchedules 종료 시 자동 스냅샷) |
-| `04f`~`04j-core-app-upload-utils-N.js` (1~5) | 파일 업로드 및 유틸리티 로직 (원래 6,590줄짜리 한 섹션을 5등분) |
+| `04f`~`04j-core-app-upload-utils-N.js` (1~5) | 파일 업로드 및 유틸리티 로직 (원래 6,590줄짜리 한 섹션을 5등분). **💬 AI 문답 기능이 `04g`(컨텍스트/프롬프트 조립)와 `04h`(모달·전송·태그 실행)에 있음 — 아래 "💬 AI 문답" 절 참고** |
 | `04k-core-app-filter-export.js` | 필터 적용/파일명 동적 조립 + 엑셀 출력 공통 스타일러 |
 
 ### 기타 기능 파일 (05~24, 대부분 단일 파일 유지)
@@ -134,6 +134,52 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | 6 | 토픽 프로파일 생성·주입 | `26-topic-profile.js` |
 | 7 | 다중 프로젝트 배분 (`gantt_ai_reassign_queue_v1`) | `14a`, `15a`, HTML |
 | 8 | 토픽 오염 감지·AI 자가진단 (`_tcGetScore`, `_tcRunDiagnosis`, `_tcApplyFix`) | `27-topic-contamination.js` |
+
+### 💬 AI 문답 (js/04g~04h, 04j) — 구조와 트러블슈팅 지침
+
+Gantt 프로젝트 데이터에 대해 자유 질문하는 챗봇(`openGanttQaModal`). 핵심 함수는 `04g-core-app-
+upload-utils-2.js`(컨텍스트/프롬프트 조립, `_aiAssist*` 실행 헬퍼)와 `04h-core-app-upload-utils-3.js`
+(`sendGanttQaMessage`, `_aiProcessGanttQaTurn`, `_applyGanttQaActions`, 로컬 명령)에 나뉘어 있음.
+
+**액션 처리 3단계 원칙** — 새 "AI가 뭔가 실행하는" 요청을 추가할 때 이 중 어디에 넣을지부터 결정:
+1. **AI 호출 자체를 생략(로컬 명령)** — 앱 전역 상태를 다루거나 표현이 뻔한 요청(Undo/Redo, 음성
+   답변·음성문답 모드 on/off). `sendGanttQaMessage` 맨 앞에서 정규식으로 가로채 즉시 처리
+   (`_ganttQaTryHandleUndoRedoCommand`/`_ganttQaTryHandleVoiceCommand`). API 키 없어도 동작, 지연 없음.
+2. **AI가 판단 후 즉시 실행(`[[ACTION:...]]` 태그, 확인 없음)** — 데이터를 바꾸지만 안전하게 되돌릴
+   수 있거나(SET_ALARM/CLEAR_ALARM/DELETE_ROW/SET_STATUS/TOGGLE_KEY/SET_LEVEL/MOVE_ROW/
+   MOVE_ROW_BEFORE — Undo 가능) 아예 데이터를 안 바꾸는 순수 화면 동작(GOTO_ROW=업무로 스크롤,
+   SWITCH_TAB=다른 탭 전환)인 경우. `_applyGanttQaActions`에서 정규식으로 파싱해 바로 실행.
+3. **초안 → 사람 확인 → 확정 2단계 왕복** — 실제 발송/등록처럼 되돌리기 번거로운 동작(MAIL_DRAFT/
+   SEND_MAIL:CONFIRM, NOTICE_DRAFT/REGISTER_NOTICE:CONFIRM, ALARM_DRAFT/APPLY_ALARM:CONFIRM,
+   GANTT_EDIT_DRAFT/APPLY_GANTT_EDIT:CONFIRM, GANTT_ADD_DRAFT/APPLY_GANTT_ADD:CONFIRM).
+
+**"기본 동작인데 태그가 없어 AI가 추론만 하다 느려지거나 실패" 버그 패턴** — 지금까지 이 이유로
+GOTO_ROW·SWITCH_TAB·Undo/Redo 로컬명령이 추가됨. 사용자가 "당연히 될 줄 알았는데 안 된다"고 하는
+동작은 대부분 "그 verb에 대응하는 태그/로컬명령이 아예 없어서 AI가 매번 다르게 반응"하는 경우이니,
+새로 발견되면 위 3단계 중 어디에 해당하는지 판단해 태그나 로컬명령을 추가할 것 (단, 그 verb에
+대응하는 실제 UI 기능/전역 함수가 애초에 없으면 이 앱 자체에 없는 기능이므로 대상 아님).
+
+**표시No. ≠ 실제 #G 인덱스** — Gantt 표의 "No." 열은 WBS 접기/필터에 따라 화면에 보이는 순서대로
+매번 새로 매겨지는 표시용 번호(`04k-core-app-filter-export.js`의 `applyFilters`)이고, AI가 쓰는
+"#G숫자"는 항상 고정된 실제 `globalData` 배열 인덱스라 서로 다를 수 있음. `_buildGanttQaContext`가
+DOM(`.no-td .row-num-span`)에서 표시No.를 읽어와 `[업무 목록]` 각 줄에 "(표시No.X)"로 같이 보여주고,
+프롬프트에서 AI에게 "G 없이 그냥 숫자만 말하면 표시No.로 해석하라"고 지시함 — 실행은 항상 #G 인덱스로.
+
+**성능 — 새 비동기 조회를 추가할 때 반드시 챙길 것**: `_buildGanttQaContext`는 질문마다 매번 통째로
+다시 실행됨. (1) Elec Parts CONVERTER/AD BOARD/PANEL 라이브러리 조회, "다른 프로젝트 목록"
+조회(`_msLoadProjectIndex`)처럼 서로 의존관계 없는 Drive 조회가 여러 개면 **순차 await 대신
+`Promise.all`로 병렬화**할 것(안 그러면 캐시가 비어있는 세션 첫 질문마다 조회 개수만큼 대기시간이
+곱절로 늘어남 — 실제로 "AD BD 정보 알려줘"가 거의 1분 걸리던 원인이었음). (2) `_buildGanttQaPrompt`의
+`historyText`는 최근 16개 메시지로 캡됨(`HISTORY_LIMIT`) — 대화가 길어질수록 매 턴 프롬프트가
+계속 커져 응답이 느려지는 걸 막기 위함, 이 캡을 건드릴 땐 이유를 다시 확인할 것.
+
+**대화 데이터 활용 — "AI 호출 없는 로컬 신호"만 채택하기로 결정(2026-09-08)**: 전체 대화를 AI에게
+다시 분석시켜 프롬프트를 자동 개선하는 방식은 토큰·응답속도 비용 대비 신호 품질(라벨 없음)이
+낮다고 판단해 채택 안 함. 대신 AI 호출 없이: (1) 재질문 패턴 감지(`_ganttQaCheckReaskPattern`,
+글자 2-그램 유사도 + "OOO님"/"#G번호" 같은 핵심 식별자가 다르면 무조건 다른 질문으로 판정하는
+방어 로직 포함) — 최근 대화 속 질문과 지금 질문이 비슷하면 그 답변에 "문제 있었나요?" 힌트를 달아
+기존 👍👎 피드백 파이프라인에 편입. (2) 질문 문구 빈도만 기록(`gantt_qa_question_freq`, localStorage,
+답변 내용은 저장 안 함)해서 빈 채팅창에 "자주 묻는 질문" 드롭다운으로 노출.
 
 ### 백엔드
 | 파일 | 역할 |
