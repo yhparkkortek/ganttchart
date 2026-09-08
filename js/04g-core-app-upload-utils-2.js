@@ -1106,8 +1106,18 @@ ${question}
     //    만든다(사용자가 직접 타이핑할 수 없는 부분이므로) — 편집 가능한 건 지시문/설명 텍스트뿐이다.
     window._buildGanttQaPrompt = async function(question, priorHistory, mailTexts, otherProjectTexts) {
         const ctx = await window._buildGanttQaContext();
-        const historyText = (priorHistory && priorHistory.length)
-            ? priorHistory.map(function(h) { return (h.role === 'user' ? '사용자' : 'AI') + ': ' + h.text; }).join('\n')
+        // 🐛 [2026-09-08 버그수정] "응답 속도가 많이 느려졌다" — 대화가 길어질수록 지금까지의 전체
+        //    대화(질문+답변 전문)를 매번 통째로 다시 프롬프트에 실어 보내고 있었다. 대화가 쌓일수록
+        //    프롬프트 크기(=AI가 처리해야 할 토큰 수)가 계속 커져서 turn마다 점점 느려지고, 오래 대화한
+        //    세션에서는 요청 크기 제한에 걸리기도 한다. AI에게 "보내는" 컨텍스트만 최근 대화로 제한하고
+        //    (화면에 보이는 _ganttQaHistory 자체는 그대로 다 남아있음 — 사람이 보는 기록은 안 잘림),
+        //    잘린 경우 그 사실을 한 줄로 알려줘서 AI가 "그 전 얘기는 모른다"는 걸 스스로 알게 한다.
+        const HISTORY_LIMIT = 16; // 최근 8턴(질문+답변 8쌍) 정도만 프롬프트에 포함
+        const trimmedHistory = (priorHistory && priorHistory.length > HISTORY_LIMIT) ? priorHistory.slice(-HISTORY_LIMIT) : priorHistory;
+        const omittedTurns = (priorHistory && priorHistory.length > HISTORY_LIMIT) ? (priorHistory.length - HISTORY_LIMIT) : 0;
+        const historyText = (trimmedHistory && trimmedHistory.length)
+            ? (omittedTurns ? `...(대화가 길어져 이전 메시지 ${omittedTurns}건은 생략됨)\n` : '')
+                + trimmedHistory.map(function(h) { return (h.role === 'user' ? '사용자' : 'AI') + ': ' + h.text; }).join('\n')
             : '(없음)';
         const mailSection = (mailTexts && mailTexts.length)
             ? `\n[요청하신 원문 메일 전문]\n${mailTexts.join('\n\n---\n\n')}\n`
@@ -1578,11 +1588,22 @@ ${question}
         steps = Math.max(1, Math.min(50, parseInt(steps, 10) || 1));
         const dir = String(direction).toUpperCase() === 'DOWN' ? 1 : -1;
         let cur = rowIndex;
-        for (let i = 0; i < steps; i++) {
-            const next = window.moveRow(cur, dir);
-            if (next == null) break;
-            cur = next;
+        // 🐛 [2026-09-08 버그수정] steps가 여러 칸이면 window.moveRow가 스텝마다 전체 일정을 다시
+        //    계산(recalculateSchedules)하는데, 최대 50번이 한 호출 스택 안에서 연달아 실행되면 화면이
+        //    몇 초간 멈춘 것처럼 보였다("이동해줘 하면 이동은 해줬는데 기능이 먹통이 됨"). 이동하는
+        //    동안엔 매 스텝의 재계산을 건너뛰도록(04i-core-app-upload-utils-4.js의 moveRow 참고)
+        //    표시해두고, 다 옮긴 뒤 여기서 딱 한 번만 재계산한다.
+        window._aiBulkRowMove = true;
+        try {
+            for (let i = 0; i < steps; i++) {
+                const next = window.moveRow(cur, dir);
+                if (next == null) break;
+                cur = next;
+            }
+        } finally {
+            window._aiBulkRowMove = false;
         }
+        window.recalculateSchedules();
         return { ok: true, taskName: label };
     };
 

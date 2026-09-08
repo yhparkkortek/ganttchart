@@ -785,6 +785,14 @@ window.deleteHistoryByDateRange = function() {
         }
         logChange(index, -1, '행 이동', `${direction > 0 ? '아래' : '위'}로 이동 (하위 포함)`);
 
+        // 🐛 [2026-09-08 버그수정] AI 문답이 "N칸 이동해줘"를 한 번에 여러 스텝(_aiAssistMoveRow, 아래
+        //    window._aiBulkRowMove 참고)으로 처리할 때, 스텝마다 이 함수가 매번 recalculateSchedules()
+        //    (전체 일정 재계산 + 다시 그리기)를 동기적으로 돌리면 최대 50번이 한 호출 스택 안에서 연달아
+        //    실행되어 화면이 몇 초간 "먹통"처럼 멈춰 보이는 문제가 있었다 — bulk 이동 중에는 매 스텝의
+        //    재계산을 건너뛰고, 다 옮긴 뒤 딱 한 번만 재계산하도록 호출부(_aiAssistMoveRow)에 위임한다.
+        //    (마우스로 한 칸씩 누르는 평소 사용에는 영향 없음 — 그때는 이 플래그가 항상 false)
+        if (window._aiBulkRowMove) return newStart;
+
         // 🔧 연속 이동 감지 debounce — 500ms 이내 재클릭이 감지되면 "연속 이동 중"으로 판정.
         //    recalculateSchedules 내부의 토스트를 억제하고, 연속이 끝난 후 한 번만 표시한다.
         //    첫 클릭은 빠르게 토스트가 표시되고, 이후 연속 클릭 구간은 마지막에 한 번만 표시됨.

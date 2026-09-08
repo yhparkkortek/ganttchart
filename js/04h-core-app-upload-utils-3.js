@@ -1258,6 +1258,12 @@
         const question = input.value.trim();
         if (!question) return;
 
+        // 🐛 [2026-09-08 버그수정] 음성문답 모드가 자동으로 전송하는 시점과 사람이 직접 전송 버튼을
+        //    누르는 시점이 겹치면(예: 답변을 기다리는 동안 마이크가 계속 켜져있어 다른 말이 섞여 들어간
+        //    경우) 같은 대화 배열(window._ganttQaHistory)을 두 호출이 동시에 건드려 메시지 순서가
+        //    꼬이거나 화면이 멈춘 것처럼 보일 수 있다 — 이미 처리 중이면 새 호출은 조용히 무시한다.
+        if (window._ganttQaSending) return;
+
         // 🎙️ [2026-09-08 신규] "음성기능 꺼줘"/"음성 답변 켜줘" 같은 음성 제어 명령은 AI에게 물어보지
         //    않고 여기서 바로 처리하고 끝낸다(API 키 없어도 동작, AI가 깜빡할 위험도 없음).
         const voiceCmdReply = window._ganttQaTryHandleVoiceCommand ? window._ganttQaTryHandleVoiceCommand(question) : null;
@@ -1273,6 +1279,7 @@
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
 
+        window._ganttQaSending = true;
         const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
         window._ganttQaHistory.push({ role: 'user', text: question });
         input.value = '';
@@ -1327,6 +1334,7 @@
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });
         } finally {
+            window._ganttQaSending = false;
             window._renderGanttQaMessages();
             input.disabled = false;
             input.focus();
@@ -1635,6 +1643,15 @@
             .trim();
     };
 
+    // 🐛 [2026-09-08 버그수정] "음성문답" 지속 모드에서, AI 답변이 화면에 그려지는 시점(sendGanttQaMessage
+    //    반환 시점)과 실제로 스피커에서 다 읽어주는 시점은 다르다(speechSynthesis.speak는 비동기로 큐에
+    //    넣고 바로 반환됨) — 그런데 마이크 재시작 로직(_ganttQaStartListening의 rec.onend)이 "답변까지
+    //    받았으면" 바로 재시도했기 때문에, AI가 아직 답을 소리 내어 읽는 도중에 마이크가 다시 켜져서
+    //    스피커 소리(AI 자신의 목소리)를 마이크가 되받아 인식 → 새 질문으로 자동전송 → 그 답을 또 읽고
+    //    또 되받는 식으로 "혼자 계속 대화"하며 응답이 밀리고 화면이 안 먹히는 것처럼 보이는 문제가 있었다.
+    //    이제 utterance가 실제로 끝날 때 resolve되는 Promise를 남겨두고, 듣기 재시작 전에 그걸 기다린다.
+    window._ganttQaSpeakPromise = null;
+
     window._ganttQaSpeak = function(text) {
         if (!window._ganttQaVoiceOutputEnabled || !window.speechSynthesis) return;
         const clean = window._ganttQaStripForSpeech(text);
@@ -1643,7 +1660,21 @@
         const utter = new SpeechSynthesisUtterance(clean);
         utter.lang = window._currentLang === 'en' ? 'en-US' : 'ko-KR';
         utter.rate = 1.0;
+        window._ganttQaSpeakPromise = new Promise(function(resolve) {
+            utter.onend = resolve;
+            utter.onerror = resolve; // 읽다가 오류가 나도 영원히 안 풀리는 대기가 되지 않게
+        });
         window.speechSynthesis.speak(utter);
+    };
+
+    // 음성문답 모드가 다시 듣기를 시작하기 전에 호출 — 방금 큐에 넣은 읽어주기가 끝날 때까지 기다린다
+    //    (읽어줄 게 없었으면 즉시 통과). 에코 캔슬링이 없는 일반 스피커+마이크 환경을 감안해 다 읽은
+    //    뒤에도 짧은 여유 시간을 살짝 더 둔다.
+    window._ganttQaWaitForSpeechEnd = async function() {
+        if (window._ganttQaSpeakPromise) {
+            try { await window._ganttQaSpeakPromise; } catch (e) {}
+        }
+        await new Promise(function(r) { setTimeout(r, 300); });
     };
 
     // _renderGanttQaMessages()가 매번 다시 그릴 때 호출 — 아직 안 읽어준 최신 AI 답변(uid 있는 것 =
@@ -1658,8 +1689,9 @@
         window._ganttQaSpeak(last.text);
     };
 
-    // 🔊/🔇 헤더 버튼 — [2026-09-08 수정] 테두리 없음 + 배경은 항상 고정(녹색), 토글 시 아이콘만 바뀜
-    //    (이전엔 켜짐/꺼짐마다 배경색도 바꿨었는데, 사용자 요청으로 배경은 고정하고 아이콘만 바꾸도록 단순화)
+    // 🔊/🔇 헤더 버튼 — [2026-09-08 수정] 옆 "📝 프롬프트" 버튼과 동일한 배경/호버 스타일(#e8f4fd →
+    //    호버 시 #cfe6fa)로 통일 — 이전엔 항상 녹색 고정이었는데, 다른 헤더 버튼들과 안 어울린다는
+    //    피드백으로 변경. 배경은 켜짐/꺼짐 상태와 무관하게 고정이고, 토글 시 아이콘(🔊↔🔇)만 바뀐다.
     window._ganttQaUpdateVoiceBtn = function() {
         const btn = document.getElementById('gantt-qa-voice-toggle-btn');
         if (!btn) return;
@@ -1800,7 +1832,8 @@
             const input = document.getElementById('gantt-qa-input');
             if (finalTranscript.trim() && input) {
                 input.value = finalTranscript.trim();
-                await window.sendGanttQaMessage(); // 답변까지 다 받은 뒤에 다시 들어야 AI 목소리를 되받아 인식하지 않음
+                await window.sendGanttQaMessage(); // 텍스트 답변까지 다 받은 뒤 진행
+                await window._ganttQaWaitForSpeechEnd(); // 🐛 그 답을 스피커로 다 읽어줄 때까지 기다렸다가 다시 들어야 AI 목소리를 되받아 인식하지 않음
             }
             // 그 사이 사용자가 "글자문답"을 눌러 모드를 껐으면 다시 듣지 않고 조용히 종료
             if (window._ganttQaVoiceMode) {
@@ -1865,7 +1898,7 @@
                 <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 AI 문답</span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" style="border:none; border-radius:6px; background:#c9ecd3; color:#1f7a3d; font-size:13px; cursor:pointer; padding:0 9px; height:28px; white-space:nowrap;">🔇</button>
+                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:28px; white-space:nowrap; transition:background .15s;">🔇</button>
                         <button onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
                         <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
