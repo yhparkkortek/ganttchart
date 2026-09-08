@@ -578,11 +578,43 @@ window.openColorPaletteModal = function() {
     document.getElementById('cp-custom-color').value = window._cpLiveAppliedHex || '#2c5f8a';
     window._cpRenderPreview(window._cpLiveAppliedHex || document.getElementById('cp-custom-color').value || '#2c5f8a');
     window._cpUpdateApplyStatus();
+    // 🐛 [2026-09-08 버그수정] "이색저색 눌러보다가 아무것도 안 하고 X로 닫으면 원래 색으로 안 돌아가고
+    //    마지막으로 눌러본 색 그대로 남는다"는 제보 — 원인은 프리셋/직접선택을 누르는 즉시 _cpApplyLive가
+    //    화면 적용은 물론 tabData.themeColor·dirty 플래그까지 바로 확정해버려서, "미리보기"와 "확정"이
+    //    구분되지 않았던 것(다음 자동저장 때 의도치 않은 색이 그대로 영구 저장될 위험까지 있었음).
+    //    열 때의 상태를 스냅샷으로 남겨두고, 닫을 때(closeColorPaletteModal) 그 사이 바뀌었으면
+    //    유지할지 물어보고, "아니오"면 스냅샷 그대로(화면·저장대상·dirty 플래그 전부) 되돌린다.
+    window._cpModalSnapshot = {
+        liveHex: window._cpLiveAppliedHex,
+        themeColor: window.tabData ? window.tabData.themeColor : undefined,
+        dirty: window._cpThemeDirty
+    };
     document.getElementById('color-palette-modal-overlay').style.display = 'block';
     document.getElementById('color-palette-modal').style.display = 'block';
     if (window.bringModalToFront) window.bringModalToFront('color-palette-modal');
 };
+// 열 때 스냅샷으로 화면·저장대상(tabData.themeColor)·dirty 플래그를 전부 되돌림
+window._cpRevertToSnapshot = function() {
+    const snap = window._cpModalSnapshot;
+    if (!snap) return;
+    if (snap.liveHex) window._cpApplyLive(snap.liveHex, true);
+    else if (window._cpRevertLive) window._cpRevertLive();
+    if (window.tabData) {
+        if (snap.themeColor === undefined) delete window.tabData.themeColor;
+        else window.tabData.themeColor = snap.themeColor;
+    }
+    window._cpThemeDirty = !!snap.dirty;
+    if (window._cpUpdateApplyStatus) window._cpUpdateApplyStatus();
+};
 window.closeColorPaletteModal = function() {
+    // 직접 선택 드래그 중이던 디바운스가 닫힌 뒤 뒤늦게 적용되는 것 방지
+    if (window._cpApplyLiveTimer) { clearTimeout(window._cpApplyLiveTimer); window._cpApplyLiveTimer = null; }
+    const snap = window._cpModalSnapshot;
+    if (snap && window._cpLiveAppliedHex !== snap.liveHex) {
+        const keep = confirm('🎨 테마 색상을 변경하셨습니다.\n\n이대로 유지하시겠습니까?\n\n(취소를 누르면 이 창을 열기 전 색상으로 되돌아갑니다)');
+        if (!keep) window._cpRevertToSnapshot();
+    }
+    window._cpModalSnapshot = null;
     document.getElementById('color-palette-modal-overlay').style.display = 'none';
     document.getElementById('color-palette-modal').style.display = 'none';
 };
