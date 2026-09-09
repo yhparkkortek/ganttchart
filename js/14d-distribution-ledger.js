@@ -657,7 +657,14 @@ window.mergeRemoteDistributions = async function(fileId) {
         console.info(`[저장 계측] 배분 병합 확인: ${Math.round(performance.now() - _tM0)}ms (파일이 바뀌어 전체 다운로드 수행)`);
         const remote = resp.result || {};
         const remoteDists = remote.distributions || [];
-        if (!remoteDists.length) return;
+        // 🐛 [2026-09-09 버그수정] 이 조기 반환이 그냥 bare return(undefined)이었다 — 아래 두 반환
+        // 경로(마지막 줄 · 위 "변경 없음" 분기)는 항상 {remoteChanged,hadBaseline}을 돌려주는데 여기만
+        // undefined를 줘서, 호출부(_saveToGoogleDriveRaw)의 `if (_mergeResult && _mergeResult.hadBaseline
+        // && _mergeResult.remoteChanged)` 검사가 무조건 거짓이 됐다. 그 결과 "원격 파일은 바뀌었지만
+        // 새로 배분된 업무는 없는" — 즉 두 사람이 그냥 같은 프로젝트를 직접 고친, 가장 흔한 충돌
+        // 상황에서는 3-way 병합도, "다른 사용자가 더 최근에 저장했습니다" 경고도 전혀 뜨지 않고 조용히
+        // 덮어써지고 있었다(실제 충돌 시나리오 테스트로 발견). 다른 반환 경로와 동일한 모양으로 맞춘다.
+        if (!remoteDists.length) return { remoteChanged: _remoteChanged, hadBaseline: _hadBaseline };
 
         window.projectDistributions = window.projectDistributions || [];
         const knownUids = {};
