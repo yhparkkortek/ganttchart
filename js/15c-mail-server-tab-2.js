@@ -1058,7 +1058,14 @@ const AR = {
                         ${r.date ? `<span style="font-size:10px; color:#aaa;">${r.date}</span>` : ''}
                         ${r.project
                             ? `<span style="background:#e7f3ff; color:#0056b3; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r.project}</span>`
-                            : (!canSel ? `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>` : '')}
+                            // 💡 [2026-09-09 신규] 미분류(task는 있지만 project가 없음)는 지금까지 이 목록에서
+                            //    아무 표시도 없었다(canSel=!!r.task라 아래 error 분기에도 안 걸림) — AI가 매
+                            //    건마다 만든 "매칭근거"(r.matchReason, msCallGemini에서 이미 채워둠)가 있으면
+                            //    짧게 보여준다(전체 문장은 title 툴팁으로). 대기 항목(Task Inbox)에 매칭근거를
+                            //    노출한 것과 동일한 목적 — "왜 미분류됐는지" 한눈에 보이게.
+                            : (r.matchReason
+                                ? `<span title="${escapeHtml(r.matchReason)}" style="background:#fff3e0; color:#a85d0a; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle;">💡 ${escapeHtml(r.matchReason)}</span>`
+                                : (!canSel ? `<span style="color:#dc3545; font-size:10px;">${r.error||''}</span>` : ''))}
                         ${typeof r._score === 'number'
                             ? `<span title="우선순위 점수" style="background:#fff3cd; color:#856404; padding:1px 5px; border-radius:3px; font-size:10px; font-weight:bold;">${r._scoreGrade||''}${r._score}점</span>`
                             : ''}
