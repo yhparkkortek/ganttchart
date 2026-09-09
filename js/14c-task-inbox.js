@@ -628,6 +628,7 @@ window.showMailRawModal = function(r) {
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div id="inbox-mailraw-meta" style="padding:8px 16px; font-size:11.5px; color:#555; background:#fafafa; border-bottom:1px solid #eee;"></div>
+            <div id="inbox-mailraw-attachments" style="display:none; padding:6px 14px 6px; background:#f0f5ff; border-bottom:1px solid #d8e6ff; font-size:11.5px;"></div>
             <!-- 💡 [2026-08-24] wrap="off" + white-space:pre 조합이 줄바꿈을 강제로 막아서, 모달을 아무리 넓게
                  늘려도 긴 줄은 늘 원래 길이 그대로 남아 좌우 스크롤이 필요했다. white-space:pre-wrap으로
                  바꿔서 원문의 줄바꿈(엔터)은 그대로 보존하되, 한 줄이 너무 길면 모달 폭에 맞춰 자동으로
@@ -645,6 +646,26 @@ window.showMailRawModal = function(r) {
     document.getElementById('inbox-mailraw-title').textContent = '📧 ' + (_en2 ? 'Mail Source' : '메일 원문');
     document.getElementById('inbox-mailraw-meta').innerHTML =
         `<b>${_en2 ? 'Subject' : '제목'}</b>: ${escapeHtml(r.subject || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Sender' : '발신'}</b>: ${escapeHtml(r.sender || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Date' : '날짜'}</b>: ${escapeHtml(r.date || '-')}`;
+    // 💡 [2026-09-09 신규] 첨부파일 목록 표시 — 실제 파일 내용은 가져오지 않고 메타데이터만 pill로 렌더링
+    (function() {
+        var attDiv = document.getElementById('inbox-mailraw-attachments');
+        var atts = r.attachments;
+        if (!atts || !atts.length) { attDiv.style.display = 'none'; attDiv.innerHTML = ''; return; }
+        function fmtSize(bytes) {
+            if (!bytes || bytes <= 0) return '';
+            if (bytes >= 1048576) return ' (' + (bytes / 1048576).toFixed(1) + ' MB)';
+            if (bytes >= 1024)    return ' (' + Math.round(bytes / 1024) + ' KB)';
+            return ' (' + bytes + ' B)';
+        }
+        var pills = atts.map(function(a) {
+            return '<span style="display:inline-flex;align-items:center;gap:3px;background:#e0ecff;border:1px solid #b8d0f8;border-radius:12px;padding:2px 9px;margin:2px 3px 2px 0;font-size:11px;color:#1c4fa0;white-space:nowrap;">'
+                + '📎 ' + escapeHtml(a.name || '(이름 없음)') + '<span style="color:#5585cc;">' + fmtSize(a.size) + '</span>'
+                + '</span>';
+        }).join('');
+        var label = _en2 ? 'Attachments' : '첨부파일';
+        attDiv.innerHTML = '<span style="font-weight:bold;color:#1c4fa0;margin-right:6px;">📎 ' + label + ' ' + atts.length + '개</span>' + pills;
+        attDiv.style.display = 'block';
+    })();
     document.getElementById('inbox-mailraw-body').value = r.body2000 || '';
     modal.style.display = 'block';
     window.bringModalToFront('inbox-mailraw-modal');

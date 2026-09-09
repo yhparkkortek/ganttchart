@@ -315,6 +315,36 @@ def extract_body(msg):
     #    항상 별도로 2000자로 다시 잘라 쓰므로, 여기를 늘려도 AI 분석에는 영향 없음 — 저장/표시용 한도만 확장.
     return body[:15000]
 
+def extract_attachments(msg):
+    """MIME 메시지에서 첨부파일 메타데이터({name, size, type})만 추출 — 파일 내용은 읽지 않음."""
+    attachments = []
+    if not msg.is_multipart():
+        return attachments
+    for part in msg.walk():
+        cd = str(part.get("Content-Disposition", ""))
+        if "attachment" not in cd:
+            continue
+        filename = part.get_filename()
+        if not filename:
+            continue
+        try:
+            filename = decode_str(filename)
+        except Exception:
+            pass
+        try:
+            payload = part.get_payload()
+            # base64 인코딩된 경우 문자열 길이로 원본 바이트 크기를 추정
+            raw_len = len(payload) if isinstance(payload, (str, bytes)) else 0
+            size = int(raw_len * 3 / 4) if isinstance(payload, str) else raw_len
+        except Exception:
+            size = 0
+        attachments.append({
+            "name": filename,
+            "size": size,
+            "type": part.get_content_type() or "application/octet-stream"
+        })
+    return attachments
+
 def matches_keyword(subject, body, keyword, keyword_from='', sender='', keyword_body=''):
     def check(text, kw):
         if not kw or not kw.strip():
@@ -536,16 +566,17 @@ def fetch_mail():
                 is_cc_me  = (not is_to_me) and (my_addr in cc_header)
 
                 results.append({
-                    "subject":    subject,
-                    "sender":     sender,
-                    "to":         to_raw,
-                    "cc":         cc_raw,
-                    "date":       msg_dt.strftime("%Y-%m-%d %H:%M"),
-                    "body":       body,
-                    "fileName":   f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml",
-                    "importance": importance_high,   # true/false
-                    "isToMe":     is_to_me,           # true/false
-                    "isCcMe":     is_cc_me            # true/false
+                    "subject":     subject,
+                    "sender":      sender,
+                    "to":          to_raw,
+                    "cc":          cc_raw,
+                    "date":        msg_dt.strftime("%Y-%m-%d %H:%M"),
+                    "body":        body,
+                    "fileName":    f"{msg_dt.strftime('%Y%m%d')}_{subject[:20]}.eml",
+                    "importance":  importance_high,           # true/false
+                    "isToMe":      is_to_me,                  # true/false
+                    "isCcMe":      is_cc_me,                  # true/false
+                    "attachments": extract_attachments(msg)   # [{name,size,type}, ...]
                 })
             except Exception:
                 continue

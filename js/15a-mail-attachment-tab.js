@@ -567,7 +567,7 @@ window.mfAnalyzeSingle = async function(idx) {
             subject: parsed.subject, sender: parsed.sender, date: parsed.date, body: parsed.body,
             // 💡 [2026-08-24 버그 수정] ms 탭과 동일한 사고 — 이 필드가 없어서 "⚡ 선택항목 연속등록"이
             //    엉뚱한(직접입력 탭 전용) window._mailParsedRaw로 대체하려다 실패해 "📧 원문 보기"가 사라졌었다.
-            mailRaw: { subject: parsed.subject, sender: parsed.sender, date: parsed.date, body2000: parsed.body, fileName: f.name },
+            mailRaw: { subject: parsed.subject, sender: parsed.sender, date: parsed.date, body2000: parsed.body, fileName: f.name, attachments: parsed.attachments || [] },
             project: window._msProjectTagLabel(projectTag), task, selected: !!task, registered: false,
             _projectTag: projectTag,
             _score: scoreResult ? scoreResult.total : null,
@@ -581,7 +581,7 @@ window.mfAnalyzeSingle = async function(idx) {
         result = {
             idx: window._mfResults.length, fileName: f.name,
             subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body: parsed.body || '',
-            mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name },
+            mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name, attachments: parsed.attachments || [] },
             project:null, task:null, selected:false, registered:false, error: e.message
         };
     }
@@ -688,12 +688,13 @@ function mfParseFile(file) {
             // 💡 .eml은 원본 바이트를 1바이트=1문자로 보존하는 latin1로 읽음 (charset을 알아낸 뒤 정확히 재해석하기 위함)
             //    .html/.txt는 지금까지 잘 동작하던 UTF-8 읽기를 그대로 유지 (회귀 방지)
             const text = (ext === 'eml') ? bytesToLatin1String(e.target.result) : e.target.result;
-            let subject = file.name.replace(/\.[^.]+$/, '');
-            let sender  = '';
-            let to      = ''; // 💡 [2026-09-06 신규] To/Cc 헤더 — msCallGemini 수신자 판별 폴백 근거
-            let cc      = '';
-            let date    = ''; // ✅ date 변수 선언 추가
-            let body    = '';
+            let subject     = file.name.replace(/\.[^.]+$/, '');
+            let sender      = '';
+            let to          = ''; // 💡 [2026-09-06 신규] To/Cc 헤더 — msCallGemini 수신자 판별 폴백 근거
+            let cc          = '';
+            let date        = ''; // ✅ date 변수 선언 추가
+            let body        = '';
+            let attachments = []; // 💡 [2026-09-09 신규] 첨부파일 메타데이터 목록 ({name,size,type})
 
             // ── MIME 헤더 디코딩 ──────────────────────
             function decodeMimeHeader(str) {
@@ -781,6 +782,43 @@ function mfParseFile(file) {
                 return plainFallback || '';
             }
 
+            // 💡 [2026-09-09 신규] MIME 첨부파일 메타데이터만 추출 — 파일 내용(바이너리)은 읽지 않음.
+            //    content-disposition: attachment 파트에서 파일명·크기(base64 길이 추정)·MIME 타입만 수집.
+            function extractAttachments(content, boundary) {
+                const result = [];
+                const escaped = boundary.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const parts = content.split(new RegExp('--' + escaped));
+                for (const part of parts) {
+                    if (!part || part.trim() === '--') continue;
+                    const pEnd = part.search(/\r?\n\r?\n/);
+                    if (pEnd < 0) continue;
+                    const pHeader  = part.substring(0, pEnd);
+                    const pBody    = part.substring(pEnd + 2);
+                    const pHeaderL = pHeader.toLowerCase();
+                    // 중첩 multipart: 재귀 처리
+                    if (pHeaderL.includes('multipart')) {
+                        const innerCt = pHeader.match(/Content-Type:[^\r\n]+(\r?\n\s+[^\r\n]+)*/i)?.[0] || '';
+                        const innerBm = innerCt.match(/boundary="?([^";\r\n]+)"?/i);
+                        if (innerBm) {
+                            extractAttachments(pBody, innerBm[1].trim()).forEach(function(a) { result.push(a); });
+                        }
+                        continue;
+                    }
+                    if (!pHeaderL.includes('attachment')) continue;
+                    // 파일명 추출 (Content-Disposition filename= 또는 Content-Type name=)
+                    let name = (pHeader.match(/filename\*?="?([^";\r\n]+)"?/i)||[])[1]
+                            || (pHeader.match(/name="?([^";\r\n]+)"?/i)||[])[1]
+                            || '(이름 없음)';
+                    try { name = decodeMimeHeader(name); } catch(e) {}
+                    // 크기 추정: base64 문자열 길이 × 3/4 ≈ 실제 바이트
+                    const b64 = pBody.replace(/[\r\n\s]/g, '');
+                    const size = Math.floor(b64.length * 3 / 4);
+                    const mime = (pHeader.match(/Content-Type:\s*([^\s;]+)/i)||[])[1] || 'application/octet-stream';
+                    result.push({ name: name.trim(), size, type: mime.trim() });
+                }
+                return result;
+            }
+
             if (ext === 'eml') {
                 const headerEnd  = text.search(/\r?\n\r?\n/);
                 const headerPart = headerEnd > 0 ? text.substring(0, headerEnd) : text;
@@ -812,7 +850,8 @@ function mfParseFile(file) {
                 if (ct.includes('multipart')) {
                     const bm = ct.match(/boundary="?([^";\r\n]+)"?/i);
                     if (bm) {
-                        body = extractPlainText(bodyPart, bm[1].trim());
+                        body        = extractPlainText(bodyPart, bm[1].trim());
+                        attachments = extractAttachments(bodyPart, bm[1].trim());
                     }
                 } else {
                     body = decodeBodyWithCharset(bodyPart, te, outerCharset);
@@ -862,7 +901,7 @@ function mfParseFile(file) {
             // 💡 [2026-08-24] "원문 보기"용 저장 한도(6000→15000, 메일서버 탭 kortek_backend.py와 동일 기준으로 통일).
             //    AI 분석 입력은 msCallGemini가 이 값과 무관하게 항상 별도로 window.getAiMailMaxLen()
             //    (⚙️ 설정 → AI 분석 설정, 기본 2000자)으로 다시 잘라 쓰므로 영향 없음.
-            resolve({ subject, sender, to, cc, date, body: body.substring(0, 15000), fileName: file.name });
+            resolve({ subject, sender, to, cc, date, body: body.substring(0, 15000), fileName: file.name, attachments });
         };
         if (ext === 'eml') reader.readAsArrayBuffer(file);
         else reader.readAsText(file, 'utf-8');

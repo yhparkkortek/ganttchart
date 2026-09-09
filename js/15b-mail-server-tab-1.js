@@ -216,7 +216,7 @@ window.msFetchMail = async function() {
                     // 💡 [2026-08-24 버그 수정] 이 필드가 없어서 "⚡ 선택항목 연속등록"(AR.batchInsert)이
                     //    r.mailRaw를 못 찾고 엉뚱한(직접입력 탭 전용) window._mailParsedRaw로 대체하려다
                     //    실패 → Gantt에 꽂힌 행에 _mailRaw가 안 남아 "📧 원문 보기" 버튼이 사라졌었다.
-                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName },
+                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
                     project: window._msProjectTagLabel(projectTag), task,
                     _projectTag: projectTag,
                     _score: scoreResult ? scoreResult.total : null,
@@ -233,7 +233,7 @@ window.msFetchMail = async function() {
                     idx: i, fileName: mail.fileName,
                     subject: mail.subject, sender: mail.sender, date: mail.date,
                     body: mail.body,
-                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName },
+                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
                     project: null, task: null,
                     selected: false, registered: false, error: e.message
                 };
