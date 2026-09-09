@@ -556,6 +556,12 @@ window._msResolveAiProjectMatch = function(task, candidatesForAI) {
     if (!task || !candidatesForAI || !candidatesForAI.length) return null;
     const conf = task['매칭신뢰도'];
     const pickedIdx = parseInt(task['주매칭프로젝트번호'], 10);
+    // 💡 [2026-09-09 신규] AI가 매 건마다 반환하는 "매칭근거"(왜 이 신뢰도/후보를 골랐는지 1~2문장)를
+    //    지금까진 confidence 판정에만 쓰고 버렸다 — 그래서 업무 보관함에서 "왜 하필 이 건이 대기(중/하
+    //    신뢰도)인지" 사람이 알 방법이 없었다("관리번호 불일치라 신뢰도를 낮췄다" 같은 구체적 이유가
+    //    이미 AI 응답에 있는데도 화면엔 후보 이름만 보임). projectTag에 함께 실어 TaskInbox 카드까지
+    //    전달되게 한다(호출부: TaskInbox.add(task, {matchedProject: projectTag, ...})).
+    const matchBasis = task['매칭근거'] || '';
 
     // 💡 [2026-09-07 신규 — 복수 프로젝트 공통 이슈] 주매칭을 0(단일 프로젝트로 못 좁힘)으로 두고도,
     //    AI가 "복수매칭후보목록"에 "같은 제품군 여러 모델처럼 공통으로 해당될 법한 후보"를 넓게
@@ -574,7 +580,7 @@ window._msResolveAiProjectMatch = function(task, candidatesForAI) {
                 multi.push(candidatesForAI[idx - 1]);
             }
         });
-        if (multi.length) return { status: 'ambiguous', candidates: multi, extraCandidates: [], multi: true };
+        if (multi.length) return { status: 'ambiguous', candidates: multi, extraCandidates: [], multi: true, matchBasis: matchBasis, confidence: conf || '' };
     }
 
     if (!conf || !pickedIdx) return null;
@@ -595,8 +601,8 @@ window._msResolveAiProjectMatch = function(task, candidatesForAI) {
     }
 
     return conf === '상'
-        ? { status: 'matched', candidates: [picked], extraCandidates: extraCandidates }
-        : { status: 'ambiguous', candidates: [picked], extraCandidates: [] };
+        ? { status: 'matched', candidates: [picked], extraCandidates: extraCandidates, matchBasis: matchBasis, confidence: conf }
+        : { status: 'ambiguous', candidates: [picked], extraCandidates: [], matchBasis: matchBasis, confidence: conf };
 };
 
 // 💡 [매칭/점수 통일화] projectTag({status,candidates}) → 리스트 배지에 쓸 표시용 문자열

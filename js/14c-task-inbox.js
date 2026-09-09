@@ -398,11 +398,19 @@ window.renderTaskInbox = function() {
                     ${it.status === '대기' ? `<button onclick="window.inboxCreateNewProjectFromPending('${it.uid}')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_ibEn ? 'No project matched (or matched project is wrong) — register this mail as a new project (AI-prefilled)' : '아직 어느 프로젝트에도 배치되지 않은 건 — 이 메일로 새 프로젝트를 등록합니다(AI 자동 추출)'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">➕ ${_ibEn ? 'New Proj' : '새 Proj 생성'}</button>` : ''}
                     ${it.status !== '대기' ? `<button onclick="window.inboxReportFalseMatch('${it.uid}')" onmouseover="this.style.background='#ffe0b2'; this.style.borderColor='#ef8c25';" onmouseout="this.style.background='#fff3e0'; this.style.borderColor='#ffca75';" title="${_ibEn ? 'Report as false match — logs to topic learning, removes from current Gantt if placed here' : '오매칭으로 신고 — 토픽 학습에 기록 · 현재 Proj 배치됨이면 간트에서도 삭제'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#fff3e0; color:#b05000; border:1px solid #ffca75; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">🚨 ${_ibEn ? 'False match' : '오매칭 신고'}</button>` : ''}
                 </div>
-                <span style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
+                <span title="${(it.matchedProject && it.matchedProject.matchBasis) ? escapeHtml((it.matchedProject.confidence ? '[' + (_ibEn ? 'AI confidence: ' : 'AI 신뢰도: ') + it.matchedProject.confidence + '] ' : '') + it.matchedProject.matchBasis) : ''}" style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
                 ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(it.source || '')} · ${when}
             </div>
+            <!-- 💡 [2026-09-09 신규] "왜 자동배치 안 되고 대기인지" — AI가 매 건마다 반환하는 매칭근거를
+                 지금까진 신뢰도 판정에만 쓰고 버렸는데(사람이 이유를 알 방법이 없었음), 후보/신뢰도와
+                 함께 상태뱃지 툴팁 + 대기 항목에 한해 카드에 바로 보이는 줄로도 노출한다. -->
+            ${(it.status === '대기' && it.matchedProject && it.matchedProject.matchBasis) ? `
+            <div style="font-size:10.5px; color:#a85d0a; margin-top:3px; line-height:1.4; display:flex; gap:4px; align-items:flex-start;">
+                <span style="flex-shrink:0;">🤖</span>
+                <span>${(_ibEn ? 'AI reasoning' : 'AI 판단 근거')}${it.matchedProject.confidence ? ` (${_ibEn ? 'confidence: ' : '신뢰도: '}${escapeHtml(it.matchedProject.confidence)})` : ''}: ${escapeHtml(it.matchedProject.matchBasis)}</span>
+            </div>` : ''}
             <div id="inbox-detail-${it.uid}" style="display:${window._ibExpandedUids.has(it.uid) ? 'block' : 'none'}; margin-top:6px; padding:8px 10px; background:#f8f9fb; border:1px solid #e6e9ef; border-radius:6px; font-size:11.5px; color:#444; line-height:1.6;">
                 <div><b>${_ibEn ? 'Task' : '업무명'}</b> : ${escapeHtml(t['업무명'] || '')}</div>
                 <div><b>${_ibEn ? 'Detail' : '상세내용'}</b> : <span style="white-space:pre-wrap;">${escapeHtml((t['상세내용'] || '').toString())}</span></div>
