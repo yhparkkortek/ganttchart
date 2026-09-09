@@ -2013,6 +2013,19 @@
     // 🎙️ [2026-09-08 수정] "음성문답" 버튼 — 한 번 말하면 풀리던 것을 "모드"로 바꿔 고정시킴.
     //    한 번 켜면(음성문답 모드 ON) 질문 → 자동전송 → 답변 수신까지 끝난 뒤 알아서 다시 듣기를
     //    시작해서, 사용자가 "글자문답"을 눌러 직접 끄기 전까지는 계속 음성으로 주고받을 수 있다.
+    //    🐛 [2026-09-09 버그수정] 이 "계속 듣기" 방식이 모바일(특히 안드로이드)에서 문제였다 — rec.
+    //    continuous=false라 잠깐이라도 조용하면(사용자가 아직 말을 안 했어도) onend가 발생하고, 그때마다
+    //    아래 _ganttQaStartListening의 재시작 루프가 다시 rec.start()를 부른다. 그런데 안드로이드의
+    //    SpeechRecognition은 start()/stop() 시점마다 브라우저/OS가 자체적으로 "띵" 알림음을 재생하는데
+    //    (우리 코드가 만드는 소리가 아니라 안드로이드 SpeechRecognizer 서비스가 내는 네이티브 소리라
+    //    Web Speech API에 볼륨 조절 파라미터 자체가 없음 — 미디어 볼륨을 낮춰도 안 줄어드는 게 바로
+    //    이 때문이다), 이 재시작 루프가 사용자가 아무 말도 안 하는 동안에도 무음 타임아웃마다 계속
+    //    돌면서 "띵동띵동"이 반복 재생되는 것으로 제보됨. 데스크톱은 이런 시끄러운 알림음이 없어
+    //    "계속 듣기"가 원래 의도대로 편리하지만, 모바일에서는 한 번 듣고(말을 하든 못 하든) 자동으로
+    //    "글자문답"으로 풀리게 원래 방식으로 되돌린다(_ganttQaStartListening의 onend 참고) — 재시작
+    //    루프 자체가 없어지므로 반복 재생 문제가 사라진다(알림음 자체의 존재/음량은 안드로이드
+    //    OS·브라우저 영역이라 이 앱에서 조절할 방법이 없음).
+    window._ganttQaIsMobile = /android|iphone|ipad|ipod/i.test(navigator.userAgent);
     window._ganttQaVoiceMode = false;
 
     window._ganttQaUpdateMicBtn = function() {
@@ -2079,6 +2092,13 @@
                 input.value = finalTranscript.trim();
                 await window.sendGanttQaMessage(); // 텍스트 답변까지 다 받은 뒤 진행
                 await window._ganttQaWaitForSpeechEnd(); // 🐛 그 답을 스피커로 다 읽어줄 때까지 기다렸다가 다시 들어야 AI 목소리를 되받아 인식하지 않음
+            }
+            // 📱 [2026-09-09 버그수정] 모바일에서는 계속 재시작하지 않고(위 _ganttQaIsMobile 선언부 주석
+            //    참고) 한 번 듣고(말을 했든 못 했든) 바로 "글자문답"으로 자동 복귀 — 반복 재시작으로
+            //    인한 "띵동띵동" 무한 루프 자체를 없앤다.
+            if (window._ganttQaIsMobile) {
+                if (window._ganttQaVoiceMode) { window._ganttQaVoiceMode = false; window._ganttQaUpdateMicBtn(); }
+                return;
             }
             // 그 사이 사용자가 "글자문답"을 눌러 모드를 껐으면 다시 듣지 않고 조용히 종료
             if (window._ganttQaVoiceMode) {
