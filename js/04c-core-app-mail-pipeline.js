@@ -1646,6 +1646,17 @@
                 window.currentDriveFileName = fileName;
                 window.updateCurrentFileLabel();
                 window.recalculateSchedules();
+                // 🐛 [2026-09-09 버그수정] 3-way 병합(_tryThreeWayMergeOnConflict, 14d-distribution-ledger.js)의
+                //    비교 기준(base)이 지금까지 "이 세션에서 저장에 성공한 직후"에만 찍혔다(_captureMergeBaseline).
+                //    그래서 프로젝트를 열고 나서 이번 세션 첫 저장에서 충돌이 나면 base가 아예 없어 3-way 병합을
+                //    시도조차 못 하고, "다른 사용자가 더 최근에 저장했습니다(그래도 저장/취소)" 블런트 경고로만
+                //    빠졌다 — 사용자 지적대로 "프로젝트를 새로 받아와서 내 메모리 편집과 합치는" 정상적인
+                //    동작이 세션 첫 저장에서는 아예 불가능했던 것. 사실 "방금 이 파일을 받아온 시점"이야말로
+                //    3-way 병합의 완벽한 기준점이므로, 여기(로드 직후)에서도 미리 찍어둔다 — 이러면 세션 몇 번째
+                //    저장이든 항상 3-way 병합을 시도할 수 있다. _ensureRowUids를 먼저 호출해 옛 프로젝트(이
+                //    기능 이전에 저장돼 _rowUid가 없는 행)도 비교 기준에 빠짐없이 포함되게 한다.
+                if (window._ensureRowUids) window._ensureRowUids();
+                if (window._captureMergeBaseline) window._captureMergeBaseline(fileId);
                 window.renderSheetTabsBar(); // 💡 [멀티시트]
                 // 💡 [버그 수정] 계획(Baseline)은 프로젝트별로 분리 저장되므로, 프로젝트가 바뀌면 그 프로젝트 것으로 다시 로드
                 window._compareTargetId = null;
