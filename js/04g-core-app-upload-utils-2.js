@@ -857,9 +857,19 @@
             }).join('\n');
         }
 
+        // 💡 [2026-09-09 신규] "AI 답변이 현재 어느 프로젝트 얘기인지 안 밝힌다"는 지적 — 여러 프로젝트를
+        //    번갈아 열어보는 사용자 입장에서는 "현재 진행 중인 업무를 정리해 드립니다" 같은 답변만 보면
+        //    지금 열려있는 게 어느 프로젝트인지 알 수 없다. 상단바에 실제로 표시되는 파일명
+        //    (window.currentDriveFileName, updateCurrentFileLabel 참고)을 "이 프로젝트의 이름"으로 삼아
+        //    프롬프트에 별도 필드로 얹어두고, 아래 _buildGanttQaPrompt에서 요약형 답변에 이 이름을
+        //    반드시 밝히도록 고정 지시문을 덧붙인다(사용자가 프롬프트를 직접 편집해둔 경우에도 항상
+        //    적용되도록 템플릿 토큰이 아니라 결과 문자열 뒤에 고정으로 붙임).
+        const currentFileName = window.currentDriveFileName || pm.프로젝트명 || pm.고객모델명 || '(파일명 미지정)';
+
         return {
             todayStr: todayStr,
-            projectLine: `[프로젝트] 고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}`,
+            currentFileName: currentFileName,
+            projectLine: `[프로젝트] 파일명:${currentFileName} / 고객사:${pm.고객사 || '-'} / 모델:${pm.고객모델명 || '-'} / PM:${pm.프로젝트담당자 || '-'}`,
             overviewText: overviewLines.length ? overviewLines.join('\n') : '(없음)',
             memberText: memberLines.length ? memberLines.join('\n') : '(없음)',
             materialText: materialLines.length ? materialLines.join('\n') : '(없음)',
@@ -1230,6 +1240,12 @@ ${question}
         result = rep(result, '${recentLogsText}', ctx.recentLogsText);
         result = rep(result, '${historyText}', historyText);
         result = rep(result, '${question}', question);
+
+        // 🏷️ [2026-09-09 신규] 사용자가 [🤖 AI 문답 → 📝 프롬프트]에서 프롬프트를 직접 편집해뒀어도
+        //    항상 적용되도록, 템플릿 치환이 끝난 뒤 결과 문자열에 고정으로 덧붙인다(위 ctx.projectLine에
+        //    이미 파일명이 포함돼 있지만, "본문에서도 밝혀라"는 지시가 없으면 AI가 데이터로만 갖고 있고
+        //    실제 답변엔 안 옮겨 적는 경우가 많았음).
+        result += `\n\n🏷️ [필수] 프로젝트 이름 표시 규칙: "현재 진행 중인 업무/이슈 정리해줘", "오늘 뭐 해야 돼", "전체 현황 알려줘"처럼 이 프로젝트 전체를 개관·요약하는 질문에 답할 때는(특정 업무 하나만 콕 집어 묻는 질문은 제외), 답변 맨 첫 줄에 "**[${ctx.currentFileName}]** 프로젝트 기준으로 정리해 드립니다." 처럼 지금 어느 프로젝트를 보고 답하는지 반드시 먼저 밝히세요. 위 "🌐 다른 프로젝트 조회" 규칙에 따라 다른 프로젝트 데이터를 근거로 답하는 경우에도 그 프로젝트 이름을 답변 첫 줄에 동일하게 밝히세요.`;
         return result;
     };
 
