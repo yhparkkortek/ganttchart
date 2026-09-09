@@ -2058,9 +2058,24 @@
         const rec = new SR();
         rec.lang = window._currentLang === 'en' ? 'en-US' : 'ko-KR';
         rec.interimResults = true;
-        rec.continuous = false;
+        // 🐛 [2026-09-09 버그수정] "몇 초 후 바로 분석이 시작돼서 말을 다 못 끝냈는데 잘림" 제보 —
+        //    continuous=false에서는 브라우저 자체 VAD(음성감지)가 짧은 침묵만 감지해도 곧바로 마이크를
+        //    끊어버려서(onend 발생), 그 시점 이후엔 뒤에 한 말이 아예 녹음조차 안 된다. continuous=true로
+        //    바꿔서 마이크 자체는 끊기지 않고 계속 듣게 하고, "언제를 진짜 끝으로 볼지"는 아래 자체
+        //    침묵 타이머(_ganttQaSilenceTimeout)로 직접 통제한다 — 말하는 동안엔(onresult) 계속 타이머를
+        //    늘려서 절대 안 끊기고, 실제로 잠깐 멈추면(NO_SPEECH_MS/PAUSE_MS) 그때 rec.stop()을 호출해
+        //    마무리한다.
+        rec.continuous = true;
         rec.maxAlternatives = 1;
         let finalTranscript = '';
+        let _silenceTimer = null;
+        const NO_SPEECH_MS = 8000; // 마이크를 켠 뒤 이 시간 안에 말을 시작 안 하면 포기하고 종료
+        const PAUSE_MS = 3000;     // 한 번이라도 말한 뒤, 이만큼 조용해지면 "다 말했다"로 보고 종료
+        const _armSilenceTimeout = function(ms) {
+            if (_silenceTimer) clearTimeout(_silenceTimer);
+            _silenceTimer = setTimeout(function() { try { rec.stop(); } catch (e) {} }, ms);
+        };
+        rec.onstart = function() { _armSilenceTimeout(NO_SPEECH_MS); };
 
         rec.onresult = function(e) {
             let interim = '';
@@ -2071,6 +2086,7 @@
             }
             const input = document.getElementById('gantt-qa-input');
             if (input) input.value = finalTranscript + interim;
+            _armSilenceTimeout(PAUSE_MS); // 말이 들어올 때마다 타이머 리셋 — 계속 말하는 동안은 절대 안 끊김
         };
         rec.onerror = function(e) {
             // 🔒 마이크 권한 거부/마이크 없음처럼 재시도해도 절대 해결 안 되는 오류는 무한 재시도 루프로
@@ -2087,6 +2103,7 @@
             }
         };
         rec.onend = async function() {
+            if (_silenceTimer) { clearTimeout(_silenceTimer); _silenceTimer = null; } // 이미 끝났으니 남은 타이머 정리
             const input = document.getElementById('gantt-qa-input');
             if (finalTranscript.trim() && input) {
                 input.value = finalTranscript.trim();
