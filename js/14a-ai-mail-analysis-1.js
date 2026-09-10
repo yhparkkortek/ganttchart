@@ -186,6 +186,15 @@ window._AI_QUOTA_HINT = '\n\n💡 무료 등급의 요청 한도(quota)는 API �
 //    해결됨. ⚙️ AI 분석 설정에 새로 생긴 "최대 참고 업무 건수" 설정으로 유도한다.
 window._AI_REQUEST_TOO_LARGE_RE = /request too large|tokens per minute|context length exceeded|maximum context length|too many tokens|context_length_exceeded/i;
 window._AI_REQUEST_TOO_LARGE_HINT = '\n\n💡 무료 등급은 보통 "요청 1건의 토큰 수" 자체에도 낮은 상한이 걸려 있습니다(예: Groq 무료 등급의 분당 토큰(TPM) 한도). 업무가 많은 프로젝트에서 AI 요약/AI 문답을 실행하면 한 번에 보내는 프롬프트가 그 상한을 넘어버려서, 시간을 두고 재시도해도 소용없고 요청 크기 자체를 줄여야 합니다.\n→ ① ⚙️ AI 분석 설정 → 📉 요청 크기 제한에서 "최대 참고 업무 건수"·"최대 글자 수"를 줄이기 ② 요청 크기 제한이 더 넉넉한 제공사(Gemini 등)로 임시 전환 ③ 유료 등급으로 전환';
+// 🐛 [2026-09-10] "⚠️ 오류: Error: Internal error encountered." 문의 대응. 이건 구글 Gemini API
+//    자체의 일시적 5xx 백엔드 오류라 우리 프롬프트/코드와 무관하게 터질 수 있는데, 기존엔 이 패턴이
+//    위 세 정규식(deprecated/quota/too-large) 어디에도 안 걸려서 "다른 이유로 실패한 것"으로 취급 —
+//    같은 모델로 짧게 2번만 재시도하고 바로 실패 처리했다(= 다른 모델로는 안 넘어감). 하지만 이 오류는
+//    "그 모델 인스턴스의 일시적 문제"에 가까워서 다른 모델(또는 다른 provider 후보)로 바꾸면 성공할
+//    가능성이 실제로 있으므로, deprecated/quota/too-large와 동일하게 "이 모델은 포기하고 바로 다음
+//    후보 모델로 전환"하도록 편입시킨다.
+window._AI_INTERNAL_ERROR_RE = /internal error|internal server error|\b500\b.*internal|internal_error/i;
+window._AI_INTERNAL_ERROR_HINT = '\n\n💡 이 메시지는 구글 Gemini API 쪽의 일시적 서버 오류입니다(우리 앱의 설정 문제가 아님). 대부분 몇 초~몇 분 뒤 재시도하면 해결됩니다.\n→ ① 같은 요청을 다시 시도 ② 계속되면 ⚙️ 설정에서 AI 모델을 다른 걸로 바꾸거나 Groq/Mistral 등 다른 제공사로 임시 전환';
 
 window.callAiBackend = async function(apiKey, prompt, opts) {
     opts = opts || {};
@@ -228,7 +237,8 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                 const isDeprecated = window._AI_MODEL_DEPRECATED_RE.test(err.message || '');
                 const isQuota = window._AI_QUOTA_EXCEEDED_RE.test(err.message || '');
                 const isTooLarge = window._AI_REQUEST_TOO_LARGE_RE.test(err.message || '');
-                if (isDeprecated || isQuota || isTooLarge) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
+                const isInternal = window._AI_INTERNAL_ERROR_RE.test(err.message || '');
+                if (isDeprecated || isQuota || isTooLarge || isInternal) { skipRemainingRetries = true; break; } // 바로 다음 후보 모델로
                 if (attempt < maxRetryPerModel && !(opts.isCancelled && opts.isCancelled())) {
                     await new Promise(r => setTimeout(r, retryDelayMs));
                 }
@@ -238,11 +248,13 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
         //    다른 모델로 바꿔봐야 소용없으므로 후보를 계속 순회하지 않고 여기서 바로 실패 처리
         if (!skipRemainingRetries) return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
     }
-    // 모든 후보 모델이 실패 — 마지막 에러가 할당량 초과/요청 크기 초과라면 원인·대응법을 메시지에 덧붙여준다.
+    // 모든 후보 모델이 실패 — 마지막 에러가 할당량 초과/요청 크기 초과/내부 일시오류라면 원인·대응법을 메시지에 덧붙여준다.
     if (lastErr && window._AI_QUOTA_EXCEEDED_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_QUOTA_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_QUOTA_HINT);
     } else if (lastErr && window._AI_REQUEST_TOO_LARGE_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_REQUEST_TOO_LARGE_HINT) === -1) {
         lastErr = new Error(lastErr.message + window._AI_REQUEST_TOO_LARGE_HINT);
+    } else if (lastErr && window._AI_INTERNAL_ERROR_RE.test(lastErr.message || '') && lastErr.message.indexOf(window._AI_INTERNAL_ERROR_HINT) === -1) {
+        lastErr = new Error(lastErr.message + window._AI_INTERNAL_ERROR_HINT);
     }
     return { ok: false, error: lastErr || new Error('알 수 없는 오류') };
 };
