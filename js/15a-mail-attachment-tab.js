@@ -1126,6 +1126,9 @@ window.mfAnalyze = async function() {
                 sender: parsed.sender,
                 date: parsed.date,
                 body: parsed.body,   // ← 추가
+                // 💡 [버그 수정] mfAnalyzeSingle(개별분석)에만 있고 여기(일괄분석)엔 없어서, 여러 파일을
+                //    한 번에 "일괄 분석"해 등록한 업무만 원문이 안 붙어 "📧 원문 보기" 버튼이 안 생겼었음.
+                mailRaw: { subject: parsed.subject, sender: parsed.sender, date: parsed.date, body2000: parsed.body, fileName: f.name, attachments: parsed.attachments || [] },
                 project: window._msProjectTagLabel(projectTag), task,
                 _projectTag: projectTag,
                 _score: scoreResult ? scoreResult.total : null,
@@ -1144,6 +1147,7 @@ window.mfAnalyze = async function() {
                 sender: parsed.sender || '',
                 date: parsed.date || '',
                 body: parsed.body || '',
+                mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name, attachments: parsed.attachments || [] },
                 project:null, task:null, selected:false, registered:false, error: e.message
             });
         }
