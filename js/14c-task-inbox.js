@@ -480,9 +480,8 @@ window.inboxDistributeToMultiCandidates = function(uid) {
     const targetNames = checked.map(function(c) {
         return ([c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ')) || c.customer || c.file_name || '';
     });
-    if (!confirm(_en
-        ? `Distribute "${taskName}" to ${checked.length} project(s)?\n(${targetNames.join(', ')})`
-        : `"${taskName}"\n선택한 ${checked.length}개 프로젝트에 전부 배분할까요?\n(${targetNames.join(', ')})`)) return;
+    // 💡 [2026-09-10] 체크박스로 대상 프로젝트를 직접 골라 [배분] 버튼까지 누른 시점에 이미 의사표시가
+    //    끝난 것이므로 confirm() 없이 바로 진행 — 결과는 아래 showToast로 안내한다.
 
     let queue = [];
     try { queue = JSON.parse(localStorage.getItem('gantt_ai_reassign_queue_v1') || '[]'); } catch(e) {}
@@ -579,10 +578,8 @@ window.inboxBatchRegisterMatched = async function() {
             : '일괄전송할 항목이 없습니다.\n(매칭이 단일 확정 + 날짜 확정된 "대기" 항목만 대상 — 후보 다수/미매칭/날짜미확정 건은 여전히 직접 처리해야 합니다.)');
         return;
     }
-    if (!confirm(_en
-        ? `Send ${targets.length} confirmed-match pending item(s) to their matched project(s) now?`
-        : `매칭 확정된 대기 항목 ${targets.length}건을 지금 각자 매칭된 프로젝트로 전송할까요?`)) return;
-
+    // 💡 [2026-09-10] "🚀 매칭건 일괄전송" 버튼 클릭 자체가 이미 명시적 의사표시라 confirm() 제거 —
+    //    결과는 아래 showToast(실패 있으면 console.warn 상세 로그 병행)로만 안내한다.
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) { alert(_en ? '🔒 Please connect Google Drive first from the top menu.' : '🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
@@ -593,10 +590,10 @@ window.inboxBatchRegisterMatched = async function() {
         try {
             const result = await window._msAutoRegisterToProject(it.uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
             if (result.ok) {
-                // 💡 [버그 수정 2026-09-06] 이 함수는 사람이 "🚀 매칭건 일괄전송" 버튼을 누르고 확인창까지
-                //    거치는 수동 액션인데 '자동배치됨'으로 기록되고 있었음 — 진짜 자동(사람 개입 0, 완전자동
-                //    메일모드의 커트라인 배치)과 구분이 안 돼서 "몇 건이 진짜 자동으로 처리됐는지" 집계가
-                //    부정확해짐. 단건 버전(inboxQuickRegisterMatched)과 성격이 같으므로 '배치됨'으로 통일.
+                // 💡 [버그 수정 2026-09-06] 이 함수는 사람이 "🚀 매칭건 일괄전송" 버튼을 눌러서(2026-09-10부터
+                //    confirm() 없이 즉시) 실행하는 수동 액션인데 '자동배치됨'으로 기록되고 있었음 — 진짜 자동
+                //    (사람 개입 0, 완전자동 메일모드의 커트라인 배치)과 구분이 안 돼서 "몇 건이 진짜 자동으로
+                //    처리됐는지" 집계가 부정확해짐. 단건 버전(inboxQuickRegisterMatched)과 성격이 같으므로 '배치됨'으로 통일.
                 window.TaskInbox.setStatus(it.uid, '배치됨', { type: '일괄전송', target: target.file_name, at: new Date().toISOString() });
                 okCount++;
             } else {
@@ -607,13 +604,14 @@ window.inboxBatchRegisterMatched = async function() {
         }
     }
     window.renderTaskInbox();
+    // 💡 [2026-09-10] confirm() 없이 바로 실행하는 흐름과 짝을 맞춰, 결과도 alert(막힘) 대신 toast(안 막힘)로
+    //    안내 — 실패 상세 목록은 toast에 다 담기 어려우니 console.warn으로 남기고 toast엔 건수만 표기.
     let msg = _en ? `✅ ${okCount} sent` : `✅ ${okCount}건 전송 완료`;
     if (fails.length) {
-        msg += (_en ? `\n❌ ${fails.length} failed:\n` : `\n❌ ${fails.length}건 실패:\n`) + fails.slice(0, 5).join('\n')
-            + (fails.length > 5 ? (_en ? `\n...and ${fails.length - 5} more` : `\n...외 ${fails.length - 5}건`) : '');
+        msg += _en ? `, ❌ ${fails.length} failed (see console for details)` : `, ❌ ${fails.length}건 실패 (상세는 콘솔 참고)`;
         console.warn('[업무 보관함] 일괄전송 실패 목록:', fails);
     }
-    alert(msg);
+    if (window.showToast) window.showToast(msg, fails.length ? 'error' : 'info'); else alert(msg);
 };
 
 window.showMailRawModal = function(r) {
