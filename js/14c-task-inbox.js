@@ -546,8 +546,8 @@ window.inboxQuickRegisterMatched = async function(uid) {
         alert('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 다시 시도해주세요.');
         return;
     }
-    if (!confirm(`"${it.task['업무명'] || '새 업무'}" 업무를 매칭된 프로젝트\n[${target.file_name}]\n로 바로 전송할까요?`)) return;
-
+    // 💡 [2026-09-10] "✅ 매칭전송" 버튼 클릭 자체가 이미 명시적 의사표시라 확인창은 불필요한 클릭 한 번
+    //    더 요구할 뿐 — confirm() 없이 바로 전송하고, 결과는 성공/실패 토스트(아래)로 안내한다.
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) { alert('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
