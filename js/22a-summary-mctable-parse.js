@@ -580,6 +580,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // 💡 [2026-09-06 신규] 자동로그인 — 드롭다운 토글 버튼 초기 표시 동기화 + (켜져 있으면) 조용한 재연동 시도
     if (window.refreshAutoLoginButton) window.refreshAutoLoginButton(window.isAutoLoginEnabled && window.isAutoLoginEnabled());
     if (window._tryAutoLogin) window._tryAutoLogin();
+    // 🐛 [2026-09-11 버그 수정] 자동알람 ON/OFF 토글 버튼이 페이지 로드 시 갱신되지 않아, 실제 설정값
+    //    (localStorage 'gantt_alarm_settings'.autoSend)은 그대로 유지되는데도 버튼은 항상 HTML에
+    //    하드코딩된 "🟢 자동알람 ON"으로만 보여서 "재접속하면 설정이 초기화된다"고 오인하게 만들었음.
+    //    다른 토글 버튼들처럼 여기서 저장된 값으로 즉시 동기화.
+    if (window.refreshAlarmAutoButtons && window.loadAlarmSettings) {
+        window.refreshAlarmAutoButtons(window.loadAlarmSettings().autoSend !== false);
+    }
 });
 
 function _escTabVal(v) { return (v === undefined || v === null) ? '' : String(v).replace(/"/g, '&quot;'); }
