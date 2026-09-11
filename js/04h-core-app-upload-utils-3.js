@@ -1340,7 +1340,7 @@
         }
 
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-        if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
+        if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
         // 💡 [2026-09-08 신규] AI 호출 없이 로컬에서만 처리 — 재질문 패턴 감지(위 규칙 참고)는 이번
         //    질문을 히스토리에 넣기 "전"에 검사해야 자기 자신과 비교되지 않는다. 질문 문구 빈도 기록도
@@ -1553,7 +1553,7 @@
             const pending = log.filter(function(x) { return x.rating === 'bad' && !x.improved; }).slice(0, 10);
             targetUids = pending.map(function(x) { return x.uid; });
             if (!pending.length) {
-                alert('⚠️ 개선할 피드백 케이스가 없습니다.\n먼저 AI 답변 아래 👎 버튼을 눌러 케이스를 쌓아주세요.');
+                alert(window._t('⚠️ 개선할 피드백 케이스가 없습니다.\n먼저 AI 답변 아래 👎 버튼을 눌러 케이스를 쌓아주세요.', '⚠️ No feedback cases to improve from.\nPlease click 👎 under an AI answer first to collect some cases.'));
                 return;
             }
             casesText = pending.map(function(fb, i) {
@@ -1579,11 +1579,11 @@
             const improvedPrompt = promptMatch ? promptMatch[1].trim() : '';
             const isTruncated = !/===END===/.test(cleaned);
 
-            if (!improvedPrompt) throw new Error('AI 응답 형식을 해석하지 못했습니다.');
+            if (!improvedPrompt) throw new Error(window._t('AI 응답 형식을 해석하지 못했습니다.', 'Could not parse the AI response format.'));
             const structIssues = window.validateGanttQaPromptStructure(improvedPrompt);
             window.showQaImprovePreviewModal(analysis, improvedPrompt, targetUids, currentPrompt, isTruncated, structIssues);
         } catch (e) {
-            alert('❌ AI 개선 요청 실패: ' + (e && e.message ? e.message : e));
+            alert(window._t('❌ AI 개선 요청 실패: ', '❌ AI improvement request failed: ') + (e && e.message ? e.message : e));
         }
     };
 
@@ -1651,10 +1651,10 @@
     // ── 💡 개선 프롬프트 채택 ───────────────────────────────────────────────
     window.applyImprovedQaPrompt = async function() {
         const text = document.getElementById('gantt-qa-improve-prompt-textarea').value.trim();
-        if (!text) { alert('프롬프트가 비어있습니다.'); return; }
+        if (!text) { alert(window._t('프롬프트가 비어있습니다.', 'The prompt is empty.')); return; }
 
-        if (!window.verifyAdminPassword('🔒 개선된 프롬프트를 채택하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
-            alert('❌ 비밀번호 인증 실패. 채택이 취소되었습니다.');
+        if (!window.verifyAdminPassword(window._t('🔒 개선된 프롬프트를 채택하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to adopt the improved prompt.\n(case-insensitive)'))) {
+            alert(window._t('❌ 비밀번호 인증 실패. 채택이 취소되었습니다.', '❌ Authentication failed. Adoption cancelled.'));
             return;
         }
 
@@ -1691,21 +1691,21 @@
             const ok = await window.saveGanttQaPromptToDrive(text);
             if (ok) {
                 localStorage.removeItem('gantt_qa_prompt_pending_push');
-                alert('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._ganttQaPromptVersion + ')');
+                alert(window._t('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v', '✅ Improved prompt adopted and saved to Drive. (v') + window._ganttQaPromptVersion + ')');
             } else {
                 localStorage.setItem('gantt_qa_prompt_pending_push', '1');
-                alert('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.');
+                alert(window._t('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.', '⚠️ Saved locally, but uploading to Drive failed. It will retry automatically on the next Drive connection.'));
             }
         } else {
             localStorage.setItem('gantt_qa_prompt_pending_push', '1');
-            alert('✅ 개선된 프롬프트가 채택되었습니다. (v' + window._ganttQaPromptVersion + ')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)');
+            alert(window._t('✅ 개선된 프롬프트가 채택되었습니다. (v', '✅ Improved prompt adopted. (v') + window._ganttQaPromptVersion + window._t(')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)', ')\n(Drive not connected — will sync to the shared team copy on next connection)'));
         }
         modal.style.display = 'none';
         if (document.getElementById('gantt-qa-prompt-textarea')) document.getElementById('gantt-qa-prompt-textarea').value = text;
     };
 
     window.clearGanttQaChat = function() {
-        if (window._ganttQaHistory.length && !confirm('대화 내용을 모두 지울까요?')) return;
+        if (window._ganttQaHistory.length && !confirm(window._t('대화 내용을 모두 지울까요?', 'Clear the entire conversation?'))) return;
         window._ganttQaHistory = [];
         window._ganttQaPendingMailDraft = null; // 💡 대화를 지우면 남아있던 메일 초안도 함께 무효화
         window._ganttQaPendingNoticeDraft = null; // 💡 공지 초안도 함께 무효화
@@ -2468,8 +2468,8 @@
     };
 
     window.unlockGanttQaPrompt = function() {
-        const success = verifyAdminPassword('🔒 프롬프트 수정을 위해 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)');
-        if (!success) { alert('❌ 비밀번호 인증 실패. 프롬프트 수정이 취소되었습니다.'); return; }
+        const success = verifyAdminPassword(window._t('🔒 프롬프트 수정을 위해 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to edit the prompt.\n(case-insensitive)'));
+        if (!success) { alert(window._t('❌ 비밀번호 인증 실패. 프롬프트 수정이 취소되었습니다.', '❌ Authentication failed. Edit cancelled.')); return; }
 
         document.getElementById('gantt-qa-prompt-textarea').readOnly = false;
         document.getElementById('gantt-qa-prompt-textarea').style.background = '#fffde7';
@@ -2487,7 +2487,7 @@
 
     window.saveGanttQaPromptFromModal = async function() {
         const text = document.getElementById('gantt-qa-prompt-textarea').value.trim();
-        if (!text) { alert('프롬프트 내용이 비어있습니다.'); return; }
+        if (!text) { alert(window._t('프롬프트 내용이 비어있습니다.', 'The prompt content is empty.')); return; }
 
         // ✅ 변경 이력 저장 (AI 요약/AI 업무분석 프롬프트 편집과 동일한 이력 기능)
         const oldPrompt = localStorage.getItem('gantt_qa_prompt') || window._defaultGanttQaPromptTemplate || '';
@@ -2553,7 +2553,7 @@
     window.showQaPromptLogs = function() {
         let logs = JSON.parse(localStorage.getItem('gantt_qa_prompt_logs') || '[]');
         let versions = JSON.parse(localStorage.getItem('gantt_qa_prompt_versions') || '[]');
-        if (logs.length === 0) { alert('프롬프트 변경 이력이 없습니다.'); return; }
+        if (logs.length === 0) { alert(window._t('프롬프트 변경 이력이 없습니다.', 'No prompt change history.')); return; }
 
         let logModal = document.getElementById('gantt-qa-prompt-log-modal');
         if (!logModal) {
@@ -2616,20 +2616,20 @@
     window.restoreQaPromptVersion = function(version) {
         const versions = JSON.parse(localStorage.getItem('gantt_qa_prompt_versions') || '[]');
         const target = versions.find(v => v.version === version);
-        if (!target) { alert('해당 버전을 찾을 수 없습니다.'); return; }
+        if (!target) { alert(window._t('해당 버전을 찾을 수 없습니다.', 'That version could not be found.')); return; }
 
         document.getElementById('gantt-qa-prompt-log-modal').style.display = 'none';
         const textarea = document.getElementById('gantt-qa-prompt-textarea');
         if (textarea) textarea.value = target.prompt;
-        alert('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 저장] 버튼을 눌러야 최종 반영됩니다.');
+        alert(window._t('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 저장] 버튼을 눌러야 최종 반영됩니다.', '📋 Loaded version v' + version + '.\nReview the content, then click [💾 Save] to actually apply it.'));
     };
 
     window.clearQaPromptLogs = function() {
-        if (!confirm('프롬프트 변경 이력을 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+        if (!confirm(window._t('프롬프트 변경 이력을 전부 삭제할까요? 되돌릴 수 없습니다.', 'Delete all prompt change history? This cannot be undone.'))) return;
         localStorage.removeItem('gantt_qa_prompt_logs');
         localStorage.removeItem('gantt_qa_prompt_versions');
         document.getElementById('gantt-qa-prompt-log-modal').style.display = 'none';
-        alert('✅ 이력이 삭제되었습니다.');
+        alert(window._t('✅ 이력이 삭제되었습니다.', '✅ History deleted.'));
     };
 
     // ═══════════════════════════════════════════════════════════

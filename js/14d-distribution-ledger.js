@@ -22,13 +22,13 @@ window.closeInboxDist = function() {
 window.inboxOpenDistribute = async function(uid) {
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-    if (!token) { alert('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
+    if (!token) { alert(window._t('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.', '🔒 Please sign in to Google via [🔵 Connect Drive] at the top first.')); return; }
 
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
     const r = it.task;
     if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
-        alert('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.');
+        alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.', '⚠️ Start/end date is unconfirmed ("date needs confirmation"). Please confirm the date in the mail analyzer screen before adding to the inbox.'));
         return;
     }
 
@@ -303,7 +303,7 @@ window.inboxDistPickFile = async function(fileId, fileName) {
         if (window._distCtx !== ctx) return;
         const saveData = contentResp.result;
         if (!saveData || !saveData.globalData || !saveData.colIdx) {
-            alert('⚠️ 대상 파일에 간트 데이터가 없거나 구조를 해석할 수 없습니다.');
+            alert(window._t('⚠️ 대상 파일에 간트 데이터가 없거나 구조를 해석할 수 없습니다.', '⚠️ The target file has no Gantt data, or its structure could not be parsed.'));
             return;
         }
         ctx.fileId = fileId;
@@ -322,7 +322,7 @@ window.inboxDistPickFile = async function(fileId, fileName) {
         document.getElementById('dist-step2').style.display = 'block';
     } catch (err) {
         if (window._distCtx !== ctx) return; // 이미 패널을 닫고 나간 뒤라면 에러 알림도 띄우지 않음
-        alert('대상 프로젝트 로드 실패: ' + err.message);
+        alert(window._t('대상 프로젝트 로드 실패: ', 'Failed to load target project: ') + err.message);
     }
 };
 
@@ -367,7 +367,7 @@ window.inboxDistReload = async function(prevL0) {
         // 💡 대기 중 패널이 닫히거나 다른 업무로 전환됐으면 중단 (동일한 크래시 방지 목적)
         if (window._distCtx !== ctx) return false;
         const saveData = contentResp.result;
-        if (!saveData || !saveData.globalData || !saveData.colIdx) { alert('⚠️ 최신본 구조를 해석할 수 없습니다.'); return false; }
+        if (!saveData || !saveData.globalData || !saveData.colIdx) { alert(window._t('⚠️ 최신본 구조를 해석할 수 없습니다.', '⚠️ Could not parse the structure of the latest version.')); return false; }
         ctx.saveData = saveData;
         ctx.rows = saveData.globalData.map(function(obj) {
             let row = obj.data;
@@ -380,13 +380,13 @@ window.inboxDistReload = async function(prevL0) {
         window.inboxDistFillL0Select(prevL0);
         const sel = document.getElementById('dist-l0-select');
         if (prevL0 !== '__END__' && sel.value !== prevL0) {
-            alert('⚠️ 최신본에서 선택했던 개발단계 구간이 사라졌습니다.\n구간을 다시 선택한 후 전송해주세요.');
+            alert(window._t('⚠️ 최신본에서 선택했던 개발단계 구간이 사라졌습니다.\n구간을 다시 선택한 후 전송해주세요.', '⚠️ The previously selected dev-stage section is gone in the latest version.\nPlease reselect the section and send again.'));
             return false;
         }
         return true;
     } catch (err) {
         if (window._distCtx !== ctx) return false;
-        alert('최신본 확보 실패: ' + err.message); return false;
+        alert(window._t('최신본 확보 실패: ', 'Failed to fetch the latest version: ') + err.message); return false;
     }
 };
 
@@ -403,10 +403,10 @@ window.inboxDistExecute = async function(attempt) {
         const mResp = await gapi.client.drive.files.get({ fileId: ctx.fileId, fields: 'modifiedTime', supportsAllDrives: true });
         if (mResp.result.modifiedTime !== ctx.fetchedModifiedTime) {
             if ((attempt || 0) >= 2) {
-                alert('⚠️ 대상 파일이 계속 갱신되고 있어 전송을 중단했습니다.\n잠시 후 다시 시도해주세요.');
+                alert(window._t('⚠️ 대상 파일이 계속 갱신되고 있어 전송을 중단했습니다.\n잠시 후 다시 시도해주세요.', '⚠️ The target file keeps getting updated — sending was cancelled.\nPlease try again shortly.'));
                 return;
             }
-            alert('⚠️ 대상 파일이 방금 다른 사용자에 의해 갱신되었습니다.\n최신본을 받아 자동 재시도합니다.');
+            alert(window._t('⚠️ 대상 파일이 방금 다른 사용자에 의해 갱신되었습니다.\n최신본을 받아 자동 재시도합니다.', '⚠️ The target file was just updated by another user.\nFetching the latest version and retrying automatically.'));
             const ok = await window.inboxDistReload(chosenL0);
             if (!ok) return;
             return await window.inboxDistExecute((attempt || 0) + 1);
@@ -454,7 +454,7 @@ window.inboxDistExecute = async function(attempt) {
         // PATCH 업로드
         const tokenObj = gapi.client.getToken();
         const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!token) { alert('🔒 구글 인증 토큰이 유실되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.'); return; }
+        if (!token) { alert(window._t('🔒 구글 인증 토큰이 유실되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.', '🔒 The Google auth token was lost. Please reconnect using the button at the top and try again.')); return; }
         const boundary = 'inbox_dist_boundary';
         const metadata = { name: ctx.fileName, mimeType: 'application/json' };
         const body = "\r\n--" + boundary + "\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n" + JSON.stringify(metadata)
@@ -473,14 +473,14 @@ window.inboxDistExecute = async function(attempt) {
             window.renderTaskInbox();
         } else {
             const status = resp.status || (file && file.error ? file.error.code : 0);
-            let msg = '업로드 중 오류가 발생했습니다.';
-            if (status === 401) msg = '🔒 구글 인증 세션이 만료되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.';
-            else if (status === 403) msg = '🚫 공유 폴더의 편집자 권한이 없습니다.';
-            else if (file && file.error) msg = `구글 드라이브 에러 (${status}): ${file.error.message}`;
-            alert('❌ 전송 실패\n\n' + msg);
+            let msg = window._t('업로드 중 오류가 발생했습니다.', 'An error occurred while uploading.');
+            if (status === 401) msg = window._t('🔒 구글 인증 세션이 만료되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.', '🔒 The Google auth session expired. Please reconnect using the button at the top and try again.');
+            else if (status === 403) msg = window._t('🚫 공유 폴더의 편집자 권한이 없습니다.', '🚫 No editor permission on the shared folder.');
+            else if (file && file.error) msg = window._t(`구글 드라이브 에러 (${status}): ${file.error.message}`, `Google Drive error (${status}): ${file.error.message}`);
+            alert(window._t('❌ 전송 실패\n\n', '❌ Send failed\n\n') + msg);
         }
     } catch (err) {
-        alert('전송 시스템 에러: ' + err.message);
+        alert(window._t('전송 시스템 에러: ', 'System error while sending: ') + err.message);
     } finally {
         btn.disabled = false; btn.textContent = '🚀 전송 실행';
     }
@@ -505,7 +505,7 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
     if (!token) {
-        alert('🔒 구글 인증 토큰이 유실되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.');
+        alert(window._t('🔒 구글 인증 토큰이 유실되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.', '🔒 The Google auth token was lost. Please reconnect using the button at the top and try again.'));
         return { okNames: [], failNames: (targets || []).map(function(t) { return t.name; }) };
     }
 
@@ -712,7 +712,10 @@ window.mergeRemoteDistributions = async function(fileId) {
 
         if (mergedNames.length) {
             window.recalculateSchedules();
-            alert(`📥 작업하는 동안 다른 사용자가 배분한 업무 ${mergedNames.length}건이 자동 병합되어 함께 저장됩니다.\n\n· ${mergedNames.join('\n· ')}`);
+            alert(window._t(
+                `📥 작업하는 동안 다른 사용자가 배분한 업무 ${mergedNames.length}건이 자동 병합되어 함께 저장됩니다.\n\n· ${mergedNames.join('\n· ')}`,
+                `📥 ${mergedNames.length} task(s) distributed by another user while you were working have been auto-merged and will be saved together.\n\n· ${mergedNames.join('\n· ')}`
+            ));
         }
         return { remoteChanged: _remoteChanged, hadBaseline: _hadBaseline };
     } catch (err) {

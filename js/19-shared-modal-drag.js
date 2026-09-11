@@ -107,16 +107,21 @@ function _findModalCloseBtn(handle) {
 }
 
 // 헤더의 제목 텍스트만 뽑아낸다(도움말 아이콘/툴팁처럼 중첩된 요소의 텍스트는 제외).
+// 💡 [2026-09-11 버그 수정] 이전 코드는 cand의 직계 TEXT_NODE만 읽어서
+//    <span>💬 <span id="qa-title">AI 문답</span></span> 구조에서 "💬" 이모지만
+//    잡고 멈췄다(서브 span 텍스트 누락) → 칩 라벨이 이모지 하나만 나오는 버그.
+//    cloneNode로 버튼·말풍선 도움말 요소를 제거한 뒤 전체 textContent를 읽어 정확한 제목을 추출.
 function _modalTitleFor(handle, modalId) {
     if (!handle) return modalId;
     const cand = handle.querySelector('span, h3, strong');
     let text = '';
     if (cand) {
-        for (let i = 0; i < cand.childNodes.length; i++) {
-            const n = cand.childNodes[i];
-            if (n.nodeType === Node.TEXT_NODE && n.textContent.trim()) { text = n.textContent; break; }
+        var clone = cand.cloneNode(true);
+        var removeEls = clone.querySelectorAll('button, .modal-min-btn, .inbox-help-ico, .modal-icon-btn');
+        for (var ri = 0; ri < removeEls.length; ri++) {
+            if (removeEls[ri].parentNode) removeEls[ri].parentNode.removeChild(removeEls[ri]);
         }
-        if (!text) text = cand.textContent;
+        text = clone.textContent;
     } else {
         text = handle.textContent;
     }
@@ -351,7 +356,7 @@ window._makeMinimizable = function(modalId, handleId) {
     const minBtn = document.createElement('button');
     minBtn.type = 'button';
     minBtn.className = 'modal-min-btn modal-icon-btn';
-    minBtn.title = '최소화';
+    minBtn.title = (window._currentLang === 'en') ? 'Minimize' : '최소화';
     minBtn.innerHTML = '<i class="ti ti-chevron-down"></i>';
     minBtn.setAttribute('style', closeBtn.getAttribute('style') || '');
     // 헤더(드래그 손잡이) 안에 있으므로 mousedown/touchstart가 드래그 시작으로 번지지 않게 막는다.
@@ -409,7 +414,7 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     chip.style.cssText = 'pointer-events:all; display:flex; align-items:center; gap:6px; background:' + tabBg + '; border:1px solid ' + tabBorder + '; border-bottom:none; border-radius:8px 8px 0 0; box-shadow:0 -2px 10px rgba(0,0,0,.15); padding:6px 6px 6px 12px; font-size:12.5px; color:' + tabText + '; font-weight:bold; box-sizing:border-box;';
     chip.style.setProperty('--mtc-hover-bg', tabHoverBg);
     chip.style.setProperty('--mtc-hover-border', tabHoverBorder);
-    chip.title = '더블클릭하면 원래대로 복원됩니다';
+    chip.title = (window._currentLang === 'en') ? 'Double-click to restore' : '더블클릭하면 원래대로 복원됩니다';
 
     // 💡 [2026-09-02 신규] 상자 기본 폭을 상단 시트탭과 같은 값(MT_TAB_W)으로 — 제목이 잘려도
     //    title 속성(말풍선)으로 전체를 볼 수 있으니 자르는 걸 허용.
@@ -419,11 +424,16 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     label.title = label.textContent;
     label.style.cssText = 'flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;';
 
-    const restoreBtn = _modalIconBtn('<i class="ti ti-chevron-up"></i>', '복원');
+    // 💡 [2026-09-11 UX 수정] 칩 화살표가 현재 상태를 직관적으로 표시하도록 통일:
+    //    ▼ = 지금 내려가 있음(최소화), ▲ = 지금 올라와 있음(열림).
+    //    이전 코드는 "클릭하면 어디로 가는지(액션)"를 표시(▲=복원 클릭, ▼=최소화 클릭)했는데,
+    //    사용자에게는 현재 상태를 보여주는 쪽이 더 직관적이었다.
+    const _tbEn = window._currentLang === 'en';
+    const restoreBtn = _modalIconBtn('<i class="ti ti-chevron-down"></i>', _tbEn ? 'Minimized — click to restore' : '최소화됨 — 클릭하면 복원');
     restoreBtn.className += ' mtc-restore-btn';
     restoreBtn.addEventListener('click', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
 
-    const xBtn = _modalIconBtn('<i class="ti ti-x"></i>', '닫기');
+    const xBtn = _modalIconBtn('<i class="ti ti-x"></i>', (window._currentLang === 'en') ? 'Close' : '닫기');
     xBtn.addEventListener('click', function(e) {
         e.stopPropagation();
         const info = window._modalMinimized[modalId];
@@ -482,7 +492,7 @@ window._restoreModal = function(modalId) {
         if (info.observer) info.observer.disconnect();
         info.toggleEl.style.display = 'none';
         info.isRestored = false;
-        if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-up"></i>'; restoreBtn.title = '복원'; }
+        if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-down"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Minimized — click to restore' : '최소화됨 — 클릭하면 복원'; }
         // 외부 코드가 모달을 다시 열면 칩 자동 제거
         info.observer = new MutationObserver(function() {
             if (info.toggleEl.style.display === 'none') return;
@@ -512,7 +522,7 @@ window._restoreModal = function(modalId) {
     //    모달만 opt-in으로 등록해두면(window._modalRefreshOnRestore) 여기서 공통으로 호출해준다.
     const refreshFn = window._modalRefreshOnRestore && window._modalRefreshOnRestore[modalId];
     if (refreshFn) { try { refreshFn(); } catch (e) { console.warn('[modal-taskbar] 복원 시 새로고침 실패:', modalId, e); } }
-    if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-down"></i>'; restoreBtn.title = '최소화'; }
+    if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-up"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Open — click to minimize' : '열려 있음 — 클릭하면 최소화'; }
     // 모달이 자체 ✕로 닫히면 칩도 자동 제거
     info.observer = new MutationObserver(function() {
         if (info.toggleEl.style.display !== 'none') return;
