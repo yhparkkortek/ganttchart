@@ -933,7 +933,7 @@ ${recentLogs}
 }
 
 ※ 업무 요약, 리스크, 액션추천은 각각 최대 5개까지 작성하며, 근거 데이터가 부족한 항목은 빈 배열([])로 반환하세요.
-총평/업무 요약/리스크/액션추천에서 특정 업무의 일정을 언급할 때는 위 목록의 "기간:" 표시(예: 8/26~8/27)를 그대로 쓰세요. YYYY-MM-DD로 풀어쓰지 마세요.`;
+※ #G숫자로 특정 업무를 언급할 때는 그 업무의 날짜·기간을 문장에 따로 적지 마세요 — 화면에서 #G숫자 옆에 기간이 자동으로 표시되므로 직접 쓰면 "(9/3~9/4)(9/3~9/4)"처럼 중복돼 보입니다. #G 참조 없이 날짜를 언급해야 하는 경우에만 YYYY-MM-DD 대신 M/D 또는 M/D~M/D처럼 짧게 쓰세요.`;
     };
 
     // 💡 코드 기본값(진짜 로직) — "🔄 기본값으로 초기화" 버튼이 참조. localStorage 상태와 무관하게
@@ -1080,13 +1080,18 @@ ${recentLogs}
         //    있게 링크로 바꿔준다(window._linkifyTaskRefs — AI 문답 채팅창과 공용 로직).
         // 💡 [2026-09-03 신규/수정] 각 <li>에 onclick(_aiToggleLineRefs) + hover 하이라이트 추가.
         //    "기간:X~Y" 중복 제거도 여기서 — AI 요약 JSON 텍스트도 배지와 중복될 수 있음.
+        // 🐛 [2026-09-11 버그 수정] AI가 프롬프트의 "(예: 8/26~8/27)" 표기를 그대로 따라해 "기간:" 라벨
+        //    없이 "(9/3~9/4)"처럼 괄호로만 감싸 쓰는 경우가 있었는데, 기존 정규식은 "기간:" 라벨이 붙은
+        //    형태만 잡아내서 이 경우엔 못 지웠다 — 자동 생성되는 배지와 겹쳐 "(9/3~9/4)(9/3~9/4)"처럼
+        //    중복 표시됨. "기간:" 라벨 유무와 무관하게 괄호로 감싼 M/D~M/D 범위도 함께 제거하도록 확장.
         const _liHover = "this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.12)':'rgba(44,95,138,0.04)';";
         const _liOut   = "this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.07)':'';";
         const _liClick = "window._aiToggleLineRefs(this, event);";
         const _liStyle = `margin-bottom:4px; cursor:pointer; border-radius:3px; transition:background .12s; list-style-position:outside;`;
         const _processLiText = function(x) {
-            // AI 요약 텍스트도 "기간:X/Y~X/Y" 중복 제거
-            return window._linkifyTaskRefs(escapeHtml(x).replace(/,?\s*기간:\d+\/\d+(?:~\d+\/\d+)?/g, ''));
+            // AI 요약 텍스트도 "기간:X/Y~X/Y" 또는 "(X/Y~X/Y)" 중복 제거 후, 남은 날짜 배지는 문장 끝으로 이동
+            const cleaned = escapeHtml(x).replace(/,?\s*(?:기간:\d+\/\d+(?:~\d+\/\d+)?|\(\d+\/\d+~\d+\/\d+\))/g, '');
+            return window._moveRefDateBadgesToEnd(window._linkifyTaskRefs(cleaned));
         };
         const riskHtml = (r.리스크 && r.리스크.length)
             ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.리스크.map(function(x) { return `<li style="${_liStyle}" onmouseover="${_liHover}" onmouseout="${_liOut}" onclick="${_liClick}">${_processLiText(x)}</li>`; }).join('') + '</ul>'
@@ -1107,7 +1112,7 @@ ${recentLogs}
             <div style="font-size:11px; color:#999; margin-bottom:12px;">생성 시각: ${genStr}</div>
             <div style="display:flex; align-items:center; gap:10px; padding:14px; background:#f8f9fa; border-radius:8px; margin-bottom:14px;">
                 <span style="font-size:28px;">${r.신호등 || '🟡'}</span>
-                <span style="font-size:13px; font-weight:bold; color:#333; cursor:pointer; border-radius:3px; padding:1px 2px; transition:background .12s;" onmouseover="this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.12)':'rgba(44,95,138,0.04)';" onmouseout="this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.07)':'';" onclick="window._aiToggleLineRefs(this, event);">${window._linkifyTaskRefs(escapeHtml(r.총평 || '').replace(/,?\s*기간:\d+\/\d+(?:~\d+\/\d+)?/g, ''))}</span>
+                <span style="font-size:13px; font-weight:bold; color:#333; cursor:pointer; border-radius:3px; padding:1px 2px; transition:background .12s;" onmouseover="this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.12)':'rgba(44,95,138,0.04)';" onmouseout="this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.07)':'';" onclick="window._aiToggleLineRefs(this, event);">${_processLiText(r.총평 || '')}</span>
             </div>
             <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; text-align:center; font-size:12px;">
                 <div style="padding:8px; background:#e7f6ec; border-radius:6px;"><b style="font-size:16px; color:#2f9e44;">${d.counts.완료 || 0}</b><br>완료</div>

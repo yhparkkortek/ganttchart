@@ -1312,6 +1312,26 @@ ${question}
         // chip 구조: [wb구두점][#G링크][▶토글][extra][wa구두점]  /  chip 밖: [기간 배지 — 항상 보임]
         return `<span class="ai-ref-chip" style="display:none">${wb}<span class="ai-task-ref" onclick="window._aiJumpToRow(${n}); event.stopPropagation();" title="${_en ? 'Click to jump to this task' : '클릭하면 이 업무로 이동합니다'}" style="color:#0056b3; font-weight:bold; cursor:pointer; text-decoration:underline dotted; text-underline-offset:2px;">#G${n}</span><span class="ai-ref-toggle" onclick="window._aiToggleRefExtra(this); event.stopPropagation();" title="${_en ? 'Show/hide alarm · mail · sender' : '펼치기/접기(알람·원문·발신인)'}">▶</span><span class="ai-ref-extra">${extra}</span>${wa}</span>${dateBadge}`;
     };
+    // 💡 [2026-09-11 신규] "AI 요약" 리포트처럼 문장이 항상 "#G숫자"로 시작하는 경우, 위 dateBadge가
+    //    그 자리(=문장 맨 앞, chip이 숨겨져 있어 실제로는 배지만 보임)에 붙어 "문장 뒤에 나와야 할 기간
+    //    표시가 앞에 나온다"는 문제가 있었다. 또한 한 문장 안에서 같은 업무를 여러 번 언급하면(가지런히
+    //    같은 배지가) 그 횟수만큼 반복 표시됐다. _linkifyTaskRefs로 만들어진 문자열에서 이 날짜 배지들을
+    //    모두 떼어내 중복 제거 후 문장 맨 끝에 한 번만 다시 붙여준다 — AI 문답 채팅창처럼 문장마다 여러
+    //    서로 다른 업무를 참조하는 경우는 그대로 두는 게 자연스러우므로, 필요한 화면(AI 요약)에서만 사용.
+    window._moveRefDateBadgesToEnd = function(html) {
+        const badgeRe = /<span class="ai-ref-date-badge"[^>]*>\(([^)]*)\)<\/span>/g;
+        const seen = [];
+        let m;
+        while ((m = badgeRe.exec(html)) !== null) {
+            if (seen.indexOf(m[1]) === -1) seen.push(m[1]);
+        }
+        if (!seen.length) return html;
+        const stripped = html.replace(badgeRe, '').replace(/[ \t]{2,}/g, ' ');
+        const trailing = seen.map(function(d) {
+            return `<span class="ai-ref-date-badge" style="color:#999; font-size:10.5px; margin-left:2px;">(${d})</span>`;
+        }).join('');
+        return stripped + trailing;
+    };
     window._linkifyTaskRefs = function(escapedText) {
         // 💡 [2026-08-30 확장] 표별 접두사(#G=Gantt, #CS=Customer SPEC, #MC=M.C Table, #EP=Elec Parts SPEC,
         //    #MT=주요 자재, #AD=주소록) 지원. 접두사 없는 bare "#숫자"는 더 이상 생성하지 않지만
