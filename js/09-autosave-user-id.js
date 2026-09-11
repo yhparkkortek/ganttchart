@@ -147,7 +147,22 @@
             const hasChanges = currentLogs > savedLogs || window._nonGanttDirty || window._cpThemeDirty;
             if (!hasChanges) return;
             if (window.currentDriveFileId) {
-                saveToGoogleDrive();
+                // 🐛 [2026-09-11 버그 수정] Summary 필수 항목(고객사/고객모델명/KTK PN_모델명/담당자)을
+                //    수정하려고 잠깐 지워둔 사이 이 3분 타이머가 돌면, saveToGoogleDrive()가 내부적으로
+                //    validateRequiredProjectInfo()에 걸려 alert()로 "필수 정보를 입력하세요" 팝업을
+                //    사용자가 한창 편집 중인데 갑자기 띄웠다(그 alert이 Summary 탭으로 강제 전환까지 시킴).
+                //    자동저장은 "새 프로젝트" 분기처럼 조용히 실패해야 한다 — suppressAlert로 alert을
+                //    막고, 막힌 경우엔 토스트 + 로컬 백업으로만 알린다(다음 3분 뒤 필드가 채워져 있으면
+                //    정상적으로 저장됨).
+                saveToGoogleDrive({ suppressAlert: true }).then(function(ok) {
+                    if (ok === false && window.showToast) {
+                        window.showToast(window._t(
+                            '💾 Summary 필수 항목이 비어 있어 자동저장을 건너뛰었습니다 — 입력을 마친 뒤 저장해주세요',
+                            '💾 Auto-save skipped — a required Summary field is empty. Please fill it in and save.'
+                        ), 'warning', 6000);
+                        if (window._saveLocalBackup) window._saveLocalBackup('autosave-missing-required-info');
+                    }
+                });
             } else if (window.showToast) {
                 // 💡 [버그 수정] 아직 한 번도 저장 안 한 "새 프로젝트"는 자동저장을 그대로 걸면 3분 타이머가
                 //    느닷없이 관리자 비밀번호 입력창(prompt)을 띄우게 되어 당황스럽다. 대신 조용한 알림으로
