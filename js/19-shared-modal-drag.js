@@ -139,14 +139,27 @@ function _modalTitleFor(handle, modalId) {
 //    🐛 [2026-09-11 버그 수정 2] 처음엔 "body 직계 자식까지"만 보고 멈췄는데, task-inbox-overlay처럼
 //    body가 아니라 #app-main 밑에 정적으로 박혀 있는 오버레이도 있어서(반대로 이런 건 body 직계
 //    자식으로 착각하고 #app-main까지 계속 더 올라가버려 엉뚱한 요소의 z-index를 건드릴 뻔했다) —
-//    ".modal-overlay" 클래스를 우선 신호로 먼저 확인하고, 그 클래스가 없는 gantt-qa-modal/npw-modal
-//    같은 경우에만 "body 직계 자식"을 보조 신호로 쓴다.
+//    ".modal-overlay" 클래스를 우선 신호로 먼저 확인하도록 고쳤다.
+//    🐛 [2026-09-11 버그 수정 3] 그런데 그 보조 신호("일단 부모가 있으면 한 칸 더 올라가고, body
+//    직계 자식에서 멈춘다")가 너무 느슨했다 — alarm-modal/alarm-settings-modal/alarm-schedule-modal/
+//    notice-modal처럼 ".modal-overlay" 클래스도 없고 애초에 감싸는 오버레이 래퍼 자체가 없이(자기
+//    자신이 이미 최상위 모달 박스) 그냥 #app-main 아래 나란히 배치된 정적 HTML 모달들까지, 부모가
+//    #app-main이라는 이유만으로 그 #app-main까지 잘못 걸어 올라가서 최소화 시 앱 전체 화면
+//    (#app-main)을 통째로 숨겨버리는 훨씬 심각한 회귀를 만들 뻔했다(실측 테스트로 발견).
+//    실제 오버레이 래퍼와 "그냥 어쩌다 안에 있는 평범한 레이아웃 컨테이너(#app-main)"를 구분하는
+//    믿을 만한 신호는 CSS position — 이 앱의 모든 모달 오버레이는 화면 전체를 덮도록 항상
+//    position:fixed이고, #app-main 등 일반 레이아웃 컨테이너는 그렇지 않다(static/relative).
+//    "부모가 fixed가 아니면 거기서 멈추고 지금 요소 자신을 반환"으로 바꿔서, 진짜 fixed 오버레이가
+//    한 겹 이상 겹쳐 있는 경우에만 올라가고, 그 밖의 경우(alarm-modal류)는 절대 부모로 넘어가지
+//    않도록 고쳤다.
 function _modalStackingRoot(el) {
     let cur = el;
     while (cur && cur !== document.body) {
         if (cur.classList && cur.classList.contains('modal-overlay')) return cur;
-        if (cur.parentElement === document.body) return cur;
-        cur = cur.parentElement;
+        const parent = cur.parentElement;
+        if (!parent || parent === document.body) return cur;
+        if (getComputedStyle(parent).position !== 'fixed') return cur;
+        cur = parent;
     }
     return el;
 }
