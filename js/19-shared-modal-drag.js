@@ -429,7 +429,7 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     //    이전 코드는 "클릭하면 어디로 가는지(액션)"를 표시(▲=복원 클릭, ▼=최소화 클릭)했는데,
     //    사용자에게는 현재 상태를 보여주는 쪽이 더 직관적이었다.
     const _tbEn = window._currentLang === 'en';
-    const restoreBtn = _modalIconBtn('<i class="ti ti-chevron-down"></i>', _tbEn ? 'Minimized — click to restore' : '최소화됨 — 클릭하면 복원');
+    const restoreBtn = _modalIconBtn('<i class="ti ti-chevron-up"></i>', _tbEn ? 'Restore' : '복원');
     restoreBtn.className += ' mtc-restore-btn';
     restoreBtn.addEventListener('click', function(e) { e.stopPropagation(); window._restoreModal(modalId); });
 
@@ -492,7 +492,7 @@ window._restoreModal = function(modalId) {
         if (info.observer) info.observer.disconnect();
         info.toggleEl.style.display = 'none';
         info.isRestored = false;
-        if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-down"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Minimized — click to restore' : '최소화됨 — 클릭하면 복원'; }
+        if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-up"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Restore' : '복원'; }
         // 외부 코드가 모달을 다시 열면 칩 자동 제거
         info.observer = new MutationObserver(function() {
             if (info.toggleEl.style.display === 'none') return;
@@ -522,7 +522,7 @@ window._restoreModal = function(modalId) {
     //    모달만 opt-in으로 등록해두면(window._modalRefreshOnRestore) 여기서 공통으로 호출해준다.
     const refreshFn = window._modalRefreshOnRestore && window._modalRefreshOnRestore[modalId];
     if (refreshFn) { try { refreshFn(); } catch (e) { console.warn('[modal-taskbar] 복원 시 새로고침 실패:', modalId, e); } }
-    if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-up"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Open — click to minimize' : '열려 있음 — 클릭하면 최소화'; }
+    if (restoreBtn) { restoreBtn.innerHTML = '<i class="ti ti-chevron-down"></i>'; restoreBtn.title = (window._currentLang === 'en') ? 'Minimize' : '최소화'; }
     // 모달이 자체 ✕로 닫히면 칩도 자동 제거
     info.observer = new MutationObserver(function() {
         if (info.toggleEl.style.display !== 'none') return;
