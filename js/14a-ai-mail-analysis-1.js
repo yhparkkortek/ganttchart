@@ -683,7 +683,7 @@ window.editPrompt = async function() {
                 <div id="prompt-edit-meta" style="padding:4px 18px 0; font-size:10.5px; color:#aaa;"></div>
                 <div style="padding:10px 18px; flex:1; overflow:hidden; display:flex; flex-direction:column;">
                     <textarea id="prompt-edit-textarea" readonly style="flex:1;width:100%;font-size:13px;font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic';border:1px solid #ced4da;border-radius:6px;padding:10px;box-sizing:border-box;resize:none;line-height:1.5;background:#f8f9fa;color:#555;"></textarea>
-                    <input id="prompt-save-memo" type="text" maxlength="40" placeholder="💬 이번 저장 메모 (선택, 예: 우선순위 점수 필드 추가 v1)"
+                    <input id="prompt-save-memo" type="text" maxlength="40" placeholder="${window._currentLang === 'en' ? '💬 Memo for this save (optional, e.g. Added priority score field v1)' : '💬 이번 저장 메모 (선택, 예: 우선순위 점수 필드 추가 v1)'}"
                         style="display:none; width:100%; margin-top:8px; padding:7px 10px; border:1px solid #ced4da; border-radius:6px; font-size:12px; box-sizing:border-box; flex-shrink:0;">
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">

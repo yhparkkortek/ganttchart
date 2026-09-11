@@ -97,7 +97,7 @@ const BM_CONF = {
         rowHtml: function() {
             return '<td class="bm-no"></td>'
                 + '<td><input type="text" class="u-input" data-field="name"></td>'
-                + '<td><input type="text" class="u-input" data-field="nameEn" placeholder="예: Hong Gildong"></td>'
+                + '<td><input type="text" class="u-input" data-field="nameEn" placeholder="' + (window._currentLang === 'en' ? 'e.g. Hong Gildong' : '예: Hong Gildong') + '"></td>'
                 + '<td><input type="text" class="u-input" data-field="dept"></td>'
                 + '<td><input type="text" class="u-input" data-field="title"></td>'
                 + '<td><input type="email" class="u-input" data-field="email"></td>'
@@ -105,7 +105,7 @@ const BM_CONF = {
                 + '<td><input type="text" class="u-input" data-field="phone"></td>'
                 // 🐛 [버그 수정] 이 템플릿이 텔레그램 ID 열이 추가되기 전에 만들어진 채 그대로 남아있어서,
                 // ▲▼＋－ 팝업으로 행을 추가하면 마지막 "텔레그램 ID" 칸 자체가 통째로 빠진 행이 생겼음.
-                + '<td><input type="text" class="u-input" data-field="telegramId" placeholder="예: 987654321"></td>';
+                + '<td><input type="text" class="u-input" data-field="telegramId" placeholder="' + (window._currentLang === 'en' ? 'e.g. 987654321' : '예: 987654321') + '"></td>';
         }
     },
 

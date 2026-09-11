@@ -123,7 +123,7 @@ function _renderStep1(body) {
         '<label style="display:flex; align-items:flex-start; gap:10px; padding:9px 12px; border:1px dashed #ced4da; border-radius:8px; margin-bottom:8px; cursor:pointer; background:#fafafa; transition:background .15s;" onmouseover="this.style.background=\'#f5f5f5\'" onmouseout="this.style.background=\'#fafafa\'">' +
         '<input type="checkbox" id="npw-custom-chk" style="width:16px;height:16px;cursor:pointer;margin-top:2px;" onchange="var inp=document.getElementById(\'npw-custom-input\');inp.disabled=!this.checked;if(this.checked)inp.focus();">' +
         '<div style="flex:1;"><div style="font-weight:bold; font-size:13px; color:#555;">직접 입력</div>' +
-        '<input id="npw-custom-input" type="text" disabled placeholder="예: PDU, SBD" value="' + customVal + '" onclick="event.stopPropagation();" ' +
+        '<input id="npw-custom-input" type="text" disabled placeholder="' + _t('예: PDU, SBD', 'e.g. PDU, SBD') + '" value="' + customVal + '" onclick="event.stopPropagation();" ' +
         'style="margin-top:5px; width:100%; box-sizing:border-box; padding:5px 8px; font-size:12px; border:1px solid #ced4da; border-radius:5px;"></div></label>' +
         '<div style="font-size:11px; color:#aaa; margin-top:4px;">※ 선택하지 않아도 등록은 가능합니다 — 건너뛰기로 넘어가세요.</div>';
 }
@@ -170,7 +170,7 @@ function _renderStep3(body) {
     const val = (window._npwData && window._npwData.customer) || _prefill.customer || '';
     body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객사 <span style="color:#e03131;">*</span></div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:14px;">파일명 생성 및 메일 매칭에 사용됩니다.</div>' +
-        '<input id="npw-customer" type="text" placeholder="예: LNW, Samsung, BOE" value="' + val + '" autocomplete="off" ' +
+        '<input id="npw-customer" type="text" placeholder="' + _t('예: LNW, Samsung, BOE', 'e.g. LNW, Samsung, BOE') + '" value="' + val + '" autocomplete="off" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;" ' +
         'oninput="window._npwCustAC(this.value)">' +
         '<div id="npw-cust-ac" style="border:1px solid #ced4da; border-radius:6px; max-height:140px; overflow-y:auto; margin-top:4px; display:none; background:#fff; box-shadow:0 2px 8px rgba(0,0,0,0.1); font-size:13px;"></div>';
@@ -212,11 +212,11 @@ function _renderStep4(body) {
     const model  = (window._npwData && window._npwData.model)  || _prefill.model  || '';
     const ktkpn  = (window._npwData && window._npwData.ktkpn)  || _prefill.ktkpn  || '';
     body.innerHTML = '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:12px;">고객 모델명 <span style="color:#e03131;">*</span></div>' +
-        '<input id="npw-model" type="text" placeholder="예: STELLAR32, KV-43XH8596" value="' + model + '" ' +
+        '<input id="npw-model" type="text" placeholder="' + _t('예: STELLAR32, KV-43XH8596', 'e.g. STELLAR32, KV-43XH8596') + '" value="' + model + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:15px; border:1.5px solid #a5c8f0; border-radius:8px;">' +
         '<div style="font-size:13px; font-weight:bold; color:#333; margin:16px 0 8px;">KTK PN_모델명 <span style="color:#e03131;">*</span></div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">형식: <code style="background:#f8f9fa;padding:1px 5px;border-radius:3px;">502574_MAIN>KTS320DPS01,LNW</code> — 파일명 생성에 필요합니다.</div>' +
-        '<input id="npw-ktkpn" type="text" placeholder="예: 502574_MAIN>KTS320DPS01,LNW" value="' + ktkpn + '" ' +
+        '<input id="npw-ktkpn" type="text" placeholder="' + _t('예: 502574_MAIN>KTS320DPS01,LNW', 'e.g. 502574_MAIN>KTS320DPS01,LNW') + '" value="' + ktkpn + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; font-family:monospace;">' +
         '<div style="font-size:11px; color:#aaa; margin-top:6px;">※ 아직 모르면 비워두고 Summary 탭에서 나중에 입력해도 됩니다 (저장 전까지 필수).</div>';
     setTimeout(function() { const el = document.getElementById('npw-model'); if (el) el.focus(); }, 50);
@@ -250,11 +250,11 @@ function _buildPmHtml(ab) {
     return '<div style="font-size:13px; font-weight:bold; color:#333; margin-bottom:8px;">프로젝트 담당자 <span style="color:#e03131;">*</span></div>' +
         '<select id="npw-pm" style="width:100%; box-sizing:border-box; padding:9px 12px; font-size:14px; border:1.5px solid #a5c8f0; border-radius:8px; background:#fff;">' + opts + '</select>' +
         '<div style="font-size:11.5px; color:#888; margin:4px 0 0 2px;">주소록에 없으면 아래에 직접 입력하세요.</div>' +
-        '<input id="npw-pm-manual" type="text" placeholder="직접 입력 (주소록 선택 시 무시됨)" value="" ' +
+        '<input id="npw-pm-manual" type="text" placeholder="' + _t('직접 입력 (주소록 선택 시 무시됨)', 'Enter manually (ignored if selected from address book)') + '" value="" ' +
         'style="width:100%; box-sizing:border-box; padding:8px 12px; font-size:13px; border:1px solid #ced4da; border-radius:8px; margin-top:6px;">' +
         '<div style="font-size:13px; font-weight:bold; color:#333; margin:18px 0 8px;">메일 키워드 <span style="font-size:11px; color:#aaa; font-weight:normal;">(선택)</span></div>' +
         '<div style="font-size:11.5px; color:#888; margin-bottom:8px;">이 프로젝트로 메일을 자동 매칭할 키워드. 쉼표로 구분.</div>' +
-        '<input id="npw-kw" type="text" placeholder="예: S32, STELLAR, 에스삼투" value="' + kws + '" ' +
+        '<input id="npw-kw" type="text" placeholder="' + _t('예: S32, STELLAR, 에스삼투', 'e.g. S32, STELLAR, ESSAMTU') + '" value="' + kws + '" ' +
         'style="width:100%; box-sizing:border-box; padding:10px 14px; font-size:13px; border:1.5px solid #a5c8f0; border-radius:8px;">';
 }
 async function _renderStep5(body) {

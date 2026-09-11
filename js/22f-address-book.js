@@ -17,13 +17,13 @@ window.renderAddressTable = function() {
         return '<tr>'
             + '<td class="bm-no"></td>'
             + '<td><input class="u-input" data-field="name" value="' + _escTabVal(p.name) + '" onchange="window.collectAddressData()"></td>'
-            + '<td><input class="u-input" data-field="nameEn" value="' + _escTabVal(p.nameEn) + '" placeholder="예: Hong Gildong" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="nameEn" value="' + _escTabVal(p.nameEn) + '" placeholder="' + (window._currentLang === 'en' ? 'e.g. Hong Gildong' : '예: Hong Gildong') + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="dept" value="' + _escTabVal(p.dept) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="title" value="' + _escTabVal(p.title) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="email" value="' + _escTabVal(p.email) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="mobile" value="' + _escTabVal(p.mobile) + '" onchange="window.collectAddressData()"></td>'
             + '<td><input class="u-input" data-field="phone" value="' + _escTabVal(p.phone) + '" onchange="window.collectAddressData()"></td>'
-            + '<td><input class="u-input" data-field="telegramId" value="' + _escTabVal(p.telegramId) + '" placeholder="예: 987654321" onchange="window.collectAddressData()"></td>'
+            + '<td><input class="u-input" data-field="telegramId" value="' + _escTabVal(p.telegramId) + '" placeholder="' + (window._currentLang === 'en' ? 'e.g. 987654321' : '예: 987654321') + '" onchange="window.collectAddressData()"></td>'
             + '</tr>';
     }).join('');
 

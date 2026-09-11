@@ -926,8 +926,8 @@ window.renderMember3Rows = function(rows) {
     window.tabData.projectMembers3 = rows || [];
 
     const build = function(r, idx) {
-        return '<input type="text" data-idx="' + idx + '" data-field="role" class="u-input mem-label" value="' + _escTabVal(r.role) + '" placeholder="예: PCB 설계">'
-            + '<input type="text" data-idx="' + idx + '" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="예: 홍길동">'
+        return '<input type="text" data-idx="' + idx + '" data-field="role" class="u-input mem-label" value="' + _escTabVal(r.role) + '" placeholder="' + (window._currentLang === 'en' ? 'e.g. PCB Design' : '예: PCB 설계') + '">'
+            + '<input type="text" data-idx="' + idx + '" data-field="name" class="u-input" value="' + _escTabVal(r.name) + '" placeholder="' + (window._currentLang === 'en' ? 'e.g. Gildong Hong' : '예: 홍길동') + '">'
             + '<div style="position:relative; display:flex; align-items:center;">'
             +   '<input type="email" data-idx="' + idx + '" data-field="email" class="u-input" value="' + _escTabVal(r.email) + '" placeholder="email@company.com" style="width:100%; padding-right:24px; box-sizing:border-box;">'
             +   '<button type="button" onclick="window.deleteMember3Row(' + idx + ')" title="이 인원 삭제"'

@@ -1494,7 +1494,7 @@
                     <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-improve-comment-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="padding:18px;">
-                    <textarea id="gantt-qa-improve-comment-input" placeholder="예: 데이터에 있는 값인데도 '데이터에서 확인되지 않습니다'라고 답함 (선택 입력)"
+                    <textarea id="gantt-qa-improve-comment-input" placeholder="${window._currentLang === 'en' ? "e.g. Said 'not found in the data' even though the value exists (optional)" : "예: 데이터에 있는 값인데도 '데이터에서 확인되지 않습니다'라고 답함 (선택 입력)"}"
                         style="width:100%; min-height:80px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
                     <div style="display:flex; gap:8px; margin-top:12px;">
                         <button onclick="window.submitQaImproveComment()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; padding:9px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🤖 요청</button>
@@ -2422,7 +2422,7 @@
                 <div id="gantt-qa-prompt-meta" style="padding:4px 18px 0; font-size:10.5px; color:#aaa;"></div>
                 <div style="flex:1; padding:10px 18px; overflow:hidden; display:flex; flex-direction:column;">
                     <textarea id="gantt-qa-prompt-textarea" readonly style="flex:1; width:100%; resize:none; padding:10px; border:1px solid #ccc; border-radius:6px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; line-height:1.5; background:#f8f9fa; color:#555;"></textarea>
-                    <input id="gantt-qa-save-memo" type="text" maxlength="40" placeholder="💬 이번 저장 메모 (선택, 예: 추론 허용 문구 추가 v1)"
+                    <input id="gantt-qa-save-memo" type="text" maxlength="40" placeholder="${_en ? '💬 Memo for this save (optional, e.g. Added inference-allowed phrase v1)' : '💬 이번 저장 메모 (선택, 예: 추론 허용 문구 추가 v1)'}"
                         style="display:none; width:100%; margin-top:8px; padding:7px 10px; border:1px solid #ced4da; border-radius:6px; font-size:12px; box-sizing:border-box; flex-shrink:0;">
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px; flex-wrap:wrap;">

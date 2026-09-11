@@ -788,7 +788,7 @@ window._pcAddKeywordRow = function(word, score) {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
     row.innerHTML = `
-        <input class="pc-kw-word" type="text" value="${word}" placeholder="키워드"
+        <input class="pc-kw-word" type="text" value="${word}" placeholder="${window._currentLang === 'en' ? 'Keyword' : '키워드'}"
             style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
         <input class="pc-kw-score" type="number" value="${score}"
             style="width:55px; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
@@ -1807,7 +1807,7 @@ window._msOpenReanalyzeHintModal = function(fileName) {
                     <div id="ms-proj-picker-list" style="display:none; margin-top:4px; border:1px solid #ced4da; border-radius:6px; max-height:160px; overflow-y:auto; background:#fff; font-size:12px; box-shadow:0 2px 8px rgba(0,0,0,0.08);"></div>
                     <div id="ms-proj-picker-hint" style="display:none; font-size:10.5px; color:#888; margin-top:2px;">💡 2개 이상 선택하면 AI 단일 매칭 없이 선택한 프로젝트 전부로 곧바로 배분됩니다.</div>
                 </div>
-                <textarea id="ms-reanalyze-hint" placeholder="예: 관리번호는 다르지만 실제로는 STELLAR32 건 맞음 / 예: 회의록이라 여러 프로젝트가 섞여있어서 미분류가 맞음"
+                <textarea id="ms-reanalyze-hint" placeholder="${window._currentLang === 'en' ? 'e.g. Ref. number differs but it is actually STELLAR32 / e.g. It is a meeting note mixing multiple projects, so unclassified is correct' : '예: 관리번호는 다르지만 실제로는 STELLAR32 건 맞음 / 예: 회의록이라 여러 프로젝트가 섞여있어서 미분류가 맞음'}"
                     style="width:100%; min-height:70px; font-size:13px; border:1px solid #ced4da; border-radius:6px; padding:8px; box-sizing:border-box; resize:vertical;"></textarea>
                 <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">
                     <button onclick="window._msSubmitReanalyze()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:6px 18px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">재분석 요청</button>

@@ -36,23 +36,23 @@
 <body>
 
 <div id="app-topbar">
-    <div class="tb-logo-wrap"><div class="tb-logo" role="img" aria-label="Kortek" onclick="window.openColorPaletteModal && window.openColorPaletteModal()" title="🎨 컬러 팔레트 보기" style="cursor:pointer;"></div></div>
+    <div class="tb-logo-wrap"><div class="tb-logo" role="img" aria-label="Kortek" onclick="window.openColorPaletteModal && window.openColorPaletteModal()" title="🎨 컬러 팔레트 보기" data-i18n-title="color-palette-view" style="cursor:pointer;"></div></div>
     <div class="tb-btns">
         <!-- ☁️ Drive — 파일/드라이브/프로젝트 통합 -->
         <div style="position:relative; display:inline-block;">
             <button id="file-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('file-menu-popup', this);">📁 프로젝트</button>
             <div id="file-menu-popup" class="topbar-popup" style="display:none;">
-                <button id="auth_button" class="topbar-menu-item" onclick="handleAuthClick(event)" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요. | Shift+클릭: 계정 전환">🔵 드라이브 연동하기</button>
+                <button id="auth_button" class="topbar-menu-item" onclick="handleAuthClick(event)" title="💡 구글 동기화에 문제가 있는 경우 키보드의 [CTRL + F5]를 눌러주세요. | Shift+클릭: 계정 전환" data-i18n-title="drive-sync-issue-hint">🔵 드라이브 연동하기</button>
                 <button id="drive_load_btn" class="topbar-menu-item" onclick="window.selectProject()" disabled>📂 프로젝트 열기</button>
                 <button id="drive_save_btn" class="topbar-menu-item" onclick="saveToGoogleDrive()" disabled>💾 프로젝트 저장</button>
-                <button id="backup_restore_btn" class="topbar-menu-item" onclick="window.loadBackupList()" disabled title="드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)">🔄 프로젝트 복원</button>
+                <button id="backup_restore_btn" class="topbar-menu-item" onclick="window.loadBackupList()" disabled title="드라이브 Backups 폴더의 이전 저장본으로 복원 (최근 7일)" data-i18n-title="drive-restore-backup">🔄 프로젝트 복원</button>
                 <div class="tb-menu-sep"></div>
                 <label id="file-input-label" class="topbar-menu-item" for="file-input" style="cursor:pointer;">🟩 프로젝트 엑셀 열기</label>
                 <input type="file" id="file-input" accept=".xlsx, .xls, .csv" multiple style="display:none;" />
                 <button id="excel-btn" class="topbar-menu-item" onclick="exportToExcel()">🟩 프로젝트 엑셀 저장</button>
                 <div class="tb-menu-sep"></div>
-                <button id="new-project-btn" class="topbar-menu-item" onclick="window.startNewProject()" title="현재 화면을 비우고 새 프로젝트를 시작합니다">➕ 새 프로젝트 추가</button>
-                <button id="delete-project-btn" class="topbar-menu-item" onclick="window.deleteProjectFlow()" title="구글 드라이브의 프로젝트 파일을 영구 삭제합니다 (관리자 비밀번호 필요)" style="color:#e03131;">🗑️ 프로젝트 삭제</button>
+                <button id="new-project-btn" class="topbar-menu-item" onclick="window.startNewProject()" title="현재 화면을 비우고 새 프로젝트를 시작합니다" data-i18n-title="new-project-clear">➕ 새 프로젝트 추가</button>
+                <button id="delete-project-btn" class="topbar-menu-item" onclick="window.deleteProjectFlow()" title="구글 드라이브의 프로젝트 파일을 영구 삭제합니다 (관리자 비밀번호 필요)" data-i18n-title="drive-delete-project" style="color:#e03131;">🗑️ 프로젝트 삭제</button>
             </div>
         </div>
         <!-- 🤖 AI 도구 — AI 업무분석/AI 업무 보관함/AI 요약/AI 문답/설정 통합 메뉴 -->
@@ -64,49 +64,49 @@
                     📦 AI 업무 보관함<span id="inbox-badge" style="display:none; background:#e03131; color:#fff; border-radius:9px; padding:1px 6px; font-size:10px; font-weight:bold; margin-left:5px; vertical-align:middle;">0</span>
                 </button>
                 <div class="tb-menu-sep"></div>
-                <button id="ai-summary-menu-btn" class="topbar-menu-item" onclick="window.openAiProjectSummaryModal()" title="지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다">🤖 AI 요약</button>
-                <button id="ai-qa-menu-btn" class="topbar-menu-item" onclick="window.openGanttQaModal()" title="이 프로젝트 데이터에 대해 자유롭게 질문하고 AI 답변을 받습니다">💬 AI 문답</button>
+                <button id="ai-summary-menu-btn" class="topbar-menu-item" onclick="window.openAiProjectSummaryModal()" title="지연/임박 업무·최근 변경이력을 AI가 요약해서 리스크와 액션을 짚어줍니다" data-i18n-title="ai-summary-risk-hint">🤖 AI 요약</button>
+                <button id="ai-qa-menu-btn" class="topbar-menu-item" onclick="window.openGanttQaModal()" title="이 프로젝트 데이터에 대해 자유롭게 질문하고 AI 답변을 받습니다" data-i18n-title="gantt-qa-hint">💬 AI 문답</button>
                 <div class="tb-menu-sep"></div>
                 <!-- 💡 [2026-08-28 이동] "⚙️ 설정" 바로가기 버튼 삭제 → 원래 ⚙️ 설정 메뉴 안에 있던
                      "🤖 AI 분석 설정"을 이 자리로 옮김(AI 관련 설정이니 AI 도구 메뉴 안에 있는 게 더 자연스럽다는
                      피드백). 상단 ⚙️ 설정 메뉴 자체는 그대로 유지됨. -->
-                <button id="ai-analysis-settings-btn" class="topbar-menu-item" onclick="window.openAiToolsSettingsModal(); window.closeTopbarMenu('ai-menu-popup');" title="AI 요약·AI 문답이 업무 상세내용/답변을 읽을 때 최대 몇 자까지 참고할지 설정합니다">🤖 AI 분석 설정</button>
+                <button id="ai-analysis-settings-btn" class="topbar-menu-item" onclick="window.openAiToolsSettingsModal(); window.closeTopbarMenu('ai-menu-popup');" title="AI 요약·AI 문답이 업무 상세내용/답변을 읽을 때 최대 몇 자까지 참고할지 설정합니다" data-i18n-title="ai-context-len-hint">🤖 AI 분석 설정</button>
             </div>
         </div>
         <!-- ⚙️ 설정 — 기타 기능 통합 -->
         <div style="position:relative; display:inline-block;">
             <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정</button>
             <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
-                <button id="auto-login-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleAutoLogin()" style="font-weight:bold;" title="켜두면 새로고침·새 탭에서 예전에 연동했던 계정으로 조용히(팝업 없이) 자동 재연동을 시도합니다. 실패해도 지금처럼 [드라이브 연동하기]를 누르면 됩니다.">🔴 자동로그인 OFF</button>
-                <button id="my-team-menu-btn" class="topbar-menu-item" onclick="window.openMyTeamModal(); window.closeTopbarMenu('settings-menu-popup');" title="이 컴퓨터(브라우저)가 속한 팀 — 로그인 이름을 주소록과 대조해 자동 추정되며, 여기서 직접 바꿀 수 있습니다. 앞으로 AI 메일 매칭 범위 제한 등에 사용될 예정입니다.">👥 내 팀: <span id="my-team-label">미설정</span></button>
+                <button id="auto-login-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleAutoLogin()" style="font-weight:bold;" title="켜두면 새로고침·새 탭에서 예전에 연동했던 계정으로 조용히(팝업 없이) 자동 재연동을 시도합니다. 실패해도 지금처럼 [드라이브 연동하기]를 누르면 됩니다." data-i18n-title="auto-login-hint">🔴 자동로그인 OFF</button>
+                <button id="my-team-menu-btn" class="topbar-menu-item" onclick="window.openMyTeamModal(); window.closeTopbarMenu('settings-menu-popup');" title="이 컴퓨터(브라우저)가 속한 팀 — 로그인 이름을 주소록과 대조해 자동 추정되며, 여기서 직접 바꿀 수 있습니다. 앞으로 AI 메일 매칭 범위 제한 등에 사용될 예정입니다." data-i18n-title="my-team-hint">👥 내 팀: <span id="my-team-label">미설정</span></button>
                 <div class="tb-menu-sep"></div>
                 <button id="alarm-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
-                <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정">⚙️ 자동알람 설정</button>
+                <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정" data-i18n-title="smtp-settings-hint">⚙️ 자동알람 설정</button>
                 <div class="tb-menu-sep"></div>
                 <button id="mail-mode-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleMailMode()" style="font-weight:bold; color:#b85c00;">🟠 메일 반자동 (보관함)</button>
-                <button id="mail-auto-config-menu-btn" class="topbar-menu-item" onclick="window.openMailAutoConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="수집주기·우선순위점수·중요키워드·초기화">📬 메일 자동배치 설정</button>
+                <button id="mail-auto-config-menu-btn" class="topbar-menu-item" onclick="window.openMailAutoConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="수집주기·우선순위점수·중요키워드·초기화" data-i18n-title="mail-collect-settings-hint">📬 메일 자동배치 설정</button>
                 <div class="tb-menu-sep"></div>
                 <!-- 💡 [2026-08-28 이동] "🤖 AI 분석 설정"은 위 "🤖 AI 도구" 메뉴 안으로 옮김(ai-analysis-settings-btn 참고) -->
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
-                <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다">🔑 비밀번호 변경</button>
-                <button id="add-user-btn" class="topbar-menu-item" onclick="window.open('https://console.cloud.google.com/auth/audience?hl=ko&amp;project=yhparkkortek-gantt','_blank'); window.open('https://drive.google.com/drive/u/0/home','_blank');" title="새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다.">👤 사용자 추가</button>
+                <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다" data-i18n-title="admin-pw-change-hint">🔑 비밀번호 변경</button>
+                <button id="add-user-btn" class="topbar-menu-item" onclick="window.open('https://console.cloud.google.com/auth/audience?hl=ko&amp;project=yhparkkortek-gantt','_blank'); window.open('https://drive.google.com/drive/u/0/home','_blank');" title="새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다." data-i18n-title="new-user-setup-hint">👤 사용자 추가</button>
             </div>
         </div>
         <span id="current-file-sep" class="tb-sep" style="display:none;"></span>
         <span id="current-project-filename" onclick="window.selectProject()"
-              title="클릭하면 다른 프로젝트를 열 수 있습니다 (저장 안 한 변경사항이 있으면 먼저 물어봅니다)"
+              title="클릭하면 다른 프로젝트를 열 수 있습니다 (저장 안 한 변경사항이 있으면 먼저 물어봅니다)" data-i18n-title="open-other-project-hint"
               style="display:none; flex-shrink:0; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:220px; padding:0 12px; height:30px; box-sizing:border-box; border-radius:6px; align-items:center; transition:background .15s;"></span>
         <!-- 💡 [2026-08-25 신규] 구글 드라이브 연결 상태 표시등 — 저장을 시도해봐야만("헛수고") 끊긴 걸
              알게 되는 문제를 줄이기 위해, 연결이 끊기면 언제든 상단에서 바로 보이게 함. 클릭하면 재연동. -->
         <span id="drive-conn-badge" style="display:none; flex-shrink:0; font-size:15px; margin-left:6px; align-items:center;"></span>
     </div>
     <div id="file-status" style="display:none;"></div>
-    <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환">🌐 ENG</button>
+    <button id="lang-toggle-btn" class="topbar-btn tb-lang" onclick="window.toggleLang()" title="한글/영어 전환" data-i18n-title="lang-toggle-hint">🌐 ENG</button>
 </div>
 
 <div id="app-sidebar">
     <div class="sb-header" style="justify-content:flex-start;">
-        <button class="sb-toggle-btn" id="sb-toggle-btn" onclick="window.toggleSidebar()" title="메뉴 접기/펴기">☰</button>
+        <button class="sb-toggle-btn" id="sb-toggle-btn" onclick="window.toggleSidebar()" title="메뉴 접기/펴기" data-i18n-title="sidebar-toggle-hint">☰</button>
     </div>
     <div class="sb-nav" id="sb-nav">
         <div class="sb-item" data-tab="summary" onclick="window.switchTab('summary')"><span class="sb-ico">📝</span><span class="sb-label">Summary</span></div>
@@ -125,22 +125,22 @@
      방식(position:fixed)이라 클리핑 없이 항상 트리거 버튼 바로 아래에 뜨도록 body 최상위에 둠 -->
 <div id="gantt-filter-popup-cal-wbs" class="row-action-popup gantt-filter-popup" data-trigger-id="gantt-filter-trigger-cal-wbs">
     <div class="filter-group" id="cal-level-filter-group">
-        <div class="filter-label" id="cal-level-all-label" onclick="window.calToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
-        <button type="button" class="btn" data-level="0" onclick="window.calToggleLevel(0)" title="대분류">0</button>
-        <button type="button" class="btn" data-level="1" onclick="window.calToggleLevel(1)" title="소분류1">1</button>
-        <button type="button" class="btn" data-level="2" onclick="window.calToggleLevel(2)" title="소분류2">2</button>
-        <button type="button" class="btn active" data-level="3" onclick="window.calToggleLevel(3)" title="세부업무">3</button>
-        <button type="button" class="btn active" data-level="4" onclick="window.calToggleLevel(4)" title="하위업무">4</button>
+        <div class="filter-label" id="cal-level-all-label" onclick="window.calToggleLevelAll()" title="전체 선택/해제" data-i18n-title="select-all">LEVEL(WBS)</div>
+        <button type="button" class="btn" data-level="0" onclick="window.calToggleLevel(0)" title="대분류" data-i18n-title="wbs-major">0</button>
+        <button type="button" class="btn" data-level="1" onclick="window.calToggleLevel(1)" title="소분류1" data-i18n-title="wbs-sub1">1</button>
+        <button type="button" class="btn" data-level="2" onclick="window.calToggleLevel(2)" title="소분류2" data-i18n-title="wbs-sub2">2</button>
+        <button type="button" class="btn active" data-level="3" onclick="window.calToggleLevel(3)" title="세부업무" data-i18n-title="wbs-detail">3</button>
+        <button type="button" class="btn active" data-level="4" onclick="window.calToggleLevel(4)" title="하위업무" data-i18n-title="wbs-subtask">4</button>
     </div>
 </div>
 <div id="gantt-filter-popup-wr-wbs" class="row-action-popup gantt-filter-popup" data-trigger-id="gantt-filter-trigger-wr-wbs">
     <div class="filter-group" id="wr-level-filter-group">
-        <div class="filter-label" id="wr-level-all-label" onclick="window.wrToggleLevelAll()" title="전체 선택/해제">LEVEL(WBS)</div>
-        <button type="button" class="btn" data-level="0" onclick="window.wrToggleLevel(0)" title="대분류">0</button>
-        <button type="button" class="btn" data-level="1" onclick="window.wrToggleLevel(1)" title="소분류1">1</button>
-        <button type="button" class="btn" data-level="2" onclick="window.wrToggleLevel(2)" title="소분류2">2</button>
-        <button type="button" class="btn active" data-level="3" onclick="window.wrToggleLevel(3)" title="세부업무">3</button>
-        <button type="button" class="btn active" data-level="4" onclick="window.wrToggleLevel(4)" title="하위업무">4</button>
+        <div class="filter-label" id="wr-level-all-label" onclick="window.wrToggleLevelAll()" title="전체 선택/해제" data-i18n-title="select-all">LEVEL(WBS)</div>
+        <button type="button" class="btn" data-level="0" onclick="window.wrToggleLevel(0)" title="대분류" data-i18n-title="wbs-major">0</button>
+        <button type="button" class="btn" data-level="1" onclick="window.wrToggleLevel(1)" title="소분류1" data-i18n-title="wbs-sub1">1</button>
+        <button type="button" class="btn" data-level="2" onclick="window.wrToggleLevel(2)" title="소분류2" data-i18n-title="wbs-sub2">2</button>
+        <button type="button" class="btn active" data-level="3" onclick="window.wrToggleLevel(3)" title="세부업무" data-i18n-title="wbs-detail">3</button>
+        <button type="button" class="btn active" data-level="4" onclick="window.wrToggleLevel(4)" title="하위업무" data-i18n-title="wbs-subtask">4</button>
     </div>
 </div>
 
@@ -160,7 +160,7 @@
       <!-- 💡 [멀티시트 UI 통일] 알람/공지 토글 — 두 뷰 모두 같은 한 줄짜리 헤더박스를 쓰도록,
            이 토글 요소를 _switchAlarmView()가 활성 뷰의 헤더박스 맨 앞으로 옮겨 씀 -->
       <div id="alarm-view-toggle" style="position:relative; display:flex; align-items:center; flex-shrink:0;">
-        <button id="alarm-view-trigger" onclick="window._toggleAlarmViewDropdown(event)" title="Alarm(D-day 알람) / Notice(반복 공지) 중 선택"
+        <button id="alarm-view-trigger" onclick="window._toggleAlarmViewDropdown(event)" title="Alarm(D-day 알람) / Notice(반복 공지) 중 선택" data-i18n-title="alarm-or-notice-hint"
                 style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; background:none; border:none; padding:0; margin:0; user-select:none;">
             <span id="alarm-view-trigger-label">🔔 Alarm</span><span style="font-size:11px;">▾</span>
         </button>
@@ -173,7 +173,7 @@
           onclick="window.sendAllPendingAlarms()"
           onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
           style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;"
-          title="과거 미발송분 포함 전체 발송">📧 일괄 발송</button>
+          title="과거 미발송분 포함 전체 발송" data-i18n-title="send-all-including-past">📧 일괄 발송</button>
       </div>
       <button data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')"
         onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
@@ -251,7 +251,7 @@
       <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
         <div style="padding:10px 12px; background:#eef6f7; border-bottom:2px solid #cfe3e5; display:flex; align-items:center; justify-content:space-between;">
           <span style="font-size:12.5px; font-weight:bold; color:#444;">⏰ 예약 발송 규칙 (기간·반복 — 서버가 직접 스케줄을 돕니다)</span>
-          <button onclick="window.loadScheduleRulesFromBackend()" title="새로고침"
+          <button onclick="window.loadScheduleRulesFromBackend()" title="새로고침" data-i18n-title="refresh"
                   onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                   style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 새로고침</button>
         </div>
@@ -308,7 +308,7 @@
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
         onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
         onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-        title="닫기">✕</button>
+        title="닫기" data-i18n-title="close">✕</button>
   </div>
 
   <div id="alarm-settings-body" style="flex:1; min-height:0; overflow-y:auto; padding:18px 28px;">
@@ -437,9 +437,9 @@
       </div>
       <div style="display:grid; grid-template-columns:80px 1fr; gap:6px 10px; align-items:center; font-size:12px; margin-bottom:10px;">
         <label id="as-lbl-tgtoken">Bot Token</label>
-        <input id="tg-token" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="BotFather에서 발급받은 Token">
+        <input id="tg-token" type="password" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="BotFather에서 발급받은 Token" data-i18n-placeholder="tg-token">
         <label id="as-lbl-chatid">내 Chat ID</label>
-        <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)">
+        <input id="tg-chatid" class="u-input" style="padding:5px 8px; border:1px solid #ddd; border-radius:4px;" placeholder="본인 Chat ID (숫자)" data-i18n-placeholder="tg-chatid">
       </div>
       <div style="display:flex; gap:6px; align-items:center; justify-content:flex-end;">
         <button id="as-tg-save-btn" onclick="window.saveTelegramConfig()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:5px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">저장</button>
@@ -513,7 +513,7 @@
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
         onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
         onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-        title="닫기">✕</button>
+        title="닫기" data-i18n-title="close">✕</button>
   </div>
   <div id="alarm-modal-body" style="font-size:13px; color:#333; line-height:1.7;"></div>
   <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
@@ -547,7 +547,7 @@
                display:flex; align-items:center; justify-content:center; transition:0.15s;"
         onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
         onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-        title="닫기">✕</button>
+        title="닫기" data-i18n-title="close">✕</button>
   </div>
 
   <div id="alarm-schedule-body" style="flex:1; min-height:0; overflow-y:auto; padding:16px 20px;">
@@ -629,7 +629,7 @@
         </div>
         <div style="display:flex; align-items:center; gap:6px; margin-top:7px;">
           <span style="font-size:11.5px; color:#666; white-space:nowrap;">직접 입력:</span>
-          <input id="as-d-custom" type="number" min="1" max="365" placeholder="예: 20"
+          <input id="as-d-custom" type="number" min="1" max="365" placeholder="예: 20" data-i18n-placeholder="as-d-custom"
                  style="width:80px; padding:4px 7px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();window._asAddCustomDay();}">
           <span style="font-size:11.5px; color:#888;">일 전</span>
@@ -723,11 +723,11 @@
 
       <div id="as-recip-header" style="display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; margin-bottom:3px;">
         <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
-        <button type="button" onclick="window._asRecipBulkToggleChannel('as-recip-list', 'email')" title="이메일 전체 선택/해제"
+        <button type="button" onclick="window._asRecipBulkToggleChannel('as-recip-list', 'email')" title="이메일 전체 선택/해제" data-i18n-title="email-select-all"
                 style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
-        <button type="button" onclick="window._asRecipBulkToggleChannel('as-recip-list', 'tg')" title="텔레그램 전체 선택/해제"
+        <button type="button" onclick="window._asRecipBulkToggleChannel('as-recip-list', 'tg')" title="텔레그램 전체 선택/해제" data-i18n-title="tg-select-all"
                 style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
-        <button type="button" onclick="window._asRecipBulkRemoveAll('as-recip-list')" title="수신자 전체 삭제"
+        <button type="button" onclick="window._asRecipBulkRemoveAll('as-recip-list')" title="수신자 전체 삭제" data-i18n-title="recipient-delete-all"
                 onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
                 style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
       </div>
@@ -761,16 +761,16 @@
         <button id="work-filter-btn"
             onclick="window.toggleWorkFilterPanel(event)"
             onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');"
-            title="LEVEL(WBS) · 업무상태 · 개발단계 필터"
+            title="LEVEL(WBS) · 업무상태 · 개발단계 필터" data-i18n-title="filter-wbs-status-hint"
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🎛️ 업무필터 ▾</button>
     </div>
     <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 12px;"></span>
     <div class="btn-group">
-        <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;">🛠️ 일정 도구</button>
+        <button id="schedule-tools-btn" onclick="window.toggleScheduleToolsMenu(event)" onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');" title="계획 저장·비교 · 선택 구간 재계산 · 날짜순 정렬" data-i18n-title="plan-save-compare-hint" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap;">🛠️ 일정 도구</button>
         <button id="gantt-ai-search-btn"
             onclick="window.ganttAiSearchToggle && window.ganttAiSearchToggle()"
             onmouseover="this.style.background=(window._cpRoleHex?window._cpRoleHex('hoverBg'):'#a3d9e0');" onmouseout="this.style.background=(window._cpRoleHex?window._cpRoleHex('bg'):'#e0f5f7');"
-            title="검색 바 표시/숨김 (Ctrl+Shift+F)"
+            title="검색 바 표시/숨김 (Ctrl+Shift+F)" data-i18n-title="search-bar-toggle-hint"
             style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; white-space:nowrap; margin-left:4px;">🔍 AI검색</button>
     </div>
 
@@ -842,14 +842,14 @@
       <!-- 제목 -->
       <div style="margin-bottom:12px;">
         <label id="nm-lbl-title" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">제목 *</label>
-        <input id="nm-title" class="u-input" placeholder="공지 제목"
+        <input id="nm-title" class="u-input" placeholder="공지 제목" data-i18n-placeholder="nm-title"
                style="width:100%; padding:7px 10px; border:1px solid #eee; border-radius:4px; font-size:13px; box-sizing:border-box; background:#f8f9fa;">
       </div>
 
       <!-- 내용 -->
       <div>
         <label id="nm-lbl-body" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">내용 *</label>
-        <textarea id="nm-body" placeholder="발송할 공지 내용"
+        <textarea id="nm-body" placeholder="발송할 공지 내용" data-i18n-placeholder="nm-body"
                   style="width:100%; height:110px; padding:7px 10px; border:1px solid #eee; border-radius:4px; font-size:12.5px; box-sizing:border-box; resize:vertical; font-family:'맑은 고딕',sans-serif; line-height:1.6; background:#f8f9fa;"></textarea>
       </div>
     </div>
@@ -911,7 +911,7 @@
           <!-- 직접 입력 -->
             <div style="display:flex; align-items:center; gap:6px; margin-top:7px;">
               <span id="nm-lbl-direct" style="font-size:11.5px; color:#666; white-space:nowrap;">직접 입력:</span>
-              <input id="nm-d-custom" type="number" min="1" max="365" placeholder="예: 14"
+              <input id="nm-d-custom" type="number" min="1" max="365" placeholder="예: 14" data-i18n-placeholder="nm-d-custom"
                      style="width:80px; padding:4px 7px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;"
                      onkeydown="if(event.key==='Enter'){event.preventDefault();window._nmAddCustomDay();}">
               <span id="nm-lbl-days-before" style="font-size:11.5px; color:#888;">일 전</span>
@@ -1012,11 +1012,11 @@
            window._asSyncRecipHeaderPad로 스크롤바 폭만큼 보정한다. -->
       <div id="nm-recipient-header" style="display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; margin-bottom:3px;">
         <span style="grid-column:1 / 4; font-size:10px; color:#bbb;">ALL</span>
-        <button type="button" onclick="window._nmBulkToggleChannel('email')" title="이메일 전체 선택/해제"
+        <button type="button" onclick="window._nmBulkToggleChannel('email')" title="이메일 전체 선택/해제" data-i18n-title="email-select-all"
                 style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
-        <button type="button" onclick="window._nmBulkToggleChannel('tg')" title="텔레그램 전체 선택/해제"
+        <button type="button" onclick="window._nmBulkToggleChannel('tg')" title="텔레그램 전체 선택/해제" data-i18n-title="tg-select-all"
                 style="width:28px; height:20px; border:1px solid #bbb; background:#fff; color:#888; border-radius:3px; cursor:pointer; font-size:11px; padding:0;">✓</button>
-        <button type="button" onclick="window._nmBulkRemoveAll()" title="수신자 전체 삭제"
+        <button type="button" onclick="window._nmBulkRemoveAll()" title="수신자 전체 삭제" data-i18n-title="recipient-delete-all"
                 onmouseover="this.style.background='#fbe4e2';" onmouseout="this.style.background='none';"
                 style="width:26px; height:20px; border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; padding:0; border-radius:4px; transition:background .15s;">✕</button>
       </div>
@@ -1073,15 +1073,15 @@
                 <table class="concept-table">
                     <thead>
                         <tr>
-                            <th style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
-                            <th style="width:11%; cursor:pointer;" data-sort-field="name" onclick="window.sortAddressByHeader('name')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-name">이름</span><span class="addr-sort-indicator"></span></th>
-                            <th style="width:11%; cursor:pointer;" data-sort-field="nameEn" onclick="window.sortAddressByHeader('nameEn')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-name-en">영문 이름</span><span class="addr-sort-indicator"></span></th>
-                            <th style="width:10%; cursor:pointer;" data-sort-field="dept" onclick="window.sortAddressByHeader('dept')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-dept">부서</span><span class="addr-sort-indicator"></span></th>
-                            <th style="width:11%; cursor:pointer;" data-sort-field="title" onclick="window.sortAddressByHeader('title')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-title">직함</span><span class="addr-sort-indicator"></span></th>
-                            <th style="width:19%; cursor:pointer;" data-sort-field="email" onclick="window.sortAddressByHeader('email')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-email">이메일</span><span class="addr-sort-indicator"></span></th>
-                            <th style="width:11%; cursor:pointer;" data-sort-field="mobile" onclick="window.sortAddressByHeader('mobile')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-mobile">휴대폰</span><span class="addr-sort-indicator"></span></th>
-                            <th style="width:11%; cursor:pointer;" data-sort-field="phone" onclick="window.sortAddressByHeader('phone')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-phone">근무처 전화</span><span class="addr-sort-indicator"></span></th>
-                            <th style="width:12%; cursor:pointer;" data-sort-field="telegramId" onclick="window.sortAddressByHeader('telegramId')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)"><span data-i18n="th-addr-telegram">텔레그램 ID</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택" data-i18n-title="row-menu-hint">NO</th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="name" onclick="window.sortAddressByHeader('name')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-name">이름</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="nameEn" onclick="window.sortAddressByHeader('nameEn')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-name-en">영문 이름</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:10%; cursor:pointer;" data-sort-field="dept" onclick="window.sortAddressByHeader('dept')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-dept">부서</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="title" onclick="window.sortAddressByHeader('title')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-title">직함</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:19%; cursor:pointer;" data-sort-field="email" onclick="window.sortAddressByHeader('email')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-email">이메일</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="mobile" onclick="window.sortAddressByHeader('mobile')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-mobile">휴대폰</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:11%; cursor:pointer;" data-sort-field="phone" onclick="window.sortAddressByHeader('phone')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-phone">근무처 전화</span><span class="addr-sort-indicator"></span></th>
+                            <th style="width:12%; cursor:pointer;" data-sort-field="telegramId" onclick="window.sortAddressByHeader('telegramId')" title="클릭하면 정렬(다시 클릭하면 오름차순/내림차순 반복)" data-i18n-title="col-sort-hint"><span data-i18n="th-addr-telegram">텔레그램 ID</span><span class="addr-sort-indicator"></span></th>
                         </tr>
                     </thead>
                     <tbody id="address-table-body"></tbody>
@@ -1121,7 +1121,7 @@
             <!-- 💡 [2026-09-03] 3-State 순환: DV → EOL → MP(EC) → DV
                  기존 근육기억(DV↔EOL 한 클릭) 보존하면서 MP(EC)도 수동 설정 가능.
                  값: ''=DV, '완료'=EOL, 'MP(EC)'=MP(EC). 기존 저장 파일 호환 유지. -->
-            <select id="sum-project-status" title="EOL로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다. MP(EC)는 메일 분석 생성 임시 프로젝트 — 메일 자동매칭 포함, 완료 처리 시 EOL로 전환하세요." onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; padding:6px 12px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
+            <select id="sum-project-status" title="EOL로 표시하면 '프로젝트 불러오기' 목록에서 흐리게 구분 표시되고, [설정 → 메일 자동배치 설정]에서 끄지 않는 한 새 메일 자동매칭 대상에서도 제외됩니다. MP(EC)는 메일 분석 생성 임시 프로젝트 — 메일 자동매칭 포함, 완료 처리 시 EOL로 전환하세요." data-i18n-title="eol-hint" onmousedown="event.preventDefault(); window._toggleProjectStatus();" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='transparent';" style="border:none; background:transparent; box-shadow:none; font-size:14px; font-weight:bold; color:#00707d; cursor:pointer; padding:6px 12px; margin:0; border-radius:6px; -webkit-appearance:none; -moz-appearance:none; appearance:none; outline:none; transition:background .15s;">
                 <option value="">🔵 DV</option>
                 <option value="MP(EC)">🟢 MP(EC)</option>
                 <option value="완료">🔴 EOL</option>
@@ -1148,10 +1148,10 @@
                         <!-- 💡 [2026-08-30 신규] 개발기간(일) 입력칸을 표 아래 별도 줄로 두지 않고, 이미 표에 있는
                              계획/실적 날짜(Start~PRA)로 자동 계산해서 표 오른쪽 열에 바로 보여주도록 통합.
                              클릭하면 일/주/개월 단위를 순환 전환(sumToggleDevDaysUnit). -->
-                        <th rowspan="2" style="width:90px; cursor:pointer;" onclick="window.sumToggleDevDaysUnit()" title="클릭하면 일/주/개월 단위로 순환 전환됩니다"><span id="sum-lbl-devdays">개발기간</span><br><span id="sum-devdays-unit-label" style="font-size:10.5px; color:#888; font-weight:normal;">소요(일) 🔄</span></th>
+                        <th rowspan="2" style="width:90px; cursor:pointer;" onclick="window.sumToggleDevDaysUnit()" title="클릭하면 일/주/개월 단위로 순환 전환됩니다" data-i18n-title="date-unit-cycle-hint"><span id="sum-lbl-devdays">개발기간</span><br><span id="sum-devdays-unit-label" style="font-size:10.5px; color:#888; font-weight:normal;">소요(일) 🔄</span></th>
                     </tr>
                     <tr id="sum-milestone-head">
-                        <th>Start <span style="color:#e03131;" title="필수 입력 — 새 프로젝트 등록 시 Gantt Chart의 시작일 기준(anchor)으로 사용되어 전체 일정이 자동 계산됩니다">*</span></th>
+                        <th>Start <span style="color:#e03131;" title="필수 입력 — 새 프로젝트 등록 시 Gantt Chart의 시작일 기준(anchor)으로 사용되어 전체 일정이 자동 계산됩니다" data-i18n-title="start-date-required-hint">*</span></th>
                         <th>End</th>
                         <th>DR</th>
                         <th>Start</th>
@@ -1165,28 +1165,28 @@
                 <tbody>
                     <tr id="sum-milestone-body" style="background:#eef6f7;">
                         <td id="sum-td-plan" style="font-weight:bold;">계획</td>
-                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" readonly title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력)" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)" oninput="window._checkRequiredField(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" id="sum-ms-plan-protostart" class="u-input req-field" data-stage="기획Start" data-field="date" placeholder="YYYY-MM-DD" readonly title="프로젝트 시작일(필수) — Gantt Chart 시작일로 사용되어 새 프로젝트 등록 시 전체 일정이 여기서부터 자동 계산됩니다 (한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력)" data-i18n-title="start-date-anchor-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)" oninput="window._checkRequiredField(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="date" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
                         <td id="sum-devdays-plan" style="font-weight:bold;">-</td>
                     </tr>
                     <tr id="sum-milestone-body-actual" style="background:#fff8e6; position:relative; z-index:1;">
                         <td id="sum-td-actual" style="font-weight:bold;">실적</td>
-                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
-                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Start" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="기획Finish" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ProtoDR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="ESEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="DVR" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPStart" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PPEnd" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
+                        <td><input type="text" class="u-input" data-stage="PRA" data-field="actualDate" placeholder="YYYY-MM-DD" readonly title="한 번 클릭: 달력에서 선택 / 더블클릭: 직접 입력" data-i18n-title="date-click-hint" onclick="window.showGenericCalendar(this)" ondblclick="window._msEnableDirectEdit(this)"></td>
                         <td id="sum-devdays-actual" style="font-weight:bold;">-</td>
                     </tr>
                 </tbody>
@@ -1201,46 +1201,46 @@
             <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
                 <h3 id="sum-h3-overview">프로젝트 개요</h3>
                 <div class="concept-grid">
-                    <label id="sum-lbl-purpose" style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="6" style="width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:150px;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발"></textarea>
-                    <label id="sum-lbl-volume">연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년">
-                    <label id="sum-lbl-mpdate">목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정">
+                    <label id="sum-lbl-purpose" style="align-self:start; padding-top:6px;">적용 목적</label><textarea id="sum-purpose" class="u-input" rows="6" style="width:100%; padding:6px 8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:150px;" placeholder="예: LNW UK / 유럽 시장 판매 / S32 신규 Cabinet 개발" data-i18n-placeholder="sum-purpose"></textarea>
+                    <label id="sum-lbl-volume">연간 수요량</label><input type="text" id="sum-volume" class="u-input" placeholder="예: 약 20,000대/년" data-i18n-placeholder="sum-volume">
+                    <label id="sum-lbl-mpdate">목표 양산 일정</label><input type="text" id="sum-mp-date" class="u-input" placeholder="예: 2027년 5월 납품 예정" data-i18n-placeholder="sum-mp-date">
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 260px; margin-bottom:16px;">
                 <h3 id="sum-h3-info">프로젝트 정보</h3>
                 <div class="concept-grid">
-                    <label id="sum-lbl-customer">고객사 <span style="color:#e03131;">*</span></label><input type="text" id="sum-customer" class="u-input req-field" placeholder="예: LNW" oninput="window._checkRequiredField(this)">
-                    <label id="sum-lbl-cmodel">고객 모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-customer-model" class="u-input req-field" placeholder="예: STELLAR32" oninput="window._checkRequiredField(this)">
-                    <label id="sum-lbl-pcode">프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB">
-                    <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER">
-                    <label id="sum-lbl-ktkpn">KTK PN_모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-ktk-pn-model" class="u-input req-field" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW" oninput="window._checkRequiredField(this)">
-                    <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)&#10;&#10;⚠️ 사람 이름은 넣지 마세요 — 그 사람이 보내는 모든 메일이 내용과 무관하게 이 프로젝트로 자동 매칭됩니다(서명란에 항상 본인 이름이 들어가기 때문). 주소록에 등록된 이름은 매칭 시 자동으로 제외되지만, 안전하게 처음부터 넣지 않는 걸 권장합니다.">메일 키워드 🔖</label><input type="text" id="sum-mail-keywords" class="u-input" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)">
+                    <label id="sum-lbl-customer">고객사 <span style="color:#e03131;">*</span></label><input type="text" id="sum-customer" class="u-input req-field" placeholder="예: LNW" data-i18n-placeholder="sum-customer" oninput="window._checkRequiredField(this)">
+                    <label id="sum-lbl-cmodel">고객 모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-customer-model" class="u-input req-field" placeholder="예: STELLAR32" data-i18n-placeholder="sum-customer-model" oninput="window._checkRequiredField(this)">
+                    <label id="sum-lbl-pcode">프로젝트 코드</label><input type="text" id="sum-project-code" class="u-input" placeholder="예: G2608OB" data-i18n-placeholder="sum-project-code">
+                    <label id="sum-lbl-pname">프로젝트 명칭</label><input type="text" id="sum-project-name" class="u-input" placeholder="예: LNW&gt;S32&gt;LOWER" data-i18n-placeholder="sum-project-name">
+                    <label id="sum-lbl-ktkpn">KTK PN_모델명 <span style="color:#e03131;">*</span></label><input type="text" id="sum-ktk-pn-model" class="u-input req-field" placeholder="예: 502574_MVD&gt;KTS320DPS01,LNW" data-i18n-placeholder="sum-ktk-pn-model" oninput="window._checkRequiredField(this)">
+                    <label id="sum-lbl-mailkw" title="메일 자동수집·분석 시 이 프로젝트로 매칭할 별칭/약어. 쉼표로 구분 (예: S32, 에스삼투, STELLAR)&#10;&#10;⚠️ 사람 이름은 넣지 마세요 — 그 사람이 보내는 모든 메일이 내용과 무관하게 이 프로젝트로 자동 매칭됩니다(서명란에 항상 본인 이름이 들어가기 때문). 주소록에 등록된 이름은 매칭 시 자동으로 제외되지만, 안전하게 처음부터 넣지 않는 걸 권장합니다." data-i18n-title="mail-keyword-hint">메일 키워드 🔖</label><input type="text" id="sum-mail-keywords" class="u-input" placeholder="예: S32, STELLAR, 에스삼투 (쉼표로 구분)" data-i18n-placeholder="sum-mail-keywords">
                 </div>
             </div>
         </div>
         <div class="concept-section">
             <h3 id="sum-h3-background">추진 배경 및 의의</h3>
-            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:80px; max-height:220px; overflow-y:auto;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..."></textarea>
+            <textarea id="sum-background" class="u-input" rows="4" style="width:100%; padding:8px; border:1px solid #cfe3e5; border-radius:4px; font-size:12.5px; box-sizing:border-box; font-family:inherit; resize:vertical; min-height:80px; max-height:220px; overflow-y:auto;" placeholder="예: LNW UK 신규 개발 Cabinet / 유럽시장 진출, 신규 수주 확보를 통한 제품 포트폴리오 확장..." data-i18n-placeholder="sum-background"></textarea>
         </div>
         <div style="display:flex; gap:16px; align-items:stretch; flex-wrap:wrap;">
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member1">프로젝트 멤버-1</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자 *" readonly style="color:#e03131; font-weight:bold;"><input type="text" id="sum-pm" class="u-input req-field" placeholder="예: 박용훈" oninput="window._checkRequiredField(this)"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자 *" readonly style="color:#e03131; font-weight:bold;"><input type="text" id="sum-pm" class="u-input req-field" placeholder="예: 박용훈" data-i18n-placeholder="sum-pm" oninput="window._checkRequiredField(this)"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인" data-i18n-placeholder="sum-mech"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준" data-i18n-placeholder="sum-hw"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석" data-i18n-placeholder="sum-fw"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍" data-i18n-placeholder="sum-module"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member2">프로젝트 멤버-2</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌" data-i18n-placeholder="sum-tsp"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-lcm"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-slimming"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-cutting"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-tooling"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
         </div>
@@ -1267,7 +1267,7 @@
                                 <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:60px;">KTK PN</th>
                                 <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center;">Description</th>
                                 <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:50px;">Cost($)</th>
-                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험)." data-i18n-title="pn-trust-check">✓</th>
                             </tr>
                         </thead>
                         <tbody id="sum-materials-rows-a"></tbody>
@@ -1281,7 +1281,7 @@
                                 <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:60px;">KTK PN</th>
                                 <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center;">Description</th>
                                 <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:50px;">Cost($)</th>
-                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험).">✓</th>
+                                <th style="padding:5px 6px; border:1px solid #cfe3e5; text-align:center; width:30px;" title="체크하면 AI가 이 PN 언급을 &quot;이 프로젝트가 맞다&quot;는 신뢰 신호로 사용. 여러 프로젝트가 같이 쓰는 공용 부품은 체크하지 마세요(오매칭 위험)." data-i18n-title="pn-trust-check">✓</th>
                             </tr>
                         </thead>
                         <tbody id="sum-materials-rows-b"></tbody>
@@ -1293,16 +1293,16 @@
         <div class="concept-section" id="product-images-section">
             <h3><span id="sum-h3-photo">제품 사진</span> <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
             <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;">
-                <div class="prod-img-slot" id="prod-img-slot-0" title="클릭하여 사진 추가">
+                <div class="prod-img-slot" id="prod-img-slot-0" title="클릭하여 사진 추가" data-i18n-title="photo-add">
                     <div class="prod-placeholder">📷<br>사진 1<br>클릭하여 추가</div>
                     <img class="prod-preview" alt="제품사진1">
-                    <button class="prod-del-btn" title="삭제">✕</button>
+                    <button class="prod-del-btn" title="삭제" data-i18n-title="delete">✕</button>
                     <input type="file" accept="image/*" style="display:none;">
                 </div>
-                <div class="prod-img-slot" id="prod-img-slot-1" title="클릭하여 사진 추가">
+                <div class="prod-img-slot" id="prod-img-slot-1" title="클릭하여 사진 추가" data-i18n-title="photo-add">
                     <div class="prod-placeholder">📷<br>사진 2<br>클릭하여 추가</div>
                     <img class="prod-preview" alt="제품사진2">
-                    <button class="prod-del-btn" title="삭제">✕</button>
+                    <button class="prod-del-btn" title="삭제" data-i18n-title="delete">✕</button>
                     <input type="file" accept="image/*" style="display:none;">
                 </div>
              </div>
@@ -1343,16 +1343,16 @@
             <table class="concept-table">
                 <thead>
                     <tr>
-                        <th rowspan="2" style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
+                        <th rowspan="2" style="width:3%;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택" data-i18n-title="row-menu-hint">NO</th>
                         <th rowspan="2" style="width:17%;">TYPE</th>
                         <th rowspan="2" style="width:8%;">TYPE2</th>
                         <th id="bs-desc-th" colspan="3" style="width:45%;">Description</th>
                         <th rowspan="2" style="width:30%;">Note</th>
                     </tr>
                     <tr>
-                        <th data-col="modelA"><input type="text" class="bs-col-label-input" data-col-field="modelA" value="Model A" title="클릭해서 열 이름을 바꿀 수 있습니다 (예: MVD)"></th>
-                        <th data-col="modelB"><input type="text" class="bs-col-label-input" data-col-field="modelB" value="Model B" title="클릭해서 열 이름을 바꿀 수 있습니다 (예: TVD)"></th>
-                        <th data-col="modelC"><input type="text" class="bs-col-label-input" data-col-field="modelC" value="Model C" title="클릭해서 열 이름을 바꿀 수 있습니다 (예: TPR)"></th>
+                        <th data-col="modelA"><input type="text" class="bs-col-label-input" data-col-field="modelA" value="Model A" title="클릭해서 열 이름을 바꿀 수 있습니다 (예: MVD)" data-i18n-title="col-rename-mvd"></th>
+                        <th data-col="modelB"><input type="text" class="bs-col-label-input" data-col-field="modelB" value="Model B" title="클릭해서 열 이름을 바꿀 수 있습니다 (예: TVD)" data-i18n-title="col-rename-tvd"></th>
+                        <th data-col="modelC"><input type="text" class="bs-col-label-input" data-col-field="modelC" value="Model C" title="클릭해서 열 이름을 바꿀 수 있습니다 (예: TPR)" data-i18n-title="col-rename-tpr"></th>
                     </tr>
                 </thead>
                 <tbody id="briefspec-body">
@@ -1396,13 +1396,13 @@
                  패널 안 이름변경/추가/삭제) 그려준다. -->
             <div id="mc-unit-bar" style="display:none; align-items:center; gap:4px; margin-right:4px;"></div>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:none; background:#e0f5f7; color:#00707d; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold; transition:background .15s;">➕</button>
-            <button id="mc-rev-cycle-btn" class="mc-rev-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)"
+            <button id="mc-add-rev-btn" onclick="window.mcAddNewRevision()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" title="새 리비전 추가 (금액이 입력된 리비전 기준 다음 번호로 이동 — 금액 없는 빈 리비전은 실수로 여러 번 눌러도 건너뛰지 않고 재사용됨)" data-i18n-title="revision-add-hint" style="margin:0 4px 0 0; padding:6px 8px; min-width:auto; border:none; background:#e0f5f7; color:#00707d; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold; transition:background .15s;">➕</button>
+            <button id="mc-rev-cycle-btn" class="mc-rev-btn" data-rev="R1" onclick="window.mcCycleRevision()" title="클릭할 때마다 금액이 입력된 리비전끼리 순환 (완전히 새 리비전은 ➕로 추가)" data-i18n-title="revision-cycle-hint"
                 style="padding:6px 10px; min-width:auto; border:1px solid #a5c8f0; background:#e8f4fd; color:#1a4f7a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">R1</button>
             <button id="mc-comparison-btn" class="mc-comparison-btn" onclick="window.mcShowComparison && window.mcShowComparison()" title="Comparison"
                 style="margin-left:4px; padding:6px 10px; min-width:auto; border:1px solid #edbf85; background:#fbead9; color:#a85d0a; border-radius:5px; cursor:pointer; font-size:12.5px; font-weight:bold;">VS</button>
             <span style="display:inline-block; width:1px; height:16px; background:#ddd; margin:0 8px;"></span>
-            <button id="mc-clear-price-btn" class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f;">금액삭제</button>
+            <button id="mc-clear-price-btn" class="concept-add-row-btn" data-i18n="btn-mc-clear-price" data-i18n="btn-mc-clear-price" onclick="window.mcClearAllPrices()" title="금액 전체 삭제" data-i18n-title="amount-delete-all" style="margin:0 8px 0 0; padding:6px 8px; min-width:auto; background:#fbe4e2; border:1px solid #eeb0ac; color:#b1432f;">금액삭제</button>
             <div class="btn-group"></div>
             <button data-i18n="btn-print" data-i18n="btn-print" onclick="window.printTabSection('tab-mctable')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🖨️ 인쇄 (PDF)</button>
         </div>
@@ -1427,9 +1427,9 @@
                 </colgroup>
                 <thead id="mc-thead">
                 <tr>
-                    <th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택">NO</th>
+                    <th rowspan="2" style="width:40px;" title="클릭: 메뉴 / Ctrl·Shift 클릭: 여러 행 선택" data-i18n-title="row-menu-hint">NO</th>
                     <th rowspan="2" style="width:100px;">TYPE</th>
-                    <th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 'etc.'를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다.">ITEM</th>
+                    <th rowspan="2" style="width:160px;" title="💡 ITEM 칸에 'etc.'를 입력한 행이 그룹의 마지막 행이 됩니다 — 이 지점에서 TYPE 구분과 SUBTOTAL이 계산됩니다." data-i18n-title="etc-row-hint">ITEM</th>
                     <th rowspan="2" style="width:140px;">GROUP</th>
                     <th rowspan="2" style="width:120px;">P/N</th>
                     <th rowspan="2" style="min-width:280px;">Specification</th>
@@ -1495,7 +1495,7 @@
                  뺐음(더 이상 "여러 탭 중 활성" 개념이 아니라 단일 트리거라서). 다른 페이지 헤더 탭과
                  폰트가 통일되도록. -->
             <div id="elec-view-toggle" style="position:relative; display:flex; align-items:center; flex-shrink:0;">
-                <button id="elec-view-trigger" onclick="window._toggleElecViewDropdown(event)" title="스펙표가 등록된 부품 종류만 목록에 나타납니다(나머지는 추후 등록 예정)"
+                <button id="elec-view-trigger" onclick="window._toggleElecViewDropdown(event)" title="스펙표가 등록된 부품 종류만 목록에 나타납니다(나머지는 추후 등록 예정)" data-i18n-title="spec-lib-hint"
                         style="display:flex; align-items:center; gap:4px; font-size:15px; font-weight:bold; cursor:pointer; color:#2c5f8a; background:none; border:none; padding:0; margin:0; user-select:none;">
                     <span id="elec-view-trigger-label">🖥️ PANEL</span><span style="font-size:11px;">▾</span>
                 </button>
@@ -1640,7 +1640,7 @@
                 <button data-i18n="btn-next" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calChangePeriod(1)">다음 ▶</button>
                 <button data-i18n="btn-today" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="display:flex; align-items:center; justify-content:center; height:28px; padding:0 8px; margin:0; box-sizing:border-box; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; transition:background .15s;" onclick="window.calGoToday()">오늘</button>
             </div>
-            <button data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서">📤 내보내기/동기화</button>
+            <button data-i18n="btn-cal-export" onclick="window.openCalSyncHelp()" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;" title="ICS 내보내기 · Google 자동 동기화 — 둘 다 여기서" data-i18n-title="ics-sync-hint">📤 내보내기/동기화</button>
             <button data-i18n="btn-print" onclick="window.printTabSection('tab-calendar')" onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';" style="padding:6px 12px; background:#e0f5f7; border:none; color:#00707d; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s; margin-left:8px;">🖨️ 인쇄 (PDF)</button>
         </div>
         <div id="calendar-table-scroll" class="concept-section" style="overflow-y:auto; max-height:calc(100vh - 160px - var(--mt-reserve, 0px)); background:#e0f5f7; border-color:#a3d9e0;">
@@ -1729,7 +1729,7 @@
             새 프로젝트를 시작합니다.<br>참조 엑셀을 다운로드해서 작성한 뒤<br>화면에 드래그하세요.
         </div>
         <div style="display:flex; flex-direction:column; align-items:center; gap:10px;">
-            <button id="new-project-auto-import-btn" onclick="window.autoImportReferenceExcel()" title="구글 드라이브에 연동되어 있으면, 참조 엑셀을 자동으로 가져와 바로 화면에 반영합니다" style="width:240px; box-sizing:border-box; padding:10px 0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">🚀 자동으로 가져오기</button>
+            <button id="new-project-auto-import-btn" onclick="window.autoImportReferenceExcel()" title="구글 드라이브에 연동되어 있으면, 참조 엑셀을 자동으로 가져와 바로 화면에 반영합니다" data-i18n-title="ref-excel-auto-hint" style="width:240px; box-sizing:border-box; padding:10px 0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">🚀 자동으로 가져오기</button>
             <div style="font-size:11px; color:#999; margin:2px 0;">— 또는 직접 다운로드해서 작성하려면 —</div>
             <a href="https://docs.google.com/spreadsheets/d/1lhg8Usuj-SP9Bsp_gs8Cnz9jnvQF3D7T/export?format=xlsx" target="_blank" style="display:inline-block; width:240px; box-sizing:border-box; padding:10px 0; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; text-decoration:none; font-weight:bold; font-size:13px; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';">📥 참조 엑셀 다운로드</a>
             <button onclick="document.getElementById('new-project-modal-overlay').style.display='none';" style="width:240px; box-sizing:border-box; padding:10px 0; margin-top:6px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer; transition:background .15s;" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';">확인</button>
@@ -1754,7 +1754,7 @@
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
                     onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
                     onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-                    title="닫기">✕</button>
+                    title="닫기" data-i18n-title="close">✕</button>
             </div>
             <div class="history-body" style="padding: 20px; overflow-y:auto; flex:1;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; gap:12px;">
@@ -1827,8 +1827,8 @@
                 전송된 업무가 팀원의 동시 저장으로 유실된 경우, '전송됨' 항목을 같은 방법으로 재전송하면 복구됩니다.
             </span></span></span>
             <div style="display:flex; gap:6px; flex-shrink:0; align-items:center;">
-                <button id="inbox-batch-register-btn" onclick="window.inboxBatchRegisterMatched()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="font-size:12px; font-weight:bold; padding:0 10px; height:28px; box-sizing:border-box; border:none; border-radius:6px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)">🚀 매칭건 일괄전송</button>
-                <button id="inbox-cleanup-storage-btn" onclick="window.inboxCleanupStorage()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="font-size:12px; font-weight:bold; padding:0 10px; height:28px; box-sizing:border-box; border:none; border-radius:6px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s;" title="완료(배치됨/전송됨) 항목의 저장된 메일 원문을 지우고, 너무 많이 쌓였으면 오래된 항목을 정리해 저장 공간을 확보합니다.">🧹 저장공간 정리</button>
+                <button id="inbox-batch-register-btn" onclick="window.inboxBatchRegisterMatched()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="font-size:12px; font-weight:bold; padding:0 10px; height:28px; box-sizing:border-box; border:none; border-radius:6px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s;" title="매칭 확정 + 날짜 확정된 대기 항목을 한 번에 각 프로젝트로 전송 (예전에 쌓인 대기 항목 정리용)" data-i18n-title="dist-send-hint">🚀 매칭건 일괄전송</button>
+                <button id="inbox-cleanup-storage-btn" onclick="window.inboxCleanupStorage()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="font-size:12px; font-weight:bold; padding:0 10px; height:28px; box-sizing:border-box; border:none; border-radius:6px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background .15s;" title="완료(배치됨/전송됨) 항목의 저장된 메일 원문을 지우고, 너무 많이 쌓였으면 오래된 항목을 정리해 저장 공간을 확보합니다." data-i18n-title="dist-cleanup-hint">🧹 저장공간 정리</button>
                 <button id="inbox-close-btn" onclick="window.closeTaskInbox()"
                     style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
                            color:var(--modal-icon-text); font-size:16px; cursor:pointer;
@@ -1836,7 +1836,7 @@
                            display:flex; align-items:center; justify-content:center; transition:0.15s;"
                     onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
                     onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-                    title="닫기">✕</button>
+                    title="닫기" data-i18n-title="close">✕</button>
             </div>
         </div>
         <!-- 💡 [UX 개선] 아래 "미분류/신규발신자" 구간은 고정하고, 업무 목록(#inbox-list)만 자체 스크롤 -->
@@ -1855,7 +1855,7 @@
                 <div style="margin-bottom:4px; display:flex; gap:6px; align-items:center;">
                     <button id="topic-diagnosis-btn"
                         onclick="window._tcRunDiagnosis && window._tcRunDiagnosis()"
-                        title="오매칭 패턴을 AI로 분석하여 토픽 프로파일의 오염 원인을 진단하고 수정안을 제시합니다."
+                        title="오매칭 패턴을 AI로 분석하여 토픽 프로파일의 오염 원인을 진단하고 수정안을 제시합니다." data-i18n-title="topic-diagnosis-hint"
                         onmouseover="this.style.background='#fcd5d5';this.style.borderColor='#e8857a';"
                         onmouseout="this.style.background='#fde8e8';this.style.borderColor='#f0a8a0';"
                         style="flex-shrink:0;height:26px;padding:0 10px;font-size:11px;font-weight:bold;
@@ -1865,7 +1865,7 @@
                         🔬 AI 진단
                     </button>
                     <button onclick="window._generateTopicProfile && window._generateTopicProfile()"
-                        title="현재 프로젝트의 간트 업무를 AI로 분석하여 키워드·토픽 프로파일을 저장합니다. 이후 메일 분석 정확도가 향상됩니다."
+                        title="현재 프로젝트의 간트 업무를 AI로 분석하여 키워드·토픽 프로파일을 저장합니다. 이후 메일 분석 정확도가 향상됩니다." data-i18n-title="topic-profile-gen-hint"
                         onmouseover="this.style.background='#d8f3d8';this.style.borderColor='#7cc494';"
                         onmouseout="this.style.background='#eaf7ea';this.style.borderColor='#a8dab8';"
                         style="flex:1;height:26px;font-size:11px;font-weight:bold;cursor:pointer;
@@ -1875,9 +1875,9 @@
                     </button>
                     <span id="topic-profile-badge" onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()"
                         style="font-size:10px;color:#888;white-space:nowrap;cursor:pointer;"
-                        title="클릭하면 저장된 토픽 프로파일을 열람합니다"></span>
+                        title="클릭하면 저장된 토픽 프로파일을 열람합니다" data-i18n-title="topic-profile-view-hint"></span>
                     <button onclick="window._showTopicProfileViewer && window._showTopicProfileViewer()"
-                        title="저장된 토픽 프로파일 열람"
+                        title="저장된 토픽 프로파일 열람" data-i18n-title="topic-profile-view"
                         onmouseover="this.style.background='#d8eafd';" onmouseout="this.style.background='#e8f4fd';"
                         style="flex-shrink:0;padding:2px 7px;font-size:11px;background:#e8f4fd;color:#1a4f7a;border:1px solid #a5c8f0;border-radius:6px;cursor:pointer;transition:background .15s;">🔍</button>
                 </div>
@@ -1931,7 +1931,7 @@
                        display:flex; align-items:center; justify-content:center; transition:0.15s;"
                 onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
                 onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-                title="닫기">✕</button>
+                title="닫기" data-i18n-title="close">✕</button>
         </div>
         <div style="padding:12px; flex:1; overflow-y:auto; min-height:0; display:flex; flex-direction:column;">
             <p style="margin:0 0 10px; font-size:12px; color:#888; flex-shrink:0;"><span id="inbox-dist-task-label">전송 업무</span>: <b id="dist-task-name" style="color:#e67e22;"></b></p>
@@ -1972,7 +1972,7 @@
             ※ 위 예시가 아니어도, 이 프로젝트에 맞는 이름을 자유롭게 적으셔도 됩니다.<br>
             ※ 취소하시면 우선 <b>"미지정"</b>으로 저장되고, 나중에 언제든 이름만 바꾸실 수 있습니다.
         </div>
-        <input id="mc-add-unit-input" type="text" placeholder="예: BTN" list="mc-unit-options" autocomplete="off"
+        <input id="mc-add-unit-input" type="text" placeholder="예: BTN" data-i18n-placeholder="mc-add-unit-input" list="mc-unit-options" autocomplete="off"
                onkeydown="if(event.key==='Enter') window.mcAddUnitConfirm()"
                style="width:100%; box-sizing:border-box; padding:8px 10px; border:1px solid #ced4da; border-radius:6px; font-size:13px; margin-bottom:14px;">
         <!-- 💡 드롭다운(자동완성)으로 자주 쓰는 제품구분자를 바로 고를 수 있으면서도, datalist라 목록에
@@ -1998,14 +1998,14 @@
        <div id="mail-drag-handle" class="history-header" style="background:#e7f3ff; color:#1971c2; font-size:14px; font-weight:bold; padding:13px 18px; flex-shrink:0; position:relative; cursor:grab; border-bottom:1px solid #a5c8f0; border-radius:10px 10px 0 0; display:flex; align-items:center; gap:14px;">
             <span id="mail-popup-title" style="white-space:nowrap; flex-shrink:0;">📧 AI 업무 분석</span>
             <div style="flex:1;"></div>
-            <button id="mail-prompt-btn" onclick="window.editPrompt()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="3개 탭 공용 AI 분석 프롬프트 수정"
+            <button id="mail-prompt-btn" onclick="window.editPrompt()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="3개 탭 공용 AI 분석 프롬프트 수정" data-i18n-title="ai-prompt-edit-hint"
                 style="padding:6px 12px; font-size:13px; font-weight:bold; height:28px; box-sizing:border-box; background:#e8f4fd; color:#1a4f7a; border:none; border-radius:6px; cursor:pointer; flex-shrink:0; transition:background .15s;">
                 ✏️ 프롬프트
             </button>
             <button onclick="document.getElementById('mail-analyzer-overlay').style.display='none'"
                 onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
                 style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:0.15s;"
-                title="닫기">✕</button>
+                title="닫기" data-i18n-title="close">✕</button>
         </div>
         <!-- ===== 공통 좌우분할 컨테이너 ===== -->
         <div style="display:flex; flex:1; overflow:hidden;">
@@ -2050,7 +2050,7 @@
                 <!-- ── 직접입력 탭 왼쪽 ── -->
                 <div id="mail-tab-paste-content" style="display:flex; flex-direction:column; flex:1; overflow:hidden; padding:12px;">
                     <label id="mail-paste-label" style="font-size:12px; font-weight:bold; color:#555; margin-bottom:4px;">📋 메일 내용 붙여넣기</label>
-                    <textarea id="mail-content-input" placeholder="메일 본문을 여기에 붙여넣으세요..."
+                    <textarea id="mail-content-input" placeholder="메일 본문을 여기에 붙여넣으세요..." data-i18n-placeholder="mail-content-input"
                         data-placeholder-ko="메일 본문을 여기에 붙여넣으세요..." data-placeholder-en="Paste the mail content here..."
                         style="flex:1; padding:10px; border:1px solid #ced4da; border-radius:6px;
                                font-size:12px; resize:none; box-sizing:border-box;
@@ -2191,7 +2191,7 @@
                             </div>
                             <div style="display:flex; align-items:center; gap:4px;">
                                 <span id="ms-lbl-body" style="font-size:10px; color:#2c5f8a; font-weight:bold; width:36px; flex-shrink:0;">본문</span>
-                                <input id="ms-keyword-body" type="text" placeholder="RFQ, 견적"
+                                <input id="ms-keyword-body" type="text" placeholder="RFQ, 견적" data-i18n-placeholder="ms-keyword-body"
                                        style="flex:1; padding:4px 7px; border:1px solid #ced4da; border-radius:4px; font-size:11px; box-sizing:border-box;">
                             </div>
                         </div>
@@ -2289,7 +2289,7 @@
                              보기" 줄)는 원래 텍스트 선택이 필요 없는 토글 전용 버튼이라 그대로 두고, 실제
                              원문이 들어있는 이 칸만 한 번 클릭(=드래그 선택)으로는 안 접히고 더블클릭해야만
                              접히도록 바꿨다. -->
-                        <div id="mail-original-body" ondblclick="window.toggleMailOriginal()" title="더블클릭하면 접힙니다"
+                        <div id="mail-original-body" ondblclick="window.toggleMailOriginal()" title="더블클릭하면 접힙니다" data-i18n-title="dblclick-collapse-hint"
                              style="display:none; padding:10px; background:#f8f9fa;
                                     border:1px solid #dee2e6; border-radius:0 0 6px 6px;
                                     font-size:12px; color:#333; max-height:320px;
@@ -2317,7 +2317,7 @@
                                 style="height:38px; box-sizing:border-box; padding:0 16px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85;
                                        border-radius:6px; font-size:13px; font-weight:bold; flex-shrink:0;
                                        cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;"
-                                title="현재 프로젝트가 아닌 업무를 보관함에 담아두고, 나중에 다른 프로젝트에 배치합니다.">
+                                title="현재 프로젝트가 아닌 업무를 보관함에 담아두고, 나중에 다른 프로젝트에 배치합니다." data-i18n-title="task-inbox-hint">
                             <span id="mail-right-inbox-btn-label">📥 보관함</span>
                         </button>
                     </div>
@@ -2398,7 +2398,7 @@
              굳이 별도로 알릴 필요가 없음). -->
         <div id="cp-preset-swatches" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:18px;">
             <div id="cp-preset-swatches-list" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value);" title="직접 선택 (클릭하면 색상 선택기가 열립니다)" style="width:32px; height:32px; border-radius:8px; border:2px solid #999; cursor:pointer; padding:0; -webkit-appearance:none; appearance:none;">
+            <input type="color" id="cp-custom-color" value="#2c5f8a" oninput="window._cpRenderPreview(this.value);" title="직접 선택 (클릭하면 색상 선택기가 열립니다)" data-i18n-title="color-picker-hint" style="width:32px; height:32px; border-radius:8px; border:2px solid #999; cursor:pointer; padding:0; -webkit-appearance:none; appearance:none;">
         </div>
         <div id="cp-preview-swatches" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(128px,1fr)); gap:10px; margin-bottom:18px;"></div>
 

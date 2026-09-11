@@ -610,7 +610,7 @@ window.openMailAutoConfigModal = async function() {
                             <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">제목 키워드</div>
                             <div id="mac-filter-subject-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
                             <div style="display:flex; gap:4px;">
-                                <input id="mac-filter-subject-input" type="text" placeholder="예: [광고]" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <input id="mac-filter-subject-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. [AD]' : '예: [광고]'}" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
                                 <button onclick="window._macAddFilterRuleFromInput('subjectKeywords','mac-filter-subject-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
                             </div>
                         </div>
@@ -619,7 +619,7 @@ window.openMailAutoConfigModal = async function() {
                             <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 패턴 (noreply 등)</div>
                             <div id="mac-filter-noreply-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
                             <div style="display:flex; gap:4px;">
-                                <input id="mac-filter-noreply-input" type="text" placeholder="예: noreply" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <input id="mac-filter-noreply-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. noreply' : '예: noreply'}" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
                                 <button onclick="window._macAddFilterRuleFromInput('noreplyPatterns','mac-filter-noreply-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
                             </div>
                         </div>
@@ -628,7 +628,7 @@ window.openMailAutoConfigModal = async function() {
                             <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 도메인 완전차단</div>
                             <div id="mac-filter-domain-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
                             <div style="display:flex; gap:4px;">
-                                <input id="mac-filter-domain-input" type="text" placeholder="예: spam-mailer.com" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <input id="mac-filter-domain-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. spam-mailer.com' : '예: spam-mailer.com'}" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
                                 <button onclick="window._macAddFilterRuleFromInput('blockedDomains','mac-filter-domain-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
                             </div>
                         </div>
@@ -680,7 +680,7 @@ window._macAddKeywordRow = function(word, score) {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex; align-items:center; gap:8px; margin-bottom:4px;';
     row.innerHTML = `
-        <input class="mac-kw-word" type="text" value="${word}" placeholder="키워드"
+        <input class="mac-kw-word" type="text" value="${word}" placeholder="${window._currentLang === 'en' ? 'Keyword' : '키워드'}"
             style="flex:1; padding:4px 7px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
         <input class="mac-kw-score" type="number" value="${score}"
             style="width:64px; min-width:0; box-sizing:border-box; padding:4px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">

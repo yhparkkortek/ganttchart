@@ -219,7 +219,7 @@ window._nmAddRecipientRow = function(name='', email='', telegramId='', emailOn=t
     row.dataset.tg = telegramId;
     row.style.cssText = 'display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; padding:4px 0; border-bottom:1px solid #eee;';
     row.innerHTML = `
-        <input class="nm-rr-name u-input" placeholder="이름 (자동완성)" value="${name}"
+        <input class="nm-rr-name u-input" placeholder="${window._currentLang === 'en' ? 'Name (autocomplete)' : '이름 (자동완성)'}" value="${name}"
                list="nm-addr-namelist" oninput="window._nmRecipientAutofill(this)"
                style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
         <span style="font-size:10px; color:#2c5f8a; background:${auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${auto ? 'visible' : 'hidden'};">summary</span>
@@ -841,7 +841,7 @@ window._asRecipAddRow = function(containerId, r) {
     row.dataset.tg = row0.telegramId;
     row.style.cssText = 'display:grid; grid-template-columns:88px 52px 1fr 28px 28px 26px; column-gap:6px; align-items:center; padding:4px 0; border-bottom:1px solid #eee;';
     row.innerHTML = `
-        <input class="as-recip-name u-input" placeholder="이름 (자동완성)" value="${row0.name}"
+        <input class="as-recip-name u-input" placeholder="${window._currentLang === 'en' ? 'Name (autocomplete)' : '이름 (자동완성)'}" value="${row0.name}"
                oninput="window._asRecipAutofill(this)"
                style="width:100%; padding:5px 8px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;">
         <span style="font-size:10px; color:#2c5f8a; background:${row0.auto ? '#eaf2fa' : 'transparent'}; border-radius:3px; padding:2px 5px; white-space:nowrap; text-align:center; visibility:${row0.auto ? 'visible' : 'hidden'};">summary</span>
