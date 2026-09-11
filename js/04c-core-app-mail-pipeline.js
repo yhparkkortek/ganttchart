@@ -698,8 +698,16 @@
                 if (_merge3.applied) {
                     const _hasTrueConflict = _merge3.merge.cellConflicts.length || _merge3.merge.editVsDeleteConflicts.length;
                     if (_hasTrueConflict) {
-                        // 진짜 충돌(같은 칸을 서로 다르게 고침/삭제-수정 충돌)은 놓치면 안 되므로 alert로 확실히 보여줌
-                        alert(_merge3.summaryMsg + '\n\n(자세한 내용은 하단 [🕒 변경 이력 확인]에서 확인할 수 있습니다)');
+                        // 진짜 충돌(같은 칸을 서로 다르게 고침/삭제-수정 충돌)은 놓치면 안 되는 정보라 원래
+                        // alert로 확실히 보여줬는데, 3분 자동저장·메일 완전자동배치처럼 사람이 지켜보지 않는
+                        // 백그라운드 저장 중에 이 alert이 뜨면 똑같이 편집을 가로막는다. suppressAlert일 땐
+                        // 저장 자체는 그대로 진행하되(병합은 이미 적용됨) 토스트로만 알린다 — 자세한 내용은
+                        // 원래 안내대로 [🕒 변경 이력 확인]에서 언제든 확인 가능.
+                        if (opts.suppressAlert) {
+                            window.showToast(_merge3.summaryMsg + ' (🕒 변경 이력 확인에서 상세 확인)', 'warning', 8000);
+                        } else {
+                            alert(_merge3.summaryMsg + '\n\n(자세한 내용은 하단 [🕒 변경 이력 확인]에서 확인할 수 있습니다)');
+                        }
                     } else {
                         window.showToast(_merge3.summaryMsg, 'info');
                     }
@@ -888,10 +896,33 @@
                     errorMsg = `구글 드라이브 에러 (${status}): ${file.error.message}`;
                 }
                 
-                alert(_svEn ? `❌ Save failed\n\n${errorMsg}` : `❌ 저장 실패\n\n${errorMsg}`);
+                // 🐛 [2026-09-11 버그 수정] 실제 저장 실패(권한/인증만료 등)도 3분 자동저장·메일 완전자동배치
+                //    같은 백그라운드 경로에서 일어나면 alert이 편집을 가로막았다. suppressAlert일 땐 조용히
+                //    토스트로만 알리고 로컬 백업을 남긴다(다음 저장 시도 때 다시 시도됨) — 단, 401(인증 만료)은
+                //    이미 위 _handleDriveDisconnected가 상단 표시등/토스트/텔레그램까지 별도로 처리하므로 중복 방지.
+                const _saveFailMsg = _svEn ? `❌ Save failed\n\n${errorMsg}` : `❌ 저장 실패\n\n${errorMsg}`;
+                window._lastSaveBlockReason = _saveFailMsg;
+                if (opts.suppressAlert) {
+                    if (status !== 401 && window.showToast) window.showToast(_saveFailMsg, 'error', 8000);
+                    if (window._saveLocalBackup) window._saveLocalBackup('autosave-drive-save-failed');
+                } else {
+                    alert(_saveFailMsg);
+                }
             }
         } catch (err) {
-            alert(_svEn ? "Google Drive system error: " + err.message : "구글 드라이브 전송 시스템 에러: " + err.message);
+            // 🐛 [2026-09-11 버그 수정] try 블록 안의 const _svEn은 catch 블록에서 안 보인다(별개의 블록
+            //    스코프) — 여기서 그대로 참조하면 "_svEn is not defined" ReferenceError가 나면서 원래
+            //    보여주려던 "구글 드라이브 전송 시스템 에러" 메시지 자체가 통째로 묻혀버렸다(실제 에러
+            //    대신 이 새 에러로 조용히 reject됨). catch 블록에서 다시 계산해서 이 문제를 없앤다.
+            const _svEn = window._currentLang === 'en';
+            const _sysErrMsg = _svEn ? "Google Drive system error: " + err.message : "구글 드라이브 전송 시스템 에러: " + err.message;
+            window._lastSaveBlockReason = _sysErrMsg;
+            if (opts.suppressAlert) {
+                if (window.showToast) window.showToast(_sysErrMsg, 'error', 8000);
+                if (window._saveLocalBackup) window._saveLocalBackup('autosave-drive-system-error');
+            } else {
+                alert(_sysErrMsg);
+            }
             return false;
         }
     }
