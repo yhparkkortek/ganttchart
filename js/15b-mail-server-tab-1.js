@@ -900,7 +900,14 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
                 if (window.renderGantt) window.renderGantt();
                 // ✅ [A: 토픽 자동갱신] AI 업무 5개 추가마다 현재 프로젝트 프로파일 백그라운드 재생성
                 if (window._tpCheckAutoRegen) window._tpCheckAutoRegen();
-                await window.saveToGoogleDrive(); // 💡 화면에 즉시 반영 + 곧바로 Drive 저장까지
+                // 🐛 [2026-09-11 버그 수정] 완전자동 모드에서 메일이 여러 통 연달아 매칭되면 이 함수가
+                //    메일 한 통마다(수십 초 간격) 호출되는데, suppressAlert 없이 saveToGoogleDrive()를
+                //    부르는 바람에 Summary 필수 항목(모델명 등)을 수정 중이라 잠깐 비어 있으면 메일이
+                //    매칭될 때마다 "필수 정보를 입력하세요" alert이 반복해서 튀어나왔다. 헤드리스 자동
+                //    처리 경로이므로 alert 대신 조용히 넘어가고(작업 자체는 이미 globalData에 반영됨 —
+                //    다음 저장 때 같이 저장됨), 막힌 경우에만 로컬 백업으로 안전장치를 남긴다.
+                const _saveOk = await window.saveToGoogleDrive({ suppressAlert: true }); // 💡 화면에 즉시 반영 + 곧바로 Drive 저장까지
+                if (!_saveOk && window._saveLocalBackup) window._saveLocalBackup('mail-auto-register-missing-required-info');
                 return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0 };
             } catch (e) { return { ok: false, reason: 'current_project_insert_failed: ' + e.message }; }
         }
