@@ -124,6 +124,32 @@ function _modalTitleFor(handle, modalId) {
     return text ? text.slice(0, 20) : modalId;
 }
 
+// 🐛 [2026-09-11 버그 수정] "여러 프로젝트를 오가며 이런저런 모달을 연 뒤, AI 문답을 타스크바에서
+//    복원하면 화살표(▲/▼)는 정상적으로 바뀌는데 창 자체는 안 보인다" 제보의 원인 — AI 문답은
+//    toggleTarget이 실제 열고닫히는 바깥 오버레이(gantt-qa-modal)가 아니라 그 자식 박스
+//    (gantt-qa-box)라서(_modalToggleTarget 참고), 복원 시 bringModalToFront(toggleEl.id)를 그대로
+//    부르면 "박스" 자신의 z-index만 올라간다. 그런데 바깥 오버레이가 이미 자체 z-index를 갖고 있어
+//    별도의 쌓임 맥락(stacking context)을 만들어버리므로, 그 안의 자식 z-index를 아무리 올려도
+//    "다른 모달과 비교했을 때"는 전혀 반영되지 않는다(바깥 오버레이의 z-index가 그대로 상한선).
+//    그 결과 AI 문답보다 나중에 연 다른 모달(예: 우선순위 점수 설정 등)이 있으면 그 뒤에 가려진 채
+//    "열렸지만 안 보이는" 상태가 됨 — 어떤 모달을 그 사이에 열었었는지에 따라 달라지니 "특정 경우를
+//    확정할 수 없다"는 제보와도 일치. body의 직계 자식(=실제 쌓임 맥락의 뿌리)까지 거슬러 올라가서
+//    그 요소를 최상단으로 올리도록 고친다 — toggleTarget이 이미 body 직계 자식인 대다수 모달은
+//    한 바퀴만 돌고 자기 자신을 그대로 반환하므로 동작 변화 없음.
+function _modalStackingRoot(el) {
+    while (el && el.parentElement && el.parentElement !== document.body) el = el.parentElement;
+    return el;
+}
+function _bringModalStackToFront(el) {
+    const root = _modalStackingRoot(el);
+    if (!root) return;
+    if (root.id && window.bringModalToFront) { window.bringModalToFront(root.id); return; }
+    // id가 없는 동적 요소는 bringModalToFront(id 조회 필요)를 못 쓰므로 직접 z-index를 올린다
+    // (아래 "새 모달 자동 최상단" 옵저버의 폴백과 동일한 방식).
+    window._topModalZ = (window._topModalZ || 9999) + 1;
+    root.style.zIndex = String(window._topModalZ);
+}
+
 // ✕ 버튼의 onclick에서 실제 토글 대상 id를 읽어낸다. 못 찾으면 modalId 자신을 토글 대상으로 가정
 // (박스 자신이 곧 열고 닫는 대상인 모달들이 이 경우에 해당).
 function _modalToggleTarget(modalId, closeBtn) {
@@ -407,7 +433,7 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
         if (info.chip && info.chip.parentNode) info.chip.parentNode.removeChild(info.chip);
         delete window._modalMinimized[modalId];
         _relayoutTaskbarChips(bar);
-        if (window.bringModalToFront) window.bringModalToFront(toggleEl.id);
+        _bringModalStackToFront(toggleEl);
     });
     observer.observe(toggleEl, { attributes: true, attributeFilter: ['style'] });
 
@@ -437,7 +463,7 @@ window._restoreModal = function(modalId) {
             if (chip && chip.parentNode) chip.parentNode.removeChild(chip);
             delete window._modalMinimized[modalId];
             _relayoutTaskbarChips(bar);
-            if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
+            _bringModalStackToFront(info.toggleEl);
         });
         info.observer.observe(info.toggleEl, { attributes: true, attributeFilter: ['style'] });
         return;
@@ -446,7 +472,7 @@ window._restoreModal = function(modalId) {
     // 최초 복원: 모달 열기, 칩 유지, 아이콘 ▲ → ▼
     if (info.observer) info.observer.disconnect();
     info.toggleEl.style.display = info.prevDisplay;
-    if (window.bringModalToFront) window.bringModalToFront(info.toggleEl.id);
+    _bringModalStackToFront(info.toggleEl);
     info.isRestored = true;
     // 🐛 [2026-09-07 버그수정] "페이지 로드 시 자동 최소화"(아래 DEFAULTS)로 열린 모달은 로그인/
     //    프로젝트 로드가 끝나기 전(300ms 시점)에 딱 한 번만 내용을 채운 채로 계속 최소화 상태였다 —
