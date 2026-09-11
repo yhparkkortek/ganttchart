@@ -63,7 +63,7 @@
         modal.innerHTML = `
             <div id="my-team-drag" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:min(var(--modal-w-sm), 92vw); box-shadow:0 8px 32px rgba(0,0,0,0.3); top:50%; left:50%; transform:translate(-50%,-50%);">
                 <div style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                    <span>👥 ${_en ? 'My Team' : '내 팀 설정'}</span>
+                    <span>👥 <span id="my-team-title">${_en ? 'My Team' : '내 팀 설정'}</span></span>
                     <button onclick="document.getElementById('my-team-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;">✕</button>
                 </div>
                 <div style="padding:18px;">

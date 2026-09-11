@@ -234,7 +234,7 @@ window.showImprovePreviewModal = function(analysis, improvedPrompt, targetUids, 
         modal.innerHTML = `
         <div id="prompt-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
             <div id="prompt-improve-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
-                <span>🤖 ${_en ? 'AI Prompt Improvement Suggestion' : 'AI 프롬프트 개선 제안'}</span>
+                <span>🤖 <span id="prompt-improve-title">${_en ? 'AI Prompt Improvement Suggestion' : 'AI 프롬프트 개선 제안'}</span></span>
                 <button onclick="document.getElementById('prompt-improve-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div id="improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
@@ -377,7 +377,7 @@ window.showPromptLogs = function() {
         logModal.innerHTML = `
             <div id="prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                 <div id="prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:14px;background:#fff8e6;color:#7a5210;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
-                    <span>🕒 ${_en ? 'Prompt History' : '프롬프트 변경 이력'}</span>
+                    <span>🕒 <span id="prompt-log-title">${_en ? 'Prompt History' : '프롬프트 변경 이력'}</span></span>
                     <button onclick="event.stopPropagation(); document.getElementById('prompt-log-modal').style.display='none'"
                         style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
                                color:var(--modal-icon-text); font-size:16px; cursor:pointer;
