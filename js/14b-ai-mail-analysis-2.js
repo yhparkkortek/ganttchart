@@ -365,6 +365,7 @@ window.showPromptLogs = function() {
 
     let logModal = document.getElementById('prompt-log-modal');
     if (!logModal) {
+        const _en = window._currentLang === 'en';
         logModal = document.createElement('div');
         logModal.id = 'prompt-log-modal';
         // 💡 [2026-08-24 UI 버그 수정] 이 모달만 예전 스타일(검은 배경 0.6 딤 + 드래그 불가)로 남아있어서
@@ -376,7 +377,7 @@ window.showPromptLogs = function() {
         logModal.innerHTML = `
             <div id="prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                 <div id="prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #ffe08a;font-weight:bold;font-size:14px;background:#fff8e6;color:#7a5210;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
-                    <span>🕒 프롬프트 변경 이력</span>
+                    <span>🕒 ${_en ? 'Prompt History' : '프롬프트 변경 이력'}</span>
                     <button onclick="event.stopPropagation(); document.getElementById('prompt-log-modal').style.display='none'"
                         style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
                                color:var(--modal-icon-text); font-size:16px; cursor:pointer;

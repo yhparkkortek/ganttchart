@@ -32,9 +32,12 @@
         for (const k in currentFilters) {
             if (currentFilters[k] && !currentFilters[k].has('All')) activeCount++;
         }
+        // 🐛 [2026-09-11 버그 수정] 이 함수가 필터 변경 때마다 버튼 문구를 한글로 다시 써버려서,
+        //    LANG.ui(toggleLang)로 영문 전환해도 필터를 한 번만 건드리면 곧바로 한글로 되돌아왔다.
+        const _en = window._currentLang === 'en';
         const label = activeCount > 0
-            ? '🎛️ 업무필터 (' + activeCount + ') ▾'
-            : '🎛️ 업무필터 ▾';
+            ? (_en ? '🎛️ Task Filter (' + activeCount + ') ▾' : '🎛️ 업무필터 (' + activeCount + ') ▾')
+            : (_en ? '🎛️ Task Filter ▾' : '🎛️ 업무필터 ▾');
         btn.textContent = label;
         const restBg = activeCount > 0 ? _cpHex('hoverBg') : _cpHex('bg');
         btn.style.background = restBg;

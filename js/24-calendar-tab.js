@@ -172,7 +172,7 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
         title.textContent = '📋 ' + ev.name;
         body.innerHTML =
             '<div style="margin-bottom:10px;">'
-            + '<button onclick="window.calShowDayPopup(\'' + dateKey + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="font-size:11.5px; padding:3px 10px; border:1px solid #a5c8f0; border-radius:4px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; transition:background .15s, border-color .15s;">◀ 목록으로</button>'
+            + '<button onclick="window.calShowDayPopup(\'' + dateKey + '\')" onmouseover="this.style.background=\'#cfe6fa\'; this.style.borderColor=\'#7fb0dd\';" onmouseout="this.style.background=\'#e8f4fd\'; this.style.borderColor=\'#a5c8f0\';" style="font-size:11.5px; padding:3px 10px; border:1px solid #a5c8f0; border-radius:4px; background:#e8f4fd; color:#1a4f7a; cursor:pointer; transition:background .15s, border-color .15s;">' + window._t('◀ 목록으로', '◀ Back to list') + '</button>'
             + '</div>'
             + '<div style="margin-bottom:8px; font-size:12px; color:#777;">'
             + '📅 ' + wrFormatMD(ev.start) + ' ~ ' + wrFormatMD(ev.end)
@@ -188,9 +188,9 @@ window.calShowDayPopup = function(dateKey, targetIdx) {
             const dk1 = calTsToKey(ev.start), dk2 = calTsToKey(ev.end);
             return dateKey >= dk1 && dateKey <= dk2;
         }).sort(function(a, b) { return a.start - b.start; });
-        title.textContent = '📅 ' + dateKey + ' 업무 (' + events.length + '건)';
+        title.textContent = window._t('📅 ' + dateKey + ' 업무 (' + events.length + '건)', '📅 ' + dateKey + ' Tasks (' + events.length + ')');
         if (events.length === 0) {
-            body.innerHTML = '<div style="color:#999; padding:20px; text-align:center;">해당 날짜에 업무가 없습니다.</div>';
+            body.innerHTML = '<div style="color:#999; padding:20px; text-align:center;">' + window._t('해당 날짜에 업무가 없습니다.', 'No tasks on this date.') + '</div>';
         } else {
             const sMap = (typeof LANG !== 'undefined' && window._currentLang && LANG[window._currentLang]) ? LANG[window._currentLang].statusMap : null;
             body.innerHTML = events.map(function(ev) {

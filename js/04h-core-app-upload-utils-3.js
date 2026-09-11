@@ -432,7 +432,7 @@
     window._aiSendPendingMailDraft = async function(draftId, btn) {
         const pending = window._ganttQaPendingMailDraft;
         if (!pending || pending.id !== draftId) {
-            if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning');
+            if (window.showToast) window.showToast(window._t('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', '⚠️ This draft has already been handled or replaced by a newer draft.'), 'warning');
             window._renderGanttQaMessages();
             return;
         }
@@ -547,7 +547,7 @@
     window._aiRegisterPendingNoticeDraft = async function(draftId, btn) {
         const pending = window._ganttQaPendingNoticeDraft;
         if (!pending || pending.id !== draftId) {
-            if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning');
+            if (window.showToast) window.showToast(window._t('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', '⚠️ This draft has already been handled or replaced by a newer draft.'), 'warning');
             window._renderGanttQaMessages();
             return;
         }
@@ -683,7 +683,7 @@
     window._aiApplyPendingAlarmDraft = async function(draftId, btn) {
         const pending = window._ganttQaPendingAlarmDraft;
         if (!pending || pending.id !== draftId) {
-            if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning');
+            if (window.showToast) window.showToast(window._t('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', '⚠️ This draft has already been handled or replaced by a newer draft.'), 'warning');
             window._renderGanttQaMessages();
             return;
         }
@@ -770,7 +770,7 @@
 
     window._aiApplyPendingGanttEditDraft = function(draftId, btn) {
         const pending = window._ganttQaPendingEditDraft;
-        if (!pending || pending.id !== draftId) { if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning'); window._renderGanttQaMessages(); return; }
+        if (!pending || pending.id !== draftId) { if (window.showToast) window.showToast(window._t('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', '⚠️ This draft has already been handled or replaced by a newer draft.'), 'warning'); window._renderGanttQaMessages(); return; }
         if (btn) { btn.disabled = true; btn.textContent = '⏳ 적용 중...'; }
         const res = window._aiApplyGanttEditDraft(pending);
         window._ganttQaPendingEditDraft = null;
@@ -908,7 +908,7 @@
 
     window._aiApplyPendingGanttAddDraft = function(draftId, btn) {
         const pending = window._ganttQaPendingAddDraft;
-        if (!pending || pending.id !== draftId) { if (window.showToast) window.showToast('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', 'warning'); window._renderGanttQaMessages(); return; }
+        if (!pending || pending.id !== draftId) { if (window.showToast) window.showToast(window._t('⚠️ 이 초안은 이미 처리되었거나 새 초안으로 대체되었습니다.', '⚠️ This draft has already been handled or replaced by a newer draft.'), 'warning'); window._renderGanttQaMessages(); return; }
         if (btn) { btn.disabled = true; btn.textContent = '⏳ 추가 중...'; }
         const res = window._aiApplyGanttAddDraft(pending);
         window._ganttQaPendingAddDraft = null;
@@ -1378,7 +1378,7 @@
                 manualOtherProjectTexts = [otherCtx];
                 qaQuestionForPrompt = `[질문 대상: 다른 프로젝트 "${qaTarget.label}"] ${question}`;
             } else if (window.showToast) {
-                window.showToast(`⚠️ [${qaTarget.label}] 데이터를 불러오지 못해 현재 프로젝트 기준으로 답합니다.`, 'warning');
+                window.showToast(window._t(`⚠️ [${qaTarget.label}] 데이터를 불러오지 못해 현재 프로젝트 기준으로 답합니다.`, `⚠️ Couldn't load data for [${qaTarget.label}] — answering based on the current project instead.`), 'warning');
             }
             if (window._ganttQaHistory[pendingIdx]) {
                 window._ganttQaHistory[pendingIdx].text = '⏳ 답변 생성 중...';
@@ -1475,7 +1475,7 @@
         if (rating === 'good') window._lastQaFeedbackUid = null;
         else window._lastQaFeedbackUid = uid;
 
-        if (window.showToast && rating === 'good') window.showToast('👍 피드백이 저장되었습니다.', 'info');
+        if (window.showToast && rating === 'good') window.showToast(window._t('👍 피드백이 저장되었습니다.', '👍 Feedback saved.'), 'info');
         window._renderGanttQaMessages(); // 버튼 활성 표시 + "💡 의견" 링크 노출 갱신
     };
 
@@ -1490,7 +1490,7 @@
             modal.innerHTML = `
             <div id="gantt-qa-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:200px;">
                 <div id="gantt-qa-improve-comment-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                    <span>✏️ 어떤 부분이 문제였나요?</span>
+                    <span>✏️ ${window._currentLang === 'en' ? 'What was the problem?' : '어떤 부분이 문제였나요?'}</span>
                     <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-improve-comment-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="padding:18px;">
@@ -1565,7 +1565,7 @@
 
         const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 "AI 문답(Gantt 프로젝트에 대해 자유 질문에 답하는 챗봇)" 프롬프트와, 이 프롬프트로 답변했을 때 사용자가 "나쁨"으로 평가한 사례입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}${PROTECTED_STRUCTURE_RULE}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n\n반드시 아래 형식 그대로만 응답하세요. JSON이나 코드블록(\`\`\`)은 절대 사용하지 마세요.\n\n===ANALYSIS===\n(여기에 문제점 분석을 3줄 이내로 작성)\n===PROMPT===\n(여기에 개선된 프롬프트 전문을 기존과 동일한 형식으로 작성)\n===END===`;
 
-        if (window.showToast) window.showToast('🤖 AI 개선 요청 중...', 'info');
+        if (window.showToast) window.showToast(window._t('🤖 AI 개선 요청 중...', '🤖 Requesting AI improvement...'), 'info');
         try {
             const callResult = await window.callAiBackend(apiKey, improvePrompt);
             if (!callResult.ok) throw callResult.error;
@@ -1597,7 +1597,7 @@
             modal.innerHTML = `
             <div id="gantt-qa-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                 <div id="gantt-qa-improve-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                    <span>🤖 AI 프롬프트 개선 제안 (AI 문답)</span>
+                    <span>🤖 ${window._currentLang === 'en' ? 'AI Prompt Improvement Suggestion (AI Q&A)' : 'AI 프롬프트 개선 제안 (AI 문답)'}</span>
                     <button onclick="document.getElementById('gantt-qa-improve-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div id="gantt-qa-improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>
@@ -2206,7 +2206,7 @@
             modal.innerHTML = `
             <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
                 <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                    <span>💬 AI 문답</span>
+                    <span>💬 <span id="gantt-qa-title">${_qEn ? 'AI Q&A' : 'AI 문답'}</span></span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:28px; white-space:nowrap; transition:background .15s;">🔇</button>
                         <button onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
@@ -2405,13 +2405,14 @@
     window.openGanttQaPromptModal = async function() {
         let modal = document.getElementById('gantt-qa-prompt-modal');
         if (!modal) {
+            const _en = window._currentLang === 'en';
             modal = document.createElement('div');
             modal.id = 'gantt-qa-prompt-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9200; pointer-events:none; background:none;';
             modal.innerHTML = `
             <div id="gantt-qa-prompt-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:360px; min-height:400px;">
                 <div id="gantt-qa-prompt-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                    <span>📝 AI 문답 — 프롬프트 편집</span>
+                    <span>📝 ${_en ? 'AI Q&A — Edit Prompt' : 'AI 문답 — 프롬프트 편집'}</span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button onclick="event.stopPropagation(); window.showQaPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
                         <button onclick="document.getElementById('gantt-qa-prompt-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
@@ -2517,10 +2518,12 @@
             const ok = await window.saveGanttQaPromptToDrive(text);
             if (ok) localStorage.removeItem('gantt_qa_prompt_pending_push');
             else localStorage.setItem('gantt_qa_prompt_pending_push', '1');
-            if (window.showToast) window.showToast(ok ? '✏️ 프롬프트를 팀 공용으로 저장했습니다.' : '⚠️ 로컬엔 저장됐지만 팀 공용(Drive) 저장은 실패했습니다.', ok ? 'info' : 'error');
+            if (window.showToast) window.showToast(ok
+                ? window._t('✏️ 프롬프트를 팀 공용으로 저장했습니다.', '✏️ Prompt saved to the shared team copy.')
+                : window._t('⚠️ 로컬엔 저장됐지만 팀 공용(Drive) 저장은 실패했습니다.', '⚠️ Saved locally, but saving to the shared team copy (Drive) failed.'), ok ? 'info' : 'error');
         } else {
             localStorage.setItem('gantt_qa_prompt_pending_push', '1');
-            if (window.showToast) window.showToast('✏️ 이 PC에만 저장했습니다 (Drive 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다).', 'info');
+            if (window.showToast) window.showToast(window._t('✏️ 이 PC에만 저장했습니다 (Drive 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다).', '✏️ Saved on this PC only (Drive not connected — will sync to the shared team copy on next connection).'), 'info');
         }
     };
 
@@ -2554,13 +2557,14 @@
 
         let logModal = document.getElementById('gantt-qa-prompt-log-modal');
         if (!logModal) {
+            const _en = window._currentLang === 'en';
             logModal = document.createElement('div');
             logModal.id = 'gantt-qa-prompt-log-modal';
             logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none; background:none; align-items:center; justify-content:center;';
             logModal.innerHTML = `
                 <div id="gantt-qa-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                     <div id="gantt-qa-prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;color:#1971c2;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
-                        <span>🕒 AI 문답 — 프롬프트 변경 이력</span>
+                        <span>🕒 ${_en ? 'AI Q&A — Prompt History' : 'AI 문답 — 프롬프트 변경 이력'}</span>
                         <button onclick="event.stopPropagation(); document.getElementById('gantt-qa-prompt-log-modal').style.display='none'"
                             style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
                                    color:var(--modal-icon-text); font-size:16px; cursor:pointer;

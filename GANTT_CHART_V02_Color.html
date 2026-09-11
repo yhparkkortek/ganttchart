@@ -1056,7 +1056,7 @@
             <!-- 💡 [2026-08-30 삭제] "🔤 이름순"/"🏢 부서순" 버튼 — 표 헤더 클릭 정렬(sortAddressByHeader)로
                  대체되어 더 이상 필요 없어짐(모든 열을 클릭 정렬 가능하고 오름차순/내림차순도 토글됨). -->
             <div style="position:relative; display:inline-flex; align-items:center;">
-                <input id="addr-search-input" type="text" placeholder="🔍 검색 (이름/부서/직함/이메일/전화 등)" oninput="window.filterAddressRows(this.value)"
+                <input id="addr-search-input" type="text" placeholder="🔍 검색 (이름/부서/직함/이메일/전화 등)" data-i18n-placeholder="addr-search" oninput="window.filterAddressRows(this.value)"
                     style="width:220px; padding:6px 28px 6px 10px; border:1px solid #ccc; border-radius:14px; font-size:12px; box-sizing:border-box;">
                 <span id="addr-search-clear" onclick="document.getElementById('addr-search-input').value=''; window.filterAddressRows('');"
                     style="display:none; position:absolute; right:8px; cursor:pointer; color:#999; font-size:13px;">✕</span>
@@ -1820,7 +1820,7 @@
         <div id="inbox-drag-handle" class="history-header"
              style="background:#e7f3ff; color:#1971c2; font-size:14px; font-weight:bold; padding:13px 18px; flex-shrink:0; position:relative;
                     cursor:grab; border-bottom:1px solid #a5c8f0; border-radius:10px 10px 0 0; display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:8px 10px;">
-            <span id="inbox-modal-title" style="white-space:nowrap;">📦 AI 업무 보관함<span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="inbox-help-tip-text">
+            <span id="inbox-modal-title" style="white-space:nowrap;">📦 <span id="inbox-modal-title-text">AI 업무 보관함</span><span class="inbox-help-ico">ℹ️<span class="inbox-help-tip" id="inbox-help-tip-text">
                 📧 메일 분석에서 [📥 보관함]으로 담은 업무를 프로젝트와 독립적으로 보관합니다. (프로젝트를 전환해도 유지됨)<br><br>
                 ➡️ <b>현재 프로젝트</b> : 열려 있는 프로젝트의 개발단계(L0) 구간 끝에 배치<br>
                 📤 <b>다른 프로젝트</b> : 화면 전환 없이 드라이브의 다른 프로젝트로 직접 전송<br><br>

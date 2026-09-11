@@ -223,7 +223,7 @@ window._msShowKeywordSuggestModal = async function() {
     modal.style.display = 'block';
     window.bringModalToFront('ms-kwsuggest-modal');
     const body = document.getElementById('ms-kwsuggest-body');
-    body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">⏳ 열려있는 프로젝트 대비 분석 중...</div>';
+    body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">⏳ ' + window._t('열려있는 프로젝트 대비 분석 중...', 'Analyzing against open projects...') + '</div>';
     window._msKwSuggestions = await window._msSuggestKeywordsForUnmatched();
     window._msRenderKeywordSuggestList();
 };
@@ -233,9 +233,9 @@ window._msRenderKeywordSuggestList = function() {
     const title = document.getElementById('ms-kwsuggest-title');
     const list = window._msKwSuggestions || [];
     const openProjects = window._msKwOpenProjects || [];
-    if (title) title.textContent = `🔑 키워드 제안 (${list.length}건)`;
+    if (title) title.textContent = window._t(`🔑 키워드 제안 (${list.length}건)`, `🔑 Keyword Suggestions (${list.length})`);
     if (!list.length) {
-        body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">제안할 키워드가 없습니다.<br>(열려있는 프로젝트와 겹치는 미분류 메일이 없거나, 이미 다 등록돼 있습니다)</div>';
+        body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">' + window._t('제안할 키워드가 없습니다.<br>(열려있는 프로젝트와 겹치는 미분류 메일이 없거나, 이미 다 등록돼 있습니다)', 'No keywords to suggest.<br>(No unclassified mail overlapping with open projects, or all already registered)') + '</div>';
         return;
     }
     body.innerHTML = list.map(function(s, i) {
@@ -296,10 +296,13 @@ window._msApplyOneKeywordSuggestion = async function(idx) {
     if (ok) {
         window._msKwSuggestions = window._msKwSuggestions.filter(function(_, i) { return i !== idx; });
         const moved = await window._msRecheckUnmatched();
-        if (window.showToast) window.showToast(`✅ "${s.keyword}" → ${projectLabel}에 추가됨` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''), 'info');
+        if (window.showToast) window.showToast(window._t(
+            `✅ "${s.keyword}" → ${projectLabel}에 추가됨` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''),
+            `✅ "${s.keyword}" → added to ${projectLabel}` + (moved ? ` (${moved} unclassified mail re-matched)` : '')
+        ), 'info');
         window._msRenderKeywordSuggestList();
     } else if (window.showToast) {
-        window.showToast('❌ 키워드 추가 실패 — 콘솔 확인', 'error');
+        window.showToast(window._t('❌ 키워드 추가 실패 — 콘솔 확인', '❌ Failed to add keyword — check console'), 'error');
     }
 };
 
@@ -324,7 +327,10 @@ window._msApplyAllKeywordSuggestions = async function() {
     const moved = await window._msRecheckUnmatched();
     window._msKwSuggestions = list.filter(function(_, i) { return !appliedIdx.has(i); });
     window._msRenderKeywordSuggestList();
-    if (window.showToast) window.showToast(`✅ 키워드 ${okCount}건 추가 완료` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''), 'info');
+    if (window.showToast) window.showToast(window._t(
+        `✅ 키워드 ${okCount}건 추가 완료` + (moved ? ` (미분류 ${moved}건 재매칭됨)` : ''),
+        `✅ Added ${okCount} keyword(s)` + (moved ? ` (${moved} unclassified mail re-matched)` : '')
+    ), 'info');
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -399,9 +405,9 @@ window._msRenderAddressSuggestList = function() {
     const body = document.getElementById('ms-addrsuggest-body');
     const title = document.getElementById('ms-addrsuggest-title');
     const list = window._msAddrSuggestions || [];
-    if (title) title.textContent = `📇 주소록 추가 제안 (${list.length}건)`;
+    if (title) title.textContent = window._t(`📇 주소록 추가 제안 (${list.length}건)`, `📇 Address Book Suggestions (${list.length})`);
     if (!list.length) {
-        body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">추가할 신규 발신자가 없습니다.<br>(이미 주소록에 있거나, 대기 중인 신규발신자가 없습니다)</div>';
+        body.innerHTML = '<div style="padding:24px; text-align:center; color:#999; font-size:12px;">' + window._t('추가할 신규 발신자가 없습니다.<br>(이미 주소록에 있거나, 대기 중인 신규발신자가 없습니다)', 'No new senders to add.<br>(Already in the Address Book, or no pending new senders)') + '</div>';
         return;
     }
     body.innerHTML = list.map(function(e, i) {
@@ -425,7 +431,7 @@ window._msRenderAddressSuggestList = function() {
             window._msAddToAddressBook([e]);
             window._msAddrSuggestions = window._msAddrSuggestions.filter(function(_, i) { return i !== idx; });
             window._msRenderAddressSuggestList();
-            if (window.showToast) window.showToast(`✅ "${e.name}" 주소록에 추가됨`, 'info');
+            if (window.showToast) window.showToast(window._t(`✅ "${e.name}" 주소록에 추가됨`, `✅ "${e.name}" added to Address Book`), 'info');
         });
     });
     body.querySelectorAll('.ms-addrsuggest-del-btn').forEach(function(btn) {
@@ -444,7 +450,7 @@ window._msApplyAllAddressSuggestions = function() {
     const added = window._msAddToAddressBook(list);
     window._msAddrSuggestions = [];
     window._msRenderAddressSuggestList();
-    if (window.showToast) window.showToast(`✅ 주소록에 ${added}명 추가 완료`, 'info');
+    if (window.showToast) window.showToast(window._t(`✅ 주소록에 ${added}명 추가 완료`, `✅ Added ${added} contact(s) to Address Book`), 'info');
 };
 
 // 💡 [2026-09-07 신규] "미분류/신규발신자/자동폐기" 버튼을 한 번 더 누르면 모달이 닫히도록(토글) —
@@ -502,13 +508,14 @@ window.openMailAutoConfigModal = async function() {
     const cfg = await window.loadPriorityConfig();
     let modal = document.getElementById('mail-auto-config-modal');
     if (!modal) {
+        const _en = window._currentLang === 'en';
         modal = document.createElement('div');
         modal.id = 'mail-auto-config-modal';
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="mail-auto-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
             <div id="mail-auto-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
-                <span>⚙️ 메일 자동배치 설정</span>
+                <span>⚙️ ${_en ? 'Mail Auto-Placement Settings' : '메일 자동배치 설정'}</span>
                 <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
@@ -711,7 +718,7 @@ window._macAddFilterRuleFromInput = function(type, inputId) {
     const added = window._msAddFilterRule(type, v);
     input.value = '';
     window._macRenderFilterRules();
-    if (window.showToast) window.showToast(added ? `✅ 규칙 추가됨: ${v}` : `이미 등록된 규칙입니다`, added ? 'info' : 'error');
+    if (window.showToast) window.showToast(added ? window._t(`✅ 규칙 추가됨: ${v}`, `✅ Rule added: ${v}`) : window._t(`이미 등록된 규칙입니다`, `This rule is already registered`), added ? 'info' : 'error');
 };
 
 window._macRemoveFilterRule = function(type, idx) {
@@ -763,7 +770,7 @@ window._macSave = async function() {
         cutline: Math.max(0, Math.min(100, parseInt(document.getElementById('mac-cutline').value, 10) || 50))
     };
     const ok = await window.savePriorityConfig(newConfig);
-    if (window.showToast) window.showToast(ok ? '✅ 저장 완료' : '⚠️ 저장 실패 (콘솔 확인)', ok ? 'info' : 'error');
+    if (window.showToast) window.showToast(ok ? window._t('✅ 저장 완료', '✅ Saved') : window._t('⚠️ 저장 실패 (콘솔 확인)', '⚠️ Save failed (check console)'), ok ? 'info' : 'error');
     if (ok) document.getElementById('mail-auto-config-modal').style.display = 'none';
 };
 

@@ -84,13 +84,14 @@
     window.openAiToolsSettingsModal = function() {
         let modal = document.getElementById('ai-tools-settings-modal');
         if (!modal) {
+            const _en = window._currentLang === 'en';
             modal = document.createElement('div');
             modal.id = 'ai-tools-settings-modal';
             modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9160; pointer-events:none; background:none;';
             modal.innerHTML = `
             <div id="ai-tools-settings-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
                 <div id="ai-tools-settings-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2; flex-shrink:0;">
-                    <span>⚙️ AI 분석 설정</span>
+                    <span>⚙️ ${_en ? 'AI Analysis Settings' : 'AI 분석 설정'}</span>
                     <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="overflow-y:auto; flex:1; padding:14px 18px; display:flex; flex-direction:column; gap:10px;">
@@ -357,7 +358,10 @@
         learnCountInput.value = lc;
         window.setTopicLearningCount(lc);
 
-        if (window.showToast) window.showToast('✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · AI 문답 참고 업무 최대 ' + qmt + '/' + qmo + '건 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ' · 학습 로그 반영 최근 ' + ld + '일/' + lc + '건)', 'info');
+        if (window.showToast) window.showToast(window._t(
+            '✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · AI 문답 참고 업무 최대 ' + qmt + '/' + qmo + '건 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ' · 학습 로그 반영 최근 ' + ld + '일/' + lc + '건)',
+            '✅ Settings saved. (Mail analysis max ' + mv + ' chars · Task detail max ' + v + ' chars · AI Q&A max ' + qmt + '/' + qmo + ' tasks · Search range ±' + rd + ' days · Urgent threshold D-' + ud + ' · Learning log covers last ' + ld + ' days/' + lc + ' entries)'
+        ), 'info');
     };
 
     // 🤖 [2026-08-27] "AI 요약"/"AI 문답"/"AI 분석 설정"은 상단 메뉴 "🤖 AI 도구"(및 "⚙️ 설정")로

@@ -25,7 +25,11 @@ let _prefill = {};   // AI 추출 or 외부 pre-fill 데이터
 let _status  = '';   // 완료 시 설정할 완료여부 값 (''=DV, 'MP(EC)'=임시)
 
 // ─── 공용 헬퍼 ───────────────────────────────────────────────────────
-const _en = function() { return !!(window.isEnglishMode && window.isEnglishMode()); };
+// 🐛 [2026-09-11 버그 수정] window.isEnglishMode()는 이 앱 어디에도 정의된 적이 없는 함수라
+//    항상 undefined였고, 그래서 이 파일의 _en()은 언어 설정과 무관하게 항상 false만 반환했다 —
+//    즉 이 새 프로젝트 등록 위자드는 영문 모드로 바꿔도 계속 한글로만 보이던 숨은 버그.
+//    앱 전역에서 실제로 쓰는 언어 상태(window._currentLang)를 그대로 참조하도록 수정.
+const _en = function() { return window._currentLang === 'en'; };
 const _t  = function(ko, en) { return _en() ? en : ko; };
 
 // ─── 모달 DOM 생성 (최초 1회) ─────────────────────────────────────────
@@ -42,7 +46,7 @@ function _ensureModal() {
   <!-- 헤더 -->
   <div id="npw-drag" style="display:flex; justify-content:space-between; align-items:center;
     padding:14px 18px; background:#e7f3ff; border-bottom:1px solid #a5c8f0; cursor:grab;">
-    <span style="font-weight:bold; font-size:14px; color:#1971c2;">➕ <span id="npw-title">새 프로젝트 등록</span></span>
+    <span style="font-weight:bold; font-size:14px; color:#1971c2;">➕ <span id="npw-title">${_t('새 프로젝트 등록', 'Register New Project')}</span></span>
     <button onclick="window._npwClose()" style="background:none; border:none; font-size:18px; cursor:pointer; color:#555; line-height:1; padding:0 4px;">✕</button>
   </div>
   <!-- 프로그레스 -->
@@ -399,7 +403,7 @@ window._npwNext = function() {
         // 완료
         _applyToSummary();
         window._npwClose();
-        if (window.showToast) window.showToast('✅ 프로젝트 정보를 입력했습니다. 확인 후 저장해주세요.', 'success', 4000);
+        if (window.showToast) window.showToast(window._t('✅ 프로젝트 정보를 입력했습니다. 확인 후 저장해주세요.', '✅ Project info filled in. Please review and save.'), 'success', 4000);
         return;
     }
     _step++;

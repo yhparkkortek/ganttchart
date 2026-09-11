@@ -41,10 +41,15 @@
                 'alarm-send-all-btn':'📧 일괄 발송',
                 'mail-btn':'🤖 AI 업무 분석',
                 'project-select-btn': '🔃 프로젝트 선택',
+                'work-filter-btn':    '🎛️ 업무필터 ▾',
                 'schedule-tools-btn': '🛠️ 일정 도구',
+                'gantt-ai-search-btn':'🔍 AI검색',
                 'ai-menu-btn':        '🤖 AI 도구',
                 'ai-summary-menu-btn':'🤖 AI 요약',
                 'ai-qa-menu-btn':     '💬 AI 문답',
+                'ai-summary-title':   'AI 요약',
+                'gantt-qa-title':     'AI 문답',
+                'inbox-modal-title-text': 'AI 업무 보관함',
                 'ai-analysis-settings-btn': '🤖 AI 분석 설정',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'add-user-btn':       '👤 사용자 추가',
@@ -80,6 +85,8 @@
                 'ep-convbd-toggle-btn': '🔽 펼치기',
                 'ep-convbd-export-btn': '🟩 엑셀로 내보내기',
                 'ep-save-btn': '💾 저장',
+                'cal-view-month-btn': '월',
+                'cal-view-week-btn':  '주',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -133,6 +140,11 @@
                 'th-addr-phone':      '근무처 전화',
                 'th-addr-telegram':   '텔레그램 ID',
             },
+            // 💡 [2026-09-11 신규] data-i18n-placeholder 속성이 붙은 input의 placeholder 번역 —
+            //    data-i18n(textContent 전용)과 별도 맵. toggleLang()에서 함께 처리.
+            i18nPlaceholder: {
+                'addr-search': '🔍 검색 (이름/부서/직함/이메일/전화 등)',
+            },
         },
 
         en: {
@@ -151,10 +163,15 @@
                 'alarm-send-all-btn':'📧 Batch Send',
                 'mail-btn':'🤖 AI Analysis',
                 'project-select-btn': '🔃 Select Project',
+                'work-filter-btn':    '🎛️ Task Filter ▾',
                 'schedule-tools-btn': '🛠️ Schedule Tools',
+                'gantt-ai-search-btn':'🔍 AI Search',
                 'ai-menu-btn':        '🤖 AI Tools',
                 'ai-summary-menu-btn':'🤖 AI Summary',
                 'ai-qa-menu-btn':     '💬 AI Q&A',
+                'ai-summary-title':   'AI Summary',
+                'gantt-qa-title':     'AI Q&A',
+                'inbox-modal-title-text': 'AI Task Inbox',
                 'ai-analysis-settings-btn': '🤖 AI Analysis Settings',
                 'admin-pw-change-btn': '🔑 Change Password',
                 'add-user-btn':       '👤 Add User',
@@ -190,6 +207,8 @@
                 'ep-convbd-toggle-btn': '🔽 Expand',
                 'ep-convbd-export-btn': '🟩 Export to Excel',
                 'ep-save-btn': '💾 Save',
+                'cal-view-month-btn': 'Month',
+                'cal-view-week-btn':  'Week',
             },
             filterLabel: {
                 'LEVEL(WBS)': 'LEVEL(WBS)',
@@ -243,6 +262,9 @@
                 'th-addr-phone':      'Office Phone',
                 'th-addr-telegram':   'Telegram ID',
             },
+            i18nPlaceholder: {
+                'addr-search': '🔍 Search (name/dept/title/email/phone, etc.)',
+            },
         },
     };
     window._currentLang = 'ko';
@@ -289,6 +311,13 @@
         document.querySelectorAll('[data-i18n]').forEach(el => {
             const key = el.dataset.i18n;
             if (i18nMap[key] !== undefined) el.textContent = i18nMap[key];
+        });
+
+        // 🐛 [2026-09-11 신규] data-i18n-placeholder 속성 기반 placeholder 번역 (예: 주소록 검색창)
+        const i18nPlaceholderMap = LANG[window._currentLang].i18nPlaceholder || {};
+        document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+            const key = el.dataset.i18nPlaceholder;
+            if (i18nPlaceholderMap[key] !== undefined) el.placeholder = i18nPlaceholderMap[key];
         });
 
         // 필터 라벨 갱신

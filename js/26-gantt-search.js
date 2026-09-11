@@ -72,26 +72,36 @@
 
         var c = _getThemeColors(); // 생성 시점 테마 색
 
+        // 🐛 [2026-09-11 버그 수정] 이 검색바는 최초 열 때 한 번만 DOM에 삽입되는데, 라벨/placeholder/
+        //    title/버튼 문구가 전부 한글로 하드코딩돼 있어 영문 모드에서도 그대로 한글로 보였다.
+        //    LANG.ui의 id 기반 치환 방식은 innerHTML을 나중에 통째로 다시 쓰는 이 구조엔 안 맞아서,
+        //    생성 시점의 window._currentLang을 그대로 반영해 만든다(언어를 바꾼 뒤 새로 열면 새 언어로
+        //    보임 — 이미 열려있는 채로 언어를 토글하는 경우까지 실시간 반영하려면 toggleLang 쪽에서
+        //    이 함수를 다시 호출해야 하는데, 검색바는 대부분 필요할 때만 짧게 여닫는 보조 UI라 그정도
+        //    실시간성까지는 이 수정 범위 밖으로 둠).
+        var _en = window._currentLang === 'en';
         var bar = document.createElement('div');
         bar.id = 'gantt-ai-searchbar';
         bar.style.cssText =
             'display:none;padding:6px 10px;background:' + c.barBg + ';border-bottom:1px solid ' + c.barBorder + ';' +
             'align-items:center;gap:7px;flex-wrap:wrap;font-size:13px;';
         bar.innerHTML =
-            '<span style="color:' + c.text + ';font-weight:700;white-space:nowrap;font-size:12px;">🔍 검색</span>' +
+            '<span style="color:' + c.text + ';font-weight:700;white-space:nowrap;font-size:12px;">🔍 ' + (_en ? 'Search' : '검색') + '</span>' +
             '<input id="gantt-ai-search-input" type="text"' +
-            '  placeholder="이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)"' +
+            '  placeholder="' + (_en
+                ? 'Name·task·content·mail snippet  /  @project  /  #ai (all AI-registered)'
+                : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)') + '"' +
             '  style="flex:1;min-width:200px;padding:4px 10px;border-radius:6px;border:1px solid ' + c.inputBorder + ';' +
             '  font-size:13px;outline:none;background:#fff;color:' + c.text + ';">' +
-            '<button id="gantt-search-prev" title="이전 결과 (Shift+Enter)"' +
+            '<button id="gantt-search-prev" title="' + (_en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)') + '"' +
             '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↑</button>' +
-            '<button id="gantt-search-next" title="다음 결과 (Enter)"' +
+            '<button id="gantt-search-next" title="' + (_en ? 'Next result (Enter)' : '다음 결과 (Enter)') + '"' +
             '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↓</button>' +
             '<span id="gantt-ai-search-count" style="color:' + c.text + ';font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
             '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
-            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:' + c.text + ';"> 비매칭 숨기기</label>' +
-            '<button id="gantt-ai-search-clear" title="검색 초기화 (Esc)"' +
-            '  style="padding:4px 10px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:12px;cursor:pointer;color:' + c.text + ';">✕ 초기화</button>';
+            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:' + c.text + ';"> ' + (_en ? 'Hide non-matching' : '비매칭 숨기기') + '</label>' +
+            '<button id="gantt-ai-search-clear" title="' + (_en ? 'Clear search (Esc)' : '검색 초기화 (Esc)') + '"' +
+            '  style="padding:4px 10px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:12px;cursor:pointer;color:' + c.text + ';">✕ ' + (_en ? 'Clear' : '초기화') + '</button>';
 
         container.insertBefore(bar, container.firstChild);
 

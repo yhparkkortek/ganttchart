@@ -17,13 +17,14 @@
 
         let logModal = document.getElementById('ps-prompt-log-modal');
         if (!logModal) {
+            const _en = window._currentLang === 'en';
             logModal = document.createElement('div');
             logModal.id = 'ps-prompt-log-modal';
             logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none; background:none; align-items:center; justify-content:center;';
             logModal.innerHTML = `
                 <div id="ps-prompt-log-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.2); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                     <div id="ps-prompt-log-drag" style="padding:13px 18px;border-bottom:1px solid #a5c8f0;font-weight:bold;font-size:14px;background:#e7f3ff;color:#1971c2;border-radius:10px 10px 0 0;display:flex;justify-content:space-between;align-items:center;cursor:grab;">
-                        <span>🕒 AI 요약 — 프롬프트 변경 이력</span>
+                        <span>🕒 ${_en ? 'AI Summary — Prompt History' : 'AI 요약 — 프롬프트 변경 이력'}</span>
                         <button onclick="event.stopPropagation(); document.getElementById('ps-prompt-log-modal').style.display='none'"
                             style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px;
                                    color:var(--modal-icon-text); font-size:16px; cursor:pointer;
@@ -127,7 +128,7 @@
             if (triggerRow) triggerRow.style.display = 'none';
             if (goodBtn) { goodBtn.style.background = '#c9ecd3'; goodBtn.style.color = '#1f7a3d'; goodBtn.dataset.active = '1'; }
             if (badBtn)  { badBtn.style.background = '#fbe4e2'; badBtn.style.color = '#b1432f'; delete badBtn.dataset.active; }
-            if (window.showToast) window.showToast('👍 피드백이 저장되었습니다.', 'info');
+            if (window.showToast) window.showToast(window._t('👍 피드백이 저장되었습니다.', '👍 Feedback saved.'), 'info');
         } else {
             window._lastPsFeedbackUid = uid;
             if (triggerRow) triggerRow.style.display = 'block'; // 💡 나쁨 선택 시에만 개선요청 버튼 노출
@@ -154,7 +155,7 @@
             modal.innerHTML = `
             <div id="ps-improve-comment-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:200px;">
                 <div id="ps-improve-comment-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                    <span>✏️ 어떤 부분이 문제였나요?</span>
+                    <span>✏️ ${window._currentLang === 'en' ? 'What was the problem?' : '어떤 부분이 문제였나요?'}</span>
                     <button onclick="event.stopPropagation(); document.getElementById('ps-improve-comment-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div style="padding:18px;">
@@ -238,7 +239,7 @@
 
         const improvePrompt = `당신은 AI 프롬프트 개선 전문가입니다.\n아래는 현재 사용 중인 "AI 프로젝트 요약 리포트" 프롬프트와, 이 프롬프트로 생성했을 때 사용자가 "나쁨"으로 평가한 사례입니다.\n\n=== 현재 프롬프트 ===\n${currentPrompt}\n\n=== 실패 케이스 ===\n${casesText}${PROTECTED_STRUCTURE_RULE}\n\n위 케이스에서 프롬프트의 어떤 부분이 문제인지 분석하고, 개선된 프롬프트 전문을 제안해주세요.\n\n반드시 아래 형식 그대로만 응답하세요. JSON이나 코드블록(\`\`\`)은 절대 사용하지 마세요.\n\n===ANALYSIS===\n(여기에 문제점 분석을 3줄 이내로 작성)\n===PROMPT===\n(여기에 개선된 프롬프트 전문을 기존과 동일한 형식으로 작성)\n===END===`;
 
-        if (window.showToast) window.showToast('🤖 AI 개선 요청 중...', 'info');
+        if (window.showToast) window.showToast(window._t('🤖 AI 개선 요청 중...', '🤖 Requesting AI improvement...'), 'info');
         try {
             const callResult = await window.callAiBackend(apiKey, improvePrompt);
             if (!callResult.ok) throw callResult.error;
@@ -273,7 +274,7 @@
             modal.innerHTML = `
             <div id="ps-improve-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:400px; min-height:300px;">
                 <div id="ps-improve-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                    <span>🤖 AI 프롬프트 개선 제안 (프로젝트 요약)</span>
+                    <span>🤖 ${window._currentLang === 'en' ? 'AI Prompt Improvement Suggestion (Project Summary)' : 'AI 프롬프트 개선 제안 (프로젝트 요약)'}</span>
                     <button onclick="document.getElementById('ps-improve-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                 </div>
                 <div id="ps-improve-truncate-warning" style="display:none; margin:10px 16px 0; padding:8px 12px; background:#fff3cd; border:1px solid #ffc107; border-radius:6px; font-size:12px; color:#856404;"></div>

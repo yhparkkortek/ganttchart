@@ -724,13 +724,14 @@ window.openPriorityConfigModal = async function() {
     const cfg = await window.loadPriorityConfig();
     let modal = document.getElementById('priority-config-modal');
     if (!modal) {
+        const _en = window._currentLang === 'en';
         modal = document.createElement('div');
         modal.id = 'priority-config-modal';
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9100; pointer-events:none; background:none;';
         modal.innerHTML = `
         <div id="priority-config-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:300px;">
             <div id="priority-config-drag" style="padding:13px 18px; border-bottom:1px solid #ffe08a; font-weight:bold; font-size:14px; background:#fff8e6; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#7a5210;">
-                <span>⭐ 우선순위 점수 설정</span>
+                <span>⭐ ${_en ? 'Priority Score Settings' : '우선순위 점수 설정'}</span>
                 <button onclick="document.getElementById('priority-config-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div style="overflow-y:auto; flex:1; padding:14px 18px;">
@@ -822,7 +823,7 @@ window._pcSave = async function() {
     };
     const ok = await window.savePriorityConfig(newConfig);
     if (window.showToast) {
-        window.showToast(ok ? '✅ 우선순위 점수 설정이 저장되었습니다.' : '⚠️ 저장 실패 (콘솔 확인)', ok ? 'info' : 'error');
+        window.showToast(ok ? window._t('✅ 우선순위 점수 설정이 저장되었습니다.', '✅ Priority score settings saved.') : window._t('⚠️ 저장 실패 (콘솔 확인)', '⚠️ Save failed (check console)'), ok ? 'info' : 'error');
     }
     if (ok) document.getElementById('priority-config-modal').style.display = 'none';
 };
@@ -1051,11 +1052,17 @@ window._msTryFullAutoRegister = function(item, mailRawObj, onDone) {
     let doneCount = 0;
     window._msRegisterToProjectTargets(targets, item.task, mailRawObj, srcLabel, item._alarmWorthy, '메일완전자동', function(target, result) {
         doneCount++;
-        const multiSuffix = targets.length > 1 ? ` (${doneCount}/${targets.length}개 프로젝트)` : '';
+        const multiSuffix = targets.length > 1 ? window._t(` (${doneCount}/${targets.length}개 프로젝트)`, ` (${doneCount}/${targets.length} projects)`) : '';
         if (result.ok) {
-            if (window.showToast) window.showToast(`🎯 "${taskName}" 완전자동 배치 완료 → ${target.file_name}${multiSuffix} (${result.label || ''})`, 'info');
+            if (window.showToast) window.showToast(window._t(
+                `🎯 "${taskName}" 완전자동 배치 완료 → ${target.file_name}${multiSuffix} (${result.label || ''})`,
+                `🎯 "${taskName}" auto-placed → ${target.file_name}${multiSuffix} (${result.label || ''})`
+            ), 'info');
         } else {
-            if (window.showToast) window.showToast(`⚠️ "${taskName}" → ${target ? target.file_name : '?'} 완전자동 등록 실패 (${result.reason || '알 수 없는 오류'}) — 보관함에서 [✅매칭전송]으로 직접 처리해주세요.`, 'error');
+            if (window.showToast) window.showToast(window._t(
+                `⚠️ "${taskName}" → ${target ? target.file_name : '?'} 완전자동 등록 실패 (${result.reason || '알 수 없는 오류'}) — 보관함에서 [✅매칭전송]으로 직접 처리해주세요.`,
+                `⚠️ "${taskName}" → ${target ? target.file_name : '?'} auto-registration failed (${result.reason || 'unknown error'}) — please handle it manually from the Inbox with [✅ Send matched].`
+            ), 'error');
         }
         if (doneCount === targets.length) {
             item.registered = true;
@@ -1245,7 +1252,10 @@ window._autoMailFetchTick = async function() {
                                         type: '메일자동처리(커트라인)', target: target.file_name, at: new Date().toISOString()
                                     });
                                     if (window.showToast) {
-                                        window.showToast(`🎯 "${item.task['업무명']}" 자동배치 완료 → ${target.file_name} (${result.label})`, 'info');
+                                        window.showToast(window._t(
+                                            `🎯 "${item.task['업무명']}" 자동배치 완료 → ${target.file_name} (${result.label})`,
+                                            `🎯 "${item.task['업무명']}" auto-placed → ${target.file_name} (${result.label})`
+                                        ), 'info');
                                     }
                                 } else {
                                     console.warn('[메일 자동처리] 자동배치 실패, TaskInbox 대기 상태 유지:', result.reason);
@@ -1574,7 +1584,7 @@ window._msRenderQueueModal = function(type) {
                 window._msAddFilterRule('blockedDomains', domain);
                 const r = window._msQueueRows && window._msQueueRows[Number(ruleBtn.dataset.idx)];
                 if (r) window._msQueueRemoveRow(window._msQueueCurrentType, r.fileName);
-                if (window.showToast) window.showToast(`🚫 "${domain}" 도메인 자동폐기 규칙에 등록됨`, 'info');
+                if (window.showToast) window.showToast(window._t(`🚫 "${domain}" 도메인 자동폐기 규칙에 등록됨`, `🚫 "${domain}" registered to the auto-discard domain rule`), 'info');
             }
         });
         // 💡 [2026-09-06 신규] 요약 칩(발신 도메인/사유 상위) 클릭 필터 — AI 업무 보관함 요약과 동일한 방식
@@ -1660,14 +1670,14 @@ window._msBulkReanalyzeUnmatched = async function(opts) {
         });
     }
     if (!unmatched.length) {
-        if (!_noConfirm && window.showToast) window.showToast('미분류 메일이 없습니다.', 'info');
-        else if (skippedRecent && window.showToast) window.showToast('🔄 자동 재분석 — 전부 최근에 이미 시도한 건이라 건너뜁니다(' + skippedRecent + '건, API 절약).', 'info', 4000);
+        if (!_noConfirm && window.showToast) window.showToast(window._t('미분류 메일이 없습니다.', 'No unclassified mail.'), 'info');
+        else if (skippedRecent && window.showToast) window.showToast(window._t('🔄 자동 재분석 — 전부 최근에 이미 시도한 건이라 건너뜁니다(' + skippedRecent + '건, API 절약).', '🔄 Auto re-analysis — skipped all (' + skippedRecent + ') as they were already tried recently, to save API calls.'), 'info', 4000);
         return;
     }
 
     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
     if (!apiKey) {
-        if (window.showToast) window.showToast('⚠️ AI API 키를 먼저 설정해주세요.', 'error');
+        if (window.showToast) window.showToast(window._t('⚠️ AI API 키를 먼저 설정해주세요.', '⚠️ Please set up the AI API key first.'), 'error');
         return;
     }
 
@@ -1687,9 +1697,10 @@ window._msBulkReanalyzeUnmatched = async function(opts) {
         const candidatesForAI = candidates.length ? candidates : null;
 
         if (!candidatesForAI) {
-            if (window.showToast) window.showToast(
+            if (window.showToast) window.showToast(window._t(
                 '⚠️ 매칭 가능한 진행 중 프로젝트가 없습니다. project_index.json 및 완료 여부를 확인해주세요.',
-                'error', 6000);
+                '⚠️ No in-progress projects available to match. Please check project_index.json and completion status.'
+            ), 'error', 6000);
             return;
         }
 
@@ -1753,11 +1764,14 @@ window._msBulkReanalyzeUnmatched = async function(opts) {
         if (btn) btn.textContent = origBtnText;
         const remaining = (window._msResults || []).filter(r => !r.project).length;
         if (window.showToast) {
-            window.showToast(
+            window.showToast(window._t(
                 `🔄 일괄 재분석 완료 — ${unmatched.length}건 중 ${matched}건 매칭됨` +
                 (remaining ? `, ${remaining}건 여전히 미분류` : ', 모두 매칭됨! 🎉') +
                 (failed ? ` (${failed}건 오류)` : ''),
-                matched > 0 ? 'info' : 'warning', 6000);
+                `🔄 Batch re-analysis done — ${matched}/${unmatched.length} matched` +
+                (remaining ? `, ${remaining} still unclassified` : ', all matched! 🎉') +
+                (failed ? ` (${failed} error(s))` : '')
+            ), matched > 0 ? 'info' : 'warning', 6000);
         }
     }
 };
@@ -1773,13 +1787,14 @@ window._msOpenReanalyzeHintModal = function(fileName) {
     window._msReanalyzeTarget = fileName;
     let modal = document.getElementById('ms-reanalyze-modal');
     if (!modal) {
+        const _en = window._currentLang === 'en';
         modal = document.createElement('div');
         modal.id = 'ms-reanalyze-modal';
         modal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none;';
         modal.innerHTML = `
         <div id="ms-reanalyze-box" onclick="event.stopPropagation()" style="position:fixed; background:#fff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:340px; min-height:220px; pointer-events:auto;">
             <div id="ms-reanalyze-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
-                <span>🔄 프로젝트 매칭 재분석 요청</span>
+                <span>🔄 ${_en ? 'Project Match Re-analysis Request' : '프로젝트 매칭 재분석 요청'}</span>
                 <button onclick="event.stopPropagation(); document.getElementById('ms-reanalyze-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
             </div>
             <div style="padding:18px;">
@@ -2000,7 +2015,7 @@ window._msQueueReanalyze = async function(fileName, hint) {
     if (!r) return;
     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
     if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
-    if (window.showToast) window.showToast('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', 'info');
+    if (window.showToast) window.showToast(window._t('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', '🔄 Re-analyzing... "' + (r.subject || '').substring(0, 24) + '"'), 'info');
     try {
         const candidateList = window._msFilterCandidateProjects(await window._msLoadProjectIndex());
         const candidatesForAI = candidateList.length ? candidateList : null;
@@ -2074,15 +2089,15 @@ window._msQueueReanalyze = async function(fileName, hint) {
         window._msRenderQueueModal('unmatched');
         if (window.showToast) {
             if (task && projectTag && projectTag.status === 'matched') {
-                window.showToast(`✅ 재분석 완료 — "${window._msProjectTagLabel(projectTag)}"로 매칭되어 업무 보관함에 추가됨`, 'info');
+                window.showToast(window._t(`✅ 재분석 완료 — "${window._msProjectTagLabel(projectTag)}"로 매칭되어 업무 보관함에 추가됨`, `✅ Re-analysis done — matched to "${window._msProjectTagLabel(projectTag)}" and added to the Task Inbox`), 'info');
             } else if (task) {
-                window.showToast('🔄 재분석 완료 — 여전히 미분류입니다(근거를 다시 확인해보세요)', 'warning');
+                window.showToast(window._t('🔄 재분석 완료 — 여전히 미분류입니다(근거를 다시 확인해보세요)', '🔄 Re-analysis done — still unclassified (please review the reasoning again)'), 'warning');
             } else {
-                window.showToast('⚠️ 재분석 실패(AI 분석에 실패했습니다)', 'error');
+                window.showToast(window._t('⚠️ 재분석 실패(AI 분석에 실패했습니다)', '⚠️ Re-analysis failed (AI analysis was unsuccessful)'), 'error');
             }
         }
     } catch (e) {
-        if (window.showToast) window.showToast('⚠️ 재분석 중 오류: ' + e.message, 'error');
+        if (window.showToast) window.showToast(window._t('⚠️ 재분석 중 오류: ' + e.message, '⚠️ Error during re-analysis: ' + e.message), 'error');
     }
 };
 
@@ -2096,7 +2111,7 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
     if (!r) return;
     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
     if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
-    if (window.showToast) window.showToast('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', 'info');
+    if (window.showToast) window.showToast(window._t('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', '🔄 Re-analyzing... "' + (r.subject || '').substring(0, 24) + '"'), 'info');
     try {
         const candidateList = window._msFilterCandidateProjects(await window._msLoadProjectIndex());
         const candidatesForAI = candidateList.length ? candidateList : null;
@@ -2112,11 +2127,11 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
             r.error = 'AI분석실패';
             window._msSaveQueueToStorage();
             window._msRenderQueueModal('unmatched');
-            if (window.showToast) window.showToast('⚠️ 재분석 실패(AI가 업무 정보를 추출하지 못했습니다)', 'error');
+            if (window.showToast) window.showToast(window._t('⚠️ 재분석 실패(AI가 업무 정보를 추출하지 못했습니다)', '⚠️ Re-analysis failed (AI could not extract task information)'), 'error');
             return;
         }
 
-        if (window.showToast) window.showToast('📤 ' + targets.length + '개 프로젝트로 전송 중...', 'info');
+        if (window.showToast) window.showToast(window._t('📤 ' + targets.length + '개 프로젝트로 전송 중...', '📤 Sending to ' + targets.length + ' project(s)...'), 'info');
         const result = await window.distSendTaskToTargets(task, targets, { source: '미분류 재분석(다중전송)' });
 
         r.error = null;
@@ -2135,7 +2150,7 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
         if (result.failNames.length) msg += (msg ? '\n\n' : '') + `❌ ${result.failNames.length}건 실패\n· ` + result.failNames.join('\n· ');
         alert(msg || '전송할 항목이 없습니다.');
     } catch (e) {
-        if (window.showToast) window.showToast('⚠️ 재분석 중 오류: ' + e.message, 'error');
+        if (window.showToast) window.showToast(window._t('⚠️ 재분석 중 오류: ' + e.message, '⚠️ Error during re-analysis: ' + e.message), 'error');
     }
 };
 
