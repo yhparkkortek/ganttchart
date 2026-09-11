@@ -267,7 +267,7 @@ window._nmBulkToggleChannel = function(type) {
 // 일괄 삭제
 window._nmBulkRemoveAll = function() {
     const list = document.getElementById('nm-recipient-list');
-    if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) {
+    if (list && list.children.length && confirm(window._t('수신자를 전체 삭제할까요?', 'Remove all recipients?'))) {
         list.innerHTML = '';
         window._asSyncRecipHeaderPad('nm-recipient-list');
     }
@@ -430,7 +430,7 @@ window.saveNoticeItem = function() {
     const title    = document.getElementById('nm-title').value.trim();
     const body     = document.getElementById('nm-body').value.trim();
     const deadline = document.getElementById('nm-deadline').value;
-    if (!title || !body || !deadline) { alert('제목, 내용, 기준일은 필수입니다.'); return; }
+    if (!title || !body || !deadline) { alert(window._t('제목, 내용, 기준일은 필수입니다.', 'Title, content, and base date are required.')); return; }
 
     // D-day 수집 (기본 체크박스 + 커스텀)
     const presetDays  = [7,3,1,0].filter(d => { const el=document.getElementById(`nm-d${d}`); return el&&el.checked; });
@@ -458,21 +458,21 @@ window.saveNoticeItem = function() {
 window._nmSaveRecurRule = async function() {
     const title = document.getElementById('nm-title').value.trim();
     const body  = document.getElementById('nm-body').value.trim();
-    if (!title || !body) { alert('제목, 내용은 필수입니다.'); return; }
+    if (!title || !body) { alert(window._t('제목, 내용은 필수입니다.', 'Title and content are required.')); return; }
 
     const { recipients } = window._nmPersistRecipientMode();
-    if (!recipients.length) { alert('수신 대상을 1명 이상 추가해주세요.'); return; }
+    if (!recipients.length) { alert(window._t('수신 대상을 1명 이상 추가해주세요.', 'Please add at least one recipient.')); return; }
 
     const dateMode = document.getElementById('nm-datemode-specific')?.checked ? 'specific' : 'range';
     let startDate = '', endDate = '', dayInterval = 1;
     if (dateMode === 'range') {
         startDate = document.getElementById('nm-recur-start').value;
         endDate   = document.getElementById('nm-recur-end').value;
-        if (!startDate || !endDate) { alert('시작일/종료일을 입력해주세요.'); return; }
-        if (startDate > endDate) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+        if (!startDate || !endDate) { alert(window._t('시작일/종료일을 입력해주세요.', 'Please enter the start/end date.')); return; }
+        if (startDate > endDate) { alert(window._t('종료일이 시작일보다 빠릅니다.', 'The end date is earlier than the start date.')); return; }
         dayInterval = parseInt(document.getElementById('nm-recur-day-interval').value, 10) || 1;
     } else {
-        if (!window._nmSpecificDates.length) { alert('특정 날짜를 1개 이상 추가해주세요.'); return; }
+        if (!window._nmSpecificDates.length) { alert(window._t('특정 날짜를 1개 이상 추가해주세요.', 'Please add at least one specific date.')); return; }
     }
 
     // 💡 [2026-08-31] 시간창(시작~종료+몇시간마다) 대신 "발송 시각" 하나만 받음 — 백엔드 스키마는
@@ -494,7 +494,7 @@ window._nmSaveRecurRule = async function() {
         const health = await fetch(`${MAIL_SERVER}/health`, { signal: AbortSignal.timeout(2000) });
         if (!health.ok) throw new Error();
     } catch (e) {
-        alert('❌ 메일 서버(kortek_backend.py)가 실행되지 않았습니다.\n예약 발송(기간·반복)은 이 서버가 켜져 있어야 등록/동작합니다.');
+        alert(window._t('❌ 메일 서버(kortek_backend.py)가 실행되지 않았습니다.\n예약 발송(기간·반복)은 이 서버가 켜져 있어야 등록/동작합니다.', '❌ The mail server (kortek_backend.py) is not running.\nScheduled sending (period/recurring) requires this server to be on.'));
         return;
     }
 
@@ -507,7 +507,7 @@ window._nmSaveRecurRule = async function() {
         window.closeNoticeModal();
         window.loadScheduleRulesFromBackend();
     } catch (e) {
-        alert('❌ 예약 규칙 저장 실패: ' + e.message);
+        alert(window._t('❌ 예약 규칙 저장 실패: ', '❌ Failed to save the schedule rule: ') + e.message);
     }
 };
 
@@ -585,14 +585,14 @@ window.toggleScheduleRuleEnabled = async function(id) {
     try {
         await fetch(`${MAIL_SERVER}/schedule`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(rule) });
     } catch (e) {
-        alert('❌ 상태 변경 실패: 메일 서버에 연결할 수 없습니다.');
+        alert(window._t('❌ 상태 변경 실패: 메일 서버에 연결할 수 없습니다.', '❌ Failed to change status: could not connect to the mail server.'));
         rule.enabled = !(rule.enabled !== false);
         window.renderScheduleRuleTable();
     }
 };
 
 window.deleteScheduleRule = async function(id) {
-    if (!confirm('이 예약 발송 규칙을 삭제할까요?')) return;
+    if (!confirm(window._t('이 예약 발송 규칙을 삭제할까요?', 'Delete this scheduled sending rule?'))) return;
     try {
         await fetch(`${MAIL_SERVER}/schedule/${id}`, { method: 'DELETE' });
     } catch (e) {}
@@ -602,7 +602,7 @@ window.deleteScheduleRule = async function(id) {
 // 규칙 목록에서 "수정" 클릭 시 — 공지 등록 모달을 기간·반복 모드로 열어 기존 값 채움
 window.openScheduleRuleEditModal = async function(ruleId) {
     const rule = (window._scheduleRules || []).find(r => r.id === ruleId);
-    if (!rule) { alert('규칙을 찾을 수 없습니다.'); return; }
+    if (!rule) { alert(window._t('규칙을 찾을 수 없습니다.', 'The rule could not be found.')); return; }
 
     await window.openNoticeModal(); // 신규 등록 상태로 모달 초기화(리셋)부터 시작
 
@@ -683,14 +683,15 @@ window.sendNoticeNow = async function(id, skipLog) {
             results.push(`💬 Telegram ${successCount}/${seenIds.size}명 완료` + (failedNames.length ? ` — 실패: ${failedNames.join(', ')}` : ''));
         }catch(e){results.push(`💬 오류:${e.message}`);}
     }
-    const resultStr=results.join(' | ')||'수신 대상 없음';
+    const resultStr=results.join(' | ')||window._t('수신 대상 없음', 'No recipients');
     if(!skipLog){
         n.sentLog=n.sentLog||[];
         n.sentLog.push({day:diffDays,sentAt:new Date().toISOString().slice(0,10)});
         window._noticeLogs.unshift({time:new Date().toLocaleString('ko-KR'),title:n.title,result:resultStr});
         if(window._noticeLogs.length>50) window._noticeLogs.pop();
         window._noticeSave(); window.renderNoticeTab();
-        if(window.bmAlertModal) window.bmAlertModal(`발송 완료\n${resultStr}`); else alert(`발송 완료\n${resultStr}`);
+        const _sentMsg = window._t('발송 완료\n', 'Sent\n') + resultStr;
+        if(window.bmAlertModal) window.bmAlertModal(_sentMsg); else alert(_sentMsg);
     }
     return {ok:true,result:resultStr};
 };
@@ -716,13 +717,13 @@ window.checkAndSendNotices = async function(isManual) {
     }
     if(window._noticeLogs.length>50) window._noticeLogs.length=50;
     window._noticeSave();
-    if(isManual){const msg=sentCount>0?`공지 ${sentCount}건 발송 완료`:'발송할 공지 없음';if(window.bmAlertModal)window.bmAlertModal(msg);else alert(msg);}
+    if(isManual){const msg=sentCount>0?window._t(`공지 ${sentCount}건 발송 완료`, `${sentCount} notice(s) sent`):window._t('발송할 공지 없음', 'No notices to send');if(window.bmAlertModal)window.bmAlertModal(msg);else alert(msg);}
     else if(sentCount>0) console.log(`[공지] 자동 발송 ${sentCount}건 완료`);
     return sentCount;
 };
 window.noticeUpdateEmailTarget=window._nmEmailToggle||function(){};
 window.noticeUpdateTgTarget=window._nmTgToggle||function(){};
-window.sendNotice=function(){alert('[+ 공지 등록]으로 등록 후 ✉️ 버튼으로 발송하세요.');};
+window.sendNotice=function(){alert(window._t('[+ 공지 등록]으로 등록 후 ✉️ 버튼으로 발송하세요.', 'Register via [+ Add Notice] first, then send using the ✉️ button.'));};
 window._noticeHistory=[];window._addNoticeHistory=function(){};
 window._renderNoticeHistory=window.renderNoticeTab;
 
@@ -796,7 +797,7 @@ window.saveSmtpConfig = async function() {
         pass: document.getElementById('as-smtp-pass').value,
     };
     if (!cfg.host || !cfg.user || !cfg.pass) {
-        alert('서버 주소, 계정, 비밀번호를 모두 입력해 주세요.'); return;
+        alert(window._t('서버 주소, 계정, 비밀번호를 모두 입력해 주세요.', 'Please enter the server address, account, and password.')); return;
     }
     const msgEl = document.getElementById('as-smtp-save-msg');
 
@@ -882,7 +883,7 @@ window._asRecipBulkToggleChannel = function(containerId, type) {
 };
 window._asRecipBulkRemoveAll = function(containerId) {
     const list = document.getElementById(containerId);
-    if (list && list.children.length && confirm('수신자를 전체 삭제할까요?')) list.innerHTML = '';
+    if (list && list.children.length && confirm(window._t('수신자를 전체 삭제할까요?', 'Remove all recipients?'))) list.innerHTML = '';
     window._asSyncRecipHeaderPad(containerId);
 };
 // 수신자 수집 — 이름/이메일/텔레그램ID + 채널별 on/off (이름·채널 둘 다 꺼져있으면 제외)

@@ -39,7 +39,7 @@
     };
 
     window.undoLastAction = function() {
-        if (window._undoStack.length < 2) { alert('더 이상 실행 취소할 작업이 없습니다.'); return; }
+        if (window._undoStack.length < 2) { alert(window._t('더 이상 실행 취소할 작업이 없습니다.', 'No more actions to undo.')); return; }
         window._isRestoringUndo = true;
         const current = window._undoStack.pop();
         window._redoStack.push(current);
@@ -55,7 +55,7 @@
     };
 
     window.redoLastAction = function() {
-        if (window._redoStack.length === 0) { alert('다시 실행할 작업이 없습니다.'); return; }
+        if (window._redoStack.length === 0) { alert(window._t('다시 실행할 작업이 없습니다.', 'No actions to redo.')); return; }
         window._isRestoringUndo = true;
         const next = window._redoStack.pop();
         window._undoStack.push(next);
@@ -789,7 +789,7 @@
     };
 
     window.saveScheduleBaseline = function() {
-        if (!globalData || globalData.length <= 1) { alert('저장할 일정이 없습니다.'); return; }
+        if (!globalData || globalData.length <= 1) { alert(window._t('저장할 일정이 없습니다.', 'No schedule to save.')); return; }
         const defaultLabel = new Date().toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
         const label = prompt('이 계획의 이름을 입력하세요 (예: 킥오프 계획, 26년 5월 계획 등)', defaultLabel);
         if (label === null) return;
@@ -840,7 +840,7 @@
             : '';
         if (!confirm(window._t(`"${bl.label}" 계획을 삭제할까요? 되돌릴 수 없습니다.${kickoffWarn}`, `Delete plan "${bl.label}"? This cannot be undone.${kickoffWarn}`))) return;
         if (!verifyAdminPassword(`🔒 "${bl.label}" 계획을 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)`)) {
-            alert('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.');
+            alert(window._t('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.', '❌ Authentication failed. Deletion cancelled.'));
             return;
         }
 
@@ -1054,7 +1054,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(blobUrl);
         } catch (e) {
-            alert(`다운로드 실패: ${e.message}\n\n아래 주소를 새 탭에서 열어 [Ctrl+S]로 저장해주세요:\n${url}`);
+            alert(window._t(`다운로드 실패: ${e.message}\n\n아래 주소를 새 탭에서 열어 [Ctrl+S]로 저장해주세요:\n${url}`, `Download failed: ${e.message}\n\nPlease open the URL below in a new tab and save with [Ctrl+S]:\n${url}`));
         }
     };
 
@@ -1065,15 +1065,20 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const text = await res.text();
             await navigator.clipboard.writeText(text);
-            alert(
+            alert(window._t(
                 `✅ "${filename}" 내용이 클립보드에 복사되었습니다.\n\n` +
                 `1. 메모장(Notepad) 실행\n` +
                 `2. Ctrl+V로 붙여넣기\n` +
                 `3. [다른 이름으로 저장] → 파일 이름: ${filename}\n` +
-                `   (저장 형식을 "모든 파일"로 선택해야 .txt로 안 바뀝니다)`
-            );
+                `   (저장 형식을 "모든 파일"로 선택해야 .txt로 안 바뀝니다)`,
+                `✅ "${filename}" content copied to clipboard.\n\n` +
+                `1. Open Notepad\n` +
+                `2. Paste with Ctrl+V\n` +
+                `3. [Save As] → File name: ${filename}\n` +
+                `   (Choose "All Files" as the save type so it doesn't become .txt)`
+            ));
         } catch (e) {
-            alert(`복사 실패: ${e.message}`);
+            alert(window._t('복사 실패: ', 'Copy failed: ') + e.message);
         }
     };
 

@@ -94,11 +94,11 @@ window.msFetchMail = async function() {
     const endDate   = document.getElementById('ms-end-date').value;
 
     if (!userid || !password) {
-        alert('먼저 이메일 서버 계정을 설정해주세요 (⚙️ 이메일 서버 설정 버튼).');
+        alert(window._t('먼저 이메일 서버 계정을 설정해주세요 (⚙️ 이메일 서버 설정 버튼).', 'Please set up your email server account first (⚙️ Email Server Settings button).'));
         window.msOpenEmailServerSettings();
         return;
     }
-    if (!startDate || !endDate) { alert('날짜를 선택해주세요.'); return; }
+    if (!startDate || !endDate) { alert(window._t('날짜를 선택해주세요.', 'Please select a date.')); return; }
 
     // UI 초기화
     window._msAnalyzeCancelled = false;
@@ -1683,7 +1683,7 @@ window._msBulkReanalyzeUnmatched = async function(opts) {
 
     // 수동 버튼 클릭(noConfirm=false)일 때만 confirm — 자동 흐름에서는 생략
     if (!_noConfirm) {
-        if (!confirm(`미분류 메일 ${unmatched.length}건을 최신 토픽 프로파일로 재분석합니다.\n시간이 걸릴 수 있습니다 (건당 약 3~5초) — 계속할까요?`)) return;
+        if (!confirm(window._t(`미분류 메일 ${unmatched.length}건을 최신 토픽 프로파일로 재분석합니다.\n시간이 걸릴 수 있습니다 (건당 약 3~5초) — 계속할까요?`, `Re-analyzing ${unmatched.length} unclassified mail(s) with the latest topic profile.\nThis may take a while (about 3-5 sec each) — continue?`))) return;
     }
 
     const btn = document.getElementById('ms-queue-reanalyze-all-btn');
@@ -1847,7 +1847,7 @@ window._msSubmitReanalyze = async function() {
         const targets = selectedList
             .map(function(c) { return { id: c.drive_file_id, name: c.file_name }; })
             .filter(function(t) { return t.id && t.name; });
-        if (!targets.length) { alert('선택한 프로젝트에 드라이브 파일 정보가 없어 전송할 수 없습니다.'); return; }
+        if (!targets.length) { alert(window._t('선택한 프로젝트에 드라이브 파일 정보가 없어 전송할 수 없습니다.', 'Cannot send — the selected project has no Drive file info.')); return; }
         await window._msQueueReanalyzeMulti(fileName, hint, targets);
         return;
     }
@@ -1967,7 +1967,7 @@ window._msPickNewProject = async function() {
     if (btn) btn.textContent = '📋 프로젝트 선택 ▾';
 
     // 💡 [2026-09-04 버그 수정] 새 시트 분리 확인 — 현재 프로젝트를 덮어쓰지 않도록 사전 확인
-    if (!confirm('이 메일로 새 프로젝트를 생성합니다.\n현재 프로젝트는 탭에 유지됩니다.\n\n계속하시겠습니까?')) return;
+    if (!confirm(window._t('이 메일로 새 프로젝트를 생성합니다.\n현재 프로젝트는 탭에 유지됩니다.\n\n계속하시겠습니까?', 'This will create a new project from this mail.\nThe current project stays open in its tab.\n\nContinue?'))) return;
 
     // 새 시트 생성 + 화면 초기화 (startNewProject와 동일 패턴)
     if (window._openAsNewSheet) window._openAsNewSheet('new_' + Date.now(), null, null);
@@ -1997,7 +1997,7 @@ window._msPickNewProject = async function() {
         if (window._npwOpen) {
             window._npwOpen(prefill, 'MP(EC)');
         } else {
-            alert('위자드 모듈이 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도해주세요.');
+            alert(window._t('위자드 모듈이 로드되지 않았습니다. 페이지를 새로고침 후 다시 시도해주세요.', 'The wizard module failed to load. Please refresh the page and try again.'));
         }
     } catch (e) {
         if (btn) { btn.textContent = '📋 프로젝트 선택 ▾'; btn.disabled = false; }
@@ -2014,7 +2014,7 @@ window._msQueueReanalyze = async function(fileName, hint) {
     const r = (window._msResults || []).find(x => x.fileName === fileName);
     if (!r) return;
     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-    if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
+    if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
     if (window.showToast) window.showToast(window._t('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', '🔄 Re-analyzing... "' + (r.subject || '').substring(0, 24) + '"'), 'info');
     try {
         const candidateList = window._msFilterCandidateProjects(await window._msLoadProjectIndex());
@@ -2110,7 +2110,7 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
     const r = (window._msResults || []).find(x => x.fileName === fileName);
     if (!r) return;
     const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-    if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
+    if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
     if (window.showToast) window.showToast(window._t('🔄 재분석 중... "' + (r.subject || '').substring(0, 24) + '"', '🔄 Re-analyzing... "' + (r.subject || '').substring(0, 24) + '"'), 'info');
     try {
         const candidateList = window._msFilterCandidateProjects(await window._msLoadProjectIndex());

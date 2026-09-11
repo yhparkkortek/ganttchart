@@ -229,19 +229,19 @@ window.deleteAddrHistoryByDateRange = function() {
     const pwEl = document.getElementById('addr-history-del-pw');
     const pw = pwEl ? pwEl.value : '';
     if (pw.toLowerCase() !== getAdminPassword().toLowerCase()) {
-        if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.');
+        { const _m = window._t('비밀번호가 올바르지 않습니다.', 'The password is incorrect.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
         return;
     }
     const fromStr = (document.getElementById('addr-history-del-from') || {}).value;
     const toStr = (document.getElementById('addr-history-del-to') || {}).value;
     if (!fromStr || !toStr) {
-        if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.');
+        { const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
         return;
     }
     const fromTs = new Date(fromStr + 'T00:00:00').getTime();
     const toTs = new Date(toStr + 'T23:59:59').getTime();
     if (fromTs > toTs) {
-        if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.');
+        { const _m = window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
         return;
     }
 
@@ -441,13 +441,13 @@ window.bsRenderHistoryTable = function() {
 window.deleteBsHistoryByDateRange = function() {
     const pwEl = document.getElementById('bs-history-del-pw');
     const pw = pwEl ? pwEl.value : '';
-    if (pw.toLowerCase() !== getAdminPassword().toLowerCase()) { if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.'); return; }
+    if (pw.toLowerCase() !== getAdminPassword().toLowerCase()) { { const _m = window._t('비밀번호가 올바르지 않습니다.', 'The password is incorrect.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
     const fromStr = (document.getElementById('bs-history-del-from') || {}).value;
     const toStr = (document.getElementById('bs-history-del-to') || {}).value;
-    if (!fromStr || !toStr) { if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.'); return; }
+    if (!fromStr || !toStr) { { const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
     const fromTs = new Date(fromStr + 'T00:00:00').getTime();
     const toTs = new Date(toStr + 'T23:59:59').getTime();
-    if (fromTs > toTs) { if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.'); return; }
+    if (fromTs > toTs) { { const _m = window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
     const parseKoDateTime = function(str) {
         const m = String(str).match(/(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{1,2}):(\d{1,2})/);
         if (!m) return null;
@@ -823,7 +823,7 @@ function bmDeleteSelected(key) {
     const rows = bmDataRows(key);
     // 💡 M.C Table은 "➕ 첫 행 추가" 버튼으로 언제든 다시 시작할 수 있어서 완전 삭제(0행)를 허용.
     //    다른 탭(Brief SPEC/Address)은 아직 빈 상태 복구 UI가 없으므로 기존처럼 최소 1행 유지.
-    if (key !== 'mc' && rows.length - sel.size < 1) { bmAlertModal('최소 1개 행은 있어야 합니다.'); return; }
+    if (key !== 'mc' && rows.length - sel.size < 1) { bmAlertModal(window._t('최소 1개 행은 있어야 합니다.', 'At least one row must remain.')); return; }
     bmConfirmModal('선택한 ' + sel.size + '개 행을 삭제하시겠습니까?', function() {
         sel.forEach(function(tr) { if (tr.parentNode) tr.remove(); });
         sel.clear();

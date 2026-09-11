@@ -2528,7 +2528,7 @@
     };
 
     window.resetGanttQaPromptInModal = function() {
-        if (!confirm('편집 중인 내용을 버리고 기본 프롬프트로 되돌릴까요?')) return;
+        if (!confirm(window._t('편집 중인 내용을 버리고 기본 프롬프트로 되돌릴까요?', 'Discard your edits and reset to the default prompt?'))) return;
         // 💡 리셋도 되돌릴 수 있도록, 리셋 전 현재 프롬프트를 스냅샷으로 남김
         const current = localStorage.getItem('gantt_qa_prompt');
         if (current) window.saveQaPromptVersionSnapshot(current, '기본값 초기화 전 백업');

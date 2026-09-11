@@ -361,7 +361,7 @@ window.applyImprovedPrompt = async function() {
 window.showPromptLogs = function() {
     let logs = JSON.parse(localStorage.getItem('gantt_prompt_logs') || '[]');
     let versions = JSON.parse(localStorage.getItem('gantt_prompt_versions') || '[]');
-    if (logs.length === 0) { alert('프롬프트 변경 이력이 없습니다.'); return; }
+    if (logs.length === 0) { alert(window._t('프롬프트 변경 이력이 없습니다.', 'No prompt change history.')); return; }
 
     let logModal = document.getElementById('prompt-log-modal');
     if (!logModal) {
@@ -429,7 +429,7 @@ window.showPromptLogs = function() {
 window.restorePromptVersion = function(version) {
     const versions = JSON.parse(localStorage.getItem('gantt_prompt_versions') || '[]');
     const target = versions.find(v => v.version === version);
-    if (!target) { alert('해당 버전을 찾을 수 없습니다.'); return; }
+    if (!target) { alert(window._t('해당 버전을 찾을 수 없습니다.', 'That version could not be found.')); return; }
 
     document.getElementById('prompt-log-modal').style.display = 'none';
 
@@ -441,14 +441,14 @@ window.restorePromptVersion = function(version) {
     if (saveBtn) saveBtn.style.display = 'block';
     if (unlockBtn) unlockBtn.style.display = 'none';
 
-    alert('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 저장] 버튼을 눌러야 최종 반영됩니다.');
+    alert(window._t('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 저장] 버튼을 눌러야 최종 반영됩니다.', '📋 Loaded version v' + version + '.\nReview the content, then click [💾 Save] to actually apply it.'));
 };
 
 window.clearPromptLogs = function() {
     localStorage.removeItem('gantt_prompt_logs');
     localStorage.removeItem('gantt_prompt_versions');
     document.getElementById('prompt-log-modal').style.display = 'none';
-    alert('✅ 이력이 삭제되었습니다.');
+    alert(window._t('✅ 이력이 삭제되었습니다.', '✅ History deleted.'));
 };
         
 // 💡 [2026-08-20][WBS 레벨 추정] AI의 wbs레벨 판단은 프롬프트에 뚜렷한 기준이 없어 3/4에만 몰리는
@@ -785,13 +785,13 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
 };
 
 window.insertMailTask = function() {
-    if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
-    if (!globalData || globalData.length <= 1) { alert('먼저 엑셀 파일을 로드해주세요.'); return; }
+    if (!window._mailAnalyzedResult) { alert(window._t('먼저 분석을 실행해주세요.', 'Please run the analysis first.')); return; }
+    if (!globalData || globalData.length <= 1) { alert(window._t('먼저 엑셀 파일을 로드해주세요.', 'Please load an Excel file first.')); return; }
 
     const r = window._mailAnalyzedResult;
     // ✅ 날짜 미입력 시 삽입 차단 (필드 매핑 전에 선검증)
     if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
-        alert('⚠️ 시작일 또는 완료일을 먼저 입력해주세요.');
+        alert(window._t('⚠️ 시작일 또는 완료일을 먼저 입력해주세요.', '⚠️ Please enter the start or end date first.'));
         return;
     }
 

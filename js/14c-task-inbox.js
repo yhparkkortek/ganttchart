@@ -537,19 +537,19 @@ window.inboxQuickRegisterMatched = async function(uid) {
     if (!it) return;
     const mp = it.matchedProject;
     if (!mp || mp.status !== 'matched' || !mp.candidates || !mp.candidates[0] || !mp.candidates[0].drive_file_id) {
-        alert('매칭된 프로젝트 정보가 없습니다. [📤 다른 프로젝트]로 직접 선택해주세요.');
+        alert(window._t('매칭된 프로젝트 정보가 없습니다. [📤 다른 프로젝트]로 직접 선택해주세요.', 'No matched project info. Please select one directly via [📤 Other Project].'));
         return;
     }
     const target = mp.candidates[0];
     if ((it.task['시작일'] || '').includes('날짜확인필요') || (it.task['완료일'] || '').includes('날짜확인필요')) {
-        alert('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 다시 시도해주세요.');
+        alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 다시 시도해주세요.', '⚠️ Start/end date is unconfirmed ("date needs confirmation"). Please confirm the date in the mail analyzer screen and try again.'));
         return;
     }
     // 💡 [2026-09-10] "✅ 매칭전송" 버튼 클릭 자체가 이미 명시적 의사표시라 확인창은 불필요한 클릭 한 번
     //    더 요구할 뿐 — confirm() 없이 바로 전송하고, 결과는 성공/실패 토스트(아래)로 안내한다.
     const tokenObj = (typeof gapi !== 'undefined' && gapi.client) ? gapi.client.getToken() : null;
     const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-    if (!token) { alert('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.'); return; }
+    if (!token) { alert(window._t('🔒 먼저 상단의 [🔵 드라이브 연동하기]로 구글 로그인을 완료해주세요.', '🔒 Please sign in to Google via [🔵 Connect Drive] at the top first.')); return; }
 
     const result = await window._msAutoRegisterToProject(uid, it.task, target.drive_file_id, target.file_name, it.mailRaw, 0, !!it.alarmWorthy);
     if (result.ok) {
@@ -558,7 +558,7 @@ window.inboxQuickRegisterMatched = async function(uid) {
         const msg = `✅ "${it.task['업무명'] || '새 업무'}" → ${target.file_name} 전송 완료 (${result.label || ''})`;
         if (window.showToast) window.showToast(msg, 'info'); else alert(msg);
     } else {
-        alert('❌ 전송 실패: ' + (result.reason || '알 수 없는 오류'));
+        alert(window._t('❌ 전송 실패: ', '❌ Send failed: ') + (result.reason || window._t('알 수 없는 오류', 'Unknown error')));
     }
 };
 
@@ -977,7 +977,7 @@ window.restoreAiTaskDate = function(rowIndex, event) {
     });
 
     if (!restoredCount) {
-        alert('⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(백업도 없고, 상세내용에서 날짜를 추출할 수도 없는 업무입니다.)');
+        alert(window._t('⚠️ 복원할 AI 분석 원본 날짜가 없습니다.\n(백업도 없고, 상세내용에서 날짜를 추출할 수도 없는 업무입니다.)', "⚠️ No original AI-analyzed date to restore.\n(No backup exists, and a date couldn't be extracted from the details either.)"));
         return;
     }
 
@@ -1056,12 +1056,12 @@ window.inboxRecomputePreview = function(uid) {
 };
 
 window.inboxPlaceToCurrent = function(uid) {
-    if (!globalData || globalData.length <= 1) { alert('먼저 프로젝트(엑셀 또는 드라이브)를 로드해주세요.'); return; }
+    if (!globalData || globalData.length <= 1) { alert(window._t('먼저 프로젝트(엑셀 또는 드라이브)를 로드해주세요.', 'Please load a project (Excel or Drive) first.')); return; }
     const it = window.TaskInbox.load().find(function(x) { return x.uid === uid; });
     if (!it) return;
     const r = it.task;
     if ((r['시작일'] || '').includes('날짜확인필요') || (r['완료일'] || '').includes('날짜확인필요')) {
-        alert('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.');
+        alert(window._t('⚠️ 시작일/완료일이 미확정(날짜확인필요) 상태입니다.\n메일 분석 화면에서 날짜를 확정한 후 보관함에 담아주세요.', '⚠️ Start/end date is unconfirmed ("date needs confirmation"). Please confirm the date in the mail analyzer screen before adding to the inbox.'));
         return;
     }
     const sel = document.getElementById('inbox-l0-' + uid);
@@ -1126,7 +1126,7 @@ window.inboxCleanupStorage = function() {
 };
 
 window.mailRightToInbox = function() {
-    if (!window._mailAnalyzedResult) { alert('먼저 분석을 실행해주세요.'); return; }
+    if (!window._mailAnalyzedResult) { alert(window._t('먼저 분석을 실행해주세요.', 'Please run the analysis first.')); return; }
     window.TaskInbox.add(window._mailAnalyzedResult, { source: '업무 추가(메일분석)', mailRaw: window._mailParsedRaw || null });
     // 💡 상단바 배지 카운트 즉시 갱신
     if (window.updateInboxBadge) window.updateInboxBadge();

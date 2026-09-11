@@ -484,7 +484,7 @@
 
         document.getElementById('gantt-ai-bulk-del').addEventListener('click', function() {
             if (!_selected.size) return;
-            if (!confirm('선택한 ' + _selected.size + '건을 삭제하시겠습니까?\n(학습 기록 없이 즉시 삭제됩니다)')) return;
+            if (!confirm(window._t('선택한 ' + _selected.size + '건을 삭제하시겠습니까?\n(학습 기록 없이 즉시 삭제됩니다)', 'Delete the selected ' + _selected.size + ' item(s)?\n(Deleted immediately, without a learning record)'))) return;
             _batchDelete(false);
         });
 
@@ -494,7 +494,7 @@
                 return globalData[i] && globalData[i]._aiRegistered;
             });
             if (!aiSelected.length) {
-                alert('선택한 업무 중 AI 등록 업무가 없습니다.\n일반 "일괄 삭제"를 이용하세요.');
+                alert(window._t('선택한 업무 중 AI 등록 업무가 없습니다.\n일반 "일괄 삭제"를 이용하세요.', 'None of the selected tasks were AI-registered.\nPlease use the regular "Batch Delete" instead.'));
                 return;
             }
             _batchDelete(true);
@@ -505,7 +505,7 @@
             var idxs = Array.from(_selected).filter(function(i) {
                 return globalData[i] && globalData[i]._aiRegistered;
             });
-            if (!idxs.length) { alert('AI 등록 업무가 선택되지 않았습니다.'); return; }
+            if (!idxs.length) { alert(window._t('AI 등록 업무가 선택되지 않았습니다.', 'No AI-registered tasks were selected.')); return; }
             idxs.forEach(function(i) {
                 var row = globalData[i];
                 if (!row) return;

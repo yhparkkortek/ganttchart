@@ -225,14 +225,14 @@
      */
     window._tcRunDiagnosis = async function(key) {
         key = key || _key();
-        if (!key) { alert('프로젝트를 먼저 불러오세요.'); return; }
+        if (!key) { alert(window._t('프로젝트를 먼저 불러오세요.', 'Please load a project first.')); return; }
 
         var apiKey = window.getActiveAiKey && window.getActiveAiKey();
-        if (!apiKey) { alert('AI API 키를 먼저 설정해주세요.'); return; }
+        if (!apiKey) { alert(window._t('AI API 키를 먼저 설정해주세요.', 'Please set up the AI API key first.')); return; }
 
         var profile = window._getTopicProfile && window._getTopicProfile(key);
         if (!profile) {
-            alert('토픽 프로파일이 없습니다. 먼저 토픽 프로파일을 생성해주세요.'); return;
+            alert(window._t('토픽 프로파일이 없습니다. 먼저 토픽 프로파일을 생성해주세요.', 'No topic profile. Please generate a topic profile first.')); return;
         }
 
         var entries = (window._alGetEntries && window._alGetEntries(key)) || [];
@@ -269,7 +269,7 @@
         }
 
         if (!negEntries.length && !noMatchEntries.length) {
-            alert('30일 이내 오매칭·미분류 기록이 없습니다.'); return;
+            alert(window._t('30일 이내 오매칭·미분류 기록이 없습니다.', 'No mismatch/unclassified records within the last 30 days.')); return;
         }
 
         var st = window._tcGetScore(key);

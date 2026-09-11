@@ -648,8 +648,9 @@ window.checkAndSendAlarms = async function(isManual) {
         if (!hd.ok) throw new Error('서버 응답 없음');
     } catch(e) {
         if (isManual) {
-            if (window.bmAlertModal) window.bmAlertModal('메일 서버가 실행되지 않았습니다.\nkortek_backend.bat을 먼저 실행해 주세요.');
-            else alert('메일 서버가 실행되지 않았습니다.\nkortek_backend.bat을 먼저 실행해 주세요.');
+            const _m = window._t('메일 서버가 실행되지 않았습니다.\nkortek_backend.bat을 먼저 실행해 주세요.', 'The mail server is not running.\nPlease run kortek_backend.bat first.');
+            if (window.bmAlertModal) window.bmAlertModal(_m);
+            else alert(_m);
         }
         return;
     }
@@ -668,8 +669,9 @@ window.checkAndSendAlarms = async function(isManual) {
 
     if (!allEmails) {
         if (isManual) {
-            if (window.bmAlertModal) window.bmAlertModal('Summary 탭에 이메일 주소를 입력해 주세요.');
-            else alert('Summary 탭에 이메일 주소를 입력해 주세요.');
+            const _m = window._t('Summary 탭에 이메일 주소를 입력해 주세요.', 'Please enter an email address in the Summary tab.');
+            if (window.bmAlertModal) window.bmAlertModal(_m);
+            else alert(_m);
         }
         return;
     }
@@ -925,7 +927,7 @@ window.saveTelegramConfig = async function() {
     const token   = document.getElementById('tg-token').value.trim();
     const chat_id = document.getElementById('tg-chatid').value.trim();
     const msg     = document.getElementById('tg-save-msg');
-    if (!token || !chat_id) { alert('Token과 Chat ID를 모두 입력해주세요.'); return; }
+    if (!token || !chat_id) { alert(window._t('Token과 Chat ID를 모두 입력해주세요.', 'Please enter both Token and Chat ID.')); return; }
     try {
         const r = await fetch(`${TG_SERVER}/telegram/config`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -970,7 +972,7 @@ window.saveAllToDrive = async function() {
     try {
         const tokenObj   = gapi.client.getToken();
         const driveToken = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!driveToken) { alert('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.'); return; }
+        if (!driveToken) { alert(window._t('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.', 'Google Drive connection is required. Please click the connect button at the top first.')); return; }
 
         // Flask에서 전체 설정 암호화 (mail + telegram 동시)
         const mData  = await (await fetch(`${TG_SERVER}/telegram/members`)).json();
@@ -1015,7 +1017,7 @@ window.loadAllFromDrive = async function() {
     try {
         const tokenObj   = gapi.client.getToken();
         const driveToken = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!driveToken) { alert('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.'); return; }
+        if (!driveToken) { alert(window._t('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.', 'Google Drive connection is required. Please click the connect button at the top first.')); return; }
 
         const folderId = await window.getOrCreateBackupFolder(driveToken);
 
@@ -1026,7 +1028,7 @@ window.loadAllFromDrive = async function() {
         ]);
 
         if (!mailFileId && !tgFileId) {
-            alert('Drive에 저장된 설정이 없습니다.\n먼저 [전체 설정 Drive 저장]을 실행하세요.');
+            alert(window._t('Drive에 저장된 설정이 없습니다.\n먼저 [전체 설정 Drive 저장]을 실행하세요.', 'No settings saved on Drive.\nPlease run [Save all settings to Drive] first.'));
             return;
         }
 
@@ -1156,12 +1158,12 @@ window.checkPasswordSync = async function() {
                     body: JSON.stringify({ password: newPw.trim(), tg_encrypted: tgEnc, mail_encrypted: mailEnc })
                 });
                 window.refreshTgStatus(); window.loadTgMemberList();
-                alert('✅ 비밀번호 동기화 완료! SMTP + Telegram 설정도 자동 업데이트되었습니다.');
+                alert(window._t('✅ 비밀번호 동기화 완료! SMTP + Telegram 설정도 자동 업데이트되었습니다.', '✅ Password synced! SMTP + Telegram settings were also updated automatically.'));
                 return;
             }
             newPw = prompt(`❌ 비밀번호가 틀렸습니다. (${4 - i}회 남음)\n다시 입력하세요.`);
         }
-        alert('❌ 비밀번호 5회 실패. 관리자에게 문의하세요.');
+        alert(window._t('❌ 비밀번호 5회 실패. 관리자에게 문의하세요.', '❌ Password failed 5 times. Please contact the administrator.'));
     } catch(e) { console.warn('[PW Sync]', e.message); }
 };
 
@@ -1170,12 +1172,12 @@ window.saveTgToDrive = async function() {
     const token   = document.getElementById('tg-token').value.trim();
     const chat_id = document.getElementById('tg-chatid').value.trim();
     const msg     = document.getElementById('tg-save-msg');
-    if (!token || !chat_id) { alert('Token과 Chat ID를 먼저 입력하고 저장하세요.'); return; }
+    if (!token || !chat_id) { alert(window._t('Token과 Chat ID를 먼저 입력하고 저장하세요.', 'Please enter and save the Token and Chat ID first.')); return; }
     const password = getAdminPassword();
     try {
         const tokenObj   = gapi.client.getToken();
         const driveToken = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!driveToken) { alert('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.'); return; }
+        if (!driveToken) { alert(window._t('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.', 'Google Drive connection is required. Please click the connect button at the top first.')); return; }
 
         // 팀원 목록 + 암호화
         const mData  = await (await fetch(`${TG_SERVER}/telegram/members`)).json();
@@ -1210,11 +1212,11 @@ window.loadTgFromDrive = async function() {
     try {
         const tokenObj   = gapi.client.getToken();
         const driveToken = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-        if (!driveToken) { alert('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.'); return; }
+        if (!driveToken) { alert(window._t('Google Drive 연동이 필요합니다. 상단 연동 버튼을 먼저 클릭하세요.', 'Google Drive connection is required. Please click the connect button at the top first.')); return; }
 
         const folderId  = await window.getOrCreateBackupFolder(driveToken);
         const encFileId = await window._findDriveFile(driveToken, folderId, 'telegram_secure.enc');
-        if (!encFileId) { alert('Drive에 저장된 Telegram 설정이 없습니다.\n먼저 [Drive에 암호화 저장]을 실행하세요.'); return; }
+        if (!encFileId) { alert(window._t('Drive에 저장된 Telegram 설정이 없습니다.\n먼저 [Drive에 암호화 저장]을 실행하세요.', 'No Telegram settings saved on Drive.\nPlease run [Save encrypted to Drive] first.')); return; }
 
         const encrypted = await window._downloadDriveFile(driveToken, encFileId);
         const decRes    = await fetch(`${TG_SERVER}/telegram/decrypt`, {
@@ -1240,7 +1242,7 @@ window.addTgMember = async function() {
     const roles    = document.getElementById('tg-m-roles')    ? document.getElementById('tg-m-roles').value.split(',').map(s=>s.trim()).filter(Boolean)    : [];
     const projects = document.getElementById('tg-m-projects') ? document.getElementById('tg-m-projects').value.split(',').map(s=>s.trim()).filter(Boolean) : [];
     const msg      = document.getElementById('tg-save-msg');
-    if (!name || !chat_id) { alert('이름과 Chat ID는 필수입니다.'); return; }
+    if (!name || !chat_id) { alert(window._t('이름과 Chat ID는 필수입니다.', 'Name and Chat ID are required.')); return; }
     try {
         const r = await fetch(`${TG_SERVER}/telegram/members`, {
             method: 'POST', headers: {'Content-Type': 'application/json'},

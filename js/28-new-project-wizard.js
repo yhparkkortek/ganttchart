@@ -161,7 +161,7 @@ function _collectStep2() {
 }
 function _validateStep2() {
     const v = (document.getElementById('npw-date') || {}).value || '';
-    if (!v.trim()) { alert('시작일을 입력해주세요.'); return false; }
+    if (!v.trim()) { alert(_t('시작일을 입력해주세요.', 'Please enter the start date.')); return false; }
     return true;
 }
 
@@ -203,7 +203,7 @@ function _collectStep3() {
 }
 function _validateStep3() {
     const v = (document.getElementById('npw-customer') || {}).value || '';
-    if (!v.trim()) { alert('고객사를 입력해주세요.'); return false; }
+    if (!v.trim()) { alert(_t('고객사를 입력해주세요.', 'Please enter the customer.')); return false; }
     return true;
 }
 
@@ -228,7 +228,7 @@ function _collectStep4() {
 }
 function _validateStep4() {
     const v = (document.getElementById('npw-model') || {}).value || '';
-    if (!v.trim()) { alert('고객 모델명을 입력해주세요.'); return false; }
+    if (!v.trim()) { alert(_t('고객 모델명을 입력해주세요.', 'Please enter the customer model name.')); return false; }
     return true;
 }
 
@@ -289,7 +289,7 @@ function _collectStep5() {
 function _validateStep5() {
     const sel = (document.getElementById('npw-pm') || {}).value || '';
     const man = (document.getElementById('npw-pm-manual') || {}).value || '';
-    if (!sel && !man.trim()) { alert('프로젝트 담당자를 선택하거나 입력해주세요.'); return false; }
+    if (!sel && !man.trim()) { alert(_t('프로젝트 담당자를 선택하거나 입력해주세요.', 'Please select or enter the project owner.')); return false; }
     return true;
 }
 

@@ -16,7 +16,7 @@ window.mcAddUnitCancel = function() {
 window.mcAddUnitConfirm = function() {
     const input = document.getElementById('mc-add-unit-input');
     const name = (input ? input.value : '').trim();
-    if (!name) { alert('이름을 입력해주세요.'); return; }
+    if (!name) { alert(window._t('이름을 입력해주세요.', 'Please enter a name.')); return; }
     const units = window.getMcUnits();
     if (units.some(function(u) { return u.toLowerCase() === name.toLowerCase(); })) {
         alert('"' + name + '"은 이미 추가되어 있습니다.');
@@ -81,7 +81,7 @@ window.mcRemoveUnit = function(unit) {
     if (!unit) return;
     if (!confirm(`"${unit}" 제품구분자를 삭제할까요?\n(입력된 데이터는 남지만 탭 목록에서 사라져 다시 찾기 어려워집니다)`)) return;
     if (!window.verifyAdminPassword(`🔒 "${unit}" 제품구분자를 삭제하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)`)) {
-        alert('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.');
+        alert(window._t('❌ 비밀번호 인증 실패. 삭제가 취소되었습니다.', '❌ Authentication failed. Deletion cancelled.'));
         return;
     }
     const units = window.getMcUnits();
@@ -262,7 +262,7 @@ window.mcClearAllPrices = function() {
     inputs.forEach(function(inp) {
         if (priceFields.indexOf(inp.dataset.field) !== -1 && inp.value !== '') count++;
     });
-    if (!count) { alert('이미 비어있습니다.'); return; }
+    if (!count) { alert(window._t('이미 비어있습니다.', 'Already empty.')); return; }
     if (!confirm(window._t(`현재 리비전의 금액 ${count}칸을 모두 지우시겠습니까?\n(TYPE/ITEM/GROUP/Note 등 나머지 내용은 그대로 유지됩니다)`, `Clear all ${count} price fields in this revision?\n(TYPE/ITEM/GROUP/Note etc. will be kept)`))) return;
     // 💡 [2026-08-24 안전장치 추가] 확인창만으로는 실수로 지우기 쉬워서, 제품구분자 삭제와 동일하게
     //    관리자 비밀번호 인증을 추가함.
@@ -447,19 +447,22 @@ window.deleteMcHistoryByDateRange = function() {
     const pwEl = document.getElementById('mc-history-del-pw');
     const pw = pwEl ? pwEl.value : '';
     if (pw.toLowerCase() !== getAdminPassword().toLowerCase()) {
-        if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.');
+        const _m = window._t('비밀번호가 올바르지 않습니다.', 'The password is incorrect.');
+        if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m);
         return;
     }
     const fromStr = (document.getElementById('mc-history-del-from') || {}).value;
     const toStr = (document.getElementById('mc-history-del-to') || {}).value;
     if (!fromStr || !toStr) {
-        if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.');
+        const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.');
+        if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m);
         return;
     }
     const fromTs = new Date(fromStr + 'T00:00:00').getTime();
     const toTs = new Date(toStr + 'T23:59:59').getTime();
     if (fromTs > toTs) {
-        if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.');
+        const _m = window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.');
+        if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m);
         return;
     }
 

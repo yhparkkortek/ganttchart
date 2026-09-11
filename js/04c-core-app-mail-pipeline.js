@@ -616,7 +616,7 @@
             //    필드를 전부 지웠다가 다시 채우는 중)엔 이 알림이 그대로 튀어나올 수 있었음. 동일하게
             //    suppressAlert를 확인하도록 맞춘다.
             if (!window._hasUnsavedProjectData()) {
-                if (!opts.suppressAlert) alert("저장할 데이터가 존재하지 않습니다.");
+                if (!opts.suppressAlert) alert(window._t("저장할 데이터가 존재하지 않습니다.", "There is no data to save."));
                 return false;
             }
 
@@ -939,7 +939,7 @@
         try {
             const tokenObj = gapi.client.getToken();
             const token = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
-            if (!token) { alert("🔒 구글 인증이 필요합니다. 상단의 연동 버튼을 눌러주세요."); return; }
+            if (!token) { alert(window._t("🔒 구글 인증이 필요합니다. 상단의 연동 버튼을 눌러주세요.", "🔒 Google authentication is required. Please click the connect button at the top.")); return; }
             const folderId = await window.getOrCreateBackupFolder(token);
             // 💡 'in ancestors' 미지원 → Backups/ 바로 아래 팀 서브폴더까지 포함해 OR 쿼리 구성
             const backupParentsQ = window._buildParentsQuery
@@ -958,7 +958,7 @@
             const indexProjects = window._loadProjectIndexForModal ? await window._loadProjectIndexForModal().catch(function() { return []; }) : [];
             window.showBackupFileModal(files, indexProjects);
             window.showToast(window._currentLang === 'en' ? "🔄 Backup list loaded. Select a point to restore." : "🔄 백업 목록을 불러왔습니다. 복원할 시점을 선택해 주세요.");
-        } catch (err) { alert("백업 목록 조회 실패: " + err.message); }
+        } catch (err) { alert(window._t("백업 목록 조회 실패: ", "Failed to fetch backup list: ") + err.message); }
     };
 
     // 💡 백업 파일명(백업_<원본이름>_<YYYYMMDD>_<HHMM>.json)에서 원본 프로젝트 파일명을 복원
@@ -1167,7 +1167,7 @@
                     : window._t(`🎉 [${fileName}] 백업으로 복원되었습니다. 원본 "${origName}"이 지금 존재하지 않아 [저장] 시 새 파일로 생성됩니다.`, `🎉 Restored from [${fileName}]. Original "${origName}" no longer exists — [Save] will create a new file.`);
                 window.showToast(msg);
             }
-        } catch (err) { alert("백업 복원 실패: " + err.message); }
+        } catch (err) { alert(window._t("백업 복원 실패: ", "Failed to restore backup: ") + err.message); }
     };
 
     // ═══════════════════════════════════════════════════════════
@@ -1767,7 +1767,7 @@
                 //    로컬 백업이 있으면 복원 여부를 물어봄 — 방금 받아온 원격 내용이 이미 최신이면 자동 정리됨.
                 if (window._checkLocalBackupOnOpen) window._checkLocalBackupOnOpen(fileId, window.changeLogs.length);
             }
-        } catch (err) { alert("파일 로드 실패: " + err.message); }
+        } catch (err) { alert(window._t("파일 로드 실패: ", "Failed to load file: ") + err.message); }
     }
 
     // 💡 [팀 그룹핑] showDriveFileModal — 팀(외부 아코디온) → 담당자(내부 아코디온) → 파일 행

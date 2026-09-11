@@ -221,7 +221,7 @@
 
     window.handleAuthClick = function() {
         if (!tokenClient) {
-            alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
+            alert(window._t("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)", "⏳ Preparing the Google auth module. Please click again in 1-2 seconds.\n(If this persists, try Ctrl+F5)"));
             return;
         }
 
@@ -828,7 +828,7 @@
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
             }
-        } catch (err) { alert("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다."); }
+        } catch (err) { alert(window._t("목록 호출 실패: 권한이 없거나 폴더 ID가 잘못되었습니다.", "Failed to fetch the list: no permission, or the folder ID is invalid.")); }
     }
 
     // ─── 🤖 팀 공용 AI 프롬프트 — 드라이브에 JSON으로 저장/동기화 ───

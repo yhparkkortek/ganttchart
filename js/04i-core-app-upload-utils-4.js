@@ -418,19 +418,19 @@ window.deleteHistoryByDateRange = function() {
     const pwEl = document.getElementById('history-del-pw');
     const pw = pwEl ? pwEl.value : '';
     if (pw.toLowerCase() !== getAdminPassword().toLowerCase()) {
-        if (window.bmAlertModal) window.bmAlertModal('비밀번호가 올바르지 않습니다.'); else alert('비밀번호가 올바르지 않습니다.');
+        { const _m = window._t('비밀번호가 올바르지 않습니다.', 'The password is incorrect.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
         return;
     }
     const fromStr = (document.getElementById('history-del-from') || {}).value;
     const toStr = (document.getElementById('history-del-to') || {}).value;
     if (!fromStr || !toStr) {
-        if (window.bmAlertModal) window.bmAlertModal('시작일과 종료일을 모두 선택해주세요.'); else alert('시작일과 종료일을 모두 선택해주세요.');
+        { const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
         return;
     }
     const fromTs = new Date(fromStr + 'T00:00:00').getTime();
     const toTs = new Date(toStr + 'T23:59:59').getTime();
     if (fromTs > toTs) {
-        if (window.bmAlertModal) window.bmAlertModal('시작일이 종료일보다 늦을 수 없습니다.'); else alert('시작일이 종료일보다 늦을 수 없습니다.');
+        { const _m = window._t('시작일이 종료일보다 늦을 수 없습니다.', 'The start date cannot be later than the end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
         return;
     }
 
@@ -622,7 +622,7 @@ window.deleteHistoryByDateRange = function() {
 };
 
     window.addRow = function(index) {
-        if (index <= 0) { alert("최상단 행에는 추가할 수 없습니다."); return; }
+        if (index <= 0) { alert(window._t("최상단 행에는 추가할 수 없습니다.", "Cannot add above the top row.")); return; }
         if (document.getElementById('calendar-popup')) document.getElementById('calendar-popup').style.display = 'none';
         
         let parentRow = globalData[index]; let newRow = new Array(globalData[0].length).fill("");
@@ -824,7 +824,7 @@ window.deleteHistoryByDateRange = function() {
 
     // ─── 시작일 기준 정렬 (WBS 계층 유지) ──────────────────────────
     window.sortRowsByStartDate = function() {
-        if (!globalData || globalData.length <= 2) { alert('정렬할 데이터가 없습니다.'); return; }
+        if (!globalData || globalData.length <= 2) { alert(window._t('정렬할 데이터가 없습니다.', 'No data to sort.')); return; }
 
         const header = globalData[0];
         const rows   = globalData.slice(1);

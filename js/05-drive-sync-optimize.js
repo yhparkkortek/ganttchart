@@ -49,7 +49,7 @@
 window.handleAuthClick = function(event, silentOnly) {
         if (!tokenClient) {
             if (silentOnly) { setTimeout(function() { window.handleAuthClick(null, true); }, 500); return; }
-            alert("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)");
+            alert(window._t("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)", "⏳ Preparing the Google auth module. Please click again in 1-2 seconds.\n(If this persists, try Ctrl+F5)"));
             return;
         }
         // 💡 [2026-09-03] Shift+클릭 = 계정 전환 모드.
@@ -90,7 +90,7 @@ window.handleAuthClick = function(event, silentOnly) {
                 // 💡 자동로그인(silentOnly)은 인증 자체는 성공했지만 gapi 초기화가 느린 드문 경우인데,
                 //    사용자가 아무 조작도 안 했는데 alert가 튀어나오면 놀라니 로그만 남기고 조용히 물러난다.
                 if (!silentOnly) {
-                    alert("❌ 구글 드라이브 연결 준비가 너무 오래 걸립니다 (네트워크가 느리거나 일시적 오류일 수 있습니다).\n잠시 후 [🔵 드라이브 연동하기]를 다시 눌러주세요. 계속 안 되면 그때 Ctrl+F5로 강력 새로고침 후 시도해 주세요.");
+                    alert(window._t("❌ 구글 드라이브 연결 준비가 너무 오래 걸립니다 (네트워크가 느리거나 일시적 오류일 수 있습니다).\n잠시 후 [🔵 드라이브 연동하기]를 다시 눌러주세요. 계속 안 되면 그때 Ctrl+F5로 강력 새로고침 후 시도해 주세요.", "❌ Preparing the Google Drive connection is taking too long (the network may be slow or there may be a temporary error).\nPlease click [🔵 Connect Drive] again shortly. If it keeps failing, try a hard refresh with Ctrl+F5."));
                     authBtn.innerText = window._currentLang === 'en' ? "🔵 Connect Google Drive" : "🔵 구글 드라이브 연동하기";
                     authBtn.disabled = false;
                 } else {
@@ -173,7 +173,7 @@ window.handleAuthClick = function(event, silentOnly) {
             } catch(e) {
                 console.error("사용자 정보 가져오기 에러:", e);
                 if (!silentOnly) {
-                    alert("❌ 권한 정보를 가져오는데 실패했습니다. 팝업 차단 여부를 확인해 주세요.");
+                    alert(window._t("❌ 권한 정보를 가져오는데 실패했습니다. 팝업 차단 여부를 확인해 주세요.", "❌ Failed to fetch permission info. Please check if popups are being blocked."));
                     authBtn.innerText = "🔵 구글 드라이브 연동하기";
                     authBtn.disabled = false;
                 }

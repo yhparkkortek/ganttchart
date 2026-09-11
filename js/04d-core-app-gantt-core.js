@@ -93,13 +93,13 @@
         const nameEl = document.getElementById('holiday-add-name');
         const date = dateEl.value;
         let endDate = endDateEl.value;
-        if (!date) { alert('시작일을 선택해주세요.'); return; }
-        if (endDate && endDate < date) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+        if (!date) { alert(window._t('시작일을 선택해주세요.', 'Please select a start date.')); return; }
+        if (endDate && endDate < date) { alert(window._t('종료일이 시작일보다 빠릅니다.', 'The end date is earlier than the start date.')); return; }
         if (!endDate) endDate = date;
 
         const list = window.getCustomHolidays();
         const dup = list.some(function(h) { return h.date === date && (h.endDate || h.date) === endDate; });
-        if (dup) { alert('이미 등록된 기간입니다.'); return; }
+        if (dup) { alert(window._t('이미 등록된 기간입니다.', 'This period is already registered.')); return; }
 
         const entry = { date: date, name: (nameEl.value || '').trim() };
         if (endDate !== date) entry.endDate = endDate; // 하루짜리는 기존처럼 endDate 없이 저장 (호환성 유지)
@@ -112,9 +112,9 @@
         // ✅ 팀 공용 드라이브 파일에도 반영
         if (window.isDriveConnected) {
             const ok = await window.saveHolidaysToDrive(list);
-            if (!ok) alert('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.');
+            if (!ok) alert(window._t('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.', '⚠️ Failed to save to Drive. Please try again.'));
         } else {
-            alert('⚠️ 구글 드라이브 미연동 상태라 팀과 공유되지 않습니다.\n[파일 → 🔵 드라이브 연동하기] 후 다시 등록해주세요.');
+            alert(window._t('⚠️ 구글 드라이브 미연동 상태라 팀과 공유되지 않습니다.\n[파일 → 🔵 드라이브 연동하기] 후 다시 등록해주세요.', '⚠️ Google Drive is not connected, so this is not shared with the team.\nPlease connect via [File → 🔵 Connect Drive] and register again.'));
         }
     };
 
@@ -127,7 +127,7 @@
 
         if (window.isDriveConnected) {
             const ok = await window.saveHolidaysToDrive(list);
-            if (!ok) alert('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.');
+            if (!ok) alert(window._t('⚠️ 드라이브 저장에 실패했습니다. 다시 시도해주세요.', '⚠️ Failed to save to Drive. Please try again.'));
         }
     };
 
@@ -298,9 +298,9 @@
             await window._uploadDriveFile(driveToken, folderId, hashFileId, 'gantt_pw_sync.json',
                 JSON.stringify({ hash: newHash, updatedAt: new Date().toISOString() }));
 
-            alert('☁️ SMTP + Telegram 전체 설정이 새 비밀번호로 자동 업데이트 완료!');
+            alert(window._t('☁️ SMTP + Telegram 전체 설정이 새 비밀번호로 자동 업데이트 완료!', '☁️ All SMTP + Telegram settings auto-updated with the new password!'));
         } catch(e) {
-            alert('⚠️ Drive 자동 업데이트 실패: ' + e.message + '\n수동으로 [Drive에 암호화 저장]을 눌러주세요.');
+            alert(window._t('⚠️ Drive 자동 업데이트 실패: ', '⚠️ Drive auto-update failed: ') + e.message + window._t('\n수동으로 [Drive에 암호화 저장]을 눌러주세요.', '\nPlease click [Save encrypted to Drive] manually.'));
         }
     };
 
@@ -541,7 +541,7 @@
 // ─── 🔓 선택 구간 일정 재계산 (Ctrl/Shift로 선택한 행만 잠금 해제 후 다시 계산) ───
     window.recalcSelectedRange = function() {
         const sel = window._selectedRows;
-        if (!sel || sel.size === 0) { alert('먼저 재계산할 행을 선택해주세요. (Ctrl/Shift로 여러 행 선택 가능)'); return; }
+        if (!sel || sel.size === 0) { alert(window._t('먼저 재계산할 행을 선택해주세요. (Ctrl/Shift로 여러 행 선택 가능)', 'Please select row(s) to recalculate first. (Ctrl/Shift to select multiple)')); return; }
         const indices = Array.from(sel).sort(function(a,b){ return a-b; });
 
         // 💡 실행취소(Ctrl+Z)로 복구 가능해서 확인창 없이 바로 진행

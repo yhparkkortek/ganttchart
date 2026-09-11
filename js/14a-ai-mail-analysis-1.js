@@ -73,7 +73,7 @@ window.closeMailAnalyzer = function(e) {
 
 window.saveGeminiKey = function() {
     const key = document.getElementById('mail-gemini-key').value.trim();
-    if (!key) { alert('API 키를 입력해주세요.'); return; }
+    if (!key) { alert(window._t('API 키를 입력해주세요.', 'Please enter the API key.')); return; }
     const cfg = window.AI_PROVIDERS[window.getActiveAiProvider()] || window.AI_PROVIDERS.gemini;
     localStorage.setItem(cfg.keyName, key);
     const status = document.getElementById('mail-key-status');
@@ -364,10 +364,10 @@ window.populateInsertPosition = function() {
 
 window.analyzeMailContent = async function() {
     const apiKey = window.getActiveAiKey();
-    if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
+    if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
     const mailText = document.getElementById('mail-content-input').value.trim();
-    if (!mailText) { alert('메일 내용을 입력해주세요.'); return; }
+    if (!mailText) { alert(window._t('메일 내용을 입력해주세요.', 'Please enter the mail content.')); return; }
 
     const analyzeBtn = document.getElementById('mail-analyze-btn');
     const loadingDiv = document.getElementById('mail-loading');
@@ -744,8 +744,8 @@ window.editPrompt = async function() {
 };
 
 window.unlockPrompt = function() {
-    const success = verifyAdminPassword('🔒 프롬프트 수정을 위해 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)');
-    if (!success) { alert('❌ 비밀번호 인증 실패. 프롬프트 수정이 취소되었습니다.'); return; }
+    const success = verifyAdminPassword(window._t('🔒 프롬프트 수정을 위해 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to edit the prompt.\n(case-insensitive)'));
+    if (!success) { alert(window._t('❌ 비밀번호 인증 실패. 프롬프트 수정이 취소되었습니다.', '❌ Authentication failed. Edit cancelled.')); return; }
 
     document.getElementById('prompt-edit-textarea').readOnly = false;
     document.getElementById('prompt-edit-textarea').style.background = '#fffde7';
@@ -778,7 +778,7 @@ window.savePromptVersionSnapshot = function(promptText, note) {
 
 window.savePrompt = async function() {
     const text = document.getElementById('prompt-edit-textarea').value.trim();
-    if (!text) { alert('프롬프트가 비어있습니다.'); return; }
+    if (!text) { alert(window._t('프롬프트가 비어있습니다.', 'The prompt is empty.')); return; }
 
     // ✅ 변경 이력 저장
     const oldPrompt = localStorage.getItem('gantt_mail_prompt') || window._defaultPromptTemplate || '';
@@ -809,10 +809,10 @@ window.savePrompt = async function() {
     // ✅ 드라이브 연동 시 팀 공용 파일에도 업로드
     if (window.isDriveConnected) {
         const ok = await window.savePromptToDrive(text);
-        alert(ok ? '✅ 프롬프트가 저장되고, 팀 공용(드라이브)에도 반영되었습니다.'
-                  : '⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. (콘솔 로그 확인)');
+        alert(ok ? window._t('✅ 프롬프트가 저장되고, 팀 공용(드라이브)에도 반영되었습니다.', '✅ Prompt saved and synced to the shared team copy (Drive).')
+                  : window._t('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. (콘솔 로그 확인)', '⚠️ Saved locally, but uploading to Drive failed. (check console log)'));
     } else {
-        alert('✅ 프롬프트가 이 PC에 저장되었습니다.\n⚠️ 드라이브 미연동 상태라 팀과 공유되지는 않습니다.');
+        alert(window._t('✅ 프롬프트가 이 PC에 저장되었습니다.\n⚠️ 드라이브 미연동 상태라 팀과 공유되지는 않습니다.', '✅ Prompt saved on this PC.\n⚠️ Drive is not connected, so it is not shared with the team.'));
     }
 };
 
@@ -823,7 +823,7 @@ window.resetPrompt = function() {
 
     localStorage.removeItem('gantt_mail_prompt');
     document.getElementById('prompt-edit-textarea').value = window._defaultPromptTemplate || '';
-    alert('✅ 기본 프롬프트로 초기화되었습니다.\n(초기화 전 프롬프트는 "변경 이력"에서 복원할 수 있습니다)');
+    alert(window._t('✅ 기본 프롬프트로 초기화되었습니다.\n(초기화 전 프롬프트는 "변경 이력"에서 복원할 수 있습니다)', '✅ Reset to the default prompt.\n(The prompt from before the reset can be restored from "Change History")'));
 };
 
 // ── Phase 7: 다중 프로젝트 동시 등록 ─────────────────────────────────────
@@ -871,14 +871,14 @@ window._initMultiProjectArea = async function() {
  */
 window.mailDistributeToProject = async function() {
     var sel = document.getElementById('mail-multi-target-project');
-    if (!sel) { alert('배분 영역을 찾을 수 없습니다.'); return; }
+    if (!sel) { alert(window._t('배분 영역을 찾을 수 없습니다.', 'Could not find the distribution area.')); return; }
 
     // 💡 [2026-09-04] 다중 선택 지원 — 선택된 모든 옵션 처리
     var selected = Array.from(sel.options).filter(function(o) { return o.selected && o.value; });
-    if (!selected.length) { alert('대상 프로젝트를 1개 이상 선택해주세요.\n(Ctrl+클릭으로 여러 개 선택 가능)'); return; }
+    if (!selected.length) { alert(window._t('대상 프로젝트를 1개 이상 선택해주세요.\n(Ctrl+클릭으로 여러 개 선택 가능)', 'Please select at least one target project.\n(Ctrl+click to select multiple)')); return; }
 
     var task = window._mailAnalyzedResult;
-    if (!task) { alert('배분할 분석 결과가 없습니다.'); return; }
+    if (!task) { alert(window._t('배분할 분석 결과가 없습니다.', 'No analysis result to distribute.')); return; }
 
     var taskName = (task['업무명'] || '새업무').replace(/\s*＊AI📧\s*$/, '').trim();
     var succeededNames = [];
@@ -919,7 +919,7 @@ window.mailDistributeToProject = async function() {
             localStorage.setItem('gantt_ai_reassign_queue_v1', JSON.stringify(queue));
             succeededNames.push(targetName);
         } catch(e) {
-            alert('큐 저장 실패 (' + targetName + '): ' + e.message);
+            alert(window._t('큐 저장 실패 (', 'Failed to save queue (') + targetName + '): ' + e.message);
         }
     }
 

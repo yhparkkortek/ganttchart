@@ -1447,7 +1447,7 @@
     //    그래야 이 표에서 계획 대비 실적을 바로 비교할 수 있다(계획 행이 그동안 비어있거나 최초 PROTO
     //    Start 한 칸만 있고 나머지 8칸은 안 채워져 있던 문제를 여기서 함께 해결).
     window.syncSummaryActualsFromGantt = function() {
-        if (!globalData || globalData.length < 2) { alert('Gantt 데이터가 없습니다.'); return; }
+        if (!globalData || globalData.length < 2) { alert(window._t('Gantt 데이터가 없습니다.', 'No Gantt data.')); return; }
         const level0Rows = [];
         for (let i = 1; i < globalData.length; i++) {
             const row = globalData[i];
@@ -1455,11 +1455,14 @@
                 level0Rows.push({ name: (row._origDev || '').toString().trim(), startTs: row._calcStartTs });
             }
         }
-        if (level0Rows.length === 0) { alert('시작일이 있는 0레벨 업무를 찾을 수 없습니다.'); return; }
+        if (level0Rows.length === 0) { alert(window._t('시작일이 있는 0레벨 업무를 찾을 수 없습니다.', 'Could not find a level-0 task with a start date.')); return; }
 
         const result = deriveMilestoneDatesFromLevel0(level0Rows);
         if (!result || result.error) {
-            alert('0레벨 업무 중 "' + (result ? result.missing.join('", "') : '') + '"을(를) 찾을 수 없습니다. 업무명을 확인해주세요.');
+            alert(window._t(
+                '0레벨 업무 중 "' + (result ? result.missing.join('", "') : '') + '"을(를) 찾을 수 없습니다. 업무명을 확인해주세요.',
+                'Could not find the level-0 task "' + (result ? result.missing.join('", "') : '') + '". Please check the task name.'
+            ));
             return;
         }
 
@@ -1485,9 +1488,9 @@
 
         if (window.collectTabData) window.collectTabData();
         if (window._checkAllRequiredFields) window._checkAllRequiredFields();
-        alert('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.' + (planSynced
-            ? '\n(저장된 "최초 계획(킥오프)" 기준으로 계획 일정도 함께 반영했습니다)'
-            : '\n(저장된 "최초 계획(킥오프)"이 없어 계획 일정은 그대로 두었습니다 — 신규 프로젝트 등록 시에만 자동 저장됩니다)'));
+        alert(window._t('Gantt 0레벨 업무 기준으로 실적 일정이 반영되었습니다.', 'Actual dates were synced from the Gantt level-0 tasks.') + (planSynced
+            ? window._t('\n(저장된 "최초 계획(킥오프)" 기준으로 계획 일정도 함께 반영했습니다)', '\n(Plan dates were also synced from the saved "initial plan (kickoff)")')
+            : window._t('\n(저장된 "최초 계획(킥오프)"이 없어 계획 일정은 그대로 두었습니다 — 신규 프로젝트 등록 시에만 자동 저장됩니다)', '\n(No saved "initial plan (kickoff)" — plan dates were left unchanged; it is only auto-saved when a new project is registered)')));
     };
 
     function toggleTranslation(btn, encodedText, transMode, boldBrackets) {
@@ -1512,7 +1515,7 @@
             let finalHtml = cleanOrigHtml + '<br><span class="trans-result" style="color: var(--trans-text) !important; font-weight: normal;">' + transDisplayHtml + '</span>';
             contentSpan.dataset.origHtml = cleanOrigHtml; contentSpan.dataset.transHtml = finalHtml; contentSpan.innerHTML = finalHtml;
             btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
-        }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert("번역 중 오류가 발생했습니다."); });
+        }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert(window._t("번역 중 오류가 발생했습니다.", "An error occurred during translation.")); });
     }
 
     // 💡 WBS 업무명은 상세내용/답변과 달리 "교체" 방식 — 원문 ↔ 번역문 한 줄 토글
@@ -1531,7 +1534,7 @@
             let translated = ''; tData[0].forEach(item => translated += item[0]);
             contentSpan.textContent = translated.trim();
             btn.dataset.expanded = "true"; btn.style.backgroundColor = "rgba(0,0,0,0.05)"; btn.style.pointerEvents = 'auto'; btn.style.opacity = '1';
-        }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert("번역 중 오류가 발생했습니다."); });
+        }).catch(err => { btn.style.pointerEvents = 'auto'; btn.style.opacity = '1'; alert(window._t("번역 중 오류가 발생했습니다.", "An error occurred during translation.")); });
     }
 
     // forceExpand: true → 한글 업무명 전체 번역 표시 / false → 전체 원복

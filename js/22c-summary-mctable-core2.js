@@ -567,11 +567,11 @@ window._asSaveRecurRule = async function() {
     if (dateMode === 'range') {
         startDate = document.getElementById('as-recur-start').value;
         endDate   = document.getElementById('as-recur-end').value;
-        if (!startDate || !endDate) { alert('시작일/종료일을 입력해주세요.'); return; }
-        if (startDate > endDate) { alert('종료일이 시작일보다 빠릅니다.'); return; }
+        if (!startDate || !endDate) { alert(window._t('시작일/종료일을 입력해주세요.', 'Please enter the start/end date.')); return; }
+        if (startDate > endDate) { alert(window._t('종료일이 시작일보다 빠릅니다.', 'The end date is earlier than the start date.')); return; }
         dayInterval = parseInt(document.getElementById('as-recur-day-interval').value, 10) || 1;
     } else {
-        if (!window._asSpecificDates.length) { alert('특정 날짜를 1개 이상 추가해주세요.'); return; }
+        if (!window._asSpecificDates.length) { alert(window._t('특정 날짜를 1개 이상 추가해주세요.', 'Please add at least one specific date.')); return; }
     }
 
     // 💡 [2026-08-31] 시간창(시작~종료+몇시간마다) 대신 "발송 시각" 하나만 받음 — 백엔드 스키마는
@@ -607,7 +607,7 @@ window._asSaveRecurRule = async function() {
         const health = await fetch(`${MAIL_SERVER}/health`, { signal: AbortSignal.timeout(2000) });
         if (!health.ok) throw new Error();
     } catch (e) {
-        alert('❌ 메일 서버(kortek_backend.py)가 실행되지 않았습니다.\n기간·반복 예약은 이 서버가 켜져 있어야 등록/동작합니다.');
+        alert(window._t('❌ 메일 서버(kortek_backend.py)가 실행되지 않았습니다.\n기간·반복 예약은 이 서버가 켜져 있어야 등록/동작합니다.', '❌ The mail server (kortek_backend.py) is not running.\nPeriod/recurring schedules require this server to be on.'));
         return;
     }
 
@@ -622,14 +622,14 @@ window._asSaveRecurRule = async function() {
         window.renderAlarmTab();
         if (window.showToast) window.showToast(window._t('✅ 기간·반복 예약이 저장되었습니다.', '✅ Date/recurrence schedule saved.'));
     } catch (e) {
-        alert('❌ 예약 규칙 저장 실패: ' + e.message);
+        alert(window._t('❌ 예약 규칙 저장 실패: ', '❌ Failed to save the schedule rule: ') + e.message);
     }
 };
 
 window._asDeleteRecurRule = async function() {
     const ruleId = document.getElementById('as-schedule-rule-id').value;
     if (!ruleId) return;
-    if (!confirm('이 업무의 기간·반복 예약을 해제할까요?')) return;
+    if (!confirm(window._t('이 업무의 기간·반복 예약을 해제할까요?', 'Remove the period/recurring schedule for this task?'))) return;
     try {
         await fetch(`${MAIL_SERVER}/schedule/${ruleId}`, { method: 'DELETE' });
     } catch (e) {}
@@ -789,8 +789,9 @@ window.sendSingleAlarm = async function(sendAll) {
         : item.toEmail || [...new Set(allMemberEmails)].join(',');
 
     if (!allEmails) {
-        if (window.bmAlertModal) window.bmAlertModal('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
-        else alert('Summary 탭에 이메일 주소를 먼저 입력해 주세요.');
+        const _noEmailMsg = window._t('Summary 탭에 이메일 주소를 먼저 입력해 주세요.', 'Please enter an email address in the Summary tab first.');
+        if (window.bmAlertModal) window.bmAlertModal(_noEmailMsg);
+        else alert(_noEmailMsg);
         return;
     }
 
@@ -848,8 +849,9 @@ window.sendSingleAlarm = async function(sendAll) {
             throw new Error(data.error);
         }
     } catch(e) {
-        if (window.bmAlertModal) window.bmAlertModal('발송 실패: ' + e.message);
-        else alert('발송 실패: ' + e.message);
+        const _failMsg = window._t('발송 실패: ', 'Send failed: ') + e.message;
+        if (window.bmAlertModal) window.bmAlertModal(_failMsg);
+        else alert(_failMsg);
     } finally {
         if (btn) { btn.disabled = false; btn.textContent = '📧 즉시 발송'; }
     }
@@ -864,8 +866,9 @@ window.sendAllPendingAlarms = async function() {
     });
 
     if (!pending.length) {
-        if (window.bmAlertModal) window.bmAlertModal('미발송 항목이 없습니다.');
-        else alert('미발송 항목이 없습니다.');
+        const _noneMsg = window._t('미발송 항목이 없습니다.', 'No unsent items.');
+        if (window.bmAlertModal) window.bmAlertModal(_noneMsg);
+        else alert(_noneMsg);
         return;
     }
 

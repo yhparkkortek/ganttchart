@@ -1,7 +1,7 @@
 // [분리됨] 원본: js/04-core-app.js 의 5786~7094행 (리팩터링: 파일당 토큰 절약 · 협업용 분리)
 // 섹션: 파일 업로드 및 유틸리티 로직 2/5
     window.resetProjectSummaryPromptInModal = function() {
-        if (!confirm('편집 중인 내용을 버리고 기본 프롬프트로 되돌릴까요?')) return;
+        if (!confirm(window._t('편집 중인 내용을 버리고 기본 프롬프트로 되돌릴까요?', 'Discard your edits and reset to the default prompt?'))) return;
         // 💡 리셋도 되돌릴 수 있도록, 리셋 전 현재 프롬프트를 스냅샷으로 남김
         const current = localStorage.getItem('gantt_project_summary_prompt');
         if (current) window.savePsPromptVersionSnapshot(current, '기본값 초기화 전 백업');
@@ -13,7 +13,7 @@
     window.showPsPromptLogs = function() {
         let logs = JSON.parse(localStorage.getItem('gantt_project_summary_prompt_logs') || '[]');
         let versions = JSON.parse(localStorage.getItem('gantt_project_summary_prompt_versions') || '[]');
-        if (logs.length === 0) { alert('프롬프트 변경 이력이 없습니다.'); return; }
+        if (logs.length === 0) { alert(window._t('프롬프트 변경 이력이 없습니다.', 'No prompt change history.')); return; }
 
         let logModal = document.getElementById('ps-prompt-log-modal');
         if (!logModal) {
@@ -76,20 +76,20 @@
     window.restorePsPromptVersion = function(version) {
         const versions = JSON.parse(localStorage.getItem('gantt_project_summary_prompt_versions') || '[]');
         const target = versions.find(v => v.version === version);
-        if (!target) { alert('해당 버전을 찾을 수 없습니다.'); return; }
+        if (!target) { alert(window._t('해당 버전을 찾을 수 없습니다.', 'That version could not be found.')); return; }
 
         document.getElementById('ps-prompt-log-modal').style.display = 'none';
         const textarea = document.getElementById('ai-summary-prompt-textarea');
         if (textarea) textarea.value = target.prompt;
-        alert('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 팀 공용으로 저장] 버튼을 눌러야 최종 반영됩니다.');
+        alert(window._t('📋 v' + version + ' 버전을 불러왔습니다.\n내용을 확인한 후 [💾 팀 공용으로 저장] 버튼을 눌러야 최종 반영됩니다.', '📋 Loaded version v' + version + '.\nReview the content, then click [💾 Save to shared team copy] to actually apply it.'));
     };
 
     window.clearPsPromptLogs = function() {
-        if (!confirm('프롬프트 변경 이력을 전부 삭제할까요? 되돌릴 수 없습니다.')) return;
+        if (!confirm(window._t('프롬프트 변경 이력을 전부 삭제할까요? 되돌릴 수 없습니다.', 'Delete all prompt change history? This cannot be undone.'))) return;
         localStorage.removeItem('gantt_project_summary_prompt_logs');
         localStorage.removeItem('gantt_project_summary_prompt_versions');
         document.getElementById('ps-prompt-log-modal').style.display = 'none';
-        alert('✅ 이력이 삭제되었습니다.');
+        alert(window._t('✅ 이력이 삭제되었습니다.', '✅ History deleted.'));
     };
 
     // ── 💡 [2026-08-24 신규] AI 요약 피드백(👍/👎) + AI 프롬프트 자동개선 요청 ─────────────
@@ -224,7 +224,7 @@
             const pending = log.filter(function(x) { return x.rating === 'bad' && !x.improved; }).slice(0, 10);
             targetUids = pending.map(function(x) { return x.uid; });
             if (!pending.length) {
-                alert('⚠️ 개선할 피드백 케이스가 없습니다.\n먼저 리포트 결과에서 👎 버튼을 눌러 케이스를 쌓아주세요.');
+                alert(window._t('⚠️ 개선할 피드백 케이스가 없습니다.\n먼저 리포트 결과에서 👎 버튼을 눌러 케이스를 쌓아주세요.', '⚠️ No feedback cases to improve from.\nPlease click 👎 on a report result first to collect some cases.'));
                 return;
             }
             casesText = pending.map(function(fb, i) {
@@ -254,13 +254,13 @@
             const isTruncated = !/===END===/.test(cleaned); // 💡 종료 마커 없으면 잘림 의심
 
             if (!improvedPrompt) {
-                throw new Error('AI 응답 형식을 해석하지 못했습니다.');
+                throw new Error(window._t('AI 응답 형식을 해석하지 못했습니다.', 'Could not parse the AI response format.'));
             }
             // 💡 구조 손상 여부 검증 — 다운스트림 코드가 의존하는 필수 요소가 빠졌는지 확인
             const structIssues = window.validateProjectSummaryPromptStructure(improvedPrompt);
             window.showPsImprovePreviewModal(analysis, improvedPrompt, targetUids, currentPrompt, isTruncated, structIssues);
         } catch(e) {
-            alert('❌ AI 개선 요청 실패: ' + (e && e.message ? e.message : e));
+            alert(window._t('❌ AI 개선 요청 실패: ', '❌ AI improvement request failed: ') + (e && e.message ? e.message : e));
         }
     };
 
@@ -328,12 +328,12 @@
     // ── 💡 개선 프롬프트 채택 ───────────────────────────────────────────────
     window.applyImprovedPsPrompt = async function() {
         const text = document.getElementById('ps-improve-prompt-textarea').value.trim();
-        if (!text) { alert('프롬프트가 비어있습니다.'); return; }
+        if (!text) { alert(window._t('프롬프트가 비어있습니다.', 'The prompt is empty.')); return; }
 
         // 💡 [2026-08-24 안전장치 추가] 팀 공용 프롬프트를 덮어쓰는 파괴적 액션이라, 수동 편집(✏️ 프롬프트
         //    편집 모달의 "🔒 수정하기")과 동일하게 관리자 비밀번호 인증을 요구함.
-        if (!window.verifyAdminPassword('🔒 개선된 프롬프트를 채택하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
-            alert('❌ 비밀번호 인증 실패. 채택이 취소되었습니다.');
+        if (!window.verifyAdminPassword(window._t('🔒 개선된 프롬프트를 채택하려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to adopt the improved prompt.\n(case-insensitive)'))) {
+            alert(window._t('❌ 비밀번호 인증 실패. 채택이 취소되었습니다.', '❌ Authentication failed. Adoption cancelled.'));
             return;
         }
 
@@ -377,14 +377,14 @@
             const ok = await window.saveProjectSummaryPromptToDrive(text);
             if (ok) {
                 localStorage.removeItem('gantt_project_summary_prompt_pending_push');
-                alert('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v' + window._projectSummaryPromptVersion + ')');
+                alert(window._t('✅ 개선된 프롬프트가 채택되어 드라이브에 저장되었습니다. (v', '✅ Improved prompt adopted and saved to Drive. (v') + window._projectSummaryPromptVersion + ')');
             } else {
                 localStorage.setItem('gantt_project_summary_prompt_pending_push', '1');
-                alert('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.');
+                alert(window._t('⚠️ 로컬에는 저장됐지만 드라이브 업로드에 실패했습니다. 다음 드라이브 연결 시 자동으로 다시 시도합니다.', '⚠️ Saved locally, but uploading to Drive failed. It will retry automatically on the next Drive connection.'));
             }
         } else {
             localStorage.setItem('gantt_project_summary_prompt_pending_push', '1');
-            alert('✅ 개선된 프롬프트가 채택되었습니다. (v' + window._projectSummaryPromptVersion + ')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)');
+            alert(window._t('✅ 개선된 프롬프트가 채택되었습니다. (v', '✅ Improved prompt adopted. (v') + window._projectSummaryPromptVersion + window._t(')\n(현재 드라이브 미연동 — 다음 연결 시 팀 공용으로 자동 반영됩니다)', ')\n(Drive not connected — will sync to the shared team copy on next connection)'));
         }
         modal.style.display = 'none';
     };
@@ -393,7 +393,7 @@
     //    Gantt 표 전용 인쇄 규칙(zoom 0.7 등)과 안 섞이도록 별도 영역/모드 클래스 사용
     window.printAiProjectSummary = function() {
         const content = document.getElementById('ai-summary-report-content');
-        if (!content) { alert('먼저 [🔄 다시 생성]으로 리포트를 만들어주세요.'); return; }
+        if (!content) { alert(window._t('먼저 [🔄 다시 생성]으로 리포트를 만들어주세요.', 'Please generate the report first with [🔄 Regenerate].')); return; }
         let printArea = document.getElementById('ai-summary-print-area');
         if (!printArea) { printArea = document.createElement('div'); printArea.id = 'ai-summary-print-area'; document.body.appendChild(printArea); }
         const pm = window.projectMeta || {};
@@ -409,9 +409,9 @@
     // 💡 [PPT] 신호등/총평/통계/리스크/액션추천을 2슬라이드짜리 PowerPoint로 — Weekly Report PPT 내보내기와
     //    동일 라이브러리(PptxGenJS, 이미 로드돼 있음) 재사용, 색상/여백은 이 리포트 전용으로 단순화
     window.exportAiProjectSummaryPPT = function() {
-        if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+        if (typeof PptxGenJS === 'undefined') { alert(window._t('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.', 'Failed to load the PPT library. Please refresh and try again.')); return; }
         const r = (window.projectMeta || {}).aiSummaryReport;
-        if (!r) { alert('먼저 [🔄 다시 생성]으로 리포트를 만들어주세요.'); return; }
+        if (!r) { alert(window._t('먼저 [🔄 다시 생성]으로 리포트를 만들어주세요.', 'Please generate the report first with [🔄 Regenerate].')); return; }
         const d = r.dataSnapshot || { counts: {}, project: {} };
         const pm = window.projectMeta || {};
         const title = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';

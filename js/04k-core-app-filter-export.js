@@ -266,7 +266,7 @@
     }
 
     function exportToExcel() {
-        if (globalData.length <= 1) { alert("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요."); return; }
+        if (globalData.length <= 1) { alert(window._t("다운로드할 데이터가 없습니다. 먼저 엑셀 파일을 선택하여 병합해주세요.", "No data to download. Please select and merge an Excel file first.")); return; }
         // ── GanttChart 시트: 웹 화면과 동일 구성 ──
         const _hdrContent = (colIdx.content !== -1 && globalData[0][colIdx.content]) ? globalData[0][colIdx.content] : '업무 상세내용';
         // 💡 텍스트 막대(유니코드 블록)로 웹의 현황 막대 위치를 흉내냄 — 전체 타임라인 기준, 총 20칸

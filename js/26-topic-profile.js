@@ -467,7 +467,7 @@
     };
     window._tpClearAll = function() {
         var total = Object.keys(JSON.parse(localStorage.getItem('gantt_topic_profile_v1') || '{}')).length;
-        if (!confirm('저장된 토픽 프로파일 ' + total + '개를 모두 삭제할까요?')) return;
+        if (!confirm(window._t('저장된 토픽 프로파일 ' + total + '개를 모두 삭제할까요?', 'Delete all ' + total + ' saved topic profile(s)?'))) return;
         localStorage.removeItem('gantt_topic_profile_v1');
         window._refreshTopicProfileBadge();
         var ov = document.getElementById('tp-viewer-overlay');

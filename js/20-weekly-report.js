@@ -462,7 +462,7 @@
       });
   };
   window.exportWeeklyReportPPT = async function() {
-        if (typeof PptxGenJS === 'undefined') { alert('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.'); return; }
+        if (typeof PptxGenJS === 'undefined') { alert(window._t('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.', 'Failed to load the PPT library. Please refresh and try again.')); return; }
 
         const _pptColorChoice = await window._showPptColorChoiceModal();
         if (_pptColorChoice === 'cancel') return;

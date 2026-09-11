@@ -240,7 +240,7 @@ window._applyAddressWorkbookBuffer = function(arrayBuffer, sourceLabel) {
         alert('✅ ' + (sourceLabel || '파일') + '에서 주소록 ' + list.length + '명을 불러왔습니다.');
         return true;
     } catch (err) {
-        alert('❌ 파일을 읽는 중 오류가 발생했습니다: ' + err.message);
+        alert(window._t('❌ 파일을 읽는 중 오류가 발생했습니다: ', '❌ An error occurred while reading the file: ') + err.message);
         return false;
     }
 };
@@ -251,12 +251,12 @@ window.importAddressFromDrive = async function() {
 
     const tokenObj = (window.gapi && gapi.client) ? gapi.client.getToken() : null;
     if (!tokenObj) {
-        alert('먼저 상단의 [🔵 드라이브 연동하기]로 구글 드라이브 로그인을 해주세요.\n로그인 후 이 버튼을 다시 눌러주세요.');
+        alert(window._t('먼저 상단의 [🔵 드라이브 연동하기]로 구글 드라이브 로그인을 해주세요.\n로그인 후 이 버튼을 다시 눌러주세요.', 'Please sign in to Google Drive via [🔵 Connect Drive] at the top first.\nThen click this button again after signing in.'));
         return;
     }
 
     const curCount = (window.tabData && window.tabData.addressBook) ? window.tabData.addressBook.length : 0;
-    if (!confirm('구글 드라이브의 주소록 시트로 현재 주소록(' + curCount + '명)을 전체 교체합니다.\n계속할까요?')) return;
+    if (!confirm(window._t('구글 드라이브의 주소록 시트로 현재 주소록(' + curCount + '명)을 전체 교체합니다.\n계속할까요?', 'This will replace the current Address Book (' + curCount + ' people) entirely with the Google Drive sheet.\nContinue?'))) return;
 
     try {
         const url = 'https://www.googleapis.com/drive/v3/files/' + ADDR_SHEET_FILE_ID
@@ -270,7 +270,7 @@ window.importAddressFromDrive = async function() {
         const buf = await res.arrayBuffer();
         window._applyAddressWorkbookBuffer(buf, '구글 드라이브 주소록');
     } catch (err) {
-        alert('❌ 드라이브 파일을 불러오는 중 오류가 발생했습니다: ' + err.message);
+        alert(window._t('❌ 드라이브 파일을 불러오는 중 오류가 발생했습니다: ', '❌ An error occurred while loading the Drive file: ') + err.message);
     }
 };
 

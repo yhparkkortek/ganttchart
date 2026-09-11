@@ -611,7 +611,7 @@ window.closeColorPaletteModal = function() {
     if (window._cpApplyLiveTimer) { clearTimeout(window._cpApplyLiveTimer); window._cpApplyLiveTimer = null; }
     const snap = window._cpModalSnapshot;
     if (snap && window._cpLiveAppliedHex !== snap.liveHex) {
-        const keep = confirm('🎨 테마 색상을 변경하셨습니다.\n\n이대로 유지하시겠습니까?\n\n(취소를 누르면 이 창을 열기 전 색상으로 되돌아갑니다)');
+        const keep = confirm(window._t('🎨 테마 색상을 변경하셨습니다.\n\n이대로 유지하시겠습니까?\n\n(취소를 누르면 이 창을 열기 전 색상으로 되돌아갑니다)', '🎨 You changed the theme color.\n\nKeep this change?\n\n(Cancel reverts to the color from before opening this window)'));
         if (!keep) window._cpRevertToSnapshot();
     }
     window._cpModalSnapshot = null;

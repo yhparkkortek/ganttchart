@@ -288,7 +288,7 @@ window._msApplyOneKeywordSuggestion = async function(idx) {
     if (!s.certain) {
         const sel = document.querySelector('.ms-kwsuggest-proj-select[data-idx="' + idx + '"]');
         driveFileId = sel ? sel.value : '';
-        if (!driveFileId) { alert('먼저 대상 프로젝트를 선택해주세요.'); return; }
+        if (!driveFileId) { alert(window._t('먼저 대상 프로젝트를 선택해주세요.', 'Please select the target project first.')); return; }
         const p = (window._msKwOpenProjects || []).find(function(pp) { return pp.drive_file_id === driveFileId; });
         projectLabel = p ? (p.model || p.customer) : driveFileId;
     }
@@ -316,8 +316,8 @@ window._msApplyAllKeywordSuggestions = async function() {
         return sel && sel.value ? { i: i, driveFileId: sel.value, keyword: s.keyword } : null;
     }).filter(Boolean);
     const skipped = list.length - applicable.length;
-    if (!applicable.length) { alert('적용할 항목이 없습니다. "제목분석" 후보는 먼저 대상 프로젝트를 선택해주세요.'); return; }
-    if (!confirm(`${applicable.length}건의 키워드를 추가할까요?` + (skipped ? ` (프로젝트 미선택 ${skipped}건은 건너뜁니다)` : ''))) return;
+    if (!applicable.length) { alert(window._t('적용할 항목이 없습니다. "제목분석" 후보는 먼저 대상 프로젝트를 선택해주세요.', 'Nothing to apply. For "Subject analysis" candidates, please select a target project first.')); return; }
+    if (!confirm(window._t(`${applicable.length}건의 키워드를 추가할까요?` + (skipped ? ` (프로젝트 미선택 ${skipped}건은 건너뜁니다)` : ''), `Add ${applicable.length} keyword(s)?` + (skipped ? ` (skipping ${skipped} with no project selected)` : '')))) return;
     let okCount = 0;
     for (const s of applicable) {
         const ok = await window._msAppendProjectKeyword(s.driveFileId, s.keyword);
@@ -446,7 +446,7 @@ window._msRenderAddressSuggestList = function() {
 window._msApplyAllAddressSuggestions = function() {
     const list = window._msAddrSuggestions || [];
     if (!list.length) return;
-    if (!confirm(`${list.length}명을 전부 주소록에 추가할까요?`)) return;
+    if (!confirm(window._t(`${list.length}명을 전부 주소록에 추가할까요?`, `Add all ${list.length} people to the Address Book?`))) return;
     const added = window._msAddToAddressBook(list);
     window._msAddrSuggestions = [];
     window._msRenderAddressSuggestList();
@@ -473,7 +473,7 @@ window.msShowUnmatchedModal = function() {
 
 // 💡 [테스트용] 캐시 초기화 후 즉시 재수집 — 그동안 콘솔에서 반복 실행하던 스크립트를 버튼화
 window.msForceRefetchForTest = async function() {
-    const ok = confirm('⚠️ 테스트 재수집\n\n마지막 수집 기록을 초기화하고 즉시 다시 수집합니다.\nAI 분석이 다시 돌아 API 호출 비용이 발생할 수 있습니다.\n\n계속할까요?');
+    const ok = confirm(window._t('⚠️ 테스트 재수집\n\n마지막 수집 기록을 초기화하고 즉시 다시 수집합니다.\nAI 분석이 다시 돌아 API 호출 비용이 발생할 수 있습니다.\n\n계속할까요?', '⚠️ Test refetch\n\nThis resets the last collection record and refetches immediately.\nAI analysis will re-run, which may incur API call costs.\n\nContinue?'));
     if (!ok) return;
 
     const btn = document.getElementById('ms-test-refetch-btn');
@@ -980,7 +980,7 @@ window.msBatchInsert = async function() {
 
     msRenderList(window._msResults);
     window.recalculateSchedules();
-    alert(`✅ ${validTargets.length}개 항목이 등록되었습니다!`);
+    alert(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`));
 };
 
 window.msSyncCheckAll = function() {
@@ -1285,7 +1285,7 @@ const AR = {
 
         AR.render(tabKey);
         window.recalculateSchedules();
-        alert(`✅ ${validTargets.length}개 항목이 등록되었습니다!`);
+        alert(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`));
     },
 
     // 💡 체크한 항목들을 Gantt에 등록하지 않고 "업무 보관함"으로 한 번에 이동
@@ -1293,7 +1293,7 @@ const AR = {
         const c = AR.cfg[tabKey];
         const arr = c.getArr();
         const validTargets = arr.filter(r => r.selected && r.task && !r.registered);
-        if (!validTargets.length) { alert('보관함으로 옮길 항목을 체크해주세요.'); return; }
+        if (!validTargets.length) { alert(window._t('보관함으로 옮길 항목을 체크해주세요.', 'Please check the item(s) to move to the inbox.')); return; }
 
         // 💡 날짜 미확정 항목이 섞여 있으면 미리 알려줌 — "다른 프로젝트 전송" 시점까지 기다리지 않게
         const incomplete = validTargets.filter(r =>

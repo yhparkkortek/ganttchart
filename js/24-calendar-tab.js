@@ -252,7 +252,7 @@ function calBuildICSText() {
 
 window.calExportICS = function() {
     const icsText = calBuildICSText();
-    if (!icsText) { alert('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.'); return; }
+    if (!icsText) { alert(window._t('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.', 'No tasks to export. Please load Gantt chart data first.')); return; }
     const blob = new Blob([icsText], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -267,7 +267,7 @@ window.calExportICS = function() {
 // - 읽기(구글이 가져가는 것): 인증 없는 raw URL — "링크를 아는 사람만 접근 가능" 수준이며 완전 비공개는 아님
 window.calSyncToGist = async function() {
     const icsText = calBuildICSText();
-    if (!icsText) { alert('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.'); return; }
+    if (!icsText) { alert(window._t('내보낼 업무가 없습니다. Gantt chart 데이터를 먼저 불러와주세요.', 'No tasks to export. Please load Gantt chart data first.')); return; }
 
     let token = localStorage.getItem('gantt_gist_token');
     if (!token) {
@@ -309,7 +309,7 @@ window.calSyncToGist = async function() {
         const rawUrl = data.files[filename].raw_url.replace(/\/raw\/[0-9a-f]+\//, '/raw/'); // 항상 최신본을 가리키는 URL
         prompt('구글 캘린더 좌측 [다른 캘린더 +] → "URL로 만들기"에 아래 주소를 붙여넣으세요:\n(최초 1회만 등록하면 이후 자동 갱신됩니다)', rawUrl);
     } catch (err) {
-        alert('동기화 실패: ' + err.message + '\n토큰이 올바른지, gist 권한이 있는지 확인해주세요.');
+        alert(window._t('동기화 실패: ', 'Sync failed: ') + err.message + window._t('\n토큰이 올바른지, gist 권한이 있는지 확인해주세요.', '\nPlease check that the token is correct and has gist permission.'));
     }
 };
 

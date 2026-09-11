@@ -39,7 +39,7 @@
                 "(취소 시 엑셀 로드가 중단됩니다)"
             );
             if (!success) {
-                alert("❌ 비밀번호 인증 실패. 엑셀 로드가 취소되었습니다.");
+                alert(window._t("❌ 비밀번호 인증 실패. 엑셀 로드가 취소되었습니다.", "❌ Authentication failed. Excel load cancelled."));
                 document.getElementById('file-input').value = '';
                 return;
             }
@@ -1021,7 +1021,7 @@ ${recentLogs}
     // 💡 실제 생성 실행 — 결과는 projectMeta.aiSummaryReport에 캐싱(프로젝트 저장 시 함께 보관됨)
     window.generateAiProjectSummary = async function() {
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
-        if (!apiKey) { alert('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.'); return; }
+        if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
         const btn = document.getElementById('ai-summary-generate-btn');
         if (btn) { btn.disabled = true; btn.textContent = '⏳ 생성 중...'; }
@@ -1058,7 +1058,7 @@ ${recentLogs}
             window._renderAiProjectSummaryBody();
             if (window.showToast) window.showToast(window._t('🤖 AI 요약을 생성했습니다.', '🤖 AI summary generated.'), 'info');
         } catch (e) {
-            alert('⚠️ AI 요약 생성 실패: ' + (e && e.message ? e.message : e));
+            alert(window._t('⚠️ AI 요약 생성 실패: ', '⚠️ Failed to generate AI summary: ') + (e && e.message ? e.message : e));
         } finally {
             if (btn) { btn.disabled = false; btn.textContent = '🔄 다시 생성'; }
         }
@@ -1277,7 +1277,7 @@ ${recentLogs}
     //    등)로 바꿔서 보여줌.
     window.unlockPsPrompt = function() {
         const success = verifyAdminPassword('🔒 프롬프트 수정을 위해 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)');
-        if (!success) { alert('❌ 비밀번호 인증 실패. 프롬프트 수정이 취소되었습니다.'); return; }
+        if (!success) { alert(window._t('❌ 비밀번호 인증 실패. 프롬프트 수정이 취소되었습니다.', '❌ Authentication failed. Edit cancelled.')); return; }
 
         document.getElementById('ai-summary-prompt-textarea').readOnly = false;
         document.getElementById('ai-summary-prompt-textarea').style.background = '#fffde7';
@@ -1311,7 +1311,7 @@ ${recentLogs}
 
     window.saveProjectSummaryPromptFromModal = async function() {
         const text = document.getElementById('ai-summary-prompt-textarea').value.trim();
-        if (!text) { alert('프롬프트 내용이 비어있습니다.'); return; }
+        if (!text) { alert(window._t('프롬프트 내용이 비어있습니다.', 'The prompt content is empty.')); return; }
 
         // ✅ 변경 이력 저장 (메일분석 프롬프트 편집과 동일한 이력 기능)
         const oldPrompt = localStorage.getItem('gantt_project_summary_prompt') || window._defaultProjectSummaryPromptTemplate || '';

@@ -220,7 +220,7 @@ window.mailRightInsert = function() {
     const p = window._mailAnalyzedResult['완료일'];
     
     if ((s||'').includes('날짜확인필요') || (p||'').includes('날짜확인필요')) {
-        alert('⚠️ 시작일 또는 완료일을 먼저 선택해주세요.');
+        alert(window._t('⚠️ 시작일 또는 완료일을 먼저 선택해주세요.', '⚠️ Please select the start or end date first.'));
         return;
     }
 
@@ -526,7 +526,7 @@ window.mfRemoveFile = function(idx) {
 // ─── 파일 1개만 개별 분석 (일괄 분석 버튼과 별개) ─────────────────
 window.mfAnalyzeSingle = async function(idx) {
     const apiKey = window.getActiveAiKey();
-    if (!apiKey) { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
+    if (!apiKey) { alert(window._t('Gemini API 키를 먼저 저장해주세요.', 'Please save the Gemini API key first.')); return; }
     const f = window._mfFiles && window._mfFiles[idx];
     if (!f) return;
 
@@ -1078,8 +1078,8 @@ async function mfCallGemini(apiKey, parsed) {
 // ─── 일괄 분석 ───────────────────────────────────────────
 window.mfAnalyze = async function() {
     const apiKey = window.getActiveAiKey();
-    if (!apiKey)  { alert('Gemini API 키를 먼저 저장해주세요.'); return; }
-    if (!window._mfFiles.length) { alert('파일을 선택해주세요.'); return; }
+    if (!apiKey)  { alert(window._t('Gemini API 키를 먼저 저장해주세요.', 'Please save the Gemini API key first.')); return; }
+    if (!window._mfFiles.length) { alert(window._t('파일을 선택해주세요.', 'Please select a file.')); return; }
 
     document.getElementById('mf-analyze-btn').disabled  = true;
     document.getElementById('mf-progress').style.display = 'block';
@@ -1424,13 +1424,13 @@ window.mfBatchInsert = async function() {
 
     mfRenderList(window._mfResults);
     window.recalculateSchedules();
-    alert(`✅ ${validTargets.length}개 항목이 등록되었습니다!`);
+    alert(window._t(`✅ ${validTargets.length}개 항목이 등록되었습니다!`, `✅ ${validTargets.length} item(s) registered!`));
 };
 
 // 날짜체크 없이 직접 삽입
 function mfDirectInsert(task, mailRaw, setAlarm) {
-    if (!globalData || globalData.length <= 1) { 
-        alert('먼저 Gantt Chart 파일을 불러와주세요.'); 
+    if (!globalData || globalData.length <= 1) {
+        alert(window._t('먼저 Gantt Chart 파일을 불러와주세요.', 'Please load a Gantt Chart file first.'));
         return false; 
     }
 
