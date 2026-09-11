@@ -133,11 +133,21 @@ function _modalTitleFor(handle, modalId) {
 //    "다른 모달과 비교했을 때"는 전혀 반영되지 않는다(바깥 오버레이의 z-index가 그대로 상한선).
 //    그 결과 AI 문답보다 나중에 연 다른 모달(예: 우선순위 점수 설정 등)이 있으면 그 뒤에 가려진 채
 //    "열렸지만 안 보이는" 상태가 됨 — 어떤 모달을 그 사이에 열었었는지에 따라 달라지니 "특정 경우를
-//    확정할 수 없다"는 제보와도 일치. body의 직계 자식(=실제 쌓임 맥락의 뿌리)까지 거슬러 올라가서
-//    그 요소를 최상단으로 올리도록 고친다 — toggleTarget이 이미 body 직계 자식인 대다수 모달은
-//    한 바퀴만 돌고 자기 자신을 그대로 반환하므로 동작 변화 없음.
+//    확정할 수 없다"는 제보와도 일치. 진짜 오버레이 조상(.modal-overlay 클래스가 붙어있거나, body의
+//    직계 자식인 지점)까지만 거슬러 올라가서 그 요소를 최상단으로 올리도록 고친다 — toggleTarget이
+//    이미 그 오버레이 자신인 대다수 모달은 한 바퀴만 돌고 자기 자신을 그대로 반환하므로 동작 변화 없음.
+//    🐛 [2026-09-11 버그 수정 2] 처음엔 "body 직계 자식까지"만 보고 멈췄는데, task-inbox-overlay처럼
+//    body가 아니라 #app-main 밑에 정적으로 박혀 있는 오버레이도 있어서(반대로 이런 건 body 직계
+//    자식으로 착각하고 #app-main까지 계속 더 올라가버려 엉뚱한 요소의 z-index를 건드릴 뻔했다) —
+//    ".modal-overlay" 클래스를 우선 신호로 먼저 확인하고, 그 클래스가 없는 gantt-qa-modal/npw-modal
+//    같은 경우에만 "body 직계 자식"을 보조 신호로 쓴다.
 function _modalStackingRoot(el) {
-    while (el && el.parentElement && el.parentElement !== document.body) el = el.parentElement;
+    let cur = el;
+    while (cur && cur !== document.body) {
+        if (cur.classList && cur.classList.contains('modal-overlay')) return cur;
+        if (cur.parentElement === document.body) return cur;
+        cur = cur.parentElement;
+    }
     return el;
 }
 function _bringModalStackToFront(el) {
@@ -164,13 +174,19 @@ function _modalToggleTarget(modalId, closeBtn) {
     //    원인 — task-inbox-modal처럼 ✕ 버튼이 onclick에 getElementById(...)를 직접 안 쓰고 이름
     //    있는 도우미 함수(window.closeTaskInbox() 등)만 호출하는 모달은, 위 정규식이 못 찾아서
     //    modalId 자신(오버레이의 자식인 내부 박스)을 최소화 대상으로 잘못 골랐다. 이 앱의 실제
-    //    open/closeXxx() 로직은 항상 부모(.modal-overlay 오버레이 wrapper)의 display만 토글하고
-    //    자식 박스 자신의 인라인 display는 절대 건드리지 않으므로, 최소화가 자식만 display:none으로
-    //    숨긴 뒤엔 그 뒤로 openXxx()를 아무리 다시 불러도(부모만 flex로 "재확인"될 뿐 자식은 그대로
-    //    none) 화면에 아무것도 안 보여 "모달이 안 열리는" 것처럼 보였다. 부모가 .modal-overlay면
-    //    그 부모를 실제 토글 대상으로 삼는다.
-    if (modalEl && modalEl.parentElement && modalEl.parentElement.classList.contains('modal-overlay')) {
-        return modalEl.parentElement;
+    //    open/closeXxx() 로직은 항상 부모(오버레이 wrapper)의 display만 토글하고 자식 박스 자신의
+    //    인라인 display는 절대 건드리지 않으므로, 최소화가 자식만 display:none으로 숨긴 뒤엔 그
+    //    뒤로 openXxx()를 아무리 다시 불러도(부모만 다시 보이는 값으로 "재확인"될 뿐 자식은 그대로
+    //    none) 화면에 아무것도 안 보여 "모달이 안 열리는" 것처럼 보였다.
+    // 🐛 [2026-09-11 버그 수정] 위 최초 수정은 부모에 ".modal-overlay" 클래스가 붙어있을 때만
+    //    잡아냈는데, AI 문답(gantt-qa-modal/gantt-qa-box)·새 프로젝트 등록 위자드(npw-modal/npw-box)
+    //    처럼 그 클래스 없이 그냥 body 바로 아래 오버레이 div로만 만들어진 모달은 여전히 못 잡아서
+    //    같은 증상(+ 타스크바 복원 시 z-index도 이 자식 기준으로 잘못 올라감 — 73c249f 참고)이 났다.
+    //    클래스 이름에 의존하지 않고, "body의 직계 자식까지 거슬러 올라간 실제 조상"을 구조적으로
+    //    찾는 _modalStackingRoot로 일반화 — 새 모달이 어떤 클래스를 쓰든 상관없이 항상 정확히 잡는다.
+    if (modalEl) {
+        const root = _modalStackingRoot(modalEl);
+        if (root && root !== modalEl) return root;
     }
     return modalEl;
 }
