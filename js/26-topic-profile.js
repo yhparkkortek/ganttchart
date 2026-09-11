@@ -95,18 +95,18 @@
     window._generateTopicProfile = async function() {
         var key = _currentKey();
         if (!key) {
-            if (window.showToast) window.showToast('⚠️ 프로젝트를 먼저 불러오세요.', 'error');
+            if (window.showToast) window.showToast(window._t('⚠️ 프로젝트를 먼저 불러오세요.', '⚠️ Please load a project first.'), 'error');
             return null;
         }
 
         if (typeof globalData === 'undefined' || !globalData || globalData.length <= 1) {
-            if (window.showToast) window.showToast('⚠️ 간트차트에 업무 데이터가 없습니다.', 'error');
+            if (window.showToast) window.showToast(window._t('⚠️ 간트차트에 업무 데이터가 없습니다.', '⚠️ No task data in the Gantt chart.'), 'error');
             return null;
         }
 
         var apiKey = window.getActiveAiKey && window.getActiveAiKey();
         if (!apiKey) {
-            if (window.showToast) window.showToast('⚠️ AI API 키를 먼저 설정해주세요.', 'error');
+            if (window.showToast) window.showToast(window._t('⚠️ AI API 키를 먼저 설정해주세요.', '⚠️ Please set up the AI API key first.'), 'error');
             return null;
         }
 
@@ -330,15 +330,15 @@
             '}';
 
         console.info('[토픽 프로파일] 생성 시작', { key: key, allCount: allTaskNames.length, recentCount: recentTaskNames.length });
-        if (window.showToast) window.showToast('🔍 토픽 프로파일 생성 중... (업무 ' + allTaskNames.length + '건)', 'info', 20000);
+        if (window.showToast) window.showToast(window._t('🔍 토픽 프로파일 생성 중... (업무 ' + allTaskNames.length + '건)', '🔍 Generating topic profile... (' + allTaskNames.length + ' tasks)'), 'info', 20000);
 
         var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
         if (!result || !result.ok) {
             // result.error 는 Error 객체 — .message에 실제 메시지가 있음
             var _errDetail = result && result.error
                 ? (result.error.message || String(result.error)).slice(0, 120)
-                : '응답 없음';
-            if (window.showToast) window.showToast('❌ 토픽 프로파일 생성 실패: ' + _errDetail, 'error', 8000);
+                : window._t('응답 없음', 'No response');
+            if (window.showToast) window.showToast(window._t('❌ 토픽 프로파일 생성 실패: ' + _errDetail, '❌ Failed to generate topic profile: ' + _errDetail), 'error', 8000);
             console.warn('[토픽 프로파일] API 실패 상세:', { result: result, error: result && result.error });
             return null;
         }
@@ -356,7 +356,7 @@
         } catch(e) {}
 
         if (!profile || !profile.keywords) {
-            if (window.showToast) window.showToast('❌ AI 응답을 파싱할 수 없습니다', 'error');
+            if (window.showToast) window.showToast(window._t('❌ AI 응답을 파싱할 수 없습니다', '❌ Could not parse the AI response'), 'error');
             return null;
         }
 
@@ -391,7 +391,7 @@
         _saveStore(store);
 
         if (window.showToast) {
-            window.showToast('✅ 토픽 프로파일 생성 완료 — 키워드 ' + (profile.keywords || []).length + '개', 'info', 4000);
+            window.showToast(window._t('✅ 토픽 프로파일 생성 완료 — 키워드 ' + (profile.keywords || []).length + '개', '✅ Topic profile generated — ' + (profile.keywords || []).length + ' keyword(s)'), 'info', 4000);
         }
         console.info('[토픽 프로파일]', profile);
 
@@ -406,9 +406,10 @@
         if (unmatchedCount > 0 && typeof window._msBulkReanalyzeUnmatched === 'function') {
             var _estMin = Math.round(unmatchedCount * 4 / 60 * 10) / 10; // 4초/건 기준 예상 분(최대치)
             if (window.showToast) {
-                window.showToast(
+                window.showToast(window._t(
                     '🔄 토픽 갱신 완료 — 미분류 최대 ' + unmatchedCount + '건 자동 재분석 확인 중 (최대 ' + _estMin + '분, 최근 재시도한 건은 건너뜀)...',
-                    'info', 5000);
+                    '🔄 Topic profile updated — checking up to ' + unmatchedCount + ' unclassified mail(s) for auto re-analysis (up to ' + _estMin + ' min, recently-retried ones skipped)...'
+                ), 'info', 5000);
             }
             setTimeout(function() {
                 window._msBulkReanalyzeUnmatched({ noConfirm: true });
@@ -471,7 +472,7 @@
         window._refreshTopicProfileBadge();
         var ov = document.getElementById('tp-viewer-overlay');
         if (ov) ov.remove();
-        if (window.showToast) window.showToast('🗑 토픽 프로파일 전체 삭제 완료', 'info', 3000);
+        if (window.showToast) window.showToast(window._t('🗑 토픽 프로파일 전체 삭제 완료', '🗑 All topic profiles deleted'), 'info', 3000);
     };
 
     // 💡 [2026-09-06 신규] 이미 저장돼 있는(구버전 프롬프트로 생성된) 프로파일에서 PROTO/TOOLING/METAL

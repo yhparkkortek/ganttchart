@@ -228,7 +228,7 @@ window.callAiBackend = async function(apiKey, prompt, opts) {
                     console.warn(`[AI 모델 자동전환] "${activeModel}" 실패 → "${model}"로 전환 성공. 기본값을 갱신합니다.`);
                     localStorage.setItem('ai_model_' + provider, model);
                     if (window.showToast) {
-                        window.showToast(`⚠️ AI 모델("${activeModel}")이 사용 중단되어 "${model}"로 자동 전환했습니다.`);
+                        window.showToast(window._t(`⚠️ AI 모델("${activeModel}")이 사용 중단되어 "${model}"로 자동 전환했습니다.`, `⚠️ AI model "${activeModel}" is unavailable — automatically switched to "${model}".`));
                     }
                 }
                 return { ok: true, data, modelUsed: model, switched: model !== activeModel };

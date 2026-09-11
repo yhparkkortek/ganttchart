@@ -104,12 +104,12 @@
      */
     window._alRunRetry = async function(lowRows) {
         var apiKey = window.getActiveAiKey && window.getActiveAiKey();
-        if (!apiKey) { _showToast('⚠️ AI API 키를 먼저 설정해주세요'); return; }
+        if (!apiKey) { _showToast(window._t('⚠️ AI API 키를 먼저 설정해주세요', '⚠️ Please set up the AI API key first')); return; }
 
         var rows = (lowRows || []).filter(function(r) { return r.snippet && r.snippet.length > 10; });
-        if (!rows.length) { _showToast('재분석할 수 있는 업무(원문 있음)가 없습니다'); return; }
+        if (!rows.length) { _showToast(window._t('재분석할 수 있는 업무(원문 있음)가 없습니다', 'No tasks available to re-analyze (need original mail text)')); return; }
 
-        _showToast('🔄 저신뢰도 ' + rows.length + '건 재분석 중...', 6000);
+        _showToast(window._t('🔄 저신뢰도 ' + rows.length + '건 재분석 중...', '🔄 Re-analyzing ' + rows.length + ' low-confidence task(s)...'), 6000);
 
         // 💡 [무료 API 절약] 건당 2000ms 딜레이 — 무료 Gemini 한도 준수 (메일 분석의 4000ms 기준 완화)
         var _RETRY_DELAY_MS = 2000;
@@ -153,9 +153,9 @@
         }
         if (improved > 0) {
             if (window.recalculateSchedules) window.recalculateSchedules();
-            _showToast('✅ ' + improved + '건 신뢰도 갱신 완료');
+            _showToast(window._t('✅ ' + improved + '건 신뢰도 갱신 완료', '✅ Updated confidence for ' + improved + ' task(s)'));
         } else {
-            _showToast('재분석 완료 — 신뢰도 변경 없음');
+            _showToast(window._t('재분석 완료 — 신뢰도 변경 없음', 'Re-analysis complete — no confidence change'));
         }
     };
 
@@ -389,9 +389,12 @@
                     },
                     status: 'pending'
                 });
-                _showToast('📚 학습 기록 완료 — ' + (targetProject ? targetProject.file_name : targetProjectVal) + '을 열면 수신 알림이 표시됩니다');
+                _showToast(window._t(
+                    '📚 학습 기록 완료 — ' + (targetProject ? targetProject.file_name : targetProjectVal) + '을 열면 수신 알림이 표시됩니다',
+                    '📚 Learning recorded — a notification will show when you open ' + (targetProject ? targetProject.file_name : targetProjectVal)
+                ));
             } else {
-                _showToast('📚 학습 데이터가 기록됐습니다');
+                _showToast(window._t('📚 학습 데이터가 기록됐습니다', '📚 Learning data recorded'));
             }
 
             closeModal();
@@ -499,7 +502,7 @@
         });
         if (added > 0) {
             window.recalculateSchedules();
-            _showToast('✅ 재배치 업무 ' + added + '건이 추가됐습니다');
+            _showToast(window._t('✅ 재배치 업무 ' + added + '건이 추가됐습니다', '✅ Added ' + added + ' re-assigned task(s)'));
         }
     }
 

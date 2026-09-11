@@ -704,7 +704,7 @@
                         // 저장 자체는 그대로 진행하되(병합은 이미 적용됨) 토스트로만 알린다 — 자세한 내용은
                         // 원래 안내대로 [🕒 변경 이력 확인]에서 언제든 확인 가능.
                         if (opts.suppressAlert) {
-                            window.showToast(_merge3.summaryMsg + ' (🕒 변경 이력 확인에서 상세 확인)', 'warning', 8000);
+                            window.showToast(_merge3.summaryMsg + window._t(' (🕒 변경 이력 확인에서 상세 확인)', ' (see 🕒 Edit History for details)'), 'warning', 8000);
                         } else {
                             alert(_merge3.summaryMsg + '\n\n(자세한 내용은 하단 [🕒 변경 이력 확인]에서 확인할 수 있습니다)');
                         }

@@ -620,7 +620,7 @@ window._asSaveRecurRule = async function() {
         window.closeAlarmScheduleModal();
         await window.loadScheduleRulesFromBackend();
         window.renderAlarmTab();
-        if (window.showToast) window.showToast('✅ 기간·반복 예약이 저장되었습니다.');
+        if (window.showToast) window.showToast(window._t('✅ 기간·반복 예약이 저장되었습니다.', '✅ Date/recurrence schedule saved.'));
     } catch (e) {
         alert('❌ 예약 규칙 저장 실패: ' + e.message);
     }

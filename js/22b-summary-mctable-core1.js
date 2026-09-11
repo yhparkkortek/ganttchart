@@ -1052,7 +1052,7 @@ window.toggleMailMode = function() {
         if (window._autoMailFetchTick) {
             localStorage.removeItem(window.MS_LAST_AUTO_FETCH_KEY || 'ms_last_auto_fetch');
             window._autoMailFetchTick();
-            if (window.showToast) window.showToast('📬 메일 자동배치 ON — 즉시 수집 시작', 'info');
+            if (window.showToast) window.showToast(window._t('📬 메일 자동배치 ON — 즉시 수집 시작', '📬 Mail Auto ON — starting collection now'), 'info');
         }
     }
 };

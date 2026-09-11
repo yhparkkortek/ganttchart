@@ -182,23 +182,23 @@
         if (!_inCooldown) {
             if (st.level === 'critical') {
                 if (window.showToast) {
-                    window.showToast(
+                    window.showToast(window._t(
                         '🔴 토픽 오염 위험 — 최근 오매칭 ' + st.negCount + '건 (연속 ' + st.consecutive + '건). AI 진단을 권장합니다.',
-                        'error', 8000
-                    );
+                        '🔴 Topic contamination risk — ' + st.negCount + ' recent mismatch(es) (' + st.consecutive + ' in a row). AI diagnosis recommended.'
+                    ), 'error', 8000);
                     _alerted = true;
                 }
             } else if (st.level === 'caution' && st.consecutive >= 2) {
                 if (window.showToast) {
-                    window.showToast(
+                    window.showToast(window._t(
                         '🟠 토픽 오염 경고 — 오매칭이 반복되고 있습니다 (' + st.negCount + '건). 메일 분석기에서 AI 진단을 실행해주세요.',
-                        'warn', 5000
-                    );
+                        '🟠 Topic contamination warning — mismatches keep recurring (' + st.negCount + '). Please run AI diagnosis in the mail analyzer.'
+                    ), 'warn', 5000);
                     _alerted = true;
                 }
             } else if (st.level === 'warn' && st.hiConfNeg >= 2) {
                 if (window.showToast) {
-                    window.showToast('🟡 고신뢰도 오매칭 ' + st.hiConfNeg + '건 — 토픽 프로파일 점검을 권장합니다.', 'info', 4000);
+                    window.showToast(window._t('🟡 고신뢰도 오매칭 ' + st.hiConfNeg + '건 — 토픽 프로파일 점검을 권장합니다.', '🟡 ' + st.hiConfNeg + ' high-confidence mismatch(es) — reviewing the topic profile is recommended.'), 'info', 4000);
                     _alerted = true;
                 }
             }
@@ -208,10 +208,10 @@
         // (exact equality라 자연적으로 1회성 — 쿨다운과 별도로 항상 허용)
         if (!_inCooldown && (st.noMatchCount === 5 || st.noMatchCount === 10)) {
             if (window.showToast) {
-                window.showToast(
+                window.showToast(window._t(
                     '📭 미분류 누적 ' + st.noMatchCount + '건 — 토픽 키워드가 실제 메일 패턴을 못 잡고 있을 수 있습니다. AI 진단으로 보완 키워드를 확인해보세요.',
-                    'warn', 6000
-                );
+                    '📭 ' + st.noMatchCount + ' unclassified mail(s) accumulated — the topic keywords may not be capturing actual mail patterns. Run AI diagnosis to check for missing keywords.'
+                ), 'warn', 6000);
                 _alerted = true;
             }
         }
@@ -319,11 +319,11 @@
             '  "confidence": "high|medium|low"\n' +
             '}';
 
-        if (window.showToast) window.showToast('🔬 토픽 오염 진단 중...', 'info', 20000);
+        if (window.showToast) window.showToast(window._t('🔬 토픽 오염 진단 중...', '🔬 Diagnosing topic contamination...'), 'info', 20000);
 
         var result = await window.callAiBackend(apiKey, prompt, {});
         if (!result || !result.ok) {
-            if (window.showToast) window.showToast('❌ AI 진단 실패', 'error');
+            if (window.showToast) window.showToast(window._t('❌ AI 진단 실패', '❌ AI diagnosis failed'), 'error');
             return;
         }
 
@@ -340,11 +340,11 @@
         } catch(e) {}
 
         if (!suggestion) {
-            if (window.showToast) window.showToast('❌ AI 응답을 파싱할 수 없습니다', 'error');
+            if (window.showToast) window.showToast(window._t('❌ AI 응답을 파싱할 수 없습니다', '❌ Could not parse the AI response'), 'error');
             return;
         }
 
-        if (window.showToast) window.showToast('🔬 진단 완료', 'info', 2000);
+        if (window.showToast) window.showToast(window._t('🔬 진단 완료', '🔬 Diagnosis complete'), 'info', 2000);
         _showDiagnosisModal(suggestion, profile, key, _noMatchFilteredOutCount);
     };
 
@@ -484,7 +484,7 @@
             localStorage.setItem('gantt_topic_profile_v1', JSON.stringify(store));
         } catch(e) {}
 
-        if (window.showToast) window.showToast('✅ 토픽 프로파일이 AI 진단 기준으로 갱신됐습니다.', 'info', 4000);
+        if (window.showToast) window.showToast(window._t('✅ 토픽 프로파일이 AI 진단 기준으로 갱신됐습니다.', '✅ Topic profile updated based on the AI diagnosis.'), 'info', 4000);
         window._tcRefreshBadge(key);
         if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();
 

@@ -148,7 +148,7 @@ window.AddressBook = {
                     const currentSavedAt = checkResp.result && checkResp.result.savedAt;
                     if (currentSavedAt && currentSavedAt !== this._lastKnownSavedAt) {
                         console.warn(`[AddressBook 안전장치] Drive 동기화 중단 — 다른 팀원이 ${currentSavedAt}에 이미 저장했습니다(내가 마지막으로 본 건 ${this._lastKnownSavedAt}). 내 화면의 오래된 내용으로 덮어쓰지 않고, 최신본을 다시 불러옵니다.`);
-                        if (window.showToast) window.showToast('⚠️ 주소록이 다른 팀원에 의해 방금 업데이트되어 저장을 건너뛰고 최신본을 다시 불러왔습니다. 방금 변경사항은 다시 입력해주세요.', 'warning', 6000);
+                        if (window.showToast) window.showToast(window._t('⚠️ 주소록이 다른 팀원에 의해 방금 업데이트되어 저장을 건너뛰고 최신본을 다시 불러왔습니다. 방금 변경사항은 다시 입력해주세요.', '⚠️ The Address Book was just updated by another team member — skipped saving and reloaded the latest version. Please re-enter your recent changes.'), 'warning', 6000);
                         const fresh = await this.loadFromDrive();
                         if (fresh) { window.tabData = window.tabData || {}; window.tabData.addressBook = fresh; if (window.renderAddressTable) window.renderAddressTable(); }
                         return;
