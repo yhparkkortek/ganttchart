@@ -907,7 +907,11 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
                 //    처리 경로이므로 alert 대신 조용히 넘어가고(작업 자체는 이미 globalData에 반영됨 —
                 //    다음 저장 때 같이 저장됨), 막힌 경우에만 로컬 백업으로 안전장치를 남긴다.
                 const _saveOk = await window.saveToGoogleDrive({ suppressAlert: true }); // 💡 화면에 즉시 반영 + 곧바로 Drive 저장까지
-                if (!_saveOk && window._saveLocalBackup) window._saveLocalBackup('mail-auto-register-missing-required-info');
+                // 💡 백업 사유는 실제 차단 사유(window._lastSaveBlockReason — 필수정보 누락일 수도, 네트워크/
+                //    인증 실패일 수도 있음)를 그대로 남겨서 나중에 로컬 백업만 보고도 원인을 알 수 있게 함.
+                if (!_saveOk && window._saveLocalBackup) {
+                    window._saveLocalBackup('mail-auto-register-save-blocked: ' + String(window._lastSaveBlockReason || 'unknown').slice(0, 80));
+                }
                 return { ok: true, label: posInfo.previewLabel, targetL0: chosenL0 };
             } catch (e) { return { ok: false, reason: 'current_project_insert_failed: ' + e.message }; }
         }

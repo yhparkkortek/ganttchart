@@ -761,6 +761,7 @@
 
             if (!token) {
                 window.showToast(_svEn ? "🔒 Auth token lost. Please reconnect Google Drive." : "🔒 구글 인증 토큰을 확보하지 못했습니다. 연동 버튼을 다시 클릭해 주세요.", 'error');
+                window._lastSaveBlockReason = _svEn ? "Auth token lost." : "구글 인증 토큰을 확보하지 못했습니다.";
                 window._handleDriveDisconnected('save-no-token');
                 return false;
             }
