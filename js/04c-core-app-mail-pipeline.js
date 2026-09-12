@@ -881,7 +881,9 @@
                 
                 const status = response.status || (file && file.error ? file.error.code : 0);
                 if (status === 401) {
-                    errorMsg = "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 저장해 주세요.";
+                    // 💡 [2026-09-12] 토큰 자체는 멀쩡한데 구글 계정 차원의 보안 재인증(step-up)을 요구해서
+                    //    이 앱 버튼만으론 안 풀리던 실제 사례가 있었음 — 해당 가능성도 같이 안내.
+                    errorMsg = "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 저장해 주세요.\n(그래도 안 되면 drive.google.com에 직접 접속해 구글이 추가 인증을 요구하는지 확인 후 완료하고 다시 시도해 주세요)";
                     const authBtn = document.getElementById('auth_button');
                     if (authBtn) {
                         authBtn.disabled = false;
@@ -1781,9 +1783,13 @@
             //    구글 원문 에러만 그대로 노출되고 있었다. 저장 경로와 동일하게 401을 "연결 끊김"으로 처리.
             if (_loadStatus === 401) {
                 if (window._handleDriveDisconnected) window._handleDriveDisconnected('load-401');
+                // 💡 [2026-09-12] 실제 사례 확인 — 토큰 자체(스코프/만료시간)는 멀쩡한데 구글이 계정 차원의
+                //    보안 재인증(step-up)을 요구하는 상태라, 이 앱의 [연동하기] 버튼만 다시 눌러선 안 풀리고
+                //    drive.google.com 등 구글 화면에 직접 들어가 재인증을 완료해야 풀리는 경우가 있었다.
+                //    그 가능성도 같이 안내해서 재연동만 반복하다 헤매는 일을 줄인다.
                 alert(window._t(
-                    "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 다시 열어주세요.",
-                    "🔒 The Google auth session expired.\n\nPlease reconnect using the [🔵 Connect Google Drive] button at the top, then try opening it again."
+                    "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 다시 열어주세요.\n(그래도 안 되면 drive.google.com에 직접 접속해 구글이 추가 인증을 요구하는지 확인 후 완료하고 다시 시도해 주세요)",
+                    "🔒 The Google auth session expired.\n\nPlease reconnect using the [🔵 Connect Google Drive] button at the top, then try opening it again.\n(If that still doesn't work, visit drive.google.com directly — Google may be asking you to re-verify your account there — then try again)"
                 ));
                 return;
             }

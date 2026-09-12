@@ -474,7 +474,12 @@ window.inboxDistExecute = async function(attempt) {
         } else {
             const status = resp.status || (file && file.error ? file.error.code : 0);
             let msg = window._t('업로드 중 오류가 발생했습니다.', 'An error occurred while uploading.');
-            if (status === 401) msg = window._t('🔒 구글 인증 세션이 만료되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.', '🔒 The Google auth session expired. Please reconnect using the button at the top and try again.');
+            // 💡 [2026-09-12] 토큰 자체는 멀쩡한데 구글 계정 차원의 보안 재인증(step-up)을 요구해서
+            //    이 앱 버튼만으론 안 풀리던 실제 사례가 있었음 — 해당 가능성도 같이 안내.
+            if (status === 401) msg = window._t(
+                '🔒 구글 인증 세션이 만료되었습니다. 상단 연동 버튼으로 재로그인 후 시도해주세요.\n(그래도 안 되면 drive.google.com에 직접 접속해 구글이 추가 인증을 요구하는지 확인해 주세요)',
+                '🔒 The Google auth session expired. Please reconnect using the button at the top and try again.\n(If that still doesn\'t work, visit drive.google.com directly — Google may be asking you to re-verify your account)'
+            );
             else if (status === 403) msg = window._t('🚫 공유 폴더의 편집자 권한이 없습니다.', '🚫 No editor permission on the shared folder.');
             else if (file && file.error) msg = window._t(`구글 드라이브 에러 (${status}): ${file.error.message}`, `Google Drive error (${status}): ${file.error.message}`);
             alert(window._t('❌ 전송 실패\n\n', '❌ Send failed\n\n') + msg);
