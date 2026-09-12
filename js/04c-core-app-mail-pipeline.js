@@ -1767,7 +1767,17 @@
                 //    로컬 백업이 있으면 복원 여부를 물어봄 — 방금 받아온 원격 내용이 이미 최신이면 자동 정리됨.
                 if (window._checkLocalBackupOnOpen) window._checkLocalBackupOnOpen(fileId, window.changeLogs.length);
             }
-        } catch (err) { alert(window._t("파일 로드 실패: ", "Failed to load file: ") + err.message); }
+        } catch (err) {
+            // 💡 [2026-09-12 버그 수정] gapi.client가 던지는 Drive API 오류는 표준 Error가 아니라
+            //    {result:{error:{message}}} 형태라 err.message가 undefined로 찍혀 "파일 로드 실패: undefined"
+            //    처럼 원인을 알 수 없는 알림만 뜨는 문제가 있었다. 콘솔에 원본 객체를 남기고, 알림에는
+            //    gapi 오류 형태까지 포함해 실제 사유(권한 부족/401 등)가 보이게 한다.
+            console.error('[프로젝트 열기] 실패:', err);
+            const _loadErrMsg = (err && err.result && err.result.error && err.result.error.message)
+                || (err && err.message)
+                || (typeof err === 'string' ? err : JSON.stringify(err));
+            alert(window._t("파일 로드 실패: ", "Failed to load file: ") + _loadErrMsg);
+        }
     }
 
     // 💡 [팀 그룹핑] showDriveFileModal — 팀(외부 아코디온) → 담당자(내부 아코디온) → 파일 행
