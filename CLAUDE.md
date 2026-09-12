@@ -318,6 +318,49 @@ Drive 폴더에 들어올 수 있는지)만 결정하고, 이 비밀번호는 �
   체계는 없음). 진짜 중앙 서버를 새로 두지 않는 한(현재는 안 두는 쪽으로 결정) 근본적으로는
   Drive를 신뢰 루트로 삼는 현재 설계가 최선.
 
+### 🪟 모달 신규 생성 시 UI 컨벤션 (2026-09-13)
+
+**새 모달을 만들 때 반드시 아래 패턴을 그대로 따를 것** — 기존 모달과 UI 일관성을 유지하기 위함.
+
+#### 헤더 색상 구분
+- **AI 관련 모달** (AI 분석·요약·미리보기 등): **하늘색**
+  ```css
+  background: #e7f3ff; border-bottom: 1px solid #a5c8f0; color: #1971c2;
+  ```
+- **비-AI 일반 모달** (설정·확인·목록 등): **살구색**
+  ```css
+  background: #fff8e6; border-bottom: 1px solid #ffe08a; color: #7a5210;
+  ```
+
+#### 구조 패턴 (투명 래퍼 + 내부 박스)
+```javascript
+// 외부 투명 래퍼 — 다크 오버레이 없이, 배경 클릭/조작 허용
+outerWrap.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
+
+// 내부 실제 박스
+innerBox.style.cssText = 'pointer-events:all; position:fixed; ... resize:both; overflow:hidden; border-radius:10px; min-width:420px; min-height:420px;';
+```
+
+#### 필수 호출 (드래그·최소화·z-index 관리)
+```javascript
+// modalId = outerWrap.id, handleId = 헤더 div의 id
+window._makeDraggable('modal-box-id', 'modal-handle-id');   // 드래그 + 터치 + 최소화버튼 자동 추가
+window._bindClickToFront('outer-wrap-id');                  // 클릭 시 최상단 z-index
+window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시 최상단
+```
+
+#### 닫기 버튼 스타일 — 반드시 CSS 변수 사용
+```html
+<!-- _makeMinimizable 이 버튼을 style 문자열에서 'modal-icon-bg'로 탐지함 — 변수 필수 -->
+<button style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);
+               color:var(--modal-icon-text); border-radius:6px; font-size:16px;
+               cursor:pointer; width:28px; height:28px;">✕</button>
+```
+
+#### 모달 크기 조절 / 이동 / 배경 조작
+- 위 구조(투명 래퍼 + `resize:both`)를 따르면 자동으로 적용됨
+- 헤더에 `cursor:grab; user-select:none;` 추가 권장
+
 ### 백엔드
 | 파일 | 역할 |
 |---|---|

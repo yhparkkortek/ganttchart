@@ -514,63 +514,107 @@
       const thisWk  = data.thisWeekNo || '?';
       const nextWk  = data.nextWeekNo || '?';
 
-      return new Promise(resolve => {
-          const overlay = document.createElement('div');
-          overlay.style.cssText = 'position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+      // 이전 인스턴스가 남아 있으면 제거
+      const _prev = document.getElementById('wr-pv-modal');
+      if (_prev) { try { document.body.removeChild(_prev); } catch(e) {} }
 
-          const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
-              (!document.documentElement.getAttribute('data-theme') &&
-               window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches);
-          const bg    = isDark ? '#23262e' : '#ffffff';
-          const fg    = isDark ? '#f0f0f0' : '#1a1a1a';
-          const bdr   = isDark ? '#3a3d47' : '#e5e7eb';
-          const tabg  = isDark ? '#1a1d23' : '#f9fafb';
-          const tafg  = isDark ? '#e4e6eb' : '#222222';
+      return new Promise(resolve => {
+          // ── 기존 모달 패턴: 투명 오버레이 + 내부 박스 (배경 조작 가능) ──
+          const outerWrap = document.createElement('div');
+          outerWrap.id = 'wr-pv-modal';
+          outerWrap.style.cssText = 'display:flex; position:fixed; inset:0; z-index:9300; pointer-events:none; background:none;';
 
           const _sp = _en ? '⏳ AI organizing...' : '⏳ AI 정리 중...';
 
-          const modal = document.createElement('div');
-          modal.style.cssText = `background:${bg};border-radius:12px;box-shadow:0 8px 36px rgba(0,0,0,0.28);width:min(880px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;font-family:'Malgun Gothic',sans-serif;`;
-          modal.innerHTML = `
-<div style="padding:16px 20px;border-bottom:1px solid ${bdr};display:flex;align-items:center;gap:10px;">
-  <span style="font-size:22px;">📊</span>
-  <div style="flex:1;">
-    <div style="font-size:15px;font-weight:bold;color:${fg};">${_en ? 'Weekly Report PPT Preview' : '주간보고 PPT 미리보기'}</div>
-    <div style="font-size:12px;color:#888;margin-top:2px;">${_en ? 'AI is organizing your tasks. Review and edit, then save as PPT.' : 'AI가 업무를 정리합니다. 내용 확인·수정 후 PPT 저장을 누르세요.'}</div>
+          outerWrap.innerHTML = `
+<div id="wr-pv-box" onclick="event.stopPropagation()"
+  style="pointer-events:all; position:fixed; background:#fff; border-radius:10px;
+         width:min(860px,92vw); max-height:88vh; display:flex; flex-direction:column;
+         box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%;
+         transform:translate(-50%,-50%); resize:both; overflow:hidden;
+         min-width:420px; min-height:420px;">
+
+  <!-- ── 헤더 (드래그 손잡이) · AI 계열: 하늘색 #e7f3ff ── -->
+  <div id="wr-pv-drag"
+    style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold;
+           font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0;
+           display:flex; justify-content:space-between; align-items:center;
+           cursor:grab; color:#1971c2; flex-shrink:0; user-select:none;">
+    <span>📊 ${_en ? 'Weekly Report PPT Preview' : '주간보고 PPT 미리보기'}</span>
+    <button id="wr-pv-x"
+      style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border);
+             border-radius:6px; color:var(--modal-icon-text); font-size:16px;
+             cursor:pointer; width:28px; height:28px; padding:0; line-height:1;
+             flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:.15s;"
+      onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
+      onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
   </div>
-  <button id="wr-pv-x" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999;padding:4px 8px;line-height:1;">✕</button>
-</div>
-<div style="padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px;">
-  <div>
-    <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
-      <span>📋 ${_en ? `Key Achievements (${thisWk}W)` : `주요 실적 (${thisWk}W)`}</span><span id="wr-pv-sp-this" style="font-size:11px;color:#888;display:none;">${_sp}</span>
+
+  <!-- ── 부제 ── -->
+  <div style="padding:6px 18px; font-size:10.5px; color:#999; border-bottom:1px solid #f0f0f0; flex-shrink:0;">
+    ${_en ? 'AI is organizing your tasks. Review and edit, then save as PPT.' : 'AI가 업무를 정리합니다. 내용 확인·수정 후 PPT 저장을 누르세요.'}
+  </div>
+
+  <!-- ── 본문 (스크롤 가능) ── -->
+  <div style="padding:16px 18px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:14px;">
+    <div>
+      <div style="font-size:12.5px; font-weight:bold; color:#333; margin-bottom:5px; display:flex; align-items:center; gap:8px;">
+        <span>📋 ${_en ? `Key Achievements (${thisWk}W)` : `주요 실적 (${thisWk}W)`}</span>
+        <span id="wr-pv-sp-this" style="font-size:11px; color:#888; display:none;">${_sp}</span>
+      </div>
+      <textarea id="wr-pv-ta-this" rows="6"
+        placeholder="${_en ? 'This week\'s key achievements...' : '이번 주 주요 실적...'}"
+        style="width:100%; box-sizing:border-box; resize:vertical; padding:8px 10px;
+               border:1px solid #ddd; border-radius:6px; font-size:12px;
+               font-family:'Malgun Gothic',sans-serif; line-height:1.6;
+               color:#222; background:#f9fafb; outline:none;"></textarea>
     </div>
-    <textarea id="wr-pv-ta-this" rows="6" placeholder="${_en ? 'This week\'s key achievements...' : '이번 주 주요 실적...'}"
-      style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
-  </div>
-  <div>
-    <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
-      <span>🎯 ${_en ? `Action Plan (${nextWk}W)` : `추진 계획 (${nextWk}W)`}</span><span id="wr-pv-sp-next" style="font-size:11px;color:#888;display:none;">${_sp}</span>
+    <div>
+      <div style="font-size:12.5px; font-weight:bold; color:#333; margin-bottom:5px; display:flex; align-items:center; gap:8px;">
+        <span>🎯 ${_en ? `Action Plan (${nextWk}W)` : `추진 계획 (${nextWk}W)`}</span>
+        <span id="wr-pv-sp-next" style="font-size:11px; color:#888; display:none;">${_sp}</span>
+      </div>
+      <textarea id="wr-pv-ta-next" rows="6"
+        placeholder="${_en ? 'Next week\'s action plan...' : '다음 주 추진 계획...'}"
+        style="width:100%; box-sizing:border-box; resize:vertical; padding:8px 10px;
+               border:1px solid #ddd; border-radius:6px; font-size:12px;
+               font-family:'Malgun Gothic',sans-serif; line-height:1.6;
+               color:#222; background:#f9fafb; outline:none;"></textarea>
     </div>
-    <textarea id="wr-pv-ta-next" rows="6" placeholder="${_en ? 'Next week\'s action plan...' : '다음 주 추진 계획...'}"
-      style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
-  </div>
-  <div>
-    <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
-      <span>⚠️ ${_en ? 'Issues & Problems' : '문제점 및 Issue'}</span><span id="wr-pv-sp-issue" style="font-size:11px;color:#888;display:none;">${_sp}</span>
+    <div>
+      <div style="font-size:12.5px; font-weight:bold; color:#333; margin-bottom:5px; display:flex; align-items:center; gap:8px;">
+        <span>⚠️ ${_en ? 'Issues & Problems' : '문제점 및 Issue'}</span>
+        <span id="wr-pv-sp-issue" style="font-size:11px; color:#888; display:none;">${_sp}</span>
+      </div>
+      <textarea id="wr-pv-ta-issue" rows="4"
+        placeholder="${_en ? 'Issues and problems...' : '문제점 및 이슈...'}"
+        style="width:100%; box-sizing:border-box; resize:vertical; padding:8px 10px;
+               border:1px solid #ddd; border-radius:6px; font-size:12px;
+               font-family:'Malgun Gothic',sans-serif; line-height:1.6;
+               color:#222; background:#f9fafb; outline:none;"></textarea>
     </div>
-    <textarea id="wr-pv-ta-issue" rows="4" placeholder="${_en ? 'Issues and problems...' : '문제점 및 이슈...'}"
-      style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
   </div>
-</div>
-<div style="padding:12px 20px;border-top:1px solid ${bdr};display:flex;align-items:center;gap:10px;">
-  <span id="wr-pv-status" style="font-size:12px;color:#888;flex:1;"></span>
-  <button id="wr-pv-skip" style="padding:8px 18px;border:1px solid #ccc;border-radius:8px;background:${bg};color:${fg};cursor:pointer;font-size:13px;">${_en ? 'Cancel (output as-is)' : '취소 (직접 출력)'}</button>
-  <button id="wr-pv-save" style="padding:8px 22px;border:none;border-radius:8px;background:#19c3d6;color:#fff;cursor:pointer;font-size:13px;font-weight:bold;opacity:0.6;" disabled>${_sp}</button>
+
+  <!-- ── 푸터 ── -->
+  <div style="padding:10px 18px; border-top:1px solid #eee; display:flex; align-items:center; gap:8px; flex-shrink:0;">
+    <span id="wr-pv-status" style="font-size:11.5px; color:#888; flex:1;"></span>
+    <button id="wr-pv-skip"
+      onmouseover="this.style.background='#f5f5f5';" onmouseout="this.style.background='#fff';"
+      style="padding:7px 16px; border:1px solid #ccc; border-radius:6px; background:#fff;
+             color:#555; cursor:pointer; font-size:12.5px; transition:background .15s;">
+      ${_en ? 'Cancel (output as-is)' : '취소 (직접 출력)'}
+    </button>
+    <button id="wr-pv-save"
+      style="padding:7px 20px; border:none; border-radius:6px; background:#19c3d6;
+             color:#fff; cursor:pointer; font-size:12.5px; font-weight:bold;
+             opacity:0.6; transition:opacity .15s;" disabled>${_sp}</button>
+  </div>
 </div>`;
 
-          overlay.appendChild(modal);
-          document.body.appendChild(overlay);
+          document.body.appendChild(outerWrap);
+          window._makeDraggable('wr-pv-box', 'wr-pv-drag');
+          window._bindClickToFront('wr-pv-modal');
+          window.bringModalToFront('wr-pv-modal');
 
           const taThis   = document.getElementById('wr-pv-ta-this');
           const taNext   = document.getElementById('wr-pv-ta-next');
@@ -578,15 +622,18 @@
           const saveBtn  = document.getElementById('wr-pv-save');
           const statusEl = document.getElementById('wr-pv-status');
 
-          const closeModal = () => { try { document.body.removeChild(overlay); } catch(e) {} };
+          const closeModal = () => {
+              const _m = document.getElementById('wr-pv-modal');
+              if (_m) { try { document.body.removeChild(_m); } catch(e) {} }
+          };
           const enableSave = () => {
               saveBtn.disabled = false;
               saveBtn.style.opacity = '1';
               saveBtn.textContent = _en ? '💾 Save as PPT' : '💾 PPT 저장';
           };
 
-          document.getElementById('wr-pv-x').onclick   = () => { closeModal(); resolve(null); };
-          document.getElementById('wr-pv-skip').onclick = () => { closeModal(); resolve('skip'); };
+          document.getElementById('wr-pv-x').onclick    = () => { closeModal(); resolve(null); };
+          document.getElementById('wr-pv-skip').onclick  = () => { closeModal(); resolve('skip'); };
           saveBtn.onclick = () => {
               closeModal();
               resolve({ thisText: taThis.value.trim(), nextText: taNext.value.trim(), issueText: taIssue.value.trim() });
@@ -1246,7 +1293,7 @@ ${issRaw}
         const sectionY = goalTableY + goalTableH + GAP, sectionH = 0.3;
         const bodyH = Math.max(1.75, maxLines * lineHeightIn + 0.16);   // 여유 패딩 포함, 최소 1.75 유지
         const sectTitleOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
-        const sectBodyOpt = { fontSize: 10, valign: 'top', color: '000000', align: 'left', fontFace: 'Malgun Gothic' };
+        const sectBodyOpt = { fontSize: 9, valign: 'top', color: '000000', align: 'left', fontFace: 'Malgun Gothic' };
 
         slide.addTable(
             [
@@ -1267,7 +1314,7 @@ ${issRaw}
         // ── 문제점 및 Issue 표 (이미 단일 표 — 행 높이만 보정) ──
         const issueY = sectionY + sectionH + bodyH + GAP;
         const issueHeadOpt = { bold: true, fill: { color: C.tint }, color: '000000', fontSize: HEAD_FS, align: 'center', valign: 'middle' };
-        const issueBodyOpt = { fontSize: 10, valign: 'middle', color: '000000' };
+        const issueBodyOpt = { fontSize: 9, valign: 'middle', color: '000000' };
 
         const tableRows = [
             [
