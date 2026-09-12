@@ -660,7 +660,9 @@ window.showMailRawModal = function(r) {
                  바꿔서 원문의 줄바꿈(엔터)은 그대로 보존하되, 한 줄이 너무 길면 모달 폭에 맞춰 자동으로
                  접히도록(wrap) 한다 — wrap="off" 속성도 제거(기본값 soft로 줄바꿈 허용). -->
             <textarea id="inbox-mailraw-body" readonly style="flex:1; margin:12px; font-size:12px; font-family:Consolas,'D2Coding','Courier New',monospace,'Malgun Gothic'; white-space:pre-wrap; word-break:break-word; tab-size:4; border:1px solid #ced4da; border-radius:6px; padding:10px; resize:none; overflow:auto; line-height:1.5; background:#f8f9fa; color:#333;"></textarea>
-            <div style="padding:10px 16px; text-align:right; border-top:1px solid #eee;">
+            <div id="inbox-mailraw-translated" style="display:none; flex:1; margin:12px; font-size:12px; border:1px solid #ced4da; border-radius:6px; padding:10px; overflow:auto; line-height:1.5; background:#f8f9fa;"></div>
+            <div style="padding:10px 16px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eee;">
+                <button id="inbox-mailraw-translate-btn" onclick="window._toggleMailRawTranslation()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="${_en ? 'AI translates each paragraph that is not Korean and shows the Korean translation right below it' : '한국어가 아닌 문단마다 AI가 번역한 한글을 바로 아래에 붙여서 보여줍니다'}" style="padding:7px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🌐 ${_en ? 'Show Translation' : '번역 보기'}</button>
                 <button onclick="document.getElementById('inbox-mailraw-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="padding:7px 18px; background:#f8f9fa; color:#555; border:1px solid #ccc; border-radius:6px; font-size:12px; cursor:pointer; transition:background .15s, border-color .15s;">✖ ${_en ? 'Close' : '닫기'}</button>
             </div>
         </div>`;
@@ -693,8 +695,105 @@ window.showMailRawModal = function(r) {
         attDiv.style.display = 'block';
     })();
     document.getElementById('inbox-mailraw-body').value = r.body2000 || '';
+    // 💡 [2026-09-12 신규] 다른 메일로 다시 열렸을 수 있으니, 번역 보기 상태로 남아있지 않도록
+    // 항상 "원문 보기"로 초기화(캐시는 그대로 둬서 같은 메일을 또 열면 재호출 없이 바로 보여줌).
+    const _trTextarea = document.getElementById('inbox-mailraw-body');
+    const _trDiv = document.getElementById('inbox-mailraw-translated');
+    const _trBtn = document.getElementById('inbox-mailraw-translate-btn');
+    if (_trDiv) _trDiv.style.display = 'none';
+    if (_trTextarea) _trTextarea.style.display = '';
+    if (_trBtn) _trBtn.textContent = '🌐 ' + (_en2 ? 'Show Translation' : '번역 보기');
     modal.style.display = 'block';
     window.bringModalToFront('inbox-mailraw-modal');
+};
+
+// 💡 [2026-09-12 신규] "메일 원문이 영문인 경우 문단마다 한글 번역을 달아달라"는 요청 — 원문
+// textarea는 그대로 두고(복사/선택 편의 보존), 번역 결과는 별도 div에 문단별로 원문+번역을
+// 나란히 렌더링해서 버튼으로 토글한다. 어떤 문단이 번역이 필요한지(한국어가 아닌지) 판단하는
+// 것도 AI에게 같이 맡긴다(정규식 언어감지보다 실제 메일의 혼합언어 상황에 더 안정적).
+window._mailRawTranslatedCache = null; // { body, html } — 같은 원문 재조회 시 AI 재호출 방지
+window._toggleMailRawTranslation = async function() {
+    const btn = document.getElementById('inbox-mailraw-translate-btn');
+    const textarea = document.getElementById('inbox-mailraw-body');
+    const transDiv = document.getElementById('inbox-mailraw-translated');
+    const _en = window._currentLang === 'en';
+    if (!btn || !textarea || !transDiv) return;
+
+    // 이미 번역 보기 상태면 → 원문 보기로 되돌리기(토글)
+    if (transDiv.style.display !== 'none') {
+        transDiv.style.display = 'none';
+        textarea.style.display = '';
+        btn.textContent = '🌐 ' + (_en ? 'Show Translation' : '번역 보기');
+        return;
+    }
+
+    const body = textarea.value || '';
+    if (!body.trim()) return;
+
+    // 같은 원문을 다시 보는 경우 AI 재호출 없이 캐시 재사용
+    if (window._mailRawTranslatedCache && window._mailRawTranslatedCache.body === body) {
+        transDiv.innerHTML = window._mailRawTranslatedCache.html;
+        textarea.style.display = 'none';
+        transDiv.style.display = 'block';
+        btn.textContent = '🌐 ' + (_en ? 'Show Original' : '원문 보기');
+        return;
+    }
+
+    const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
+    if (!apiKey) {
+        alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.'));
+        return;
+    }
+
+    // 빈 줄 기준으로 문단 분리 — 빈 줄이 아예 없는(한 덩어리) 원문이면 줄 단위로 대신 분리
+    // (이 앱의 메일 본문은 흔히 [태그]/줄바꿈으로만 구분돼 있고 빈 줄이 없는 경우가 많음).
+    const blocksByBlank = body.split(/\n\s*\n/).map(function(s) { return s.trim(); }).filter(Boolean);
+    const blocks = blocksByBlank.length > 1 ? blocksByBlank : body.split('\n').map(function(s) { return s.trim(); }).filter(Boolean);
+    if (!blocks.length) return;
+
+    const origBtnHtml = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = '⏳ ' + (_en ? 'Translating...' : '번역 중...');
+
+    try {
+        const blockListText = blocks.map(function(b, i) { return i + ': ' + b; }).join('\n');
+        const prompt = '당신은 번역 보조 AI입니다. 아래는 이메일 원문을 줄/문단 단위 블록으로 나눈 것입니다.\n'
+            + '각 블록이 영어 등 한국어가 아닌 언어로 되어 있으면 자연스러운 한국어로 번역하고, 이미 한국어이거나 번역할 의미가 없는 경우(단순 날짜·기호·매우 짧은 헤더 등)에는 번역하지 마세요.\n\n'
+            + '[블록 목록]\n' + blockListText + '\n\n'
+            + '다음 JSON 배열 형식으로만 답하세요 (블록 개수·순서를 정확히 그대로 유지, JSON 외 텍스트 금지):\n'
+            + '[{"idx": 0, "translate": true 또는 false, "ko": "번역문 또는 빈 문자열"}, ...]';
+        const result = await window.callAiBackend(apiKey, prompt, {});
+        if (!result.ok) throw result.error || new Error(window._t('번역 실패', 'Translation failed'));
+        const text = (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
+            && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
+            && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '';
+        const match = text.match(/\[[\s\S]*\]/);
+        if (!match) throw new Error(window._t('AI 응답에서 JSON을 찾을 수 없습니다.', 'Could not find JSON in the AI response.'));
+        const parsed = JSON.parse(match[0]);
+
+        const html = blocks.map(function(b, i) {
+            const entry = parsed.find(function(p) { return p.idx === i; });
+            const escaped = escapeHtml(b).replace(/\n/g, '<br>');
+            if (entry && entry.translate && entry.ko && String(entry.ko).trim()) {
+                return '<div style="margin-bottom:10px;">'
+                    + '<div style="color:#333; white-space:pre-wrap;">' + escaped + '</div>'
+                    + '<div style="color:#1971c2; background:#eef6ff; border-left:3px solid #a5c8f0; padding:4px 8px; margin-top:3px; border-radius:0 4px 4px 0; white-space:pre-wrap;">🇰🇷 ' + escapeHtml(String(entry.ko).trim()) + '</div>'
+                    + '</div>';
+            }
+            return '<div style="margin-bottom:10px; color:#333; white-space:pre-wrap;">' + escaped + '</div>';
+        }).join('');
+
+        window._mailRawTranslatedCache = { body: body, html: html };
+        transDiv.innerHTML = html;
+        textarea.style.display = 'none';
+        transDiv.style.display = 'block';
+        btn.textContent = '🌐 ' + (_en ? 'Show Original' : '원문 보기');
+    } catch (e) {
+        alert(window._t('⚠️ 번역 실패: ', '⚠️ Translation failed: ') + (e && e.message ? e.message : e));
+        btn.textContent = origBtnHtml;
+    } finally {
+        btn.disabled = false;
+    }
 };
 
 window.showInboxMailRaw = function(uid) {
