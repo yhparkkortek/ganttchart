@@ -2146,6 +2146,25 @@
         }
     };
 
+    // 💡 [2026-09-12 신규] 헤더에 항상 떠 있는 "자주 쓰는 질문" 드롭다운(#gantt-qa-freq-select) 채우기.
+    //    대화 중에도(비어있지 않아도) 계속 갱신 가능하도록 _renderGanttQaMessages와 분리했다 —
+    //    "한 번 대화하면 안 나오네" 실사용 피드백 반영. 실제 기록이 없으면(신규 프로젝트 등) 예전
+    //    "예시 질문"과 같은 문구를 그대로 보여주되, 라벨은 항상 "자주 쓰는 질문"으로 통일한다.
+    window._ganttQaPopulateFreqSelect = function(projectKey) {
+        const sel = document.getElementById('gantt-qa-freq-select');
+        if (!sel) return;
+        const _fqEn = window._currentLang === 'en';
+        const top = window._ganttQaGetDisplayQuestions
+            ? window._ganttQaGetDisplayQuestions(6, projectKey, function() { window._ganttQaPopulateFreqSelect(projectKey); })
+            : (window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(6, projectKey) : []);
+        const examples = _fqEn
+            ? ['Any delayed tasks?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
+            : ['지연된 업무가 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
+        const options = top.length ? top.map(function(t) { return t.sample; }) : examples;
+        const placeholderHtml = `<option value="">${_fqEn ? '(select a question)' : '(질문 선택하기)'}</option>`;
+        sel.innerHTML = placeholderHtml + options.map(function(t) { return `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; }).join('');
+    };
+
     // 🎙️ [2026-09-08 수정] "음성문답" 버튼 — 한 번 말하면 풀리던 것을 "모드"로 바꿔 고정시킴.
     //    한 번 켜면(음성문답 모드 ON) 질문 → 자동전송 → 답변 수신까지 끝난 뒤 알아서 다시 듣기를
     //    시작해서, 사용자가 "글자문답"을 눌러 직접 끄기 전까지는 계속 음성으로 주고받을 수 있다.
@@ -2370,6 +2389,16 @@
                     -->
                     <button id="gantt-qa-target-open-btn" onclick="window._ganttQaOpenTargetProject(this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_qEn ? 'Open this project (switch the current tab to it) and ask exactly as if it were already open' : '이 프로젝트를 열어서(현재 탭이 이 프로젝트로 전환됨) 실제로 열람 중인 것과 동일한 조건으로 질문합니다'}" style="display:none; flex-shrink:0; font-size:11px; padding:3px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? '🔓 Open' : '🔓 열기'}</button>
                 </div>
+                <!-- 💡 [2026-09-12 신규] "자주 쓰는 질문" — 예전엔 채팅이 비어있을 때만(_renderGanttQaMessages
+                     안에서) 잠깐 보이다가 질문 한 번 하면 사라졌음("한 번 대화하면 안 나오네" 실사용 피드백).
+                     대화 중에도 계속 골라 쓸 수 있게 위 "질문 대상"과 같은 자리에 항상 보이는 행으로 고정.
+                     선택하면 입력창에 채워짐(바로 전송 안 됨) — window._ganttQaFillQuestion 재사용. -->
+                <div style="padding:4px 18px 0; display:flex; align-items:center; gap:6px;">
+                    <label id="gantt-qa-freq-label" for="gantt-qa-freq-select" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '💡 Frequently used' : '💡 자주 쓰는 질문'}</label>
+                    <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
+                        <option value="">${_qEn ? '(select a question)' : '(질문 선택하기)'}</option>
+                    </select>
+                </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #eee; display:flex; gap:8px; align-items:stretch;">
                     <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; padding:0 16px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear<br>Chat' : '대화<br>삭제'}</button>
@@ -2385,6 +2414,7 @@
         }
         window._renderGanttQaMessages();
         window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
+        window._ganttQaPopulateFreqSelect(); // 열 때마다 "자주 쓰는 질문" 최신화
         window._ganttQaUpdateVoiceBtn(); // 🔊/🔇 저장된 상태(localStorage) 반영
         window._ganttQaUpdateMicBtn();
         modal.style.display = 'block';
@@ -2481,6 +2511,8 @@
                 : (_tcEn ? `🔀 Back to asking about the **currently open project**. (New chat started)` : `🔀 다시 **현재 열려있는 프로젝트**에 대해 질문합니다. (새 대화 시작)`)
         });
         window._renderGanttQaMessages();
+        // 💡 [2026-09-12 신규] "자주 쓰는 질문"도 질문 대상이 바뀌면 그 프로젝트 기준으로 다시 채움
+        window._ganttQaPopulateFreqSelect(newTarget ? newTarget.drive_file_id : null);
 
         // 💡 [2026-09-07 신규] 선택한 순간 미리 가져와둔다(fire-and-forget) — 사용자가 질문을 타이핑하는
         //    동안 Drive 조회가 끝나 있으면, 실제로 전송을 누를 때는 이미 캐시에 있어 지연이 거의 안 느껴짐.

@@ -1227,6 +1227,11 @@
         // 드롭다운은 선택된 값을 잃지 않도록 옵션 텍스트만 다시 채움(재조회 없이 즉시 반영)
         const _qaSel = document.getElementById('gantt-qa-target-project');
         if (_qaSel && window._ganttQaPopulateProjectSelect) window._ganttQaPopulateProjectSelect();
+        // 💡 [2026-09-12 신규] "자주 쓰는 질문" 행 — 위 "질문 대상"과 동일한 패턴으로 라벨/옵션 재반영
+        const _qaFreqLabel = document.getElementById('gantt-qa-freq-label');
+        if (_qaFreqLabel) _qaFreqLabel.textContent = _en ? '💡 Frequently used' : '💡 자주 쓰는 질문';
+        const _qaFreqSel = document.getElementById('gantt-qa-freq-select');
+        if (_qaFreqSel && window._ganttQaPopulateFreqSelect) window._ganttQaPopulateFreqSelect();
         const _qaOpenBtn = document.getElementById('gantt-qa-target-open-btn');
         if (_qaOpenBtn) {
             _qaOpenBtn.textContent = _en ? '🔓 Open' : '🔓 열기';

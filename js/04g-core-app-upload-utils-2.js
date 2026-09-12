@@ -1480,9 +1480,8 @@ ${question}
         }).join('');
     };
 
-    // 채팅창이 비어있을 때 보여주는 예시 질문 칩 — 클릭하면 입력창에 그대로 채워짐(바로 전송은 안 함,
-    // 보내기 전에 수정할 수 있게). window._ganttQaGetTopQuestions(04h)에 2번 이상 물어본 기록이 있으면
-    // 그걸 우선 보여주고(다른 사람이 뭘 자주 물어보는지 발견하기 쉽게), 없으면 고정 예시로 대체한다.
+    // 상단 "자주 쓰는 질문" 드롭다운(#gantt-qa-freq-select, window._ganttQaPopulateFreqSelect@04h)에서
+    // 항목을 고르면 호출됨 — 입력창에 그대로 채워짐(바로 전송은 안 함, 보내기 전에 수정할 수 있게).
     window._ganttQaFillQuestion = function(text) {
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
@@ -1495,30 +1494,12 @@ ${question}
         if (!box) return;
         if (!window._ganttQaHistory.length) {
             const _emEn = window._currentLang === 'en';
-            // 💡 [2026-09-08 수정] 예전엔 예시/자주 묻는 질문을 세로로 쌓인 버튼 목록으로 보여줬는데,
-            //    "자주 묻는 질문이 늘어나면 채팅창을 도배할 수 있다"는 지적으로 한 줄짜리 드롭다운으로
-            //    바꿈 — 몇 개가 쌓이든 항상 한 줄만 차지한다. 고른 뒤에는 selectedIndex를 다시 0으로
-            //    돌려서(같은 항목을 또 고를 수 있게) "선택됨" 상태로 안 남게 함.
-            //    또한 예시 문구에서 특정 인물명("김철수님") 지칭을 빼고 일반적인 표현으로 교체.
-            // 💡 [2026-09-12] AI로 유사 질문을 묶은 결과가 있으면 그걸 우선 사용(_ganttQaGetDisplayQuestions).
-            //    아직 캐시가 없어 AI 호출이 막 시작됐다면 그 응답이 늦게 와도, 그 시점에 채팅이 여전히
-            //    비어있을 때만(=사용자가 이미 질문을 시작했으면 건드리지 않음) 조용히 다시 그려서 갱신한다.
-            const top = window._ganttQaGetDisplayQuestions
-                ? window._ganttQaGetDisplayQuestions(6, null, function() { if (!window._ganttQaHistory.length) window._renderGanttQaMessages(); })
-                : (window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(10) : []);
-            const examples = _emEn
-                ? ['Any delayed tasks?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
-                : ['지연된 업무가 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
-            const options = top.length ? top.map(function(t) { return t.sample; }) : examples;
-            const label = top.length ? (_emEn ? '💡 Frequently asked' : '💡 자주 묻는 질문') : (_emEn ? '💡 Example questions' : '💡 예시 질문');
-            const optionsHtml = options.map(function(t) { return `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`; }).join('');
-            box.innerHTML = `<div style="padding:20px 10px; color:#999; font-size:12px; line-height:1.6;">
-                <div style="text-align:center; margin-bottom:10px;">${_emEn ? "Ask anything about this project's Gantt tasks · overview · members · key materials." : '이 프로젝트의 Gantt 업무 · 개요 · 멤버 · 주요 자재에 대해 자유롭게 질문해보세요.'}</div>
-                <div style="font-size:11px; color:#888; margin-bottom:4px;">${label}</div>
-                <select onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="width:100%; padding:7px 8px; border:1px solid #dee2e6; border-radius:6px; background:#fff; color:#495057; font-size:11.5px; cursor:pointer;">
-                    <option value="">${_emEn ? '(select a question)' : '(질문 선택하기)'}</option>
-                    ${optionsHtml}
-                </select>
+            // 💡 [2026-09-12 수정] "자주 쓰는 질문" 드롭다운은 채팅이 비어있을 때만 잠깐 보이다 질문을
+            //    하나라도 하면 사라졌었다("한 번 대화하면 안 나오네" 실사용 피드백) — 대화 중에도 계속
+            //    골라 쓸 수 있게 상단 "질문 대상"과 같은 자리의 항상-보이는 행(#gantt-qa-freq-select,
+            //    window._ganttQaPopulateFreqSelect)으로 옮겼다. 여기 빈 화면에는 안내 문구만 남긴다.
+            box.innerHTML = `<div style="padding:20px 10px; color:#999; font-size:12px; line-height:1.6; text-align:center;">
+                ${_emEn ? "Ask anything about this project's Gantt tasks · overview · members · key materials." : '이 프로젝트의 Gantt 업무 · 개요 · 멤버 · 주요 자재에 대해 자유롭게 질문해보세요.'}
             </div>`;
             return;
         }
