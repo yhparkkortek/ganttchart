@@ -927,6 +927,7 @@
             'nm-lbl-direct':        { ko:'직접 입력:',            en:'Custom:' },
             'nm-lbl-days-before':   { ko:'일 전',                en:'days before' },
             'nm-lbl-add-btn':       { ko:'+ 추가',               en:'+ Add' },
+            'nm-recip-add-btn':     { ko:'+ 수신자 추가',        en:'+ Add Recipient' },
             'nm-sec-content-label': { ko:'📝 공지 내용',          en:'📝 Notice Content' },
             'nm-sec-send-label':    { ko:'📤 발송 방식',          en:'📤 Send Method' },
             'nm-sec-recip-label':   { ko:'👥 수신 대상',          en:'👥 Recipients' },

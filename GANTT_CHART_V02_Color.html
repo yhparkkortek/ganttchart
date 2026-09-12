@@ -1024,7 +1024,7 @@
       <div id="nm-recipient-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px; max-height:220px; overflow-y:auto; padding-right:4px;"></div>
       <!-- 💡 [2026-09-01] 오른쪽 정렬 + 주소록 탭 버튼(예: 📂 불러오기)과 동일한 padding:6px 12px 적용 -->
       <div style="display:flex; justify-content:flex-end;">
-        <button type="button" onclick="window._nmAddRecipientRow()"
+        <button id="nm-recip-add-btn" type="button" onclick="window._nmAddRecipientRow()"
                 onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                 style="padding:6px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
       </div>
