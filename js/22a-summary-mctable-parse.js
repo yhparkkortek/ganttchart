@@ -1127,6 +1127,15 @@ window._uploadDriveFile = async function(token, folderId, existingId, fileName, 
 };
 
 // ── Drive 비밀번호 동기화 확인 (앱 시작 시 자동 실행) ─────────
+// 🐛 [2026-09-12 버그 수정] 예전엔 불일치를 감지하는 즉시 여기서 prompt()를 띄웠는데, 이 native
+//    대화상자는 페이지 전체 JS 실행(다른 구글 인증 콜백·타이머 포함)을 멈춰 세운다. 로그인 성공
+//    1.5초 뒤 자동으로 실행되다 보니, 하필 프로젝트 목록을 막 열어보거나 자동로그인/조용한 토큰갱신이
+//    배경에서 진행 중인 타이밍과 자주 겹친다 — 여러 번 틀려서 재시도하면 수십 초까지도 페이지가
+//    멈춰있는 동안, 그 사이 진행 중이던 구글 인증 흐름이 뒤늦게 처리되며 세션이 꼬일 수 있었다
+//    (05-drive-sync-optimize.js의 handleAuthClick 쪽 tokenClient 공유 레이스 참고 — 이 blocking
+//    prompt가 그 레이스의 발생 빈도를 실질적으로 크게 높이는 역할을 했다). 이제는 불일치를 감지해도
+//    곧바로 막지 않고, 클릭하면 그때 프롬프트를 띄우는 알림만 띄운다 — 사용자가 원하는 시점에
+//    조용히 동기화하게 해서, 다른 인증 흐름이 다 끝난 뒤 안전하게 처리되도록 한다.
 window.checkPasswordSync = async function() {
     try {
         const tokenObj   = gapi.client.getToken();
@@ -1142,41 +1151,58 @@ window.checkPasswordSync = async function() {
         const localHash = await window._sha256hex(getAdminPassword());
         if (driveHash === localHash) return; // 동일 — 동기화 불필요
 
-        // 비밀번호 불일치 감지 → 새 비밀번호 입력 요청
-        // 💡 [2026-09-12] "팀 비밀번호가 변경되었습니다"는 실제로 누가 방금 바꾼 경우뿐 아니라,
-        //    이 브라우저/PC에서 아직 한 번도 동기화한 적이 없어 로컬값이 비어있는 상태(getAdminPassword()
-        //    가 '')일 때도 똑같이 뜬다(여러 PC/브라우저를 번갈아 쓰는 사용자가 "바꾼 적 없는데 뜬다"고
-        //    오인하는 원인) — 문구를 "다르다"는 사실 위주로 바꾸고 두 가능성을 모두 안내.
-        let newPw = prompt(window._t(
-            '🔔 이 브라우저에 저장된 비밀번호가 팀 설정과 다릅니다.\n(다른 PC/브라우저에서 비밀번호를 변경했거나, 이 브라우저에서 처음 동기화하는 경우 모두 뜰 수 있습니다)\n현재 팀 비밀번호를 입력하세요.\n(5회 실패 시 취소됩니다)',
-            "🔔 This browser's saved password doesn't match the team setting.\n(This can happen either because it was changed on another PC/browser, or because this browser hasn't synced before)\nEnter the current team password.\n(Cancels after 5 failed attempts)"
-        ));
-        for (let i = 0; i < 5; i++) {
-            if (!newPw) return;
-            const inputHash = await window._sha256hex(newPw.trim());
-            if (inputHash === driveHash) {
-                setAdminPassword(newPw.trim());
-                // Telegram + SMTP 설정 자동 로드
-                const [encFileId, mailFileId] = await Promise.all([
-                    window._findDriveFile(driveToken, folderId, 'telegram_secure.enc'),
-                    window._findDriveFile(driveToken, folderId, 'mail_secure.enc')
-                ]);
-                const [tgEnc, mailEnc] = await Promise.all([
-                    encFileId  ? window._downloadDriveFile(driveToken, encFileId)  : Promise.resolve(''),
-                    mailFileId ? window._downloadDriveFile(driveToken, mailFileId) : Promise.resolve('')
-                ]);
-                await fetch(`${TG_SERVER}/all/decrypt`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ password: newPw.trim(), tg_encrypted: tgEnc, mail_encrypted: mailEnc })
-                });
-                window.refreshTgStatus(); window.loadTgMemberList();
-                alert(window._t('✅ 비밀번호 동기화 완료! SMTP + Telegram 설정도 자동 업데이트되었습니다.', '✅ Password synced! SMTP + Telegram settings were also updated automatically.'));
-                return;
-            }
-            newPw = prompt(window._t(`❌ 비밀번호가 틀렸습니다. (${4 - i}회 남음)\n다시 입력하세요.`, `❌ Incorrect password. (${4 - i} attempt(s) left)\nPlease try again.`));
+        // 💡 "팀 비밀번호가 변경되었습니다"는 실제로 누가 방금 바꾼 경우뿐 아니라, 이 브라우저/PC에서
+        //    아직 한 번도 동기화한 적이 없어 로컬값이 비어있는 상태(getAdminPassword()가 '')일 때도
+        //    똑같이 뜬다(여러 PC/브라우저를 번갈아 쓰는 사용자가 "바꾼 적 없는데 뜬다"고 오인하는 원인).
+        window._pendingPwSync = { driveToken, folderId, driveHash };
+        const toastEl = window.showToast(window._t(
+            "🔔 이 브라우저의 팀 비밀번호가 최신 설정과 다릅니다. 클릭해서 동기화하세요.",
+            "🔔 This browser's team password is out of sync. Click to sync."
+        ), 'warning', 20000);
+        if (toastEl) {
+            toastEl.style.cursor = 'pointer';
+            toastEl.title = window._t('클릭해서 지금 동기화', 'Click to sync now');
+            toastEl.onclick = function() { toastEl.remove(); window._runPasswordSyncPrompt(); };
         }
-        alert(window._t('❌ 비밀번호 5회 실패. 관리자에게 문의하세요.', '❌ Password failed 5 times. Please contact the administrator.'));
     } catch(e) { console.warn('[PW Sync]', e.message); }
+};
+
+// 💡 위 checkPasswordSync가 감지만 해두고, 사용자가 알림을 클릭했을 때 실제로 prompt()를 띄워
+//    동기화를 진행하는 부분 — 위 주석 참고(로그인 직후 자동으로 뜨지 않도록 분리함).
+window._runPasswordSyncPrompt = async function() {
+    const p = window._pendingPwSync;
+    if (!p) return;
+    const { driveToken, folderId, driveHash } = p;
+    let newPw = prompt(window._t(
+        '🔔 이 브라우저에 저장된 비밀번호가 팀 설정과 다릅니다.\n(다른 PC/브라우저에서 비밀번호를 변경했거나, 이 브라우저에서 처음 동기화하는 경우 모두 뜰 수 있습니다)\n현재 팀 비밀번호를 입력하세요.\n(5회 실패 시 취소됩니다)',
+        "🔔 This browser's saved password doesn't match the team setting.\n(This can happen either because it was changed on another PC/browser, or because this browser hasn't synced before)\nEnter the current team password.\n(Cancels after 5 failed attempts)"
+    ));
+    for (let i = 0; i < 5; i++) {
+        if (!newPw) return;
+        const inputHash = await window._sha256hex(newPw.trim());
+        if (inputHash === driveHash) {
+            setAdminPassword(newPw.trim());
+            // Telegram + SMTP 설정 자동 로드
+            const [encFileId, mailFileId] = await Promise.all([
+                window._findDriveFile(driveToken, folderId, 'telegram_secure.enc'),
+                window._findDriveFile(driveToken, folderId, 'mail_secure.enc')
+            ]);
+            const [tgEnc, mailEnc] = await Promise.all([
+                encFileId  ? window._downloadDriveFile(driveToken, encFileId)  : Promise.resolve(''),
+                mailFileId ? window._downloadDriveFile(driveToken, mailFileId) : Promise.resolve('')
+            ]);
+            await fetch(`${TG_SERVER}/all/decrypt`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ password: newPw.trim(), tg_encrypted: tgEnc, mail_encrypted: mailEnc })
+            });
+            window.refreshTgStatus(); window.loadTgMemberList();
+            alert(window._t('✅ 비밀번호 동기화 완료! SMTP + Telegram 설정도 자동 업데이트되었습니다.', '✅ Password synced! SMTP + Telegram settings were also updated automatically.'));
+            window._pendingPwSync = null;
+            return;
+        }
+        newPw = prompt(window._t(`❌ 비밀번호가 틀렸습니다. (${4 - i}회 남음)\n다시 입력하세요.`, `❌ Incorrect password. (${4 - i} attempt(s) left)\nPlease try again.`));
+    }
+    alert(window._t('❌ 비밀번호 5회 실패. 관리자에게 문의하세요.', '❌ Password failed 5 times. Please contact the administrator.'));
 };
 
 // ── Drive에 Telegram 설정 암호화 저장 ────────────────────────

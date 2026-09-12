@@ -513,6 +513,7 @@
                 window._toastReposition();
             }, 300);
         }, ms);
+        return toast; // 💡 [2026-09-12] checkPasswordSync 등에서 토스트 클릭 핸들러를 붙일 수 있도록 반환
     };
 
     // 💡 [긴급 버그 수정] 저장 함수 내부에 여러 await 지점(mergeRemoteDistributions, fetch)이 있는데,
