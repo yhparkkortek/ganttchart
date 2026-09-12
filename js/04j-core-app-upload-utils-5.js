@@ -198,6 +198,9 @@
                 'topic-diagnosis-btn':     '🔬 AI 진단',
                 'topic-profile-gen-btn':   '📊 토픽 프로파일 생성',
                 'mac-interval-10': '10분', 'mac-interval-15': '15분', 'mac-interval-30': '30분', 'mac-interval-60': '60분',
+                'schedule-rule-loading':   '불러오는 중...',
+                'alarm-modal-send-btn':    '📧 즉시 발송',
+                'alarm-modal-close-btn':   '닫기',
             },
             // 💡 [2026-09-11 신규] data-i18n-placeholder 속성이 붙은 input의 placeholder 번역 —
             //    data-i18n(textContent 전용)과 별도 맵. toggleLang()에서 함께 처리.
@@ -484,6 +487,9 @@
                 'topic-diagnosis-btn':     '🔬 AI Diagnosis',
                 'topic-profile-gen-btn':   '📊 Generate Topic Profile',
                 'mac-interval-10': '10 min', 'mac-interval-15': '15 min', 'mac-interval-30': '30 min', 'mac-interval-60': '60 min',
+                'schedule-rule-loading':   'Loading...',
+                'alarm-modal-send-btn':    '📧 Send Now',
+                'alarm-modal-close-btn':   'Close',
             },
             i18nPlaceholder: {
                 'addr-search': '🔍 Search (name/dept/title/email/phone, etc.)',
@@ -947,9 +953,76 @@
             else _nmTitle.textContent = _en ? '📢 Add Notice' : '📢 공지 등록';
         }
 
+        // [알람 일정(Alarm Schedule) 모달] — 공지 등록(nm-*)과 구조가 완전히 동일한 쌍둥이 모달인데
+        // (섹션 1: 업무 정보/공지 내용, 섹션 2: 발송 방식, 섹션 3: 수신 대상), nm-*만 위에서 번역되고
+        // as-*는 어디에도 등록된 적이 없어서 통째로 미번역이었음(사용자 스크린샷으로 발견).
+        const _asTexts = {
+            'as-sec-info-label':        { ko:'📋 업무 정보',          en:'📋 Task Info' },
+            'as-lbl-title':             { ko:'제목',                 en:'Title' },
+            'as-lbl-content':           { ko:'내용',                 en:'Content' },
+            'as-mailraw-btn':           { ko:'📧 메일 원문 보기',      en:'📧 View Original Mail' },
+            'as-sec-send-label':        { ko:'📤 발송 방식',          en:'📤 Send Method' },
+            'as-lbl-sendmethod':        { ko:'발송 방식',            en:'Send Method' },
+            'as-mode-dday-label':       { ko:'D-day 목록',           en:'D-day List' },
+            'as-mode-recur-label':      { ko:'기간·반복',            en:'Date Range/Recurring' },
+            'as-lbl-alarmtiming':       { ko:'알람 시점',             en:'Alarm Timing' },
+            'as-lbl-direct':            { ko:'직접 입력:',            en:'Custom:' },
+            'as-lbl-daysbefore':        { ko:'일 전',                en:'days before' },
+            'as-add-custom-btn':        { ko:'+ 추가',               en:'+ Add' },
+            'as-lbl-date':              { ko:'날짜',                 en:'Date' },
+            'as-datemode-range-label':  { ko:'기간',                 en:'Date Range' },
+            'as-datemode-specific-label': { ko:'특정 날짜',           en:'Specific Dates' },
+            'as-lbl-start':             { ko:'시작일',               en:'Start' },
+            'as-lbl-end':               { ko:'종료일',               en:'End' },
+            'as-lbl-interval':          { ko:'며칠마다',              en:'Every N days' },
+            'as-lbl-specific-date':     { ko:'날짜',                 en:'Date' },
+            'as-add-specific-btn':      { ko:'+ 추가',               en:'+ Add' },
+            'as-lbl-sendtime':          { ko:'발송 시각',             en:'Send Time' },
+            'as-delete-rule-btn':       { ko:'🗑️ 이 업무의 기간·반복 예약 해제', en:'🗑️ Remove this task\'s date-range/recurring schedule' },
+            'as-sec-recip-label':       { ko:'👥 수신 대상',          en:'👥 Recipients' },
+            'as-recip-mode-default-label': { ko:'기본수신',           en:'Default' },
+            'as-recip-mode-custom-label':  { ko:'개별수신',           en:'Custom' },
+            'as-recip-add-btn':         { ko:'+ 수신자 추가',         en:'+ Add Recipient' },
+            'as-reset-btn':             { ko:'기본값으로',            en:'Reset to Default' },
+            'as-save-btn':              { ko:'저장',                 en:'Save' },
+            'as-close-btn':             { ko:'닫기',                 en:'Close' },
+        };
+        Object.entries(_asTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+        // [알람 일정 모달] 섹션 접기/펼치기 화살표 — 펼쳐진 적 없으면 기본 "▶ 펼치기"가 그대로
+        // 남아있는데, 이건 _toggleAlarmSection()이 클릭될 때만 언어를 반영하기 때문 — 클릭 전에도
+        // 맞는 언어로 보이도록 여기서 한 번 더 맞춰준다(공지 등록의 nm-sec-*도 같은 한계가 있었음).
+        ['as-sec-info','as-sec-send','as-sec-recip','nm-sec-content','nm-sec-send','nm-sec-recip'].forEach(sid => {
+            const sec   = document.getElementById(sid);
+            const arrow = document.getElementById(sid + '-arrow');
+            if (!sec || !arrow) return;
+            const open = sec.style.display !== 'none';
+            arrow.textContent = open ? (_en ? '▼ Collapse' : '▼ 접기') : (_en ? '▶ Expand' : '▶ 펼치기');
+        });
+
         // [Notice 탭] 빈 상태 메시지
         const _noticeEmpty = document.getElementById('notice-empty-msg');
         if (_noticeEmpty) _noticeEmpty.textContent = _en ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.';
+
+        // [Notice 탭] "예약 발송 규칙" 섹션 — 헤더/컬럼명 정적 텍스트 + 이미 불러온 데이터가 있으면
+        // renderScheduleRuleTable()을 다시 호출해 행 내용(종류/날짜/시간/툴팁)까지 즉시 갱신
+        const _srTexts = {
+            'schedule-rule-section-label': { ko:'⏰ 예약 발송 규칙 (기간·반복 — 서버가 직접 스케줄을 돕니다)', en:'⏰ Scheduled Sending Rules (Date Range/Recurring — the server handles the schedule itself)' },
+            'schedule-rule-refresh-btn':   { ko:'🔄 새로고침', en:'🔄 Refresh' },
+            'schedule-rule-th-status':     { ko:'상태', en:'Status' },
+            'schedule-rule-th-title':      { ko:'제목', en:'Title' },
+            'schedule-rule-th-type':       { ko:'종류', en:'Type' },
+            'schedule-rule-th-date':       { ko:'날짜', en:'Date' },
+            'schedule-rule-th-time':       { ko:'시간', en:'Time' },
+            'schedule-rule-th-action':     { ko:'액션', en:'Action' },
+        };
+        Object.entries(_srTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+        if (window._scheduleRules !== undefined && window.renderScheduleRuleTable) window.renderScheduleRuleTable();
 
         // [Summary 탭] 고정 라벨/헤더 번역
         const _sumTexts = {

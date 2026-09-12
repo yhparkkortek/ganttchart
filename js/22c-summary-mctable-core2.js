@@ -224,17 +224,17 @@ window.renderAlarmTab = async function() {
     const sentStatus = (sentLog, diffDays, sentHidden, idx) => {
         const keys = Object.keys(sentLog);
         if (!keys.length) {
-            if (diffDays <= 7 && diffDays >= 0) return '<span style="color:#e03131;">⚠ 미발송</span>';
+            if (diffDays <= 7 && diffDays >= 0) return '<span style="color:#e03131;">⚠ ' + (_isEn ? 'Not sent' : '미발송') + '</span>';
             return '<span style="color:#aaa;">-</span>';
         }
-        const toggleIcon = `<span onclick="event.stopPropagation(); window.toggleAlarmSent(${idx});" title="클릭하면 발송/미발송 상태가 토글됩니다 (이력은 삭제되지 않음, 상세보기는 칸의 다른 부분을 클릭하세요)" style="cursor:pointer; margin-left:5px; color:#999; font-size:11px;">🔄</span>`;
+        const toggleIcon = `<span onclick="event.stopPropagation(); window.toggleAlarmSent(${idx});" title="${_isEn ? 'Click to toggle sent/not-sent (history is not deleted; click elsewhere in the cell for details)' : '클릭하면 발송/미발송 상태가 토글됩니다 (이력은 삭제되지 않음, 상세보기는 칸의 다른 부분을 클릭하세요)'}" style="cursor:pointer; margin-left:5px; color:#999; font-size:11px;">🔄</span>`;
         if (sentHidden) {
-            return '<span style="color:#e67e22;">◻ 미발송 처리됨</span>' + toggleIcon;
+            return '<span style="color:#e67e22;">◻ ' + (_isEn ? 'Marked not sent' : '미발송 처리됨') + '</span>' + toggleIcon;
         }
         const dayKeys = keys.filter(k => !isNaN(Number(k))).map(Number).sort((a,b) => a-b);
-        const parts = dayKeys.map(d => '<span style="color:#27ae60; font-size:11px;">✓ D-' + d + '전</span>');
+        const parts = dayKeys.map(d => '<span style="color:#27ae60; font-size:11px;">✓ D-' + d + (_isEn ? '' : '전') + '</span>');
         if (keys.includes('bulk') || keys.includes('manual')) {
-            parts.push('<span style="color:#27ae60; font-size:11px;">✓ 기 발송됨</span>');
+            parts.push('<span style="color:#27ae60; font-size:11px;">✓ ' + (_isEn ? 'Sent' : '기 발송됨') + '</span>');
         }
         return parts.join('<br>') + toggleIcon;
     };
@@ -247,8 +247,8 @@ window.renderAlarmTab = async function() {
 
     const emailCell = (email, missing) => {
         if (email) return `<span style="font-size:11px;">${email}</span>`;
-        if (missing && missing.length) return `<span style="color:#e03131; font-size:11px;">미등록: ${missing.join(', ')}</span>`;
-        return `<span style="color:#e03131; font-size:11px;">미입력</span>`;
+        if (missing && missing.length) return `<span style="color:#e03131; font-size:11px;">${_isEn ? 'Not registered: ' : '미등록: '}${missing.join(', ')}</span>`;
+        return `<span style="color:#e03131; font-size:11px;">${_isEn ? 'Not entered' : '미입력'}</span>`;
     };
 
     // 이름 목록 → "첫번째 외 N명" + tooltip
@@ -256,28 +256,29 @@ window.renderAlarmTab = async function() {
         if (!nameStr || nameStr === '-') return '-';
         const names = nameStr.split(/[,，]/).map(n => n.trim()).filter(Boolean);
         if (names.length <= 1) return `<span style="white-space:nowrap;">${names[0] || '-'}</span>`;
-        return `<span title="${names.join('\n')}" style="cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;">${names[0]} 외 ${names.length-1}명</span>`;
+        return `<span title="${names.join('\n')}" style="cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;">${names[0]} ${_isEn ? '+' + (names.length-1) + ' more' : '외 ' + (names.length-1) + '명'}</span>`;
     };
     // 🌐 도메인 차단으로 인해 실제 발송에서 제외된 이메일이 있으면 배지로 표시
     const domainBadge = (blocked) => (blocked && blocked.length)
-        ? `<span title="🌐 외부 도메인 차단됨(알람 설정에서 허용 가능): ${blocked.join(', ')}" style="margin-left:4px; font-size:10px; color:#e67e22; cursor:help;">🌐🚫</span>` : '';
+        ? `<span title="${_isEn ? '🌐 Blocked external domain (can be allowed in Alarm Settings): ' : '🌐 외부 도메인 차단됨(알람 설정에서 허용 가능): '}${blocked.join(', ')}" style="margin-left:4px; font-size:10px; color:#e67e22; cursor:help;">🌐🚫</span>` : '';
     const emailCell2 = (email, missing, blocked) => {
         if (!email) {
-            if (missing && missing.length) return `<span style="color:#e03131; font-size:11px; white-space:nowrap;" title="${missing.join('\n')} 이메일 미등록">미등록 ⚠</span>`;
-            return `<span style="color:#e03131; font-size:11px; white-space:nowrap;">미입력</span>`;
+            if (missing && missing.length) return `<span style="color:#e03131; font-size:11px; white-space:nowrap;" title="${missing.join('\n')} ${_isEn ? 'email not registered' : '이메일 미등록'}">${_isEn ? 'Not registered ⚠' : '미등록 ⚠'}</span>`;
+            return `<span style="color:#e03131; font-size:11px; white-space:nowrap;">${_isEn ? 'Not entered' : '미입력'}</span>`;
         }
         const emails = email.split(',').map(e => e.trim()).filter(Boolean);
         if (emails.length <= 1) return `<span style="font-size:11px; white-space:nowrap;">${emails[0]}</span>${domainBadge(blocked)}`;
-        return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;" title="${emails.join('\n')}">${emails[0]} 외 ${emails.length-1}</span>${domainBadge(blocked)}`;
+        return `<span style="font-size:11px; cursor:help; border-bottom:1px dashed #aaa; white-space:nowrap;" title="${emails.join('\n')}">${emails[0]} ${_isEn ? '+' + (emails.length-1) : '외 ' + (emails.length-1)}</span>${domainBadge(blocked)}`;
     };
 
+    const _statusEn = { '진행':'On going', '완료':'Done', '대기':'Pending', '지연':'Delay', '보류':'Delay' };
     tbody.innerHTML = items.map((item, idx) => `
         <tr class="${idx % 2 === 1 ? 'mc-zebra-b' : 'mc-zebra-a'}" style="cursor:pointer; border-bottom:1px solid #cfe3e5;"
             onmouseover="this.style.background='#d3ecef'" onmouseout="this.style.background=''"
-            title="더블클릭하면 Gantt chart의 해당 업무로 이동합니다"
+            title="${_isEn ? 'Double-click to jump to this task in the Gantt chart' : '더블클릭하면 Gantt chart의 해당 업무로 이동합니다'}"
             onclick="window._alarmRowClick(${idx})" ondblclick="window._alarmRowDblClick(${idx}, ${item.rowIdx})">
             <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
-            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${item.status || '-'}</td>
+            <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${(item.status && _isEn ? (_statusEn[item.status] || item.status) : item.status) || '-'}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.assignee)}</td>
             <td style="padding:7px 10px; font-size:11px; color:#555;">${emailCell2(item.assigneeEmail, item.missingPeople, item.blockedByDomain)}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.receiverStr)}</td>
@@ -722,12 +723,12 @@ window.openAlarmModal = function(idx) {
     if (!item) return;
     window._alarmCurrentItem = item;
 
-    const _amEn = window._currentLang === 'en';   // ← 여기로 이동
+    const _amEn = window._currentLang === 'en';
     const pm        = window.projectMeta || {};
-    const projTitle = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || '프로젝트';
-    const _amEn2 = window._currentLang === 'en';
+    const projTitle = [pm.고객사, pm.고객모델명].filter(Boolean).join(' > ') || (_amEn ? 'Project' : '프로젝트');
+    const _amEn2 = _amEn;
     const dayKeys   = Object.keys(item.sentLog).filter(k => !isNaN(Number(k))).map(Number).sort((a,b) => a-b);
-    const sentParts = dayKeys.map(d => `✓ D-${d}일 전 발송 (${item.sentLog[d].substring(0,16).replace('T',' ')})`);
+    const sentParts = dayKeys.map(d => _amEn2 ? `✓ Sent D-${d} (${item.sentLog[d].substring(0,16).replace('T',' ')})` : `✓ D-${d}일 전 발송 (${item.sentLog[d].substring(0,16).replace('T',' ')})`);
     if (item.sentLog.manual) sentParts.push(`✓ ${_amEn2 ? 'Manual send' : '즉시 발송'} (${item.sentLog.manual.substring(0,16).replace('T',' ')})`);
     if (item.sentLog.bulk)   sentParts.push(`✓ ${_amEn2 ? 'Batch send' : '일괄 발송'} (${item.sentLog.bulk.substring(0,16).replace('T',' ')})`);
     const sentHtml  = sentParts.length ? sentParts.join('<br>') : (_amEn2 ? 'No send history' : '발송 이력 없음');
@@ -735,12 +736,23 @@ window.openAlarmModal = function(idx) {
     // 업무내용 줄바꿈: 날짜 이후, [섹션키워드] 이전에 개행
     const formattedContent = item.content ? window.alarmFormatContent(item.content) : '';
 
+    const _statusEnAm = { '진행':'On going', '완료':'Done', '대기':'Pending', '지연':'Delay', '보류':'Delay' };
     const _isBlockedEmail = (email) => (item.blockedByDomain || []).some(b => (email || '').split(',').map(e=>e.trim()).includes(b));
     const emailWarn = (email, name) => email
-        ? `<span style="color:#27ae60;">${email}</span>${_isBlockedEmail(email) ? ' <span title="🌐 외부 도메인 차단됨 — 실제 알람은 발송되지 않습니다 (알람 설정에서 허용 가능)" style="font-size:10px; color:#e67e22; cursor:help;">🌐🚫 차단</span>' : ''}`
-        : `<span style="color:#e03131;">미등록 — Summary 탭에 <b>${name}</b> 이메일을 입력해 주세요</span>`;
+        ? `<span style="color:#27ae60;">${email}</span>${_isBlockedEmail(email) ? ` <span title="${_amEn2 ? '🌐 Blocked external domain — this alarm will not actually be sent (can be allowed in Alarm Settings)' : '🌐 외부 도메인 차단됨 — 실제 알람은 발송되지 않습니다 (알람 설정에서 허용 가능)'}" style="font-size:10px; color:#e67e22; cursor:help;">🌐🚫 ${_amEn2 ? 'Blocked' : '차단'}</span>` : ''}`
+        : `<span style="color:#e03131;">${_amEn2 ? `Not registered — please enter <b>${name}</b>'s email in the Summary tab` : `미등록 — Summary 탭에 <b>${name}</b> 이메일을 입력해 주세요`}</span>`;
     document.getElementById('alarm-modal-title').textContent = '🔔 ' + item.taskName;
-    document.getElementById('alarm-modal-body').innerHTML = `
+    document.getElementById('alarm-modal-body').innerHTML = _amEn2 ? `
+        <table style="width:100%; border-collapse:collapse; font-size:12.5px; line-height:1.6;">
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; width:100px;">Project</td><td style="padding:6px 10px;">${projTitle}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">Task</td><td style="padding:6px 10px;">${item.taskName}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">Status</td><td style="padding:6px 10px;">${(_statusEnAm[item.status] || item.status) || '-'}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">Sender</td><td style="padding:6px 10px;">${item.assignee} &nbsp; ${emailWarn(item.assigneeEmail, item.assignee)}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">Receiver</td><td style="padding:6px 10px;">${item.receiverStr} &nbsp; ${emailWarn(item.receiverEmail, item.receiverStr)}</td></tr>
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">Due Date</td><td style="padding:6px 10px; color:#e03131; font-weight:bold;">${item.dueStr} (${dDayLabel(item.diffDays)})</td></tr>
+            ${formattedContent ? `<tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">Task Details</td><td style="padding:6px 10px; white-space:pre-wrap; font-size:12px; color:#444;">${formattedContent}${item.mailRaw ? `<div style="margin-top:6px; white-space:normal;"><button onclick="window.showMailRawModal(window._alarmCurrentItem.mailRaw)" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:11px; padding:3px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📧 View Mail Source</button></div>` : ''}</td></tr>` : ''}
+            <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">Send History</td><td style="padding:6px 10px; color:#555; font-size:12px;">${sentHtml}</td></tr>
+        </table>` : `
         <table style="width:100%; border-collapse:collapse; font-size:12.5px; line-height:1.6;">
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; width:100px;">프로젝트</td><td style="padding:6px 10px;">${projTitle}</td></tr>
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">업무명</td><td style="padding:6px 10px;">${item.taskName}</td></tr>
@@ -748,7 +760,7 @@ window.openAlarmModal = function(idx) {
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">발신인</td><td style="padding:6px 10px;">${item.assignee} &nbsp; ${emailWarn(item.assigneeEmail, item.assignee)}</td></tr>
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">수신인</td><td style="padding:6px 10px;">${item.receiverStr} &nbsp; ${emailWarn(item.receiverEmail, item.receiverStr)}</td></tr>
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold;">완료 예정일</td><td style="padding:6px 10px; color:#e03131; font-weight:bold;">${item.dueStr} (${dDayLabel(item.diffDays)})</td></tr>
-            ${formattedContent ? `<tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">업무 내용</td><td style="padding:6px 10px; white-space:pre-wrap; font-size:12px; color:#444;">${formattedContent}${item.mailRaw ? `<div style="margin-top:6px; white-space:normal;"><button onclick="window.showMailRawModal(window._alarmCurrentItem.mailRaw)" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:11px; padding:3px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📧 ${_amEn2 ? 'View Mail Source' : '메일 원문 보기'}</button></div>` : ''}</td></tr>` : ''}
+            ${formattedContent ? `<tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">업무 내용</td><td style="padding:6px 10px; white-space:pre-wrap; font-size:12px; color:#444;">${formattedContent}${item.mailRaw ? `<div style="margin-top:6px; white-space:normal;"><button onclick="window.showMailRawModal(window._alarmCurrentItem.mailRaw)" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="font-size:11px; padding:3px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📧 메일 원문 보기</button></div>` : ''}</td></tr>` : ''}
             <tr><td style="padding:6px 10px; background:#f4f6f8; font-weight:bold; vertical-align:top;">발송 이력</td><td style="padding:6px 10px; color:#555; font-size:12px;">${sentHtml}</td></tr>
         </table>`;
 

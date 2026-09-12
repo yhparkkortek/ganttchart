@@ -250,24 +250,24 @@
 
       <div style="background:#fff; border:1px solid #cfe3e5; border-radius:8px; overflow:hidden; margin-bottom:16px;">
         <div style="padding:10px 12px; background:#eef6f7; border-bottom:2px solid #cfe3e5; display:flex; align-items:center; justify-content:space-between;">
-          <span style="font-size:12.5px; font-weight:bold; color:#444;">⏰ 예약 발송 규칙 (기간·반복 — 서버가 직접 스케줄을 돕니다)</span>
-          <button onclick="window.loadScheduleRulesFromBackend()" title="새로고침" data-i18n-title="refresh"
+          <span id="schedule-rule-section-label" style="font-size:12.5px; font-weight:bold; color:#444;">⏰ 예약 발송 규칙 (기간·반복 — 서버가 직접 스케줄을 돕니다)</span>
+          <button id="schedule-rule-refresh-btn" onclick="window.loadScheduleRulesFromBackend()" title="새로고침" data-i18n-title="refresh"
                   onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                   style="padding:3px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 새로고침</button>
         </div>
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
             <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
-              <th style="padding:10px 12px; text-align:center; width:54px;">상태</th>
-              <th style="padding:10px 12px; text-align:left;">제목</th>
-              <th style="padding:10px 12px; text-align:center; width:120px;">종류</th>
-              <th style="padding:10px 12px; text-align:center; width:200px;">날짜</th>
-              <th style="padding:10px 12px; text-align:center; width:130px;">시간</th>
-              <th style="padding:10px 12px; text-align:center; width:150px;">액션</th>
+              <th id="schedule-rule-th-status" style="padding:10px 12px; text-align:center; width:54px;">상태</th>
+              <th id="schedule-rule-th-title" style="padding:10px 12px; text-align:left;">제목</th>
+              <th id="schedule-rule-th-type" style="padding:10px 12px; text-align:center; width:120px;">종류</th>
+              <th id="schedule-rule-th-date" style="padding:10px 12px; text-align:center; width:200px;">날짜</th>
+              <th id="schedule-rule-th-time" style="padding:10px 12px; text-align:center; width:130px;">시간</th>
+              <th id="schedule-rule-th-action" style="padding:10px 12px; text-align:center; width:150px;">액션</th>
             </tr>
           </thead>
           <tbody id="schedule-rule-table-body">
-            <tr><td colspan="6" style="padding:24px; text-align:center; color:#aaa; font-size:13px;">불러오는 중...</td></tr>
+            <tr><td colspan="6" style="padding:24px; text-align:center; color:#aaa; font-size:13px;" data-i18n="schedule-rule-loading">불러오는 중...</td></tr>
           </tbody>
         </table>
       </div>
@@ -521,7 +521,7 @@
       onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
       style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;"
       onclick="window.sendSingleAlarm(false)">📧 즉시 발송</button>
-    <button onclick="window.closeAlarmModal()"
+    <button id="alarm-modal-close-btn" onclick="window.closeAlarmModal()"
       onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';"
       style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
   </div>
@@ -565,17 +565,17 @@
            저장되어(row._알림제목오버라이드/_알림내용오버라이드) 발송 시 그 값이 그대로 쓰인다
            (window.saveAlarmSchedule/collectAlarmItems, kortek_backend.py _build_alarm_task_snapshot 참고). -->
       <div style="margin-bottom:10px;">
-        <label style="font-size:11px; font-weight:bold; color:#555; display:block; margin-bottom:4px;">제목</label>
+        <label id="as-lbl-title" style="font-size:11px; font-weight:bold; color:#555; display:block; margin-bottom:4px;">제목</label>
         <input id="as-info-title" class="u-input"
                style="width:100%; padding:7px 10px; border:1px solid #eee; border-radius:4px; font-size:13px; color:#333; box-sizing:border-box; background:#f8f9fa;">
       </div>
       <div>
-        <label style="font-size:11px; font-weight:bold; color:#555; display:block; margin-bottom:4px;">내용</label>
+        <label id="as-lbl-content" style="font-size:11px; font-weight:bold; color:#555; display:block; margin-bottom:4px;">내용</label>
         <textarea id="as-info-content"
                style="width:100%; height:110px; padding:7px 10px; border:1px solid #eee; border-radius:4px; font-size:12.5px; color:#444; box-sizing:border-box; resize:vertical; font-family:'맑은 고딕',sans-serif; line-height:1.6; background:#f8f9fa;"></textarea>
       </div>
       <div id="as-info-mailraw-wrap" style="display:none; margin-top:8px; text-align:right;">
-        <button type="button" onclick="window.showMailRawModal(window._alarmScheduleItem && window._alarmScheduleItem.mailRaw)"
+        <button id="as-mailraw-btn" type="button" onclick="window.showMailRawModal(window._alarmScheduleItem && window._alarmScheduleItem.mailRaw)"
                 onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                 style="font-size:11px; padding:4px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">📧 메일 원문 보기</button>
       </div>
@@ -594,12 +594,12 @@
            서버(kortek_backend.py)가 직접 스케줄을 도는 "기간·반복" 방식을 추가. 단, 공지와 달리 이 업무
            알람은 저장 시점 내용을 고정하지 않고 발송 직전 담당자/완료예정일/업무내용을 다시 조회한다. -->
       <div style="margin-bottom:10px; display:flex; gap:10px; align-items:center; padding:8px 10px; background:#f8f9fa; border-radius:6px; border:1px solid #eee; flex-wrap:wrap;">
-        <span style="font-size:12px; font-weight:bold; color:#444;">발송 방식</span>
+        <span id="as-lbl-sendmethod" style="font-size:12px; font-weight:bold; color:#444;">발송 방식</span>
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="as-mode" id="as-mode-dday" value="dday" checked onchange="window._asToggleMode()"> D-day 목록
+          <input type="radio" name="as-mode" id="as-mode-dday" value="dday" checked onchange="window._asToggleMode()"> <span id="as-mode-dday-label">D-day 목록</span>
         </label>
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="as-mode" id="as-mode-recur" value="recur" onchange="window._asToggleMode()"> 기간·반복
+          <input type="radio" name="as-mode" id="as-mode-recur" value="recur" onchange="window._asToggleMode()"> <span id="as-mode-recur-label">기간·반복</span>
         </label>
       </div>
 
@@ -609,7 +609,7 @@
         <!-- 💡 [2026-09-01] 공지 등록과 동일한 구조로 통일 — 이 모달은 "기준일"이 없어(완료예정일이
              자동 기준) 그 블록만 없을 뿐, 나머지(라벨+체크박스+직접입력)는 공지 등록의 "알람 시점"
              블록과 동일한 배치를 쓴다. -->
-        <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">알람 시점</label>
+        <label id="as-lbl-alarmtiming" style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:4px;">알람 시점</label>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
           <label style="display:flex; align-items:center; gap:3px; font-size:12px; cursor:pointer;">
             <input type="checkbox" class="alarm-sched-cb" id="as-d14" value="14"> D-14
@@ -628,12 +628,12 @@
           </label>
         </div>
         <div style="display:flex; align-items:center; gap:6px; margin-top:7px;">
-          <span style="font-size:11.5px; color:#666; white-space:nowrap;">직접 입력:</span>
+          <span id="as-lbl-direct" style="font-size:11.5px; color:#666; white-space:nowrap;">직접 입력:</span>
           <input id="as-d-custom" type="number" min="1" max="365" placeholder="예: 20" data-i18n-placeholder="as-d-custom"
                  style="width:80px; padding:4px 7px; border:1px solid #ddd; border-radius:4px; font-size:12px; box-sizing:border-box;"
                  onkeydown="if(event.key==='Enter'){event.preventDefault();window._asAddCustomDay();}">
-          <span style="font-size:11.5px; color:#888;">일 전</span>
-          <button type="button" onclick="window._asAddCustomDay()"
+          <span id="as-lbl-daysbefore" style="font-size:11.5px; color:#888;">일 전</span>
+          <button id="as-add-custom-btn" type="button" onclick="window._asAddCustomDay()"
                   onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                   style="padding:3px 8px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:3px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 추가</button>
         </div>
@@ -644,12 +644,12 @@
            id만 as- 접두어로 구분. /schedule API에 type='alarm'으로 등록된다. -->
       <div id="as-recur-fields" style="display:none; padding:10px; background:#f0f6ff; border-radius:6px; border:1px solid #d6e4f7;">
         <div style="display:flex; gap:14px; align-items:center; margin-bottom:8px;">
-          <span style="font-size:12px; font-weight:bold; color:#444;">날짜</span>
+          <span id="as-lbl-date" style="font-size:12px; font-weight:bold; color:#444;">날짜</span>
           <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-            <input type="radio" name="as-datemode" id="as-datemode-range" value="range" checked onchange="window._asToggleDateMode()"> 기간
+            <input type="radio" name="as-datemode" id="as-datemode-range" value="range" checked onchange="window._asToggleDateMode()"> <span id="as-datemode-range-label">기간</span>
           </label>
           <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-            <input type="radio" name="as-datemode" id="as-datemode-specific" value="specific" onchange="window._asToggleDateMode()"> 특정 날짜
+            <input type="radio" name="as-datemode" id="as-datemode-specific" value="specific" onchange="window._asToggleDateMode()"> <span id="as-datemode-specific-label">특정 날짜</span>
           </label>
         </div>
 
@@ -658,35 +658,35 @@
         <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-bottom:6px;">
           <div id="as-daterange-fields" style="display:flex; gap:6px; flex:1; min-width:0;">
             <div style="flex:1; min-width:76px;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">시작일</label>
+              <label id="as-lbl-start" style="font-size:11px; color:#666; display:block; margin-bottom:3px;">시작일</label>
               <input id="as-recur-start" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
                      style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; cursor:pointer;">
             </div>
             <div style="flex:1; min-width:76px;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">종료일</label>
+              <label id="as-lbl-end" style="font-size:11px; color:#666; display:block; margin-bottom:3px;">종료일</label>
               <input id="as-recur-end" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
                      style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; cursor:pointer;">
             </div>
             <div style="width:56px; flex-shrink:0;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">며칠마다</label>
+              <label id="as-lbl-interval" style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">며칠마다</label>
               <input id="as-recur-day-interval" type="number" min="1" max="365" value="1"
                      style="width:100%; padding:6px 4px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; text-align:center;">
             </div>
           </div>
           <div id="as-specific-dates-fields" style="display:none; gap:6px; align-items:flex-end; flex:1; min-width:0;">
             <div style="flex:1; min-width:90px;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">날짜</label>
+              <label id="as-lbl-specific-date" style="font-size:11px; color:#666; display:block; margin-bottom:3px;">날짜</label>
               <input id="as-specific-date-input" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
                      style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; cursor:pointer;">
             </div>
-            <button type="button" onclick="window._asAddSpecificDate()"
+            <button id="as-add-specific-btn" type="button" onclick="window._asAddSpecificDate()"
                     onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                     style="flex-shrink:0; padding:6px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 추가</button>
           </div>
           <!-- 💡 시간창(시작~종료+몇시간마다)은 의미가 없다는 피드백으로 발송 시각 하나로 단순화
                (내부적으로는 hourStart=hourEnd=이 시각으로 저장해 기존 백엔드 로직 그대로 재사용) -->
           <div style="width:88px; flex-shrink:0;">
-            <label style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">발송 시각</label>
+            <label id="as-lbl-sendtime" style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">발송 시각</label>
             <input id="as-recur-send-time" type="time" class="u-input" value="09:00"
                    style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box;">
           </div>
@@ -714,10 +714,10 @@
     <div id="as-sec-recip" style="display:none; padding:14px; border-top:1px solid #e8e8e8;">
       <div style="display:flex; gap:14px; align-items:center; margin-bottom:6px;">
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="as-recip-mode" id="as-recip-mode-default" value="default" checked onchange="window._asToggleRecipMode()"> 기본수신
+          <input type="radio" name="as-recip-mode" id="as-recip-mode-default" value="default" checked onchange="window._asToggleRecipMode()"> <span id="as-recip-mode-default-label">기본수신</span>
         </label>
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="as-recip-mode" id="as-recip-mode-custom" value="custom" onchange="window._asToggleRecipMode()"> 개별수신
+          <input type="radio" name="as-recip-mode" id="as-recip-mode-custom" value="custom" onchange="window._asToggleRecipMode()"> <span id="as-recip-mode-custom-label">개별수신</span>
         </label>
       </div>
 
@@ -734,7 +734,7 @@
       <div id="as-recip-list" style="display:flex; flex-direction:column; gap:4px; margin-bottom:6px; max-height:180px; overflow-y:auto; padding-right:4px;"></div>
       <!-- 💡 [2026-09-01] 오른쪽 정렬 + 주소록 탭 버튼(예: 📂 불러오기)과 동일한 padding:6px 12px 적용 -->
       <div style="display:flex; justify-content:flex-end;">
-        <button type="button" onclick="window._asRecipAddRow('as-recip-list', {emailOn:true, tgOn:true})"
+        <button id="as-recip-add-btn" type="button" onclick="window._asRecipAddRow('as-recip-list', {emailOn:true, tgOn:true})"
                 onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                 style="padding:6px 12px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:6px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 수신자 추가</button>
       </div>
@@ -747,8 +747,8 @@
   <!-- 💡 [2026-08-31] 기본값으로/저장/닫기 순서로 오른쪽 정렬 통일(공지 등록의 저장→닫기 순서와 동일) -->
   <div style="padding:14px 20px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
     <button id="as-reset-btn" onclick="window.resetAlarmScheduleForm()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:6px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">기본값으로</button>
-    <button onclick="window.saveAlarmSchedule()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">저장</button>
-    <button onclick="window.closeAlarmScheduleModal()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
+    <button id="as-save-btn" onclick="window.saveAlarmSchedule()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">저장</button>
+    <button id="as-close-btn" onclick="window.closeAlarmScheduleModal()" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; color:#555; background:#f8f9fa; border-radius:6px; font-size:13px; cursor:pointer; transition:background .15s;">닫기</button>
   </div>
 </div>
 

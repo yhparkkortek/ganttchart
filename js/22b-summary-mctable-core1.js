@@ -535,27 +535,38 @@ window.loadScheduleRulesFromBackend = async function() {
 window.renderScheduleRuleTable = function() {
     const tbody = document.getElementById('schedule-rule-table-body');
     if (!tbody) return;
+    const _en = window._currentLang === 'en';
     if (window._scheduleRules === 'outdated') {
-        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#e67e22;font-size:12.5px;">⚠️ 백엔드(kortek_backend.py)가 구버전입니다 — 최신 파일로 교체 후 재실행해주세요.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#e67e22;font-size:12.5px;">${_en
+            ? '⚠️ The backend (kortek_backend.py) is outdated — please replace it with the latest file and restart it.'
+            : '⚠️ 백엔드(kortek_backend.py)가 구버전입니다 — 최신 파일로 교체 후 재실행해주세요.'}</td></tr>`;
         return;
     }
     if (window._scheduleRules === null) {
-        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#e67e22;font-size:12.5px;">⚠️ 메일 서버(kortek_backend.py)에 연결할 수 없습니다 — 실행 후 새로고침해주세요.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#e67e22;font-size:12.5px;">${_en
+            ? '⚠️ Cannot connect to the mail server (kortek_backend.py) — please start it and refresh.'
+            : '⚠️ 메일 서버(kortek_backend.py)에 연결할 수 없습니다 — 실행 후 새로고침해주세요.'}</td></tr>`;
         return;
     }
     if (!window._scheduleRules.length) {
-        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#aaa;font-size:12.5px;">등록된 예약 발송 규칙이 없습니다. [+ 공지 등록]에서 "기간·반복"을 선택해 추가하세요.</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="6" style="padding:24px;text-align:center;color:#aaa;font-size:12.5px;">${_en
+            ? 'No scheduled sending rules registered. Choose "Date Range/Recurring" in [+ Add Notice] to add one.'
+            : '등록된 예약 발송 규칙이 없습니다. [+ 공지 등록]에서 "기간·반복"을 선택해 추가하세요.'}</td></tr>`;
         return;
     }
     tbody.innerHTML = window._scheduleRules.map((r, i) => {
         const rowBg = i % 2 === 0 ? '#fff' : '#e8f2f3';
         const dateLabel = r.dateMode === 'specific'
-            ? `특정 ${(r.specificDates||[]).length}일`
-            : `${r.startDate||'?'} ~ ${r.endDate||'?'} (${r.dayInterval||1}일마다)`;
-        const timeLabel = `${r.hourStart||'09:00'}~${r.hourEnd||'21:00'} (${r.hourInterval||1}h마다)`;
-        const typeLabel = r.type === 'alarm' ? '업무 알람' : '공지';
+            ? (_en ? `${(r.specificDates||[]).length} specific date(s)` : `특정 ${(r.specificDates||[]).length}일`)
+            : (_en ? `${r.startDate||'?'} ~ ${r.endDate||'?'} (every ${r.dayInterval||1}d)` : `${r.startDate||'?'} ~ ${r.endDate||'?'} (${r.dayInterval||1}일마다)`);
+        const timeLabel = _en
+            ? `${r.hourStart||'09:00'}~${r.hourEnd||'21:00'} (every ${r.hourInterval||1}h)`
+            : `${r.hourStart||'09:00'}~${r.hourEnd||'21:00'} (${r.hourInterval||1}h마다)`;
+        const typeLabel = r.type === 'alarm' ? (_en ? 'Task Alarm' : '업무 알람') : (_en ? 'Notice' : '공지');
         const isOn = r.enabled !== false;
-        const statusIcon = `<span onclick="window.toggleScheduleRuleEnabled('${r.id}')" style="cursor:pointer;font-size:16px;" title="${isOn ? '🟢 켜짐 — 클릭하여 끄기' : '🔴 꺼짐 — 클릭하여 켜기'}">${isOn ? '🟢' : '🔴'}</span>`;
+        const onTitle  = _en ? '🟢 On — click to turn off' : '🟢 켜짐 — 클릭하여 끄기';
+        const offTitle = _en ? '🔴 Off — click to turn on' : '🔴 꺼짐 — 클릭하여 켜기';
+        const statusIcon = `<span onclick="window.toggleScheduleRuleEnabled('${r.id}')" style="cursor:pointer;font-size:16px;" title="${isOn ? onTitle : offTitle}">${isOn ? '🟢' : '🔴'}</span>`;
         return `<tr style="background:${rowBg};border-bottom:1px solid #cfe3e5;">
           <td style="padding:8px 12px;text-align:center;">${statusIcon}</td>
           <td style="padding:8px 12px;">
@@ -567,9 +578,9 @@ window.renderScheduleRuleTable = function() {
           <td style="padding:8px 12px;text-align:center;font-size:11.5px;color:#555;">${timeLabel}</td>
           <td style="padding:8px 12px;text-align:center;">
             <div style="display:flex;gap:4px;justify-content:center;">
-              <button onclick="window.openScheduleRuleEditModal('${r.id}')" title="수정"
+              <button onclick="window.openScheduleRuleEditModal('${r.id}')" title="${_en ? 'Edit' : '수정'}"
                 style="width:26px;height:26px;border:1px solid #edbf85;color:#a85d0a;background:#fbead9;border-radius:4px;cursor:pointer;font-size:12px;">✏️</button>
-              <button onclick="window.deleteScheduleRule('${r.id}')" title="삭제"
+              <button onclick="window.deleteScheduleRule('${r.id}')" title="${_en ? 'Delete' : '삭제'}"
                 style="width:26px;height:26px;border:1px solid #eeb0ac;color:#b1432f;background:#fbe4e2;border-radius:4px;cursor:pointer;font-size:12px;">🗑️</button>
             </div>
           </td>
@@ -907,13 +918,20 @@ window._asRecipAutofill = function(input) {
 };
 
 // 💡 목록에 스크롤바가 생기면 그만큼 폭이 줄어 행의 채널 버튼 위치가 헤더보다 왼쪽으로 밀리는 문제 보정
-//    (containerId="as-recip-list", headerId="as-recip-header" 고정 쌍으로 사용)
+//    (containerId="as-recip-list"/"nm-recipient-list", headerId="as-recip-header"/"nm-recipient-header" 고정 쌍으로 사용)
+// 🐛 [2026-09-12 버그수정] 스크롤바 폭만 보정하고 있었는데, 목록(list) 자체에 인라인
+// padding-right:4px가 항상 붙어 있어서(HTML 참고) 행의 실제 렌더 폭은 "list.clientWidth - 4px"인
+// 반면 헤더 폭은 그 4px 보정이 없어 "list.offsetWidth"와 같았다 — 그 결과 스크롤바가 아예 없어도
+// (행이 몇 개 없어도) 헤더의 아이콘 3개(✓/✓/✕)가 행의 아이콘보다 항상 4px+스크롤바폭만큼 오른쪽으로
+// 밀려 보였음(칸이 고정폭이라 4px 정도도 눈에 띔). list의 실제 padding-right까지 함께 보정.
 window._asSyncRecipHeaderPad = function(containerId) {
     const list = document.getElementById(containerId);
     const header = document.getElementById(containerId.replace('-list', '-header'));
     if (!list || !header) return;
     const sbWidth = list.offsetWidth - list.clientWidth;
-    header.style.paddingRight = sbWidth > 0 ? sbWidth + 'px' : '';
+    const listPadRight = parseFloat(getComputedStyle(list).paddingRight) || 0;
+    const total = sbWidth + listPadRight;
+    header.style.paddingRight = total > 0 ? total + 'px' : '';
 };
 
 // 💡 [버그 수정] 메일 본문에서 AI가 이름을 "있는 그대로" 추출하다 보니 "윤재권 팀장님"처럼
