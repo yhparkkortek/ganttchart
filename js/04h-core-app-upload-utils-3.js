@@ -1339,6 +1339,17 @@
             return;
         }
 
+        // 🔔 [2026-09-12 신규] "알람" / "alarm" 알람 필터 로컬 명령 — API 키 없어도 동작.
+        const alarmFilterReply = window._ganttQaTryHandleAlarmFilterCommand ? window._ganttQaTryHandleAlarmFilterCommand(question) : null;
+        if (alarmFilterReply) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: alarmFilterReply });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
@@ -1895,6 +1906,53 @@
         }
         window.undoLastAction();
         return _urEn ? '↩️ Undone (same as Ctrl+Z).' : '↩️ 실행 취소했습니다. (Ctrl+Z와 동일)';
+    };
+
+    // 🔔 [2026-09-12 신규] "알람" / "alarm" 로컬 명령 — AI 호출 없이 Gantt 알람 필터를 즉시 ON/OFF.
+    //    ON: _알림=true인 업무만 표시(window._toggleAlarmFilter(true), 배지 표시).
+    //    OFF: "알람 해제" / "알람 끄기" / "alarm off" / "전체" 입력 시.
+    //    매치 안 되면 null 반환 → 평소처럼 AI 에게 물어보는 흐름으로 진행.
+    window._ganttQaTryHandleAlarmFilterCommand = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        var _en = window._currentLang === 'en';
+
+        // OFF 패턴: "알람 해제", "알람 끄기", "alarm off", "alarm filter off", "전체 보기", "전체 표시"
+        var offPattern = /알람\s*(해제|끄기|끄|off\b)|alarm\s*(filter\s*)?(off|해제|끄기)|전체\s*(보기|표시|보여줘)/i;
+        if (offPattern.test(text)) {
+            if (!window._ganttAlarmFilterActive) {
+                return _en ? '✅ Alarm filter is already off.' : '✅ 알람 필터는 이미 꺼져 있습니다.';
+            }
+            if (window._toggleAlarmFilter) window._toggleAlarmFilter(false);
+            return _en ? '✅ Alarm filter OFF — all tasks are now visible.' : '✅ 알람 필터 꺼짐 — 전체 업무가 다시 표시됩니다.';
+        }
+
+        // ON 패턴: "알람", "알람 보여줘", "알람 업무", "alarm", "alarm filter" 등
+        // — "알람 설정해줘"/"알람 걸어줘" 같이 특정 업무의 알람을 켜는 요청은 AI에게 넘겨야 하므로
+        //   "어느 업무"를 가리키는 업무명·번호가 붙어있으면 필터 명령으로 해석하지 않는다.
+        var onPattern = /^(🔔\s*)?(알람|alarm)([\s]*(보여|보기|있는|걸린|업무|filter|on|켜|켜줘|보여줘|검색|찾아|정렬|뭐야|뭐|list|show))?$/i;
+        if (onPattern.test(text)) {
+            if (window._ganttAlarmFilterActive) {
+                return _en ? '🔔 Alarm filter is already ON.' : '🔔 알람 필터가 이미 켜져 있습니다.';
+            }
+            var count = 0;
+            if (typeof globalData !== 'undefined' && globalData) {
+                for (var i = 1; i < globalData.length; i++) {
+                    if (globalData[i] && globalData[i]._알림) count++;
+                }
+            }
+            if (window._toggleAlarmFilter) window._toggleAlarmFilter(true);
+            if (count === 0) {
+                return _en
+                    ? '🔔 Alarm filter ON — but no tasks have alarms set yet.'
+                    : '🔔 알람 필터 켜짐 — 아직 알람이 설정된 업무가 없습니다.';
+            }
+            return _en
+                ? `🔔 Alarm filter ON — showing ${count} task(s) with alarms. Type "alarm off" to show all.`
+                : `🔔 알람 필터 켜짐 — 알람이 설정된 업무 ${count}건만 표시합니다. "알람 해제"라고 입력하면 전체가 다시 표시됩니다.`;
+        }
+
+        return null;
     };
 
     // ═══════════════════════════════════════════════════════════

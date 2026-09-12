@@ -211,6 +211,9 @@
                         }
                     }
                 }
+                // 💡 [2026-09-12 신규] 알람 필터 — AI 문답 로컬 명령("알람")으로 ON/OFF.
+                //    currentFilters AND 조건: 기존 필터 통과한 행 중 _알림이 없으면 추가로 숨김.
+                if (showRow && window._ganttAlarmFilterActive && !rowData._알림) showRow = false;
 
                 if (showRow) {
                     tr.style.display = "";
@@ -233,6 +236,41 @@
             updateFilterVisibility();
         } catch(e) { console.error("Filter Apply Error: ", e); }
     }
+
+    // 💡 [2026-09-12 신규] AI 문답 로컬 명령 "알람" / "alarm" 으로 호출 — 알람이 설정된(_알림=true)
+    //    업무만 Gantt 에 표시하거나 원래대로 복귀. 화면 우하단에 주황색 배지를 띄워 필터 상태를 알리고,
+    //    배지 클릭으로도 해제할 수 있음. applyFilters() 가 같은 스코프 안에 있어 바로 호출 가능.
+    window._toggleAlarmFilter = function(on) {
+        window._ganttAlarmFilterActive = !!on;
+        var badge = document.getElementById('gantt-alarm-filter-badge');
+        if (on) {
+            if (!badge) {
+                badge = document.createElement('div');
+                badge.id = 'gantt-alarm-filter-badge';
+                badge.style.cssText = [
+                    'position:fixed', 'bottom:64px', 'right:16px', 'z-index:3100',
+                    'background:#e8590c', 'color:#fff', 'padding:5px 13px 5px 10px',
+                    'border-radius:20px', 'font-size:12px', 'font-weight:bold',
+                    'cursor:pointer', 'box-shadow:0 2px 8px rgba(0,0,0,0.28)',
+                    'display:flex', 'align-items:center', 'gap:6px', 'user-select:none',
+                    'transition:opacity .2s'
+                ].join(';');
+                badge.onclick = function() {
+                    window._toggleAlarmFilter(false);
+                    if (window.showToast) window.showToast(
+                        window._t ? window._t('✅ 알람 필터 꺼짐 — 전체 업무가 표시됩니다.', '✅ Alarm filter OFF — all tasks are now visible.') : '✅ 알람 필터 꺼짐', 'success');
+                };
+                document.body.appendChild(badge);
+            }
+            var _en = window._currentLang === 'en';
+            badge.innerHTML = '🔔 ' + (_en ? 'Alarm Filter&nbsp;<b>ON</b>' : '알람 필터&nbsp;<b>ON</b>') + '&nbsp;<span style="font-size:10px;opacity:0.85;">✕</span>';
+            badge.title = _en ? 'Click to turn off alarm filter' : '클릭하면 알람 필터 해제';
+            badge.style.display = 'flex';
+        } else {
+            if (badge) badge.style.display = 'none';
+        }
+        applyFilters();
+    };
 
     function updateFilterVisibility() {
         filterColumns.forEach(col => {
