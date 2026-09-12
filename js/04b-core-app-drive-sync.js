@@ -9,6 +9,19 @@
     window.intializeGapiClient = async function() {
         await gapi.client.init({ apiKey: API_KEY, discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'] });
         gapiInited = true;
+        // 🐛 [2026-09-12 버그 수정] "처음 로그인 직후 프로젝트 목록은 뜨는데 파일을 열면 401(인증 세션
+        //    만료)"의 실제 원인 — gapi.client.init()은 이미 gapi.client.setToken()으로 심어둔 OAuth
+        //    토큰을 지워버릴 수 있다(구글 라이브러리 자체의 알려진 동작). 첫 로그인처럼 네트워크가 느려
+        //    gapi.client.drive가 늦게 준비되면, 05-drive-sync-optimize.js의 로그인 재시도 루프가
+        //    (05-drive-sync-optimize.js:82~84) 이 함수를 한 번 더 호출하는데, 이 두 번째 init()이
+        //    로그인 성공 처리(gapi.client.setToken)보다 "늦게" 끝나버리면 방금 심은 토큰이 사라진다.
+        //    그 직후 파일 목록 조회(gapi.client.drive.files.list)는 이미 성공적으로 끝나 화면에 보이지만,
+        //    잠시 뒤 사용자가 프로젝트를 열 때(files.get)는 토큰이 사라진 채라 401이 났던 것.
+        //    이미 로그인해서 토큰을 알고 있으면(window.googleAccessToken) init() 직후 즉시 재적용해
+        //    이 레이스로 인한 토큰 유실을 막는다.
+        if (window.googleAccessToken) {
+            try { gapi.client.setToken({ access_token: window.googleAccessToken }); } catch (e) {}
+        }
     }
     
     window.gisLoaded = function() {
