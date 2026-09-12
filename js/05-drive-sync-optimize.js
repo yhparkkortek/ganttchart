@@ -52,6 +52,21 @@ window.handleAuthClick = function(event, silentOnly) {
             alert(window._t("⏳ 구글 인증 모듈을 준비 중입니다. 1~2초 뒤에 다시 클릭해 주세요.\n(지속적으로 안 될 경우 Ctrl+F5를 눌러주세요)", "⏳ Preparing the Google auth module. Please click again in 1-2 seconds.\n(If this persists, try Ctrl+F5)"));
             return;
         }
+        // 🐛 [2026-09-12 버그 수정] "로그인 직후 구글 인증 세션이 만료되었습니다(401)"의 실제 원인 —
+        //    자동로그인(_tryAutoLogin)·수동 클릭·12분 주기 조용한 갱신이 전부 하나의 공유 tokenClient를
+        //    같이 썼다. google.accounts.oauth2 tokenClient는 callback이 단 하나뿐인 가변 프로퍼티라서,
+        //    예를 들어 자동로그인이 조용히 응답을 기다리는 동안 사용자가 수동으로 [드라이브 연동하기]를
+        //    누르면 이 재할당으로 tokenClient.callback이 수동 로그인 콜백으로 바뀌는데, "나중에 도착하는"
+        //    자동로그인의 응답이 그 시점에 할당돼 있던 수동 로그인 콜백으로 잘못 전달되어 계정/토큰이
+        //    뒤섞였다 — 방금 로그인한 계정과 무관한(또는 이미 만료된) 토큰이 뒤늦게 gapi.client에 덮어써
+        //    곧바로(또는 다음 시도부터) 401이 났던 것. 자동로그인이 켜져 있으면 거의 항상 재현된다.
+        //    → 이 호출 전용의 독립된 tokenClient 인스턴스를 새로 만들어 다른 로그인 시도와 콜백 슬롯을
+        //    아예 공유하지 않게 하고, mySeq로 "이 응답을 처리하기 전에 더 최신 로그인 시도가 이미
+        //    시작됐는지"도 추가로 검증해 늦게 도착한(그러나 격리는 된) 응답이 최신 상태를 덮어쓰는
+        //    것까지 막는다.
+        const _myTokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '' });
+        window._authSeq = (window._authSeq || 0) + 1;
+        const _mySeq = window._authSeq;
         // 💡 [2026-09-03] Shift+클릭 = 계정 전환 모드.
         //    이전 이메일 hint가 있어서 항상 같은 계정으로만 자동 연결되던 문제 해결.
         const _isAccountSwitch = !silentOnly && !!(event && event.shiftKey);
@@ -64,6 +79,14 @@ window.handleAuthClick = function(event, silentOnly) {
 
         // 💡 조용한 시도/전체 동의 시도 둘 다 성공하면 완전히 동일한 후처리를 거쳐야 하므로 공용 함수로 뺌.
         const onAuthSuccess = async (resp) => {
+            // 🐛 [2026-09-12 버그 수정] 이 응답을 실제로 반영하기 직전, 그 사이 더 최신 로그인 시도가
+            //    시작되지는 않았는지 다시 확인한다 — 격리된 tokenClient를 쓰더라도(위 참고) 이 응답이
+            //    네트워크상 오래 걸려 늦게 도착했다면, 그 사이 이미 성공한 더 최신 로그인 결과를
+            //    뒤늦게 덮어쓸 수 있기 때문.
+            if (_mySeq !== window._authSeq) {
+                console.info('[구글 인증] 더 최신 로그인 시도가 이미 있어 이 응답은 무시합니다.', _mySeq, 'vs', window._authSeq);
+                return;
+            }
             gapi.client.setToken(resp);
             window.googleAccessToken = resp.access_token;
 
@@ -182,6 +205,9 @@ window.handleAuthClick = function(event, silentOnly) {
 
         // 💡 전체 동의 화면(prompt:'consent')까지 실패/취소한 경우에만 버튼을 원래 상태로 되돌린다.
         const onFinalFailure = (resp) => {
+            // 🐛 [2026-09-12 버그 수정] 이 실패도 더 최신 로그인 시도가 이미 성공한 뒤에 도착한 오래된
+            //    응답일 수 있다 — 그 경우 버튼을 "연동 안 됨" 상태로 잘못 되돌리지 않는다.
+            if (_mySeq !== window._authSeq) return;
             if (silentOnly) {
                 console.info('[자동로그인] 조용한 시도 실패 — 수동으로 [🔵 드라이브 연동하기]를 눌러주세요:', resp.error);
                 return; // 확전 없이 조용히 종료 (버튼 상태도 건드리지 않음)
@@ -224,28 +250,28 @@ window.handleAuthClick = function(event, silentOnly) {
         //     (silentOnly는 위에서 걸러져 항상 hint가 있으므로 여기선 무조건 [B] 경로만 탄다)
         if (_isAccountSwitch || !_emailHint) {
             // [A] 계정 선택창 바로 표시
-            tokenClient.callback = async (resp) => {
+            _myTokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) { onFinalFailure(resp); return; }
                 await onAuthSuccess(resp);
             };
-            tokenClient.requestAccessToken({ prompt: 'select_account' });
+            _myTokenClient.requestAccessToken({ prompt: 'select_account' });
         } else {
             // [B] 1차: 조용한 시도(prompt:'') — 이미 로그인+권한이 살아있으면 화면에 아무것도 안 띄우고 성공한다.
-            tokenClient.callback = async (resp) => {
+            _myTokenClient.callback = async (resp) => {
                 if (resp.error !== undefined) {
                     if (silentOnly) { onFinalFailure(resp); return; } // 자동로그인은 여기서 확전하지 않고 종료
                     console.info('[구글 인증] 조용한 재연동 실패 → 계정 선택창으로 전환:', resp.error);
                     // 2차: 조용한 시도가 실패했을 때만 계정 선택창으로 넘어간다(consent 전체화면보다 가볍고 깔끔).
-                    tokenClient.callback = async (resp2) => {
+                    _myTokenClient.callback = async (resp2) => {
                         if (resp2.error !== undefined) { onFinalFailure(resp2); return; }
                         await onAuthSuccess(resp2);
                     };
-                    tokenClient.requestAccessToken(_emailHint ? { prompt: 'select_account', hint: _emailHint } : { prompt: 'select_account' });
+                    _myTokenClient.requestAccessToken(_emailHint ? { prompt: 'select_account', hint: _emailHint } : { prompt: 'select_account' });
                     return;
                 }
                 await onAuthSuccess(resp);
             };
-            tokenClient.requestAccessToken({ prompt: '', hint: _emailHint });
+            _myTokenClient.requestAccessToken({ prompt: '', hint: _emailHint });
         }
     };
 
