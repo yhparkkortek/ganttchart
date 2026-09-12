@@ -70,18 +70,21 @@
         const countLabel = document.getElementById('holiday-count-label');
         if (!container) return;
         const list = window.getCustomHolidays();
+        const _hEn = window._currentLang === 'en';
         if (countLabel) {
             const totalDays = list.reduce(function(sum, h) { return sum + window._hDayDiff(h.date, h.endDate || h.date) + 1; }, 0);
-            countLabel.textContent = list.length + '건 (총 ' + totalDays + '일) 등록됨';
+            countLabel.textContent = _hEn
+                ? list.length + ' entries (' + totalDays + ' days total) registered'
+                : list.length + '건 (총 ' + totalDays + '일) 등록됨';
         }
         if (!list.length) {
-            container.innerHTML = '<div style="text-align:center; color:#adb5bd; padding:20px 0; font-size:12px;">등록된 추가 휴일이 없습니다.</div>';
+            container.innerHTML = '<div style="text-align:center; color:#adb5bd; padding:20px 0; font-size:12px;">' + (_hEn ? 'No additional holidays registered.' : '등록된 추가 휴일이 없습니다.') + '</div>';
             return;
         }
         container.innerHTML = list.map(function(h, idx) {
             const rangeLabel = (h.endDate && h.endDate !== h.date) ? (h.date + ' ~ ' + h.endDate) : h.date;
             return '<div style="display:flex; align-items:center; justify-content:space-between; padding:6px 4px; border-bottom:1px solid #f1f3f5; font-size:12px;">'
-                + '<span><b style="color:#2c5f8a;">' + rangeLabel + '</b> &nbsp; ' + (h.name ? _hEsc(h.name) : '<span style="color:#adb5bd;">(사유 없음)</span>') + '</span>'
+                + '<span><b style="color:#2c5f8a;">' + rangeLabel + '</b> &nbsp; ' + (h.name ? _hEsc(h.name) : '<span style="color:#adb5bd;">' + (_hEn ? '(no reason)' : '(사유 없음)') + '</span>') + '</span>'
                 + '<button onclick="window.removeCustomHoliday(' + idx + ')" onmouseover="this.style.background=\'#fbe4e2\';" onmouseout="this.style.background=\'none\';" style="border:none; background:none; color:#b1432f; cursor:pointer; font-size:13px; border-radius:4px; padding:2px 5px; transition:background .15s;">🗑️</button>'
                 + '</div>';
         }).join('');

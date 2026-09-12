@@ -2209,7 +2209,7 @@
                     <span>💬 <span id="gantt-qa-title">${_qEn ? 'AI Q&A' : 'AI 문답'}</span></span>
                     <div style="display:flex; gap:6px; align-items:center;">
                         <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:28px; white-space:nowrap; transition:background .15s;">🔇</button>
-                        <button onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
+                        <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
                         <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
@@ -2414,7 +2414,7 @@
                 <div id="gantt-qa-prompt-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>📝 <span id="gantt-qa-prompt-title">${_en ? 'AI Q&A — Edit Prompt' : 'AI 문답 — 프롬프트 편집'}</span></span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button onclick="event.stopPropagation(); window.showQaPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 이력</button>
+                        <button id="gantt-qa-history-btn" onclick="event.stopPropagation(); window.showQaPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 ${_en ? 'History' : '이력'}</button>
                         <button onclick="document.getElementById('gantt-qa-prompt-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
@@ -2429,7 +2429,7 @@
                     <button id="gantt-qa-prompt-unlock-btn" onclick="window.unlockGanttQaPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔒 수정하기</button>
                     <button id="gantt-qa-prompt-save-btn" onclick="window.saveGanttQaPromptFromModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">저장</button>
                     <button id="gantt-qa-prompt-reset-btn" onclick="window.resetGanttQaPromptInModal()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; min-width:120px; padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
-                    <button onclick="window.triggerGanttQaPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
+                    <button id="gantt-qa-batch-improve-btn" onclick="window.triggerGanttQaPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
                 </div>
             </div>`;
             document.body.appendChild(modal);
@@ -2445,7 +2445,9 @@
         document.getElementById('gantt-qa-prompt-textarea').value = current;
         const meta = window._ganttQaPromptDriveMeta;
         const metaEl = document.getElementById('gantt-qa-prompt-meta');
-        if (metaEl) metaEl.textContent = (meta && meta.updatedBy) ? `마지막 수정: ${meta.updatedBy} · ${meta.updatedAt}` : '';
+        if (metaEl) metaEl.textContent = (meta && meta.updatedBy)
+            ? (window._t('마지막 수정: ', 'Last edited: ') + `${meta.updatedBy} · ${meta.updatedAt}`)
+            : '';
 
         // 💡 팀 공용 프롬프트를 실수로 건드리지 않도록, 다른 프롬프트 편집창과 동일하게 열 때마다 잠금 상태로 초기화
         document.getElementById('gantt-qa-prompt-textarea').readOnly = true;
@@ -2460,8 +2462,8 @@
         notice.style.background = '#eef3f8';
         notice.style.color = '#495057';
         notice.textContent = window.isDriveConnected
-            ? '💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.'
-            : '⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.';
+            ? window._t('💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.', '💡 This is the shared team prompt (Drive). Admin password required to edit.')
+            : window._t('⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.', '⚠️ Google Drive is not connected — this is stored only on this PC and not shared with the team. Admin password required to edit.');
 
         modal.style.display = 'block';
         window.bringModalToFront('gantt-qa-prompt-modal');
@@ -2480,7 +2482,10 @@
         const memoEl = document.getElementById('gantt-qa-save-memo');
         if (memoEl) memoEl.style.display = 'block';
         const notice = document.getElementById('gantt-qa-prompt-notice');
-        notice.textContent = '✏️ 프롬프트를 자유롭게 수정하세요. "${todayStr}"·"${taskListText}"·"${question}" 처럼 "${...}"로 표시된 자리는 실제 답변 생성 시 데이터로 자동 치환되니 그대로 유지하세요(지우거나 철자를 바꾸면 그 자리엔 데이터 대신 글자 그대로 나갑니다).';
+        notice.textContent = window._t(
+            '✏️ 프롬프트를 자유롭게 수정하세요. "${todayStr}"·"${taskListText}"·"${question}" 처럼 "${...}"로 표시된 자리는 실제 답변 생성 시 데이터로 자동 치환되니 그대로 유지하세요(지우거나 철자를 바꾸면 그 자리엔 데이터 대신 글자 그대로 나갑니다).',
+            '✏️ Feel free to edit the prompt. Placeholders like "${todayStr}"·"${taskListText}"·"${question}" — anything written as "${...}" — are automatically replaced with real data when generating an answer, so keep them as-is (deleting or misspelling one makes it appear literally instead of the data).'
+        );
         notice.style.color = '#0056b3';
         notice.style.background = '#e7f1ff';
     };
@@ -2551,13 +2556,15 @@
     };
 
     window.showQaPromptLogs = function() {
+        // 💡 [2026-09-12 i18n] showPsPromptLogs와 동일한 이유로 _en을 함수 최상단으로 끌어올림 —
+        // 표(html)는 열 때마다 새로 그려지므로 if(!logModal) 블록 밖에서도 필요함.
+        const _en = window._currentLang === 'en';
         let logs = JSON.parse(localStorage.getItem('gantt_qa_prompt_logs') || '[]');
         let versions = JSON.parse(localStorage.getItem('gantt_qa_prompt_versions') || '[]');
         if (logs.length === 0) { alert(window._t('프롬프트 변경 이력이 없습니다.', 'No prompt change history.')); return; }
 
         let logModal = document.getElementById('gantt-qa-prompt-log-modal');
         if (!logModal) {
-            const _en = window._currentLang === 'en';
             logModal = document.createElement('div');
             logModal.id = 'gantt-qa-prompt-log-modal';
             logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none; background:none; align-items:center; justify-content:center;';
@@ -2572,12 +2579,12 @@
                                    display:flex; align-items:center; justify-content:center; transition:0.15s;"
                             onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
                             onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-                            title="닫기">✕</button>
+                            title="${_en ? 'Close' : '닫기'}">✕</button>
                     </div>
                     <div id="gantt-qa-prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
                     <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">
-                        <button onclick="window.clearQaPromptLogs()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1;padding:10px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;transition:background .15s, border-color .15s;">🗑️ 이력 삭제</button>
-                        <button onclick="document.getElementById('gantt-qa-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">닫기</button>
+                        <button id="gantt-qa-prompt-log-clear-btn" onclick="window.clearQaPromptLogs()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1;padding:10px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;transition:background .15s, border-color .15s;">🗑️ ${_en ? 'Delete History' : '이력 삭제'}</button>
+                        <button id="gantt-qa-prompt-log-close-btn" onclick="document.getElementById('gantt-qa-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">${_en ? 'Close' : '닫기'}</button>
                     </div>
                 </div>`;
             document.body.appendChild(logModal);
@@ -2591,11 +2598,13 @@
         //    table-layout:fixed + colgroup으로 각 열 너비를 고정폭 비율로 미리 확보해서, 브라우저가
         //    내용 길이에 따라 열 너비를 제멋대로 줄이지 못하게 막는다.
         let html = '<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px;"><colgroup><col style="width:14%;"><col style="width:11%;"><col style="width:33%;"><col style="width:33%;"><col style="width:9%;"></colgroup>';
-        html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
+        html += _en
+            ? '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">Time</th><th style="padding:8px;border:1px solid #dee2e6;">Editor</th><th style="padding:8px;border:1px solid #dee2e6;">Before (first 200 chars)</th><th style="padding:8px;border:1px solid #dee2e6;">After (first 200 chars)</th><th style="padding:8px;border:1px solid #dee2e6;">Restore</th></tr>'
+            : '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
         [...logs].reverse().forEach((log) => {
             const matched = versions.find(v => v.time === log.time);
             const restoreBtn = matched
-                ? `<button onclick="window.restoreQaPromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 복원</button>`
+                ? `<button onclick="window.restoreQaPromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 ${_en ? 'Restore' : '복원'}</button>`
                 : `<span style="font-size:10px; color:#ccc;">-</span>`;
             html += `<tr>
                 <td style="padding:8px;border:1px solid #dee2e6;color:#6c757d; word-break:break-word;">${log.time}</td>

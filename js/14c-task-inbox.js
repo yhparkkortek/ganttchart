@@ -229,6 +229,10 @@ var _TI_STATUS_STYLE = {
     '전송됨':     { bg: '#e7f3ff', fg: '#1971c2', emoji: '🔵' },
     '배치됨':     { bg: '#e6f6ea', fg: '#1f7a3d', emoji: '🟢' }
 };
+// 💡 [2026-09-12 i18n] 요약 칩(_tiBuildSummaryHtml)과 카드 배지(renderTaskInboxList) 양쪽에서
+// 공유하는 상태명 영문 매핑 — 예전엔 요약 칩 쪽에 이 매핑이 아예 없어서 영문 모드에서도
+// "자동배치됨/대기/전송됨/배치됨"이 그대로 노출되고 있었음.
+var _TI_STATUS_LABEL_EN = { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed' };
 
 /** 업무 1건이 매칭된 프로젝트명 (없으면 noMatchLabel) — 요약 집계·필터 양쪽에서 재사용 */
 function _tiProjectOf(it, noMatchLabel) {
@@ -280,7 +284,8 @@ window._tiBuildSummaryHtml = function(items) {
         `style="cursor:pointer;text-decoration:underline dotted;"><b>${_en ? 'Total' : '전체'} ${items.length}${_en ? '' : '건'}</b></span> — ` +
         statusTop.map(e => {
             const sc = _TI_STATUS_STYLE[e[0]] || { bg: '#eef3ff', fg: '#1a4f7a' };
-            return chip(e[0], e[1], sc.bg, sc.fg, e[0], null);
+            const label = _en ? (_TI_STATUS_LABEL_EN[e[0]] || e[0]) : e[0];
+            return chip(label, e[1], sc.bg, sc.fg, e[0], null);
         }).join('') + `</div>`;
 
     // 💡 [2026-09-06 개선] "자리를 많이 차지한다"는 피드백 — 기본으로는 위 상태별 건수 줄만 보이고,
@@ -295,11 +300,13 @@ window._tiBuildSummaryHtml = function(items) {
             const dates = subset.map(x => (x.addedAt || '').slice(0, 10)).filter(Boolean).sort();
             const range = dates.length ? `${dates[0]} ~ ${dates[dates.length - 1]}` : '';
             const sc = _TI_STATUS_STYLE[st] || { bg: '#eef3ff', fg: '#1a4f7a', emoji: '🔹' };
-            html += `<div style="margin-top:6px;"><b>${sc.emoji} ${st} ${subset.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
+            const stLabel = _en ? (_TI_STATUS_LABEL_EN[st] || st) : st;
+            html += `<div style="margin-top:6px;"><b>${sc.emoji} ${stLabel} ${subset.length}${_en ? '' : '건'} ${_en ? 'by project' : '프로젝트별'}:</b><br>` +
                 byProject.map(e => chip(e[0], e[1], sc.bg, sc.fg, st, e[0])).join('') +
                 (range ? `<span style="color:#999;margin-left:4px;">(${escapeHtml(range)})</span>` : '') + `</div>`;
         }
-        const filterLabel = filter.project ? `${filter.status} · ${filter.project}` : filter.status;
+        const filterStatusLabel = _en ? (_TI_STATUS_LABEL_EN[filter.status] || filter.status) : filter.status;
+        const filterLabel = filter.project ? `${filterStatusLabel} · ${filter.project}` : filterStatusLabel;
         html += `<div style="margin-top:8px;"><span style="font-size:11px;color:#1971c2;font-weight:bold;">🔎 ${_en ? 'Filtered' : '필터링 중'}: ${escapeHtml(filterLabel)}</span></div>`;
     }
     html += `</div>`;
@@ -359,7 +366,7 @@ window.renderTaskInbox = function() {
     const l0List = window.getCurrentL0List();
     const statusStyle = { '대기': 'background:#fff3e0;color:#e67e22;', '배치됨': 'background:#d4edda;color:#2f9e44;', '전송됨': 'background:#e7f3ff;color:#1971c2;', '자동배치됨': 'background:#f3f0ff;color:#7048e8;' };
     const statusLabel = _ibEn
-        ? { '대기': 'Pending', '배치됨': 'Placed', '전송됨': 'Sent', '자동배치됨': 'Auto-placed' }
+        ? _TI_STATUS_LABEL_EN
         : { '대기': '대기', '배치됨': '배치됨', '전송됨': '전송됨', '자동배치됨': '자동배치됨' };
     let html = '';
     filteredItems.forEach(function(it) {

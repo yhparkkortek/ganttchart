@@ -423,30 +423,35 @@
     window._refreshTopicProfileBadge = function() {
         var badge = document.getElementById('topic-profile-badge');
         if (!badge) return;
+        var _en = window._currentLang === 'en';
         var profile = window._getTopicProfile();
         if (profile && profile.ts) {
             var d    = new Date(profile.ts);
             var ageMin  = Math.round((Date.now() - d) / 60000);
             var ageDays = Math.round(ageMin / 1440);
-            var ageLabel = ageMin < 60  ? ageMin + '분 전'
-                         : ageMin < 1440 ? Math.round(ageMin / 60) + '시간 전'
-                         :                 ageDays + '일 전';
+            var ageLabel = _en
+                ? (ageMin < 60 ? ageMin + 'm ago' : ageMin < 1440 ? Math.round(ageMin / 60) + 'h ago' : ageDays + 'd ago')
+                : (ageMin < 60 ? ageMin + '분 전' : ageMin < 1440 ? Math.round(ageMin / 60) + '시간 전' : ageDays + '일 전');
 
             // 수집 기간 메타 (구버전 프로파일엔 없을 수 있음)
             var cp = profile.collectedPeriod;
             var periodLabel = cp
-                ? ' · 최근 ' + cp.recentDays + '일/' + cp.recentCount + '건 + 전체 ' + cp.totalCount + '건'
-                : (profile.taskCount ? ' · ' + profile.taskCount + '개 업무' : '');
+                ? (_en
+                    ? ' · last ' + cp.recentDays + 'd/' + cp.recentCount + ' + total ' + cp.totalCount
+                    : ' · 최근 ' + cp.recentDays + '일/' + cp.recentCount + '건 + 전체 ' + cp.totalCount + '건')
+                : (profile.taskCount ? (_en ? ' · ' + profile.taskCount + ' task(s)' : ' · ' + profile.taskCount + '개 업무') : '');
 
             // 신선도 경고: 30일 초과 시 ⚠️
             var stale = ageDays >= 30;
-            badge.innerHTML = (stale ? '⚠️ ' : '✅ ') + ageLabel + '에 생성됨' + periodLabel;
+            badge.innerHTML = (stale ? '⚠️ ' : '✅ ') + (_en ? 'Generated ' + ageLabel : ageLabel + '에 생성됨') + periodLabel;
             badge.style.color = stale ? '#a85d0a' : '#1f6a3a';
             badge.title = stale
-                ? '프로파일이 ' + ageDays + '일 지났습니다. 재생성을 권장합니다.'
-                : '생성: ' + d.toLocaleDateString() + (cp ? ' (최근 ' + cp.recentDays + '일 업무 기준)' : '');
+                ? (_en ? 'The profile is ' + ageDays + ' day(s) old. Regenerating it is recommended.' : '프로파일이 ' + ageDays + '일 지났습니다. 재생성을 권장합니다.')
+                : (_en
+                    ? 'Generated: ' + d.toLocaleDateString() + (cp ? ' (based on the last ' + cp.recentDays + ' days of tasks)' : '')
+                    : '생성: ' + d.toLocaleDateString() + (cp ? ' (최근 ' + cp.recentDays + '일 업무 기준)' : ''));
         } else {
-            badge.textContent = '⚪ 프로파일 없음';
+            badge.textContent = _en ? '⚪ No profile' : '⚪ 프로파일 없음';
             badge.style.color = '#aaa';
         }
     };
@@ -526,6 +531,9 @@
     window._showTopicProfileViewer = async function() {
         var existing = document.getElementById('tp-viewer-overlay');
         if (existing) { existing.remove(); return; }
+        // 💡 [2026-09-12 i18n] 이 모달은 매번 새로 생성/삭제되는 구조(overlay.remove() 후 재호출)라
+        // toggleLang()의 사후 갱신을 탈 필요 없이, 열 때마다 현재 언어를 그대로 반영하면 됨.
+        var _en = window._currentLang === 'en';
 
         var overlay = document.createElement('div');
         overlay.id = 'tp-viewer-overlay';
@@ -549,11 +557,13 @@
         hdr.style.cssText = 'background:#e7f3ff;color:#1971c2;padding:13px 18px;font-size:14px;font-weight:bold;border-bottom:1px solid #a5c8f0;' +
             'border-radius:12px 12px 0 0;display:flex;align-items:center;gap:10px;flex-shrink:0;' +
             'cursor:grab;user-select:none;';
-        hdr.innerHTML = '<span style="flex:1;">📊 토픽 프로파일 뷰어</span>';
+        hdr.innerHTML = '<span style="flex:1;">📊 ' + (_en ? 'Topic Profile Viewer' : '토픽 프로파일 뷰어') + '</span>';
         // 💡 [2026-09-06 신규] AI 재호출 없이 로컬에서 즉시 범용 WBS 용어(PROTO/TOOLING/METAL 등) 제거
         var reFilterBtn = document.createElement('button');
-        reFilterBtn.textContent = '🧹 범용용어 정리';
-        reFilterBtn.title = '이미 저장된 프로파일에서 PROTO·TOOLING·METAL 같은 범용 WBS 용어를 keywords에서 제거합니다 (AI 재호출 없음)';
+        reFilterBtn.textContent = _en ? '🧹 Clean Generic Terms' : '🧹 범용용어 정리';
+        reFilterBtn.title = _en
+            ? 'Removes generic WBS terms like PROTO/TOOLING/METAL from keywords in already-saved profiles (no AI call)'
+            : '이미 저장된 프로파일에서 PROTO·TOOLING·METAL 같은 범용 WBS 용어를 keywords에서 제거합니다 (AI 재호출 없음)';
         reFilterBtn.style.cssText = 'background:#e7f3ff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:#1971c2;padding:3px 10px;transition:background .15s;';
         reFilterBtn.addEventListener('mouseover', function() { this.style.background = '#cce0ff'; });
         reFilterBtn.addEventListener('mouseout',  function() { this.style.background = '#e7f3ff'; });
@@ -561,7 +571,9 @@
             e.stopPropagation();
             var r = window._tpReapplyGenericFilter();
             if (window.showToast) window.showToast(
-                r.changed ? ('🧹 프로젝트 ' + r.changed + '개에서 범용 키워드 ' + r.removed + '개 제거됨') : '제거할 범용 키워드가 없습니다',
+                r.changed
+                    ? (_en ? ('🧹 Removed ' + r.removed + ' generic keyword(s) from ' + r.changed + ' project(s)') : ('🧹 프로젝트 ' + r.changed + '개에서 범용 키워드 ' + r.removed + '개 제거됨'))
+                    : (_en ? 'No generic keywords to remove' : '제거할 범용 키워드가 없습니다'),
                 'info', 3500);
             overlay.remove();
             window._showTopicProfileViewer();
@@ -570,8 +582,10 @@
         // 💡 [2026-09-06 신규] "같은 프로젝트가 중복 생성되는 것 같다" 제보 대응 — 구버전 fileName 키를
         //    최신 fileId 키로 병합/정리(AI 재호출 없음). 카드에 "⚠️파일명" 배지가 보이면 이 버튼으로 정리.
         var migrateBtn = document.createElement('button');
-        migrateBtn.textContent = '🔀 중복 정리';
-        migrateBtn.title = '"⚠️파일명" 배지가 붙은 구버전 항목을 최신 프로젝트(ID)로 병합하거나 정리합니다 (AI 재호출 없음)';
+        migrateBtn.textContent = _en ? '🔀 Clean Up Duplicates' : '🔀 중복 정리';
+        migrateBtn.title = _en
+            ? 'Merges or cleans up legacy items marked with a "⚠️filename" badge into the current project (by ID) (no AI call)'
+            : '"⚠️파일명" 배지가 붙은 구버전 항목을 최신 프로젝트(ID)로 병합하거나 정리합니다 (AI 재호출 없음)';
         migrateBtn.style.cssText = 'background:#e7f3ff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:#1971c2;padding:3px 10px;transition:background .15s;';
         migrateBtn.addEventListener('mouseover', function() { this.style.background = '#cce0ff'; });
         migrateBtn.addEventListener('mouseout',  function() { this.style.background = '#e7f3ff'; });
@@ -579,15 +593,17 @@
             e.stopPropagation();
             var r = await window._tpMigrateLegacyKeys();
             var msg = (r.migrated || r.dropped)
-                ? ('🔀 병합 ' + r.migrated + '건, 중복 제거 ' + r.dropped + '건' + (r.unresolved ? (' · 미해결 ' + r.unresolved + '건(프로젝트 못 찾음)') : ''))
-                : '정리할 구버전 항목이 없습니다';
+                ? (_en
+                    ? ('🔀 Merged ' + r.migrated + ', removed ' + r.dropped + ' duplicate(s)' + (r.unresolved ? (' · ' + r.unresolved + ' unresolved (project not found)') : ''))
+                    : ('🔀 병합 ' + r.migrated + '건, 중복 제거 ' + r.dropped + '건' + (r.unresolved ? (' · 미해결 ' + r.unresolved + '건(프로젝트 못 찾음)') : '')))
+                : (_en ? 'No legacy items to clean up' : '정리할 구버전 항목이 없습니다');
             if (window.showToast) window.showToast(msg, 'info', 4000);
             overlay.remove();
             window._showTopicProfileViewer();
         };
         hdr.appendChild(migrateBtn);
         var clearAllBtn = document.createElement('button');
-        clearAllBtn.textContent = '🗑 전체 삭제';
+        clearAllBtn.textContent = _en ? '🗑 Delete All' : '🗑 전체 삭제';
         // 💡 [2026-09-04] 헤더와 동일 배경색(#e7f3ff/#1971c2) + hover + 테두리 없음
         clearAllBtn.style.cssText = 'background:#e7f3ff;border:none;border-radius:6px;font-size:11.5px;cursor:pointer;color:#1971c2;padding:3px 10px;transition:background .15s;';
         clearAllBtn.addEventListener('mouseover', function() { this.style.background = '#cce0ff'; });
@@ -693,9 +709,9 @@
         } catch(e) {}
 
         if (!keys.length) {
-            body.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px;">⚪ 저장된 토픽 프로파일이 없습니다.<br><br>' +
+            body.innerHTML = '<div style="text-align:center;padding:30px;color:#888;font-size:13px;">⚪ ' + (_en ? 'No saved topic profiles.' : '저장된 토픽 프로파일이 없습니다.') + '<br><br>' +
                 '<button onclick="window._generateTopicProfile && window._generateTopicProfile()" ' +
-                'style="padding:8px 18px;background:#eaf7ea;color:#1f6a3a;border:1px solid #a8dab8;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;">📊 현재 프로젝트 프로파일 생성</button></div>';
+                'style="padding:8px 18px;background:#eaf7ea;color:#1f6a3a;border:1px solid #a8dab8;border-radius:6px;cursor:pointer;font-size:13px;font-weight:bold;">📊 ' + (_en ? 'Generate profile for current project' : '현재 프로젝트 프로파일 생성') + '</button></div>';
             document.body.appendChild(overlay);
             return;
         }
@@ -717,7 +733,9 @@
             var d = p.ts ? new Date(p.ts) : null;
             var ago = d ? (function() {
                 var min = Math.round((Date.now() - d) / 60000);
-                return min < 60 ? min + '분 전' : min < 1440 ? Math.round(min/60) + '시간 전' : Math.round(min/1440) + '일 전';
+                return _en
+                    ? (min < 60 ? min + 'm ago' : min < 1440 ? Math.round(min/60) + 'h ago' : Math.round(min/1440) + 'd ago')
+                    : (min < 60 ? min + '분 전' : min < 1440 ? Math.round(min/60) + '시간 전' : Math.round(min/1440) + '일 전');
             })() : '';
             var kwChips = (p.keywords || []).map(function(kw) {
                 return '<span style="display:inline-block;padding:2px 8px;margin:2px 2px 2px 0;background:#e8f4fd;color:#1a4f7a;border-radius:10px;font-size:11.5px;">' + kw + '</span>';
@@ -733,18 +751,20 @@
             var _isFileId = /^[A-Za-z0-9_\-]{25,}$/.test(k);
             var _keyBadge = _isFileId
                 ? '<span style="font-size:9px;color:#888;background:#e8f0fe;border:1px solid #c5d5f8;border-radius:4px;padding:1px 5px;margin-left:4px;" title="Drive fileId: ' + k + '">ID</span>'
-                : '<span style="font-size:9px;color:#a05000;background:#fff3e0;border:1px solid #ffcc80;border-radius:4px;padding:1px 5px;margin-left:4px;" title="구버전 fileName 키: ' + k + '">⚠️파일명</span>';
+                : '<span style="font-size:9px;color:#a05000;background:#fff3e0;border:1px solid #ffcc80;border-radius:4px;padding:1px 5px;margin-left:4px;" title="' + (_en ? 'Legacy fileName key: ' : '구버전 fileName 키: ') + k + '">' + (_en ? '⚠️filename' : '⚠️파일명') + '</span>';
             var safeCardId = 'tp-card-' + k.replace(/[^a-zA-Z0-9]/g, '_');
+            var agoText = ago ? (_en ? 'Created ' + ago : ago + ' 생성') : '';
+            var taskCountText = p.taskCount ? (_en ? ' · ' + p.taskCount + ' task(s)' : ' · ' + p.taskCount + '개 업무') : '';
             html += '<div id="' + safeCardId + '" style="border:' + (isCur ? '2px solid #1971c2' : '1px solid #dee2e6') + ';border-radius:10px;padding:12px 14px;margin-bottom:12px;background:' + (isCur ? '#f0f8ff' : '#fafafa') + ';">' +
                 '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
                   '<span style="font-size:13px;font-weight:bold;color:' + (isCur ? '#1971c2' : '#333') + ';flex:1;">' + (isCur ? '🔵 ' : '') + projName + _keyBadge + '</span>' +
-                  '<button onclick="window._tpDeleteOne(\'' + k.replace(/'/g, '') + '\')" title="이 프로파일 삭제" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;">🗑 삭제</button>' +
-                  '<span style="font-size:10px;color:#aaa;">' + (ago ? ago + ' 생성' : '') + (p.taskCount ? ' · ' + p.taskCount + '개 업무' : '') + '</span>' +
+                  '<button onclick="window._tpDeleteOne(\'' + k.replace(/'/g, '') + '\')" title="' + (_en ? 'Delete this profile' : '이 프로파일 삭제') + '" style="padding:2px 8px;font-size:11px;color:#e03131;background:#fff5f5;border:1px solid #f5c6cb;border-radius:6px;cursor:pointer;">🗑 ' + (_en ? 'Delete' : '삭제') + '</button>' +
+                  '<span style="font-size:10px;color:#aaa;">' + agoText + taskCountText + '</span>' +
                 '</div>' +
                 (p.summary ? '<div style="font-size:12px;color:#2c5f8a;background:#e7f3ff;padding:6px 10px;border-radius:6px;margin-bottom:8px;">' + p.summary + '</div>' : '') +
-                (kwChips ? '<div style="margin-bottom:6px;"><div style="font-size:11px;color:#888;margin-bottom:3px;">🔑 키워드</div>' + kwChips + '</div>' : '') +
-                (topics ? '<div style="margin-bottom:4px;"><div style="font-size:11px;color:#888;margin-bottom:2px;">📂 업무 유형</div>' + topics + '</div>' : '') +
-                (patterns ? '<div><div style="font-size:11px;color:#888;margin-bottom:2px;">💡 패턴</div>' + patterns + '</div>' : '') +
+                (kwChips ? '<div style="margin-bottom:6px;"><div style="font-size:11px;color:#888;margin-bottom:3px;">🔑 ' + (_en ? 'Keywords' : '키워드') + '</div>' + kwChips + '</div>' : '') +
+                (topics ? '<div style="margin-bottom:4px;"><div style="font-size:11px;color:#888;margin-bottom:2px;">📂 ' + (_en ? 'Task Types' : '업무 유형') + '</div>' + topics + '</div>' : '') +
+                (patterns ? '<div><div style="font-size:11px;color:#888;margin-bottom:2px;">💡 ' + (_en ? 'Patterns' : '패턴') + '</div>' + patterns + '</div>' : '') +
                 '</div>';
         });
         body.innerHTML = html;

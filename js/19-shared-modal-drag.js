@@ -476,7 +476,27 @@ window._minimizeModal = function(modalId, handleId, closeBtn, handle) {
     });
     observer.observe(toggleEl, { attributes: true, attributeFilter: ['style'] });
 
-    window._modalMinimized[modalId] = { toggleEl: toggleEl, prevDisplay: prevDisplay, chip: chip, observer: observer };
+    // 💡 [2026-09-12 i18n] handle을 같이 저장해서, 나중에 언어를 토글해도 이 칩의 라벨을 다시
+    // 계산할 수 있게 함 — _refreshMinimizedChipLabels() 참고.
+    window._modalMinimized[modalId] = { toggleEl: toggleEl, prevDisplay: prevDisplay, chip: chip, observer: observer, handle: handle };
+};
+
+// 💡 [2026-09-12 i18n 버그수정] 페이지 로드 시 자동 최소화되는 모달(AI 문답/AI 요약/AI 업무분석 등)은
+// 앱이 기본 한글 상태일 때 이미 칩이 만들어져 라벨이 그 시점 언어로 고정돼 있었다 — 이후 사용자가
+// 영문으로 토글해도 모달 자신의 제목(handle 안)은 갱신되는데, 이미 만들어진 타스크바 칩의
+// mtc-label은 아무도 다시 안 읽어서 계속 한글로 남아있었다(전수 점검 2차에서 "AI 문답"/"AI 요약"
+// 칩이 영문 모드에서도 한글로 보인다는 제보). toggleLang()이 다른 모든 제목 갱신을 끝낸 뒤 이 함수를
+// 호출하면, 현재 최소화된 모든 칩의 라벨을 그 시점의(이미 갱신된) handle 텍스트로 다시 뽑아온다.
+window._refreshMinimizedChipLabels = function() {
+    Object.keys(window._modalMinimized || {}).forEach(function(modalId) {
+        const info = window._modalMinimized[modalId];
+        if (!info || !info.chip || !info.handle) return;
+        const label = info.chip.querySelector('.mtc-label');
+        if (!label) return;
+        const text = _modalTitleFor(info.handle, modalId);
+        label.textContent = text;
+        label.title = text;
+    });
 };
 
 // 💡 [2026-09-02 개선] ▲ 클릭 시 모달을 열되 칩은 유지 — 잘못 열었을 때 ▼를 다시 누르면

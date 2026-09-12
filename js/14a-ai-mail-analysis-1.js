@@ -339,7 +339,7 @@ window.refreshAiKeyPanel = function() {
 
 window.populateInsertPosition = function() {
     const select = document.getElementById('mail-insert-position');
-    select.innerHTML = '<option value="-1">맨 마지막에 추가</option>';
+    select.innerHTML = '<option value="-1">' + (window._currentLang === 'en' ? 'Append at end' : '맨 마지막에 추가') + '</option>';
     if (!globalData || globalData.length <= 1) return;
     
     for (let i = 1; i < globalData.length; i++) {

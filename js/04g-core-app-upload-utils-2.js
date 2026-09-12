@@ -11,13 +11,17 @@
     // ── 💡 프롬프트 변경 이력 모달 — 메일분석의 방금 고친(단일 ✕, 드래그 가능, 배경 비차단) 표준
     //    패턴을 그대로 따름 ──────────────────────────────────────────────
     window.showPsPromptLogs = function() {
+        // 💡 [2026-09-12 i18n] 아래 표(html)는 열 때마다 새로 그려지므로 이 함수 전체 스코프에서
+        // _en을 참조할 수 있어야 함 — 예전엔 if(!logModal) 블록 안에서만 const로 선언돼 있어서
+        // 모달 뼈대(제목 등)만 언어를 타고, 정작 매번 다시 그리는 표 헤더/하단 버튼은 늘 한글
+        // 고정이었음.
+        const _en = window._currentLang === 'en';
         let logs = JSON.parse(localStorage.getItem('gantt_project_summary_prompt_logs') || '[]');
         let versions = JSON.parse(localStorage.getItem('gantt_project_summary_prompt_versions') || '[]');
         if (logs.length === 0) { alert(window._t('프롬프트 변경 이력이 없습니다.', 'No prompt change history.')); return; }
 
         let logModal = document.getElementById('ps-prompt-log-modal');
         if (!logModal) {
-            const _en = window._currentLang === 'en';
             logModal = document.createElement('div');
             logModal.id = 'ps-prompt-log-modal';
             logModal.style.cssText = 'display:none; position:fixed; inset:0; z-index:9260; pointer-events:none; background:none; align-items:center; justify-content:center;';
@@ -32,12 +36,12 @@
                                    display:flex; align-items:center; justify-content:center; transition:0.15s;"
                             onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';"
                             onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';"
-                            title="닫기">✕</button>
+                            title="${_en ? 'Close' : '닫기'}">✕</button>
                     </div>
                     <div id="ps-prompt-log-content" style="padding:15px;overflow-y:auto;flex:1;"></div>
                     <div style="padding:15px;border-top:1px solid #dee2e6;display:flex;gap:6px;">
-                        <button onclick="window.clearPsPromptLogs()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1;padding:10px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;transition:background .15s, border-color .15s;">🗑️ 이력 삭제</button>
-                        <button onclick="document.getElementById('ps-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">닫기</button>
+                        <button id="ps-prompt-log-clear-btn" onclick="window.clearPsPromptLogs()" onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';" style="flex:1;padding:10px;background:#fbe4e2;color:#b1432f;border:1px solid #eeb0ac;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer;transition:background .15s, border-color .15s;">🗑️ ${_en ? 'Delete History' : '이력 삭제'}</button>
+                        <button id="ps-prompt-log-close-btn" onclick="document.getElementById('ps-prompt-log-modal').style.display='none'" onmouseover="this.style.background='#e9ecef'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='#f8f9fa'; this.style.borderColor='#ccc';" style="flex:1;padding:10px;background:#f8f9fa;color:#555;border:1px solid #ccc;border-radius:6px;font-size:13px;cursor:pointer;transition:background .15s, border-color .15s;">${_en ? 'Close' : '닫기'}</button>
                     </div>
                 </div>`;
             document.body.appendChild(logModal);
@@ -51,11 +55,13 @@
         //    table-layout:fixed + colgroup으로 각 열 너비를 고정폭 비율로 미리 확보해서, 브라우저가
         //    내용 길이에 따라 열 너비를 제멋대로 줄이지 못하게 막는다.
         let html = '<table style="width:100%; table-layout:fixed; border-collapse:collapse; font-size:12px;"><colgroup><col style="width:14%;"><col style="width:11%;"><col style="width:33%;"><col style="width:33%;"><col style="width:9%;"></colgroup>';
-        html += '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
+        html += _en
+            ? '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">Time</th><th style="padding:8px;border:1px solid #dee2e6;">Editor</th><th style="padding:8px;border:1px solid #dee2e6;">Before (first 200 chars)</th><th style="padding:8px;border:1px solid #dee2e6;">After (first 200 chars)</th><th style="padding:8px;border:1px solid #dee2e6;">Restore</th></tr>'
+            : '<tr style="background:#f8f9fa;"><th style="padding:8px;border:1px solid #dee2e6;">변경일시</th><th style="padding:8px;border:1px solid #dee2e6;">수정자</th><th style="padding:8px;border:1px solid #dee2e6;">변경 전 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">변경 후 (앞 200자)</th><th style="padding:8px;border:1px solid #dee2e6;">복원</th></tr>';
         [...logs].reverse().forEach((log) => {
             const matched = versions.find(v => v.time === log.time);
             const restoreBtn = matched
-                ? `<button onclick="window.restorePsPromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 복원</button>`
+                ? `<button onclick="window.restorePsPromptVersion(${matched.version})" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="font-size:11px; padding:4px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 ${_en ? 'Restore' : '복원'}</button>`
                 : `<span style="font-size:10px; color:#ccc;">-</span>`;
             html += `<tr>
                 <td style="padding:8px;border:1px solid #dee2e6;color:#6c757d; word-break:break-word;">${log.time}</td>

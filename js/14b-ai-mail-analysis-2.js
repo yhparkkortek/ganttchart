@@ -727,8 +727,12 @@ window.formatYM = function(ts) {
 };
 
 window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
+    // 💡 [2026-09-12 i18n] 이 함수의 previewLabel은 업무 보관함(Task Inbox)의 미리보기 줄
+    // (inbox-preview-*)에 그대로 노출되는데, 언어 분기가 아예 없어서 영문 모드에서도 항상
+    // 한글로만 표시되고 있었음.
+    var _cliEn = window._currentLang === 'en';
     if (l0Value === '__END__' || !rows || rows.length <= 1) {
-        return { pos: rows ? rows.length : 0, usedDateMatch: false, previewLabel: '📍 맨 끝에 추가' };
+        return { pos: rows ? rows.length : 0, usedDateMatch: false, previewLabel: _cliEn ? '📍 Append at end' : '📍 맨 끝에 추가' };
     }
     // 구간 범위 탐색
     let first = -1, last = -1;
@@ -756,9 +760,9 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
         }
     }
     if (first === -1) {
-        return { pos: rows.length, usedDateMatch: false, previewLabel: '⚠️ 해당 구간을 찾지 못해 맨 끝에 추가됩니다.' };
+        return { pos: rows.length, usedDateMatch: false, previewLabel: _cliEn ? '⚠️ Section not found — appended at the end.' : '⚠️ 해당 구간을 찾지 못해 맨 끝에 추가됩니다.' };
     }
-    const fallback = { pos: last + 1, usedDateMatch: false, previewLabel: `📍 [${l0Value}] 구간 끝에 추가` };
+    const fallback = { pos: last + 1, usedDateMatch: false, previewLabel: _cliEn ? `📍 Added to the end of [${l0Value}]` : `📍 [${l0Value}] 구간 끝에 추가` };
     if (!useAuto) return fallback;
 
     const startTs = (startDateStr && !startDateStr.includes('날짜확인필요') && typeof parseDateValue === 'function' && parseDateValue(startDateStr))
@@ -781,7 +785,9 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
     const pos = Math.max(bestIndex + 1, first);
     const anchorRow = rows[pos];
     const anchorName = anchorRow ? (anchorRow._origDev || anchorRow._origT1 || anchorRow._origT2 || anchorRow._origT3 || anchorRow._origT4 || '') : '';
-    return { pos: pos, usedDateMatch: true, previewLabel: `🎯 [${l0Value}] 구간 내 "${anchorName || (pos + '행')}" 앞에 자동 삽입` };
+    return { pos: pos, usedDateMatch: true, previewLabel: _cliEn
+        ? `🎯 Auto-inserted before "${anchorName || ('row ' + pos)}" within [${l0Value}]`
+        : `🎯 [${l0Value}] 구간 내 "${anchorName || (pos + '행')}" 앞에 자동 삽입` };
 };
 
 window.insertMailTask = function() {

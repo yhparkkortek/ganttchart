@@ -504,6 +504,59 @@ window.msForceRefetchForTest = async function() {
 //    "그룹5: 미분류/신규발신자" 섹션이 있었는데, 마지막 정의(=실제로 실행되는 쪽)엔 빠져 있어서
 //    설정 모달에서 그 버튼들이 아예 안 보이는 상태였음 — 죽은 사본을 지우면서 그룹5(+신규 그룹6)를
 //    살아있는 쪽에 이식.
+// 💡 [2026-09-12 i18n] "메일 자동배치 설정" 모달은 최초 1회만 innerHTML을 그리고(if(!modal)),
+// 이후 언어가 바뀌어도 안 갱신되고 있었음(2차 전수 점검에서 발견) — 알람 설정과 동일한 id 기반
+// 일괄 갱신 함수를 별도로 빼서, ①toggleLang()에서(이미 열려있는 상태에서 토글) ②이 모달을 열 때마다
+// (처음부터 영문 모드에서 최초로 여는 경우까지) 둘 다 호출해 항상 현재 언어로 맞춘다.
+window._macRefreshLang = function() {
+    const _en = window._currentLang === 'en';
+    const idTexts = {
+        'mac-sec-collect-label':        { ko:'⏱️ 수집설정',                              en:'⏱️ Collection Settings' },
+        'mac-interval-label':           { ko:'수집 주기',                                en:'Collection Interval' },
+        'mac-cutline-label':            { ko:'📌 핀셋 기준점수 ',                        en:'📌 Pinned Score Threshold ' },
+        'mac-collect-completed-label':  { ko:'EOL 프로젝트도 수집 대상에 포함',          en:'Also collect for EOL projects' },
+        'mac-collect-completed-desc':   { ko:'기본값(체크 해제)은 Summary 탭에서 "EOL"로 표시한 프로젝트를 새 메일 자동매칭에서 제외합니다(이미 끝난 프로젝트에 실수로 새 업무가 등록되는 걸 방지). 체크하면 EOL 프로젝트도 계속 매칭 대상에 포함됩니다. MP(EC) 프로젝트는 이 설정과 무관하게 항상 매칭 대상에 포함됩니다.',
+                                           en:'By default (unchecked), projects marked "EOL" in the Summary tab are excluded from new mail auto-matching (prevents tasks being mistakenly added to already-finished projects). When checked, EOL projects stay included. MP(EC) projects are always included regardless of this setting.' },
+        'mac-cleanup-auto-label':       { ko:'처리된 업무는 보관함에서 자동삭제',        en:'Auto-delete processed tasks from the inbox' },
+        'mac-cleanup-auto-desc':        { ko:'기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.',
+                                           en:'By default (unchecked), processed items (placed/sent, etc.) in the AI Task Inbox stay in the list until deleted with each row\'s 🗑. When checked, they disappear from the list automatically as soon as they\'re processed.' },
+        'mac-topic-auto-disable-label': { ko:'🧠 토픽 프로파일 자동 생성 끄기',           en:'🧠 Turn off automatic topic profile generation' },
+        'mac-topic-auto-disable-desc':  { ko:'체크하면 프로젝트 로드 시 및 AI 업무 누적 시 자동 토픽 프로파일 생성을 완전히 끕니다. 수동 생성(토픽 프로파일 뷰어 내 버튼)은 계속 사용할 수 있습니다. 무료 API 한도가 빠듯할 때 권장.',
+                                           en:'When checked, automatic topic profile generation on project load and as AI tasks accumulate is fully disabled. Manual generation (the button inside the Topic Profile Viewer) still works. Recommended when your free API quota is tight.' },
+        'mac-sec-score-label':          { ko:'⭐ 가산점수',                              en:'⭐ Bonus Scores' },
+        'mac-keyword-score-label':      { ko:'🚨 점수 가산 키워드 ',                     en:'🚨 Score-boosting Keywords ' },
+        'mac-keyword-add-btn':          { ko:'+ 키워드 추가',                            en:'+ Add Keyword' },
+        'mac-priority-score-label':     { ko:'📊 우선순위 점수',                         en:'📊 Priority Score' },
+        'mac-external-label':           { ko:'외부(고객사) 발신 가산',                   en:'From external (customer) sender' },
+        'mac-tome-label':               { ko:'To(직접수신) 가산',                        en:'To (direct recipient)' },
+        'mac-ccme-label':               { ko:'Cc(참조) 가산',                            en:'Cc (copied)' },
+        'mac-importance-label':         { ko:'중요도 헤더(Outlook 높음) 가산',           en:'Importance header (Outlook High)' },
+        'mac-title-score-label':        { ko:'👤 직급별 점수',                           en:'👤 Score by Job Title' },
+        'mac-sec-filter-label':         { ko:'🚫 자동폐기 필터',                         en:'🚫 Auto-discard Filters' },
+        'mac-filter-desc':              { ko:'완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.',
+                                           en:'During fully-automatic collection, a mail matching one of these rules is quietly discarded before the AI is even called (saves cost). You can also add a rule directly from the 🗑 Discarded / 👤 New Sender queue via "Add rule".' },
+        'mac-filter-subject-label':     { ko:'제목 키워드',                              en:'Subject Keywords' },
+        'mac-filter-subject-add-btn':   { ko:'+ 추가',                                   en:'+ Add' },
+        'mac-filter-noreply-label':     { ko:'발신자 패턴 (noreply 등)',                 en:'Sender Pattern (noreply, etc.)' },
+        'mac-filter-noreply-add-btn':   { ko:'+ 추가',                                   en:'+ Add' },
+        'mac-filter-domain-label':      { ko:'발신자 도메인 완전차단',                    en:'Fully Block Sender Domain' },
+        'mac-filter-domain-add-btn':    { ko:'+ 추가',                                   en:'+ Add' },
+        'mac-save-btn':                 { ko:'저장',                                     en:'Save' },
+        'mac-close-btn':                { ko:'닫기',                                     en:'Close' },
+    };
+    Object.entries(idTexts).forEach(([id, t]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = _en ? t.en : t.ko;
+    });
+    ['mac-sec-collect','mac-sec-score','mac-sec-filter'].forEach(sid => {
+        const sec   = document.getElementById(sid);
+        const arrow = document.getElementById(sid + '-arrow');
+        if (!sec || !arrow) return;
+        const open = sec.style.display !== 'none';
+        arrow.textContent = open ? (_en ? '▼ Collapse' : '▼ 접기') : (_en ? '▶ Expand' : '▶ 펼치기');
+    });
+};
+
 window.openMailAutoConfigModal = async function() {
     const cfg = await window.loadPriorityConfig();
     let modal = document.getElementById('mail-auto-config-modal');
@@ -524,21 +577,21 @@ window.openMailAutoConfigModal = async function() {
                 <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                     <div onclick="window._toggleAlarmSection('mac-sec-collect')"
                          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                        <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⏱️ 수집설정</span>
+                        <span id="mac-sec-collect-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⏱️ 수집설정</span>
                         <span id="mac-sec-collect-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
                     <div id="mac-sec-collect" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
                         <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:8px;">
-                            <span style="flex:1;">수집 주기</span>
+                            <span id="mac-interval-label" style="flex:1;">수집 주기</span>
                             <select id="mac-interval" style="padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                                <option value="10">10분</option>
-                                <option value="15">15분</option>
-                                <option value="30">30분</option>
-                                <option value="60">60분</option>
+                                <option value="10" data-i18n="mac-interval-10">10분</option>
+                                <option value="15" data-i18n="mac-interval-15">15분</option>
+                                <option value="30" data-i18n="mac-interval-30">30분</option>
+                                <option value="60" data-i18n="mac-interval-60">60분</option>
                             </select>
                         </div>
                         <div style="display:flex; align-items:center; gap:8px; font-size:12px; margin-bottom:8px;">
-                            <span style="flex:1;">📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
+                            <span id="mac-cutline-label" style="flex:1;">📌 핀셋 기준점수 <span style="font-weight:normal; color:#888; font-size:11px;">(이 점수 이상 긴급)</span></span>
                             <input id="mac-cutline" type="number" min="0" max="100" style="width:64px; min-width:0; box-sizing:border-box; padding:3px 6px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                         </div>
                         <!-- 💡 [2026-08-29 신규] "완료로 표시된 프로젝트도 메일 자동매칭 대상에 포함할지"는
@@ -546,21 +599,21 @@ window.openMailAutoConfigModal = async function() {
                              mac-interval과 동일하게 localStorage에 개인별로 저장한다(_macSave/getMailAutoCollectCompleted 참고). -->
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer;">
                             <input id="mac-collect-completed" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
-                            <span style="flex:1;">EOL 프로젝트도 수집 대상에 포함</span>
+                            <span id="mac-collect-completed-label" style="flex:1;">EOL 프로젝트도 수집 대상에 포함</span>
                         </label>
-                        <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 Summary 탭에서 "EOL"로 표시한 프로젝트를 새 메일 자동매칭에서 제외합니다(이미 끝난 프로젝트에 실수로 새 업무가 등록되는 걸 방지). 체크하면 EOL 프로젝트도 계속 매칭 대상에 포함됩니다. MP(EC) 프로젝트는 이 설정과 무관하게 항상 매칭 대상에 포함됩니다.</div>
+                        <div id="mac-collect-completed-desc" style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 Summary 탭에서 "EOL"로 표시한 프로젝트를 새 메일 자동매칭에서 제외합니다(이미 끝난 프로젝트에 실수로 새 업무가 등록되는 걸 방지). 체크하면 EOL 프로젝트도 계속 매칭 대상에 포함됩니다. MP(EC) 프로젝트는 이 설정과 무관하게 항상 매칭 대상에 포함됩니다.</div>
                         <!-- 💡 [2026-08-29 이동] AI 업무 보관함 헤더에 있던 "🟠 처리됨 보관 / 🟢 처리됨 자동삭제" 토글을 여기로 옮김 -->
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-top:10px;">
                             <input id="mac-cleanup-auto" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
-                            <span style="flex:1;">처리된 업무는 보관함에서 자동삭제</span>
+                            <span id="mac-cleanup-auto-label" style="flex:1;">처리된 업무는 보관함에서 자동삭제</span>
                         </label>
-                        <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.</div>
+                        <div id="mac-cleanup-auto-desc" style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">기본값(체크 해제)은 AI 업무 보관함의 처리된(배치됨/전송됨 등) 항목을 목록에 남겨두고 각 행의 🗑로 직접 지웁니다. 체크하면 처리되는 즉시 목록에서 자동으로 사라집니다.</div>
                         <!-- 💡 [무료 API 절약] 토픽 프로파일 자동 생성 완전 비활성화 옵션 -->
                         <label style="display:flex; align-items:center; gap:8px; font-size:12px; cursor:pointer; margin-top:10px;">
                             <input id="mac-topic-auto-disable" type="checkbox" style="width:15px; height:15px; cursor:pointer;">
-                            <span style="flex:1;">🧠 토픽 프로파일 자동 생성 끄기</span>
+                            <span id="mac-topic-auto-disable-label" style="flex:1;">🧠 토픽 프로파일 자동 생성 끄기</span>
                         </label>
-                        <div style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">체크하면 프로젝트 로드 시 및 AI 업무 누적 시 자동 토픽 프로파일 생성을 완전히 끕니다. 수동 생성(토픽 프로파일 뷰어 내 버튼)은 계속 사용할 수 있습니다. 무료 API 한도가 빠듯할 때 권장.</div>
+                        <div id="mac-topic-auto-disable-desc" style="font-size:10.5px; color:#999; margin-top:4px; padding-left:23px;">체크하면 프로젝트 로드 시 및 AI 업무 누적 시 자동 토픽 프로파일 생성을 완전히 끕니다. 수동 생성(토픽 프로파일 뷰어 내 버튼)은 계속 사용할 수 있습니다. 무료 API 한도가 빠듯할 때 권장.</div>
                     </div>
                 </div>
 
@@ -568,26 +621,26 @@ window.openMailAutoConfigModal = async function() {
                 <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                     <div onclick="window._toggleAlarmSection('mac-sec-score')"
                          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                        <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⭐ 가산점수</span>
+                        <span id="mac-sec-score-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">⭐ 가산점수</span>
                         <span id="mac-sec-score-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
                     <div id="mac-sec-score" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
                         <div style="margin-bottom:14px;">
-                            <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">🚨 점수 가산 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(키워드별 점수 지정)</span></div>
+                            <div id="mac-keyword-score-label" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">🚨 점수 가산 키워드 <span style="font-weight:normal; color:#888; font-size:11px;">(키워드별 점수 지정)</span></div>
                             <div id="mac-keyword-rows" style="margin-bottom:4px;"></div>
-                            <button onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:2px;">+ 키워드 추가</button>
+                            <button id="mac-keyword-add-btn" onclick="window._macAddKeywordRow('',5)" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer; margin-top:2px;">+ 키워드 추가</button>
                         </div>
                         <div style="margin-bottom:14px;">
-                            <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
+                            <div id="mac-priority-score-label" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:10px;">📊 우선순위 점수</div>
                             <div style="display:grid; grid-template-columns:1fr 64px; gap:6px 10px; align-items:center; font-size:12px;">
-                                <span>외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                                <span>To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                                <span>Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
-                                <span>중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <span id="mac-external-label">외부(고객사) 발신 가산</span><input id="mac-external" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <span id="mac-tome-label">To(직접수신) 가산</span><input id="mac-tome" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <span id="mac-ccme-label">Cc(참조) 가산</span><input id="mac-ccme" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                <span id="mac-importance-label">중요도 헤더(Outlook 높음) 가산</span><input id="mac-importance" type="number" style="width:100%; min-width:0; box-sizing:border-box; padding:3px 5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
                             </div>
                         </div>
                         <div>
-                            <div style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
+                            <div id="mac-title-score-label" style="font-size:12px; font-weight:bold; color:#2c5f8a; margin-bottom:8px;">👤 직급별 점수</div>
                             <div id="mac-title-rows" style="max-height:140px; overflow-y:auto; margin-bottom:4px; padding-right:4px;"></div>
                         </div>
                     </div>
@@ -600,36 +653,36 @@ window.openMailAutoConfigModal = async function() {
                 <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                     <div onclick="window._toggleAlarmSection('mac-sec-filter')"
                          style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                        <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🚫 자동폐기 필터</span>
+                        <span id="mac-sec-filter-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🚫 자동폐기 필터</span>
                         <span id="mac-sec-filter-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                     </div>
                     <div id="mac-sec-filter" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                        <div style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
+                        <div id="mac-filter-desc" style="font-size:10.5px; color:#999; margin-bottom:8px;">완전자동 수집 시 AI 호출 전에 이 규칙에 걸리면 조용히 버려집니다(비용 절감). 🗑 자동폐기/👤 신규발신자 큐에서도 "규칙 추가"로 바로 등록할 수 있습니다.</div>
 
                         <div style="margin-bottom:10px;">
-                            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">제목 키워드</div>
+                            <div id="mac-filter-subject-label" style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">제목 키워드</div>
                             <div id="mac-filter-subject-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
                             <div style="display:flex; gap:4px;">
-                                <input id="mac-filter-subject-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. [AD]' : '예: [광고]'}" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
-                                <button onclick="window._macAddFilterRuleFromInput('subjectKeywords','mac-filter-subject-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                                <input id="mac-filter-subject-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. [AD]' : '예: [광고]'}" data-i18n-placeholder="mac-filter-subject-input" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <button id="mac-filter-subject-add-btn" onclick="window._macAddFilterRuleFromInput('subjectKeywords','mac-filter-subject-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
                             </div>
                         </div>
 
                         <div style="margin-bottom:10px;">
-                            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 패턴 (noreply 등)</div>
+                            <div id="mac-filter-noreply-label" style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 패턴 (noreply 등)</div>
                             <div id="mac-filter-noreply-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
                             <div style="display:flex; gap:4px;">
-                                <input id="mac-filter-noreply-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. noreply' : '예: noreply'}" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
-                                <button onclick="window._macAddFilterRuleFromInput('noreplyPatterns','mac-filter-noreply-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                                <input id="mac-filter-noreply-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. noreply' : '예: noreply'}" data-i18n-placeholder="mac-filter-noreply-input" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <button id="mac-filter-noreply-add-btn" onclick="window._macAddFilterRuleFromInput('noreplyPatterns','mac-filter-noreply-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
                             </div>
                         </div>
 
                         <div>
-                            <div style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 도메인 완전차단</div>
+                            <div id="mac-filter-domain-label" style="font-size:11px; font-weight:bold; color:#555; margin-bottom:4px;">발신자 도메인 완전차단</div>
                             <div id="mac-filter-domain-rows" style="display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px;"></div>
                             <div style="display:flex; gap:4px;">
-                                <input id="mac-filter-domain-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. spam-mailer.com' : '예: spam-mailer.com'}" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
-                                <button onclick="window._macAddFilterRuleFromInput('blockedDomains','mac-filter-domain-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
+                                <input id="mac-filter-domain-input" type="text" placeholder="${window._currentLang === 'en' ? 'e.g. spam-mailer.com' : '예: spam-mailer.com'}" data-i18n-placeholder="mac-filter-domain-input" style="flex:1; padding:4px 6px; border:1px solid #ccc; border-radius:4px; font-size:11px;">
+                                <button id="mac-filter-domain-add-btn" onclick="window._macAddFilterRuleFromInput('blockedDomains','mac-filter-domain-input')" style="padding:3px 10px; background:#fff; border:1px solid #ccc; border-radius:6px; font-size:11px; cursor:pointer;">+ 추가</button>
                             </div>
                         </div>
                     </div>
@@ -637,8 +690,8 @@ window.openMailAutoConfigModal = async function() {
 
             </div>
             <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px;">
-                <button onclick="window._macSave()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
-                <button onclick="document.getElementById('mail-auto-config-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
+                <button id="mac-save-btn" onclick="window._macSave()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
+                <button id="mac-close-btn" onclick="document.getElementById('mail-auto-config-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
             </div>
         </div>`;
         document.body.appendChild(modal);
@@ -660,6 +713,9 @@ window.openMailAutoConfigModal = async function() {
     window._macRenderKeywordRows(cfg.urgentKeywords);
     // 💡 미분류/신규발신자/자동폐기 큐 열람은 업무 보관함 모달에만 있음(중복 제거) — 이 모달에선 필터 규칙만 갱신
     if (window._macRenderFilterRules) window._macRenderFilterRules();
+    // 💡 처음 여는 순간이 영문 모드일 수도 있으므로(모달 뼈대는 항상 한글로 그려짐), 열 때마다
+    // 현재 언어로 다시 맞춰준다 — toggleLang()이 나중에 또 호출해도 안전(멱등).
+    window._macRefreshLang();
 
     modal.style.display = 'block';
     window.bringModalToFront('mail-auto-config-modal');

@@ -81,6 +81,71 @@
     //    ② AI 글자 수 설정(기존 메일 분석/요약·문답 최대 글자 수)
     //    "메일 자동배치 설정"과 동일한 펼치기/접기 아코디언 구조(window._toggleAlarmSection 재사용)로
     //    만들어서, 나중에 설정 항목이 늘어나도 그룹만 추가하면 되게 함.
+    // 💡 [2026-09-12 i18n] "AI 분석 설정" 모달 5개 그룹 전체가 언어 전환 대응이 아예 없었음
+    // (사용자가 직접 하위 그룹까지 상세 점검 요청해서 발견 — "📉 AI 요청 크기 제한" 그룹만 예전에
+    // 부분적으로 04j-core-app-upload-utils-5.js의 toggleLang()에 등록돼 있었고, 나머지 4개 그룹은
+    // 전혀 없었음). Mail Auto-Placement Settings와 동일한 패턴 — id 기반 일괄 갱신 함수를 모달과
+    // 같은 파일에 두고, ①toggleLang() ②이 모달을 열 때마다(영문 모드에서 처음 여는 경우 포함) 호출.
+    window._aiSettingsRefreshLang = function() {
+        const _en = window._currentLang === 'en';
+        const idTexts = {
+            'ai-set-sec-model-label':   { ko:'🤖 AI 모델 선택',                       en:'🤖 AI Model Selection' },
+            'ai-provider-groq':         { ko:'Groq — 오픈모델 무료 호스팅',           en:'Groq — free hosting for open models' },
+            'ai-provider-mistral':      { ko:'Mistral (프랑스 AI, 무료)',             en:'Mistral (French AI, free)' },
+            'ai-provider-openai':       { ko:'OpenAI (GPT, 유료·카드등록 필요)',      en:'OpenAI (GPT, paid — card required)' },
+            'ai-set-sec-maxlen-label':  { ko:'🔢 AI 글자 수 설정',                    en:'🔢 AI Character Limits' },
+            'ai-mail-maxlen-label':     { ko:'AI 업무 분석(메일) 최대 글자 수',       en:'AI Task Analysis (mail) — Max characters' },
+            'ai-mail-maxlen-desc':      { ko:'🤖 AI 업무 분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.',
+                                          en:'Sets the max characters of the mail body sent to the AI (Gemini) for task analysis. Too short truncates the later part of the body and weakens the analysis; too long increases token usage and can slow down or fail the analysis.' },
+            'ai-mail-maxlen-hint':      { ko:'권장값: 2000자 (기본값)',               en:'Recommended: 2000 characters (default)' },
+            'ai-content-maxlen-label':  { ko:'AI 요약·문답 최대 글자 수 (업무 상세내용/답변)', en:'AI Summary/Q&A — Max characters (task details/answers)' },
+            'ai-content-maxlen-desc':   { ko:'🤖 AI 요약 · 💬 AI 문답이 각 업무의 "상세내용"/"답변" 필드를 읽을 때 최대 몇 자까지 참고할지 정합니다. 너무 짧으면 세부 내용(수치·번호 등)이 잘려서 답변이 부실해지고, 너무 길면 업무가 많을 때 응답이 느려지거나 실패할 수 있습니다.',
+                                          en:'Sets the max characters of each task\'s "Details"/"Answer" field that AI Summary/Q&A reads. Too short truncates details (numbers, IDs, etc.) and weakens answers; too long can slow down or fail responses on projects with many tasks.' },
+            'ai-content-maxlen-hint':   { ko:'권장값: 500자 (기본값)',                en:'Recommended: 500 characters (default)' },
+            'ai-set-sec-range-label':   { ko:'📅 AI 요약 기간 설정',                  en:'📅 AI Summary Date Range' },
+            'ai-summary-range-days-label': { ko:'🔍 검색 범위 (오늘 기준 ±일)',       en:'🔍 Search Range (± days from today)' },
+            'ai-summary-range-days-desc': { ko:'🤖 AI 요약이 "지연 업무"/"예정 마감" 목록을 뽑을 때, 오늘 날짜 기준으로 며칠 이내 업무까지 담을지 정합니다. 값을 늘리면 더 먼 미래의 예정 마감과 더 오래된 지연 업무까지 AI에게 전달되어 요약이 길어지고, 줄이면 당장 가까운 업무 위주로만 짧게 요약됩니다.',
+                                          en:'Sets how many days from today AI Summary looks when pulling "delayed"/"upcoming deadline" tasks. A larger value includes farther-future deadlines and older delays (longer summary); a smaller value keeps the summary short and focused on near-term tasks.' },
+            'ai-summary-range-days-hint': { ko:'권장값: 21일 (기본값) — "검색 범위"는 얼마나 넓게 훑어볼지를 정할 뿐, 급한 정도와는 무관합니다.',
+                                             en:'Recommended: 21 days (default) — "search range" only controls how wide a window to scan, unrelated to urgency.' },
+            'ai-summary-urgent-days-label': { ko:'🚨 임박(긴급) 마감 기준 (D-며칠 이내)', en:'🚨 Urgent Deadline Threshold (D-days)' },
+            'ai-summary-urgent-days-desc': { ko:'🔍 검색 범위 안에 있는 예정 마감 중에서도, 이 기준 이내로 남은 것만 "🔴 임박"으로 따로 표시해 AI가 우선적으로 다루게 합니다. 검색 범위보다 항상 같거나 좁아야 의미가 있습니다(예: 검색 범위 21일 중 D-7 이내만 임박 표시).',
+                                             en:'Among the upcoming deadlines within the search range, only those within this threshold are flagged "🔴 Urgent" so the AI prioritizes them. This should always be equal to or narrower than the search range (e.g. only D-7 or closer is "urgent" within a 21-day search range).' },
+            'ai-summary-urgent-days-hint': { ko:'권장값: 7일 (기본값)',               en:'Recommended: 7 days (default)' },
+            'ai-set-sec-learning-label': { ko:'📚 학습 로그 반영 범위',               en:'📚 Learning Log Coverage' },
+            'ai-topic-learning-desc':   { ko:'🧠 토픽 프로파일을 생성할 때, 오매칭 신고·[📋 추출사유] AI 근거문의·미분류 재분석 힌트로 쌓인 학습 로그(사람 또는 AI가 검토를 마친 확정적 판단만 기록됨)를 keywords 추출에 함께 참고합니다. 아래 두 값으로 "얼마나 오래된 것까지, 몇 건까지" 반영할지 정할 수 있습니다.',
+                                          en:'When generating a topic profile, keyword extraction also references the learning log accumulated from mismatch reports, [📋 Extraction reason] AI queries, and unclassified re-analysis hints (only confirmed judgments reviewed by a person or the AI are recorded). The two settings below control "how old, how many" of those to include.' },
+            'ai-topic-learning-days-label': { ko:'🗓 최근 며칠 이내 기록만 반영',      en:'🗓 Only include records from the last N days' },
+            'ai-topic-learning-days-hint': { ko:'권장값: 45일 (기본값) — 값을 줄이면 오래된(철 지난) 기록이 새 프로파일에 섞여 들어가는 것을 막을 수 있습니다.',
+                                              en:'Recommended: 45 days (default) — lowering this prevents stale, outdated records from mixing into a new profile.' },
+            'ai-topic-learning-count-label': { ko:'🔢 최대 건수 (긍정·부정 사례 각각)', en:'🔢 Max count (positive/negative cases, each)' },
+            'ai-topic-learning-count-hint': { ko:'권장값: 15건 (기본값) — "이 프로젝트로 확인된 사례"와 "이 프로젝트가 아니었던 사례"에 각각 적용됩니다. 너무 크면 프롬프트가 길어져 응답이 느려지거나 실패할 수 있습니다.',
+                                               en:'Recommended: 15 (default) — applies separately to "confirmed as this project" and "confirmed as not this project" cases. Too high lengthens the prompt and can slow down or fail responses.' },
+            'ai-set-save-btn':  { ko:'저장', en:'Save' },
+            'ai-set-close-btn': { ko:'닫기', en:'Close' },
+        };
+        Object.entries(idTexts).forEach(([id, t]) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? t.en : t.ko;
+        });
+        const resetBtns = ['ai-mail-maxlen-reset-btn','ai-content-maxlen-reset-btn','ai-summary-range-days-reset-btn','ai-summary-urgent-days-reset-btn','ai-topic-learning-days-reset-btn','ai-topic-learning-count-reset-btn'];
+        resetBtns.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = _en ? '🔄 Reset' : '🔄 기본값';
+        });
+        // 💡 ai-set-sec-reqsize 라벨 자체는 04j-core-app-upload-utils-5.js의 toggleLang() 안
+        // _reqsizeTexts가 이미 갱신하지만, 그 화살표(-arrow)는 어디에도 없었어서 여기서 같이 처리.
+        ['ai-set-sec-model','ai-set-sec-maxlen','ai-set-sec-reqsize','ai-set-sec-range','ai-set-sec-learning'].forEach(sid => {
+            const sec   = document.getElementById(sid);
+            const arrow = document.getElementById(sid + '-arrow');
+            if (!sec || !arrow) return;
+            const open = sec.style.display !== 'none';
+            arrow.textContent = open ? (_en ? '▼ Collapse' : '▼ 접기') : (_en ? '▶ Expand' : '▶ 펼치기');
+        });
+        const _clearKeyBtn = document.querySelector('[data-i18n-title="clear-api-key"]');
+        if (_clearKeyBtn) _clearKeyBtn.title = _en ? 'Delete API Key' : 'API 키 삭제';
+    };
+
     window.openAiToolsSettingsModal = function() {
         let modal = document.getElementById('ai-tools-settings-modal');
         if (!modal) {
@@ -100,7 +165,7 @@
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-model')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🤖 AI 모델 선택</span>
+                            <span id="ai-set-sec-model-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🤖 AI 모델 선택</span>
                             <span id="ai-set-sec-model-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
                         <div id="ai-set-sec-model" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
@@ -109,9 +174,9 @@
                                 <select id="mail-ai-provider" onchange="window.onAiProviderChange()"
                                         style="flex:1; min-width:0; padding:4px 6px; border:1px solid #ddd; border-radius:4px; font-size:12px;">
                                     <option value="gemini">Gemini (Google)</option>
-                                    <option value="groq">Groq — 오픈모델 무료 호스팅</option>
-                                    <option value="mistral">Mistral (프랑스 AI, 무료)</option>
-                                    <option value="openai">OpenAI (GPT, 유료·카드등록 필요)</option>
+                                    <option value="groq" data-i18n="ai-provider-groq">Groq — 오픈모델 무료 호스팅</option>
+                                    <option value="mistral" data-i18n="ai-provider-mistral">Mistral (프랑스 AI, 무료)</option>
+                                    <option value="openai" data-i18n="ai-provider-openai">OpenAI (GPT, 유료·카드등록 필요)</option>
                                 </select>
                             </div>
                             <div style="font-size:11px; color:#2c5f8a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
@@ -150,7 +215,7 @@
                                 </button>
                                 <button onclick="window.clearGeminiKey()"
                                         onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
-                                        title="API 키 삭제"
+                                        title="API 키 삭제" data-i18n-title="clear-api-key"
                                         style="height:26px; padding:0 8px; font-size:11px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:4px; cursor:pointer; box-sizing:border-box; transition:background .15s, border-color .15s;">
                                     🗑️
                                 </button>
@@ -163,25 +228,25 @@
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-maxlen')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔢 AI 글자 수 설정</span>
+                            <span id="ai-set-sec-maxlen-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔢 AI 글자 수 설정</span>
                             <span id="ai-set-sec-maxlen-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
                         <div id="ai-set-sec-maxlen" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 업무 분석(메일) 최대 글자 수</label>
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무 분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.</div>
+                            <label id="ai-mail-maxlen-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 업무 분석(메일) 최대 글자 수</label>
+                            <div id="ai-mail-maxlen-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무 분석이 메일 본문을 AI(Gemini)에게 보낼 때 최대 몇 자까지 보낼지 정합니다. 너무 짧으면 본문 뒷부분 내용이 잘려서 분석이 부실해지고, 너무 길면 토큰 사용량이 늘고 분석 시간이 느려지거나 실패할 수 있습니다.</div>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-mail-maxlen-input" type="number" min="500" max="5000" step="100" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-mail-maxlen-input').value=window._AI_MAIL_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-mail-maxlen-reset-btn" onclick="document.getElementById('ai-mail-maxlen-input').value=window._AI_MAIL_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 2000자 (기본값)</div>
+                            <div id="ai-mail-maxlen-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 2000자 (기본값)</div>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 요약·문답 최대 글자 수 (업무 상세내용/답변)</label>
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약 · 💬 AI 문답이 각 업무의 "상세내용"/"답변" 필드를 읽을 때 최대 몇 자까지 참고할지 정합니다. 너무 짧으면 세부 내용(수치·번호 등)이 잘려서 답변이 부실해지고, 너무 길면 업무가 많을 때 응답이 느려지거나 실패할 수 있습니다.</div>
+                            <label id="ai-content-maxlen-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">AI 요약·문답 최대 글자 수 (업무 상세내용/답변)</label>
+                            <div id="ai-content-maxlen-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약 · 💬 AI 문답이 각 업무의 "상세내용"/"답변" 필드를 읽을 때 최대 몇 자까지 참고할지 정합니다. 너무 짧으면 세부 내용(수치·번호 등)이 잘려서 답변이 부실해지고, 너무 길면 업무가 많을 때 응답이 느려지거나 실패할 수 있습니다.</div>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-content-maxlen-input" type="number" min="100" max="3000" step="50" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-content-maxlen-input').value=window._AI_CONTENT_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-content-maxlen-reset-btn" onclick="document.getElementById('ai-content-maxlen-input').value=window._AI_CONTENT_MAXLEN_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 500자 (기본값)</div>
+                            <div id="ai-content-maxlen-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 500자 (기본값)</div>
                         </div>
                     </div>
 
@@ -225,25 +290,25 @@
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-range')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📅 AI 요약 기간 설정</span>
+                            <span id="ai-set-sec-range-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📅 AI 요약 기간 설정</span>
                             <span id="ai-set-sec-range-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
                         <div id="ai-set-sec-range" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🔍 검색 범위 (오늘 기준 ±일)</label>
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약이 "지연 업무"/"예정 마감" 목록을 뽑을 때, 오늘 날짜 기준으로 며칠 이내 업무까지 담을지 정합니다. 값을 늘리면 더 먼 미래의 예정 마감과 더 오래된 지연 업무까지 AI에게 전달되어 요약이 길어지고, 줄이면 당장 가까운 업무 위주로만 짧게 요약됩니다.</div>
+                            <label id="ai-summary-range-days-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🔍 검색 범위 (오늘 기준 ±일)</label>
+                            <div id="ai-summary-range-days-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 요약이 "지연 업무"/"예정 마감" 목록을 뽑을 때, 오늘 날짜 기준으로 며칠 이내 업무까지 담을지 정합니다. 값을 늘리면 더 먼 미래의 예정 마감과 더 오래된 지연 업무까지 AI에게 전달되어 요약이 길어지고, 줄이면 당장 가까운 업무 위주로만 짧게 요약됩니다.</div>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-summary-range-days-input" type="number" min="1" max="90" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-summary-range-days-input').value=window._AI_SUMMARY_RANGE_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-summary-range-days-reset-btn" onclick="document.getElementById('ai-summary-range-days-input').value=window._AI_SUMMARY_RANGE_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 21일 (기본값) — "검색 범위"는 얼마나 넓게 훑어볼지를 정할 뿐, 급한 정도와는 무관합니다.</div>
+                            <div id="ai-summary-range-days-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 21일 (기본값) — "검색 범위"는 얼마나 넓게 훑어볼지를 정할 뿐, 급한 정도와는 무관합니다.</div>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🚨 임박(긴급) 마감 기준 (D-며칠 이내)</label>
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🔍 검색 범위 안에 있는 예정 마감 중에서도, 이 기준 이내로 남은 것만 "🔴 임박"으로 따로 표시해 AI가 우선적으로 다루게 합니다. 검색 범위보다 항상 같거나 좁아야 의미가 있습니다(예: 검색 범위 21일 중 D-7 이내만 임박 표시).</div>
+                            <label id="ai-summary-urgent-days-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🚨 임박(긴급) 마감 기준 (D-며칠 이내)</label>
+                            <div id="ai-summary-urgent-days-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🔍 검색 범위 안에 있는 예정 마감 중에서도, 이 기준 이내로 남은 것만 "🔴 임박"으로 따로 표시해 AI가 우선적으로 다루게 합니다. 검색 범위보다 항상 같거나 좁아야 의미가 있습니다(예: 검색 범위 21일 중 D-7 이내만 임박 표시).</div>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-summary-urgent-days-input" type="number" min="1" max="90" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-summary-urgent-days-input').value=window._AI_URGENT_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-summary-urgent-days-reset-btn" onclick="document.getElementById('ai-summary-urgent-days-input').value=window._AI_URGENT_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 7일 (기본값)</div>
+                            <div id="ai-summary-urgent-days-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 7일 (기본값)</div>
                         </div>
                     </div>
 
@@ -252,31 +317,31 @@
                     <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
                         <div onclick="window._toggleAlarmSection('ai-set-sec-learning')"
                              style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
-                            <span style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📚 학습 로그 반영 범위</span>
+                            <span id="ai-set-sec-learning-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">📚 학습 로그 반영 범위</span>
                             <span id="ai-set-sec-learning-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
                         </div>
                         <div id="ai-set-sec-learning" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
-                            <div style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🧠 토픽 프로파일을 생성할 때, 오매칭 신고·[📋 추출사유] AI 근거문의·미분류 재분석 힌트로 쌓인 학습 로그(사람 또는 AI가 검토를 마친 확정적 판단만 기록됨)를 keywords 추출에 함께 참고합니다. 아래 두 값으로 "얼마나 오래된 것까지, 몇 건까지" 반영할지 정할 수 있습니다.</div>
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🗓 최근 며칠 이내 기록만 반영</label>
+                            <div id="ai-topic-learning-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🧠 토픽 프로파일을 생성할 때, 오매칭 신고·[📋 추출사유] AI 근거문의·미분류 재분석 힌트로 쌓인 학습 로그(사람 또는 AI가 검토를 마친 확정적 판단만 기록됨)를 keywords 추출에 함께 참고합니다. 아래 두 값으로 "얼마나 오래된 것까지, 몇 건까지" 반영할지 정할 수 있습니다.</div>
+                            <label id="ai-topic-learning-days-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🗓 최근 며칠 이내 기록만 반영</label>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-topic-learning-days-input" type="number" min="1" max="365" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-topic-learning-days-input').value=window._TOPIC_LEARNING_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-topic-learning-days-reset-btn" onclick="document.getElementById('ai-topic-learning-days-input').value=window._TOPIC_LEARNING_DAYS_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 45일 (기본값) — 값을 줄이면 오래된(철 지난) 기록이 새 프로파일에 섞여 들어가는 것을 막을 수 있습니다.</div>
+                            <div id="ai-topic-learning-days-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 45일 (기본값) — 값을 줄이면 오래된(철 지난) 기록이 새 프로파일에 섞여 들어가는 것을 막을 수 있습니다.</div>
                             <div style="border-top:1px solid #eee; margin:16px 0;"></div>
-                            <label style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🔢 최대 건수 (긍정·부정 사례 각각)</label>
+                            <label id="ai-topic-learning-count-label" style="display:block; font-size:12.5px; font-weight:bold; color:#333; margin-bottom:6px;">🔢 최대 건수 (긍정·부정 사례 각각)</label>
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <input id="ai-topic-learning-count-input" type="number" min="1" max="50" step="1" style="flex:1; min-width:0; padding:8px 10px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
-                                <button onclick="document.getElementById('ai-topic-learning-count-input').value=window._TOPIC_LEARNING_COUNT_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
+                                <button id="ai-topic-learning-count-reset-btn" onclick="document.getElementById('ai-topic-learning-count-input').value=window._TOPIC_LEARNING_COUNT_DEFAULT;" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="flex-shrink:0; padding:8px 12px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔄 기본값</button>
                             </div>
-                            <div style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 15건 (기본값) — "이 프로젝트로 확인된 사례"와 "이 프로젝트가 아니었던 사례"에 각각 적용됩니다. 너무 크면 프롬프트가 길어져 응답이 느려지거나 실패할 수 있습니다.</div>
+                            <div id="ai-topic-learning-count-hint" style="font-size:10.5px; color:#aaa; margin-top:4px;">권장값: 15건 (기본값) — "이 프로젝트로 확인된 사례"와 "이 프로젝트가 아니었던 사례"에 각각 적용됩니다. 너무 크면 프롬프트가 길어져 응답이 느려지거나 실패할 수 있습니다.</div>
                         </div>
                     </div>
 
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
-                    <button onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
-                    <button onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
+                    <button id="ai-set-save-btn" onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
+                    <button id="ai-set-close-btn" onclick="document.getElementById('ai-tools-settings-modal').style.display='none'" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="padding:6px 14px; border:1px solid #ccc; background:#f8f9fa; border-radius:4px; cursor:pointer; font-size:12.5px; transition:background .15s;">닫기</button>
                 </div>
             </div>`;
             document.body.appendChild(modal);
@@ -295,6 +360,9 @@
         //    팝업이 열릴 때만 채워지던 값들이라, 여기서도 열릴 때마다 새로 채워줘야 함.
         if (window.refreshAiKeyPanel) window.refreshAiKeyPanel();
         if (window.refreshAiModelDropdown) window.refreshAiModelDropdown();
+        // 💡 처음 여는 순간이 영문 모드일 수도 있으므로(모달 뼈대는 항상 한글로 그려짐), 열 때마다
+        // 현재 언어로 다시 맞춰준다 — toggleLang()이 나중에 또 호출해도 안전(멱등).
+        window._aiSettingsRefreshLang();
         modal.style.display = 'block';
         window.bringModalToFront('ai-tools-settings-modal');
     };

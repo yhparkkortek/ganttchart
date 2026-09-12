@@ -76,6 +76,25 @@
                 // ep-pinmap-title/ep-spec-title 참고). 그 함수들이 이미 열 때마다 _en을 다시 읽어
                 // 알아서 새로 그리므로 별도 등록 불필요.
                 'ai-analysis-settings-btn': '🤖 AI 분석 설정',
+                // 💡 [2026-09-12 신규] AI 요약 프롬프트 편집 모달은 최초 1회만 innerHTML을 그려서
+                // (기존 모달이 있으면 재사용) 이후 언어를 토글해도 이 버튼들 텍스트는 안 바뀌고
+                // 있었음 — id로 등록해 toggleLang()이 매번 다시 맞춰주도록 함.
+                'ai-summary-history-btn':      '🕒 이력',
+                'ai-summary-unlock-btn':       '🔒 수정하기',
+                'ai-summary-save-btn':         '저장',
+                'ai-summary-reset-btn':        '🔄 기본값으로 초기화',
+                'ai-summary-batch-improve-btn':'🤖 일괄개선',
+                'gantt-qa-history-btn':        '🕒 이력',
+                'gantt-qa-prompt-unlock-btn':  '🔒 수정하기',
+                'gantt-qa-prompt-save-btn':    '저장',
+                'gantt-qa-prompt-reset-btn':   '🔄 기본값으로 초기화',
+                'gantt-qa-batch-improve-btn':  '🤖 일괄개선',
+                'ps-prompt-log-clear-btn':       '🗑️ 이력 삭제',
+                'ps-prompt-log-close-btn':       '닫기',
+                'gantt-qa-prompt-log-clear-btn': '🗑️ 이력 삭제',
+                'gantt-qa-prompt-log-close-btn': '닫기',
+                'ai-summary-open-prompt-btn':    '✏️ 프롬프트',
+                'gantt-qa-open-prompt-btn':      '📝 프롬프트',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'add-user-btn':       '👤 사용자 추가',
                 'file-input-label':'🟩 프로젝트 엑셀 열기',
@@ -164,6 +183,21 @@
                 'th-addr-mobile':     '휴대폰',
                 'th-addr-phone':      '근무처 전화',
                 'th-addr-telegram':   '텔레그램 ID',
+                // 💡 [2026-09-12 신규] 전수 점검(2차)에서 발견된 미번역 항목들
+                'my-team-prefix':          '내 팀:',
+                'mail-auto-config-menu-btn': '📬 메일 자동배치 설정',
+                'sum-materials-note':      '(메일 분석 시 참고 자료로 활용 · 체크박스는 "분석용", 그 옆 － 버튼은 자유추가 행 삭제)',
+                'sum-photo-note':          '(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)',
+                'photo-num-1':             '사진 1',
+                'photo-num-2':             '사진 2',
+                'photo-add-text':          '클릭하여 추가',
+                'ms-email-server-btn':     '⚙️ 이메일 서버 설정',
+                'mail-multi-project-label':'🔀 다른 프로젝트로 배분',
+                'mail-multi-dist-btn':     '📤 선택 프로젝트 배분',
+                'mail-multi-project-hint': 'Ctrl(⌘)+클릭으로 여러 프로젝트 선택 가능 · 선택한 프로젝트를 열면 수신 대기 알림이 표시됩니다',
+                'topic-diagnosis-btn':     '🔬 AI 진단',
+                'topic-profile-gen-btn':   '📊 토픽 프로파일 생성',
+                'mac-interval-10': '10분', 'mac-interval-15': '15분', 'mac-interval-30': '30분', 'mac-interval-60': '60분',
             },
             // 💡 [2026-09-11 신규] data-i18n-placeholder 속성이 붙은 input의 placeholder 번역 —
             //    data-i18n(textContent 전용)과 별도 맵. toggleLang()에서 함께 처리.
@@ -198,6 +232,24 @@
                 'mc-add-unit-input': '예: BTN',
                 'mail-content-input': '메일 본문을 여기에 붙여넣으세요...',
                 'ms-keyword-body': 'RFQ, 견적',
+                'mac-filter-subject-input': '예: [광고]',
+                'mac-filter-noreply-input': '예: noreply',
+                'mac-filter-domain-input': '예: spam-mailer.com',
+            },
+            // 💡 [2026-09-12 신규] readonly 역할 라벨 <input value="...">는 textContent가 안 먹히고
+            //    placeholder/title도 아니라서 이 세 맵(i18n/i18nPlaceholder/i18nTitle) 어디에도
+            //    안 걸렸었음 — 전용 data-i18n-value 속성 + 맵 신설.
+            i18nValue: {
+                'sum-pm-label':       '프로젝트 담당자 *',
+                'sum-mech-label':     '기구 담당자',
+                'sum-hw-label':       'H/W 담당자',
+                'sum-fw-label':       'F/W 담당자',
+                'sum-module-label':   'BLU 담당자',
+                'sum-tsp-label':      'TSP 담당자',
+                'sum-lcm-label':      'LCM 담당자',
+                'sum-slimming-label': 'Slimming 담당자',
+                'sum-cutting-label':  'Cutting 담당자',
+                'sum-tooling-label':  'Tooling 담당자',
             },
             i18nTitle: {
                 "color-palette-view": "🎨 컬러 팔레트 보기",
@@ -314,6 +366,22 @@
                 'pc-add-title': '🖥️ Add Panel',
                 'pc-spec-title': '🖥️ Panel Spec',
                 'ai-analysis-settings-btn': '🤖 AI Analysis Settings',
+                'ai-summary-history-btn':      '🕒 History',
+                'ai-summary-unlock-btn':       '🔒 Edit',
+                'ai-summary-save-btn':         'Save',
+                'ai-summary-reset-btn':        '🔄 Reset to Default',
+                'ai-summary-batch-improve-btn':'🤖 Batch Improve',
+                'gantt-qa-history-btn':        '🕒 History',
+                'gantt-qa-prompt-unlock-btn':  '🔒 Edit',
+                'gantt-qa-prompt-save-btn':    'Save',
+                'gantt-qa-prompt-reset-btn':   '🔄 Reset to Default',
+                'gantt-qa-batch-improve-btn':  '🤖 Batch Improve',
+                'ps-prompt-log-clear-btn':       '🗑️ Delete History',
+                'ps-prompt-log-close-btn':       'Close',
+                'gantt-qa-prompt-log-clear-btn': '🗑️ Delete History',
+                'gantt-qa-prompt-log-close-btn': 'Close',
+                'ai-summary-open-prompt-btn':    '✏️ Prompt',
+                'gantt-qa-open-prompt-btn':      '📝 Prompt',
                 'admin-pw-change-btn': '🔑 Change Password',
                 'add-user-btn':       '👤 Add User',
                 'file-input-label':'🟩 Open Project Excel',
@@ -402,6 +470,20 @@
                 'th-addr-mobile':     'Mobile',
                 'th-addr-phone':      'Office Phone',
                 'th-addr-telegram':   'Telegram ID',
+                'my-team-prefix':          'My Team:',
+                'mail-auto-config-menu-btn': '📬 Mail Auto-Placement Settings',
+                'sum-materials-note':      '(Used as reference during mail analysis · the checkbox means "for analysis", the － button next to it removes a freely-added row)',
+                'sum-photo-note':          '(Up to 2 · saved as compressed JPEG · inserted as 1 PPT slide)',
+                'photo-num-1':             'Photo 1',
+                'photo-num-2':             'Photo 2',
+                'photo-add-text':          'Click to add',
+                'ms-email-server-btn':     '⚙️ Email Server Settings',
+                'mail-multi-project-label':'🔀 Distribute to other projects',
+                'mail-multi-dist-btn':     '📤 Distribute to selected projects',
+                'mail-multi-project-hint': 'Ctrl(⌘)+click to select multiple projects · opening a selected project shows a pending-arrival notice',
+                'topic-diagnosis-btn':     '🔬 AI Diagnosis',
+                'topic-profile-gen-btn':   '📊 Generate Topic Profile',
+                'mac-interval-10': '10 min', 'mac-interval-15': '15 min', 'mac-interval-30': '30 min', 'mac-interval-60': '60 min',
             },
             i18nPlaceholder: {
                 'addr-search': '🔍 Search (name/dept/title/email/phone, etc.)',
@@ -434,6 +516,21 @@
                 'mc-add-unit-input': 'e.g. BTN',
                 'mail-content-input': 'Paste the mail body here...',
                 'ms-keyword-body': 'RFQ, Quote',
+                'mac-filter-subject-input': 'e.g. [AD]',
+                'mac-filter-noreply-input': 'e.g. noreply',
+                'mac-filter-domain-input': 'e.g. spam-mailer.com',
+            },
+            i18nValue: {
+                'sum-pm-label':       'Project Owner *',
+                'sum-mech-label':     'Mechanical',
+                'sum-hw-label':       'H/W',
+                'sum-fw-label':       'F/W',
+                'sum-module-label':   'BLU',
+                'sum-tsp-label':      'TSP',
+                'sum-lcm-label':      'LCM',
+                'sum-slimming-label': 'Slimming',
+                'sum-cutting-label':  'Cutting',
+                'sum-tooling-label':  'Tooling',
             },
             i18nTitle: {
                 "color-palette-view": "🎨 View color palette",
@@ -564,6 +661,16 @@
             if (i18nTitleMap[key] !== undefined) el.title = i18nTitleMap[key];
         });
 
+        // 🐛 [2026-09-12 신규] data-i18n-value 속성 기반 번역 — readonly <input value="…"> 라벨은
+        // textContent가 안 먹히고 placeholder/title도 아니라서 위 세 맵 어디에도 안 걸림(예: Summary
+        // 탭의 "기구 담당자"/"TSP 담당자" 등 역할 라벨). id로 다른 기능에서 참조되긴 하지만 .value를
+        // 직접 읽어 쓰는 곳은 없음을 확인 — 표시 문구만 언어에 맞게 갱신.
+        const i18nValueMap = LANG[window._currentLang].i18nValue || {};
+        document.querySelectorAll('[data-i18n-value]').forEach(el => {
+            const key = el.dataset.i18nValue;
+            if (i18nValueMap[key] !== undefined) el.value = i18nValueMap[key];
+        });
+
         // 필터 라벨 갱신
         document.querySelectorAll('.filter-label').forEach(el => {
             const colName = el.dataset.colName;
@@ -650,20 +757,35 @@
             'as-tg-addr-guide':        { ko:'📋 텔레그램 ID는 주소록 탭에서 관리합니다.', en:'📋 Telegram IDs are managed in the Address Book tab.' },
             'as-modal-save-btn':       { ko:'저장',                               en:'Save' },
             'as-modal-close-btn':      { ko:'닫기',                               en:'Close' },
+            // 💡 [2026-09-12 신규] "외부 도메인 발송 허용" 섹션 — sec-server/email/messenger처럼
+            // _asLabels 제네릭 루프에 안 넣고 여기 id로 바로 등록(이 헤더는 이미 고정 id를 갖고 있어
+            // previousElementSibling 탐색이 필요 없음). 예전엔 이 항목 자체가 어느 맵에도 없었음.
+            'sec-domain-label':        { ko:'🌐 외부 도메인 발송 허용',            en:'🌐 Allow External Domains' },
         };
         Object.entries(_asIdTexts).forEach(([id, t]) => {
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? t.en : t.ko;
         });
 
+        // [외부 도메인 발송 허용] 설명 문단 — <b> 태그가 섞여 있어 textContent가 아니라 innerHTML로 교체
+        const _domainDesc = document.getElementById('sec-domain-desc');
+        if (_domainDesc) _domainDesc.innerHTML = _en
+            ? '📌 <b>@kortek.co.kr</b> is always allowed to send. Other domains are <b style="color:#e03131;">blocked</b> by default — only checked domains will receive mail/messenger alarms.<br>(A safeguard to prevent alarms reaching outsiders until this is fully stabilized)'
+            : '📌 <b>@kortek.co.kr</b>은 항상 발송됩니다. 그 외 도메인은 기본적으로 <b style="color:#e03131;">차단</b>되며, 체크한 도메인만 메일/메신저 알람이 발송됩니다.<br>(안정화 전까지 외부인에게 알람이 나가는 것을 막기 위한 안전장치)';
+
         // [알람설정 섹션 접기/펼치기 화살표] 현재 열림 상태 유지하며 언어만 갱신
-        ['sec-server','sec-email','sec-messenger'].forEach(sid => {
+        ['sec-server','sec-email','sec-messenger','sec-domain'].forEach(sid => {
             const sec   = document.getElementById(sid);
             const arrow = document.getElementById(sid + '-arrow');
             if (!sec || !arrow) return;
             const open = sec.style.display !== 'none';
             arrow.textContent = open ? (_en ? '▼ Collapse' : '▼ 접기') : (_en ? '▶ Expand' : '▶ 펼치기');
         });
+
+        // [메일 자동배치 설정] 팝업 — 이 모달 전체가 언어 전환 대응이 아예 없었음(전수 점검 2차에서
+        // 발견). 실제 텍스트 맵/갱신 로직은 15c-mail-server-tab-2.js의 _macRefreshLang()에 있음
+        // (모달을 처음 열 때도 같은 함수를 호출해서 "영문 모드에서 처음 여는" 경우도 커버).
+        if (window._macRefreshLang) window._macRefreshLang();
 
         // [TG Chat ID 안내] 번역
         const _tgGuideArrow = document.getElementById('tg-chatid-guide-arrow');
@@ -1058,6 +1180,11 @@
         if (window._ganttQaUpdateVoiceBtn) window._ganttQaUpdateVoiceBtn();
         if (window._ganttQaUpdateMicBtn) window._ganttQaUpdateMicBtn();
 
+        // [AI 분석 설정] 나머지 4개 그룹(모델선택/글자수/기간설정/학습로그) — 실제 텍스트 맵은
+        // 04i-core-app-upload-utils-4.js의 _aiSettingsRefreshLang()에 있음(모달과 같은 파일에 둬서
+        // 모달을 처음 열 때도 같은 함수로 커버 가능하게 함).
+        if (window._aiSettingsRefreshLang) window._aiSettingsRefreshLang();
+
         // [AI 분석 설정] "📉 AI 요청 크기 제한" 섹션 (2026-09-07 신설)
         const _reqsizeTexts = {
             'ai-set-sec-reqsize-label': {
@@ -1105,11 +1232,19 @@
                · <b>크기형(TPM 등)</b> — 요청 1건의 토큰 수 자체에 상한(예: Groq 무료 등급). 업무가 많은 프로젝트에서 AI 요약·문답을 돌리면 프롬프트가 이 상한을 넘어 <b>기다려도 계속 실패</b>합니다 — 아래 값을 줄이거나 다른 제공사로 바꿔야 풀립니다.<br>
                · OpenAI는 무료 등급이 아예 없습니다(카드 등록 필요).`;
 
+        // [내 팀] "미설정" 플레이스홀더 갱신 (팀이 이미 인식된 경우엔 팀명 그대로 유지)
+        if (window._updateMyTeamLabel) window._updateMyTeamLabel();
+
         // [업무 보관함 모달] 헤더 번역
         // 💡 [2026-08-25] childNodes[0]만 바꾸는 이유 — 이 span 안엔 ℹ️ 도움말 아이콘(nested span)이
         //    같이 들어있어서, textContent를 통째로 덮으면 그 아이콘/툴팁까지 같이 사라진다.
+        // 🐛 [2026-09-12 버그수정] childNodes[0]은 nested span(id=inbox-modal-title-text) *앞*의
+        //    순수 이모지 텍스트 노드일 뿐인데, 예전엔 여기다 "AI Task Inbox" 전체 문구까지 넣고
+        //    있어서 — 바로 옆 nested span도 'ui' 맵의 'inbox-modal-title-text' 항목으로 별도 갱신되며
+        //    같은 문구를 다시 그려 "AI Task InboxAI Task Inbox"처럼 중복 표시되고 있었다. 이모지만
+        //    남기고, 실제 제목 문구는 아래 nested span(= uiMap 'inbox-modal-title-text')에게 맡긴다.
         const _ibxTitle = document.getElementById('inbox-modal-title');
-        if (_ibxTitle) _ibxTitle.childNodes[0].textContent = _en ? '📦 AI Task Inbox' : '📦 AI 업무 보관함';
+        if (_ibxTitle) _ibxTitle.childNodes[0].textContent = '📦 ';
         const _ibxHelpTip = document.getElementById('inbox-help-tip-text');
         if (_ibxHelpTip) _ibxHelpTip.innerHTML = _en
             ? `📧 Tasks added via [📥 Inbox] in mail analysis are kept independent of any project (persists across project switches).<br><br>
@@ -1246,6 +1381,11 @@
         if (_mrSection && _mrSection.style.display !== 'none' && window._mailAnalyzedResult && window.renderMailResult) {
             window.renderMailResult(window._mailAnalyzedResult);
         }
+
+        // [최소화된 모달 타스크바 칩] 위에서 각 모달 제목을 전부 갱신한 뒤 마지막에 호출 — 페이지
+        // 로드 시 자동 최소화되는 모달(AI 문답/AI 요약 등)의 칩 라벨이 최소화 당시 언어로 고정되는
+        // 문제 수정 (js/19-shared-modal-drag.js 참고).
+        if (window._refreshMinimizedChipLabels) window._refreshMinimizedChipLabels();
      };
 
 

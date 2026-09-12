@@ -78,13 +78,13 @@
             <button id="settings-menu-btn" class="topbar-btn" onclick="window.toggleTopbarMenu('settings-menu-popup', this)">⚙️ 설정</button>
             <div id="settings-menu-popup" class="topbar-popup" style="display:none;">
                 <button id="auto-login-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleAutoLogin()" style="font-weight:bold;" title="켜두면 새로고침·새 탭에서 예전에 연동했던 계정으로 조용히(팝업 없이) 자동 재연동을 시도합니다. 실패해도 지금처럼 [드라이브 연동하기]를 누르면 됩니다." data-i18n-title="auto-login-hint">🔴 자동로그인 OFF</button>
-                <button id="my-team-menu-btn" class="topbar-menu-item" onclick="window.openMyTeamModal(); window.closeTopbarMenu('settings-menu-popup');" title="이 컴퓨터(브라우저)가 속한 팀 — 로그인 이름을 주소록과 대조해 자동 추정되며, 여기서 직접 바꿀 수 있습니다. 앞으로 AI 메일 매칭 범위 제한 등에 사용될 예정입니다." data-i18n-title="my-team-hint">👥 내 팀: <span id="my-team-label">미설정</span></button>
+                <button id="my-team-menu-btn" class="topbar-menu-item" onclick="window.openMyTeamModal(); window.closeTopbarMenu('settings-menu-popup');" title="이 컴퓨터(브라우저)가 속한 팀 — 로그인 이름을 주소록과 대조해 자동 추정되며, 여기서 직접 바꿀 수 있습니다. 앞으로 AI 메일 매칭 범위 제한 등에 사용될 예정입니다." data-i18n-title="my-team-hint">👥 <span data-i18n="my-team-prefix">내 팀:</span> <span id="my-team-label">미설정</span></button>
                 <div class="tb-menu-sep"></div>
                 <button id="alarm-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleAlarmAuto()" style="font-weight:bold;">🟢 자동알람 ON</button>
                 <button id="alarm-settings-menu-btn" class="topbar-menu-item" onclick="window.openAlarmSettings(); window.closeTopbarMenu('settings-menu-popup');" title="SMTP·자동발송·참조인 설정" data-i18n-title="smtp-settings-hint">⚙️ 자동알람 설정</button>
                 <div class="tb-menu-sep"></div>
                 <button id="mail-mode-toggle-btn" class="topbar-menu-item" data-keep-open="true" onclick="window.toggleMailMode()" style="font-weight:bold; color:#b85c00;">🟠 메일 반자동 (보관함)</button>
-                <button id="mail-auto-config-menu-btn" class="topbar-menu-item" onclick="window.openMailAutoConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="수집주기·우선순위점수·중요키워드·초기화" data-i18n-title="mail-collect-settings-hint">📬 메일 자동배치 설정</button>
+                <button id="mail-auto-config-menu-btn" class="topbar-menu-item" onclick="window.openMailAutoConfigModal(); window.closeTopbarMenu('settings-menu-popup');" title="수집주기·우선순위점수·중요키워드·초기화" data-i18n-title="mail-collect-settings-hint" data-i18n="mail-auto-config-menu-btn">📬 메일 자동배치 설정</button>
                 <div class="tb-menu-sep"></div>
                 <!-- 💡 [2026-08-28 이동] "🤖 AI 분석 설정"은 위 "🤖 AI 도구" 메뉴 안으로 옮김(ai-analysis-settings-btn 참고) -->
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
@@ -482,7 +482,7 @@
       <span id="sec-domain-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
     </div>
     <div id="sec-domain" style="display:none; padding:14px; border-top:1px solid #e8e8e8; max-height:48vh; overflow-y:auto;">
-      <p style="margin:0 0 10px; font-size:11px; color:#888; line-height:1.5;">
+      <p id="sec-domain-desc" style="margin:0 0 10px; font-size:11px; color:#888; line-height:1.5;">
         📌 <b>@kortek.co.kr</b>은 항상 발송됩니다. 그 외 도메인은 기본적으로 <b style="color:#e03131;">차단</b>되며,
         체크한 도메인만 메일/메신저 알람이 발송됩니다.<br>(안정화 전까지 외부인에게 알람이 나가는 것을 막기 위한 안전장치)
       </p>
@@ -1226,21 +1226,21 @@
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member1">프로젝트 멤버-1</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자 *" readonly style="color:#e03131; font-weight:bold;"><input type="text" id="sum-pm" class="u-input req-field" placeholder="예: 박용훈" data-i18n-placeholder="sum-pm" oninput="window._checkRequiredField(this)"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인" data-i18n-placeholder="sum-mech"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준" data-i18n-placeholder="sum-hw"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석" data-i18n-placeholder="sum-fw"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍" data-i18n-placeholder="sum-module"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-pm-label" class="u-input mem-label" value="프로젝트 담당자 *" readonly style="color:#e03131; font-weight:bold;" data-i18n-value="sum-pm-label"><input type="text" id="sum-pm" class="u-input req-field" placeholder="예: 박용훈" data-i18n-placeholder="sum-pm" oninput="window._checkRequiredField(this)"><input type="email" id="sum-pm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-mech-label" class="u-input mem-label" value="기구 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-mech-label"><input type="text" id="sum-mech" class="u-input" placeholder="예: 서경인" data-i18n-placeholder="sum-mech"><input type="email" id="sum-mech-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-hw-label" class="u-input mem-label" value="H/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-hw-label"><input type="text" id="sum-hw" class="u-input" placeholder="예: 조익현,조재준" data-i18n-placeholder="sum-hw"><input type="email" id="sum-hw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-fw-label" class="u-input mem-label" value="F/W 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-fw-label"><input type="text" id="sum-fw" class="u-input" placeholder="예: 최종석" data-i18n-placeholder="sum-fw"><input type="email" id="sum-fw-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-module-label" class="u-input mem-label" value="BLU 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-module-label"><input type="text" id="sum-module" class="u-input" placeholder="예: 김태홍" data-i18n-placeholder="sum-module"><input type="email" id="sum-module-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
             <div class="concept-section" style="flex:1 1 400px; margin-bottom:16px;">
                 <h3 id="sum-h3-member2">프로젝트 멤버-2</h3>
                 <div class="concept-grid concept-grid-mem">
-                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌" data-i18n-placeholder="sum-tsp"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-lcm"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-slimming"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-cutting"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
-                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-tooling"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tsp-label" class="u-input mem-label" value="TSP 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-tsp-label"><input type="text" id="sum-tsp" class="u-input" placeholder="예: 김진권,노태헌" data-i18n-placeholder="sum-tsp"><input type="email" id="sum-tsp-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-lcm-label" class="u-input mem-label" value="LCM 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-lcm-label"><input type="text" id="sum-lcm" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-lcm"><input type="email" id="sum-lcm-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-slimming-label" class="u-input mem-label" value="Slimming 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-slimming-label"><input type="text" id="sum-slimming" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-slimming"><input type="email" id="sum-slimming-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-cutting-label" class="u-input mem-label" value="Cutting 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-cutting-label"><input type="text" id="sum-cutting" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-cutting"><input type="email" id="sum-cutting-email" class="u-input" placeholder="email@company.com">
+                    <input type="text" id="sum-tooling-label" class="u-input mem-label" value="Tooling 담당자" readonly title="역할 이름은 고정되어 있어 수정할 수 없습니다 (다른 기능에서 이 이름으로 참조합니다)" data-i18n-title="role-label-fixed" data-i18n-value="sum-tooling-label"><input type="text" id="sum-tooling" class="u-input" placeholder="예: 홍길동" data-i18n-placeholder="sum-tooling"><input type="email" id="sum-tooling-email" class="u-input" placeholder="email@company.com">
                 </div>
             </div>
         </div>
@@ -1257,7 +1257,7 @@
             <button id="sum-add-member3-btn" type="button" onclick="window.addMember3Row()" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 인원 추가</button>
         </div>
         <div class="concept-section" id="major-materials-section">
-            <h3><span id="sum-h3-materials">주요 자재</span> <span style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용 · 체크박스는 &quot;분석용&quot;, 그 옆 － 버튼은 자유추가 행 삭제)</span></h3>
+            <h3><span id="sum-h3-materials">주요 자재</span> <span data-i18n="sum-materials-note" style="font-size:11px;color:#999;font-weight:normal;">(메일 분석 시 참고 자료로 활용 · 체크박스는 &quot;분석용&quot;, 그 옆 － 버튼은 자유추가 행 삭제)</span></h3>
             <div style="display:flex; gap:16px; flex-wrap:wrap;">
                 <div style="flex:1 1 320px; min-width:280px; overflow:auto; border:1px solid #cfe3e5; border-radius:8px;">
                     <table style="width:100%; border-collapse:collapse; font-size:12px;">
@@ -1291,16 +1291,16 @@
             <button id="sum-add-material-btn" type="button" onclick="window.addMaterialRow()" onmouseover="this.style.background='#eef6f7';" onmouseout="this.style.background='#fff';" style="margin-top:10px; padding:4px 12px; border:1px dashed #a3d9e0; color:#00707d; background:#fff; border-radius:4px; cursor:pointer; font-size:12px; transition:background .15s;">+ 자재 추가</button>
         </div><!-- /#major-materials-section -->
         <div class="concept-section" id="product-images-section">
-            <h3><span id="sum-h3-photo">제품 사진</span> <span style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
+            <h3><span id="sum-h3-photo">제품 사진</span> <span data-i18n="sum-photo-note" style="font-size:11px;color:#999;font-weight:normal;">(최대 2장 · JPEG 압축 저장 · PPT 슬라이드 1 삽입)</span></h3>
             <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start;">
                 <div class="prod-img-slot" id="prod-img-slot-0" title="클릭하여 사진 추가" data-i18n-title="photo-add">
-                    <div class="prod-placeholder">📷<br>사진 1<br>클릭하여 추가</div>
+                    <div class="prod-placeholder">📷<br><span data-i18n="photo-num-1">사진 1</span><br><span data-i18n="photo-add-text">클릭하여 추가</span></div>
                     <img class="prod-preview" alt="제품사진1">
                     <button class="prod-del-btn" title="삭제" data-i18n-title="delete">✕</button>
                     <input type="file" accept="image/*" style="display:none;">
                 </div>
                 <div class="prod-img-slot" id="prod-img-slot-1" title="클릭하여 사진 추가" data-i18n-title="photo-add">
-                    <div class="prod-placeholder">📷<br>사진 2<br>클릭하여 추가</div>
+                    <div class="prod-placeholder">📷<br><span data-i18n="photo-num-2">사진 2</span><br><span data-i18n="photo-add-text">클릭하여 추가</span></div>
                     <img class="prod-preview" alt="제품사진2">
                     <button class="prod-del-btn" title="삭제" data-i18n-title="delete">✕</button>
                     <input type="file" accept="image/*" style="display:none;">
@@ -1853,7 +1853,7 @@
             <div style="flex-shrink:0; border:1px solid #dee2e6; border-radius:8px; margin:10px 12px 12px 12px; padding:12px 14px; background:#fff; box-shadow:0 -6px 10px -8px rgba(0,0,0,0.25); position:relative; z-index:1;">
                 <!-- Phase 6+8: 토픽 프로파일 생성 + AI 진단 버튼 -->
                 <div style="margin-bottom:4px; display:flex; gap:6px; align-items:center;">
-                    <button id="topic-diagnosis-btn"
+                    <button id="topic-diagnosis-btn" data-i18n="topic-diagnosis-btn"
                         onclick="window._tcRunDiagnosis && window._tcRunDiagnosis()"
                         title="오매칭 패턴을 AI로 분석하여 토픽 프로파일의 오염 원인을 진단하고 수정안을 제시합니다." data-i18n-title="topic-diagnosis-hint"
                         onmouseover="this.style.background='#fcd5d5';this.style.borderColor='#e8857a';"
@@ -1864,7 +1864,7 @@
                                transition:background .15s,border-color .15s;white-space:nowrap;">
                         🔬 AI 진단
                     </button>
-                    <button onclick="window._generateTopicProfile && window._generateTopicProfile()"
+                    <button onclick="window._generateTopicProfile && window._generateTopicProfile()" data-i18n="topic-profile-gen-btn"
                         title="현재 프로젝트의 간트 업무를 AI로 분석하여 키워드·토픽 프로파일을 저장합니다. 이후 메일 분석 정확도가 향상됩니다." data-i18n-title="topic-profile-gen-hint"
                         onmouseover="this.style.background='#d8f3d8';this.style.borderColor='#7cc494';"
                         onmouseout="this.style.background='#eaf7ea';this.style.borderColor='#a8dab8';"
@@ -2172,7 +2172,7 @@
                          없거나 바꾸고 싶으면 버튼 한 번으로 알람 설정의 해당 섹션을 열어 펼쳐준다. -->
                     <div id="ms-account-status" style="margin-bottom:10px; flex-shrink:0; padding:10px 12px; background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; font-size:12px; display:flex; align-items:center; justify-content:space-between; gap:8px;">
                         <span id="ms-account-status-text" style="color:#555;">계정 확인 중...</span>
-                        <button onclick="window.msOpenEmailServerSettings()"
+                        <button onclick="window.msOpenEmailServerSettings()" data-i18n="ms-email-server-btn"
                           style="flex-shrink:0; padding:5px 10px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; font-size:11.5px; font-weight:bold; cursor:pointer; white-space:nowrap;">⚙️ 이메일 서버 설정</button>
                     </div>
                     <!-- 접속 정보 -->
@@ -2324,18 +2324,18 @@
 
                     <!-- Phase 7: 다중 프로젝트 동시 등록 영역 -->
                     <div id="mail-multi-project-area" style="display:none; margin-top:8px; padding:10px 12px; background:#f0f4ff; border:1px solid #b8c8f0; border-radius:8px; flex-shrink:0;">
-                        <div style="font-size:11px; font-weight:700; color:#3a5199; margin-bottom:7px;">🔀 다른 프로젝트로 배분</div>
+                        <div data-i18n="mail-multi-project-label" style="font-size:11px; font-weight:700; color:#3a5199; margin-bottom:7px;">🔀 다른 프로젝트로 배분</div>
                         <div style="display:flex; flex-direction:column; gap:6px;">
                             <select id="mail-multi-target-project" multiple
                                 style="width:100%; height:80px; padding:4px 8px; border:1px solid #b8c8f0; border-radius:6px; font-size:12px; background:#fff; box-sizing:border-box;">
                             </select>
-                            <button onclick="window.mailDistributeToProject()"
+                            <button onclick="window.mailDistributeToProject()" data-i18n="mail-multi-dist-btn"
                                 onmouseover="this.style.background='#c0d0f8';" onmouseout="this.style.background='#d6e2ff';"
                                 style="height:30px; padding:0 14px; background:#d6e2ff; color:#2b44a0; border:1px solid #b8c8f0; border-radius:6px; font-size:11px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .15s;">
                                 📤 선택 프로젝트 배분
                             </button>
                         </div>
-                        <div style="font-size:10px; color:#6c757d; margin-top:5px;">
+                        <div data-i18n="mail-multi-project-hint" style="font-size:10px; color:#6c757d; margin-top:5px;">
                             Ctrl(⌘)+클릭으로 여러 프로젝트 선택 가능 · 선택한 프로젝트를 열면 수신 대기 알림이 표시됩니다
                         </div>
                     </div>

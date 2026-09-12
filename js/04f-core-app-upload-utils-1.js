@@ -1168,7 +1168,7 @@ ${recentLogs}
                 <div id="ai-summary-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>🤖 <span id="ai-summary-title">${_en ? 'AI Summary' : 'AI 요약'}</span></span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button onclick="event.stopPropagation(); window.openProjectSummaryPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="이 리포트를 만들 때 AI에게 보내는 프롬프트(지시문)를 팀 공용으로 편집합니다" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">✏️ 프롬프트</button>
+                        <button id="ai-summary-open-prompt-btn" onclick="event.stopPropagation(); window.openProjectSummaryPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="이 리포트를 만들 때 AI에게 보내는 프롬프트(지시문)를 팀 공용으로 편집합니다" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">✏️ 프롬프트</button>
                         <button onclick="document.getElementById('ai-summary-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
@@ -1217,7 +1217,7 @@ ${recentLogs}
                 <div id="ai-summary-prompt-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>✏️ <span id="ai-summary-prompt-title">${_en ? 'AI Summary — Edit Prompt' : 'AI 요약 — 프롬프트 편집'}</span></span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button onclick="event.stopPropagation(); window.showPsPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 ${_en ? 'History' : '이력'}</button>
+                        <button id="ai-summary-history-btn" onclick="event.stopPropagation(); window.showPsPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 ${_en ? 'History' : '이력'}</button>
                         <button onclick="document.getElementById('ai-summary-prompt-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
@@ -1232,7 +1232,7 @@ ${recentLogs}
                     <button id="ai-summary-unlock-btn" onclick="window.unlockPsPrompt()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="비밀번호 필요" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🔒 수정하기</button>
                     <button id="ai-summary-save-btn" onclick="window.saveProjectSummaryPromptFromModal()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; min-width:120px; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">저장</button>
                     <button id="ai-summary-reset-btn" onclick="window.resetProjectSummaryPromptInModal()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="flex:1; min-width:120px; padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; display:none; transition:background .15s, border-color .15s;">🔄 기본값으로 초기화</button>
-                    <button onclick="window.triggerProjectSummaryPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
+                    <button id="ai-summary-batch-improve-btn" onclick="window.triggerProjectSummaryPromptImprove('batch')" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" title="쌓인 👎 피드백 케이스를 모아 한 번에 프롬프트 개선" style="flex:1; min-width:120px; padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🤖 일괄개선</button>
                 </div>
             </div>`;
             document.body.appendChild(modal);
@@ -1248,7 +1248,9 @@ ${recentLogs}
         document.getElementById('ai-summary-prompt-textarea').value = current;
         const meta = window._projectSummaryPromptDriveMeta;
         const metaEl = document.getElementById('ai-summary-prompt-meta');
-        if (metaEl) metaEl.textContent = (meta && meta.updatedBy) ? `마지막 수정: ${meta.updatedBy} · ${meta.updatedAt}` : '';
+        if (metaEl) metaEl.textContent = (meta && meta.updatedBy)
+            ? (window._t('마지막 수정: ', 'Last edited: ') + `${meta.updatedBy} · ${meta.updatedAt}`)
+            : '';
 
         // 💡 [2026-08-27] "AI 분석 프롬프트"(메일분석) 편집창과 UI/동작 통일 — 팀 공용 프롬프트를
         //    아무나 바로 고칠 수 있던 것을, 저쪽처럼 관리자 비밀번호로 잠가서 열 때마다 잠금 상태로
@@ -1265,8 +1267,8 @@ ${recentLogs}
         notice.style.background = '#eef3f8';
         notice.style.color = '#495057';
         notice.textContent = window.isDriveConnected
-            ? '💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.'
-            : '⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.';
+            ? window._t('💡 팀 공용(드라이브) 프롬프트입니다. 수정하려면 관리자 비밀번호가 필요합니다.', '💡 This is the shared team prompt (Drive). Admin password required to edit.')
+            : window._t('⚠️ 구글 드라이브 미연동 상태 — 이 PC에만 저장되며 팀과 공유되지 않습니다. 수정하려면 관리자 비밀번호가 필요합니다.', '⚠️ Google Drive is not connected — this is stored only on this PC and not shared with the team. Admin password required to edit.');
 
         modal.style.display = 'block';
         window.bringModalToFront('ai-summary-prompt-modal');
@@ -1288,7 +1290,7 @@ ${recentLogs}
         if (memoEl) memoEl.style.display = 'block';
         document.getElementById('ai-summary-reset-btn').style.display = 'block';
         const notice = document.getElementById('ai-summary-prompt-notice');
-        notice.textContent = '✏️ 프롬프트를 자유롭게 수정하세요. ${customer}, ${delayedList} 등 변수는 그대로 유지하세요.';
+        notice.textContent = window._t('✏️ 프롬프트를 자유롭게 수정하세요. ${customer}, ${delayedList} 등 변수는 그대로 유지하세요.', '✏️ Feel free to edit the prompt. Keep variables like ${customer}, ${delayedList} intact.');
         notice.style.color = '#0056b3';
         notice.style.background = '#e7f1ff';
     };
