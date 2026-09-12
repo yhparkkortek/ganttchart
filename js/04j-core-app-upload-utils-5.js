@@ -928,6 +928,21 @@
             'nm-lbl-days-before':   { ko:'일 전',                en:'days before' },
             'nm-lbl-add-btn':       { ko:'+ 추가',               en:'+ Add' },
             'nm-recip-add-btn':     { ko:'+ 수신자 추가',        en:'+ Add Recipient' },
+            // 💡 [2026-09-12] "발송 방식" 섹션 — 라디오 2개(D-day 기준/기간·반복)와 그 안의 "기간·반복"
+            // 하위 필드(날짜/기간/특정 날짜/시작일/종료일/며칠마다/발송 시각/+추가) 전체가 쌍둥이
+            // 모달인 Alarm Schedule(as-*)만 먼저 고쳐지고 이쪽(nm-*)은 빠져있던 것을 뒤늦게 발견해 보완.
+            'nm-lbl-sendmethod':       { ko:'발송 방식',    en:'Send Method' },
+            'nm-mode-dday-label':      { ko:'D-day 기준',   en:'Based on D-day' },
+            'nm-mode-recur-label':     { ko:'기간·반복',     en:'Date Range/Recurring' },
+            'nm-lbl-date':             { ko:'날짜',         en:'Date' },
+            'nm-datemode-range-label': { ko:'기간',         en:'Date Range' },
+            'nm-datemode-specific-label': { ko:'특정 날짜',  en:'Specific Dates' },
+            'nm-lbl-start':            { ko:'시작일',       en:'Start' },
+            'nm-lbl-end':              { ko:'종료일',       en:'End' },
+            'nm-lbl-interval':         { ko:'며칠마다',      en:'Every N days' },
+            'nm-lbl-specific-date':    { ko:'날짜',         en:'Date' },
+            'nm-add-specific-btn':     { ko:'+ 추가',       en:'+ Add' },
+            'nm-lbl-sendtime':         { ko:'발송 시각',     en:'Send Time' },
             'nm-sec-content-label': { ko:'📝 공지 내용',          en:'📝 Notice Content' },
             'nm-sec-send-label':    { ko:'📤 발송 방식',          en:'📤 Send Method' },
             'nm-sec-recip-label':   { ko:'👥 수신 대상',          en:'👥 Recipients' },

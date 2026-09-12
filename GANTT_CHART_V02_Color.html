@@ -867,12 +867,12 @@
            도는 "기간·반복" 방식을 추가. 브라우저 탭이 꺼져 있어도 kortek_backend.py만 켜져 있으면 동작함
            (자세한 설계는 대화 참고 — id/type이 있는 규칙은 /schedule API로 백엔드에 등록됨). -->
       <div style="margin-bottom:10px; display:flex; gap:16px; align-items:center; padding:8px 10px; background:#f8f9fa; border-radius:6px; border:1px solid #eee; flex-wrap:wrap;">
-        <span style="font-size:12px; font-weight:bold; color:#444;">발송 방식</span>
+        <span id="nm-lbl-sendmethod" style="font-size:12px; font-weight:bold; color:#444;">발송 방식</span>
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="nm-mode" id="nm-mode-dday" value="dday" checked onchange="window._nmToggleMode()"> D-day 기준
+          <input type="radio" name="nm-mode" id="nm-mode-dday" value="dday" checked onchange="window._nmToggleMode()"> <span id="nm-mode-dday-label">D-day 기준</span>
         </label>
         <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-          <input type="radio" name="nm-mode" id="nm-mode-recur" value="recur" onchange="window._nmToggleMode()"> 기간·반복
+          <input type="radio" name="nm-mode" id="nm-mode-recur" value="recur" onchange="window._nmToggleMode()"> <span id="nm-mode-recur-label">기간·반복</span>
         </label>
       </div>
 
@@ -927,12 +927,12 @@
            날짜(기간+며칠마다, 또는 특정 날짜 여러 개) × 시간창+몇시간마다를 곱해서 반복 발송 시각을 만든다. -->
       <div id="nm-recur-fields" style="display:none; padding:10px; background:#f0f6ff; border-radius:6px; border:1px solid #d6e4f7;">
         <div style="display:flex; gap:14px; align-items:center; margin-bottom:8px;">
-          <span style="font-size:12px; font-weight:bold; color:#444;">날짜</span>
+          <span id="nm-lbl-date" style="font-size:12px; font-weight:bold; color:#444;">날짜</span>
           <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-            <input type="radio" name="nm-datemode" id="nm-datemode-range" value="range" checked onchange="window._nmToggleDateMode()"> 기간
+            <input type="radio" name="nm-datemode" id="nm-datemode-range" value="range" checked onchange="window._nmToggleDateMode()"> <span id="nm-datemode-range-label">기간</span>
           </label>
           <label style="font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer;">
-            <input type="radio" name="nm-datemode" id="nm-datemode-specific" value="specific" onchange="window._nmToggleDateMode()"> 특정 날짜
+            <input type="radio" name="nm-datemode" id="nm-datemode-specific" value="specific" onchange="window._nmToggleDateMode()"> <span id="nm-datemode-specific-label">특정 날짜</span>
           </label>
         </div>
 
@@ -945,35 +945,35 @@
         <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-bottom:6px;">
           <div id="nm-daterange-fields" style="display:flex; gap:6px; flex:1; min-width:0;">
             <div style="flex:1; min-width:76px;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">시작일</label>
+              <label id="nm-lbl-start" style="font-size:11px; color:#666; display:block; margin-bottom:3px;">시작일</label>
               <input id="nm-recur-start" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
                      style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; cursor:pointer;">
             </div>
             <div style="flex:1; min-width:76px;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">종료일</label>
+              <label id="nm-lbl-end" style="font-size:11px; color:#666; display:block; margin-bottom:3px;">종료일</label>
               <input id="nm-recur-end" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
                      style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; cursor:pointer;">
             </div>
             <div style="width:56px; flex-shrink:0;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">며칠마다</label>
+              <label id="nm-lbl-interval" style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">며칠마다</label>
               <input id="nm-recur-day-interval" type="number" min="1" max="365" value="1"
                      style="width:100%; padding:6px 4px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; text-align:center;">
             </div>
           </div>
           <div id="nm-specific-dates-fields" style="display:none; gap:6px; align-items:flex-end; flex:1; min-width:0;">
             <div style="flex:1; min-width:90px;">
-              <label style="font-size:11px; color:#666; display:block; margin-bottom:3px;">날짜</label>
+              <label id="nm-lbl-specific-date" style="font-size:11px; color:#666; display:block; margin-bottom:3px;">날짜</label>
               <input id="nm-specific-date-input" type="date" class="u-input" readonly onclick="window.showGenericCalendar(this)"
                      style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box; cursor:pointer;">
             </div>
-            <button type="button" onclick="window._nmAddSpecificDate()"
+            <button id="nm-add-specific-btn" type="button" onclick="window._nmAddSpecificDate()"
                     onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';"
                     style="flex-shrink:0; padding:6px 10px; border:1px solid #a5c8f0; color:#1a4f7a; background:#e8f4fd; border-radius:4px; font-size:11.5px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">+ 추가</button>
           </div>
           <!-- 💡 시간창(시작~종료+몇시간마다)은 의미가 없다는 피드백으로 발송 시각 하나로 단순화
                (내부적으로는 hourStart=hourEnd=이 시각으로 저장해 기존 백엔드 로직 그대로 재사용) -->
           <div style="width:88px; flex-shrink:0;">
-            <label style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">발송 시각</label>
+            <label id="nm-lbl-sendtime" style="font-size:11px; color:#666; display:block; margin-bottom:3px; white-space:nowrap;">발송 시각</label>
             <input id="nm-recur-send-time" type="time" class="u-input" value="09:00"
                    style="width:100%; padding:6px 5px; border:1px solid #ddd; border-radius:4px; font-size:11.5px; box-sizing:border-box;">
           </div>
