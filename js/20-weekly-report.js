@@ -506,6 +506,7 @@
    *   - null: X버튼 → 완전 취소
    */
   window._wrShowAiPreviewModal = async function(data, issueRows) {
+      const _en     = window._currentLang === 'en';
       const apiKey  = window.getActiveAiKey ? window.getActiveAiKey() : null;
       const thisRaw = _wrFmtTasksForAi(data.thisList);
       const nextRaw = _wrFmtTasksForAi(data.nextList);
@@ -526,44 +527,46 @@
           const tabg  = isDark ? '#1a1d23' : '#f9fafb';
           const tafg  = isDark ? '#e4e6eb' : '#222222';
 
+          const _sp = _en ? '⏳ AI organizing...' : '⏳ AI 정리 중...';
+
           const modal = document.createElement('div');
           modal.style.cssText = `background:${bg};border-radius:12px;box-shadow:0 8px 36px rgba(0,0,0,0.28);width:min(880px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;font-family:'Malgun Gothic',sans-serif;`;
           modal.innerHTML = `
 <div style="padding:16px 20px;border-bottom:1px solid ${bdr};display:flex;align-items:center;gap:10px;">
   <span style="font-size:22px;">📊</span>
   <div style="flex:1;">
-    <div style="font-size:15px;font-weight:bold;color:${fg};">주간보고 PPT 미리보기</div>
-    <div style="font-size:12px;color:#888;margin-top:2px;">AI가 업무를 정리합니다. 내용 확인·수정 후 PPT 저장을 누르세요.</div>
+    <div style="font-size:15px;font-weight:bold;color:${fg};">${_en ? 'Weekly Report PPT Preview' : '주간보고 PPT 미리보기'}</div>
+    <div style="font-size:12px;color:#888;margin-top:2px;">${_en ? 'AI is organizing your tasks. Review and edit, then save as PPT.' : 'AI가 업무를 정리합니다. 내용 확인·수정 후 PPT 저장을 누르세요.'}</div>
   </div>
   <button id="wr-pv-x" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999;padding:4px 8px;line-height:1;">✕</button>
 </div>
 <div style="padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px;">
   <div>
     <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
-      <span>📋 주요 실적 (${thisWk}W)</span><span id="wr-pv-sp-this" style="font-size:11px;color:#888;display:none;">⏳ AI 정리 중...</span>
+      <span>📋 ${_en ? `Key Achievements (${thisWk}W)` : `주요 실적 (${thisWk}W)`}</span><span id="wr-pv-sp-this" style="font-size:11px;color:#888;display:none;">${_sp}</span>
     </div>
-    <textarea id="wr-pv-ta-this" rows="6" placeholder="이번 주 주요 실적..."
+    <textarea id="wr-pv-ta-this" rows="6" placeholder="${_en ? 'This week\'s key achievements...' : '이번 주 주요 실적...'}"
       style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
   </div>
   <div>
     <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
-      <span>🎯 추진 계획 (${nextWk}W)</span><span id="wr-pv-sp-next" style="font-size:11px;color:#888;display:none;">⏳ AI 정리 중...</span>
+      <span>🎯 ${_en ? `Action Plan (${nextWk}W)` : `추진 계획 (${nextWk}W)`}</span><span id="wr-pv-sp-next" style="font-size:11px;color:#888;display:none;">${_sp}</span>
     </div>
-    <textarea id="wr-pv-ta-next" rows="6" placeholder="다음 주 추진 계획..."
+    <textarea id="wr-pv-ta-next" rows="6" placeholder="${_en ? 'Next week\'s action plan...' : '다음 주 추진 계획...'}"
       style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
   </div>
   <div>
     <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
-      <span>⚠️ 문제점 및 Issue</span><span id="wr-pv-sp-issue" style="font-size:11px;color:#888;display:none;">⏳ AI 정리 중...</span>
+      <span>⚠️ ${_en ? 'Issues & Problems' : '문제점 및 Issue'}</span><span id="wr-pv-sp-issue" style="font-size:11px;color:#888;display:none;">${_sp}</span>
     </div>
-    <textarea id="wr-pv-ta-issue" rows="4" placeholder="문제점 및 이슈..."
+    <textarea id="wr-pv-ta-issue" rows="4" placeholder="${_en ? 'Issues and problems...' : '문제점 및 이슈...'}"
       style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
   </div>
 </div>
 <div style="padding:12px 20px;border-top:1px solid ${bdr};display:flex;align-items:center;gap:10px;">
   <span id="wr-pv-status" style="font-size:12px;color:#888;flex:1;"></span>
-  <button id="wr-pv-skip" style="padding:8px 18px;border:1px solid #ccc;border-radius:8px;background:${bg};color:${fg};cursor:pointer;font-size:13px;">취소 (직접 출력)</button>
-  <button id="wr-pv-save" style="padding:8px 22px;border:none;border-radius:8px;background:#19c3d6;color:#fff;cursor:pointer;font-size:13px;font-weight:bold;opacity:0.6;" disabled>⏳ AI 정리 중...</button>
+  <button id="wr-pv-skip" style="padding:8px 18px;border:1px solid #ccc;border-radius:8px;background:${bg};color:${fg};cursor:pointer;font-size:13px;">${_en ? 'Cancel (output as-is)' : '취소 (직접 출력)'}</button>
+  <button id="wr-pv-save" style="padding:8px 22px;border:none;border-radius:8px;background:#19c3d6;color:#fff;cursor:pointer;font-size:13px;font-weight:bold;opacity:0.6;" disabled>${_sp}</button>
 </div>`;
 
           overlay.appendChild(modal);
@@ -579,7 +582,7 @@
           const enableSave = () => {
               saveBtn.disabled = false;
               saveBtn.style.opacity = '1';
-              saveBtn.textContent = '💾 PPT 저장';
+              saveBtn.textContent = _en ? '💾 Save as PPT' : '💾 PPT 저장';
           };
 
           document.getElementById('wr-pv-x').onclick   = () => { closeModal(); resolve(null); };
@@ -595,12 +598,13 @@
               if (sp) sp.style.display = 'inline';
           });
 
+          const _noIssue = _en ? 'N/A' : '해당 없음';
           const applyFallback = (msg) => {
               taThis.value  = _wrFmtFallback(data.thisList);
               taNext.value  = _wrFmtFallback(data.nextList);
               taIssue.value = issueRows.length
                   ? issueRows.map(r => '• ' + r[0].replace(/\n/g, ' ')).join('\n')
-                  : '해당 없음';
+                  : _noIssue;
               ['this', 'next', 'issue'].forEach(k => {
                   const sp = document.getElementById('wr-pv-sp-' + k);
                   if (sp) sp.style.display = 'none';
@@ -609,9 +613,14 @@
               enableSave();
           };
 
-          if (!apiKey) { applyFallback('⚠️ AI 키 없음 — 원본 데이터로 초기화됨'); return; }
+          if (!apiKey) {
+              applyFallback(_en
+                  ? '⚠️ No AI key — initialized with raw task data'
+                  : '⚠️ AI 키 없음 — 원본 데이터로 초기화됨');
+              return;
+          }
 
-          const prompt = `당신은 주간 업무 보고서 작성 어시스턴트입니다.
+          let prompt = `당신은 주간 업무 보고서 작성 어시스턴트입니다.
 아래의 이번 주 업무(${thisWk}W)와 다음 주 업무(${nextWk}W), 그리고 현재 문제점 목록을 보고서에 적합한 형식으로 정리해주세요.
 
 [이번 주(${thisWk}W) 업무 목록]
@@ -637,26 +646,33 @@ ${issRaw}
 ===문제점및이슈===
 (문제점 및 이슈 요약)
 ===끝===`;
+          if (_en) prompt += '\n\n[Output language] Write all summary content in English. Keep the section delimiters (===주요실적===, ===추진계획===, ===문제점및이슈===, ===끝===) exactly as shown — do not translate them.';
 
           window.callAiBackend(apiKey, prompt, {}).then(result => {
-              if (!result.ok) throw result.error || new Error('AI 응답 오류');
+              if (!result.ok) throw result.error || new Error(_en ? 'AI response error' : 'AI 응답 오류');
               const text = (result.data?.result?.candidates?.[0]?.content?.parts?.[0]?.text) || '';
               const parse = (tag1, tag2) => {
                   const m = text.match(new RegExp(`===${tag1}===\\s*([\\s\\S]*?)(?===${tag2}===|===끝===)`, 'i'));
                   return m ? m[1].trim() : '';
               };
-              taThis.value  = parse('주요실적', '추진계획')  || '(AI 응답을 파싱하지 못했습니다 — 직접 입력해주세요)';
-              taNext.value  = parse('추진계획', '문제점및이슈') || '(AI 응답을 파싱하지 못했습니다 — 직접 입력해주세요)';
-              taIssue.value = parse('문제점및이슈', '끝') || '해당 없음';
+              const _parseErr = _en ? '(Could not parse AI response — please type manually)' : '(AI 응답을 파싱하지 못했습니다 — 직접 입력해주세요)';
+              taThis.value  = parse('주요실적', '추진계획')     || _parseErr;
+              taNext.value  = parse('추진계획', '문제점및이슈') || _parseErr;
+              taIssue.value = parse('문제점및이슈', '끝')        || _noIssue;
               ['this', 'next', 'issue'].forEach(k => {
                   const sp = document.getElementById('wr-pv-sp-' + k);
                   if (sp) sp.style.display = 'none';
               });
-              if (statusEl) statusEl.textContent = '✅ AI 정리 완료 — 내용 확인·수정 후 저장하세요';
+              if (statusEl) statusEl.textContent = _en
+                  ? '✅ AI done — review and edit, then save'
+                  : '✅ AI 정리 완료 — 내용 확인·수정 후 저장하세요';
               enableSave();
           }).catch(err => {
               console.error('[WR PPT Preview] AI error:', err);
-              applyFallback(`⚠️ AI 오류 (${(err && err.message) || '알 수 없는 오류'}) — 원본 데이터로 초기화됨`);
+              const errMsg = (err && err.message) || (_en ? 'unknown error' : '알 수 없는 오류');
+              applyFallback(_en
+                  ? `⚠️ AI error (${errMsg}) — initialized with raw task data`
+                  : `⚠️ AI 오류 (${errMsg}) — 원본 데이터로 초기화됨`);
           });
       });
   };
