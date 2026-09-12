@@ -74,11 +74,10 @@
 
         // 🐛 [2026-09-11 버그 수정] 이 검색바는 최초 열 때 한 번만 DOM에 삽입되는데, 라벨/placeholder/
         //    title/버튼 문구가 전부 한글로 하드코딩돼 있어 영문 모드에서도 그대로 한글로 보였다.
-        //    LANG.ui의 id 기반 치환 방식은 innerHTML을 나중에 통째로 다시 쓰는 이 구조엔 안 맞아서,
-        //    생성 시점의 window._currentLang을 그대로 반영해 만든다(언어를 바꾼 뒤 새로 열면 새 언어로
-        //    보임 — 이미 열려있는 채로 언어를 토글하는 경우까지 실시간 반영하려면 toggleLang 쪽에서
-        //    이 함수를 다시 호출해야 하는데, 검색바는 대부분 필요할 때만 짧게 여닫는 보조 UI라 그정도
-        //    실시간성까지는 이 수정 범위 밖으로 둠).
+        //    생성 시점의 window._currentLang을 그대로 반영해 만듦.
+        //    🐛 [2026-09-12 추가수정] "이미 열려있는 채로 토글하면 안 바뀐다"는 그때 남겨둔 한계가
+        //    실제로 재현 리포트로 들어와서, 아래 window._gsRefreshLang()을 추가하고 toggleLang()
+        //    (js/04j-core-app-upload-utils-5.js)에서 호출하도록 연결함 — 이제 실시간 반영됨.
         var _en = window._currentLang === 'en';
         var bar = document.createElement('div');
         bar.id = 'gantt-ai-searchbar';
@@ -99,7 +98,8 @@
             '  style="padding:3px 9px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:13px;cursor:pointer;color:' + c.text + ';">↓</button>' +
             '<span id="gantt-ai-search-count" style="color:' + c.text + ';font-size:12px;white-space:nowrap;min-width:62px;text-align:center;"></span>' +
             '<label style="white-space:nowrap;cursor:pointer;font-size:12px;color:#555;">' +
-            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:' + c.text + ';"> ' + (_en ? 'Hide non-matching' : '비매칭 숨기기') + '</label>' +
+            '  <input type="checkbox" id="gantt-ai-search-filtermode" style="cursor:pointer;accent-color:' + c.text + ';"> ' +
+            '<span id="gantt-ai-search-filtermode-label">' + (_en ? 'Hide non-matching' : '비매칭 숨기기') + '</span></label>' +
             '<button id="gantt-ai-search-clear" title="' + (_en ? 'Clear search (Esc)' : '검색 초기화 (Esc)') + '"' +
             '  style="padding:4px 10px;background:' + c.btnBg + ';border:1px solid ' + c.inputBorder + ';border-radius:5px;font-size:12px;cursor:pointer;color:' + c.text + ';">✕ ' + (_en ? 'Clear' : '초기화') + '</button>';
 
@@ -151,6 +151,32 @@
             };
         }
     }
+
+    // 💡 [2026-09-12 신규] 검색바가 이미 열려 있는 상태로 언어를 토글해도 문구가 즉시 바뀌도록 —
+    // toggleLang()(js/04j-core-app-upload-utils-5.js)에서 호출됨. 검색바가 아직 안 만들어졌으면
+    // 아무것도 안 함(다음에 처음 열릴 때 그 시점 언어로 정상 생성됨).
+    window._gsRefreshLang = function() {
+        var bar = document.getElementById('gantt-ai-searchbar');
+        if (!bar) return;
+        var _en = window._currentLang === 'en';
+        var lbl = bar.querySelector('span:first-child');
+        if (lbl) lbl.textContent = '🔍 ' + (_en ? 'Search' : '검색');
+        var inp = document.getElementById('gantt-ai-search-input');
+        if (inp) inp.placeholder = _en
+            ? 'Name·task·content·mail snippet  /  @project  /  #ai (all AI-registered)'
+            : '이름·업무명·상세내용·메일스니펫  /  @프로젝트  /  #ai (AI 등록 전체)';
+        var prevBtn = document.getElementById('gantt-search-prev');
+        if (prevBtn) prevBtn.title = _en ? 'Previous result (Shift+Enter)' : '이전 결과 (Shift+Enter)';
+        var nextBtn = document.getElementById('gantt-search-next');
+        if (nextBtn) nextBtn.title = _en ? 'Next result (Enter)' : '다음 결과 (Enter)';
+        var fmLabel = document.getElementById('gantt-ai-search-filtermode-label');
+        if (fmLabel) fmLabel.textContent = _en ? 'Hide non-matching' : '비매칭 숨기기';
+        var clearBtn = document.getElementById('gantt-ai-search-clear');
+        if (clearBtn) {
+            clearBtn.title = _en ? 'Clear search (Esc)' : '검색 초기화 (Esc)';
+            clearBtn.textContent = '✕ ' + (_en ? 'Clear' : '초기화');
+        }
+    };
 
     function _showSearchBar() {
         var bar = document.getElementById('gantt-ai-searchbar');

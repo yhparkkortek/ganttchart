@@ -1353,7 +1353,10 @@
             if (_alTab && _alTab.style.display !== 'none') window.renderAlarmTab();
         }
 
-        if (globalData) { 
+        // [Gantt #검색 바] 이미 열려있는 상태에서 언어 전환 시 즉시 반영
+        if (window._gsRefreshLang) window._gsRefreshLang();
+
+        if (globalData) {
             renderTable(globalData);
             generateFilters(globalData);
             applyFilters();

@@ -228,8 +228,14 @@
             return { darkText: '#00707d', border: '#cfe3e5' }[k];
         };
         const title = document.createElement('div');
+        title.id = 'work-filter-panel-title';
         title.style.cssText = 'font-size:11px;font-weight:700;color:' + (_cpHexP('darkText') || '#00707d') + ';margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase;';
-        title.textContent = '업무 필터 (LEVEL · 업무상태 · 개발단계)';
+        // 🐛 [2026-09-12 버그수정] 이 패널은 toggleLang()의 generateFilters() 재호출로 매번 다시
+        // 그려지는데(=build-once 고착 버그는 아님), 이 제목 줄에만 언어 분기가 아예 없어서 "Status"/
+        // "Dev Stage" 등 나머지는 영문으로 바뀌어도 이 줄만 항상 한글로 남아있었음.
+        title.textContent = (window._currentLang === 'en')
+            ? 'Task Filter (LEVEL · Status · Dev Stage)'
+            : '업무 필터 (LEVEL · 업무상태 · 개발단계)';
         panel.appendChild(title);
 
         // groups 배열을 순서대로 패널에 추가 (각 사이에 구분선)
