@@ -313,7 +313,7 @@ window.pcRenderHistoryTable = function() {
 window.deletePcHistoryByDateRange = function() {
     const pwEl = document.getElementById('pc-history-del-pw');
     const pw = pwEl ? pwEl.value : '';
-    if (pw.toLowerCase() !== getAdminPassword().toLowerCase()) { { const _m = window._t('비밀번호가 올바르지 않습니다.', 'The password is incorrect.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
+    if (!adminPwMatches(pw)) { { const _m = adminPwGateFailMessage(); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }
     const fromStr = (document.getElementById('pc-history-del-from') || {}).value;
     const toStr = (document.getElementById('pc-history-del-to') || {}).value;
     if (!fromStr || !toStr) { { const _m = window._t('시작일과 종료일을 모두 선택해주세요.', 'Please select both a start date and an end date.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); } return; }

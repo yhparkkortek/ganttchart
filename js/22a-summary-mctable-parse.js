@@ -968,6 +968,10 @@ window.saveAllToDrive = async function() {
     const chat_id = document.getElementById('tg-chatid').value.trim();
     const msg     = document.getElementById('tg-save-msg');
     const password = getAdminPassword();
+    // 💡 [2026-09-12 보안수정] 비밀번호가 비어있는 채로(=이 브라우저 미동기화) 그대로 저장을 진행하면
+    //    빈 문자열을 새 팀 비밀번호로 Drive에 덮어써서 이미 동기화된 다른 팀원 전원을 잠그게 된다 —
+    //    실행 전에 반드시 막는다.
+    if (!password) { alert(adminPwGateFailMessage()); return; }
 
     try {
         const tokenObj   = gapi.client.getToken();
@@ -1014,6 +1018,7 @@ window.saveAllToDrive = async function() {
 window.loadAllFromDrive = async function() {
     const msg      = document.getElementById('tg-save-msg');
     const password = getAdminPassword();
+    if (!password) { alert(adminPwGateFailMessage()); return; }
     try {
         const tokenObj   = gapi.client.getToken();
         const driveToken = (tokenObj ? tokenObj.access_token : null) || window.googleAccessToken;
@@ -1137,8 +1142,15 @@ window.checkPasswordSync = async function() {
         const localHash = await window._sha256hex(getAdminPassword());
         if (driveHash === localHash) return; // 동일 — 동기화 불필요
 
-        // 비밀번호 변경 감지 → 팀원에게 새 비밀번호 입력 요청
-        let newPw = prompt('🔔 팀 비밀번호가 변경되었습니다.\n새 비밀번호를 입력하세요.\n(5회 실패 시 취소됩니다)');
+        // 비밀번호 불일치 감지 → 새 비밀번호 입력 요청
+        // 💡 [2026-09-12] "팀 비밀번호가 변경되었습니다"는 실제로 누가 방금 바꾼 경우뿐 아니라,
+        //    이 브라우저/PC에서 아직 한 번도 동기화한 적이 없어 로컬값이 비어있는 상태(getAdminPassword()
+        //    가 '')일 때도 똑같이 뜬다(여러 PC/브라우저를 번갈아 쓰는 사용자가 "바꾼 적 없는데 뜬다"고
+        //    오인하는 원인) — 문구를 "다르다"는 사실 위주로 바꾸고 두 가능성을 모두 안내.
+        let newPw = prompt(window._t(
+            '🔔 이 브라우저에 저장된 비밀번호가 팀 설정과 다릅니다.\n(다른 PC/브라우저에서 비밀번호를 변경했거나, 이 브라우저에서 처음 동기화하는 경우 모두 뜰 수 있습니다)\n현재 팀 비밀번호를 입력하세요.\n(5회 실패 시 취소됩니다)',
+            "🔔 This browser's saved password doesn't match the team setting.\n(This can happen either because it was changed on another PC/browser, or because this browser hasn't synced before)\nEnter the current team password.\n(Cancels after 5 failed attempts)"
+        ));
         for (let i = 0; i < 5; i++) {
             if (!newPw) return;
             const inputHash = await window._sha256hex(newPw.trim());
@@ -1161,7 +1173,7 @@ window.checkPasswordSync = async function() {
                 alert(window._t('✅ 비밀번호 동기화 완료! SMTP + Telegram 설정도 자동 업데이트되었습니다.', '✅ Password synced! SMTP + Telegram settings were also updated automatically.'));
                 return;
             }
-            newPw = prompt(`❌ 비밀번호가 틀렸습니다. (${4 - i}회 남음)\n다시 입력하세요.`);
+            newPw = prompt(window._t(`❌ 비밀번호가 틀렸습니다. (${4 - i}회 남음)\n다시 입력하세요.`, `❌ Incorrect password. (${4 - i} attempt(s) left)\nPlease try again.`));
         }
         alert(window._t('❌ 비밀번호 5회 실패. 관리자에게 문의하세요.', '❌ Password failed 5 times. Please contact the administrator.'));
     } catch(e) { console.warn('[PW Sync]', e.message); }

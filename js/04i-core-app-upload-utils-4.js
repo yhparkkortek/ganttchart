@@ -417,8 +417,8 @@
 window.deleteHistoryByDateRange = function() {
     const pwEl = document.getElementById('history-del-pw');
     const pw = pwEl ? pwEl.value : '';
-    if (pw.toLowerCase() !== getAdminPassword().toLowerCase()) {
-        { const _m = window._t('비밀번호가 올바르지 않습니다.', 'The password is incorrect.'); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
+    if (!adminPwMatches(pw)) {
+        { const _m = adminPwGateFailMessage(); if (window.bmAlertModal) window.bmAlertModal(_m); else alert(_m); }
         return;
     }
     const fromStr = (document.getElementById('history-del-from') || {}).value;

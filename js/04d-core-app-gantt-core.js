@@ -195,25 +195,48 @@
     }
 
     // 🔑 관리자 비밀번호 — localStorage에 JSON으로 저장, "파일 > 비밀번호 변경" 메뉴에서 변경 가능
-    //    저장된 값이 없으면 기존 기본값 'kortek'을 그대로 사용 (기존 사용자와 100% 호환)
+    //    💡 [2026-09-12 보안수정] 예전엔 저장된 값이 없으면 하드코딩된 기본값 'kortek'을 그대로 썼는데,
+    //    이 앱은 GitHub Pages로 공개 배포되어 소스가 누구나 보이므로 사실상 전 세계에 공개된 비밀번호였고,
+    //    이 함수를 쓰는 앱 곳곳의 "관리자 비밀번호 확인" 게이트(삭제 확인 등)를 그 값만 알면 누구나
+    //    우회할 수 있었다. 저장된 값이 없으면 빈 문자열을 반환하도록 바꾸고, hasAdminPassword()/
+    //    adminPwMatches()로 "이 브라우저가 아직 팀 비밀번호를 동기화하지 않은 상태"를 명확히 구분한다.
     const ADMIN_PW_STORAGE_KEY = 'gantt_admin_pw';
     function getAdminPassword() {
         try {
             const saved = JSON.parse(localStorage.getItem(ADMIN_PW_STORAGE_KEY) || 'null');
-            return (saved && saved.pw) ? saved.pw : 'kortek';
-        } catch(e) { return 'kortek'; }
+            return (saved && saved.pw) ? saved.pw : '';
+        } catch(e) { return ''; }
+    }
+    function hasAdminPassword() { return !!getAdminPassword(); }
+    // 💡 사용자가 입력한 pw가 관리자 비밀번호와 일치하는지 안전하게 비교 — 관리자 비밀번호가 아직
+    //    설정 안 된 상태(빈 문자열)일 때 입력값도 비어있으면 "둘 다 빈 문자열이라 일치" 판정이 나는
+    //    사고를 막기 위해 양쪽 다 비어있지 않은지부터 확인한다. 앱 곳곳의 중복된 비밀번호 확인
+    //    게이트가 전부 이 함수를 거치도록 통일.
+    function adminPwMatches(pw) {
+        const target = getAdminPassword();
+        return !!target && !!pw && pw.toLowerCase() === target.toLowerCase();
     }
     function setAdminPassword(newPw) {
         try { localStorage.setItem(ADMIN_PW_STORAGE_KEY, JSON.stringify({ pw: newPw, updatedAt: Date.now() })); return true; }
         catch(e) { return false; }
     }
+    // 💡 비밀번호 확인 게이트가 실패했을 때 보여줄 안내 — 아예 미동기화 상태(빈 값)인지, 그냥 오타인지
+    //    구분해서 알려준다("비밀번호가 틀렸습니다"만 계속 뜨면 사용자가 원인을 못 찾고 헤맴).
+    function adminPwGateFailMessage() {
+        return hasAdminPassword()
+            ? window._t('비밀번호가 올바르지 않습니다.', 'The password is incorrect.')
+            : window._t(
+                '🔒 이 브라우저는 아직 팀 비밀번호가 동기화되지 않았습니다.\n상단 "구글 드라이브 연동"으로 로그인하면 자동으로 동기화됩니다.',
+                "🔒 This browser hasn't synced the team password yet.\nSign in via \"Connect Google Drive\" above to sync it automatically."
+            );
+    }
     function verifyAdminPassword(promptMessage) {
+        if (!hasAdminPassword()) { alert(adminPwGateFailMessage()); return false; }
         let pw = prompt(promptMessage);
         if (!pw) return false;
-        const target = getAdminPassword().toLowerCase();
         let maxTry = 5;
         for (let i = 0; i < maxTry; i++) {
-            if (pw.toLowerCase() === target) return true;
+            if (adminPwMatches(pw)) return true;
             let remain = maxTry - i - 1;
             if (remain === 0) break;
             pw = prompt(window._currentLang === 'en' ? `❌ Incorrect password. (case-insensitive)\nAttempts remaining: ${remain}\n\nEnter password again.` : `❌ 비밀번호가 틀렸습니다. (대/소문자 구분 없음)\n남은 시도: ${remain}회\n\n비밀번호를 다시 입력하세요.`);
@@ -224,9 +247,31 @@
     window.changeAdminPassword = async function() {
         const oldPw = getAdminPassword();
         const _cpEn = window._currentLang === 'en';
-        if (!verifyAdminPassword(_cpEn ? '🔑 Enter current admin password to change it.\n(case-insensitive)' : '🔑 비밀번호를 변경하려면 현재 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
-            alert(_cpEn ? '❌ Authentication failed. Change cancelled.' : '❌ 비밀번호 인증 실패. 변경이 취소되었습니다.');
-            return;
+        if (oldPw) {
+            // 이 브라우저에 이미 팀 비밀번호가 저장돼 있음 — 평소처럼 본인 확인 후 변경
+            if (!verifyAdminPassword(_cpEn ? '🔑 Enter current admin password to change it.\n(case-insensitive)' : '🔑 비밀번호를 변경하려면 현재 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)')) {
+                alert(_cpEn ? '❌ Authentication failed. Change cancelled.' : '❌ 비밀번호 인증 실패. 변경이 취소되었습니다.');
+                return;
+            }
+        } else {
+            // 💡 [2026-09-12] 이 브라우저는 아직 팀 비밀번호를 모르는 상태(최초 설정 또는 미동기화) —
+            //    확인할 기존 비밀번호가 없으니 본인 확인은 건너뛰되, Drive에 이미 팀 비밀번호가 설정돼
+            //    있다면 "모르는 채로 새로 덮어써서 이미 동기화된 다른 팀원들을 잠그는" 사고를 막기 위해
+            //    경고 후 진행 여부를 묻는다.
+            try {
+                const tokenObj0   = gapi.client.getToken();
+                const driveToken0 = (tokenObj0 ? tokenObj0.access_token : null) || window.googleAccessToken;
+                if (driveToken0 && window.getOrCreateBackupFolder && window._findDriveFile) {
+                    const folderId0   = await window.getOrCreateBackupFolder(driveToken0);
+                    const hashFileId0 = await window._findDriveFile(driveToken0, folderId0, 'gantt_pw_sync.json');
+                    if (hashFileId0) {
+                        const proceed = confirm(_cpEn
+                            ? "⚠️ This browser has no saved team password, but Drive already has one set.\nIf you don't know it, setting a new one here will lock out teammates who already synced the old one.\n\nIf you're not sure, cancel and sign in with Google instead — it will prompt you to sync the existing password automatically.\n\nContinue and overwrite it anyway?"
+                            : '⚠️ 이 브라우저엔 저장된 팀 비밀번호가 없지만, Drive에는 이미 팀 비밀번호가 설정되어 있습니다.\n모르는 채로 여기서 새로 설정하면, 기존 비밀번호를 이미 동기화한 다른 팀원들이 잠길 수 있습니다.\n\n확실하지 않다면 취소하고 구글 로그인을 이용하세요 — 기존 비밀번호를 입력해 동기화하라는 안내가 자동으로 뜹니다.\n\n그래도 새로 덮어쓰시겠습니까?');
+                        if (!proceed) return;
+                    }
+                }
+            } catch(e) { /* Drive 확인 실패해도 최초 설정 흐름 자체는 막지 않음 */ }
         }
         let newPw = prompt(_cpEn ? '🔑 Enter new password.' : '🔑 새 비밀번호를 입력하세요.');
         if (!newPw || !newPw.trim()) return;
