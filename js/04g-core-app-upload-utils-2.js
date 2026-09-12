@@ -924,10 +924,12 @@
 3. 그 중 특히 챙겨야 할 것(지연/오늘 마감/내용상 리스크가 있는 것)이 있으면 짚어주세요.
 4. 근거로 인용할 때만 업무명을 언급하고, 목록 나열이 답변의 전부가 되지 않게 하세요.
 5. ⚠️ 서술형으로 풀어 쓰거나 여러 업무를 하나의 문단/그룹으로 묶어 설명하더라도, 그 안에서 구체적으로
-   언급한 업무마다 "#G숫자"와 "기간:" 값은 절대 생략하지 마세요 — 예를 들어 그룹핑된 문단이라면 각 문장이나
-   소제목 옆에 "(#G46, 기간:8/26~8/27)"처럼 괄호로 붙이세요. 이 두 정보는 목록 형식(글머리 기호 나열)일 때만
-   붙이는 게 아니라, 요약을 "narrative(서술형)"로 풀어 쓸 때도 인용하는 모든 업무에 반드시 동반되어야 하는
-   근거 표시입니다(사용자가 그 번호를 클릭해 실제 업무로 이동하거나 알람을 걸 수 있으므로 빠지면 안 됨).
+   언급한 업무마다 "#G숫자"는 절대 생략하지 마세요 — 예를 들어 그룹핑된 문단이라면 각 문장 끝에
+   "(#G46)"처럼 괄호로 붙이세요. 이 번호는 목록 형식(글머리 기호 나열)일 때만 붙이는 게 아니라,
+   요약을 "narrative(서술형)"로 풀어 쓸 때도 인용하는 모든 업무에 반드시 동반되어야 하는 근거 표시입니다
+   (사용자가 그 번호를 클릭해 실제 업무로 이동하거나 알람을 걸 수 있으므로 빠지면 안 됨).
+   ⚠️ "기간:" 날짜 정보는 시스템이 자동으로 "#G번호" 옆에 표시하므로 답변 텍스트에 직접 쓰지 마세요.
+   ⚠️ 내용이 없는 빈 괄호 "()"는 절대 쓰지 마세요 — 실제 #G 번호가 들어갈 경우에만 괄호를 씁니다.
 반대로 "지연된 업무 목록 보여줘"처럼 명시적으로 "목록/리스트"를 요청한 경우엔 목록으로 답해도 됩니다.
 
 🔗 표별 인용 번호 규칙 — [업무 목록]/[Customer SPEC]/[M.C Table (원가/공수)]/[Elec Parts SPEC]/[주요 자재]/
@@ -1451,10 +1453,12 @@ ${question}
         // 🐛 [2026-09-11 버그 수정] AI 요약에서와 같은 원인(AI가 "기간:" 라벨 없이 "(9/3~9/4)"처럼
         //    괄호로만 감싸 쓰는 경우)이 채팅창에서도 그대로 재현됨 — "(9/3~9/4) #G1 업무는~"처럼 답하면
         //    #G1 뒤에 자동으로 붙는 배지와 겹쳐 "(9/3~9/4) (9/3~9/4)"로 중복 표시됐다. "기간:" 라벨
-        //    유무와 무관하게 괄호로 감싼 M/D~M/D 범위도 함께 제거하도록 확장(위치 재배치는 하지 않음 —
-        //    채팅 한 줄에 서로 다른 여러 업무가 언급되는 경우가 많아 각 참조 바로 옆에 날짜가 붙는
-        //    현재 배치가 더 명확함, AI 요약과의 차이점).
+        //    유무와 무관하게 괄호로 감싼 M/D~M/D 범위도 함께 제거하도록 확장.
         escaped = escaped.replace(/,?\s*(?:기간:\d+\/\d+(?:~\d+\/\d+)?|\(\d+\/\d+~\d+\/\d+\))/g, '');
+        // 💡 [2026-09-12 신규] 빈 괄호 () 제거 — AI가 담당자 없거나 #G 참조만 남고 실제 텍스트가 빠진
+        //    경우 "()" 가 그대로 출력되는 문제 방지. 날짜 제거 후에 실행해야 "(날짜)"만 제거된 뒤 남는
+        //    "()" 도 잡을 수 있음.
+        escaped = escaped.replace(/\(\s*\)/g, '');
         escaped = window._linkifyTaskRefs(escaped); // #G{n} → 클릭 이동 링크(chip 포함)
         const lines = escaped.split('\n');
         // 💡 [2026-09-03 신규/수정] 문장/글머리 div 에 onclick(_aiToggleLineRefs) + hover 하이라이트 추가.
@@ -1462,9 +1466,13 @@ ${question}
         const _lineOnClick = 'window._aiToggleLineRefs(this, event);';
         const _lineHover   = "this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.12)':'rgba(44,95,138,0.04)';";
         const _lineOut     = "this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.07)':'';";
+        // 💡 [2026-09-12 신규] AI 요약처럼 날짜 배지를 줄 끝으로 이동 — ref chip 이 문장 앞에 붙어
+        //    "(날짜) 내용..." 형태로 나오던 것을 "내용... (날짜)" 형태로 바꿈. per-line 적용이라
+        //    여러 업무를 동시 인용하는 줄도 각 날짜가 그 줄 끝에 함께 붙는다.
+        const _moveDates = window._moveRefDateBadgesToEnd || function(h) { return h; };
         return lines.map(function(line) {
             const heading = line.match(/^(#{1,4})\s+(.*)$/);
-            if (heading) return `<div style="font-weight:bold; margin:8px 0 3px;">${heading[2]}</div>`;
+            if (heading) return _moveDates(`<div style="font-weight:bold; margin:8px 0 3px;">${heading[2]}</div>`);
             const bullet = line.match(/^(\s*)[-*]\s+(.*)$/);
             if (bullet) {
                 const depth = Math.floor(bullet[1].length / 2);
@@ -1474,17 +1482,17 @@ ${question}
                 //    클릭해도 아무 변화 없어서 사용자가 "동작 안 함"으로 느낌 — chip 있는 라인만 interactive 처리
                 const hasChips = bullet[2].includes('ai-ref-chip');
                 if (hasChips) {
-                    return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${mark}&nbsp;${bullet[2]}</div>`;
+                    return _moveDates(`<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${mark}&nbsp;${bullet[2]}</div>`);
                 }
-                return `<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px;">${mark}&nbsp;${bullet[2]}</div>`;
+                return _moveDates(`<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px;">${mark}&nbsp;${bullet[2]}</div>`);
             }
             if (line.trim() === '') return '<div style="height:6px;"></div>';
             // 💡 [2026-09-04 버그수정] 일반 문장도 chip 유무 확인 후 interactive 처리
             const hasLineChips = line.includes('ai-ref-chip');
             if (hasLineChips) {
-                return `<div style="margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`;
+                return _moveDates(`<div style="margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`);
             }
-            return `<div style="margin-bottom:2px;">${line}</div>`;
+            return _moveDates(`<div style="margin-bottom:2px;">${line}</div>`);
         }).join('');
     };
 
