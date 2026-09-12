@@ -53,7 +53,10 @@ window.inboxOpenDistribute = async function(uid) {
 
     // 💡 [다수 프로젝트 선택] selectedFiles: {fileId: fileName} — 체크된(선택된) 모든 대상 파일을 추적.
     //    0개=패널 숨김, 1개=기존 단일모드(L0 수동 지정) 그대로, 2개 이상=자동위치 일괄전송 모드로 전환.
-    window._distCtx = { uid: uid, task: JSON.parse(JSON.stringify(r)), taskName: (r['업무명'] || '새 업무'), selectedFiles: {} };
+    // 🐛 [2026-09-12 버그수정] mailRaw를 안 담아서 "다른 프로젝트로 전송"으로 배분된 업무는
+    //    대상 프로젝트에서 "원문 보기" 버튼이 사라지는 문제(원본 메일 데이터가 있는데도 유실됨) —
+    //    아래 inboxDistExecute/inboxDistExecuteMulti가 이 mailRaw를 buildMailTaskRow까지 전달해야 함.
+    window._distCtx = { uid: uid, task: JSON.parse(JSON.stringify(r)), taskName: (r['업무명'] || '새 업무'), selectedFiles: {}, mailRaw: it.mailRaw || null };
     inlineEl.dataset.uid = uid;
     inlineEl.style.display = 'block';
     // 💡 "다른 프로젝트" 패널이 펼쳐진 동안은 "현재 프로젝트"용 자동위치 줄을 숨겨 중복처럼 안 보이게 함
@@ -414,7 +417,7 @@ window.inboxDistExecute = async function(attempt) {
 
         // 행 생성 — 대상 프로젝트의 컬럼 구조(colIdx) 기준
         const tCol = ctx.saveData.colIdx;
-        const built = window.buildMailTaskRow(ctx.task, ctx.rows, tCol);
+        const built = window.buildMailTaskRow(ctx.task, ctx.rows, tCol, ctx.mailRaw);
         built.row._알림 = true; // ✅ 배분 업무는 대상 프로젝트에서 D-7/3/1 알림 대상으로 자동 설정
 
         // L0~4 구간 내 시작일 기준 최적 위치 계산 (자동 미충족 시 구간 끝 fallback)
@@ -435,7 +438,11 @@ window.inboxDistExecute = async function(attempt) {
             uid: distUid, inboxUid: ctx.uid,
             task: JSON.parse(JSON.stringify(ctx.task)),
             taskName: built.taskName, targetL0: chosenL0,
-            insertedAt: nowIso, by: userName, source: '업무보관함', processed: false
+            insertedAt: nowIso, by: userName, source: '업무보관함', processed: false,
+            // 🐛 [2026-09-12 버그수정] 원장에도 mailRaw를 같이 남겨야, 이 배분을 아직 모르는 다른
+            //    팀원 세션이 나중에 저장할 때 돌아가는 자동 병합 경로(아래 buildMailTaskRow(d.task) 참고)도
+            //    "원문 보기" 버튼을 살릴 수 있다 — 원장 항목에 없으면 그 경로는 원문을 영영 알 수 없음.
+            mailRaw: ctx.mailRaw || null
         });
         ctx.saveData.changeLogs = ctx.saveData.changeLogs || [];
         ctx.saveData.changeLogs.push({
@@ -499,7 +506,9 @@ window.inboxDistExecute = async function(attempt) {
 //    두 파일에 중복 구현하지 않기 위함.
 //    - task: buildMailTaskRow가 받는 업무 객체(업무명/시작일/완료일/상세내용 등 한글 키)
 //    - targets: [{ id: <Drive fileId>, name: <파일명> }, ...]
-//    - opts: { inboxUid, source, onProgress(i, n, name) } 전부 선택
+//    - opts: { inboxUid, source, mailRaw, onProgress(i, n, name) } 전부 선택. mailRaw를 넘기면
+//      새로 생성되는 각 행에도 "원문 보기" 버튼이 뜨도록 그대로 심어준다(2026-09-12 버그수정 —
+//      예전엔 안 넘겨서 이 헬퍼를 거친 배분은 전부 원문 데이터가 유실됐음).
 //    ⚠️ inboxDistExecute(단일모드)와 달리 "이전에 받아둔 내용이 그새 바뀌었는지" 사전 대조를 하지
 //    않는다 — 대상마다 실행 직전에 매번 새로 fetch해서 바로 건축→저장하므로 충돌 창(window) 자체가
 //    이미 최소화되어 있고, N개 대상 각각에 재시도 루프까지 넣으면 복잡도만 커진다. 만에 하나 그 짧은
@@ -537,7 +546,7 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
             const l0s = window.buildL0SectionInfo(rows, tCol);
             const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '');
 
-            const built = window.buildMailTaskRow(task, rows, tCol);
+            const built = window.buildMailTaskRow(task, rows, tCol, opts.mailRaw);
             built.row._알림 = true;
             const posInfo = window.computeL0InsertPos(rows, tCol, chosenL0, task['시작일'], true);
             const pos = posInfo.pos;
@@ -552,7 +561,8 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
                 uid: distUid, inboxUid: opts.inboxUid || null,
                 task: JSON.parse(JSON.stringify(task)),
                 taskName: built.taskName, targetL0: chosenL0,
-                insertedAt: nowIso, by: userName, source: opts.source || '다중전송', processed: false
+                insertedAt: nowIso, by: userName, source: opts.source || '다중전송', processed: false,
+                mailRaw: opts.mailRaw || null // 🐛 [2026-09-12] 위 inboxDistExecute와 동일한 이유로 원장에도 보존
             });
             saveData.changeLogs = saveData.changeLogs || [];
             saveData.changeLogs.push({
@@ -601,7 +611,7 @@ window.inboxDistExecuteMulti = async function() {
     const targets = ids.map(function(id) { return { id: id, name: ctx.selectedFiles[id] }; });
 
     const result = await window.distSendTaskToTargets(ctx.task, targets, {
-        inboxUid: ctx.uid, source: '업무보관함(다중전송)',
+        inboxUid: ctx.uid, source: '업무보관함(다중전송)', mailRaw: ctx.mailRaw,
         onProgress: function(i, n) { btn.textContent = '⏳ 전송 중... (' + i + '/' + n + ')'; }
     });
 
@@ -692,7 +702,10 @@ window.mergeRemoteDistributions = async function(fileId) {
             //    하고 있었으므로, 그 함수를 그대로 재사용해서 자동 병합 경로도 동일하게 맞춘다.
             //    L0 구간 자체를 못 찾거나(로컬에 그 개발단계가 없음) targetL0이 '__END__'/미지정이면
             //    기존과 동일하게 맨 끝으로 자연스럽게 fallback된다(computeL0InsertPos 내부 처리).
-            const built = window.buildMailTaskRow(d.task);
+            // 🐛 [2026-09-12 버그수정] d.mailRaw를 안 넘겨서, 이 자동 병합 경로로(=아직 로컬에 반영 안 된
+            //    남의 배분을 뒤늦게 merge할 때) 들어오는 행은 항상 "원문 보기" 버튼이 없었다 — 위
+            //    distributions.push()들이 원장에 mailRaw를 같이 남기게 고쳤으니 여기서도 그대로 심어준다.
+            const built = window.buildMailTaskRow(d.task, undefined, undefined, d.mailRaw || null);
             built.row._알림 = true;
             const posInfo = window.computeL0InsertPos(globalData, colIdx, d.targetL0 || '__END__', d.task && d.task['시작일'], true);
             const pos = posInfo.pos;

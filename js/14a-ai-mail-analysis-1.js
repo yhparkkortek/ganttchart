@@ -909,6 +909,9 @@ window.mailDistributeToProject = async function() {
                     snippet: (task['상세내용'] || '').substring(0, 150)
                 }
             },
+            // 🐛 [2026-09-12 버그수정] mailRaw를 안 담아서, 이 배분 큐를 나중에 25-ai-learning.js가
+            //    소비할 때(_openReassignInbox/_applyReassignedTasks) "원문 보기" 버튼이 없는 행이 됐음
+            mailRaw: window._mailParsedRaw || null,
             status: 'pending'
         };
 

@@ -954,7 +954,8 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
             uid: distUid, inboxUid: uid,
             task: JSON.parse(JSON.stringify(task)),
             taskName: built.taskName, targetL0: chosenL0,
-            insertedAt: nowIso, by: userName, source: '메일자동처리(커트라인)', processed: false
+            insertedAt: nowIso, by: userName, source: '메일자동처리(커트라인)', processed: false,
+            mailRaw: mailRaw || null // 🐛 [2026-09-12] 다른 팀원 세션의 자동 병합 경로도 "원문 보기"를 살리도록 원장에 보존
         });
         saveData.changeLogs = saveData.changeLogs || [];
         saveData.changeLogs.push({
@@ -2132,7 +2133,9 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
         }
 
         if (window.showToast) window.showToast(window._t('📤 ' + targets.length + '개 프로젝트로 전송 중...', '📤 Sending to ' + targets.length + ' project(s)...'), 'info');
-        const result = await window.distSendTaskToTargets(task, targets, { source: '미분류 재분석(다중전송)' });
+        // 🐛 [2026-09-12 버그수정] mailRaw를 안 넘겨서 이 경로로 배분된 업무는 "원문 보기" 버튼이 사라졌음
+        const mailRawObj = { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName };
+        const result = await window.distSendTaskToTargets(task, targets, { source: '미분류 재분석(다중전송)', mailRaw: mailRawObj });
 
         r.error = null;
         if (result.okNames.length) {
