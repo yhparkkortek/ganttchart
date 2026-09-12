@@ -1773,6 +1773,19 @@
             //    처럼 원인을 알 수 없는 알림만 뜨는 문제가 있었다. 콘솔에 원본 객체를 남기고, 알림에는
             //    gapi 오류 형태까지 포함해 실제 사유(권한 부족/401 등)가 보이게 한다.
             console.error('[프로젝트 열기] 실패:', err);
+            const _loadStatus = err && (err.status || (err.result && err.result.error && err.result.error.code));
+            // 🐛 [2026-09-12 버그 수정] saveToGoogleDrive는 401(인증 만료)을 감지하면 _handleDriveDisconnected로
+            //    상단 표시등/재연동 안내까지 처리하는데, 프로젝트 "열기" 경로엔 이 처리가 아예 없어서
+            //    똑같이 토큰이 만료된 상황에서도 "Request had invalid authentication credentials..." 같은
+            //    구글 원문 에러만 그대로 노출되고 있었다. 저장 경로와 동일하게 401을 "연결 끊김"으로 처리.
+            if (_loadStatus === 401) {
+                if (window._handleDriveDisconnected) window._handleDriveDisconnected('load-401');
+                alert(window._t(
+                    "🔒 구글 인증 세션이 만료되었습니다.\n\n상단의 [🔵 구글 드라이브 연동하기] 버튼을 다시 눌러 로그인을 완료한 후 다시 열어주세요.",
+                    "🔒 The Google auth session expired.\n\nPlease reconnect using the [🔵 Connect Google Drive] button at the top, then try opening it again."
+                ));
+                return;
+            }
             const _loadErrMsg = (err && err.result && err.result.error && err.result.error.message)
                 || (err && err.message)
                 || (typeof err === 'string' ? err : JSON.stringify(err));
