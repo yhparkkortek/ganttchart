@@ -137,9 +137,9 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 
 ### 📧 메일 원문(`mailRaw`) 전달 규칙 — "원문 보기" 버튼이 빠지는 버그 패턴 (2026-09-12)
 
-Gantt 행(`row._mailRaw`)이나 Task Inbox 항목(`it.mailRaw`)에 `{subject, sender, date, body2000,
-fileName}` 형태 객체가 있어야 "📧 원문 보기" 버튼이 뜬다(`14c-task-inbox.js`). 메일 분석으로 만든
-업무가 **경유지를 하나 더 거칠 때마다**(보관함 → 다른 프로젝트로 전송, 미분류 재분석 → 다중 배분,
+Gantt 행(`row._mailRaw`)이나 Task Inbox 항목(`it.mailRaw`)에 `{subject, sender, to, cc, date,
+body2000, fileName}` 형태 객체가 있어야 "📧 원문 보기" 버튼이 뜬다(`14c-task-inbox.js`). 메일 분석으로
+만든 업무가 **경유지를 하나 더 거칠 때마다**(보관함 → 다른 프로젝트로 전송, 미분류 재분석 → 다중 배분,
 배분 원장을 다른 팀원 세션이 나중에 병합 등) 그 경유지 코드가 `mailRaw`를 안 넘기면 원문이 조용히
 사라지는 버그가 반복 발생했다(2026-09-12에 5곳 동시 발견·수정: `14d-distribution-ledger.js`의
 `inboxOpenDistribute`/`inboxDistExecute`/`distSendTaskToTargets`/`inboxDistExecuteMulti`,
@@ -155,6 +155,23 @@ fileName}` 형태 객체가 있어야 "📧 원문 보기" 버튼이 뜬다(`14c
   보기가 되고 어떤 건 안 된다"는 제보의 실제 원인이 이것이었다.
 - `gantt_ai_reassign_queue_v1`(localStorage) 큐에 항목을 넣을 때도 `mailRaw` 필드를 같이 넣을 것
   (`25-ai-learning.js`의 `_pushReassignQueue` 호출부가 원조 패턴 — `row._mailRaw || null`).
+- **수신자(to/cc) 실제 주소도 mailRaw의 일부다(2026-09-12 추가)**: 백엔드 POP3 수신(`kortek_backend.py`
+  `/fetch-mail`)과 `.eml` 첨부 파싱(`15a-mail-attachment-tab.js`의 `mfParseFile`)은 원래부터 `to`/`cc`
+  헤더를 뽑아내고 있었는데, 그 값이 AI 프롬프트용 힌트(`_recipHint`, "수신인 판별" 문맥)로만 잠깐
+  쓰이고 `mailRaw` 조립 시점에는 계속 버려지고 있었다 — 그 결과 "메일 원문 보기"엔 발신자만 보이고
+  수신자는 아예 안 뜨고, AI가 업무명/담당자에 "수신인 미상"류 문구를 쓰게 됐다. `mailRaw`를 새로
+  조립하는 곳이 있으면 소스 객체(`mail.to`/`mail.cc` 또는 `parsed.to`/`parsed.cc`)에 값이 있는 한
+  같이 넣을 것 — AI가 화면에 "다수"/"OO팀"처럼 축약해서 보여주는 것과 무관하게, 실제 이메일 주소는
+  항상 구조화된 필드로 따라다녀야 나중에 발송/알람 기능이 실제로 쓸 수 있다. 단, 순수 텍스트
+  붙여넣기(직접입력 탭)는 애초에 헤더가 없으니 `to`/`cc`가 항상 빈 값인 게 정상.
+- **같은 날짜 업무의 등록 순서 = 실제 메일 발송 시각순(2026-09-12 추가)**: 메일의 시:분까지는 이미
+  백엔드가 `date`를 `"YYYY-MM-DD HH:MM"`로 캡처해서 `mailRaw.date`에 항상 들어있었지만,
+  `window.computeL0InsertPos()`가 위치를 계산할 때 시작일(날짜만, 시간 없음) 비교만 하고 있어서 —
+  같은 날짜인 업무끼리는 "실제 시각순"이 아니라 "등록(분석) 처리 순서"대로 꽂혔다. 지금은 같은
+  구간 안에서 날짜가 동률인 두 행이 둘 다 `_mailRaw.date`를 갖고 있으면 그 시:분까지 비교해서 순서를
+  정한다(`computeL0InsertPos`의 6번째 인자 `mailSentAt` — 새 호출부를 추가할 때 mailRaw가 있으면
+  `mailRaw.date`를 꼭 같이 넘길 것). 어느 한쪽이라도 `mailRaw`가 없으면(수동 입력 업무 등) 기존과
+  동일하게 날짜만 비교하는 동작으로 조용히 폴백한다.
 
 ### 💬 AI 문답 (js/04g~04h, 04j) — 구조와 트러블슈팅 지침
 

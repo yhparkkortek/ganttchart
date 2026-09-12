@@ -353,7 +353,7 @@ window.distRecomputePreview = function() {
     const autoEl = document.getElementById('dist-auto-position');
     const previewEl = document.getElementById('dist-position-preview');
     if (!ctx || !ctx.saveData || !sel || !previewEl) return;
-    const info = window.computeL0InsertPos(ctx.rows, ctx.saveData.colIdx, sel.value, ctx.task['시작일'], autoEl ? autoEl.checked : true);
+    const info = window.computeL0InsertPos(ctx.rows, ctx.saveData.colIdx, sel.value, ctx.task['시작일'], autoEl ? autoEl.checked : true, ctx.mailRaw && ctx.mailRaw.date);
     previewEl.textContent = info.previewLabel;
 };
 
@@ -422,7 +422,7 @@ window.inboxDistExecute = async function(attempt) {
 
         // L0~4 구간 내 시작일 기준 최적 위치 계산 (자동 미충족 시 구간 끝 fallback)
         const autoEl = document.getElementById('dist-auto-position');
-        const posInfo = window.computeL0InsertPos(ctx.rows, tCol, chosenL0, ctx.task['시작일'], autoEl ? autoEl.checked : true);
+        const posInfo = window.computeL0InsertPos(ctx.rows, tCol, chosenL0, ctx.task['시작일'], autoEl ? autoEl.checked : true, ctx.mailRaw && ctx.mailRaw.date);
         const pos = posInfo.pos;
         if (chosenL0 !== '__END__' && tCol.devStage !== -1) {
             built.row[tCol.devStage] = chosenL0;
@@ -548,7 +548,7 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
 
             const built = window.buildMailTaskRow(task, rows, tCol, opts.mailRaw);
             built.row._알림 = true;
-            const posInfo = window.computeL0InsertPos(rows, tCol, chosenL0, task['시작일'], true);
+            const posInfo = window.computeL0InsertPos(rows, tCol, chosenL0, task['시작일'], true, opts.mailRaw && opts.mailRaw.date);
             const pos = posInfo.pos;
             if (chosenL0 !== '__END__' && tCol.devStage !== -1) built.row[tCol.devStage] = chosenL0;
             rows.splice(pos, 0, built.row);
@@ -707,7 +707,7 @@ window.mergeRemoteDistributions = async function(fileId) {
             //    distributions.push()들이 원장에 mailRaw를 같이 남기게 고쳤으니 여기서도 그대로 심어준다.
             const built = window.buildMailTaskRow(d.task, undefined, undefined, d.mailRaw || null);
             built.row._알림 = true;
-            const posInfo = window.computeL0InsertPos(globalData, colIdx, d.targetL0 || '__END__', d.task && d.task['시작일'], true);
+            const posInfo = window.computeL0InsertPos(globalData, colIdx, d.targetL0 || '__END__', d.task && d.task['시작일'], true, d.mailRaw && d.mailRaw.date);
             const pos = posInfo.pos;
             if (d.targetL0 && d.targetL0 !== '__END__' && colIdx.devStage !== -1) {
                 built.row[colIdx.devStage] = d.targetL0;

@@ -726,7 +726,18 @@ window.formatYM = function(ts) {
     return d.getFullYear() + '/' + String(d.getMonth() + 1).padStart(2, '0');
 };
 
-window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
+// 💡 [2026-09-12 신규] mailSentAt: 이 업무를 만든 메일의 실제 발송시각 문자열("YYYY-MM-DD HH:MM",
+//    mailRaw.date 그대로). 같은 날짜(시작일)로 묶이는 업무가 여러 건이면, 기존엔 그냥 "이미 있는
+//    같은 날짜 업무들 뒤"에 등록 순서대로 꽂혔음(날짜만 비교하고 시:분 정보는 아예 안 씀) — 새로
+//    등록하는 메일 업무와 구간 내 기존 업무 양쪽 다 mailRaw.date(실제 발송시각)를 알면, 그 시각까지
+//    비교해서 진짜 시간 순서로 꽂는다. 어느 한쪽이라도 mailRaw가 없으면(수동입력 업무 등) 기존과
+//    동일하게 "날짜만 비교" 동작으로 조용히 폴백 — 회귀 없음.
+function _msMailFullTs(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr); // mailRaw.date는 백엔드/eml파서가 이미 "YYYY-MM-DD HH:MM" 로컬시각으로 내려줌
+    return isNaN(d.getTime()) ? null : d.getTime();
+}
+window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto, mailSentAt) {
     // 💡 [2026-09-12 i18n] 이 함수의 previewLabel은 업무 보관함(Task Inbox)의 미리보기 줄
     // (inbox-preview-*)에 그대로 노출되는데, 언어 분기가 아예 없어서 영문 모드에서도 항상
     // 한글로만 표시되고 있었음.
@@ -769,6 +780,7 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
         ? parseDateValue(startDateStr).ts : null;
     if (!startTs) return fallback; // 날짜 미확정 → fallback 유지
 
+    const newMailTs = _msMailFullTs(mailSentAt);
     let bestIndex = -1;
     for (let i = first; i <= last; i++) {
         const row = rows[i]; if (!row) continue;
@@ -778,7 +790,15 @@ window.computeL0InsertPos = function(rows, ci, l0Value, startDateStr, useAuto) {
             const _p = (typeof parseDateValue === 'function') ? parseDateValue(row[ci.start]) : null;
             if (_p) rowStartTs = _p.ts;
         }
-        if (rowStartTs && rowStartTs > startTs) { bestIndex = i - 1; break; }
+        if (!rowStartTs) continue;
+        if (rowStartTs > startTs) { bestIndex = i - 1; break; }
+        // 💡 같은 날짜(rowStartTs===startTs)인데 이 기존 행도 메일 발송시각을 알고 있고, 그게 새로
+        //    등록하는 메일보다 실제로 더 늦은 시각이면 — 날짜만 보면 동률이지만 시간까지 보면 이
+        //    행보다 먼저 와야 하므로 여기서 끊는다(기존엔 이 케이스를 그냥 지나쳐서 무조건 맨 뒤로 갔음).
+        if (rowStartTs === startTs && newMailTs != null && row._mailRaw) {
+            const rowMailTs = _msMailFullTs(row._mailRaw.date);
+            if (rowMailTs != null && rowMailTs > newMailTs) { bestIndex = i - 1; break; }
+        }
     }
     if (bestIndex === -1) return fallback; // 구간 내 모든 행보다 늦은 날짜 → 결과적으로 구간 끝과 동일
 

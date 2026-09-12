@@ -211,12 +211,15 @@ window.msFetchMail = async function() {
 
                 item = {
                     idx: i, fileName: mail.fileName,
-                    subject: mail.subject, sender: mail.sender, date: mail.date,
+                    subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
                     body: mail.body,
                     // 💡 [2026-08-24 버그 수정] 이 필드가 없어서 "⚡ 선택항목 연속등록"(AR.batchInsert)이
                     //    r.mailRaw를 못 찾고 엉뚱한(직접입력 탭 전용) window._mailParsedRaw로 대체하려다
                     //    실패 → Gantt에 꽂힌 행에 _mailRaw가 안 남아 "📧 원문 보기" 버튼이 사라졌었다.
-                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
+                    // 🐛 [2026-09-12 버그수정] to/cc(실제 수신자/참조 주소)를 여기서부터 버리고 있었음 —
+                    //    "메일 원문 보기"에 수신자가 안 뜨고, 발송/알람 등 나중에 실제 주소가 필요한
+                    //    기능도 이 mailRaw를 거치는 한 영영 못 구했다. 원본 헤더 그대로 보존.
+                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
                     project: window._msProjectTagLabel(projectTag), task,
                     _projectTag: projectTag,
                     _score: scoreResult ? scoreResult.total : null,
@@ -231,9 +234,9 @@ window.msFetchMail = async function() {
             } catch(e) {
                 item = {
                     idx: i, fileName: mail.fileName,
-                    subject: mail.subject, sender: mail.sender, date: mail.date,
+                    subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date,
                     body: mail.body,
-                    mailRaw: { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
+                    mailRaw: { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName, attachments: mail.attachments || [] },
                     project: null, task: null,
                     selected: false, registered: false, error: e.message
                 };
@@ -248,7 +251,7 @@ window.msFetchMail = async function() {
 
             // 💡 [완전자동] mail_mode='full'이면 TaskInbox 대기 없이 바로 Gantt 등록 시도
             window._msTryFullAutoRegister(item,
-                { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName },
+                { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName },
                 () => msRenderList(window._msResults));
 
             if (i < data.data.length - 1 && !window._msAnalyzeCancelled) await new Promise(r => setTimeout(r, 4000));
@@ -892,7 +895,7 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
                 const chosenL0 = window.pickL0SectionByDate(l0s, task['시작일'] || '') || '__END__';
                 const built = window.buildMailTaskRow(task, undefined, undefined, mailRaw);
                 if (setAlarm) built.row._알림 = true;
-                const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, task['시작일'], true);
+                const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, task['시작일'], true, mailRaw && mailRaw.date);
                 const pos = posInfo.pos;
                 if (chosenL0 !== '__END__' && colIdx.devStage !== -1) built.row[colIdx.devStage] = chosenL0;
                 globalData.splice(pos, 0, built.row);
@@ -939,7 +942,7 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
         const built = window.buildMailTaskRow(task, rows, saveData.colIdx, mailRaw);
         if (setAlarm) built.row._알림 = true; // 💡 커트라인 이상일 때만 자동알람(D-7/3/1) 대상으로 설정
 
-        const posInfo = window.computeL0InsertPos(rows, saveData.colIdx, chosenL0, task['시작일'], true);
+        const posInfo = window.computeL0InsertPos(rows, saveData.colIdx, chosenL0, task['시작일'], true, mailRaw && mailRaw.date);
         const pos = posInfo.pos;
         if (chosenL0 !== '__END__' && saveData.colIdx.devStage !== -1) {
             built.row[saveData.colIdx.devStage] = chosenL0;
@@ -1196,7 +1199,7 @@ window._autoMailFetchTick = async function() {
 
                     item = {
                         idx: window._msResults.length, fileName: mail.fileName,
-                        subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
+                        subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body: mail.body,
                         project: window._msProjectTagLabel(resolvedProjectTag), _projectTag: resolvedProjectTag,
                         task, selected: !!task, registered: false,
                         error: !task ? 'AI분석실패' : null,
@@ -1205,7 +1208,7 @@ window._autoMailFetchTick = async function() {
                 } catch(e) {
                     item = {
                         idx: window._msResults.length, fileName: mail.fileName,
-                        subject: mail.subject, sender: mail.sender, date: mail.date, body: mail.body,
+                        subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body: mail.body,
                         project: null, _projectTag: null,
                         task: null, selected: false, registered: false, error: e.message
                     };
@@ -1229,7 +1232,7 @@ window._autoMailFetchTick = async function() {
                     const sourceLabel = finalProjectTag.status === 'ambiguous'
                         ? `${grade}${scoreResult.total}점 메일자동분석(AI판단 후보: ${candidateNames})`
                         : `${grade}${scoreResult.total}점 메일자동분석(${candidateNames})`;
-                    const mailRawObj = { subject: mail.subject, sender: mail.sender, date: mail.date, body2000: mail.body, fileName: mail.fileName };
+                    const mailRawObj = { subject: mail.subject, sender: mail.sender, to: mail.to, cc: mail.cc, date: mail.date, body2000: mail.body, fileName: mail.fileName };
                     window.TaskInbox.add(item.task, {
                         source: sourceLabel, mailRaw: mailRawObj,
                         matchedProject: finalProjectTag,
@@ -1570,7 +1573,7 @@ window._msRenderQueueModal = function(type) {
             const viewBtn = e.target.closest('.ms-queue-view-btn');
             if (viewBtn) {
                 const r = window._msQueueRows && window._msQueueRows[Number(viewBtn.dataset.idx)];
-                if (r && window.showMailRawModal) window.showMailRawModal({ subject: r.subject, sender: r.sender, date: r.date, body2000: r.body });
+                if (r && window.showMailRawModal) window.showMailRawModal({ subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body });
                 return;
             }
             // 💡 [2026-09-01 신규] "🔄 재분석 요청" — 미분류 사유를 읽고 사용자 의견(선택)을 남긴 뒤 그 메일만 다시 판단
@@ -1743,7 +1746,7 @@ window._msBulkReanalyzeUnmatched = async function(opts) {
                         const sourceLabel    = `${grade}${r._score || 0}점 메일자동분석(일괄재분석` +
                             (projectTag.status === 'ambiguous'
                                 ? `, AI판단 후보: ${candidateNames})` : `, ${candidateNames})`);
-                        const mailRawObj = { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName };
+                        const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName };
                         window.TaskInbox.add(task, { source: sourceLabel, mailRaw: mailRawObj, matchedProject: projectTag, alarmWorthy: !!r._alarmWorthy });
                     }
                 }
@@ -2080,7 +2083,7 @@ window._msQueueReanalyze = async function(fileName, hint) {
                 const grade = r._scoreGrade || '⚪';
                 const candidateNames = projectTag.candidates.map(c => c.model || c.customer).join(', ');
                 const sourceLabel = `${grade}${r._score || 0}점 메일자동분석(재분석` + (projectTag.status === 'ambiguous' ? `, AI판단 후보: ${candidateNames})` : `, ${candidateNames})`);
-                const mailRawObj = { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName };
+                const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName };
                 window.TaskInbox.add(task, { source: sourceLabel, mailRaw: mailRawObj, matchedProject: projectTag, alarmWorthy: !!r._alarmWorthy });
             }
         }
@@ -2134,7 +2137,7 @@ window._msQueueReanalyzeMulti = async function(fileName, hint, targets) {
 
         if (window.showToast) window.showToast(window._t('📤 ' + targets.length + '개 프로젝트로 전송 중...', '📤 Sending to ' + targets.length + ' project(s)...'), 'info');
         // 🐛 [2026-09-12 버그수정] mailRaw를 안 넘겨서 이 경로로 배분된 업무는 "원문 보기" 버튼이 사라졌음
-        const mailRawObj = { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName };
+        const mailRawObj = { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName };
         const result = await window.distSendTaskToTargets(task, targets, { source: '미분류 재분석(다중전송)', mailRaw: mailRawObj });
 
         r.error = null;

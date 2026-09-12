@@ -672,8 +672,15 @@ window.showMailRawModal = function(r) {
     }
     const _en2 = window._currentLang === 'en';
     document.getElementById('inbox-mailraw-title').textContent = '📧 ' + (_en2 ? 'Mail Source' : '메일 원문');
+    // 💡 [2026-09-12 신규] 발신자만 있고 수신자(To/Cc)는 아예 안 보이던 문제 — mailRaw에 to/cc가
+    //    이제 같이 보존되니(위 mailRaw 구성부 참고) 있으면 같이 보여준다. 옛 기록 등 to/cc가 없는
+    //    항목은 "수신: -"로 채우지 않고 그 구간 자체를 생략(예전과 동일하게 보이게).
+    const _toCcParts = [];
+    if (r.to) _toCcParts.push(`<b>${_en2 ? 'To' : '수신'}</b>: ${escapeHtml(r.to)}`);
+    if (r.cc) _toCcParts.push(`<b>${_en2 ? 'Cc' : '참조'}</b>: ${escapeHtml(r.cc)}`);
+    const _toCcHtml = _toCcParts.length ? ('&nbsp;&nbsp;|&nbsp;&nbsp;' + _toCcParts.join('&nbsp;&nbsp;|&nbsp;&nbsp;')) : '';
     document.getElementById('inbox-mailraw-meta').innerHTML =
-        `<b>${_en2 ? 'Subject' : '제목'}</b>: ${escapeHtml(r.subject || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Sender' : '발신'}</b>: ${escapeHtml(r.sender || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Date' : '날짜'}</b>: ${escapeHtml(r.date || '-')}`;
+        `<b>${_en2 ? 'Subject' : '제목'}</b>: ${escapeHtml(r.subject || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Sender' : '발신'}</b>: ${escapeHtml(r.sender || '-')}&nbsp;&nbsp;|&nbsp;&nbsp;<b>${_en2 ? 'Date' : '날짜'}</b>: ${escapeHtml(r.date || '-')}${_toCcHtml}`;
     // 💡 [2026-09-09 신규] 첨부파일 목록 표시 — 실제 파일 내용은 가져오지 않고 메타데이터만 pill로 렌더링
     (function() {
         var attDiv = document.getElementById('inbox-mailraw-attachments');
@@ -1170,7 +1177,7 @@ window.inboxRecomputePreview = function(uid) {
     const autoEl = document.getElementById('inbox-auto-' + uid);
     const previewEl = document.getElementById('inbox-preview-' + uid);
     if (!sel || !previewEl) return;
-    const info = window.computeL0InsertPos(globalData, colIdx, sel.value, it.task['시작일'], autoEl ? autoEl.checked : true);
+    const info = window.computeL0InsertPos(globalData, colIdx, sel.value, it.task['시작일'], autoEl ? autoEl.checked : true, it.mailRaw && it.mailRaw.date);
     previewEl.textContent = info.previewLabel;
 };
 
@@ -1189,7 +1196,7 @@ window.inboxPlaceToCurrent = function(uid) {
     const useAuto = autoEl ? autoEl.checked : true;
 
     const built = window.buildMailTaskRow(r, undefined, undefined, it.mailRaw);
-    const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, r['시작일'], useAuto);
+    const posInfo = window.computeL0InsertPos(globalData, colIdx, chosenL0, r['시작일'], useAuto, it.mailRaw && it.mailRaw.date);
     const pos = posInfo.pos;
     if (chosenL0 !== '__END__' && colIdx.devStage !== -1) {
         built.row[colIdx.devStage] = chosenL0; // 배치 구간과 개발단계 값 일치시킴

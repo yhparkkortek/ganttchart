@@ -564,10 +564,11 @@ window.mfAnalyzeSingle = async function(idx) {
             task, priorityConfig) : null;
         result = {
             idx: window._mfResults.length, fileName: f.name,
-            subject: parsed.subject, sender: parsed.sender, date: parsed.date, body: parsed.body,
+            subject: parsed.subject, sender: parsed.sender, to: parsed.to, cc: parsed.cc, date: parsed.date, body: parsed.body,
             // 💡 [2026-08-24 버그 수정] ms 탭과 동일한 사고 — 이 필드가 없어서 "⚡ 선택항목 연속등록"이
             //    엉뚱한(직접입력 탭 전용) window._mailParsedRaw로 대체하려다 실패해 "📧 원문 보기"가 사라졌었다.
-            mailRaw: { subject: parsed.subject, sender: parsed.sender, date: parsed.date, body2000: parsed.body, fileName: f.name, attachments: parsed.attachments || [] },
+            // 🐛 [2026-09-12] .eml 헤더의 to/cc(mfParseFile이 이미 파싱해둠)도 여기서부터 같이 보존
+            mailRaw: { subject: parsed.subject, sender: parsed.sender, to: parsed.to, cc: parsed.cc, date: parsed.date, body2000: parsed.body, fileName: f.name, attachments: parsed.attachments || [] },
             project: window._msProjectTagLabel(projectTag), task, selected: !!task, registered: false,
             _projectTag: projectTag,
             _score: scoreResult ? scoreResult.total : null,
@@ -580,8 +581,8 @@ window.mfAnalyzeSingle = async function(idx) {
         if (!window._mfFiles.includes(f)) return; // 💡 분석 중 X로 제외됨 → 결과 버리고 조용히 종료
         result = {
             idx: window._mfResults.length, fileName: f.name,
-            subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body: parsed.body || '',
-            mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name, attachments: parsed.attachments || [] },
+            subject: parsed.subject || f.name, sender: parsed.sender || '', to: parsed.to || '', cc: parsed.cc || '', date: parsed.date || '', body: parsed.body || '',
+            mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', to: parsed.to || '', cc: parsed.cc || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name, attachments: parsed.attachments || [] },
             project:null, task:null, selected:false, registered:false, error: e.message
         };
     }
@@ -591,7 +592,7 @@ window.mfAnalyzeSingle = async function(idx) {
 
     // 💡 [완전자동] mail_mode='full'이면 TaskInbox 대기 없이 바로 Gantt 등록 시도
     window._msTryFullAutoRegister(result,
-        { subject: result.subject, sender: result.sender, date: result.date, body2000: result.body, fileName: f.name },
+        { subject: result.subject, sender: result.sender, to: result.to, cc: result.cc, date: result.date, body2000: result.body, fileName: f.name },
         () => mfRenderList(window._mfResults));
 
     // 💡 완료 후 버튼 상태 복구 + 완료 표시 (성공/실패 색상 구분)
@@ -1124,11 +1125,12 @@ window.mfAnalyze = async function() {
                 idx: i, fileName: f.name,
                 subject: parsed.subject,
                 sender: parsed.sender,
+                to: parsed.to, cc: parsed.cc,
                 date: parsed.date,
                 body: parsed.body,   // ← 추가
                 // 💡 [버그 수정] mfAnalyzeSingle(개별분석)에만 있고 여기(일괄분석)엔 없어서, 여러 파일을
                 //    한 번에 "일괄 분석"해 등록한 업무만 원문이 안 붙어 "📧 원문 보기" 버튼이 안 생겼었음.
-                mailRaw: { subject: parsed.subject, sender: parsed.sender, date: parsed.date, body2000: parsed.body, fileName: f.name, attachments: parsed.attachments || [] },
+                mailRaw: { subject: parsed.subject, sender: parsed.sender, to: parsed.to, cc: parsed.cc, date: parsed.date, body2000: parsed.body, fileName: f.name, attachments: parsed.attachments || [] },
                 project: window._msProjectTagLabel(projectTag), task,
                 _projectTag: projectTag,
                 _score: scoreResult ? scoreResult.total : null,
@@ -1145,9 +1147,10 @@ window.mfAnalyze = async function() {
                 idx:i, fileName:f.name,
                 subject: parsed.subject || f.name,
                 sender: parsed.sender || '',
+                to: parsed.to || '', cc: parsed.cc || '',
                 date: parsed.date || '',
                 body: parsed.body || '',
-                mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name, attachments: parsed.attachments || [] },
+                mailRaw: { subject: parsed.subject || f.name, sender: parsed.sender || '', to: parsed.to || '', cc: parsed.cc || '', date: parsed.date || '', body2000: parsed.body || '', fileName: f.name, attachments: parsed.attachments || [] },
                 project:null, task:null, selected:false, registered:false, error: e.message
             });
         }
@@ -1167,7 +1170,7 @@ window.mfAnalyze = async function() {
     // 💡 [완전자동] mail_mode='full'이면 TaskInbox 대기 없이 바로 Gantt 등록 시도 (건별)
     results.forEach(function(r) {
         window._msTryFullAutoRegister(r,
-            { subject: r.subject, sender: r.sender, date: r.date, body2000: r.body, fileName: r.fileName },
+            { subject: r.subject, sender: r.sender, to: r.to, cc: r.cc, date: r.date, body2000: r.body, fileName: r.fileName },
             () => mfRenderList(window._mfResults));
     });
 };
