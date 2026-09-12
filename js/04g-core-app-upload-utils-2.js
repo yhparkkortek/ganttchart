@@ -1253,6 +1253,14 @@ ${question}
         //    이미 파일명이 포함돼 있지만, "본문에서도 밝혀라"는 지시가 없으면 AI가 데이터로만 갖고 있고
         //    실제 답변엔 안 옮겨 적는 경우가 많았음).
         result += `\n\n🏷️ [필수] 프로젝트 이름 표시 규칙: "현재 진행 중인 업무/이슈 정리해줘", "오늘 뭐 해야 돼", "전체 현황 알려줘"처럼 이 프로젝트 전체를 개관·요약하는 질문에 답할 때는(특정 업무 하나만 콕 집어 묻는 질문은 제외), 답변 맨 첫 줄에 "**[${ctx.currentFileName}]** 프로젝트 기준으로 정리해 드립니다." 처럼 지금 어느 프로젝트를 보고 답하는지 반드시 먼저 밝히세요. 위 "🌐 다른 프로젝트 조회" 규칙에 따라 다른 프로젝트 데이터를 근거로 답하는 경우에도 그 프로젝트 이름을 답변 첫 줄에 동일하게 밝히세요.`;
+        // 💡 [2026-09-12 신규] AI 요약(_buildProjectSummaryPrompt)과 동일한 패턴 — 사용자가 프롬프트를
+        // 직접 고쳐 저장했어도 항상 마지막에 붙도록, 템플릿 치환이 다 끝난 뒤에 조건부로 덧붙인다.
+        // 이 프롬프트는 JSON이 아니라 자유 서술형 답변이라 "키는 유지, 값만 번역" 같은 제약이 필요
+        // 없고, [[ACTION:...]] 태그(대문자 영문 고정)는 원래도 영향받지 않으므로 그냥 "영어로 답하라"만
+        // 지시하면 됨.
+        if (window._currentLang === 'en') {
+            result += '\n\n[Output language] Answer entirely in English, regardless of what language the question itself is written in. Keep [[ACTION:...]] tags exactly as specified above (they are a fixed protocol, not natural language).';
+        }
         return result;
     };
 
