@@ -1020,8 +1020,15 @@ ${recentLogs}
         // 안에 들어갈 문장(총평·요약·리스크·액션추천 텍스트)만 영어로 쓰도록 별도 지시를 덧붙인다.
         // 팀이 프롬프트를 직접 고쳐 저장했어도(savedPrompt) 이 지시는 항상 맨 뒤에 추가되므로 계속
         // 적용됨 — 템플릿 치환과 무관하게 항상 최종 결과 문자열 끝에 붙이는 방식이라 안전.
+        // 🐛 [2026-09-12 버그수정] 실사용 결과 "리스크"/"액션추천" 문장 안의 업무명만 한국어로 남고
+        // 나머지만 번역되는 반쪽짜리 결과가 나왔음 — 원인은 위 [지침]의 "데이터 일치 및 엄격 준수:
+        // 업무 ID·업무명·담당자명을 변형 없이 그대로 인용하세요"가 "영어로 쓰라"는 이 지시보다 더
+        // 구체적이라 AI가 그 규칙을 우선해 업무명만 원문(한국어) 그대로 두고 있었던 것. 그 규칙의
+        // 진짜 의도(업무명을 지어내지 말고 데이터에 있는 그대로의 "내용"을 반영하라)는 번역 여부와
+        // 무관하므로, 클릭 이동에 실제로 쓰이는 "#G숫자"만 예외로 명시하고 나머지(업무명 포함)는
+        // 전부 번역하라고 명확히 override한다.
         if (window._currentLang === 'en') {
-            result += '\n\n[Output language] Write all string VALUES inside the JSON (총평, 업무 요약 items, 리스크 items, 액션추천 items) in English. Keep the JSON key names exactly as given above (in Korean) — only translate the sentence content, not the keys.';
+            result += '\n\n[Output language] Write all string VALUES inside the JSON (총평, 업무 요약 items, 리스크 items, 액션추천 items) in English — this includes translating any Korean task names or phrases quoted from the data, not just the surrounding sentence. The earlier "quote verbatim, do not alter" instruction is about not inventing or misreporting facts, not about keeping the original Korean wording — it does NOT mean task names must stay in Korean. The one exception that truly must stay exactly as given, character-for-character, is the "#G<number>" reference tag itself (e.g. #G98), because it powers click-to-navigate links in the UI and breaks if altered. Person names may be kept as given or written in English, whichever reads more naturally. Keep the JSON key names exactly as given above (in Korean) — only translate the string values, not the keys.';
         }
         return result;
     };
