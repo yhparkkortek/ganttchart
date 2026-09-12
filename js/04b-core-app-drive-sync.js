@@ -209,19 +209,7 @@
             //    조용한 갱신 성공 시에도 "로그인 성공" 전체 처리(프로젝트 목록 재조회 등 무거운 부수효과)가
             //    배경에서 통째로 다시 실행되고 있었다. 조용한 갱신 전용 콜백으로 토큰만 갈아끼우고,
             //    실패하면(=브라우저 세션 만료 등으로 prompt:''가 실패) 연결 끊김으로 간주해 사람이 알 수 있게 표시한다.
-            // 🐛 [2026-09-12 버그 수정] 이 12분 주기 조용한 갱신도 handleAuthClick(수동/자동로그인)과
-            //    같은 공유 tokenClient.callback을 재사용하고 있었다 — 갱신 요청이 응답을 기다리는 사이
-            //    사용자가 수동으로 로그인하면(또는 그 반대 순서로) 서로의 응답이 그 시점에 할당돼 있던
-            //    콜백으로 잘못 전달될 수 있다(05-drive-sync-optimize.js의 handleAuthClick 주석 참고).
-            //    이 갱신 전용 독립 tokenClient + mySeq 검증으로 다른 로그인 시도와 완전히 격리한다.
-            const _refreshTokenClient = google.accounts.oauth2.initTokenClient({ client_id: CLIENT_ID, scope: SCOPES, callback: '' });
-            window._authSeq = (window._authSeq || 0) + 1;
-            const _refreshMySeq = window._authSeq;
-            _refreshTokenClient.callback = (resp) => {
-                if (_refreshMySeq !== window._authSeq) {
-                    console.info('[구글 인증] 조용한 갱신 응답 도착 전 더 최신 로그인 시도가 있어 무시합니다.');
-                    return;
-                }
+            tokenClient.callback = (resp) => {
                 if (resp.error !== undefined) {
                     window._silentRefreshFailCount++;
                     console.warn(`[구글 인증] 조용한 토큰 갱신 실패 (${window._silentRefreshFailCount}회 연속):`, resp.error);
@@ -240,7 +228,7 @@
             //    (아직 연결 끊김 판정 전)인데 팝업만 계속 떠 있던 증상의 실제 원인. 로그인 성공 시
             //    기억해둔 이메일을 hint로 넘겨 계정을 미리 지정해서 이 창 자체가 뜨지 않게 한다.
             const _emailHint = window.currentUserEmail || (function() { try { return localStorage.getItem('gantt_google_email_hint') || ''; } catch(e) { return ''; } })();
-            _refreshTokenClient.requestAccessToken(_emailHint ? { prompt: '', hint: _emailHint } : { prompt: '' });
+            tokenClient.requestAccessToken(_emailHint ? { prompt: '', hint: _emailHint } : { prompt: '' });
         }, 12 * 60 * 1000);
     }
 
