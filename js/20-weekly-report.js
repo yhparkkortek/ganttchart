@@ -461,6 +461,206 @@
           modal.onclick = function() { done('cancel'); };
       });
   };
+  // ──────────────────────────────────────────────────────────────────
+  // 💡 [2026-09-12 신규] PPT 출력 전 AI 정리 + 미리보기 모달
+  // ──────────────────────────────────────────────────────────────────
+
+  /** 태스크 목록을 AI 프롬프트용 plain text로 변환 */
+  function _wrFmtTasksForAi(list) {
+      if (!list || !list.length) return '(없음)';
+      return list.map((t, i) => {
+          const raw = colIdx.content !== -1 ? (t.row[colIdx.content] || '').toString() : '';
+          const assignee = typeof wrExtractAssignee === 'function' ? wrExtractAssignee(raw) : '';
+          const stripped = (typeof wrStripIssueLines === 'function' ? wrStripIssueLines(raw) : raw)
+              .split('\n').filter(l => l.trim() && !/^(\[요청|발신\s*→)/.test(l.trim()))
+              .join(' ').trim().slice(0, 120);
+          const nm = t.text.replace(/\s*'\d{2}(?=[~)])/g, '');
+          return `${i + 1}. ${nm}${assignee ? ` [${assignee}]` : ''}${stripped ? `\n   ${stripped}` : ''}`;
+      }).join('\n');
+  }
+
+  /** 문제점 issueRows를 AI 프롬프트용 텍스트로 변환 */
+  function _wrFmtIssuesForAi(rows) {
+      if (!rows || !rows.length) return '(없음)';
+      return rows.map((r, i) =>
+          `${i + 1}. [문제점] ${r[0].replace(/\n/g, ' ')}\n   [대책] ${r[1]}  [일정] ${r[2]}  [담당] ${r[3]}`
+      ).join('\n');
+  }
+
+  /** 태스크 목록 → 간단 ✓ 형식 fallback 텍스트 (AI 없을 때 미리보기 초기값) */
+  function _wrFmtFallback(list) {
+      if (!list || !list.length) return '해당 항목 없음';
+      return list.map(t => {
+          const raw = colIdx.content !== -1 ? (t.row[colIdx.content] || '').toString() : '';
+          const a = typeof wrExtractAssignee === 'function' ? wrExtractAssignee(raw) : '';
+          const nm = t.text.replace(/\s*'\d{2}(?=[~)])/g, '');
+          return `✓ ${nm}${a ? `  [${a}]` : ''}`;
+      }).join('\n');
+  }
+
+  /**
+   * AI 미리보기 모달 — PPT 저장 전에 AI가 정리한 내용을 사용자가 확인·수정.
+   * @returns Promise<{thisText, nextText, issueText}|'skip'|null>
+   *   - {thisText, nextText, issueText}: AI(또는 사용자 편집) 내용으로 PPT 생성
+   *   - 'skip': "취소(직접 출력)" → 원본 데이터로 그대로 PPT 생성
+   *   - null: X버튼 → 완전 취소
+   */
+  window._wrShowAiPreviewModal = async function(data, issueRows) {
+      const apiKey  = window.getActiveAiKey ? window.getActiveAiKey() : null;
+      const thisRaw = _wrFmtTasksForAi(data.thisList);
+      const nextRaw = _wrFmtTasksForAi(data.nextList);
+      const issRaw  = _wrFmtIssuesForAi(issueRows);
+      const thisWk  = data.thisWeekNo || '?';
+      const nextWk  = data.nextWeekNo || '?';
+
+      return new Promise(resolve => {
+          const overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;inset:0;z-index:9500;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);';
+
+          const isDark = document.documentElement.getAttribute('data-theme') === 'dark' ||
+              (!document.documentElement.getAttribute('data-theme') &&
+               window.matchMedia && window.matchMedia('(prefers-color-scheme:dark)').matches);
+          const bg    = isDark ? '#23262e' : '#ffffff';
+          const fg    = isDark ? '#f0f0f0' : '#1a1a1a';
+          const bdr   = isDark ? '#3a3d47' : '#e5e7eb';
+          const tabg  = isDark ? '#1a1d23' : '#f9fafb';
+          const tafg  = isDark ? '#e4e6eb' : '#222222';
+
+          const modal = document.createElement('div');
+          modal.style.cssText = `background:${bg};border-radius:12px;box-shadow:0 8px 36px rgba(0,0,0,0.28);width:min(880px,96vw);max-height:90vh;display:flex;flex-direction:column;overflow:hidden;font-family:'Malgun Gothic',sans-serif;`;
+          modal.innerHTML = `
+<div style="padding:16px 20px;border-bottom:1px solid ${bdr};display:flex;align-items:center;gap:10px;">
+  <span style="font-size:22px;">📊</span>
+  <div style="flex:1;">
+    <div style="font-size:15px;font-weight:bold;color:${fg};">주간보고 PPT 미리보기</div>
+    <div style="font-size:12px;color:#888;margin-top:2px;">AI가 업무를 정리합니다. 내용 확인·수정 후 PPT 저장을 누르세요.</div>
+  </div>
+  <button id="wr-pv-x" style="background:none;border:none;font-size:20px;cursor:pointer;color:#999;padding:4px 8px;line-height:1;">✕</button>
+</div>
+<div style="padding:20px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:16px;">
+  <div>
+    <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+      <span>📋 주요 실적 (${thisWk}W)</span><span id="wr-pv-sp-this" style="font-size:11px;color:#888;display:none;">⏳ AI 정리 중...</span>
+    </div>
+    <textarea id="wr-pv-ta-this" rows="6" placeholder="이번 주 주요 실적..."
+      style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
+  </div>
+  <div>
+    <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+      <span>🎯 추진 계획 (${nextWk}W)</span><span id="wr-pv-sp-next" style="font-size:11px;color:#888;display:none;">⏳ AI 정리 중...</span>
+    </div>
+    <textarea id="wr-pv-ta-next" rows="6" placeholder="다음 주 추진 계획..."
+      style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
+  </div>
+  <div>
+    <div style="font-size:13px;font-weight:bold;color:${fg};margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+      <span>⚠️ 문제점 및 Issue</span><span id="wr-pv-sp-issue" style="font-size:11px;color:#888;display:none;">⏳ AI 정리 중...</span>
+    </div>
+    <textarea id="wr-pv-ta-issue" rows="4" placeholder="문제점 및 이슈..."
+      style="width:100%;box-sizing:border-box;resize:vertical;padding:10px 12px;border:1px solid ${bdr};border-radius:8px;font-size:12px;font-family:'Malgun Gothic',sans-serif;line-height:1.65;color:${tafg};background:${tabg};outline:none;"></textarea>
+  </div>
+</div>
+<div style="padding:12px 20px;border-top:1px solid ${bdr};display:flex;align-items:center;gap:10px;">
+  <span id="wr-pv-status" style="font-size:12px;color:#888;flex:1;"></span>
+  <button id="wr-pv-skip" style="padding:8px 18px;border:1px solid #ccc;border-radius:8px;background:${bg};color:${fg};cursor:pointer;font-size:13px;">취소 (직접 출력)</button>
+  <button id="wr-pv-save" style="padding:8px 22px;border:none;border-radius:8px;background:#19c3d6;color:#fff;cursor:pointer;font-size:13px;font-weight:bold;opacity:0.6;" disabled>⏳ AI 정리 중...</button>
+</div>`;
+
+          overlay.appendChild(modal);
+          document.body.appendChild(overlay);
+
+          const taThis   = document.getElementById('wr-pv-ta-this');
+          const taNext   = document.getElementById('wr-pv-ta-next');
+          const taIssue  = document.getElementById('wr-pv-ta-issue');
+          const saveBtn  = document.getElementById('wr-pv-save');
+          const statusEl = document.getElementById('wr-pv-status');
+
+          const closeModal = () => { try { document.body.removeChild(overlay); } catch(e) {} };
+          const enableSave = () => {
+              saveBtn.disabled = false;
+              saveBtn.style.opacity = '1';
+              saveBtn.textContent = '💾 PPT 저장';
+          };
+
+          document.getElementById('wr-pv-x').onclick   = () => { closeModal(); resolve(null); };
+          document.getElementById('wr-pv-skip').onclick = () => { closeModal(); resolve('skip'); };
+          saveBtn.onclick = () => {
+              closeModal();
+              resolve({ thisText: taThis.value.trim(), nextText: taNext.value.trim(), issueText: taIssue.value.trim() });
+          };
+
+          // ── 스피너 표시 ─────────────────────────────────────────────
+          ['this', 'next', 'issue'].forEach(k => {
+              const sp = document.getElementById('wr-pv-sp-' + k);
+              if (sp) sp.style.display = 'inline';
+          });
+
+          const applyFallback = (msg) => {
+              taThis.value  = _wrFmtFallback(data.thisList);
+              taNext.value  = _wrFmtFallback(data.nextList);
+              taIssue.value = issueRows.length
+                  ? issueRows.map(r => '• ' + r[0].replace(/\n/g, ' ')).join('\n')
+                  : '해당 없음';
+              ['this', 'next', 'issue'].forEach(k => {
+                  const sp = document.getElementById('wr-pv-sp-' + k);
+                  if (sp) sp.style.display = 'none';
+              });
+              if (statusEl) statusEl.textContent = msg;
+              enableSave();
+          };
+
+          if (!apiKey) { applyFallback('⚠️ AI 키 없음 — 원본 데이터로 초기화됨'); return; }
+
+          const prompt = `당신은 주간 업무 보고서 작성 어시스턴트입니다.
+아래의 이번 주 업무(${thisWk}W)와 다음 주 업무(${nextWk}W), 그리고 현재 문제점 목록을 보고서에 적합한 형식으로 정리해주세요.
+
+[이번 주(${thisWk}W) 업무 목록]
+${thisRaw}
+
+[다음 주(${nextWk}W) 업무 목록]
+${nextRaw}
+
+[현재 문제점 목록]
+${issRaw}
+
+규칙:
+- 중요도가 낮거나 단순 반복 업무는 생략 가능. 보고 가치가 있는 업무를 우선 선택
+- 각 항목은 "✓ 업무명" 형식으로 시작하고, 핵심 내용을 1~2줄로 요약
+- 담당자가 있으면 업무명 뒤에 "[담당자]" 형태로 표기
+- 문제점은 간결하게 핵심만 기술 (없으면 "해당 없음"으로만 작성)
+- 응답은 아래 구분자를 그대로 사용해 3개 섹션으로만 구성
+
+===주요실적===
+(이번 주 주요 실적 요약)
+===추진계획===
+(다음 주 추진 계획 요약)
+===문제점및이슈===
+(문제점 및 이슈 요약)
+===끝===`;
+
+          window.callAiBackend(apiKey, prompt, {}).then(result => {
+              if (!result.ok) throw result.error || new Error('AI 응답 오류');
+              const text = (result.data?.result?.candidates?.[0]?.content?.parts?.[0]?.text) || '';
+              const parse = (tag1, tag2) => {
+                  const m = text.match(new RegExp(`===${tag1}===\\s*([\\s\\S]*?)(?===${tag2}===|===끝===)`, 'i'));
+                  return m ? m[1].trim() : '';
+              };
+              taThis.value  = parse('주요실적', '추진계획')  || '(AI 응답을 파싱하지 못했습니다 — 직접 입력해주세요)';
+              taNext.value  = parse('추진계획', '문제점및이슈') || '(AI 응답을 파싱하지 못했습니다 — 직접 입력해주세요)';
+              taIssue.value = parse('문제점및이슈', '끝') || '해당 없음';
+              ['this', 'next', 'issue'].forEach(k => {
+                  const sp = document.getElementById('wr-pv-sp-' + k);
+                  if (sp) sp.style.display = 'none';
+              });
+              if (statusEl) statusEl.textContent = '✅ AI 정리 완료 — 내용 확인·수정 후 저장하세요';
+              enableSave();
+          }).catch(err => {
+              console.error('[WR PPT Preview] AI error:', err);
+              applyFallback(`⚠️ AI 오류 (${(err && err.message) || '알 수 없는 오류'}) — 원본 데이터로 초기화됨`);
+          });
+      });
+  };
+
   window.exportWeeklyReportPPT = async function() {
         if (typeof PptxGenJS === 'undefined') { alert(window._t('PPT 라이브러리 로드에 실패했습니다. 새로고침 후 다시 시도해주세요.', 'Failed to load the PPT library. Please refresh and try again.')); return; }
 
@@ -484,6 +684,11 @@
             const issueWithTask = `[${t.text}]\n${issue}`;
             issueRows.push([issueWithTask, fix || '-', `${_pptFormatMD(t.row._calcStartTs)}~${_pptFormatMD(t.row._calcPlanTs)}`, assignee || '-']);
         });
+
+        // 💡 [2026-09-12 신규] PPT 저장 전 AI 미리보기 모달
+        // 'skip' → 원본 데이터 그대로, null → 완전 취소, object → AI 정리 내용
+        const _pptPreview = await window._wrShowAiPreviewModal(data, issueRows);
+        if (_pptPreview === null) return; // X버튼: 완전 취소
 
         const pptx = new PptxGenJS();
         pptx.defineLayout({ name: 'WIDE', width: 13.33, height: 7.5 });
@@ -1003,10 +1208,23 @@
             }).join('\n');
         };
 
+        // 💡 [2026-09-12 신규] AI 미리보기 텍스트 또는 원본 데이터 선택
+        const _usePreview = _pptPreview && typeof _pptPreview === 'object';
+        const _thisText  = _usePreview && _pptPreview.thisText  ? _pptPreview.thisText  : listToText(data.thisList);
+        const _nextText  = _usePreview && _pptPreview.nextText  ? _pptPreview.nextText  : listToText(data.nextList);
+        // 문제점 issueRows: AI 미리보기 텍스트가 있으면 파싱해 단순 행으로 교체
+        let _issueRowsToUse = issueRows;
+        if (_usePreview && _pptPreview.issueText && _pptPreview.issueText.trim() && _pptPreview.issueText.trim() !== '해당 없음') {
+            const _parsedIssues = _pptPreview.issueText.split('\n')
+                .map(l => l.trim()).filter(l => l && l !== '해당 없음')
+                .map(l => [l.replace(/^[•✓\-\*\d\.]\s*/, ''), '-', '-', '-']);
+            if (_parsedIssues.length > 0) _issueRowsToUse = _parsedIssues;
+        }
+
         // 텍스트 줄 수를 추정해서 필요한 높이를 동적으로 계산 (고정 1.75 대신)
         const estimateLines = (text) => text.split('\n').length;
-        const thisLines = estimateLines(listToText(data.thisList));
-        const nextLines = estimateLines(listToText(data.nextList));
+        const thisLines = estimateLines(_thisText);
+        const nextLines = estimateLines(_nextText);
         const maxLines = Math.max(thisLines, nextLines, 4);   // 최소 4줄 보장
         const lineHeightIn = 0.165;   // 10pt 폰트 기준 줄당 높이(인치) 근사값
         const sectionY = goalTableY + goalTableH + GAP, sectionH = 0.3;
@@ -1017,7 +1235,7 @@
         slide.addTable(
             [
                 [{ text: `주요 실적 (${data.thisWeekNo}W)`, options: sectTitleOpt }],
-                [{ text: listToText(data.thisList), options: sectBodyOpt }],
+                [{ text: _thisText, options: sectBodyOpt }],
             ],
             { x: 0.4, y: sectionY, w: sectW, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [sectW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
@@ -1025,7 +1243,7 @@
       slide.addTable(
             [
                 [{ text: `추진 계획 (${data.nextWeekNo}W)`, options: sectTitleOpt }],
-                [{ text: listToText(data.nextList), options: sectBodyOpt }],
+                [{ text: _nextText, options: sectBodyOpt }],
             ],
             { x: col2X, y: sectionY, w: sectW, h: sectionH + bodyH, rowH: [sectionH, bodyH], colW: [sectW], border: { type: 'solid', color: BORDER, pt: BORDER_W } }
         );
@@ -1043,8 +1261,8 @@
                 { text: '담당자', options: issueHeadOpt },
             ]
         ];
-        if (issueRows.length > 0) {
-            issueRows.forEach(r => tableRows.push(r.map((c, i) => ({ text: c, options: { ...issueBodyOpt, align: i === 0 ? 'left' : 'center' } }))));
+        if (_issueRowsToUse.length > 0) {
+            _issueRowsToUse.forEach(r => tableRows.push(r.map((c, i) => ({ text: c, options: { ...issueBodyOpt, align: i === 0 ? 'left' : 'center' } }))));
         } else {
             tableRows.push(['이번 주 문제점/이슈 없음', '-', '-', '-'].map((c, i) => ({ text: c, options: { ...issueBodyOpt, align: i === 0 ? 'left' : 'center' } })));
         }
