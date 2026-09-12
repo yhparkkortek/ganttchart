@@ -393,13 +393,26 @@ window.renderTaskInbox = function() {
             const isCurProj = it.matchedProject && it.matchedProject.candidates && it.matchedProject.candidates[0]
                 && it.matchedProject.candidates[0].drive_file_id === window.currentDriveFileId;
             const resolved = isCurProj && window._msResolveCategoryAssignee ? window._msResolveCategoryAssignee(catVal) : null;
-            assigneeBadge = ' · 담당: ' + escapeHtml(catVal) + (resolved && resolved.name ? ' (' + escapeHtml(resolved.name) + ')' : '');
+            assigneeBadge = (_ibEn ? ' · Owner: ' : ' · 담당: ') + escapeHtml(catVal) + (resolved && resolved.name ? ' (' + escapeHtml(resolved.name) + ')' : '');
         }
+        // 💡 [2026-09-12 i18n] it.source는 이 업무가 보관함에 들어온 경로를 나타내는 내부 태그 값(저장은
+        // 항상 한글 고정 — 다른 코드가 문자열로 비교/매칭할 수 있어 저장값 자체는 안 바꿈)이라, 화면
+        // 표시할 때만 골라서 영문으로 바꿔치기한다. 목록에 없는 값(옛 데이터 등)은 원문 그대로 표시.
+        const _sourceEnMap = {
+            '업무 추가(메일분석)': 'Added (mail analysis)',
+            '업무보관함': 'Task Inbox',
+            '업무보관함(다중전송)': 'Task Inbox (multi-send)',
+            '메일자동처리(커트라인)': 'Mail auto-process (cutoff)',
+            '미분류 재분석(다중전송)': 'Unclassified re-analysis (multi-send)',
+        };
+        const sourceDisplay = _ibEn
+            ? (_sourceEnMap[it.source] || (it.source || '').replace('🔀 오매칭 재배치', '🔀 Mismatch reassignment'))
+            : (it.source || '');
         html += `
         <div style="border:1px solid #e0e0e0; border-radius:8px; padding:10px 12px; margin-bottom:8px; background:#fff;">
             <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
                 <div style="display:flex; align-items:center; gap:6px; min-width:0; overflow:hidden;">
-                    <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || '새 업무')} 📧</span>
+                    <span style="font-size:13px; font-weight:bold; color:#333; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(t['업무명'] || (_ibEn ? 'New Task' : '새 업무'))} 📧</span>
                     <a href="javascript:void(0)" onclick="window._ibToggleDetail('${it.uid}', this)" style="flex-shrink:0; font-size:11px; color:#1971c2; text-decoration:none; font-weight:bold; white-space:nowrap;">${window._ibExpandedUids.has(it.uid) ? (_ibEn ? '▲ Collapse' : '▲ 상세 접기') : (_ibEn ? '▼ Details' : '▼ 상세 보기')}</a>
                     <button onclick="window.extractInboxForAI('${it.uid}')" onmouseover="this.style.background='#e4dbff'; this.style.borderColor='#b8a4f0';" onmouseout="this.style.background='#f3f0ff'; this.style.borderColor='#d0bfff';" title="${_ibEn ? 'Copy mail source + analysis result to clipboard, to discuss a mismatch with AI' : '메일 원문 + 분석 결과를 복사해서 AI에게 오매칭 여부를 문의할 수 있습니다'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#f3f0ff; color:#5f3dc4; border:1px solid #d0bfff; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">📋 ${_ibEn ? 'Extract reason' : '추출사유'}</button>
                     ${it.status === '대기' ? `<button onclick="window.inboxCreateNewProjectFromPending('${it.uid}')" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_ibEn ? 'No project matched (or matched project is wrong) — register this mail as a new project (AI-prefilled)' : '아직 어느 프로젝트에도 배치되지 않은 건 — 이 메일로 새 프로젝트를 등록합니다(AI 자동 추출)'}" style="flex-shrink:0; font-size:11px; padding:2px 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; transition:background .15s, border-color .15s;">➕ ${_ibEn ? 'New Proj' : '새 Proj 생성'}</button>` : ''}
@@ -408,7 +421,7 @@ window.renderTaskInbox = function() {
                 <span title="${(it.matchedProject && it.matchedProject.matchBasis) ? escapeHtml((it.matchedProject.confidence ? '[' + (_ibEn ? 'AI confidence: ' : 'AI 신뢰도: ') + it.matchedProject.confidence + '] ' : '') + it.matchedProject.matchBasis) : ''}" style="flex-shrink:0; font-size:10px; font-weight:bold; padding:2px 8px; border-radius:10px; white-space:nowrap; ${statusStyle[it.status] || statusStyle['대기']}">${statusLabel[it.status] || it.status}</span>
             </div>
             <div style="font-size:11px; color:#888; margin-top:3px;">
-                ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(it.source || '')} · ${when}
+                ${dateStr}${t['개발단계'] ? ' · L0: ' + escapeHtml(t['개발단계']) : ''}${assigneeBadge} · ${escapeHtml(sourceDisplay)} · ${when}
             </div>
             <!-- 💡 [2026-09-09 신규] "왜 자동배치 안 되고 대기인지" — AI가 매 건마다 반환하는 매칭근거를
                  지금까진 신뢰도 판정에만 쓰고 버렸는데(사람이 이유를 알 방법이 없었음), 후보/신뢰도와
@@ -431,8 +444,8 @@ window.renderTaskInbox = function() {
                 <div style="font-size:11px; font-weight:bold; color:#1a4f7a; margin-bottom:5px;">🔀 ${_ibEn ? 'May belong to several projects at once (check all that apply, then distribute)' : '여러 프로젝트에 공통으로 해당될 수 있는 후보 — 체크한 곳에 모두 배분'}</div>
                 <div style="display:flex; flex-direction:column; gap:3px; max-height:120px; overflow-y:auto;">
                     ${it.matchedProject.candidates.map(function(c, ci) {
-                        const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || '(이름없음)';
-                        const sub = [c.customer, c.assignee ? '담당:' + c.assignee : ''].filter(Boolean).join(' · ');
+                        const label = [c.model, c.inch ? c.inch + '"' : ''].filter(Boolean).join(' ') || c.file_name || (_ibEn ? '(no name)' : '(이름없음)');
+                        const sub = [c.customer, c.assignee ? (_ibEn ? 'Owner:' : '담당:') + c.assignee : ''].filter(Boolean).join(' · ');
                         return `<label style="display:flex; align-items:center; gap:6px; font-size:11.5px; color:#333; cursor:pointer;">
                             <input type="checkbox" data-idx="${ci}" checked style="cursor:pointer; flex-shrink:0;">
                             <span style="font-weight:bold;">${escapeHtml(label)}</span>${sub ? `<span style="color:#888;">${escapeHtml(sub)}</span>` : ''}

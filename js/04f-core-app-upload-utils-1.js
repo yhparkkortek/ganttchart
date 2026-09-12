@@ -1015,6 +1015,14 @@ ${recentLogs}
         //    예정 마감 목록은 rangeDays 범위 전체를 담되, 그중 urgentDays 이내인 건만 🔴로 표시(위
         //    dueSoonText 렌더링 참고). 프롬프트에서 "${urgentDays}"를 쓰면 이 기준값이 그대로 반영됨.
         result = rep(result, '${urgentDays}', d.urgentDays != null ? d.urgentDays : (window.getAiUrgentDays ? window.getAiUrgentDays() : window._AI_URGENT_DAYS_DEFAULT));
+        // 💡 [2026-09-12 신규] "AI 요약 내용도 영문으로 나오게 할 수 있나?" 요청 — JSON 키 이름
+        // (신호등/총평/업무 요약/리스크/액션추천)은 파싱에 쓰이므로 그대로 한국어로 고정하고, 그
+        // 안에 들어갈 문장(총평·요약·리스크·액션추천 텍스트)만 영어로 쓰도록 별도 지시를 덧붙인다.
+        // 팀이 프롬프트를 직접 고쳐 저장했어도(savedPrompt) 이 지시는 항상 맨 뒤에 추가되므로 계속
+        // 적용됨 — 템플릿 치환과 무관하게 항상 최종 결과 문자열 끝에 붙이는 방식이라 안전.
+        if (window._currentLang === 'en') {
+            result += '\n\n[Output language] Write all string VALUES inside the JSON (총평, 업무 요약 items, 리스크 items, 액션추천 items) in English. Keep the JSON key names exactly as given above (in Korean) — only translate the sentence content, not the keys.';
+        }
         return result;
     };
 
@@ -1024,19 +1032,19 @@ ${recentLogs}
         if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
         const btn = document.getElementById('ai-summary-generate-btn');
-        if (btn) { btn.disabled = true; btn.textContent = '⏳ 생성 중...'; }
+        if (btn) { btn.disabled = true; btn.textContent = window._t('⏳ 생성 중...', '⏳ Generating...'); }
 
         try {
             const data = window._buildProjectSummaryData();
             const prompt = window._buildProjectSummaryPrompt(data);
             const result = await window.callAiBackend(apiKey, prompt, {});
-            if (!result.ok) throw result.error || new Error('알 수 없는 오류');
+            if (!result.ok) throw result.error || new Error(window._t('알 수 없는 오류', 'Unknown error'));
 
             const text = (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
                 && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
                 && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '';
             const match = text.match(/\{[\s\S]*\}/);
-            if (!match) throw new Error('AI 응답에서 JSON을 찾을 수 없습니다.');
+            if (!match) throw new Error(window._t('AI 응답에서 JSON을 찾을 수 없습니다.', 'Could not find JSON in the AI response.'));
             const parsed = JSON.parse(match[0]);
 
             window.projectMeta = window.projectMeta || {};
@@ -1060,16 +1068,21 @@ ${recentLogs}
         } catch (e) {
             alert(window._t('⚠️ AI 요약 생성 실패: ', '⚠️ Failed to generate AI summary: ') + (e && e.message ? e.message : e));
         } finally {
-            if (btn) { btn.disabled = false; btn.textContent = '🔄 다시 생성'; }
+            if (btn) { btn.disabled = false; btn.textContent = window._t('🔄 다시 생성', '🔄 Regenerate'); }
         }
     };
 
     window._renderAiProjectSummaryBody = function() {
         const body = document.getElementById('ai-summary-body');
         if (!body) return;
+        // 💡 [2026-09-12 i18n] 이 함수는 매번 저장된 데이터로부터 새로 그려지므로(build-once 고착
+        // 문제 없음), _en만 매번 최신으로 읽으면 toggleLang() 재호출만으로 바로 반영됨.
+        const _en = window._currentLang === 'en';
         const r = (window.projectMeta || {}).aiSummaryReport;
         if (!r) {
-            body.innerHTML = '<div style="padding:36px 10px; text-align:center; color:#999; font-size:12px;">아직 생성한 요약이 없습니다.<br>아래 [🔄 다시 생성] 버튼을 눌러 AI 요약을 만들어보세요.</div>';
+            body.innerHTML = _en
+                ? '<div style="padding:36px 10px; text-align:center; color:#999; font-size:12px;">No summary generated yet.<br>Click the [🔄 Regenerate] button below to create an AI summary.</div>'
+                : '<div style="padding:36px 10px; text-align:center; color:#999; font-size:12px;">아직 생성한 요약이 없습니다.<br>아래 [🔄 다시 생성] 버튼을 눌러 AI 요약을 만들어보세요.</div>';
             return;
         }
         const d = r.dataSnapshot || { counts: {} };
@@ -1095,54 +1108,54 @@ ${recentLogs}
         };
         const riskHtml = (r.리스크 && r.리스크.length)
             ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.리스크.map(function(x) { return `<li style="${_liStyle}" onmouseover="${_liHover}" onmouseout="${_liOut}" onclick="${_liClick}">${_processLiText(x)}</li>`; }).join('') + '</ul>'
-            : '<div style="color:#999; font-size:12px;">특별한 리스크가 감지되지 않았습니다.</div>';
+            : `<div style="color:#999; font-size:12px;">${_en ? 'No significant risks detected.' : '특별한 리스크가 감지되지 않았습니다.'}</div>`;
         const actionHtml = (r.액션추천 && r.액션추천.length)
             ? '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.액션추천.map(function(x) { return `<li style="${_liStyle}" onmouseover="${_liHover}" onmouseout="${_liOut}" onclick="${_liClick}">${_processLiText(x)}</li>`; }).join('') + '</ul>'
-            : '<div style="color:#999; font-size:12px;">추천 액션이 없습니다.</div>';
+            : `<div style="color:#999; font-size:12px;">${_en ? 'No recommended actions.' : '추천 액션이 없습니다.'}</div>`;
         // 💡 [2026-08-31 신규] "업무 요약" — 기본 프롬프트엔 없는 선택적 항목이라, 커스텀 프롬프트를
         // 안 쓰는 사람에겐 이 값이 항상 빈 배열이다. 그런 경우 리스크/액션추천처럼 "없습니다" 문구를
         // 굳이 보여주지 않고 섹션 자체를 통째로 생략한다(안 쓰는 기능이 빈 칸으로 계속 보이면 어색함).
         const taskSummaryHtml = (r.업무요약 && r.업무요약.length)
-            ? '<div style="margin-bottom:14px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">📋 업무 요약</div>'
+            ? `<div style="margin-bottom:14px;"><div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">📋 ${_en ? 'Task Summary' : '업무 요약'}</div>`
                 + '<ul style="margin:0; padding-left:18px; font-size:12.5px;">' + r.업무요약.map(function(x) { return `<li style="${_liStyle}" onmouseover="${_liHover}" onmouseout="${_liOut}" onclick="${_liClick}">${_processLiText(x)}</li>`; }).join('') + '</ul></div>'
             : '';
 
         body.innerHTML = `
         <div id="ai-summary-report-content">
-            <div style="font-size:11px; color:#999; margin-bottom:12px;">생성 시각: ${genStr}</div>
+            <div style="font-size:11px; color:#999; margin-bottom:12px;">${_en ? 'Generated at' : '생성 시각'}: ${genStr}</div>
             <div style="display:flex; align-items:center; gap:10px; padding:14px; background:#f8f9fa; border-radius:8px; margin-bottom:14px;">
                 <span style="font-size:28px;">${r.신호등 || '🟡'}</span>
                 <span style="font-size:13px; font-weight:bold; color:#333; cursor:pointer; border-radius:3px; padding:1px 2px; transition:background .12s;" onmouseover="this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.12)':'rgba(44,95,138,0.04)';" onmouseout="this.style.background=this.dataset.refsShown?'rgba(44,95,138,0.07)':'';" onclick="window._aiToggleLineRefs(this, event);">${_processLiText(r.총평 || '')}</span>
             </div>
             <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:14px; text-align:center; font-size:12px;">
-                <div style="padding:8px; background:#e7f6ec; border-radius:6px;"><b style="font-size:16px; color:#2f9e44;">${d.counts.완료 || 0}</b><br>완료</div>
-                <div style="padding:8px; background:#eef3f7; border-radius:6px;"><b style="font-size:16px; color:#1971c2;">${d.counts.진행 || 0}</b><br>진행</div>
-                <div style="padding:8px; background:#fff8e6; border-radius:6px;"><b style="font-size:16px; color:#b85c00;">${d.counts.대기 || 0}</b><br>대기</div>
-                <div style="padding:8px; background:#ffe3e3; border-radius:6px;"><b style="font-size:16px; color:#e03131;">${d.counts.지연 || 0}</b><br>지연</div>
+                <div style="padding:8px; background:#e7f6ec; border-radius:6px;"><b style="font-size:16px; color:#2f9e44;">${d.counts.완료 || 0}</b><br>${_en ? 'Done' : '완료'}</div>
+                <div style="padding:8px; background:#eef3f7; border-radius:6px;"><b style="font-size:16px; color:#1971c2;">${d.counts.진행 || 0}</b><br>${_en ? 'On going' : '진행'}</div>
+                <div style="padding:8px; background:#fff8e6; border-radius:6px;"><b style="font-size:16px; color:#b85c00;">${d.counts.대기 || 0}</b><br>${_en ? 'Pending' : '대기'}</div>
+                <div style="padding:8px; background:#ffe3e3; border-radius:6px;"><b style="font-size:16px; color:#e03131;">${d.counts.지연 || 0}</b><br>${_en ? 'Delay' : '지연'}</div>
             </div>
             ${taskSummaryHtml}
             <div style="margin-bottom:14px;">
-                <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">⚠️ 주요 리스크</div>
+                <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">⚠️ ${_en ? 'Key Risks' : '주요 리스크'}</div>
                 ${riskHtml}
             </div>
             <div>
-                <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">✅ 담당자별 액션 추천</div>
+                <div style="font-size:12.5px; font-weight:bold; color:#2c5f8a; margin-bottom:6px;">✅ ${_en ? 'Recommended Actions by Owner' : '담당자별 액션 추천'}</div>
                 ${actionHtml}
             </div>
         </div>
         <div id="ai-summary-feedback-block" style="margin-top:14px; padding:10px 12px; background:#f8f9fa; border-radius:8px;">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size:11px; color:#888;">AI 분석 결과가 도움이 되었나요?</span>
+                <span style="font-size:11px; color:#888;">${_en ? 'Was this AI analysis helpful?' : 'AI 분석 결과가 도움이 되었나요?'}</span>
                 <div>
                     <button onclick="window.saveProjectSummaryFeedback('good')" id="ps-fb-good-btn"
                         onmouseover="if(!this.dataset.active) this.style.background='#c9ecd3';" onmouseout="if(!this.dataset.active) this.style.background='#e6f6ea';"
                         style="font-size:12px; padding:3px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; font-weight:bold; cursor:pointer; margin-right:4px; transition:background .15s;">
-                        👍 좋음
+                        👍 ${_en ? 'Good' : '좋음'}
                     </button>
                     <button onclick="window.saveProjectSummaryFeedback('bad')" id="ps-fb-bad-btn"
                         onmouseover="if(!this.dataset.active) this.style.background='#f5c2bd';" onmouseout="if(!this.dataset.active) this.style.background='#fbe4e2';"
                         style="font-size:12px; padding:3px 12px; border:1px solid #eeb0ac; background:#fbe4e2; color:#b1432f; border-radius:5px; font-weight:bold; cursor:pointer; transition:background .15s;">
-                        👎 나쁨
+                        👎 ${_en ? 'Bad' : '나쁨'}
                     </button>
                 </div>
             </div>
@@ -1150,7 +1163,7 @@ ${recentLogs}
                 <button onclick="window.openPsImproveCommentModal()"
                     onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';"
                     style="font-size:12px; padding:5px 14px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer; font-weight:bold; transition:background .15s, border-color .15s;">
-                    💡 의견 남기고 AI 개선 요청
+                    💡 ${_en ? 'Leave feedback & request AI improvement' : '의견 남기고 AI 개선 요청'}
                 </button>
             </div>
         </div>`;
@@ -1175,6 +1188,7 @@ ${recentLogs}
                 <div id="ai-summary-body" style="overflow-y:auto; flex:1; padding:16px 18px;"></div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; gap:8px;">
                     <button id="ai-summary-generate-btn" onclick="window.generateAiProjectSummary()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="flex:1; padding:8px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;">🔄 다시 생성</button>
+
                     <button onclick="window.printAiProjectSummary()" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" style="padding:8px 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">🖨️ PDF</button>
                     <button onclick="window.exportAiProjectSummaryPPT()" onmouseover="this.style.background='#f4d9b3'; this.style.borderColor='#dba354';" onmouseout="this.style.background='#fbead9'; this.style.borderColor='#edbf85';" style="padding:8px 14px; background:#fbead9; color:#a85d0a; border:1px solid #edbf85; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">📊 PPT</button>
                 </div>

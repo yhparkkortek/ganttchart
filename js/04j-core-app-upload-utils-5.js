@@ -95,6 +95,7 @@
                 'gantt-qa-prompt-log-close-btn': '닫기',
                 'ai-summary-open-prompt-btn':    '✏️ 프롬프트',
                 'gantt-qa-open-prompt-btn':      '📝 프롬프트',
+                'ai-summary-generate-btn':       '🔄 다시 생성',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'add-user-btn':       '👤 사용자 추가',
                 'file-input-label':'🟩 프로젝트 엑셀 열기',
@@ -385,6 +386,7 @@
                 'gantt-qa-prompt-log-close-btn': 'Close',
                 'ai-summary-open-prompt-btn':    '✏️ Prompt',
                 'gantt-qa-open-prompt-btn':      '📝 Prompt',
+                'ai-summary-generate-btn':       '🔄 Regenerate',
                 'admin-pw-change-btn': '🔑 Change Password',
                 'add-user-btn':       '👤 Add User',
                 'file-input-label':'🟩 Open Project Excel',
@@ -1449,6 +1451,18 @@
 
         // [Gantt #검색 바] 이미 열려있는 상태에서 언어 전환 시 즉시 반영
         if (window._gsRefreshLang) window._gsRefreshLang();
+
+        // [AI 요약] 이미 생성된 리포트가 있으면(모달이 열려있든 최소화돼 있든) 저장된 데이터로 다시
+        // 그려서 언어를 즉시 반영 — _renderAiProjectSummaryBody는 매번 새로 그리는 함수라 안전(멱등).
+        if (window._renderAiProjectSummaryBody) window._renderAiProjectSummaryBody();
+
+        // [AI 업무 보관함] 목록 카드 하나하나(상세 보기/추출사유/오매칭 신고/상태뱃지/담당/L0 등)는
+        // 이미 전부 이중언어로 짜여 있었는데, renderTaskInbox()가 toggleLang()에서 한 번도 재호출된
+        // 적이 없어서 — 모달이 열려있는 상태로 언어를 바꾸면 이미 그려진 카드들은 계속 그 전 언어로
+        // 남아있었음(전형적인 "코드는 되어있는데 재렌더를 안 함" 패턴). 상단 집계 요약과 토픽 프로파일
+        // 배지도 같은 이유로 같이 갱신.
+        if (document.getElementById('inbox-list') && window.renderTaskInbox) window.renderTaskInbox();
+        if (window._refreshTopicProfileBadge) window._refreshTopicProfileBadge();
 
         if (globalData) {
             renderTable(globalData);
