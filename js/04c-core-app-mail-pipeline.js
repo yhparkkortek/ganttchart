@@ -748,7 +748,10 @@
                 //    거의 못 읽어와서, Drive에 저장되는 aiLearning 배열이 사실상 항상 텅 비어있던 원인이었음.
                 aiLearning: window._alGetEntriesForSave ? window._alGetEntriesForSave(window.currentDriveFileId || window.currentDriveFileName || '') : [],
                 // ✅ [토픽 프로파일] Drive JSON에 포함 — 로드 시 localStorage 캐시로 복원됨
-                topicProfile: (window._getTopicProfile && window._getTopicProfile()) || null };
+                topicProfile: (window._getTopicProfile && window._getTopicProfile()) || null,
+                // ✅ [2026-09-12 신규] AI 문답 "자주 묻는 질문" — 이 프로젝트에서 실제로 물어본 질문
+                //    문구(답변 내용 제외)를 Drive JSON에 포함해 팀원끼리 공유되게 함(js/04h 참고).
+                qaQuestionFreq: window._ganttQaGetFreqForSave ? window._ganttQaGetFreqForSave(window.currentDriveFileId || window.currentDriveFileName || '') : [] };
             let boundary = 'foo_bar_baz';
             // 💡 [2026-08-29 신규] completed appProperty — "프로젝트 불러오기" 목록이 파일 내용을 통째로
             //    안 받고도(가벼운 메타데이터 조회만으로) 완료된 프로젝트를 구분 표시할 수 있게, pm과 같은
@@ -1724,6 +1727,11 @@
                 //    토픽 프로파일(바로 아래 topicProfile 복원)은 이미 fileId를 쓰고 있어 이쪽만 어긋나 있었음.
                 if (saveData.aiLearning && saveData.aiLearning.length && window._alMergeFromDrive) {
                     window._alMergeFromDrive(saveData.aiLearning, fileId);
+                }
+                // ✅ [2026-09-12 신규] AI 문답 "자주 묻는 질문" — Drive에서 받아온 팀 전체 기록을
+                //    이 브라우저 기록과 병합(js/04h의 _ganttQaMergeFreqFromDrive 참고).
+                if (saveData.qaQuestionFreq && saveData.qaQuestionFreq.length && window._ganttQaMergeFreqFromDrive) {
+                    window._ganttQaMergeFreqFromDrive(saveData.qaQuestionFreq, fileId);
                 }
                 // ✅ [토픽 프로파일] Drive JSON에서 복원 → localStorage 런타임 캐시에 적재
                 //    처음 로딩·마지막 저장은 Drive(server), 실제 동작은 캐시 — 추가 Drive 호출 없음

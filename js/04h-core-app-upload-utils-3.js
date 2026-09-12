@@ -1977,14 +1977,32 @@
         window._renderGanttQaMessages();
     };
 
-    const _QA_FREQ_KEY = 'gantt_qa_question_freq';
-    const _QA_FREQ_MAX = 150; // localStorage 무한 증가 방지용 상한
+    // 🐛 [2026-09-12 개선] "자주 묻는 질문"이 이 브라우저(localStorage) 안에서만 쌓여서, 팀원이
+    //    여러 명이면 한 사람 몫으로 "2번 이상"을 채우기 어렵고, 다른 사람이 뭘 자주 묻는지도 전혀
+    //    안 보였다("운영이 안 된다"는 실사용 피드백). AI 학습 데이터(js/25-ai-learning.js)와 동일한
+    //    패턴으로 확장 — ①localStorage 저장을 프로젝트(fileId)별로 나누고 ②저장할 때 프로젝트 JSON에
+    //    같이 실어 Drive로 올리고(saveData.qaQuestionFreq) ③프로젝트를 열 때 Drive에서 받아온 걸
+    //    로컬과 병합해서 팀 전체가 이 프로젝트에서 실제로 자주 묻는 질문을 서로 볼 수 있게 한다.
+    //    질문 "문구"만 저장하고 답변 내용은 여전히 저장하지 않음(기존 방침 그대로).
+    const _QA_FREQ_KEY = 'gantt_qa_question_freq_v2'; // v2: 구조가 [항목...] → {fileKey:[항목...]}로 바뀌어 키를 새로 씀
+    const _QA_FREQ_MAX = 150; // 프로젝트당 localStorage 무한 증가 방지용 상한
 
-    window._ganttQaRecordQuestionFreq = function(question) {
+    function _qaFreqStore() {
+        try { return JSON.parse(localStorage.getItem(_QA_FREQ_KEY)) || {}; } catch (e) { return {}; }
+    }
+    function _qaFreqSaveStore(store) {
+        try { localStorage.setItem(_QA_FREQ_KEY, JSON.stringify(store)); } catch (e) {}
+    }
+    // 프로젝트를 아직 저장하기 전(새 프로젝트, fileId 없음)이면 '_unsaved' 키에 임시로 쌓아두되,
+    // 이 키는 saveData에 실어 Drive로 올리지 않는다(어느 프로젝트 것인지 알 수 없으므로).
+    function _qaFreqKey(projectKey) { return projectKey || window.currentDriveFileId || window.currentDriveFileName || '_unsaved'; }
+
+    window._ganttQaRecordQuestionFreq = function(question, projectKey) {
         const norm = window._ganttQaNormalizeQ(question);
         if (!norm || norm.length < 2) return;
-        let list = [];
-        try { list = JSON.parse(localStorage.getItem(_QA_FREQ_KEY) || '[]'); } catch (e) { list = []; }
+        const key = _qaFreqKey(projectKey);
+        const store = _qaFreqStore();
+        let list = store[key] || [];
         const entry = list.find(function(x) { return x.norm === norm; });
         if (entry) {
             entry.count = (entry.count || 1) + 1;
@@ -1997,17 +2015,135 @@
             list.sort(function(a, b) { return (b.lastAsked || 0) - (a.lastAsked || 0); });
             list = list.slice(0, _QA_FREQ_MAX);
         }
-        try { localStorage.setItem(_QA_FREQ_KEY, JSON.stringify(list)); } catch (e) {}
+        store[key] = list;
+        _qaFreqSaveStore(store);
     };
 
-    // "2번 이상" 물어본 것만 "자주"로 인정 — 한 번만 물어본 걸 예시로 보여주는 건 의미가 없음
-    window._ganttQaGetTopQuestions = function(n) {
-        let list = [];
-        try { list = JSON.parse(localStorage.getItem(_QA_FREQ_KEY) || '[]'); } catch (e) { list = []; }
+    // "2번 이상" 물어본 것만 "자주"로 인정 — 한 번만 물어본 걸 예시로 보여주는 건 의미가 없음.
+    // 지금 열려있는 프로젝트 것만 보여준다(다른 프로젝트에서 자주 묻던 질문은 여기 안 섞임).
+    window._ganttQaGetTopQuestions = function(n, projectKey) {
+        const key = _qaFreqKey(projectKey);
+        const list = _qaFreqStore()[key] || [];
         return list
             .filter(function(x) { return (x.count || 1) >= 2; })
             .sort(function(a, b) { return (b.count - a.count) || ((b.lastAsked || 0) - (a.lastAsked || 0)); })
             .slice(0, n || 6);
+    };
+
+    /** 저장 시 호출 — 현재 프로젝트의 질문 빈도 배열을 반환하여 saveData.qaQuestionFreq에 담음. */
+    window._ganttQaGetFreqForSave = function(projectKey) {
+        const key = _qaFreqKey(projectKey);
+        if (key === '_unsaved') return []; // 어느 프로젝트인지 모르는 임시 기록은 Drive에 올리지 않음
+        return _qaFreqStore()[key] || [];
+    };
+
+    /**
+     * 프로젝트 로드 시 호출 — Drive에서 받아온 질문 빈도를 이 브라우저의 기록과 병합.
+     * norm(정규화된 질문 문구) 기준 union — 같은 질문이면 더 큰 count를 채택(정확한 팀 전체 합산은
+     * 아니지만, 여러 사람이 각자 다른 브라우저에서 쌓은 기록이 저장될 때마다 한 값으로 수렴하므로
+     * "이 질문을 여러 사람이 반복해서 물었다"는 신호로는 충분하다 — 정밀 집계가 필요한 데이터가 아님).
+     */
+    window._ganttQaMergeFreqFromDrive = function(driveEntries, projectKey) {
+        if (!driveEntries || !driveEntries.length) return;
+        const key = _qaFreqKey(projectKey);
+        if (key === '_unsaved') return;
+        const store = _qaFreqStore();
+        const local = store[key] || [];
+        const byNorm = {};
+        local.forEach(function(e) { if (e && e.norm) byNorm[e.norm] = e; });
+        driveEntries.forEach(function(e) {
+            if (!e || !e.norm) return;
+            const existing = byNorm[e.norm];
+            if (!existing || (e.count || 1) > (existing.count || 1)) {
+                byNorm[e.norm] = { norm: e.norm, sample: e.sample || e.norm, count: Math.max(e.count || 1, existing ? (existing.count || 1) : 0), lastAsked: Math.max(e.lastAsked || 0, existing ? (existing.lastAsked || 0) : 0) };
+            }
+        });
+        let merged = Object.values(byNorm).sort(function(a, b) { return (b.lastAsked || 0) - (a.lastAsked || 0); });
+        if (merged.length > _QA_FREQ_MAX) merged = merged.slice(0, _QA_FREQ_MAX);
+        store[key] = merged;
+        _qaFreqSaveStore(store);
+    };
+
+    // 💡 [2026-09-12 신규] "자주 묻는 질문" 원본은 문구가 토씨 하나만 달라도 별개 항목으로 쌓인다
+    //    (_ganttQaNormalizeQ가 조사/어미까지는 안 지움) — 그대로 다 보여주면 "지연된 업무 있어?"/
+    //    "지연된 업무가 있어?"가 각각 count=1인 채 따로 떠서 정작 "여러 사람이 자주 묻는 질문"이
+    //    거의 안 뜬다. AI로 의미상 같은 질문을 묶어서 대표 문구 + 합산 횟수로 보여준다.
+    //    비용/속도 때문에 매번 부르지 않고, 원본 구성(문구+횟수)이 실제로 바뀌었을 때만 새로 호출해
+    //    캐시하고, 그 전까지는 캐시(또는 원본 그대로)를 즉시 보여준다 — 화면이 AI 응답을 기다리며
+    //    멈추는 일은 없음.
+    const _QA_CLUSTER_CACHE_KEY = 'gantt_qa_cluster_cache_v1';
+    const _QA_CLUSTER_MIN_RAW   = 4; // 원본이 이보다 적으면 묶어봐야 의미 없어 AI 호출 안 함
+
+    function _qaClusterCacheStore() {
+        try { return JSON.parse(localStorage.getItem(_QA_CLUSTER_CACHE_KEY)) || {}; } catch (e) { return {}; }
+    }
+    function _qaClusterCacheSave(store) {
+        try { localStorage.setItem(_QA_CLUSTER_CACHE_KEY, JSON.stringify(store)); } catch (e) {}
+    }
+    // 원본 목록의 "서명" — 문구+횟수 조합이 하나라도 바뀌면 달라짐(캐시 무효화 판단용)
+    function _qaRawSignature(list) {
+        return list.map(function(x) { return x.norm + ':' + (x.count || 1); }).sort().join('|');
+    }
+
+    /**
+     * 빈 채팅창에 보여줄 "자주 묻는 질문" 목록 — AI로 묶은 결과가 있으면 그걸, 없으면(원본이 적거나
+     * AI 키가 없거나 아직 클러스터링 전이면) 기존 방식("2번 이상"만 필터링한 원본)을 즉시 반환한다.
+     * 캐시가 낡았으면 뒤에서 조용히 AI를 불러 캐시를 새로 채우고, 끝나면 onUpdated(clusters)로 알린다
+     * (호출부에서 그 시점에도 채팅이 여전히 비어있으면 다시 그려서 자연스럽게 갱신).
+     */
+    window._ganttQaGetDisplayQuestions = function(n, projectKey, onUpdated) {
+        const key = _qaFreqKey(projectKey);
+        const raw = (_qaFreqStore()[key] || []).slice().sort(function(a, b) { return (b.count || 1) - (a.count || 1); });
+        const fallback = function() { return raw.filter(function(x) { return (x.count || 1) >= 2; }).slice(0, n || 6); };
+        if (raw.length < _QA_CLUSTER_MIN_RAW) return fallback();
+
+        const apiKey = window.getActiveAiKey && window.getActiveAiKey();
+        if (!apiKey) return fallback(); // AI 키 없으면 클러스터링 불가 — 기존 방식 그대로
+
+        const sig = _qaRawSignature(raw);
+        const cached = _qaClusterCacheStore()[key];
+        if (!cached || cached.sig !== sig) {
+            window._ganttQaRefreshClusterCache(key, raw, sig, onUpdated); // fire-and-forget
+        }
+        return (cached && cached.sig === sig && cached.clusters && cached.clusters.length) ? cached.clusters.slice(0, n || 6) : fallback();
+    };
+
+    window._ganttQaClusterInFlight = null; // 같은 서명으로 중복 호출 방지용
+    window._ganttQaRefreshClusterCache = async function(key, raw, sig, onUpdated) {
+        if (window._ganttQaClusterInFlight === sig) return;
+        window._ganttQaClusterInFlight = sig;
+        try {
+            const apiKey = window.getActiveAiKey();
+            const listText = raw.slice(0, 60).map(function(x, i) { return (i + 1) + '. "' + x.sample + '" (x' + (x.count || 1) + ')'; }).join('\n');
+            const prompt = '다음은 어떤 회사 프로젝트 Gantt 챗봇에 실제로 입력된 사용자 질문 목록이다. 괄호 안 숫자는 그 문구가 입력된 횟수다.\n\n' +
+                listText +
+                '\n\n의미가 사실상 같은 질문(표현·조사·어미만 다름, 예: "지연된 업무 있어?"와 "지연된 업무가 있어?")끼리 묶어서, ' +
+                '그룹마다 가장 자연스러운 대표 문구 하나와 그 그룹에 속한 항목들의 횟수 합계를 계산하라. ' +
+                '완전히 다른 질문끼리는 절대 묶지 말 것. 합산 횟수 내림차순으로 최대 6개 그룹만, 다른 설명 없이 JSON 배열로만 응답하라:\n' +
+                '[{"sample":"대표 질문 문구","count":합산횟수}, ...]';
+            const result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; }, maxRetryPerModel: 1 });
+            if (!result || !result.ok) { console.warn('[AI문답 질문 클러스터링] 실패:', result && result.error); return; }
+            const text = (result.data && result.data.result && result.data.result.candidates && result.data.result.candidates[0] &&
+                result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts &&
+                result.data.result.candidates[0].content.parts[0].text) || '';
+            const m = text.match(/\[[\s\S]*\]/);
+            if (!m) { console.warn('[AI문답 질문 클러스터링] JSON 배열을 찾지 못함:', text.slice(0, 200)); return; }
+            let clusters = JSON.parse(m[0]);
+            if (!Array.isArray(clusters)) return;
+            clusters = clusters.filter(function(c) { return c && c.sample; })
+                .map(function(c) { return { sample: String(c.sample).slice(0, 120), count: Number(c.count) || 1 }; })
+                .sort(function(a, b) { return b.count - a.count; })
+                .slice(0, 6);
+            const store = _qaClusterCacheStore();
+            store[key] = { sig: sig, clusters: clusters, ts: Date.now() };
+            _qaClusterCacheSave(store);
+            console.info('[AI문답 질문 클러스터링] 갱신 완료:', key, clusters.length + '개 그룹');
+            if (onUpdated) onUpdated(clusters);
+        } catch (e) {
+            console.warn('[AI문답 질문 클러스터링] 오류:', e.message);
+        } finally {
+            if (window._ganttQaClusterInFlight === sig) window._ganttQaClusterInFlight = null;
+        }
     };
 
     // 🎙️ [2026-09-08 수정] "음성문답" 버튼 — 한 번 말하면 풀리던 것을 "모드"로 바꿔 고정시킴.

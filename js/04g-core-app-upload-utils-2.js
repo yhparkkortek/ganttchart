@@ -1500,7 +1500,12 @@ ${question}
             //    바꿈 — 몇 개가 쌓이든 항상 한 줄만 차지한다. 고른 뒤에는 selectedIndex를 다시 0으로
             //    돌려서(같은 항목을 또 고를 수 있게) "선택됨" 상태로 안 남게 함.
             //    또한 예시 문구에서 특정 인물명("김철수님") 지칭을 빼고 일반적인 표현으로 교체.
-            const top = window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(10) : [];
+            // 💡 [2026-09-12] AI로 유사 질문을 묶은 결과가 있으면 그걸 우선 사용(_ganttQaGetDisplayQuestions).
+            //    아직 캐시가 없어 AI 호출이 막 시작됐다면 그 응답이 늦게 와도, 그 시점에 채팅이 여전히
+            //    비어있을 때만(=사용자가 이미 질문을 시작했으면 건드리지 않음) 조용히 다시 그려서 갱신한다.
+            const top = window._ganttQaGetDisplayQuestions
+                ? window._ganttQaGetDisplayQuestions(6, null, function() { if (!window._ganttQaHistory.length) window._renderGanttQaMessages(); })
+                : (window._ganttQaGetTopQuestions ? window._ganttQaGetTopQuestions(10) : []);
             const examples = _emEn
                 ? ['Any delayed tasks?', "What's this project's annual demand volume?", 'Who is in charge of mechanical design?']
                 : ['지연된 업무가 있어?', '이 프로젝트 연간 수요량이 얼마야?', '기구 담당자가 누구야?'];
