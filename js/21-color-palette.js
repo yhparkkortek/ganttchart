@@ -605,6 +605,10 @@ window._cpRevertToSnapshot = function() {
     }
     window._cpThemeDirty = !!snap.dirty;
     if (window._cpUpdateApplyStatus) window._cpUpdateApplyStatus();
+    // 🐛 [2026-09-13 버그수정] tabData.themeColor가 복구된 "후"에 시트 탭을 다시 그려야
+    //    올바른 원래 색으로 표시됨 — _cpApplyLive 내부의 첫 번째 renderSheetTabsBar 호출은
+    //    tabData.themeColor가 아직 변경된 색인 상태에서 실행되므로 탭이 바뀐 색으로 그려진다.
+    if (window.renderSheetTabsBar) window.renderSheetTabsBar();
 };
 window.closeColorPaletteModal = function() {
     // 직접 선택 드래그 중이던 디바운스가 닫힌 뒤 뒤늦게 적용되는 것 방지
