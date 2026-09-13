@@ -891,6 +891,14 @@ window.deleteHistoryByDateRange = function() {
     };
 
     // ─── 시작일 기준 정렬 (WBS 계층 유지) ──────────────────────────
+    // 🐛 [2026-09-13 버그수정] "하위 그룹(T1~T3 등, 자식이 있는 행)이 있으면 날짜순 정렬이 안 먹힌다"는
+    //    제보 — 원인은 그룹행의 _calcStartTs가 "그 그룹 안 실제 업무들 중 가장 이른 날짜"가 아니라,
+    //    자식이 있는 행은 절대 Forced로 고정되지 않고(04d-core-app-gantt-core.js applyDatesToRow 참고)
+    //    매번 "이전 형제가 끝난 자리"를 그대로 이어받는 값이었다는 것 — 즉 정렬 실행 "이전" 배열 순서가
+    //    낳은 결과값을 다시 정렬 기준으로 쓰는 셈이라, 그룹행 기준 정렬은 사실상 아무 정보도 없는
+    //    순환 참조였다(리프 업무 — 자식 없는 행 — 는 대부분 메일분석 시 _startForced로 고정되어 자기
+    //    실제 날짜를 갖고 있어서 문제가 덜 드러났음). 이제 자식이 있는 행은 "그 하위에 실제로 존재하는
+    //    가장 이른 날짜"를 재귀적으로 구해 그것을 정렬 기준으로 쓴다.
     window.sortRowsByStartDate = function() {
         if (!globalData || globalData.length <= 2) { alert(window._t('정렬할 데이터가 없습니다.', 'No data to sort.')); return; }
 
@@ -912,9 +920,27 @@ window.deleteHistoryByDateRange = function() {
             stack.push({ node, level: lv });
         }
 
+        // 💡 리프(자식 없음) 노드는 자기 자신의 _calcStartTs를 그대로 쓰고, 그룹(자식 있음) 노드는
+        //    하위 전체에서 가장 이른 날짜를 재귀적으로 구해서 쓴다 — 그룹행 자신의 _calcStartTs(=이전
+        //    정렬 결과의 부산물)는 더 이상 정렬 기준으로 쓰지 않는다. 같은 서브트리를 여러 번 훑지
+        //    않도록 노드에 결과를 캐싱(_sortKey)한다.
+        const effectiveTs = (node) => {
+            if (node._sortKey !== undefined) return node._sortKey;
+            let key;
+            if (!node.children.length) {
+                key = startTs(node.row);
+            } else {
+                key = Infinity;
+                for (const c of node.children) { const t = effectiveTs(c); if (t < key) key = t; }
+                if (key === Infinity) key = startTs(node.row); // 자식도 전부 날짜 없으면 자기 값으로 폴백
+            }
+            node._sortKey = key;
+            return key;
+        };
+
         // 2) 형제끼리 시작일 오름차순 정렬 (재귀)
         const sortNodes = (nodes) => {
-            nodes.sort((a, b) => startTs(a.row) - startTs(b.row));
+            nodes.sort((a, b) => effectiveTs(a) - effectiveTs(b));
             for (const n of nodes) sortNodes(n.children);
         };
         sortNodes(roots);
@@ -949,8 +975,23 @@ window.deleteHistoryByDateRange = function() {
             else stack[stack.length - 1].node.children.push(node);
             stack.push({ node, level: lv });
         }
+        // 💡 [2026-09-13] 위 window.sortRowsByStartDate와 동일한 이유로, 자식이 있는 행은 자기
+        //    _calcStartTs(=이전 순서의 부산물) 대신 하위에서 가장 이른 실제 날짜로 정렬한다.
+        const effectiveTs = (node) => {
+            if (node._sortKey !== undefined) return node._sortKey;
+            let key;
+            if (!node.children.length) {
+                key = startTs(node.row);
+            } else {
+                key = Infinity;
+                for (const c of node.children) { const t = effectiveTs(c); if (t < key) key = t; }
+                if (key === Infinity) key = startTs(node.row);
+            }
+            node._sortKey = key;
+            return key;
+        };
         const sortNodes = (nodes) => {
-            nodes.sort((a, b) => startTs(a.row) - startTs(b.row));
+            nodes.sort((a, b) => effectiveTs(a) - effectiveTs(b));
             for (const n of nodes) sortNodes(n.children);
         };
         sortNodes(roots);
