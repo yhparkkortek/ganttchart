@@ -799,48 +799,108 @@
     }
 
     // ── 상태 셀(select) 포커스 모드 ───────────────────────────────────────────
-    // _kbEnterCell 에서 호출 — _ensureCellNavigation 내부로 두면 스코프 밖이라 접근 불가
+    // ⚠️ native select.focus() 를 쓰면 화살표→onchange→updateStatus()→renderTable() 으로
+    //    select 자체가 사라져 이후 키 조작이 불가능해짐 — 대신 capture-phase 전역 핸들러로 처리
     function _enterSelectMode(sel) {
         _kbMode = 'select';
-        sel.focus();
-        function cleanup() {
-            sel.removeEventListener('keydown', onKey, true);
-            sel.removeEventListener('blur',    onBlur);
-            if (_kbMode === 'select') _kbMode = null;
+        var savedRowIdx = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : -1;
+        var savedTdIdx  = _kbCell ? _kbCell.tdIdx : -1;
+        var _exited = false;
+
+        // 시각 표시 (focus 없이)
+        sel.style.outline = '2px solid ' + _getFocusColor();
+
+        // 재렌더 후 같은 행/열 위치의 select를 재탐색
+        function _querySel() {
+            var tr = document.querySelector('tr[data-row-index="' + savedRowIdx + '"]');
+            if (!tr) return null;
+            var tds = tr.querySelectorAll('td');
+            return tds[savedTdIdx] ? tds[savedTdIdx].querySelector('select') : null;
         }
-        function onKey(e) {
-            if (e.key === 'Enter' || e.key === 'Escape') {
+
+        function _exit() {
+            if (_exited) return;
+            _exited = true;
+            document.removeEventListener('keydown', _onKey, true);
+            var cs = _querySel();
+            if (cs) cs.style.outline = '';
+            if (_kbMode === 'select') _kbMode = null;
+            // KB 포커스 복원 — re-render 후 새 tr 재탐색
+            setTimeout(function() {
+                var newTr = document.querySelector('tr[data-row-index="' + savedRowIdx + '"]');
+                if (newTr) { _kbCell = null; _setKbFocus(newTr, savedTdIdx); }
+            }, 30);
+        }
+
+        function _onKey(e) {
+            if (_kbMode !== 'select') { _exit(); return; }
+            var cs = _querySel();
+            if (!cs) { _exit(); return; } // 행이 사라진 경우
+
+            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
                 e.preventDefault(); e.stopPropagation();
-                cleanup(); sel.blur();
+                var newIdx = cs.selectedIndex + (e.key === 'ArrowDown' ? 1 : -1);
+                newIdx = Math.max(0, Math.min(cs.options.length - 1, newIdx));
+                if (cs.selectedIndex !== newIdx) {
+                    cs.selectedIndex = newIdx;
+                    cs.dispatchEvent(new Event('change', { bubbles: true })); // → updateStatus()
+                    // re-render 후 새 select에 시각 표시 재적용
+                    setTimeout(function() {
+                        var ns = _querySel();
+                        if (ns) ns.style.outline = '2px solid ' + _getFocusColor();
+                    }, 30);
+                }
+            } else if (e.key === 'Enter' || e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                _exit();
             }
         }
-        function onBlur() { cleanup(); }
-        sel.addEventListener('keydown', onKey, true); // capture: native select보다 먼저
-        sel.addEventListener('blur',    onBlur);
+
+        document.addEventListener('keydown', _onKey, true);
     }
 
     // ── 텍스트 편집 모드(contenteditable) 진입 ───────────────────────────────
     // makeEditable 내부 onkeydown(Enter=저장, Shift+Enter=줄바꿈)을 유지하면서
-    // Esc=취소(원본 복원)만 별도 핸들러로 추가
+    // Esc=취소(원본 복원)만 별도 핸들러로 추가.
+    // 저장 후 renderTable()이 호출되어 _kbCell.tr이 stale 해지는 문제를
+    // onBlur에서 data-row-index로 재탐색해 KB 포커스를 복원함.
     function _enterEditMode(td) {
         if (!window.makeEditable) return;
-        var rawAttr  = td.getAttribute('data-raw');
-        var origText = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
+        var rawAttr     = td.getAttribute('data-raw');
+        var origText    = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
+        var savedRowIdx = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : -1;
+        var savedTdIdx  = _kbCell ? _kbCell.tdIdx : -1;
+        var _exited = false;
+
         window.makeEditable(td);
         _kbMode = 'edit';
+
+        function _restore() {
+            if (_exited) return;
+            _exited = true;
+            if (_kbMode === 'edit') _kbMode = null;
+            // 50ms 대기: recalculateSchedules 등 동기 re-render 완료 후 새 tr 탐색
+            setTimeout(function() {
+                if (savedRowIdx < 0) return;
+                var newTr = document.querySelector('tr[data-row-index="' + savedRowIdx + '"]');
+                if (newTr) { _kbCell = null; _setKbFocus(newTr, savedTdIdx); }
+            }, 50);
+        }
 
         function onEsc(e) {
             if (e.key === 'Escape') {
                 e.preventDefault(); e.stopPropagation();
                 td.removeEventListener('keydown', onEsc, true);
+                td.removeEventListener('blur', onBlur);
                 td.innerText = origText; // 원본 복원 → blur 시 "변경 없음"으로 처리
                 td.blur();
+                _restore();
             }
         }
         function onBlur() {
             td.removeEventListener('keydown', onEsc, true);
-            td.removeEventListener('blur',    onBlur);
-            if (_kbMode === 'edit') _kbMode = null;
+            td.removeEventListener('blur', onBlur);
+            _restore(); // Enter 저장 or Esc 후 blur 모두 여기서 KB 포커스 복원
         }
         td.addEventListener('keydown', onEsc, true); // capture: makeEditable의 onkeydown보다 먼저
         td.addEventListener('blur',    onBlur);
@@ -891,17 +951,19 @@
             return;
         }
 
-        // 2. 상태 셀: select 포커스 → select 모드
-        var sel = td.querySelector('select');
-        if (sel) { _enterSelectMode(sel); return; }
-
-        // 3. WBS 업무명 → 행 액션 팝업 → WBS 메뉴 모드
+        // 2. WBS 업무명 → 행 액션 팝업 → WBS 메뉴 모드
+        // ⚠️ select 체크(case 3)보다 먼저 해야 함 — WBS 셀 안에 담당자 <select>가 있을 경우
+        //    case 3(select)이 먼저 실행되어 WBS 팝업 대신 담당자 select를 잡아버리는 버그 방지
         if (onclickAttr.includes('onRowNoClick')) {
             if (window.onRowNoClick)
                 window.onRowNoClick(td, rowIdx, { target: td, shiftKey: false, ctrlKey: false, detail: 1 });
             _kbMode = 'wbs-menu';
             return;
         }
+
+        // 3. 상태 셀: select 포커스 → select 모드
+        var sel = td.querySelector('select');
+        if (sel) { _enterSelectMode(sel); return; }
 
         // 4. 상세내용 — Enter: 펼치기/접기 / Shift+Enter: 텍스트 편집 모드
         if (onclickAttr.includes('toggleDetailExpand')) {
