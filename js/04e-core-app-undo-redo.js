@@ -427,16 +427,29 @@
         window.recalculateSchedules();
     };
 
+    // 🐛 [2026-09-13 버그수정] #app-topbar가 자체 z-index(700, styles.css)로 별도의 stacking context를
+    //    만들고 있어서, 그 안의 .topbar-popup(드롭다운)이 아무리 z-index를 높여도 그 컨텍스트 밖으로
+    //    못 나가 — AI 문답 등 모달(z-index 9000+)이 열려있으면 드롭다운이 그 뒤에 가려졌다. 드롭다운이
+    //    실제로 열려있는 동안만 #app-topbar 자체의 z-index를 모든 모달보다 높게 올려 상단 메뉴가 항상
+    //    최상단에 보이게 하고, 닫히면 원래 값(스타일시트의 700)으로 되돌린다.
+    window._topbarSyncZ = function() {
+        const anyOpen = Array.prototype.some.call(document.querySelectorAll('.topbar-popup'), function(p) { return p.style.display === 'block'; });
+        const topbar = document.getElementById('app-topbar');
+        if (topbar) topbar.style.zIndex = anyOpen ? '2147483000' : '';
+    };
+
     window.toggleTopbarMenu = function(popupId, btn) {
         document.querySelectorAll('.topbar-popup').forEach(p => { if (p.id !== popupId) p.style.display = 'none'; });
         const popup = document.getElementById(popupId);
         if (!popup) return;
         const willShow = popup.style.display !== 'block';
         popup.style.display = willShow ? 'block' : 'none';
+        window._topbarSyncZ();
         if (willShow) {
             const closeHandler = function(e) {
                 if (!popup.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
                     popup.style.display = 'none';
+                    window._topbarSyncZ();
                     document.removeEventListener('click', closeHandler);
                 }
             };
@@ -447,6 +460,7 @@
     // ✅ 구글 로그인 완료 / 엑셀 파일 로드 시 열려있는 파일·업무 드롭다운을 자동으로 닫음
     window.closeAllTopbarMenus = function() {
         document.querySelectorAll('.topbar-popup').forEach(p => { p.style.display = 'none'; });
+        window._topbarSyncZ();
     };
 
     // ✅ [2026-08-24] 팝업 하나만 닫기 — 예전부터 "자동알람 설정"/"메일 자동배치 설정" 버튼 onclick에서
@@ -455,6 +469,7 @@
     window.closeTopbarMenu = function(popupId) {
         const popup = document.getElementById(popupId);
         if (popup) popup.style.display = 'none';
+        window._topbarSyncZ();
     };
 
     // ✅ [2026-08-24] "프로젝트"/"설정" 드롭다운의 하위 메뉴 버튼을 누르면 드롭다운이 자동으로 닫히도록.
@@ -465,6 +480,7 @@
             const item = e.target.closest('.topbar-menu-item');
             if (!item || item.dataset.keepOpen === 'true') return;
             popup.style.display = 'none';
+            window._topbarSyncZ();
         });
     });
 
