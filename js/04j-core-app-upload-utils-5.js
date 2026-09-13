@@ -1501,12 +1501,30 @@
 
 
     // 💡 오늘이 진행기간에 걸쳐있는(또는 가장 가까운 다음) 행을, 표 헤더 바로 아래로 스크롤해서 보여줌
+    // 🐛 [2026-09-13 버그수정] "페이지를 열면 오늘 위치가 아니라 맨 위(과거)에서 시작한다"는 제보 —
+    //    실제 원인은 두 가지가 겹쳐 있었다:
+    //    ① (진짜 원인) `#table-container > div`로 스크롤 컨테이너를 찾고 있었는데, 그사이 AI 검색/
+    //       일괄작업 툴바(`#gantt-ai-bulk-bar`, `#gantt-ai-searchbar`)가 `#table-container`의 새
+    //       "첫 자식 div"로 추가되면서 이 셀렉터가 진짜 스크롤 영역(`#gantt-table-scroll`)이 아니라
+    //       항상 숨겨져 있는(`display:none`) 툴바 div를 짚게 됐다 — 그 div 기준으로 delta를 계산하니
+    //       매번 0이 나와 스크롤이 전혀 동작하지 않았다(탭 가시성과 무관하게 항상 발생).
+    //    ② 페이지 로드 시 Gantt가 아닌 다른 탭(마지막으로 보던 탭, gantt_active_tab 참고)이 복원되어
+    //       있으면 Gantt 탭 패널 자체가 display:none이라, 설령 셀렉터가 맞았어도 getBoundingClientRect가
+    //       전부 0을 반환해 계산이 무의미해진다 — renderTable()의 "최초 1회만 시도" 플래그
+    //       (_didInitialScrollToToday)는 이걸 성공으로 착각해 그 세션 동안 다시는 재시도하지 않았다.
+    //    ①은 id로 정확히 짚어 고치고, ②는 boolean을 반환해 "실제로 보이는 상태에서 시도했는지"를
+    //    호출부가 판단하게 하여, 숨겨진 상태였으면 나중에(Gantt 탭이 실제로 보일 때) 재시도한다 —
+    //    window.switchTab('gantt')의 재시도 호출 참고.
     window.scrollToTodayRow = function() {
         try {
-            const scrollBox = document.querySelector('#table-container > div');
+            const scrollBox = document.getElementById('gantt-table-scroll');
             const tbody = document.getElementById('table-body');
             const thead = document.getElementById('table-head');
-            if (!scrollBox || !tbody || !window.globalData) return;
+            if (!scrollBox || !tbody || !window.globalData || window.globalData.length <= 1) return false;
+            // 💡 offsetParent===null ⇒ display:none이라 아직 실제로 그려지지 않은 상태. clientHeight===0도
+            //    (레이아웃이 막 시작돼 아직 높이가 안 잡힌 경우 등) 마찬가지로 델타 계산이 무의미하므로
+            //    함께 걸러낸다 — 어느 쪽이든 지금 계산해봐야 의미없는 값만 나오므로 나중에 다시 시도한다.
+            if (scrollBox.offsetParent === null || scrollBox.clientHeight === 0) return false;
 
             const today = new Date(); today.setHours(0, 0, 0, 0);
             const todayMs = today.getTime();
@@ -1527,17 +1545,18 @@
                     if (r._calcStartTs >= todayMs && r._calcStartTs < bestTs) { bestTs = r._calcStartTs; targetIdx = i; }
                 }
             }
-            if (targetIdx === -1) return; // 해당하는 행이 없으면 맨 위 그대로 둠
+            if (targetIdx === -1) return true; // 해당하는 행이 없는 건 정상 상태(할 일 없음) — 재시도 불필요
 
             const targetTr = tbody.querySelector(`tr[data-row-index="${targetIdx}"]`);
-            if (!targetTr) return;
+            if (!targetTr) return false; // 아직 그 행이 DOM에 없음 — 나중에 다시 시도
 
             const boxRect = scrollBox.getBoundingClientRect();
             const trRect = targetTr.getBoundingClientRect();
             const headerH = thead ? thead.getBoundingClientRect().height : 0;
             const delta = trRect.top - boxRect.top - headerH;
             scrollBox.scrollTop += delta;
-        } catch (e) { /* 스크롤 계산에 실패해도 화면 자체엔 영향 없도록 무시 */ }
+            return true;
+        } catch (e) { return false; /* 스크롤 계산에 실패해도 화면 자체엔 영향 없도록 무시 */ }
     };
 
     function renderTable(data) {
@@ -1854,9 +1873,17 @@
         }
 
         // 💡 페이지를 새로고침한 뒤 최초 1회만 "오늘" 행으로 스크롤 (편집/필터 등으로 인한 재렌더링 시엔 스크롤 위치를 건드리지 않음)
+        // 🐛 [2026-09-13] Gantt 탭이 안 보이는 상태거나(다른 탭이 복원됨) 레이아웃이 아직 안 잡힌 상태면
+        //    scrollToTodayRow()가 false를 반환하며 조용히 실패할 수 있다 — 성공했을 때만 플래그를 세우고,
+        //    페이지 로드 직후 몇 차례(레이아웃이 늦게 자리잡는 경우 대비) 짧게 재시도한다. 그래도 실패하면
+        //    (=Gantt 탭 자체가 안 보이는 상태) window.switchTab('gantt')이 탭이 보일 때 마저 재시도한다.
         if (!window._didInitialScrollToToday && data && data.length > 1) {
-            window._didInitialScrollToToday = true;
-            setTimeout(window.scrollToTodayRow, 50);
+            [50, 300, 800].forEach(function(delay) {
+                setTimeout(function() {
+                    if (window._didInitialScrollToToday) return; // 이미 성공했으면 나머지 재시도는 건너뜀
+                    if (window.scrollToTodayRow()) window._didInitialScrollToToday = true;
+                }, delay);
+            });
         }
     }
 

@@ -49,6 +49,14 @@
             setTimeout(function() {
                 if (window.updateStickyPositions) window.updateStickyPositions();
                 window.dispatchEvent(new Event('resize'));
+                // 🐛 [2026-09-13 버그수정] 페이지 로드 시 Gantt가 아닌 다른 탭이 복원돼 있으면(마지막으로
+                //    보던 탭) renderTable()의 "최초 1회 오늘 스크롤"이 탭이 숨겨진 상태라 조용히 실패했을
+                //    수 있다(js/04j-core-app-upload-utils-5.js의 scrollToTodayRow 참고) — 아직 한 번도
+                //    성공한 적 없으면 지금(탭이 실제로 화면에 보이는 시점) 다시 시도한다. 이미 성공했으면
+                //    (=사용자가 그 뒤 직접 스크롤했을 수 있음) 매번 다시 안 건드리도록 조건을 건다.
+                if (!window._didInitialScrollToToday && window.scrollToTodayRow && window.scrollToTodayRow()) {
+                    window._didInitialScrollToToday = true;
+                }
             }, 0);
         }
         // Weekly Report 탭은 매번 최신 기준주로 다시 그린다
