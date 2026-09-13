@@ -2490,24 +2490,31 @@
         });
     };
 
-    // 💡 [2026-09-13 신규] AI 문답 창 투명도 조절 — 헤더 슬라이더로 실시간 변경, localStorage에 저장
-    //    기본값은 100%(완전 불투명). 100% 미만이면 frosted-glass(backdrop-filter:blur) 자동 적용.
-    //    투명도는 창 배경색 알파값만 조절하므로 텍스트 가독성에는 영향 없음.
+    // 💡 [2026-09-13 신규→버그수정] AI 문답 창 투명도 조절 — 헤더 슬라이더로 실시간 변경, localStorage에 저장.
+    //    기본값은 100%(완전 불투명).
+    //    🐛 [2026-09-13 버그수정 2] 원래 100% 미만일 때 backdrop-filter:blur(14px)를 같이 걸었는데(frosted
+    //    glass 의도), 지난 세션까지는 투명도 슬라이더 자체가 드래그가 안 되는 버그(19-shared-modal-drag.js
+    //    쪽 별도 수정 완료) 때문에 실사용자가 100% 미만 값을 낼 방법이 없어 이 blur 경로를 아무도 못 타고
+    //    있었다 — 슬라이더 드래그를 고치고 나서야 비로소 "좁은 화면에서 뒤 내용을 살짝 보이게" 켜보면,
+    //    ① 일부 환경에서 blur가 있는 상태로 알파 배경을 합성하는 게 아예 깨져 창 전체가 불투명한 흰색
+    //    그대로 렌더링되고(맨 위 모듈 주석에 남아있던 "일부 환경에서 모달이 아예 안 보이는 렌더링 버그"와
+    //    동일 계열), ② 설령 정상 렌더링되는 환경이어도 14px 블러는 뒤 텍스트를 알아볼 수 없을 만큼
+    //    뭉개버려 "뒤에 뭐가 있는지 보려고" 만든 기능의 목적 자체를 무력화했다. blur를 완전히 제거하고
+    //    순수 알파(rgba) 반투명만 쓰도록 변경 — 블러 없이 알파만 쓰면 렌더링도 안정적이고, 뒤 텍스트도
+    //    (흐릿하지만) 실제로 식별 가능하게 비쳐 보인다.
     window._ganttQaSetBgAlpha = function(val) {  // val: 20~100 정수
         val = Math.max(20, Math.min(100, parseInt(val) || 100));
         const box = document.getElementById('gantt-qa-box');
         const drag = document.getElementById('gantt-qa-drag');
         if (!box) return;
         const a = val / 100;
+        box.style.backdropFilter = '';
+        box.style.webkitBackdropFilter = '';
         if (val >= 100) {
             box.style.background = '#ffffff';
-            box.style.backdropFilter = '';
-            box.style.webkitBackdropFilter = '';
             if (drag) drag.style.background = '#e7f3ff';
         } else {
             box.style.background = 'rgba(255,255,255,' + a + ')';
-            box.style.backdropFilter = 'blur(14px)';
-            box.style.webkitBackdropFilter = 'blur(14px)';
             if (drag) drag.style.background = 'rgba(231,243,255,' + Math.min(1, a + 0.1) + ')';
         }
         const lbl = document.getElementById('gantt-qa-opacity-label');
