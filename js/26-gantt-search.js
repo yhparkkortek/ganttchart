@@ -776,19 +776,28 @@
     }
 
     /**
-     * 💡 [2026-09-13 버그수정] 날짜 확정(_calConfirm)이나 텍스트 편집 저장(blurCell)처럼 셀 액션이
-     * recalculateSchedules()/renderTable()로 tbody 전체를 다시 그리면, 그 순간 _kbCell.tr은 이미
-     * DOM에서 떨어져나간(stale) 옛 <tr>을 계속 가리키게 된다 — 이후 방향키를 누르면
-     * rows.indexOf(stale tr)가 -1이 되어 "맨 위 행으로 튐"으로 보이는 버그가 됐다(달력 확정 직후,
-     * 상세내용/일반 텍스트 편집 Enter로 빠져나온 직후 모두 동일 원인). 액션 직전에 저장해둔
-     * rowIndex/tdIdx로 재렌더 후의 새 <tr>을 다시 찾아 포커스를 그 자리에 그대로 복원한다.
+     * 💡 [2026-09-13 버그수정, 2026-09-14 재수정] 날짜 확정(_calConfirm)이나 텍스트 편집 저장
+     * (blurCell)처럼 셀 액션이 recalculateSchedules()/renderTable()로 tbody 전체를 다시 그리면,
+     * 그 순간 _kbCell.tr은 이미 DOM에서 떨어져나간(stale) 옛 <tr>을 계속 가리키게 된다 — 이후
+     * 방향키를 누르면 rows.indexOf(stale tr)가 -1이 되어 "맨 위 행으로 튐"으로 보이는 버그가 됐다.
+     *
+     * [2026-09-14] 처음 수정에서는 액션 직후 "바로" 새 tr을 찾았는데, recalculateSchedules()는
+     * 내부에서 setTimeout(...,10)으로 실제 renderTable() 호출을 한 틱 미룬다(날짜/기간/WBS 등
+     * "일정에 영향 주는" 컬럼을 고쳤을 때 타는 경로 — 달력으로 시작/완료일을 바꾸는 경우가 대표적).
+     * 그래서 "바로" 찾으면 아직 안 바뀐 옛(곧 사라질) <tr>을 찾아 거기 포커스를 되씌우고 마는데,
+     * 10ms 뒤 진짜 재렌더가 일어나면 그 tr째 통째로 교체되면서 방금 되살린 포커스도 같이
+     * 사라져버렸다(그 뒤로 아무도 다시 잡아주지 않아 다음 방향키에서 "맨 위 행으로 튐"으로 나타남).
+     * 내부 지연(10ms)보다 확실히 긴 지연 뒤에 재탐색하도록 바꿔서, 재렌더가 늦게 오든(달력·기간 등
+     * 일정 관련 컬럼) 이미 끝나 있든(상세내용처럼 동기 렌더인 컬럼) 항상 최종 tr에 포커스가 남는다.
      */
     function _reanchorKbFocus(rowIndex, tdIdx) {
         if (rowIndex === null || rowIndex === undefined || isNaN(rowIndex) || tdIdx === null || tdIdx === undefined) return;
-        var newTr = document.querySelector('tr[data-row-index="' + rowIndex + '"]');
-        if (!newTr) return;
-        _kbCell = null; // stale 참조를 먼저 지워 clearKbFocus가 옛 td를 건드리지 않게 함
-        _setKbFocus(newTr, tdIdx);
+        setTimeout(function() {
+            var newTr = document.querySelector('tr[data-row-index="' + rowIndex + '"]');
+            if (!newTr) return;
+            _kbCell = null; // stale 참조를 먼저 지워 clearKbFocus가 옛 td를 건드리지 않게 함
+            _setKbFocus(newTr, tdIdx);
+        }, 30); // recalculateSchedules()의 내부 setTimeout(...,10)보다 확실히 뒤에 실행되도록
     }
 
     /** 같은 열에서 위/아래 visible 행으로 이동 */
