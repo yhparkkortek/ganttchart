@@ -23,6 +23,7 @@
 
     // ── 셀 키보드 포커스 ──────────────────────────────────────────────────────
     var _kbCell = null;       // { tr: HTMLElement, tdIdx: number } 현재 포커스 셀
+    var _kbMode = null;       // 'calendar' | 'select' | 'edit' | 'wbs-menu' | null
     var _cellNavSetup = false; // 전역 핸들러 중복 등록 방지
 
     // ─── 검색바 삽입 (테이블 위 분리 렌더링 — 기본 숨김, AI검색 버튼으로 토글) ──
@@ -768,34 +769,56 @@
         _setKbFocus(_kbCell.tr, idx);
     }
 
-    /** 현재 포커스 셀 Enter 액션 실행 */
-    function _kbEnterCell() {
+    /**
+     * 현재 포커스 셀 Enter 액션 실행
+     * @param {boolean} shiftKey  — Shift+Enter 여부 (상세내용 셀에서만 의미)
+     *
+     * 셀 타입별 동작:
+     *   날짜 셀    → 달력 팝업 열기 → 화살표로 날짜 이동 → Enter 확정 / Esc 취소
+     *   상태 셀    → select 포커스 → 화살표로 값 변경 → Enter/Esc로 빠져나옴
+     *   WBS 업무명 → 행 액션 팝업 → 화살표=이동/레벨, +-=추가/삭제 → Enter/Esc 닫기
+     *   상세내용   → Enter=펼치기/접기 / Shift+Enter=텍스트 편집 → Enter/Esc 빠져나옴
+     *   기간·담당자 등 일반 텍스트 → 편집 모드 → Enter 저장 / Esc 취소
+     */
+    function _kbEnterCell(shiftKey) {
         if (!_kbCell) return;
         var td = _kbCell.tr.querySelectorAll('td')[_kbCell.tdIdx];
         if (!td || _isSkipCell(td)) return;
 
-        // 상태 셀: <select> 직접 포커스
+        var rowIdx      = parseInt(_kbCell.tr.getAttribute('data-row-index'), 10);
+        var onclickAttr = td.getAttribute('onclick')    || '';
+        var ondblAttr   = td.getAttribute('ondblclick') || '';
+
+        // 1. 날짜 셀: .date-clickable 스팬 클릭 → showCalendar → 캘린더 모드
+        var dateSpan = td.querySelector('.date-clickable');
+        if (dateSpan) {
+            dateSpan.click();          // showCalendar() 호출, 달력 팝업 표시
+            _kbMode = 'calendar';
+            return;
+        }
+
+        // 2. 상태 셀: select 포커스 → select 모드
         var sel = td.querySelector('select');
-        if (sel) { sel.focus(); return; }
+        if (sel) { _enterSelectMode(sel); return; }
 
-        var rowIdx = parseInt(_kbCell.tr.getAttribute('data-row-index'), 10);
-        var onclickAttr = td.getAttribute('onclick') || '';
-
-        // WBS 업무명 → 행 액션 메뉴 (onRowNoClick)
+        // 3. WBS 업무명 → 행 액션 팝업 → WBS 메뉴 모드
         if (onclickAttr.includes('onRowNoClick')) {
-            if (window.onRowNoClick) window.onRowNoClick(td, rowIdx, { target: td });
+            if (window.onRowNoClick)
+                window.onRowNoClick(td, rowIdx, { target: td, shiftKey: false, ctrlKey: false, detail: 1 });
+            _kbMode = 'wbs-menu';
             return;
         }
 
-        // 상세내용 → 펼치기/접기 (toggleDetailExpand)
+        // 4. 상세내용 — Enter: 펼치기/접기 / Shift+Enter: 텍스트 편집 모드
         if (onclickAttr.includes('toggleDetailExpand')) {
-            td.click();
+            if (shiftKey) { _enterEditMode(td); }
+            else          { td.click(); }       // toggleDetailExpand
             return;
         }
 
-        // 기간·날짜·담당자·모델·고객사 등 일반 텍스트 셀 → 편집 모드 (makeEditable)
-        if ((td.getAttribute('ondblclick') || '').includes('makeEditable')) {
-            if (window.makeEditable) window.makeEditable(td);
+        // 5. 기간·날짜 직접입력·담당자·모델·고객사 등 일반 텍스트 편집 셀
+        if (ondblAttr.includes('makeEditable')) {
+            _enterEditMode(td);
         }
     }
 
@@ -805,9 +828,8 @@
         _cellNavSetup = true;
 
         // ── 셀 클릭 위임: capture 단계 등록 (세 번째 인자 true)
-        //    · 이유: WBS/상세내용/상태 등 td의 inline onclick(onRowNoClick·toggleDetailExpand 등)이
-        //      stopPropagation을 호출하면 bubbling 핸들러는 document까지 도달하지 못함.
-        //      capture 단계는 inline onclick보다 먼저 실행되므로 모든 셀을 확실히 포착.
+        //    · 이유: WBS/상세내용/상태 등 td의 inline onclick이 stopPropagation을 호출하면
+        //      bubbling 핸들러는 document까지 도달하지 못함. capture 단계는 먼저 실행됨.
         //    · 부작용: 없음. 기존 onclick 액션은 이후 target 단계에서 정상 실행됨.
         document.addEventListener('click', function(e) {
             var td = e.target.closest('td');
@@ -816,34 +838,148 @@
                 if (tr && tr.closest('#table-body') && !_isSkipCell(td)) {
                     var tds = Array.from(tr.querySelectorAll('td'));
                     _setKbFocus(tr, tds.indexOf(td));
+                    // 날짜 셀 클릭으로 캘린더가 열릴 경우 자동으로 calendar 모드 전환
+                    if (td.querySelector('.date-clickable')) _kbMode = 'calendar';
+                    else if (_kbMode === 'calendar') _kbMode = null;
                 }
             } else if (!e.target.closest('#table-body')) {
-                // 테이블 외부 클릭 → 포커스 해제
                 _clearKbFocus();
+                if (_kbMode !== 'edit') _kbMode = null;
             }
         }, true); // ← capture phase
 
-        // ── 전역 키보드 핸들러 ──────────────────────────────────────────────
+        // ── 달력 키보드 헬퍼 ──────────────────────────────────────────────
+        function _calKeyNav(dayDelta) {
+            window.currentCalendarTs = (window.currentCalendarTs || Date.now()) + dayDelta * 86400000;
+            var d = new Date(window.currentCalendarTs);
+            window.currentViewYear  = d.getFullYear();
+            window.currentViewMonth = d.getMonth();
+            if (window.renderCalendar) window.renderCalendar(true);
+        }
+        function _calConfirm() {
+            var d = new Date(window.currentCalendarTs || Date.now());
+            _kbMode = null;
+            if (window.selectDateFromCalendar)
+                window.selectDateFromCalendar(d.getFullYear(), d.getMonth(), d.getDate());
+        }
+        function _calClose() {
+            var p = document.getElementById('calendar-popup');
+            if (p) p.style.display = 'none';
+            var o = document.getElementById('calendar-bg-overlay'); if (o) o.remove();
+            _kbMode = null;
+        }
+
+        // ── 상태 셀(select) 포커스 모드 ───────────────────────────────────
+        // enter/select 모드: select 포커스 → 화살표로 값 변경 → Enter/Esc로 빠져나옴
+        // ⚠️ onchange="updateStatus()" 가 화살표 키마다 발동되어 이미 저장됨
+        //    → Esc 취소는 이 앱의 Undo(Ctrl+Z)로 되돌리는 것을 안내
+        function _enterSelectMode(sel) {
+            _kbMode = 'select';
+            sel.focus();
+            function cleanup() {
+                sel.removeEventListener('keydown', onKey, true);
+                sel.removeEventListener('blur', onBlur);
+                if (_kbMode === 'select') _kbMode = null;
+            }
+            function onKey(e) {
+                if (e.key === 'Enter' || e.key === 'Escape') {
+                    e.preventDefault(); e.stopPropagation();
+                    cleanup(); sel.blur();
+                }
+            }
+            function onBlur() { cleanup(); }
+            sel.addEventListener('keydown', onKey, true); // capture: native select보다 먼저
+            sel.addEventListener('blur', onBlur);
+        }
+
+        // ── 텍스트 편집 모드(contenteditable) 진입 ────────────────────────
+        // makeEditable 내부의 onkeydown(Enter=저장, Shift+Enter=줄바꿈)을 유지하면서
+        // Esc=취소(원본 복원)만 별도 핸들러로 추가
+        function _enterEditMode(td) {
+            if (!window.makeEditable) return;
+            // data-raw(원본 텍스트) 저장 — Esc 취소 시 복원 대상
+            var rawAttr  = td.getAttribute('data-raw');
+            var origText = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
+            window.makeEditable(td);
+            _kbMode = 'edit';
+
+            function onEsc(e) {
+                if (e.key === 'Escape') {
+                    e.preventDefault(); e.stopPropagation();
+                    td.removeEventListener('keydown', onEsc, true);
+                    // 원본 텍스트 복원 → blurCell이 "변경 없음"으로 처리 (저장 안 됨)
+                    td.innerText = origText;
+                    td.blur();
+                }
+            }
+            function onBlur() {
+                td.removeEventListener('keydown', onEsc, true);
+                td.removeEventListener('blur', onBlur);
+                if (_kbMode === 'edit') _kbMode = null;
+            }
+            // capture: makeEditable의 td.onkeydown보다 먼저 실행되어 Esc를 가로챔
+            td.addEventListener('keydown', onEsc, true);
+            td.addEventListener('blur', onBlur);
+        }
+
+        // ── 전역 키보드 핸들러 ────────────────────────────────────────────
         document.addEventListener('keydown', function(e) {
+
+            // ── 캘린더 모드: 날짜 탐색·확정·취소 ─────────────────────────
+            if (_kbMode === 'calendar') {
+                var calPopup = document.getElementById('calendar-popup');
+                if (!calPopup || calPopup.style.display !== 'block') {
+                    _kbMode = null; // 달력이 이미 닫혔으면 모드 리셋
+                } else {
+                    if (e.key === 'ArrowLeft')  { e.preventDefault(); _calKeyNav(-1); return; }
+                    if (e.key === 'ArrowRight') { e.preventDefault(); _calKeyNav(+1); return; }
+                    if (e.key === 'ArrowUp')    { e.preventDefault(); _calKeyNav(-7); return; }
+                    if (e.key === 'ArrowDown')  { e.preventDefault(); _calKeyNav(+7); return; }
+                    if (e.key === 'Enter')      { e.preventDefault(); _calConfirm(); return; }
+                    if (e.key === 'Escape')     { e.preventDefault(); _calClose();   return; }
+                    return; // 그 외 키는 달력 뒤 셀로 전달 차단
+                }
+            }
+
+            // ── WBS 메뉴 모드: 행 조작 버튼 키 매핑 ─────────────────────
+            // ↑/↓ = 위/아래 이동, ←/→ = WBS 레벨 변경, +/= = 행 추가, - = 행 삭제
+            // Enter/Esc = 팝업 닫고 셀 네비게이션으로 복귀
+            if (_kbMode === 'wbs-menu') {
+                var rapPopup = document.getElementById('row-action-popup');
+                if (!rapPopup || rapPopup.style.display !== 'block') {
+                    _kbMode = null;
+                } else {
+                    function _rapClick(id) { var b = document.getElementById(id); if (b) b.click(); }
+                    if (e.key === 'ArrowUp')             { e.preventDefault(); _rapClick('rap-up');    return; }
+                    if (e.key === 'ArrowDown')           { e.preventDefault(); _rapClick('rap-dn');    return; }
+                    if (e.key === 'ArrowLeft')           { e.preventDefault(); _rapClick('rap-left');  return; }
+                    if (e.key === 'ArrowRight')          { e.preventDefault(); _rapClick('rap-right'); return; }
+                    if (e.key === '+' || e.key === '=')  { e.preventDefault(); _rapClick('rap-add');   return; }
+                    if (e.key === '-')                   { e.preventDefault(); _rapClick('rap-del');   return; }
+                    if (e.key === 'Enter' || e.key === 'Escape') {
+                        e.preventDefault();
+                        rapPopup.style.display = 'none';
+                        if (window.clearRowHighlight) window.clearRowHighlight();
+                        _kbMode = null;
+                        return;
+                    }
+                    return; // 그 외 키 차단
+                }
+            }
+
+            // ── 일반 네비게이션 모드 ─────────────────────────────────────
             var isSearchInput = (document.activeElement &&
                                  document.activeElement.id === 'gantt-ai-search-input');
 
             // ↑ / ↓ ─────────────────────────────────────────────────────────
             if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
                 var delta = e.key === 'ArrowDown' ? 1 : -1;
-
-                // 검색 input 포커스 → 검색 결과 이동
                 if (isSearchInput) {
                     if (_matchedIndices.length) { e.preventDefault(); _navGo(delta); }
                     return;
                 }
-
-                if (_isEditingAnywhere()) return; // 편집 중 무시
-
-                // 셀 포커스 있음 → 행 이동
+                if (_isEditingAnywhere()) return; // edit/select 모드 — per-element 핸들러 처리
                 if (_kbCell) { e.preventDefault(); _kbMoveRow(delta); return; }
-
-                // 검색 결과 있음 → 결과 이동
                 if (_matchedIndices.length) { e.preventDefault(); _navGo(delta); }
             }
 
@@ -857,15 +993,18 @@
 
             // Enter ──────────────────────────────────────────────────────────
             if (e.key === 'Enter') {
-                if (_isEditingAnywhere()) return;
+                if (_isEditingAnywhere()) return; // edit/select 모드 — per-element 핸들러 처리
                 if (!_kbCell) return;
                 e.preventDefault();
-                _kbEnterCell();
+                _kbEnterCell(e.shiftKey); // shiftKey: 상세내용 셀 Shift+Enter = 편집 모드
             }
 
-            // Escape — 셀 포커스 해제 (검색 초기화는 _ensureSearchBar 핸들러) ──
-            if (e.key === 'Escape' && _kbCell) {
-                _clearKbFocus();
+            // Esc ─────────────────────────────────────────────────────────────
+            if (e.key === 'Escape') {
+                // edit/select 모드는 per-element 핸들러(stopPropagation)가 먼저 처리
+                // wbs-menu/calendar는 위에서 이미 처리됨
+                if (_kbMode === 'edit' || _kbMode === 'select') return;
+                if (_kbCell) _clearKbFocus();
             }
         });
     }
