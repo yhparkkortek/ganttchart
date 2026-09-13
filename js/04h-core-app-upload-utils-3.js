@@ -2490,6 +2490,33 @@
         });
     };
 
+    // 💡 [2026-09-13 신규] AI 문답 창 투명도 조절 — 헤더 슬라이더로 실시간 변경, localStorage에 저장
+    //    기본값은 100%(완전 불투명). 100% 미만이면 frosted-glass(backdrop-filter:blur) 자동 적용.
+    //    투명도는 창 배경색 알파값만 조절하므로 텍스트 가독성에는 영향 없음.
+    window._ganttQaSetBgAlpha = function(val) {  // val: 20~100 정수
+        val = Math.max(20, Math.min(100, parseInt(val) || 100));
+        const box = document.getElementById('gantt-qa-box');
+        const drag = document.getElementById('gantt-qa-drag');
+        if (!box) return;
+        const a = val / 100;
+        if (val >= 100) {
+            box.style.background = '#ffffff';
+            box.style.backdropFilter = '';
+            box.style.webkitBackdropFilter = '';
+            if (drag) drag.style.background = '#e7f3ff';
+        } else {
+            box.style.background = 'rgba(255,255,255,' + a + ')';
+            box.style.backdropFilter = 'blur(14px)';
+            box.style.webkitBackdropFilter = 'blur(14px)';
+            if (drag) drag.style.background = 'rgba(231,243,255,' + Math.min(1, a + 0.1) + ')';
+        }
+        const lbl = document.getElementById('gantt-qa-opacity-label');
+        if (lbl) lbl.textContent = val + '%';
+        const sld = document.getElementById('gantt-qa-opacity-slider');
+        if (sld && sld.value !== String(val)) sld.value = val;
+        try { localStorage.setItem('gantt_qa_bg_alpha', val); } catch(e) {}
+    };
+
     window.openGanttQaModal = function() {
         let modal = document.getElementById('gantt-qa-modal');
         if (!modal) {
@@ -2500,14 +2527,25 @@
             //    toggleLang()이 id 기반으로 다시 패치해줘야 언어 전환 시에도 즉시 반영된다(04j-core-app-
             //    upload-utils-5.js의 toggleLang() 안 'gantt-qa-target-label'/'gantt-qa-desc' 참고).
             const _qEn = window._currentLang === 'en';
+            // 🐛 [2026-09-13 버그수정] 이전 세션에서 backdrop-filter:blur(14px)를 하드코딩했더니
+            //    일부 환경에서 모달이 아예 안 보이는 렌더링 버그 발생 → 기본값을 완전 불투명(#fff)으로
+            //    복원하고, 투명도는 헤더 슬라이더로 사용자가 직접 조절하는 방식으로 변경.
             modal.innerHTML = `
-            <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:rgba(255,255,255,0.82); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px); border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
-                <div id="gantt-qa-drag" style="padding:13px 18px; border-bottom:1px solid rgba(165,200,240,0.7); font-weight:bold; font-size:14px; background:rgba(231,243,255,0.88); border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
+            <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#ffffff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
+                <div id="gantt-qa-drag" style="padding:10px 14px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 <span id="gantt-qa-title">${_qEn ? 'AI Q&A' : 'AI 문답'}</span></span>
-                    <div style="display:flex; gap:6px; align-items:center;">
-                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:28px; white-space:nowrap; transition:background .15s;">🔇</button>
-                        <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
-                        <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
+                    <div style="display:flex; gap:5px; align-items:center;">
+                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#d8edfb';" style="background:#d8edfb; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🔇</button>
+                        <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#d8edfb';" title="AI 문답 프롬프트 편집" style="background:#d8edfb; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
+                        <!-- 💡 [2026-09-13 신규] 투명도 슬라이더 — 드래그해서 창 배경 투명도 실시간 조절 -->
+                        <div onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:3px; background:rgba(255,255,255,0.5); border-radius:6px; padding:2px 6px; border:1px solid rgba(165,200,240,0.5);" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
+                            <span style="font-size:11px; color:#5585a8; user-select:none;">🪟</span>
+                            <input type="range" id="gantt-qa-opacity-slider" min="20" max="100" value="100" step="5"
+                                   oninput="window._ganttQaSetBgAlpha(this.value)"
+                                   style="width:55px; height:14px; cursor:pointer; accent-color:#1971c2; vertical-align:middle;">
+                            <span id="gantt-qa-opacity-label" style="font-size:10px; color:#5585a8; min-width:28px; text-align:right; user-select:none;">100%</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:26px; height:26px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
                 <div id="gantt-qa-desc" style="padding:8px 18px 0; font-size:10.5px; color:#999;">${_qEn ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Conversation content isn\'t saved — only the question text is kept, anonymously, to power the "Frequently asked" suggestions)' : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화 내용 자체는 저장되지 않으며, 질문 문구만 "자주 묻는 질문" 추천에 쓰입니다)'}</div>
@@ -2520,7 +2558,7 @@
                      자동 경로(🌐 다른 프로젝트 조회 규칙)와 별개로, 사람이 미리 지정해두면 왕복 없이 바로 답한다. -->
                 <div style="padding:6px 18px 0; display:flex; align-items:center; gap:6px;">
                     <label id="gantt-qa-target-label" for="gantt-qa-target-project" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '📂 Target' : '📂 질문 대상'}</label>
-                    <select id="gantt-qa-target-project" onchange="window._ganttQaOnTargetChange()" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:rgba(255,255,255,0.75); color:#333;">
+                    <select id="gantt-qa-target-project" onchange="window._ganttQaOnTargetChange()" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
                         <option value="">${_qEn ? 'Current project' : '현재 프로젝트'}</option>
                     </select>
                     <!-- 💡 [2026-09-07 신규] "질문 대상"만 고르면 왕복 없이 답하는 가벼운 조회 경로와 별개로,
@@ -2537,15 +2575,15 @@
                      선택하면 입력창에 채워짐(바로 전송 안 됨) — window._ganttQaFillQuestion 재사용. -->
                 <div style="padding:4px 18px 0; display:flex; align-items:center; gap:6px;">
                     <label id="gantt-qa-freq-label" for="gantt-qa-freq-select" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '💡 Frequently used' : '💡 자주 쓰는 질문'}</label>
-                    <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:rgba(255,255,255,0.75); color:#333;">
+                    <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
                         <option value="">${_qEn ? '(select a question)' : '(질문 선택하기)'}</option>
                     </select>
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px; background:transparent;"></div>
-                <div style="padding:10px 14px; border-top:1px solid rgba(200,210,220,0.6); background:rgba(248,250,252,0.6); display:flex; gap:8px; align-items:stretch;">
+                <div style="padding:10px 14px; border-top:1px solid #d0dde8; background:#f6f8fa; display:flex; gap:8px; align-items:stretch;">
                     <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; padding:0 16px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear<br>Chat' : '대화<br>삭제'}</button>
                     <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Voice<br>Q&A' : '음성<br>문답'}</button>
-                    <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid rgba(180,195,210,0.7); border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:rgba(255,255,255,0.8);" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
+                    <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>
             </div>`;
@@ -2553,6 +2591,11 @@
             window._makeDraggable('gantt-qa-box', 'gantt-qa-drag');
             window._bindClickToFront('gantt-qa-modal');
             window._ganttQaGuardMobileZoom(document.getElementById('gantt-qa-input')); // 📱 모바일 과도확대 방지
+            // 저장된 투명도 복원 (최초 생성 시 1회)
+            try {
+                const saved = parseInt(localStorage.getItem('gantt_qa_bg_alpha') || '100');
+                if (saved < 100) window._ganttQaSetBgAlpha(saved);
+            } catch(e) {}
         }
         window._renderGanttQaMessages();
         window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
