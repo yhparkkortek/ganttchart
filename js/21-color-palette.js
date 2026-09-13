@@ -383,17 +383,23 @@ window._cpApplyLive = function(hex, skipSave) {
         + '.btn.active .badge { color: ' + gen.darkText + ' !important; }\n'
         + '.filter-label.active { background-color: ' + gen.darkText + ' !important; border-color: ' + gen.darkText + ' !important; box-shadow: 0 0 5px rgba(' + _dtRgb + ', 0.4) !important; }\n';
 
-    // 💡 [2026-09-14 신규] 알람/공지 탭 "📤 선택 발송"/"🗑️ 선택 삭제" 버튼이 팔레트를 안 따라가던 원인:
-    //    이 버튼들은 styles.css의 .action-btn.solid.c-success/.c-danger(초록/빨강 고정 색상 클래스)를
-    //    쓰는데, 이 c-success/c-danger 계열은 "삭제=빨강, 저장/성공=초록"이라는 앱 전역 상태색 규칙(위
-    //    styles.css 주석 참고)이라 원래부터 _cpApplyLive 오버라이드 대상에 의도적으로 없었다 — M.C
-    //    Table/Address Book 등 다른 삭제 버튼들은 지금도 이 이유로 빨강 고정을 유지 중. 다만 이 두
-    //    버튼은 요청에 따라 예외적으로 팔레트 테마를 따르게 한다 — 클래스 전체(c-success/c-danger)가
-    //    아니라 이 두 id만 콕 집어 오버라이드해서, 다른 곳의 삭제/성공 버튼들은 원래 규칙(고정 색상)을
-    //    그대로 유지하도록 범위를 좁혔다. .btn.active와 동일한 "테마의 진한 텍스트색을 배경으로 쓰는
-    //    solid 버튼" 공식을 재사용.
-    css += '#btn-alarm-send-selected, #btn-notice-delete-selected { background-color: ' + gen.darkText + ' !important; border-color: ' + gen.darkText + ' !important; color: #fff !important; }\n'
-        + '#btn-alarm-send-selected:hover, #btn-notice-delete-selected:hover { background-color: ' + genDarkHover + ' !important; border-color: ' + genDarkHover + ' !important; color: #fff !important; }\n';
+    // 💡 [2026-09-14 신규 → 같은 날 톤 수정] 알람/공지 탭 "📤 선택 발송"/"🗑️ 선택 삭제" 버튼이 팔레트를
+    //    안 따라가던 원인: 이 버튼들은 styles.css의 .action-btn.solid.c-success/.c-danger(초록/빨강
+    //    고정 색상 클래스)를 쓰는데, 이 c-success/c-danger 계열은 "삭제=빨강, 저장/성공=초록"이라는
+    //    앱 전역 상태색 규칙(위 styles.css 주석 참고)이라 원래부터 _cpApplyLive 오버라이드 대상에
+    //    의도적으로 없었다 — M.C Table/Address Book 등 다른 삭제 버튼들은 지금도 이 이유로 빨강 고정을
+    //    유지 중. 다만 이 두 버튼은 요청에 따라 예외적으로 팔레트 테마를 따르게 한다 — 클래스 전체
+    //    (c-success/c-danger)가 아니라 이 두 id만 콕 집어 오버라이드해서, 다른 곳의 삭제/성공 버튼들은
+    //    원래 규칙(고정 색상)을 그대로 유지하도록 범위를 좁혔다.
+    //    🐛 처음엔 .btn.active와 같은 "진한 텍스트색을 배경으로 쓰는 solid(흰 글씨)" 공식을 썼는데,
+    //    같은 줄에 나란히 있는 "일괄 발송"/"공지 등록"/"인쇄 (PDF)" 등 형제 버튼들은 전부 옅은 파스텔
+    //    배경(gen.bg)+진한 글자(gen.darkText) 스타일이라, 이 두 버튼만 진하게 칠해진 채로 튀어 보인다는
+    //    지적으로 형제 버튼과 완전히 같은 공식(배경 gen.bg, 글자 gen.darkText, 호버 시 배경만 gen.hoverBg
+    //    로 살짝 진해짐 — 글자색은 유지)으로 다시 맞췄다. 이제 "선택 발송/선택 삭제"는 다른 버튼과 톤은
+    //    통일되고, 아이콘·라벨 문구로만 구분된다(팔레트 무관 상시 보이는 게 아니라 체크 시에만 나타나는
+    //    문맥이라 그것만으로도 충분히 구분됨).
+    css += '#btn-alarm-send-selected, #btn-notice-delete-selected { background-color: ' + gen.bg + ' !important; border-color: ' + gen.bg + ' !important; color: ' + gen.darkText + ' !important; }\n'
+        + '#btn-alarm-send-selected:hover, #btn-notice-delete-selected:hover { background-color: ' + gen.hoverBg + ' !important; border-color: ' + gen.hoverBg + ' !important; color: ' + gen.darkText + ' !important; }\n';
 
     // 💡 파일 곳곳(body 안)에 흩어진 <style> 블록 중 이 override보다 "문서상 나중에" 오는 것들이 있으면
     //    동일 특이도+!important 상황에서 그게 이겨버린다 — <head> 끝이 아니라 항상 body 맨 끝에 붙여서
