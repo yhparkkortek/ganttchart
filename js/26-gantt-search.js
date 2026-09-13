@@ -982,7 +982,14 @@
                     if (td.querySelector('.date-clickable')) _kbMode = 'calendar';
                     else if (_kbMode === 'calendar') _kbMode = null;
                 }
-            } else if (!e.target.closest('#table-body')) {
+            } else if (!e.target.closest('#table-body') && !e.target.closest('#row-action-popup') && !e.target.closest('#calendar-popup')) {
+                // 💡 [2026-09-14 버그수정] WBS 상하좌우+- 팝업(#row-action-popup)이나 달력 팝업
+                //    (#calendar-popup)은 둘 다 #table-body 밖(document.body)에 별도로 떠있는
+                //    요소라서, 그 안을 클릭하면(_rapClick의 b.click()처럼 키보드로 흉내낸 클릭이든,
+                //    실제 마우스로 달력 날짜를 클릭하든) 여기 걸려 매번 kb 포커스/모드가 통째로
+                //    초기화됐다 — WBS 팝업은 방향키 한 번만 먹고 그 다음부터 "그냥 클릭"으로 오인되어
+                //    셀 조작이 멈췄고, 달력은 키보드 탐색 도중 날짜를 마우스로 찍으면 포커스가 사라졌다.
+                //    두 팝업 안 클릭은 이 초기화에서 제외해서 각 모드가 계속 유지되게 한다.
                 _clearKbFocus();
                 if (_kbMode !== 'edit') _kbMode = null;
             }
@@ -1054,9 +1061,16 @@
                     if (e.key === '-')                   { e.preventDefault(); _rapClick('rap-del');   return; }
                     if (e.key === 'Enter' || e.key === 'Escape') {
                         e.preventDefault();
+                        // 💡 [2026-09-14 신규] 상하좌우+-로 이동/레벨변경된 "현재" 행(rap-* 버튼들이
+                        //    누를 때마다 popup.dataset.rowIndex를 갱신해둠)의 WBS 셀로 셀 키보드
+                        //    포커스를 되돌려서, 팝업만 닫고 끝나는 게 아니라 곧바로 다음 방향키로
+                        //    이어서 셀 이동을 할 수 있는 "대기" 상태로 자연스럽게 복귀시킨다.
+                        var _wbsRowIdx = parseInt(rapPopup.dataset.rowIndex, 10);
+                        var _wbsTdIdx  = _kbCell ? _kbCell.tdIdx : null;
                         rapPopup.style.display = 'none';
                         if (window.clearRowHighlight) window.clearRowHighlight();
                         _kbMode = null;
+                        _reanchorKbFocus(_wbsRowIdx, _wbsTdIdx);
                         return;
                     }
                     return; // 그 외 키 차단
