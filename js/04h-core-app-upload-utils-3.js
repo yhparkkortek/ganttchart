@@ -459,7 +459,7 @@
     // 단순함. [[MAIL_DRAFT]] 파서와 동일한 관대한 파싱 방식을 그대로 따른다.
     window._parseNoticeDraftBlock = function(blockText) {
         const lines = String(blockText || '').split('\n');
-        let title = '', deadlineLine = '', ddayLine, recipLine;
+        let title = '', deadlineLine = '', ddayLine, recipLine, correctLine;
         const contentLines = [];
         let inContent = false;
         lines.forEach(function(line) {
@@ -467,11 +467,13 @@
             const mDeadline = !inContent && line.match(/^\s*기준일\s*:\s*(.*)$/);
             const mDday     = !inContent && line.match(/^\s*D-day\s*:\s*(.*)$/i);
             const mRecip    = !inContent && line.match(/^\s*수신인\s*:\s*(.*)$/);
+            const mCorrect  = !inContent && line.match(/^\s*정정\s*:\s*(.*)$/);
             const mContent  = !inContent && line.match(/^\s*내용\s*:\s*(.*)$/);
             if (mTitle)    { title = mTitle[1].trim(); return; }
             if (mDeadline) { deadlineLine = mDeadline[1].trim(); return; }
             if (mDday)     { ddayLine = mDday[1].trim(); return; }
             if (mRecip)    { recipLine = mRecip[1].trim(); return; }
+            if (mCorrect)  { correctLine = mCorrect[1].trim(); return; }
             if (mContent)  { inContent = true; if (mContent[1].trim()) contentLines.push(mContent[1]); return; }
             if (inContent) contentLines.push(line);
         });
@@ -479,13 +481,17 @@
         const parseDays  = function(s) { return String(s || '').split(/[,，、]/).map(function(x) { return parseInt(x.trim(), 10); }).filter(function(n) { return !isNaN(n); }); };
         // 💡 기준일은 쉼표로 구분된 여러 날짜를 허용 — 날짜마다 별도 공지가 등록됨
         const deadlines = deadlineLine ? deadlineLine.split(/[,，、]/).map(function(d) { return d.trim(); }).filter(Boolean) : [];
+        // 💡 [2026-09-13 신규] "정정: true" — AI가 "정정해줘/이전 것 삭제 후 다시 등록" 요청을 받을 때
+        //    이 필드를 삽입. 등록 시 같은 제목의 기존 공지를 모두 삭제 후 새 공지를 등록한다.
+        const correctMode = correctLine ? /^(true|yes|1|예|맞|네)$/i.test(correctLine) : false;
         return {
             title: title,
             deadline: deadlines[0] || '',    // 하위호환 — 단일 날짜 경로도 유지
             deadlines: deadlines,            // 다중 날짜 배열 (0개면 빈 배열)
             alarmDays: ddayLine ? parseDays(ddayLine) : [0],
             recipientNames: recipLine !== undefined ? splitNames(recipLine) : [],
-            body: contentLines.join('\n').trim()
+            body: contentLines.join('\n').trim(),
+            correctMode: correctMode         // 정정 모드: true면 같은 제목 기존 공지 삭제 후 등록
         };
     };
 
@@ -507,7 +513,8 @@
             deadlines: deadlines,            // 다중 날짜 배열
             alarmDays: (parsed.alarmDays && parsed.alarmDays.length ? parsed.alarmDays : [0]).slice().sort(function(a, b) { return b - a; }),
             recipients: window._aiResolveNamesToRecipients(parsed.recipientNames),
-            body: parsed.body || ''
+            body: parsed.body || '',
+            correctMode: !!parsed.correctMode  // 정정 모드 전달
         };
     };
 
@@ -516,8 +523,13 @@
         const recipStr = draft.recipients.length ? draft.recipients.map(fmtPerson).join(', ') : '(등록 후 직접 선택 필요)';
         const dls = (draft.deadlines && draft.deadlines.length) ? draft.deadlines : (draft.deadline ? [draft.deadline] : []);
         const dlStr = dls.length > 1 ? `${dls.join(', ')} (${dls.length}개 날짜 → 공지 ${dls.length}건 등록)` : (dls[0] || '⚠️(기준일 없음)');
+        // 💡 [2026-09-13 신규] 정정 모드 안내 — 같은 제목의 기존 공지가 삭제된다는 것을 미리 알려줌
+        const correctHint = draft.correctMode
+            ? `\n\n🔄 **정정 모드**: 제목이 "${draft.title || ''}"인 기존 공지를 모두 삭제하고 새로 등록합니다.`
+            : '';
         let md = `📢 **공지 초안**\n- **제목:** ${draft.title || '(제목 없음)'}\n- **기준일:** ${dlStr}\n- **알림 시점:** ${draft.alarmDays.map(function(d) { return 'D-' + d; }).join(', ')}\n- **수신 대상:** ${recipStr}`;
         md += `\n\n**내용**\n${draft.body || '(내용 없음)'}`;
+        md += correctHint;
         if (!dls.length) md += `\n\n⚠️ 기준일이 없어 등록할 수 없습니다 — 기준일을 알려주세요.`;
         else if (!draft.title) md += `\n\n⚠️ 제목이 없어 등록할 수 없습니다 — 제목을 알려주세요.`;
         else if (draft.recipients.some(function(p) { return !p.email; })) md += `\n\n⚠️ 수신 대상 중 이메일을 찾지 못한 사람이 있습니다.`;
@@ -531,6 +543,24 @@
     window._aiRegisterNoticeFromDraft = function(draft) {
         const dls = (draft.deadlines && draft.deadlines.length) ? draft.deadlines : (draft.deadline ? [draft.deadline] : []);
         if (!draft.title || !dls.length) return { ok: false, error: '제목 또는 기준일이 없습니다.' };
+        // 💡 [2026-09-13 신규] 정정 모드: 같은 제목의 기존 공지를 모두 삭제 후 새로 등록
+        //    "정정해줘"/"이전 것 지우고 다시 등록" 요청에서 AI가 draft.correctMode=true를 세팅함.
+        let deletedCount = 0;
+        if (draft.correctMode && draft.title) {
+            const titleToDelete = draft.title.trim();
+            const before = window._noticeItems.length;
+            window._noticeItems = window._noticeItems.filter(function(n) {
+                if ((n.title || '').trim() === titleToDelete) {
+                    // 기존 알람 localStorage 키도 정리
+                    [7, 3, 1, 0].forEach(function(d) {
+                        try { localStorage.removeItem('notice_alarm_' + n.id + '_d' + d); } catch(e) {}
+                    });
+                    return false;
+                }
+                return true;
+            });
+            deletedCount = before - window._noticeItems.length;
+        }
         // 💡 날짜마다 별도 공지 1건씩 등록 — 여러 날짜를 한 번에 처리
         dls.forEach(function(dl, i) {
             window._noticeItems.push({
@@ -541,7 +571,7 @@
         });
         window._noticeSave();
         if (window.renderNoticeTab) window.renderNoticeTab();
-        return { ok: true, count: dls.length };
+        return { ok: true, count: dls.length, deletedCount: deletedCount };
     };
 
     window._aiRegisterPendingNoticeDraft = async function(draftId, btn) {
@@ -554,9 +584,19 @@
         if (btn) { btn.disabled = true; btn.textContent = '⏳ 등록 중...'; }
         const res = window._aiRegisterNoticeFromDraft(pending);
         window._ganttQaPendingNoticeDraft = null;
+        let resText = '';
+        if (res.ok) {
+            const cntStr = res.count > 1 ? ` (${res.count}개 날짜 → ${res.count}건 등록)` : '';
+            const delStr = res.deletedCount > 0 ? ` 기존 공지 ${res.deletedCount}건을 삭제하고 정정 등록했습니다.` : '';
+            resText = delStr
+                ? `✅ "${pending.title}" 공지를 정정했습니다.${cntStr}${delStr}`
+                : `✅ "${pending.title}" 공지를 등록했습니다.${cntStr}`;
+        } else {
+            resText = `⚠️ 공지 등록 실패: ${res.error}`;
+        }
         window._ganttQaHistory.push({
             role: 'ai',
-            text: res.ok ? `✅ "${pending.title}" 공지를 등록했습니다.${res.count > 1 ? ` (${res.count}개 날짜 → ${res.count}건 등록)` : ''}` : `⚠️ 공지 등록 실패: ${res.error}`,
+            text: resText,
             uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)
         });
         window._renderGanttQaMessages();
