@@ -2597,11 +2597,14 @@
                 if (saved < 100) window._ganttQaSetBgAlpha(saved);
             } catch(e) {}
         }
-        window._renderGanttQaMessages();
-        window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
-        window._ganttQaPopulateFreqSelect(); // 열 때마다 "자주 쓰는 질문" 최신화
-        window._ganttQaUpdateVoiceBtn(); // 🔊/🔇 저장된 상태(localStorage) 반영
-        window._ganttQaUpdateMicBtn();
+        // 🐛 [2026-09-13 버그수정] 아래 함수들이 정의되기 전에(또는 04g 스크립트 로드 실패 시)
+        //    openGanttQaModal이 호출되면 TypeError가 발생해 _openAndMinimize의 try-catch에 잡혀
+        //    칩이 생성되지 않고 모달도 열리지 않았다. 모두 방어적 호출로 전환.
+        if (window._renderGanttQaMessages)       window._renderGanttQaMessages();
+        if (window._ganttQaPopulateProjectSelect) window._ganttQaPopulateProjectSelect(); // 열 때마다 다른 프로젝트 목록 최신화(그 사이 추가/삭제됐을 수 있음)
+        if (window._ganttQaPopulateFreqSelect)    window._ganttQaPopulateFreqSelect(); // 열 때마다 "자주 쓰는 질문" 최신화
+        if (window._ganttQaUpdateVoiceBtn)        window._ganttQaUpdateVoiceBtn(); // 🔊/🔇 저장된 상태(localStorage) 반영
+        if (window._ganttQaUpdateMicBtn)          window._ganttQaUpdateMicBtn();
         modal.style.display = 'block';
         window.bringModalToFront('gantt-qa-modal');
         setTimeout(function() { const inp = document.getElementById('gantt-qa-input'); if (inp) inp.focus(); }, 50);
