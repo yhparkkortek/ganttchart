@@ -23,8 +23,20 @@
 
     // ── 셀 키보드 포커스 ──────────────────────────────────────────────────────
     var _kbCell = null;       // { tr: HTMLElement, tdIdx: number } 현재 포커스 셀
-    var _kbMode = null;       // 'calendar' | 'select' | 'edit' | 'wbs-menu' | null
+    var _kbMode = null;       // 'calendar' | 'select' | 'edit' | 'wbs-menu' | 'confirm-delete' | 'confirm-level0' | null
     var _cellNavSetup = false; // 전역 핸들러 중복 등록 방지
+    // 💡 [2026-09-14 신규] "마우스 모드"(_kbCell===null)에서 Enter로 키보드 셀 탐색으로 복귀할 때 씀.
+    //    _lastKbCellInfo는 클릭 등으로 포커스가 풀려도(=_clearKbFocus) 절대 지우지 않는 "마지막
+    //    기억" — 있으면 그 자리부터, 없으면 지금 마우스가 올라가 있는 셀(_hoverTd)부터 시작한다.
+    var _lastKbCellInfo = null; // { rowIndex: number, tdIdx: number }
+    var _hoverTd = null;        // 현재 마우스가 올라가 있는 표 안의 <td>
+    // 💡 [2026-09-14 신규] wbs-menu 조작 중 뜰 수 있는 "예/아니오" 확인 모달들 — _kbMode 값 하나당
+    //    한 줄. 새 확인 모달을 추가하려면 그 모달을 여는 쪽에서 window._ganttSetKbMode(그 키)를
+    //    부르고 여기 항목만 추가하면 아래 공통 핸들러가 그대로 처리한다.
+    var _CONFIRM_MODALS = {
+        'confirm-delete': { modalId: 'confirm-delete-modal', okId: 'confirm-delete-ok', cancelId: 'confirm-delete-cancel' },
+        'confirm-level0': { modalId: 'confirm-level0-modal', okId: 'confirm-level0-ok', cancelId: 'confirm-level0-cancel' }
+    };
 
     // ─── 검색바 삽입 (테이블 위 분리 렌더링 — 기본 숨김, AI검색 버튼으로 토글) ──
 
@@ -773,6 +785,10 @@
         // CSS 변수로 행 왼쪽 인디케이터 색도 동기화
         tr.style.setProperty('--gantt-kb-row-color', color);
         td.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // 💡 [2026-09-14 신규] 나중에 포커스가 풀려도(마우스 클릭 등) "마지막으로 키보드 탐색하던
+        //    자리"를 기억해둔다 — _clearKbFocus는 이 값을 절대 건드리지 않음(아래 참고).
+        var _rowIdxAttr = parseInt(tr.getAttribute('data-row-index'), 10);
+        if (!isNaN(_rowIdxAttr)) _lastKbCellInfo = { rowIndex: _rowIdxAttr, tdIdx: tdIdx };
     }
 
     /**
@@ -798,6 +814,52 @@
             _kbCell = null; // stale 참조를 먼저 지워 clearKbFocus가 옛 td를 건드리지 않게 함
             _setKbFocus(newTr, tdIdx);
         }, 30); // recalculateSchedules()의 내부 setTimeout(...,10)보다 확실히 뒤에 실행되도록
+    }
+
+    // 💡 [2026-09-14 신규] js/04i-core-app-upload-utils-4.js의 deleteRow() 확인 모달처럼 이 파일
+    // 바깥(다른 <script>)에서 kb 탐색 상태를 다뤄야 하는 경우를 위한 최소 노출 — _kbMode/_kbCell은
+    // 이 IIFE 안에서만 보이는 private 변수라 직접 건드릴 수 없다.
+    window._ganttSetKbMode = function(mode) { _kbMode = mode; };
+    window._ganttReanchorRow = function(rowIndex) {
+        var tdIdx = _kbCell ? _kbCell.tdIdx : null;
+        _reanchorKbFocus(rowIndex, tdIdx);
+    };
+
+    /** Gantt 탭이 지금 실제로 화면에 보이는 중인지 (다른 탭에서 무관한 Enter를 가로채지 않기 위한 가드) */
+    function _isGanttTabActive() {
+        var el = document.getElementById('tab-gantt');
+        return !!(el && el.classList.contains('active'));
+    }
+
+    /**
+     * 💡 [2026-09-14 신규] "마우스 모드"(_kbCell===null)에서 처음 Enter를 눌렀을 때 호출 —
+     * 1순위: 직전에 키보드로 탐색하던 셀(_lastKbCellInfo)이 아직 존재하면 그 자리로 복귀.
+     * 2순위: 그런 기억이 없으면(또는 그 행/칸이 이제 없으면) 지금 마우스가 올라가 있는 셀(_hoverTd)부터.
+     * 이 Enter 입력 자체는 "그 자리로 돌아가기"용으로만 쓰고, 그 셀의 편집/팝업 동작까지 한 번에
+     * 실행하지는 않는다(호출부에서 _kbEnterCell을 잇달아 부르지 않음) — 사용자가 의도치 않게 두
+     * 단계를 한 번에 겪지 않도록.
+     */
+    function _tryResumeKbFocus() {
+        if (_lastKbCellInfo) {
+            var tr = document.querySelector('tr[data-row-index="' + _lastKbCellInfo.rowIndex + '"]');
+            if (tr) {
+                var tds = tr.querySelectorAll('td');
+                var idx = _lastKbCellInfo.tdIdx;
+                if (idx >= 0 && idx < tds.length && !_isSkipCell(tds[idx])) {
+                    _setKbFocus(tr, idx);
+                    return true;
+                }
+            }
+        }
+        if (_hoverTd && document.body.contains(_hoverTd)) {
+            var hTr = _hoverTd.closest('tr[data-row-index]');
+            if (hTr && hTr.closest('#table-body') && !_isSkipCell(_hoverTd)) {
+                var hTds = Array.from(hTr.querySelectorAll('td'));
+                _setKbFocus(hTr, hTds.indexOf(_hoverTd));
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 같은 열에서 위/아래 visible 행으로 이동 */
@@ -945,6 +1007,13 @@
         if (onclickAttr.includes('onRowNoClick')) {
             if (window.onRowNoClick)
                 window.onRowNoClick(td, rowIdx, { target: td, shiftKey: false, ctrlKey: false, detail: 1 });
+            // 💡 [2026-09-14 신규] 키보드로 들어왔을 때는 상하좌우+- 버튼 팝업을 안 보이게 한다 —
+            //    버튼은 마우스 클릭용 UI라 키보드 조작에는 필요 없고(_rapClick이 내부적으로만
+            //    클릭을 흉내내 그대로 계속 씀), 대신 셀 포커스 박스(_reanchorKbFocus, 아래
+            //    _rapClick 참고)로 "지금 이동 중인 행"을 보여준다. 마우스로 열 때(toggleRowActions)는
+            //    항상 visibility를 되돌려놓으므로 서로 간섭하지 않는다.
+            var rapPopupEl = document.getElementById('row-action-popup');
+            if (rapPopupEl) rapPopupEl.style.visibility = 'hidden';
             _kbMode = 'wbs-menu';
             return;
         }
@@ -995,6 +1064,14 @@
             }
         }, true); // ← capture phase
 
+        // 💡 [2026-09-14 신규] 지금 마우스가 표 안 어느 <td> 위에 있는지 계속 기억해둔다 — 아직 한 번도
+        //    클릭/키보드로 셀을 선택한 적 없는 상태에서 Enter를 누르면 이 위치부터 키보드 탐색을
+        //    시작하기 위함(아래 _tryResumeKbFocus 참고). mouseover는 버블링되므로 document 하나로 충분.
+        document.addEventListener('mouseover', function(e) {
+            var td = e.target.closest('td');
+            if (td && td.closest('#table-body')) _hoverTd = td;
+        });
+
         // ── 달력 키보드 헬퍼 ──────────────────────────────────────────────
         function _calKeyNav(dayDelta) {
             window.currentCalendarTs = (window.currentCalendarTs || Date.now()) + dayDelta * 86400000;
@@ -1044,6 +1121,36 @@
                 }
             }
 
+            // ── 확인(예/아니오) 모달 공통 키보드 지원 ──────────────────────
+            // ←/→ = 확인·취소 버튼 사이 포커스 전환, Enter = 포커스된 버튼 실행(기본값: 취소 — 안전),
+            // Esc = 취소. window._ganttSetKbMode('confirm-delete' | 'confirm-level0')를 각 모달을
+            // 여는 쪽(js/04i의 deleteRow()/changeRowLevel())이 호출 — 새 확인 모달을 wbs-menu 흐름에
+            // 추가할 땐 이 맵에 한 줄만 추가하면 이 공통 핸들러가 그대로 재사용된다.
+            if (_CONFIRM_MODALS[_kbMode]) {
+                var _cfg = _CONFIRM_MODALS[_kbMode];
+                var cfModal = document.getElementById(_cfg.modalId);
+                if (!cfModal || cfModal.style.display !== 'flex') {
+                    _kbMode = null; // 이미 닫혔으면(다른 경로로) 모드만 리셋
+                } else {
+                    var cfOk = document.getElementById(_cfg.okId);
+                    var cfCancel = document.getElementById(_cfg.cancelId);
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        if (document.activeElement === cfOk) { if (cfCancel) cfCancel.focus(); }
+                        else if (cfOk) cfOk.focus();
+                        return;
+                    }
+                    if (e.key === 'Escape') { e.preventDefault(); if (cfCancel) cfCancel.click(); return; }
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (document.activeElement === cfOk) cfOk.click();
+                        else if (cfCancel) cfCancel.click(); // 기본값: 취소(포커스가 없거나 취소에 있을 때)
+                        return;
+                    }
+                    return; // 그 외 키 차단 — 뒤쪽 셀 탐색으로 새지 않게
+                }
+            }
+
             // ── WBS 메뉴 모드: 행 조작 버튼 키 매핑 ─────────────────────
             // ↑/↓ = 위/아래 이동, ←/→ = WBS 레벨 변경, +/= = 행 추가, - = 행 삭제
             // Enter/Esc = 팝업 닫고 셀 네비게이션으로 복귀
@@ -1052,13 +1159,22 @@
                 if (!rapPopup || rapPopup.style.display !== 'block') {
                     _kbMode = null;
                 } else {
-                    function _rapClick(id) { var b = document.getElementById(id); if (b) b.click(); }
+                    function _rapClick(id) {
+                        var b = document.getElementById(id); if (b) b.click();
+                        // 💡 [2026-09-14 신규] 팝업이 숨겨져 있는 동안(키보드로 진입한 경우)에는 이 셀
+                        //    포커스 박스가 "지금 어느 행이 움직이고 있는지" 보여주는 유일한 표시라서,
+                        //    이동/레벨변경/추가·삭제할 때마다 popup.dataset.rowIndex가 가리키는 현재
+                        //    행으로 계속 따라가게 한다(재렌더가 늦게 오는 경우까지 _reanchorKbFocus가 처리).
+                        var _rapRi = parseInt(rapPopup.dataset.rowIndex, 10);
+                        var _rapTi = _kbCell ? _kbCell.tdIdx : null;
+                        _reanchorKbFocus(_rapRi, _rapTi);
+                    }
                     if (e.key === 'ArrowUp')             { e.preventDefault(); _rapClick('rap-up');    return; }
                     if (e.key === 'ArrowDown')           { e.preventDefault(); _rapClick('rap-dn');    return; }
                     if (e.key === 'ArrowLeft')           { e.preventDefault(); _rapClick('rap-left');  return; }
                     if (e.key === 'ArrowRight')          { e.preventDefault(); _rapClick('rap-right'); return; }
                     if (e.key === '+' || e.key === '=')  { e.preventDefault(); _rapClick('rap-add');   return; }
-                    if (e.key === '-')                   { e.preventDefault(); _rapClick('rap-del');   return; }
+                    if (e.key === '-' || e.key === 'Delete') { e.preventDefault(); _rapClick('rap-del'); return; }
                     if (e.key === 'Enter' || e.key === 'Escape') {
                         e.preventDefault();
                         // 💡 [2026-09-14 신규] 상하좌우+-로 이동/레벨변경된 "현재" 행(rap-* 버튼들이
@@ -1104,7 +1220,15 @@
             // Enter ──────────────────────────────────────────────────────────
             if (e.key === 'Enter') {
                 if (_isEditingAnywhere()) return; // edit/select 모드 — per-element 핸들러 처리
-                if (!_kbCell) return;
+                if (!_kbCell) {
+                    // 💡 [2026-09-14 신규] "마우스 모드"(클릭으로 셀을 짚은 적이 아직 없거나, 어떤 이유로
+                    //    포커스가 풀린 상태)에서 처음 Enter — 이 Enter는 그 셀의 편집/팝업 동작까지
+                    //    실행하지 않고, 키보드 탐색 상태로 "전환"만 한다(다음 Enter부터 정상 동작).
+                    //    Gantt 탭이 실제로 보이는 중일 때만 가로챈다 — 다른 탭에서 무관한 Enter까지
+                    //    가로채 표(숨겨진 상태)로 포커스를 옮겨버리는 걸 막기 위함.
+                    if (_isGanttTabActive() && _tryResumeKbFocus()) e.preventDefault();
+                    return;
+                }
                 e.preventDefault();
                 _kbEnterCell(e.shiftKey); // shiftKey: 상세내용 셀 Shift+Enter = 편집 모드
             }

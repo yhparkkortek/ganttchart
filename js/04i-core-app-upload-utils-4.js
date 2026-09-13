@@ -673,6 +673,11 @@ window.deleteHistoryByDateRange = function() {
     const wbsCellForPopup = td.closest('tr') ? td.closest('tr').querySelector('.wbs-cell') : null;
     let rect = (wbsCellForPopup || td).getBoundingClientRect();
     popup.style.display = 'block';
+    // 💡 [2026-09-14 신규] 키보드로 열었을 때(js/26-gantt-search.js의 _kbEnterCell)는 이 팝업을
+    //    visibility:hidden으로 숨겨두는데(마우스용 버튼 UI 없이 셀 포커스 박스만으로 조작), 그
+    //    상태가 남아있으면 나중에 "같은 행"을 마우스로 클릭해도 안 보이는 사고가 난다 — 여기서
+    //    열릴 때마다 항상 보이는 상태로 재설정.
+    popup.style.visibility = '';
     let popupW = popup.offsetWidth;
     let popupH = popup.offsetHeight;
     let top = rect.top + window.scrollY;
@@ -766,11 +771,26 @@ window.deleteHistoryByDateRange = function() {
                 document.body.appendChild(modal);
             }
             modal.style.display = 'flex';
+            // 💡 [2026-09-14 신규] 키보드 지원 — wbs-menu에서 ←(레벨 올리기)를 반복하다 대분류(0)에
+            //    닿으면 이 확인창이 뜬다. js/26-gantt-search.js의 공통 확인모달 핸들러(_CONFIRM_MODALS)가
+            //    ←/→(버튼 전환)·Enter(포커스된 버튼 실행)·Esc(취소)를 대신 처리하도록 모드 전환.
+            var _rapPopupBg2 = document.getElementById('row-action-popup');
+            if (_rapPopupBg2) _rapPopupBg2.style.display = 'none';
+            if (window._ganttSetKbMode) window._ganttSetKbMode('confirm-level0');
             let okBtn = document.getElementById('confirm-level0-ok'); let cancelBtn = document.getElementById('confirm-level0-cancel');
             let newOk = okBtn.cloneNode(true); okBtn.parentNode.replaceChild(newOk, okBtn);
             let newCancel = cancelBtn.cloneNode(true); cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
-            document.getElementById('confirm-level0-ok').addEventListener('click', function() { modal.style.display = 'none'; processChange(); });
-            document.getElementById('confirm-level0-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
+            document.getElementById('confirm-level0-cancel').focus(); // 기본 포커스: 취소(안전)
+            document.getElementById('confirm-level0-ok').addEventListener('click', function() {
+                modal.style.display = 'none'; processChange();
+                if (window._ganttSetKbMode) window._ganttSetKbMode(null);
+                if (window._ganttReanchorRow) window._ganttReanchorRow(index); // 레벨만 바뀌고 위치는 그대로
+            });
+            document.getElementById('confirm-level0-cancel').addEventListener('click', function() {
+                modal.style.display = 'none';
+                if (window._ganttSetKbMode) window._ganttSetKbMode(null);
+                if (window._ganttReanchorRow) window._ganttReanchorRow(index);
+            });
         } else { processChange(); }
     };
 
@@ -811,9 +831,19 @@ window.deleteHistoryByDateRange = function() {
         document.getElementById('confirm-delete-msg').textContent = `${rowName}번 행(업무)을 삭제하시겠습니까?`;
         modal.style.display = 'flex';
 
+        // 💡 [2026-09-14 신규] 키보드 지원 — 이 모달이 떠있는 동안은 js/26-gantt-search.js의 전역
+        //    셀 탐색 키 핸들러가 대신 ←/→(버튼 전환)·Enter(포커스된 버튼 실행)·Esc(취소)를 처리한다
+        //    (window._ganttSetKbMode). 상하좌우+- 팝업이 배경에 열려있었다면(키보드로 '-'/Delete를
+        //    눌러 여기로 온 경우) 같이 닫아 상태가 꼬이지 않게 한다.
+        var _rapPopupBg = document.getElementById('row-action-popup');
+        if (_rapPopupBg) _rapPopupBg.style.display = 'none';
+        if (window._ganttSetKbMode) window._ganttSetKbMode('confirm-delete');
+
         let okBtn = document.getElementById('confirm-delete-ok'); let cancelBtn = document.getElementById('confirm-delete-cancel');
         let newOk = okBtn.cloneNode(true); okBtn.parentNode.replaceChild(newOk, okBtn);
         let newCancel = cancelBtn.cloneNode(true); cancelBtn.parentNode.replaceChild(newCancel, cancelBtn);
+        // 기본 포커스는 "취소"(안전한 기본값) — Enter를 눌러도 곧바로 삭제되지 않는다.
+        document.getElementById('confirm-delete-cancel').focus();
         document.getElementById('confirm-delete-ok').addEventListener('click', function() {
             modal.style.display = 'none'; let deleted = globalData.splice(index, 1); let taskName = "알 수 없는 업무";
             if (deleted[0]) {
@@ -821,8 +851,17 @@ window.deleteHistoryByDateRange = function() {
             }
             window.changeLogs.push({ time: new Date().toLocaleString('ko-KR'), userName: window.currentUserName || "비로그인", rowName: rowName, colName: "행 조작", oldVal: taskName, newVal: "삭제됨" });
             window.recalculateSchedules();
+            // 💡 삭제 확정 후 "이동 대기" 상태로 복귀 — 삭제된 자리엔 다음 행이 당겨오므로 같은
+            //    인덱스(단, 마지막 행이었으면 그만큼 줄어든 마지막 인덱스)로 셀 포커스를 되돌린다.
+            if (window._ganttSetKbMode) window._ganttSetKbMode(null);
+            if (window._ganttReanchorRow) window._ganttReanchorRow(Math.min(index, globalData.length - 1));
         });
-        document.getElementById('confirm-delete-cancel').addEventListener('click', function() { modal.style.display = 'none'; });
+        document.getElementById('confirm-delete-cancel').addEventListener('click', function() {
+            modal.style.display = 'none';
+            // 💡 취소해도 "이동 대기" 상태로 복귀 — 삭제 안 됐으니 원래 그 행 그대로.
+            if (window._ganttSetKbMode) window._ganttSetKbMode(null);
+            if (window._ganttReanchorRow) window._ganttReanchorRow(index);
+        });
     };
 
    window.moveRow = function(index, direction) {
