@@ -98,6 +98,7 @@
                 'ai-summary-generate-btn':       '🔄 다시 생성',
                 'admin-pw-change-btn': '🔑 비밀번호 변경',
                 'add-user-btn':       '👤 사용자 추가',
+                'kb-shortcuts-btn':   '⌨️ 키보드 단축키',
                 'file-input-label':'🟩 프로젝트 엑셀 열기',
                 'auth_button':    '👤 {name} (드라이브 연동하기)',
                 'history-btn':    '🕒 수정 이력 확인',
@@ -272,6 +273,7 @@
                 "mail-collect-settings-hint": "수집주기·우선순위점수·중요키워드·초기화",
                 "admin-pw-change-hint": "삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다",
                 "new-user-setup-hint": "새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다.",
+                "kb-shortcuts-hint": "키보드 단축키 목록",
                 "open-other-project-hint": "클릭하면 다른 프로젝트를 열 수 있습니다 (저장 안 한 변경사항이 있으면 먼저 물어봅니다)",
                 "lang-toggle-hint": "한글/영어 전환",
                 "sidebar-toggle-hint": "메뉴 접기/펴기",
@@ -391,6 +393,7 @@
                 'ai-summary-generate-btn':       '🔄 Regenerate',
                 'admin-pw-change-btn': '🔑 Change Password',
                 'add-user-btn':       '👤 Add User',
+                'kb-shortcuts-btn':   '⌨️ Keyboard Shortcuts',
                 'file-input-label':'🟩 Open Project Excel',
                 'auth_button':    '👤 {name} (Connect Drive)',
                 'history-btn':    '🕒 Edit History',
@@ -559,6 +562,7 @@
                 "mail-collect-settings-hint": "Collection interval, priority score, key keywords, reset",
                 "admin-pw-change-hint": "Changes the admin password used for delete/security actions",
                 "new-user-setup-hint": "2 steps to add a new user — ① Add on the Google Cloud 'Audience (test users)' page → ② Grant project folder sharing permission on Google Drive. Clicking opens both pages in new tabs.",
+                "kb-shortcuts-hint": "Keyboard shortcuts reference",
                 "open-other-project-hint": "Click to open another project (you'll be asked first if there are unsaved changes)",
                 "lang-toggle-hint": "Switch Korean/English",
                 "sidebar-toggle-hint": "Collapse/expand menu",
@@ -1460,6 +1464,15 @@
 
         // [Gantt #검색 바] 이미 열려있는 상태에서 언어 전환 시 즉시 반영
         if (window._gsRefreshLang) window._gsRefreshLang();
+
+        // [키보드 단축키 모달] 열려있는 상태로 언어 전환 시 내용 재렌더
+        if (window._gsRefreshKbShortcuts) {
+            var _kbModal = document.getElementById('gantt-kb-shortcuts-modal');
+            if (_kbModal && _kbModal.style.display !== 'none') window._gsRefreshKbShortcuts();
+            // 모달 타이틀도 갱신
+            var _kbTitle = document.getElementById('gantt-kb-shortcuts-title');
+            if (_kbTitle) _kbTitle.textContent = (window._currentLang === 'en') ? 'Keyboard Shortcuts' : '키보드 단축키';
+        }
 
         // [AI 요약] 이미 생성된 리포트가 있으면(모달이 열려있든 최소화돼 있든) 저장된 데이터로 다시
         // 그려서 언어를 즉시 반영 — _renderAiProjectSummaryBody는 매번 새로 그리는 함수라 안전(멱등).

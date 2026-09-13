@@ -90,6 +90,7 @@
                 <button id="holiday-btn" class="topbar-menu-item" onclick="window.openHolidayManager()">🗓️ 휴일 등록</button>
                 <button id="admin-pw-change-btn" class="topbar-menu-item" onclick="window.changeAdminPassword()" title="삭제/보안 동작에 쓰이는 관리자 비밀번호를 변경합니다" data-i18n-title="admin-pw-change-hint">🔑 비밀번호 변경</button>
                 <button id="add-user-btn" class="topbar-menu-item" onclick="window.open('https://console.cloud.google.com/auth/audience?hl=ko&amp;project=yhparkkortek-gantt','_blank'); window.open('https://drive.google.com/drive/u/0/home','_blank');" title="새 사용자 추가 2단계 — ① Google Cloud '대상(테스트 사용자)' 페이지에서 추가 → ② Google Drive에서 프로젝트 폴더 공유 권한 부여. 클릭하면 두 페이지가 새 탭으로 열립니다." data-i18n-title="new-user-setup-hint">👤 사용자 추가</button>
+                <button id="kb-shortcuts-btn" class="topbar-menu-item" onclick="window.openGanttKeyboardShortcuts(); window.closeTopbarMenu('settings-menu-popup');" title="키보드 단축키 목록" data-i18n-title="kb-shortcuts-hint">⌨️ 키보드 단축키</button>
             </div>
         </div>
         <span id="current-file-sep" class="tb-sep" style="display:none;"></span>

@@ -902,4 +902,244 @@
         _observer.observe(tbody, { childList: true });
     };
 
+    // ─── 키보드 단축키 모달 ────────────────────────────────────────────────────
+    // 💡 [2026-09-13 신규] 설정 메뉴 "⌨️ 키보드 단축키" → 단축키 참조 모달
+    //    sky-blue 헤더(AI 모달 스타일), draggable, minimizable, 한/영 지원
+
+    /** 모달 콘텐츠 영역 HTML 생성 (언어 전환 때마다 재호출) */
+    window._gsRefreshKbShortcuts = function() {
+        var content = document.getElementById('gantt-kb-shortcuts-content');
+        if (!content) return;
+        var _en = window._currentLang === 'en';
+        // 타이틀도 갱신
+        var titleEl = document.getElementById('gantt-kb-shortcuts-title');
+        if (titleEl) titleEl.textContent = _en ? 'Keyboard Shortcuts' : '키보드 단축키';
+
+        // ── 헬퍼: key 뱃지 HTML ──────────────────────────────────────────────
+        function key(label) {
+            return '<span style="display:inline-flex;align-items:center;justify-content:center;' +
+                   'font-family:\'Consolas\',\'Menlo\',monospace;font-size:11px;font-weight:600;' +
+                   'background:#f5f7fa;border:1px solid #b8c0cc;box-shadow:0 2px 0 #9aa3b0;' +
+                   'border-radius:5px;padding:2px 7px;white-space:nowrap;color:#1a2332;margin:0 1px;">' +
+                   label + '</span>';
+        }
+        function plus() { return '<span style="font-size:11px;color:#868e96;margin:0 2px;">+</span>'; }
+        function badge(text, color) {
+            var colors = {
+                blue:  'background:rgba(25,113,194,.1);color:#1971c2;',
+                green: 'background:rgba(47,158,68,.1);color:#2f9e44;',
+                amber: 'background:rgba(230,119,0,.1);color:#e67700;',
+                gray:  'background:rgba(107,117,135,.1);color:#6b7587;'
+            };
+            return '<span style="display:inline-block;font-size:11px;font-weight:600;border-radius:4px;' +
+                   'padding:1px 7px;white-space:nowrap;' + (colors[color] || colors.gray) + '">' + text + '</span>';
+        }
+
+        // ── 섹션 헤더 ────────────────────────────────────────────────────────
+        function sectionLabel(text) {
+            return '<p style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;' +
+                   'color:#868e96;margin:18px 0 7px;">' + text + '</p>';
+        }
+
+        // ── 테이블 빌더 ──────────────────────────────────────────────────────
+        function table(headers, rows) {
+            var ths = headers.map(function(h, i) {
+                return '<th style="padding:8px 12px;text-align:left;font-size:11px;font-weight:600;' +
+                       'letter-spacing:.07em;text-transform:uppercase;color:#868e96;background:#f5f7fa;' +
+                       'border-bottom:1px solid #e4e7ec;' + (i === 0 ? 'width:200px;' : '') + '">' + h + '</th>';
+            }).join('');
+            var trs = rows.map(function(r) {
+                var tds = r.cells.map(function(c) {
+                    return '<td style="padding:9px 12px;vertical-align:middle;border-bottom:1px solid #f0f2f5;">' + c + '</td>';
+                }).join('');
+                var accentColor = { nav:'#1971c2', edit:'#2f9e44', action:'#e67700', none:'#dee2e8' }[r.type || 'none'];
+                return '<tr style="border-left:3px solid ' + accentColor + ';">' + tds + '</tr>';
+            }).join('');
+            return '<div style="overflow-x:auto;border-radius:7px;border:1px solid #e4e7ec;margin-bottom:4px;">' +
+                   '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
+                   '<thead><tr>' + ths + '</tr></thead><tbody>' + trs + '</tbody></table></div>';
+        }
+
+        // ── 내용 조립 ─────────────────────────────────────────────────────────
+        var html = '';
+
+        // 전역 단축키
+        html += sectionLabel(_en ? 'Global Shortcuts' : '전역 단축키');
+        html += table(
+            [_en ? 'Key' : '키', _en ? 'Action' : '동작', _en ? 'Condition' : '조건'],
+            [
+                { type: 'nav', cells: [
+                    key('Ctrl') + plus() + key('Shift') + plus() + key('F'),
+                    _en ? 'Open &amp; focus AI search' : 'AI 검색창 열기 &amp; 포커스',
+                    _en ? 'Always' : '항상'
+                ]},
+                { type: 'nav', cells: [
+                    key('↑') + ' ' + key('↓'),
+                    _en ? 'Previous / next search result' : '검색 결과 이전 / 다음',
+                    _en ? 'While search has results (also works inside search box)' : '검색 결과 있을 때<br><small style="color:#868e96;">검색창 안에서도 동작</small>'
+                ]},
+                { type: 'nav', cells: [
+                    key('Enter') + ' / ' + key('Shift') + plus() + key('Enter'),
+                    _en ? 'Next / previous search result' : '검색 결과 다음 / 이전',
+                    _en ? 'Search box focused' : '검색창 포커스 상태'
+                ]},
+                { type: 'none', cells: [
+                    key('Esc'),
+                    _en ? 'Clear search / deselect cell' : '검색 초기화 / 셀 포커스 해제',
+                    _en ? 'While searching or cell selected' : '검색 중이거나 셀 선택 시'
+                ]}
+            ]
+        );
+
+        // 셀 선택 후 조작
+        html += sectionLabel(_en ? 'After Clicking a Cell' : '셀 선택 후 키보드 조작');
+        html += table(
+            [_en ? 'Key' : '키', _en ? 'Action' : '동작', _en ? 'Condition' : '조건'],
+            [
+                { type: 'nav', cells: [
+                    key('↑') + ' ' + key('↓'),
+                    _en ? 'Move up / down (same column)' : '위 / 아래 행 이동 (같은 열)',
+                    _en ? 'Not editing' : '편집 중이 아닐 때'
+                ]},
+                { type: 'nav', cells: [
+                    key('←') + ' ' + key('→'),
+                    _en ? 'Move left / right (No. &amp; chart columns skipped)' : '좌 / 우 열 이동<br><small style="color:#868e96;">No.·차트 열 자동 스킵</small>',
+                    _en ? 'Not editing' : '편집 중이 아닐 때'
+                ]},
+                { type: 'action', cells: [
+                    key('Enter'),
+                    _en ? 'Cell action (see table below)' : '셀 타입별 액션 실행 (아래 표 참고)',
+                    _en ? 'Not editing' : '편집 중이 아닐 때'
+                ]},
+                { type: 'none', cells: [
+                    key('Esc'),
+                    _en ? 'Deselect cell' : '셀 포커스 해제',
+                    _en ? 'Cell selected' : '셀 선택 상태'
+                ]}
+            ]
+        );
+
+        // 셀 타입별 Enter 예외 표
+        html += sectionLabel(_en ? 'Enter Action by Cell Type' : '셀 타입별 Enter 동작');
+        html += table(
+            [_en ? 'Cell' : '셀 유형', _en ? 'Enter Action' : 'Enter 동작',
+             _en ? 'While Editing' : '편집 중 Enter', _en ? 'Note' : '비고'],
+            [
+                { type: 'action', cells: [
+                    badge(_en ? 'WBS Task' : 'WBS 업무명', 'amber'),
+                    _en ? 'Row action menu' : '행 액션 메뉴',
+                    _en ? 'Save' : '완료(저장)',
+                    _en ? 'Dbl-click to rename' : '더블클릭하면 이름 편집'
+                ]},
+                { type: 'edit', cells: [
+                    badge(_en ? 'Duration' : '기간 (Days)', 'green'),
+                    _en ? 'Edit number' : '숫자 편집 모드',
+                    _en ? 'Save' : '완료(저장)',
+                    '—'
+                ]},
+                { type: 'nav', cells: [
+                    badge(_en ? 'Status' : '상태 (Status)', 'blue'),
+                    _en ? 'Focus &lt;select&gt;' : '&lt;select&gt; 포커스',
+                    '—',
+                    _en ? 'Arrow keys to pick value' : '방향키로 값 선택'
+                ]},
+                { type: 'edit', cells: [
+                    badge(_en ? 'Start / End Date' : '시작일 / 종료일', 'green'),
+                    _en ? 'Edit date' : '날짜 직접 편집',
+                    _en ? 'Save' : '완료(저장)',
+                    '—'
+                ]},
+                { type: 'edit', cells: [
+                    badge(_en ? 'Assignee / Model / Client' : '담당자 / 모델 / 고객사', 'green'),
+                    _en ? 'Edit text' : '텍스트 편집 모드',
+                    _en ? 'Save' : '완료(저장)',
+                    '—'
+                ]},
+                { type: 'action', cells: [
+                    badge(_en ? 'Detail' : '상세내용', 'amber'),
+                    _en ? 'Expand / collapse' : '펼치기 / 접기',
+                    _en ? 'Save (Shift+Enter=newline)' : '완료 (Shift+Enter=줄바꿈)',
+                    _en ? 'Dbl-click to edit text' : '더블클릭 → 텍스트 편집'
+                ]},
+                { type: 'none', cells: [
+                    badge(_en ? 'No. column' : 'No. 열', 'gray'),
+                    '<span style="color:#868e96;">' + (_en ? 'None' : '없음') + '</span>',
+                    '—',
+                    _en ? 'Row number only, keyboard skipped' : '행번호 표시 전용, 키보드 스킵'
+                ]},
+                { type: 'none', cells: [
+                    badge(_en ? 'Chart cell' : '차트 셀', 'gray'),
+                    '<span style="color:#868e96;">' + (_en ? 'None' : '없음') + '</span>',
+                    '—',
+                    _en ? 'Drag only, keyboard skipped' : '드래그 전용, 키보드 스킵'
+                ]}
+            ]
+        );
+
+        content.innerHTML = html;
+    };
+
+    /** 키보드 단축키 모달 열기 */
+    window.openGanttKeyboardShortcuts = function() {
+        var modal = document.getElementById('gantt-kb-shortcuts-modal');
+
+        if (!modal) {
+            // ── 최초 1회 DOM 생성 ───────────────────────────────────────────
+            modal = document.createElement('div');
+            modal.id = 'gantt-kb-shortcuts-modal';
+            modal.style.cssText =
+                'display:none;position:fixed;inset:0;z-index:9250;pointer-events:none;background:none;';
+
+            var box = document.createElement('div');
+            box.id = 'gantt-kb-shortcuts-box';
+            box.style.cssText =
+                'pointer-events:all;position:fixed;background:#fff;' +
+                'top:50%;left:50%;transform:translate(-50%,-50%);' +
+                'border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,.18);' +
+                'width:620px;min-width:420px;min-height:320px;max-height:85vh;' +
+                'display:flex;flex-direction:column;overflow:hidden;resize:both;';
+
+            // sky-blue 헤더 (AI 모달 컨벤션)
+            var hdr = document.createElement('div');
+            hdr.id = 'gantt-kb-shortcuts-drag';
+            hdr.style.cssText =
+                'background:#e7f3ff;border-bottom:1px solid #a5c8f0;color:#1971c2;' +
+                'padding:10px 14px;display:flex;align-items:center;gap:8px;' +
+                'cursor:grab;user-select:none;flex-shrink:0;';
+            hdr.innerHTML =
+                '<span style="font-size:16px;">⌨️</span>' +
+                '<span id="gantt-kb-shortcuts-title" style="font-weight:700;font-size:14px;flex:1;"></span>' +
+                '<button id="gantt-kb-shortcuts-close"' +
+                '  style="background:var(--modal-icon-bg);border:1px solid var(--modal-icon-border);' +
+                '  color:var(--modal-icon-text);border-radius:6px;font-size:16px;' +
+                '  cursor:pointer;width:28px;height:28px;flex-shrink:0;">✕</button>';
+
+            // 스크롤 영역
+            var content = document.createElement('div');
+            content.id = 'gantt-kb-shortcuts-content';
+            content.style.cssText = 'overflow-y:auto;padding:14px 16px 20px;flex:1;';
+
+            box.appendChild(hdr);
+            box.appendChild(content);
+            modal.appendChild(box);
+            document.body.appendChild(modal);
+
+            // 닫기 버튼
+            document.getElementById('gantt-kb-shortcuts-close').addEventListener('click', function() {
+                modal.style.display = 'none';
+            });
+
+            // 드래그·최소화·z-index 관리
+            if (window._makeDraggable)    window._makeDraggable('gantt-kb-shortcuts-box', 'gantt-kb-shortcuts-drag');
+            if (window._bindClickToFront) window._bindClickToFront('gantt-kb-shortcuts-modal');
+        }
+
+        // 언어 반영 (열 때마다 + toggleLang 시)
+        window._gsRefreshKbShortcuts();
+
+        // 모달 표시 & 최상단
+        modal.style.display = 'block';
+        if (window.bringModalToFront) window.bringModalToFront('gantt-kb-shortcuts-modal');
+    };
+
 })();
