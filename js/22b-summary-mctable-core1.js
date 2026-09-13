@@ -73,13 +73,19 @@ window.renderNoticeTab = function() {
     window._noticeLoad();
     const tbody = document.getElementById('notice-table-body');
     if (!tbody) return;
+    // 전체선택 체크박스·선택삭제 버튼 상태 초기화
+    const selAllCb = document.getElementById('notice-select-all');
+    const delSelBtn = document.getElementById('btn-notice-delete-selected');
+    if (selAllCb) selAllCb.checked = false;
+    if (delSelBtn) delSelBtn.style.display = 'none';
+    const _niEn = window._currentLang === 'en';
     if (!window._noticeItems.length) {
-        const _niEn = window._currentLang === 'en';
-        tbody.innerHTML = `<tr><td colspan="7" style="padding:30px;text-align:center;color:#aaa;font-size:13px;">${_niEn ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.'}</td></tr>`;
+        tbody.innerHTML = `<tr><td colspan="9" style="padding:30px;text-align:center;color:#aaa;font-size:13px;">${_niEn ? 'No notices registered. Click [+ Add Notice] to add one.' : '등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.'}</td></tr>`;
         window._noticeRenderLog(); window.loadScheduleRulesFromBackend(); return;
     }
     const today = new Date(); today.setHours(0,0,0,0);
     tbody.innerHTML = window._noticeItems.map((n, i) => {
+        const no      = i + 1; // #NI 번호와 일치 (1-based)
         const deadline = new Date(n.deadline); deadline.setHours(0,0,0,0);
         const diffDays = Math.ceil((deadline - today) / 86400000);
         const dDayStr  = diffDays===0?'D-Day':diffDays>0?`D-${diffDays}`:`D+${Math.abs(diffDays)}`;
@@ -96,7 +102,12 @@ window.renderNoticeTab = function() {
         const targetLabel = chParts.join(' ') || '-';
         const dDaysLabel  = (n.alarmDays||[]).map(d=>`D-${d}`).join(', ');
         const rowBg = i%2===0?'#fff':'#e8f2f3';
-        return `<tr style="background:${rowBg};border-bottom:1px solid #cfe3e5;">
+        return `<tr style="background:${rowBg};border-bottom:1px solid #cfe3e5;" data-notice-id="${n.id}">
+          <td style="padding:6px 6px;text-align:center;">
+            <input type="checkbox" class="notice-row-cb" data-id="${n.id}" onchange="window._noticeUpdateSelectState()"
+                   style="cursor:pointer; width:14px; height:14px;">
+          </td>
+          <td style="padding:6px 6px;text-align:center;font-size:11.5px;color:#888;font-weight:bold;">#NI${no}</td>
           <td style="padding:10px 12px;text-align:center;font-size:16px;">${statusDot}</td>
           <td style="padding:10px 12px;">
             <div style="font-weight:bold;color:#333;font-size:12.5px;">${n.title}</div>
@@ -126,6 +137,46 @@ window.renderNoticeTab = function() {
     }).join('');
     window._noticeRenderLog();
     window.loadScheduleRulesFromBackend();
+};
+
+// 체크박스 선택 상태 갱신 — 선택삭제 버튼 표시/숨김 + 전체선택 체크박스 상태 동기화
+window._noticeUpdateSelectState = function() {
+    const cbs = document.querySelectorAll('.notice-row-cb');
+    const checked = Array.from(cbs).filter(c => c.checked);
+    const selAllCb = document.getElementById('notice-select-all');
+    const delSelBtn = document.getElementById('btn-notice-delete-selected');
+    if (selAllCb) selAllCb.checked = cbs.length > 0 && checked.length === cbs.length;
+    if (delSelBtn) {
+        if (checked.length > 0) {
+            const _en = window._currentLang === 'en';
+            delSelBtn.textContent = `🗑️ ${_en ? 'Delete Selected' : '선택 삭제'} (${checked.length})`;
+            delSelBtn.style.display = '';
+        } else {
+            delSelBtn.style.display = 'none';
+        }
+    }
+};
+
+// 전체선택/해제
+window._noticeToggleSelectAll = function(checked) {
+    document.querySelectorAll('.notice-row-cb').forEach(c => { c.checked = checked; });
+    window._noticeUpdateSelectState();
+};
+
+// 선택된 공지 일괄 삭제
+window.deleteSelectedNotices = function() {
+    const cbs = Array.from(document.querySelectorAll('.notice-row-cb:checked'));
+    if (!cbs.length) return;
+    const ids = cbs.map(c => c.dataset.id);
+    const _en = window._currentLang === 'en';
+    if (!confirm(_en
+        ? `Delete ${ids.length} selected notice(s)? This cannot be undone.`
+        : `선택한 공지 ${ids.length}건을 삭제하시겠습니까? 되돌릴 수 없습니다.`)) return;
+    window._noticeItems = window._noticeItems.filter(n => !ids.includes(n.id));
+    window._noticeSave();
+    window.renderNoticeTab();
+    const msg = _en ? `${ids.length} notice(s) deleted.` : `공지 ${ids.length}건을 삭제했습니다.`;
+    if (window.showToast) window.showToast(msg); else alert(msg);
 };
 
 window._noticeRenderLog = function() {

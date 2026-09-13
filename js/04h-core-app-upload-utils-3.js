@@ -1040,6 +1040,35 @@
             return '';
         });
 
+        // 💡 [2026-09-13 신규] DELETE_NOTICES — 공지 1건 이상을 즉시 삭제 (#NI 번호로 지정)
+        //    되돌리기 불가 — AI가 답변 텍스트에 "다음 공지를 삭제합니다" 먼저 써주고 태그를 뒤에 붙임
+        text = text.replace(/\[\[ACTION:DELETE_NOTICES:([^\]]+)\]\]/gi, function(_, refStr) {
+            if (!window._aiNoticeRefMap) return '';
+            const refs = refStr.split(',').map(function(r) { return r.trim().toUpperCase(); });
+            let deleted = 0;
+            const deletedTitles = [];
+            refs.forEach(function(ref) {
+                const m = ref.match(/^#?NI(\d+)$/i);
+                if (!m) return;
+                const id = window._aiNoticeRefMap[parseInt(m[1], 10)];
+                if (!id) return;
+                const item = window._noticeItems.find(function(n) { return n.id === id; });
+                if (!item) return;
+                deletedTitles.push('"' + (item.title || '(제목없음)') + '"');
+                window._noticeItems = window._noticeItems.filter(function(n) { return n.id !== id; });
+                [7, 3, 1, 0].forEach(function(d) { try { localStorage.removeItem('gantt_notice_' + id + '_d' + d); } catch(e) {} });
+                deleted++;
+            });
+            if (deleted > 0) {
+                window._noticeSave();
+                if (window.renderNoticeTab) window.renderNoticeTab();
+                results.push(`🗑️ 공지 ${deleted}건을 삭제했습니다: ${deletedTitles.join(', ')}`);
+            } else {
+                results.push('⚠️ 삭제할 공지를 찾지 못했습니다.');
+            }
+            return '';
+        });
+
         // 🗂️ [2026-09-08 신규] SWITCH_TAB — Gantt 업무와 무관하게 다른 탭 자체를 열어달라는 요청
         //    (사이드바 탭 버튼 클릭과 동일한 window.switchTab 재사용, window._aiAssistSwitchTab 참고)
         text = text.replace(/\[\[ACTION:SWITCH_TAB:([a-z]+)\]\]/gi, function(_, tabName) {

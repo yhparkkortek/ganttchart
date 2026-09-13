@@ -220,6 +220,9 @@
           <button data-i18n="btn-notice-sendall" onclick="window.checkAndSendNotices(true)"
                   onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
                   style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📢 전체 즉시 발송</button>
+          <button id="btn-notice-delete-selected" data-i18n="btn-notice-delete-selected" onclick="window.deleteSelectedNotices()"
+                  onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
+                  style="display:none; padding:6px 12px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🗑️ 선택 삭제</button>
         </div>
       </div>
 
@@ -229,6 +232,10 @@
         <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
           <thead>
             <tr style="background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+              <th style="padding:10px 6px; text-align:center; width:32px;">
+                <input type="checkbox" id="notice-select-all" title="전체 선택/해제" onchange="window._noticeToggleSelectAll(this.checked)" style="cursor:pointer; width:14px; height:14px;">
+              </th>
+              <th style="padding:10px 6px; text-align:center; width:36px; color:#555; font-weight:bold; font-size:11.5px;">No.</th>
               <th style="padding:10px 12px; text-align:center; width:54px;" data-i18n="th-notice-status">상태</th>
               <th style="padding:10px 12px; text-align:left;" data-i18n="th-notice-title">제목</th>
               <th style="padding:10px 12px; text-align:center; width:100px;" data-i18n="th-notice-target">발송 채널</th>
@@ -240,7 +247,7 @@
           </thead>
           <tbody id="notice-table-body">
             <tr>
-              <td colspan="7" style="padding:30px; text-align:center; color:#aaa; font-size:13px;">
+              <td colspan="9" style="padding:30px; text-align:center; color:#aaa; font-size:13px;">
                 <span id="notice-empty-msg">등록된 공지가 없습니다. [+ 공지 등록] 버튼을 눌러 추가하세요.</span>
               </td>
             </tr>

@@ -873,6 +873,20 @@
         //    적용되도록 템플릿 토큰이 아니라 결과 문자열 뒤에 고정으로 붙임).
         const currentFileName = window.currentDriveFileName || pm.프로젝트명 || pm.고객모델명 || '(파일명 미지정)';
 
+        // 💡 [2026-09-13 신규] 현재 등록된 공지 목록 — AI가 공지를 조회/삭제/정정할 수 있도록 컨텍스트에 포함.
+        //    실제 id(UUID)는 너무 길어 AI가 다루기 어려우므로, 순번(#NI1, #NI2, ...)으로 인용하고
+        //    window._aiNoticeRefMap[idx] = n.id 로 실제 id와 매핑한다.
+        window._aiNoticeRefMap = {};
+        const noticeCtxLines = (window._noticeItems || []).map(function(n, i) {
+            const idx = i + 1;
+            window._aiNoticeRefMap[idx] = n.id;
+            const recipStr = (n.recipients || []).map(function(r) { return r.name || r.email || ''; }).filter(Boolean).join(', ') || '(미지정)';
+            const ddayStr = (n.alarmDays || [0]).map(function(d) { return 'D-' + d; }).join(', ');
+            const deadline = new Date(n.deadline || ''); deadline.setHours(0, 0, 0, 0);
+            const statusStr = isNaN(deadline) ? '?' : (n.status === 'paused' ? '정지' : (deadline < today ? '종료' : '발송중'));
+            return `- #NI${idx} "${n.title || '(제목없음)'}" | 기준일:${n.deadline || '-'} | 알림:${ddayStr} | 수신:${recipStr} | 상태:${statusStr}`;
+        });
+
         return {
             todayStr: todayStr,
             currentFileName: currentFileName,
@@ -885,6 +899,7 @@
             elecPartsText: elecLines.length ? elecLines.join('\n') : '(없음)',
             addressText: (addressLines.length ? addressLines.join('\n') : '(없음)') + addressOmitted,
             otherProjectsText: otherProjectsText,
+            noticeText: noticeCtxLines.length ? noticeCtxLines.join('\n') : '(등록된 공지 없음)',
             totalTasks: rows.length,
             taskListText: (lines.length ? lines.join('\n') : '(등록된 업무 없음)') + omittedNote,
             recentLogsText: recentLogs.length ? recentLogs.join('\n') : '(없음)'
@@ -1017,6 +1032,12 @@ Gantt 표 화면의 맨 왼쪽 "No." 열은 WBS 접기/필터 상태에 따라 �
      - "취소해줘/그만할게"처럼 **취소**면 → 태그 없이 "네, 공지 등록을 취소했습니다"처럼만 답하세요.
      - 무관한 새로운 질문이면 → 평소처럼 그 질문에만 답하고 공지 관련 태그는 아무것도 붙이지 마세요.
 2. [[ACTION:REGISTER_NOTICE:CONFIRM]] 태그는 오직 직전에 보여준 초안을 사용자가 명확히 확정했을 때만 쓰세요.
+
+🗑️ 공지 삭제 요청에 대한 규칙:
+- "[현재 등록된 공지 목록]"에서 삭제할 공지를 찾아 #NI 번호를 확인하세요.
+- 단건/다건 삭제 모두: `[[ACTION:DELETE_NOTICES:#NI1,#NI2,...]]` 형식으로 즉시 실행됩니다(확인 없음, 되돌리기 불가 — 삭제 전에 "다음 공지를 삭제합니다: ..." 한 줄로 먼저 알려주세요).
+- "같은 제목의 공지를 전부 삭제해줘"처럼 범위가 넓은 경우: 해당하는 #NI 번호를 모두 나열해서 한 태그에 넣으세요(예: `[[ACTION:DELETE_NOTICES:#NI1,#NI2,#NI3]]`).
+- 공지 목록이 비어있거나 해당하는 공지가 없으면: 태그 없이 "등록된 공지가 없습니다" 또는 "해당하는 공지를 찾지 못했습니다"로 답하세요.
 
 📧 "원문/원본 메일 보여줘·읽어줘·확인해줘" 유형 요청에 대한 필수 규칙 (실제 메일 원문을 조회하는 기능):
 [업무 목록]에서 " [원문有]" 표시가 붙은 업무는 등록 당시의 원본 이메일 전문이 시스템에 별도로 저장되어 있습니다 — 다만 이 목록에는 "있다/없다" 표시만 있고 원문 내용 자체는 아직 포함되어 있지 않으니, 표시만 보고 원문 내용을 안다고 착각하거나 지어내지 마세요.
@@ -1167,6 +1188,9 @@ ${ctx.elecPartsText}
 [주소록 — 이름/부서/직함만 포함, 연락처는 미포함]
 ${ctx.addressText}
 
+[현재 등록된 공지 목록 — #NI숫자로 인용. 삭제하려면 [[ACTION:DELETE_NOTICES:#NI숫자,...]] 태그 사용]
+${ctx.noticeText}
+
 [다른 프로젝트 목록 — 지금 열려있는 이 프로젝트 제외, 업무 상세 데이터 없음]
 ${ctx.otherProjectsText}
 ${otherProjectSection}
@@ -1194,7 +1218,7 @@ ${question}
         todayStr: '${todayStr}', projectLine: '${projectLine}', overviewText: '${overviewText}',
         memberText: '${memberText}', materialText: '${materialText}', customerSpecText: '${customerSpecText}',
         mcTableText: '${mcTableText}', elecPartsText: '${elecPartsText}', addressText: '${addressText}',
-        otherProjectsText: '${otherProjectsText}',
+        noticeText: '${noticeText}', otherProjectsText: '${otherProjectsText}',
         totalTasks: '${totalTasks}', taskListText: '${taskListText}', recentLogsText: '${recentLogsText}'
     }, '${question}', '${historyText}', '${mailSection}', '${otherProjectSection}');
 
@@ -1242,6 +1266,7 @@ ${question}
         result = rep(result, '${mcTableText}', ctx.mcTableText);
         result = rep(result, '${elecPartsText}', ctx.elecPartsText);
         result = rep(result, '${addressText}', ctx.addressText);
+        result = rep(result, '${noticeText}', ctx.noticeText);
         result = rep(result, '${otherProjectsText}', ctx.otherProjectsText);
         result = rep(result, '${totalTasks}', ctx.totalTasks);
         result = rep(result, '${taskListText}', ctx.taskListText);
