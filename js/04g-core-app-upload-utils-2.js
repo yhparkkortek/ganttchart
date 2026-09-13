@@ -1526,7 +1526,7 @@ ${question}
             //    "지금 어디까지 선택됐는지"가 거의 안 보였다 — 그래서 복사하려고 드래그해도 선택 범위를
             //    확인할 수 없었음. 배경을 흐린 파랑으로, 글자는 진한 파랑으로 바꿔서 선택 하이라이트가
             //    배경과 뚜렷이 구분되게 한다(선택 안 된 상태에서도 읽기 편함은 그대로 유지).
-            const bg = isUser ? '#e7f3ff' : (m.error ? '#fff0f0' : '#f1f3f5');
+            const bg = isUser ? 'rgba(231,243,255,0.88)' : (m.error ? 'rgba(255,240,240,0.88)' : 'rgba(241,243,245,0.78)');
             const fg = isUser ? '#0056b3' : (m.error ? '#c92a2a' : '#333');
             const body = isUser
                 ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
