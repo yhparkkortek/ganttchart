@@ -669,11 +669,12 @@
         return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
     }
 
-    /** No.열·차트열처럼 키보드 스킵 대상 td인지 */
+    /** 차트열처럼 키보드 스킵 대상 td인지
+     *  · no-td(번호·📌핀 셀)는 스킵 해제 — Enter로 알람 토글 가능
+     *  · canvas를 직접 포함하는 차트 셀만 스킵 유지 */
     function _isSkipCell(td) {
         if (!td) return true;
-        if (td.classList.contains('no-td')) return true;
-        if (td.querySelector('canvas')) return true;   // 차트 셀
+        if (td.querySelector('canvas')) return true;   // 차트 셀만 스킵
         return false;
     }
 
@@ -788,6 +789,23 @@
         var rowIdx      = parseInt(_kbCell.tr.getAttribute('data-row-index'), 10);
         var onclickAttr = td.getAttribute('onclick')    || '';
         var ondblAttr   = td.getAttribute('ondblclick') || '';
+
+        // 0. No. 셀(📌 핀) → 알람 토글 (Enter=ON, 다시 Enter=OFF)
+        //    wrToggleAlarm → renderTable() 호출 → tbody 전체 재렌더 → _kbCell.tr stale
+        //    → 재렌더 후 새 tr을 찾아 포커스 복원
+        if (td.classList.contains('no-td')) {
+            if (window.wrToggleAlarm) {
+                window.wrToggleAlarm(rowIdx, null); // renderTable + applyFilters 동기 실행
+                var newTr = document.querySelector('tr[data-row-index="' + rowIdx + '"]');
+                if (newTr) {
+                    var newTds = Array.from(newTr.querySelectorAll('td'));
+                    var noIdx  = newTds.findIndex(function(t) { return t.classList.contains('no-td'); });
+                    _kbCell = null; // 기존 stale 참조 먼저 해제 (clearKbFocus가 stale td를 건드리지 않게)
+                    if (noIdx !== -1) _setKbFocus(newTr, noIdx);
+                }
+            }
+            return;
+        }
 
         // 1. 날짜 셀: .date-clickable 스팬 클릭 → showCalendar → 캘린더 모드
         var dateSpan = td.querySelector('.date-clickable');
