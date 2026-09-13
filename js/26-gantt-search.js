@@ -811,8 +811,22 @@
         setTimeout(function() {
             var newTr = document.querySelector('tr[data-row-index="' + rowIndex + '"]');
             if (!newTr) return;
-            _kbCell = null; // stale 참조를 먼저 지워 clearKbFocus가 옛 td를 건드리지 않게 함
+            // 💡 [2026-09-14 버그수정] 예전엔 여기서 _kbCell을 미리 null로 비웠는데(stale해진 옛
+            //    tr을 clearKbFocus가 건드리지 않게 하려는 의도) — _setKbFocus가 내부에서 부르는
+            //    _clearKbFocus는 이미 DOM에서 떨어져나간 노드에 스타일을 지워도 안전(화면에 아무
+            //    영향 없음)해서 애초에 미리 비울 필요가 없었고, 오히려 방향키를 빠르게 연타해 이
+            //    함수가 겹쳐 여러 번 예약되면 매번 "이전 타이머가 남긴 outline"의 존재 자체를
+            //    _kbCell에서 지워버려 못 찾게 만들었다 — 그 결과 오래된 outline이 지워지지 않고
+            //    새 outline과 함께 동시에 남는 "고스트 테두리 박스"가 됐다. null로 비우지 않고
+            //    _setKbFocus가 항상 "지금의" _kbCell부터 정리하게 두면 이전 것이 무엇이었든
+            //    확실히 하나만 지워지고 하나만 남는다.
             _setKbFocus(newTr, tdIdx);
+            // 💡 WBS 상하좌우+-(_rapClick)가 키보드로 진입했을 때는 행 전체 하이라이트
+            //    (window.highlightRow, .highlighted-row 테두리 박스)를 쓰지 않고 이 셀 포커스
+            //    박스 하나로만 "지금 위치"를 보여준다 — recalculateSchedules() 완료 후 자동으로
+            //    붙는 window.syncRowHighlight()가 이 시점(내부 10ms보다 늦은 우리 30ms) 이후에나
+            //    실행되므로, 그게 다시 붙여놓은 하이라이트까지 여기서 한 번 더 지워줘야 한다.
+            if (window.clearRowHighlight) window.clearRowHighlight();
         }, 30); // recalculateSchedules()의 내부 setTimeout(...,10)보다 확실히 뒤에 실행되도록
     }
 
@@ -989,7 +1003,9 @@
                 if (newTr) {
                     var newTds = Array.from(newTr.querySelectorAll('td'));
                     var noIdx  = newTds.findIndex(function(t) { return t.classList.contains('no-td'); });
-                    _kbCell = null; // 기존 stale 참조 먼저 해제 (clearKbFocus가 stale td를 건드리지 않게)
+                    // 💡 [2026-09-14 버그수정] 여기서 _kbCell을 미리 null로 비우지 않는다 — _setKbFocus
+                    //    내부의 _clearKbFocus가 "지금의" _kbCell(설령 stale해도 안전)부터 정리하게
+                    //    둬야 이전 outline이 확실히 지워진다(아래 _reanchorKbFocus의 같은 수정과 동일 이유).
                     if (noIdx !== -1) _setKbFocus(newTr, noIdx);
                 }
             }
@@ -1025,6 +1041,11 @@
             //    항상 visibility를 되돌려놓으므로 서로 간섭하지 않는다.
             var rapPopupEl = document.getElementById('row-action-popup');
             if (rapPopupEl) rapPopupEl.style.visibility = 'hidden';
+            // 💡 [2026-09-14 신규] onRowNoClick 안에서 window.highlightRow()로 행 전체에 테두리+배경
+            //    강조(.highlighted-row, 마우스용 UI)가 걸리는데, 키보드 흐름에선 그 대신 셀 포커스
+            //    박스만 보이길 원해서 곧바로 지운다(이후 _rapClick/종료 시의 _reanchorKbFocus도 매번
+            //    같이 지워서 재렌더 뒤에 자동으로 다시 붙는 것까지 계속 제거).
+            if (window.clearRowHighlight) window.clearRowHighlight();
             _kbMode = 'wbs-menu';
             return;
         }
@@ -1172,7 +1193,12 @@
                 } else {
                     function _rapClick(id) {
                         var b = document.getElementById(id); if (b) b.click();
-                        // 💡 [2026-09-14 신규] 팝업이 숨겨져 있는 동안(키보드로 진입한 경우)에는 이 셀
+                        // 💡 [2026-09-14 신규] rap-* 버튼 클릭 핸들러(js/04i)가 매번 window.highlightRow()로
+                        //    행 전체 테두리+배경 강조를 다시 붙이는데(마우스 UI용), 키보드 흐름에선 그
+                        //    대신 셀 포커스 박스만 보이길 원하므로 곧바로(다음 페인트 전에) 지워 깜빡임
+                        //    없이 숨긴다.
+                        if (window.clearRowHighlight) window.clearRowHighlight();
+                        // 💡 팝업이 숨겨져 있는 동안(키보드로 진입한 경우)에는 이 셀
                         //    포커스 박스가 "지금 어느 행이 움직이고 있는지" 보여주는 유일한 표시라서,
                         //    이동/레벨변경/추가·삭제할 때마다 popup.dataset.rowIndex가 가리키는 현재
                         //    행으로 계속 따라가게 한다(재렌더가 늦게 오는 경우까지 _reanchorKbFocus가 처리).
