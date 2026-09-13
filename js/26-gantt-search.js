@@ -21,6 +21,10 @@
     var _debounceTimer = null; // 검색 debounce 타이머
     var _lastAutoNavQuery = ''; // 자동 이동 마지막 적용 쿼리
 
+    // ── 셀 키보드 포커스 ──────────────────────────────────────────────────────
+    var _kbCell = null;       // { tr: HTMLElement, tdIdx: number } 현재 포커스 셀
+    var _cellNavSetup = false; // 전역 핸들러 중복 등록 방지
+
     // ─── 검색바 삽입 (테이블 위 분리 렌더링 — 기본 숨김, AI검색 버튼으로 토글) ──
 
     // 현재 테마 색상 조회 (21-color-palette.js 의 _cpRoleHex / CP_CURRENT_TEAL 활용)
@@ -118,6 +122,8 @@
                 e.preventDefault();
                 if (e.shiftKey) _navGo(-1); else _navGo(1);
             }
+            // 검색창 포커스 상태에서도 ↑/↓로 결과 이동 — 전역 핸들러와 중복 방지를 위해
+            // 전역 핸들러가 isSearchInput 분기로 처리하므로 여기선 따로 처리하지 않음
         });
         document.getElementById('gantt-search-prev').addEventListener('click', function() { _navGo(-1); });
         document.getElementById('gantt-search-next').addEventListener('click', function() { _navGo(1); });
@@ -636,6 +642,175 @@
         window._showAiToast && window._showAiToast('🗑️ ' + msg);
     }
 
+    // ─── 셀 키보드 포커스 & 네비게이션 ──────────────────────────────────────────
+    // 💡 [2026-09-13 신규] Gantt 셀 클릭 시 포커스 추적 → 화살표·Enter 키보드 조작
+    //
+    // 셀 타입별 Enter 동작:
+    //   WBS 업무명   → onRowNoClick (행 액션 메뉴)
+    //   기간·날짜 등  → makeEditable (텍스트 직접 편집)
+    //   상태(Status) → <select> 포커스
+    //   상세내용     → toggleDetailExpand (펼치기/접기)
+    //   No.·차트열   → 없음 (스킵)
+
+    /** 편집 중(contenteditable·input·textarea·select 포커스)인지 확인 */
+    function _isEditingAnywhere() {
+        var a = document.activeElement;
+        if (!a) return false;
+        if (a.isContentEditable) return true;
+        var t = a.tagName;
+        return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT';
+    }
+
+    /** No.열·차트열처럼 키보드 스킵 대상 td인지 */
+    function _isSkipCell(td) {
+        if (!td) return true;
+        if (td.classList.contains('no-td')) return true;
+        if (td.querySelector('canvas')) return true;   // 차트 셀
+        return false;
+    }
+
+    /** 키보드 포커스 해제 */
+    function _clearKbFocus() {
+        if (!_kbCell) return;
+        var tds = _kbCell.tr.querySelectorAll('td');
+        if (tds[_kbCell.tdIdx]) tds[_kbCell.tdIdx].classList.remove('gantt-kb-active');
+        _kbCell.tr.classList.remove('gantt-kb-row');
+        _kbCell = null;
+    }
+
+    /** tdIdx 위치에 키보드 포커스 이동 */
+    function _setKbFocus(tr, tdIdx) {
+        _clearKbFocus();
+        if (!tr) return;
+        var tds = tr.querySelectorAll('td');
+        if (tdIdx < 0 || tdIdx >= tds.length) return;
+        _kbCell = { tr: tr, tdIdx: tdIdx };
+        tds[tdIdx].classList.add('gantt-kb-active');
+        tr.classList.add('gantt-kb-row');
+        tds[tdIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    /** 같은 열에서 위/아래 visible 행으로 이동 */
+    function _kbMoveRow(delta) {
+        var tbody = document.getElementById('table-body');
+        if (!tbody) return;
+        var rows = Array.from(tbody.querySelectorAll('tr[data-row-index]')).filter(function(tr) {
+            return tr.style.display !== 'none';
+        });
+        var currIdx = _kbCell ? rows.indexOf(_kbCell.tr) : -1;
+        var newIdx = currIdx + delta;
+        if (newIdx < 0 || newIdx >= rows.length) return;
+        _setKbFocus(rows[newIdx], _kbCell ? _kbCell.tdIdx : 1);
+    }
+
+    /** 같은 행에서 좌/우 열로 이동 (No.·차트열 자동 스킵) */
+    function _kbMoveCol(delta) {
+        if (!_kbCell) return;
+        var tds = _kbCell.tr.querySelectorAll('td');
+        var idx = _kbCell.tdIdx + delta;
+        while (idx >= 0 && idx < tds.length && _isSkipCell(tds[idx])) idx += delta;
+        if (idx < 0 || idx >= tds.length) return;
+        _setKbFocus(_kbCell.tr, idx);
+    }
+
+    /** 현재 포커스 셀 Enter 액션 실행 */
+    function _kbEnterCell() {
+        if (!_kbCell) return;
+        var td = _kbCell.tr.querySelectorAll('td')[_kbCell.tdIdx];
+        if (!td || _isSkipCell(td)) return;
+
+        // 상태 셀: <select> 직접 포커스
+        var sel = td.querySelector('select');
+        if (sel) { sel.focus(); return; }
+
+        var rowIdx = parseInt(_kbCell.tr.getAttribute('data-row-index'), 10);
+        var onclickAttr = td.getAttribute('onclick') || '';
+
+        // WBS 업무명 → 행 액션 메뉴 (onRowNoClick)
+        if (onclickAttr.includes('onRowNoClick')) {
+            if (window.onRowNoClick) window.onRowNoClick(td, rowIdx, { target: td });
+            return;
+        }
+
+        // 상세내용 → 펼치기/접기 (toggleDetailExpand)
+        if (onclickAttr.includes('toggleDetailExpand')) {
+            td.click();
+            return;
+        }
+
+        // 기간·날짜·담당자·모델·고객사 등 일반 텍스트 셀 → 편집 모드 (makeEditable)
+        if ((td.getAttribute('ondblclick') || '').includes('makeEditable')) {
+            if (window.makeEditable) window.makeEditable(td);
+        }
+    }
+
+    /** 셀 클릭 위임 + 전역 키보드 핸들러 초기화 (ganttSearchInit 때 1회 호출) */
+    function _ensureCellNavigation() {
+        if (_cellNavSetup) return;
+        _cellNavSetup = true;
+
+        // ── 셀 클릭 위임: document 레벨 (table-body 재렌더 후에도 생존) ──
+        document.addEventListener('click', function(e) {
+            var td = e.target.closest('td');
+            if (td) {
+                var tr = td.closest('tr[data-row-index]');
+                if (tr && tr.closest('#table-body') && !_isSkipCell(td)) {
+                    var tds = Array.from(tr.querySelectorAll('td'));
+                    _setKbFocus(tr, tds.indexOf(td));
+                }
+            } else if (!e.target.closest('#table-body')) {
+                // 테이블 외부 클릭 → 포커스 해제
+                _clearKbFocus();
+            }
+        });
+
+        // ── 전역 키보드 핸들러 ──────────────────────────────────────────────
+        document.addEventListener('keydown', function(e) {
+            var isSearchInput = (document.activeElement &&
+                                 document.activeElement.id === 'gantt-ai-search-input');
+
+            // ↑ / ↓ ─────────────────────────────────────────────────────────
+            if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                var delta = e.key === 'ArrowDown' ? 1 : -1;
+
+                // 검색 input 포커스 → 검색 결과 이동
+                if (isSearchInput) {
+                    if (_matchedIndices.length) { e.preventDefault(); _navGo(delta); }
+                    return;
+                }
+
+                if (_isEditingAnywhere()) return; // 편집 중 무시
+
+                // 셀 포커스 있음 → 행 이동
+                if (_kbCell) { e.preventDefault(); _kbMoveRow(delta); return; }
+
+                // 검색 결과 있음 → 결과 이동
+                if (_matchedIndices.length) { e.preventDefault(); _navGo(delta); }
+            }
+
+            // ← / → ─────────────────────────────────────────────────────────
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                if (_isEditingAnywhere()) return;
+                if (!_kbCell) return;
+                e.preventDefault();
+                _kbMoveCol(e.key === 'ArrowRight' ? 1 : -1);
+            }
+
+            // Enter ──────────────────────────────────────────────────────────
+            if (e.key === 'Enter') {
+                if (_isEditingAnywhere()) return;
+                if (!_kbCell) return;
+                e.preventDefault();
+                _kbEnterCell();
+            }
+
+            // Escape — 셀 포커스 해제 (검색 초기화는 _ensureSearchBar 핸들러) ──
+            if (e.key === 'Escape' && _kbCell) {
+                _clearKbFocus();
+            }
+        });
+    }
+
     // ─── CSS 주입 ──────────────────────────────────────────────────────────────
 
     function _injectCss() {
@@ -654,7 +829,12 @@
             '#gantt-search-prev:hover, #gantt-search-next:hover { background: rgba(0,112,125,.15) !important; }' +
             // 텍스트 하이라이트 mark
             'mark.gantt-search-hl { background: #fff176; color: #333; border-radius: 2px;' +
-            '  padding: 0 1px; font-weight: inherit; font-style: inherit; }';
+            '  padding: 0 1px; font-weight: inherit; font-style: inherit; }' +
+            // 셀 키보드 포커스 (td.gantt-kb-active)
+            'td.gantt-kb-active { outline: 2px solid #1971c2 !important; outline-offset: -2px;' +
+            '  background: rgba(25,113,194,.09) !important; }' +
+            // 포커스된 행 왼쪽 인디케이터
+            'tr.gantt-kb-row > td:first-child { border-left: 3px solid #1971c2 !important; }';
         document.head.appendChild(s);
     }
 
@@ -668,6 +848,7 @@
         _injectCss();
         _ensureSearchBar();
         _ensureBulkBar();
+        _ensureCellNavigation(); // 💡 [2026-09-13 신규] 셀 키보드 네비게이션 초기화
         if (_query) _applySearch(); // 재렌더 후 재적용
     };
 
