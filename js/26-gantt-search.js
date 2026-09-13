@@ -775,6 +775,22 @@
         td.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
+    /**
+     * 💡 [2026-09-13 버그수정] 날짜 확정(_calConfirm)이나 텍스트 편집 저장(blurCell)처럼 셀 액션이
+     * recalculateSchedules()/renderTable()로 tbody 전체를 다시 그리면, 그 순간 _kbCell.tr은 이미
+     * DOM에서 떨어져나간(stale) 옛 <tr>을 계속 가리키게 된다 — 이후 방향키를 누르면
+     * rows.indexOf(stale tr)가 -1이 되어 "맨 위 행으로 튐"으로 보이는 버그가 됐다(달력 확정 직후,
+     * 상세내용/일반 텍스트 편집 Enter로 빠져나온 직후 모두 동일 원인). 액션 직전에 저장해둔
+     * rowIndex/tdIdx로 재렌더 후의 새 <tr>을 다시 찾아 포커스를 그 자리에 그대로 복원한다.
+     */
+    function _reanchorKbFocus(rowIndex, tdIdx) {
+        if (rowIndex === null || rowIndex === undefined || isNaN(rowIndex) || tdIdx === null || tdIdx === undefined) return;
+        var newTr = document.querySelector('tr[data-row-index="' + rowIndex + '"]');
+        if (!newTr) return;
+        _kbCell = null; // stale 참조를 먼저 지워 clearKbFocus가 옛 td를 건드리지 않게 함
+        _setKbFocus(newTr, tdIdx);
+    }
+
     /** 같은 열에서 위/아래 visible 행으로 이동 */
     function _kbMoveRow(delta) {
         var tbody = document.getElementById('table-body');
@@ -803,6 +819,13 @@
     function _enterSelectMode(sel) {
         _kbMode = 'select';
         sel.focus();
+        // 💡 [2026-09-13 버그수정] focus()만으로는 네이티브 select의 옵션 목록이 실제로 펼쳐지지
+        //    않는다(포커스 후 화살표를 눌러도 목록 없이 값만 조용히 바뀜) — 이 Enter 키다운은 이미
+        //    document 전역 핸들러에서 preventDefault()된 뒤라 브라우저가 "Enter로 펼치기"를 자체
+        //    처리할 기회가 없기 때문. showPicker()로 그 자리에서 직접 펼쳐서, 사용자가 기대하는
+        //    "Enter=드롭다운 펼침, ↑/↓=값 이동" 동작을 재현한다(트랜지언트 사용자 활성화 컨텍스트
+        //    안이라 허용됨). 구형 브라우저 등 showPicker 미지원 환경은 조용히 폴백(포커스만 유지).
+        try { if (sel.showPicker) sel.showPicker(); } catch (e) {}
         function cleanup() {
             sel.removeEventListener('keydown', onKey, true);
             sel.removeEventListener('blur',    onBlur);
@@ -826,6 +849,11 @@
         if (!window.makeEditable) return;
         var rawAttr  = td.getAttribute('data-raw');
         var origText = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
+        // 💡 [2026-09-13 버그수정] blurCell이 값 변경을 감지하면 renderTable()로 tbody를 통째로
+        //    다시 그려서 이 td/tr을 DOM에서 떼어낸다 — onBlur 시점엔 이미 늦으므로, 아직 유효할 때
+        //    (=편집 시작 시점) 행/열 위치를 미리 저장해뒀다가 편집 종료 후 새 tr에 재적용한다.
+        var _riIdx    = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : null;
+        var _tdIdxSav = _kbCell ? _kbCell.tdIdx : null;
         window.makeEditable(td);
         _kbMode = 'edit';
 
@@ -841,6 +869,9 @@
             td.removeEventListener('keydown', onEsc, true);
             td.removeEventListener('blur',    onBlur);
             if (_kbMode === 'edit') _kbMode = null;
+            // 💡 blurCell이 renderTable()을 호출했다면 이 td는 이미 stale — 같은 행/열의 새 셀을
+            //    다시 찾아 키보드 포커스를 그대로 이어준다(변경 없어 재렌더가 없었어도 멱등하게 안전).
+            _reanchorKbFocus(_riIdx, _tdIdxSav);
         }
         td.addEventListener('keydown', onEsc, true); // capture: makeEditable의 onkeydown보다 먼저
         td.addEventListener('blur',    onBlur);
@@ -892,8 +923,14 @@
         }
 
         // 2. 상태 셀: select 포커스 → select 모드
-        var sel = td.querySelector('select');
-        if (sel) { _enterSelectMode(sel); return; }
+        //    💡 [2026-09-13 버그수정] WBS 셀(.wbs-cell) 안에도 "담당구분" select(.wbs-discipline-badge)가
+        //    같이 들어있어서, td.querySelector('select')로만 판단하면 WBS 행에서 Enter를 눌렀을 때
+        //    이 조건이 3번(onRowNoClick, 상하좌우+- 팝업)보다 먼저 걸려 담당구분 드롭다운으로 잘못
+        //    빠졌었다 — status-td로 한정해서 원래 의도한 상태 셀에서만 select 모드로 진입하게 한다.
+        if (td.classList.contains('status-td')) {
+            var sel = td.querySelector('select');
+            if (sel) { _enterSelectMode(sel); return; }
+        }
 
         // 3. WBS 업무명 → 행 액션 팝업 → WBS 메뉴 모드
         if (onclickAttr.includes('onRowNoClick')) {
@@ -952,9 +989,16 @@
         }
         function _calConfirm() {
             var d = new Date(window.currentCalendarTs || Date.now());
+            // 💡 [2026-09-13 버그수정] selectDateFromCalendar → recalculateSchedules() →
+            //    renderTable()이 tbody를 통째로 다시 그려서 _kbCell.tr을 stale하게 만들기 전에,
+            //    지금 포커스된 행/열을 먼저 저장해둔다 — 그래야 날짜 확정 후에도 "맨 위 행으로 튐"
+            //    없이 같은 날짜 셀에 포커스가 그대로 남는다.
+            var _riIdx    = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : null;
+            var _tdIdxSav = _kbCell ? _kbCell.tdIdx : null;
             _kbMode = null;
             if (window.selectDateFromCalendar)
                 window.selectDateFromCalendar(d.getFullYear(), d.getMonth(), d.getDate());
+            _reanchorKbFocus(_riIdx, _tdIdxSav);
         }
         function _calClose() {
             var p = document.getElementById('calendar-popup');
