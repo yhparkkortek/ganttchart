@@ -1270,6 +1270,24 @@
                 _kbEnterCell(e.shiftKey); // shiftKey: 상세내용 셀 Shift+Enter = 편집 모드
             }
 
+            // Space ──────────────────────────────────────────────────────────
+            // 💡 [2026-09-14 신규] 소요일(period-td) 셀 — Enter는 숫자 직접수정(_kbEnterCell 5번,
+            //    기존 그대로), Space는 그 옆의 🔒/🔓 자동↔고정 아이콘(window.wrToggleScheduleLock)을
+            //    누른 것과 동일하게 토글. wrToggleScheduleLock → recalculateSchedules()(비동기 10ms
+            //    재렌더)라서 달력/WBS와 같은 이유로 _reanchorKbFocus로 같은 셀에 포커스를 유지한다.
+            if (e.key === ' ') {
+                if (_isEditingAnywhere()) return; // 텍스트 편집 중엔 스페이스를 문자 입력으로 그대로 사용
+                if (!_kbCell) return;
+                var spaceTd = _kbCell.tr.querySelectorAll('td')[_kbCell.tdIdx];
+                if (spaceTd && spaceTd.classList.contains('period-td')) {
+                    e.preventDefault();
+                    var spaceRowIdx = parseInt(_kbCell.tr.getAttribute('data-row-index'), 10);
+                    var spaceTdIdx  = _kbCell.tdIdx;
+                    if (window.wrToggleScheduleLock) window.wrToggleScheduleLock(spaceRowIdx, null);
+                    _reanchorKbFocus(spaceRowIdx, spaceTdIdx);
+                }
+            }
+
             // Esc ─────────────────────────────────────────────────────────────
             if (e.key === 'Escape') {
                 // edit/select 모드는 per-element 핸들러(stopPropagation)가 먼저 처리
