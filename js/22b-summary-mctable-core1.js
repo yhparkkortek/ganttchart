@@ -104,10 +104,11 @@ window.renderNoticeTab = function() {
         const rowBg = i%2===0?'#fff':'#e8f2f3';
         return `<tr style="background:${rowBg};border-bottom:1px solid #cfe3e5;" data-notice-id="${n.id}">
           <td style="padding:6px 6px;text-align:center;">
-            <input type="checkbox" class="notice-row-cb" data-id="${n.id}" onchange="window._noticeUpdateSelectState()"
+            <input type="checkbox" class="notice-row-cb" data-id="${n.id}" data-idx="${i}"
+                   onclick="window._noticeCbClick(event, this, ${i})"
                    style="cursor:pointer; width:14px; height:14px;">
           </td>
-          <td style="padding:6px 6px;text-align:center;font-size:11.5px;color:#888;font-weight:bold;">#NI${no}</td>
+          <td style="padding:6px 6px;text-align:center;font-size:11.5px;color:#888;font-weight:bold;" title="#NI${no}">${no}</td>
           <td style="padding:10px 12px;text-align:center;font-size:16px;">${statusDot}</td>
           <td style="padding:10px 12px;">
             <div style="font-weight:bold;color:#333;font-size:12.5px;">${n.title}</div>
@@ -139,6 +140,24 @@ window.renderNoticeTab = function() {
     window.loadScheduleRulesFromBackend();
 };
 
+// 💡 [2026-09-13] Shift+Click 범위선택 / Ctrl+Click 개별선택 지원
+window._noticeLastCbIdx = null;
+window._noticeCbClick = function(ev, cb, idx) {
+    const cbs = Array.from(document.querySelectorAll('.notice-row-cb'));
+    if (ev.shiftKey && window._noticeLastCbIdx !== null) {
+        // Shift: 마지막 클릭 ~ 현재 사이 전체를 현재 체크박스와 같은 상태로
+        const from = Math.min(window._noticeLastCbIdx, idx);
+        const to   = Math.max(window._noticeLastCbIdx, idx);
+        cbs.forEach(function(c) {
+            const i = parseInt(c.dataset.idx);
+            if (i >= from && i <= to) c.checked = cb.checked;
+        });
+    }
+    // Ctrl+Click: 이미 개별 토글이 브라우저 기본 동작 — 추가 처리 불필요
+    window._noticeLastCbIdx = idx;
+    window._noticeUpdateSelectState();
+};
+
 // 체크박스 선택 상태 갱신 — 선택삭제 버튼 표시/숨김 + 전체선택 체크박스 상태 동기화
 window._noticeUpdateSelectState = function() {
     const cbs = document.querySelectorAll('.notice-row-cb');
@@ -160,6 +179,7 @@ window._noticeUpdateSelectState = function() {
 // 전체선택/해제
 window._noticeToggleSelectAll = function(checked) {
     document.querySelectorAll('.notice-row-cb').forEach(c => { c.checked = checked; });
+    window._noticeLastCbIdx = null;
     window._noticeUpdateSelectState();
 };
 

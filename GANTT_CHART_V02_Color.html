@@ -174,6 +174,8 @@
           onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
           style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;"
           title="과거 미발송분 포함 전체 발송" data-i18n-title="send-all-including-past">📧 일괄 발송</button>
+        <button id="btn-alarm-send-selected" data-i18n="btn-alarm-send-selected" onclick="window.sendSelectedAlarms()"
+          class="action-btn solid c-success" style="display:none;">📤 선택 발송</button>
       </div>
       <button data-i18n="btn-print" onclick="window.printTabSection(window._alarmView === 'notice' ? 'tab-notice' : 'tab-alarm')"
         onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
@@ -186,6 +188,10 @@
       <table class="concept-table" id="alarm-table" style="width:100%; border-collapse:separate; border-spacing:0; font-size:12.5px;">
         <thead style="position:sticky; top:0; z-index:10;">
           <tr style="background:#eef6f7;">
+            <th style="padding:8px 6px; text-align:center; width:28px; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;">
+              <input type="checkbox" id="alarm-select-all" title="전체 선택/해제" onchange="window._alarmToggleSelectAll(this.checked)" style="cursor:pointer; width:14px; height:14px;">
+            </th>
+            <th style="padding:8px 6px; text-align:center; width:36px; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5; color:#555; font-size:11.5px;">No.</th>
             <th style="padding:8px 10px; text-align:center; width:18%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-task-name">업무명</th>
             <th style="padding:8px 10px; text-align:center; width:6%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-status">업무상태</th>
             <th style="padding:8px 10px; text-align:center; width:7%; white-space:nowrap; background:#eef6f7; border-bottom:2px solid #cfe3e5;" data-i18n="th-sender">발신인</th>
@@ -200,7 +206,7 @@
           </tr>
         </thead>
         <tbody id="alarm-table-body">
-          <tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
+          <tr><td colspan="13" style="text-align:center; padding:40px; color:#aaa;">알람 데이터를 불러오는 중...</td></tr>
         </tbody>
       </table>
       </div>
@@ -221,8 +227,7 @@
                   onmouseover="this.style.background='#a3d9e0';" onmouseout="this.style.background='#e0f5f7';"
                   style="padding:6px 12px; background:#e0f5f7; color:#00707d; border:none; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">📢 전체 즉시 발송</button>
           <button id="btn-notice-delete-selected" data-i18n="btn-notice-delete-selected" onclick="window.deleteSelectedNotices()"
-                  onmouseover="this.style.background='#f5c2bd'; this.style.borderColor='#e08f87';" onmouseout="this.style.background='#fbe4e2'; this.style.borderColor='#eeb0ac';"
-                  style="display:none; padding:6px 12px; background:#fbe4e2; color:#b1432f; border:1px solid #eeb0ac; border-radius:6px; font-size:13px; font-weight:bold; cursor:pointer; transition:background .15s;">🗑️ 선택 삭제</button>
+                  class="action-btn solid c-danger" style="display:none;">🗑️ 선택 삭제</button>
         </div>
       </div>
 

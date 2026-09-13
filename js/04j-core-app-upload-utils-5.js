@@ -147,6 +147,7 @@
                 'btn-notice-add':     '+ 공지 등록',
                 'btn-notice-sendall': '📢 전체 즉시 발송',
                 'btn-notice-delete-selected': '🗑️ 선택 삭제',
+                'btn-alarm-send-selected': '📤 선택 발송',
                 'btn-addr-load':      '📂 불러오기',
                 'btn-sync-gantt':     '🔄 Gantt 실적 연동',
                 'btn-print':          '🖨️ 인쇄 (PDF)',
@@ -439,6 +440,7 @@
                 'btn-notice-add':     '+ Add Notice',
                 'btn-notice-sendall': '📢 Send All Now',
                 'btn-notice-delete-selected': '🗑️ Delete Selected',
+                'btn-alarm-send-selected': '📤 Send Selected',
                 'btn-addr-load':      '📂 Load',
                 'btn-sync-gantt':     '🔄 Sync from Gantt',
                 'btn-print':          '🖨️ Print (PDF)',
@@ -1453,6 +1455,8 @@
 
         // [공지 탭] 선택된 행이 있으면 선택삭제 버튼 텍스트도 현재 언어로 갱신
         if (window._noticeUpdateSelectState) window._noticeUpdateSelectState();
+        // [알람 탭] 선택된 행이 있으면 선택발송 버튼 텍스트도 현재 언어로 갱신
+        if (window._alarmUpdateSelectState) window._alarmUpdateSelectState();
 
         // [Gantt #검색 바] 이미 열려있는 상태에서 언어 전환 시 즉시 반영
         if (window._gsRefreshLang) window._gsRefreshLang();

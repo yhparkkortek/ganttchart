@@ -205,8 +205,8 @@ window.renderAlarmTab = async function() {
     const items = window.collectAlarmItems();
     if (!items.length) {
         tbody.innerHTML = _isEn
-            ? '<tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">📌 No Gantt items with alarm configured.</td></tr>'
-            : '<tr><td colspan="11" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
+            ? '<tr><td colspan="13" style="text-align:center; padding:40px; color:#aaa;">📌 No Gantt items with alarm configured.</td></tr>'
+            : '<tr><td colspan="13" style="text-align:center; padding:40px; color:#aaa;">📌 알람이 설정된 Gantt 항목이 없습니다.</td></tr>';
         return;
     }
 
@@ -272,11 +272,23 @@ window.renderAlarmTab = async function() {
     };
 
     const _statusEn = { '진행':'On going', '완료':'Done', '대기':'Pending', '지연':'Delay', '보류':'Delay' };
+    // 전체선택 체크박스·선택발송 버튼 상태 초기화
+    const _alSelAllCb = document.getElementById('alarm-select-all');
+    const _alSendSelBtn = document.getElementById('btn-alarm-send-selected');
+    if (_alSelAllCb) _alSelAllCb.checked = false;
+    if (_alSendSelBtn) _alSendSelBtn.style.display = 'none';
+    window._alarmLastCbIdx = null;
     tbody.innerHTML = items.map((item, idx) => `
         <tr class="${idx % 2 === 1 ? 'mc-zebra-b' : 'mc-zebra-a'}" style="cursor:pointer; border-bottom:1px solid #cfe3e5;"
             onmouseover="this.style.background='#d3ecef'" onmouseout="this.style.background=''"
             title="${_isEn ? 'Double-click to jump to this task in the Gantt chart' : '더블클릭하면 Gantt chart의 해당 업무로 이동합니다'}"
             onclick="window._alarmRowClick(${idx})" ondblclick="window._alarmRowDblClick(${idx}, ${item.rowIdx})">
+            <td style="padding:6px 6px; text-align:center;" onclick="event.stopPropagation()">
+              <input type="checkbox" class="alarm-row-cb" data-idx="${idx}"
+                     onclick="window._alarmCbClick(event, this, ${idx})"
+                     style="cursor:pointer; width:14px; height:14px;">
+            </td>
+            <td style="padding:6px 6px; text-align:center; font-size:11.5px; color:#888; font-weight:bold;">${idx + 1}</td>
             <td style="padding:7px 10px; font-size:12px;">${item.taskName}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${(item.status && _isEn ? (_statusEn[item.status] || item.status) : item.status) || '-'}</td>
             <td style="padding:7px 10px; text-align:center; font-size:11.5px;">${nameCell(item.assignee)}</td>
@@ -297,6 +309,68 @@ window.renderAlarmTab = async function() {
     // 💡 [2026-08-31 신규] 이 업무들 중 "기간·반복" 예약(백엔드 /schedule, type='alarm')이 걸려있는
     //    행에 ⏰ 배지 표시 — 렌더링 자체를 막지 않도록 fire-and-forget(비동기, 결과 기다리지 않음)
     window._alarmAnnotateRecurBadges();
+};
+
+// 💡 [2026-09-13 신규] 알람 탭 체크박스 선택 시스템 — Shift+Click 범위선택, Ctrl+Click 개별선택
+window._alarmLastCbIdx = null;
+window._alarmCbClick = function(ev, cb, idx) {
+    const cbs = Array.from(document.querySelectorAll('.alarm-row-cb'));
+    if (ev.shiftKey && window._alarmLastCbIdx !== null) {
+        const from = Math.min(window._alarmLastCbIdx, idx);
+        const to   = Math.max(window._alarmLastCbIdx, idx);
+        cbs.forEach(function(c) {
+            const i = parseInt(c.dataset.idx);
+            if (i >= from && i <= to) c.checked = cb.checked;
+        });
+    }
+    window._alarmLastCbIdx = idx;
+    window._alarmUpdateSelectState();
+};
+
+window._alarmUpdateSelectState = function() {
+    const cbs = document.querySelectorAll('.alarm-row-cb');
+    const checked = Array.from(cbs).filter(c => c.checked);
+    const selAllCb = document.getElementById('alarm-select-all');
+    const sendSelBtn = document.getElementById('btn-alarm-send-selected');
+    if (selAllCb) selAllCb.checked = cbs.length > 0 && checked.length === cbs.length;
+    if (sendSelBtn) {
+        if (checked.length > 0) {
+            const _en = window._currentLang === 'en';
+            sendSelBtn.textContent = `📤 ${_en ? 'Send Selected' : '선택 발송'} (${checked.length})`;
+            sendSelBtn.style.display = '';
+        } else {
+            sendSelBtn.style.display = 'none';
+        }
+    }
+};
+
+window._alarmToggleSelectAll = function(checked) {
+    document.querySelectorAll('.alarm-row-cb').forEach(c => { c.checked = checked; });
+    window._alarmLastCbIdx = null;
+    window._alarmUpdateSelectState();
+};
+
+// 선택된 알람 행 즉시 발송
+window.sendSelectedAlarms = async function() {
+    const cbs = Array.from(document.querySelectorAll('.alarm-row-cb:checked'));
+    if (!cbs.length) return;
+    const idxList = cbs.map(c => parseInt(c.dataset.idx));
+    const items = window._alarmItems || [];
+    const _en = window._currentLang === 'en';
+    const names = idxList.map(i => items[i] ? (items[i].taskName || '') : '').filter(Boolean);
+    if (!confirm(_en
+        ? `Send alarm now for ${idxList.length} selected item(s)?\n${names.join(', ')}`
+        : `선택한 ${idxList.length}건을 즉시 발송하시겠습니까?\n${names.join(', ')}`)) return;
+    let ok = 0, fail = 0;
+    for (const i of idxList) {
+        try {
+            await window.sendAlarmNow(i);
+            ok++;
+        } catch(e) { fail++; }
+    }
+    const msg = _en ? `Sent: ${ok} / Failed: ${fail}` : `발송 완료: ${ok}건 / 실패: ${fail}건`;
+    if (window.showToast) window.showToast(msg); else alert(msg);
+    window.renderAlarmTab();
 };
 
 // 💡 알람 목록 각 행에 "기간·반복" 예약 등록 여부(⏰)를 표시 — 백엔드 /schedule 규칙과 driveFileId+rowIdx로 매칭
