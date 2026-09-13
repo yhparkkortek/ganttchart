@@ -682,7 +682,8 @@ ${issRaw}
 규칙:
 - 중요도가 낮거나 단순 반복 업무는 생략 가능. 보고 가치가 있는 업무를 우선 선택
 - 각 항목은 "✓ 업무명" 형식으로 시작하고, 핵심 내용을 1~2줄로 요약
-- 담당자가 있으면 업무명 뒤에 "[담당자]" 형태로 표기
+- 날짜 범위(예: 09/01~09/11)가 업무 목록에 있으면 업무명 뒤 담당자 앞에 (MM/DD~MM/DD) 형태로 반드시 표시
+- 담당자가 있으면 날짜 뒤(날짜 없으면 업무명 뒤)에 "[담당자]" 형태로 표기
 - 문제점은 간결하게 핵심만 기술 (없으면 "해당 없음"으로만 작성)
 - 응답은 아래 구분자를 그대로 사용해 3개 섹션으로만 구성
 
@@ -1275,13 +1276,22 @@ ${issRaw}
         const _usePreview = _pptPreview && typeof _pptPreview === 'object';
         const _thisText  = _usePreview && _pptPreview.thisText  ? _pptPreview.thisText  : listToText(data.thisList);
         const _nextText  = _usePreview && _pptPreview.nextText  ? _pptPreview.nextText  : listToText(data.nextList);
-        // 문제점 issueRows: AI 미리보기 텍스트가 있으면 파싱해 단순 행으로 교체
+        // 문제점 issueRows: AI 미리보기 텍스트가 있으면 문제점(1열)만 교체, 대책/추진일정/담당자는 원본 유지
         let _issueRowsToUse = issueRows;
         if (_usePreview && _pptPreview.issueText && _pptPreview.issueText.trim() && _pptPreview.issueText.trim() !== '해당 없음') {
-            const _parsedIssues = _pptPreview.issueText.split('\n')
-                .map(l => l.trim()).filter(l => l && l !== '해당 없음')
-                .map(l => [l.replace(/^[•✓\-\*\d\.]\s*/, ''), '-', '-', '-']);
-            if (_parsedIssues.length > 0) _issueRowsToUse = _parsedIssues;
+            const _editedLines = _pptPreview.issueText.split('\n')
+                .map(l => l.trim()).filter(l => l && l !== '해당 없음');
+            if (_editedLines.length > 0) {
+                _issueRowsToUse = _editedLines.map((l, i) => {
+                    const orig = issueRows[i]; // 원본 행이 있으면 대책/추진일정/담당자 유지
+                    return [
+                        l.replace(/^[•✓\-\*\d\.]\s*/, ''),
+                        orig ? orig[1] : '-',
+                        orig ? orig[2] : '-',
+                        orig ? orig[3] : '-'
+                    ];
+                });
+            }
         }
 
         // 텍스트 줄 수를 추정해서 필요한 높이를 동적으로 계산 (고정 1.75 대신)
