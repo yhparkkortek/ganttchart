@@ -95,6 +95,8 @@
         let tr = document.querySelector(`tr[data-row-index="${rowIndex}"]`);
         if (tr) {
             tr.classList.add('highlighted-row');
+            // 💡 팔렛트 보색 적용 — 26-gantt-search.js의 _applyHlColorToTr을 전역으로 노출한 헬퍼
+            if (window._ganttApplyHlColor) window._ganttApplyHlColor(tr, false);
         }
     };
 
@@ -111,15 +113,24 @@
         for (let j = rowIndex + 1; j < rows.length; j++) {
             if (lvOf(rows[j]) <= L) break;
             const tr = document.querySelector(`tr[data-row-index="${j}"]`);
-            if (tr) tr.classList.add('highlighted-row-child');
+            if (tr) {
+                tr.classList.add('highlighted-row-child');
+                if (window._ganttApplyHlColor) window._ganttApplyHlColor(tr, true);
+            }
         }
     };
 
     window.clearRowHighlight = function() {
         document.querySelectorAll('tr.highlighted-row').forEach(tr => {
             tr.classList.remove('highlighted-row');
+            tr.style.removeProperty('--gantt-hl-color');
+            tr.style.removeProperty('--gantt-hl-bg');
         });
-        document.querySelectorAll('tr.highlighted-row-child').forEach(tr => tr.classList.remove('highlighted-row-child'));
+        document.querySelectorAll('tr.highlighted-row-child').forEach(tr => {
+            tr.classList.remove('highlighted-row-child');
+            tr.style.removeProperty('--gantt-hl-color');
+            tr.style.removeProperty('--gantt-hl-bg');
+        });
         // 💡 하이라이트가 어디서든(외부클릭 닫기/행삭제 정리 등) 지워지면, WBS 클릭 사이클도 함께 리셋해서
         //    다음에 같은 행을 클릭했을 때 엉뚱한 단계(2/3)부터 이어지지 않고 항상 1단계(선택)부터 시작하게 함.
         window._rowClickCycle = { index: null, step: 0 };

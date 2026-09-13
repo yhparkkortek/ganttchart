@@ -451,17 +451,17 @@
         content: '';
         position: absolute;
         top: 0; left: 0; right: 0; bottom: 0;
-        background-color: rgba(230, 126, 34, 0.15) !important;
-        border-top: 2px solid #e67e22 !important;
-        border-bottom: 2px solid #e67e22 !important;
+        background-color: var(--gantt-hl-bg, rgba(230, 126, 34, 0.15)) !important;
+        border-top: 2px solid var(--gantt-hl-color, #e67e22) !important;
+        border-bottom: 2px solid var(--gantt-hl-color, #e67e22) !important;
         pointer-events: none;
         z-index: 5;
     }
     tr.highlighted-row td:first-child::after {
-        border-left: 2px solid #e67e22 !important;
+        border-left: 2px solid var(--gantt-hl-color, #e67e22) !important;
     }
     tr.highlighted-row td:last-child::after {
-        border-right: 2px solid #e67e22 !important;
+        border-right: 2px solid var(--gantt-hl-color, #e67e22) !important;
     }
 
     /* 💡 [2026-08-24] WBS 2번째 클릭 — 하위(자식) 행 하이라이트. 본인 행(위 highlighted-row, 테두리+15% 톤)
@@ -475,7 +475,7 @@
         content: '';
         position: absolute;
         top: 0; left: 0; right: 0; bottom: 0;
-        background-color: rgba(230, 126, 34, 0.09) !important;
+        background-color: var(--gantt-hl-bg, rgba(230, 126, 34, 0.09)) !important;
         pointer-events: none;
         z-index: 4;
     }

@@ -162,6 +162,13 @@
                     if (_tds[_kbCell.tdIdx]) _tds[_kbCell.tdIdx].style.outline = '2px solid ' + _color;
                     _kbCell.tr.style.setProperty('--gantt-kb-row-color', _color);
                 }
+                // 팔렛트 변경 시 현재 하이라이트 행(WBS 클릭)의 보색도 즉시 갱신
+                document.querySelectorAll('tr.highlighted-row').forEach(function(hlTr) {
+                    _applyHlColorToTr(hlTr, false);
+                });
+                document.querySelectorAll('tr.highlighted-row-child').forEach(function(hlTr) {
+                    _applyHlColorToTr(hlTr, true);
+                });
             };
         }
     }
@@ -707,6 +714,27 @@
             return 'hsl('+compH+','+compS+'%,38%)';
         } catch(e) { return '#1971c2'; }
     }
+    // 전역 노출 — 04e-core-app-undo-redo.js의 highlightRow/highlightRowChildren에서 사용
+    window._ganttGetFocusColor = _getFocusColor;
+
+    /**
+     * WBS 행 하이라이트 색을 tr에 CSS 변수로 적용
+     * isChild=true → 자식 행(더 옅은 배경, 테두리 없음)
+     */
+    function _applyHlColorToTr(tr, isChild) {
+        var color = _getFocusColor();
+        var bg;
+        if (color.startsWith('hsl(')) {
+            var inner = color.slice(4, -1); // "H, S%, L%"
+            bg = isChild ? 'hsla(' + inner + ', 0.09)' : 'hsla(' + inner + ', 0.15)';
+        } else {
+            // hex: 15% ≈ 0x26, 9% ≈ 0x17
+            bg = isChild ? (color + '17') : (color + '26');
+        }
+        tr.style.setProperty('--gantt-hl-color', color);
+        tr.style.setProperty('--gantt-hl-bg',    bg);
+    }
+    window._ganttApplyHlColor = _applyHlColorToTr;
 
     /** 키보드 포커스 해제 — 저장해둔 inline 스타일 복원 */
     function _clearKbFocus() {
@@ -768,6 +796,54 @@
         while (idx >= 0 && idx < tds.length && _isSkipCell(tds[idx])) idx += delta;
         if (idx < 0 || idx >= tds.length) return;
         _setKbFocus(_kbCell.tr, idx);
+    }
+
+    // ── 상태 셀(select) 포커스 모드 ───────────────────────────────────────────
+    // _kbEnterCell 에서 호출 — _ensureCellNavigation 내부로 두면 스코프 밖이라 접근 불가
+    function _enterSelectMode(sel) {
+        _kbMode = 'select';
+        sel.focus();
+        function cleanup() {
+            sel.removeEventListener('keydown', onKey, true);
+            sel.removeEventListener('blur',    onBlur);
+            if (_kbMode === 'select') _kbMode = null;
+        }
+        function onKey(e) {
+            if (e.key === 'Enter' || e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                cleanup(); sel.blur();
+            }
+        }
+        function onBlur() { cleanup(); }
+        sel.addEventListener('keydown', onKey, true); // capture: native select보다 먼저
+        sel.addEventListener('blur',    onBlur);
+    }
+
+    // ── 텍스트 편집 모드(contenteditable) 진입 ───────────────────────────────
+    // makeEditable 내부 onkeydown(Enter=저장, Shift+Enter=줄바꿈)을 유지하면서
+    // Esc=취소(원본 복원)만 별도 핸들러로 추가
+    function _enterEditMode(td) {
+        if (!window.makeEditable) return;
+        var rawAttr  = td.getAttribute('data-raw');
+        var origText = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
+        window.makeEditable(td);
+        _kbMode = 'edit';
+
+        function onEsc(e) {
+            if (e.key === 'Escape') {
+                e.preventDefault(); e.stopPropagation();
+                td.removeEventListener('keydown', onEsc, true);
+                td.innerText = origText; // 원본 복원 → blur 시 "변경 없음"으로 처리
+                td.blur();
+            }
+        }
+        function onBlur() {
+            td.removeEventListener('keydown', onEsc, true);
+            td.removeEventListener('blur',    onBlur);
+            if (_kbMode === 'edit') _kbMode = null;
+        }
+        td.addEventListener('keydown', onEsc, true); // capture: makeEditable의 onkeydown보다 먼저
+        td.addEventListener('blur',    onBlur);
     }
 
     /**
@@ -887,58 +963,7 @@
             _kbMode = null;
         }
 
-        // ── 상태 셀(select) 포커스 모드 ───────────────────────────────────
-        // enter/select 모드: select 포커스 → 화살표로 값 변경 → Enter/Esc로 빠져나옴
-        // ⚠️ onchange="updateStatus()" 가 화살표 키마다 발동되어 이미 저장됨
-        //    → Esc 취소는 이 앱의 Undo(Ctrl+Z)로 되돌리는 것을 안내
-        function _enterSelectMode(sel) {
-            _kbMode = 'select';
-            sel.focus();
-            function cleanup() {
-                sel.removeEventListener('keydown', onKey, true);
-                sel.removeEventListener('blur', onBlur);
-                if (_kbMode === 'select') _kbMode = null;
-            }
-            function onKey(e) {
-                if (e.key === 'Enter' || e.key === 'Escape') {
-                    e.preventDefault(); e.stopPropagation();
-                    cleanup(); sel.blur();
-                }
-            }
-            function onBlur() { cleanup(); }
-            sel.addEventListener('keydown', onKey, true); // capture: native select보다 먼저
-            sel.addEventListener('blur', onBlur);
-        }
-
-        // ── 텍스트 편집 모드(contenteditable) 진입 ────────────────────────
-        // makeEditable 내부의 onkeydown(Enter=저장, Shift+Enter=줄바꿈)을 유지하면서
-        // Esc=취소(원본 복원)만 별도 핸들러로 추가
-        function _enterEditMode(td) {
-            if (!window.makeEditable) return;
-            // data-raw(원본 텍스트) 저장 — Esc 취소 시 복원 대상
-            var rawAttr  = td.getAttribute('data-raw');
-            var origText = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
-            window.makeEditable(td);
-            _kbMode = 'edit';
-
-            function onEsc(e) {
-                if (e.key === 'Escape') {
-                    e.preventDefault(); e.stopPropagation();
-                    td.removeEventListener('keydown', onEsc, true);
-                    // 원본 텍스트 복원 → blurCell이 "변경 없음"으로 처리 (저장 안 됨)
-                    td.innerText = origText;
-                    td.blur();
-                }
-            }
-            function onBlur() {
-                td.removeEventListener('keydown', onEsc, true);
-                td.removeEventListener('blur', onBlur);
-                if (_kbMode === 'edit') _kbMode = null;
-            }
-            // capture: makeEditable의 td.onkeydown보다 먼저 실행되어 Esc를 가로챔
-            td.addEventListener('keydown', onEsc, true);
-            td.addEventListener('blur', onBlur);
-        }
+        // _enterSelectMode, _enterEditMode 는 외부 IIFE 스코프에 정의됨 (스코프 접근 보장)
 
         // ── 전역 키보드 핸들러 ────────────────────────────────────────────
         document.addEventListener('keydown', function(e) {
