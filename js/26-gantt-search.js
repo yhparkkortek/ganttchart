@@ -404,6 +404,25 @@
 
         // 검색바 표시
         if (active) _showSearchBar();
+
+        // 🐛 [2026-09-13 버그수정] 검색이 tr.style.display를 직접 바꾸지만 applyFilters()를
+        //    호출하지 않아서 .row-num-span 번호가 갱신되지 않는 버그 → 검색 후 보이는 행만
+        //    순서대로 번호를 다시 매긴다(applyFilters 전체 재호출보다 가볍고 충돌 없음).
+        _gsRenumberRows();
+    }
+
+    // 현재 화면에 보이는 행만 순서대로 No. 번호 재할당
+    function _gsRenumberRows() {
+        var tbody = document.querySelector('#gantt-table tbody');
+        if (!tbody) return;
+        var n = 1;
+        tbody.querySelectorAll('tr[data-row-index]').forEach(function(tr) {
+            if (tr.style.display === 'none') return;
+            var noTd = tr.querySelector('.no-td');
+            if (!noTd) return;
+            var span = noTd.querySelector('.row-num-span');
+            if (span) span.textContent = n++;
+        });
     }
 
     // ─── 네비게이션 ────────────────────────────────────────────────────────────
