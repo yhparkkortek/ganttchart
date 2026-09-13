@@ -278,9 +278,13 @@
 
     // ─── 검색 실행 ─────────────────────────────────────────────────────────────
 
-    function _rowMatches(row, kw, isProject, isAiAll) {
+    // 알람 동의어 패턴 — 이 키워드로 검색하면 텍스트 매칭 대신 row._알림===true 인 행만 표시
+    var _alarmWords = /^(알람|알림|핀셋알람|핀셋알림|핀셋|마감알람|마감알림|alarm|reminder|notification)$/i;
+
+    function _rowMatches(row, kw, isProject, isAiAll, isAlarm) {
         if (!row) return false;
-        if (isAiAll) return !!row._aiRegistered;
+        if (isAiAll)  return !!row._aiRegistered;
+        if (isAlarm)  return !!row._알림;
 
         var kwL = kw.toLowerCase();
 
@@ -345,6 +349,7 @@
         var isProject = raw.startsWith('@');
         var isHash    = raw.startsWith('#');
         var isAiAll   = raw.toLowerCase() === '#ai';
+        var isAlarm   = !isProject && !isHash && _alarmWords.test(raw.trim());
         var kw = isProject ? raw.slice(1) : isHash ? raw.slice(1) : raw;
         var active = kw.length > 0;
 
@@ -358,7 +363,7 @@
         rows.forEach(function(tr) {
             var idx = parseInt(tr.getAttribute('data-row-index'), 10);
             var gRow = (typeof globalData !== 'undefined') ? globalData[idx] : null;
-            var matches = !active || _rowMatches(gRow, kw, isProject, isAiAll);
+            var matches = !active || _rowMatches(gRow, kw, isProject, isAiAll, isAlarm);
 
             // 하이라이트/필터
             if (active) {
@@ -368,7 +373,7 @@
                     _matchedIndices.push(idx);
                     matchCount++;
                     // ── 텍스트 하이라이트 (행 테두리 대신) ──
-                    if (!isAiAll) _highlightTextInRow(tr, kw);
+                    if (!isAiAll && !isAlarm) _highlightTextInRow(tr, kw);
                 } else if (_mode === 'filter') {
                     tr.style.display = 'none';
                     tr.classList.remove('gantt-search-match');
