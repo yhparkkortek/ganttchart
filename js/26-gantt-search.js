@@ -889,6 +889,12 @@
     // _kbEnterCell 에서 호출 — _ensureCellNavigation 내부로 두면 스코프 밖이라 접근 불가
     function _enterSelectMode(sel) {
         _kbMode = 'select';
+        // 💡 [2026-09-14 버그수정] 값이 바뀌면 onchange="updateStatus(...)"가 renderTable()을 동기
+        //    호출해 tbody를 통째로 다시 그린다 — 그 순간 이 select가 들어있던 td/tr도 같이 사라져
+        //    _kbCell이 stale해지고, 이후 방향키에서 "1번 행으로 튐" 버그가 됐다(달력/WBS와 동일 원인).
+        //    아직 유효한 지금 행/열 위치를 저장해뒀다가 아래 cleanup()에서 재탐색한다.
+        var _riIdx    = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : null;
+        var _tdIdxSav = _kbCell ? _kbCell.tdIdx : null;
         sel.focus();
         // 💡 [2026-09-13 버그수정] focus()만으로는 네이티브 select의 옵션 목록이 실제로 펼쳐지지
         //    않는다(포커스 후 화살표를 눌러도 목록 없이 값만 조용히 바뀜) — 이 Enter 키다운은 이미
@@ -901,6 +907,11 @@
             sel.removeEventListener('keydown', onKey, true);
             sel.removeEventListener('blur',    onBlur);
             if (_kbMode === 'select') _kbMode = null;
+            // 💡 renderTable()이 있었든(값 변경) 없었든(변경 없이 취소) 항상 안전하게 같은 행/열의
+            //    (새) 셀로 포커스를 되돌려 "이동 대기" 상태로 복귀 — onKey(Enter/Esc)·onBlur(마우스로
+            //    옵션 클릭 등 다른 방식으로 빠져나간 경우) 두 경로 모두 이 cleanup()을 거치므로 한
+            //    군데서만 처리하면 된다.
+            _reanchorKbFocus(_riIdx, _tdIdxSav);
         }
         function onKey(e) {
             if (e.key === 'Enter' || e.key === 'Escape') {
