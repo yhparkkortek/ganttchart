@@ -154,6 +154,13 @@
             window._cpApplyLive = function(hex, skipSave) {
                 if (_origApplyLive) _origApplyLive.call(this, hex, skipSave);
                 _updateSearchBarColors();
+                // 팔렛트 변경 시 현재 포커스 셀의 outline 색도 보색으로 즉시 갱신
+                if (_kbCell) {
+                    var _color = _getFocusColor();
+                    var _tds = _kbCell.tr.querySelectorAll('td');
+                    if (_tds[_kbCell.tdIdx]) _tds[_kbCell.tdIdx].style.outline = '2px solid ' + _color;
+                    _kbCell.tr.style.setProperty('--gantt-kb-row-color', _color);
+                }
             };
         }
     }
@@ -669,25 +676,73 @@
         return false;
     }
 
-    /** 키보드 포커스 해제 */
+    /**
+     * 현재 팔렛트에 맞는 kb 포커스 색 반환
+     * · 기본 teal 팔렛트: 파란색 #1971c2
+     * · 사용자 지정 팔렛트: darkText 색의 보색(hue+180°) — 팔렛트 색과 최대 대비
+     */
+    function _getFocusColor() {
+        try {
+            var darkText = window._cpRoleHex && window._cpRoleHex('darkText');
+            // 기본 팔렛트(teal #00707d)이면 파란색 그대로
+            if (!darkText || darkText.toLowerCase() === '#00707d') return '#1971c2';
+
+            // hex → HSL 변환
+            var hex = darkText.replace('#','');
+            if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+            var r=parseInt(hex.slice(0,2),16)/255;
+            var g=parseInt(hex.slice(2,4),16)/255;
+            var b=parseInt(hex.slice(4,6),16)/255;
+            var max=Math.max(r,g,b), min=Math.min(r,g,b), d=max-min, h, l=(max+min)/2;
+            if (!d) return '#1971c2';
+            var s = l>0.5 ? d/(2-max-min) : d/(max+min);
+            if      (max===r) h=((g-b)/d+(g<b?6:0))/6;
+            else if (max===g) h=((b-r)/d+2)/6;
+            else              h=((r-g)/d+4)/6;
+            // 보색: hue +180°, 채도 55~75%, 명도 38% (충분히 진해서 outline으로 보임)
+            var compH = Math.round((h*360+180)%360);
+            var compS = Math.round(Math.max(55, Math.min(75, s*100)));
+            return 'hsl('+compH+','+compS+'%,38%)';
+        } catch(e) { return '#1971c2'; }
+    }
+
+    /** 키보드 포커스 해제 — 저장해둔 inline 스타일 복원 */
     function _clearKbFocus() {
         if (!_kbCell) return;
         var tds = _kbCell.tr.querySelectorAll('td');
-        if (tds[_kbCell.tdIdx]) tds[_kbCell.tdIdx].classList.remove('gantt-kb-active');
+        var td = tds[_kbCell.tdIdx];
+        if (td) {
+            // 저장해뒀던 원래 inline outline/background 복원
+            td.style.outline        = _kbCell.prevOutline        != null ? _kbCell.prevOutline        : '';
+            td.style.outlineOffset  = _kbCell.prevOutlineOffset  != null ? _kbCell.prevOutlineOffset  : '';
+            td.classList.remove('gantt-kb-active');
+        }
         _kbCell.tr.classList.remove('gantt-kb-row');
+        _kbCell.tr.style.removeProperty('--gantt-kb-row-color');
         _kbCell = null;
     }
 
-    /** tdIdx 위치에 키보드 포커스 이동 */
+    /** tdIdx 위치에 키보드 포커스 이동 — 팔렛트 보색을 inline style로 적용 */
     function _setKbFocus(tr, tdIdx) {
         _clearKbFocus();
         if (!tr) return;
         var tds = tr.querySelectorAll('td');
         if (tdIdx < 0 || tdIdx >= tds.length) return;
-        _kbCell = { tr: tr, tdIdx: tdIdx };
-        tds[tdIdx].classList.add('gantt-kb-active');
+        var td = tds[tdIdx];
+        var color = _getFocusColor();
+        // 기존 inline 스타일 저장 후 포커스 outline 적용
+        _kbCell = {
+            tr: tr, tdIdx: tdIdx,
+            prevOutline:       td.style.outline       || '',
+            prevOutlineOffset: td.style.outlineOffset || ''
+        };
+        td.style.outline       = '2px solid ' + color;
+        td.style.outlineOffset = '-2px';
+        td.classList.add('gantt-kb-active');
         tr.classList.add('gantt-kb-row');
-        tds[tdIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // CSS 변수로 행 왼쪽 인디케이터 색도 동기화
+        tr.style.setProperty('--gantt-kb-row-color', color);
+        td.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
 
     /** 같은 열에서 위/아래 visible 행으로 이동 */
@@ -749,7 +804,11 @@
         if (_cellNavSetup) return;
         _cellNavSetup = true;
 
-        // ── 셀 클릭 위임: document 레벨 (table-body 재렌더 후에도 생존) ──
+        // ── 셀 클릭 위임: capture 단계 등록 (세 번째 인자 true)
+        //    · 이유: WBS/상세내용/상태 등 td의 inline onclick(onRowNoClick·toggleDetailExpand 등)이
+        //      stopPropagation을 호출하면 bubbling 핸들러는 document까지 도달하지 못함.
+        //      capture 단계는 inline onclick보다 먼저 실행되므로 모든 셀을 확실히 포착.
+        //    · 부작용: 없음. 기존 onclick 액션은 이후 target 단계에서 정상 실행됨.
         document.addEventListener('click', function(e) {
             var td = e.target.closest('td');
             if (td) {
@@ -762,7 +821,7 @@
                 // 테이블 외부 클릭 → 포커스 해제
                 _clearKbFocus();
             }
-        });
+        }, true); // ← capture phase
 
         // ── 전역 키보드 핸들러 ──────────────────────────────────────────────
         document.addEventListener('keydown', function(e) {
@@ -830,11 +889,11 @@
             // 텍스트 하이라이트 mark
             'mark.gantt-search-hl { background: #fff176; color: #333; border-radius: 2px;' +
             '  padding: 0 1px; font-weight: inherit; font-style: inherit; }' +
-            // 셀 키보드 포커스 (td.gantt-kb-active)
-            'td.gantt-kb-active { outline: 2px solid #1971c2 !important; outline-offset: -2px;' +
-            '  background: rgba(25,113,194,.09) !important; }' +
-            // 포커스된 행 왼쪽 인디케이터
-            'tr.gantt-kb-row > td:first-child { border-left: 3px solid #1971c2 !important; }';
+            // 셀 키보드 포커스: outline은 _setKbFocus가 inline style로 동적 적용(보색 대응)
+            // .gantt-kb-active는 식별자 역할만(clear 시 querySelector 용도)
+            'td.gantt-kb-active { }' +
+            // 포커스 행 왼쪽 인디케이터: CSS 변수 --gantt-kb-row-color 를 tr에서 _setKbFocus가 세팅
+            'tr.gantt-kb-row > td:first-child { border-left: 3px solid var(--gantt-kb-row-color, #1971c2) !important; }';
         document.head.appendChild(s);
     }
 
