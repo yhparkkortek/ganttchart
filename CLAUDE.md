@@ -114,26 +114,29 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | `22h`/`22i-brief-mc-common-N.js` | Brief SPEC / M.C Table 공용 (NO 클릭 팝업, 묶음 선택/이동/추가/삭제) 1/2, 2/2 |
 | `23-sidebar-tabs.js` | 사이드바 접기/펴기 + 탭 전환 |
 | `24-calendar-tab.js` | Calendar 탭 — 간트차트 업무를 월간 캘린더로 표시 |
-| `25-ai-learning.js` | AI 학습 시스템. Phase 3(학습 로그 저장) + **Phase 4 재시도 엔진**: `_alTriggerRetry()` → 저신뢰도(`_aiConfidence≠'상'`) 행 탐지 → 우측 배너 표시 → `_alRunRetry()` → `callAiBackend` 재분석 → 개선 시 `recalculateSchedules()` |
-| `26-topic-profile.js` | **Phase 6 토픽 프로파일**: 간트 업무명 → Gemini AI → `{keywords,topics,patterns,summary}` → `localStorage('gantt_topic_profile_v1')` 저장. `_generateTopicProfile()` / `_getTopicProfile()` / `_topicProfileSnippet()` / `_clearTopicProfile()` / `_refreshTopicProfileBadge()`. `getSystemPrompt`를 래핑해 **메일 본문 직전**에 스니펫 주입. `_currentKey()`는 `fileId` 우선(fileName 공유 충돌 방지). |
+| `25-ai-learning.js` | AI 학습 시스템. Phase 3(학습 로그 저장) + **Phase 4 재시도 엔진**: `_alTriggerRetry()` → 저신뢰도(`_aiConfidence≠'상'`) 행 탐지 → `getAiRetryAutoEnabled()`가 켜져 있으면(기본값) 배너 없이 바로 `_alRunRetry()`로 자동 재분석 → 개선 시 `recalculateSchedules()`; 꺼져 있으면 조용히 대기시켰다가 ⚙️AI 분석 설정의 "🔄 저신뢰도 자동 재분석" 그룹에서 `_alRunPendingRetryNow()`로 일괄 처리. |
+| `26-topic-profile.js` | **Phase 6 토픽 프로파일**: 간트 업무명 → Gemini AI → `{keywords,topics,patterns,summary}` → `localStorage('gantt_topic_profile_v1')` 저장. `_generateTopicProfile(ctx?)`(ctx 생략 시 지금 열려있는 프로젝트 기준, `{key,rows,colIdx,projectMeta,silent}` 지정 시 임의 프로젝트용) / `_getTopicProfile()` / `_topicProfileSnippet()` / `_clearTopicProfile()` / `_refreshTopicProfileBadge()`. `getSystemPrompt`를 래핑해 **메일 본문 직전**에 스니펫 주입. `_currentKey()`는 `fileId` 우선(fileName 공유 충돌 방지). `_tpMaybeAutoRegen(fileId,rows,colIdx,projectMeta)`가 fileId별 독립 쿨다운(`gantt_topic_regen_state_v1`)으로 "지금 열려있지 않은" 프로젝트도 자동 재생성 — 아래 헤드리스 경로 절 참고. |
 | `27-topic-contamination.js` | **Phase 8 토픽 오염 감지·AI 자가진단**: Phase 3 학습 로그(`_alGetEntries`) 재사용 → 30일 가중 오염 지수 계산 → 4단계 레벨(ok/warn/caution/critical) → 메일 분석기 배지·토스트 알람. `_writeLearningEntry` 래핑: 오매칭 기록 후 300ms 자동 체크. `_tcRunDiagnosis()` → Gemini AI에 오염 패턴 전송 → 진단 모달(제거/추가 키워드 제안) → `_tcApplyFix()` 사용자 승인 시 토픽 갱신 + 진단 이력(`_diagHistory`) 보존. |
 | `26-gantt-search.js` | 간트차트 내 키워드 검색 |
+| `28-new-project-wizard.js` | **새 프로젝트 마법사**: 상단 메뉴 "➕ 새 프로젝트 추가"(`_npwOpen({}, '')`, DV 상태) 또는 미분류 메일 1건에서 AI로 필드(고객사/모델명/PM/키워드 등) 추출 후 pre-fill(`_npwOpen(prefill, 'MP(EC)')`, "메일 분석 임시 프로젝트" 상태) — 단계별 입력 UI + `_npwExtractFromMail(mailRecord)`(단건 AI 추출). "MP(EC)"는 완료여부 3단계 순환(DV→EOL→MP(EC))의 한 상태값으로, EOL과 달리 새 메일 자동매칭에서 계속 후보로 유지됨(`js/22g-name-autocomplete.js`). |
+| `29-new-project-cluster-detect.js` | **Phase 9 신규 프로젝트 군집 감지**: `_msResolveAiProjectMatch`가 "근접 후보조차 없는" 완전 미분류를 반환할 때(27번 파일의 근접 후보 판정과 반대 경우) `_ncdRecordCandidate()`로 업무명 기반 결정론적 키(AI 호출 없음)로 군집화 → Drive `project_index.json`의 `unmatchedClusters`에 팀 공유 누적(30초 디바운스). 군집이 10건 넘으면 그때만 AI에게 "신규 프로젝트로 보이는지" 1회 확인(`_ncdCheckAndSuggest`/`_judgeCluster`) → 메일서버 탭 상단 배너(`#ncd-suggestion-banner`)에 제안. 실제 Drive 프로젝트 생성은 사람이 배너의 [새 프로젝트 만들기]를 눌러 `28-new-project-wizard.js`의 `_npwOpen(prefill,'MP(EC)')`을 직접 완료해야만 이뤄짐 — 이 파일은 절대 스스로 프로젝트를 만들지 않음. |
 
 > `04`, `14`, `15`, `22`는 각각 원래 하나의 거대 파일(최대 11,915줄)이었고, 협업 편의와 토큰 절약을
 > 위해 여러 조각으로 나눈 것입니다. 나머지(05~13, 16~21, 23~26) 번호는 이미 세분화된 단일 파일이라
 > 대부분 추가로 쪼갤 필요가 없습니다.
 
-### Phase 4~7 AI 학습 시스템 요약
+### Phase 1~9 AI 학습 시스템 요약
 | Phase | 내용 | 주요 파일 |
 |---|---|---|
 | 1 | 업무 보관함 (Task Inbox) | `14c-task-inbox.js` |
 | 2/2.5 | 드라이브 배분 원장 | `14d-distribution-ledger.js` |
 | 3 | AI 학습 로그 저장 (`_writeLearningEntry`) | `25-ai-learning.js` |
-| 4 | 재시도 엔진 — 저신뢰도 행 배너·재분석 | `25-ai-learning.js` |
+| 4 | 재시도 엔진 — 저신뢰도 자동/수동 재분석 (`getAiRetryAutoEnabled`) | `25-ai-learning.js` |
 | 5 | 신뢰도 배지 (`_confBadge`) — 세 목록 모두 | `15a`, `15c` |
-| 6 | 토픽 프로파일 생성·주입 | `26-topic-profile.js` |
+| 6 | 토픽 프로파일 생성·주입 (`_tpMaybeAutoRegen`로 헤드리스 프로젝트도 커버) | `26-topic-profile.js` |
 | 7 | 다중 프로젝트 배분 (`gantt_ai_reassign_queue_v1`) | `14a`, `15a`, HTML |
 | 8 | 토픽 오염 감지·AI 자가진단 (`_tcGetScore`, `_tcRunDiagnosis`, `_tcApplyFix`) | `27-topic-contamination.js` |
+| 9 | 완전 미분류 메일 군집 감지 → 신규 프로젝트 생성 제안 (`_ncdRecordCandidate`, `_ncdCheckAndSuggest`) | `29-new-project-cluster-detect.js` |
 
 ### 📧 메일 원문(`mailRaw`) 전달 규칙 — "원문 보기" 버튼이 빠지는 버그 패턴 (2026-09-12)
 
