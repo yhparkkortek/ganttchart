@@ -49,6 +49,11 @@ window._makeDraggable = function(modalId, handleId) {
     document.addEventListener('mousedown', function(e) {
         const handle = document.getElementById(handleId);
         if (!handle || !handle.contains(e.target)) return;
+        // 🐛 [2026-09-13 버그수정] 헤더 안에 슬라이더 등 폼 컨트롤이 들어있는 경우(예: AI 문답 헤더의
+        //    투명도 슬라이더), 여기서 무조건 e.preventDefault()를 걸어버리면 그 컨트롤의 네이티브
+        //    드래그 동작(예: range input을 마우스로 끌어 값 바꾸기)까지 막혀버려 "슬라이더가 안 움직인다"는
+        //    버그가 됐다. 폼 컨트롤 위에서 시작된 mousedown은 창 드래그로 가로채지 않고 그대로 흘려보낸다.
+        if (e.target.closest('input, select, textarea')) return;
         const modal = document.getElementById(modalId);
         if (!modal) return;
         startDrag(e.clientX, e.clientY, handle, modal);
@@ -62,6 +67,7 @@ window._makeDraggable = function(modalId, handleId) {
     document.addEventListener('touchstart', function(e) {
         const handle = document.getElementById(handleId);
         if (!handle || !handle.contains(e.target)) return;
+        if (e.target.closest('input, select, textarea')) return; // 위 mousedown과 동일 이유
         const modal = document.getElementById(modalId);
         if (!modal || !e.touches.length) return;
         const t = e.touches[0];

@@ -2490,24 +2490,31 @@
         });
     };
 
-    // 💡 [2026-09-13 신규] AI 문답 창 투명도 조절 — 헤더 슬라이더로 실시간 변경, localStorage에 저장
-    //    기본값은 100%(완전 불투명). 100% 미만이면 frosted-glass(backdrop-filter:blur) 자동 적용.
-    //    투명도는 창 배경색 알파값만 조절하므로 텍스트 가독성에는 영향 없음.
+    // 💡 [2026-09-13 신규→버그수정] AI 문답 창 투명도 조절 — 헤더 슬라이더로 실시간 변경, localStorage에 저장.
+    //    기본값은 100%(완전 불투명).
+    //    🐛 [2026-09-13 버그수정 2] 원래 100% 미만일 때 backdrop-filter:blur(14px)를 같이 걸었는데(frosted
+    //    glass 의도), 지난 세션까지는 투명도 슬라이더 자체가 드래그가 안 되는 버그(19-shared-modal-drag.js
+    //    쪽 별도 수정 완료) 때문에 실사용자가 100% 미만 값을 낼 방법이 없어 이 blur 경로를 아무도 못 타고
+    //    있었다 — 슬라이더 드래그를 고치고 나서야 비로소 "좁은 화면에서 뒤 내용을 살짝 보이게" 켜보면,
+    //    ① 일부 환경에서 blur가 있는 상태로 알파 배경을 합성하는 게 아예 깨져 창 전체가 불투명한 흰색
+    //    그대로 렌더링되고(맨 위 모듈 주석에 남아있던 "일부 환경에서 모달이 아예 안 보이는 렌더링 버그"와
+    //    동일 계열), ② 설령 정상 렌더링되는 환경이어도 14px 블러는 뒤 텍스트를 알아볼 수 없을 만큼
+    //    뭉개버려 "뒤에 뭐가 있는지 보려고" 만든 기능의 목적 자체를 무력화했다. blur를 완전히 제거하고
+    //    순수 알파(rgba) 반투명만 쓰도록 변경 — 블러 없이 알파만 쓰면 렌더링도 안정적이고, 뒤 텍스트도
+    //    (흐릿하지만) 실제로 식별 가능하게 비쳐 보인다.
     window._ganttQaSetBgAlpha = function(val) {  // val: 20~100 정수
         val = Math.max(20, Math.min(100, parseInt(val) || 100));
         const box = document.getElementById('gantt-qa-box');
         const drag = document.getElementById('gantt-qa-drag');
         if (!box) return;
         const a = val / 100;
+        box.style.backdropFilter = '';
+        box.style.webkitBackdropFilter = '';
         if (val >= 100) {
             box.style.background = '#ffffff';
-            box.style.backdropFilter = '';
-            box.style.webkitBackdropFilter = '';
             if (drag) drag.style.background = '#e7f3ff';
         } else {
             box.style.background = 'rgba(255,255,255,' + a + ')';
-            box.style.backdropFilter = 'blur(14px)';
-            box.style.webkitBackdropFilter = 'blur(14px)';
             if (drag) drag.style.background = 'rgba(231,243,255,' + Math.min(1, a + 0.1) + ')';
         }
         const lbl = document.getElementById('gantt-qa-opacity-label');
@@ -2535,10 +2542,14 @@
                 <div id="gantt-qa-drag" style="padding:10px 14px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 <span id="gantt-qa-title">${_qEn ? 'AI Q&A' : 'AI 문답'}</span></span>
                     <div style="display:flex; gap:5px; align-items:center;">
-                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#d8edfb';" style="background:#d8edfb; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🔇</button>
-                        <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#d8edfb';" title="AI 문답 프롬프트 편집" style="background:#d8edfb; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
-                        <!-- 💡 [2026-09-13 신규] 투명도 슬라이더 — 드래그해서 창 배경 투명도 실시간 조절 -->
-                        <div onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:3px; background:rgba(255,255,255,0.5); border-radius:6px; padding:2px 6px; border:1px solid rgba(165,200,240,0.5);" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
+                        <!-- 💡 [2026-09-13 버그수정] 기본 배경을 다른 모달의 헤더 버튼(예: AI 업무 분석 프롬프트
+                             편집창의 🕒 이력 버튼)과 동일한 톤(#e8f4fd, 테두리 없음)으로 맞춰 헤더(#e7f3ff)
+                             위에서 튀지 않게 통일 — 예전엔 #d8edfb로 더 진하게 박혀 있어 다른 모달과 이질적이었음. -->
+                        <button id="gantt-qa-voice-toggle-btn" onclick="event.stopPropagation(); window._ganttQaToggleVoiceOutput()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:13px; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">🔇</button>
+                        <button id="gantt-qa-open-prompt-btn" onclick="event.stopPropagation(); window.openGanttQaPromptModal()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="AI 문답 프롬프트 편집" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 9px; height:26px; white-space:nowrap; transition:background .15s;">📝 프롬프트</button>
+                        <!-- 💡 [2026-09-13 신규] 투명도 슬라이더 — 드래그해서 창 배경 투명도 실시간 조절.
+                             배경도 위 두 버튼과 같은 개념(#e8f4fd, 테두리 없음)으로 통일. -->
+                        <div onclick="event.stopPropagation()" style="display:flex; align-items:center; gap:3px; background:#e8f4fd; border-radius:6px; padding:2px 6px; border:none;" title="${_qEn ? 'Window opacity' : '창 투명도 조절'}">
                             <span style="font-size:11px; color:#5585a8; user-select:none;">🪟</span>
                             <input type="range" id="gantt-qa-opacity-slider" min="20" max="100" value="100" step="5"
                                    oninput="window._ganttQaSetBgAlpha(this.value)"
@@ -2770,7 +2781,10 @@
                 <div id="gantt-qa-prompt-drag" style="padding:13px 18px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>📝 <span id="gantt-qa-prompt-title">${_en ? 'AI Q&A — Edit Prompt' : 'AI 문답 — 프롬프트 편집'}</span></span>
                     <div style="display:flex; gap:6px; align-items:center;">
-                        <button id="gantt-qa-history-btn" onclick="event.stopPropagation(); window.showQaPromptLogs()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:1px solid #a5c8f0; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s, border-color .15s;">🕒 ${_en ? 'History' : '이력'}</button>
+                        <!-- 🐛 [2026-09-13 버그수정] 다른 프롬프트 편집창(예: AI 업무 분석 — 프롬프트 편집의
+                             🕒 이력 버튼, js/14a-ai-mail-analysis-1.js)과 달리 테두리(border)가 남아있어
+                             이질적으로 보였다 — border 제거 + 배경/호버 개념 통일(#e8f4fd → hover #cfe6fa, 테두리 없음). -->
+                        <button id="gantt-qa-history-btn" onclick="event.stopPropagation(); window.showQaPromptLogs()" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';" title="지금까지의 변경 이력 보기 · 이전 버전으로 복원" style="background:#e8f4fd; border:none; border-radius:6px; color:#1a4f7a; font-size:11px; font-weight:bold; cursor:pointer; padding:0 10px; height:28px; white-space:nowrap; transition:background .15s;">🕒 ${_en ? 'History' : '이력'}</button>
                         <button onclick="document.getElementById('gantt-qa-prompt-modal').style.display='none'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:28px; height:28px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>

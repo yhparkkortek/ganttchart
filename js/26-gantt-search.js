@@ -23,8 +23,20 @@
 
     // ── 셀 키보드 포커스 ──────────────────────────────────────────────────────
     var _kbCell = null;       // { tr: HTMLElement, tdIdx: number } 현재 포커스 셀
-    var _kbMode = null;       // 'calendar' | 'select' | 'edit' | 'wbs-menu' | null
+    var _kbMode = null;       // 'calendar' | 'select' | 'edit' | 'wbs-menu' | 'confirm-delete' | 'confirm-level0' | null
     var _cellNavSetup = false; // 전역 핸들러 중복 등록 방지
+    // 💡 [2026-09-14 신규] "마우스 모드"(_kbCell===null)에서 Enter로 키보드 셀 탐색으로 복귀할 때 씀.
+    //    _lastKbCellInfo는 클릭 등으로 포커스가 풀려도(=_clearKbFocus) 절대 지우지 않는 "마지막
+    //    기억" — 있으면 그 자리부터, 없으면 지금 마우스가 올라가 있는 셀(_hoverTd)부터 시작한다.
+    var _lastKbCellInfo = null; // { rowIndex: number, tdIdx: number }
+    var _hoverTd = null;        // 현재 마우스가 올라가 있는 표 안의 <td>
+    // 💡 [2026-09-14 신규] wbs-menu 조작 중 뜰 수 있는 "예/아니오" 확인 모달들 — _kbMode 값 하나당
+    //    한 줄. 새 확인 모달을 추가하려면 그 모달을 여는 쪽에서 window._ganttSetKbMode(그 키)를
+    //    부르고 여기 항목만 추가하면 아래 공통 핸들러가 그대로 처리한다.
+    var _CONFIRM_MODALS = {
+        'confirm-delete': { modalId: 'confirm-delete-modal', okId: 'confirm-delete-ok', cancelId: 'confirm-delete-cancel' },
+        'confirm-level0': { modalId: 'confirm-level0-modal', okId: 'confirm-level0-ok', cancelId: 'confirm-level0-cancel' }
+    };
 
     // ─── 검색바 삽입 (테이블 위 분리 렌더링 — 기본 숨김, AI검색 버튼으로 토글) ──
 
@@ -773,6 +785,95 @@
         // CSS 변수로 행 왼쪽 인디케이터 색도 동기화
         tr.style.setProperty('--gantt-kb-row-color', color);
         td.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        // 💡 [2026-09-14 신규] 나중에 포커스가 풀려도(마우스 클릭 등) "마지막으로 키보드 탐색하던
+        //    자리"를 기억해둔다 — _clearKbFocus는 이 값을 절대 건드리지 않음(아래 참고).
+        var _rowIdxAttr = parseInt(tr.getAttribute('data-row-index'), 10);
+        if (!isNaN(_rowIdxAttr)) _lastKbCellInfo = { rowIndex: _rowIdxAttr, tdIdx: tdIdx };
+    }
+
+    /**
+     * 💡 [2026-09-13 버그수정, 2026-09-14 재수정] 날짜 확정(_calConfirm)이나 텍스트 편집 저장
+     * (blurCell)처럼 셀 액션이 recalculateSchedules()/renderTable()로 tbody 전체를 다시 그리면,
+     * 그 순간 _kbCell.tr은 이미 DOM에서 떨어져나간(stale) 옛 <tr>을 계속 가리키게 된다 — 이후
+     * 방향키를 누르면 rows.indexOf(stale tr)가 -1이 되어 "맨 위 행으로 튐"으로 보이는 버그가 됐다.
+     *
+     * [2026-09-14] 처음 수정에서는 액션 직후 "바로" 새 tr을 찾았는데, recalculateSchedules()는
+     * 내부에서 setTimeout(...,10)으로 실제 renderTable() 호출을 한 틱 미룬다(날짜/기간/WBS 등
+     * "일정에 영향 주는" 컬럼을 고쳤을 때 타는 경로 — 달력으로 시작/완료일을 바꾸는 경우가 대표적).
+     * 그래서 "바로" 찾으면 아직 안 바뀐 옛(곧 사라질) <tr>을 찾아 거기 포커스를 되씌우고 마는데,
+     * 10ms 뒤 진짜 재렌더가 일어나면 그 tr째 통째로 교체되면서 방금 되살린 포커스도 같이
+     * 사라져버렸다(그 뒤로 아무도 다시 잡아주지 않아 다음 방향키에서 "맨 위 행으로 튐"으로 나타남).
+     * 내부 지연(10ms)보다 확실히 긴 지연 뒤에 재탐색하도록 바꿔서, 재렌더가 늦게 오든(달력·기간 등
+     * 일정 관련 컬럼) 이미 끝나 있든(상세내용처럼 동기 렌더인 컬럼) 항상 최종 tr에 포커스가 남는다.
+     */
+    function _reanchorKbFocus(rowIndex, tdIdx) {
+        if (rowIndex === null || rowIndex === undefined || isNaN(rowIndex) || tdIdx === null || tdIdx === undefined) return;
+        setTimeout(function() {
+            var newTr = document.querySelector('tr[data-row-index="' + rowIndex + '"]');
+            if (!newTr) return;
+            // 💡 [2026-09-14 버그수정] 예전엔 여기서 _kbCell을 미리 null로 비웠는데(stale해진 옛
+            //    tr을 clearKbFocus가 건드리지 않게 하려는 의도) — _setKbFocus가 내부에서 부르는
+            //    _clearKbFocus는 이미 DOM에서 떨어져나간 노드에 스타일을 지워도 안전(화면에 아무
+            //    영향 없음)해서 애초에 미리 비울 필요가 없었고, 오히려 방향키를 빠르게 연타해 이
+            //    함수가 겹쳐 여러 번 예약되면 매번 "이전 타이머가 남긴 outline"의 존재 자체를
+            //    _kbCell에서 지워버려 못 찾게 만들었다 — 그 결과 오래된 outline이 지워지지 않고
+            //    새 outline과 함께 동시에 남는 "고스트 테두리 박스"가 됐다. null로 비우지 않고
+            //    _setKbFocus가 항상 "지금의" _kbCell부터 정리하게 두면 이전 것이 무엇이었든
+            //    확실히 하나만 지워지고 하나만 남는다.
+            _setKbFocus(newTr, tdIdx);
+            // 💡 WBS 상하좌우+-(_rapClick)가 키보드로 진입했을 때는 행 전체 하이라이트
+            //    (window.highlightRow, .highlighted-row 테두리 박스)를 쓰지 않고 이 셀 포커스
+            //    박스 하나로만 "지금 위치"를 보여준다 — recalculateSchedules() 완료 후 자동으로
+            //    붙는 window.syncRowHighlight()가 이 시점(내부 10ms보다 늦은 우리 30ms) 이후에나
+            //    실행되므로, 그게 다시 붙여놓은 하이라이트까지 여기서 한 번 더 지워줘야 한다.
+            if (window.clearRowHighlight) window.clearRowHighlight();
+        }, 30); // recalculateSchedules()의 내부 setTimeout(...,10)보다 확실히 뒤에 실행되도록
+    }
+
+    // 💡 [2026-09-14 신규] js/04i-core-app-upload-utils-4.js의 deleteRow() 확인 모달처럼 이 파일
+    // 바깥(다른 <script>)에서 kb 탐색 상태를 다뤄야 하는 경우를 위한 최소 노출 — _kbMode/_kbCell은
+    // 이 IIFE 안에서만 보이는 private 변수라 직접 건드릴 수 없다.
+    window._ganttSetKbMode = function(mode) { _kbMode = mode; };
+    window._ganttReanchorRow = function(rowIndex) {
+        var tdIdx = _kbCell ? _kbCell.tdIdx : null;
+        _reanchorKbFocus(rowIndex, tdIdx);
+    };
+
+    /** Gantt 탭이 지금 실제로 화면에 보이는 중인지 (다른 탭에서 무관한 Enter를 가로채지 않기 위한 가드) */
+    function _isGanttTabActive() {
+        var el = document.getElementById('tab-gantt');
+        return !!(el && el.classList.contains('active'));
+    }
+
+    /**
+     * 💡 [2026-09-14 신규] "마우스 모드"(_kbCell===null)에서 처음 Enter를 눌렀을 때 호출 —
+     * 1순위: 직전에 키보드로 탐색하던 셀(_lastKbCellInfo)이 아직 존재하면 그 자리로 복귀.
+     * 2순위: 그런 기억이 없으면(또는 그 행/칸이 이제 없으면) 지금 마우스가 올라가 있는 셀(_hoverTd)부터.
+     * 이 Enter 입력 자체는 "그 자리로 돌아가기"용으로만 쓰고, 그 셀의 편집/팝업 동작까지 한 번에
+     * 실행하지는 않는다(호출부에서 _kbEnterCell을 잇달아 부르지 않음) — 사용자가 의도치 않게 두
+     * 단계를 한 번에 겪지 않도록.
+     */
+    function _tryResumeKbFocus() {
+        if (_lastKbCellInfo) {
+            var tr = document.querySelector('tr[data-row-index="' + _lastKbCellInfo.rowIndex + '"]');
+            if (tr) {
+                var tds = tr.querySelectorAll('td');
+                var idx = _lastKbCellInfo.tdIdx;
+                if (idx >= 0 && idx < tds.length && !_isSkipCell(tds[idx])) {
+                    _setKbFocus(tr, idx);
+                    return true;
+                }
+            }
+        }
+        if (_hoverTd && document.body.contains(_hoverTd)) {
+            var hTr = _hoverTd.closest('tr[data-row-index]');
+            if (hTr && hTr.closest('#table-body') && !_isSkipCell(_hoverTd)) {
+                var hTds = Array.from(hTr.querySelectorAll('td'));
+                _setKbFocus(hTr, hTds.indexOf(_hoverTd));
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 같은 열에서 위/아래 visible 행으로 이동 */
@@ -799,108 +900,74 @@
     }
 
     // ── 상태 셀(select) 포커스 모드 ───────────────────────────────────────────
-    // ⚠️ native select.focus() 를 쓰면 화살표→onchange→updateStatus()→renderTable() 으로
-    //    select 자체가 사라져 이후 키 조작이 불가능해짐 — 대신 capture-phase 전역 핸들러로 처리
+    // _kbEnterCell 에서 호출 — _ensureCellNavigation 내부로 두면 스코프 밖이라 접근 불가
     function _enterSelectMode(sel) {
         _kbMode = 'select';
-        var savedRowIdx = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : -1;
-        var savedTdIdx  = _kbCell ? _kbCell.tdIdx : -1;
-        var _exited = false;
-
-        // 시각 표시 (focus 없이)
-        sel.style.outline = '2px solid ' + _getFocusColor();
-
-        // 재렌더 후 같은 행/열 위치의 select를 재탐색
-        function _querySel() {
-            var tr = document.querySelector('tr[data-row-index="' + savedRowIdx + '"]');
-            if (!tr) return null;
-            var tds = tr.querySelectorAll('td');
-            return tds[savedTdIdx] ? tds[savedTdIdx].querySelector('select') : null;
-        }
-
-        function _exit() {
-            if (_exited) return;
-            _exited = true;
-            document.removeEventListener('keydown', _onKey, true);
-            var cs = _querySel();
-            if (cs) cs.style.outline = '';
+        // 💡 [2026-09-14 버그수정] 값이 바뀌면 onchange="updateStatus(...)"가 renderTable()을 동기
+        //    호출해 tbody를 통째로 다시 그린다 — 그 순간 이 select가 들어있던 td/tr도 같이 사라져
+        //    _kbCell이 stale해지고, 이후 방향키에서 "1번 행으로 튐" 버그가 됐다(달력/WBS와 동일 원인).
+        //    아직 유효한 지금 행/열 위치를 저장해뒀다가 아래 cleanup()에서 재탐색한다.
+        var _riIdx    = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : null;
+        var _tdIdxSav = _kbCell ? _kbCell.tdIdx : null;
+        sel.focus();
+        // 💡 [2026-09-13 버그수정] focus()만으로는 네이티브 select의 옵션 목록이 실제로 펼쳐지지
+        //    않는다(포커스 후 화살표를 눌러도 목록 없이 값만 조용히 바뀜) — 이 Enter 키다운은 이미
+        //    document 전역 핸들러에서 preventDefault()된 뒤라 브라우저가 "Enter로 펼치기"를 자체
+        //    처리할 기회가 없기 때문. showPicker()로 그 자리에서 직접 펼쳐서, 사용자가 기대하는
+        //    "Enter=드롭다운 펼침, ↑/↓=값 이동" 동작을 재현한다(트랜지언트 사용자 활성화 컨텍스트
+        //    안이라 허용됨). 구형 브라우저 등 showPicker 미지원 환경은 조용히 폴백(포커스만 유지).
+        try { if (sel.showPicker) sel.showPicker(); } catch (e) {}
+        function cleanup() {
+            sel.removeEventListener('keydown', onKey, true);
+            sel.removeEventListener('blur',    onBlur);
             if (_kbMode === 'select') _kbMode = null;
-            // KB 포커스 복원 — re-render 후 새 tr 재탐색
-            setTimeout(function() {
-                var newTr = document.querySelector('tr[data-row-index="' + savedRowIdx + '"]');
-                if (newTr) { _kbCell = null; _setKbFocus(newTr, savedTdIdx); }
-            }, 30);
+            // 💡 renderTable()이 있었든(값 변경) 없었든(변경 없이 취소) 항상 안전하게 같은 행/열의
+            //    (새) 셀로 포커스를 되돌려 "이동 대기" 상태로 복귀 — onKey(Enter/Esc)·onBlur(마우스로
+            //    옵션 클릭 등 다른 방식으로 빠져나간 경우) 두 경로 모두 이 cleanup()을 거치므로 한
+            //    군데서만 처리하면 된다.
+            _reanchorKbFocus(_riIdx, _tdIdxSav);
         }
-
-        function _onKey(e) {
-            if (_kbMode !== 'select') { _exit(); return; }
-            var cs = _querySel();
-            if (!cs) { _exit(); return; } // 행이 사라진 경우
-
-            if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        function onKey(e) {
+            if (e.key === 'Enter' || e.key === 'Escape') {
                 e.preventDefault(); e.stopPropagation();
-                var newIdx = cs.selectedIndex + (e.key === 'ArrowDown' ? 1 : -1);
-                newIdx = Math.max(0, Math.min(cs.options.length - 1, newIdx));
-                if (cs.selectedIndex !== newIdx) {
-                    cs.selectedIndex = newIdx;
-                    cs.dispatchEvent(new Event('change', { bubbles: true })); // → updateStatus()
-                    // re-render 후 새 select에 시각 표시 재적용
-                    setTimeout(function() {
-                        var ns = _querySel();
-                        if (ns) ns.style.outline = '2px solid ' + _getFocusColor();
-                    }, 30);
-                }
-            } else if (e.key === 'Enter' || e.key === 'Escape') {
-                e.preventDefault(); e.stopPropagation();
-                _exit();
+                cleanup(); sel.blur();
             }
         }
-
-        document.addEventListener('keydown', _onKey, true);
+        function onBlur() { cleanup(); }
+        sel.addEventListener('keydown', onKey, true); // capture: native select보다 먼저
+        sel.addEventListener('blur',    onBlur);
     }
 
     // ── 텍스트 편집 모드(contenteditable) 진입 ───────────────────────────────
     // makeEditable 내부 onkeydown(Enter=저장, Shift+Enter=줄바꿈)을 유지하면서
-    // Esc=취소(원본 복원)만 별도 핸들러로 추가.
-    // 저장 후 renderTable()이 호출되어 _kbCell.tr이 stale 해지는 문제를
-    // onBlur에서 data-row-index로 재탐색해 KB 포커스를 복원함.
+    // Esc=취소(원본 복원)만 별도 핸들러로 추가
     function _enterEditMode(td) {
         if (!window.makeEditable) return;
-        var rawAttr     = td.getAttribute('data-raw');
-        var origText    = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
-        var savedRowIdx = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : -1;
-        var savedTdIdx  = _kbCell ? _kbCell.tdIdx : -1;
-        var _exited = false;
-
+        var rawAttr  = td.getAttribute('data-raw');
+        var origText = rawAttr ? decodeURIComponent(rawAttr) : td.innerText.trim();
+        // 💡 [2026-09-13 버그수정] blurCell이 값 변경을 감지하면 renderTable()로 tbody를 통째로
+        //    다시 그려서 이 td/tr을 DOM에서 떼어낸다 — onBlur 시점엔 이미 늦으므로, 아직 유효할 때
+        //    (=편집 시작 시점) 행/열 위치를 미리 저장해뒀다가 편집 종료 후 새 tr에 재적용한다.
+        var _riIdx    = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : null;
+        var _tdIdxSav = _kbCell ? _kbCell.tdIdx : null;
         window.makeEditable(td);
         _kbMode = 'edit';
-
-        function _restore() {
-            if (_exited) return;
-            _exited = true;
-            if (_kbMode === 'edit') _kbMode = null;
-            // 50ms 대기: recalculateSchedules 등 동기 re-render 완료 후 새 tr 탐색
-            setTimeout(function() {
-                if (savedRowIdx < 0) return;
-                var newTr = document.querySelector('tr[data-row-index="' + savedRowIdx + '"]');
-                if (newTr) { _kbCell = null; _setKbFocus(newTr, savedTdIdx); }
-            }, 50);
-        }
 
         function onEsc(e) {
             if (e.key === 'Escape') {
                 e.preventDefault(); e.stopPropagation();
                 td.removeEventListener('keydown', onEsc, true);
-                td.removeEventListener('blur', onBlur);
                 td.innerText = origText; // 원본 복원 → blur 시 "변경 없음"으로 처리
                 td.blur();
-                _restore();
             }
         }
         function onBlur() {
             td.removeEventListener('keydown', onEsc, true);
-            td.removeEventListener('blur', onBlur);
-            _restore(); // Enter 저장 or Esc 후 blur 모두 여기서 KB 포커스 복원
+            td.removeEventListener('blur',    onBlur);
+            if (_kbMode === 'edit') _kbMode = null;
+            // 💡 blurCell이 renderTable()을 호출했다면 이 td는 이미 stale — 같은 행/열의 새 셀을
+            //    다시 찾아 키보드 포커스를 그대로 이어준다(변경 없어 재렌더가 없었어도 멱등하게 안전).
+            _reanchorKbFocus(_riIdx, _tdIdxSav);
         }
         td.addEventListener('keydown', onEsc, true); // capture: makeEditable의 onkeydown보다 먼저
         td.addEventListener('blur',    onBlur);
@@ -936,7 +1003,9 @@
                 if (newTr) {
                     var newTds = Array.from(newTr.querySelectorAll('td'));
                     var noIdx  = newTds.findIndex(function(t) { return t.classList.contains('no-td'); });
-                    _kbCell = null; // 기존 stale 참조 먼저 해제 (clearKbFocus가 stale td를 건드리지 않게)
+                    // 💡 [2026-09-14 버그수정] 여기서 _kbCell을 미리 null로 비우지 않는다 — _setKbFocus
+                    //    내부의 _clearKbFocus가 "지금의" _kbCell(설령 stale해도 안전)부터 정리하게
+                    //    둬야 이전 outline이 확실히 지워진다(아래 _reanchorKbFocus의 같은 수정과 동일 이유).
                     if (noIdx !== -1) _setKbFocus(newTr, noIdx);
                 }
             }
@@ -951,19 +1020,35 @@
             return;
         }
 
-        // 2. WBS 업무명 → 행 액션 팝업 → WBS 메뉴 모드
-        // ⚠️ select 체크(case 3)보다 먼저 해야 함 — WBS 셀 안에 담당자 <select>가 있을 경우
-        //    case 3(select)이 먼저 실행되어 WBS 팝업 대신 담당자 select를 잡아버리는 버그 방지
+        // 2. 상태 셀: select 포커스 → select 모드
+        //    💡 [2026-09-13 버그수정] WBS 셀(.wbs-cell) 안에도 "담당구분" select(.wbs-discipline-badge)가
+        //    같이 들어있어서, td.querySelector('select')로만 판단하면 WBS 행에서 Enter를 눌렀을 때
+        //    이 조건이 3번(onRowNoClick, 상하좌우+- 팝업)보다 먼저 걸려 담당구분 드롭다운으로 잘못
+        //    빠졌었다 — status-td로 한정해서 원래 의도한 상태 셀에서만 select 모드로 진입하게 한다.
+        if (td.classList.contains('status-td')) {
+            var sel = td.querySelector('select');
+            if (sel) { _enterSelectMode(sel); return; }
+        }
+
+        // 3. WBS 업무명 → 행 액션 팝업 → WBS 메뉴 모드
         if (onclickAttr.includes('onRowNoClick')) {
             if (window.onRowNoClick)
                 window.onRowNoClick(td, rowIdx, { target: td, shiftKey: false, ctrlKey: false, detail: 1 });
+            // 💡 [2026-09-14 신규] 키보드로 들어왔을 때는 상하좌우+- 버튼 팝업을 안 보이게 한다 —
+            //    버튼은 마우스 클릭용 UI라 키보드 조작에는 필요 없고(_rapClick이 내부적으로만
+            //    클릭을 흉내내 그대로 계속 씀), 대신 셀 포커스 박스(_reanchorKbFocus, 아래
+            //    _rapClick 참고)로 "지금 이동 중인 행"을 보여준다. 마우스로 열 때(toggleRowActions)는
+            //    항상 visibility를 되돌려놓으므로 서로 간섭하지 않는다.
+            var rapPopupEl = document.getElementById('row-action-popup');
+            if (rapPopupEl) rapPopupEl.style.visibility = 'hidden';
+            // 💡 [2026-09-14 신규] onRowNoClick 안에서 window.highlightRow()로 행 전체에 테두리+배경
+            //    강조(.highlighted-row, 마우스용 UI)가 걸리는데, 키보드 흐름에선 그 대신 셀 포커스
+            //    박스만 보이길 원해서 곧바로 지운다(이후 _rapClick/종료 시의 _reanchorKbFocus도 매번
+            //    같이 지워서 재렌더 뒤에 자동으로 다시 붙는 것까지 계속 제거).
+            if (window.clearRowHighlight) window.clearRowHighlight();
             _kbMode = 'wbs-menu';
             return;
         }
-
-        // 3. 상태 셀: select 포커스 → select 모드
-        var sel = td.querySelector('select');
-        if (sel) { _enterSelectMode(sel); return; }
 
         // 4. 상세내용 — Enter: 펼치기/접기 / Shift+Enter: 텍스트 편집 모드
         if (onclickAttr.includes('toggleDetailExpand')) {
@@ -998,11 +1083,26 @@
                     if (td.querySelector('.date-clickable')) _kbMode = 'calendar';
                     else if (_kbMode === 'calendar') _kbMode = null;
                 }
-            } else if (!e.target.closest('#table-body')) {
+            } else if (!e.target.closest('#table-body') && !e.target.closest('#row-action-popup') && !e.target.closest('#calendar-popup')) {
+                // 💡 [2026-09-14 버그수정] WBS 상하좌우+- 팝업(#row-action-popup)이나 달력 팝업
+                //    (#calendar-popup)은 둘 다 #table-body 밖(document.body)에 별도로 떠있는
+                //    요소라서, 그 안을 클릭하면(_rapClick의 b.click()처럼 키보드로 흉내낸 클릭이든,
+                //    실제 마우스로 달력 날짜를 클릭하든) 여기 걸려 매번 kb 포커스/모드가 통째로
+                //    초기화됐다 — WBS 팝업은 방향키 한 번만 먹고 그 다음부터 "그냥 클릭"으로 오인되어
+                //    셀 조작이 멈췄고, 달력은 키보드 탐색 도중 날짜를 마우스로 찍으면 포커스가 사라졌다.
+                //    두 팝업 안 클릭은 이 초기화에서 제외해서 각 모드가 계속 유지되게 한다.
                 _clearKbFocus();
                 if (_kbMode !== 'edit') _kbMode = null;
             }
         }, true); // ← capture phase
+
+        // 💡 [2026-09-14 신규] 지금 마우스가 표 안 어느 <td> 위에 있는지 계속 기억해둔다 — 아직 한 번도
+        //    클릭/키보드로 셀을 선택한 적 없는 상태에서 Enter를 누르면 이 위치부터 키보드 탐색을
+        //    시작하기 위함(아래 _tryResumeKbFocus 참고). mouseover는 버블링되므로 document 하나로 충분.
+        document.addEventListener('mouseover', function(e) {
+            var td = e.target.closest('td');
+            if (td && td.closest('#table-body')) _hoverTd = td;
+        });
 
         // ── 달력 키보드 헬퍼 ──────────────────────────────────────────────
         function _calKeyNav(dayDelta) {
@@ -1014,9 +1114,16 @@
         }
         function _calConfirm() {
             var d = new Date(window.currentCalendarTs || Date.now());
+            // 💡 [2026-09-13 버그수정] selectDateFromCalendar → recalculateSchedules() →
+            //    renderTable()이 tbody를 통째로 다시 그려서 _kbCell.tr을 stale하게 만들기 전에,
+            //    지금 포커스된 행/열을 먼저 저장해둔다 — 그래야 날짜 확정 후에도 "맨 위 행으로 튐"
+            //    없이 같은 날짜 셀에 포커스가 그대로 남는다.
+            var _riIdx    = _kbCell ? parseInt(_kbCell.tr.getAttribute('data-row-index'), 10) : null;
+            var _tdIdxSav = _kbCell ? _kbCell.tdIdx : null;
             _kbMode = null;
             if (window.selectDateFromCalendar)
                 window.selectDateFromCalendar(d.getFullYear(), d.getMonth(), d.getDate());
+            _reanchorKbFocus(_riIdx, _tdIdxSav);
         }
         function _calClose() {
             var p = document.getElementById('calendar-popup');
@@ -1046,6 +1153,36 @@
                 }
             }
 
+            // ── 확인(예/아니오) 모달 공통 키보드 지원 ──────────────────────
+            // ←/→ = 확인·취소 버튼 사이 포커스 전환, Enter = 포커스된 버튼 실행(기본값: 취소 — 안전),
+            // Esc = 취소. window._ganttSetKbMode('confirm-delete' | 'confirm-level0')를 각 모달을
+            // 여는 쪽(js/04i의 deleteRow()/changeRowLevel())이 호출 — 새 확인 모달을 wbs-menu 흐름에
+            // 추가할 땐 이 맵에 한 줄만 추가하면 이 공통 핸들러가 그대로 재사용된다.
+            if (_CONFIRM_MODALS[_kbMode]) {
+                var _cfg = _CONFIRM_MODALS[_kbMode];
+                var cfModal = document.getElementById(_cfg.modalId);
+                if (!cfModal || cfModal.style.display !== 'flex') {
+                    _kbMode = null; // 이미 닫혔으면(다른 경로로) 모드만 리셋
+                } else {
+                    var cfOk = document.getElementById(_cfg.okId);
+                    var cfCancel = document.getElementById(_cfg.cancelId);
+                    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                        e.preventDefault();
+                        if (document.activeElement === cfOk) { if (cfCancel) cfCancel.focus(); }
+                        else if (cfOk) cfOk.focus();
+                        return;
+                    }
+                    if (e.key === 'Escape') { e.preventDefault(); if (cfCancel) cfCancel.click(); return; }
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (document.activeElement === cfOk) cfOk.click();
+                        else if (cfCancel) cfCancel.click(); // 기본값: 취소(포커스가 없거나 취소에 있을 때)
+                        return;
+                    }
+                    return; // 그 외 키 차단 — 뒤쪽 셀 탐색으로 새지 않게
+                }
+            }
+
             // ── WBS 메뉴 모드: 행 조작 버튼 키 매핑 ─────────────────────
             // ↑/↓ = 위/아래 이동, ←/→ = WBS 레벨 변경, +/= = 행 추가, - = 행 삭제
             // Enter/Esc = 팝업 닫고 셀 네비게이션으로 복귀
@@ -1054,18 +1191,39 @@
                 if (!rapPopup || rapPopup.style.display !== 'block') {
                     _kbMode = null;
                 } else {
-                    function _rapClick(id) { var b = document.getElementById(id); if (b) b.click(); }
+                    function _rapClick(id) {
+                        var b = document.getElementById(id); if (b) b.click();
+                        // 💡 [2026-09-14 신규] rap-* 버튼 클릭 핸들러(js/04i)가 매번 window.highlightRow()로
+                        //    행 전체 테두리+배경 강조를 다시 붙이는데(마우스 UI용), 키보드 흐름에선 그
+                        //    대신 셀 포커스 박스만 보이길 원하므로 곧바로(다음 페인트 전에) 지워 깜빡임
+                        //    없이 숨긴다.
+                        if (window.clearRowHighlight) window.clearRowHighlight();
+                        // 💡 팝업이 숨겨져 있는 동안(키보드로 진입한 경우)에는 이 셀
+                        //    포커스 박스가 "지금 어느 행이 움직이고 있는지" 보여주는 유일한 표시라서,
+                        //    이동/레벨변경/추가·삭제할 때마다 popup.dataset.rowIndex가 가리키는 현재
+                        //    행으로 계속 따라가게 한다(재렌더가 늦게 오는 경우까지 _reanchorKbFocus가 처리).
+                        var _rapRi = parseInt(rapPopup.dataset.rowIndex, 10);
+                        var _rapTi = _kbCell ? _kbCell.tdIdx : null;
+                        _reanchorKbFocus(_rapRi, _rapTi);
+                    }
                     if (e.key === 'ArrowUp')             { e.preventDefault(); _rapClick('rap-up');    return; }
                     if (e.key === 'ArrowDown')           { e.preventDefault(); _rapClick('rap-dn');    return; }
                     if (e.key === 'ArrowLeft')           { e.preventDefault(); _rapClick('rap-left');  return; }
                     if (e.key === 'ArrowRight')          { e.preventDefault(); _rapClick('rap-right'); return; }
                     if (e.key === '+' || e.key === '=')  { e.preventDefault(); _rapClick('rap-add');   return; }
-                    if (e.key === '-')                   { e.preventDefault(); _rapClick('rap-del');   return; }
+                    if (e.key === '-' || e.key === 'Delete') { e.preventDefault(); _rapClick('rap-del'); return; }
                     if (e.key === 'Enter' || e.key === 'Escape') {
                         e.preventDefault();
+                        // 💡 [2026-09-14 신규] 상하좌우+-로 이동/레벨변경된 "현재" 행(rap-* 버튼들이
+                        //    누를 때마다 popup.dataset.rowIndex를 갱신해둠)의 WBS 셀로 셀 키보드
+                        //    포커스를 되돌려서, 팝업만 닫고 끝나는 게 아니라 곧바로 다음 방향키로
+                        //    이어서 셀 이동을 할 수 있는 "대기" 상태로 자연스럽게 복귀시킨다.
+                        var _wbsRowIdx = parseInt(rapPopup.dataset.rowIndex, 10);
+                        var _wbsTdIdx  = _kbCell ? _kbCell.tdIdx : null;
                         rapPopup.style.display = 'none';
                         if (window.clearRowHighlight) window.clearRowHighlight();
                         _kbMode = null;
+                        _reanchorKbFocus(_wbsRowIdx, _wbsTdIdx);
                         return;
                     }
                     return; // 그 외 키 차단
@@ -1099,9 +1257,35 @@
             // Enter ──────────────────────────────────────────────────────────
             if (e.key === 'Enter') {
                 if (_isEditingAnywhere()) return; // edit/select 모드 — per-element 핸들러 처리
-                if (!_kbCell) return;
+                if (!_kbCell) {
+                    // 💡 [2026-09-14 신규] "마우스 모드"(클릭으로 셀을 짚은 적이 아직 없거나, 어떤 이유로
+                    //    포커스가 풀린 상태)에서 처음 Enter — 이 Enter는 그 셀의 편집/팝업 동작까지
+                    //    실행하지 않고, 키보드 탐색 상태로 "전환"만 한다(다음 Enter부터 정상 동작).
+                    //    Gantt 탭이 실제로 보이는 중일 때만 가로챈다 — 다른 탭에서 무관한 Enter까지
+                    //    가로채 표(숨겨진 상태)로 포커스를 옮겨버리는 걸 막기 위함.
+                    if (_isGanttTabActive() && _tryResumeKbFocus()) e.preventDefault();
+                    return;
+                }
                 e.preventDefault();
                 _kbEnterCell(e.shiftKey); // shiftKey: 상세내용 셀 Shift+Enter = 편집 모드
+            }
+
+            // Space ──────────────────────────────────────────────────────────
+            // 💡 [2026-09-14 신규] 소요일(period-td) 셀 — Enter는 숫자 직접수정(_kbEnterCell 5번,
+            //    기존 그대로), Space는 그 옆의 🔒/🔓 자동↔고정 아이콘(window.wrToggleScheduleLock)을
+            //    누른 것과 동일하게 토글. wrToggleScheduleLock → recalculateSchedules()(비동기 10ms
+            //    재렌더)라서 달력/WBS와 같은 이유로 _reanchorKbFocus로 같은 셀에 포커스를 유지한다.
+            if (e.key === ' ') {
+                if (_isEditingAnywhere()) return; // 텍스트 편집 중엔 스페이스를 문자 입력으로 그대로 사용
+                if (!_kbCell) return;
+                var spaceTd = _kbCell.tr.querySelectorAll('td')[_kbCell.tdIdx];
+                if (spaceTd && spaceTd.classList.contains('period-td')) {
+                    e.preventDefault();
+                    var spaceRowIdx = parseInt(_kbCell.tr.getAttribute('data-row-index'), 10);
+                    var spaceTdIdx  = _kbCell.tdIdx;
+                    if (window.wrToggleScheduleLock) window.wrToggleScheduleLock(spaceRowIdx, null);
+                    _reanchorKbFocus(spaceRowIdx, spaceTdIdx);
+                }
             }
 
             // Esc ─────────────────────────────────────────────────────────────
