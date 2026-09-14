@@ -1499,6 +1499,9 @@
                 window._renderGanttQaMessages();
             }
             sapText = await window._aiFetchSapContext();
+            // 💡 [2026-09-14] 실패 진단용 — "SAP 조회를 눌렀는데 AI가 전혀 모르는 척한다"는 제보가
+            //    있어, 최소한 콘솔에서라도 실제로 조회가 됐는지/뭐가 왔는지 바로 확인할 수 있게 남긴다.
+            console.info('[AI 문답] SAP 조회 결과:', sapText ? sapText.slice(0, 300) : '(null — 조회 자체가 실행 안 됨)');
             if (window._ganttQaHistory[pendingIdx2]) {
                 window._ganttQaHistory[pendingIdx2].text = '⏳ 답변 생성 중...';
                 window._renderGanttQaMessages();
