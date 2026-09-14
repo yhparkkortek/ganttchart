@@ -33,7 +33,7 @@
 #    건너뛴다(밀린 발송을 몰아서 보내지 않음).
 # ══════════════════════════════════════════════════════════════
 
-import os, json, re, poplib, email, smtplib, hashlib, base64, html, threading, time, uuid
+import os, json, re, poplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess
 from email.header     import decode_header
 from email.utils      import parsedate_to_datetime
 from email.mime.text  import MIMEText
@@ -59,17 +59,9 @@ except ImportError:
     GOOGLE_AUTH_OK = False
     print("[경고] google-auth 미설치 → pip install google-auth (업무별 예약 알람의 실시간 조회 기능에 필요)")
 
-# 💡 [2026-09-14 신규] SAP GUI Scripting 연동 — pywin32는 Windows 전용이라 그 외 환경에선
-#    아예 설치가 안 될 수 있으므로(이 백엔드는 항상 각 팀원 PC의 Windows에서 로컬 실행되지만,
-#    혹시 모를 환경 대비 다른 optional import들과 동일하게 방어적으로 처리) 항상 try/except로 감싼다.
-try:
-    import win32com.client
-    SAP_COM_OK = True
-except ImportError:
-    SAP_COM_OK = False
-    print("[경고] pywin32 미설치 → pip install pywin32 (AI 문답의 SAP 조회 기능에 필요)")
-
 app = Flask(__name__)
+# 💡 [2026-09-14] SAP GUI Scripting(win32com)은 이 파일(64비트 Python)에서 직접 import하지 않는다
+#    — 아래 /sap-fetch 라우트 바로 위 주석 참고. 32비트 전용 코드/의존성은 전부 sap_bridge_32.py 쪽.
 
 # ── CORS: 허용 출처 제한 (보안 강화) ─────────────────────────
 ALLOWED_ORIGINS = [
@@ -1494,175 +1486,58 @@ def all_decrypt():
 
 
 # ── SAP GUI Scripting 연동 (AI 문답 "SAP" 조회) ──────────────────
-#    [2026-09-14 신규] AI 문답(js/04g~04h)에서 질문에 "SAP"가 언급되면 프런트가 이 엔드포인트를
-#    호출한다. 비밀번호를 전혀 저장/입력하지 않는다 — 사용자가 평소처럼 SAP GUI에 직접 로그인해둔
-#    "이미 열려 있는 세션"에 SAP GUI Scripting(COM)으로 올라타서 지금 보이는 화면을 읽기만 한다.
-#    특정 트랜잭션(CO24/ME2M 등)을 가정한 전용 파서를 만들지 않고, 화면에 ALV 그리드가 있으면
-#    그리드를, 없으면 눈에 보이는 라벨/입력필드 텍스트를 최대한 있는 그대로 덤프해서 그대로
-#    AI(callAiBackend)에게 넘겨 구조화를 맡긴다 — 화면 종류가 바뀔 때마다 백엔드를 다시 손볼
-#    필요가 없도록 하기 위한 의도적 설계.
-def _get_sap_session():
-    """이미 로그인돼 열려 있는 SAP GUI의 첫 번째 연결/세션을 가져온다.
-    💡 [2026-09-14] 단계별로 실패 원인을 구분해서 알려준다 — "GetObject 자체가 실패"(스크립팅
-    엔진을 못 찾음, 대부분 옵션이 꺼져 있거나 SAP GUI가 아예 안 켜진 경우)와 "엔진은 찾았지만
-    로그인된 연결/세션이 없음"은 원인과 해결책이 완전히 다른데, 이걸 뭉뚱그려 "SAP 연결 실패"라고만
-    하면 사용자가 뭘 확인해야 할지 알 수 없다는 실사용 제보가 있었다."""
-    try:
-        sap_gui_auto = win32com.client.GetObject("SAPGUI")
-    except Exception as e:
-        # 💡 [2026-09-14] GetObject("SAPGUI")가 실패할 때 가장 흔한 원인이 COM 오류 코드
-        #    -2147221020(MK_E_SYNTAX, "잘못된 구문입니다")인데 — 이건 이름 그대로의 구문 오류가
-        #    전혀 아니라 "SAPGUI라는 이름의 ROT(Running Object Table) 항목 자체가 없다"는 뜻,
-        #    즉 SAP GUI Scripting이 아직 실제로 켜져 있지 않다는 신호다(실사용 제보로 확인됨).
-        #    이 특정 코드를 알아보고 바로 정확한 해결 절차를 안내한다.
-        hresult = None
-        try:
-            hresult = e.args[0] if e.args else None
-        except Exception:
-            pass
-        if hresult == -2147221020:
-            raise RuntimeError('SAP GUI Scripting이 아직 켜져 있지 않습니다(COM 오류 -2147221020/MK_E_SYNTAX — "SAPGUI" 항목을 찾을 수 없음). 해결 절차: SAP GUI 세션 안에서 ① Alt+F12(또는 창 왼쪽 위 아이콘) → 옵션(Options) → Accessibility & Scripting → Scripting → "스크립트 사용(Enable Scripting)" 체크 → OK ② 지금 열려 있는 SAP 연결/세션을 전부 닫고 다시 로그인(체크만 하고 기존 세션을 그대로 쓰면 적용 안 됨). 그래도 안 되면 SAP 서버 쪽에서 스크립팅 자체를 막아둔 것일 수 있어(파라미터 sapgui/user_scripting) 사내 SAP 담당자(Basis) 확인이 필요합니다.')
-        raise RuntimeError('SAP GUI Scripting 엔진을 찾지 못했습니다. 확인해주세요: ① SAP GUI가 켜져 있는지 ② SAP GUI 세션 안에서 Alt+F12 → 옵션(Options) → Accessibility & Scripting → Scripting에서 "스크립트 사용(Enable scripting)"이 체크돼 있는지(체크 후 세션을 다시 열어야 적용됨) ③ kortek_backend.py를 SAP GUI를 켠 것과 같은 Windows 로그인 세션에서 실행 중인지(관리자 권한으로 둘 중 하나만 실행하면 서로 못 찾을 수 있음). (원본 오류: ' + str(e) + ')')
-    application = sap_gui_auto.GetScriptingEngine
-    if application.Children.Count == 0:
-        raise RuntimeError('SAP GUI Scripting 엔진 연결에는 성공했지만, 열려 있는 SAP 연결(접속)이 없습니다 — SAP에 로그인해주세요.')
-    connection = application.Children(0)
-    if connection.Children.Count == 0:
-        raise RuntimeError('SAP 연결은 있지만 열려 있는 세션(화면)이 없습니다.')
-    return connection.Children(0)
-
-
-def _sap_find_grid(container, depth=0):
-    """창 트리를 재귀 탐색해 첫 번째 ALV 그리드(GuiShell, SubType=GridView)를 찾는다.
-    SAP 조회/리스트 화면 대부분이 이 그리드로 결과를 보여준다."""
-    if depth > 12:
-        return None
-    try:
-        children = container.Children
-    except Exception:
-        return None
-    if children is None:
-        return None
-    for i in range(children.Count):
-        child = children.Item(i)
-        try:
-            if child.Type == 'GuiShell' and child.SubType == 'GridView':
-                return child
-        except Exception:
-            pass
-        found = _sap_find_grid(child, depth + 1)
-        if found is not None:
-            return found
-    return None
-
-
-def _sap_dump_grid(shell):
-    """ALV 그리드의 보이는 열/행을 탭 구분 텍스트로 변환. 응답 크기 보호를 위해 최대 500행."""
-    try:
-        col_ids = list(shell.ColumnOrder)
-    except Exception:
-        col_ids = []
-    if not col_ids:
-        return None
-    titles = []
-    for cid in col_ids:
-        try:
-            titles.append(shell.GetColumnTitle(cid) or cid)
-        except Exception:
-            titles.append(cid)
-    total_rows = shell.RowCount
-    row_count  = min(total_rows, 500)
-    lines = ['\t'.join(titles)]
-    for r in range(row_count):
-        cells = []
-        for cid in col_ids:
-            try:
-                cells.append(str(shell.GetCellValue(r, cid)))
-            except Exception:
-                cells.append('')
-        lines.append('\t'.join(cells))
-    if total_rows > row_count:
-        lines.append(f'... (총 {total_rows}행 중 {row_count}행만 표시)')
-    return '\n'.join(lines)
-
-
-def _sap_dump_fields(container, depth=0, max_depth=10):
-    """그리드가 없는 화면(선택화면/상세화면 등)을 위한 대체 경로 — 라벨/입력필드 텍스트를
-    보이는 순서대로 모아 평문으로 만든다. 특정 화면 전용 로직 없이 항상 동작해야 하므로
-    타입을 최대한 넓게 잡는다."""
-    lines = []
-    if depth > max_depth:
-        return lines
-    try:
-        children = container.Children
-    except Exception:
-        return lines
-    if children is None:
-        return lines
-    for i in range(children.Count):
-        child = children.Item(i)
-        try:
-            ctype = child.Type
-        except Exception:
-            continue
-        if ctype in ('GuiLabel', 'GuiTextField', 'GuiCTextField', 'GuiComboBox', 'GuiCheckBox', 'GuiRadioButton'):
-            try:
-                text = (child.Text or '').strip()
-                if text:
-                    lines.append(text)
-            except Exception:
-                pass
-        lines.extend(_sap_dump_fields(child, depth + 1, max_depth))
-    return lines
+#    [2026-09-14 신규, 같은 날 32비트 브릿지로 재설계] AI 문답(js/04g~04h)에서 질문에 "SAP"가
+#    언급되면 프런트가 이 엔드포인트를 호출한다. 비밀번호를 전혀 저장/입력하지 않는다 —
+#    사용자가 평소처럼 SAP GUI에 직접 로그인해둔 "이미 열려 있는 세션"에 SAP GUI
+#    Scripting(COM)으로 올라타서 지금 보이는 화면을 읽기만 한다.
+#
+#    ⚠️ 실제 COM 작업은 이 파일(64비트 Python)이 직접 하지 않는다 — sap_bridge_32.py를
+#    32비트 Python 서브프로세스로 띄워서 시킨다. 이유(실사용 진단으로 확정): SAP GUI
+#    Scripting의 COM 컴포넌트가 32비트로만 등록돼 있어서(레지스트리
+#    HKLM\SOFTWARE\WOW6432Node\SAP\SAPGUI Front\...\Security 에만 UserScripting 값이 있고
+#    64비트 레지스트리 뷰에는 없음), 이 백엔드처럼 64비트 Python에서 직접
+#    win32com.client.GetObject("SAPGUI")를 부르면 항상 COM 오류 -2147221020(MK_E_SYNTAX)로
+#    실패한다 — SAP GUI가 켜져 있고 로그인돼 있고 스크립팅도 켜져 있어도 100% 재현되는
+#    비트수 불일치 문제였다(32비트 Python으로 같은 호출을 하면 즉시 성공 확인됨). 앞으로 이
+#    엔드포인트를 고칠 때 실제 SAP 화면 파싱 로직(그리드/필드 덤프)은 전부
+#    sap_bridge_32.py에 있으니 그쪽을 수정할 것 — 여기(kortek_backend.py)엔 절대 win32com을
+#    다시 끌어오지 말 것(64비트라 어차피 못 씀).
+_SAP_BRIDGE_PATH = os.path.join(BASE_DIR, 'sap_bridge_32.py')
 
 
 @app.route('/sap-fetch', methods=['GET'])
 def sap_fetch():
-    if not SAP_COM_OK:
-        return jsonify({'ok': False, 'error': 'pywin32 미설치 — pip install pywin32 후 백엔드를 재시작하세요.'}), 500
     try:
-        session = _get_sap_session()
-        wnd = session.findById('wnd[0]')
-        try:
-            title = wnd.Text
-        except Exception:
-            title = ''
-        try:
-            transaction = session.Info.Transaction
-        except Exception:
-            transaction = ''
-        try:
-            status_text = session.findById('wnd[0]/sbar').Text
-        except Exception:
-            status_text = ''
+        proc = subprocess.run(
+            ['py', '-3-32', _SAP_BRIDGE_PATH],
+            capture_output=True, text=True, timeout=30, encoding='utf-8', errors='replace'
+        )
+    except FileNotFoundError:
+        return jsonify({'ok': False, 'error': 'Python 런처(py.exe)를 찾을 수 없습니다 — Python 공식 설치 상태를 확인하세요.'}), 500
+    except subprocess.TimeoutExpired:
+        return jsonify({'ok': False, 'error': 'SAP 조회가 30초 안에 끝나지 않았습니다. SAP GUI에 응답 대기 중인 팝업(스크립트 접근 확인 등)이 떠 있지 않은지 확인해주세요.'}), 500
 
-        grid = _sap_find_grid(wnd)
-        if grid is not None:
-            body   = _sap_dump_grid(grid)
-            source = 'grid'
-        else:
-            body   = '\n'.join(_sap_dump_fields(wnd))
-            source = 'fields'
+    stdout_lines = [ln for ln in (proc.stdout or '').strip().splitlines() if ln.strip()]
+    if not stdout_lines:
+        # 💡 32비트 Python/pywin32가 아예 없는 경우 등 — sap_bridge_32.py가 뭘 출력하기도 전에
+        #    런처 자체가 실패한 상황. kortek_backend.bat의 자동 설치 블록을 다시 타라고 안내.
+        stderr_tail = (proc.stderr or '').strip()
+        print(f"[SAP 조회 실패] 서브프로세스가 출력 없이 종료(returncode={proc.returncode}). stderr: {stderr_tail}")
+        if 'No runtime installed' in stderr_tail or 'not installed' in stderr_tail.lower():
+            return jsonify({'ok': False, 'error': '32비트 Python이 이 PC에 설치되어 있지 않습니다. kortek_backend.bat을 다시 실행하면 자동 설치됩니다(최초 1회, 몇 분 소요).'}), 500
+        return jsonify({'ok': False, 'error': 'SAP 조회 서브프로세스 실행에 실패했습니다. 백엔드 콘솔 창의 [SAP 조회 실패] 로그를 확인하세요. (' + (stderr_tail[-300:] if stderr_tail else '상세 정보 없음') + ')'}), 500
 
-        if not body:
-            return jsonify({'ok': False, 'error': '현재 SAP 화면에서 읽을 수 있는 데이터를 찾지 못했습니다.'})
+    try:
+        data = json.loads(stdout_lines[-1])
+    except Exception:
+        print(f"[SAP 조회 실패] sap_bridge_32.py 출력 JSON 파싱 실패. stdout: {proc.stdout!r} stderr: {proc.stderr!r}")
+        return jsonify({'ok': False, 'error': 'SAP 조회 결과를 해석하지 못했습니다. 백엔드 콘솔 창의 로그를 확인하세요.'}), 500
 
-        header = f'[SAP 화면: {title}]\n[트랜잭션: {transaction}]\n'
-        if status_text:
-            header += f'[상태표시줄: {status_text}]\n'
-        text = header + '\n' + body
-        print(f"[SAP 조회] source={source} transaction={transaction} 길이={len(text)}자")
-        return jsonify({'ok': True, 'source': source, 'text': text})
-    except RuntimeError as e:
-        # 💡 _get_sap_session이 이미 원인을 구분해서 친절한 메시지로 올린 경우 — 그대로 전달.
-        print(f"[SAP 조회 실패] {e}")
-        return jsonify({'ok': False, 'error': str(e)}), 500
-    except Exception as e:
-        # 💡 [2026-09-14] 예상 못한 COM 오류 — 콘솔에 전체 traceback을 남겨서(요청자가 SAP 환경을
-        #    직접 볼 수 없으므로) 다음에 또 실패하면 이 창 내용을 그대로 확인할 수 있게 한다.
-        import traceback
-        traceback.print_exc()
-        return jsonify({'ok': False, 'error': 'SAP 연결 중 예상치 못한 오류가 발생했습니다. SAP GUI가 켜져 있고 로그인돼 있는지, [옵션 → Accessibility & Scripting → Scripting]에서 스크립팅이 켜져 있는지 확인하세요. 이 백엔드 콘솔 창에 자세한 오류(traceback)가 출력됐습니다. (' + str(e) + ')'}), 500
+    if data.get('ok'):
+        print(f"[SAP 조회] source={data.get('source')} 길이={len(data.get('text') or '')}자")
+    else:
+        print(f"[SAP 조회 실패] {data.get('error')}")
+    return jsonify(data)
 
 
 # ══════════════════════════════════════════════════════════════

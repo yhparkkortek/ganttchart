@@ -297,27 +297,48 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
   판단해서 태그를 붙이는 방식이 아니라 **코드가 키워드로 직접 트리거**한다(사용자가 매 질문마다
   SAP를 언급하면 매번 조회되므로 비용이 큰 조회는 아니지만, 백엔드/SAP GUI가 꺼져 있으면 그때마다
   15초 타임아웃 대기가 생긴다는 점을 새 트리거 조건 추가 시 감안할 것).
-- **백엔드**: `kortek_backend.py`의 `/sap-fetch`(GET) — `win32com.client.GetObject("SAPGUI")`로
-  이미 열려 있는 세션에 접속 → 화면에 ALV 그리드(`GuiShell`/`SubType=GridView`)가 있으면
+- **백엔드**: `kortek_backend.py`의 `/sap-fetch`(GET) — 실제 SAP GUI Scripting(COM) 작업은 이
+  파일이 직접 하지 않고 `sap_bridge_32.py`를 서브프로세스(`py -3-32 sap_bridge_32.py`)로 실행해서
+  시킨다(아래 "⚠️ 32비트 브릿지" 항목 참고). 브릿지가 stdout에 JSON 한 줄
+  (`{"ok":true/false, "source":"grid"|"fields", "text":..., "error":...}`)을 출력하면 그대로 읽어
+  응답으로 전달. `sap_bridge_32.py` 내부: 화면에 ALV 그리드(`GuiShell`/`SubType=GridView`)가 있으면
   `_sap_find_grid`+`_sap_dump_grid`로 표 전체를 탭 구분 텍스트로, 없으면 `_sap_dump_fields`로
   보이는 라벨/입력필드 텍스트를 순서대로 모아 반환. **특정 트랜잭션 코드 전용 파서를 만들지 않는
   게 의도적 설계** — 어떤 화면이든 "있는 그대로 텍스트 덤프"만 하고, 그걸 구조화하는 건 전부
   AI(`callAiBackend`)에게 맡긴다. 새 SAP 화면 종류를 지원해야 한다는 요청이 와도, 원칙적으로
   이 덤프 로직 자체는 안 건드리고(이미 웬만한 화면에서 다 동작해야 함) 프롬프트의 "🏭 SAP 조회
-  규칙" 문구만 조정하는 방향을 먼저 검토할 것.
+  규칙" 문구만 조정하는 방향을 먼저 검토할 것. 실제 SAP 화면(BOM 전개 `ZPP033`, ALV 그리드 45행)에
+  대해 이 파이프라인이 정상 동작함을 실사용 테스트로 확인함(2026-09-14).
 - **프롬프트 배선**: `js/04g-core-app-upload-utils-2.js`의 `_buildGanttQaPromptTemplateRaw`/
   `_buildGanttQaPrompt`에 `sapSection`/`sapText` 인자를 추가해 `${sapSection}` 토큰으로 주입
   (`${mailSection}`/`${otherProjectSection}`과 동일한 패턴). `otherProjectSection`과 마찬가지로
   `validateGanttQaPromptStructure`/`PROTECTED_STRUCTURE_RULE`(04h)의 "필수 플레이스홀더" 목록에는
   **의도적으로 포함하지 않음** — AI가 팀 공용 프롬프트를 자동개선할 때 이 선택적 섹션까지 반드시
-  지키라고 강제하지 않는 기존 관례를 그대로 따름.
-- **pywin32**: `requirements.txt`에 `pywin32; sys_platform == 'win32'`로 추가, `kortek_backend.py`
-  상단에서 다른 optional import들과 동일하게 try/except로 감싸 미설치여도 나머지 기능은 정상 동작.
-- **테스트 한계**: 이 SAP GUI Scripting 코드는 실제 SAP 환경에서 검증되지 않았다(개발 환경에
-  SAP GUI가 없음) — 표준 SAP GUI Scripting API 패턴을 따랐지만, 실제 사내 SAP 화면 구조(그리드가
-  중첩 컨테이너 안에 있거나, 팝업창(`wnd[1]` 등)에 떠 있는 경우 등)에 따라 `_sap_find_grid`의
-  탐색 범위나 `sbar`/`wnd[0]` 참조를 조정해야 할 수 있음. 처음 실사용 시 실패하면 `print`로 남긴
-  `[SAP 조회]` 로그와 `/sap-fetch` 응답의 `error` 필드부터 확인할 것.
+  지키라고 강제하지 않는 기존 관례를 그대로 따름. 대신 저장된 팀 공용 프롬프트에 아직 이 토큰이
+  없는 경우(이 기능 추가 이전에 저장해둔 프롬프트)를 대비해, `${sapSection}` 토큰이 템플릿에
+  아예 없으면 치환 결과 끝에 SAP 데이터를 강제로 덧붙인다(안 그러면 조회는 성공했는데 AI 프롬프트
+  어디에도 안 실려서 AI가 SAP 데이터를 완전히 모르는 것처럼 답하는 버그가 실제로 발생했었음 —
+  `templateHasSapToken` 분기 참고, "🏷️ [필수] 프로젝트 이름 표시 규칙"과 동일 패턴).
+- **⚠️⚠️ 32비트 브릿지가 필수인 이유(실사용 디버깅으로 확정, 2026-09-14) — 이 사실을 모르면 반드시
+  같은 삽질을 반복함**: SAP GUI Scripting의 COM 컴포넌트는 **32비트로만** 레지스트리에 등록되어
+  있다(`HKLM\SOFTWARE\WOW6432Node\SAP\SAPGUI Front\SAP Frontend Server\Security`에만
+  `UserScripting` 값이 존재, 64비트 레지스트리 뷰에는 아예 없음). 이 프로젝트의 백엔드
+  Python(3.11/3.14, python.org 표준 설치)은 **64비트**라서, `kortek_backend.py`가 직접
+  `win32com.client.GetObject("SAPGUI")`를 부르면 SAP GUI가 켜져 있고 로그인돼 있고 스크립팅
+  옵션도 켜져 있어도 **항상 100% 재현되는** COM 오류 `-2147221020`(MK_E_SYNTAX, "SAPGUI 항목을
+  찾을 수 없음")로 실패한다 — 이 오류가 스크립팅 자체가 안 켜져 있다는 뜻일 수도 있고(그 경우
+  해결책은 SAP GUI Options에서 Enable Scripting 체크) 64/32비트 불일치일 수도 있어서(그 경우
+  해결책은 완전히 다름) 초반엔 원인 특정에 여러 라운드가 걸렸다. **같은 PC에서 32비트 Python으로
+  똑같은 `GetObject("SAPGUI")`를 부르면 즉시 성공**한다는 게 결정적 증거였다. 그래서 실제 COM
+  작업은 전부 `sap_bridge_32.py`(별도 32비트 Python 프로세스)로 옮겼고, `kortek_backend.py`는
+  `subprocess.run(['py', '-3-32', ...])`로 그 결과(JSON 한 줄)만 받아온다 — **`kortek_backend.py`에
+  절대 `win32com`을 다시 직접 import하지 말 것**, 64비트라 어차피 못 찾는다. `py -3-32`가 안 되면
+  (`py install 3-32` 필요) `kortek_backend.bat`의 자동 설치 블록이 최초 1회 처리한다(같은 이유로
+  `requirements.txt`엔 pywin32가 없음 — 메인 64비트 환경용이 아니므로).
+- **디버깅 시 확인 순서**: ① `kortek_backend.bat` 콘솔에 `[SAP] 32비트 Python 확인 완료`가
+  찍혔는지(안 찍혔으면 32비트 런타임 문제) ② `/sap-fetch` 응답의 `error` 필드 ③ 그래도 막히면
+  터미널에서 직접 `py -3-32 sap_bridge_32.py` 실행해서 kortek_backend.py를 거치지 않고 바로
+  원인 확인(이 방법으로 실제 원인을 찾았음).
 - **TIPR(웹 기반, 로그인 필요)은 아직 미구현** — SAP와 달리 "이미 인증된 세션에 올라타기"가 안 되고
   ID/PW 자동 로그인 자동화(Playwright 등)가 필요해 자격증명 저장 문제가 딸려온다. 사용자는 "서버에
   무리만 안 가면 ID/PW 자동 로그인도 괜찮다"고 확인했으므로, 구현 시 mail_config.json/
@@ -552,11 +573,12 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 | 파일 | 역할 |
 |---|---|
 | `kortek_backend.py` | Flask 서버. 메일 SMTP/POP3, Telegram 알람, 설정 암복호화, 예약 발송 스케줄러 (`/schedule` API) |
-| `kortek_backend.bat` | 로컬에서 백엔드 실행하는 배치 스크립트 |
+| `sap_bridge_32.py` | **[2026-09-14 신규]** SAP GUI Scripting 32비트 브릿지 — `/sap-fetch`가 `py -3-32`로 이 파일을 서브프로세스 실행해서 실제 COM 작업을 시킨다(이유: 위 "🏭 SAP 조회 연동" 절의 "⚠️⚠️ 32비트 브릿지" 항목 참고). `kortek_backend.zip`에도 반드시 포함돼야 함(안 그러면 다른 팀원 PC에서 SAP 기능이 동작 안 함) — `.claude/settings.json`의 PostToolUse 훅이 이 파일 수정 시에도 자동으로 재포함해서 재생성함 |
+| `kortek_backend.bat` | 로컬에서 백엔드 실행하는 배치 스크립트. SAP 조회용 32비트 Python(`py install 3-32`)·pywin32도 최초 1회 자동 설치 |
 | `kortek_backend_install.bat` | **원클릭 설치 스크립트** — Windows 시작프로그램(`shell:startup`)에 자동 시작 바로가기 등록 + 지금 바로 최소화 실행까지 한 번에 처리. 내부적으로 PowerShell(`New-Object -ComObject WScript.Shell`)로 `.lnk` 생성, 인라인 `-Command` 대신 임시 `.ps1` 파일을 생성해 실행(따옴표/캐럿 이스케이프 문제 회피) |
 | `kortek_backend_start_minimized.vbs` | 위 설치 스크립트가 만드는 바로가기가 실제로 가리키는 대상 — `kortek_backend.bat`을 `WScript.Shell.Run(..., 7, False)`로 최소화 상태로 조용히 실행 (콘솔 창이 화면에 튀어나오지 않음) |
-| `kortek_backend.zip` | **다른 사용자 배포용 압축 파일** (`kortek_backend.py` + `.bat` + `_install.bat` + `_start_minimized.vbs` 4개 포함). `kortek_backend.py` 수정 시 `.claude/settings.json`의 PostToolUse 훅이 자동으로 재생성함 (`Compress-Archive` 사용) — 단, 설치 스크립트 2개만 수정한 경우엔 훅이 안 걸리므로 수동으로 `Compress-Archive`를 다시 돌려야 함 |
-| `requirements.txt` | flask, flask-cors, requests, cryptography, google-auth |
+| `kortek_backend.zip` | **다른 사용자 배포용 압축 파일** (`kortek_backend.py` + `sap_bridge_32.py` + `.bat` + `_install.bat` + `_start_minimized.vbs` 5개 포함). `kortek_backend.py` 또는 `sap_bridge_32.py` 수정 시 `.claude/settings.json`의 PostToolUse 훅이 자동으로 재생성함 (`Compress-Archive` 사용) — 단, 설치 스크립트 2개만 수정한 경우엔 훅이 안 걸리므로 수동으로 `Compress-Archive`를 다시 돌려야 함 |
+| `requirements.txt` | flask, flask-cors, requests, cryptography, google-auth (메인 64비트 환경용 — SAP용 32비트 pywin32는 별도, `kortek_backend.bat`이 자동 설치) |
 
 > **Notice 탭 오류 진단**: `kortek_backend.py`의 `/schedule` 엔드포인트는 나중에 추가된 기능이라 구버전 백엔드를 가진 사용자에게는 없음. 구버전은 `/schedule` 요청 시 404 반환 → `renderScheduleRuleTable()`이 `_scheduleRules = 'outdated'` 상태로 "구버전" 경고 메시지 표시. AI·메일 기능은 정상(다른 엔드포인트 사용)하면서 Notice만 안 되면 백엔드 구버전 의심.
 

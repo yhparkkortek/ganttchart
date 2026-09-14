@@ -3,4 +3,6 @@ flask-cors
 requests
 cryptography
 google-auth
-pywin32; sys_platform == 'win32'
+# 💡 pywin32는 여기 없음 — SAP 조회(sap_bridge_32.py)는 SAP GUI Scripting의 COM이 32비트로만
+# 등록돼 있어 별도 32비트 Python 환경에 따로 설치해야 한다(이 파일은 메인 64비트 환경용).
+# kortek_backend.bat이 최초 실행 시 자동으로 처리한다: py install 3-32 && py -3-32 -m pip install pywin32
