@@ -1510,7 +1510,19 @@ def _get_sap_session():
     try:
         sap_gui_auto = win32com.client.GetObject("SAPGUI")
     except Exception as e:
-        raise RuntimeError('SAP GUI Scripting 엔진을 찾지 못했습니다. 확인해주세요: ① SAP GUI가 켜져 있는지 ② SAP GUI 상단 메뉴 [옵션(Options) → Accessibility & Scripting → Scripting]에서 "스크립트 사용(Enable scripting)"이 체크돼 있는지 ③ kortek_backend.py를 SAP GUI를 켠 것과 같은 Windows 로그인 세션에서 실행 중인지(관리자 권한으로 둘 중 하나만 실행하면 서로 못 찾을 수 있음). (원본 오류: ' + str(e) + ')')
+        # 💡 [2026-09-14] GetObject("SAPGUI")가 실패할 때 가장 흔한 원인이 COM 오류 코드
+        #    -2147221020(MK_E_SYNTAX, "잘못된 구문입니다")인데 — 이건 이름 그대로의 구문 오류가
+        #    전혀 아니라 "SAPGUI라는 이름의 ROT(Running Object Table) 항목 자체가 없다"는 뜻,
+        #    즉 SAP GUI Scripting이 아직 실제로 켜져 있지 않다는 신호다(실사용 제보로 확인됨).
+        #    이 특정 코드를 알아보고 바로 정확한 해결 절차를 안내한다.
+        hresult = None
+        try:
+            hresult = e.args[0] if e.args else None
+        except Exception:
+            pass
+        if hresult == -2147221020:
+            raise RuntimeError('SAP GUI Scripting이 아직 켜져 있지 않습니다(COM 오류 -2147221020/MK_E_SYNTAX — "SAPGUI" 항목을 찾을 수 없음). 해결 절차: SAP GUI 세션 안에서 ① Alt+F12(또는 창 왼쪽 위 아이콘) → 옵션(Options) → Accessibility & Scripting → Scripting → "스크립트 사용(Enable Scripting)" 체크 → OK ② 지금 열려 있는 SAP 연결/세션을 전부 닫고 다시 로그인(체크만 하고 기존 세션을 그대로 쓰면 적용 안 됨). 그래도 안 되면 SAP 서버 쪽에서 스크립팅 자체를 막아둔 것일 수 있어(파라미터 sapgui/user_scripting) 사내 SAP 담당자(Basis) 확인이 필요합니다.')
+        raise RuntimeError('SAP GUI Scripting 엔진을 찾지 못했습니다. 확인해주세요: ① SAP GUI가 켜져 있는지 ② SAP GUI 세션 안에서 Alt+F12 → 옵션(Options) → Accessibility & Scripting → Scripting에서 "스크립트 사용(Enable scripting)"이 체크돼 있는지(체크 후 세션을 다시 열어야 적용됨) ③ kortek_backend.py를 SAP GUI를 켠 것과 같은 Windows 로그인 세션에서 실행 중인지(관리자 권한으로 둘 중 하나만 실행하면 서로 못 찾을 수 있음). (원본 오류: ' + str(e) + ')')
     application = sap_gui_auto.GetScriptingEngine
     if application.Children.Count == 0:
         raise RuntimeError('SAP GUI Scripting 엔진 연결에는 성공했지만, 열려 있는 SAP 연결(접속)이 없습니다 — SAP에 로그인해주세요.')
