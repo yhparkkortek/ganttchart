@@ -763,20 +763,52 @@ window._toggleMailRawTranslation = async function() {
     btn.textContent = '⏳ ' + (_en ? 'Translating...' : '번역 중...');
 
     try {
-        const blockListText = blocks.map(function(b, i) { return i + ': ' + b; }).join('\n');
-        const prompt = '당신은 번역 보조 AI입니다. 아래는 이메일 원문을 줄/문단 단위 블록으로 나눈 것입니다.\n'
-            + '각 블록이 영어 등 한국어가 아닌 언어로 되어 있으면 자연스러운 한국어로 번역하고, 이미 한국어이거나 번역할 의미가 없는 경우(단순 날짜·기호·매우 짧은 헤더 등)에는 번역하지 마세요.\n\n'
-            + '[블록 목록]\n' + blockListText + '\n\n'
-            + '다음 JSON 배열 형식으로만 답하세요 (블록 개수·순서를 정확히 그대로 유지, JSON 외 텍스트 금지):\n'
-            + '[{"idx": 0, "translate": true 또는 false, "ko": "번역문 또는 빈 문자열"}, ...]';
-        const result = await window.callAiBackend(apiKey, prompt, {});
-        if (!result.ok) throw result.error || new Error(window._t('번역 실패', 'Translation failed'));
-        const text = (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
-            && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
-            && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '';
-        const match = text.match(/\[[\s\S]*\]/);
-        if (!match) throw new Error(window._t('AI 응답에서 JSON을 찾을 수 없습니다.', 'Could not find JSON in the AI response.'));
-        const parsed = JSON.parse(match[0]);
+        // 💡 [2026-09-14 버그수정] 원문이 길고(빈 줄이 없어 줄 단위로 잘게 쪼개짐) 블록 수가 많으면,
+        // 한 번의 요청에 모든 블록의 JSON을 다 담아 응답하라고 시키는 게 모델의 출력 토큰 한도를
+        // 넘겨 응답이 중간에 잘리는 경우가 있었다 — 그러면 배열이 "]"로 안 닫힌 채 끊겨서 아래 정규식이
+        // 아예 매치를 못 찾고 "AI 응답에서 JSON을 찾을 수 없습니다" 로 실패했다(제보 사례).
+        // 청크(묶음) 단위로 나눠 병렬 호출하면 요청당 응답 크기가 줄어 잘릴 위험이 크게 낮아지고,
+        // 일부 청크만 실패해도 나머지는 정상 표시되도록(부분 성공) 완화했다.
+        const CHUNK_SIZE = 25;
+        const chunks = [];
+        for (let start = 0; start < blocks.length; start += CHUNK_SIZE) {
+            chunks.push(blocks.slice(start, start + CHUNK_SIZE).map(function(b, j) { return { idx: start + j, block: b }; }));
+        }
+
+        const extractAiText = function(result) {
+            return (result.data.result && result.data.result.candidates && result.data.result.candidates[0]
+                && result.data.result.candidates[0].content && result.data.result.candidates[0].content.parts
+                && result.data.result.candidates[0].content.parts[0] && result.data.result.candidates[0].content.parts[0].text) || '';
+        };
+
+        let firstFailure = null;
+        const chunkResults = await Promise.all(chunks.map(async function(chunk) {
+            const blockListText = chunk.map(function(c) { return c.idx + ': ' + c.block; }).join('\n');
+            const prompt = '당신은 번역 보조 AI입니다. 아래는 이메일 원문을 줄/문단 단위 블록으로 나눈 것입니다.\n'
+                + '각 블록이 영어 등 한국어가 아닌 언어로 되어 있으면 자연스러운 한국어로 번역하고, 이미 한국어이거나 번역할 의미가 없는 경우(단순 날짜·기호·매우 짧은 헤더 등)에는 번역하지 마세요.\n\n'
+                + '[블록 목록]\n' + blockListText + '\n\n'
+                + '다음 JSON 배열 형식으로만 답하세요 (블록의 idx·개수·순서를 정확히 그대로 유지, 마크다운 코드블록(```)이나 설명 문장 없이 JSON 배열 하나만 출력):\n'
+                + '[{"idx": ' + chunk[0].idx + ', "translate": true 또는 false, "ko": "번역문 또는 빈 문자열"}, ...]';
+            try {
+                const result = await window.callAiBackend(apiKey, prompt, {});
+                if (!result.ok) throw result.error || new Error(window._t('번역 실패', 'Translation failed'));
+                const text = extractAiText(result);
+                const cleaned = text.replace(/```json/gi, '').replace(/```/g, '').trim();
+                const match = cleaned.match(/\[[\s\S]*\]/);
+                if (!match) throw new Error(window._t('AI 응답에서 JSON을 찾을 수 없습니다.', 'Could not find JSON in the AI response.') + (text ? ' — ' + window._t('AI 원문 응답', 'raw AI response') + ': ' + text.slice(0, 300) : ' (' + window._t('빈 응답', 'empty response') + ')'));
+                return JSON.parse(match[0]);
+            } catch (e) {
+                // 💡 청크 하나가 실패해도 전체를 막지 않고, 원인 진단용으로 콘솔에는 남긴다.
+                console.error('[메일 원문 번역] 블록 ' + chunk[0].idx + '~' + chunk[chunk.length - 1].idx + ' 청크 번역 실패:', e);
+                if (!firstFailure) firstFailure = e;
+                return null;
+            }
+        }));
+
+        const parsed = [];
+        let anySucceeded = false;
+        chunkResults.forEach(function(r) { if (r) { anySucceeded = true; parsed.push.apply(parsed, r); } });
+        if (!anySucceeded) throw firstFailure || new Error(window._t('번역 실패', 'Translation failed'));
 
         const html = blocks.map(function(b, i) {
             const entry = parsed.find(function(p) { return p.idx === i; });
@@ -795,7 +827,11 @@ window._toggleMailRawTranslation = async function() {
         textarea.style.display = 'none';
         transDiv.style.display = 'block';
         btn.textContent = '🌐 ' + (_en ? 'Show Original' : '원문 보기');
+        if (firstFailure && anySucceeded && window.showToast) {
+            window.showToast(window._t('⚠️ 일부 구간은 번역하지 못했습니다(원문 그대로 표시).', '⚠️ Some sections could not be translated (shown as original text).'));
+        }
     } catch (e) {
+        console.error('[메일 원문 번역] 전체 실패:', e);
         alert(window._t('⚠️ 번역 실패: ', '⚠️ Translation failed: ') + (e && e.message ? e.message : e));
         btn.textContent = origBtnHtml;
     } finally {
