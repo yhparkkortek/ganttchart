@@ -451,6 +451,16 @@ window.inboxDistExecute = async function(attempt) {
             newVal: `보관함에서 배분 추가: ${built.taskName}`
         });
 
+        // ✅ [A: 토픽 자동갱신 - 헤드리스] 지금 열려있지 않은 프로젝트라도 AI 업무가 충분히 늘었으면
+        //    프로파일을 갱신해서 이 PATCH 한 번에 같이 실어 보낸다(별도 Drive 왕복 없음 — js/26-topic-profile.js
+        //    _tpMaybeAutoRegen 참고). 실패해도 배분 자체는 막지 않도록 조용히 무시.
+        if (window._tpMaybeAutoRegen) {
+            try {
+                const _tpProfile = await window._tpMaybeAutoRegen(ctx.fileId, ctx.rows, ctx.saveData.colIdx, ctx.saveData.projectMeta || {});
+                if (_tpProfile) ctx.saveData.topicProfile = _tpProfile;
+            } catch (_tpErr) { console.warn('[토픽 자동갱신] 헤드리스 갱신 실패(무시):', _tpErr); }
+        }
+
         // 직렬화 (saveToGoogleDrive와 동일 규격)
         ctx.saveData.globalData = ctx.rows.map(function(row) {
             let o = { data: Array.from(row) };
@@ -570,6 +580,18 @@ window.distSendTaskToTargets = async function(task, targets, opts) {
                 rowName: pos, colName: '행 조작', oldVal: '없음',
                 newVal: `${opts.source || '다중전송'}: ${built.taskName}`
             });
+
+            // ✅ [A: 토픽 자동갱신 - 헤드리스] 지금 열려있지 않은 프로젝트라도 AI 업무가 충분히 늘었으면
+            //    프로파일을 갱신해서 이 PATCH 한 번에 같이 실어 보낸다(별도 Drive 왕복 없음 — js/26-topic-profile.js
+            //    _tpMaybeAutoRegen 참고). 대상마다 독립적으로 판단되므로 여러 프로젝트에 동시 배분해도 안전.
+            //    실패해도 배분 자체는 막지 않도록 조용히 무시.
+            if (window._tpMaybeAutoRegen) {
+                try {
+                    const _tpProfile = await window._tpMaybeAutoRegen(fileId, rows, saveData.colIdx, saveData.projectMeta || {});
+                    if (_tpProfile) saveData.topicProfile = _tpProfile;
+                } catch (_tpErr) { console.warn('[토픽 자동갱신] 헤드리스 갱신 실패(무시):', _tpErr); }
+            }
+
             saveData.globalData = rows.map(function(row) {
                 let o = { data: Array.from(row) };
                 for (let k in row) { if (k.startsWith('_')) o[k] = row[k]; }

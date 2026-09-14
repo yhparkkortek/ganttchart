@@ -967,6 +967,16 @@ window._msAutoRegisterToProject = async function(uid, task, driveFileId, fileNam
             newVal: `메일 자동처리(커트라인)로 자동 배치: ${built.taskName}`
         });
 
+        // ✅ [A: 토픽 자동갱신 - 헤드리스] 지금 열려있지 않은 프로젝트라도 AI 업무가 충분히 늘었으면
+        //    프로파일을 갱신해서 이 PATCH 한 번에 같이 실어 보낸다(별도 Drive 왕복 없음 — js/26-topic-profile.js
+        //    _tpMaybeAutoRegen 참고). 실패해도 업무 자동배치 자체는 막지 않도록 조용히 무시.
+        if (window._tpMaybeAutoRegen) {
+            try {
+                const _tpProfile = await window._tpMaybeAutoRegen(driveFileId, rows, saveData.colIdx, saveData.projectMeta || {});
+                if (_tpProfile) saveData.topicProfile = _tpProfile;
+            } catch (_tpErr) { console.warn('[토픽 자동갱신] 헤드리스 갱신 실패(무시):', _tpErr); }
+        }
+
         saveData.globalData = rows.map(function(row) {
             let o = { data: Array.from(row) };
             for (let k in row) { if (k.startsWith('_')) o[k] = row[k]; }

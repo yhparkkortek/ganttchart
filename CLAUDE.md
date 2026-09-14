@@ -394,6 +394,37 @@ window.CP_ROLES.forEach(r => { compGen[r.key] = window._cpHslToHex(compHue, r.s,
 그 요소도 같이 바뀌는지 확인할 것 — 특히 평소(rest) 상태가 호버 상태만 테마를 따르고 rest는 안
 따르는 경우가 반복적으로 발견됐다(Elec Parts "핀맵 보기" 버튼 사례, 위 `_cpApplyLive` 주석 참고).
 
+### 🔄 토픽 프로파일(Phase 6) 자동 재생성 — 헤드리스 경로까지 커버 (2026-09-14)
+
+`js/26-topic-profile.js`의 "AI 업무 +10개마다 프로파일 자동 재생성"(`_tpMaybeAutoRegen`, 내부
+`_tpShouldRegen`이 판정)은 **fileId별로 독립된 쿨다운(10분)·기준치(+10개)를 localStorage
+(`gantt_topic_regen_state_v1`)에 저장**해서 추적한다 — 예전엔 이걸 모듈 전역 변수 하나로만
+추적해서 ①프로젝트를 오가면 쿨다운이 서로 오염되고 ②애초에 "지금 열려있지 않은" 프로젝트에는
+걸 수조차 없었다. 지금은 아래 **헤드리스 경로(지금 브라우저에 열려있지 않은 프로젝트에 Drive를
+직접 fetch→PATCH하는 코드) 3곳**에서도 각자 호출한다 — 새로운 헤드리스 Drive 쓰기 경로를 추가할
+때 반드시 여기도 걸 것:
+
+- `js/15b-mail-server-tab-1.js`의 `_msAutoRegisterToProject`(메일서버 완전자동, "지금 열려있지
+  않은" 분기)
+- `js/14d-distribution-ledger.js`의 `inboxDistExecute`(업무보관함 단일 배분)
+- `js/14d-distribution-ledger.js`의 `distSendTaskToTargets`(다중 배분 공용 헬퍼 — Task Inbox
+  다중전송·`_msQueueReanalyzeMulti` 양쪽이 재사용)
+
+세 곳 모두 패턴이 동일: PATCH할 `saveData`를 다 만든 직후(`saveData.globalData = ...` 대입
+직전) `await window._tpMaybeAutoRegen(fileId, rows, saveData.colIdx, saveData.projectMeta || {})`를
+호출해 결과가 있으면 `saveData.topicProfile`에 얹은 뒤, **원래 하려던 PATCH 한 번에 같이
+실어 보낸다** — 별도 Drive 왕복을 추가하지 않는다(그만큼 저장 충돌 창도 늘어나므로). 이 함수는
+`window.getActiveAiKey()`가 없거나 `getTopicProfileAutoDisabled()`가 켜져 있으면 조용히 null을
+반환하고, 실패해도 호출부는 전부 `try/catch`로 감싸 업무 배치 자체를 막지 않는다.
+
+`window._generateTopicProfile()`도 이 참에 `ctx` 인자(`{key, rows, colIdx, projectMeta, silent}`)를
+받도록 확장됨 — **인자 없이 호출하면 예전과 100% 동일하게 "지금 열려있는 프로젝트" 기준으로 동작**
+하고, `ctx.silent`가 true면 토스트를 띄우지 않고 "미분류 자동 재분석" 트리거(`_msBulkReanalyzeUnmatched`,
+`window._msResults` 참조 — 지금 화면의 메일서버 탭 상태라 다른 프로젝트 갱신과는 무관)도 건너뛴다.
+새로 이 함수를 호출하는 코드를 추가할 때, 지금 열려있지 않은 프로젝트를 대상으로 한다면 반드시
+`rows`/`colIdx`/`projectMeta`를 명시적으로 넘길 것 — 안 넘기면 전역 `globalData`/`colIdx`/
+`window.projectMeta`(=지금 열려있는 엉뚱한 프로젝트 것)를 잘못 읽어버린다.
+
 ### 🔑 관리자 비밀번호("팀 비밀번호") 체계 (2026-09-12 보안수정)
 
 구글 로그인(OAuth)과 이 비밀번호는 **완전히 별개**다 — 구글 로그인은 Drive API 접근권한(누가 이

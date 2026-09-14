@@ -89,24 +89,40 @@
     };
 
     /**
-     * 현재 프로젝트의 Gantt 업무를 AI로 분석하여 토픽 프로파일을 생성·저장.
+     * 프로젝트의 Gantt 업무를 AI로 분석하여 토픽 프로파일을 생성·저장.
      * 성공 시 profile 객체를 반환, 실패 시 null.
+     * @param {object} [ctx]  생략하면 "지금 열려있는 프로젝트" 기준 — 예전과 100% 동일 동작.
+     *   - ctx.key         프로젝트 식별자(Drive fileId). 생략 시 _currentKey().
+     *   - ctx.rows        globalData와 동일한 형태의 행 배열. 생략 시 전역 globalData.
+     *   - ctx.colIdx      그 rows에 대응하는 colIdx. 생략 시 전역 colIdx.
+     *   - ctx.projectMeta 그 프로젝트의 projectMeta(PM/고객사/모델명/인치). 생략 시 전역 window.projectMeta.
+     *   - ctx.silent      true면 토스트를 띄우지 않고 "미분류 자동 재분석" 트리거도 건너뜀 — 헤드리스로
+     *                     "지금 보고 있지 않은" 다른 프로젝트를 갱신할 때 씀(console 로그는 항상 남음).
+     *   💡 [2026-09-14 신규] 메일서버 완전자동/업무보관함 배분/다중배분처럼 "지금 열려있지 않은"
+     *   프로젝트에 헤드리스로 업무를 꽂는 경로에서도 프로파일을 갱신할 수 있도록 ctx로 대상을 주입
+     *   가능하게 확장 — ctx를 생략한 기존 호출부(수동 재생성 버튼 등)는 변경 없이 그대로 동작한다.
      */
-    window._generateTopicProfile = async function() {
-        var key = _currentKey();
+    window._generateTopicProfile = async function(ctx) {
+        ctx = ctx || {};
+        var silent  = !!ctx.silent;
+        var key     = ctx.key  || _currentKey();
+        var rows    = ctx.rows || (typeof globalData !== 'undefined' ? globalData : null);
+        var tColIdx = ('colIdx' in ctx) ? ctx.colIdx : (typeof colIdx !== 'undefined' ? colIdx : undefined);
+        var pmCtx   = ('projectMeta' in ctx) ? (ctx.projectMeta || {}) : (window.projectMeta || {});
+
         if (!key) {
-            if (window.showToast) window.showToast(window._t('⚠️ 프로젝트를 먼저 불러오세요.', '⚠️ Please load a project first.'), 'error');
+            if (!silent && window.showToast) window.showToast(window._t('⚠️ 프로젝트를 먼저 불러오세요.', '⚠️ Please load a project first.'), 'error');
             return null;
         }
 
-        if (typeof globalData === 'undefined' || !globalData || globalData.length <= 1) {
-            if (window.showToast) window.showToast(window._t('⚠️ 간트차트에 업무 데이터가 없습니다.', '⚠️ No task data in the Gantt chart.'), 'error');
+        if (!rows || rows.length <= 1) {
+            if (!silent && window.showToast) window.showToast(window._t('⚠️ 간트차트에 업무 데이터가 없습니다.', '⚠️ No task data in the Gantt chart.'), 'error');
             return null;
         }
 
         var apiKey = window.getActiveAiKey && window.getActiveAiKey();
         if (!apiKey) {
-            if (window.showToast) window.showToast(window._t('⚠️ AI API 키를 먼저 설정해주세요.', '⚠️ Please set up the AI API key first.'), 'error');
+            if (!silent && window.showToast) window.showToast(window._t('⚠️ AI API 키를 먼저 설정해주세요.', '⚠️ Please set up the AI API key first.'), 'error');
             return null;
         }
 
@@ -121,15 +137,15 @@
         var recentTaskNames = []; // 최근 90일 종료/진행 업무 (현재 단계 파악용)
         var _recentSeenInAll = {}; // recentTaskNames가 allTaskNames와 겹치는지 추적
 
-        for (var i = 1; i < globalData.length; i++) {
-            var row = globalData[i];
+        for (var i = 1; i < rows.length; i++) {
+            var row = rows[i];
             if (!row) continue;
             var name = row._origT1 || row._origT2 || row._origT3 || row._origT4 || row._origDev || '';
             name = (name || '').replace(/\s*＊AI📧\s*$/, '').trim();
             // 폴백: _origT* 필드가 없는 구버전 프로젝트 (엑셀 임포트 전 코드로 저장된 파일)
-            // colIdx에서 row._level에 해당하는 열 값을 대신 사용
-            if (!name && typeof colIdx !== 'undefined' && typeof row._level === 'number') {
-                var _fallCols = [colIdx.wbs, colIdx.taskType1, colIdx.taskType2, colIdx.taskType3, colIdx.taskType4];
+            // tColIdx에서 row._level에 해당하는 열 값을 대신 사용
+            if (!name && tColIdx && typeof row._level === 'number') {
+                var _fallCols = [tColIdx.wbs, tColIdx.taskType1, tColIdx.taskType2, tColIdx.taskType3, tColIdx.taskType4];
                 var _fi = _fallCols[Math.min(row._level, 4)];
                 if (_fi !== undefined && _fi >= 0) {
                     name = ((row[_fi] != null ? row[_fi] : '') + '').replace(/\s*＊AI📧\s*$/, '').trim();
@@ -155,17 +171,16 @@
         }
         var taskNames = allTaskNames; // 이하 기존 코드 호환성 유지
         if (!taskNames.length) {
-            var _rowCount = globalData.length - 1;
-            var _hasColIdx = typeof colIdx !== 'undefined';
+            var _rowCount = rows.length - 1;
             var _diagMsg = _rowCount > 0
                 ? ('간트차트 행 ' + _rowCount + '개에서 업무명을 추출하지 못했습니다. '
-                   + (_hasColIdx ? '' : '(colIdx 없음) ')
+                   + (tColIdx ? '' : '(colIdx 없음) ')
                    + '엑셀로 다시 임포트 후 저장하면 해결될 수 있습니다.')
                 : '간트차트에 데이터가 없습니다. 프로젝트를 불러온 뒤 다시 시도하세요.';
-            if (window.showToast) window.showToast('⚠️ ' + _diagMsg, 'error', 6000);
+            if (!silent && window.showToast) window.showToast('⚠️ ' + _diagMsg, 'error', 6000);
             console.warn('[토픽 프로파일] 업무명 추출 실패',
-                { rowCount: _rowCount, colIdx: _hasColIdx ? colIdx : '없음',
-                  sampleRow: globalData[1] || null });
+                { key: key, rowCount: _rowCount, colIdx: tColIdx || '없음',
+                  sampleRow: rows[1] || null });
             return null;
         }
 
@@ -178,7 +193,7 @@
         //      프로젝트(SHUFFLER 3.0/4.3 등)를 AI가 구분할 근거가 프로젝트 정보에 전혀 없었음
         //      (project_index.json 실측 결과 SHUFFLER 두 항목 모두 inch가 빈 값이었던 것도 한몫함 —
         //      04c-core-app-mail-pipeline.js의 _inchFromFileName 폴백으로 별도 수정).
-        var pm = window.projectMeta || {};
+        var pm = pmCtx;
         var metaParts = [];
         if (pm.프로젝트담당자) metaParts.push('PM: ' + pm.프로젝트담당자);
         if (pm.고객사)         metaParts.push('고객사: ' + pm.고객사);
@@ -199,18 +214,17 @@
         //    _projectIndexCache(5분 캐시)가 있으면 재사용, 없으면 Drive에서 직접 조회
         var mailSignalLine = '';
         try {
-            var _myKey = _currentKey();
             // 캐시 우선 → 없으면 _msLoadProjectIndex() 호출 (이미 async 함수 안이므로 await 가능)
             var _piAll = (window._projectIndexCache && window._projectIndexCache.data)
                 ? window._projectIndexCache.data
                 : (window._msLoadProjectIndex ? await window._msLoadProjectIndex() : []);
-            var _piEntry = (_piAll || []).find(function(p) { return p.drive_file_id === _myKey; });
+            var _piEntry = (_piAll || []).find(function(p) { return p.drive_file_id === key; });
             var _piKws = (_piEntry && _piEntry.topicKeywords && _piEntry.topicKeywords.length)
                 ? _piEntry.topicKeywords.slice()
                 : [];
             // project_index에 신호가 없으면 기존 프로파일 keywords를 참고 (이미 학습된 것 유지)
             if (!_piKws.length) {
-                var _oldProf = _getStore()[_myKey];
+                var _oldProf = _getStore()[key];
                 _piKws = (_oldProf && _oldProf.keywords) ? _oldProf.keywords.slice() : [];
             }
             if (_piKws.length) {
@@ -228,9 +242,9 @@
         var contentSamples = [];
         (function() {
             var seenC = {};
-            var contentIdx = (typeof colIdx !== 'undefined' && colIdx.content >= 0) ? colIdx.content : -1;
-            for (var ci = 1; ci < globalData.length && contentIdx >= 0 && contentSamples.length < 40; ci++) {
-                var crow = globalData[ci];
+            var contentIdx = (tColIdx && tColIdx.content >= 0) ? tColIdx.content : -1;
+            for (var ci = 1; ci < rows.length && contentIdx >= 0 && contentSamples.length < 40; ci++) {
+                var crow = rows[ci];
                 if (!crow || !crow._aiRegistered) continue;
                 // 💡 globalData 행은 배열 자체에 속성을 붙인 형태(row[colIdx.content])다 — Drive 저장용
                 //    직렬화({data:[...]}) 형태가 아니라 04d/04k 등 다른 파일과 동일한 접근 방식을 따른다.
@@ -329,8 +343,8 @@
             '  "summary":        "한 문장으로 이 프로젝트를 설명"\n' +
             '}';
 
-        console.info('[토픽 프로파일] 생성 시작', { key: key, allCount: allTaskNames.length, recentCount: recentTaskNames.length });
-        if (window.showToast) window.showToast(window._t('🔍 토픽 프로파일 생성 중... (업무 ' + allTaskNames.length + '건)', '🔍 Generating topic profile... (' + allTaskNames.length + ' tasks)'), 'info', 20000);
+        console.info('[토픽 프로파일] 생성 시작', { key: key, silent: silent, allCount: allTaskNames.length, recentCount: recentTaskNames.length });
+        if (!silent && window.showToast) window.showToast(window._t('🔍 토픽 프로파일 생성 중... (업무 ' + allTaskNames.length + '건)', '🔍 Generating topic profile... (' + allTaskNames.length + ' tasks)'), 'info', 20000);
 
         var result = await window.callAiBackend(apiKey, prompt, { isCancelled: function() { return false; } });
         if (!result || !result.ok) {
@@ -338,8 +352,8 @@
             var _errDetail = result && result.error
                 ? (result.error.message || String(result.error)).slice(0, 120)
                 : window._t('응답 없음', 'No response');
-            if (window.showToast) window.showToast(window._t('❌ 토픽 프로파일 생성 실패: ' + _errDetail, '❌ Failed to generate topic profile: ' + _errDetail), 'error', 8000);
-            console.warn('[토픽 프로파일] API 실패 상세:', { result: result, error: result && result.error });
+            if (!silent && window.showToast) window.showToast(window._t('❌ 토픽 프로파일 생성 실패: ' + _errDetail, '❌ Failed to generate topic profile: ' + _errDetail), 'error', 8000);
+            console.warn('[토픽 프로파일] API 실패 상세:', { key: key, result: result, error: result && result.error });
             return null;
         }
 
@@ -356,7 +370,7 @@
         } catch(e) {}
 
         if (!profile || !profile.keywords) {
-            if (window.showToast) window.showToast(window._t('❌ AI 응답을 파싱할 수 없습니다', '❌ Could not parse the AI response'), 'error');
+            if (!silent && window.showToast) window.showToast(window._t('❌ AI 응답을 파싱할 수 없습니다', '❌ Could not parse the AI response'), 'error');
             return null;
         }
 
@@ -390,10 +404,10 @@
         store[key] = profile;
         _saveStore(store);
 
-        if (window.showToast) {
+        if (!silent && window.showToast) {
             window.showToast(window._t('✅ 토픽 프로파일 생성 완료 — 키워드 ' + (profile.keywords || []).length + '개', '✅ Topic profile generated — ' + (profile.keywords || []).length + ' keyword(s)'), 'info', 4000);
         }
-        console.info('[토픽 프로파일]', profile);
+        console.info('[토픽 프로파일]', { key: key, silent: silent, profile: profile });
 
         // 💡 [2026-09-04 → 2026-09-07 무료 API 절약] 미분류 메일이 있으면 새 프로파일로 자동 재분석
         //    시작(팝업 없음). 실제로 이 자동 트리거가 토픽 프로파일 재생성마다(+10업무·10분 쿨다운
@@ -402,18 +416,22 @@
         //    초과). 실제 스킵 여부는 _msBulkReanalyzeUnmatched 내부(최근 1시간 내 재시도 이력 있으면
         //    자동 흐름에서 제외)가 판단하므로, 여기 예상 건수/시간 안내는 "최대치" 추정으로 남겨두고
         //    실제 처리 결과 토스트는 그 함수가 별도로 띄운다.
-        var unmatchedCount = (window._msResults || []).filter(function(r) { return !r.project; }).length;
-        if (unmatchedCount > 0 && typeof window._msBulkReanalyzeUnmatched === 'function') {
-            var _estMin = Math.round(unmatchedCount * 4 / 60 * 10) / 10; // 4초/건 기준 예상 분(최대치)
-            if (window.showToast) {
-                window.showToast(window._t(
-                    '🔄 토픽 갱신 완료 — 미분류 최대 ' + unmatchedCount + '건 자동 재분석 확인 중 (최대 ' + _estMin + '분, 최근 재시도한 건은 건너뜀)...',
-                    '🔄 Topic profile updated — checking up to ' + unmatchedCount + ' unclassified mail(s) for auto re-analysis (up to ' + _estMin + ' min, recently-retried ones skipped)...'
-                ), 'info', 5000);
+        //    💡 [2026-09-14] silent(헤드리스로 다른 프로젝트를 갱신하는 경우)일 땐 건너뜀 —
+        //    window._msResults는 "지금 화면에 보이는" 메일서버 탭 상태라 이 흐름과는 무관하다.
+        if (!silent) {
+            var unmatchedCount = (window._msResults || []).filter(function(r) { return !r.project; }).length;
+            if (unmatchedCount > 0 && typeof window._msBulkReanalyzeUnmatched === 'function') {
+                var _estMin = Math.round(unmatchedCount * 4 / 60 * 10) / 10; // 4초/건 기준 예상 분(최대치)
+                if (window.showToast) {
+                    window.showToast(window._t(
+                        '🔄 토픽 갱신 완료 — 미분류 최대 ' + unmatchedCount + '건 자동 재분석 확인 중 (최대 ' + _estMin + '분, 최근 재시도한 건은 건너뜀)...',
+                        '🔄 Topic profile updated — checking up to ' + unmatchedCount + ' unclassified mail(s) for auto re-analysis (up to ' + _estMin + ' min, recently-retried ones skipped)...'
+                    ), 'info', 5000);
+                }
+                setTimeout(function() {
+                    window._msBulkReanalyzeUnmatched({ noConfirm: true });
+                }, 800);
             }
-            setTimeout(function() {
-                window._msBulkReanalyzeUnmatched({ noConfirm: true });
-            }, 800);
         }
 
         return profile;
@@ -851,38 +869,82 @@
         } catch(e) { console.warn('[토픽 신호] project_index 갱신 실패:', e); }
     }
 
-    // ── A: 현재 프로젝트 AI 업무 추가 시 자동 프로파일 갱신 ─────────────────────
+    // ── A: AI 업무 추가 시 자동 프로파일 갱신 (프로젝트별 독립 추적) ─────────────
     // AI가 등록한 업무가 10개 이상 새로 추가될 때마다 프로파일 백그라운드 재생성
     // 💡 [무료 API 절약] +5→+10으로 기준 상향 + 10분 쿨다운 추가
     //    메일 대량 분석 시 반복 호출 방지 (이전엔 쿨다운 없어서 50건 → 최대 10회 호출)
-    var _TP_REGEN_COOLDOWN_MS = 10 * 60 * 1000; // 10분
-    var _tpLastRegenTs = 0; // 마지막 자동 재생성 타임스탬프
+    // 💡 [2026-09-14 개편] 예전엔 "지금 열려있는 프로젝트"만 추적하는 모듈 전역 변수
+    //    (_tpLastRegenCount/_tpLastRegenTs) 하나로 모든 프로젝트의 쿨다운을 공유하고 있어서,
+    //    ①프로젝트를 오가면 쿨다운이 서로 오염되고 ②메일서버 완전자동/업무보관함 배분/다중배분처럼
+    //    "지금 열려있지 않은" 프로젝트에 헤드리스로 업무가 꽂히는 경로(15b/14d — globalData가 아니라
+    //    방금 Drive에서 받아온 rows를 다룸)에는 애초에 걸 수가 없었다. 사용자 요청("헤드리스 경로까지
+    //    다 커버, 여러 곳에서 수행돼야 프로파일이 풍부해짐")에 따라 localStorage에 fileId별로
+    //    "마지막 재생성 시점의 AI 업무 수·시각"을 저장해서, 임의의 프로젝트(rows/colIdx만 있으면 지금
+    //    열려있지 않아도) 각각 독립적으로 +10개·10분 쿨다운을 추적하도록 확장한다.
+    var _TP_REGEN_STATE_KEY   = 'gantt_topic_regen_state_v1';
+    var _TP_REGEN_COOLDOWN_MS = 10 * 60 * 1000; // 프로젝트별 10분 쿨다운
+    var _TP_REGEN_STEP        = 10;             // AI 업무 +10개마다 재생성 후보
+
+    function _tpGetRegenState() {
+        try { return JSON.parse(localStorage.getItem(_TP_REGEN_STATE_KEY)) || {}; } catch(e) { return {}; }
+    }
+    function _tpSaveRegenState(state) {
+        try { localStorage.setItem(_TP_REGEN_STATE_KEY, JSON.stringify(state)); } catch(e) {}
+    }
+    /** fileId 기준 "지금 재생성해도 되는지" 판정 — 통과 즉시 상태를 갱신해 중복 트리거를 막는다
+     *  (동시에 여러 건이 같은 프로젝트로 헤드리스 배분될 때도 AI 호출이 한 번만 나가도록 — 이 함수
+     *  자체엔 await가 없어 호출~반환 사이 다른 비동기 작업이 끼어들 틈이 없다). */
+    function _tpShouldRegen(fileId, aiCount) {
+        if (!fileId) return false;
+        var state = _tpGetRegenState();
+        var s = state[fileId] || { count: 0, ts: 0 };
+        if (aiCount < s.count + _TP_REGEN_STEP) return false; // 아직 +10개 미만
+        if (Date.now() - s.ts < _TP_REGEN_COOLDOWN_MS) return false; // 프로젝트별 쿨다운 중
+        state[fileId] = { count: aiCount, ts: Date.now() };
+        _tpSaveRegenState(state);
+        return true;
+    }
+
+    /**
+     * 임의의 프로젝트(지금 열려있지 않아도 됨)에 대해 "AI 업무가 충분히 늘었으면" 프로파일을
+     * 백그라운드로 재생성한다. 메일서버 완전자동(15b)·업무보관함 단일/다중 배분(14d)처럼 헤드리스로
+     * Drive에 직접 쓰는 모든 경로가 공통으로 호출 — 판정을 통과해 실제로 재생성했으면 profile 객체를,
+     * 아니면(쿨다운/증가폭 미달·API 키 없음·설정으로 꺼짐 등) null을 반환한다.
+     * ⚠️ Drive 저장은 이 함수가 직접 하지 않는다 — 헤드리스 호출부가 이미 만들고 있는 saveData에
+     *    반환값을 saveData.topicProfile로 얹어 원래 하려던 PATCH 한 번에 같이 실어 보내는 것을
+     *    전제로 한다(별도 Drive 왕복을 추가하면 그만큼 저장 충돌 창도 함께 늘어나므로).
+     */
+    window._tpMaybeAutoRegen = async function(fileId, rows, colIdxArg, projectMeta) {
+        if (!fileId || !rows || !window._generateTopicProfile) return null;
+        // 사용자가 "토픽 프로파일 자동 생성 끄기"를 체크한 경우 완전 스킵
+        if (window.getTopicProfileAutoDisabled && window.getTopicProfileAutoDisabled()) return null;
+        var apiKey = window.getActiveAiKey && window.getActiveAiKey();
+        if (!apiKey) return null; // 키 없으면 조용히 스킵 — 헤드리스 경로엔 에러를 보여줄 화면이 없음
+        var aiCount = rows.filter(function(r) { return r && r._aiRegistered; }).length;
+        if (!_tpShouldRegen(fileId, aiCount)) return null;
+        try {
+            var isCurrent = (fileId === _currentKey());
+            console.log('[토픽 자동갱신] "' + fileId + '" AI 업무 ' + aiCount + '개 도달 → 프로파일 재생성' + (isCurrent ? '' : ' (헤드리스)'));
+            return await window._generateTopicProfile({
+                key: fileId, rows: rows, colIdx: colIdxArg, projectMeta: projectMeta || {},
+                silent: !isCurrent
+            });
+        } catch(e) { console.warn('[토픽 자동갱신] 실패(무시):', fileId, e); return null; }
+    };
+
+    /** "지금 열려있는" 프로젝트 전용 진입점(기존 호출부 호환용) — 성공 시 Drive에도 바로 반영한다. */
     window._tpCheckAutoRegen = function() {
         if (!window._generateTopicProfile || !window.globalData) return;
-        // 사용자가 "토픽 프로파일 자동 생성 끄기"를 체크한 경우 완전 스킵
-        if (window.getTopicProfileAutoDisabled && window.getTopicProfileAutoDisabled()) return;
-        var aiCount = (window.globalData || []).filter(function(r) { return r && r._aiRegistered; }).length;
-        var lastCount = window._tpLastRegenCount || 0;
-        if (aiCount < lastCount + 10) return;  // 아직 +10개 미만
-        // 쿨다운 체크 — 마지막 재생성으로부터 10분 이내면 스킵
-        var now = Date.now();
-        if (now - _tpLastRegenTs < _TP_REGEN_COOLDOWN_MS) {
-            console.log('[토픽 자동갱신] 쿨다운 중 스킵 (마지막 재생성 후 ' +
-                Math.round((now - _tpLastRegenTs) / 60000) + '분 경과)');
-            return;
-        }
-        window._tpLastRegenCount = aiCount;
-        _tpLastRegenTs = now;
-        setTimeout(function() {
-            var apiKey = window.getActiveAiKey && window.getActiveAiKey();
-            if (!apiKey) return;
-            console.log('[토픽 자동갱신] AI 업무 ' + aiCount + '개 증가 → 프로파일 재생성');
-            window._generateTopicProfile().then(function(prof) {
-                if (prof && window.currentDriveFileId && window.saveToGoogleDrive) {
-                    window.saveToGoogleDrive({ suppressAlert: true });
-                }
-            }).catch(function(e) { console.warn('[토픽 자동갱신] 실패', e); });
-        }, 5000); // 5초 딜레이 (렌더링 먼저 완료 후)
+        var fileId = _currentKey();
+        if (!fileId) return;
+        setTimeout(function() { // 5초 딜레이 (렌더링 먼저 완료 후) — 기존 동작 유지
+            window._tpMaybeAutoRegen(fileId, window.globalData, (typeof colIdx !== 'undefined' ? colIdx : undefined), window.projectMeta || {})
+                .then(function(profile) {
+                    if (profile && window.currentDriveFileId === fileId && window.saveToGoogleDrive) {
+                        window.saveToGoogleDrive({ suppressAlert: true });
+                    }
+                });
+        }, 5000);
     };
 
     // ── 토픽 프로파일을 getSystemPrompt에 자동 주입 ───────────────────────────
