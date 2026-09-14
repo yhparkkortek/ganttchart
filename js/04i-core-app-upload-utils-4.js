@@ -121,6 +121,13 @@
             'ai-topic-learning-count-label': { ko:'🔢 최대 건수 (긍정·부정 사례 각각)', en:'🔢 Max count (positive/negative cases, each)' },
             'ai-topic-learning-count-hint': { ko:'권장값: 15건 (기본값) — "이 프로젝트로 확인된 사례"와 "이 프로젝트가 아니었던 사례"에 각각 적용됩니다. 너무 크면 프롬프트가 길어져 응답이 느려지거나 실패할 수 있습니다.',
                                                en:'Recommended: 15 (default) — applies separately to "confirmed as this project" and "confirmed as not this project" cases. Too high lengthens the prompt and can slow down or fail responses.' },
+            'ai-set-sec-retry-label':   { ko:'🔄 저신뢰도 자동 재분석',                 en:'🔄 Auto Re-analysis (Low Confidence)' },
+            'ai-retry-auto-desc':       { ko:'🤖 AI 업무 분석으로 등록된 업무 중 신뢰도가 "상"이 아닌 것이 생기면(오매칭 신고·재분석 힌트 등으로 학습 로그가 갱신될 때마다), 그 업무들을 AI로 다시 분석해 정확도를 높일 수 있습니다.',
+                                          en:'When a task registered via AI mail analysis gets a confidence below "High" (e.g. after a mismatch report or re-analysis hint updates the learning log), it can be re-analyzed by AI to improve accuracy.' },
+            'ai-retry-auto-checkbox-label': { ko:'자동으로 즉시 재분석 실행 (끄면 모았다가 아래에서 한 번에 처리)', en:'Run re-analysis automatically and immediately (turn off to batch them below instead)' },
+            'ai-retry-auto-hint':       { ko:'기본값: 켜짐 — 켜두면 배너 없이 조용히 처리되고 결과만 토스트로 알려줍니다.',
+                                          en:'Default: on — when on, it runs quietly with no popup and only a toast reports the result.' },
+            'ai-retry-run-now-btn':     { ko:'🔄 지금 일괄 재분석', en:'🔄 Re-analyze all now' },
             'ai-set-save-btn':  { ko:'저장', en:'Save' },
             'ai-set-close-btn': { ko:'닫기', en:'Close' },
         };
@@ -133,9 +140,12 @@
             const el = document.getElementById(id);
             if (el) el.textContent = _en ? '🔄 Reset' : '🔄 기본값';
         });
+        // 💡 대기 건수 표시는 매번 새로 그리는(멱등) 동적 문구라 idTexts 정적 맵으로는 못 다룸 —
+        // 언어 전환 시에도 다시 맞춰주도록 여기서 같이 호출.
+        if (window._aiRetryRefreshPendingCount) window._aiRetryRefreshPendingCount();
         // 💡 ai-set-sec-reqsize 라벨 자체는 04j-core-app-upload-utils-5.js의 toggleLang() 안
         // _reqsizeTexts가 이미 갱신하지만, 그 화살표(-arrow)는 어디에도 없었어서 여기서 같이 처리.
-        ['ai-set-sec-model','ai-set-sec-maxlen','ai-set-sec-reqsize','ai-set-sec-range','ai-set-sec-learning'].forEach(sid => {
+        ['ai-set-sec-model','ai-set-sec-maxlen','ai-set-sec-reqsize','ai-set-sec-range','ai-set-sec-learning','ai-set-sec-retry'].forEach(sid => {
             const sec   = document.getElementById(sid);
             const arrow = document.getElementById(sid + '-arrow');
             if (!sec || !arrow) return;
@@ -144,6 +154,19 @@
         });
         const _clearKeyBtn = document.querySelector('[data-i18n-title="clear-api-key"]');
         if (_clearKeyBtn) _clearKeyBtn.title = _en ? 'Delete API Key' : 'API 키 삭제';
+    };
+
+    // 💡 [2026-09-14 신규] "🔄 저신뢰도 자동 재분석" 그룹의 대기 건수 표시 — 모달을 열 때,
+    //    그리고 _alRunRetry(js/25-ai-learning.js) 실행이 끝날 때마다(모달이 열려 있다면) 호출됨.
+    //    모달이 아직 안 만들어졌거나 닫혀 있어도 안전하게 no-op.
+    window._aiRetryRefreshPendingCount = function() {
+        var el = document.getElementById('ai-retry-pending-count');
+        if (!el) return;
+        var n = window._alCollectLowConfidenceRows ? window._alCollectLowConfidenceRows().length : 0;
+        var _en = window._currentLang === 'en';
+        el.innerHTML = _en
+            ? 'Pending low-confidence tasks: <b>' + n + '</b>'
+            : '대기 중인 저신뢰도 업무: <b>' + n + '건</b>';
     };
 
     window.openAiToolsSettingsModal = function() {
@@ -338,6 +361,30 @@
                         </div>
                     </div>
 
+                    <!-- ══ 그룹5: 🔄 저신뢰도 자동 재분석 (기본 접힘, 신규 2026-09-14) — Phase 4
+                         재시도 엔진(_alTriggerRetry, js/25-ai-learning.js)의 실행 방식 선택.
+                         on: 배너 없이 즉시 자동 재분석. off: 조용히 대기시켰다가 아래 버튼으로 일괄 처리 ══ -->
+                    <div style="border:1px solid #e0e0e0; border-radius:6px; overflow:hidden;">
+                        <div onclick="window._toggleAlarmSection('ai-set-sec-retry')"
+                             style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:#f0f4f8; cursor:pointer; user-select:none; transition:background .15s;" onmouseover="this.style.background='#e4eaf1'" onmouseout="this.style.background='#f0f4f8'">
+                            <span id="ai-set-sec-retry-label" style="font-size:12.5px; font-weight:bold; color:#2c5f8a;">🔄 저신뢰도 자동 재분석</span>
+                            <span id="ai-set-sec-retry-arrow" style="font-size:11px; color:#888;">▶ 펼치기</span>
+                        </div>
+                        <div id="ai-set-sec-retry" style="display:none; padding:12px 14px; border-top:1px solid #e8e8e8;">
+                            <div id="ai-retry-auto-desc" style="font-size:11px; color:#888; margin-bottom:10px; line-height:1.5;">🤖 AI 업무 분석으로 등록된 업무 중 신뢰도가 "상"이 아닌 것이 생기면(오매칭 신고·재분석 힌트 등으로 학습 로그가 갱신될 때마다), 그 업무들을 AI로 다시 분석해 정확도를 높일 수 있습니다.</div>
+                            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; margin-bottom:4px;">
+                                <input id="ai-retry-auto-checkbox" type="checkbox" style="cursor:pointer; width:16px; height:16px; flex-shrink:0;">
+                                <span id="ai-retry-auto-checkbox-label" style="font-size:12.5px; font-weight:bold; color:#333;">자동으로 즉시 재분석 실행 (끄면 모았다가 아래에서 한 번에 처리)</span>
+                            </label>
+                            <div id="ai-retry-auto-hint" style="font-size:10.5px; color:#aaa; margin-bottom:12px;">기본값: 켜짐 — 켜두면 배너 없이 조용히 처리되고 결과만 토스트로 알려줍니다.</div>
+                            <div style="border-top:1px solid #eee; margin:12px 0;"></div>
+                            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap;">
+                                <span id="ai-retry-pending-count" style="font-size:12px; color:#555;"></span>
+                                <button id="ai-retry-run-now-btn" onclick="window._alRunPendingRetryNow()" onmouseover="this.style.background='#ffd766';" onmouseout="this.style.background='#ffe082';" style="padding:7px 14px; background:#ffe082; color:#4a3500; border:1px solid #ffc107; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; transition:background .15s;">🔄 지금 일괄 재분석</button>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
                 <div style="padding:10px 16px; border-top:1px solid #eee; display:flex; justify-content:flex-end; gap:8px; flex-shrink:0;">
                     <button id="ai-set-save-btn" onclick="window.saveAiToolsSettings()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:6px 18px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:4px; cursor:pointer; font-size:13px; font-weight:bold; transition:background .15s, border-color .15s;">저장</button>
@@ -356,6 +403,8 @@
         document.getElementById('ai-summary-urgent-days-input').value = window.getAiUrgentDays();
         document.getElementById('ai-topic-learning-days-input').value = window.getTopicLearningDays();
         document.getElementById('ai-topic-learning-count-input').value = window.getTopicLearningCount();
+        document.getElementById('ai-retry-auto-checkbox').checked = window.getAiRetryAutoEnabled();
+        window._aiRetryRefreshPendingCount();
         // 💡 이 모달로 옮겨온 mail-ai-provider/mail-ai-model/mail-gemini-key 등은 원래 AI 업무분석
         //    팝업이 열릴 때만 채워지던 값들이라, 여기서도 열릴 때마다 새로 채워줘야 함.
         if (window.refreshAiKeyPanel) window.refreshAiKeyPanel();
@@ -426,9 +475,12 @@
         learnCountInput.value = lc;
         window.setTopicLearningCount(lc);
 
+        var retryAutoOn = document.getElementById('ai-retry-auto-checkbox').checked;
+        window.setAiRetryAutoEnabled(retryAutoOn);
+
         if (window.showToast) window.showToast(window._t(
-            '✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · AI 문답 참고 업무 최대 ' + qmt + '/' + qmo + '건 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ' · 학습 로그 반영 최근 ' + ld + '일/' + lc + '건)',
-            '✅ Settings saved. (Mail analysis max ' + mv + ' chars · Task detail max ' + v + ' chars · AI Q&A max ' + qmt + '/' + qmo + ' tasks · Search range ±' + rd + ' days · Urgent threshold D-' + ud + ' · Learning log covers last ' + ld + ' days/' + lc + ' entries)'
+            '✅ 설정을 저장했습니다. (메일 분석 최대 ' + mv + '자 · 업무 상세내용 최대 ' + v + '자 · AI 문답 참고 업무 최대 ' + qmt + '/' + qmo + '건 · 검색 범위 ±' + rd + '일 · 임박 기준 D-' + ud + ' · 학습 로그 반영 최근 ' + ld + '일/' + lc + '건 · 저신뢰도 자동 재분석 ' + (retryAutoOn ? '켜짐' : '꺼짐') + ')',
+            '✅ Settings saved. (Mail analysis max ' + mv + ' chars · Task detail max ' + v + ' chars · AI Q&A max ' + qmt + '/' + qmo + ' tasks · Search range ±' + rd + ' days · Urgent threshold D-' + ud + ' · Learning log covers last ' + ld + ' days/' + lc + ' entries · Auto re-analysis ' + (retryAutoOn ? 'on' : 'off') + ')'
         ), 'info');
     };
 

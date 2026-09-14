@@ -51,14 +51,24 @@
 
     // ─── Phase 4: 재시도 엔진 — 저신뢰도(중/하/미분류) AI 업무 자동 재분석 ────────
 
-    /**
-     * globalData에서 AI 등록 + 저신뢰도 행을 스캔하여, 재분석 배너를 표시한다.
-     * _writeLearningEntry 호출 직후 자동으로 실행됨.
-     */
-    function _alTriggerRetry() {
-        // globalData가 없거나 비어있으면 스킵
-        if (typeof globalData === 'undefined' || !globalData || globalData.length <= 1) return;
+    // 💡 [2026-09-14 신규] "🔄 저신뢰도 자동 재분석" on/off — ⚙️ AI 분석 설정 모달에서 조절.
+    //    on(기본): 배너로 물어보지 않고 즉시 자동 재분석 후 결과만 토스트로 알림.
+    //    off: 즉시 실행하지 않고 조용히 대기시켜서, 나중에 그 설정 그룹의
+    //    "🔄 지금 일괄 재분석" 버튼으로 한 번에 몰아서 처리할 수 있게 함(1건 갱신마다 끼어들지 않음).
+    window._AI_RETRY_AUTO_DEFAULT = true;
+    window.getAiRetryAutoEnabled = function() {
+        var v = localStorage.getItem('gantt_ai_retry_auto');
+        if (v === null) return window._AI_RETRY_AUTO_DEFAULT;
+        return v === '1';
+    };
+    window.setAiRetryAutoEnabled = function(on) {
+        localStorage.setItem('gantt_ai_retry_auto', on ? '1' : '0');
+    };
+
+    /** globalData에서 AI 등록 + 저신뢰도(중/하/미분류) 행만 뽑아 배열로 반환 (배너/설정 패널 공용) */
+    window._alCollectLowConfidenceRows = function() {
         var lowRows = [];
+        if (typeof globalData === 'undefined' || !globalData || globalData.length <= 1) return lowRows;
         for (var i = 1; i < globalData.length; i++) {
             var row = globalData[i];
             if (!row || !row._aiRegistered) continue;
@@ -66,37 +76,32 @@
             if (conf === '상') continue; // 상은 이미 확정
             lowRows.push({ idx: i, taskName: row._origT3 || row._origT2 || row._origT1 || row._origT4 || row._origDev || '업무', conf: conf, snippet: row._aiSourceSnippet || '' });
         }
+        return lowRows;
+    };
+
+    /**
+     * globalData에서 AI 등록 + 저신뢰도 행을 스캔하여, 설정에 따라 즉시 재분석하거나
+     * 조용히 대기시킨다. _writeLearningEntry 호출 직후 자동으로 실행됨.
+     */
+    function _alTriggerRetry() {
+        var lowRows = window._alCollectLowConfidenceRows();
         if (!lowRows.length) return;
-        _showRetryBanner(lowRows);
+        if (window.getAiRetryAutoEnabled()) {
+            _alRunRetry(lowRows); // 배너 없이 즉시 실행 — 결과는 _alRunRetry 내부 토스트로만 알림
+        }
+        // off일 때는 여기서 아무것도 하지 않음 — "🔄 저신뢰도 자동 재분석" 설정 그룹의
+        // "지금 일괄 재분석" 버튼(window._alRunPendingRetryNow)으로 나중에 몰아서 처리
     }
 
-    /** 재분석 제안 배너 (비침습적 — 자동 닫힘 15초, 수동 닫기 또는 실행 가능) */
-    function _showRetryBanner(lowRows) {
-        var existing = document.getElementById('al-retry-banner');
-        if (existing) existing.remove();
-
-        var banner = document.createElement('div');
-        banner.id = 'al-retry-banner';
-        banner.style.cssText =
-            'position:fixed;top:56px;right:16px;z-index:99500;max-width:340px;' +
-            'background:#fff8e1;border:1px solid #ffe082;border-radius:10px;' +
-            'padding:12px 16px;box-shadow:0 4px 16px rgba(0,0,0,0.14);font-family:sans-serif;';
-        banner.innerHTML =
-            '<div style="font-size:13px;font-weight:700;color:#856404;margin-bottom:6px;">📊 AI 학습 갱신됨</div>' +
-            '<div style="font-size:12px;color:#6c4a00;margin-bottom:10px;">저신뢰도 AI 업무 <b>' + lowRows.length + '건</b>을 재분석해 정확도를 높일 수 있습니다.</div>' +
-            '<div style="display:flex;gap:8px;">' +
-              '<button id="al-retry-run-btn" style="flex:1;padding:7px 0;background:#ffe082;color:#4a3500;border:1px solid #ffc107;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;">🔄 재분석 실행</button>' +
-              '<button id="al-retry-close-btn" style="padding:7px 12px;background:#f8f9fa;color:#888;border:1px solid #dee2e6;border-radius:6px;font-size:12px;cursor:pointer;">닫기</button>' +
-            '</div>';
-        document.body.appendChild(banner);
-
-        document.getElementById('al-retry-close-btn').addEventListener('click', function() { banner.remove(); });
-        document.getElementById('al-retry-run-btn').addEventListener('click', function() {
-            banner.remove();
-            _alRunRetry(lowRows);
-        });
-        setTimeout(function() { if (banner.parentNode) banner.remove(); }, 15000);
-    }
+    /** ⚙️ AI 분석 설정 모달의 "🔄 지금 일괄 재분석" 버튼 — 현재 대기 중인 저신뢰도 행을 즉시 재분석 */
+    window._alRunPendingRetryNow = function() {
+        var lowRows = window._alCollectLowConfidenceRows();
+        if (!lowRows.length) {
+            _showToast(window._t('저신뢰도로 대기 중인 업무가 없습니다', 'No low-confidence tasks are pending'));
+            return;
+        }
+        _alRunRetry(lowRows);
+    };
 
     /**
      * 저신뢰도 행을 AI로 재분석하여 신뢰도가 올라오면 row._aiConfidence를 갱신한다.
@@ -157,6 +162,8 @@
         } else {
             _showToast(window._t('재분석 완료 — 신뢰도 변경 없음', 'Re-analysis complete — no confidence change'));
         }
+        // ⚙️ AI 분석 설정 모달이 열려 있으면 "대기 중" 건수를 갱신 (닫혀 있으면 조용히 no-op)
+        if (window._aiRetryRefreshPendingCount) window._aiRetryRefreshPendingCount();
     };
 
     // ─── 재배치 큐 ──────────────────────────────────────────────────────────

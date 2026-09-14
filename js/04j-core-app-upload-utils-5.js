@@ -1284,7 +1284,7 @@
         if (window._ganttQaUpdateVoiceBtn) window._ganttQaUpdateVoiceBtn();
         if (window._ganttQaUpdateMicBtn) window._ganttQaUpdateMicBtn();
 
-        // [AI 분석 설정] 나머지 4개 그룹(모델선택/글자수/기간설정/학습로그) — 실제 텍스트 맵은
+        // [AI 분석 설정] 나머지 5개 그룹(모델선택/글자수/기간설정/학습로그/저신뢰도 자동재분석) — 실제 텍스트 맵은
         // 04i-core-app-upload-utils-4.js의 _aiSettingsRefreshLang()에 있음(모달과 같은 파일에 둬서
         // 모달을 처음 열 때도 같은 함수로 커버 가능하게 함).
         if (window._aiSettingsRefreshLang) window._aiSettingsRefreshLang();
