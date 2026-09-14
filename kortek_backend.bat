@@ -38,6 +38,22 @@ if errorlevel 1 (
     echo  [2/3] 패키지 확인 완료
 )
 
+:: ── SAP 조회(AI 문답) 전용 패키지 확인 — 없어도 서버는 정상 실행됨(선택 기능) ──
+:: 2026-09-14: pywin32는 위 필수 패키지 자동설치 목록에서 빠져 있어, SAP 조회 기능을 쓰려는
+:: 사람이 매번 pip install을 수동으로 쳐야 했다. 여기서도 동일하게 최초 1회만 자동 설치한다.
+python -c "import win32com.client" > nul 2>&1
+if errorlevel 1 (
+    echo  [SAP] pywin32 설치 중... (AI 문답의 SAP 조회 기능에 필요, 최초 1회만 실행됩니다)
+    pip install pywin32 --quiet
+    if errorlevel 1 (
+        echo  [안내] pywin32 설치 실패 — SAP 조회 기능만 비활성화된 채로 나머지는 정상 실행됩니다.
+    ) else (
+        echo  [SAP] pywin32 설치 완료
+    )
+) else (
+    echo  [SAP] pywin32 확인 완료
+)
+
 :: ── 설정 파일 확인 ─────────────────────────────────────
 if not exist telegram_config.json (
     echo  [안내] telegram_config.json 없음
