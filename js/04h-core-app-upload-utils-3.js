@@ -1456,6 +1456,37 @@
             return;
         }
 
+        // 📄 [2026-09-14 신규] "SAP에서 P01 문서 열어줘" 로컬 명령 — AI 호출 없이, MM03에서 이미
+        //    열어둔 자재의 "문서 데이터" 탭에서 해당 문서 타입을 찾아 열고 원본 파일을 다운로드+
+        //    실행한다. 비동기(백엔드 왕복)라 다른 로컬 명령들과 달리 별도 블록으로 처리.
+        const sapOpenDocType = window._ganttQaExtractSapOpenDocRequest ? window._ganttQaExtractSapOpenDocRequest(question) : null;
+        if (sapOpenDocType) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 "${sapOpenDocType}" 문서를 찾아 여는 중...`, `Looking up and opening SAP document "${sapOpenDocType}"...`), pending: true });
+            input.value = '';
+            window._renderGanttQaMessages();
+            let sapDocReply;
+            try {
+                const res = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-open-document?type=' + encodeURIComponent(sapOpenDocType)),
+                    50000, window._t('SAP 문서 열기 50초 시간 초과', 'Opening the SAP document timed out after 50s')
+                );
+                const data = await res.json();
+                if (data.ok) {
+                    sapDocReply = '📄 ' + (data.message || window._t(`"${sapOpenDocType}" 문서를 열었습니다.`, `Opened document "${sapOpenDocType}".`));
+                } else {
+                    sapDocReply = '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                }
+            } catch (e) {
+                sapDocReply = '⚠️ ' + window._t('SAP 문서 열기 실패: ', 'Failed to open SAP document: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: sapDocReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
@@ -2129,6 +2160,26 @@
                 ? '⚠️ Failed to export to Excel: ' + (e && e.message ? e.message : e)
                 : '⚠️ 엑셀 내보내기에 실패했습니다: ' + (e && e.message ? e.message : e);
         }
+    };
+
+    // 📄 [2026-09-14 신규] "SAP에서 P01 문서 열어줘/다운로드해줘" — 질문 문자열만 보고 로컬에서
+    //    바로 판정(문서 타입 코드를 추출)한다. 실제 실행은 비동기(백엔드 왕복)라 sendGanttQaMessage
+    //    쪽에서 이 반환값을 보고 별도 async 블록으로 처리한다(다른 로컬 명령들처럼 여기서 바로
+    //    답변 문자열까지 만들지 않는 이유). 문서 타입 코드는 이 회사 SAP의 실제 문서 타입
+    //    패턴(P01/C04/Q11/P07 등 — 대문자 1글자 + 숫자 2자리)에 맞춘 정규식으로 추출.
+    window._ganttQaExtractSapOpenDocRequest = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        if (!/sap/i.test(text)) return null;
+        if (!/문서/.test(text)) return null;
+        if (!/(열어|열기|다운로드|출력|보여|open)/i.test(text)) return null;
+        // 💡 "문서 열기 가능해?"류 여부-질문까지 실행으로 오인하지 않도록(엑셀 내보내기 명령과 동일한
+        //    가드 패턴 — 위 looksLikeQuestion 참고).
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (looksLikeQuestion) return null;
+        var m = text.match(/\b([A-Za-z][0-9]{2})\b/);
+        if (!m) return null;
+        return m[1].toUpperCase();
     };
 
     // 💡 실제 XLSX 조립 — _ganttQaTryHandleSapExportCommand 전용으로 분리(다른 곳에서도 "마지막

@@ -1505,39 +1505,60 @@ def all_decrypt():
 _SAP_BRIDGE_PATH = os.path.join(BASE_DIR, 'sap_bridge_32.py')
 
 
-@app.route('/sap-fetch', methods=['GET'])
-def sap_fetch():
+def _run_sap_bridge(extra_args, timeout, log_prefix):
+    """sap_bridge_32.py를 32비트 Python 서브프로세스로 실행하고 JSON 결과를 돌려주는 공용
+    헬퍼 — /sap-fetch와 /sap-open-document가 똑같이 쓴다(2026-09-14, 두 번째 엔드포인트
+    추가하면서 중복 제거)."""
     try:
         proc = subprocess.run(
-            ['py', '-3-32', _SAP_BRIDGE_PATH],
-            capture_output=True, text=True, timeout=30, encoding='utf-8', errors='replace'
+            ['py', '-3-32', _SAP_BRIDGE_PATH] + extra_args,
+            capture_output=True, text=True, timeout=timeout, encoding='utf-8', errors='replace'
         )
     except FileNotFoundError:
-        return jsonify({'ok': False, 'error': 'Python 런처(py.exe)를 찾을 수 없습니다 — Python 공식 설치 상태를 확인하세요.'}), 500
+        return {'ok': False, 'error': 'Python 런처(py.exe)를 찾을 수 없습니다 — Python 공식 설치 상태를 확인하세요.'}, 500
     except subprocess.TimeoutExpired:
-        return jsonify({'ok': False, 'error': 'SAP 조회가 30초 안에 끝나지 않았습니다. SAP GUI에 응답 대기 중인 팝업(스크립트 접근 확인 등)이 떠 있지 않은지 확인해주세요.'}), 500
+        return {'ok': False, 'error': f'{timeout}초 안에 끝나지 않았습니다. SAP GUI에 응답 대기 중인 팝업이 떠 있지 않은지 확인해주세요.'}, 500
 
     stdout_lines = [ln for ln in (proc.stdout or '').strip().splitlines() if ln.strip()]
     if not stdout_lines:
         # 💡 32비트 Python/pywin32가 아예 없는 경우 등 — sap_bridge_32.py가 뭘 출력하기도 전에
         #    런처 자체가 실패한 상황. kortek_backend.bat의 자동 설치 블록을 다시 타라고 안내.
         stderr_tail = (proc.stderr or '').strip()
-        print(f"[SAP 조회 실패] 서브프로세스가 출력 없이 종료(returncode={proc.returncode}). stderr: {stderr_tail}")
+        print(f"[{log_prefix} 실패] 서브프로세스가 출력 없이 종료(returncode={proc.returncode}). stderr: {stderr_tail}")
         if 'No runtime installed' in stderr_tail or 'not installed' in stderr_tail.lower():
-            return jsonify({'ok': False, 'error': '32비트 Python이 이 PC에 설치되어 있지 않습니다. kortek_backend.bat을 다시 실행하면 자동 설치됩니다(최초 1회, 몇 분 소요).'}), 500
-        return jsonify({'ok': False, 'error': 'SAP 조회 서브프로세스 실행에 실패했습니다. 백엔드 콘솔 창의 [SAP 조회 실패] 로그를 확인하세요. (' + (stderr_tail[-300:] if stderr_tail else '상세 정보 없음') + ')'}), 500
+            return {'ok': False, 'error': '32비트 Python이 이 PC에 설치되어 있지 않습니다. kortek_backend.bat을 다시 실행하면 자동 설치됩니다(최초 1회, 몇 분 소요).'}, 500
+        return {'ok': False, 'error': f'{log_prefix} 서브프로세스 실행에 실패했습니다. 백엔드 콘솔 창의 [{log_prefix} 실패] 로그를 확인하세요. (' + (stderr_tail[-300:] if stderr_tail else '상세 정보 없음') + ')'}, 500
 
     try:
         data = json.loads(stdout_lines[-1])
     except Exception:
-        print(f"[SAP 조회 실패] sap_bridge_32.py 출력 JSON 파싱 실패. stdout: {proc.stdout!r} stderr: {proc.stderr!r}")
-        return jsonify({'ok': False, 'error': 'SAP 조회 결과를 해석하지 못했습니다. 백엔드 콘솔 창의 로그를 확인하세요.'}), 500
+        print(f"[{log_prefix} 실패] sap_bridge_32.py 출력 JSON 파싱 실패. stdout: {proc.stdout!r} stderr: {proc.stderr!r}")
+        return {'ok': False, 'error': f'{log_prefix} 결과를 해석하지 못했습니다. 백엔드 콘솔 창의 로그를 확인하세요.'}, 500
 
     if data.get('ok'):
-        print(f"[SAP 조회] source={data.get('source')} 길이={len(data.get('text') or '')}자")
+        print(f"[{log_prefix}] {data}")
     else:
-        print(f"[SAP 조회 실패] {data.get('error')}")
-    return jsonify(data)
+        print(f"[{log_prefix} 실패] {data.get('error')}")
+    return data, 200
+
+
+@app.route('/sap-fetch', methods=['GET'])
+def sap_fetch():
+    data, status = _run_sap_bridge([], 30, 'SAP 조회')
+    return jsonify(data), status
+
+
+@app.route('/sap-open-document', methods=['GET'])
+def sap_open_document():
+    # 💡 [2026-09-14 신규] "SAP에서 P01 문서 열어줘" — MM03에서 이미 열어둔 자재의 "문서 데이터"
+    #    탭에서 지정한 문서 타입(예: P01/C04/Q11)을 찾아 열고, 첨부된 원본 파일을 더블클릭해서
+    #    연결된 프로그램(Acrobat 등)으로 바로 연다. 실제 클릭 순서는 SAP GUI "기록 및 재생"으로
+    #    녹화한 매크로를 일반화해서 sap_bridge_32.py의 open_document()에 구현돼 있다.
+    doc_type = (request.args.get('type') or '').strip()
+    if not doc_type:
+        return jsonify({'ok': False, 'error': '문서 타입(type 파라미터)이 필요합니다. 예: /sap-open-document?type=P01'}), 400
+    data, status = _run_sap_bridge(['open_document', doc_type], 45, 'SAP 문서 열기')
+    return jsonify(data), status
 
 
 # ══════════════════════════════════════════════════════════════

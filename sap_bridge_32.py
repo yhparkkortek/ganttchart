@@ -16,9 +16,20 @@
 # 그리드가 있으면 그리드를, 없으면 보이는 라벨/입력필드 텍스트를 최대한 있는 그대로
 # 덤프해서 AI(callAiBackend)에게 구조화를 맡긴다 — kortek_backend.py의 예전 설계를 그대로
 # 옮겨온 것.
+#
+# 두 번째 인자로 "open_document"를 주면(세 번째 인자로 문서 타입, 예: P01) 다른 동작 —
+# MM03에서 이미 열어둔 자재의 "문서 데이터" 탭에서 그 문서 타입 행을 찾아 열고, 첨부된
+# 원본 파일을 더블클릭해서 연결된 프로그램(Acrobat 등)으로 바로 연다. 2026-09-14 실사용
+# 화면 녹화(SAP GUI "기록 및 재생")로 얻은 정확한 컨트롤 ID를 일반화한 것 — 절대경로
+# 대신 "화면 어디에 있든 ID에 특정 문자열이 포함된 컨트롤을 재귀 탐색"하는 방식을 써서,
+# 자재 유형별로 화면 서브구조 번호(SUB2/SUB7 등)가 달라져도 최대한 버티도록 했다.
+# 전제 조건: 사람이 미리 MM03에서 해당 자재를 조회해 "문서 데이터" 탭을 열어둔 상태여야
+# 한다(자재 조회 자체는 자동화하지 않음 — 화면 구조를 몰라 추측하기보다, 이미 검증된
+# "지금 열려 있는 화면을 조작"하는 설계를 그대로 따름).
 # ══════════════════════════════════════════════════════════════
 import sys
 import json
+import time
 
 
 def _get_sap_session():
@@ -160,6 +171,175 @@ def fetch_current_screen():
     return {'ok': True, 'source': source, 'text': text}
 
 
+# ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
+def _find_by_id_substring(container, substring, depth=0, max_depth=30, require_type=None):
+    """창 트리를 재귀 탐색해 .Id에 특정 문자열이 포함된 첫 번째 컨트롤을 찾는다.
+    절대경로(예: .../subSUB2:SAPLZ38MM_MATERIAL:3400/...)는 자재 유형에 따라 서브구조
+    번호가 달라질 수 있어 깨지기 쉽다 — 대신 "그 컨트롤 고유의 기술 이름"만 알면 화면
+    어디에 있든 찾아내는 이 방식이 더 안정적이다(2026-09-14, 실사용 녹화로 얻은 정확한
+    ID의 마지막 구성요소만 잘라서 검색어로 사용).
+    💡 [2026-09-14] "원본" 트리 컨트롤을 찾을 때, 같은 이름을 포함한 바깥쪽 컨테이너
+    (예: GuiCustomControl `cntlCTL_FILES2`)가 실제 기능이 있는 안쪽 GuiShell보다 먼저
+    걸려서 잘못 반환되는 문제가 실사용 테스트로 확인됨 — require_type='GuiShell'처럼
+    타입까지 맞아야만 반환하도록 해서 이 문제를 막는다(다른 호출부는 기존과 동일하게
+    타입 무관하게 첫 매치를 반환)."""
+    try:
+        cid = container.Id or ''
+        type_ok = (require_type is None) or (getattr(container, 'Type', None) == require_type)
+        if substring in cid and type_ok:
+            return container
+    except Exception:
+        pass
+    if depth > max_depth:
+        return None
+    try:
+        children = container.Children
+    except Exception:
+        return None
+    if children is None:
+        return None
+    for i in range(children.Count):
+        try:
+            child = children.Item(i)
+        except Exception:
+            continue
+        found = _find_by_id_substring(child, substring, depth + 1, max_depth, require_type)
+        if found is not None:
+            return found
+    return None
+
+
+def _select_tab_if_present(wnd, id_substring):
+    tab = _find_by_id_substring(wnd, id_substring)
+    if tab is not None:
+        try:
+            tab.select()
+        except Exception:
+            pass
+
+
+def _table_find_cell_by_exact_row_text(table, target_text):
+    """GuiTableControl에 지금 화면에 렌더링된 셀들(GuiTableControl.Children)을 훑어서,
+    텍스트가 target_text와 정확히 일치하는 셀을 찾는다. 컬럼의 정확한 필드명(DRAT-DOKAR
+    등)을 몰라도 동작하도록 모든 셀을 다 검사 — "Ty." 컬럼이 몇 번째인지 몰라도 된다."""
+    try:
+        children = table.Children
+    except Exception:
+        return None
+    if children is None:
+        return None
+    for i in range(children.Count):
+        try:
+            child = children.Item(i)
+            text = (child.Text or '').strip()
+        except Exception:
+            continue
+        if text.upper() == target_text.upper():
+            return child
+    return None
+
+
+def open_document(doc_type):
+    """MM03에서 이미 열려 있는 자재의 "문서 데이터" 탭에서, 지정한 문서 타입(예: 'P01')과
+    일치하는 행을 찾아 열고, 그 문서의 "원본(Originals)" 파일을 더블클릭해서 연결된
+    프로그램(Acrobat 등)으로 바로 연다."""
+    doc_type = (doc_type or '').strip().upper()
+    if not doc_type:
+        raise RuntimeError('문서 타입을 지정해주세요 (예: P01).')
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+
+    # 1) "문서 데이터" 탭이 아직 선택 안 돼 있으면 선택 시도(이미 열려 있으면 조용히 통과).
+    _select_tab_if_present(wnd, 'tabpZU04')
+    time.sleep(0.3)
+
+    # 2) 문서 목록 테이블 컨트롤을 화면 어디에 있든 찾는다.
+    table = _find_by_id_substring(wnd, 'tblSAPLCV140SUB_DOC')
+    if table is None:
+        raise RuntimeError('"문서 데이터" 탭의 문서 목록을 화면에서 찾지 못했습니다 — MM03에서 해당 자재를 조회하고 "문서 데이터" 탭을 열어둔 상태인지 확인해주세요.')
+
+    # 3) 화면에 보이는 행(스크롤 포함)을 훑어 어느 컬럼이든 doc_type과 정확히 일치하는
+    #    셀을 찾는다 — 여러 페이지에 걸쳐 있을 수 있어 스크롤하며 반복 탐색.
+    target_cell = None
+    try:
+        total_rows = table.RowCount
+        visible_rows = table.VisibleRowCount or total_rows or 1
+    except Exception:
+        total_rows, visible_rows = 0, 1
+    seen_positions = set()
+    pos = 0
+    while target_cell is None:
+        if pos in seen_positions:
+            break
+        seen_positions.add(pos)
+        try:
+            table.FirstVisibleRow = pos
+        except Exception:
+            pass
+        target_cell = _table_find_cell_by_exact_row_text(table, doc_type)
+        if target_cell is not None:
+            break
+        pos += visible_rows
+        if not total_rows or pos >= total_rows:
+            break
+
+    if target_cell is None:
+        raise RuntimeError(f'"문서 데이터" 목록에서 문서 타입 "{doc_type}"를 찾지 못했습니다 — 화면에 보이는 Ty. 열 값과 정확히 일치해야 합니다.')
+
+    # 4) 해당 셀에 포커스를 준 뒤 F2(VKey 2)로 "연다" — 실사용 녹화에서 확인한 패턴
+    #    (setFocus → caretPosition → sendVKey 2, 더블클릭과 동일 효과).
+    try:
+        target_cell.setFocus()
+        target_cell.caretPosition = 0
+    except Exception:
+        pass
+    wnd.sendVKey(2)
+    time.sleep(1.2)  # 새 문서 조회 화면이 그려질 시간
+
+    # 5) "원본(Originals)" 탭(tabpTSFILES — 실사용 테스트로 확인, "전표 데이터" 탭인
+    #    tabpTSMAIN과는 다름)이 기본으로 선택돼 있지 않을 수 있어 명시적으로 선택 시도
+    #    (이전에 다른 탭을 보고 있었으면 문서를 새로 열어도 그 탭이 그대로 유지돼, 원본 탭
+    #    하위 컨트롤이 아예 렌더링 트리에 없어 못 찾는 경우가 실제로 있었음).
+    _select_tab_if_present(wnd, 'tabpTSFILES')
+
+    # 💡 [2026-09-14] 실사용 테스트로 확인: 탭 전환 직후 곧바로 하위 컨트롤을 찾으면 화면이
+    #    아직 다 그려지지 않았거나(찾지 못함) SAP GUI가 일시적으로 바쁜 상태라 COM 예외가
+    #    나는 경우가 있었다 — 짧게 여러 번 재시도한다.
+    tree = None
+    last_err = None
+    for attempt in range(5):
+        time.sleep(0.6)
+        try:
+            tree = _find_by_id_substring(wnd, 'CTL_FILES', require_type='GuiShell')
+        except Exception as e:
+            last_err = e
+            continue
+        if tree is not None:
+            break
+
+    # "원본(Originals)" 트리 컨트롤을 찾아 첫 번째 첨부파일을 더블클릭 — SAP가 임시폴더
+    #    (C:\temp)에 내려받은 뒤 연결된 프로그램(Acrobat 등)으로 자동으로 연다. 이 동작에
+    #    수반되던 "SAP GUI 보안" 확인 팝업은 사용자가 SAP GUI 옵션에서 C:/temp/* 읽기+실행
+    #    허용 규칙을 추가해서 더 이상 뜨지 않는 것을 실사용으로 확인함(2026-09-14).
+    if tree is None:
+        extra = f' (마지막 오류: {last_err})' if last_err else ''
+        raise RuntimeError(f'문서 "{doc_type}"는 열었지만, "원본(Originals)" 파일 목록을 화면에서 찾지 못했습니다 — 이 문서에 첨부파일이 없거나 화면이 아직 그려지는 중일 수 있습니다.{extra}')
+
+    try:
+        node_keys = list(tree.GetAllNodeKeys())
+    except Exception as e:
+        raise RuntimeError(f'원본 파일 목록을 읽는 중 오류가 발생했습니다: {e}')
+    if not node_keys:
+        raise RuntimeError(f'문서 "{doc_type}"에 연결된 원본 파일이 없습니다.')
+
+    first_key = node_keys[0]
+    tree.selectNode(first_key)
+    tree.doubleClickNode(first_key)
+
+    return {'ok': True, 'docType': doc_type, 'message': f'문서 "{doc_type}"의 원본 파일을 열도록 요청했습니다. 잠시 후 연결된 프로그램(Acrobat 등)이 열립니다.'}
+
+
 def main():
     try:
         import win32com.client  # noqa: F401  (설치 여부 확인용)
@@ -167,7 +347,12 @@ def main():
         print(json.dumps({'ok': False, 'error': '32비트 Python용 pywin32가 설치되지 않았습니다. kortek_backend.bat을 다시 실행하면 자동 설치됩니다(또는 수동: py -3-32 -m pip install pywin32).'}, ensure_ascii=False))
         return
     try:
-        result = fetch_current_screen()
+        action = sys.argv[1] if len(sys.argv) > 1 else 'fetch_screen'
+        if action == 'open_document':
+            doc_type = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = open_document(doc_type)
+        else:
+            result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))
     except RuntimeError as e:
         print(json.dumps({'ok': False, 'error': str(e)}, ensure_ascii=False))

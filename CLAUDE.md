@@ -347,6 +347,52 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
   포함 여부로 걸러내 실행 명령으로 오인하지 않는다(`looksLikeQuestion` 가드 — 실제로 이 오인식이
   터진 뒤 추가됨). 같은 3단계 로컬명령 판단 원칙(위 "💬 AI 문답" 절)을 그대로 따름 — 새 "AI가 뭔가
   내보내기/저장하는" 요청을 추가할 때 참고.
+- **문서 열기("SAP에서 P01 문서 열어줘")**: `sap_bridge_32.py`의 `open_document(doc_type)` —
+  MM03에서 이미 열어둔 자재의 "문서 데이터" 탭(`tblSAPLCV140SUB_DOC` 테이블 컨트롤, 화면 어디에
+  있든 `_find_by_id_substring`로 재귀 탐색해 절대경로에 안 묶이게 함)에서 doc_type과 텍스트가
+  정확히 일치하는 셀을 찾아 `setFocus`+`VKey 2`(F2)로 열고(SAP GUI "기록 및 재생" 매크로 녹화로
+  얻은 정확한 클릭 패턴을 일반화한 것), 문서 화면의 "원본(Originals)" 트리에서 첫 번째 첨부파일을
+  `doubleClickNode`한다 — 그러면 SAP가 알아서 로컬 임시폴더(`C:\temp\`)에 받아 연결된 프로그램
+  (Acrobat 등)으로 바로 연다(브라우저로 파일을 옮길 필요 자체가 없음 — SAP GUI와 백엔드가 같은 PC).
+  프런트: `js/04h`의 `_ganttQaExtractSapOpenDocRequest`(로컬 판정, 정규식 `[A-Za-z][0-9]{2}`로
+  문서 타입 코드 추출 — 이 회사 SAP 문서 타입 체계에 맞춘 것) + `sendGanttQaMessage`의 비동기
+  블록(`/sap-open-document?type=` 호출, 50초 타임아웃) → `_run_sap_bridge`(kortek_backend.py,
+  `/sap-fetch`와 공용 서브프로세스 헬퍼로 리팩터링됨) → `open_document`.
+  **⚠️⚠️ 실사용 디버깅으로 확정된 함정들 — 다음에 이 영역 건드릴 때 반드시 참고할 것(2026-09-14)**:
+  1. **원본 트리 컨테이너 이름이 화면마다 다르다**: 어떤 문서는 `cntlCTL_FILES1`, 어떤 문서는
+     `cntlCTL_FILES2`(SAP 서브스크린 버전 차이로 추정) — 그래서 `_find_by_id_substring`은
+     `'CTL_FILES'`(끝자리 숫자 없이)로 검색한다. 절대 `CTL_FILES1`처럼 끝자리를 고정해서 검색하지
+     말 것.
+  2. **같은 ID 문자열이 바깥 컨테이너에도 들어있어 얕은 탐색이 잘못 걸린다**: `.../cntlCTL_FILES2`
+     라는 `GuiCustomControl`(컨테이너)이 실제 기능이 있는 안쪽 `GuiShell`(`.../shellcont/.../shell`)
+     보다 훨씬 얕은 depth에서 먼저 매치되어, `GetAllNodeKeys`/`doubleClickNode` 같은 Tree 전용
+     메서드가 없어 `AttributeError`가 난다 — 그래서 `_find_by_id_substring`에 `require_type`
+     인자를 추가해 `require_type='GuiShell'`로 타입까지 맞아야 반환하도록 했다. 앞으로 이 함수로
+     "그 컨트롤 자체의 메서드를 호출해야 하는" 대상(Tree/Grid 등 GuiShell)을 찾을 땐 반드시
+     `require_type='GuiShell'`을 넘길 것 — 안 그러면 같은 함정이 재발한다.
+  3. **"원본" 탭의 실제 ID는 `tabpTSFILES`이지, `tabpTSMAIN`이 아니다** — `tabpTSMAIN`은 "전표
+     데이터"(기본 데이터) 탭이다. 처음에 SAP GUI "기록 및 재생" 녹화 스크립트를 보고
+     `tabpTSMAIN`으로 착각해서 여러 번 실패했다 — 탭 ID가 헷갈리면 `walk()` 스타일로 전체
+     `GuiTab`/`GuiTabStrip`을 덤프해서 `.Text`(화면에 보이는 라벨)와 `.Id`를 같이 출력해보는 게
+     제일 빠르다(진단에 실제로 썼던 방법).
+  4. **SAP GUI 세션이 여러 개 열려 있으면 엉뚱한 세션을 조작할 수 있다** — `_get_sap_session()`은
+     항상 `connection.Children(0)`(첫 번째 세션)만 본다. 사용자가 SAP 창을 2개 이상 띄워두면
+     (SAP는 새 세션을 쉽게 여는 UI라 흔함) 첫 번째 세션이 사용자가 지금 보고 있는 화면이 아닐 수
+     있어, "문서 데이터 탭을 열어뒀는데 못 찾는다"는 증상으로 나타난다 — 디버깅 시 항상
+     `app.Children(0).Children.Count`로 세션 개수부터 확인하고, 2개 이상이면 필요 없는 세션을
+     닫아달라고 안내할 것(여러 세션 중 "맞는" 것을 자동으로 고르는 로직은 아직 없음).
+  5. **SAP GUI 보안 팝업**("파일 ...에 액세스하려는 중입니다")은 SAP GUI Scripting의 `wnd[1]`
+     객체 트리에 아예 안 잡힌다(녹화 매크로에도 기록 안 됨) — 즉 스크립팅으로 "허용" 버튼을 누를
+     방법이 없다. 해결은 SAP GUI 옵션 → 보안 → 보안 세팅 → 보안 구성 열기에서 `C:/temp/*`
+     파일에 대한 읽기+실행 허용 규칙을 사용자 규칙으로 추가하는 것(경로 구분자는 `\`가 아니라
+     `/`를 쓰라고 다이얼로그 안내문에 명시돼 있음) — 파일마다 자동 생성되는 개별 규칙(파일명이
+     문서마다 달라 재사용 불가)이 아니라 디렉토리 와일드카드 규칙을 추가해야 이후 문서에도
+     계속 통한다. 이 규칙이 없으면 `open_document`가 `doubleClickNode`까지는 성공해도 그 뒤
+     사람이 수동으로 팝업의 "허용"을 눌러줘야 실제로 열린다.
+  6. **진단 방법 — 화면 구조를 모를 때**: `sap_bridge_32.py`를 모듈로 import해서(`import
+     sap_bridge_32 as sb`) `sb._get_sap_session()`으로 세션을 잡고, `wnd.Children`을 재귀
+     탐색하며 `(Type, Id)`를 전부 출력하는 임시 스크립트를 `py -3-32 -c "..."`로 즉석에서
+     실행하는 게 제일 빠르다 — 이 방법으로 이번 문서 열기 기능의 막힌 지점들을 전부 찾아냈다.
 - **TIPR(웹 기반, 로그인 필요)은 아직 미구현** — SAP와 달리 "이미 인증된 세션에 올라타기"가 안 되고
   ID/PW 자동 로그인 자동화(Playwright 등)가 필요해 자격증명 저장 문제가 딸려온다. 사용자는 "서버에
   무리만 안 가면 ID/PW 자동 로그인도 괜찮다"고 확인했으므로, 구현 시 mail_config.json/
