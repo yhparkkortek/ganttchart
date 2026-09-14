@@ -1498,6 +1498,12 @@
             reaskTarget.possibleDissatisfaction = true;
         }
         if (window._ganttQaRecordQuestionFreq) window._ganttQaRecordQuestionFreq(question);
+        // 🐛 [2026-09-14 버그수정] 위 기록만 하고 드롭다운(#gantt-qa-freq-select)은 모달을 처음 열 때만
+        //    채워지고 있어서, 모달을 열어둔 채로 같은 질문을 두 번째 물어 방금 "2회 이상"(자주 쓰는
+        //    질문 자격)이 되어도 화면엔 반영되지 않았다(모달을 닫았다 다시 열어야만 보임) — "중복 자주
+        //    하는 질문이 드롭다운에 추가되어야 하는데 안 된다"는 실사용 제보의 원인. 기록 직후 바로
+        //    다시 채워서 같은 세션 안에서도 즉시 보이게 한다.
+        if (window._ganttQaPopulateFreqSelect) window._ganttQaPopulateFreqSelect();
 
         window._ganttQaSending = true;
         const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
