@@ -33,7 +33,17 @@
 #    건너뛴다(밀린 발송을 몰아서 보내지 않음).
 # ══════════════════════════════════════════════════════════════
 
+import sys
 import os, json, re, poplib, email, smtplib, hashlib, base64, html, threading, time, uuid, subprocess
+
+# 💡 [2026-09-14] sap_bridge_32.py에서 겪은 것과 같은 부류의 문제(콘솔이 실제 콘솔이 아니라
+#    파이프/다른 인코딩으로 연결되면 Windows에서 stdout이 cp949로 잡혀 한글 print()가
+#    UnicodeEncodeError로 죽을 수 있음)를 이 파일도 예방 차원에서 방어. kortek_backend.bat의
+#    `chcp 65001`은 실제 콘솔에 붙어 있을 때만 효과가 있어, 다른 실행 방식(서비스 등록,
+#    다른 셸 등)에서도 안전하도록 명시적으로 재설정.
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 from email.header     import decode_header
 from email.utils      import parsedate_to_datetime
 from email.mime.text  import MIMEText
