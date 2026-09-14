@@ -94,6 +94,28 @@
         } catch (e) { console.warn('[AI 문답] 선택한 프로젝트(' + (entry.file_name || entry.label || '') + ') 조회 실패:', e.message); return null; }
     };
 
+    // ── 💡 [2026-09-14 신규] "AI 문답에서 SAP 언급 시 자동으로 현재 SAP 화면 조회" ──────────────────
+    //    로컬 백엔드(kortek_backend.py, 127.0.0.1:5000)의 /sap-fetch가 실제 SAP GUI Scripting을
+    //    수행한다 — 이 함수는 그 결과를 가져와 문자열로 반환할 뿐, 브라우저에서 SAP에 직접 접속하지
+    //    않는다(브라우저 JS는 애초에 Windows COM에 접근할 수 없음). 비밀번호를 전혀 주고받지 않는다:
+    //    사용자가 평소처럼 SAP GUI에 로그인해서 원하는 화면을 열어둔 상태에서만 동작한다.
+    //    실패해도(백엔드 꺼짐/SAP GUI 안 열림 등) null을 반환해 AI 문답 자체는 계속 진행되고,
+    //    프롬프트의 "🏭 SAP 조회 규칙"이 그 경우 AI가 "가져오지 못했다"고 솔직히 답하게 지시한다.
+    window._aiFetchSapContext = async function() {
+        try {
+            const res = await window._withTimeout(
+                fetch('http://127.0.0.1:5000/sap-fetch'), 15000,
+                window._t('SAP 조회 15초 시간 초과', 'SAP lookup timed out after 15s')
+            );
+            const data = await res.json();
+            if (!data.ok) return '(' + window._t('SAP 조회 실패', 'SAP lookup failed') + ': ' + (data.error || window._t('알 수 없는 오류', 'unknown error')) + ')';
+            return data.text || null;
+        } catch (e) {
+            console.warn('[AI 문답] SAP 조회 실패:', e && e.message);
+            return '(' + window._t('SAP 조회 실패', 'SAP lookup failed') + ': ' + window._t('로컬 백엔드(kortek_backend.py)가 켜져 있는지 확인하세요.', 'Please check that the local backend (kortek_backend.py) is running.') + ')';
+        }
+    };
+
     // 💡 [2026-09-07 확장] 다른 프로젝트의 저장 파일(globalData/colIdx/projectMeta/tabData)을 가볍게
     //    요약 텍스트로 변환. 현재 프로젝트용 _buildGanttQaContext처럼 DOM(rendered table)에서 읽지
     //    않고 저장된 JSON 값만 사용한다(다른 프로젝트를 화면에 렌더링하지 않고 조회만 하기 위함) —
@@ -1466,6 +1488,23 @@
             }
         }
 
+        // 🏭 [2026-09-14 신규] 질문에 "SAP"가 언급되면 AI가 판단할 필요 없이 여기서 바로 로컬
+        //    백엔드에 "지금 SAP GUI 화면"을 물어봐서 프롬프트에 실어 보낸다(질문마다 항상 조회하면
+        //    느려지고 불필요하므로, 언급이 있을 때만 — CLAUDE.md "SAP/TIPR" 결정 사항 참고).
+        let sapText = null;
+        if (/sap/i.test(question)) {
+            const pendingIdx2 = window._ganttQaHistory.length - 1;
+            if (window._ganttQaHistory[pendingIdx2]) {
+                window._ganttQaHistory[pendingIdx2].text = '⏳ ' + window._t('SAP 화면 조회 중...', 'Reading SAP screen...');
+                window._renderGanttQaMessages();
+            }
+            sapText = await window._aiFetchSapContext();
+            if (window._ganttQaHistory[pendingIdx2]) {
+                window._ganttQaHistory[pendingIdx2].text = '⏳ 답변 생성 중...';
+                window._renderGanttQaMessages();
+            }
+        }
+
         try {
             // 💡 [2026-09-08 신규] "느리다"는 신고가 반복돼서, 어디가 느린지(코드가 컨텍스트를
             //    조립하는 단계 vs AI가 실제로 답을 생성하는 단계) 바로 구분할 수 있게 계측 로그를
@@ -1474,7 +1513,7 @@
             //    걸렸으면 코드/Drive 조회 문제, AI 응답 생성이 오래 걸렸으면 AI 백엔드(무료 등급
             //    등)가 느린 것이라 코드로는 더 손댈 부분이 없다는 뜻.
             const _tQa0 = performance.now();
-            const prompt = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, manualOtherProjectTexts);
+            const prompt = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, manualOtherProjectTexts, sapText);
             const _tQa1 = performance.now();
             const _ctxMs = Math.round(_tQa1 - _tQa0);
             console.info(`[AI 문답 계측] 컨텍스트/프롬프트 조립: ${_ctxMs}ms (프롬프트 길이: ${prompt.length.toLocaleString()}자)`);

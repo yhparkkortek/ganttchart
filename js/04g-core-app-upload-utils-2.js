@@ -915,7 +915,7 @@
     //    실데이터 대신 "${토큰}" 문자열 그 자체로 호출해서 "편집 가능한 기본 프롬프트 텍스트"를 만드는 데
     //    재사용한다(AI 업무분석/AI 프로젝트 요약의 _defaultPromptTemplate 트릭과 동일 — 수동으로 다시
     //    타이핑하다 토큰을 빠뜨리거나 오타 낼 위험이 없음).
-    window._buildGanttQaPromptTemplateRaw = function(ctx, question, historyText, mailSection, otherProjectSection) {
+    window._buildGanttQaPromptTemplateRaw = function(ctx, question, historyText, mailSection, otherProjectSection, sapSection) {
         return `당신은 아래 프로젝트(Gantt 일정 + Summary/Customer SPEC/M.C Table/Elec Parts/Address 등 프로젝트 파일 전체 데이터)를 잘 아는 보조 AI입니다.
 기본적으로 아래 데이터에 있는 내용에 근거해서 답하고, 데이터에 없는 구체적인 수치·값을 있는 사실처럼 지어내지 마세요 — 그런 경우 "데이터에서 확인되지 않습니다"라고 답하세요.
 🔎 추론 허용 규칙: 다만 사용자가 "추론해줘/추정해줘/네 생각은/일반적으로 어때/충족할 수 있어?"처럼 판단이나 추론을 명시적으로 요청하면, 데이터에 없는 내용이라도 당신이 아는 일반적인 전자/디스플레이/기구 엔지니어링 지식을 근거로 답변하세요 — 절대 "데이터에서 확인되지 않습니다"로 끝내지 마세요. 이때는 답변 앞에 "🔎 AI 추론(데이터 아님, 일반 지식 기반 추정)"이라고 표시를 붙여서 위 [데이터] 기반 사실과 명확히 구분하고, 추론에 사용한 전제·근거와 불확실성(예: 정확한 수치는 부품 데이터시트 확인 필요)도 함께 설명하세요. 지어낸 수치를 확정된 데이터처럼 단정하지 말고 "약 ~로 알려져 있음/일반적으로 ~하는 경향" 식으로 추정임을 드러내세요. 간결하고 실무적인 한국어로 답변하세요.
@@ -1162,6 +1162,8 @@ Elec Parts/알람·공지/주소록 탭으로 이동해줘"처럼 Gantt 업무�
 3. 다른 프로젝트의 업무를 언급할 때는 "#G숫자" 같은 클릭 인용 번호를 절대 붙이지 마세요(그 번호는 지금 열려있는 이 프로젝트의 업무에만 유효합니다 — 다른 프로젝트 업무는 그냥 업무명으로 설명하세요). 답변 안에서 지금 프로젝트 얘기와 다른 프로젝트 얘기가 섞이면 "(OO 프로젝트)"처럼 어느 프로젝트 얘기인지 매번 명확히 구분해서 헷갈리지 않게 하세요.
 4. **다른 프로젝트에 대해 "#G번호가 있어야만 가능한" 것을 요청받았을 때** — 원문 메일 확인("그 메일 원문 보여줘"), Gantt에서 보고 싶다/이동하고 싶다는 요청, 실행(삭제/상태변경/알람/레벨/이동/추가/수정 등) 전부 포함: #G숫자가 없어 원문보기·실행 태그들을 그 프로젝트에 쓸 수 없으므로, 대신 그 프로젝트를 화면에 여는 절차를 거쳐야 합니다 — 평소처럼 자연스럽게 답한 뒤(예: "OO 프로젝트를 열어서 원문을 보여드리려면 확인이 필요합니다" / "...처리하려면 확인이 필요합니다"), 다른 말 없이 답변 마지막 줄에 정확히 이 형식만 추가하세요: [[ACTION:OPEN_PROJECT_TO_EDIT:그프로젝트의번호]] ("P"는 빼고 숫자만, [다른 프로젝트 목록] 기준 — 그 번호는 [질문 대상] 드롭다운에서 고른 프로젝트일 수도, 방금 이름으로 언급한 다른 프로젝트일 수도 있습니다). 이 태그는 위 6가지 즉시실행 태그와 달리 곧바로 실행되지 않고, 사람이 채팅창의 확인 버튼을 눌러야만 그 프로젝트를 새 탭으로 열고 요청하신 작업(원문보기 포함)을 이어서 처리합니다 — 화면 전체가 그 프로젝트로 바뀌는 큰 동작이라 반드시 사람 확인을 거칩니다. 프로젝트를 연 뒤에는 이 프로젝트가 곧 "현재 프로젝트"가 되므로, 원문보기·Gantt 이동·실행 전부 평소와 완전히 동일하게 동작합니다.
 
+🏭 SAP 조회 규칙: 질문에 "SAP"가 언급되면, 시스템이 지금 이 PC에서 이미 로그인해 열어둔 SAP GUI의 "현재 화면"을 자동으로 읽어와 아래 [방금 조회한 SAP 화면 데이터] 섹션에 실어줍니다(사람이 미리 원하는 SAP 화면을 열어둬야 하며, 특정 트랜잭션에 종속된 파서가 아니라 화면에 보이는 그리드/필드를 있는 그대로 텍스트로 덤프한 것이니 열/행 이름이 원래 SAP 라벨과 다르게 표기될 수 있음을 감안하세요). 그 섹션이 있으면 근거로 답하거나, 필요하면 그 내용을 간트차트 업무로 반영하는 초안(위 GANTT_ADD_DRAFT/GANTT_EDIT_DRAFT 규칙)을 제안하세요. 섹션이 비어 있거나 "SAP 조회 실패" 안내만 있다면, SAP 데이터를 가져오지 못했다고 솔직히 답하고 SAP GUI가 켜져 있고 원하는 화면이 열려 있는지 확인해달라고 안내하세요 — 조회 실패를 데이터가 없다는 뜻으로 단정하지 마세요.
+
 [오늘 날짜]
 ${ctx.todayStr}
 
@@ -1199,6 +1201,7 @@ ${otherProjectSection}
 [업무 목록]
 ${ctx.taskListText}
 ${mailSection}
+${sapSection}
 [최근 변경 이력]
 ${ctx.recentLogsText}
 
@@ -1220,13 +1223,13 @@ ${question}
         mcTableText: '${mcTableText}', elecPartsText: '${elecPartsText}', addressText: '${addressText}',
         noticeText: '${noticeText}', otherProjectsText: '${otherProjectsText}',
         totalTasks: '${totalTasks}', taskListText: '${taskListText}', recentLogsText: '${recentLogsText}'
-    }, '${question}', '${historyText}', '${mailSection}', '${otherProjectSection}');
+    }, '${question}', '${historyText}', '${mailSection}', '${otherProjectSection}', '${sapSection}');
 
     // 💡 [2026-08-31 신규] AI 문답 프롬프트도 AI 업무분석/AI 프로젝트 요약과 동일하게 "팀 공용(Drive)
     //    프롬프트 텍스트 + 데이터 토큰 치환" 구조로 전환 — 문구 수정이 이제 코드 변경 없이
     //    [💬 AI 문답 → 📝 프롬프트]에서 가능하다. ctx(표/목록 데이터) 자체는 여전히 코드가 매번 새로
     //    만든다(사용자가 직접 타이핑할 수 없는 부분이므로) — 편집 가능한 건 지시문/설명 텍스트뿐이다.
-    window._buildGanttQaPrompt = async function(question, priorHistory, mailTexts, otherProjectTexts) {
+    window._buildGanttQaPrompt = async function(question, priorHistory, mailTexts, otherProjectTexts, sapText) {
         const ctx = await window._buildGanttQaContext();
         // 🐛 [2026-09-08 버그수정] "응답 속도가 많이 느려졌다" — 대화가 길어질수록 지금까지의 전체
         //    대화(질문+답변 전문)를 매번 통째로 다시 프롬프트에 실어 보내고 있었다. 대화가 쌓일수록
@@ -1248,6 +1251,11 @@ ${question}
         //    채워짐(sendGanttQaMessage 참고, VIEW_MAIL의 mailTexts와 동일한 2단계 조회 패턴).
         const otherProjectSection = (otherProjectTexts && otherProjectTexts.length)
             ? `\n[요청하신 다른 프로젝트 상세 데이터]\n${otherProjectTexts.join('\n\n---\n\n')}\n`
+            : '';
+        // 💡 [2026-09-14 신규] "SAP" 언급 시 로컬 백엔드(kortek_backend.py)가 이미 로그인해 열어둔
+        //    SAP GUI의 현재 화면을 읽어온 결과(sendGanttQaMessage의 _aiFetchSapContext 호출부 참고).
+        const sapSection = sapText
+            ? `\n[방금 조회한 SAP 화면 데이터]\n${sapText}\n`
             : '';
 
         const savedTemplate = localStorage.getItem('gantt_qa_prompt');
@@ -1272,6 +1280,7 @@ ${question}
         result = rep(result, '${taskListText}', ctx.taskListText);
         result = rep(result, '${mailSection}', mailSection);
         result = rep(result, '${otherProjectSection}', otherProjectSection);
+        result = rep(result, '${sapSection}', sapSection);
         result = rep(result, '${recentLogsText}', ctx.recentLogsText);
         result = rep(result, '${historyText}', historyText);
         result = rep(result, '${question}', question);

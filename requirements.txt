@@ -3,3 +3,4 @@ flask-cors
 requests
 cryptography
 google-auth
+pywin32; sys_platform == 'win32'

@@ -285,6 +285,45 @@ JS 템플릿 리터럴(백틱 문자열)이다. 그 안의 프롬프트 "본문 
 프롬프트 문구를 추가/수정한 뒤에는 브라우저 콘솔에 `SyntaxError`가 없는지, 그리고 `typeof window.
 sendGanttQaMessage`처럼 그 파일이 정의하는 핵심 함수가 실제로 `"function"`인지 확인하는 습관을 들일 것.
 
+### 🏭 SAP 조회 연동 (AI 문답 확장) — 설계와 확장 방향 (2026-09-14)
+
+AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 로그인해서 열어둔 SAP GUI 화면**을
+로컬 백엔드가 읽어와 그 턴의 프롬프트에 끼워 넣는다. 비밀번호를 저장하지도, 자동 로그인을 하지도
+않는다 — 이미 인증된 세션에 SAP GUI Scripting(COM)으로 "올라타서" 읽기만 하는 구조라 이 선택이
+가능했다(TIPR처럼 로그인 자체가 필요한 시스템은 이 방식이 안 통해서 아직 미구현 — 아래 참고).
+
+- **트리거**: `js/04h-core-app-upload-utils-3.js`의 `sendGanttQaMessage`가 질문에 `/sap/i` 매치가
+  있으면(다른 로컬 명령들처럼 AI 호출 전에) `window._aiFetchSapContext()`를 호출 — AI가 스스로
+  판단해서 태그를 붙이는 방식이 아니라 **코드가 키워드로 직접 트리거**한다(사용자가 매 질문마다
+  SAP를 언급하면 매번 조회되므로 비용이 큰 조회는 아니지만, 백엔드/SAP GUI가 꺼져 있으면 그때마다
+  15초 타임아웃 대기가 생긴다는 점을 새 트리거 조건 추가 시 감안할 것).
+- **백엔드**: `kortek_backend.py`의 `/sap-fetch`(GET) — `win32com.client.GetObject("SAPGUI")`로
+  이미 열려 있는 세션에 접속 → 화면에 ALV 그리드(`GuiShell`/`SubType=GridView`)가 있으면
+  `_sap_find_grid`+`_sap_dump_grid`로 표 전체를 탭 구분 텍스트로, 없으면 `_sap_dump_fields`로
+  보이는 라벨/입력필드 텍스트를 순서대로 모아 반환. **특정 트랜잭션 코드 전용 파서를 만들지 않는
+  게 의도적 설계** — 어떤 화면이든 "있는 그대로 텍스트 덤프"만 하고, 그걸 구조화하는 건 전부
+  AI(`callAiBackend`)에게 맡긴다. 새 SAP 화면 종류를 지원해야 한다는 요청이 와도, 원칙적으로
+  이 덤프 로직 자체는 안 건드리고(이미 웬만한 화면에서 다 동작해야 함) 프롬프트의 "🏭 SAP 조회
+  규칙" 문구만 조정하는 방향을 먼저 검토할 것.
+- **프롬프트 배선**: `js/04g-core-app-upload-utils-2.js`의 `_buildGanttQaPromptTemplateRaw`/
+  `_buildGanttQaPrompt`에 `sapSection`/`sapText` 인자를 추가해 `${sapSection}` 토큰으로 주입
+  (`${mailSection}`/`${otherProjectSection}`과 동일한 패턴). `otherProjectSection`과 마찬가지로
+  `validateGanttQaPromptStructure`/`PROTECTED_STRUCTURE_RULE`(04h)의 "필수 플레이스홀더" 목록에는
+  **의도적으로 포함하지 않음** — AI가 팀 공용 프롬프트를 자동개선할 때 이 선택적 섹션까지 반드시
+  지키라고 강제하지 않는 기존 관례를 그대로 따름.
+- **pywin32**: `requirements.txt`에 `pywin32; sys_platform == 'win32'`로 추가, `kortek_backend.py`
+  상단에서 다른 optional import들과 동일하게 try/except로 감싸 미설치여도 나머지 기능은 정상 동작.
+- **테스트 한계**: 이 SAP GUI Scripting 코드는 실제 SAP 환경에서 검증되지 않았다(개발 환경에
+  SAP GUI가 없음) — 표준 SAP GUI Scripting API 패턴을 따랐지만, 실제 사내 SAP 화면 구조(그리드가
+  중첩 컨테이너 안에 있거나, 팝업창(`wnd[1]` 등)에 떠 있는 경우 등)에 따라 `_sap_find_grid`의
+  탐색 범위나 `sbar`/`wnd[0]` 참조를 조정해야 할 수 있음. 처음 실사용 시 실패하면 `print`로 남긴
+  `[SAP 조회]` 로그와 `/sap-fetch` 응답의 `error` 필드부터 확인할 것.
+- **TIPR(웹 기반, 로그인 필요)은 아직 미구현** — SAP와 달리 "이미 인증된 세션에 올라타기"가 안 되고
+  ID/PW 자동 로그인 자동화(Playwright 등)가 필요해 자격증명 저장 문제가 딸려온다. 사용자는 "서버에
+  무리만 안 가면 ID/PW 자동 로그인도 괜찮다"고 확인했으므로, 구현 시 mail_config.json/
+  telegram_config.json과 동일하게 `/all/encrypt`·`/all/decrypt` 패턴으로 로컬 암호화 저장하는
+  구조를 그대로 재사용할 것(관리자 비밀번호 체계는 위 "🔑 관리자 비밀번호" 절 참고).
+
 ### 🌐 다국어(i18n) 지원 규칙 — 새 UI 문구 추가 시 반드시 확인 (2026-09-12)
 
 **⚠️ 새 UI(모달/버튼/라벨/안내문 등)를 추가하는 작업은 영문 대응 작업까지 포함해야 완료된 것으로

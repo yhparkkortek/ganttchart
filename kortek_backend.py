@@ -21,6 +21,8 @@
 #    /all/decrypt       — 전체 설정 복호화 (Drive 로드용)
 #    /schedule          — 예약 발송 규칙 등록/조회 (GET/POST)
 #    /schedule/<id>     — 예약 발송 규칙 삭제 (DELETE)
+#    /sap-fetch         — [2026-09-14 신규] AI 문답 "SAP 조회" — 이미 로그인된 SAP GUI의
+#                          현재 화면을 텍스트로 덤프 (SAP GUI Scripting, 비밀번호 저장 없음)
 #
 #    [2026-08-31 신규] 예약 발송(반복 규칙) 스케줄러
 #    기존엔 "언제 보낼지" 판단을 전부 브라우저(JS setInterval)가 맡고 있어서,
@@ -56,6 +58,16 @@ try:
 except ImportError:
     GOOGLE_AUTH_OK = False
     print("[경고] google-auth 미설치 → pip install google-auth (업무별 예약 알람의 실시간 조회 기능에 필요)")
+
+# 💡 [2026-09-14 신규] SAP GUI Scripting 연동 — pywin32는 Windows 전용이라 그 외 환경에선
+#    아예 설치가 안 될 수 있으므로(이 백엔드는 항상 각 팀원 PC의 Windows에서 로컬 실행되지만,
+#    혹시 모를 환경 대비 다른 optional import들과 동일하게 방어적으로 처리) 항상 try/except로 감싼다.
+try:
+    import win32com.client
+    SAP_COM_OK = True
+except ImportError:
+    SAP_COM_OK = False
+    print("[경고] pywin32 미설치 → pip install pywin32 (AI 문답의 SAP 조회 기능에 필요)")
 
 app = Flask(__name__)
 
@@ -1479,6 +1491,151 @@ def all_decrypt():
 
     overall_ok = all(v.get('ok') for v in results.values())
     return jsonify({'ok': overall_ok, 'results': results})
+
+
+# ── SAP GUI Scripting 연동 (AI 문답 "SAP" 조회) ──────────────────
+#    [2026-09-14 신규] AI 문답(js/04g~04h)에서 질문에 "SAP"가 언급되면 프런트가 이 엔드포인트를
+#    호출한다. 비밀번호를 전혀 저장/입력하지 않는다 — 사용자가 평소처럼 SAP GUI에 직접 로그인해둔
+#    "이미 열려 있는 세션"에 SAP GUI Scripting(COM)으로 올라타서 지금 보이는 화면을 읽기만 한다.
+#    특정 트랜잭션(CO24/ME2M 등)을 가정한 전용 파서를 만들지 않고, 화면에 ALV 그리드가 있으면
+#    그리드를, 없으면 눈에 보이는 라벨/입력필드 텍스트를 최대한 있는 그대로 덤프해서 그대로
+#    AI(callAiBackend)에게 넘겨 구조화를 맡긴다 — 화면 종류가 바뀔 때마다 백엔드를 다시 손볼
+#    필요가 없도록 하기 위한 의도적 설계.
+def _get_sap_session():
+    """이미 로그인돼 열려 있는 SAP GUI의 첫 번째 연결/세션을 가져온다."""
+    sap_gui_auto = win32com.client.GetObject("SAPGUI")
+    application  = sap_gui_auto.GetScriptingEngine
+    if application.Children.Count == 0:
+        raise RuntimeError('열려 있는 SAP 연결이 없습니다 — SAP GUI에서 먼저 로그인해주세요.')
+    connection = application.Children(0)
+    if connection.Children.Count == 0:
+        raise RuntimeError('SAP 연결은 있지만 열려 있는 세션(화면)이 없습니다.')
+    return connection.Children(0)
+
+
+def _sap_find_grid(container, depth=0):
+    """창 트리를 재귀 탐색해 첫 번째 ALV 그리드(GuiShell, SubType=GridView)를 찾는다.
+    SAP 조회/리스트 화면 대부분이 이 그리드로 결과를 보여준다."""
+    if depth > 12:
+        return None
+    try:
+        children = container.Children
+    except Exception:
+        return None
+    if children is None:
+        return None
+    for i in range(children.Count):
+        child = children.Item(i)
+        try:
+            if child.Type == 'GuiShell' and child.SubType == 'GridView':
+                return child
+        except Exception:
+            pass
+        found = _sap_find_grid(child, depth + 1)
+        if found is not None:
+            return found
+    return None
+
+
+def _sap_dump_grid(shell):
+    """ALV 그리드의 보이는 열/행을 탭 구분 텍스트로 변환. 응답 크기 보호를 위해 최대 500행."""
+    try:
+        col_ids = list(shell.ColumnOrder)
+    except Exception:
+        col_ids = []
+    if not col_ids:
+        return None
+    titles = []
+    for cid in col_ids:
+        try:
+            titles.append(shell.GetColumnTitle(cid) or cid)
+        except Exception:
+            titles.append(cid)
+    total_rows = shell.RowCount
+    row_count  = min(total_rows, 500)
+    lines = ['\t'.join(titles)]
+    for r in range(row_count):
+        cells = []
+        for cid in col_ids:
+            try:
+                cells.append(str(shell.GetCellValue(r, cid)))
+            except Exception:
+                cells.append('')
+        lines.append('\t'.join(cells))
+    if total_rows > row_count:
+        lines.append(f'... (총 {total_rows}행 중 {row_count}행만 표시)')
+    return '\n'.join(lines)
+
+
+def _sap_dump_fields(container, depth=0, max_depth=10):
+    """그리드가 없는 화면(선택화면/상세화면 등)을 위한 대체 경로 — 라벨/입력필드 텍스트를
+    보이는 순서대로 모아 평문으로 만든다. 특정 화면 전용 로직 없이 항상 동작해야 하므로
+    타입을 최대한 넓게 잡는다."""
+    lines = []
+    if depth > max_depth:
+        return lines
+    try:
+        children = container.Children
+    except Exception:
+        return lines
+    if children is None:
+        return lines
+    for i in range(children.Count):
+        child = children.Item(i)
+        try:
+            ctype = child.Type
+        except Exception:
+            continue
+        if ctype in ('GuiLabel', 'GuiTextField', 'GuiCTextField', 'GuiComboBox', 'GuiCheckBox', 'GuiRadioButton'):
+            try:
+                text = (child.Text or '').strip()
+                if text:
+                    lines.append(text)
+            except Exception:
+                pass
+        lines.extend(_sap_dump_fields(child, depth + 1, max_depth))
+    return lines
+
+
+@app.route('/sap-fetch', methods=['GET'])
+def sap_fetch():
+    if not SAP_COM_OK:
+        return jsonify({'ok': False, 'error': 'pywin32 미설치 — pip install pywin32 후 백엔드를 재시작하세요.'}), 500
+    try:
+        session = _get_sap_session()
+        wnd = session.findById('wnd[0]')
+        try:
+            title = wnd.Text
+        except Exception:
+            title = ''
+        try:
+            transaction = session.Info.Transaction
+        except Exception:
+            transaction = ''
+        try:
+            status_text = session.findById('wnd[0]/sbar').Text
+        except Exception:
+            status_text = ''
+
+        grid = _sap_find_grid(wnd)
+        if grid is not None:
+            body   = _sap_dump_grid(grid)
+            source = 'grid'
+        else:
+            body   = '\n'.join(_sap_dump_fields(wnd))
+            source = 'fields'
+
+        if not body:
+            return jsonify({'ok': False, 'error': '현재 SAP 화면에서 읽을 수 있는 데이터를 찾지 못했습니다.'})
+
+        header = f'[SAP 화면: {title}]\n[트랜잭션: {transaction}]\n'
+        if status_text:
+            header += f'[상태표시줄: {status_text}]\n'
+        text = header + '\n' + body
+        print(f"[SAP 조회] source={source} transaction={transaction} 길이={len(text)}자")
+        return jsonify({'ok': True, 'source': source, 'text': text})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': 'SAP 연결 실패: SAP GUI가 켜져 있고 로그인돼 있는지, [옵션 → Accessibility & Scripting → Scripting]에서 스크립팅이 켜져 있는지 확인하세요. (' + str(e) + ')'}), 500
 
 
 # ══════════════════════════════════════════════════════════════
