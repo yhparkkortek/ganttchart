@@ -1502,11 +1502,18 @@ def all_decrypt():
 #    AI(callAiBackend)에게 넘겨 구조화를 맡긴다 — 화면 종류가 바뀔 때마다 백엔드를 다시 손볼
 #    필요가 없도록 하기 위한 의도적 설계.
 def _get_sap_session():
-    """이미 로그인돼 열려 있는 SAP GUI의 첫 번째 연결/세션을 가져온다."""
-    sap_gui_auto = win32com.client.GetObject("SAPGUI")
-    application  = sap_gui_auto.GetScriptingEngine
+    """이미 로그인돼 열려 있는 SAP GUI의 첫 번째 연결/세션을 가져온다.
+    💡 [2026-09-14] 단계별로 실패 원인을 구분해서 알려준다 — "GetObject 자체가 실패"(스크립팅
+    엔진을 못 찾음, 대부분 옵션이 꺼져 있거나 SAP GUI가 아예 안 켜진 경우)와 "엔진은 찾았지만
+    로그인된 연결/세션이 없음"은 원인과 해결책이 완전히 다른데, 이걸 뭉뚱그려 "SAP 연결 실패"라고만
+    하면 사용자가 뭘 확인해야 할지 알 수 없다는 실사용 제보가 있었다."""
+    try:
+        sap_gui_auto = win32com.client.GetObject("SAPGUI")
+    except Exception as e:
+        raise RuntimeError('SAP GUI Scripting 엔진을 찾지 못했습니다. 확인해주세요: ① SAP GUI가 켜져 있는지 ② SAP GUI 상단 메뉴 [옵션(Options) → Accessibility & Scripting → Scripting]에서 "스크립트 사용(Enable scripting)"이 체크돼 있는지 ③ kortek_backend.py를 SAP GUI를 켠 것과 같은 Windows 로그인 세션에서 실행 중인지(관리자 권한으로 둘 중 하나만 실행하면 서로 못 찾을 수 있음). (원본 오류: ' + str(e) + ')')
+    application = sap_gui_auto.GetScriptingEngine
     if application.Children.Count == 0:
-        raise RuntimeError('열려 있는 SAP 연결이 없습니다 — SAP GUI에서 먼저 로그인해주세요.')
+        raise RuntimeError('SAP GUI Scripting 엔진 연결에는 성공했지만, 열려 있는 SAP 연결(접속)이 없습니다 — SAP에 로그인해주세요.')
     connection = application.Children(0)
     if connection.Children.Count == 0:
         raise RuntimeError('SAP 연결은 있지만 열려 있는 세션(화면)이 없습니다.')
@@ -1634,8 +1641,16 @@ def sap_fetch():
         text = header + '\n' + body
         print(f"[SAP 조회] source={source} transaction={transaction} 길이={len(text)}자")
         return jsonify({'ok': True, 'source': source, 'text': text})
+    except RuntimeError as e:
+        # 💡 _get_sap_session이 이미 원인을 구분해서 친절한 메시지로 올린 경우 — 그대로 전달.
+        print(f"[SAP 조회 실패] {e}")
+        return jsonify({'ok': False, 'error': str(e)}), 500
     except Exception as e:
-        return jsonify({'ok': False, 'error': 'SAP 연결 실패: SAP GUI가 켜져 있고 로그인돼 있는지, [옵션 → Accessibility & Scripting → Scripting]에서 스크립팅이 켜져 있는지 확인하세요. (' + str(e) + ')'}), 500
+        # 💡 [2026-09-14] 예상 못한 COM 오류 — 콘솔에 전체 traceback을 남겨서(요청자가 SAP 환경을
+        #    직접 볼 수 없으므로) 다음에 또 실패하면 이 창 내용을 그대로 확인할 수 있게 한다.
+        import traceback
+        traceback.print_exc()
+        return jsonify({'ok': False, 'error': 'SAP 연결 중 예상치 못한 오류가 발생했습니다. SAP GUI가 켜져 있고 로그인돼 있는지, [옵션 → Accessibility & Scripting → Scripting]에서 스크립팅이 켜져 있는지 확인하세요. 이 백엔드 콘솔 창에 자세한 오류(traceback)가 출력됐습니다. (' + str(e) + ')'}), 500
 
 
 # ══════════════════════════════════════════════════════════════
