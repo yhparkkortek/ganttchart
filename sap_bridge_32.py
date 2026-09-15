@@ -35,6 +35,7 @@
 # 확보한 정확한 컨트롤 ID 그대로 재현 — `download_documents_batch` 참고).
 # ══════════════════════════════════════════════════════════════
 import sys
+import os
 import json
 import time
 
@@ -687,11 +688,21 @@ def download_documents_batch(materials, doc_type='P01'):
         raise RuntimeError(f'결과 목록에서 전체 선택 후 다운로드하는 중 오류가 발생했습니다(자재를 찾지 못해 결과가 비어 있을 수도 있습니다): {e}')
     time.sleep(1.5)
 
+    # 💡 [2026-09-15 신규] 다운로드 완료 후 C:\SAP_DMS\ 폴더를 탐색기로 열어준다 — 백엔드와
+    # SAP GUI가 같은 PC에서 돌아가는 구조라(파일을 옮길 필요 자체가 없다는 이 프로젝트의 기존
+    # 설계 원칙 그대로) os.startfile로 로컬 탐색기를 바로 띄울 수 있다. 폴더 여는 것 자체가
+    # 실패해도(예: 폴더가 아직 생성 안 됐거나 권한 문제) 다운로드 자체는 이미 끝난 뒤이니
+    # 전체 요청을 실패로 만들지 않는다.
+    try:
+        os.startfile(r'C:\SAP_DMS')
+    except Exception:
+        pass
+
     return {
         'ok': True,
         'materials': materials,
         'docType': doc_type,
-        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다(자재별 하위 폴더 자동 생성).',
+        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다(자재별 하위 폴더 자동 생성). 탐색기로 그 폴더를 열었습니다.',
     }
 
 
