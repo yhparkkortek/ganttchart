@@ -1412,6 +1412,31 @@ AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면(📎 버튼
      그 외에도 이 테스트는 자재 1건짜리 단일 케이스라, 복수 품목(여러 행)에서 협력사
      F4 검색을 행마다 반복해야 하는지 여부(현재는 한 번만 선택) 등은 여전히 미검증
      상태로 남아있다.
+- **통화(KRW/USD) 지원 (2026-09-16 신규)**: "계산서나 거래명세서에 KRW 말고 USD도 있는
+  경우가 있는데 이것도 참고할 수 있도록 해달라"는 요청으로 추가 — 지금까지는 모든 PDF가
+  KRW라고 암묵적으로 가정하고 있었다. `_ganttQaExtractPoItemsViaAi`의 JSON 스키마에
+  `"currency"` 필드를 추가(AI가 "USD"/"US$"/"$" 같은 명확한 표시가 있을 때만 USD로,
+  불명확하면 기본값 KRW로 판단하도록 지시) — 파싱 직후 코드 레벨에서 KRW/USD 두 값으로만
+  정규화(`toUpperCase()` 후 "USD"/"US$"/"$"가 아니면 전부 KRW로 폴백, AI가 필드를 아예
+  빠뜨려도 안전). `window._ganttQaPoDraft`(새 draft 시작·정정 재추출 양쪽 경로 모두)에
+  `currency`로 저장되고, `_ganttQaPoSummaryText`가 품목별 단가 옆에 통화를 같이 표시하며
+  KRW가 아니면 "⚠️ 통화: USD (KRW가 아닙니다 — 맞는지 확인해주세요)" 줄을 상단에 추가로
+  강조 표시함("통화는 USD로 변경" 같은 자유서술 정정도 기존 `correctionNote` 재추출
+  경로로 그대로 처리됨 — 별도 파싱 로직 불필요).
+  `_ganttQaRunPoSapPrepareAndReport`가 `/po-sap-prepare` 요청 바디에 `currency: pd.currency
+  || 'KRW'`를 실어 보내고, `kortek_backend.py`의 `/po-sap-prepare`가 이를 그대로
+  `sap_bridge_32.py prepare_po_from_excel`의 6번째 인자로 넘긴다.
+  `prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency='KRW')` —
+  그리드의 `WAERS`(통화) 컬럼은 실사용 테스트에서 아무것도 안 건드려도 이미 'KRW'로 자동
+  채워지는 것을 확인했으므로(협력사/플랜트 기준 SAP 기본 통화로 추정), **`currency`가
+  'KRW'가 아닐 때만** 품목별 단가(NETPR) 입력 루프 안에서 `grid.modifyCell(idx, 'WAERS',
+  currency)`로 명시적으로 덮어쓴다 — 기본값(KRW) 경로는 기존에 이미 검증된 동작을 그대로
+  유지해 회귀 위험을 최소화하는 설계. **⚠️⚠️ USD 경로(`WAERS` 덮어쓰기)는 아직 실사용
+  SAP 세션으로 검증되지 않음** — 브라우저 모킹으로 프런트(추출~요약 표시~SAP 준비 요청
+  바디에 currency가 실제로 실리는지)까지는 왕복 확인했지만, SAP GUI에서 `WAERS` 셀에
+  직접 값을 넣었을 때 정말로 반영되는지(예: 환율 관련 팝업이 뜨는지, 필드가 read-only는
+  아닌지)는 다음에 USD 문서로 실제 구매오더를 시도할 때 확인이 필요하다 — 문제가 생기면
+  이 부분부터 의심할 것.
 
 ### 🔄 로컬 백엔드(kortek_backend.py) 자동 업데이트 (2026-09-15 신규)
 

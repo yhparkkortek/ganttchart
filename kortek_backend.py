@@ -2002,11 +2002,12 @@ def po_sap_prepare():
     biz_reg_no = (data.get('bizRegNo') or '').strip()
     items = data.get('items') or []
     plant = (data.get('plant') or '1000').strip()
+    currency = (data.get('currency') or 'KRW').strip() or 'KRW'
     if not excel_path or not biz_reg_no or not items:
         return jsonify({'ok': False, 'error': 'excelPath/bizRegNo/items가 모두 필요합니다.'}), 400
     timeout = min(120, 40 + 8 * len(items))
     data_out, status = _run_sap_bridge(
-        ['prepare_po_from_excel', excel_path, biz_reg_no, json.dumps(items, ensure_ascii=False), plant],
+        ['prepare_po_from_excel', excel_path, biz_reg_no, json.dumps(items, ensure_ascii=False), plant, currency],
         timeout, 'SAP 구매오더 준비')
     return jsonify(data_out), status
 

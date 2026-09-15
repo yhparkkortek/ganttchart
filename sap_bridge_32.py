@@ -1467,7 +1467,7 @@ def _sap_close_stray_popups(session, max_windows=4):
         time.sleep(0.3)
 
 
-def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000'):
+def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000', currency='KRW'):
     """구매오더 생성 1단계 — 엑셀 업로드 후 각 품목 행에 협력사/세금코드/단가를 채우고
     저장 직전에 멈춘다. `items`는 엑셀에 넣은 행과 같은 순서의 리스트, 각 원소는
     {"unitPrice": 숫자} 형태(PDF에서 추출한 단가 — SAP에 저장된 값이 아니라 이 값을
@@ -1476,7 +1476,12 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000'):
     ⚠️ 재시도 시 이전 실패로 남은 팝업을 먼저 정리한다(`_sap_close_stray_popups`) —
     협력사 검색이 실패(사업자등록번호가 SAP에 없음 등)하면 "검색 결과 없음"류 팝업이
     열린 채로 남는데, 그 상태에서 그냥 다시 이 함수를 호출하면 새 트랜잭션 진입 자체가
-    막히던 문제가 실사용에서 확인됨."""
+    막히던 문제가 실사용에서 확인됨.
+    `currency`(2026-09-16 신규, 사용자 요청 — "계산서/거래명세서에 KRW 말고 USD도 있다")
+    — 그리드의 `WAERS`(통화) 컬럼은 실사용 테스트에서 아무것도 안 건드려도 'KRW'로
+    자동 채워지는 것을 확인했으므로(협력사/플랜트 기준 기본 통화로 추정), 기본값(KRW)일
+    때는 그대로 두고(이미 검증된 동작을 건드리지 않기 위해) **currency가 'KRW'가
+    아닐 때만** 행마다 `WAERS` 셀을 명시적으로 덮어쓴다."""
     session = _get_sap_session()
     _sap_close_stray_popups(session)
     wnd = session.findById('wnd[0]')
@@ -1535,6 +1540,8 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000'):
             continue
         try:
             grid.modifyCell(idx, 'NETPR', str(price))
+            if currency and currency != 'KRW':
+                grid.modifyCell(idx, 'WAERS', currency)
             grid.currentCellRow = idx
             grid.currentCellColumn = 'EPEIN'
             grid.triggerModified()
@@ -1875,8 +1882,9 @@ def main():
             biz_reg_no = sys.argv[3] if len(sys.argv) > 3 else ''
             items_json = sys.argv[4] if len(sys.argv) > 4 else '[]'
             plant = sys.argv[5] if len(sys.argv) > 5 else '1000'
+            currency = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else 'KRW'
             items = json.loads(items_json)
-            result = prepare_po_from_excel(excel_path, biz_reg_no, items, plant)
+            result = prepare_po_from_excel(excel_path, biz_reg_no, items, plant, currency)
         elif action == 'confirm_save_po':
             purchasing_org = sys.argv[2] if len(sys.argv) > 2 else '9000'
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'

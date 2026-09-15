@@ -328,8 +328,9 @@
   "bizRegNo": "공급자 사업자등록번호(숫자만, 하이픈 제거)",
   "invoiceDate": "작성일자(YYYYMMDD 8자리 숫자)",
   "vendorName": "공급자(협력사) 상호",
+  "currency": "통화 코드 — KRW 또는 USD(다른 통화 기호/코드가 명확히 보이면 그 코드, 불명확하면 KRW)",
   "items": [
-    {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(원 단위 정수, 콤마 제거), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
+    {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(통화 단위 그대로, 콤마 제거), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
   ],
   "note": "페이지를 일부만 사용했거나 애매해서 넘어간 부분이 있으면 한 문장으로, 없으면 빈 문자열"
 }
@@ -359,6 +360,9 @@
    페이지만 기준으로 삼고, 어떤 페이지를 기준으로 썼는지/어떤 페이지를 건너뛰었는지를
    note 필드에 한 문장으로 적으세요. 절대 여러 페이지의 서로 다른 내용을 억지로 합치거나
    짜맞추지 마세요.
+5. 문서 대부분은 KRW(원)이지만, "USD"/"US$"/"$" 같은 표시가 명확히 있으면 그 통화로
+   판단하세요(단가/합계 옆에 붙은 통화 기호·코드를 확인). 통화 표시가 전혀 없거나
+   애매하면 기본값인 "KRW"로 두세요 — 추측해서 USD로 단정하지 마세요.
 품목이 여러 개면 items 배열에 전부 넣으세요(하나도 빠뜨리지 말 것) — 단, 위 4번처럼 기준으로
 삼은 페이지/표 안의 품목만 넣으면 됩니다.
 
@@ -376,6 +380,11 @@ ${attachText}`;
         let parsed;
         try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error(window._t('AI 응답 JSON 파싱에 실패했습니다: ', 'Failed to parse the AI response JSON: ') + e.message); }
         if (!parsed.items || !parsed.items.length) throw new Error(window._t('PDF에서 품목을 추출하지 못했습니다.', 'Could not extract any line items from the PDF.'));
+
+        // 💡 [2026-09-16 신규] 통화 코드 정규화 — AI가 "원"/"₩"/소문자 등으로 답하거나
+        // 아예 빠뜨릴 수 있어, KRW/USD 두 가지로만 정리하고 그 외/누락은 KRW로 기본값 처리.
+        const rawCurrency = (parsed.currency || '').toString().trim().toUpperCase();
+        parsed.currency = (rawCurrency === 'USD' || rawCurrency === 'US$' || rawCurrency === '$') ? 'USD' : 'KRW';
 
         // 🐛🐛 [2026-09-16 실사용 버그수정] 프롬프트의 "코텍이면 절대 협력사로 쓰지 말 것"
         // 지시를 AI가 실제로 무시하고 우리 회사(코텍) 번호를 그대로 협력사로 뽑는 사고가
@@ -416,15 +425,21 @@ ${attachText}`;
             // `(it.tempCode || _en) ? A : B`로 해석되어, _en이 true면 tempCode가 있어도
             // 항상 "(unmatched)"가 나오는 등 의도와 다르게 동작하던 버그 — 괄호로 명확히 고침.
             const codeLabel = codeInfo ? `${it.tempCode}(${codeInfo.desc})` : (_en ? '(unmatched)' : '(매칭 안 됨)');
-            return `${i + 1}. ${it.desc} | ${_en ? 'qty' : '수량'}:${it.qty} | ${_en ? 'unit price' : '단가'}:${(it.unitPrice || 0).toLocaleString()} | ${_en ? 'temp code' : '임시코드'}:${codeLabel}`;
+            return `${i + 1}. ${it.desc} | ${_en ? 'qty' : '수량'}:${it.qty} | ${_en ? 'unit price' : '단가'}:${(it.unitPrice || 0).toLocaleString()} ${draft.currency || 'KRW'} | ${_en ? 'temp code' : '임시코드'}:${codeLabel}`;
         }).join('\n');
         // 💡 [2026-09-15 신규] 여러 페이지/표 중 일부만 기준으로 썼거나 건너뛴 부분이 있으면
         // AI가 남긴 note를 같이 보여준다("2페이지는 서로 다른 정보면 1페이지만 분석하고
         // 안내해달라"는 사용자 요청 반영).
         const noteLine = draft.note ? `\n\nℹ️ ${draft.note}` : '';
+        // 💡 [2026-09-16 신규] 통화가 KRW가 아니면(USD 등) 확인 화면에서 눈에 띄게 별도로
+        // 표시 — 품목별 단가 옆에도 이미 붙지만, "이 문서는 통화가 다르다"는 걸 놓치기 쉬워
+        // 한 번 더 요약 상단에 강조한다.
+        const currencyLine = (draft.currency && draft.currency !== 'KRW')
+            ? window._t(`\n⚠️ 통화: ${draft.currency} (KRW가 아닙니다 — 맞는지 확인해주세요)`, `\n⚠️ Currency: ${draft.currency} (not KRW — please confirm this is correct)`)
+            : '';
         return window._t(
-            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경").`,
-            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2's temp code should be 900201").`
+            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}${currencyLine}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경", "통화는 USD로 변경").`,
+            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}${currencyLine}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2's temp code should be 900201", "currency should be USD").`
         );
     };
 
@@ -467,7 +482,7 @@ ${attachText}`;
                     body: JSON.stringify({
                         excelPath: pd.excelPath, bizRegNo: pd.bizRegNo,
                         items: pd.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
-                        plant: '1000'
+                        plant: '1000', currency: pd.currency || 'KRW'
                     })
                 }), Math.min(120000, 40000 + 8000 * pd.items.length),
                 window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
@@ -2043,6 +2058,7 @@ ${attachText}`;
                         stage: 'confirm_items',
                         bizRegNo: extracted.bizRegNo || '', invoiceDate: extracted.invoiceDate || '',
                         vendorName: extracted.vendorName || '', items: extracted.items,
+                        currency: extracted.currency || 'KRW',
                         note: extracted.note || '',
                         projectCode: '', buyerEmpId: '', reason: '', purpose: '',
                     };
@@ -2099,12 +2115,13 @@ ${attachText}`;
                     try {
                         // 원본 첨부 텍스트가 없으면(이미 소비됨) 정정 지시만으로는 재추출이 불가능하므로,
                         // 기존 draft의 품목 목록을 텍스트로 재구성해 "이전 결과"로 같이 실어 보낸다.
-                        const prevAsText = [{ name: '(이전 추출 결과)', text: JSON.stringify({ bizRegNo: pd.bizRegNo, invoiceDate: pd.invoiceDate, vendorName: pd.vendorName, items: pd.items }, null, 2) }];
+                        const prevAsText = [{ name: '(이전 추출 결과)', text: JSON.stringify({ bizRegNo: pd.bizRegNo, invoiceDate: pd.invoiceDate, vendorName: pd.vendorName, currency: pd.currency, items: pd.items }, null, 2) }];
                         const extracted = await window._ganttQaExtractPoItemsViaAi(apiKeyForPo, prevAsText, replyText);
                         pd.bizRegNo = extracted.bizRegNo || pd.bizRegNo;
                         pd.invoiceDate = extracted.invoiceDate || pd.invoiceDate;
                         pd.vendorName = extracted.vendorName || pd.vendorName;
                         pd.items = extracted.items;
+                        pd.currency = extracted.currency || pd.currency || 'KRW';
                         pd.note = extracted.note || '';
                         window._ganttQaHistory.pop();
                         window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaPoSummaryText(pd) });
