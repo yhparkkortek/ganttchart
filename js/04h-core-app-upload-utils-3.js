@@ -1397,11 +1397,93 @@
         return function stop() { timers.forEach(clearTimeout); };
     };
 
+    // ⬆️⬇️ [2026-09-15 신규] 입력창 질문 히스토리 — 터미널/셸처럼 위/아래 화살표로 예전에 보낸
+    //    질문을 다시 불러올 수 있게 한다. localStorage에 저장해 페이지를 새로고침하거나 모달을
+    //    닫았다 다시 열어도 유지된다(대화 내용 자체(window._ganttQaHistory)는 모달을 닫으면
+    //    비워지지만, 이 "질문 문구만" 담은 히스토리는 "자주 쓰는 질문" 빈도 기록
+    //    (gantt_qa_question_freq_v2)처럼 별도로 계속 쌓인다).
+    const _QA_INPUT_HIST_KEY = 'gantt_qa_input_history_v1';
+    const _QA_INPUT_HIST_MAX = 100;
+    window._ganttQaInputHistory = (function() {
+        try {
+            const raw = localStorage.getItem(_QA_INPUT_HIST_KEY);
+            const arr = raw ? JSON.parse(raw) : [];
+            return Array.isArray(arr) ? arr : [];
+        } catch (e) { return []; }
+    })();
+    window._ganttQaInputHistoryPos = -1; // -1 = 히스토리 탐색 중이 아님(지금 타이핑 중인 초안 상태)
+    window._ganttQaInputDraft = ''; // 위 화살표를 처음 누르기 직전까지 입력창에 있던 내용(임시 보관)
+
+    // sendGanttQaMessage의 모든 분기(로컬 명령이든 AI 호출이든)가 공유하는 맨 앞부분에서 딱 한 번
+    // 호출된다 — 예전에 mailRaw를 여러 경유지 코드에 각각 넣어야 해서 하나씩 빠뜨리던 버그
+    // 패턴(CLAUDE.md 참고)을 반복하지 않기 위해, 분기마다 따로 기록하지 않고 공용 진입점 한 곳
+    // 에서만 기록한다.
+    window._ganttQaRecordInputHistory = function(text) {
+        if (!text) return;
+        const hist = window._ganttQaInputHistory;
+        if (hist.length && hist[hist.length - 1] === text) return; // 같은 질문 연속 전송은 중복 저장 안 함
+        hist.push(text);
+        if (hist.length > _QA_INPUT_HIST_MAX) hist.shift();
+        window._ganttQaInputHistoryPos = -1; // 새 질문이 쌓이면 탐색 위치는 항상 초기화
+        try { localStorage.setItem(_QA_INPUT_HIST_KEY, JSON.stringify(hist)); } catch (e) { /* 저장 실패는 무시(용량 초과 등) */ }
+    };
+
+    // 입력창(textarea)의 onkeydown이 호출하는 공용 핸들러 — Enter 전송 + 위/아래 히스토리 탐색을
+    // 한 곳에서 처리한다. 여러 줄 입력(Shift+Enter로 줄바꿈) 중 커서를 위/아래로 옮기는 평소
+    // 동작을 방해하지 않도록, "아직 히스토리 탐색을 시작하지 않은" 상태에서 위 화살표를 누를 때만
+    // 커서가 맨 앞에 있는지 확인한다 — 일단 탐색을 시작한 뒤에는(한 번이라도 이전 질문을 불러온
+    // 뒤에는) 커서 위치와 무관하게 계속 화살표로 더 훑어볼 수 있어야 자연스럽다(재귀 호출 시마다
+    // 매번 "커서가 맨 앞/맨 끝"인지 다시 검사하면, 히스토리를 불러온 직후 커서가 텍스트 끝으로
+    // 옮겨져 있어서 두 번째 위 화살표부터 먹통이 되는 버그가 실제로 있었음 — 브라우저 테스트로
+    // 확인 후 수정, 2026-09-15).
+    window._ganttQaHandleInputKeydown = function(event) {
+        if (event.key === 'Enter' && !event.shiftKey) {
+            event.preventDefault();
+            window.sendGanttQaMessage();
+            return;
+        }
+        const textarea = event.target;
+        const navigating = window._ganttQaInputHistoryPos !== -1;
+        if (event.key === 'ArrowUp') {
+            if (!navigating && (textarea.selectionStart !== 0 || textarea.selectionEnd !== 0)) return;
+            const hist = window._ganttQaInputHistory || [];
+            if (!hist.length) return;
+            event.preventDefault();
+            if (!navigating) {
+                window._ganttQaInputDraft = textarea.value;
+                window._ganttQaInputHistoryPos = hist.length;
+            }
+            if (window._ganttQaInputHistoryPos > 0) {
+                window._ganttQaInputHistoryPos--;
+                textarea.value = hist[window._ganttQaInputHistoryPos];
+                const len = textarea.value.length;
+                textarea.setSelectionRange(len, len);
+            }
+        } else if (event.key === 'ArrowDown') {
+            if (!navigating) return; // 히스토리 탐색 중이 아니면 평소처럼 동작(다른 줄로 이동 등)
+            event.preventDefault();
+            const hist2 = window._ganttQaInputHistory || [];
+            window._ganttQaInputHistoryPos++;
+            if (window._ganttQaInputHistoryPos >= hist2.length) {
+                window._ganttQaInputHistoryPos = -1;
+                textarea.value = window._ganttQaInputDraft || '';
+            } else {
+                textarea.value = hist2[window._ganttQaInputHistoryPos];
+            }
+            const newLen = textarea.value.length;
+            textarea.setSelectionRange(newLen, newLen);
+        }
+    };
+
     window.sendGanttQaMessage = async function() {
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
         const question = input.value.trim();
         if (!question) return;
+
+        // ⬆️⬇️ [2026-09-15 신규] 입력창 히스토리에 기록 — 아래 모든 분기(로컬 명령/AI 호출)가
+        //    공유하는 진입점이라 여기 한 곳에만 있으면 된다(위 히스토리 도우미 선언부 참고).
+        window._ganttQaRecordInputHistory(question);
 
         // 🐛 [2026-09-08 버그수정] 음성문답 모드가 자동으로 전송하는 시점과 사람이 직접 전송 버튼을
         //    누르는 시점이 겹치면(예: 답변을 기다리는 동안 마이크가 계속 켜져있어 다른 말이 섞여 들어간
@@ -2919,7 +3001,7 @@
                 <div style="padding:10px 14px; border-top:1px solid #d0dde8; background:#f6f8fa; display:flex; gap:8px; align-items:stretch;">
                     <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; padding:0 16px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear<br>Chat' : '대화<br>삭제'}</button>
                     <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Voice<br>Q&A' : '음성<br>문답'}</button>
-                    <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="if(event.key==='Enter' &amp;&amp; !event.shiftKey){ event.preventDefault(); window.sendGanttQaMessage(); }"></textarea>
+                    <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line, ↑↓=History)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈, ↑↓=이전 질문)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="window._ganttQaHandleInputKeydown(event)"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>
             </div>`;
