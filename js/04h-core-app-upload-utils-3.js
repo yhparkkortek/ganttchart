@@ -246,18 +246,30 @@
 
     // 📎 [2026-09-16 신규, 사용자 요청] 드래그앤드롭 — 모달 어디에 놓아도(메시지 영역/입력창
     // 등) 받도록 모달 박스 전체에 걸어둔다. 드래그 중엔 점선 테두리로 시각적 표시.
+    // 🐛 [2026-09-16 실사용 버그수정] `stopPropagation()`이 빠져있어서, 드롭 이벤트가 이
+    // 모달을 지나 `js/04f-core-app-upload-utils-1.js`의 **페이지 전체를 덮는 전역
+    // "drop" 리스너**(엑셀 파일을 드래그하면 그걸 "프로젝트 로드"로 처리하는 기존 기능,
+    // "페이지 어디에 드롭해도 엑셀 로드가 동작하도록" 의도적으로 window 레벨에 걸려있음)
+    // 까지 올라가버려서, PDF를 놓아도 "프로젝트를 새로 불러오려는 것"으로 오인해 그
+    // 기능의 안내 팝업("팀 비밀번호가 아직 동기화되지 않았습니다")이 뜨는 사고가 있었다 —
+    // `22d`/`22e`(Panel 데이터시트/Elec Parts 드롭존)가 이미 같은 이유로 `stopPropagation()`
+    // 을 쓰고 있던 것과 동일한 함정. 세 핸들러 모두에 추가해서 이 모달의 드롭존이 전역
+    // 리스너로 새지 않게 막는다.
     window._ganttQaHandleDragOver = function(ev) {
         ev.preventDefault();
+        ev.stopPropagation();
         const box = document.getElementById('gantt-qa-box');
         if (box) box.style.outline = '3px dashed #7cc494';
     };
     window._ganttQaHandleDragLeave = function(ev) {
         ev.preventDefault();
+        ev.stopPropagation();
         const box = document.getElementById('gantt-qa-box');
         if (box) box.style.outline = 'none';
     };
     window._ganttQaHandleDrop = async function(ev) {
         ev.preventDefault();
+        ev.stopPropagation();
         const box = document.getElementById('gantt-qa-box');
         if (box) box.style.outline = 'none';
         const files = ev.dataTransfer && ev.dataTransfer.files;

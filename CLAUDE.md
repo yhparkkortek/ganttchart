@@ -1059,6 +1059,15 @@ AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면(📎 버튼
   (2026-09-16 신규, 사용자 요청)** 둘 다 이 함수를 재사용한다 — 모달 박스 전체
   (`#gantt-qa-box`)에 `ondragover`/`ondragleave`/`ondrop`을 걸어 어디에 놓아도 받고,
   드래그 중엔 초록 점선 테두리로 시각 표시한다(`_ganttQaHandleDragOver/DragLeave/Drop`).
+  **🐛 [2026-09-16 실사용 버그수정] `stopPropagation()`이 빠져서 이 모달에 놓은 파일이
+  `js/04f-core-app-upload-utils-1.js`의 페이지 전체 window 레벨 `"drop"` 리스너(엑셀
+  드래그 시 "프로젝트 로드"로 처리하는 기존 기능)까지 새어 들어가, PDF를 놓아도 "구글
+  드라이브 팀 비밀번호 미동기화" 같은 그 기능의 안내 팝업이 뜨는 사고가 있었다 — `22d`/
+  `22e`(Panel 데이터시트/Elec Parts 드롭존)가 이미 같은 이유로 `stopPropagation()`을
+  쓰고 있던 것과 동일한 함정. 세 핸들러(dragover/dragleave/drop) 전부에 추가해서 고침.
+  **앞으로 이 앱에 새 드롭존을 추가할 때는 항상 `stopPropagation()`을 같이 넣을 것** —
+  이 페이지엔 이미 전역 드롭 리스너가 있어서, 지역 드롭존이 이걸 빼먹으면 매번 같은
+  버그가 재발한다.
   `window._ganttQaPendingAttachments`(배열)에 `{name, text}`로 쌓아두고, **다음 메시지를
   보낼 때** 그 첨부들을 소비한다(즉시 처리 안 함 — 사람이 여러 PDF를 첨부한 뒤 메시지
   없이 그냥 전송해도 처리되도록). ⚠️ **지금은 "구매오더 요청"이 첨부의 유일한 용도**라서
