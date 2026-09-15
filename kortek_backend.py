@@ -1932,6 +1932,97 @@ def sap_approval_generate():
     return jsonify({'ok': True, 'made': made, 'failed': failed, 'folder': _APPROVAL_OUT_DIR, 'message': msg})
 
 
+# 🛒 [2026-09-15 신규] "구매오더 요청" — AI 문답에 전자세금계산서/견적서 PDF를 첨부하면 항목을
+#    추출해 "연구소 구매오더,기타출고 제안 BDC Upload양식"(사용자 제공 Z38MMR060.xls) 형식의
+#    엑셀을 만들어준다. ZMMR060에 이 엑셀을 실제로 "업로드"하는 정확한 SAP GUI 조작은 아직
+#    확인 전(매크로/라이브 진단 대기 중)이라, 이 엔드포인트는 **엑셀 생성 + 폴더 자동 오픈까지만**
+#    한다 — SAP 자동화(업로드~F8~저장확인~ZMM018 발주서 출력)는 그 조작이 확인되면 이어서 붙일
+#    예정(CLAUDE.md "🛒 구매오더 요청" 절 참고). 컬럼 순서/헤더 문구/시작 위치(헤더 5행·B열,
+#    데이터 6행부터)는 사용자가 준 원본 Z38MMR060.xls의 "Upload" 시트를 xlrd로 직접 읽어
+#    그대로 확인한 값 — 추측이 아니라 실측값이므로 바꾸지 말 것.
+_PO_OUT_DIR = os.path.join('C:\\SAP_DMS', '구매오더')
+_PO_EXCEL_HEADERS = ['자재코드', '자재명', '요청수량', '필요일자', '구매그룹', '프로젝트코드',
+                      '수령인', '구매담당자 사번', '요청사유', 'VINA PO', '목적', '비고']
+
+
+@app.route('/po-build-excel', methods=['POST'])
+def po_build_excel():
+    # 💡 원본 템플릿이 레거시 BIFF .xls라(openpyxl은 이 포맷을 못 씀) xlwt로 새로 써서 같은
+    #    확장자(.xls)로 맞춘다 — SAP이 실제로 어떤 방식으로 이 파일을 읽을지 아직 몰라서, 형식
+    #    불일치로 인한 새로운 실패를 피하려고 원본과 동일한 바이너리 포맷을 그대로 재현했다.
+    import xlwt
+    data = request.get_json(silent=True) or {}
+    rows = data.get('rows') or []
+    if not rows:
+        return jsonify({'ok': False, 'error': '엑셀에 넣을 품목이 없습니다.'}), 400
+
+    try:
+        os.makedirs(_PO_OUT_DIR, exist_ok=True)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'저장 폴더({_PO_OUT_DIR})를 만들지 못했습니다: {e}'}), 500
+
+    wb = xlwt.Workbook(encoding='utf-8')
+    ws = wb.add_sheet('Upload')
+    title_style = xlwt.easyxf('font: bold on')
+    header_style = xlwt.easyxf('font: bold on; pattern: pattern solid, fore_colour yellow;')
+    ws.write(1, 1, '연구소 구매오더,기타출고 제안 BDC Upload양식 [양식변경불가, 작성방법 참조]', title_style)
+    ws.write(2, 1, '※ 양식변경사항 발생시, iCare로 요청 바랍니다.')
+    for ci, h in enumerate(_PO_EXCEL_HEADERS):
+        ws.write(4, 1 + ci, h, header_style)
+    for ri, row in enumerate(rows):
+        for ci, h in enumerate(_PO_EXCEL_HEADERS):
+            ws.write(5 + ri, 1 + ci, row.get(h, ''))
+
+    ts = datetime.now(KST).strftime('%Y%m%d_%H%M%S')
+    file_name = f'구매오더요청_{ts}.xls'
+    out_path = os.path.join(_PO_OUT_DIR, file_name)
+    try:
+        wb.save(out_path)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'엑셀 저장 중 오류: {e}'}), 500
+
+    # 생성 완료 후 폴더를 탐색기로 열어준다 — ZDMSR004/승인원 표지와 동일한 패턴.
+    try:
+        os.startfile(_PO_OUT_DIR)
+    except Exception:
+        pass
+
+    return jsonify({'ok': True, 'fileName': file_name, 'path': out_path, 'folder': _PO_OUT_DIR,
+                     'message': f'구매오더 요청 엑셀({len(rows)}개 품목)을 생성했습니다: {file_name}'})
+
+
+@app.route('/po-sap-prepare', methods=['POST'])
+def po_sap_prepare():
+    # 🛒 [2026-09-15 신규] "구매오더 요청" 2단계 — /po-build-excel로 만든 엑셀을 ZMMR060에
+    #    업로드해 협력사(사업자등록번호로 검색)/세금코드/단가까지 채우고 저장 직전에
+    #    멈춘다(사용자와 합의한 "저장 직전 확인 후 정지" 설계 — CLAUDE.md "🛒 구매오더
+    #    요청" 절 참고). 실제 저장은 /po-sap-confirm-save가 사람 확인 후 별도로 호출한다.
+    data = request.get_json(silent=True) or {}
+    excel_path = (data.get('excelPath') or '').strip()
+    biz_reg_no = (data.get('bizRegNo') or '').strip()
+    items = data.get('items') or []
+    plant = (data.get('plant') or '1000').strip()
+    if not excel_path or not biz_reg_no or not items:
+        return jsonify({'ok': False, 'error': 'excelPath/bizRegNo/items가 모두 필요합니다.'}), 400
+    timeout = min(120, 40 + 8 * len(items))
+    data_out, status = _run_sap_bridge(
+        ['prepare_po_from_excel', excel_path, biz_reg_no, json.dumps(items, ensure_ascii=False), plant],
+        timeout, 'SAP 구매오더 준비')
+    return jsonify(data_out), status
+
+
+@app.route('/po-sap-confirm-save', methods=['POST'])
+def po_sap_confirm_save():
+    # 🛒 [2026-09-15 신규] "구매오더 요청" 3단계 — 사람이 /po-sap-prepare 결과를 채팅에서
+    #    확인하고 "저장해줘"라고 답한 뒤에만 호출된다. 실제 저장(구매오더 확정) + 오더번호
+    #    확보 + ZMM018 발주서 PDF 출력까지 진행한다.
+    data = request.get_json(silent=True) or {}
+    purchasing_org = (data.get('purchasingOrg') or '9000').strip()
+    plant = (data.get('plant') or '1000').strip()
+    data_out, status = _run_sap_bridge(['confirm_save_po', purchasing_org, plant], 60, 'SAP 구매오더 저장')
+    return jsonify(data_out), status
+
+
 # ── 백엔드 자동 업데이트("SAP 조회 연동" 절 kortek_backend.zip 배포 방식의 대안, 2026-09-15) ─
 # 이 앱은 GitHub Pages(정적 프런트) + 각 PC의 로컬 백엔드(kortek_backend.py) 구조라, 백엔드
 # 파일이 바뀔 때마다 사용자가 kortek_backend.zip을 다시 받아 기존 폴더에 덮어써야 했다 —

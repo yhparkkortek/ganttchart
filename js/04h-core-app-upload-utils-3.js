@@ -178,6 +178,145 @@
         );
     };
 
+    // 🛒 [2026-09-15 신규] "구매오더 요청" — AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면
+    //    항목을 추출해 "연구소 구매오더,기타출고 제안 BDC Upload양식"(사용자 제공
+    //    Z38MMR060.xls) 엑셀을 만들고, ZMMR060에 업로드→F8→협력사/세금코드/단가 입력까지
+    //    자동화한 뒤 **저장 직전에 멈춰 사람 확인을 받는다**(사용자와 명시적으로 합의한
+    //    설계 — 실제 SAP 저장은 되돌리기 번거로운 재무적 커밋이라 확인 없이 자동 실행하지
+    //    않음). CLAUDE.md "🛒 구매오더 요청" 절 참고.
+    // 임시코드 표(920101~900501) — 사용자가 제공한 표 그대로. AI가 품목 설명을 보고 가장
+    // 가까운 코드를 제안하는 데 쓰인다(애매하면 사람이 확인/정정).
+    window._PO_TEMP_CODE_TABLE = [
+        { code: '900101', desc: '개발용 Panel(Open Cell, LCM)' },
+        { code: '900102', desc: '개발용 Panel Mock Up(BLU 등)' },
+        { code: '900103', desc: '개발용 Panel 기타부품(Pol, Sheet, 기타)' },
+        { code: '900201', desc: '개발용 A/W' },
+        { code: '900202', desc: '개발용 PCB' },
+        { code: '900203', desc: '개발용 PBM 및 회로부품' },
+        { code: '900301', desc: '개발용 TSP' },
+        { code: '900302', desc: '개발용 전장부품' },
+        { code: '900401', desc: '개발용 Glass' },
+        { code: '900402', desc: '개발용 Frame(Sheet metal, Cover, Back, BKT)' },
+        { code: '900403', desc: '개발용 기구 Mock Up(Mold 물)' },
+        { code: '900404', desc: '개발용 기구 기타부품(Foam tape, Screw, 기타)' },
+        { code: '900501', desc: '개발용 포장부품' },
+    ];
+    // 목적 표(P01~P05) — 사용자가 제공한 표 그대로.
+    window._PO_PURPOSE_TABLE = [
+        { code: 'P01', desc: '유상샘플' },
+        { code: 'P02', desc: '무상샘플' },
+        { code: 'P03', desc: 'E3 자재' },
+        { code: 'P04', desc: '내부검토용' },
+        { code: 'P05', desc: '기타' },
+    ];
+
+    // 첨부(PDF)는 지금은 "구매오더 요청" 용도가 유일하다 — 첨부가 있는 채로 메시지를
+    // 보내면 항상 이 흐름을 탄다. 다른 첨부 용도가 추가되면 이 가정을 재검토할 것.
+    window._ganttQaPendingAttachments = []; // [{name, text}]
+
+    window._ganttQaHandleFileSelect = async function(inputEl) {
+        const files = Array.from(inputEl.files || []);
+        inputEl.value = ''; // 같은 파일을 다시 골라도 change 이벤트가 발생하도록 초기화
+        if (!files.length) return;
+        if (typeof window._pcExtractPdfText !== 'function') {
+            if (window.showToast) window.showToast(window._t('⚠️ PDF 읽기 기능을 아직 불러오지 못했습니다 — 잠시 후 다시 시도해주세요.', '⚠️ The PDF reader hasn\'t loaded yet — please try again in a moment.'), 'warning');
+            return;
+        }
+        for (const file of files) {
+            if (!/\.pdf$/i.test(file.name)) {
+                if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}"은(는) PDF가 아니라 건너뜁니다.`, `⚠️ Skipping "${file.name}" — not a PDF.`), 'warning');
+                continue;
+            }
+            try {
+                const text = await window._pcExtractPdfText(file);
+                window._ganttQaPendingAttachments.push({ name: file.name, text: text || '' });
+            } catch (e) {
+                if (window.showToast) window.showToast(window._t(`⚠️ "${file.name}" 읽기 실패: `, `⚠️ Failed to read "${file.name}": `) + (e && e.message ? e.message : e), 'warning');
+            }
+        }
+        window._ganttQaRenderAttachmentStrip();
+    };
+
+    window._ganttQaRemoveAttachment = function(idx) {
+        window._ganttQaPendingAttachments.splice(idx, 1);
+        window._ganttQaRenderAttachmentStrip();
+    };
+
+    window._ganttQaRenderAttachmentStrip = function() {
+        const strip = document.getElementById('gantt-qa-attach-strip');
+        if (!strip) return;
+        const list = window._ganttQaPendingAttachments || [];
+        if (!list.length) { strip.style.display = 'none'; strip.innerHTML = ''; return; }
+        strip.style.display = 'flex';
+        strip.innerHTML = list.map(function(a, i) {
+            return `<span style="display:inline-flex; align-items:center; gap:5px; background:#fff8e6; border:1px solid #ffe08a; color:#7a5210; border-radius:5px; padding:3px 8px; font-size:11px;">
+                📎 ${escapeHtml(a.name)}
+                <span onclick="window._ganttQaRemoveAttachment(${i})" style="cursor:pointer; font-weight:bold; color:#b03a3a;">✕</span>
+            </span>`;
+        }).join('');
+    };
+
+    // 여러 턴에 걸치는 "여러 턴 draft" 패턴(승인원 표지/BOM 옵션과 동일한 설계) —
+    // {stage, materialsSourceNames, bizRegNo, invoiceDate, vendorName, items:[{desc,qty,unitPrice,tempCode}],
+    //  projectCode, buyerEmpId, reason, purpose, excelPath, receiver}
+    window._ganttQaPoDraft = null;
+
+    window._ganttQaPoOptionsTableText = function() {
+        const tempLines = window._PO_TEMP_CODE_TABLE.map(function(r) { return `${r.code} ${r.desc}`; }).join('\n');
+        const purposeLines = window._PO_PURPOSE_TABLE.map(function(r) { return `${r.code} ${r.desc}`; }).join('\n');
+        return { tempLines, purposeLines };
+    };
+
+    // PDF 텍스트(들)에서 품목 정보를 AI로 추출 — 다중 항목 전부 추출, 임시코드는 AI가 표를
+    // 보고 가장 가까운 것을 제안(애매하면 사람이 확인). correctionNote가 있으면 이전 추출
+    // 결과에 대한 사람의 정정 지시를 같이 실어 재추출한다(별도 파싱 로직 없이 AI에게 다시
+    // 맡기는 방식 — 승인원 표지의 "재질문" 패턴과 달리 여기선 자유서술 정정이 더 유용해서
+    // AI 재호출로 단순화).
+    window._ganttQaExtractPoItemsViaAi = async function(apiKey, attachments, correctionNote) {
+        const { tempLines, purposeLines } = window._ganttQaPoOptionsTableText();
+        const attachText = attachments.map(function(a) { return `[첨부파일: ${a.name}]\n${a.text}`; }).join('\n\n---\n\n');
+        const correctionBlock = correctionNote ? `\n\n[사람의 정정 지시 — 이전 추출 결과 대신 이 지시를 반영해서 다시 추출할 것]\n${correctionNote}` : '';
+        const prompt = `다음은 전자세금계산서/견적서 PDF에서 추출한 원문 텍스트입니다. 아래 정보를 JSON 객체 하나로만 정확히 응답하세요(설명 문구·코드블록 표시 없이 JSON만):
+{
+  "bizRegNo": "공급자 사업자등록번호(숫자만, 하이픈 제거)",
+  "invoiceDate": "작성일자(YYYYMMDD 8자리 숫자)",
+  "vendorName": "공급자(협력사) 상호",
+  "items": [
+    {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(원 단위 정수, 콤마 제거), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
+  ]
+}
+품목이 여러 개면 items 배열에 전부 넣으세요(하나도 빠뜨리지 말 것). tempCode를 확신할 수 없으면 가장 근접한 것을 고르되, 정말 판단이 안 서면 빈 문자열로 두세요.
+
+[임시코드 표]
+${tempLines}
+${correctionBlock}
+
+[PDF 원문]
+${attachText}`;
+        const result = await window.callAiBackend(apiKey, prompt, {});
+        if (!result.ok) throw result.error || new Error('AI 추출 실패');
+        const text = window._extractGanttQaAiText(result);
+        const m = text.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error(window._t('AI 응답에서 JSON을 찾지 못했습니다.', 'Could not find JSON in the AI response.'));
+        let parsed;
+        try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error(window._t('AI 응답 JSON 파싱에 실패했습니다: ', 'Failed to parse the AI response JSON: ') + e.message); }
+        if (!parsed.items || !parsed.items.length) throw new Error(window._t('PDF에서 품목을 추출하지 못했습니다.', 'Could not extract any line items from the PDF.'));
+        return parsed;
+    };
+
+    window._ganttQaPoSummaryText = function(draft) {
+        const _en = window._currentLang === 'en';
+        const itemLines = draft.items.map(function(it, i) {
+            const codeInfo = window._PO_TEMP_CODE_TABLE.find(function(r) { return r.code === it.tempCode; });
+            const codeLabel = codeInfo ? `${it.tempCode}(${codeInfo.desc})` : (it.tempCode || _en ? '(unmatched)' : '(매칭 안 됨)');
+            return `${i + 1}. ${it.desc} | ${_en ? 'qty' : '수량'}:${it.qty} | ${_en ? 'unit price' : '단가'}:${(it.unitPrice || 0).toLocaleString()} | ${_en ? 'temp code' : '임시코드'}:${codeLabel}`;
+        }).join('\n');
+        return window._t(
+            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}\n\n[품목 ${draft.items.length}건]\n${itemLines}\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경").`,
+            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}\n\n[${draft.items.length} item(s)]\n${itemLines}\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2's temp code should be 900201").`
+        );
+    };
+
     window._aiFetchSapContext = async function(question) {
         try {
             // 💡 [2026-09-15 다중 자재 지원] 원래 첫 번째 자재번호만 뽑았는데(non-global 정규식),
@@ -1693,6 +1832,223 @@
             window._renderGanttQaMessages();
             input.focus();
             return;
+        }
+
+        // 🛒 [2026-09-15 신규] "구매오더 요청" — PDF 첨부(📎) + 전송 → AI로 품목 추출 →
+        //    확인/정정 → 프로젝트코드/구매담당자 사번/요청사유/목적 순차질문 → 엑셀 생성 →
+        //    ZMMR060 업로드+협력사/세금코드/단가 입력 → **저장 직전 확인** → (사람이 승낙하면)
+        //    저장+ZMM018 발주서 출력. 승인원 표지와 같은 "여러 턴 draft" 패턴
+        //    (window._ganttQaPoDraft). 실제 SAP 저장은 되돌리기 번거로운 동작이라 사람 확인
+        //    없이 자동 실행하지 않기로 사용자와 명시적으로 합의함(CLAUDE.md 참고) — 반드시
+        //    다른 모든 로컬 명령보다 먼저 체크해야 함(트리거 단어 없는 후속 답변이 엉뚱하게
+        //    다른 로컬 명령/일반 AI 질문으로 새면 안 되므로, 첨부 자체가 유일한 용도인 지금은
+        //    최우선 순위로 둠).
+        if (window._ganttQaPoDraft || (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length)) {
+            const apiKeyForPo = window.getActiveAiKey ? window.getActiveAiKey() : null;
+            if (!apiKeyForPo && !window._ganttQaPoDraft) {
+                alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.'));
+                return;
+            }
+            const replyText = question.trim();
+
+            // ── 새 draft 시작: 첨부가 있고 아직 진행 중인 draft가 없음 ──
+            if (!window._ganttQaPoDraft) {
+                window._ganttQaHistory.push({ role: 'user', text: question });
+                input.value = '';
+                const attachments = window._ganttQaPendingAttachments.slice();
+                window._ganttQaPendingAttachments = [];
+                window._ganttQaRenderAttachmentStrip();
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('첨부 파일에서 품목 정보를 추출하는 중...', 'Extracting line items from the attachment...'), pending: true });
+                window._renderGanttQaMessages();
+                try {
+                    const extracted = await window._ganttQaExtractPoItemsViaAi(apiKeyForPo, attachments, null);
+                    window._ganttQaPoDraft = {
+                        stage: 'confirm_items',
+                        bizRegNo: extracted.bizRegNo || '', invoiceDate: extracted.invoiceDate || '',
+                        vendorName: extracted.vendorName || '', items: extracted.items,
+                        projectCode: '', buyerEmpId: '', reason: '', purpose: '',
+                    };
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaPoSummaryText(window._ganttQaPoDraft) });
+                } catch (e) {
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('품목 추출 실패: ', 'Failed to extract line items: ') + (e && e.message ? e.message : e) });
+                }
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            // ── 기존 draft 이어서 처리 ──
+            const pd = window._ganttQaPoDraft;
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            input.value = '';
+
+            if (pd.stage === 'confirm_items') {
+                if (/^(확인|네|맞아|맞습니다|ok|okay|confirm|yes)\b/i.test(replyText) || /^(확인|네)$/.test(replyText)) {
+                    const missingCode = pd.items.some(function(it) { return !it.tempCode || !window._PO_TEMP_CODE_TABLE.some(function(r) { return r.code === it.tempCode; }); });
+                    if (missingCode) {
+                        window._ganttQaHistory.push({ role: 'ai', text: window._t('⚠️ 일부 품목의 임시코드가 확인되지 않았습니다 — 몇 번 품목을 어떤 임시코드로 할지 알려주세요(예: "2번은 900201").', '⚠️ Some item(s) don\'t have a confirmed temp code — please tell me which code to use (e.g. "item 2 should be 900201").') });
+                        window._renderGanttQaMessages();
+                        input.focus();
+                        return;
+                    }
+                    pd.stage = 'ask_project';
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('✅ 확인했습니다. 프로젝트코드를 알려주세요.', '✅ Got it. What\'s the project code?') });
+                } else {
+                    // 확인이 아니면 정정 지시로 간주 — AI에게 다시 추출을 맡긴다(별도 파싱 없음).
+                    window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('정정 사항을 반영해서 다시 추출하는 중...', 'Re-extracting with your correction...'), pending: true });
+                    window._renderGanttQaMessages();
+                    try {
+                        // 원본 첨부 텍스트가 없으면(이미 소비됨) 정정 지시만으로는 재추출이 불가능하므로,
+                        // 기존 draft의 품목 목록을 텍스트로 재구성해 "이전 결과"로 같이 실어 보낸다.
+                        const prevAsText = [{ name: '(이전 추출 결과)', text: JSON.stringify({ bizRegNo: pd.bizRegNo, invoiceDate: pd.invoiceDate, vendorName: pd.vendorName, items: pd.items }, null, 2) }];
+                        const extracted = await window._ganttQaExtractPoItemsViaAi(apiKeyForPo, prevAsText, replyText);
+                        pd.bizRegNo = extracted.bizRegNo || pd.bizRegNo;
+                        pd.invoiceDate = extracted.invoiceDate || pd.invoiceDate;
+                        pd.vendorName = extracted.vendorName || pd.vendorName;
+                        pd.items = extracted.items;
+                        window._ganttQaHistory.pop();
+                        window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaPoSummaryText(pd) });
+                    } catch (e) {
+                        window._ganttQaHistory.pop();
+                        window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('재추출 실패: ', 'Re-extraction failed: ') + (e && e.message ? e.message : e) });
+                    }
+                }
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            if (pd.stage === 'ask_project') {
+                pd.projectCode = replyText;
+                pd.stage = 'ask_buyer';
+                window._ganttQaHistory.push({ role: 'ai', text: window._t('구매담당자 사번을 알려주세요.', 'What\'s the buyer\'s employee ID?') });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            if (pd.stage === 'ask_buyer') {
+                pd.buyerEmpId = replyText;
+                pd.stage = 'ask_reason';
+                window._ganttQaHistory.push({ role: 'ai', text: window._t('요청사유를 알려주세요(예: 샘플제작).', 'What\'s the reason for the request (e.g. sample production)?') });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            if (pd.stage === 'ask_reason') {
+                pd.reason = replyText;
+                pd.stage = 'ask_purpose';
+                const { purposeLines } = window._ganttQaPoOptionsTableText();
+                window._ganttQaHistory.push({ role: 'ai', text: window._t(`목적을 아래 표에서 골라주세요(코드 또는 내역으로 답해주세요):\n${purposeLines}`, `Please pick a purpose from the table below (reply with the code or the description):\n${purposeLines}`) });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            if (pd.stage === 'ask_purpose') {
+                let purposeCode = (replyText.match(/P0[1-5]/i) || [])[0];
+                if (purposeCode) purposeCode = purposeCode.toUpperCase();
+                if (!purposeCode) {
+                    const hit = window._PO_PURPOSE_TABLE.find(function(r) { return replyText.indexOf(r.desc) !== -1; });
+                    if (hit) purposeCode = hit.code;
+                }
+                if (!purposeCode) {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('목적 코드를 못 알아들었어요 — "P01"처럼 코드로 답해주세요.', 'I couldn\'t recognize that purpose — please reply with a code like "P01".') });
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+                pd.purpose = purposeCode;
+
+                // 여기까지 다 모였으면 곧바로 엑셀 생성 → SAP 업로드+입력(저장 전까지)를 진행.
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('구매오더 요청 엑셀을 생성하는 중...', 'Generating the purchase order request excel...'), pending: true });
+                window._renderGanttQaMessages();
+                const receiver = window.getActiveUserName ? window.getActiveUserName() : '';
+                const rows = pd.items.map(function(it) {
+                    return {
+                        '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
+                        '필요일자': pd.invoiceDate, '구매그룹': '908', '프로젝트코드': pd.projectCode,
+                        '수령인': receiver, '구매담당자 사번': pd.buyerEmpId, '요청사유': pd.reason,
+                        'VINA PO': '', '목적': pd.purpose, '비고': '',
+                    };
+                });
+                let finalReply;
+                try {
+                    const exRes = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/po-build-excel', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ rows: rows })
+                        }), 30000, window._t('엑셀 생성 시간 초과', 'Excel generation timed out')
+                    );
+                    const exData = await exRes.json();
+                    if (!exData.ok) throw new Error(exData.error || window._t('알 수 없는 오류', 'unknown error'));
+                    pd.excelPath = exData.path;
+
+                    if (window._ganttQaHistory.length) {
+                        window._ganttQaHistory[window._ganttQaHistory.length - 1].text = '⏳ ' + window._t('SAP에 엑셀을 업로드하고 협력사/단가를 입력하는 중... (시간이 걸릴 수 있습니다)', 'Uploading the excel to SAP and filling in vendor/price... (this may take a while)');
+                        window._renderGanttQaMessages();
+                    }
+                    const prepRes = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/po-sap-prepare', {
+                            method: 'POST', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                excelPath: pd.excelPath, bizRegNo: pd.bizRegNo,
+                                items: pd.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
+                                plant: '1000'
+                            })
+                        }), Math.min(120000, 40000 + 8000 * pd.items.length),
+                        window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
+                    );
+                    const prepData = await prepRes.json();
+                    if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
+                    pd.stage = 'confirm_sap_prepare';
+                    finalReply = window._t(
+                        `✅ 엑셀 생성(${exData.fileName}) + SAP 업로드/입력까지 완료했습니다.\n\n${prepData.text || ''}\n\n📌 SAP에는 아직 저장(확정)되지 않았습니다 — 위 내용을 SAP 화면에서 직접 확인하신 후 "저장해줘"라고 답해주시면 실제로 저장하고 발주서 PDF까지 출력합니다. 취소하시려면 "취소"라고 답해주세요.`,
+                        `✅ Generated the excel (${exData.fileName}) and uploaded/filled it into SAP.\n\n${prepData.text || ''}\n\n📌 This has NOT been saved in SAP yet — please review it directly in the SAP screen, then reply "save" to actually save it and print the purchase order PDF, or "cancel" to stop here.`
+                    );
+                } catch (e) {
+                    finalReply = '⚠️ ' + window._t('구매오더 준비 중 오류: ', 'Error while preparing the purchase order: ') + (e && e.message ? e.message : e);
+                    window._ganttQaPoDraft = null; // 실패하면 초기화(다음 요청은 새로 시작)
+                }
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: finalReply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            if (pd.stage === 'confirm_sap_prepare') {
+                if (/(저장|save|확인|네|예)/i.test(replyText) && !/(취소|안\s*함|아니|no\b|cancel)/i.test(replyText)) {
+                    window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에 저장하고 발주서 PDF를 출력하는 중...', 'Saving in SAP and printing the purchase order PDF...'), pending: true });
+                    window._renderGanttQaMessages();
+                    let saveReply;
+                    try {
+                        const saveRes = await window._withTimeout(
+                            fetch('http://127.0.0.1:5000/po-sap-confirm-save', {
+                                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ purchasingOrg: '9000', plant: '1000' })
+                            }), 60000, window._t('SAP 구매오더 저장 시간 초과', 'SAP purchase order save timed out')
+                        );
+                        const saveData = await saveRes.json();
+                        saveReply = saveData.ok
+                            ? '📄 ' + (saveData.message || window._t('구매오더가 저장되었습니다.', 'Purchase order saved.'))
+                            : '⚠️ ' + window._t('저장 실패: ', 'Save failed: ') + (saveData.error || window._t('알 수 없는 오류', 'unknown error'));
+                    } catch (e) {
+                        saveReply = '⚠️ ' + window._t('저장 중 오류: ', 'Error while saving: ') + (e && e.message ? e.message : e);
+                    }
+                    window._ganttQaHistory.pop();
+                    window._ganttQaHistory.push({ role: 'ai', text: saveReply });
+                } else {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('🚫 저장을 취소했습니다 — SAP 화면은 채워진 상태로 그대로 남아있으니 필요하면 직접 저장하거나 취소해주세요.', '🚫 Save cancelled — the SAP screen is left as-is (filled in), so please save or cancel it directly in SAP if needed.') });
+                }
+                window._ganttQaPoDraft = null; // 성공/실패/취소 무관하게 완료 후 초기화
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
         }
 
         // 📋 [2026-09-15 신규] "SAP에서 104477 승인원 표지 생성해줘" — 사내 별도 데스크톱 앱
@@ -3773,9 +4129,16 @@
                     </select>
                 </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px; background:transparent;"></div>
+                <!-- 📎 [2026-09-15 신규] "구매오더 요청" 기능용 PDF 첨부 — 지금은 이 용도가
+                     유일한 첨부 기능이라, 첨부가 있는 채로 전송하면 항상 구매오더 추출 흐름을
+                     탄다(window._ganttQaPendingAttachments 참고). 나중에 다른 첨부 용도가
+                     추가되면 이 가정을 반드시 재검토할 것. -->
+                <div id="gantt-qa-attach-strip" style="display:none; padding:6px 14px 0; flex-wrap:wrap; gap:6px;"></div>
                 <div style="padding:10px 14px; border-top:1px solid #d0dde8; background:#f6f8fa; display:flex; gap:8px; align-items:stretch;">
                     <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; padding:0 16px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear<br>Chat' : '대화<br>삭제'}</button>
                     <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Voice<br>Q&A' : '음성<br>문답'}</button>
+                    <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a PDF (e.g. tax invoice/quote) — used for Purchase Order requests' : 'PDF 첨부(전자세금계산서/견적서 등) — 구매오더 요청에 사용됩니다'}" style="flex-shrink:0; padding:0 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:14px; font-weight:bold; cursor:pointer; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#cfe6fa';" onmouseout="this.style.background='#e8f4fd';">📎</button>
+                    <input type="file" id="gantt-qa-file-input" accept=".pdf,application/pdf" multiple style="display:none;" onchange="window._ganttQaHandleFileSelect(this)">
                     <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line, ↑↓=History)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈, ↑↓=이전 질문)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="window._ganttQaHandleInputKeydown(event)"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
                 </div>

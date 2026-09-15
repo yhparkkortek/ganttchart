@@ -1379,6 +1379,221 @@ def download_documents_batch(materials, doc_type='P01'):
     }
 
 
+# ── "구매오더 요청"(ZMMR060 → ZMM018) 전용 헬퍼 (2026-09-15 신규) ──────────
+# AI 문답에 전자세금계산서/견적서 PDF를 첨부하면 항목을 추출해 만든 BDC Upload 엑셀을
+# ZMMR060에 업로드해 구매오더를 생성하고, 저장 직전에 사람이 확인하도록 두 단계로 나눴다
+# (kortek_backend.py/js 04h와 함께 설계 — CLAUDE.md "🛒 구매오더 요청" 절 참고, 실제 SAP
+# 저장(구매오더 확정)은 되돌리기 번거로운 동작이라 사람 확인 없이 자동 실행하지 않기로
+# 사용자와 명시적으로 합의함):
+#   ① prepare_po_from_excel — 엑셀 업로드 → F8 → 협력사(사업자등록번호로 F4 검색)·세금코드·
+#      단가 입력까지만 하고 저장(SAVE) 직전에 멈춘다. 결과 화면을 텍스트로 반환해 사람이
+#      AI 문답 채팅에서 확인할 수 있게 한다.
+#   ② confirm_save_po — 사람이 "저장해줘"라고 확인한 뒤에만 별도로 호출 — 실제로 저장
+#      버튼을 눌러 구매오더를 확정하고, 오더번호를 읽어 ZMM018로 이동해 발주서 PDF를
+#      출력한다. 두 함수는 서로 다른 서브프로세스 호출이지만 SAP GUI 세션 자체는 그 사이에
+#      계속 살아있는 같은 프로세스이므로(사람이 화면을 그대로 열어둔 채로만 ②를 불러야
+#      함), ②는 항상 ①이 남겨둔 화면 상태를 그대로 이어받는다.
+# ⚠️⚠️ 2026-09-15 실사용 화면 녹화(Windows ScreenSketch)로 초기화면 구조(플랜트/파일
+# 필드, "생성"/"조회" 라디오)는 시각적으로 확인했다 — "파일" 필드 옆 폴더 아이콘을 누르면
+# 네이티브 Windows "열기" 다이얼로그가 뜨는데, 선택 후 그 필드에는 평범한 전체 경로
+# 문자열(`C:\Users\...\Z38MMR060.xls`)이 그대로 채워지는 것으로 확인됨(스크린샷으로
+# 확인) — 즉 라벨이 아니라 진짜 텍스트 입력 필드다. 이 프로젝트가 이미 겪은 "네이티브
+# 다이얼로그는 SAP GUI Scripting으로 못 잡는다"는 제약(CLAUDE.md의 SAP 문서 열기 절
+# 참고)을 감안해, 다이얼로그 자체를 열지 않고 이 필드에 곧바로 경로 문자열을 대입해서
+# 완전히 우회한다(다른 SAP 선택화면 필드들과 동일한 방식). 다만 일반 화면 녹화라 정확한
+# session.findById 기술 ID까지는 안 나와서, "플랜트"/"파일" 필드는 이 프로젝트의 기존
+# 관례(_set_text_on_best_candidate로 "WERKS"/"FILE" 계열 문자열 추측)로 찾는 방어적
+# 코드다 — 못 찾으면 조용히 잘못 진행하는 대신 명확한 RuntimeError로 실패한다(실패하면
+# 라이브 진단으로 정확한 ID를 확인해야 함). 반대로 협력사(LIFNR)/세금코드(MWSKZ)/
+# 단가(NETPR)/저장(btn[5])/ZMM018 부분은 사용자가 제공한 SAP GUI "기록 및 재생" 매크로
+# (발주서 작성,출력.vbs)에서 그대로 가져온 정확한 ID다(추측 아님).
+def _navigate_to_po_upload_screen(session, wnd, excel_path, plant='1000'):
+    """ZMMR060("연구개발자재 발주시스템") 초기화면에 진입해 "생성" 모드로 로컬 엑셀
+    파일을 업로드한다."""
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMMR060'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+    wnd = session.findById('wnd[0]')
+
+    _set_text_on_best_candidate(wnd, 'WERKS', plant)
+    # 플랜트는 화면 기본값(보통 1000)이 이미 들어있는 경우가 많아, 못 찾아도 치명적이지
+    # 않으므로 실패해도 계속 진행한다.
+
+    file_field = None
+    for guess in ('P_FILE', 'FILENAME', 'DATEI', 'FILE'):
+        file_field = _set_text_on_best_candidate(wnd, guess, excel_path)
+        if file_field is not None:
+            break
+    if file_field is None:
+        raise RuntimeError('ZMMR060 화면에서 "파일" 입력 필드를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다(라이브 진단 필요).')
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[8]').press()  # 실행(F8) — 엑셀 업로드 실행
+    except Exception as e:
+        raise RuntimeError(f'ZMMR060 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(2.0)
+    return session.findById('wnd[0]')
+
+
+def _find_po_grid(session, wnd):
+    """ZMMR060 결과 그리드는 `wnd[0]/shellcont/shell/shellcont/shell`(매크로에서 확인된
+    절대경로, usr 서브트리 밖에 있는 특이한 구조) — 먼저 이 정확한 경로를 시도하고,
+    실패하면 방어적으로 타입 기반 탐색으로 폴백한다."""
+    try:
+        return session.findById('wnd[0]/shellcont/shell/shellcont/shell')
+    except Exception:
+        return _find_by_id_substring(wnd, 'shellcont/shell', require_type='GuiShell')
+
+
+def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000'):
+    """구매오더 생성 1단계 — 엑셀 업로드 후 각 품목 행에 협력사/세금코드/단가를 채우고
+    저장 직전에 멈춘다. `items`는 엑셀에 넣은 행과 같은 순서의 리스트, 각 원소는
+    {"unitPrice": 숫자} 형태(PDF에서 추출한 단가 — SAP에 저장된 값이 아니라 이 값을
+    그대로 SAP에 입력한다). 협력사는 `biz_reg_no`(사업자등록번호) 하나로 전체 PO에
+    한 번만 검색해 선택한다(사용자 제공 매크로가 row 0에서만 협력사를 선택했고, 한 PO는
+    보통 협력사 하나이므로 나머지 행에도 자동 적용되는 것으로 가정 — 실사용에서 행마다
+    협력사가 따로 적용 안 되는 것으로 확인되면 행마다 반복하도록 고쳐야 함)."""
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    wnd = _navigate_to_po_upload_screen(session, wnd, excel_path, plant)
+
+    grid = _find_po_grid(session, wnd)
+    if grid is None:
+        raise RuntimeError('엑셀 업로드 후 결과 그리드를 찾지 못했습니다 — 업로드가 실패했거나(파일 경로/형식 문제) 화면 구조가 다를 수 있습니다.')
+
+    # 협력사(LIFNR) — 사업자등록번호로 SAP 표준 검색도움말(F4) 팝업 검색 후 첫 결과 선택.
+    # 아래 절대경로는 사용자 제공 매크로에서 그대로 가져온 것(추측 아님).
+    grid.currentCellColumn = 'LIFNR'
+    grid.pressF4()
+    time.sleep(0.6)
+    try:
+        biz_field = session.findById(
+            "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
+            "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
+        )
+        biz_field.text = str(biz_reg_no)
+        biz_field.setFocus()
+        biz_field.caretPosition = len(str(biz_reg_no))
+        session.findById('wnd[1]').sendVKey(0)  # 검색 실행
+        time.sleep(0.6)
+        session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9  # 첫 결과 행 선택
+        session.findById('wnd[1]').sendVKey(2)  # 더블클릭과 동일 — 선택 확정
+        time.sleep(0.5)
+    except Exception as e:
+        raise RuntimeError(f'협력사(사업자등록번호 "{biz_reg_no}") 검색 중 오류가 발생했습니다: {e} — 그 사업자등록번호로 등록된 협력사가 SAP에 없을 수 있습니다.')
+
+    # 세금코드(MWSKZ) — 매크로에서 항상 같은 위치([1,21])를 고르므로 고정 선택으로 재현.
+    grid.currentCellColumn = 'MWSKZ'
+    grid.pressF4()
+    time.sleep(0.6)
+    try:
+        session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
+        session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
+        session.findById('wnd[1]').sendVKey(2)
+        time.sleep(0.5)
+    except Exception as e:
+        raise RuntimeError(f'세금코드 선택 중 오류가 발생했습니다: {e}')
+
+    # 품목별 단가(NETPR)/EPEIN — PDF에서 추출한 값을 행 순서대로 입력.
+    for idx, item in enumerate(items):
+        price = item.get('unitPrice')
+        if price is None:
+            continue
+        try:
+            grid.modifyCell(idx, 'NETPR', str(price))
+            grid.currentCellColumn = 'EPEIN'
+            grid.triggerModified()
+            grid.modifyCell(idx, 'EPEIN', '1')
+            # ⚠️ EPEIN을 매크로 그대로 "1" 고정값으로 재현 — 정확한 의미(수량이 아니라
+            # 납기일수 등 다른 필드일 가능성이 있음, 요청수량은 이미 엑셀의 "요청수량"
+            # 컬럼으로 들어가 있어 중복일 수 있음) 미확인. 실사용에서 이상하면 이 값부터
+            # 의심할 것.
+        except Exception as e:
+            raise RuntimeError(f'{idx + 1}번째 품목의 단가 입력 중 오류가 발생했습니다: {e}')
+
+    body, source = _sap_dump_screen_body(wnd)
+    header = '[SAP 구매오더 생성(ZMMR060) — 저장 전 확인 필요]\n'
+    text = header + '\n' + (body or '(화면 내용을 읽지 못했습니다)')
+    return {'ok': True, 'source': source, 'text': text}
+
+
+def confirm_save_po(purchasing_org='9000', plant='1000'):
+    """구매오더 생성 2단계 — `prepare_po_from_excel`이 채워둔 화면을 사람이 확인한 뒤
+    호출한다. 저장(SAVE) → 오더번호 확보 → ZMM018에서 발주서 PDF 출력까지 진행한다.
+    이 함수 호출 시점에 SAP GUI가 반드시 `prepare_po_from_excel`이 마지막으로 남겨둔
+    화면(그리드에 협력사/단가가 채워진 채 저장 대기 중)이어야 한다 — 그 사이 사람이나
+    다른 스크립트가 화면을 바꿨으면 예상 못한 상태에서 저장이 실행될 위험이 있다."""
+    session = _get_sap_session()
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[5]').press()  # 저장
+        time.sleep(1.0)
+    except Exception as e:
+        raise RuntimeError(f'저장(SAVE) 중 오류가 발생했습니다: {e}')
+
+    # 저장 확인 팝업이 뜨면 확인(매크로에서 확인된 패턴) — 안 뜨면 조용히 건너뜀.
+    try:
+        session.findById('wnd[1]/usr/btnBUTTON_1').press()
+        time.sleep(0.8)
+    except Exception:
+        pass
+
+    wnd = session.findById('wnd[0]')
+    grid = _find_po_grid(session, wnd)
+    if grid is None:
+        raise RuntimeError('저장 후 결과 그리드를 찾지 못했습니다 — 저장이 실패했을 수 있습니다.')
+
+    po_number = None
+    try:
+        grid.currentCellColumn = 'EBELN'
+        grid.firstVisibleColumn = 'NOMNG'
+        grid.clickCurrentCell()  # 오더 상세화면으로 drill-down
+        time.sleep(1.0)
+        po_field = session.findById(
+            'wnd[0]/usr/subSUB0:SAPLMEGUI:0020/subSUB0:SAPLMEGUI:0030/subSUB1:SAPLMEGUI:1105/txtMEPO_TOPLINE-EBELN'
+        )
+        po_number = (po_field.text or '').strip()
+        # 뒤로가기 3번 — 매크로에서 확인된 정확한 복귀 경로.
+        for _ in range(3):
+            session.findById('wnd[0]/tbar[0]/btn[3]').press()
+            time.sleep(0.4)
+    except Exception as e:
+        raise RuntimeError(f'저장은 됐지만 오더번호를 확인하는 중 오류가 발생했습니다: {e} — SAP에서 방금 생성된 구매오더를 직접 확인해주세요.')
+
+    if not po_number:
+        raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
+
+    # ZMM018 — 발주서 PDF 출력.
+    try:
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM018'
+        wnd = session.findById('wnd[0]')
+        wnd.sendVKey(0)
+        time.sleep(0.8)
+        wnd = session.findById('wnd[0]')
+        _set_text_on_best_candidate(wnd, 'S_EKORG-LOW', purchasing_org)
+        _set_text_on_best_candidate(wnd, 'S_WERKS-LOW', plant)
+        ebeln_field = _set_text_on_best_candidate(wnd, 'S_EBELN-LOW', po_number)
+        if ebeln_field is None:
+            raise RuntimeError('ZMM018 화면에서 오더번호 입력 필드를 찾지 못했습니다.')
+        session.findById('wnd[0]/tbar[1]/btn[8]').press()  # 실행(F8)
+        time.sleep(1.5)
+
+        # ZMM018 결과 그리드는 `wnd[0]/shellcont/shell`(ZMMR060과 달리 한 단계만 중첩 —
+        # 매크로에서 확인된 절대경로).
+        try:
+            out_grid = session.findById('wnd[0]/shellcont/shell')
+        except Exception:
+            out_grid = _find_by_id_substring(session.findById('wnd[0]'), 'shellcont/shell', require_type='GuiShell')
+        out_grid.currentCellColumn = ''
+        out_grid.selectedRows = '0'
+        session.findById('wnd[0]/tbar[1]/btn[13]').press()  # 출력 — 매크로에서 확인된 인덱스
+        time.sleep(1.5)
+    except Exception as e:
+        raise RuntimeError(f'구매오더("{po_number}")는 정상 저장됐지만, 발주서 PDF 출력(ZMM018) 중 오류가 발생했습니다: {e} — ZMM018에서 오더번호 "{po_number}"로 직접 출력해주세요.')
+
+    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. 발주서 PDF를 출력했습니다.'}
+
+
 def main():
     try:
         import win32com.client  # noqa: F401  (설치 여부 확인용)
@@ -1426,6 +1641,17 @@ def main():
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
             result = fetch_approval_info(materials_list)
+        elif action == 'prepare_po_from_excel':
+            excel_path = sys.argv[2] if len(sys.argv) > 2 else ''
+            biz_reg_no = sys.argv[3] if len(sys.argv) > 3 else ''
+            items_json = sys.argv[4] if len(sys.argv) > 4 else '[]'
+            plant = sys.argv[5] if len(sys.argv) > 5 else '1000'
+            items = json.loads(items_json)
+            result = prepare_po_from_excel(excel_path, biz_reg_no, items, plant)
+        elif action == 'confirm_save_po':
+            purchasing_org = sys.argv[2] if len(sys.argv) > 2 else '9000'
+            plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
+            result = confirm_save_po(purchasing_org, plant)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))
