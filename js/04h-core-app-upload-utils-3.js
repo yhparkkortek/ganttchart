@@ -131,6 +131,53 @@
         return false;
     };
 
+    // 📐 [2026-09-15 신규] "BOM 조회 전에 옵션(Explosion type/Show price/Location Information)을
+    //    먼저 물어보고, 복수(ZPP038)/단일(ZPP033) 트랜잭션도 워딩으로 판정해달라"는 사용자 요청 —
+    //    실제 ZPP038 초기화면 캡처(빨간 박스로 두 섹션을 표시)를 보여주며 요청함. 사용처(역전개)의
+    //    "다중/일괄/복수" 워딩 라우팅(wantsBatchWhereUsed)과 같은 패턴을 재사용하되, BOM은 "애매하면
+    //    조회 전에 한번 물어봐줘"까지 요구돼서(사용처는 절대 안 물어봄) 여러 턴에 걸친 draft
+    //    상태머신(_ganttQaApprovalDraft/_ganttQaSapDocClarify와 동일한 설계)이 하나 더 필요하다.
+    //    아래 sendGanttQaMessage의 BOM draft 블록이 이 값들을 채운 뒤, 정확히 그 자재 조합에 대해
+    //    딱 한 번만 소비되는 "예약된 옵션"(_ganttQaBomResolvedOptions)을 여기 남겨두면, 이 함수의
+    //    bomMatch 분기가 그 값을 읽어 /sap-bom에 실어 보내고 즉시 비운다(1회성 — 재사용 금지, 다음
+    //    BOM 질문은 다시 옵션을 물어봐야 하므로).
+    window._ganttQaBomDraft = null; // {materials, originalQuestion, useSingleTcode, explosion, showPrice, showLocation, stage:'tcode'|'options'}
+    window._ganttQaBomResolvedOptions = null; // {materialsKey, useSingleTcode, explosion, showPrice, showLocation} — 1회성
+    // 📁 [2026-09-15 신규] "엑셀로 내보내줘" 성공 직후 "그 폴더로 이동할까요?"라고 물은 상태 —
+    //    다음 사람 메시지를 그 답으로 해석한다(sendGanttQaMessage 맨 앞의 처리 블록 참고).
+    window._ganttQaOpenFolderConfirm = false;
+
+    window._ganttQaExtractBomTrigger = function(question) {
+        if (!question) return null;
+        if (/(역전개|사용처)/.test(question)) return null; // 사용처 조회가 더 구체적인 요청이면 그쪽에 양보(기존 bomMatch와 동일 우선순위)
+        if (!/bom/i.test(question)) return null;
+        const nums = question.match(/\b\d{5,8}\b/g) || [];
+        if (!nums.length) return null;
+        return { materials: nums };
+    };
+
+    // "단일 레벨, 가격 표시, 위치 정보 안 함"류 자유 답변을 느슨하게 파싱 — 언급 안 된 항목은
+    // undefined로 남겨 "아직 모름"과 "아니오"를 구분한다(호출부가 필요에 따라 기본값을 채움).
+    window._ganttQaParseBomOptionReply = function(text) {
+        const out = {};
+        if (!text) return out;
+        if (/(다중|multi)/i.test(text)) out.explosion = 'multi';
+        else if (/(단일|single)/i.test(text)) out.explosion = 'single';
+        const priceSeg = (text.match(/가격[^,，\n]*/) || text.match(/price[^,，\n]*/i) || [])[0];
+        if (priceSeg) out.showPrice = !/(x|아니오|제외|안\s*함|no\b|미표시|없음)/i.test(priceSeg);
+        const locSeg = (text.match(/(로케이션|위치|location)[^,，\n]*/i) || [])[0];
+        if (locSeg) out.showLocation = !/(x|아니오|제외|안\s*함|no\b|미표시|없음)/i.test(locSeg);
+        return out;
+    };
+
+    window._ganttQaBomOptionsQuestionText = function(materials) {
+        const matLabel = materials.join(', ');
+        return window._t(
+            `📐 자재 "${matLabel}"의 BOM을 조회하기 전에 옵션을 선택해주세요:\n1) 전개 방식(Explosion type): 단일 레벨 / 다중 레벨\n2) Show price(표준가격) 표시할까요? (예/아니오)\n3) Location Information(재고위치) 표시할까요? (예/아니오)\n\n예시 답변: "단일 레벨, 가격 표시, 위치 정보 안 함"`,
+            `📐 Before looking up the BOM for material(s) "${matLabel}", please choose the options:\n1) Explosion type: Single level / Multi level\n2) Show price? (yes/no)\n3) Location Information? (yes/no)\n\nExample reply: "Single level, show price, no location info"`
+        );
+    };
+
     window._aiFetchSapContext = async function(question) {
         try {
             // 💡 [2026-09-15 다중 자재 지원] 원래 첫 번째 자재번호만 뽑았는데(non-global 정규식),
@@ -162,7 +209,22 @@
                 timeoutMs = whereUsedNums.length <= 1 ? 30000 : Math.min(150000, 30000 + 20000 * whereUsedNums.length);
                 timeoutMsgKo = 'SAP 사용처 조회 시간 초과'; timeoutMsgEn = 'SAP where-used lookup timed out';
             } else if (bomMatch) {
-                url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(bomNums.join(','));
+                // 💡 [2026-09-15 신규] sendGanttQaMessage의 BOM 옵션 draft가 이미 이 자재 조합에
+                //    대해 물어보고 답을 받아뒀으면(_ganttQaBomResolvedOptions) 그 값을 그대로 써서
+                //    또 묻지 않는다 — 1회성이라 쓰고 나면 즉시 비운다(다음 BOM 질문은 새로 물어봄).
+                let tcodeParam = 'auto', explosionParam = 'single', priceParam = '0', locParam = '0';
+                const bomKey = bomNums.slice().sort().join(',');
+                const resolvedOpts = window._ganttQaBomResolvedOptions;
+                if (resolvedOpts && resolvedOpts.materialsKey === bomKey) {
+                    tcodeParam = resolvedOpts.useSingleTcode === true ? 'single' : (resolvedOpts.useSingleTcode === false ? 'multi' : 'auto');
+                    explosionParam = resolvedOpts.explosion || 'single';
+                    priceParam = resolvedOpts.showPrice ? '1' : '0';
+                    locParam = resolvedOpts.showLocation ? '1' : '0';
+                    window._ganttQaBomResolvedOptions = null;
+                }
+                url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(bomNums.join(','))
+                    + '&tcode=' + tcodeParam + '&explosion=' + explosionParam
+                    + '&show_price=' + priceParam + '&show_location=' + locParam;
                 timeoutMs = Math.min(90000, 30000 + 10000 * bomNums.length);
                 timeoutMsgKo = 'SAP BOM 조회 시간 초과'; timeoutMsgEn = 'SAP BOM lookup timed out';
             } else {
@@ -1547,8 +1609,13 @@
     window.sendGanttQaMessage = async function() {
         const input = document.getElementById('gantt-qa-input');
         if (!input) return;
-        const question = input.value.trim();
+        let question = input.value.trim();
         if (!question) return;
+        // 💡 [2026-09-15 신규] BOM 옵션 draft가 완료되면 "원래 질문"으로 되돌려(question 재대입)
+        //    정상 AI 흐름을 재개한다(아래 BOM draft 블록 참고) — 그 경우 원래 질문은 이미 draft
+        //    시작 시점에 한 번 히스토리에 들어가 있으므로, 아래(1965행 부근)에서 또 넣지 않도록
+        //    이 플래그로 건너뛴다.
+        let _skipUserHistoryPush = false;
 
         // ⬆️⬇️ [2026-09-15 신규] 입력창 히스토리에 기록 — 아래 모든 분기(로컬 명령/AI 호출)가
         //    공유하는 진입점이라 여기 한 곳에만 있으면 된다(위 히스토리 도우미 선언부 참고).
@@ -1590,6 +1657,39 @@
             window._ganttQaHistory.push({ role: 'user', text: question });
             window._ganttQaHistory.push({ role: 'ai', text: alarmFilterReply });
             input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 📁 [2026-09-15 신규] 방금 "엑셀로 내보내줘" 응답 끝에 "해당 폴더로 이동하시겠습니까?"라고
+        //    물어본 상태면, 이번 메시지를 그 답으로 해석한다 — API 키 없어도 동작, AI를 거치지
+        //    않는다(음성/실행취소 로컬 명령과 같은 이유).
+        if (window._ganttQaOpenFolderConfirm) {
+            window._ganttQaOpenFolderConfirm = false;
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            input.value = '';
+            if (/(예|네|응|어|맞|이동|열어|open|yes|y\b)/i.test(question)) {
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('폴더를 여는 중...', 'Opening the folder...'), pending: true });
+                window._renderGanttQaMessages();
+                let folderReply;
+                try {
+                    const res = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/open-downloads-folder'),
+                        15000, window._t('폴더 열기 시간 초과', 'Opening the folder timed out')
+                    );
+                    const data = await res.json();
+                    folderReply = data.ok
+                        ? '📁 ' + (data.message || window._t('다운로드 폴더를 열었습니다.', 'Opened the downloads folder.'))
+                        : '⚠️ ' + window._t('폴더 열기 실패: ', 'Failed to open the folder: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                } catch (e) {
+                    folderReply = '⚠️ ' + window._t('폴더 열기 실패: ', 'Failed to open the folder: ') + (e && e.message ? e.message : e);
+                }
+                window._ganttQaHistory.pop();
+                window._ganttQaHistory.push({ role: 'ai', text: folderReply });
+            }
+            // 부정/무관한 답이면 조용히 넘어감(그 답을 평소처럼 다시 처리하면 엉뚱하게 AI 질문으로
+            // 새어나갈 수 있어, 여기서 그냥 종료 — 승인원 표지의 "무관한 답이면 조용히 해제" 패턴과 동일).
             window._renderGanttQaMessages();
             input.focus();
             return;
@@ -1765,6 +1865,110 @@
             }
         }
 
+        // 📐 [2026-09-15 신규, 사용자 요청] "SAP에서 502572 BOM 열어줘" — 조회 전에 Explosion
+        //    type/Show price/Location Information 옵션을 반드시 먼저 물어보고, 복수(ZPP038)/
+        //    단일(ZPP033) 트랜잭션도 "복수/다중" vs "단일/단수" 워딩으로 판정(애매하면 되물음)한
+        //    뒤에만 실제 조회를 실행한다 — 실제 ZPP038 초기화면 캡처(Explosion type/Option을
+        //    빨간 박스로 표시)를 보여주며 요청. 반드시 사용처(역전개)/배치 다운로드/문서 열기
+        //    판정보다 먼저 체크해야 함(트리거 단어 없는 옵션 답변이 다른 로컬 명령으로 새면 안
+        //    되고, 무엇보다 "옵션을 안 물어보고 그냥 조회부터 실행"하는 사고를 막아야 하므로 —
+        //    아래 2000행대의 _questionMentionsSapIntent 게이트/_aiFetchSapContext의 bomMatch
+        //    분기가 실행되기 전에 여기서 먼저 가로채야 한다). 옵션이 다 모이면(같은 메시지에
+        //    이미 다 있으면 즉시, 아니면 되물어서) window._ganttQaBomResolvedOptions에 1회성으로
+        //    남겨두고 question을 원래 질문으로 되돌려 아래 정상 흐름(로컬명령/AI 호출)이 그대로
+        //    이어지게 한다("승인원 표지"처럼 완전히 새 fetch/응답 로직을 만들지 않고, 이미 있는
+        //    BOM 자동조회+AI 응답 경로를 재사용하기 위함).
+        if (window._ganttQaBomDraft) {
+            const bd = window._ganttQaBomDraft;
+            const replyText = question.trim();
+            if (bd.stage === 'tcode') {
+                if (/(복수|다중|multi)/i.test(replyText)) bd.useSingleTcode = false;
+                else if (/(단일|single)/i.test(replyText)) bd.useSingleTcode = true;
+                else {
+                    window._ganttQaHistory.push({ role: 'user', text: question });
+                    input.value = '';
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                        '"단일" 또는 "복수"로 답해주세요.', 'Please reply "single" or "multiple".'
+                    )});
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+                bd.stage = 'options';
+                window._ganttQaHistory.push({ role: 'user', text: question });
+                input.value = '';
+                window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaBomOptionsQuestionText(bd.materials) });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+            if (bd.stage === 'options') {
+                const parsed = window._ganttQaParseBomOptionReply(replyText);
+                if (parsed.explosion !== undefined) bd.explosion = parsed.explosion;
+                if (parsed.showPrice !== undefined) bd.showPrice = parsed.showPrice;
+                if (parsed.showLocation !== undefined) bd.showLocation = parsed.showLocation;
+                if (bd.explosion === undefined) bd.explosion = 'single';
+                if (bd.showPrice === undefined) bd.showPrice = false;
+                if (bd.showLocation === undefined) bd.showLocation = false;
+
+                window._ganttQaHistory.push({ role: 'user', text: question });
+                input.value = '';
+                window._ganttQaBomResolvedOptions = {
+                    materialsKey: bd.materials.slice().sort().join(','),
+                    useSingleTcode: bd.useSingleTcode, explosion: bd.explosion,
+                    showPrice: bd.showPrice, showLocation: bd.showLocation
+                };
+                question = bd.originalQuestion; // 원래 질문으로 되돌려 정상 흐름 재개
+                sapDocQuestion = question;
+                _skipUserHistoryPush = true; // 원래 질문은 draft 시작 시점에 이미 한 번 히스토리에 들어갔음
+                window._ganttQaBomDraft = null;
+                // return하지 않고 아래로 계속 진행(정상 로컬명령/AI 흐름 재개)
+            }
+        } else {
+            const bomTrig = window._ganttQaExtractBomTrigger(question);
+            if (bomTrig) {
+                let useSingleTcode; // undefined = 자재 개수로 자동 결정
+                if (/(복수|다중)/.test(question)) useSingleTcode = false;
+                else if (/(단일|단수)/.test(question)) useSingleTcode = true;
+
+                if (useSingleTcode === true && bomTrig.materials.length >= 2) {
+                    window._ganttQaHistory.push({ role: 'user', text: question });
+                    input.value = '';
+                    window._ganttQaBomDraft = { materials: bomTrig.materials, originalQuestion: question, stage: 'tcode' };
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                        `자재가 ${bomTrig.materials.length}개인데 "단일" 조회를 말씀하셨어요 — 자재별로 각각 단일 조회(ZPP033)할까요, 아니면 한 번에 복수 조회(ZPP038)할까요? ("단일" 또는 "복수"로 답해주세요)`,
+                        `You mentioned a "single" lookup but there are ${bomTrig.materials.length} materials — should I look each up individually (ZPP033), or all together (ZPP038)? Please reply "single" or "multiple".`
+                    )});
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+                if (useSingleTcode === undefined) useSingleTcode = bomTrig.materials.length <= 1;
+
+                const inlineOpts = window._ganttQaParseBomOptionReply(question);
+                if (inlineOpts.explosion === undefined || inlineOpts.showPrice === undefined || inlineOpts.showLocation === undefined) {
+                    window._ganttQaHistory.push({ role: 'user', text: question });
+                    input.value = '';
+                    window._ganttQaBomDraft = {
+                        materials: bomTrig.materials, originalQuestion: question, useSingleTcode: useSingleTcode,
+                        explosion: inlineOpts.explosion, showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
+                        stage: 'options'
+                    };
+                    window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaBomOptionsQuestionText(bomTrig.materials) });
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+                // 옵션이 한 메시지에 전부 이미 있음 — 되묻지 않고 바로 진행
+                window._ganttQaBomResolvedOptions = {
+                    materialsKey: bomTrig.materials.slice().sort().join(','),
+                    useSingleTcode: useSingleTcode, explosion: inlineOpts.explosion,
+                    showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation
+                };
+                // question은 그대로 두고 아래 정상 흐름(로컬명령/AI 호출)으로 계속 진행 — return 없음
+            }
+        }
+
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
         //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
         //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
@@ -1929,12 +2133,26 @@
                 cached = window._lastSapFetchResult;
             }
             let sapExportReply;
+            let exportSucceeded = false;
             try {
                 const fileName = window._exportSapDataToExcel(cached);
                 sapExportReply = window._t(`📊 방금 조회한 SAP 원본 데이터를 "${fileName}" 파일로 내보냈습니다(다운로드됨).`, `📊 Exported the raw SAP data to "${fileName}" (downloaded).`);
+                exportSucceeded = true;
             } catch (e) {
                 console.warn('[AI 문답] SAP 엑셀 내보내기 실패:', e);
                 sapExportReply = '⚠️ ' + window._t('엑셀 내보내기에 실패했습니다: ', 'Failed to export to Excel: ') + (e && e.message ? e.message : e);
+            }
+            // 📁 [2026-09-15 신규, 사용자 요청] 파일을 출력했으면 그 폴더로 이동할지 물어보고,
+            //    승낙하면 실제로 열어준다 — "다운로드됨"이라고만 하고 끝나면 사람이 직접 탐색기를
+            //    열어 찾아가야 했음(ZDMSR004 배치 다운로드는 이미 자동으로 열어주던 것과 비교해
+            //    비대칭). 이 내보내기는 브라우저의 XLSX.js가 트리거하는 일반 다운로드라(서버가
+            //    저장 경로를 모름) 실제로 파일이 떨어지는 곳은 브라우저의 기본 다운로드 폴더(대부분
+            //    %USERPROFILE%\Downloads)다 — 백엔드와 SAP GUI가 같은 PC에서 돌아가는 이 앱의
+            //    구조를 그대로 활용해 그 폴더를 열어주는 새 엔드포인트(/open-downloads-folder)를
+            //    호출한다(승인원 표지/배치 다운로드가 자기 전용 폴더를 여는 것과 같은 패턴).
+            if (exportSucceeded) {
+                sapExportReply += '\n\n' + window._t('📁 해당 폴더로 이동하시겠습니까? ("예"라고 답해주세요)', '📁 Would you like me to open that folder? (reply "yes")');
+                window._ganttQaOpenFolderConfirm = true;
             }
             window._ganttQaHistory.push({ role: 'ai', text: sapExportReply });
             window._renderGanttQaMessages();
@@ -1962,7 +2180,7 @@
 
         window._ganttQaSending = true;
         const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
-        window._ganttQaHistory.push({ role: 'user', text: question });
+        if (!_skipUserHistoryPush) window._ganttQaHistory.push({ role: 'user', text: question });
         input.value = '';
         input.disabled = true;
         const sendBtn = document.getElementById('gantt-qa-send-btn');

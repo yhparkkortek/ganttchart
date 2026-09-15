@@ -419,6 +419,11 @@ Shortcut, `-system=/-client=/-user=/-pw=` 옵션으로 실행+로그인+특정 �
   (특정 트랜잭션 전용 파서 안 만들고 화면을 그대로 텍스트로 덤프 → 자체 XLSX 빌더로 내보내기)와
   겹치는 기능이라 재현하지 않고 실행(F8)까지만 자동화했다 — 결과 화면은
   `_sap_dump_screen_body(wnd)`(아래 참고)로 읽는다.
+  - **⚠️ [2026-09-15 갱신] `fetch_bom`이 더 이상 ZPP038 고정이 아님** — 아래 "BOM 조회 전
+    옵션 사전질문 + ZPP033/ZPP038 자동 라우팅 + 내보내기 후 폴더 이동 확인" 절 참고. 이
+    문단(BOM+자재번호만 있으면 바로 조회하던 기존 동작)은 여전히 유효하지만, 실제 실행
+    전에 항상 옵션(Explosion type/Show price/Location Information)을 먼저 물어보고,
+    자재 개수/워딩에 따라 ZPP033(단일)로도 갈 수 있게 확장됨.
   - **범용 덤프에 "트리" 지원 추가(2026-09-15) — "그리드 → 트리 → 필드" 3단계 폴백**: 사용자가
     "BOM 표준가 부모-자식 계층.vbs" 매크로로, ZPP038 결과 화면이 체크박스(`chkSHOW_L`/
     `chkSHOW_P`)와 라디오버튼(`radR_2`) 설정에 따라 **ALV 트리(부모-자식 계층)로도 표시될
@@ -470,6 +475,61 @@ Shortcut, `-system=/-client=/-user=/-pw=` 옵션으로 실행+로그인+특정 �
     입력 필드를 ID substring으로 찾을 때는 항상 이 헬퍼(또는 `_find_all_by_id_substring` +
     타입 우선순위 정렬)를 쓸 것** — 단순 `_find_by_id_substring` 첫 매치는 라벨 컨트롤에
     걸릴 위험이 있다.
+- **BOM 조회 전 옵션 사전질문 + ZPP033/ZPP038 자동 라우팅 + 내보내기 후 폴더 이동 확인
+  (2026-09-15 신규, 3부분 요청)** — 사용자가 실제 ZPP038 "BOM 전개" 초기화면 캡처(Explosion
+  type·Option 두 섹션을 빨간 박스로 표시)를 보여주며 요청한 3가지:
+  1. **옵션 사전질문(항상 먼저 물어봄)**: BOM 조회를 실행하기 전에 반드시 Explosion type
+     (단일 레벨/다중 레벨)·Show price·Location Information을 먼저 물어보고 답을 받아야
+     실행한다 — 사용처(역전개)처럼 "절대 안 물어보는" 설계와 정반대. `js/04h`의
+     `window._ganttQaBomDraft`(승인원 표지/SAP 문서 모호성 해소와 동일한 "여러 턴 draft"
+     패턴)가 담당: 새 "BOM"+자재번호 요청을 감지하면(`_ganttQaExtractBomTrigger`, 역전개/
+     사용처가 같이 언급되면 그쪽에 양보) 그 메시지 안에 이미 옵션이 다 있는지 먼저 느슨하게
+     파싱해보고(`_ganttQaParseBomOptionReply` — "단일 레벨, 가격 표시, 위치 정보 안 함"류
+     자유문장에서 explosion/showPrice/showLocation을 뽑음, 언급 안 된 항목은
+     undefined로 남겨 "모름"과 "아니오"를 구분), 하나라도 비어있으면 딱 한 번 옵션 질문을
+     묻고 답을 기다린다. **완전히 새 fetch/응답 로직을 만들지 않고 기존 BOM 자동조회+AI
+     응답 경로를 재사용**하는 방식을 택함(승인원 표지처럼 통째로 새로 만들면 유지보수 부담이
+     커짐) — 옵션이 다 모이면 `window._ganttQaBomResolvedOptions`(그 자재 조합에 대해 딱
+     한 번만 쓰이는 1회성 값)에 남겨두고 `question`을 원래 질문으로 되돌려(`let question`으로
+     변경 필요했음) 정상 로컬명령/AI 흐름을 그대로 재개시킨다 — 이때 원래 질문이 draft 시작
+     시점에 이미 한 번 히스토리에 들어가 있으므로 `_skipUserHistoryPush` 플래그로 중복 push를
+     막는다. `_aiFetchSapContext`의 `bomMatch` 분기가 이 1회성 값을 읽어 `/sap-bom`에
+     `tcode`/`explosion`/`show_price`/`show_location` 쿼리파라미터로 실어 보내고 즉시
+     비운다(재사용 금지 — 다음 BOM 질문은 다시 물어봐야 하므로). 브라우저에서 `fetch`를
+     모킹해 전체 왕복(단일 자재 자동단일→옵션질문→답변→`/sap-bom` 호출 파라미터 확인,
+     자재 2개+"단일" 워딩 충돌→되물음→"복수"로 답→옵션질문→답변→정상 진행, 한 메시지에
+     옵션 전부 포함→안 물어보고 바로 진행)을 전부 확인함.
+  2. **ZPP033(단일)/ZPP038(복수) 자동 라우팅**: 사용처(역전개)의 "다중/일괄/복수" 워딩
+     라우팅(`wantsBatchWhereUsed`)과 같은 설계를 재사용하되, BOM은 "애매하면 조회 전에
+     한번 물어봐줘"까지 요구돼서 사용처보다 한 단계 더 나간다 — "복수/다중" 워딩 → 무조건
+     ZPP038, "단일/단수" 워딩 + 자재 1개 → ZPP033, **"단일/단수" 워딩 + 자재 2개 이상 →
+     모순이므로 되물음**(`_ganttQaBomDraft.stage==='tcode'`), 워딩 없음 → 자재 개수로 자동
+     판정(1개→ZPP033, 2개 이상→ZPP038). `sap_bridge_32.py`의 `_navigate_to_bom_screen`이
+     `use_single_tcode`/`explosion`/`show_price`/`show_location` 4개 인자를 새로 받아
+     `/nZPP033` 또는 `/nZPP038`로 이동 — 두 트랜잭션은 라이브 진단(`session.
+     StartTransaction`으로 각각 직접 접속해 `usr` 트리 전체 덤프)으로 정확한 필드 ID를
+     확보함: 자재 입력 필드만 다르고(ZPP038: `ctxtMATNR-LOW`+"복수 선택" 팝업, ZPP033:
+     `ctxtMATNR` 단일 필드) 플랜트·**Explosion type 라디오버튼(`radR_1`="Single level"
+     기본선택/`radR_2`="Multi level")**·**Option 체크박스 중 `chkSHOW_P`="Show price"/
+     `chkSHOW_L`="Location Information"**은 두 화면에서 완전히 동일한 필드 ID였다(ZPP038엔
+     `chkP_MULTI`/`chkP_CK`가, ZPP033엔 `chkP_STD`/`chkP_CUS`가 더 있지만 이 기능과는 무관).
+     `fetch_bom`이 실제 사용된 트랜잭션(자동판정 결과 포함)에 맞춰 응답 헤더의 `[SAP BOM
+     전개(...)]` 라벨도 `ZPP033`/`ZPP038`로 동적으로 바꿔 반환 — 예전엔 무조건 "ZPP038"로
+     하드코딩돼 있었음. `kortek_backend.py`의 `/sap-bom`이 `tcode`(single/multi/auto)·
+     `explosion`(single/multi)·`show_price`·`show_location` 쿼리파라미터를 그대로
+     `sap_bridge_32.py`에 위치 인자로 전달.
+  3. **엑셀 내보내기 후 "해당 폴더로 이동하시겠습니까?"**: "엑셀로 내보내줘" 로컬 명령
+     (`_ganttQaExtractSapExportRequest` 처리 블록)이 성공하면 답변 끝에 이동 여부를 묻고
+     `window._ganttQaOpenFolderConfirm = true`를 세운다 — 다음 메시지를 그 답으로 해석하는
+     블록을 `sendGanttQaMessage` 맨 앞(음성/알람 로컬 명령 바로 다음, API 키 없어도 동작)에
+     둠. **이 내보내기는 브라우저의 XLSX.js가 트리거하는 일반 다운로드라 서버가 실제 저장
+     경로를 알지 못한다** — ZDMSR004 배치 다운로드/승인원 표지처럼 서버가 직접 고정 폴더
+     (`C:\SAP_DMS\...`)에 쓰는 게 아니므로, "해당 폴더"는 브라우저의 기본 다운로드 폴더
+     (대부분 `%USERPROFILE%\Downloads`)로 간주해 새 엔드포인트 `kortek_backend.py`의
+     `/open-downloads-folder`(SAP GUI와 무관 — `sap_bridge_32.py`를 거치지 않고
+     `os.startfile()`만 호출)를 부른다. 부정/무관한 답이면(승인원 표지의 "무관한 답이면
+     조용히 해제" 패턴과 동일) 그냥 아무 일도 안 하고 끝냄 — 엉뚱하게 일반 AI 질문으로
+     새어나가지 않도록 항상 이 블록에서 `return`한다.
 - **사용처 조회/역전개("SAP에서 303410 역전개 보여줘"/"...사용처 알려줘", 2026-09-15 신규 —
   "BOM 역전개(사용처리스트).vbs" 매크로로 확보)**: BOM 정전개(ZPP038, "이 자재는 뭘로
   구성되는가")의 반대 방향 — "이 자재가 어느 상위 품목에 쓰이는가"를 CS15("단일레벨

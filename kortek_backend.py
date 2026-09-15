@@ -1649,14 +1649,41 @@ def sap_bom():
     #    material 파라미터에 쉼표로 여러 자재를 같이 주면("SAP에서 502572,502573,502574 BOM
     #    보여줘"처럼 질문에 자재번호가 2개 이상이면) ZPP038의 자재코드 "복수 선택" 팝업으로
     #    한 번에 여러 BOM을 조회한다("BOM 복수 열람.vbs" 매크로로 확보, 2026-09-15).
+    #    [2026-09-15 신규] tcode(single/multi/auto), explosion(single/multi), show_price,
+    #    show_location 파라미터 추가 — 사용자가 실제 ZPP038 초기화면 캡처(Explosion type/
+    #    Option을 빨간 박스로 표시)를 보여주며 "조회 전에 이 옵션들을 먼저 물어보고 선택한
+    #    대로 조회해달라"고 요청 + "복수는 ZPP038, 단일은 ZPP033을 쓴다"고 알려줘서 추가함
+    #    (js/04h의 BOM 옵션 사전질문 draft가 이 값들을 채워서 넘긴다).
     material = (request.args.get('material') or '').strip()
     plant = (request.args.get('plant') or '1000').strip()
+    tcode_mode = (request.args.get('tcode') or 'auto').strip()  # 'single'|'multi'|'auto'
+    explosion = (request.args.get('explosion') or 'single').strip()  # 'single'|'multi'
+    show_price = (request.args.get('show_price') or '0').strip()
+    show_location = (request.args.get('show_location') or '0').strip()
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-bom?material=502572'}), 400
     material_count = len([m for m in material.split(',') if m.strip()])
     timeout = 30 if material_count <= 1 else min(90, 30 + 10 * material_count)
-    data, status = _run_sap_bridge(['fetch_bom', material, plant], timeout, 'SAP BOM 조회')
+    data, status = _run_sap_bridge(
+        ['fetch_bom', material, plant, tcode_mode, explosion, show_price, show_location],
+        timeout, 'SAP BOM 조회')
     return jsonify(data), status
+
+
+@app.route('/open-downloads-folder', methods=['GET'])
+def open_downloads_folder():
+    # 💡 [2026-09-15 신규] "엑셀로 내보내줘" 로컬 명령(js/04h)이 성공하면 "해당 폴더로
+    #    이동하시겠습니까?"라고 묻고, 사용자가 승낙하면 이 엔드포인트를 호출한다. 그 내보내기는
+    #    브라우저의 XLSX.js가 트리거하는 일반 다운로드라(서버가 저장 경로를 알지 못함) 실제
+    #    파일이 떨어지는 곳은 브라우저의 기본 다운로드 폴더(대부분 %USERPROFILE%\Downloads)다 —
+    #    백엔드와 브라우저가 같은 PC에서 돌아가는 이 앱의 구조를 그대로 활용해 그 폴더를 그냥
+    #    열어준다(SAP GUI Scripting과 무관 — sap_bridge_32.py를 거치지 않고 여기서 직접 처리).
+    try:
+        downloads_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
+        os.startfile(downloads_dir)
+        return jsonify({'ok': True, 'message': '다운로드 폴더를 열었습니다.'})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'폴더를 여는 중 오류가 발생했습니다: {e}'}), 500
 
 
 @app.route('/sap-where-used', methods=['GET'])

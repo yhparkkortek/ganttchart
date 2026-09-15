@@ -303,30 +303,46 @@ def fetch_current_screen():
 
 
 # ── "BOM 조회" (ZPP038) 전용 헬퍼 ──────────────────────────────────────
-def _navigate_to_bom_screen(session, wnd, materials, plant='1000'):
-    """ZPP038("BOM 전개(Multiple Explosion)")로 이동해 지정한 자재(들)/플랜트의 BOM을
-    조회한다. `materials`가 리스트/튜플이면(2026-09-15 신규 — "BOM 복수 열람.vbs" 매크로로
-    확보) MATNR 필드의 "복수 선택" 팝업에 여러 자재를 채워 넣고, 문자열 하나면 기존처럼
-    MATNR-LOW에 직접 입력한다.
-    2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 얻은 정확한 컨트롤을 재현한 것 —
-    매크로에는 이 뒤로 "레이아웃 불러오기"(`&MB_VARIANT`/`&LOAD`)와 SAP 자체 엑셀 내보내기
-    (`&MB_EXPORT`/`&XXL`, OLE로 Excel을 직접 여는 SAP 표준 기능)가 이어지는데, 그건 이
-    코드베이스의 기존 설계(SAP 화면을 그대로 텍스트로 덤프 → 자체 XLSX 빌더로 내보내기,
-    특정 트랜잭션 전용 파서를 안 만드는 원칙)와 겹치는 기능이라 그대로 재현하지 않는다 —
-    실행(F8)까지만 자동화하고, 결과 화면은 fetch_current_screen()과 동일한 범용 덤프
-    (_sap_find_grid/_sap_dump_fields)로 읽는다.
-    ⚠️ 화면 어디에 있든 `MATNR-LOW`/`WERKS`/`%_MATNR_%_APP_%-VALU_PUSH` 문자열이 포함된
-    컨트롤을 찾는 방식이라(절대경로 대신 이 프로젝트의 기존 관례 그대로), 다른 선택화면
-    필드와 ID가 겹치면 잘못될 수 있다 — 현재까지는 문제 없이 동작했다(실사용 확인).
+def _navigate_to_bom_screen(session, wnd, materials, plant='1000', use_single_tcode=None,
+                             explosion='single', show_price=False, show_location=False):
+    """ZPP038("BOM 전개 (Multiple)", 복수 자재) 또는 ZPP033("BOM 전개", 단일 자재 전용)로
+    이동해 지정한 자재(들)/플랜트의 BOM을 조회한다.
+    **2026-09-15 신규**: 원래는 자재가 몇 개든 항상 ZPP038만 썼는데, 사용자가 실제 SAP 화면
+    캡처(ZPP038 초기화면 — 붉은 박스로 "Explosion type"/"Option"을 표시)를 보여주며
+    "복수 조회는 ZPP038, 단일 조회는 ZPP033을 쓴다"고 알려줘서 둘 다 지원하도록 확장함.
+    라이브 세션에 `/nZPP038`·`/nZPP033`를 각각 띄워 직접 대조 진단한 결과: 자재 입력 필드만
+    다르고(ZPP038: `ctxtMATNR-LOW` + "복수 선택" 팝업, ZPP033: `ctxtMATNR` 단일 필드) 나머지
+    — 플랜트(`ctxtWERKS`)/대체BOM/계정레벨/효력시작일/기준수량, **Explosion type** 라디오
+    버튼(`radR_1`="Single level" 기본선택, `radR_2`="Multi level"), **Option** 체크박스 중
+    `chkSHOW_P`="Show price"/`chkSHOW_L`="Location Information" — 는 두 화면에서 완전히
+    동일한 필드 ID로 확인됨(ZPP038엔 `chkP_MULTI`/`chkP_CK`가 더 있고 ZPP033엔 `chkP_STD`/
+    `chkP_CUS`가 더 있지만, 이 함수가 다루는 세 옵션과는 무관).
+    `use_single_tcode`(None|True|False) — None이면 `materials`가 리스트이고 2개 이상일 때
+    자동으로 ZPP038(복수), 아니면 ZPP033(단일). 명시적으로 넘기면 자재 개수와 무관하게
+    그걸 우선한다(사용자가 "복수"/"단일"을 말로 명시한 경우 `js/04h`가 판정해서 넘김).
+    `explosion`은 `'single'`(기본, Single level) 또는 `'multi'`(Multi level).
+    `show_price`/`show_location`은 Option 섹션의 두 체크박스 — AI 문답에서 조회 전에
+    사람에게 먼저 물어보고(2026-09-15 사용자 요청, `js/04h`의 BOM 옵션 사전질문 참고) 그
+    답을 받아 이 값들로 넘겨받는다.
+    반환값: 실제로 사용된 `use_single_tcode`(bool, 자동 결정된 경우 호출부가 결과 라벨에
+    쓸 수 있도록).
     ⚠️⚠️ ZDMSR004의 "자재코드 복수 선택" 팝업(필드명 `S_MATNR`)은 확인 버튼을 `btn[24]`,
     `btn[8]` 두 번 눌러야 했는데, 이 ZPP038의 팝업(필드명 `MATNR`, 접두사에 `S_` 없음 —
     SELECT-OPTIONS가 아니라 단순 PARAMETERS 필드로 추정)은 `btn[8]` 한 번만으로 충분했다
     (매크로로 확인) — 겉보기엔 같은 SAP 표준 SAPLALDB 팝업이라도 호출 맥락에 따라 필요한
     버튼 수가 다를 수 있다는 뜻이니, 새로운 트랜잭션의 복수 선택 팝업을 자동화할 때 이
     버튼 개수를 당연하게 가정하지 말고 매번 매크로로 확인할 것."""
-    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZPP038'
+    mat_list = list(materials) if isinstance(materials, (list, tuple)) else [materials]
+    mat_list = [str(m).strip() for m in mat_list if str(m).strip()]
+    if not mat_list:
+        raise RuntimeError('자재번호를 지정해주세요.')
+    if use_single_tcode is None:
+        use_single_tcode = len(mat_list) <= 1
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZPP033' if use_single_tcode else '/nZPP038'
     wnd.sendVKey(0)
     time.sleep(0.6)
+    wnd = session.findById('wnd[0]')
 
     # 💡⚠️ [2026-09-15 실사용에서 확인] "WERKS" 문자열이 "플랜트" 라벨 컨트롤
     # (`txt%_WERKS_%_APP_%-TEXT`)에도 걸려서, 단순 첫 매치(`_find_by_id_substring`)로는
@@ -339,8 +355,13 @@ def _navigate_to_bom_screen(session, wnd, materials, plant='1000'):
     # 필수가 아닌 변형 화면일 수도 있어서) — 필수인데 비면 아래 실행(F8) 단계에서 SAP가
     # 화면에 오류를 표시하고, 그 경우 결과 화면에도 그리드가 없어 최종적으로 실패로 보고된다.
 
-    is_multi = isinstance(materials, (list, tuple))
-    if is_multi:
+    if use_single_tcode:
+        # ZPP033: 자재 필드가 `ctxtMATNR` 하나뿐(범위/복수 선택 없음) — 진단으로 확인됨.
+        matnr_field = _find_by_id_substring(wnd, 'ctxtMATNR')
+        if matnr_field is None:
+            raise RuntimeError('ZPP033 화면에서 자재번호 입력 필드를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다(트랜잭션 권한이 없을 가능성도 있음).')
+        matnr_field.text = str(mat_list[0])
+    elif len(mat_list) > 1:
         multi_btn = _find_by_id_substring(wnd, '%_MATNR_%_APP_%-VALU_PUSH')
         if multi_btn is None:
             raise RuntimeError('ZPP038 화면에서 자재코드 "복수 선택" 버튼을 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다.')
@@ -355,14 +376,14 @@ def _navigate_to_bom_screen(session, wnd, materials, plant='1000'):
         except Exception:
             visible_rows = 7
         idx = 0
-        while idx < len(materials):
+        while idx < len(mat_list):
             if idx > 0:
                 try:
                     table.FirstVisibleRow = idx
                     time.sleep(0.3)
                 except Exception:
                     pass
-            batch = materials[idx: idx + visible_rows]
+            batch = mat_list[idx: idx + visible_rows]
             for row_offset, mat in enumerate(batch):
                 cell_id = f"{_SAP_MULTI_SELECT_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
                 try:
@@ -376,43 +397,70 @@ def _navigate_to_bom_screen(session, wnd, materials, plant='1000'):
         except Exception as e:
             raise RuntimeError(f'"자재 복수 선택" 팝업을 확인하는 중 오류가 발생했습니다: {e}')
         time.sleep(0.5)
+        wnd = session.findById('wnd[0]')
     else:
         matnr_field = _find_by_id_substring(wnd, 'MATNR-LOW')
         if matnr_field is None:
             raise RuntimeError('ZPP038 화면에서 자재번호 입력 필드를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다(트랜잭션 권한이 없을 가능성도 있음).')
-        matnr_field.text = str(materials)
+        matnr_field.text = str(mat_list[0])
+
+    # Explosion type(Single/Multi level) — 라이브 진단으로 확인된 정확한 라디오버튼 ID.
+    try:
+        wnd.findById('usr/radR_2' if explosion == 'multi' else 'usr/radR_1').selected = True
+    except Exception:
+        pass
+    # Option: Show price / Location Information 체크박스.
+    try:
+        wnd.findById('usr/chkSHOW_P').selected = bool(show_price)
+    except Exception:
+        pass
+    try:
+        wnd.findById('usr/chkSHOW_L').selected = bool(show_location)
+    except Exception:
+        pass
 
     try:
         session.findById('wnd[0]/tbar[1]/btn[8]').press()  # 실행(F8)
     except Exception as e:
-        raise RuntimeError(f'ZPP038 실행(F8) 중 오류가 발생했습니다: {e}')
+        raise RuntimeError(f'BOM 전개 실행(F8) 중 오류가 발생했습니다: {e}')
     time.sleep(1.5)
 
+    return use_single_tcode
 
-def fetch_bom(materials, plant='1000'):
-    """자재 1개 또는 여러 개의 BOM(ZPP038, "BOM 전개")을 조회해 화면을 그대로 텍스트로
-    읽어온다. `materials`는 문자열(단일) 또는 리스트/튜플(복수, 2026-09-15 신규). 결과
-    화면을 "그리드 → 트리 → 필드" 순서로 시도해 읽는다(_sap_dump_screen_body) — ZPP038은
+
+def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single',
+              show_price=False, show_location=False):
+    """자재 1개 또는 여러 개의 BOM(ZPP033 단일 또는 ZPP038 복수, "BOM 전개")을 조회해 화면을
+    그대로 텍스트로 읽어온다. `materials`는 문자열(단일) 또는 리스트/튜플(복수). 결과 화면을
+    "그리드 → 트리 → 필드" 순서로 시도해 읽는다(_sap_dump_screen_body) — ZPP038/ZPP033 둘 다
     "부모-자식 계층" 표시 모드에서 ALV가 트리로 나올 수 있음을 실사용으로 확인했고("BOM
-    표준가 부모-자식 계층.vbs"), 트리 덤프(_sap_dump_tree)는 아직 실사용 검증 전이다."""
+    표준가 부모-자식 계층.vbs"), 트리 덤프(_sap_dump_tree)는 아직 실사용 검증 전이다.
+    `use_single_tcode`/`explosion`/`show_price`/`show_location`은 그대로
+    `_navigate_to_bom_screen`에 전달 — 2026-09-15 신규(사용자가 실제 ZPP038 화면 캡처로
+    "Explosion type"/"Option" 옵션과 단일(ZPP033)/복수(ZPP038) 트랜잭션 분기를 요청)."""
     if not materials:
         raise RuntimeError('자재번호를 지정해주세요.')
     plant = (plant or '1000').strip()
 
     session = _get_sap_session()
     wnd = session.findById('wnd[0]')
-    _navigate_to_bom_screen(session, wnd, materials, plant)
+    used_single = _navigate_to_bom_screen(session, wnd, materials, plant,
+                                           use_single_tcode=use_single_tcode,
+                                           explosion=explosion, show_price=show_price,
+                                           show_location=show_location)
+    wnd = session.findById('wnd[0]')
 
     body, source = _sap_dump_screen_body(wnd)
 
     mat_label = ', '.join(materials) if isinstance(materials, (list, tuple)) else str(materials)
+    tcode_label = 'ZPP033' if used_single else 'ZPP038'
 
     if not body:
         return {'ok': False, 'error': f'자재 "{mat_label}"의 BOM 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요.'}
 
-    header = f'[SAP BOM 전개(ZPP038): 자재 {mat_label}, 플랜트 {plant}]\n'
+    header = f'[SAP BOM 전개({tcode_label}): 자재 {mat_label}, 플랜트 {plant}]\n'
     text = header + '\n' + body
-    return {'ok': True, 'source': source, 'materials': materials, 'text': text}
+    return {'ok': True, 'source': source, 'materials': materials, 'tcode': tcode_label, 'text': text}
 
 
 # ── "사용처 조회(역전개)" (CS15) 전용 헬퍼 ─────────────────────────────
@@ -1354,9 +1402,15 @@ def main():
         elif action == 'fetch_bom':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
+            tcode_mode = sys.argv[4] if len(sys.argv) > 4 else 'auto'  # 'single'|'multi'|'auto'
+            explosion = sys.argv[5] if len(sys.argv) > 5 else 'single'  # 'single'|'multi'
+            show_price = (sys.argv[6] if len(sys.argv) > 6 else '0') in ('1', 'true', 'True')
+            show_location = (sys.argv[7] if len(sys.argv) > 7 else '0') in ('1', 'true', 'True')
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
             materials_param = materials_list if len(materials_list) > 1 else (materials_list[0] if materials_list else '')
-            result = fetch_bom(materials_param, plant)
+            use_single_tcode = {'single': True, 'multi': False}.get(tcode_mode, None)
+            result = fetch_bom(materials_param, plant, use_single_tcode=use_single_tcode,
+                                explosion=explosion, show_price=show_price, show_location=show_location)
         elif action == 'fetch_where_used':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
