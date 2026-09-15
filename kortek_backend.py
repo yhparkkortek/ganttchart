@@ -49,6 +49,7 @@ from email.utils      import parsedate_to_datetime
 from email.mime.text  import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime         import datetime, timezone, timedelta
+from urllib.parse     import quote
 
 import requests
 from flask      import Flask, request, jsonify
@@ -1854,6 +1855,79 @@ def sap_approval_generate():
     if failed:
         msg += f'\n\n실패 {len(failed)}건:\n' + '\n'.join(failed[:5])
     return jsonify({'ok': True, 'made': made, 'failed': failed, 'folder': _APPROVAL_OUT_DIR, 'message': msg})
+
+
+# ── 백엔드 자동 업데이트("SAP 조회 연동" 절 kortek_backend.zip 배포 방식의 대안, 2026-09-15) ─
+# 이 앱은 GitHub Pages(정적 프런트) + 각 PC의 로컬 백엔드(kortek_backend.py) 구조라, 백엔드
+# 파일이 바뀔 때마다 사용자가 kortek_backend.zip을 다시 받아 기존 폴더에 덮어써야 했다 —
+# 그 절차를 사람이 잊거나 귀찮아하면 다른 팀원 PC는 계속 구버전 백엔드로 남는다. 그래서 프런트가
+# 구글 로그인 성공 직후(js/04b-core-app-drive-sync.js) 로컬 백엔드에게 "지금 GitHub main
+# 브랜치의 최신 파일과 내용이 다른 게 있는지" 물어보고(`/self-check-update`), 다르면 배너를
+# 띄워 사용자가 버튼을 누르면 로컬 백엔드가 스스로 그 파일들을 GitHub raw에서 받아 자기 자신의
+# 디렉터리(BASE_DIR)에 덮어쓴다(`/self-update`) — 버전 번호를 별도로 관리하지 않고 매번 GitHub의
+# 실제 파일 내용과 직접 바이트 비교하므로 "버전 올리는 걸 깜빡해서 갱신 감지가 안 되는" 문제가
+# 없다. **자동 재시작은 하지 않는다** — 실행 중인 백엔드 프로세스 자신을 안전하게 재기동시키는
+# 로직(포트 점유 해제 타이밍 등)은 복잡도·위험도에 비해 이득이 적어, 덮어쓰기까지만 자동화하고
+# "백엔드를 다시 켜 주세요" 안내는 사람이 직접 하게 한다(요청대로).
+_GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main'
+# kortek_backend.zip에 포함되는 배포 대상 파일 목록과 동일하게 유지할 것(.claude/settings.json의
+# PostToolUse 훅 Compress-Archive 목록 참고) — 새 배포 파일이 추가되면 여기도 같이 추가해야 함.
+_SELF_UPDATE_FILES = [
+    'kortek_backend.py',
+    'sap_bridge_32.py',
+    'kortek_backend.bat',
+    'kortek_backend_install.bat',
+    'kortek_backend_start_minimized.vbs',
+    'matgroups.json',
+    'templates/승인원_양식.xlsx',
+    'templates/승인원_양식.docx',
+]
+
+
+def _fetch_github_raw(rel_path):
+    url = _GITHUB_RAW_BASE + '/' + '/'.join(quote(seg) for seg in rel_path.split('/'))
+    resp = requests.get(url, timeout=10)
+    resp.raise_for_status()
+    return resp.content
+
+
+@app.route('/self-check-update', methods=['GET'])
+def self_check_update():
+    changed, errors = [], []
+    for rel_path in _SELF_UPDATE_FILES:
+        try:
+            remote_bytes = _fetch_github_raw(rel_path)
+        except Exception as e:
+            errors.append(f'{rel_path}: {e}')
+            continue
+        local_path = os.path.join(BASE_DIR, rel_path)
+        local_bytes = b''
+        if os.path.exists(local_path):
+            with open(local_path, 'rb') as f:
+                local_bytes = f.read()
+        if remote_bytes != local_bytes:
+            changed.append(rel_path)
+    return jsonify({'ok': True, 'outdated': len(changed) > 0, 'changedFiles': changed, 'errors': errors})
+
+
+@app.route('/self-update', methods=['POST'])
+def self_update():
+    updated, errors = [], []
+    for rel_path in _SELF_UPDATE_FILES:
+        try:
+            remote_bytes = _fetch_github_raw(rel_path)
+        except Exception as e:
+            errors.append(f'{rel_path}: 다운로드 실패 - {e}')
+            continue
+        local_path = os.path.join(BASE_DIR, rel_path)
+        try:
+            os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            with open(local_path, 'wb') as f:
+                f.write(remote_bytes)
+            updated.append(rel_path)
+        except Exception as e:
+            errors.append(f'{rel_path}: 저장 실패 - {e}')
+    return jsonify({'ok': len(errors) == 0, 'updatedFiles': updated, 'errors': errors})
 
 
 # ══════════════════════════════════════════════════════════════

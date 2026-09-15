@@ -271,6 +271,8 @@
             if (typeof window.loadHolidaysFromDrive === 'function') window.loadHolidaysFromDrive();
             // 💡 비밀번호 변경 감지 + Telegram 설정 자동 동기화
             setTimeout(() => { if (typeof window.checkPasswordSync === 'function') window.checkPasswordSync(); }, 1500);
+            // 💡 [2026-09-15 신규] 로컬 백엔드(kortek_backend.py) 구버전 감지 — 아래 checkBackendUpdate 참고
+            setTimeout(() => { if (typeof window.checkBackendUpdate === 'function') window.checkBackendUpdate(); }, 2000);
 
             try {
                 let aboutResp = await gapi.client.drive.about.get({fields: 'user'});
@@ -304,8 +306,72 @@
                 }
             }, 600);
         };
-        tokenClient.requestAccessToken({prompt: 'consent'}); 
+        tokenClient.requestAccessToken({prompt: 'consent'});
     }
+
+    // ── 로컬 백엔드(kortek_backend.py) 자동 업데이트 (2026-09-15 신규) ──────────────
+    // 배경: 이 앱은 GitHub Pages(정적 프런트) + 각자 PC의 로컬 백엔드(127.0.0.1:5000) 구조라,
+    // kortek_backend.py/sap_bridge_32.py 등이 바뀔 때마다 사람이 kortek_backend.zip을 다시 받아
+    // 기존 폴더에 수동으로 덮어써야 했다 — 이 절차를 잊으면 그 PC는 계속 구버전 백엔드로 남는다.
+    // 그래서 구글 로그인 성공 직후(위 tokenClient.callback) 로컬 백엔드에게 "GitHub main과 내용이
+    // 다른 파일이 있는지" 물어보고(`/self-check-update`, kortek_backend.py 참고 — 버전 번호 대신
+    // 매번 실제 파일 바이트를 직접 비교하므로 버전 올리는 걸 깜빡할 위험이 없음), 다르면 배너로
+    // 알려서 사용자가 누르면 로컬 백엔드가 스스로 파일을 받아 자기 자신을 덮어쓴다(`/self-update`).
+    // ⚠️ 자동 재시작은 하지 않음(의도적) — 덮어쓰기 후 "백엔드를 다시 켜 달라"는 안내만 띄운다.
+    // 백엔드가 꺼져있거나 오프라인이면 조용히 아무것도 안 함(선택 기능이라 에러를 노출하지 않음).
+    window.checkBackendUpdate = async function() {
+        try {
+            const res = await fetch('http://127.0.0.1:5000/self-check-update', { signal: AbortSignal.timeout(4000) });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data && data.outdated) window._showBackendUpdateBanner(data.changedFiles || []);
+        } catch (e) {
+            // 백엔드 미실행/네트워크 오류 — 조용히 무시
+        }
+    };
+
+    window._showBackendUpdateBanner = function(changedFiles) {
+        if (document.getElementById('backend-update-banner')) return; // 이미 떠있음(중복 방지)
+        const _en = window._currentLang === 'en';
+        const el = document.createElement('div');
+        el.id = 'backend-update-banner';
+        el.style.cssText = 'position:fixed; top:12px; left:50%; transform:translateX(-50%); z-index:999998; ' +
+            'display:flex; align-items:center; gap:10px; padding:10px 16px; background:#fff8e6; ' +
+            'border:1px solid #ffe08a; border-radius:8px; color:#7a5210; font-size:12px; font-weight:bold; ' +
+            'box-shadow:0 4px 14px rgba(0,0,0,0.18); max-width:92vw; flex-wrap:wrap;';
+        el.innerHTML =
+            '<span>🔄 ' + (_en ? 'A local backend update is available.' : '로컬 백엔드(kortek_backend) 업데이트가 있습니다.') + '</span>' +
+            '<button id="backend-update-apply-btn" style="padding:4px 12px; background:#f0ad4e; color:#fff; border:none; border-radius:5px; font-size:11.5px; font-weight:bold; cursor:pointer;">' + (_en ? 'Update now' : '지금 업데이트') + '</button>' +
+            '<button id="backend-update-dismiss-btn" style="padding:4px 10px; background:transparent; color:#7a5210; border:1px solid #ffe08a; border-radius:5px; font-size:11.5px; cursor:pointer;">' + (_en ? 'Later' : '나중에') + '</button>';
+        document.body.appendChild(el);
+        document.getElementById('backend-update-apply-btn').onclick = window._applyBackendUpdate;
+        document.getElementById('backend-update-dismiss-btn').onclick = function() { el.remove(); };
+    };
+
+    window._applyBackendUpdate = async function() {
+        const _en = window._currentLang === 'en';
+        const btn = document.getElementById('backend-update-apply-btn');
+        if (btn) { btn.disabled = true; btn.textContent = _en ? 'Updating...' : '업데이트 중...'; }
+        try {
+            const res = await fetch('http://127.0.0.1:5000/self-update', { method: 'POST', signal: AbortSignal.timeout(25000) });
+            const data = await res.json();
+            const banner = document.getElementById('backend-update-banner');
+            if (banner) banner.remove();
+            if (data && data.ok) {
+                window.showToast(_en
+                    ? '✅ Backend files updated to the latest version. Please close the backend console window and run kortek_backend.bat again.'
+                    : '✅ 백엔드 파일이 최신 버전으로 업데이트되었습니다. 백엔드 콘솔 창을 닫고 kortek_backend.bat을 다시 실행해 주세요.',
+                    'success', 8000);
+            } else {
+                window.showToast(_en ? '⚠️ Some backend files failed to update.' : '⚠️ 백엔드 업데이트 중 일부 파일을 받지 못했습니다.', 'warning', 6000);
+            }
+        } catch (e) {
+            console.warn('[백엔드 자동업데이트] 실패:', e);
+            const banner = document.getElementById('backend-update-banner');
+            if (banner) banner.remove();
+            window.showToast(_en ? '⚠️ Backend update failed (check backend connection).' : '⚠️ 백엔드 업데이트에 실패했습니다(백엔드 연결 확인).', 'warning', 5000);
+        }
+    };
 
     // ── Drive 쿼리 헬퍼 ─────────────────────────────────────────────────────────
     // Google Drive API v3는 'in ancestors' 를 지원하지 않음 — 'in parents' 만 유효.
