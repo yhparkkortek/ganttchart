@@ -1563,8 +1563,9 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
     if not po_number:
         raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
 
-    print_po_via_zmm018(po_number, purchasing_org, plant)
-    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. 발주서 PDF를 저장하고 열었습니다.'}
+    print_result = print_po_via_zmm018(po_number, purchasing_org, plant)
+    return {'ok': True, 'poNumber': po_number, 'autoSaved': print_result.get('autoSaved', False),
+            'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. ' + print_result.get('message', '')}
 
 
 _PO_PDF_OUT_DIR = os.path.join('C:\\SAP_DMS', '구매오더')
@@ -1751,19 +1752,33 @@ def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
     except Exception as e:
         raise RuntimeError(f'구매오더("{po_number}") 발주서 미리보기 표시(ZMM018) 중 오류가 발생했습니다: {e} — ZMM018에서 오더번호 "{po_number}"로 직접 출력해주세요.')
 
+    # ⚠️ [2026-09-15 사용자 결정] 여러 차례 시도했지만(Ctrl+S/Ctrl+Shift+S 순서 변경,
+    # 클릭 포커스 보강, "PDF 미리보기" 요소 직접 클릭) 임베드 PDF 뷰어의 저장 다이얼로그를
+    # 자동으로 못 띄움 — 사용자가 "그냥 사용자가 열고 저장해야 하나보다"라고 결론 내림.
+    # 그래서 이 마지막 한 걸음(💾 아이콘 클릭)은 **사람이 직접 하는 것으로 확정**하고,
+    # 자동화 실패를 오류로 취급하지 않는다 — 여기까지(미리보기를 여는 것) 자동으로 되면
+    # 이미 대부분의 수고를 던 것이므로 `ok: True`로 정상 완료 처리하고, 저장은 안내만 한다.
+    # (이 함수 자체는 남겨둠 — 나중에 임베드 뷰어의 정확한 단축키/컨트롤을 알게 되면
+    # 다시 켤 수 있도록.)
+    os.makedirs(_PO_PDF_OUT_DIR, exist_ok=True)
+    pdf_path = os.path.join(_PO_PDF_OUT_DIR, f'{po_number}.pdf')
+    auto_saved = False
     try:
-        os.makedirs(_PO_PDF_OUT_DIR, exist_ok=True)
-        pdf_path = os.path.join(_PO_PDF_OUT_DIR, f'{po_number}.pdf')
         _save_po_pdf_to_file(pdf_path)
+        auto_saved = True
     except Exception as e:
-        raise RuntimeError(f'발주서 미리보기는 정상 표시됐지만, PDF 파일로 저장하는 중 오류가 발생했습니다: {e} — 지금 열려있는 미리보기에서 💾 저장 아이콘을 직접 눌러 "{po_number}.pdf"로 저장해주세요.')
+        print(f'[구매오더 PDF 자동저장 실패 — 사람이 직접 저장 필요] {e}', file=sys.stderr)
 
-    try:
-        os.startfile(pdf_path)
-    except Exception:
-        pass
+    if auto_saved:
+        try:
+            os.startfile(pdf_path)
+        except Exception:
+            pass
+        return {'ok': True, 'poNumber': po_number, 'pdfPath': pdf_path, 'autoSaved': True,
+                'message': f'구매오더 "{po_number}"의 발주서 PDF를 "{pdf_path}"로 저장하고 열었습니다.'}
 
-    return {'ok': True, 'poNumber': po_number, 'pdfPath': pdf_path, 'message': f'구매오더 "{po_number}"의 발주서 PDF를 "{pdf_path}"로 저장하고 열었습니다.'}
+    return {'ok': True, 'poNumber': po_number, 'autoSaved': False,
+            'message': f'구매오더 "{po_number}"의 발주서 미리보기가 열렸습니다. 미리보기 하단의 💾 저장 아이콘을 눌러 "{po_number}.pdf"로 직접 저장해주세요(자동 저장이 아직 지원되지 않습니다).'}
 
 
 def main():
