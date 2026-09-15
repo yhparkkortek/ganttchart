@@ -1456,20 +1456,32 @@
             return;
         }
 
-        // 📄 [2026-09-14 신규] "SAP에서 P01 문서 열어줘" 로컬 명령 — AI 호출 없이, MM03에서 이미
-        //    열어둔 자재의 "문서 데이터" 탭에서 해당 문서 타입을 찾아 열고 원본 파일을 다운로드+
-        //    실행한다. 비동기(백엔드 왕복)라 다른 로컬 명령들과 달리 별도 블록으로 처리.
-        const sapOpenDocType = window._ganttQaExtractSapOpenDocRequest ? window._ganttQaExtractSapOpenDocRequest(question) : null;
-        if (sapOpenDocType) {
+        // 📄 [2026-09-14 신규, 2026-09-15 자재번호 직접조회 지원] "SAP에서 P01 문서 열어줘" 로컬
+        //    명령 — AI 호출 없이, MM03에서 이미 열어둔 자재의 "문서 데이터" 탭에서 해당 문서 타입을
+        //    찾아 열고 원본 파일을 다운로드+실행한다. 질문에 자재번호(예: "106188")가 같이 있으면
+        //    사람이 화면을 미리 열어둘 필요 없이 백엔드가 직접 MM03으로 이동해 조회한다. 비동기
+        //    (백엔드 왕복)라 다른 로컬 명령들과 달리 별도 블록으로 처리.
+        const sapOpenDocReq = window._ganttQaExtractSapOpenDocRequest ? window._ganttQaExtractSapOpenDocRequest(question) : null;
+        if (sapOpenDocReq) {
+            const sapOpenDocType = sapOpenDocReq.docType;
+            const sapOpenDocMaterial = sapOpenDocReq.material;
             window._ganttQaHistory.push({ role: 'user', text: question });
-            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 "${sapOpenDocType}" 문서를 찾아 여는 중...`, `Looking up and opening SAP document "${sapOpenDocType}"...`), pending: true });
+            const pendingText = sapOpenDocMaterial
+                ? window._t(`SAP에서 자재 "${sapOpenDocMaterial}"의 "${sapOpenDocType}" 문서를 조회해서 여는 중...`, `Looking up material "${sapOpenDocMaterial}" in SAP and opening document "${sapOpenDocType}"...`)
+                : window._t(`SAP에서 "${sapOpenDocType}" 문서를 찾아 여는 중...`, `Looking up and opening SAP document "${sapOpenDocType}"...`);
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + pendingText, pending: true });
             input.value = '';
             window._renderGanttQaMessages();
             let sapDocReply;
             try {
+                let url = 'http://127.0.0.1:5000/sap-open-document?type=' + encodeURIComponent(sapOpenDocType);
+                if (sapOpenDocMaterial) url += '&material=' + encodeURIComponent(sapOpenDocMaterial);
                 const res = await window._withTimeout(
-                    fetch('http://127.0.0.1:5000/sap-open-document?type=' + encodeURIComponent(sapOpenDocType)),
-                    50000, window._t('SAP 문서 열기 50초 시간 초과', 'Opening the SAP document timed out after 50s')
+                    fetch(url),
+                    sapOpenDocMaterial ? 60000 : 50000,
+                    sapOpenDocMaterial
+                        ? window._t('SAP 문서 열기 60초 시간 초과', 'Opening the SAP document timed out after 60s')
+                        : window._t('SAP 문서 열기 50초 시간 초과', 'Opening the SAP document timed out after 50s')
                 );
                 const data = await res.json();
                 if (data.ok) {
@@ -2185,7 +2197,12 @@
         if (looksLikeQuestion) return null;
         var m = text.match(/\b([A-Za-z][0-9]{2})\b/);
         if (!m) return null;
-        return m[1].toUpperCase();
+        // 💡 [2026-09-15 신규] 자재번호(이 회사 SAP은 5~8자리 순수 숫자)가 같이 언급돼 있으면 같이
+        //    추출 — 있으면 "지금 열려 있는 화면"에 의존하지 않고 백엔드가 MM03으로 직접 이동해
+        //    조회한다(sap_bridge_32.py의 _navigate_to_material_document_tab). 문서 타입 코드
+        //    (P01 등)는 숫자만으로 된 문자열이 아니라 이 정규식과 겹치지 않는다.
+        var matM = text.match(/\b(\d{5,8})\b/);
+        return { docType: m[1].toUpperCase(), material: matM ? matM[1] : null };
     };
 
     // 💡 실제 XLSX 조립 — _ganttQaTryHandleSapExportCommand 전용으로 분리(다른 곳에서도 "마지막

@@ -393,6 +393,23 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
      sap_bridge_32 as sb`) `sb._get_sap_session()`으로 세션을 잡고, `wnd.Children`을 재귀
      탐색하며 `(Type, Id)`를 전부 출력하는 임시 스크립트를 `py -3-32 -c "..."`로 즉석에서
      실행하는 게 제일 빠르다 — 이 방법으로 이번 문서 열기 기능의 막힌 지점들을 전부 찾아냈다.
+- **자재번호를 같이 말하면 화면을 미리 열어둘 필요가 없음(2026-09-15 추가)**: 처음엔 "사람이
+  MM03에서 이미 조회해 문서 데이터 탭을 열어둔 상태"만 지원했는데(처음 화면 진입 흐름을
+  추측하고 싶지 않아서였음), 사용자가 "왜 꼭 미리 열어둬야 하냐, 트랜잭션 코드로 알아서 찾아가면
+  안 되냐"고 문제제기해서 실사용 화면 녹화(SAP Easy Access 메인 메뉴 → 명령창에 `MM03` →
+  자재번호 입력 → Enter → 문서 데이터 탭 선택)를 추가로 받아 구현함. `sap_bridge_32.py`의
+  `_navigate_to_material_document_tab(session, wnd, material)`이 `/nMM03` 진입 + `ctxtRMMG1-
+  MATNR`(을 `_find_by_id_substring`로 찾음) 입력 + Enter를 수행하고, `open_document(doc_type,
+  material=None)`이 `material` 인자가 있으면 이 함수를 먼저 호출한 뒤 기존 문서 탐색 로직을
+  그대로 이어간다 — `material`이 없으면 기존처럼 "이미 열려 있는 화면"을 그대로 쓰는 하위호환
+  경로. 프런트(`js/04h-core-app-upload-utils-3.js`)의 `_ganttQaExtractSapOpenDocRequest`는 이제
+  `{docType, material}` 객체를 반환(예전엔 문자열 하나만 반환했음 — 이 함수를 다시 쓰는 코드가
+  있으면 반환 형태가 바뀐 걸 감안할 것)하고, 질문에서 5~8자리 순수 숫자를 자재번호로 추출해
+  `/sap-open-document?type=...&material=...`로 같이 보낸다. **⚠️ "뷰 선택(Select View(s))"
+  팝업은 이 녹화에서 뜨지 않아서(그 자재에 최근 조회 이력이 있었을 가능성) 처리 로직이 추측성
+  이다** — `_navigate_to_material_document_tab`은 자재번호 입력 후 `wnd[1]`이 나타나면 방어적으로
+  Enter를 한 번 시도하지만, 실제로 이 팝업이 뜨는 자재로 테스트해서 계속 실패하면 그 팝업이 뜬
+  상태를 다시 녹화해서 정확한 컨트롤로 교체해야 한다.
 - **TIPR(웹 기반, 로그인 필요)은 아직 미구현** — SAP와 달리 "이미 인증된 세션에 올라타기"가 안 되고
   ID/PW 자동 로그인 자동화(Playwright 등)가 필요해 자격증명 저장 문제가 딸려온다. 사용자는 "서버에
   무리만 안 가면 ID/PW 자동 로그인도 괜찮다"고 확인했으므로, 구현 시 mail_config.json/

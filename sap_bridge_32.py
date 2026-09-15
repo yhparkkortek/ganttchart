@@ -23,9 +23,10 @@
 # 화면 녹화(SAP GUI "기록 및 재생")로 얻은 정확한 컨트롤 ID를 일반화한 것 — 절대경로
 # 대신 "화면 어디에 있든 ID에 특정 문자열이 포함된 컨트롤을 재귀 탐색"하는 방식을 써서,
 # 자재 유형별로 화면 서브구조 번호(SUB2/SUB7 등)가 달라져도 최대한 버티도록 했다.
-# 전제 조건: 사람이 미리 MM03에서 해당 자재를 조회해 "문서 데이터" 탭을 열어둔 상태여야
-# 한다(자재 조회 자체는 자동화하지 않음 — 화면 구조를 몰라 추측하기보다, 이미 검증된
-# "지금 열려 있는 화면을 조작"하는 설계를 그대로 따름).
+# 네 번째 인자로 자재번호를 같이 주면(예: open_document P01 106188) 사람이 화면을 미리
+# 열어둘 필요 없이 이 스크립트가 직접 MM03으로 이동해 그 자재를 조회한 뒤 "문서 데이터"
+# 탭까지 연다(2026-09-15 실사용 화면 녹화로 추가 — `_navigate_to_material_document_tab`).
+# 자재번호를 안 주면 기존과 동일하게 "사람이 미리 열어둔 화면"을 그대로 사용한다(하위호환).
 # ══════════════════════════════════════════════════════════════
 import sys
 import json
@@ -250,10 +251,46 @@ def _table_find_cell_by_exact_row_text(table, target_text):
     return None
 
 
-def open_document(doc_type):
-    """MM03에서 이미 열려 있는 자재의 "문서 데이터" 탭에서, 지정한 문서 타입(예: 'P01')과
-    일치하는 행을 찾아 열고, 그 문서의 "원본(Originals)" 파일을 더블클릭해서 연결된
-    프로그램(Acrobat 등)으로 바로 연다."""
+def _navigate_to_material_document_tab(session, wnd, material):
+    """MM03으로 이동해 지정한 자재번호를 조회하고 "문서 데이터"(tabpZU04) 탭까지 연다.
+    2026-09-15 실사용 화면 녹화(SAP Easy Access 메인 메뉴에서 시작 → 명령창에 MM03 입력 →
+    자재번호 입력 → Enter → 기본 데이터 탭 → "문서 데이터" 탭 선택)로 얻은 정확한 컨트롤을
+    일반화한 것 — `ctxtRMMG1-MATNR` 절대경로 대신 `_find_by_id_substring`로 찾아 화면
+    서브구조가 달라져도 버티게 했다.
+    ⚠️ 녹화 당시엔 자재번호 입력 후 곧바로 기본 데이터 화면으로 넘어갔고 "뷰 선택(Select
+    View(s))" 팝업은 뜨지 않았다 — 그 자재에 최근 조회 이력이 있어 SAP가 뷰를 기억하고
+    있었을 가능성이 있다. 뷰 선택 이력이 없는 자재는 이 팝업이 뜰 수 있어, 방어적으로
+    wnd[1]이 나타나면 Enter(기본 선택 확정)를 한 번 시도한다 — 이 경로는 실사용 녹화가
+    없어 추측성 코드이니, 만약 특정 자재에서 계속 실패하면 그 팝업이 뜬 상태로 화면을
+    캡처해서 정확한 컨트롤을 다시 녹화해야 한다."""
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
+    wnd.sendVKey(0)
+    time.sleep(0.6)
+
+    matnr_field = _find_by_id_substring(wnd, 'RMMG1-MATNR')
+    if matnr_field is None:
+        raise RuntimeError('MM03 자재번호 입력 필드를 찾지 못했습니다 — SAP GUI가 예상과 다른 화면(예: 이미 다른 트랜잭션 진행 중)일 수 있습니다.')
+    matnr_field.text = str(material)
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+
+    # 방어적 팝업 처리(추측성 — 위 주석 참고).
+    try:
+        popup = session.findById('wnd[1]')
+        if popup is not None:
+            popup.sendVKey(0)
+            time.sleep(0.5)
+    except Exception:
+        pass
+
+    _select_tab_if_present(wnd, 'tabpZU04')
+    time.sleep(0.4)
+
+
+def open_document(doc_type, material=None):
+    """MM03에서 이미 열려 있는(또는 material이 주어지면 직접 조회해서 여는) 자재의
+    "문서 데이터" 탭에서, 지정한 문서 타입(예: 'P01')과 일치하는 행을 찾아 열고, 그 문서의
+    "원본(Originals)" 파일을 더블클릭해서 연결된 프로그램(Acrobat 등)으로 바로 연다."""
     doc_type = (doc_type or '').strip().upper()
     if not doc_type:
         raise RuntimeError('문서 타입을 지정해주세요 (예: P01).')
@@ -261,9 +298,14 @@ def open_document(doc_type):
     session = _get_sap_session()
     wnd = session.findById('wnd[0]')
 
-    # 1) "문서 데이터" 탭이 아직 선택 안 돼 있으면 선택 시도(이미 열려 있으면 조용히 통과).
-    _select_tab_if_present(wnd, 'tabpZU04')
-    time.sleep(0.3)
+    if material:
+        # 자재번호가 주어졌으면 직접 MM03으로 이동해 조회 — 사람이 미리 화면을 열어둘
+        # 필요가 없다(2026-09-15부터 지원).
+        _navigate_to_material_document_tab(session, wnd, material)
+    else:
+        # 자재번호 없이 호출되면 기존 방식대로 "이미 열려 있는 화면"을 그대로 사용.
+        _select_tab_if_present(wnd, 'tabpZU04')
+        time.sleep(0.3)
 
     # 2) 문서 목록 테이블 컨트롤을 화면 어디에 있든 찾는다.
     table = _find_by_id_substring(wnd, 'tblSAPLCV140SUB_DOC')
@@ -361,7 +403,8 @@ def main():
         action = sys.argv[1] if len(sys.argv) > 1 else 'fetch_screen'
         if action == 'open_document':
             doc_type = sys.argv[2] if len(sys.argv) > 2 else ''
-            result = open_document(doc_type)
+            material = sys.argv[3] if len(sys.argv) > 3 else None
+            result = open_document(doc_type, material)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))

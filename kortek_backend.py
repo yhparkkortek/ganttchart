@@ -1564,10 +1564,21 @@ def sap_open_document():
     #    탭에서 지정한 문서 타입(예: P01/C04/Q11)을 찾아 열고, 첨부된 원본 파일을 더블클릭해서
     #    연결된 프로그램(Acrobat 등)으로 바로 연다. 실제 클릭 순서는 SAP GUI "기록 및 재생"으로
     #    녹화한 매크로를 일반화해서 sap_bridge_32.py의 open_document()에 구현돼 있다.
+    # 💡 [2026-09-15 확장] material 파라미터를 같이 주면(예: "SAP에서 106188 P01 문서 열어줘")
+    #    사람이 화면을 미리 열어둘 필요 없이 sap_bridge_32.py가 직접 MM03으로 이동해 그 자재를
+    #    조회한다(_navigate_to_material_document_tab, 2026-09-15 실사용 화면 녹화로 얻은
+    #    컨트롤을 일반화). material 없이 호출하면 기존처럼 "이미 열려 있는 화면"을 그대로 쓴다.
     doc_type = (request.args.get('type') or '').strip()
+    material = (request.args.get('material') or '').strip()
     if not doc_type:
         return jsonify({'ok': False, 'error': '문서 타입(type 파라미터)이 필요합니다. 예: /sap-open-document?type=P01'}), 400
-    data, status = _run_sap_bridge(['open_document', doc_type], 45, 'SAP 문서 열기')
+    extra_args = ['open_document', doc_type]
+    if material:
+        extra_args.append(material)
+    # 자재번호부터 직접 조회하는 경로는 화면 전환이 하나 더 있어 기존보다 시간이 더 걸릴 수
+    # 있어 타임아웃을 넉넉히 둔다.
+    timeout = 60 if material else 45
+    data, status = _run_sap_bridge(extra_args, timeout, 'SAP 문서 열기')
     return jsonify(data), status
 
 
