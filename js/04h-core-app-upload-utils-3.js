@@ -1894,7 +1894,15 @@
             window._ganttQaHistory.push({ role: 'user', text: question });
             input.value = '';
             let cached = window._lastSapFetchResult;
-            if (!cached || !cached.text) {
+            // 💡 [2026-09-15 버그수정] 질문 자체가 새 SAP 조회 대상을 명시하면(자재번호+BOM/
+            //    사용처 등) 캐시가 있어도 무조건 재사용하지 않고 새로 조회한다 — 안 그러면
+            //    "104438 사용처 엑셀로 출력해줘" 다음에 "502572 표준가격 표시된 BOM 엑셀로
+            //    출력해줘"라고 물어도 무관한 이전 104438 캐시를 그대로 다시 내보내는 버그가
+            //    실사용에서 확인됨(둘 다 "엑셀"+"출력" 키워드만으로 이 블록에 걸리는데, 캐시가
+            //    "있기만 하면" 내용 일치 여부를 안 보고 그냥 썼던 게 원인). 자재번호가 없는
+            //    순수 "엑셀로 저장해줘"류 후속 메시지는 여전히 기존처럼 캐시를 그대로 재사용.
+            const looksLikeFreshSapRequest = window._questionMentionsSapIntent && window._questionMentionsSapIntent(question);
+            if (!cached || !cached.text || looksLikeFreshSapRequest) {
                 window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP 데이터를 조회하는 중...', 'Looking up SAP data...'), pending: true });
                 window._renderGanttQaMessages();
                 const sapText = await window._aiFetchSapContext(question);
@@ -2868,7 +2876,19 @@
         // 헤더 3줄([SAP 화면: ...] / [트랜잭션: ...] / [상태표시줄: ...]?)과 그 뒤 빈 줄을 걷어내고,
         // 트랜잭션 코드는 파일명에 쓰려고 따로 뽑아둔다.
         var txMatch = text.match(/\[트랜잭션:\s*([^\]]*)\]/);
-        var transaction = (txMatch && txMatch[1].trim()) || 'SAP';
+        var transaction = txMatch && txMatch[1].trim();
+        if (!transaction) {
+            // 💡 [2026-09-15 버그수정] BOM/사용처 헤더는 "[트랜잭션: ...]" 태그가 없어서 항상
+            //    기본값 'SAP'로 떨어져 파일명이 "SAP_SAP_20260915.xlsx"처럼 서로 다른 조회여도
+            //    매번 똑같아 보였다 — 실제 원인은 위 캐시 재사용 버그였지만, 파일명도 조회
+            //    대상에 따라 달라지게 고쳐서 "다른 조회를 냈는데 결과가 똑같아 보이는" 혼란을
+            //    줄인다. BOM/사용처 헤더에서 트랜잭션 코드+자재번호를 뽑아 대신 쓴다.
+            var bomMatch = text.match(/BOM 전개\(([^)]+)\):\s*자재\s*([^,\]]+)/);
+            var whereUsedMatch2 = text.match(/사용처 리스트\(([^)]+)\):\s*자재\s*([^\]]+)/);
+            if (bomMatch) transaction = bomMatch[1] + '_' + bomMatch[2].trim().replace(/\s+/g, '');
+            else if (whereUsedMatch2) transaction = whereUsedMatch2[1].split(',')[0] + '_' + whereUsedMatch2[2].trim().replace(/[\s,]+/g, '');
+            else transaction = 'SAP';
+        }
         var bodyStart = text.indexOf('\n\n');
         var body = bodyStart !== -1 ? text.slice(bodyStart + 2) : text;
         var lines = body.split('\n').filter(function(l) { return l.length > 0; });
