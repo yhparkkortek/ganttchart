@@ -1614,19 +1614,37 @@ def _save_po_pdf_to_file(save_path):
 
     sap_win.set_focus()
     time.sleep(0.5)
-    # ⚠️ [2026-09-15 1차 실사용 테스트 실패 후 보강] "발주서출력" 버튼을 누른 직후엔 SAP
-    # GUI 자체의 키보드 포커스가 여전히 그 버튼(또는 그리드)에 남아있어서, 곧바로 단축키를
-    # 보내면 임베드된 PDF 뷰어가 아니라 SAP GUI로 전달되어 무시되는 것으로 추정됨(1차
-    # 테스트에서 다이얼로그가 전혀 안 떴음) — 문서 내용 영역을 한 번 클릭해 그쪽으로
-    # 포커스를 명시적으로 옮긴 뒤 단축키를 보내도록 수정.
+    # ⚠️ [2026-09-15 2차 수정, 사용자 관찰 반영] "발주서출력" 버튼을 누른 직후엔 SAP GUI
+    # 자체의 키보드 포커스가 여전히 그 버튼(또는 그리드)에 남아있어서, 곧바로 단축키를
+    # 보내면 임베드된 PDF 뷰어가 아니라 SAP GUI로 전달되어 무시되는 것으로 추정됨.
+    # 1차 수정(SAP 창 전체의 기하학적 중앙 클릭)으로도 안 됐다 — 사용자가 "PDF 미리보기
+    # 창을 직접 클릭해야 한다"고 제보해서, SAP 창 중앙이 아니라 **"PDF 미리보기"라는
+    # 이름/텍스트를 가진 하위 요소를 UIA 트리에서 직접 찾아 그 위치를 클릭**하도록 변경
+    # (라이브 진단으로 "일괄 다운로드" 클릭 시 `wnd[1]`의 Text가 정확히 "PDF 미리보기"임을
+    # 확인한 적 있음 — "발주서출력"도 내부적으로 같은 이름의 서브 요소를 갖고 있을 가능성이
+    # 높음). 못 찾으면 기존처럼 SAP 창 전체 중앙 클릭으로 폴백.
+    clicked = False
     try:
-        rect = sap_win.rectangle()
-        cx = (rect.left + rect.right) // 2 - rect.left
-        cy = (rect.top + rect.bottom) // 2 - rect.top
-        sap_win.click_input(coords=(cx, cy))
-        time.sleep(0.5)
+        for desc in sap_win.descendants():
+            try:
+                name = desc.window_text() or ''
+            except Exception:
+                continue
+            if 'PDF' in name or '미리보기' in name:
+                desc.click_input()
+                clicked = True
+                break
     except Exception:
-        pass  # 클릭 실패해도 단축키는 일단 시도
+        pass
+    if not clicked:
+        try:
+            rect = sap_win.rectangle()
+            cx = (rect.left + rect.right) // 2 - rect.left
+            cy = (rect.top + rect.bottom) // 2 - rect.top
+            sap_win.click_input(coords=(cx, cy))
+        except Exception:
+            pass  # 클릭 실패해도 단축키는 일단 시도
+    time.sleep(0.5)
 
     def _find_save_dialog(timeout_sec):
         deadline = time.time() + timeout_sec
