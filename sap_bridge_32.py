@@ -262,6 +262,28 @@ def _select_tab_if_present(wnd, id_substring):
             pass
 
 
+def _select_tab_with_retry(wnd, id_substring, attempts=6, delay=0.5):
+    """`_select_tab_if_present`의 재시도 버전. 2026-09-15 신규 — 자재번호를 직접 입력해 MM03을
+    처음부터 여는 경로(`_navigate_to_material_document_tab`)는 "이미 열려 있는 화면"을
+    전제하던 기존 `_select_tab_if_present`와 달리 화면이 아직 다 그려지지 않았을 수 있어
+    짧게 여러 번 재시도한다. 그래도 끝내 못 찾으면 False를 반환하는데, 이 경우는 "타이밍
+    문제"가 아니라 그 자재에 저장된 "뷰 선택(Select View(s))" 이력에 해당 뷰 자체가 없어서
+    탭이 애초에 화면에 존재하지 않는 것일 가능성이 있다(실사용 테스트로 확인 — 자재
+    106188은 "문서 데이터" 탭 없이 "기본 데이터" 탭으로만 열렸음). 호출부가 True/False를
+    보고 구체적인 안내 메시지를 낼 수 있도록 `_select_tab_if_present`(무조건 조용히 통과)와
+    분리했다."""
+    for _attempt in range(attempts):
+        tab = _find_by_id_substring(wnd, id_substring)
+        if tab is not None:
+            try:
+                tab.select()
+            except Exception:
+                pass
+            return True
+        time.sleep(delay)
+    return False
+
+
 def _table_find_cell_by_exact_row_text(table, target_text):
     """GuiTableControl에 지금 화면에 렌더링된 셀들(GuiTableControl.Children)을 훑어서,
     텍스트가 target_text와 정확히 일치하는 셀을 찾는다. 컬럼의 정확한 필드명(DRAT-DOKAR
@@ -333,8 +355,10 @@ def _navigate_to_material_document_tab(session, wnd, material):
     except Exception:
         pass
 
-    _select_tab_if_present(wnd, 'tabpZU04')
+    found = _select_tab_with_retry(wnd, 'tabpZU04')
     time.sleep(0.4)
+    if not found:
+        raise RuntimeError(f'자재 "{material}" 화면에서 "문서 데이터" 탭을 찾지 못했습니다 — SAP GUI에서 직접 MM03으로 이 자재를 조회했을 때도 상단에 "문서 데이터" 탭이 안 보인다면, 그 자재에 저장된 "뷰 선택(View)" 이력에 문서 데이터 뷰가 빠져 있을 수 있습니다. SAP GUI 메뉴의 추가(Extras) → 뷰(Views) → 선택(Select)에서 "문서 데이터"를 체크한 뒤 다시 시도해주세요.')
 
 
 def fetch_material_documents(material):
