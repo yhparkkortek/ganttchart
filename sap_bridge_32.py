@@ -305,6 +305,66 @@ def _table_find_cell_by_exact_row_text(table, target_text):
     return None
 
 
+def _find_material_row_in_grid(grid, material):
+    """현재 화면의 ALV 그리드(GuiShell/GridView, 예: ZMM009 "자재 List" 결과)에서 "자재"라는
+    제목의 컬럼을 찾아, 지정한 material과 정확히 일치하는 행 번호를 찾는다(2026-09-15 신규).
+    특정 트랜잭션의 내부 필드명(MATNR 등) 대신 화면에 보이는 컬럼 제목으로 찾아서, ZMM009뿐
+    아니라 "자재"라는 컬럼이 있는 다른 다중조회 화면에도 재사용 가능하게 했다 — 기존
+    `_sap_dump_grid`가 컬럼 제목을 읽는 것과 같은 패턴. 못 찾으면 (None, None)."""
+    try:
+        col_ids = list(grid.ColumnOrder)
+    except Exception:
+        return None, None
+    matnr_col = None
+    for cid in col_ids:
+        try:
+            title = (grid.GetColumnTitle(cid) or '').strip()
+        except Exception:
+            title = ''
+        if title in ('자재', 'Material'):
+            matnr_col = cid
+            break
+    if matnr_col is None:
+        return None, None
+    try:
+        total_rows = grid.RowCount
+    except Exception:
+        return None, None
+    target = str(material).strip().upper()
+    for r in range(total_rows):
+        try:
+            val = str(grid.GetCellValue(r, matnr_col)).strip().upper()
+        except Exception:
+            continue
+        if val == target:
+            return r, matnr_col
+    return None, None
+
+
+def _open_material_from_current_list(wnd, material):
+    """지금 화면에 이미 떠 있는 자재 목록 ALV 그리드(ZMM009 "자재 List" 등)에서 지정한
+    자재번호 행을 찾아 그 "자재" 셀을 더블클릭해서 그 자재의 MM03 조회 화면으로
+    drill-down한다(2026-09-15 신규 — 실사용 화면 녹화로 확인: ZMM009 결과 그리드의 "자재"
+    컬럼 값을 더블클릭하면 바로 "자재 NNN 조회(원자재)" 화면으로 이동하고, 그 뒤부터는
+    자재번호를 직접 입력해 MM03을 새로 여는 경로와 완전히 동일한 화면이 이어진다). 이미
+    여러 자재를 조회해둔 화면을 재사용하므로 `/nMM03`을 매번 새로 여는 것보다 빠르다.
+    성공하면 True, 이 화면에 그리드가 없거나 그 자재를 못 찾으면 False를 반환(호출부가
+    `/nMM03`을 새로 여는 경로로 폴백할 수 있게 하기 위함 — 이 화면이 ZMM009 리스트가
+    아니어도(예: MM03을 막 새로 연 직후) 안전하게 실패하고 넘어간다)."""
+    grid = _sap_find_grid(wnd)
+    if grid is None:
+        return False
+    row, col = _find_material_row_in_grid(grid, material)
+    if row is None:
+        return False
+    try:
+        grid.doubleClickCell(row, col)
+        time.sleep(1.0)
+    except Exception:
+        return False
+    return True
+
+
 def _navigate_to_material_document_tab(session, wnd, material):
     """MM03으로 이동해 지정한 자재번호를 조회하고 "문서 데이터"(tabpZU04) 탭까지 연다.
     2026-09-15 실사용 화면 녹화(SAP Easy Access 메인 메뉴에서 시작 → 명령창에 MM03 입력 →
@@ -322,38 +382,44 @@ def _navigate_to_material_document_tab(session, wnd, material):
     `.text = ...`가 COM 오류("Property 'Item.text' can not be set.")로 실패한다. 그래서
     `_find_by_id_substring`(첫 매치만 반환) 대신 `_find_all_by_id_substring`으로 후보를 전부
     모아, 녹화에서 확인된 타입(GuiCTextField, ID 접두사 `ctxt`)을 우선순위로 정렬한 뒤 실제로
-    값을 설정할 수 있는 첫 번째 후보를 채택한다."""
-    session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
-    wnd.sendVKey(0)
-    time.sleep(0.6)
+    값을 설정할 수 있는 첫 번째 후보를 채택한다.
+    💡 [2026-09-15 신규] 지금 화면에 이미 자재 목록 그리드(ZMM009 "자재 List" 등)가 떠 있으면
+    `/nMM03`을 매번 새로 여는 대신 그 그리드에서 바로 drill-down한다(`_open_material_from_
+    current_list`) — 여러 자재를 한 번에 조회해둔 상태에서 하나씩 문서를 열 때 더 빠르고,
+    이미 그 자재가 그 리스트에 있다는 걸 사람이 확인한 셈이라 더 안전하다. 그 화면에 그리드가
+    없거나 그 자재가 없으면 조용히 실패하고 아래 `/nMM03` 새로 열기 경로로 폴백한다."""
+    if not _open_material_from_current_list(wnd, material):
+        session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
+        wnd.sendVKey(0)
+        time.sleep(0.6)
 
-    candidates = _find_all_by_id_substring(wnd, 'RMMG1-MATNR')
-    if not candidates:
-        raise RuntimeError('MM03 자재번호 입력 필드를 찾지 못했습니다 — SAP GUI가 예상과 다른 화면(예: 이미 다른 트랜잭션 진행 중)일 수 있습니다.')
-    candidates.sort(key=lambda c: 0 if getattr(c, 'Type', None) == 'GuiCTextField' else 1)
-    matnr_field = None
-    last_err = None
-    for cand in candidates:
+        candidates = _find_all_by_id_substring(wnd, 'RMMG1-MATNR')
+        if not candidates:
+            raise RuntimeError('MM03 자재번호 입력 필드를 찾지 못했습니다 — SAP GUI가 예상과 다른 화면(예: 이미 다른 트랜잭션 진행 중)일 수 있습니다.')
+        candidates.sort(key=lambda c: 0 if getattr(c, 'Type', None) == 'GuiCTextField' else 1)
+        matnr_field = None
+        last_err = None
+        for cand in candidates:
+            try:
+                cand.text = str(material)
+                matnr_field = cand
+                break
+            except Exception as e:
+                last_err = e
+                continue
+        if matnr_field is None:
+            raise RuntimeError(f'MM03 자재번호 입력 필드를 찾았지만 값을 설정하지 못했습니다. (마지막 오류: {last_err})')
+        wnd.sendVKey(0)
+        time.sleep(0.8)
+
+        # 방어적 팝업 처리(추측성 — 위 주석 참고).
         try:
-            cand.text = str(material)
-            matnr_field = cand
-            break
-        except Exception as e:
-            last_err = e
-            continue
-    if matnr_field is None:
-        raise RuntimeError(f'MM03 자재번호 입력 필드를 찾았지만 값을 설정하지 못했습니다. (마지막 오류: {last_err})')
-    wnd.sendVKey(0)
-    time.sleep(0.8)
-
-    # 방어적 팝업 처리(추측성 — 위 주석 참고).
-    try:
-        popup = session.findById('wnd[1]')
-        if popup is not None:
-            popup.sendVKey(0)
-            time.sleep(0.5)
-    except Exception:
-        pass
+            popup = session.findById('wnd[1]')
+            if popup is not None:
+                popup.sendVKey(0)
+                time.sleep(0.5)
+        except Exception:
+            pass
 
     # 💡⚠️ [2026-09-15 실사용 스크린샷으로 확정] "문서 데이터" 탭은 메인 화면(기본 데이터 1/2 등)의
     # 탭 스트립에 없다 — 화면 하단 "기본 데이터 텍스트" 섹션의 버튼(기술 ID에 GRUNDDATENTEXT
