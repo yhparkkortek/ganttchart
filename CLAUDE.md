@@ -381,12 +381,23 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
   실행(F8) 이후 "레이아웃 불러오기"(`&MB_VARIANT`/`&LOAD`)와 SAP 자체 엑셀 내보내기(`&MB_EXPORT`/
   `&XXL`, OLE로 Excel을 직접 여는 SAP 표준 기능)가 이어지는데, 이건 이 코드베이스의 기존 설계
   (특정 트랜잭션 전용 파서 안 만들고 화면을 그대로 텍스트로 덤프 → 자체 XLSX 빌더로 내보내기)와
-  겹치는 기능이라 재현하지 않고 실행(F8)까지만 자동화했다 — 결과 화면은 `fetch_current_screen()`
-  과 동일한 범용 덤프(`_sap_find_grid`/`_sap_dump_fields`) 재사용. **⚠️ 미검증**: ZPP038의 BOM
-  전개 결과가 ALV 그리드(GuiShell/GridView)가 아니라 트리 구조(BOM은 부모-자식 계층이라 Tree
-  컨트롤일 가능성도 있음)라면 `_sap_find_grid`가 못 찾아서 `_sap_dump_fields` 폴백도 제대로 못
-  읽을 수 있다 — 실사용 테스트로 확인 필요, 실패하면 이 부분을 의심하고 화면 구조(Tree인지
-  GridView인지)부터 확인할 것.
+  겹치는 기능이라 재현하지 않고 실행(F8)까지만 자동화했다 — 결과 화면은
+  `_sap_dump_screen_body(wnd)`(아래 참고)로 읽는다.
+  - **범용 덤프에 "트리" 지원 추가(2026-09-15) — "그리드 → 트리 → 필드" 3단계 폴백**: 사용자가
+    "BOM 표준가 부모-자식 계층.vbs" 매크로로, ZPP038 결과 화면이 체크박스(`chkSHOW_L`/
+    `chkSHOW_P`)와 라디오버튼(`radR_2`) 설정에 따라 **ALV 트리(부모-자식 계층)로도 표시될
+    수 있음**을 확인해줌 — 기존 `_sap_find_grid`(SubType이 정확히 'GridView'인 것만 찾음)는
+    이런 화면을 놓칠 위험이 있었다. `fetch_current_screen`/`fetch_material_documents`/
+    `fetch_bom` 세 함수가 각자 반복하던 "그리드 없으면 필드로 폴백" 2단계 로직을
+    `_sap_dump_screen_body(wnd)` 하나로 통합하면서, 그 사이에 **트리 단계**를 추가했다:
+    ① `_sap_find_grid`(GridView 전용)로 못 찾으면 → ② `_sap_find_shell_any`(SubType 무관,
+    아무 GuiShell이나) + `_sap_dump_tree`(`GetAllNodeKeys`+`GetColumnNames`+`GetItemText`
+    조합을 시도, 실패하면 `GetNodeTextByKey` 등 대안 시도)로 트리를 읽어보고 → ③ 그래도
+    안 되면 기존 `_sap_dump_fields`로 최종 폴백. **⚠️⚠️ 트리 덤프(`_sap_dump_tree`)는 아직
+    실사용 미검증** — SAP GUI Tree 컨트롤의 정확한 스크립팅 API 이름은 버전/화면마다 다를
+    수 있어 여러 방식을 순서대로 시도하도록만 짜뒀다. BOM이 "부모-자식 계층" 모드로 조회됐는데
+    내용이 비거나 이상하면 이 함수부터 의심하고, 그 시점 화면의 `(Type, SubType, Id)`
+    트리를 덤프해서 정확한 API를 확인할 것(기존 "진단 방법" 항목과 동일한 방식).
   - **복수 자재 BOM("SAP에서 502572,502573,502574 BOM 보여줘", 2026-09-15 신규 —
     "BOM 복수 열람.vbs" 매크로로 확보)**: 질문에 자재번호가 2개 이상 언급되면
     `_aiFetchSapContext`가 전부 모아 `material=502572,502573,502574`처럼 쉼표로 이어

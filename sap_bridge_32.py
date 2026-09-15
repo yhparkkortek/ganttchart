@@ -160,6 +160,108 @@ def _sap_dump_fields(container, depth=0, max_depth=10):
     return lines
 
 
+def _sap_find_shell_any(container, depth=0):
+    """창 트리를 재귀 탐색해 SubType 무관하게 첫 번째 GuiShell을 찾는다(2026-09-15 신규) —
+    `_sap_find_grid`는 SubType이 정확히 'GridView'인 것만 찾는데, 일부 화면(예: ZPP038의
+    "부모-자식 계층" 표시 모드처럼 ALV가 트리로 나오는 경우 — "BOM 표준가 부모-자식
+    계층.vbs" 매크로로 이런 표시 모드가 존재함을 확인함)은 GuiShell이지만 SubType이
+    GridView가 아닐 수 있어, 그런 화면도 놓치지 않기 위한 더 넓은 탐색."""
+    if depth > 12:
+        return None
+    try:
+        children = container.Children
+    except Exception:
+        return None
+    if children is None:
+        return None
+    for i in range(children.Count):
+        child = children.Item(i)
+        try:
+            if child.Type == 'GuiShell':
+                return child
+        except Exception:
+            pass
+        found = _sap_find_shell_any(child, depth + 1)
+        if found is not None:
+            return found
+    return None
+
+
+def _sap_dump_tree(shell):
+    """GridView가 아닌 GuiShell(Tree류로 추정)을 텍스트로 덤프해본다(2026-09-15 신규,
+    ⚠️ 실사용 미검증 — SAP GUI Tree 컨트롤의 정확한 스크립팅 API는 버전/화면마다 다를 수
+    있어 여러 방식을 순서대로 시도한다). 전부 실패하면 None을 반환해 호출부가
+    `_sap_dump_fields`로 폴백할 수 있게 한다."""
+    try:
+        node_keys = list(shell.GetAllNodeKeys())
+    except Exception:
+        return None
+    if not node_keys:
+        return None
+
+    col_names = []
+    try:
+        col_names = list(shell.GetColumnNames())
+    except Exception:
+        col_names = []
+
+    lines = []
+    if col_names:
+        lines.append('\t'.join(str(c) for c in col_names))
+    max_nodes = 500
+    for key in node_keys[:max_nodes]:
+        row_vals = []
+        if col_names:
+            for col in col_names:
+                val = ''
+                for attempt in ('GetItemText', 'GetCellValue'):
+                    try:
+                        val = str(getattr(shell, attempt)(key, col))
+                        break
+                    except Exception:
+                        continue
+                row_vals.append(val)
+        else:
+            val = ''
+            for attempt_fn in (lambda: shell.GetNodeTextByKey(key), lambda: shell.GetItemText(key, '')):
+                try:
+                    val = str(attempt_fn())
+                    break
+                except Exception:
+                    continue
+            row_vals.append(val)
+        if any(row_vals):
+            lines.append('\t'.join(row_vals))
+    if not lines or (col_names and len(lines) <= 1):
+        return None  # 컬럼 제목행만 있고 실제 값을 하나도 못 읽었으면 실패로 간주
+    if len(node_keys) > max_nodes:
+        lines.append(f'... (총 {len(node_keys)}개 노드 중 {max_nodes}개만 표시)')
+    return '\n'.join(lines)
+
+
+def _sap_dump_screen_body(wnd):
+    """현재 화면을 "그리드 → 트리 → 필드" 순서로 시도해 텍스트로 덤프하고 (본문, source)를
+    반환한다(2026-09-15 신규 — fetch_current_screen/fetch_material_documents/fetch_bom이
+    각자 반복하던 2단계 폴백 로직을 하나로 통합 + 트리 지원 추가). source는
+    'grid'|'tree'|'fields' 중 하나, 아무것도 못 읽으면 (None, None)."""
+    grid = _sap_find_grid(wnd)
+    if grid is not None:
+        body = _sap_dump_grid(grid)
+        if body:
+            return body, 'grid'
+
+    shell = _sap_find_shell_any(wnd)
+    if shell is not None:
+        body = _sap_dump_tree(shell)
+        if body:
+            return body, 'tree'
+
+    body = '\n'.join(_sap_dump_fields(wnd))
+    if body:
+        return body, 'fields'
+    return None, None
+
+
 def fetch_current_screen():
     session = _get_sap_session()
     wnd = session.findById('wnd[0]')
@@ -176,13 +278,7 @@ def fetch_current_screen():
     except Exception:
         status_text = ''
 
-    grid = _sap_find_grid(wnd)
-    if grid is not None:
-        body = _sap_dump_grid(grid)
-        source = 'grid'
-    else:
-        body = '\n'.join(_sap_dump_fields(wnd))
-        source = 'fields'
+    body, source = _sap_dump_screen_body(wnd)
 
     if not body:
         return {'ok': False, 'error': '현재 SAP 화면에서 읽을 수 있는 데이터를 찾지 못했습니다.'}
@@ -280,8 +376,9 @@ def _navigate_to_bom_screen(session, wnd, materials, plant='1000'):
 def fetch_bom(materials, plant='1000'):
     """자재 1개 또는 여러 개의 BOM(ZPP038, "BOM 전개")을 조회해 화면을 그대로 텍스트로
     읽어온다. `materials`는 문자열(단일) 또는 리스트/튜플(복수, 2026-09-15 신규). 결과
-    화면이 ALV 그리드(GuiShell/GridView)면 그대로 표로, 아니면(예: 트리 구조라면 아직
-    지원 안 되는 형태일 수 있음 — 실사용 검증 필요) 일반 필드 덤프로 폴백한다."""
+    화면을 "그리드 → 트리 → 필드" 순서로 시도해 읽는다(_sap_dump_screen_body) — ZPP038은
+    "부모-자식 계층" 표시 모드에서 ALV가 트리로 나올 수 있음을 실사용으로 확인했고("BOM
+    표준가 부모-자식 계층.vbs"), 트리 덤프(_sap_dump_tree)는 아직 실사용 검증 전이다."""
     if not materials:
         raise RuntimeError('자재번호를 지정해주세요.')
     plant = (plant or '1000').strip()
@@ -290,18 +387,12 @@ def fetch_bom(materials, plant='1000'):
     wnd = session.findById('wnd[0]')
     _navigate_to_bom_screen(session, wnd, materials, plant)
 
-    grid = _sap_find_grid(wnd)
-    if grid is not None:
-        body = _sap_dump_grid(grid)
-        source = 'grid'
-    else:
-        body = '\n'.join(_sap_dump_fields(wnd))
-        source = 'fields'
+    body, source = _sap_dump_screen_body(wnd)
 
     mat_label = ', '.join(materials) if isinstance(materials, (list, tuple)) else str(materials)
 
     if not body:
-        return {'ok': False, 'error': f'자재 "{mat_label}"의 BOM 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요(화면이 ALV 그리드가 아닌 트리 구조라 아직 지원하지 않는 형태일 가능성도 있습니다).'}
+        return {'ok': False, 'error': f'자재 "{mat_label}"의 BOM 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요.'}
 
     header = f'[SAP BOM 전개(ZPP038): 자재 {mat_label}, 플랜트 {plant}]\n'
     text = header + '\n' + body
@@ -584,13 +675,7 @@ def fetch_material_documents(material):
     wnd = session.findById('wnd[0]')
     _navigate_to_material_document_tab(session, wnd, material)
 
-    grid = _sap_find_grid(wnd)
-    if grid is not None:
-        body = _sap_dump_grid(grid)
-        source = 'grid'
-    else:
-        body = '\n'.join(_sap_dump_fields(wnd))
-        source = 'fields'
+    body, source = _sap_dump_screen_body(wnd)
 
     if not body:
         return {'ok': False, 'error': f'자재 "{material}"의 "문서 데이터" 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호가 올바른지 확인해주세요.'}
