@@ -2596,7 +2596,16 @@
     window._ganttQaExtractSapOpenDocRequest = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
-        if (!/sap/i.test(text)) return null;
+        // 💡 [2026-09-15 게이트 확장] "SAP"를 안 붙이고 "104446 P01 문서 열어줘"처럼 자재번호만
+        //    있어도 인식하도록 확장 — 사용처 조회/승인원 표지 트리거를 넓힌 것과 같은 이유로
+        //    사용자 요청에 따라 검토·적용함("문서/파일"+동사+자재번호 조합은 SAP 문맥 외엔
+        //    나올 일이 거의 없다고 판단). "SAP" 언급이 없으면 자재번호(5~8자리)가 있어야만
+        //    통과하고, 아래에서 문서 타입 코드까지 확인하므로 오탐 위험은 낮다. 단, 엑셀
+        //    내보내기(`_ganttQaExtractSapExportRequest`)는 자재번호 같은 anchor가 없는 순수
+        //    catch-all이라 여기 포함 안 함 — "SAP" 요구를 그대로 유지(무관한 엑셀 저장
+        //    요청을 잘못 가로챌 위험이 커서 일부러 안 넓혔다).
+        var hasMatNum = /\b\d{5,8}\b/.test(text);
+        if (!/sap/i.test(text) && !hasMatNum) return null;
         // 💡 [2026-09-15] "문서"뿐 아니라 "파일"이라고만 말하는 경우도 실사용에서 확인됨
         //    (예: "SAP에서 106188 품번 정보 및 파일 열어줘") — 둘 다 트리거하도록 확장.
         if (!/(문서|파일)/.test(text)) return null;
@@ -2623,7 +2632,11 @@
     window._ganttQaExtractSapListDocsRequest = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
-        if (!/sap/i.test(text)) return null;
+        // 💡 [2026-09-15 게이트 확장] 위 _ganttQaExtractSapOpenDocRequest와 동일한 이유 —
+        //    "SAP" 없어도 자재번호(5~8자리)가 있으면 통과. 아래에서 자재번호를 어차피 다시
+        //    확인하므로(없으면 null) 이중 체크지만, 게이트를 명확히 하기 위해 유지.
+        var hasMatNum = /\b\d{5,8}\b/.test(text);
+        if (!/sap/i.test(text) && !hasMatNum) return null;
         if (!/(문서|파일)/.test(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
         if (looksLikeQuestion) return null;
@@ -2649,7 +2662,11 @@
     window._ganttQaExtractSapBatchDownloadRequest = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
-        if (!/sap/i.test(text)) return null;
+        // 💡 [2026-09-15 게이트 확장] 위 두 함수와 동일한 이유 — "SAP" 없어도 자재번호가
+        //    2개 이상 있으면 통과(아래에서 다시 확인). 자재번호가 여러 개 나열된 것 자체가
+        //    이미 충분히 구체적인 신호라고 판단.
+        var hasMatNums2 = (text.match(/\b\d{5,8}\b/g) || []).length >= 2;
+        if (!/sap/i.test(text) && !hasMatNums2) return null;
         if (!/(열어|열기|다운로드|출력|보여|저장|open)/i.test(text)) return null;
         if (!/(문서|파일)/.test(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
