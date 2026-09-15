@@ -1731,6 +1731,27 @@ def _approval_fill_xlsx(tpl_path, out_path, r, ctx):
     wb.save(out_path)
 
 
+def _set_cell_text_preserve_format(cell, text):
+    """`cell.text = 값` 대신 첫 문단의 첫 런(run)에만 텍스트를 채워 넣어 원본 서식(글꼴/크기/
+    문단 간격 등)을 유지한다. ⚠️⚠️ [2026-09-15 실사용에서 확인] `cell.text = 값` 대입은
+    python-docx 내부적으로 그 셀의 문단을 통째로 지우고 기본 서식의 새 문단/런을 만드는
+    방식이라, 실제로 생성해보니 채워진 값들이 원본 라벨(맑은 고딕 12pt)과 다른 기본 폰트로
+    나왔고 — 문단 간격 등도 같이 초기화되면서 누적된 높이 차이로 "1페이지로 나와야 하는
+    양식이 2페이지로 밀려나는" 문제가 실사용에서 확인됨(원본 앱은 이 문제가 없었음, 즉 이
+    코드의 재현 과정에서 생긴 회귀). 대신 기존 런이 있으면 그 런의 `.text`만 바꿔 서식을
+    그대로 물려받고, 여분 런/문단은 제거해 항상 "문단 1개·런 1개"로 정리한다(런이 아예
+    없던 빈 셀은 문단에 새 런을 추가 — 이 경우만 어쩔 수 없이 기본 서식이 적용됨)."""
+    para = cell.paragraphs[0]
+    for extra_para in cell.paragraphs[1:]:
+        extra_para._element.getparent().remove(extra_para._element)
+    if para.runs:
+        para.runs[0].text = text
+        for extra_run in para.runs[1:]:
+            extra_run._element.getparent().remove(extra_run._element)
+    else:
+        para.add_run(text)
+
+
 def _approval_fill_docx(tpl_path, out_path, r, ctx):
     """워드 양식에 값을 채워 저장한다(원본 앱 `_approval_fill_docx` 재현) — 양식은 큰 표 하나
     안에 중첩 표가 5개 들어있는 구조(python-docx로 실제 열어서 확인함): 0번이 본문(자재그룹/
@@ -1749,18 +1770,18 @@ def _approval_fill_docx(tpl_path, out_path, r, ctx):
         'desc': r.get('desc', ''), 'sub_desc': r.get('sub', ''), 'dms': ctx['dms_text'], 'remark': ctx['remark'],
     }
     for key, row_idx in _APPROVAL_DOCX_ROWS.items():
-        t_main.cell(row_idx, 1).text = str(values.get(key, ''))
+        _set_cell_text_preserve_format(t_main.cell(row_idx, 1), str(values.get(key, '')))
 
     if ctx.get('name_chk'):
         rr, cc = _APPROVAL_DOCX_SIGN['chk_name']
-        t_sign.cell(rr, cc).text = ctx['name_chk']
+        _set_cell_text_preserve_format(t_sign.cell(rr, cc), ctx['name_chk'])
         rr, cc = _APPROVAL_DOCX_SIGN['chk_date']
-        t_sign.cell(rr, cc).text = f"Date: {ctx['today']}"
+        _set_cell_text_preserve_format(t_sign.cell(rr, cc), f"Date: {ctx['today']}")
     if ctx.get('name_apv'):
         rr, cc = _APPROVAL_DOCX_SIGN['apv_name']
-        t_sign.cell(rr, cc).text = ctx['name_apv']
+        _set_cell_text_preserve_format(t_sign.cell(rr, cc), ctx['name_apv'])
         rr, cc = _APPROVAL_DOCX_SIGN['apv_date']
-        t_sign.cell(rr, cc).text = f"Date: {ctx['today']}"
+        _set_cell_text_preserve_format(t_sign.cell(rr, cc), f"Date: {ctx['today']}")
     doc.save(out_path)
 
 
