@@ -355,10 +355,24 @@ def _navigate_to_material_document_tab(session, wnd, material):
     except Exception:
         pass
 
+    # 💡⚠️ [2026-09-15 실사용 스크린샷으로 확정] "문서 데이터" 탭은 메인 화면(기본 데이터 1/2 등)의
+    # 탭 스트립에 없다 — 화면 하단 "기본 데이터 텍스트" 섹션의 버튼(기술 ID에 GRUNDDATENTEXT
+    # 포함)을 눌러야만 열리는 별도 "추가 데이터" 서브화면 안에 있다(그 서브화면 자체의 탭:
+    # 문서 데이터/기본 데이터 텍스트/검사 텍스트/내부 주석/소비). 처음 받은 SAP GUI "기록 및
+    # 재생" 매크로에 이 버튼 클릭이 있었는데 "부수적인 클릭"으로 잘못 판단해 자동화 코드에서
+    # 빠뜨렸던 게 자재 106188에서 계속 실패한 진짜 원인이었다 — 반드시 눌러야 한다.
+    extra_data_btn = _find_by_id_substring(wnd, 'GRUNDDATENTEXT')
+    if extra_data_btn is not None:
+        try:
+            extra_data_btn.press()
+            time.sleep(0.8)
+        except Exception:
+            pass
+
     found = _select_tab_with_retry(wnd, 'tabpZU04')
     time.sleep(0.4)
     if not found:
-        raise RuntimeError(f'자재 "{material}" 화면에서 "문서 데이터" 탭을 찾지 못했습니다 — SAP GUI에서 직접 MM03으로 이 자재를 조회했을 때도 상단에 "문서 데이터" 탭이 안 보인다면, 그 자재에 저장된 "뷰 선택(View)" 이력에 문서 데이터 뷰가 빠져 있을 수 있습니다. SAP GUI 메뉴의 추가(Extras) → 뷰(Views) → 선택(Select)에서 "문서 데이터"를 체크한 뒤 다시 시도해주세요.')
+        raise RuntimeError(f'자재 "{material}" 화면에서 "문서 데이터" 탭을 찾지 못했습니다 — SAP GUI에서 직접 MM03으로 이 자재를 조회했을 때도 (자재 화면 하단의 "기본 데이터 텍스트" 버튼을 눌러 들어간 서브화면에서도) "문서 데이터" 탭이 안 보인다면, 그 자재에 저장된 "뷰 선택(View)" 이력에 문서 데이터 뷰가 빠져 있을 수 있습니다.')
 
 
 def fetch_material_documents(material):
