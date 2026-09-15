@@ -1461,38 +1461,47 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000'):
     if grid is None:
         raise RuntimeError('엑셀 업로드 후 결과 그리드를 찾지 못했습니다 — 업로드가 실패했거나(파일 경로/형식 문제) 화면 구조가 다를 수 있습니다.')
 
-    # 협력사(LIFNR) — 사업자등록번호로 SAP 표준 검색도움말(F4) 팝업 검색 후 첫 결과 선택.
-    # 아래 절대경로는 사용자 제공 매크로에서 그대로 가져온 것(추측 아님).
-    grid.currentCellColumn = 'LIFNR'
-    grid.pressF4()
-    time.sleep(0.6)
-    try:
-        biz_field = session.findById(
-            "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
-            "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
-        )
-        biz_field.text = str(biz_reg_no)
-        biz_field.setFocus()
-        biz_field.caretPosition = len(str(biz_reg_no))
-        session.findById('wnd[1]').sendVKey(0)  # 검색 실행
+    # ⚠️⚠️ [2026-09-15 실사용 버그수정] 협력사(LIFNR)/세금코드(MWSKZ)를 원래는 "현재 셀"
+    # 개념으로 딱 한 번만(행 지정 없이 `currentCellColumn`만) 설정했는데, 실제 SAP 그리드는
+    # 행을 명시하지 않으면 그 시점의 "현재 행"(대체로 0번)에만 적용된다 — 품목이 여러 개인
+    # 실사용 테스트에서 "공급업체/세금코드가 일부 행만 채워지고 나머지는 비어 있다"는 제보로
+    # 확인됨. **행마다 `currentCellRow`까지 명시적으로 지정해서 반복**하도록 수정 — 협력사는
+    # 매번 같은 사업자등록번호로 다시 검색해야 해서(SAP 표준 검색도움말 특성상 "검색 결과를
+    # 다른 행에 복사"하는 기능이 없음) 품목 수만큼 F4 팝업을 반복하는 대신 방법이 없다(느리지만
+    # 정확성이 우선).
+    for idx in range(len(items)):
+        grid.currentCellRow = idx
+        grid.currentCellColumn = 'LIFNR'
+        grid.pressF4()
         time.sleep(0.6)
-        session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9  # 첫 결과 행 선택
-        session.findById('wnd[1]').sendVKey(2)  # 더블클릭과 동일 — 선택 확정
-        time.sleep(0.5)
-    except Exception as e:
-        raise RuntimeError(f'협력사(사업자등록번호 "{biz_reg_no}") 검색 중 오류가 발생했습니다: {e} — 그 사업자등록번호로 등록된 협력사가 SAP에 없을 수 있습니다.')
+        try:
+            biz_field = session.findById(
+                "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/"
+                "sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[1,24]"
+            )
+            biz_field.text = str(biz_reg_no)
+            biz_field.setFocus()
+            biz_field.caretPosition = len(str(biz_reg_no))
+            session.findById('wnd[1]').sendVKey(0)  # 검색 실행
+            time.sleep(0.6)
+            session.findById('wnd[1]/usr/lbl[1,3]').caretPosition = 9  # 첫 결과 행 선택
+            session.findById('wnd[1]').sendVKey(2)  # 더블클릭과 동일 — 선택 확정
+            time.sleep(0.5)
+        except Exception as e:
+            raise RuntimeError(f'{idx + 1}번째 품목의 협력사(사업자등록번호 "{biz_reg_no}") 검색 중 오류가 발생했습니다: {e} — 그 사업자등록번호로 등록된 협력사가 SAP에 없을 수 있습니다.')
 
-    # 세금코드(MWSKZ) — 매크로에서 항상 같은 위치([1,21])를 고르므로 고정 선택으로 재현.
-    grid.currentCellColumn = 'MWSKZ'
-    grid.pressF4()
-    time.sleep(0.6)
-    try:
-        session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
-        session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
-        session.findById('wnd[1]').sendVKey(2)
-        time.sleep(0.5)
-    except Exception as e:
-        raise RuntimeError(f'세금코드 선택 중 오류가 발생했습니다: {e}')
+        # 세금코드(MWSKZ) — 매크로에서 항상 같은 위치([1,21])를 고르므로 고정 선택으로 재현.
+        grid.currentCellRow = idx
+        grid.currentCellColumn = 'MWSKZ'
+        grid.pressF4()
+        time.sleep(0.6)
+        try:
+            session.findById('wnd[1]/usr/lbl[1,21]').setFocus()
+            session.findById('wnd[1]/usr/lbl[1,21]').caretPosition = 1
+            session.findById('wnd[1]').sendVKey(2)
+            time.sleep(0.5)
+        except Exception as e:
+            raise RuntimeError(f'{idx + 1}번째 품목의 세금코드 선택 중 오류가 발생했습니다: {e}')
 
     # 품목별 단가(NETPR)/EPEIN — PDF에서 추출한 값을 행 순서대로 입력.
     for idx, item in enumerate(items):
@@ -1501,6 +1510,7 @@ def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000'):
             continue
         try:
             grid.modifyCell(idx, 'NETPR', str(price))
+            grid.currentCellRow = idx
             grid.currentCellColumn = 'EPEIN'
             grid.triggerModified()
             grid.modifyCell(idx, 'EPEIN', '1')
@@ -1545,6 +1555,13 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
 
     po_number = None
     try:
+        # ⚠️ [2026-09-15 실사용 버그수정] 행을 명시하지 않고 `currentCellColumn`만 설정하면
+        # 그 시점에 우연히 "현재 행"이었던 셀(위 협력사/단가 입력 루프가 마지막으로 건드린
+        # 행 등)을 클릭하게 되어, 품목이 여러 개일 때 엉뚱한 셀을 클릭해 잘못된 값을 읽는
+        # 사고가 실사용에서 확인됨("구매오더 번호도 행이 여러 개인 경우라서 그런지 엉뚱한
+        # 곳을 복사했음") — 저장된 PO는 모든 행이 같은 오더번호(EBELN)를 공유하므로, 항상
+        # **0번 행**을 명시적으로 지정해 결정적으로 그 셀을 클릭하도록 고침.
+        grid.currentCellRow = 0
         grid.currentCellColumn = 'EBELN'
         grid.firstVisibleColumn = 'NOMNG'
         grid.clickCurrentCell()  # 오더 상세화면으로 drill-down

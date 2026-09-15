@@ -302,7 +302,16 @@
    "합계"를 넣으면 안 됩니다. 헷갈리면 unitPrice × qty 가 그 줄의 "공급가액"과 거의 같아야
    한다는 걸로 검산해서 맞는 값을 고르세요(수량이 1이면 단가와 공급가액이 같으므로 문제
    없음).
-품목이 여러 개면 items 배열에 전부 넣으세요(하나도 빠뜨리지 말 것). tempCode를 확신할 수 없으면 가장 근접한 것을 고르되, 정말 판단이 안 서면 빈 문자열로 두세요.
+3. tempCode는 품목명에 임시코드 표의 분류를 짐작할 수 있는 명확한 단서(예: "Panel"/
+   "LCM"/"PCB"/"TSP"/"Glass"/"Frame"/"포장" 등)가 있을 때만 채우세요. 품번(part number)만
+   있거나 "CABLE ASSY" 같은 일반 부품명이라 표의 13개 분류 중 어디에 해당하는지 확신할
+   수 없으면 **절대 추측해서 채우지 말고 빈 문자열("")로 남겨두세요** — 사람이 직접
+   확인해야 합니다.
+4. 같은 품목 목록이 문서 안에 두 번 이상 나올 수 있습니다(예: "거래명세서" 페이지와
+   "견적서/QUOTATION" 페이지가 같은 품목들을 각자의 표 형식으로 중복 기재하는 경우) —
+   이런 경우 각 품목을 두 번씩 세지 말고 한 번만 items에 넣으세요(품번/품명으로 같은
+   품목인지 판단).
+품목이 여러 개면 items 배열에 전부 넣으세요(하나도 빠뜨리지 말 것).
 
 [임시코드 표]
 ${tempLines}
@@ -1903,9 +1912,19 @@ ${attachText}`;
 
             if (pd.stage === 'confirm_items') {
                 if (/^(확인|네|맞아|맞습니다|ok|okay|confirm|yes)\b/i.test(replyText) || /^(확인|네)$/.test(replyText)) {
-                    const missingCode = pd.items.some(function(it) { return !it.tempCode || !window._PO_TEMP_CODE_TABLE.some(function(r) { return r.code === it.tempCode; }); });
-                    if (missingCode) {
-                        window._ganttQaHistory.push({ role: 'ai', text: window._t('⚠️ 일부 품목의 임시코드가 확인되지 않았습니다 — 몇 번 품목을 어떤 임시코드로 할지 알려주세요(예: "2번은 900201").', '⚠️ Some item(s) don\'t have a confirmed temp code — please tell me which code to use (e.g. "item 2 should be 900201").') });
+                    // 💡 [2026-09-15 사용자 요청] "품목명만으로는 임시코드 판단이 어려우니
+                    // 물어봐야 한다" — AI 프롬프트를 "명확한 단서가 없으면 추측하지 말고 빈
+                    // 문자열로 남길 것"으로 바꿔서(_ganttQaExtractPoItemsViaAi), 애매한
+                    // 품목은 AI가 그럴듯하게 채워넣는 대신 여기서 확실히 걸러지도록 했다.
+                    const missingItems = pd.items.map(function(it, i) { return { i: i, it: it }; })
+                        .filter(function(x) { return !x.it.tempCode || !window._PO_TEMP_CODE_TABLE.some(function(r) { return r.code === x.it.tempCode; }); });
+                    if (missingItems.length) {
+                        const { tempLines } = window._ganttQaPoOptionsTableText();
+                        const missingList = missingItems.map(function(x) { return `${x.i + 1}. ${x.it.desc}`; }).join('\n');
+                        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                            `⚠️ 아래 품목은 임시코드를 자동으로 판단하기 어려웠습니다 — 직접 알려주세요:\n${missingList}\n\n[임시코드 표]\n${tempLines}\n\n예: "2번은 900201" 또는 여러 개가 같으면 "2~5번은 900302"처럼 답해주셔도 됩니다.`,
+                            `⚠️ Couldn't confidently determine the temp code for these item(s) — please specify:\n${missingList}\n\n[Temp code table]\n${tempLines}\n\nE.g. "item 2 should be 900201", or "items 2-5 should be 900302" if several share the same code.`
+                        )});
                         window._renderGanttQaMessages();
                         input.focus();
                         return;
