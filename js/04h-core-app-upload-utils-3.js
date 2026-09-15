@@ -1499,6 +1499,43 @@
             return;
         }
 
+        // 📄 [2026-09-15 신규] 자재번호는 있지만 문서 타입 코드(P01 등)를 모른 채 말한 경우 —
+        //    위 sapOpenDocReq가 null이었을 때만 여기로 온다(순서 중요). 특정 문서를 열지 않고
+        //    먼저 그 자재의 "문서 데이터" 화면을 그대로 읽어와 보여준 뒤, 원하는 타입을 골라
+        //    다시 물어보라고 안내한다.
+        const sapListDocsMaterial = window._ganttQaExtractSapListDocsRequest ? window._ganttQaExtractSapListDocsRequest(question) : null;
+        if (sapListDocsMaterial) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 자재 "${sapListDocsMaterial}"의 문서 목록을 조회하는 중...`, `Looking up the document list for material "${sapListDocsMaterial}" in SAP...`), pending: true });
+            input.value = '';
+            window._renderGanttQaMessages();
+            let sapListReply;
+            try {
+                const res = await window._withTimeout(
+                    fetch('http://127.0.0.1:5000/sap-material-documents?material=' + encodeURIComponent(sapListDocsMaterial)),
+                    40000, window._t('SAP 문서 목록 조회 40초 시간 초과', 'Looking up the SAP document list timed out after 40s')
+                );
+                const data = await res.json();
+                if (data.ok) {
+                    const bodyStart = (data.text || '').indexOf('\n\n');
+                    const body = bodyStart !== -1 ? data.text.slice(bodyStart + 2) : (data.text || '');
+                    sapListReply = window._t(
+                        `📋 자재 "${sapListDocsMaterial}"의 "문서 데이터" 화면입니다:\n\n${body}\n\n특정 문서를 열려면 "SAP에서 ${sapListDocsMaterial} (문서타입) 문서 열어줘"처럼 문서 타입까지 같이 말씀해주세요.`,
+                        `📋 Here is the "Document data" screen for material "${sapListDocsMaterial}":\n\n${body}\n\nTo open a specific document, say "Open the (doc type) document for ${sapListDocsMaterial} in SAP" including the document type.`
+                    );
+                } else {
+                    sapListReply = '⚠️ ' + window._t('SAP 문서 목록 조회 실패: ', 'Failed to look up the SAP document list: ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                }
+            } catch (e) {
+                sapListReply = '⚠️ ' + window._t('SAP 문서 목록 조회 실패: ', 'Failed to look up the SAP document list: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: sapListReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
@@ -2189,7 +2226,9 @@
         var text = (question || '').trim();
         if (!text) return null;
         if (!/sap/i.test(text)) return null;
-        if (!/문서/.test(text)) return null;
+        // 💡 [2026-09-15] "문서"뿐 아니라 "파일"이라고만 말하는 경우도 실사용에서 확인됨
+        //    (예: "SAP에서 106188 품번 정보 및 파일 열어줘") — 둘 다 트리거하도록 확장.
+        if (!/(문서|파일)/.test(text)) return null;
         if (!/(열어|열기|다운로드|출력|보여|open)/i.test(text)) return null;
         // 💡 "문서 열기 가능해?"류 여부-질문까지 실행으로 오인하지 않도록(엑셀 내보내기 명령과 동일한
         //    가드 패턴 — 위 looksLikeQuestion 참고).
@@ -2203,6 +2242,25 @@
         //    (P01 등)는 숫자만으로 된 문자열이 아니라 이 정규식과 겹치지 않는다.
         var matM = text.match(/\b(\d{5,8})\b/);
         return { docType: m[1].toUpperCase(), material: matM ? matM[1] : null };
+    };
+
+    // 📄 [2026-09-15 신규] "SAP에서 106188 품번 정보 및 파일 열어줘"처럼 자재번호는 있지만
+    //    정확한 문서 타입 코드(P01 등)를 모른 채 말했을 때 — 위
+    //    _ganttQaExtractSapOpenDocRequest는 문서 타입 코드가 없으면 null을 반환하고 넘어가므로,
+    //    그 다음으로 이 함수가 "자재번호만으로 문서 목록을 보여달라"는 요청인지 판정한다.
+    //    (sendGanttQaMessage에서 open-doc 판정이 null일 때만 이 함수를 호출 — 순서 중요.)
+    window._ganttQaExtractSapListDocsRequest = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        if (!/sap/i.test(text)) return null;
+        if (!/(문서|파일)/.test(text)) return null;
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (looksLikeQuestion) return null;
+        // 문서 타입 코드(P01 등)가 이미 명시돼 있으면 이 함수의 대상이 아님(open 쪽에서 처리).
+        if (/\b[A-Za-z][0-9]{2}\b/.test(text)) return null;
+        var matM = text.match(/\b(\d{5,8})\b/);
+        if (!matM) return null;
+        return matM[1];
     };
 
     // 💡 실제 XLSX 조립 — _ganttQaTryHandleSapExportCommand 전용으로 분리(다른 곳에서도 "마지막

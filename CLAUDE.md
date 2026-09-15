@@ -358,6 +358,17 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
   문서 타입 코드 추출 — 이 회사 SAP 문서 타입 체계에 맞춘 것) + `sendGanttQaMessage`의 비동기
   블록(`/sap-open-document?type=` 호출, 50초 타임아웃) → `_run_sap_bridge`(kortek_backend.py,
   `/sap-fetch`와 공용 서브프로세스 헬퍼로 리팩터링됨) → `open_document`.
+  - **자재번호는 알지만 정확한 문서 타입 코드를 모르는 경우(2026-09-15 신규)**: "SAP에서
+    106188 문서/파일 열어줘"처럼 문서 타입 코드(P01 등)가 안 보이면
+    `_ganttQaExtractSapOpenDocRequest`가 null을 반환하고, 대신
+    `_ganttQaExtractSapListDocsRequest`가 자재번호만 뽑아 `/sap-material-documents?material=`
+    를 호출한다 → `sap_bridge_32.py`의 `fetch_material_documents(material)`이
+    `_navigate_to_material_document_tab`로 그 자재의 "문서 데이터" 탭까지 이동한 뒤, 특정
+    문서를 열지 않고 `fetch_current_screen()`과 똑같은 범용 덤프(`_sap_find_grid`/
+    `_sap_dump_fields`)로 화면을 그대로 읽어와 사람에게 목록으로 보여준다 — 이 화면 전용
+    파서를 새로 만들지 않고 기존 범용 덤프를 재사용한 것("특정 트랜잭션 전용 파서를 만들지
+    않는다"는 위 설계 원칙 그대로 적용). 사람이 그 목록을 보고 원하는 타입을 골라 다시
+    "OO 문서 열어줘"라고 말하면 위 `open_document` 경로로 이어진다.
   **⚠️⚠️ 실사용 디버깅으로 확정된 함정들 — 다음에 이 영역 건드릴 때 반드시 참고할 것(2026-09-14)**:
   1. **원본 트리 컨테이너 이름이 화면마다 다르다**: 어떤 문서는 `cntlCTL_FILES1`, 어떤 문서는
      `cntlCTL_FILES2`(SAP 서브스크린 버전 차이로 추정) — 그래서 `_find_by_id_substring`은

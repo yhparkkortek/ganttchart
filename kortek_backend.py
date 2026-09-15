@@ -1582,6 +1582,19 @@ def sap_open_document():
     return jsonify(data), status
 
 
+@app.route('/sap-material-documents', methods=['GET'])
+def sap_material_documents():
+    # 💡 [2026-09-15 신규] "SAP에서 106188 품번 정보 및 파일 열어줘"처럼 문서 타입(P01 등)을
+    #    모른 채 자재번호만 말했을 때 — /sap-open-document처럼 특정 문서를 바로 열지 않고,
+    #    먼저 "문서 데이터" 탭에 어떤 문서들이 있는지 목록만 읽어와 보여준다. 사람이 그 목록을
+    #    보고 원하는 타입을 골라 "OO 문서 열어줘"라고 다시 말하면 /sap-open-document로 연다.
+    material = (request.args.get('material') or '').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-material-documents?material=106188'}), 400
+    data, status = _run_sap_bridge(['fetch_material_documents', material], 30, 'SAP 자재 문서 목록 조회')
+    return jsonify(data), status
+
+
 # ══════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     print("=" * 58)

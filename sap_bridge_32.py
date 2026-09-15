@@ -287,6 +287,40 @@ def _navigate_to_material_document_tab(session, wnd, material):
     time.sleep(0.4)
 
 
+def fetch_material_documents(material):
+    """자재번호만 주어지고 문서 타입(P01 등)은 모를 때 — 그 자재의 "문서 데이터" 탭까지
+    이동한 뒤, 특정 문서를 열지 않고 화면에 보이는 문서 목록을 fetch_current_screen()과
+    똑같은 범용 덤프 로직(_sap_find_grid/_sap_dump_fields)으로 그대로 읽어온다(2026-09-15
+    신규). "문서 데이터" 탭의 문서 목록은 GuiShell 그리드가 아니라 classic GuiTableControl
+    이라 _sap_find_grid는 못 찾고 _sap_dump_fields 경로를 타는데, 이 함수가 이미
+    GuiTextField/GuiCTextField 타입 텍스트를 traversal 순서대로 모으므로 각 문서 행의
+    타입/설명 텍스트가 그대로 딸려온다 — 이 화면 전용 파서를 새로 만들지 않고 기존 범용
+    덤프를 재사용한 것(CLAUDE.md의 "특정 트랜잭션 전용 파서를 만들지 않는다" 설계 원칙을
+    그대로 따름). 사람이 이 덤프를 보고 원하는 문서 타입을 골라 다시 "OO 문서 열어줘"라고
+    말하면 open_document()가 그 타입을 찾아 연다."""
+    if not material:
+        raise RuntimeError('자재번호를 지정해주세요.')
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_material_document_tab(session, wnd, material)
+
+    grid = _sap_find_grid(wnd)
+    if grid is not None:
+        body = _sap_dump_grid(grid)
+        source = 'grid'
+    else:
+        body = '\n'.join(_sap_dump_fields(wnd))
+        source = 'fields'
+
+    if not body:
+        return {'ok': False, 'error': f'자재 "{material}"의 "문서 데이터" 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호가 올바른지 확인해주세요.'}
+
+    header = f'[SAP MM03 문서 데이터: 자재 {material}]\n'
+    text = header + '\n' + body
+    return {'ok': True, 'source': source, 'material': material, 'text': text}
+
+
 def open_document(doc_type, material=None):
     """MM03에서 이미 열려 있는(또는 material이 주어지면 직접 조회해서 여는) 자재의
     "문서 데이터" 탭에서, 지정한 문서 타입(예: 'P01')과 일치하는 행을 찾아 열고, 그 문서의
@@ -405,6 +439,9 @@ def main():
             doc_type = sys.argv[2] if len(sys.argv) > 2 else ''
             material = sys.argv[3] if len(sys.argv) > 3 else None
             result = open_document(doc_type, material)
+        elif action == 'fetch_material_documents':
+            material = sys.argv[2] if len(sys.argv) > 2 else ''
+            result = fetch_material_documents(material)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))
