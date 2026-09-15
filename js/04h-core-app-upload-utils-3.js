@@ -115,6 +115,22 @@
     //    트리거가 동시에 매치되면 "역전개/사용처"를 우선한다(더 구체적인 요청으로 간주).
     //    아무 키워드도 없거나 자재번호를 못 찾으면 기존처럼 "지금 화면"을 그대로 읽는다
     //    (하위호환 — question을 안 넘기고 호출해도 동일).
+    // 💡 [2026-09-15 버그수정] "104446 사용처 조회해줘"처럼 "SAP"란 단어 없이 사용처/역전개/BOM +
+    //    자재번호만 말하면, 아래 메인 AI 호출 경로(`sendGanttQaMessage`)의 게이트가
+    //    `/sap/i.test(question)`만 보고 있어서 이 함수(`_aiFetchSapContext`) 자체가 아예 호출되지
+    //    않았다 — 그 결과 안의 사용처/BOM 감지 로직까지 도달을 못 해, AI가 SAP를 전혀 조회하지
+    //    않고 간트 데이터에서만 자재번호를 찾다가 "데이터에서 확인되지 않습니다"라고 답하는 실사용
+    //    버그가 있었다(위 "💬 AI 문답" 절의 "당연히 될 줄 알았는데 안 된다" 패턴과 동일 — 사용자는
+    //    "SAP"를 붙일 필요가 있는 줄 몰랐음). 이 함수 내부(바로 아래)의 사용처/BOM 감지 조건과
+    //    동일한 조건을 게이트에도 적용해, "SAP"를 굳이 말하지 않아도 인식되게 한다.
+    window._questionMentionsSapIntent = function(question) {
+        if (!question) return false;
+        if (/sap/i.test(question)) return true;
+        if (/(역전개|사용처)/.test(question) && /\b\d{5,8}\b/.test(question)) return true;
+        if (/bom/i.test(question) && /\b\d{5,8}\b/.test(question)) return true;
+        return false;
+    };
+
     window._aiFetchSapContext = async function(question) {
         try {
             const whereUsedMatch = question && /(역전개|사용처)/.test(question) ? question.match(/\b(\d{5,8})\b/) : null;
@@ -1873,11 +1889,13 @@
             }
         }
 
-        // 🏭 [2026-09-14 신규] 질문에 "SAP"가 언급되면 AI가 판단할 필요 없이 여기서 바로 로컬
-        //    백엔드에 "지금 SAP GUI 화면"을 물어봐서 프롬프트에 실어 보낸다(질문마다 항상 조회하면
-        //    느려지고 불필요하므로, 언급이 있을 때만 — CLAUDE.md "SAP/TIPR" 결정 사항 참고).
+        // 🏭 [2026-09-14 신규, 2026-09-15 게이트 확장] 질문에 "SAP"가 언급되거나(기존) "사용처/
+        //    역전개/BOM"+자재번호만 언급돼도(신규, 위 _questionMentionsSapIntent 주석 참고) AI가
+        //    판단할 필요 없이 여기서 바로 로컬 백엔드에 "지금 SAP GUI 화면"을 물어봐서 프롬프트에
+        //    실어 보낸다(질문마다 항상 조회하면 느려지고 불필요하므로, 언급이 있을 때만 — CLAUDE.md
+        //    "SAP/TIPR" 결정 사항 참고).
         let sapText = null;
-        if (/sap/i.test(question)) {
+        if (window._questionMentionsSapIntent(question)) {
             const pendingIdx2 = window._ganttQaHistory.length - 1;
             if (window._ganttQaHistory[pendingIdx2]) {
                 window._ganttQaHistory[pendingIdx2].text = '⏳ ' + window._t('SAP 화면 조회 중...', 'Reading SAP screen...');
