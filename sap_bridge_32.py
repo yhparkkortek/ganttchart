@@ -195,8 +195,11 @@ def fetch_current_screen():
 
 
 # ── "BOM 조회" (ZPP038) 전용 헬퍼 ──────────────────────────────────────
-def _navigate_to_bom_screen(session, wnd, material, plant='1000'):
-    """ZPP038("BOM 전개(Multiple Explosion)")로 이동해 지정한 자재/플랜트의 BOM을 조회한다.
+def _navigate_to_bom_screen(session, wnd, materials, plant='1000'):
+    """ZPP038("BOM 전개(Multiple Explosion)")로 이동해 지정한 자재(들)/플랜트의 BOM을
+    조회한다. `materials`가 리스트/튜플이면(2026-09-15 신규 — "BOM 복수 열람.vbs" 매크로로
+    확보) MATNR 필드의 "복수 선택" 팝업에 여러 자재를 채워 넣고, 문자열 하나면 기존처럼
+    MATNR-LOW에 직접 입력한다.
     2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 얻은 정확한 컨트롤을 재현한 것 —
     매크로에는 이 뒤로 "레이아웃 불러오기"(`&MB_VARIANT`/`&LOAD`)와 SAP 자체 엑셀 내보내기
     (`&MB_EXPORT`/`&XXL`, OLE로 Excel을 직접 여는 SAP 표준 기능)가 이어지는데, 그건 이
@@ -204,17 +207,18 @@ def _navigate_to_bom_screen(session, wnd, material, plant='1000'):
     특정 트랜잭션 전용 파서를 안 만드는 원칙)와 겹치는 기능이라 그대로 재현하지 않는다 —
     실행(F8)까지만 자동화하고, 결과 화면은 fetch_current_screen()과 동일한 범용 덤프
     (_sap_find_grid/_sap_dump_fields)로 읽는다.
-    ⚠️ 화면 어디에 있든 `MATNR-LOW`/`WERKS` 문자열이 포함된 컨트롤을 찾는 방식이라(절대경로
-    대신 이 프로젝트의 기존 관례 그대로), 다른 선택화면 필드와 ID가 겹치면 잘못될 수 있다 —
-    현재까지는 문제 없이 동작했다(실사용 확인)."""
+    ⚠️ 화면 어디에 있든 `MATNR-LOW`/`WERKS`/`%_MATNR_%_APP_%-VALU_PUSH` 문자열이 포함된
+    컨트롤을 찾는 방식이라(절대경로 대신 이 프로젝트의 기존 관례 그대로), 다른 선택화면
+    필드와 ID가 겹치면 잘못될 수 있다 — 현재까지는 문제 없이 동작했다(실사용 확인).
+    ⚠️⚠️ ZDMSR004의 "자재코드 복수 선택" 팝업(필드명 `S_MATNR`)은 확인 버튼을 `btn[24]`,
+    `btn[8]` 두 번 눌러야 했는데, 이 ZPP038의 팝업(필드명 `MATNR`, 접두사에 `S_` 없음 —
+    SELECT-OPTIONS가 아니라 단순 PARAMETERS 필드로 추정)은 `btn[8]` 한 번만으로 충분했다
+    (매크로로 확인) — 겉보기엔 같은 SAP 표준 SAPLALDB 팝업이라도 호출 맥락에 따라 필요한
+    버튼 수가 다를 수 있다는 뜻이니, 새로운 트랜잭션의 복수 선택 팝업을 자동화할 때 이
+    버튼 개수를 당연하게 가정하지 말고 매번 매크로로 확인할 것."""
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nZPP038'
     wnd.sendVKey(0)
     time.sleep(0.6)
-
-    matnr_field = _find_by_id_substring(wnd, 'MATNR-LOW')
-    if matnr_field is None:
-        raise RuntimeError('ZPP038 화면에서 자재번호 입력 필드를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다(트랜잭션 권한이 없을 가능성도 있음).')
-    matnr_field.text = str(material)
 
     plant_field = _find_by_id_substring(wnd, 'WERKS')
     if plant_field is not None:
@@ -223,6 +227,49 @@ def _navigate_to_bom_screen(session, wnd, material, plant='1000'):
         except Exception:
             pass  # 플랜트 필드가 없거나 값을 못 넣어도 자재번호만으로 실행을 시도한다.
 
+    is_multi = isinstance(materials, (list, tuple))
+    if is_multi:
+        multi_btn = _find_by_id_substring(wnd, '%_MATNR_%_APP_%-VALU_PUSH')
+        if multi_btn is None:
+            raise RuntimeError('ZPP038 화면에서 자재코드 "복수 선택" 버튼을 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다.')
+        multi_btn.press()
+        time.sleep(0.8)
+        try:
+            table = session.findById(_SAP_MULTI_SELECT_POPUP_TABLE)  # 같은 SAP 표준 팝업 구조(SAPLALDB) 재사용
+        except Exception:
+            raise RuntimeError('"자재 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
+        try:
+            visible_rows = table.VisibleRowCount or 7
+        except Exception:
+            visible_rows = 7
+        idx = 0
+        while idx < len(materials):
+            if idx > 0:
+                try:
+                    table.FirstVisibleRow = idx
+                    time.sleep(0.3)
+                except Exception:
+                    pass
+            batch = materials[idx: idx + visible_rows]
+            for row_offset, mat in enumerate(batch):
+                cell_id = f"{_SAP_MULTI_SELECT_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
+                try:
+                    cell = session.findById(cell_id)
+                    cell.text = str(mat)
+                except Exception as e:
+                    raise RuntimeError(f'"자재 복수 선택" 팝업에 {idx + row_offset + 1}번째 자재("{mat}")를 입력하지 못했습니다: {e}')
+            idx += len(batch)
+        try:
+            session.findById('wnd[1]/tbar[0]/btn[8]').press()  # 확인 — 이 팝업은 한 번만 눌러도 됨(위 주석 참고)
+        except Exception as e:
+            raise RuntimeError(f'"자재 복수 선택" 팝업을 확인하는 중 오류가 발생했습니다: {e}')
+        time.sleep(0.5)
+    else:
+        matnr_field = _find_by_id_substring(wnd, 'MATNR-LOW')
+        if matnr_field is None:
+            raise RuntimeError('ZPP038 화면에서 자재번호 입력 필드를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다(트랜잭션 권한이 없을 가능성도 있음).')
+        matnr_field.text = str(materials)
+
     try:
         session.findById('wnd[0]/tbar[1]/btn[8]').press()  # 실행(F8)
     except Exception as e:
@@ -230,17 +277,18 @@ def _navigate_to_bom_screen(session, wnd, material, plant='1000'):
     time.sleep(1.5)
 
 
-def fetch_bom(material, plant='1000'):
-    """자재의 BOM(ZPP038, "BOM 전개")을 조회해 화면을 그대로 텍스트로 읽어온다. 결과 화면이
-    ALV 그리드(GuiShell/GridView)면 그대로 표로, 아니면(예: 트리 구조라면 아직 지원 안 되는
-    형태일 수 있음 — 실사용 검증 필요) 일반 필드 덤프로 폴백한다."""
-    if not material:
+def fetch_bom(materials, plant='1000'):
+    """자재 1개 또는 여러 개의 BOM(ZPP038, "BOM 전개")을 조회해 화면을 그대로 텍스트로
+    읽어온다. `materials`는 문자열(단일) 또는 리스트/튜플(복수, 2026-09-15 신규). 결과
+    화면이 ALV 그리드(GuiShell/GridView)면 그대로 표로, 아니면(예: 트리 구조라면 아직
+    지원 안 되는 형태일 수 있음 — 실사용 검증 필요) 일반 필드 덤프로 폴백한다."""
+    if not materials:
         raise RuntimeError('자재번호를 지정해주세요.')
     plant = (plant or '1000').strip()
 
     session = _get_sap_session()
     wnd = session.findById('wnd[0]')
-    _navigate_to_bom_screen(session, wnd, material, plant)
+    _navigate_to_bom_screen(session, wnd, materials, plant)
 
     grid = _sap_find_grid(wnd)
     if grid is not None:
@@ -250,12 +298,14 @@ def fetch_bom(material, plant='1000'):
         body = '\n'.join(_sap_dump_fields(wnd))
         source = 'fields'
 
-    if not body:
-        return {'ok': False, 'error': f'자재 "{material}"의 BOM 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요(화면이 ALV 그리드가 아닌 트리 구조라 아직 지원하지 않는 형태일 가능성도 있습니다).'}
+    mat_label = ', '.join(materials) if isinstance(materials, (list, tuple)) else str(materials)
 
-    header = f'[SAP BOM 전개(ZPP038): 자재 {material}, 플랜트 {plant}]\n'
+    if not body:
+        return {'ok': False, 'error': f'자재 "{mat_label}"의 BOM 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요(화면이 ALV 그리드가 아닌 트리 구조라 아직 지원하지 않는 형태일 가능성도 있습니다).'}
+
+    header = f'[SAP BOM 전개(ZPP038): 자재 {mat_label}, 플랜트 {plant}]\n'
     text = header + '\n' + body
-    return {'ok': True, 'source': source, 'material': material, 'text': text}
+    return {'ok': True, 'source': source, 'materials': materials, 'text': text}
 
 
 # ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
@@ -668,7 +718,13 @@ def open_document(doc_type, material=None):
 # 확보했고, **폴더 선택 창이 전혀 뜨지 않았다**(다운로드 경로가 ABAP 리포트 내부에
 # `C:\SAP_DMS\`로 고정돼 있는 것으로 추정) — 그래서 이 함수는 순수 SAP GUI 컨트롤 조작만으로
 # 끝까지 완결된다(네이티브 Windows 다이얼로그 처리가 필요 없음).
-_ZDMSR004_POPUP_TABLE = "wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE"
+# SAP 표준 "복수 선택" 팝업(함수그룹 SAPLALDB)의 "단일 값 선택" 탭 입력 표 — 여러 트랜잭션의
+# SELECT-OPTIONS/PARAMETERS "복수 선택" 버튼이 공통으로 이 구조를 쓴다(2026-09-15 실사용
+# 매크로 2건 — ZDMSR004의 S_MATNR 필드, ZPP038의 MATNR 필드 — 으로 동일 구조 확인). 새
+# 트랜잭션에서도 재사용 가능성이 높지만, 확인 버튼 개수는 호출 맥락마다 다를 수 있었다
+# (`_navigate_to_bom_screen`의 관련 주석 참고) — 새로 쓸 때 버튼 동작까지 자동으로 같다고
+# 가정하지 말 것.
+_SAP_MULTI_SELECT_POPUP_TABLE = "wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE"
 
 
 def download_documents_batch(materials, doc_type='P01'):
@@ -697,7 +753,7 @@ def download_documents_batch(materials, doc_type='P01'):
     # ⚠️ 실사용 매크로에서는 7개까지만 확인됐고(한 화면에 다 보임) 스크롤 자체는 검증 안 됨 —
     # 8개 이상 넣을 때 문제가 있으면 이 부분을 의심할 것.
     try:
-        table = session.findById(_ZDMSR004_POPUP_TABLE)
+        table = session.findById(_SAP_MULTI_SELECT_POPUP_TABLE)
     except Exception:
         raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
     try:
@@ -714,7 +770,7 @@ def download_documents_batch(materials, doc_type='P01'):
                 pass
         batch = materials[idx: idx + visible_rows]
         for row_offset, mat in enumerate(batch):
-            cell_id = f"{_ZDMSR004_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
+            cell_id = f"{_SAP_MULTI_SELECT_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
             try:
                 cell = session.findById(cell_id)
                 cell.text = mat
@@ -795,9 +851,11 @@ def main():
             materials = [m.strip() for m in materials_str.split(',') if m.strip()]
             result = download_documents_batch(materials, doc_type)
         elif action == 'fetch_bom':
-            material = sys.argv[2] if len(sys.argv) > 2 else ''
+            materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
-            result = fetch_bom(material, plant)
+            materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
+            materials_param = materials_list if len(materials_list) > 1 else (materials_list[0] if materials_list else '')
+            result = fetch_bom(materials_param, plant)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))

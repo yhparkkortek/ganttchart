@@ -1620,11 +1620,16 @@ def sap_bom():
     #    그 자재의 BOM 화면을 열어둘 필요 없이 ZPP038("BOM 전개")로 직접 이동해 조회한다.
     #    실제 컨트롤 조작은 sap_bridge_32.py의 fetch_bom()/_navigate_to_bom_screen()에 있다
     #    (2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 확보한 정확한 ID 재현).
+    #    material 파라미터에 쉼표로 여러 자재를 같이 주면("SAP에서 502572,502573,502574 BOM
+    #    보여줘"처럼 질문에 자재번호가 2개 이상이면) ZPP038의 자재코드 "복수 선택" 팝업으로
+    #    한 번에 여러 BOM을 조회한다("BOM 복수 열람.vbs" 매크로로 확보, 2026-09-15).
     material = (request.args.get('material') or '').strip()
     plant = (request.args.get('plant') or '1000').strip()
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-bom?material=502572'}), 400
-    data, status = _run_sap_bridge(['fetch_bom', material, plant], 30, 'SAP BOM 조회')
+    material_count = len([m for m in material.split(',') if m.strip()])
+    timeout = 30 if material_count <= 1 else min(90, 30 + 10 * material_count)
+    data, status = _run_sap_bridge(['fetch_bom', material, plant], timeout, 'SAP BOM 조회')
     return jsonify(data), status
 
 

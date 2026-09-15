@@ -101,23 +101,27 @@
     //    사용자가 평소처럼 SAP GUI에 로그인해서 원하는 화면을 열어둔 상태에서만 동작한다.
     //    실패해도(백엔드 꺼짐/SAP GUI 안 열림 등) null을 반환해 AI 문답 자체는 계속 진행되고,
     //    프롬프트의 "🏭 SAP 조회 규칙"이 그 경우 AI가 "가져오지 못했다"고 솔직히 답하게 지시한다.
-    // 💡 [2026-09-15 신규] question 인자를 받아 "BOM"과 자재번호(5~8자리 숫자)가 같이 언급되면
-    //    그냥 "지금 SAP GUI 화면"을 읽는 대신 그 자재의 BOM 화면(ZPP038)으로 직접 찾아가서
-    //    읽어온다(sap_bridge_32.py의 _navigate_to_bom_screen — 실사용 SAP GUI "기록 및 재생"
-    //    매크로로 확보한 정확한 컨트롤) — 사람이 미리 그 화면을 열어둘 필요가 없어진다(MM03
-    //    문서 열기의 자재번호 직접조회와 같은 설계). "BOM" 언급이 없거나 자재번호를 못 찾으면
-    //    기존처럼 "지금 화면"을 그대로 읽는다(하위호환 — question을 안 넘기고 호출해도 동일).
+    // 💡 [2026-09-15 신규, 같은 날 복수 자재 지원 추가] question 인자를 받아 "BOM"과 자재번호
+    //    (5~8자리 숫자)가 같이 언급되면 그냥 "지금 SAP GUI 화면"을 읽는 대신 그 자재의 BOM
+    //    화면(ZPP038)으로 직접 찾아가서 읽어온다(sap_bridge_32.py의 _navigate_to_bom_screen —
+    //    실사용 SAP GUI "기록 및 재생" 매크로로 확보한 정확한 컨트롤) — 사람이 미리 그 화면을
+    //    열어둘 필요가 없어진다(MM03 문서 열기의 자재번호 직접조회와 같은 설계). 자재번호가
+    //    2개 이상 언급되면("SAP에서 502572,502573,502574 BOM 보여줘") 전부 모아서 같이
+    //    보내 ZPP038의 "복수 선택" 팝업으로 한 번에 조회한다("BOM 복수 열람.vbs" 매크로로
+    //    확보). "BOM" 언급이 없거나 자재번호를 못 찾으면 기존처럼 "지금 화면"을 그대로
+    //    읽는다(하위호환 — question을 안 넘기고 호출해도 동일).
     window._aiFetchSapContext = async function(question) {
         try {
-            const bomMatch = question && /bom/i.test(question) ? question.match(/\b(\d{5,8})\b/) : null;
+            const bomNums = question && /bom/i.test(question) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
+            const bomMatch = bomNums.length > 0;
             const url = bomMatch
-                ? 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(bomMatch[1])
+                ? 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(bomNums.join(','))
                 : 'http://127.0.0.1:5000/sap-fetch';
-            const timeoutMs = bomMatch ? 30000 : 15000;
+            const timeoutMs = bomMatch ? Math.min(90000, 30000 + 10000 * bomNums.length) : 15000;
             const res = await window._withTimeout(
                 fetch(url), timeoutMs,
                 bomMatch
-                    ? window._t('SAP BOM 조회 30초 시간 초과', 'SAP BOM lookup timed out after 30s')
+                    ? window._t('SAP BOM 조회 시간 초과', 'SAP BOM lookup timed out')
                     : window._t('SAP 조회 15초 시간 초과', 'SAP lookup timed out after 15s')
             );
             const data = await res.json();

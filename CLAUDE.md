@@ -387,6 +387,18 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
   컨트롤일 가능성도 있음)라면 `_sap_find_grid`가 못 찾아서 `_sap_dump_fields` 폴백도 제대로 못
   읽을 수 있다 — 실사용 테스트로 확인 필요, 실패하면 이 부분을 의심하고 화면 구조(Tree인지
   GridView인지)부터 확인할 것.
+  - **복수 자재 BOM("SAP에서 502572,502573,502574 BOM 보여줘", 2026-09-15 신규 —
+    "BOM 복수 열람.vbs" 매크로로 확보)**: 질문에 자재번호가 2개 이상 언급되면
+    `_aiFetchSapContext`가 전부 모아 `material=502572,502573,502574`처럼 쉼표로 이어
+    `/sap-bom`에 같이 보낸다. `fetch_bom`/`_navigate_to_bom_screen`이 리스트를 받으면
+    MATNR 필드 옆의 "복수 선택" 버튼(`btn%_MATNR_%_APP_%-VALU_PUSH`)을 눌러 SAP 표준
+    "복수 선택" 팝업(`_SAP_MULTI_SELECT_POPUP_TABLE` — ZDMSR004의 자재코드 팝업과 같은
+    구조, `download_documents_batch`와 로직 공유)에 값을 채운다. **⚠️⚠️ 확인 버튼 개수가
+    ZDMSR004와 다르다**: ZDMSR004의 `S_MATNR`(SELECT-OPTIONS) 팝업은 `btn[24]`→`btn[8]`
+    두 번 눌러야 했는데, 이 ZPP038의 `MATNR`(PARAMETERS로 추정, `S_` 접두사 없음) 팝업은
+    `btn[8]` 한 번만으로 충분했다(매크로로 확인) — 같은 SAP 표준 팝업이라도 호출 맥락마다
+    필요한 버튼 수가 다를 수 있다는 뜻이니, 새 트랜잭션의 "복수 선택" 팝업을 자동화할 때
+    이 버튼 동작을 당연히 같다고 가정하지 말고 매번 매크로로 확인할 것.
 - **문서 열기("SAP에서 P01 문서 열어줘")**: `sap_bridge_32.py`의 `open_document(doc_type)` —
   MM03에서 이미 열어둔 자재의 "문서 데이터" 탭(`tblSAPLCV140SUB_DOC` 테이블 컨트롤, 화면 어디에
   있든 `_find_by_id_substring`로 재귀 탐색해 절대경로에 안 묶이게 함)에서 doc_type과 텍스트가
