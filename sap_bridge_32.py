@@ -1564,17 +1564,111 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
         raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
 
     print_po_via_zmm018(po_number, purchasing_org, plant)
-    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. 발주서 PDF를 출력했습니다.'}
+    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. 발주서 PDF를 저장하고 열었습니다.'}
+
+
+_PO_PDF_OUT_DIR = os.path.join('C:\\SAP_DMS', '구매오더')
+
+
+def _sap_frontend_window():
+    """pywinauto로 SAP GUI 프런트엔드 창을 찾는다(class_name이 항상 'SAP_FRONTEND_SESSION'
+    임을 실사용 진단으로 확인함) — 아래 `_save_po_pdf_to_file`가 SAP GUI Scripting이 닿지
+    않는 임베드 PDF 뷰어를 다루기 위해 사용."""
+    from pywinauto import Desktop
+    for w in Desktop(backend='uia').windows():
+        try:
+            if w.element_info.class_name == 'SAP_FRONTEND_SESSION':
+                return w
+        except Exception:
+            continue
+    return None
+
+
+def _save_po_pdf_to_file(save_path):
+    """**2026-09-15 신규, 실사용 화면 녹화로 필요성이 확인됨 — SAP GUI Scripting이 아닌
+    별도 계층(Windows UI Automation, `pywinauto`)을 쓴다.** "발주서출력"을 누르면 뜨는
+    PDF 미리보기는 SAP GUI 안에 임베드된 순수 HTML/PDF 렌더링 콘텐츠라(`wnd[1]/usr/
+    cntlHTML/shellcont/shell`의 `SAP.HTMLControl.1` — 라이브 진단으로 그 안쪽엔 더 이상
+    자식 컨트롤이 없음을 확인) `session.findById`로 그 안의 저장 아이콘을 직접 클릭할
+    방법이 없다. 사용자가 보내준 화면 녹화를 보면: 그 저장 아이콘을 누르면 네이티브
+    Windows "사본 저장..." 다이얼로그가 뜨고, 거기서 파일명(=오더번호)·형식(PDF)을
+    지정해야 비로소 실제 파일이 만들어진다 — 이 네이티브 다이얼로그도 SAP GUI
+    Scripting으로는 못 잡는 영역(SAP 문서 열기 기능에서 이미 겪은 것과 같은 제약)이라,
+    Ctrl+S 표준 단축키를 SAP 창에 직접 보내 다이얼로그를 띄운 뒤, 그 다이얼로그의
+    파일명 입력란에 전체 경로를 직접 입력하는 방식으로 자동화한다.
+    ⚠️⚠️ **이 함수는 아직 라이브 검증 전이다** — Claude Code 세션이 Bash로 직접
+    "키보드 입력을 다른 창에 보내는" 동작(SAP GUI Scripting보다 훨씬 넓은 범위의 OS
+    자동화)을 실행하려 하자 harness의 자동 모드 분류기가 차단해서, 이 세션 안에서는
+    테스트를 끝까지 하지 못했다(위 `confirm_save_po`가 harness에 막혔던 것과 같은 종류의
+    안전장치 — 우회 시도하지 않음). 실제 앱(브라우저 → kortek_backend.py → 이 서브프로세스)
+    경로는 Claude Code Bash를 거치지 않으므로 이 차단과 무관하다. 문제가 생기면 이 함수
+    부터 의심하고, 필요하면 사용자가 직접 `py -3-32 sap_bridge_32.py print_po_via_zmm018
+    <오더번호>`를 자기 터미널에서 실행해 재현/디버깅할 것(그 경우엔 harness 차단이
+    없으므로 실제 동작을 볼 수 있음)."""
+    from pywinauto.keyboard import send_keys
+    from pywinauto import Desktop
+
+    sap_win = _sap_frontend_window()
+    if sap_win is None:
+        raise RuntimeError('SAP GUI 창을 찾지 못해 PDF 저장 다이얼로그를 띄울 수 없습니다.')
+
+    sap_win.set_focus()
+    time.sleep(0.5)
+    send_keys('^s')  # Ctrl+S — 임베드된 PDF 뷰어의 표준 "다른 이름으로 저장" 단축키
+    time.sleep(1.5)
+
+    save_dlg = None
+    for _ in range(10):
+        for w in Desktop(backend='uia').windows():
+            try:
+                title = w.window_text()
+            except Exception:
+                continue
+            if '사본 저장' in title or 'Save' in title:
+                save_dlg = w
+                break
+        if save_dlg is not None:
+            break
+        time.sleep(0.5)
+    if save_dlg is None:
+        raise RuntimeError('PDF 저장("사본 저장") 다이얼로그가 뜨지 않았습니다 — PDF 미리보기가 열려있지 않거나, Ctrl+S가 전달되지 않았을 수 있습니다.')
+
+    save_dlg.set_focus()
+    time.sleep(0.3)
+    try:
+        edit = save_dlg.child_window(class_name='Edit', found_index=0)
+        edit.set_focus()
+        edit.set_edit_text(save_path)
+    except Exception as e:
+        raise RuntimeError(f'저장 다이얼로그의 파일명 입력란을 찾지 못했습니다: {e}')
+    time.sleep(0.3)
+    send_keys('{ENTER}')
+    time.sleep(1.0)
+
+    # "파일이 이미 있습니다 — 덮어쓰시겠습니까?" 같은 확인창이 뜰 수 있음 — 뜨면 Enter로 승인.
+    for w in Desktop(backend='uia').windows():
+        try:
+            title = w.window_text()
+        except Exception:
+            continue
+        if '확인' in title or 'Confirm' in title:
+            send_keys('{ENTER}')
+            break
+    time.sleep(0.5)
+
+    if not os.path.exists(save_path):
+        raise RuntimeError(f'저장 다이얼로그는 처리했지만 파일이 생성되지 않았습니다({save_path}) — 다이얼로그 상태를 SAP 화면에서 직접 확인해주세요.')
+    return save_path
 
 
 def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
-    """ZMM018에서 이미 존재하는 구매오더번호로 발주서 PDF를 출력한다. `confirm_save_po`가
-    저장 직후 자동으로 호출하지만(오더번호를 그 자리에서 방금 확보해서), 그와 별개로
-    **이미 저장된(사람이 SAP에서 직접 저장한 경우 포함) 오더번호를 알고 있을 때 출력만
-    다시 시도**하는 용도로도 쓸 수 있게 독립 함수로 분리했다(2026-09-15 — 실사용
-    테스트에서 저장은 harness 정책상 사람이 SAP 화면에서 직접 눌러야 했고, 그 뒤 출력만
-    이 함수로 이어서 실행함). 저장(SAVE)이 전혀 없는 순수 조회/출력 동작이라 저장보다
-    안전하다."""
+    """ZMM018에서 이미 존재하는 구매오더번호로 발주서 PDF를 출력하고, 실제 파일로 저장한
+    뒤 연결된 프로그램(Acrobat 등)으로 연다. `confirm_save_po`가 저장 직후 자동으로
+    호출하지만(오더번호를 그 자리에서 방금 확보해서), 그와 별개로 **이미 저장된(사람이
+    SAP에서 직접 저장한 경우 포함) 오더번호를 알고 있을 때 출력만 다시 시도**하는 용도로도
+    쓸 수 있게 독립 함수로 분리했다(2026-09-15 — 실사용 테스트에서 저장은 harness 정책상
+    사람이 SAP 화면에서 직접 눌러야 했고, 그 뒤 출력만 이 함수로 이어서 실행함). 저장
+    (SAVE)이 전혀 없는 순수 조회/출력 동작이라 저장보다 안전하다."""
     session = _get_sap_session()
     try:
         session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM018'
@@ -1598,12 +1692,24 @@ def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
             out_grid = _find_by_id_substring(session.findById('wnd[0]'), 'shellcont/shell', require_type='GuiShell')
         out_grid.currentCellColumn = ''
         out_grid.selectedRows = '0'
-        session.findById('wnd[0]/tbar[1]/btn[13]').press()  # 출력 — 매크로에서 확인된 인덱스
-        time.sleep(1.5)
+        session.findById('wnd[0]/tbar[1]/btn[13]').press()  # 출력(미리보기 표시) — 매크로에서 확인된 인덱스
+        time.sleep(2.0)
     except Exception as e:
-        raise RuntimeError(f'구매오더("{po_number}") 발주서 PDF 출력(ZMM018) 중 오류가 발생했습니다: {e} — ZMM018에서 오더번호 "{po_number}"로 직접 출력해주세요.')
+        raise RuntimeError(f'구매오더("{po_number}") 발주서 미리보기 표시(ZMM018) 중 오류가 발생했습니다: {e} — ZMM018에서 오더번호 "{po_number}"로 직접 출력해주세요.')
 
-    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"의 발주서 PDF를 출력했습니다.'}
+    try:
+        os.makedirs(_PO_PDF_OUT_DIR, exist_ok=True)
+        pdf_path = os.path.join(_PO_PDF_OUT_DIR, f'{po_number}.pdf')
+        _save_po_pdf_to_file(pdf_path)
+    except Exception as e:
+        raise RuntimeError(f'발주서 미리보기는 정상 표시됐지만, PDF 파일로 저장하는 중 오류가 발생했습니다: {e} — 지금 열려있는 미리보기에서 💾 저장 아이콘을 직접 눌러 "{po_number}.pdf"로 저장해주세요.')
+
+    try:
+        os.startfile(pdf_path)
+    except Exception:
+        pass
+
+    return {'ok': True, 'poNumber': po_number, 'pdfPath': pdf_path, 'message': f'구매오더 "{po_number}"의 발주서 PDF를 "{pdf_path}"로 저장하고 열었습니다.'}
 
 
 def main():

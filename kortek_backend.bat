@@ -44,16 +44,16 @@ if errorlevel 1 (
 :: win32com으로 SAP GUI를 절대 찾을 수 없었다(실사용 진단으로 확정) — 그래서 SAP 조회만
 :: sap_bridge_32.py를 통해 별도 32비트 Python 서브프로세스로 실행한다(kortek_backend.py의
 :: /sap-fetch 라우트 참고). 여기서 그 32비트 런타임 + pywin32를 최초 1회만 자동 설치한다.
-py -3-32 -c "import win32com.client" > nul 2>&1
+py -3-32 -c "import win32com.client, pywinauto" > nul 2>&1
 if errorlevel 1 (
-    echo  [SAP] 32비트 Python + pywin32 설치 중... (AI 문답의 SAP 조회 기능에 필요, 최초 1회만 실행되며 몇 분 걸릴 수 있습니다)
+    echo  [SAP] 32비트 Python + pywin32/pywinauto 설치 중... (AI 문답의 SAP 조회/구매오더 기능에 필요, 최초 1회만 실행되며 몇 분 걸릴 수 있습니다)
     py install 3-32 > nul 2>&1
-    py -3-32 -m pip install pywin32 --quiet
+    py -3-32 -m pip install pywin32 pywinauto --quiet
     if errorlevel 1 (
-        echo  [안내] 32비트 Python/pywin32 설치 실패 — SAP 조회 기능만 비활성화된 채로 나머지는 정상 실행됩니다.
-        echo         수동 설치: py install 3-32  그리고  py -3-32 -m pip install pywin32
+        echo  [안내] 32비트 Python/pywin32/pywinauto 설치 실패 — SAP 조회 기능만 비활성화된 채로 나머지는 정상 실행됩니다.
+        echo         수동 설치: py install 3-32  그리고  py -3-32 -m pip install pywin32 pywinauto
     ) else (
-        echo  [SAP] 32비트 Python + pywin32 설치 완료
+        echo  [SAP] 32비트 Python + pywin32 + pywinauto 설치 완료
     )
 ) else (
     echo  [SAP] 32비트 Python 확인 완료
