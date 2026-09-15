@@ -2520,7 +2520,12 @@
     window._ganttQaExtractApprovalUpdate = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
-        var isNewTrigger = /sap/i.test(text) && /승인원/.test(text) && /(표지|생성|만들|작성)/i.test(text);
+        // 💡 [2026-09-15 버그수정] "104446 승인원 표지 만들어줘"처럼 "SAP"란 단어 없이 물으면
+        //    (자재번호가 이미 이 요청을 충분히 구체적으로 만들어주는데도) 예전엔 "sap" 리터럴을
+        //    요구해서 트리거가 안 걸렸다 — 위 SAP 조회(_questionMentionsSapIntent)와 같은 날 같은
+        //    이유로 실사용에서 제보된 버그. "sap" 요구를 빼고, 바로 아래에서 자재번호가 없으면
+        //    어차피 null로 걸러지므로(line 2537 근처) "승인원"+동작 동사만으로도 충분히 안전하다.
+        var isNewTrigger = /승인원/.test(text) && /(표지|생성|만들|작성)/i.test(text);
         var draft = window._ganttQaApprovalDraft;
         if (!isNewTrigger && !draft) return null;
 
