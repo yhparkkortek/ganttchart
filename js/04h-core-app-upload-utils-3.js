@@ -1526,23 +1526,15 @@
             return;
         }
 
-        // 📊 [2026-09-14 신규] "엑셀로 내보내줘" 로컬 명령 — API 키 없어도 동작, AI를 거치지 않고
-        //    방금 조회된 SAP 원본 데이터를 바로 파일로 저장한다.
-        const sapExportReply = window._ganttQaTryHandleSapExportCommand ? window._ganttQaTryHandleSapExportCommand(question) : null;
-        if (sapExportReply) {
-            window._ganttQaHistory.push({ role: 'user', text: question });
-            window._ganttQaHistory.push({ role: 'ai', text: sapExportReply });
-            input.value = '';
-            window._renderGanttQaMessages();
-            input.focus();
-            return;
-        }
-
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
-        //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정보다 먼저 체크해야 함(둘 다
-        //    "다운로드"를 트리거 단어로 인정해서, 순서가 바뀌면 다중 자재 요청이 첫 번째 자재만
-        //    처리하는 단일 열기로 잘못 판정됨). ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")를
-        //    실행해 한 번에 C:\SAP_DMS\로 다운로드한다.
+        //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
+        //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
+        //    바뀌면 자재번호가 여러 개 딸린 요청이 엉뚱한 핸들러(첫 번째 자재만 처리하는 단일 열기,
+        //    또는 아직 조회한 게 없다는 엑셀 내보내기 실패 메시지)로 잘못 판정된다 — 실사용에서
+        //    "128808,115518 품목 조회해서 엑셀 출력해주고 P1 문서 열어줘"가 엑셀 내보내기로
+        //    잘못 가로채져 "아직 내보낼 SAP 데이터가 없습니다"만 뜨던 버그로 확인됨(2026-09-15).
+        //    ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")를 실행해 한 번에 C:\SAP_DMS\로
+        //    다운로드한다.
         const sapBatchReq = window._ganttQaExtractSapBatchDownloadRequest ? window._ganttQaExtractSapBatchDownloadRequest(question) : null;
         if (sapBatchReq) {
             window._ganttQaHistory.push({ role: 'user', text: question });
@@ -1655,6 +1647,21 @@
             }
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: sapListReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
+        // 📊 [2026-09-14 신규, 2026-09-15 순서 조정] "엑셀로 내보내줘" 로컬 명령 — API 키 없어도
+        //    동작, AI를 거치지 않고 방금 조회된 SAP 원본 데이터를 바로 파일로 저장한다. 위 배치
+        //    다운로드/단일 문서 열기/문서 목록 판정들보다 반드시 나중에 체크해야 함 — 자재번호가
+        //    같이 언급된 요청은 저 판정들이 먼저 처리하는 게 맞고, 이 명령은 "그것도 아닐 때"의
+        //    catch-all(순수하게 "지금 화면/방금 조회한 SAP 데이터를 엑셀로 달라"는 요청)이다.
+        const sapExportReply = window._ganttQaTryHandleSapExportCommand ? window._ganttQaTryHandleSapExportCommand(question) : null;
+        if (sapExportReply) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: sapExportReply });
+            input.value = '';
             window._renderGanttQaMessages();
             input.focus();
             return;
@@ -2346,6 +2353,19 @@
     //    쪽에서 이 반환값을 보고 별도 async 블록으로 처리한다(다른 로컬 명령들처럼 여기서 바로
     //    답변 문자열까지 만들지 않는 이유). 문서 타입 코드는 이 회사 SAP의 실제 문서 타입
     //    패턴(P01/C04/Q11/P07 등 — 대문자 1글자 + 숫자 2자리)에 맞춘 정규식으로 추출.
+    // 💡 [2026-09-15 신규] 문서 타입 코드 추출 공용 헬퍼 — 이 회사 SAP 문서 타입은 보통 letter+
+    //    숫자 2자리(P01/C04/Q11)지만, 사람이 "P1"처럼 자릿수를 안 채우고 줄여 말하는 경우가
+    //    실사용에서 확인됨("128808,115518 ... P1 문서 열어줘") — letter+숫자 1~2자리를 다
+    //    받아들이고, 1자리면 앞에 0을 채워 표준형(P1→P01)으로 맞춘다. 문서 타입 판정이 필요한
+    //    모든 곳(단일 열기/배치 다운로드)이 이 함수 하나를 공유 — 정규식을 각자 따로 두면 나중에
+    //    한쪽만 고치고 다른 쪽을 빠뜨리는 실수가 재발하기 쉬움.
+    window._ganttQaExtractSapDocTypeCode = function(text) {
+        var m = (text || '').match(/\b([A-Za-z])([0-9]{1,2})\b/);
+        if (!m) return null;
+        var digits = m[2].length === 1 ? ('0' + m[2]) : m[2];
+        return (m[1] + digits).toUpperCase();
+    };
+
     window._ganttQaExtractSapOpenDocRequest = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
@@ -2358,14 +2378,14 @@
         //    가드 패턴 — 위 looksLikeQuestion 참고).
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
         if (looksLikeQuestion) return null;
-        var m = text.match(/\b([A-Za-z][0-9]{2})\b/);
-        if (!m) return null;
+        var docType = window._ganttQaExtractSapDocTypeCode(text);
+        if (!docType) return null;
         // 💡 [2026-09-15 신규] 자재번호(이 회사 SAP은 5~8자리 순수 숫자)가 같이 언급돼 있으면 같이
         //    추출 — 있으면 "지금 열려 있는 화면"에 의존하지 않고 백엔드가 MM03으로 직접 이동해
         //    조회한다(sap_bridge_32.py의 _navigate_to_material_document_tab). 문서 타입 코드
         //    (P01 등)는 숫자만으로 된 문자열이 아니라 이 정규식과 겹치지 않는다.
         var matM = text.match(/\b(\d{5,8})\b/);
-        return { docType: m[1].toUpperCase(), material: matM ? matM[1] : null };
+        return { docType: docType, material: matM ? matM[1] : null };
     };
 
     // 📄 [2026-09-15 신규] "SAP에서 106188 품번 정보 및 파일 열어줘"처럼 자재번호는 있지만
@@ -2380,33 +2400,38 @@
         if (!/(문서|파일)/.test(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
         if (looksLikeQuestion) return null;
-        // 문서 타입 코드(P01 등)가 이미 명시돼 있으면 이 함수의 대상이 아님(open 쪽에서 처리).
-        if (/\b[A-Za-z][0-9]{2}\b/.test(text)) return null;
+        // 문서 타입 코드(P01/P1 등)가 이미 명시돼 있으면 이 함수의 대상이 아님(open 쪽에서 처리).
+        if (window._ganttQaExtractSapDocTypeCode(text)) return null;
         var matM = text.match(/\b(\d{5,8})\b/);
         if (!matM) return null;
         return matM[1];
     };
 
-    // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호를
-    //    2개 이상 말하면서 "다운로드/저장"을 요청한 경우 — MM03을 자재마다 드릴다운하는 대신
-    //    회사 SAP의 전용 배치 리포트 ZDMSR004로 한 번에 C:\SAP_DMS\에 다운로드한다(백엔드
-    //    /sap-download-documents-batch). "열어줘"만 쓰고 자재가 1개면 이 함수 대상이 아니고
-    //    기존 _ganttQaExtractSapOpenDocRequest(단일 드릴다운) 쪽에서 처리 — sendGanttQaMessage
-    //    에서 이 함수를 그 함수보다 먼저 체크해야 다중 자재 다운로드 요청이 단일 열기로
-    //    잘못 판정되지 않는다(둘 다 "다운로드"를 트리거 단어로 인정하기 때문).
+    // 📥 [2026-09-15 신규, 같은 날 트리거 단어 확장] "SAP에서 133012, 133010, 101831 문서
+    //    다운로드해줘" 또는 "...문서 열어줘"/"...엑셀 출력해주고 문서 열어줘"처럼 자재번호를
+    //    2개 이상 말한 경우 — MM03을 자재마다 드릴다운하는 대신 회사 SAP의 전용 배치 리포트
+    //    ZDMSR004로 한 번에 C:\SAP_DMS\에 다운로드한다(백엔드 /sap-download-documents-batch).
+    //    💡 트리거 단어를 처음엔 "다운로드/저장"만 인정했는데, 실사용에서 "...문서 열어줘"처럼
+    //    자재가 2개 이상인데도 "열어줘"만 쓰는 경우가 확인됨(2개 이상 자재는 어차피 한 번에
+    //    "여는" 방법이 이 배치 다운로드뿐이라 — 여러 파일을 동시에 인터랙티브하게 열 수는 없음) —
+    //    그래서 단일 열기와 동일한 트리거 단어 집합(열어/열기/다운로드/출력/보여/저장/open)을
+    //    쓰도록 넓혔다. "열어줘"만 있고 자재가 1개면 이 함수는 materials.length<2 조건에서
+    //    걸러지고 기존 _ganttQaExtractSapOpenDocRequest(단일 드릴다운) 쪽에서 처리 —
+    //    sendGanttQaMessage에서 이 함수를 그 함수보다 먼저 체크해야 다중 자재 요청이 단일 열기로
+    //    잘못 판정되지 않는다.
     window._ganttQaExtractSapBatchDownloadRequest = function(question) {
         var text = (question || '').trim();
         if (!text) return null;
         if (!/sap/i.test(text)) return null;
-        if (!/(다운로드|download|저장)/i.test(text)) return null;
+        if (!/(열어|열기|다운로드|출력|보여|저장|open)/i.test(text)) return null;
         if (!/(문서|파일)/.test(text)) return null;
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
         if (looksLikeQuestion) return null;
         var materials = text.match(/\b\d{5,8}\b/g) || [];
         materials = materials.filter(function(m, i) { return materials.indexOf(m) === i; }); // 중복 제거
         if (materials.length < 2) return null; // 자재 1개면 기존 단일 경로가 처리
-        var docTypeMatch = text.match(/\b([A-Za-z][0-9]{2})\b/);
-        return { materials: materials, docType: docTypeMatch ? docTypeMatch[1].toUpperCase() : 'P01' };
+        var docType = window._ganttQaExtractSapDocTypeCode(text);
+        return { materials: materials, docType: docType || 'P01' };
     };
 
     // 💡 실제 XLSX 조립 — _ganttQaTryHandleSapExportCommand 전용으로 분리(다른 곳에서도 "마지막
