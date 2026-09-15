@@ -1456,6 +1456,48 @@
             return;
         }
 
+        // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
+        //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정보다 먼저 체크해야 함(둘 다
+        //    "다운로드"를 트리거 단어로 인정해서, 순서가 바뀌면 다중 자재 요청이 첫 번째 자재만
+        //    처리하는 단일 열기로 잘못 판정됨). ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")를
+        //    실행해 한 번에 C:\SAP_DMS\로 다운로드한다.
+        const sapBatchReq = window._ganttQaExtractSapBatchDownloadRequest ? window._ganttQaExtractSapBatchDownloadRequest(question) : null;
+        if (sapBatchReq) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({
+                role: 'ai',
+                text: '⏳ ' + window._t(
+                    `SAP에서 자재 ${sapBatchReq.materials.length}개의 "${sapBatchReq.docType}" 문서를 일괄 다운로드하는 중... (시간이 걸릴 수 있습니다)`,
+                    `Batch-downloading "${sapBatchReq.docType}" documents for ${sapBatchReq.materials.length} materials in SAP... (this may take a while)`
+                ),
+                pending: true
+            });
+            input.value = '';
+            window._renderGanttQaMessages();
+            let sapBatchReply;
+            try {
+                const url = 'http://127.0.0.1:5000/sap-download-documents-batch?materials='
+                    + encodeURIComponent(sapBatchReq.materials.join(','))
+                    + '&type=' + encodeURIComponent(sapBatchReq.docType);
+                const timeoutMs = Math.min(300000, 60000 + 8000 * sapBatchReq.materials.length);
+                const res = await window._withTimeout(
+                    fetch(url), timeoutMs,
+                    window._t('SAP 문서 일괄 다운로드 시간 초과', 'Batch document download timed out')
+                );
+                const data = await res.json();
+                sapBatchReply = data.ok
+                    ? ('📥 ' + (data.message || window._t('일괄 다운로드가 완료됐습니다.', 'Batch download completed.')))
+                    : ('⚠️ ' + window._t('SAP 문서 일괄 다운로드 실패: ', 'Failed to batch-download SAP documents: ') + (data.error || window._t('알 수 없는 오류', 'unknown error')));
+            } catch (e) {
+                sapBatchReply = '⚠️ ' + window._t('SAP 문서 일괄 다운로드 실패: ', 'Failed to batch-download SAP documents: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: sapBatchReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 📄 [2026-09-14 신규, 2026-09-15 자재번호 직접조회 지원] "SAP에서 P01 문서 열어줘" 로컬
         //    명령 — AI 호출 없이, MM03에서 이미 열어둔 자재의 "문서 데이터" 탭에서 해당 문서 타입을
         //    찾아 열고 원본 파일을 다운로드+실행한다. 질문에 자재번호(예: "106188")가 같이 있으면
@@ -2261,6 +2303,28 @@
         var matM = text.match(/\b(\d{5,8})\b/);
         if (!matM) return null;
         return matM[1];
+    };
+
+    // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호를
+    //    2개 이상 말하면서 "다운로드/저장"을 요청한 경우 — MM03을 자재마다 드릴다운하는 대신
+    //    회사 SAP의 전용 배치 리포트 ZDMSR004로 한 번에 C:\SAP_DMS\에 다운로드한다(백엔드
+    //    /sap-download-documents-batch). "열어줘"만 쓰고 자재가 1개면 이 함수 대상이 아니고
+    //    기존 _ganttQaExtractSapOpenDocRequest(단일 드릴다운) 쪽에서 처리 — sendGanttQaMessage
+    //    에서 이 함수를 그 함수보다 먼저 체크해야 다중 자재 다운로드 요청이 단일 열기로
+    //    잘못 판정되지 않는다(둘 다 "다운로드"를 트리거 단어로 인정하기 때문).
+    window._ganttQaExtractSapBatchDownloadRequest = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        if (!/sap/i.test(text)) return null;
+        if (!/(다운로드|download|저장)/i.test(text)) return null;
+        if (!/(문서|파일)/.test(text)) return null;
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (looksLikeQuestion) return null;
+        var materials = text.match(/\b\d{5,8}\b/g) || [];
+        materials = materials.filter(function(m, i) { return materials.indexOf(m) === i; }); // 중복 제거
+        if (materials.length < 2) return null; // 자재 1개면 기존 단일 경로가 처리
+        var docTypeMatch = text.match(/\b([A-Za-z][0-9]{2})\b/);
+        return { materials: materials, docType: docTypeMatch ? docTypeMatch[1].toUpperCase() : 'P01' };
     };
 
     // 💡 실제 XLSX 조립 — _ganttQaTryHandleSapExportCommand 전용으로 분리(다른 곳에서도 "마지막

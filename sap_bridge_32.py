@@ -27,6 +27,12 @@
 # 열어둘 필요 없이 이 스크립트가 직접 MM03으로 이동해 그 자재를 조회한 뒤 "문서 데이터"
 # 탭까지 연다(2026-09-15 실사용 화면 녹화로 추가 — `_navigate_to_material_document_tab`).
 # 자재번호를 안 주면 기존과 동일하게 "사람이 미리 열어둔 화면"을 그대로 사용한다(하위호환).
+#
+# 두 번째 인자로 "download_documents_batch"를 주면(세 번째 인자로 문서 타입, 네 번째 인자로
+# 쉼표구분 자재번호 목록) 여러 자재의 문서를 ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")로
+# 한 번에 `C:\SAP_DMS\`에 다운로드한다 — 자재 1개씩 MM03을 드릴다운하는 open_document보다
+# 여러 개를 한 번에 처리할 때 훨씬 빠르다(2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로
+# 확보한 정확한 컨트롤 ID 그대로 재현 — `download_documents_batch` 참고).
 # ══════════════════════════════════════════════════════════════
 import sys
 import json
@@ -581,6 +587,114 @@ def open_document(doc_type, material=None):
     return {'ok': True, 'docType': doc_type, 'message': f'문서 "{doc_type}"의 원본 파일을 열도록 요청했습니다. 잠시 후 연결된 프로그램(Acrobat 등)이 열립니다.'}
 
 
+# ── "여러 자재 문서 일괄 다운로드" (ZDMSR004) 전용 헬퍼 ──────────────────
+# 💡 [2026-09-15 신규] 지금까지의 open_document()는 자재 1개씩 MM03을 드릴다운하는 방식이었는데,
+# 사용자가 "여러 개를 한 번에" 처리하고 싶다고 해서 확인해보니 — 회사 SAP에 이미 "DMS 첨부파일
+# 일괄 다운로드 프로그램"(트랜잭션 ZDMSR004)이라는 전용 커스텀 리포트가 있었다. 이 리포트의
+# 선택화면에서 자재코드를 복수 선택(SAP 표준 "복수 선택" 팝업, 함수그룹 SAPLALDB)으로 여러 개
+# 넣고 문서유형(P01 등)을 지정해 실행하면, 그 자재들의 해당 문서가 ALV 그리드로 뜨고, 전체
+# 선택 후 "다운로드" 버튼을 누르면 `C:\SAP_DMS\<문서번호>\<원본파일명>` 구조로 로컬에 한 번에
+# 다운로드된다 — MM03 드릴다운을 반복하는 것보다 훨씬 빠르고 신뢰도 높은 방식이라 이쪽을
+# 기본 경로로 추가했다. 2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 정확한 컨트롤 ID를
+# 확보했고, **폴더 선택 창이 전혀 뜨지 않았다**(다운로드 경로가 ABAP 리포트 내부에
+# `C:\SAP_DMS\`로 고정돼 있는 것으로 추정) — 그래서 이 함수는 순수 SAP GUI 컨트롤 조작만으로
+# 끝까지 완결된다(네이티브 Windows 다이얼로그 처리가 필요 없음).
+_ZDMSR004_POPUP_TABLE = "wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE"
+
+
+def download_documents_batch(materials, doc_type='P01'):
+    """ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")을 실행해 여러 자재의 문서를 한 번에
+    C:\\SAP_DMS\\<문서번호>\\ 아래로 다운로드한다. materials는 자재번호 문자열 리스트."""
+    materials = [str(m).strip() for m in (materials or []) if str(m).strip()]
+    if not materials:
+        raise RuntimeError('다운로드할 자재번호가 없습니다.')
+    doc_type = (doc_type or 'P01').strip().upper()
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZDMSR004'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+
+    # 자재코드 "복수 선택" 팝업 열기(실사용 매크로에서 확인된 정확한 버튼 ID).
+    multi_btn = _find_by_id_substring(wnd, '%_S_MATNR_%_APP_%-VALU_PUSH')
+    if multi_btn is None:
+        raise RuntimeError('ZDMSR004 화면에서 "자재코드 복수 선택" 버튼을 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다(트랜잭션 권한이 없을 가능성도 있음).')
+    multi_btn.press()
+    time.sleep(0.8)
+
+    # 값 입력 — 한 화면에 보이는 행 수를 넘으면 스크롤(FirstVisibleRow)해서 이어서 입력한다.
+    # ⚠️ 실사용 매크로에서는 7개까지만 확인됐고(한 화면에 다 보임) 스크롤 자체는 검증 안 됨 —
+    # 8개 이상 넣을 때 문제가 있으면 이 부분을 의심할 것.
+    try:
+        table = session.findById(_ZDMSR004_POPUP_TABLE)
+    except Exception:
+        raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
+    try:
+        visible_rows = table.VisibleRowCount or 7
+    except Exception:
+        visible_rows = 7
+    idx = 0
+    while idx < len(materials):
+        if idx > 0:
+            try:
+                table.FirstVisibleRow = idx
+                time.sleep(0.3)
+            except Exception:
+                pass
+        batch = materials[idx: idx + visible_rows]
+        for row_offset, mat in enumerate(batch):
+            cell_id = f"{_ZDMSR004_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
+            try:
+                cell = session.findById(cell_id)
+                cell.text = mat
+            except Exception as e:
+                raise RuntimeError(f'"자재코드 복수 선택" 팝업에 {idx + row_offset + 1}번째 자재("{mat}")를 입력하지 못했습니다: {e}')
+        idx += len(batch)
+
+    # 팝업 확인(실사용 매크로에서 확인된 정확한 두 버튼 — 순서 그대로 재현).
+    try:
+        session.findById('wnd[1]/tbar[0]/btn[24]').press()
+        time.sleep(0.3)
+        session.findById('wnd[1]/tbar[0]/btn[8]').press()
+    except Exception as e:
+        raise RuntimeError(f'"자재코드 복수 선택" 팝업을 확인하는 중 오류가 발생했습니다: {e}')
+    time.sleep(0.8)
+
+    # 문서유형 필터.
+    try:
+        dokar_field = session.findById('wnd[0]/usr/ctxtS_DOKAR-LOW')
+        dokar_field.text = doc_type
+    except Exception:
+        pass  # 이 필드가 없어도(트랜잭션 화면이 다르면) 실행 자체는 시도한다.
+
+    # 실행(F8, 애플리케이션 툴바의 실행 버튼).
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[8]').press()
+    except Exception as e:
+        raise RuntimeError(f'ZDMSR004 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(1.5)
+
+    # 결과 그리드 전체 선택 후 다운로드.
+    try:
+        grid = session.findById('wnd[0]/shellcont/shell')
+        grid.setCurrentCell(-1, '')
+        grid.selectAll()
+        time.sleep(0.3)
+        session.findById('wnd[0]/tbar[1]/btn[13]').press()
+    except Exception as e:
+        raise RuntimeError(f'결과 목록에서 전체 선택 후 다운로드하는 중 오류가 발생했습니다(자재를 찾지 못해 결과가 비어 있을 수도 있습니다): {e}')
+    time.sleep(1.5)
+
+    return {
+        'ok': True,
+        'materials': materials,
+        'docType': doc_type,
+        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다(자재별 하위 폴더 자동 생성).',
+    }
+
+
 def main():
     try:
         import win32com.client  # noqa: F401  (설치 여부 확인용)
@@ -596,6 +710,11 @@ def main():
         elif action == 'fetch_material_documents':
             material = sys.argv[2] if len(sys.argv) > 2 else ''
             result = fetch_material_documents(material)
+        elif action == 'download_documents_batch':
+            doc_type = sys.argv[2] if len(sys.argv) > 2 else 'P01'
+            materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
+            materials = [m.strip() for m in materials_str.split(',') if m.strip()]
+            result = download_documents_batch(materials, doc_type)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))

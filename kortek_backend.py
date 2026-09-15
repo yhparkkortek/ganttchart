@@ -1595,6 +1595,24 @@ def sap_material_documents():
     return jsonify(data), status
 
 
+@app.route('/sap-download-documents-batch', methods=['GET'])
+def sap_download_documents_batch():
+    # 💡 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호를
+    #    여러 개 말했을 때 — MM03을 자재마다 드릴다운하는 대신 회사 SAP의 전용 배치 리포트
+    #    ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")를 실행해 한 번에 C:\SAP_DMS\로
+    #    다운로드한다. 실제 컨트롤 조작은 sap_bridge_32.py의 download_documents_batch()에
+    #    있다(2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 확보한 정확한 ID 재현).
+    materials_str = (request.args.get('materials') or '').strip()
+    doc_type = (request.args.get('type') or 'P01').strip()
+    if not materials_str:
+        return jsonify({'ok': False, 'error': '자재번호 목록(materials 파라미터, 쉼표구분)이 필요합니다. 예: /sap-download-documents-batch?materials=133012,133010&type=P01'}), 400
+    materials = [m.strip() for m in materials_str.split(',') if m.strip()]
+    # 자재 수에 비례해 타임아웃을 넉넉히 둔다(팝업 입력+스크롤+다운로드까지 포함).
+    timeout = min(300, 40 + 8 * len(materials))
+    data, status = _run_sap_bridge(['download_documents_batch', doc_type, ','.join(materials)], timeout, 'SAP 문서 일괄 다운로드')
+    return jsonify(data), status
+
+
 # ══════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     print("=" * 58)
