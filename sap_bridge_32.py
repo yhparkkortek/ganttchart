@@ -1563,7 +1563,19 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
     if not po_number:
         raise RuntimeError('구매오더는 저장됐지만 오더번호를 읽지 못했습니다 — SAP에서 직접 확인해주세요.')
 
-    # ZMM018 — 발주서 PDF 출력.
+    print_po_via_zmm018(po_number, purchasing_org, plant)
+    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. 발주서 PDF를 출력했습니다.'}
+
+
+def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
+    """ZMM018에서 이미 존재하는 구매오더번호로 발주서 PDF를 출력한다. `confirm_save_po`가
+    저장 직후 자동으로 호출하지만(오더번호를 그 자리에서 방금 확보해서), 그와 별개로
+    **이미 저장된(사람이 SAP에서 직접 저장한 경우 포함) 오더번호를 알고 있을 때 출력만
+    다시 시도**하는 용도로도 쓸 수 있게 독립 함수로 분리했다(2026-09-15 — 실사용
+    테스트에서 저장은 harness 정책상 사람이 SAP 화면에서 직접 눌러야 했고, 그 뒤 출력만
+    이 함수로 이어서 실행함). 저장(SAVE)이 전혀 없는 순수 조회/출력 동작이라 저장보다
+    안전하다."""
+    session = _get_sap_session()
     try:
         session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM018'
         wnd = session.findById('wnd[0]')
@@ -1589,9 +1601,9 @@ def confirm_save_po(purchasing_org='9000', plant='1000'):
         session.findById('wnd[0]/tbar[1]/btn[13]').press()  # 출력 — 매크로에서 확인된 인덱스
         time.sleep(1.5)
     except Exception as e:
-        raise RuntimeError(f'구매오더("{po_number}")는 정상 저장됐지만, 발주서 PDF 출력(ZMM018) 중 오류가 발생했습니다: {e} — ZMM018에서 오더번호 "{po_number}"로 직접 출력해주세요.')
+        raise RuntimeError(f'구매오더("{po_number}") 발주서 PDF 출력(ZMM018) 중 오류가 발생했습니다: {e} — ZMM018에서 오더번호 "{po_number}"로 직접 출력해주세요.')
 
-    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"가 생성되어 저장됐습니다. 발주서 PDF를 출력했습니다.'}
+    return {'ok': True, 'poNumber': po_number, 'message': f'구매오더 "{po_number}"의 발주서 PDF를 출력했습니다.'}
 
 
 def main():
@@ -1652,6 +1664,11 @@ def main():
             purchasing_org = sys.argv[2] if len(sys.argv) > 2 else '9000'
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
             result = confirm_save_po(purchasing_org, plant)
+        elif action == 'print_po_via_zmm018':
+            po_number = sys.argv[2] if len(sys.argv) > 2 else ''
+            purchasing_org = sys.argv[3] if len(sys.argv) > 3 else '9000'
+            plant = sys.argv[4] if len(sys.argv) > 4 else '1000'
+            result = print_po_via_zmm018(po_number, purchasing_org, plant)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))

@@ -2023,6 +2023,22 @@ def po_sap_confirm_save():
     return jsonify(data_out), status
 
 
+@app.route('/po-print-via-zmm018', methods=['POST'])
+def po_print_via_zmm018():
+    # 🛒 [2026-09-15 신규] 복구용 — 구매오더가 이미 저장됐는데(예: /po-sap-confirm-save가
+    #    저장은 성공했지만 ZMM018 출력 단계에서만 실패한 경우, 또는 사람이 SAP에서 직접
+    #    저장한 경우) 오더번호를 알고 있을 때 발주서 PDF 출력만 다시 시도한다. 저장(SAVE)이
+    #    전혀 없는 순수 조회/출력 동작.
+    data = request.get_json(silent=True) or {}
+    po_number = (data.get('poNumber') or '').strip()
+    purchasing_org = (data.get('purchasingOrg') or '9000').strip()
+    plant = (data.get('plant') or '1000').strip()
+    if not po_number:
+        return jsonify({'ok': False, 'error': 'poNumber가 필요합니다.'}), 400
+    data_out, status = _run_sap_bridge(['print_po_via_zmm018', po_number, purchasing_org, plant], 60, 'SAP 발주서 PDF 출력')
+    return jsonify(data_out), status
+
+
 # ── 백엔드 자동 업데이트("SAP 조회 연동" 절 kortek_backend.zip 배포 방식의 대안, 2026-09-15) ─
 # 이 앱은 GitHub Pages(정적 프런트) + 각 PC의 로컬 백엔드(kortek_backend.py) 구조라, 백엔드
 # 파일이 바뀔 때마다 사용자가 kortek_backend.zip을 다시 받아 기존 폴더에 덮어써야 했다 —
