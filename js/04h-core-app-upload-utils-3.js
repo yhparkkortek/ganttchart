@@ -109,8 +109,9 @@
             );
             const data = await res.json();
             if (!data.ok) return '(' + window._t('SAP 조회 실패', 'SAP lookup failed') + ': ' + (data.error || window._t('알 수 없는 오류', 'unknown error')) + ')';
-            // 💡 [2026-09-14 신규] "엑셀로 내보내줘" 로컬 명령(_ganttQaTryHandleSapExportCommand)이
-            //    AI를 다시 거치지 않고 바로 쓸 수 있도록, 성공한 조회 결과를 매번 최신 것으로 캐싱해둔다.
+            // 💡 [2026-09-14 신규] "엑셀로 내보내줘" 로컬 명령(sendGanttQaMessage의
+            //    _ganttQaExtractSapExportRequest 처리 블록)이 AI를 다시 거치지 않고 바로 쓸 수
+            //    있도록, 성공한 조회 결과를 매번 최신 것으로 캐싱해둔다.
             window._lastSapFetchResult = { source: data.source, text: data.text, fetchedAt: Date.now() };
             return data.text || null;
         } catch (e) {
@@ -1657,11 +1658,39 @@
         //    다운로드/단일 문서 열기/문서 목록 판정들보다 반드시 나중에 체크해야 함 — 자재번호가
         //    같이 언급된 요청은 저 판정들이 먼저 처리하는 게 맞고, 이 명령은 "그것도 아닐 때"의
         //    catch-all(순수하게 "지금 화면/방금 조회한 SAP 데이터를 엑셀로 달라"는 요청)이다.
-        const sapExportReply = window._ganttQaTryHandleSapExportCommand ? window._ganttQaTryHandleSapExportCommand(question) : null;
-        if (sapExportReply) {
+        //    💡 [2026-09-15] 캐시된 SAP 데이터가 아직 없으면(예: "SAP에서 502572 BOM 열어서
+        //    엑셀로 출력해줘"처럼 조회와 내보내기를 한 메시지에 같이 요청한 경우) 곧바로 실패
+        //    시키지 않고, 그 자리에서 _aiFetchSapContext()로 한 번 더 조회한 뒤 그 결과를 바로
+        //    내보낸다 — 단, 이건 "지금 SAP GUI 화면에 보이는 것"을 그대로 읽어오는 것이라(특정
+        //    트랜잭션으로 자동 이동하지 않음), 사람이 미리 SAP GUI에서 원하는 화면(BOM 등)을
+        //    열어둔 상태여야 한다(기존 "SAP 조회" 설계 원칙과 동일).
+        if (window._ganttQaExtractSapExportRequest && window._ganttQaExtractSapExportRequest(question)) {
             window._ganttQaHistory.push({ role: 'user', text: question });
-            window._ganttQaHistory.push({ role: 'ai', text: sapExportReply });
             input.value = '';
+            let cached = window._lastSapFetchResult;
+            if (!cached || !cached.text) {
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP 데이터를 조회하는 중...', 'Looking up SAP data...'), pending: true });
+                window._renderGanttQaMessages();
+                const sapText = await window._aiFetchSapContext();
+                window._ganttQaHistory.pop();
+                const fetchFailed = !sapText || /^\(/.test(sapText); // _aiFetchSapContext는 실패 시 "(SAP 조회 실패: ...)" 형태 문자열을 반환
+                if (fetchFailed) {
+                    window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('SAP 데이터를 조회하지 못해 내보낼 수 없습니다: ', 'Could not look up SAP data to export: ') + (sapText || window._t('알 수 없는 오류', 'unknown error')) });
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+                cached = window._lastSapFetchResult;
+            }
+            let sapExportReply;
+            try {
+                const fileName = window._exportSapDataToExcel(cached);
+                sapExportReply = window._t(`📊 방금 조회한 SAP 원본 데이터를 "${fileName}" 파일로 내보냈습니다(다운로드됨).`, `📊 Exported the raw SAP data to "${fileName}" (downloaded).`);
+            } catch (e) {
+                console.warn('[AI 문답] SAP 엑셀 내보내기 실패:', e);
+                sapExportReply = '⚠️ ' + window._t('엑셀 내보내기에 실패했습니다: ', 'Failed to export to Excel: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.push({ role: 'ai', text: sapExportReply });
             window._renderGanttQaMessages();
             input.focus();
             return;
@@ -2318,34 +2347,19 @@
     //    AI가 답변할 때 요약/재작성하면서 값이 미묘하게 바뀔 위험(빈 항목을 ``로 얼버무리는 등, 실사용
     //    제보로 확인된 패턴)을 피하려고, AI 답변 텍스트가 아니라 백엔드가 준 원본 탭 구분 텍스트를 그대로
     //    파싱해서 내보낸다 — "SAP 데이터/자재/BOM ... 엑셀로/출력/다운로드/내보내" 류 문구에 매치.
-    window._ganttQaTryHandleSapExportCommand = function(question) {
+    // 💡 [2026-09-14 신규, 2026-09-15 분리] "엑셀로 내보내줘" 트리거 판정만 하는 함수 — 실제 처리는
+    //    (캐시된 SAP 데이터가 없으면 그 자리에서 한 번 더 조회해야 할 수도 있어) sendGanttQaMessage의
+    //    비동기 블록으로 옮겼다(예전엔 이 함수가 동기적으로 "캐시 없으면 바로 실패"만 했는데, 실사용
+    //    에서 "SAP에서 502572 BOM 열어서 엑셀로 출력해줘"처럼 조회와 내보내기를 한 메시지에 같이
+    //    요청하면 캐시가 아직 없어 곧바로 실패하던 문제가 확인됨, 2026-09-15).
+    window._ganttQaExtractSapExportRequest = function(question) {
         var text = (question || '').trim();
-        if (!text) return null;
-        var _en = window._currentLang === 'en';
+        if (!text) return false;
         // 💡 "엑셀 출력도 가능해?"처럼 "지금 해달라"가 아니라 "이런 기능이 있는지" 묻는 질문까지
         //    실행 명령으로 오인하면 안 된다(실사용 제보 사례) — 물음표로 끝나거나 "가능"/"되나"/"될까"
         //    같은 여부를 묻는 표현이 있으면 로컬 명령으로 가로채지 않고 평소처럼 AI에게 넘긴다.
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
-        var wantsExport = !looksLikeQuestion && /(엑셀|excel|xlsx)/i.test(text) && /(출력|내보내|다운로드|저장|export|download)/i.test(text);
-        if (!wantsExport) return null;
-
-        var cached = window._lastSapFetchResult;
-        if (!cached || !cached.text) {
-            return _en
-                ? '⚠️ No SAP data to export yet — ask something with "SAP" in it first so it gets fetched.'
-                : '⚠️ 아직 내보낼 SAP 데이터가 없습니다 — 먼저 "SAP"가 들어간 질문으로 조회부터 해주세요.';
-        }
-        try {
-            var fileName = window._exportSapDataToExcel(cached);
-            return _en
-                ? `📊 Exported the raw SAP data to "${fileName}" (downloaded).`
-                : `📊 방금 조회한 SAP 원본 데이터를 "${fileName}" 파일로 내보냈습니다(다운로드됨).`;
-        } catch (e) {
-            console.warn('[AI 문답] SAP 엑셀 내보내기 실패:', e);
-            return _en
-                ? '⚠️ Failed to export to Excel: ' + (e && e.message ? e.message : e)
-                : '⚠️ 엑셀 내보내기에 실패했습니다: ' + (e && e.message ? e.message : e);
-        }
+        return !looksLikeQuestion && /(엑셀|excel|xlsx)/i.test(text) && /(출력|내보내|다운로드|저장|export|download)/i.test(text);
     };
 
     // 📄 [2026-09-14 신규] "SAP에서 P01 문서 열어줘/다운로드해줘" — 질문 문자열만 보고 로컬에서
@@ -2434,8 +2448,8 @@
         return { materials: materials, docType: docType || 'P01' };
     };
 
-    // 💡 실제 XLSX 조립 — _ganttQaTryHandleSapExportCommand 전용으로 분리(다른 곳에서도 "마지막
-    //    SAP 조회 결과를 엑셀로" 재사용할 수 있게 window에 노출). 그리드 조회(source:'grid')는
+    // 💡 실제 XLSX 조립 — "엑셀로 내보내줘" 처리(sendGanttQaMessage) 전용으로 분리(다른 곳에서도
+    //    "마지막 SAP 조회 결과를 엑셀로" 재사용할 수 있게 window에 노출). 그리드 조회(source:'grid')는
     //    _sap_dump_grid(백엔드)가 만든 "제목행 + 탭구분 데이터행" 텍스트를 그대로 파싱하고,
     //    필드 조회(source:'fields', 그리드가 없는 화면)는 한 줄당 한 행짜리 단일 열로 내보낸다.
     window._exportSapDataToExcel = function(cached) {
