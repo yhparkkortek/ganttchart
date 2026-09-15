@@ -2645,33 +2645,67 @@
     //    없음). 그래서 API로 실시간으로 가져오는 대신, 자주 보이는 표준 SAP 필드명을 코드에
     //    직접 매핑해두는 방식으로 우회한다 — 사용자와 상의해 "헤더만이라도 우선 고치기"로
     //    결정함(전체 데이터 셀 값의 한글 손상은 별개의 더 큰 문제로, 이 사전으로는 해결 안 됨).
-    //    ⚠️ 아래 표의 앞부분(자재유형~플랜트)은 표준 SAP MARA/MARC 테이블 필드로 회사 무관하게
-    //    어느 SAP 시스템에서나 동일한 의미이니 신뢰도가 높다. `Z`로 시작하는 필드(ZDIV, ZMATNR
-    //    등)는 이 회사 ZMM009 리포트의 커스텀 필드라 표준 사전에 없고, 이전 실사용 화면
-    //    캡처의 컬럼 순서와 대조해 유추한 것이라 신뢰도가 상대적으로 낮다 — 잘못됐으면 알려주면
-    //    바로 고칠 것. 목록에 없는 필드는 이전처럼 코드 그대로 표시된다(틀린 한글보다는 원본
-    //    코드가 낫다는 판단).
+    //    ⚠️ [2026-09-15 갱신] 처음엔 표준 SAP 필드는 일반 지식으로, Z 커스텀 필드는 이전 화면
+    //    캡처의 컬럼 순서 대조로 추정해서 신뢰도가 낮았는데, 사용자가 같은 조회의 "필드 코드"
+    //    버전과 "정상 라벨" 버전 엑셀을 각각 BOM(ZPP038)·원자재(ZMM009) 두 화면 모두에 대해
+    //    쌍으로 제공해줘서(BOM.xlsx↔BOM (2).xlsx, 원자재.xlsx↔원자재(2).xlsx), 두 파일의 헤더 행을
+    //    같은 열 위치로 1:1 대조해 전부 실측값으로 교체함 — 이제 아래 표 전체가 추정이 아니라
+    //    이 회사 실제 SAP 화면에서 직접 확인된 값이다(그래서 이전의 "표준 필드/커스텀 필드 신뢰도
+    //    구분" 주석은 더 이상 의미가 없어 제거함). 일부 필드(MSTAV/MSTDV/GROES 등)는 그 회사 SAP가
+    //    한국어 번역을 안 갖고 있어 실제로 영문("X-distr.chain status" 등)으로 표시된다는 것도
+    //    이번에 확인됨 — 틀린 게 아니라 SAP 화면 자체가 그렇게 보임. MMSTA는 BOM 조회 화면에선
+    //    "자재상태", 원자재(ZMM009) 조회 화면에선 "플랜트 고유 자재상태"로 서로 다르게 표시되는데
+    //    (같은 필드, 리포트별 컬럼폭에 따른 축약으로 추정) 사전은 코드 하나에 값 하나만 가능해
+    //    더 정확한 쪽(원자재 화면의 전체 표현)을 채택함. 목록에 없는 필드는 이전처럼 코드 그대로
+    //    표시된다(틀린 한글보다는 원본 코드가 낫다는 판단) — 새 SAP 리포트에서 또 코드로 나오는
+    //    필드를 발견하면, 이번처럼 "필드코드 버전"과 "정상라벨 버전" 엑셀을 나란히 받아 같은
+    //    방식(열 위치 대조)으로 추가하는 게 화면 캡처 추정보다 훨씬 빠르고 정확하다.
     window._SAP_FIELD_LABEL_MAP = {
-        // ── 표준 SAP 필드(MARA/MARC 등) — 높은 신뢰도 ──
-        MTART: '자재유형', MATNR: '자재', MATKL: '자재그룹', MEINS: '기본단위',
-        MAKTX: '자재내역', WERKS: '플랜트', LGORT: '저장위치', VKORG: '판매조직',
-        VTWEG: '유통경로', SPART: '사업부', MBRSH: '산업유형', BRGEW: '총중량',
-        NTGEW: '순중량', GEWEI: '중량단위', EKGRP: '구매그룹', DISPO: 'MRP 관리자',
-        DISGR: 'MRP 그룹', STRGR: '전략그룹', MSTAE: '플랜트 범위 자재상태',
-        MSTAV: '유통 자재상태', MSTDV: '유통 자재상태 유효일', BISMT: '기존자재번호',
-        NORMT: '산업표준내역', KTGRM: '자재계정지정그룹', PRCTR: '손익센터',
-        EXTWG: '외부자재그룹', MFRPN: '제조업체부품번호', UMREN: '환산분모',
-        UMREZ: '환산분자', GROES: '규격/치수', XCHPF: '배치관리', PEINH1: '가격단위',
-        MTPOS: '일반품목범주', MTPOS_MARA: '일반품목범주그룹', BSTME: '발주단위',
-        MVGR1: '자재그룹1', MVGR2: '자재그룹2', MVGR3: '자재그룹3', MVGR4: '자재그룹4',
-        MVGR5: '자재그룹5', TAXM1: '세금분류1', VERSG: '유효값 지정', RGEKZ: '역산가능여부',
-        DWERK: '기준플랜트', MEINH: '단위', SKTOF: '현금할인면제', TRAGR: '운송그룹',
-        LADGR: '적재그룹',
-        // ── 이 회사 ZMM009 커스텀 필드(Z접두사 등) — 이전 화면 캡처 대조 추정, 신뢰도 낮음 ──
-        ZDIV: 'Y/X', ZMATNR: '관련 패널품목', WGBEZ60: 'Group2', WGBEZ: 'Group1',
-        VINT1: '역방향소비기간', VINT2: '순방향소비기간', FERTH: '생산/검사 메모',
-        LGPRO: '생산저장위치', LGFSB: '외부조달 저장위치', STPRS1: '표준가',
-        STPRS2: '기간별 단가',
+        AENNR: 'BOM 변경번호', ALPGR: '대체그룹', ALPRF: '우선순위',
+        ALTSL: '선택방법', AWSLS: '원가차이키', BEIKZ: '자재공급지시자',
+        BESKZ: '조달 유형', BEZEI1: 'Size Desc', BISMT: '기존자재번호',
+        BKLAS: '평가클래스', BRGEW: '총중량', BSTME: '오더 단위',
+        BSTMI: '최소 주문 수량', BSTRF: '최소 포장 수량', DISGR: 'MRP 그룹',
+        DISLS: '로트크기유형', DISMM: 'MRP 유형', DISPO: 'MRP 관리자',
+        DWERK: '납품 플랜트', DZEIT: '내부 생산', EBORT: '설치지점',
+        EISBE: '안전 재고', EKALR: 'QS포함원가추정', EKGRP: '구매 그룹',
+        EKWSL: '구매값키', EWAHR: '사용율', EXTWG: '외부자재그룹',
+        FERTH: '생산/검사 메모', FEVOR: '생산 스케줄러', FHORI: '일정마진키',
+        GEWEI: '중량단위', GROES: 'Size/dimensions', HERKL1: '원산국',
+        HERKR1: '원산국', HKMAT: '자재원산지', HRKFT: '오리진 그룹',
+        IDNRK: '구성부품', KAUSF: '구성부품스크랩 (%)', KORDB: '소스리스트',
+        KTGRM: '계정지정그룹', LABOR: 'Laboratory/design office', LABST: '가용재고',
+        LADGR: '적하그룹', LGFSB: '외부조달 저장위치', LGORT: '저장위치',
+        LGPBE: '저장BIN', LGPRO: '생산저장위치', LOSGR: '원가계산 로트크기',
+        MAABC: 'ABC 지시자', MAKTX: '자재내역(KO)', MATKL: '자재그룹',
+        MATNR: '자재', MATNR2: '최상위코드', MBRSH: '산업유형',
+        MEINH: 'Aun', MEINS: '기본단위', MEINS_B: 'Bun',
+        MENGE: '수량', MFRNR: 'Manufacturer', MFRPN: '제조자부품번호',
+        MINBE: '재주문점', MISKZ: 'Mixed MRP', MLAST: '가격결정',
+        MMEIN: '단위', MMSTA: '플랜트 고유 자재상태', MSTAE: '플랜트간 자재상태',
+        MSTAV: 'X-distr.chain status', MSTDV: 'Valid From', MTART: '자재유형',
+        MTPOS: '품목범주그룹', MTPOS_MARA: '일반품목범주GR', MTSTB: '상태내역',
+        MTVER1: '수출/수입 그룹', MTVFP1: '가용성  점검', MVGR1: 'Size',
+        MVGR2: 'Mode', MVGR3: 'Touch Type', MVGR4: 'AD Board',
+        MVGR5: 'Buyer', NAME1: '공급업체명', NCOST: '원가계산금지',
+        NORMT: '인치 정보', NTGEW: '순중량', OCMPF: '전체프로파일',
+        OJTXP: '구성부품내역', PEINH1: '가격단위', PLIFZ: '계획 납품 기간',
+        POSNR: 'Item no.', POSTP: 'ICT', PRCTR: '손익 센터',
+        RAUBE: '저장조건', RGEKZ: '백플러쉬', SAUFT: '반복제조',
+        SBDKZ: '개별/일괄', SCHGT: '벌크자재', SFCPF: '생산일정 프로파일',
+        SFEPR: 'REM프로파일', SKTOF: '현금할인', SOBSL: '특별조달유형',
+        SPART: '제품군', STAWN1: '상품/수입 코드번호', STPRS1: '표준가',
+        STPRS2: '기간별 단가', STRGR: '전략그룹', STUFE: '레벨',
+        TAXM1: '세금분류1', TAXM2: '세금분류2', TRAGR: '운송그룹',
+        UMREN: 'X', UMREZ: 'Y', USEQU: '쿼터 조정 사용',
+        VERSG: '자재통계그룹', VINT1: '역방향소비기간', VINT2: '순방향소비기간',
+        VKORG: '판매조직', VPRSV1: '가격지정', VRMOD: '소비모드',
+        VTWEG: '유통경로', WEBAZ: '입고소요일수', WERKS: '플랜트',
+        WGBEZ: 'Group1', WGBEZ60: 'Group2', XCHPF: '뱃치관리',
+        ZDIV: 'Y/X', ZEOLFLG: 'EOL 구분', ZLIST: '대체 그룹 자재',
+        ZLIST2: '대체 그룹 자재의 모품목', ZMATNR: '관련 패널품목', ZPLD1: '계획가격일 1',
+        ZPLD2: '계획가격일 2', ZPLD3: '계획가격일 3', ZPLP1: '계획가격 1',
+        ZPLP2: '계획가격 2', ZPLP3: '계획가격 3',
     };
 
     window._exportSapDataToExcel = function(cached) {
