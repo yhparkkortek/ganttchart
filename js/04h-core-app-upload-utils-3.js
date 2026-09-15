@@ -136,16 +136,28 @@
             // 💡 [2026-09-15 다중 자재 지원] 원래 첫 번째 자재번호만 뽑았는데(non-global 정규식),
             //    "104438\n104481\n104477\n117451\n다중 사용처 조회해줘"처럼 여러 자재를 나열하면
             //    나머지가 통째로 무시되던 버그 — bomNums와 동일하게 global 매치로 전부 모은다.
-            //    백엔드(sap_bridge_32.py의 fetch_where_used)가 자재마다 CS15를 따로 실행해
-            //    이어붙이는 방식으로 다중 조회를 지원함(ZPP046 배치 리포트의 500행 캡 공유 문제로
-            //    그 방식은 채택 안 함 — 자세한 진단은 CLAUDE.md/fetch_where_used docstring 참고).
+            //    기본값은 백엔드(sap_bridge_32.py의 fetch_where_used)가 자재마다 CS15를 따로
+            //    실행해 이어붙이는 방식(느리지만 안전 — ZPP046 배치 리포트는 500행 캡을 여러
+            //    자재가 공유해서 사용처 많은 자재 하나가 나머지를 다 밀어내는 문제가 있어 기본
+            //    경로로는 채택 안 함, 자세한 진단은 CLAUDE.md/fetch_where_used docstring 참고).
+            // 💡 [2026-09-15 신규, 사용자 요청] 다만 "역전개"/"사용처"를 **다중/일괄/복수**의
+            //    의미로 명시하면(예: "다중 사용처 조회해줘"/"일괄 역전개"/"사용처 복수 조회") —
+            //    사용자가 그 트레이드오프(빠르지만 잘릴 수 있음)를 알고 원하는 것으로 보고
+            //    ZPP046 배치 경로(`/sap-where-used-batch`)로 라우팅한다. 단수 표현("104446
+            //    사용처 조회해줘")은 자재가 몇 개든 그대로 기본(CS15 순차) 경로를 탄다 —
+            //    말씀하신 대로 "단수/다중 워딩"이 기준이지 자재 개수가 기준이 아니다.
             const whereUsedNums = (question && /(역전개|사용처)/.test(question)) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
             const whereUsedMatch = whereUsedNums.length > 0;
+            const wantsBatchWhereUsed = whereUsedMatch && /(다중|일괄|복수)/.test(question);
             const bomNums = (!whereUsedMatch && question && /bom/i.test(question)) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
             const bomMatch = bomNums.length > 0;
 
             let url, timeoutMs, timeoutMsgKo, timeoutMsgEn;
-            if (whereUsedMatch) {
+            if (whereUsedMatch && wantsBatchWhereUsed) {
+                url = 'http://127.0.0.1:5000/sap-where-used-batch?material=' + encodeURIComponent(whereUsedNums.join(','));
+                timeoutMs = 60000;
+                timeoutMsgKo = 'SAP 사용처 일괄조회 시간 초과'; timeoutMsgEn = 'SAP batch where-used lookup timed out';
+            } else if (whereUsedMatch) {
                 url = 'http://127.0.0.1:5000/sap-where-used?material=' + encodeURIComponent(whereUsedNums.join(','));
                 timeoutMs = whereUsedNums.length <= 1 ? 30000 : Math.min(150000, 30000 + 20000 * whereUsedNums.length);
                 timeoutMsgKo = 'SAP 사용처 조회 시간 초과'; timeoutMsgEn = 'SAP where-used lookup timed out';

@@ -560,6 +560,73 @@ def fetch_where_used(materials, plant='1000'):
     return {'ok': True, 'source': 'grid', 'materials': mat_list, 'text': text}
 
 
+def fetch_where_used_batch(materials, plant='1000'):
+    """ZPP046("자재 사용처 일괄조회" — 회사 커스텀 배치 리포트)으로 여러 자재의 사용처를
+    SAP 서버 쪽에서 한 번에 묶어 조회한다. `fetch_where_used`(자재별 CS15 순차 실행)보다
+    SAP 화면 전환이 한 번뿐이라 빠르지만, `_sap_dump_grid`의 "응답 크기 보호용 500행 캡"을
+    **여러 자재 결과 전체가 공유**한다 — 사용처가 많은 자재 하나가 캡을 다 차지하면 나머지
+    자재 결과가 통째로 잘려나갈 수 있다(2026-09-15 실사용 진단으로 확정된 제약, 자세한 내용은
+    `fetch_where_used`의 ZPP046 관련 주석/CLAUDE.md 참고 — 실제로 자재 104438 하나가 500건
+    넘는 사용처를 갖고 있어서 나머지 3개가 전부 잘리는 걸 재현·확인함). 그래서 이 함수는
+    기본 동작이 아니라, 사용자가 "다중/일괄/복수"라고 명시적으로 말해 이 트레이드오프(빠름 vs
+    잘릴 위험)를 감수하겠다는 의사를 밝혔을 때만 `js/04h`에서 호출한다 — 기본값은 여전히
+    `fetch_where_used`(안전하지만 느림).
+    ⚠️ 복수 선택 팝업(`tblSAPLALDBSINGLE`)의 한 화면 입력 행이 8개까지만 확인됐다(그 이상은
+    스크롤이 필요한데 실사용 검증 안 됨, ZDMSR004와 동일한 제약) — 그래서 이 함수를 호출하는
+    쪽(`kortek_backend.py`)에서 최대 8개로 자른다."""
+    if not materials:
+        raise RuntimeError('자재번호를 지정해주세요.')
+    plant = (plant or '1000').strip()
+    mat_list = list(materials) if isinstance(materials, (list, tuple)) else [materials]
+    mat_list = [str(m).strip() for m in mat_list if str(m).strip()]
+    if not mat_list:
+        raise RuntimeError('자재번호를 지정해주세요.')
+
+    session = _get_sap_session()
+    session.StartTransaction('ZPP046')
+    time.sleep(0.6)
+    wnd = session.findById('wnd[0]')
+
+    try:
+        wnd.findById('usr/ctxtP_WERKS').text = plant
+    except Exception:
+        pass  # 플랜트 필드가 없어도 자재번호만으로 실행을 시도한다.
+
+    if len(mat_list) == 1:
+        try:
+            wnd.findById('usr/ctxtS_MATNR-LOW').text = mat_list[0]
+        except Exception as e:
+            raise RuntimeError(f'ZPP046 자재번호 입력 필드를 찾지 못했습니다: {e}')
+    else:
+        try:
+            wnd.findById('usr/btn%_S_MATNR_%_APP_%-VALU_PUSH').press()
+            time.sleep(0.8)
+            base = 'wnd[1]/usr/tabsTAB_STRIP/tabpSIVA/ssubSCREEN_HEADER:SAPLALDB:3010/tblSAPLALDBSINGLE/ctxtRSCSEL_255-SLOW_I[1,%d]'
+            for i, mat in enumerate(mat_list):
+                session.findById(base % i).text = mat
+            session.findById('wnd[1]/tbar[0]/btn[8]').press()  # 실사용 확인 — ZPP038 BOM과 동일하게 단일 버튼으로 충분
+            time.sleep(0.5)
+        except Exception as e:
+            raise RuntimeError(f'ZPP046 복수 자재 입력 중 오류가 발생했습니다: {e}')
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('tbar[1]/btn[8]').press()  # 실행(F8)
+    except Exception as e:
+        raise RuntimeError(f'ZPP046 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(2.0)
+
+    wnd = session.findById('wnd[0]')
+    body, source = _sap_dump_screen_body(wnd)
+    mat_label = ', '.join(mat_list)
+    if not body:
+        return {'ok': False, 'error': f'자재 "{mat_label}"의 사용처 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요.'}
+
+    header = f'[SAP 사용처 일괄조회(ZPP046): 자재 {mat_label}]\n'
+    text = header + '\n' + body
+    return {'ok': True, 'source': source, 'materials': mat_list, 'text': text}
+
+
 # ── "승인원 표지 생성" 전용 헬퍼 ────────────────────────────────────────
 # 💡 [2026-09-15 신규] 사용자가 회사에서 쓰던 별도 데스크톱 앱("연구소 가이드 시스템",
 # PyInstaller로 배포된 Python/Tkinter 앱)의 exe를 주고 "이 기능을 AI 문답에도 추가해달라"고
@@ -1296,6 +1363,11 @@ def main():
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
             materials_param = materials_list if len(materials_list) > 1 else (materials_list[0] if materials_list else '')
             result = fetch_where_used(materials_param, plant)
+        elif action == 'fetch_where_used_batch':
+            materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
+            materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
+            result = fetch_where_used_batch(materials_list, plant)
         elif action == 'fetch_approval_info':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]

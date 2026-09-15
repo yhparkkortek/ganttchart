@@ -1684,6 +1684,25 @@ def sap_where_used():
     return jsonify(data), status
 
 
+@app.route('/sap-where-used-batch', methods=['GET'])
+def sap_where_used_batch():
+    # 💡 [2026-09-15 신규, 사용자 요청] "다중 사용처 조회해줘"/"일괄 역전개"처럼 "역전개"/
+    #    "사용처"를 다중/일괄/복수의 의미로 말하면(js/04h의 판정) ZPP046("자재 사용처
+    #    일괄조회")으로 SAP 서버 쪽에서 한 번에 묶어 빠르게 조회한다 — 위 /sap-where-used
+    #    (자재별 CS15 순차 실행, 기본값)보다 빠르지만 _sap_dump_grid의 500행 캡을 여러 자재
+    #    결과 전체가 공유해서 사용처가 많은 자재가 있으면 나머지가 잘릴 수 있다(자세한 내용은
+    #    sap_bridge_32.py의 fetch_where_used_batch docstring 참고) — 사용자가 이
+    #    트레이드오프를 알고 "다중/일괄/복수"라고 명시했을 때만 이 경로를 탄다(기본 동작
+    #    아님). 복수 선택 팝업 입력 행이 8개까지만 확인돼 최대 8개로 자름.
+    material = (request.args.get('material') or '').strip()
+    plant = (request.args.get('plant') or '1000').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-where-used-batch?material=303410,303411'}), 400
+    materials = [m.strip() for m in material.split(',') if m.strip()][:8]
+    data, status = _run_sap_bridge(['fetch_where_used_batch', ','.join(materials), plant], 60, 'SAP 사용처 일괄조회')
+    return jsonify(data), status
+
+
 # ── 승인원 표지 생성 ──────────────────────────────────────────
 #    [2026-09-15 신규] "SAP에서 104477 승인원 표지 생성해줘" — 사내 별도 데스크톱 앱("연구소
 #    가이드 시스템")의 exe를 pyinstxtractor-ng로 풀고 main.pyc 바이트코드를 분석해서 그
