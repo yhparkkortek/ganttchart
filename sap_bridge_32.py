@@ -1594,8 +1594,8 @@ def _save_po_pdf_to_file(save_path):
     Windows "사본 저장..." 다이얼로그가 뜨고, 거기서 파일명(=오더번호)·형식(PDF)을
     지정해야 비로소 실제 파일이 만들어진다 — 이 네이티브 다이얼로그도 SAP GUI
     Scripting으로는 못 잡는 영역(SAP 문서 열기 기능에서 이미 겪은 것과 같은 제약)이라,
-    Ctrl+S 표준 단축키를 SAP 창에 직접 보내 다이얼로그를 띄운 뒤, 그 다이얼로그의
-    파일명 입력란에 전체 경로를 직접 입력하는 방식으로 자동화한다.
+    Ctrl+S(안 되면 Ctrl+Shift+S) 표준 단축키를 SAP 창에 직접 보내 다이얼로그를 띄운 뒤,
+    그 다이얼로그의 파일명 입력란에 전체 경로를 직접 입력하는 방식으로 자동화한다.
     ⚠️⚠️ **이 함수는 아직 라이브 검증 전이다** — Claude Code 세션이 Bash로 직접
     "키보드 입력을 다른 창에 보내는" 동작(SAP GUI Scripting보다 훨씬 넓은 범위의 OS
     자동화)을 실행하려 하자 harness의 자동 모드 분류기가 차단해서, 이 세션 안에서는
@@ -1614,24 +1614,55 @@ def _save_po_pdf_to_file(save_path):
 
     sap_win.set_focus()
     time.sleep(0.5)
-    send_keys('^s')  # Ctrl+S — 임베드된 PDF 뷰어의 표준 "다른 이름으로 저장" 단축키
-    time.sleep(1.5)
+    # ⚠️ [2026-09-15 1차 실사용 테스트 실패 후 보강] "발주서출력" 버튼을 누른 직후엔 SAP
+    # GUI 자체의 키보드 포커스가 여전히 그 버튼(또는 그리드)에 남아있어서, 곧바로 단축키를
+    # 보내면 임베드된 PDF 뷰어가 아니라 SAP GUI로 전달되어 무시되는 것으로 추정됨(1차
+    # 테스트에서 다이얼로그가 전혀 안 떴음) — 문서 내용 영역을 한 번 클릭해 그쪽으로
+    # 포커스를 명시적으로 옮긴 뒤 단축키를 보내도록 수정.
+    try:
+        rect = sap_win.rectangle()
+        cx = (rect.left + rect.right) // 2 - rect.left
+        cy = (rect.top + rect.bottom) // 2 - rect.top
+        sap_win.click_input(coords=(cx, cy))
+        time.sleep(0.5)
+    except Exception:
+        pass  # 클릭 실패해도 단축키는 일단 시도
 
+    def _find_save_dialog(timeout_sec):
+        deadline = time.time() + timeout_sec
+        titles = []
+        while time.time() < deadline:
+            for w in Desktop(backend='uia').windows():
+                try:
+                    title = w.window_text()
+                except Exception:
+                    continue
+                if title and title not in titles:
+                    titles.append(title)
+                if '사본 저장' in title or 'Save' in title:
+                    return w, titles
+            time.sleep(0.4)
+        return None, titles
+
+    # ⚠️ [사용자 제안 반영] 임베드 뷰어에 따라 "다른 이름으로 저장" 단축키가 Ctrl+S가
+    # 아니라 Ctrl+Shift+S일 수 있어(Acrobat 계열이 "저장"과 "다른 이름으로 저장"을
+    # 구분하는 경우 흔함) — Ctrl+S를 먼저 시도하고 다이얼로그가 안 뜨면 Ctrl+Shift+S로
+    # 재시도한다. 둘 다 실패하면 그 시점에 열려있던 창 목록을 에러에 남겨 다음 디버깅
+    # 왕복을 줄인다.
     save_dlg = None
-    for _ in range(10):
-        for w in Desktop(backend='uia').windows():
-            try:
-                title = w.window_text()
-            except Exception:
-                continue
-            if '사본 저장' in title or 'Save' in title:
-                save_dlg = w
-                break
+    seen_titles = []
+    for shortcut in ('^s', '^+s'):
+        sap_win.type_keys(shortcut, pause=0.05)
+        time.sleep(1.5)
+        save_dlg, titles = _find_save_dialog(5)
+        seen_titles = list(dict.fromkeys(seen_titles + titles))
         if save_dlg is not None:
             break
-        time.sleep(0.5)
     if save_dlg is None:
-        raise RuntimeError('PDF 저장("사본 저장") 다이얼로그가 뜨지 않았습니다 — PDF 미리보기가 열려있지 않거나, Ctrl+S가 전달되지 않았을 수 있습니다.')
+        # 디버깅에 필요한 최소 정보(그 시점에 열려있던 창 목록)를 에러 메시지에 같이
+        # 남긴다 — 다음 실패 시 왕복 없이 바로 원인을 좁힐 수 있게.
+        titles_str = ' / '.join(seen_titles[:20])
+        raise RuntimeError(f'PDF 저장("사본 저장") 다이얼로그가 뜨지 않았습니다(Ctrl+S, Ctrl+Shift+S 둘 다 시도함) — PDF 미리보기가 열려있지 않거나, 단축키가 전달되지 않았을 수 있습니다. (열려있던 창: {titles_str})')
 
     save_dlg.set_focus()
     time.sleep(0.3)
