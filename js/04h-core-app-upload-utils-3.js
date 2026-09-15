@@ -291,7 +291,8 @@
   "vendorName": "공급자(협력사) 상호",
   "items": [
     {"desc": "품목명(원문 그대로)", "qty": 숫자, "unitPrice": 숫자(원 단위 정수, 콤마 제거), "tempCode": "아래 임시코드 표에서 이 품목과 가장 가까운 코드 하나"}
-  ]
+  ],
+  "note": "페이지를 일부만 사용했거나 애매해서 넘어간 부분이 있으면 한 문장으로, 없으면 빈 문자열"
 }
 ⚠️ 중요 — 반드시 지킬 것:
 1. 문서에 "공급자"와 "공급받는자"(또는 "받는자") 두 회사 정보가 나란히 있으면, bizRegNo/
@@ -307,11 +308,15 @@
    있거나 "CABLE ASSY" 같은 일반 부품명이라 표의 13개 분류 중 어디에 해당하는지 확신할
    수 없으면 **절대 추측해서 채우지 말고 빈 문자열("")로 남겨두세요** — 사람이 직접
    확인해야 합니다.
-4. 같은 품목 목록이 문서 안에 두 번 이상 나올 수 있습니다(예: "거래명세서" 페이지와
-   "견적서/QUOTATION" 페이지가 같은 품목들을 각자의 표 형식으로 중복 기재하는 경우) —
-   이런 경우 각 품목을 두 번씩 세지 말고 한 번만 items에 넣으세요(품번/품명으로 같은
-   품목인지 판단).
-품목이 여러 개면 items 배열에 전부 넣으세요(하나도 빠뜨리지 말 것).
+4. 문서에 페이지/표가 여러 개일 수 있습니다. **가장 분명하고 구조화된 품목 표 하나(보통
+   첫 페이지)만 기준으로 추출하세요.** 다른 페이지가 같은 품목을 다른 표 형식으로 반복한
+   것이면 그냥 무시하세요(중복으로 두 번 세지 말 것). 다른 페이지가 서로 관련 없는 별개
+   정보(예: 첫 페이지는 거래명세서, 둘째 페이지는 전혀 다른 문서)라도 마찬가지로 첫
+   페이지만 기준으로 삼고, 어떤 페이지를 기준으로 썼는지/어떤 페이지를 건너뛰었는지를
+   note 필드에 한 문장으로 적으세요. 절대 여러 페이지의 서로 다른 내용을 억지로 합치거나
+   짜맞추지 마세요.
+품목이 여러 개면 items 배열에 전부 넣으세요(하나도 빠뜨리지 말 것) — 단, 위 4번처럼 기준으로
+삼은 페이지/표 안의 품목만 넣으면 됩니다.
 
 [임시코드 표]
 ${tempLines}
@@ -334,12 +339,19 @@ ${attachText}`;
         const _en = window._currentLang === 'en';
         const itemLines = draft.items.map(function(it, i) {
             const codeInfo = window._PO_TEMP_CODE_TABLE.find(function(r) { return r.code === it.tempCode; });
-            const codeLabel = codeInfo ? `${it.tempCode}(${codeInfo.desc})` : (it.tempCode || _en ? '(unmatched)' : '(매칭 안 됨)');
+            // 🐛 [2026-09-15 버그수정] `it.tempCode || _en ? A : B` 는 연산자 우선순위 때문에
+            // `(it.tempCode || _en) ? A : B`로 해석되어, _en이 true면 tempCode가 있어도
+            // 항상 "(unmatched)"가 나오는 등 의도와 다르게 동작하던 버그 — 괄호로 명확히 고침.
+            const codeLabel = codeInfo ? `${it.tempCode}(${codeInfo.desc})` : (_en ? '(unmatched)' : '(매칭 안 됨)');
             return `${i + 1}. ${it.desc} | ${_en ? 'qty' : '수량'}:${it.qty} | ${_en ? 'unit price' : '단가'}:${(it.unitPrice || 0).toLocaleString()} | ${_en ? 'temp code' : '임시코드'}:${codeLabel}`;
         }).join('\n');
+        // 💡 [2026-09-15 신규] 여러 페이지/표 중 일부만 기준으로 썼거나 건너뛴 부분이 있으면
+        // AI가 남긴 note를 같이 보여준다("2페이지는 서로 다른 정보면 1페이지만 분석하고
+        // 안내해달라"는 사용자 요청 반영).
+        const noteLine = draft.note ? `\n\nℹ️ ${draft.note}` : '';
         return window._t(
-            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}\n\n[품목 ${draft.items.length}건]\n${itemLines}\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경").`,
-            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}\n\n[${draft.items.length} item(s)]\n${itemLines}\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2's temp code should be 900201").`
+            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경").`,
+            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2's temp code should be 900201").`
         );
     };
 
@@ -1877,8 +1889,14 @@ ${attachText}`;
             }
             const replyText = question.trim();
 
-            // ── 새 draft 시작: 첨부가 있고 아직 진행 중인 draft가 없음 ──
-            if (!window._ganttQaPoDraft) {
+            // 🐛 [2026-09-15 실사용 버그수정] 새 첨부(📎)가 있으면 이미 진행 중이던 draft가
+            // 있어도(이전 문서에 대한 확인/정정을 마치지 않고 새 파일을 첨부한 경우) 항상
+            // 새 파일로 다시 시작한다 — 원래는 `!window._ganttQaPoDraft`일 때만 새로
+            // 추출해서, draft가 남아있는 상태에서 다른 문서를 새로 첨부하면 그 새 파일은
+            // 조용히 무시되고 계속 "이전 정보만 출력"되던 버그가 실사용에서 확인됨(첨부
+            // 자체가 "이 문서로 다시 하겠다"는 의사표시이므로, 새 첨부가 항상 우선).
+            if (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) {
+                window._ganttQaPoDraft = null;
                 window._ganttQaHistory.push({ role: 'user', text: question });
                 input.value = '';
                 const attachments = window._ganttQaPendingAttachments.slice();
@@ -1892,6 +1910,7 @@ ${attachText}`;
                         stage: 'confirm_items',
                         bizRegNo: extracted.bizRegNo || '', invoiceDate: extracted.invoiceDate || '',
                         vendorName: extracted.vendorName || '', items: extracted.items,
+                        note: extracted.note || '',
                         projectCode: '', buyerEmpId: '', reason: '', purpose: '',
                     };
                     window._ganttQaHistory.pop();
@@ -1905,7 +1924,7 @@ ${attachText}`;
                 return;
             }
 
-            // ── 기존 draft 이어서 처리 ──
+            // ── 기존 draft 이어서 처리(새 첨부가 없을 때만 여기 도달) ──
             const pd = window._ganttQaPoDraft;
             window._ganttQaHistory.push({ role: 'user', text: question });
             input.value = '';
@@ -1944,6 +1963,7 @@ ${attachText}`;
                         pd.invoiceDate = extracted.invoiceDate || pd.invoiceDate;
                         pd.vendorName = extracted.vendorName || pd.vendorName;
                         pd.items = extracted.items;
+                        pd.note = extracted.note || '';
                         window._ganttQaHistory.pop();
                         window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaPoSummaryText(pd) });
                     } catch (e) {
