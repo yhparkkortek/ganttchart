@@ -328,12 +328,16 @@ def _navigate_to_bom_screen(session, wnd, materials, plant='1000'):
     wnd.sendVKey(0)
     time.sleep(0.6)
 
-    plant_field = _find_by_id_substring(wnd, 'WERKS')
-    if plant_field is not None:
-        try:
-            plant_field.text = str(plant)
-        except Exception:
-            pass  # 플랜트 필드가 없거나 값을 못 넣어도 자재번호만으로 실행을 시도한다.
+    # 💡⚠️ [2026-09-15 실사용에서 확인] "WERKS" 문자열이 "플랜트" 라벨 컨트롤
+    # (`txt%_WERKS_%_APP_%-TEXT`)에도 걸려서, 단순 첫 매치(`_find_by_id_substring`)로는
+    # 실제 입력칸(`ctxtWERKS`)이 아니라 이 라벨에 값을 넣고 "성공"으로 착각했었다 — 그 결과
+    # 플랜트가 실제로는 비어 있어 실행(F8)이 SAP의 "필수 입력 필드" 오류로 조용히 막혔다
+    # (사용자가 SAP 화면을 캡처해서 알려줘서 발견). `_set_text_on_best_candidate`로 후보를
+    # 전부 모아 입력 가능한 타입부터 시도하도록 수정.
+    plant_field = _set_text_on_best_candidate(wnd, 'WERKS', plant)
+    # 플랜트 필드를 못 찾거나 값을 못 넣어도 일단 자재번호만으로 실행을 시도한다(플랜트가
+    # 필수가 아닌 변형 화면일 수도 있어서) — 필수인데 비면 아래 실행(F8) 단계에서 SAP가
+    # 화면에 오류를 표시하고, 그 경우 결과 화면에도 그리드가 없어 최종적으로 실패로 보고된다.
 
     is_multi = isinstance(materials, (list, tuple))
     if is_multi:
@@ -448,12 +452,10 @@ def _navigate_to_where_used_screen(session, wnd, material, plant='1000'):
     if matnr_field is None:
         raise RuntimeError(f'CS15 화면에서 자재번호 입력 필드를 찾지 못했습니다(마지막 오류: {last_err}) — 이 필드 ID는 실사용 녹화로 직접 확인된 게 아니라 추측한 것이라, 화면 구조가 다르면 실패할 수 있습니다.')
 
-    plant_field = _find_by_id_substring(wnd, 'WERKS')
-    if plant_field is not None:
-        try:
-            plant_field.text = str(plant)
-        except Exception:
-            pass  # 플랜트 필드가 없어도(매크로에도 없었음) 자재번호만으로 실행을 시도한다.
+    # 💡 같은 함정(WERKS 문자열이 실제 입력칸 `ctxtWERKS`뿐 아니라 라벨 컨트롤에도 걸림) —
+    # `_navigate_to_bom_screen`의 플랜트 필드 수정과 동일한 이유로 `_set_text_on_best_candidate` 사용.
+    plant_field = _set_text_on_best_candidate(wnd, 'WERKS', plant)
+    # 플랜트 필드가 없어도(매크로에도 없었음) 자재번호만으로 실행을 시도한다.
 
     dirkt_chk = _find_by_id_substring(wnd, 'RC29L-DIRKT')
     if dirkt_chk is not None:
@@ -732,6 +734,38 @@ def _find_all_by_id_substring(container, substring, depth=0, max_depth=30, resul
             continue
         _find_all_by_id_substring(child, substring, depth + 1, max_depth, results)
     return results
+
+
+def _set_text_on_best_candidate(wnd, substring, value, prefer_types=('GuiCTextField', 'GuiTextField')):
+    """`_find_all_by_id_substring`로 후보를 전부 모아, `prefer_types` 순서로 우선 정렬한 뒤
+    실제로 `.text` 대입이 되는 첫 번째 후보를 찾아 값을 넣는다(2026-09-15 신규 — 실사용
+    진단으로 확정된 함정: SAP 선택화면은 입력 필드 ID 옆에 "라벨" 역할을 하는 컴패니언
+    컨트롤(예: `txt%_WERKS_%_APP_%-TEXT`, 실제 입력칸 `ctxtWERKS`와 별개)을 같은 ID
+    문자열로 만들어두는 경우가 흔하다 — 첫 매치(보통 이 라벨)에 값을 넣으면 예외 없이
+    "성공"하지만 실제 입력칸은 계속 비어 있어, 이후 실행(F8)이 "필수 입력 필드가 비어
+    있다"는 SAP 오류로 조용히 막히는 버그가 실사용에서 확인됨(ZPP038 BOM 조회의 플랜트
+    필드) — MM03 자재번호 필드에서 먼저 겪었던 것과 같은 종류의 함정이라 그 해결 패턴
+    (`_navigate_to_material_document_tab`)을 공용 헬퍼로 뽑아 재사용한다. 성공하면 실제로
+    값을 넣은 컨트롤을, 후보가 없거나 전부 실패하면 None을 반환한다."""
+    candidates = _find_all_by_id_substring(wnd, substring)
+    if not candidates:
+        return None
+
+    def sort_key(c):
+        try:
+            t = c.Type
+        except Exception:
+            t = None
+        return prefer_types.index(t) if t in prefer_types else len(prefer_types)
+
+    candidates.sort(key=sort_key)
+    for cand in candidates:
+        try:
+            cand.text = str(value)
+            return cand
+        except Exception:
+            continue
+    return None
 
 
 def _select_tab_if_present(wnd, id_substring):
