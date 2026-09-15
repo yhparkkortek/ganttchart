@@ -535,6 +535,14 @@ window._pcRenderLibList = function(filterText) {
 //    자체를 잃는다(값이 한 줄뿐인 항목은 우연히 살아남아 "1개는 되고 2개는 안 되는" 것처럼 보였음).
 //    pdf.js의 각 텍스트 조각은 transform[5]에 y좌표를 담고 있으므로, 같은 줄(y좌표가 거의 동일)이면
 //    스페이스로, 줄이 바뀌면(y좌표가 달라지면) 개행으로 이어붙여 원본의 줄 구조를 최대한 복원한다.
+// 🐛 [2026-09-15 버그수정] "구매오더 요청" 기능에서 거래명세서(열이 많은 촘촘한 표 — 날짜/품목/
+//    규격/수량/단가/공급가액/세액/합계)를 첨부했더니 "단가"/"합계" 숫자가 품목 행과 안 맞게
+//    뒤섞여 나오는 문제가 실사용에서 확인됨 — 원인은 이 함수가 `content.items`를 PDF 내부
+//    그리기 순서(=시각적 왼쪽→오른쪽 순서와 다를 수 있음, 특히 표/양식처럼 여러 텍스트 블록이
+//    겹치는 레이아웃) 그대로 이어붙이고 있었던 것. 지금은 먼저 y좌표로 같은 줄끼리 묶은 뒤,
+//    그 줄 안에서 x좌표(transform[4])로 다시 정렬해 실제 "왼쪽→오른쪽" 읽는 순서를 복원한다 —
+//    Panel 데이터시트(원래 이 함수의 용도)에도 그대로 적용되는 개선이라 별도 분기 없이 공용
+//    로직으로 고쳤다.
 window._pcExtractPdfText = async function(file) {
     const buf = await file.arrayBuffer();
     const pdf = await window.pdfjsLib.getDocument({ data: buf }).promise;
@@ -542,18 +550,20 @@ window._pcExtractPdfText = async function(file) {
     for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const content = await page.getTextContent();
-        let lastY = null;
+        const lines = []; // [{y, items: [{x, str}]}]
         content.items.forEach(function(it) {
-            const y = (it.transform && typeof it.transform[5] === 'number') ? it.transform[5] : null;
-            if (lastY !== null && y !== null && Math.abs(y - lastY) > 1) {
-                text += '\n';
-            } else if (text && !/[\n ]$/.test(text)) {
-                text += ' ';
-            }
-            text += it.str;
-            if (y !== null) lastY = y;
+            const y = (it.transform && typeof it.transform[5] === 'number') ? it.transform[5] : 0;
+            const x = (it.transform && typeof it.transform[4] === 'number') ? it.transform[4] : 0;
+            let line = lines.find(function(l) { return Math.abs(l.y - y) <= 2; });
+            if (!line) { line = { y: y, items: [] }; lines.push(line); }
+            line.items.push({ x: x, str: it.str });
         });
-        text += '\n';
+        // PDF 좌표계는 y가 아래에서 위로 증가하므로, 페이지 상단부터 읽으려면 y 내림차순 정렬.
+        lines.sort(function(a, b) { return b.y - a.y; });
+        lines.forEach(function(line) {
+            line.items.sort(function(a, b) { return a.x - b.x; });
+            text += line.items.map(function(it) { return it.str; }).join(' ').replace(/ +/g, ' ') + '\n';
+        });
     }
     return text;
 };
