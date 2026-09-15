@@ -367,10 +367,26 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
   **⚠️ 캐시가 없으면 그 자리에서 한 번 더 조회(2026-09-15 버그수정)**: 원래는 `_lastSapFetchResult`
   캐시가 비어 있으면 곧바로 "아직 내보낼 SAP 데이터가 없습니다"로 실패했는데, 실사용에서 "SAP에서
   502572 BOM 열어서 엑셀로 출력해줘"처럼 조회와 내보내기를 한 메시지에 같이 요청하면 캐시가 당연히
-  비어 있어 매번 실패하는 문제가 확인됨 — 지금은 캐시가 없으면 그 자리에서 `_aiFetchSapContext()`를
-  한 번 호출해(지금 SAP GUI에 보이는 화면을 그대로 읽어옴 — 특정 트랜잭션으로 자동 이동하는 기능은
-  아님) 그 결과를 바로 내보낸다. 이 때문에 함수 자체도 동기 함수에서 `sendGanttQaMessage`의 비동기
-  블록으로 옮겨졌다(다른 SAP 로컬 명령들과 같은 패턴).
+  비어 있어 매번 실패하는 문제가 확인됨 — 지금은 캐시가 없으면 그 자리에서 `_aiFetchSapContext(question)`를
+  한 번 호출해 그 결과를 바로 내보낸다. 이 때문에 함수 자체도 동기 함수에서 `sendGanttQaMessage`의
+  비동기 블록으로 옮겨졌다(다른 SAP 로컬 명령들과 같은 패턴).
+- **BOM 조회("SAP에서 502572 BOM 열어서...", 2026-09-15 신규)**: `_aiFetchSapContext`가 이제
+  `question` 인자를 받아 "BOM"과 자재번호가 같이 언급되면 그냥 "지금 화면"을 읽는 대신
+  `/sap-bom?material=...`(ZPP038 "BOM 전개"로 직접 이동)을 호출한다 — MM03 문서 열기의 자재번호
+  직접조회와 같은 설계로, **AI 문답의 일반 대화 경로(`sendGanttQaMessage`가 `_aiFetchSapContext(question)`을
+  부르는 두 곳 — 엑셀 내보내기 블록과 메인 AI 호출 블록 둘 다)에서 자동으로 적용된다**(로컬
+  명령을 새로 추가한 게 아니라 기존 조회 함수 자체를 똑똑하게 만든 것 — "BOM"이 아닌 질문/자재번호가
+  없으면 완전히 기존과 동일하게 동작). `sap_bridge_32.py`의 `fetch_bom(material, plant='1000')`/
+  `_navigate_to_bom_screen` — 2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 확보. 매크로에는
+  실행(F8) 이후 "레이아웃 불러오기"(`&MB_VARIANT`/`&LOAD`)와 SAP 자체 엑셀 내보내기(`&MB_EXPORT`/
+  `&XXL`, OLE로 Excel을 직접 여는 SAP 표준 기능)가 이어지는데, 이건 이 코드베이스의 기존 설계
+  (특정 트랜잭션 전용 파서 안 만들고 화면을 그대로 텍스트로 덤프 → 자체 XLSX 빌더로 내보내기)와
+  겹치는 기능이라 재현하지 않고 실행(F8)까지만 자동화했다 — 결과 화면은 `fetch_current_screen()`
+  과 동일한 범용 덤프(`_sap_find_grid`/`_sap_dump_fields`) 재사용. **⚠️ 미검증**: ZPP038의 BOM
+  전개 결과가 ALV 그리드(GuiShell/GridView)가 아니라 트리 구조(BOM은 부모-자식 계층이라 Tree
+  컨트롤일 가능성도 있음)라면 `_sap_find_grid`가 못 찾아서 `_sap_dump_fields` 폴백도 제대로 못
+  읽을 수 있다 — 실사용 테스트로 확인 필요, 실패하면 이 부분을 의심하고 화면 구조(Tree인지
+  GridView인지)부터 확인할 것.
 - **문서 열기("SAP에서 P01 문서 열어줘")**: `sap_bridge_32.py`의 `open_document(doc_type)` —
   MM03에서 이미 열어둔 자재의 "문서 데이터" 탭(`tblSAPLCV140SUB_DOC` 테이블 컨트롤, 화면 어디에
   있든 `_find_by_id_substring`로 재귀 탐색해 절대경로에 안 묶이게 함)에서 doc_type과 텍스트가

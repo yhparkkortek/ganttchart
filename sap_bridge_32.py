@@ -33,6 +33,10 @@
 # 한 번에 `C:\SAP_DMS\`에 다운로드한다 — 자재 1개씩 MM03을 드릴다운하는 open_document보다
 # 여러 개를 한 번에 처리할 때 훨씬 빠르다(2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로
 # 확보한 정확한 컨트롤 ID 그대로 재현 — `download_documents_batch` 참고).
+#
+# 두 번째 인자로 "fetch_bom"을 주면(세 번째 인자로 자재번호, 네 번째 인자로 플랜트 — 생략 시
+# 1000) ZPP038("BOM 전개")로 직접 이동해 그 자재의 BOM을 조회한 뒤 화면을 그대로 텍스트로
+# 읽어온다(2026-09-15 실사용 매크로로 확보 — `fetch_bom`/`_navigate_to_bom_screen` 참고).
 # ══════════════════════════════════════════════════════════════
 import sys
 import os
@@ -188,6 +192,70 @@ def fetch_current_screen():
         header += f'[상태표시줄: {status_text}]\n'
     text = header + '\n' + body
     return {'ok': True, 'source': source, 'text': text}
+
+
+# ── "BOM 조회" (ZPP038) 전용 헬퍼 ──────────────────────────────────────
+def _navigate_to_bom_screen(session, wnd, material, plant='1000'):
+    """ZPP038("BOM 전개(Multiple Explosion)")로 이동해 지정한 자재/플랜트의 BOM을 조회한다.
+    2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 얻은 정확한 컨트롤을 재현한 것 —
+    매크로에는 이 뒤로 "레이아웃 불러오기"(`&MB_VARIANT`/`&LOAD`)와 SAP 자체 엑셀 내보내기
+    (`&MB_EXPORT`/`&XXL`, OLE로 Excel을 직접 여는 SAP 표준 기능)가 이어지는데, 그건 이
+    코드베이스의 기존 설계(SAP 화면을 그대로 텍스트로 덤프 → 자체 XLSX 빌더로 내보내기,
+    특정 트랜잭션 전용 파서를 안 만드는 원칙)와 겹치는 기능이라 그대로 재현하지 않는다 —
+    실행(F8)까지만 자동화하고, 결과 화면은 fetch_current_screen()과 동일한 범용 덤프
+    (_sap_find_grid/_sap_dump_fields)로 읽는다.
+    ⚠️ 화면 어디에 있든 `MATNR-LOW`/`WERKS` 문자열이 포함된 컨트롤을 찾는 방식이라(절대경로
+    대신 이 프로젝트의 기존 관례 그대로), 다른 선택화면 필드와 ID가 겹치면 잘못될 수 있다 —
+    현재까지는 문제 없이 동작했다(실사용 확인)."""
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZPP038'
+    wnd.sendVKey(0)
+    time.sleep(0.6)
+
+    matnr_field = _find_by_id_substring(wnd, 'MATNR-LOW')
+    if matnr_field is None:
+        raise RuntimeError('ZPP038 화면에서 자재번호 입력 필드를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다(트랜잭션 권한이 없을 가능성도 있음).')
+    matnr_field.text = str(material)
+
+    plant_field = _find_by_id_substring(wnd, 'WERKS')
+    if plant_field is not None:
+        try:
+            plant_field.text = str(plant)
+        except Exception:
+            pass  # 플랜트 필드가 없거나 값을 못 넣어도 자재번호만으로 실행을 시도한다.
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[8]').press()  # 실행(F8)
+    except Exception as e:
+        raise RuntimeError(f'ZPP038 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(1.5)
+
+
+def fetch_bom(material, plant='1000'):
+    """자재의 BOM(ZPP038, "BOM 전개")을 조회해 화면을 그대로 텍스트로 읽어온다. 결과 화면이
+    ALV 그리드(GuiShell/GridView)면 그대로 표로, 아니면(예: 트리 구조라면 아직 지원 안 되는
+    형태일 수 있음 — 실사용 검증 필요) 일반 필드 덤프로 폴백한다."""
+    if not material:
+        raise RuntimeError('자재번호를 지정해주세요.')
+    plant = (plant or '1000').strip()
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_bom_screen(session, wnd, material, plant)
+
+    grid = _sap_find_grid(wnd)
+    if grid is not None:
+        body = _sap_dump_grid(grid)
+        source = 'grid'
+    else:
+        body = '\n'.join(_sap_dump_fields(wnd))
+        source = 'fields'
+
+    if not body:
+        return {'ok': False, 'error': f'자재 "{material}"의 BOM 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요(화면이 ALV 그리드가 아닌 트리 구조라 아직 지원하지 않는 형태일 가능성도 있습니다).'}
+
+    header = f'[SAP BOM 전개(ZPP038): 자재 {material}, 플랜트 {plant}]\n'
+    text = header + '\n' + body
+    return {'ok': True, 'source': source, 'material': material, 'text': text}
 
 
 # ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
@@ -726,6 +794,10 @@ def main():
             materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
             materials = [m.strip() for m in materials_str.split(',') if m.strip()]
             result = download_documents_batch(materials, doc_type)
+        elif action == 'fetch_bom':
+            material = sys.argv[2] if len(sys.argv) > 2 else ''
+            plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
+            result = fetch_bom(material, plant)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))

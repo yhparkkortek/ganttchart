@@ -1613,6 +1613,21 @@ def sap_download_documents_batch():
     return jsonify(data), status
 
 
+@app.route('/sap-bom', methods=['GET'])
+def sap_bom():
+    # 💡 [2026-09-15 신규] "SAP에서 502572 BOM 열어서 엑셀로 출력해줘"처럼 질문에 "BOM"과
+    #    자재번호가 같이 언급되면(js/04h의 _aiFetchSapContext가 판정), 사람이 미리 SAP GUI에서
+    #    그 자재의 BOM 화면을 열어둘 필요 없이 ZPP038("BOM 전개")로 직접 이동해 조회한다.
+    #    실제 컨트롤 조작은 sap_bridge_32.py의 fetch_bom()/_navigate_to_bom_screen()에 있다
+    #    (2026-09-15 실사용 SAP GUI "기록 및 재생" 매크로로 확보한 정확한 ID 재현).
+    material = (request.args.get('material') or '').strip()
+    plant = (request.args.get('plant') or '1000').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-bom?material=502572'}), 400
+    data, status = _run_sap_bridge(['fetch_bom', material, plant], 30, 'SAP BOM 조회')
+    return jsonify(data), status
+
+
 # ══════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     print("=" * 58)
