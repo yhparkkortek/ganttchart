@@ -1,0 +1,4328 @@
+[
+ {
+  "code": "100101",
+  "daebun": "회로자재",
+  "jungbun": "IC-LOGIC",
+  "sobun": "IC_LOGIC",
+  "desc": "공정, GATE TYPE(15종 유형내 선택), GATE 채널 수, 제조사 품명, GATE I/O 포트 수(#/#), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100201",
+  "daebun": "회로자재",
+  "jungbun": "IC-E SWITCH",
+  "sobun": "IC_SWC",
+  "desc": "공정, 신호 속성(속성유형 4종 중 선택), Input 채널 수, 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100203",
+  "daebun": "회로자재",
+  "jungbun": "IC-E SWITCH",
+  "sobun": "IC_PWRSW",
+  "desc": "공정, Output 채널 수, 출력 전류 (A), 제조사 품명, 전원 제어 (Active \"H\", or \"L\" or OCP \"O\"), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100301",
+  "daebun": "회로자재",
+  "jungbun": "IC-AUDIO",
+  "sobun": "IC_A-AMP",
+  "desc": "공정, AMP CLASS, 출력 Watt(Max), 제조사 품명, 출력 임피던스 (Min/Max[Ω]), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100302",
+  "daebun": "회로자재",
+  "jungbun": "IC-AUDIO",
+  "sobun": "IC_A-PRO",
+  "desc": "공정, Input 채널 수, 제조사 품명, 기능 제어 방식 (\"USB\" or \"I2C\"), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100401",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "IC_VIDEO COMP",
+  "desc": "공정, Flyback peak voltage, 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100402",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "IC_V-DEC",
+  "desc": "공정, Input 채널 수, 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100404",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "IC_V-SNC",
+  "desc": "공정, 제조사 품명, 입력신호, 입력해상도, 출력신호, 출력 해상도, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100405",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "VIDEO OSD",
+  "desc": "공정,기능 유형 (\"※ 기능 유형 정리표\" 내용 중 선택),제조사 품명,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "100406",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "VIDEO EQ",
+  "desc": "공정,기능 유형 (\"※ 기능 유형 정리표\" 내용 중 선택),제조사 품명,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "100407",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "IC_SCALR",
+  "desc": "공정, 제조사 품명, 입력신호, 입력해상도, 출력신호, 출력 해상도, VCC(Min/~/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100408",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "IC_V-CNV",
+  "desc": "공정, I/O신호, 제조사 품명, 최대 주파수, I/O BIT, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100409",
+  "daebun": "회로자재",
+  "jungbun": "IC-VIDEO",
+  "sobun": "IC_HDSDI",
+  "desc": "공정, 기능 유형 (Equalizers = \"EQUAL\", Reclockers = \"RELOK\", Cable Drivers = \"CBDRV\", Serializer = \"SERAL\",Video Timing = \"TMING\", Receiver = \"RECVR\"), 제조사 품명, VCC(Min/Max[V]) ,Pin 수, PACKAGE (or size)"
+ },
+ {
+  "code": "100501",
+  "daebun": "회로자재",
+  "jungbun": "IC-PLD/FPGA",
+  "sobun": "PLD",
+  "desc": "공정,사용자 I/O 채널,제조사 품명,Logic cell 수,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "100502",
+  "daebun": "회로자재",
+  "jungbun": "IC-PLD/FPGA",
+  "sobun": "IC_FPGA",
+  "desc": "공정, 사용자 I/O 채널, 제조사 품명, Logic cell 수, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100601",
+  "daebun": "회로자재",
+  "jungbun": "IC-MULTIPLEXER",
+  "sobun": "IC_V-MUX",
+  "desc": "공정, Input 채널, 제조사 품명, 최대 주파수, 지원 Video(HDMI, DP or HDMI/DP), I/O PORT 수, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100602",
+  "daebun": "회로자재",
+  "jungbun": "IC-MULTIPLEXER",
+  "sobun": "DEMUX(IO-EXTENDER)",
+  "desc": "공정,Input 채널 수,제조사 품명,주파수,지원 Video(HDMI or DP or HDMI/DP),I/O PORT 수,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "100701",
+  "daebun": "회로자재",
+  "jungbun": "IC-PROCESSOR",
+  "sobun": "IC_PROSR",
+  "desc": "공정, Data Bit, 제조사 품명, CORE Speed, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100801",
+  "daebun": "회로자재",
+  "jungbun": "IC-MICOM",
+  "sobun": "IC_MICOM",
+  "desc": "공정, CORE, 제조사 품명, Program Memory(FLASH), Data Memory(SRAM), ADC 채널, ADC bit, GPIO 포트, UART 유/무(O/X), ETHERNET 유/무(O/X), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "100901",
+  "daebun": "회로자재",
+  "jungbun": "IC-RTC",
+  "sobun": "IC_RTC",
+  "desc": "공정, Battery Voltage(Min/Max[V]), 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101001",
+  "daebun": "회로자재",
+  "jungbun": "IC-IO CONTR",
+  "sobun": "IC_EXPAN",
+  "desc": "공정, Output 채널, 제조사 품명, I/O tolerance voltage, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101101",
+  "daebun": "회로자재",
+  "jungbun": "IC-LAN CONTR",
+  "sobun": "IC_LAN",
+  "desc": "공정, 제조사 품명, Function(control, PHY, MAC…), 속도10/100/1000 baseTx, WOL(유/무), MAC interface(MII, GMII, RGMII) 복수지원됨, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101201",
+  "daebun": "회로자재",
+  "jungbun": "IC-UART",
+  "sobun": "IC_UART",
+  "desc": "공정, 통신 방식, 제조사 품명, Function (RX, TX), 대기전력, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101301",
+  "daebun": "회로자재",
+  "jungbun": "IC-USB CONTR",
+  "sobun": "IC_USBCT",
+  "desc": "공정, Upstream/Downstream 채널 수, 제조사 품명, I/O 특성, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101401",
+  "daebun": "회로자재",
+  "jungbun": "IC-DRAM",
+  "sobun": "IC_RAM",
+  "desc": "공정, 메모리 종류,용량, 제조사 품명,속도, 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101501",
+  "daebun": "회로자재",
+  "jungbun": "IC-FLASH MEMORY",
+  "sobun": "IC_FRAM",
+  "desc": "공정, 메모리 종류,용량, 제조사 품명, 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101601",
+  "daebun": "회로자재",
+  "jungbun": "IC-SPECIAL MEMORY",
+  "sobun": "FIFO",
+  "desc": "공정,메모리 유형,용량,제조사 품명,속도,핀수,Package(or size)"
+ },
+ {
+  "code": "101602",
+  "daebun": "회로자재",
+  "jungbun": "IC-SPECIAL MEMORY",
+  "sobun": "VIDEO RAM",
+  "desc": "기능 유형 (\"※ 기능 유형 정리표\" 내용 중 선택),메모리 유형,용량,제조사 품명,속도,핀수,Package(or size)"
+ },
+ {
+  "code": "101603",
+  "daebun": "회로자재",
+  "jungbun": "IC-SPECIAL MEMORY",
+  "sobun": "SRAM",
+  "desc": "공정,메모리 유형,용량,제조사 품명,속도,핀수,Package(or size)"
+ },
+ {
+  "code": "101701",
+  "daebun": "회로자재",
+  "jungbun": "IC-ROM",
+  "sobun": "IC_EPROM",
+  "desc": "공정, 용량,제조사 품명, INTERFACE (I2C or SPI..), VCC(Min/Max[V]),Pin 수, PACKAGE (or size)"
+ },
+ {
+  "code": "101702",
+  "daebun": "회로자재",
+  "jungbun": "IC-ROM",
+  "sobun": "EPROM",
+  "desc": "공정,용량,제조사 품명,통신방법(I2C or SPI..),VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "101703",
+  "daebun": "회로자재",
+  "jungbun": "IC-ROM",
+  "sobun": "PROM",
+  "desc": "공정,용량,제조사 품명,통신방법(I2C or SPI..),VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "101801",
+  "daebun": "회로자재",
+  "jungbun": "IC-CLOCK DRIVER",
+  "sobun": "IC_CLOCK",
+  "desc": "공정, Output 채널, 제조사 품명, Max Clock-FRQ, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "101802",
+  "daebun": "회로자재",
+  "jungbun": "IC-CLOCK DRIVER",
+  "sobun": "CLK SYNTH",
+  "desc": "공정,출력 채널수,제조사 품명,Max Clock-FRQ,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "101901",
+  "daebun": "회로자재",
+  "jungbun": "IC-RESET",
+  "sobun": "IC_RESET",
+  "desc": "공정, Output Type (Open-Drain(Collector) \"O/D\" or Push-Pull \"P/P\"), 제조사 품명, Output Control(Active-L \"L\", Active-H \"H\", Dual \"D\"), Manual Reset 여부(W-MR, W/O-MR), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102001",
+  "daebun": "회로자재",
+  "jungbun": "IC-SYSTEM TIMER",
+  "sobun": "IC_TIMER",
+  "desc": "공정, 동작 방식 (Astable(AS) or Monostable(MS) or Dual (AM)), 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102101",
+  "daebun": "회로자재",
+  "jungbun": "IC-AMPLIFIER",
+  "sobun": "IC_OPAMP",
+  "desc": "공정, Gate 채널 수, 제조사 품명, Power Type(unipolar \"UP\" or bipolar \"BP\"), Gain Bandwidth (Max), Slew Rate (SRr/SRf[V]), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102102",
+  "daebun": "회로자재",
+  "jungbun": "IC-AMPLIFIER",
+  "sobun": "IC_V-AMP",
+  "desc": "공정, Gate 채널 수, 제조사 품명, Power Type(unipolar \"UP\" or bipolar \"BP\"), Voltage Gain, Gain Bandwidth (Max), Slew Rate, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102103",
+  "daebun": "회로자재",
+  "jungbun": "IC-AMPLIFIER",
+  "sobun": "IC_DIFRX",
+  "desc": "공정, 제조사 품명, Reference Voltage (Min/Max[Mv]), Hysteresis Voltage, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102201",
+  "daebun": "회로자재",
+  "jungbun": "IC-CONVERTER",
+  "sobun": "IC_ADC",
+  "desc": "공정, 채널 수, 제조사 품명, Bandwidth, Resolution, Input Voltage Range(Min/Max[V]), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102202",
+  "daebun": "회로자재",
+  "jungbun": "IC-CONVERTER",
+  "sobun": "IC_DAC",
+  "desc": "공정, 채널 수, 제조사 품명, CLOCK FREQUENCY, DIGITAL INPUTS BIT, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102203",
+  "daebun": "회로자재",
+  "jungbun": "IC-CONVERTER",
+  "sobun": "IC_DPCNV",
+  "desc": "공정, 제조사 품명, Supports DP Ver, Supports HDMI Ver, Supports HDCP Ver, SPI ROM(internal or external), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102301",
+  "daebun": "회로자재",
+  "jungbun": "IC-LINE DRIVER",
+  "sobun": "IC_RS232",
+  "desc": "공정, I/O 채널 수, Guarantee Data Rate, 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102302",
+  "daebun": "회로자재",
+  "jungbun": "IC-LINE DRIVER",
+  "sobun": "IC_RS485",
+  "desc": "공정, I/O 채널 수, Guarantee Data Rate, 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102303",
+  "daebun": "회로자재",
+  "jungbun": "IC-LINE DRIVER",
+  "sobun": "I2C DRV",
+  "desc": "공정,출력 채널수,제조사 품명,I/O tolerance voltage,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "102304",
+  "daebun": "회로자재",
+  "jungbun": "IC-LINE DRIVER",
+  "sobun": "IC_LINEQ",
+  "desc": "공정, Tx/RX 채널 수, 제조사 품명, Signaling Rate(Mbps), Function (Tx, Rx, Repeater, Line Driver), I/O Singal, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102401",
+  "daebun": "회로자재",
+  "jungbun": "TRANSFORMER",
+  "sobun": "TRANS",
+  "desc": "공정,제조사품명,Inductance,Leakage Inductance,UL CLASS,CORE,BOBBIN,핀수"
+ },
+ {
+  "code": "102501",
+  "daebun": "회로자재",
+  "jungbun": "IC-REGULATOR",
+  "sobun": "IC_REG",
+  "desc": "공정, REG Type (Step-Down \"STD\", Boost \"BST\"), 출력 채널수, 제조사 품명, 출력 전류, 출력 전압(Min/Max[V]), 입력 VCC(Min/Max[V]), Pin 수, PACKAGE (or size)"
+ },
+ {
+  "code": "102502",
+  "daebun": "회로자재",
+  "jungbun": "IC-REGULATOR",
+  "sobun": "IC_PMIC",
+  "desc": "공정, Step-Up/Step-Down DC/DC 채널 수, 제조사 품명, Regulate 출력수, LDO 개수, Iout(Max[A]), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102505",
+  "daebun": "회로자재",
+  "jungbun": "IC-REGULATOR",
+  "sobun": "IC_LEDRV",
+  "desc": "공정, 출력 채널 수, 제조사 품명, Iout(Min/Max), Vout (Max), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "102506",
+  "daebun": "회로자재",
+  "jungbun": "IC-REGULATOR",
+  "sobun": "REG INVERT",
+  "desc": "공정,GATE TYPE,GATE 채널 수,제조사 품명,GATE I/O 포트 수,VCC(Min/Max)[V],핀수"
+ },
+ {
+  "code": "102701",
+  "daebun": "회로자재",
+  "jungbun": "OSC",
+  "sobun": "OSC",
+  "desc": "공정,출력 채널수,주파수(출력 채널수 만큼 표기 할것-단위는 MHz=\"M\" GHz=\"G\"),제조사품명,정격전압,오차한계 [ppm],핀수[P],Package(or size),제조사"
+ },
+ {
+  "code": "102801",
+  "daebun": "회로자재",
+  "jungbun": "X-TAL",
+  "sobun": "X-TAL",
+  "desc": "공정,주파수(**.**M, 단위는 MHz=\"M\", GHz=\"G\"),Capacitance,제조사품명,오차한계,핀수,Package(or size),제조사"
+ },
+ {
+  "code": "102901",
+  "daebun": "회로자재",
+  "jungbun": "CONNECTOR",
+  "sobun": "CON",
+  "desc": "공정 구분 (“S” or ”D” or ”M”), 기능/형상 구분 약자(“NOR” or “HDR” or “MCX” or “FFC” or “BTB”), 제조사품명, 전체 핀수(*P)배열(*)Male/Female(“M” or “F”)방향(“S” or “R”), Pitch(***),Option(고객사 지정시 고객사명 기입)"
+ },
+ {
+  "code": "103001",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK DC",
+  "desc": "공정,SIZE(Ф 생략), JACK 방향(SR or AN),제조사 품명,핀수,정격전류,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103002",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK PHONE",
+  "desc": "공정,Size(Ф 생략),TYPE (MO:Mono or ST:Stereo),JACK 방향(SR or AN),제조사 품명,핀수,정격 전류,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103003",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK BNC",
+  "desc": "공정,임피던스(Ω 생략),단자수(가로X세로),JACK 방향(SR or AN),제조사 품명,핀수,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103004",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK D-SUB",
+  "desc": "공정,핀수,형상구분1(MA: Male or FE: Female, MF: Male+Female),제조사 품명,JACK 방향 (SR or AN),형상 구분2 (Slim DSUB \"SLIM\", DUAL DSUB \"M+M\" or \"M+F\" or \"F+F\" 또는 이상의 조합),형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103006",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK RCA",
+  "desc": "공정,JACK 단자 수(가로X세로),JACK 방향(SR or AN),제조사 품명,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103009",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK SCSI",
+  "desc": "공정,핀수,JACK 방향(SR or AN),제조사 품명,형상 구분 MA or FE,Pitch(단위 생략),형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103010",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK USB",
+  "desc": "공정,USB Ver(3 or 2),USB TYPE(A, B, UA, UB, MA, MB),JACK 방향(SR or AN),제조사 품명,Jack Type(H or V),핀수,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103011",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK RJ45",
+  "desc": "공정,주파수(****M),JACK 방향(SR or AN),제조사 품명,핀수,Pitch(단위 생략),LED 유/무 (\"LED\" or \"-\"),형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103013",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK HDMI",
+  "desc": "공정,HDMI Type(Normal \"A\", Mini \"C\", Micro \"D\"),JACK 방향(SR or AN),제조사 품명,Flange 개수 (1ea \"F1\" or 2ea \"F2\" or 없을시 \"-\"),보호 CAP여부(\"CAP\" or \"-\"),Jack Type(H or V),핀수,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103015",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK DVI",
+  "desc": "공정,Data 종류(D or I),Data 양(DU or SI),JACK 방향(SR or AN),제조사 품명,핀수,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103017",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK DP",
+  "desc": "공정,DP Type (Standard \"N\" or Mini \"M\" or Micro \"U\"),JACK 방향(SR or AN),제조사 품명,핀수,Flange 개수 (1ea \"F1\" or 2ea \"F2\" or 없을시 \"-\"),형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103020",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK DIN",
+  "desc": "공정,핀수,JACK 방향(SR or AN),JACK TYPE (NO or MI),제조사품명,정격전류,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103022",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK RJ11",
+  "desc": "공정,JACK 방향(SR or AN),제조사 품명,핀수,Pitch(단위 생략),LED 유/무 (없을시 \"-\", LED 있을시 \"LED\"),형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103023",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK COUPLER",
+  "desc": "공정,용도(LAN or USB),제조사 품명,접속 수(1X1 or 1X2…),형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103024",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK MULTI",
+  "desc": "공정,JACK 방향(SR or AN),제조사 품명,핀수,Flange 개수 (1ea \"F1\" or 2ea \"F2\" or 없을시 \"-\"),기능 유형 표기,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103025",
+  "daebun": "회로자재",
+  "jungbun": "JACK",
+  "sobun": "JACK PUSH TML",
+  "desc": "공정,단자수(가로x세로),Jack 방향(SR or AN),제조사 품명,핀수,형상 구분3 (PCB 실장 \"PCB\", WIRE 연결 \"WIR\", 변환(ZENDER) TYPE \"ZEN\", 확장/연결 TYPE \"EXP\"),색상"
+ },
+ {
+  "code": "103301",
+  "daebun": "회로자재",
+  "jungbun": "RELAY",
+  "sobun": "RELAY",
+  "desc": "공정,제조사품명,정격전류,Coil Voltage,정격전압,접점방식(SPST, SPDT, DPST, DPDT),고객사 정보"
+ },
+ {
+  "code": "103401",
+  "daebun": "회로자재",
+  "jungbun": "SWITCH",
+  "sobun": "SWC ROTARY",
+  "desc": "공정,제조사 품명,Handle 방향(SR or AN),Handle size,Package(or size)"
+ },
+ {
+  "code": "103402",
+  "daebun": "회로자재",
+  "jungbun": "SWITCH",
+  "sobun": "SWC SLIDE",
+  "desc": "공정,제조사품명,Lever Type (Lever Only : \"L\", Lever + Push : \"L/P\"),Lever 방향,정격전압/전류"
+ },
+ {
+  "code": "103403",
+  "daebun": "회로자재",
+  "jungbun": "SWITCH",
+  "sobun": "SWC TACT",
+  "desc": "공정,제조사품명,방향,핀수,접점,정격전압/전류,색상,Package(or size)"
+ },
+ {
+  "code": "103404",
+  "daebun": "회로자재",
+  "jungbun": "SWITCH",
+  "sobun": "SWC DIP",
+  "desc": "공정,제조사품명,방향,핀수,접점,정격전압/전류,색상,Package(or size)"
+ },
+ {
+  "code": "103405",
+  "daebun": "회로자재",
+  "jungbun": "SWITCH",
+  "sobun": "SWC PUSH-BTN",
+  "desc": "공정,제조사품명,방향,핀수,접점,정격전압/전류,색상,Package(or size)"
+ },
+ {
+  "code": "103406",
+  "daebun": "회로자재",
+  "jungbun": "SWITCH",
+  "sobun": "SWC MICRO",
+  "desc": "공정,제조사품명,방향,핀수,접점,정격전압/전류,색상,Package(or size)"
+ },
+ {
+  "code": "103701",
+  "daebun": "회로자재",
+  "jungbun": "BUZZER",
+  "sobun": "BUZZER",
+  "desc": "공정,Buzzer Type,제조사품명,주파수,전압,전력, PACKAGE (or size)"
+ },
+ {
+  "code": "103801",
+  "daebun": "회로자재",
+  "jungbun": "MIC",
+  "sobun": "MIC",
+  "desc": "공정,제조사품명,감도,핀수,Package(or size)"
+ },
+ {
+  "code": "103901",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "BIMETAL",
+  "desc": "공정,제조사품명,VCC(Min/Max),핀수,Package(or size)"
+ },
+ {
+  "code": "103902",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "SENSOR IMG",
+  "desc": "공정,제조사품명,Optical format,해상도,센서타입(CMOS/CCD),핀수,Package(or size)"
+ },
+ {
+  "code": "103903",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "SENSOR TMP",
+  "desc": "공정,제조사품명,VCC(Min/Max),핀수,Package(or size)"
+ },
+ {
+  "code": "103904",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "SENSOR AMB",
+  "desc": "공정,제조사품명,VCC(Min/Max),핀수,Package(or size)"
+ },
+ {
+  "code": "103905",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "SENSOR TCH",
+  "desc": "공정,제조사품명,VCC(Min/Max),Touct Type,핀수,Package(or size)"
+ },
+ {
+  "code": "103906",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "SENSOR MAG",
+  "desc": "공정,제조사품명,AT(Operate),AT(Release),VCC(DC Max),Current(DC Max),핀수,Package(or size)"
+ },
+ {
+  "code": "103907",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "SENSOR GYRO",
+  "desc": "공정,제조사품명,VCC(Min/Max),핀수,Package(or size)"
+ },
+ {
+  "code": "103908",
+  "daebun": "회로자재",
+  "jungbun": "SENSOR",
+  "sobun": "SENSOR TOF",
+  "desc": "공정,제조사품명,VCC(Min/Max),핀수,Package(or size)"
+ },
+ {
+  "code": "104001",
+  "daebun": "회로자재",
+  "jungbun": "POTENTIOMETER",
+  "sobun": "POTENTIOMETER",
+  "desc": "공정,제조사품명,Total 저항값,VCC(Min/Max),핀수,Package(or size)"
+ },
+ {
+  "code": "104101",
+  "daebun": "회로자재",
+  "jungbun": "IR RECEIVER",
+  "sobun": "IR RX",
+  "desc": "공정,제조사품명,VCC(Min/Max),핀수,Package(or size)"
+ },
+ {
+  "code": "104201",
+  "daebun": "회로자재",
+  "jungbun": "THERMISTOR",
+  "sobun": "THERMISTOR",
+  "desc": "공정,전압,전류,제조사 품명,Package(or size)"
+ },
+ {
+  "code": "104301",
+  "daebun": "회로자재",
+  "jungbun": "BEAD",
+  "sobun": "BEAD",
+  "desc": "공정,임피던스,전류,제조사 품명, PACKAGE (or size)"
+ },
+ {
+  "code": "104401",
+  "daebun": "회로자재",
+  "jungbun": "CAPACITOR",
+  "sobun": "CAP",
+  "desc": "공정,CAPACITOR TYPE,캡값,전압,제조사품명,오차, PACKAGE (or size),온도Spec"
+ },
+ {
+  "code": "104404",
+  "daebun": "회로자재",
+  "jungbun": "CAPACITOR",
+  "sobun": "MLCC",
+  "desc": "캡값(pF 기준 승수로 표기),전압(단위 [V] 생략), PACKAGE (or size),등급,제조사품명"
+ },
+ {
+  "code": "104501",
+  "daebun": "회로자재",
+  "jungbun": "RESISTOR",
+  "sobun": "RES",
+  "desc": "공정,저항 Type, PACKAGE (or size),저항값,오차한계(영문으로 표기),제조사 품명,Watt"
+ },
+ {
+  "code": "104601",
+  "daebun": "회로자재",
+  "jungbun": "DIODE",
+  "sobun": "DIODE",
+  "desc": "공정,DIODE TYPE (REC or SCH), Vrrm(**.**V)/If (**.**A), 제조사품명, Vf (*.**V),핀수,Package(or size),제조사"
+ },
+ {
+  "code": "104602",
+  "daebun": "회로자재",
+  "jungbun": "DIODE",
+  "sobun": "DIODE TVS",
+  "desc": "공정,전압1 (ZEN=제너전압 min 값, TVS = VBR min 값, ESD = Clamping voltage) / 전압2  (ZEN=제너전압 min 값, TVS = Stand-off voltage min 값, ESD = Rated voltage), Capacitance(**.* pF or nF or uF), 제조사품명,핀수,Package(or size),제조사"
+ },
+ {
+  "code": "104605",
+  "daebun": "회로자재",
+  "jungbun": "DIODE",
+  "sobun": "DIODE ZEN",
+  "desc": "공정,Vz (*.**V),Watt (*.**W),제조사품명,핀수,Package(or size),제조사"
+ },
+ {
+  "code": "104701",
+  "daebun": "회로자재",
+  "jungbun": "INDUCTOR",
+  "sobun": "INDU",
+  "desc": "공정,인덕터 Type,인덕턴스,전류,제조사 품명, PACKAGE (or size)"
+ },
+ {
+  "code": "104801",
+  "daebun": "회로자재",
+  "jungbun": "RESONATOR",
+  "sobun": "RESONATOR DIP",
+  "desc": "공정,출력 채널수,제조사 품명,Max Clock-FRQ,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "104901",
+  "daebun": "회로자재",
+  "jungbun": "TR",
+  "sobun": "TR",
+  "desc": "공정,TR Type(BJT-N or BJT-P or FET-N or FET-P), 전압(VCE or VDS)/전류 (IC or ID), 전압(VBE or VGS), 제조사품명,핀수,Package(or size),제조사"
+ },
+ {
+  "code": "105001",
+  "daebun": "회로자재",
+  "jungbun": "IC-PHOTOCOUPLER",
+  "sobun": "IC_PHOTO",
+  "desc": "공정, 채널 수, CTR, 제조사 품명, Ic/IF, Isolation voltage, Response time (tr+tf), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "105101",
+  "daebun": "회로자재",
+  "jungbun": "LED",
+  "sobun": "LED",
+  "desc": "공정,색상(단색의 경우 3자리로 표기, 다색의 경우 한자리씩 붙여서 표기), 전압(Max), 제조사품명,Size (DIP Type 의 경우 직경/높이, SMD Type 의 경우 가로/세로 표기, 단위는  MM),LED 방향,제조사"
+ },
+ {
+  "code": "105201",
+  "daebun": "회로자재",
+  "jungbun": "SOCKET",
+  "sobun": "IC SOCKET",
+  "desc": "공정,제조사품명,핀수"
+ },
+ {
+  "code": "105202",
+  "daebun": "회로자재",
+  "jungbun": "SOCKET",
+  "sobun": "BATT HOLDER",
+  "desc": "battery Type,Package(or size),Voltage,제조사 품명"
+ },
+ {
+  "code": "105301",
+  "daebun": "회로자재",
+  "jungbun": "BARE PCB",
+  "sobun": "PCB MAIN",
+  "desc": "적용모델(용도),버전,PCB 재질,PCB Layer,PCB 두께,PCB SIZE (가로 x 세로),연배"
+ },
+ {
+  "code": "105302",
+  "daebun": "회로자재",
+  "jungbun": "BARE PCB",
+  "sobun": "PCB OSD",
+  "desc": "적용모델(용도),버전,PCB 재질,PCB Layer,PCB 두께,PCB SIZE (가로 x 세로),연배"
+ },
+ {
+  "code": "105303",
+  "daebun": "회로자재",
+  "jungbun": "BARE PCB",
+  "sobun": "PCB SUB",
+  "desc": "적용모델(용도),버전,PCB 재질,PCB Layer,PCB 두께,PCB SIZE (가로 x 세로),연배"
+ },
+ {
+  "code": "105304",
+  "daebun": "회로자재",
+  "jungbun": "BARE PCB",
+  "sobun": "PCB PWR",
+  "desc": "적용모델(용도),버전,PCB 재질,PCB Layer,PCB 두께,PCB SIZE (가로 x 세로),연배"
+ },
+ {
+  "code": "105305",
+  "daebun": "회로자재",
+  "jungbun": "BARE PCB",
+  "sobun": "PCB TCH",
+  "desc": "적용모델(용도),버전,PCB 재질,PCB Layer,PCB 두께,PCB SIZE (가로 x 세로),연배"
+ },
+ {
+  "code": "105306",
+  "daebun": "회로자재",
+  "jungbun": "BARE PCB",
+  "sobun": "PCB USB",
+  "desc": "적용모델(용도),버전,PCB 재질,PCB Layer,PCB 두께,PCB SIZE (가로 x 세로),연배"
+ },
+ {
+  "code": "105307",
+  "daebun": "회로자재",
+  "jungbun": "BARE PCB",
+  "sobun": "PCB JIG",
+  "desc": "적용모델(용도),버전,PCB 재질,PCB Layer,PCB 두께,PCB SIZE (가로 x 세로),연배"
+ },
+ {
+  "code": "105401",
+  "daebun": "회로자재",
+  "jungbun": "FPCB",
+  "sobun": "FPCB",
+  "desc": "적용모델(용도),버전"
+ },
+ {
+  "code": "105501",
+  "daebun": "회로자재",
+  "jungbun": "FILTER-BD",
+  "sobun": "FLT",
+  "desc": "공정,Filter Type,제조사품명,임피던스,전압,전류,핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "105601",
+  "daebun": "회로자재",
+  "jungbun": "VARISTOR",
+  "sobun": "VARISTOR",
+  "desc": "공정,클램핑 전압(Vc),제조사품명,정격 전압(VRAC/VRDC),Size (DIP Type 의 경우 직경/높이, SMD Type 의 경우 가로/세로 표기, 단위는  MM),핀수,Energy,Capacitance,제조사"
+ },
+ {
+  "code": "105701",
+  "daebun": "회로자재",
+  "jungbun": "FUSE",
+  "sobun": "FUSE",
+  "desc": "공정,전압,전류,제조사품명, PACKAGE (or size)"
+ },
+ {
+  "code": "105703",
+  "daebun": "회로자재",
+  "jungbun": "FUSE",
+  "sobun": "POLYSW",
+  "desc": "공정,인덕터 Type,인덕턴스,전류,제조사 품명, PACKAGE (or size)"
+ },
+ {
+  "code": "105704",
+  "daebun": "회로자재",
+  "jungbun": "FUSE",
+  "sobun": "FUSE HOLDER",
+  "desc": "공정,제조사품명,FUSE PACKAGE (or size)"
+ },
+ {
+  "code": "105801",
+  "daebun": "회로자재",
+  "jungbun": "IC-HDMI Controller",
+  "sobun": "IC_HDMTX",
+  "desc": "공정, 제조사 품명, DVI / HDMI / HDCP compliant(1.4 or 1.3a …), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "105802",
+  "daebun": "회로자재",
+  "jungbun": "IC-HDMI Controller",
+  "sobun": "IC_HDMRX",
+  "desc": "공정, 제조사 품명, DVI / HDMI / HDCP compliant(1.4 or 1.3a …), VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "105803",
+  "daebun": "회로자재",
+  "jungbun": "IC-HDMI Controller",
+  "sobun": "IC_HDMSW",
+  "desc": "공정, HDMI I/O 채널 수, 제조사 품명, HDMI Version, HDCP, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "105804",
+  "daebun": "회로자재",
+  "jungbun": "IC-HDMI Controller",
+  "sobun": "HDMI EXPANDER",
+  "desc": "공정,HDMI I/O 채널 수,제조사 품명,HDMI Version,HDCP,VCC(Min/Max)[V],핀수,Package(or size)"
+ },
+ {
+  "code": "106001",
+  "daebun": "회로자재",
+  "jungbun": "TUNER",
+  "sobun": "TUNER",
+  "desc": "공정,제조사품명,방식"
+ },
+ {
+  "code": "106101",
+  "daebun": "회로자재",
+  "jungbun": "FILTER-BD",
+  "sobun": "NOISE FLT",
+  "desc": "공정,Filter Type,제조사 품명,임피던스,전압,전류,핀수,Package(or size)"
+ },
+ {
+  "code": "106201",
+  "daebun": "회로자재",
+  "jungbun": "IC-TOUCH CONTROLLER",
+  "sobun": "IC_TCH",
+  "desc": "공정, Touch Type, Touchscreen 채널, 제조사 품명, VCC(Min/Max[V]), 핀수, PACKAGE (or size)"
+ },
+ {
+  "code": "106301",
+  "daebun": "회로자재",
+  "jungbun": "IC-SHUNT REGULATOR",
+  "sobun": "IC_SHUNT",
+  "desc": "공정, 제조사 품명, Vref(전압), Tolerance, Pin 수, PACKAGE (or size)"
+ },
+ {
+  "code": "106401",
+  "daebun": "회로자재",
+  "jungbun": "IC-CONTROL",
+  "sobun": "IC_CTRL",
+  "desc": "공정, 제어 Type, 제어 채널 수, 제조사 품명, 신호 유형(4종 유형내 선택), 입력 전압(Min/Max[V]), Pin 수, PACKAGE (or size)"
+ },
+ {
+  "code": "106501",
+  "daebun": "회로자재",
+  "jungbun": "IC-LINE DRIVER",
+  "sobun": "IC_LINEDRV",
+  "desc": "공정, 출력 채널 수, 제조사 품명, 신호 유형(4종 유형내 선택), Max Outvoltage swing (VRMS or Vp-p), 입력 VCC(Min/Max[V]), Pin 수, PACKAGE (or size)"
+ },
+ {
+  "code": "106601",
+  "daebun": "회로자재",
+  "jungbun": "SMT NUT",
+  "sobun": "SMT NUT",
+  "desc": "제조사 품명,기능(or 종류),COLOR(or도금or재질),나사규격"
+ },
+ {
+  "code": "110101",
+  "daebun": "DISPLAY",
+  "jungbun": "LCM",
+  "sobun": "LCM",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110102",
+  "daebun": "DISPLAY",
+  "jungbun": "LCM",
+  "sobun": "LCM TN",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110103",
+  "daebun": "DISPLAY",
+  "jungbun": "LCM",
+  "sobun": "LCM VA",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110104",
+  "daebun": "DISPLAY",
+  "jungbun": "LCM",
+  "sobun": "LCM PLS",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110105",
+  "daebun": "DISPLAY",
+  "jungbun": "LCM",
+  "sobun": "LCM FFS",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110106",
+  "daebun": "DISPLAY",
+  "jungbun": "LCM",
+  "sobun": "LCM IPS",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110107",
+  "daebun": "DISPLAY",
+  "jungbun": "LCM",
+  "sobun": "LCM 3D",
+  "desc": "제조사 품명,3D Filter Type,적용패널품명(모델명),INCH,추가정보"
+ },
+ {
+  "code": "110201",
+  "daebun": "DISPLAY",
+  "jungbun": "FOG",
+  "sobun": "FOG",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110202",
+  "daebun": "DISPLAY",
+  "jungbun": "FOG",
+  "sobun": "FOG TN",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110203",
+  "daebun": "DISPLAY",
+  "jungbun": "FOG",
+  "sobun": "FOG VA",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110204",
+  "daebun": "DISPLAY",
+  "jungbun": "FOG",
+  "sobun": "FOG PLS",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110205",
+  "daebun": "DISPLAY",
+  "jungbun": "FOG",
+  "sobun": "FOG FFS",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110206",
+  "daebun": "DISPLAY",
+  "jungbun": "FOG",
+  "sobun": "FOG IPS",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110207",
+  "daebun": "DISPLAY",
+  "jungbun": "FOG",
+  "sobun": "FLEX DISPLAY",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110301",
+  "daebun": "DISPLAY",
+  "jungbun": "OLED",
+  "sobun": "OLED",
+  "desc": "제조사 품명,해상도,휘도,(SNB),Interface Type,INCH"
+ },
+ {
+  "code": "110302",
+  "daebun": "DISPLAY",
+  "jungbun": "OLED",
+  "sobun": "OBM",
+  "desc": "제조사 품명,해상도,Interface Type,방열판 재질,방열판 두께,버전"
+ },
+ {
+  "code": "110401",
+  "daebun": "DISPLAY",
+  "jungbun": "PDP",
+  "sobun": "PDP",
+  "desc": "제조사 품명,해상도,휘도,Interface Type,INCH,기타정보"
+ },
+ {
+  "code": "110501",
+  "daebun": "DISPLAY",
+  "jungbun": "CRT",
+  "sobun": "CRT",
+  "desc": "제조사 품명,해상도,휘도,Interface Type,INCH,기타정보"
+ },
+ {
+  "code": "110601",
+  "daebun": "DISPLAY",
+  "jungbun": "MONITOR",
+  "sobun": "MNT",
+  "desc": "제조사 품명,해상도,휘도,Interface Type,INCH,기타정보"
+ },
+ {
+  "code": "110701",
+  "daebun": "DISPLAY",
+  "jungbun": "DB",
+  "sobun": "LCM DB",
+  "desc": "PANEL 모델명,SIZE(3자리),C or F(CURVED/FLAT),T or G(TSP/GLASS),A or R(OCA/OCR)"
+ },
+ {
+  "code": "110702",
+  "daebun": "DISPLAY",
+  "jungbun": "DB",
+  "sobun": "FOG DB",
+  "desc": "PANEL 모델명,SIZE(3자리),C or F(CURVED/FLAT),T or G(TSP/GLASS),A or R(OCA/OCR)"
+ },
+ {
+  "code": "120101",
+  "daebun": "전장자재",
+  "jungbun": "PBM SUB",
+  "sobun": "PBM SUB",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명, 보드 속성 정보(기능적 특성 기입), 버전"
+ },
+ {
+  "code": "120102",
+  "daebun": "전장자재",
+  "jungbun": "PBM SUB",
+  "sobun": "PBM TCON",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명, Panel 정보, 버전"
+ },
+ {
+  "code": "120103",
+  "daebun": "전장자재",
+  "jungbun": "PBM SUB",
+  "sobun": "PBM PDLC",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명, I/O 전압(Min/Max[V]), 버전"
+ },
+ {
+  "code": "120104",
+  "daebun": "전장자재",
+  "jungbun": "PBM SUB",
+  "sobun": "PBM FRC",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명, 동작 주파수[Hz], 버전"
+ },
+ {
+  "code": "120201",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP MAIN PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120202",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP IMG PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120203",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP LOGIC PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120204",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP BUFFER PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120205",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120206",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP MAIN+BUFFER PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120207",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP POWER PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120208",
+  "daebun": "전장자재",
+  "jungbun": "PDP PCB MODULE",
+  "sobun": "PDP SKD PBM",
+  "desc": "제조사품명,적용모델"
+ },
+ {
+  "code": "120301",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP OPT",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명, Package (or size)(인치 or 가로x세로), 인터페이스, 컨트롤러 유/무"
+ },
+ {
+  "code": "120302",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP RES",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명, Package (or size)(인치 or 가로x세로), 인터페이스, 컨트롤러 유/무,WIRE 개수"
+ },
+ {
+  "code": "120303",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP CAM",
+  "desc": "기능 유형(12종 유형내 선택),적용모델(CUSTOM PJT. or CUSTOM INCH),TYPE(제조사품명)"
+ },
+ {
+  "code": "120304",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP CAP",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명,Package (or size)(인치 or 가로x세로),인터페이스,컨트롤러 유무(Y/N)"
+ },
+ {
+  "code": "120305",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP INF",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명,Package (or size)(인치 or 가로x세로),인터페이스,컨트롤러 유무(Y/N)"
+ },
+ {
+  "code": "120306",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP MCT",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N)"
+ },
+ {
+  "code": "120307",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP PCT",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명,Package (or size)(인치 or 가로x세로),인터페이스,컨트롤러 유무(Y/N)"
+ },
+ {
+  "code": "120308",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP SAW",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명,Package (or size)(인치 or 가로x세로),인터페이스,컨트롤러 유무(Y/N)"
+ },
+ {
+  "code": "120309",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP CURVED",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명,Package (or size)(인치 or 가로x세로),인터페이스,컨트롤러 유무(Y/N)"
+ },
+ {
+  "code": "120310",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP ACTUATOR",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명,Package (or size)(인치 or 가로x세로)"
+ },
+ {
+  "code": "120312",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH SCREEN MODULE",
+  "sobun": "TSP PCT TSB",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명,Package (or size)(인치 or 가로x세로),FPCB본딩유무(Y/N),적층구조"
+ },
+ {
+  "code": "120401",
+  "daebun": "전장자재",
+  "jungbun": "CPU",
+  "sobun": "CPU DUAL",
+  "desc": "공정,제조사품명,Clock Speed,System Bus,L2 Cache,Socket Type"
+ },
+ {
+  "code": "120501",
+  "daebun": "전장자재",
+  "jungbun": "MB",
+  "sobun": "MB",
+  "desc": "기능유형,제조사품명,Socket Type,Chipset,Onboard Function"
+ },
+ {
+  "code": "120601",
+  "daebun": "전장자재",
+  "jungbun": "HDD",
+  "sobun": "HDD SATA",
+  "desc": "기능유형,제조사품명,용량,RPM(인치)"
+ },
+ {
+  "code": "120602",
+  "daebun": "전장자재",
+  "jungbun": "HDD",
+  "sobun": "SSD",
+  "desc": "제조사 품명,용량,인터페이스,Size(가로x세로x높이),기타정보"
+ },
+ {
+  "code": "120701",
+  "daebun": "전장자재",
+  "jungbun": "MEMORY MODULE",
+  "sobun": "RAM MOD",
+  "desc": "기능유형,메모리 유형,용량,제조사품명,속도,핀수,Package(or size)"
+ },
+ {
+  "code": "120801",
+  "daebun": "전장자재",
+  "jungbun": "VGA CARD",
+  "sobun": "VGA CARD",
+  "desc": "기능유형,제조사품명,Memory용량,출력 단자"
+ },
+ {
+  "code": "120901",
+  "daebun": "전장자재",
+  "jungbun": "POWER",
+  "sobun": "ADAPTOR",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명, 정격 전압(Typ),정격 전류(Typ), 에너지 효율 레벨, 대기전력, I/O 핀수(#/#P), 출력 Connector(or JACK) 사양"
+ },
+ {
+  "code": "120902",
+  "daebun": "전장자재",
+  "jungbun": "POWER",
+  "sobun": "SMPS",
+  "desc": "기능 유형(12종 유형내 선택), SMPS 유형(O/F or MOD), 제조사품명,(이전 모델명 및 특이사항), 출력 Watt"
+ },
+ {
+  "code": "120905",
+  "daebun": "전장자재",
+  "jungbun": "POWER",
+  "sobun": "CHARGER",
+  "desc": "기능유형,제조사품명,입력전압/전류,지원전력,TYPE(WIRE or WIRELESS),무선충전규격(WIRELESS TYPE 만 기재)"
+ },
+ {
+  "code": "120906",
+  "daebun": "전장자재",
+  "jungbun": "POWER",
+  "sobun": "P-CON",
+  "desc": "제조사 품명,판수(*P)/배열(*)/형상(\"M\" or \"F\")/방향(\"S\" or \"R\"),고객사 정보,추가정보"
+ },
+ {
+  "code": "121001",
+  "daebun": "전장자재",
+  "jungbun": "KEYBOARD",
+  "sobun": "KBD",
+  "desc": "제조사품명,지원언어, Interface Type, Key 수"
+ },
+ {
+  "code": "121101",
+  "daebun": "전장자재",
+  "jungbun": "LAN CARD",
+  "sobun": "LAN CARD",
+  "desc": "제조사품명,속도,유/무선"
+ },
+ {
+  "code": "121201",
+  "daebun": "전장자재",
+  "jungbun": "CONVERTER",
+  "sobun": "CONV",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명,버전, I/O 전압(##[V]/##[V]), 출력 전류[A], 출력 채널, DIMING CONTROL 방식"
+ },
+ {
+  "code": "121301",
+  "daebun": "전장자재",
+  "jungbun": "REMOCON",
+  "sobun": "REMOCON",
+  "desc": "기능유형,제조사품명,LOGO"
+ },
+ {
+  "code": "121401",
+  "daebun": "전장자재",
+  "jungbun": "PC",
+  "sobun": "PC",
+  "desc": "기능유형,제조사품명,CPU 사양,HDD 용량,Input Voltage(Min/Max),PC Type,기타사항"
+ },
+ {
+  "code": "121504",
+  "daebun": "전장자재",
+  "jungbun": "SW",
+  "sobun": "LICENSE KEY",
+  "desc": "LICENSE명,KEY 종류"
+ },
+ {
+  "code": "121505",
+  "daebun": "전장자재",
+  "jungbun": "SW",
+  "sobun": "OS LICENSE LABEL",
+  "desc": "제조사품명"
+ },
+ {
+  "code": "121506",
+  "daebun": "전장자재",
+  "jungbun": "SW",
+  "sobun": "SOFTWARE",
+  "desc": "제조사,제조사품명,용도"
+ },
+ {
+  "code": "121605",
+  "daebun": "전장자재",
+  "jungbun": "SYSTEM SWITCH",
+  "sobun": "MEMBRANE SWC",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, Package (or size)(인치 or 가로x세로), 버튼수, PIN수, 색상"
+ },
+ {
+  "code": "121606",
+  "daebun": "전장자재",
+  "jungbun": "SYSTEM SWITCH",
+  "sobun": "SW/PUSH-BTN",
+  "desc": "제조사 품명,종류,핀수,Size(가로x세로x높이),추가정보"
+ },
+ {
+  "code": "121701",
+  "daebun": "전장자재",
+  "jungbun": "CORE",
+  "sobun": "CORE CLIP",
+  "desc": "제조사품명,CORE SIZE(외경),색상"
+ },
+ {
+  "code": "121702",
+  "daebun": "전장자재",
+  "jungbun": "CORE",
+  "sobun": "CORE RING",
+  "desc": "제조사품명,CORE SIZE(외경),색상"
+ },
+ {
+  "code": "121901",
+  "daebun": "전장자재",
+  "jungbun": "SPEAKER",
+  "sobun": "SPEAKER",
+  "desc": "제조사품명,Package(or size),Impedance,Power(Typ)[W]"
+ },
+ {
+  "code": "122401",
+  "daebun": "전장자재",
+  "jungbun": "TUBE",
+  "sobun": "TUBE",
+  "desc": "제조사 품명,직경(Ф),길이(mm)"
+ },
+ {
+  "code": "122501",
+  "daebun": "전장자재",
+  "jungbun": "LED MODULE",
+  "sobun": "LED MOD",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, 적용모델, 버전"
+ },
+ {
+  "code": "122502",
+  "daebun": "전장자재",
+  "jungbun": "LED MODULE",
+  "sobun": "LED MOD/HOU",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, 적용모델, 버전"
+ },
+ {
+  "code": "122503",
+  "daebun": "전장자재",
+  "jungbun": "LED MODULE",
+  "sobun": "LED/ARR",
+  "desc": "제조사 품명,부착 위치,PKG수량,PCB 유형,INCH,버전,PCB SIZE(가로x세로)(돌출 SIZE)"
+ },
+ {
+  "code": "122504",
+  "daebun": "전장자재",
+  "jungbun": "LED MODULE",
+  "sobun": "LEDIS",
+  "desc": "Pitch,Resolution,Rated Voltage,표면처리(**),제품명(Rev No. 포함하여 기재),추가정보"
+ },
+ {
+  "code": "122505",
+  "daebun": "전장자재",
+  "jungbun": "LED MODULE",
+  "sobun": "LED-SUB",
+  "desc": "적용모델,부품명,LED 사이즈,LED MAKER,추가정보"
+ },
+ {
+  "code": "122711",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN AC",
+  "desc": "AC I/O (FLTR or OULT or INLT or SWCH), AC 핀수 LIVE, NEUTRAL, F/G (*P), 길이-밀리미터기준/단위 없음(****), AWG (#**), A (AC I/O) 품명 (****)+ B 방향 품명 (****), 핀맵 구분(V*), OPTION(****)"
+ },
+ {
+  "code": "122716",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN FFC",
+  "desc": "핀수 (***), 길이-밀리미터기준/단위 없음(****), PITCH (****) TYPE (*),FOLD(F*), UL 번호(UL*****),핀맵 구분(V*), OPTION (****)"
+ },
+ {
+  "code": "122717",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN WIRE",
+  "desc": "A 방향 핀수 (**) + B 방향 핀수 (**), 길이-밀리미터기준/단위 없음(****), AWG (#**), A 방향 Type (****)+ B 방향 Type (****),OPTION(****)"
+ },
+ {
+  "code": "122718",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN BTW",
+  "desc": "Board 연결 핀수 A (**) + 상대물 연결 핀수 B (**), 길이-밀리미터기준/단위 없음(****), AWG (#**), 보드 하우징 A (****)+ 상대물 B Type (****),핀맵 구분(V*), OPTION(****)"
+ },
+ {
+  "code": "122723",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN BTB",
+  "desc": "하우징 작은 핀수 A (**) + 하우징 큰 핀수  B (**), 길이-밀리미터기준/단위 없음(****), AWG (#**), 하우징 A (****)+하우징 B (****), 핀맵 구분(V*), OPTION(****)"
+ },
+ {
+  "code": "122726",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN MULTI",
+  "desc": "BUYER, 적용모델, V**@추가정보(하네스 유형, 특징 자유롭게 기재할 것)"
+ },
+ {
+  "code": "122727",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN LVDS",
+  "desc": "하우징 핀수 A (**) + 하우징 핀수  B (**),길이(****) 밀리미터기준/단위 없음 ,핀수 C(**), 하우징 A (****)+하우징 B (****),핀맵 구분(V*),OPTION(****)"
+ },
+ {
+  "code": "122728",
+  "daebun": "전장자재",
+  "jungbun": "HARNESS",
+  "sobun": "HN VBY1",
+  "desc": "하우징 핀수 A & B (**),길이-밀리미터기준/단위 없음(****), 하우징 A (****)+하우징 B (****),FOLD(F*),핀맵 구분(V*), OPTION(****)"
+ },
+ {
+  "code": "122804",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB LAN",
+  "desc": "길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),기타사항"
+ },
+ {
+  "code": "122805",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB DVI",
+  "desc": "DATA(DU or SI),DVI-Type (D or I),길이(*.**M),색상,제조사 품명, CORE 적용 시 정보 표기(없음 → 0CR,  1ea → 1CR, 2ea → 2CR)),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122806",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB DVI+VGA",
+  "desc": "길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122807",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB DVI+HDMI",
+  "desc": "길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122808",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB HDMI",
+  "desc": "HDMI I/O Jack Type (Normal \"A\" or Mini \"C\" or Micro \"D\"),길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122809",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB USB",
+  "desc": "USB Ver(2 or 3),USB TYPE(A, B, UA, UB, MA, MB),길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122812",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB STEREO",
+  "desc": "PIE(*.* 단위 Φ 생략),길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122817",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB DP",
+  "desc": "길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),DP A Type (\"N\"(Normal DP) or \"M\"(Mini DP) or \"U\"(Micro DP)) + DP B Type (\"N\"(Normal DP) or \"M\"(Mini DP) or \"U\"(Micro DP)),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122818",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB DP+VGA",
+  "desc": "길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122819",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB ANTENA",
+  "desc": "길이(*.**M),제조사 품명,수신주파수 대역(Min/Max)(Hz 생략)"
+ },
+ {
+  "code": "122821",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB DSUB",
+  "desc": "PIN수(P),길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122822",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB BNC",
+  "desc": "길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122823",
+  "daebun": "전장자재",
+  "jungbun": "CABLE",
+  "sobun": "CB DP+DVI",
+  "desc": "길이(*.**M),색상,제조사 품명,CORE 적용 시 정보 표기(없음 → 0CR, 1ea → 1CR, 2ea → 2CR),UL 및 선경,I/O 핀 형상,I/O Jack 방향,기타사항"
+ },
+ {
+  "code": "122901",
+  "daebun": "전장자재",
+  "jungbun": "CORD",
+  "sobun": "DC CORD",
+  "desc": "제조사품명,전압,전류"
+ },
+ {
+  "code": "122902",
+  "daebun": "전장자재",
+  "jungbun": "CORD",
+  "sobun": "P-CORD",
+  "desc": "출항지(국가 도메인 표시),전압(V 생략)/전류(단위 A),길이(*.*M),제조사 품명,Receptacle Type"
+ },
+ {
+  "code": "123001",
+  "daebun": "전장자재",
+  "jungbun": "FAN",
+  "sobun": "FAN",
+  "desc": "제조사품명,Size(가로x세로x높이),정격전압,정격전류,RPM,ACOUSTICAL NOISE,Control 핀(유/무),PWM(유/무)"
+ },
+ {
+  "code": "123101",
+  "daebun": "전장자재",
+  "jungbun": "CAM",
+  "sobun": "CAM MOD",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, 적용모델, 버전"
+ },
+ {
+  "code": "123201",
+  "daebun": "전장자재",
+  "jungbun": "PBM OSD",
+  "sobun": "PBM OSD",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, 버튼수-TYPE, 버전"
+ },
+ {
+  "code": "123301",
+  "daebun": "전장자재",
+  "jungbun": "AD BD",
+  "sobun": "PBM AD",
+  "desc": "기능 유형(12종 유형내 선택), 보드명(or 제조사 품명), 시리즈번호, PCB버전, 스케일러명, FRC유무(FRC or -), Output Interface(LVDS/VBY1/TTL/eDP), Panel공급전압, DIMMING Type(ADM or PWM)"
+ },
+ {
+  "code": "123401",
+  "daebun": "전장자재",
+  "jungbun": "INVERTER",
+  "sobun": "INV",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, 입력 전압, 버전"
+ },
+ {
+  "code": "123501",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH CONTROLLER",
+  "sobun": "PBM TCH-CON",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, TOUCH TYPE, 인터페이스, 버전"
+ },
+ {
+  "code": "123502",
+  "daebun": "전장자재",
+  "jungbun": "TOUCH CONTROLLER",
+  "sobun": "PBM TCH-CAM",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, 적용 모델"
+ },
+ {
+  "code": "123601",
+  "daebun": "전장자재",
+  "jungbun": "BATTERY",
+  "sobun": "BATT",
+  "desc": "battery Type,Package(or size),Voltage,제조사"
+ },
+ {
+  "code": "123701",
+  "daebun": "전장자재",
+  "jungbun": "WIRELESS MODULE",
+  "sobun": "WIRELESS MOD",
+  "desc": "제조사 품명,규격,인터페이스,최대속도"
+ },
+ {
+  "code": "123801",
+  "daebun": "전장자재",
+  "jungbun": "CONNECTOR",
+  "sobun": "CON HOU",
+  "desc": "*(행)R**(총_핀수)P,Pitch,제조사 품명"
+ },
+ {
+  "code": "123901",
+  "daebun": "전장자재",
+  "jungbun": "SOCKET",
+  "sobun": "HDMI DUST CAP",
+  "desc": "제조사품명"
+ },
+ {
+  "code": "123902",
+  "daebun": "전장자재",
+  "jungbun": "SOCKET",
+  "sobun": "P-SOCKET",
+  "desc": "제조사 품명,종류,핀수,Rated Voltage,Rated Current"
+ },
+ {
+  "code": "124001",
+  "daebun": "전장자재",
+  "jungbun": "CONTROLLER MODULE",
+  "sobun": "CTRL MOD/HOU",
+  "desc": "기능 유형 (\"※ 기능 유형 정리표\" 내용 중 선택),제조사 품명,적용모델,버전"
+ },
+ {
+  "code": "124101",
+  "daebun": "전장자재",
+  "jungbun": "DIV MOD/HOU",
+  "sobun": "DIV MOD/HOU",
+  "desc": "기능 유형 (\"※ 기능 유형 정리표\" 내용 중 선택),제조사 품명,적용모델,속성 정보(기능적 특성 기입),버전,추가정보"
+ },
+ {
+  "code": "124201",
+  "daebun": "전장자재",
+  "jungbun": "FUSE",
+  "sobun": "FUSE/BREAKER",
+  "desc": "제조사 품명,Rated Voltage,Rated Current"
+ },
+ {
+  "code": "201802",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "PAD THERMAL",
+  "desc": "THERMAL PAD재질,4M변경자재,구분 유형,재질,SIZE(폭x길이),두께,경도,열전도율,TAPE 사양,4M변경 이전코드"
+ },
+ {
+  "code": "201803",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "DOUBLE TAPE",
+  "desc": "TAPE 유형,4M변경자재,구분 유형,SIZE(폭x길이),두께,색상,제조사 품명,4M변경 이전코드"
+ },
+ {
+  "code": "201804",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "ADHESIVE TAPE",
+  "desc": "TAPE 유형,4M변경자재,구분 유형,SIZE(폭x길이),두께,색상,제조사 품명,4M변경 이전코드"
+ },
+ {
+  "code": "201805",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "FOAM TAPE",
+  "desc": "FOAM 재질,4M변경자재,구분 유형,SIZE(폭x길이),두께,색상,제조사품명,4M변경 이전코드,(OPTION1)"
+ },
+ {
+  "code": "201806",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "BONDING",
+  "desc": "재질①,4M 여부,제조사 품명,용도,SIZE(용량),점도[Pa.S],색상,4M변경 이전코드"
+ },
+ {
+  "code": "201807",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "TAPE THERMAL",
+  "desc": "SIZE(폭x길이or PI),높이(두께/돌출부),4M 여부,구분 유형,가공방법,TOOL 사용 외곽 동일사양 구분,제조사 품명,열전도율,4M변경 이전코드"
+ },
+ {
+  "code": "201808",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "S/RFT",
+  "desc": "부착 위치,4M 여부,제조사 품명,SIZE(폭x길이or PI),높이(두께/돌출부),버전,4M변경 이전코드"
+ },
+ {
+  "code": "201809",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "DECAL",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "201810",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "INSULATOR",
+  "desc": "INSULATOR 재질,4M변경자재,구분 유형,TAPE 사양,SIZE(폭x길이),두께,색상,제조사품명,4M변경 이전코드,형상,난연등급"
+ },
+ {
+  "code": "201811",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "MAGNET",
+  "desc": "구성 요소,4M 여부,제조사 품명,SIZE(폭x길이 or pi),높이(두께/돌출부),GAUSS(MAX),4M변경 이전코드"
+ },
+ {
+  "code": "201812",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "PROTECTION FILM",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,제조사 품명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "201813",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "PAD",
+  "desc": "PAD재질,4M변경자재,구분 유형,SIZE(폭x길이),두께,색상,MOD,버전,제조사 품명,4M변경 이전코드"
+ },
+ {
+  "code": "201814",
+  "daebun": "기구자재",
+  "jungbun": "TAPE",
+  "sobun": "MASK FILM",
+  "desc": "재질②,4M 여부,제조사 품명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,4M변경 이전코드"
+ },
+ {
+  "code": "202201",
+  "daebun": "기구자재",
+  "jungbun": "GLASS",
+  "sobun": "GLASS TEMP",
+  "desc": "INCH,4M 여부,구분 정보,SIZE(폭x길이or PI),높이(두께/돌출부),인쇄,TYPE①(TOP),TYPE①(BOT),4M변경 이전코드"
+ },
+ {
+  "code": "202202",
+  "daebun": "기구자재",
+  "jungbun": "GLASS",
+  "sobun": "GLASS SEMI",
+  "desc": "INCH,4M 여부,구분 정보,SIZE(폭x길이or PI),높이(두께/돌출부),인쇄,TYPE①(TOP),TYPE①(BOT),4M변경 이전코드"
+ },
+ {
+  "code": "202203",
+  "daebun": "기구자재",
+  "jungbun": "GLASS",
+  "sobun": "GLASS CHEM",
+  "desc": "INCH,4M 여부,구분 정보,SIZE(폭x길이or PI),높이(두께/돌출부),인쇄,TYPE①(TOP),TYPE①(BOT),4M변경 이전코드"
+ },
+ {
+  "code": "202204",
+  "daebun": "기구자재",
+  "jungbun": "GLASS",
+  "sobun": "GLASS NON",
+  "desc": "INCH,4M 여부,구분 정보,SIZE(폭x길이or PI),높이(두께/돌출부),인쇄,TYPE①(TOP),TYPE①(BOT),4M변경 이전코드"
+ },
+ {
+  "code": "202205",
+  "daebun": "기구자재",
+  "jungbun": "GLASS",
+  "sobun": "GLASS EMI FLT",
+  "desc": "INCH,4M 여부,제조사 품명,SIZE(폭x길이or PI),높이(두께/돌출부),4M변경 이전코드"
+ },
+ {
+  "code": "202901",
+  "daebun": "기구자재",
+  "jungbun": "RUBBER",
+  "sobun": "RUBBER",
+  "desc": "RUBBER 재질,4M변경자재,구분 유형,SIZE(폭x길이),두께,색상,용도,적용모델,4M변경 이전코드"
+ },
+ {
+  "code": "202902",
+  "daebun": "기구자재",
+  "jungbun": "RUBBER",
+  "sobun": "HLD",
+  "desc": "HLD재질,4M변경자재,구분유형,SIZE(폭x길이),두께,색상,MOD,버전,제조사 품명,4M변경 이전코드"
+ },
+ {
+  "code": "204701",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "FRONT(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204702",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "BACK(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204703",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "FRAME(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204704",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "STAND(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204705",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "C/TOP(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204706",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "G/PNL(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204707",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "LED/HSG(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204708",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "C/BTM(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204709",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "BASE(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204710",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "COVER(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204711",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "MOUNT(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204712",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "SUB(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204713",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "TOP_COVER(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204714",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "BTM_COVER(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204715",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "BACK_PL(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204716",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "BACK_SUB(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204717",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "WRAP(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204718",
+  "daebun": "기구자재",
+  "jungbun": "PRESS",
+  "sobun": "STFN(P)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204801",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "PEN",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204802",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "KNOB",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204803",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "LED PIPE(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204804",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "IR CAP",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204805",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "HANDLE(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204806",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "FRONT(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204807",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "BACK(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204808",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "FRAME(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204809",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "STAND(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204810",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "LENS",
+  "desc": "재질②,4M 여부,SIZE(폭x길이or PI),높이(두께/돌출부),색상,특성,버전,제조사 품명,4M변경 이전코드"
+ },
+ {
+  "code": "204811",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "C/TOP(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204812",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "G/PNL(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204813",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "LED/HSG(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204814",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "C/BTM(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204815",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "SPT/P",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204816",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "BASE(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204817",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "COVER(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204818",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "MOUNT(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204819",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "SUB(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204820",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "TOP_COVER(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204821",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "BTM_COVER(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204822",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "BACK_PL(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204823",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "BACK_SUB(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204824",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "WRAP(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204825",
+  "daebun": "기구자재",
+  "jungbun": "MOLD",
+  "sobun": "STFN(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204901",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "HEAT SINK",
+  "desc": "재질①,4M 여부,SIZE(폭x길이or PI),높이(두께/돌출부),색상,특성,버전,제조사 품명,4M변경 이전코드"
+ },
+ {
+  "code": "204902",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "FRONT(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204903",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "BACK(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204904",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "FRAME(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204905",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "STAND(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204906",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "C/TOP(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204907",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "G/PNL(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204908",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "LED/HSG(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204909",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "C/BTM(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204910",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "BASE(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204911",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "COVER(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204912",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "MOUNT(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204913",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "SUB(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204914",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "TOP_COVER(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204915",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "BTM_COVER(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204916",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "BACK_PL(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204917",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "BACK_SUB(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204918",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "WRAP(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "204919",
+  "daebun": "기구자재",
+  "jungbun": "EXTRUSION",
+  "sobun": "STFN(E)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205001",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "BADGE",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205002",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "HANDLE(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205003",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "FRONT(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205004",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "BACK(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205005",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "FRAME(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205006",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "STAND(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205007",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "C/TOP(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205008",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "G/PNL(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205009",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "LED/HSG(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205010",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "C/BTM(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205011",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "BASE(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205012",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "COVER(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205013",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "MOUNT(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205014",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "SUB(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205015",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "TOP_COVER(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205016",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "BTM_COVER(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205017",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "BACK_PL(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205018",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "BACK_SUB(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205019",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "WRAP(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205020",
+  "daebun": "기구자재",
+  "jungbun": "DIECASTING",
+  "sobun": "STFN(D)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205101",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "SCREW MACHINE",
+  "desc": "Head 형상,호칭경,길이,재질,도금사양,색상,SCREW 외경,(OPTION1)"
+ },
+ {
+  "code": "205102",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "SCREW TAPTITE",
+  "desc": "Head 형상,호칭경,길이,재질,도금,색상,SCREW 외경,(OPTION2)"
+ },
+ {
+  "code": "205103",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "SCREW TAPPING",
+  "desc": "Head 형상,호칭경,길이,재질,도금,색상,SCREW 외경,(OPTION2)"
+ },
+ {
+  "code": "205104",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "SCREW SPECIAL",
+  "desc": "Head 형상,호칭경,길이,재질,도금,색상,SCREW 외경,(OPTION2)"
+ },
+ {
+  "code": "205105",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "SPRING",
+  "desc": "SPRING 유형,색상,도금,재질 정보,SIZE(폭x길이or PI),높이(두께/돌출부),모델명,(OPTION2)"
+ },
+ {
+  "code": "205106",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "NUT",
+  "desc": "NUT 기능,나사 규격,SIZE(외경),두께,재질,도금,색상,(OPTION1)"
+ },
+ {
+  "code": "205107",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "PCB SUPPORT",
+  "desc": "유형,호칭경(내부/상단),호칭경(외부/하단),높이(두께/돌출부),재질 정보,도금,색상,제조사 품명,추가 정보1"
+ },
+ {
+  "code": "205108",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "WASHER",
+  "desc": "WASHER 기능,나사 규격,SIZE(외경),두께,재질,도금,색상"
+ },
+ {
+  "code": "205109",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "BUSHING",
+  "desc": "Head 형상,호칭경(or 내부 Hole),길이,재질,도금,색상,SCREW 외경,적용 모델,추가 정보1"
+ },
+ {
+  "code": "205110",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "CLAMP CABLE",
+  "desc": "재질,SIZE(폭x길이),두께,색상,제조사 품명"
+ },
+ {
+  "code": "205111",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "CLAMP PCB SUPPORT",
+  "desc": "재질 정보,도금,색상,SIZE(폭x길이or PI),높이(두께/돌출부),제조사 품명,추가 정보1"
+ },
+ {
+  "code": "205112",
+  "daebun": "기구자재",
+  "jungbun": "FASTENER",
+  "sobun": "CABLE TIE",
+  "desc": "재질,SIZE(폭x길이),두께,색상,제조사 품명"
+ },
+ {
+  "code": "205201",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "OPTICAL FLT",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205202",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "DFF/S",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205203",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "PRS/S",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,PRISM \"방향_각도\",버전,4M변경 이전코드"
+ },
+ {
+  "code": "205204",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "RFT/S",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205205",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "OPTICAL SHEET",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205206",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "DBEF",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205207",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "CPS/S",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205208",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "MLF",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205209",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "ANT/S",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205210",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "DFF/P",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205211",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "LGP",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "205212",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "SUBSTRATE FILM",
+  "desc": "재질②,4M 여부,제조사 품명,SIZE(폭x길이or PI),높이(두께/돌출부),색상,4M변경 이전코드"
+ },
+ {
+  "code": "205213",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "OPTICAL GLASS",
+  "desc": "INCH,4M 여부,구분 정보,SIZE(폭x길이or PI),높이(두께/돌출부),인쇄,TYPE①(TOP),TYPE①(BOT),4M변경 이전코드"
+ },
+ {
+  "code": "205214",
+  "daebun": "기구자재",
+  "jungbun": "OPTICAL",
+  "sobun": "POLARIZER",
+  "desc": "TYPE②,4M 여부,LCD 부착면,SIZE(폭x길이or PI),제조사 품명,적용모델,각도(편광),HAZE,경도,4M변경 이전코드"
+ },
+ {
+  "code": "205301",
+  "daebun": "기구자재",
+  "jungbun": "GASKET",
+  "sobun": "GASKET EMI",
+  "desc": "GASKET 재질,4M변경자재,구분 유형,형상,SIZE(폭x길이),두께,색상,제조사품명,4M변경 이전코드,(OPTION1)"
+ },
+ {
+  "code": "205302",
+  "daebun": "기구자재",
+  "jungbun": "GASKET",
+  "sobun": "TAPE EMI",
+  "desc": "TAPE EMI재질,4M변경자재,구분 유형,SIZE(폭x길이),두께,색상,제조사품명,형상,4M변경 이전코드,(OPTION1)"
+ },
+ {
+  "code": "210101",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "BOX ACC",
+  "desc": "적용모델,4M 여부,SIZE(or 규격),4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210102",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "BOX CTN",
+  "desc": "적용모델,4M 여부,SIZE(or 규격),4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210103",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "BOX CAP",
+  "desc": "적용모델,4M 여부,SIZE(or 규격),4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210104",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "BOX ANGLE",
+  "desc": "SIZE(or 규격),높이(두께/돌출부),추가정보"
+ },
+ {
+  "code": "210105",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "INNER BOX",
+  "desc": "적용모델,4M 여부,SIZE(or 규격),4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210106",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "DANPLA",
+  "desc": "적용모델,4M 여부,Size(가로x세로x높이),용도,4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210107",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "WOODEN BOX",
+  "desc": "적용모델,4M 여부,Size(가로x세로x높이),용도,4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210108",
+  "daebun": "포장자재",
+  "jungbun": "BOX",
+  "sobun": "BOX SYS",
+  "desc": "적용모델,4M 여부,SIZE(or 규격),4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210201",
+  "daebun": "포장자재",
+  "jungbun": "MANUAL",
+  "sobun": "MANUAL",
+  "desc": "언어,적용모델,색상,추가정보"
+ },
+ {
+  "code": "210202",
+  "daebun": "포장자재",
+  "jungbun": "MANUAL",
+  "sobun": "PAPER CARD",
+  "desc": "설명,적용모델,색상,Size(가로x세로x높이),추가정보"
+ },
+ {
+  "code": "210203",
+  "daebun": "포장자재",
+  "jungbun": "MANUAL",
+  "sobun": "PAPER PRINT",
+  "desc": "설명,적용모델,색상,Size(가로x세로x높이),추가정보"
+ },
+ {
+  "code": "210301",
+  "daebun": "포장자재",
+  "jungbun": "LABEL",
+  "sobun": "LABEL STICKER",
+  "desc": "부착위치,4M변경자재,구분 유형,STICKER 재질,SIZE(가로x세로),적용 모델,설명,색상,4M변경 이전코드"
+ },
+ {
+  "code": "210302",
+  "daebun": "포장자재",
+  "jungbun": "LABEL",
+  "sobun": "LABEL PLATE",
+  "desc": "부착 위치,4M 여부,설명,적용모델,색상,Size(가로x세로x높이),4M변경 이전코드"
+ },
+ {
+  "code": "210401",
+  "daebun": "포장자재",
+  "jungbun": "CD",
+  "sobun": "CD",
+  "desc": "설명,적용모델,버전,추가정보"
+ },
+ {
+  "code": "210501",
+  "daebun": "포장자재",
+  "jungbun": "BAG",
+  "sobun": "BAG",
+  "desc": "재질(기능),SIZE(입구X측면X두께),색상,인쇄,(OPTION2),(REMARK)"
+ },
+ {
+  "code": "210601",
+  "daebun": "포장자재",
+  "jungbun": "CUSHION PAD",
+  "sobun": "CUSHION(EPS)",
+  "desc": "색상,4M 여부,부착 위치,적용모델(높이 TYPE 수요처명),재질,4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210602",
+  "daebun": "포장자재",
+  "jungbun": "CUSHION PAD",
+  "sobun": "CUSHION(PE FOAM)",
+  "desc": "색상,4M 여부,부착 위치,적용모델(높이 TYPE 수요처명),재질,추가정보"
+ },
+ {
+  "code": "210701",
+  "daebun": "포장자재",
+  "jungbun": "SILICAGEL",
+  "sobun": "SILICAGEL",
+  "desc": "제조사 품명,무게,추가정보"
+ },
+ {
+  "code": "210801",
+  "daebun": "포장자재",
+  "jungbun": "WRAP",
+  "sobun": "PROTECTION WRAP",
+  "desc": "제조사 품명,4M 여부,Size(가로x세로x높이),4M변경 이전코드,추가정보"
+ },
+ {
+  "code": "210901",
+  "daebun": "포장자재",
+  "jungbun": "SUB MATERIAL",
+  "sobun": "SUB MATERIAL",
+  "desc": "제조사 품명,4M 여부,재질,HARDWARE_KIT,SIZE(용량),색상,4M변경 이전코드"
+ },
+ {
+  "code": "211001",
+  "daebun": "포장자재",
+  "jungbun": "PALLET",
+  "sobun": "PALLET",
+  "desc": "TYPE No,Size(가로x세로x높이),재질,용도,추가정보"
+ },
+ {
+  "code": "220101",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "ABS",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220102",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "PC+GF20",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220103",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "PC",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220104",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "ASA",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220105",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "TPU",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220106",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "MB",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220107",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "MPPO",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220108",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "PC/ABS",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220109",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "POM",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220110",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "ABS+GF20",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220112",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "POM+GF20",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220113",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "PPE/PS+GF10",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220114",
+  "daebun": "MP자재",
+  "jungbun": "INJECTION",
+  "sobun": "PC+GF10",
+  "desc": "GRADE,색상,색상코드,난연등급,추가정보"
+ },
+ {
+  "code": "220201",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "SGCC/SHEET",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220202",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "SGCC/COIL",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220203",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "SECC/SHEET",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220204",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "SECC/COIL",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220205",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "SPCC/SHEET",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220206",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "SPCC/COIL",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220207",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "PCM/SHEET",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220208",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "PCM/COIL",
+  "desc": "높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220209",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "AL/SHEET",
+  "desc": "재질,높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220210",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "AL/COIL",
+  "desc": "재질,높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220211",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "STS/SHEET",
+  "desc": "재질,높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220212",
+  "daebun": "MP자재",
+  "jungbun": "PRESS",
+  "sobun": "STS/COIL",
+  "desc": "재질,높이(두께/돌출부),폭,길이,추가정보"
+ },
+ {
+  "code": "220301",
+  "daebun": "MP자재",
+  "jungbun": "부자재",
+  "sobun": "INSERT",
+  "desc": "규격,세부사항,추가정보"
+ },
+ {
+  "code": "220302",
+  "daebun": "MP자재",
+  "jungbun": "부자재",
+  "sobun": "STAND OFF",
+  "desc": "형상,호칭경,길이,외경크기,도금,추가정보"
+ },
+ {
+  "code": "220303",
+  "daebun": "MP자재",
+  "jungbun": "부자재",
+  "sobun": "CLINCH NUT",
+  "desc": "형상,호칭경,SHANK CODE,도금,추가정보"
+ },
+ {
+  "code": "220304",
+  "daebun": "MP자재",
+  "jungbun": "부자재",
+  "sobun": "STUD",
+  "desc": "형상,호칭경,길이,도금,추가정보"
+ },
+ {
+  "code": "220305",
+  "daebun": "MP자재",
+  "jungbun": "부자재",
+  "sobun": "RIVET",
+  "desc": "규격,세부사항,추가정보"
+ },
+ {
+  "code": "300101",
+  "daebun": "BD 반제품",
+  "jungbun": "PBA",
+  "sobun": "PBA-AD",
+  "desc": "기능 유형(12종 유형내 선택), 보드명(or 제조사 품명), 시리즈번호, PCB버전, 스케일러명, FRC유무(FRC or -), Output Interface(LVDS/VBY1/TTL/eDP), Panel공급전압, DIMMING Type(ADM or PWM)"
+ },
+ {
+  "code": "300102",
+  "daebun": "BD 반제품",
+  "jungbun": "PBA",
+  "sobun": "PBA-M",
+  "desc": "기능 유형(12종 유형내 선택), 제조사품명, PCB버전, 시리즈번호, 고객사 코드"
+ },
+ {
+  "code": "300103",
+  "daebun": "BD 반제품",
+  "jungbun": "PBA",
+  "sobun": "PBA-S",
+  "desc": "기능 유형(12종 유형내 선택), 이니셜(2자리)+적용용도(G,P,M,S)+등록년도(2자리)+시리얼(3자리),PCB버전,(기타사항)"
+ },
+ {
+  "code": "300104",
+  "daebun": "BD 반제품",
+  "jungbun": "PBA",
+  "sobun": "PBA-T",
+  "desc": "보드명,시리즈 번호,PCB버전,터치방식(P or S),USB Interface 방식(H or B),PCB사이즈(가로X세로X두께)"
+ },
+ {
+  "code": "300105",
+  "daebun": "BD 반제품",
+  "jungbun": "PBA",
+  "sobun": "PBA-OSD",
+  "desc": "기능 유형(12종 유형내 선택), 적용용도(G,P,M,S)+년도(2자리)+시리얼(3자리),PCB 버전,(기타사항)"
+ },
+ {
+  "code": "300124",
+  "daebun": "BD 반제품",
+  "jungbun": "PBA",
+  "sobun": "PBA-CNV",
+  "desc": "기능 유형(12종 유형내 선택), 제조사 품명,시리즈번호(R1 ~ Rxx),버전, I/O 전압(##[V]/##[V]), 출력 전류[A], 출력 채널, DIMING CONTROL 방식"
+ },
+ {
+  "code": "300125",
+  "daebun": "BD 반제품",
+  "jungbun": "PBA",
+  "sobun": "PBA-LED",
+  "desc": "PCB 종류, 이니셜(2자리)+적용용도(G,P,M,S)+등록년도(2자리)+시리얼(3자리), PCB 버전, PCB 두께, LED가 실장되는 PCB면, 전체 LED수량, 기타사항"
+ },
+ {
+  "code": "310101",
+  "daebun": "반제품",
+  "jungbun": "LCM ASSY",
+  "sobun": "LCM ASSY MLD",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),LED MAKER,CONVERTER,추가정보"
+ },
+ {
+  "code": "310102",
+  "daebun": "반제품",
+  "jungbun": "LCM ASSY",
+  "sobun": "LCM ASSY KTMP",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),(특이사항)"
+ },
+ {
+  "code": "310103",
+  "daebun": "반제품",
+  "jungbun": "LCM ASSY",
+  "sobun": "LCM ASSY KTTM",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),(특이사항)"
+ },
+ {
+  "code": "310104",
+  "daebun": "반제품",
+  "jungbun": "LCM ASSY",
+  "sobun": "LCM ASSY KTTP",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),Hole 개수,추가정보"
+ },
+ {
+  "code": "310105",
+  "daebun": "반제품",
+  "jungbun": "LCM ASSY",
+  "sobun": "LCM ASSY STD",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),Hole 개수,추가정보"
+ },
+ {
+  "code": "310106",
+  "daebun": "반제품",
+  "jungbun": "LCM ASSY",
+  "sobun": "LCM ASSY CURVED",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),LED MAKER,CONVERTER,추가정보"
+ },
+ {
+  "code": "310107",
+  "daebun": "반제품",
+  "jungbun": "LCM ASSY",
+  "sobun": "LCM ASSY RESIZED",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),(특이사항)"
+ },
+ {
+  "code": "310201",
+  "daebun": "반제품",
+  "jungbun": "FOG ASSY",
+  "sobun": "FOG ASSY",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),Hole 개수,추가정보"
+ },
+ {
+  "code": "310202",
+  "daebun": "반제품",
+  "jungbun": "FOG ASSY",
+  "sobun": "FOG KTMP",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),Hole 개수,추가정보"
+ },
+ {
+  "code": "310203",
+  "daebun": "반제품",
+  "jungbun": "FOG ASSY",
+  "sobun": "FOG KTTP",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),(특이사항)"
+ },
+ {
+  "code": "310204",
+  "daebun": "반제품",
+  "jungbun": "FOG ASSY",
+  "sobun": "FOG CURVED",
+  "desc": "제조사품명(모델명),BLU TYPE,해상도,Interface Type,Radius,(특이사항)"
+ },
+ {
+  "code": "310205",
+  "daebun": "반제품",
+  "jungbun": "FOG ASSY",
+  "sobun": "OPTICAL FILM LAMI",
+  "desc": "공정자재,적용모델,INCH,추가정보"
+ },
+ {
+  "code": "310206",
+  "daebun": "반제품",
+  "jungbun": "FOG ASSY",
+  "sobun": "FOG RESIZED",
+  "desc": "제조사 품명,BLU TYPE,해상도,Interface Type,Size(가로x세로x높이),(특이사항)"
+ },
+ {
+  "code": "310207",
+  "daebun": "반제품",
+  "jungbun": "FOG ASSY",
+  "sobun": "I/S PROCESS",
+  "desc": "단위공정,적용모델,세부사항,추가정보"
+ },
+ {
+  "code": "310301",
+  "daebun": "반제품",
+  "jungbun": "POWER ASSY",
+  "sobun": "PWR ASSY",
+  "desc": "제조사 품명,길이,전압,적용모델,추가정보"
+ },
+ {
+  "code": "310302",
+  "daebun": "반제품",
+  "jungbun": "POWER ASSY",
+  "sobun": "DIV ASSY",
+  "desc": "기능 유형 (\"※ 기능 유형 정리표\" 내용 중 선택),제조사 품명,적용모델,속성 정보(기능적 특성 기입),버전,추가정보"
+ },
+ {
+  "code": "310401",
+  "daebun": "반제품",
+  "jungbun": "LED ASSY",
+  "sobun": "LED ASSY",
+  "desc": "제조사 품명,길이,전압,추가정보"
+ },
+ {
+  "code": "310501",
+  "daebun": "반제품",
+  "jungbun": "SPEAKER ASSY",
+  "sobun": "SPEAKER ASSY",
+  "desc": "제조사 품명,길이,출력 정격,추가정보"
+ },
+ {
+  "code": "310601",
+  "daebun": "반제품",
+  "jungbun": "PC ASSY",
+  "sobun": "PC ASSY",
+  "desc": "제조사 품명,HDD 용량,추가정보"
+ },
+ {
+  "code": "310701",
+  "daebun": "반제품",
+  "jungbun": "IRX ASSY",
+  "sobun": "IRX ASSY",
+  "desc": "제조사 품명,유형,추가정보"
+ },
+ {
+  "code": "310801",
+  "daebun": "반제품",
+  "jungbun": "IO SWITCHER ASSY",
+  "sobun": "IO SWITCHER ASSY",
+  "desc": "제조사 품명,유형,추가정보"
+ },
+ {
+  "code": "310901",
+  "daebun": "반제품",
+  "jungbun": "EXT ASSY",
+  "sobun": "EXT BD ASSY",
+  "desc": "제조사 품명,버전,추가정보"
+ },
+ {
+  "code": "311001",
+  "daebun": "반제품",
+  "jungbun": "MIC ASSY",
+  "sobun": "MIC ASSY",
+  "desc": "제조사 품명,길이,감도(dB),추가정보"
+ },
+ {
+  "code": "311101",
+  "daebun": "반제품",
+  "jungbun": "IRIS ASSY",
+  "sobun": "IRIS ASSY",
+  "desc": "커넥터규격,길이,Wire규격,추가정보"
+ },
+ {
+  "code": "311201",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP CAP ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),추가정보"
+ },
+ {
+  "code": "311202",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP INF ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),추가정보"
+ },
+ {
+  "code": "311203",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP MCT ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),추가정보"
+ },
+ {
+  "code": "311204",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP OPT ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),추가정보"
+ },
+ {
+  "code": "311205",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP RES ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),WIRE 수,추가정보"
+ },
+ {
+  "code": "311206",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP PCT ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),추가정보"
+ },
+ {
+  "code": "311207",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP SAW ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),추가정보"
+ },
+ {
+  "code": "311208",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP CURVED ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),인터페이스,컨트롤러 유무(Y/N),추가정보"
+ },
+ {
+  "code": "311209",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP CAM ASSY",
+  "desc": "적용모델(CUSTOM PJT. or CUSTOM INCH),INCH,형상,제조사 품명,추가정보"
+ },
+ {
+  "code": "311210",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "TSP ACTUATOR ASSY",
+  "desc": "제조사 품명,SIZE(폭x길이or PI),추가정보"
+ },
+ {
+  "code": "311211",
+  "daebun": "반제품",
+  "jungbun": "TOUCH SCREEN ASSY",
+  "sobun": "LCM+TSP ASSY",
+  "desc": "LCM 제조사 품명,TSP 제조사 품명,Touch 방식,INCH,추가정보"
+ },
+ {
+  "code": "311301",
+  "daebun": "반제품",
+  "jungbun": "GLASS ASSY",
+  "sobun": "OPTICAL GLASS ASSY",
+  "desc": "적용모델,구성,INCH,추가정보"
+ },
+ {
+  "code": "311401",
+  "daebun": "반제품",
+  "jungbun": "BLU ASSY",
+  "sobun": "BLU CCFL ASSY",
+  "desc": "제조사 품명,적용모델,SIZE(폭x길이or PI),추가정보"
+ },
+ {
+  "code": "311402",
+  "daebun": "반제품",
+  "jungbun": "BLU ASSY",
+  "sobun": "BLU LED ASSY",
+  "desc": "적용모델,LED 사이즈,LED 색상,LED MAKER,대표적용 PANEL(특이사항),추가정보"
+ },
+ {
+  "code": "311403",
+  "daebun": "반제품",
+  "jungbun": "BLU ASSY",
+  "sobun": "BLU CUSTOM ASSY",
+  "desc": "적용모델,INCH,LED 색상,LED MAKER,LED개수,추가정보"
+ },
+ {
+  "code": "311501",
+  "daebun": "반제품",
+  "jungbun": "CS ONLY",
+  "sobun": "GAME CS",
+  "desc": "GAME CS 전용(고객사),적용 모델,구성,추가정보"
+ },
+ {
+  "code": "311502",
+  "daebun": "반제품",
+  "jungbun": "CS ONLY",
+  "sobun": "PD CS",
+  "desc": "PD CS 전용(고객사),적용 모델,구성,추가정보"
+ },
+ {
+  "code": "311503",
+  "daebun": "반제품",
+  "jungbun": "CS ONLY",
+  "sobun": "MED CS",
+  "desc": "MED CS 전용(고객사),적용 모델,구성,추가정보"
+ },
+ {
+  "code": "311504",
+  "daebun": "반제품",
+  "jungbun": "CS ONLY",
+  "sobun": "BM CS",
+  "desc": "적용 모델,구성,추가정보"
+ },
+ {
+  "code": "311505",
+  "daebun": "반제품",
+  "jungbun": "CS ONLY",
+  "sobun": "LED DISPLAY CS",
+  "desc": "LED DISPLAY CS 전용(고객사),적용 모델,구성,추가정보"
+ },
+ {
+  "code": "311601",
+  "daebun": "반제품",
+  "jungbun": "FAN ASSY",
+  "sobun": "FAN ASSY",
+  "desc": "제조사 품명,전압,Size(가로x세로x높이),길이,추가정보"
+ },
+ {
+  "code": "311701",
+  "daebun": "반제품",
+  "jungbun": "DIFF PLATE ASSY",
+  "sobun": "DIFF ASSY",
+  "desc": "공정자재,적용모델,INCH,추가정보"
+ },
+ {
+  "code": "311801",
+  "daebun": "반제품",
+  "jungbun": "MONITOR ASSY",
+  "sobun": "MNT ASSY MVD",
+  "desc": "모델명,거래선,모델명,추가정보"
+ },
+ {
+  "code": "311802",
+  "daebun": "반제품",
+  "jungbun": "MONITOR ASSY",
+  "sobun": "MNT ASSY MVD-C",
+  "desc": "모델명,거래선,모델명,추가정보"
+ },
+ {
+  "code": "311803",
+  "daebun": "반제품",
+  "jungbun": "MONITOR ASSY",
+  "sobun": "MNT ASSY TVD",
+  "desc": "모델명,거래선,모델명,추가정보"
+ },
+ {
+  "code": "311804",
+  "daebun": "반제품",
+  "jungbun": "MONITOR ASSY",
+  "sobun": "MNT ASSY TVD-C",
+  "desc": "모델명,거래선,모델명,추가정보"
+ },
+ {
+  "code": "311805",
+  "daebun": "반제품",
+  "jungbun": "MONITOR ASSY",
+  "sobun": "MNT ASSY BTN",
+  "desc": "모델명,거래선,모델명,추가정보"
+ },
+ {
+  "code": "311806",
+  "daebun": "반제품",
+  "jungbun": "MONITOR ASSY",
+  "sobun": "MNT ASSY PTD",
+  "desc": "모델명,거래선,모델명,추가정보"
+ },
+ {
+  "code": "311901",
+  "daebun": "반제품",
+  "jungbun": "LED MODULE ASSY",
+  "sobun": "LED-ASM",
+  "desc": "적용모델,부품명,LED 사이즈,LED MAKER,(특이사항)"
+ },
+ {
+  "code": "312001",
+  "daebun": "반제품",
+  "jungbun": "BD ASSY",
+  "sobun": "BD REWORK",
+  "desc": "적용모델,제조사 품명,거래선,추가정보"
+ },
+ {
+  "code": "312101",
+  "daebun": "반제품",
+  "jungbun": "PACKING ASSY",
+  "sobun": "PACKING ASSY",
+  "desc": "적용모델,SIZE(폭x길이or PI),(특이사항)"
+ },
+ {
+  "code": "312201",
+  "daebun": "반제품",
+  "jungbun": "SKD ASSY",
+  "sobun": "SKD-ETC",
+  "desc": "적용모델,용도,구성,추가정보"
+ },
+ {
+  "code": "312301",
+  "daebun": "반제품",
+  "jungbun": "OLED ASSY",
+  "sobun": "OLED ASSY STD",
+  "desc": "제조사 품명,해상도,인터페이스,핀수,(특이사항)"
+ },
+ {
+  "code": "312401",
+  "daebun": "반제품",
+  "jungbun": "DB ASSY",
+  "sobun": "DB ASSY",
+  "desc": "PANEL 모델명,SIZE(3자리),C or F(CURVED/FLAT),T or G(TSP/GLASS),A or R(OCA/OCR)"
+ },
+ {
+  "code": "320201",
+  "daebun": "기구반제품",
+  "jungbun": "COVER ASSY",
+  "sobun": "FRONT ASSY",
+  "desc": "(E/M/P/D),색상,도금,재질 정보,적용모델,SIZE(폭x길이or PI),높이(두께/돌출부),세부기능,수요처명,내작구분"
+ },
+ {
+  "code": "320205",
+  "daebun": "기구반제품",
+  "jungbun": "COVER ASSY",
+  "sobun": "BACK ASSY",
+  "desc": "(E/M/P/D),색상,도금,재질 정보,적용모델,SIZE(폭x길이or PI),높이(두께/돌출부),세부기능,수요처명,내작구분"
+ },
+ {
+  "code": "320301",
+  "daebun": "기구반제품",
+  "jungbun": "TAPE ASSY",
+  "sobun": "FOAM TAPE ASSY",
+  "desc": "FOAM 재질,SIZE(폭x길이or PI),높이(두께/돌출부),색상,제조사 품명,(OPTION1)"
+ },
+ {
+  "code": "320401",
+  "daebun": "기구반제품",
+  "jungbun": "FRAME ASSY",
+  "sobun": "FRAME ASSY",
+  "desc": "사업부(G/P/M/L/C),구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전"
+ },
+ {
+  "code": "320501",
+  "daebun": "기구반제품",
+  "jungbun": "BLU MODULE",
+  "sobun": "BM",
+  "desc": "사업부(G/P/M/L/C),모델명,BM TYPE,버전,(OPTION3)"
+ },
+ {
+  "code": "320502",
+  "daebun": "기구반제품",
+  "jungbun": "BLU MODULE",
+  "sobun": "KE LCM",
+  "desc": "거래선 모델명,거래선,추가 정보1,추가 정보2,추가 정보3"
+ },
+ {
+  "code": "320503",
+  "daebun": "기구반제품",
+  "jungbun": "BLU MODULE",
+  "sobun": "KD LCM",
+  "desc": "거래선 모델명,거래선,추가 정보1,추가 정보2,추가 정보3"
+ },
+ {
+  "code": "320601",
+  "daebun": "기구반제품",
+  "jungbun": "BM PART(ASSY)",
+  "sobun": "C/TOP ASSY",
+  "desc": "적용BM모델, 버전(V1)"
+ },
+ {
+  "code": "320602",
+  "daebun": "기구반제품",
+  "jungbun": "BM PART(ASSY)",
+  "sobun": "G/PNL ASSY",
+  "desc": "적용BM모델, 버전(V1)"
+ },
+ {
+  "code": "320603",
+  "daebun": "기구반제품",
+  "jungbun": "BM PART(ASSY)",
+  "sobun": "LED/HSG ASSY",
+  "desc": "적용BM모델, 버전(V1)"
+ },
+ {
+  "code": "320604",
+  "daebun": "기구반제품",
+  "jungbun": "BM PART(ASSY)",
+  "sobun": "LGP ASSY",
+  "desc": "적용BM모델,패턴공법,추가 가공,버전"
+ },
+ {
+  "code": "320605",
+  "daebun": "기구반제품",
+  "jungbun": "BM PART(ASSY)",
+  "sobun": "LED/ARR ASSY",
+  "desc": "적용BM모델, 버전(V1)"
+ },
+ {
+  "code": "320606",
+  "daebun": "기구반제품",
+  "jungbun": "BM PART(ASSY)",
+  "sobun": "C/BTM ASSY",
+  "desc": "적용BM모델, 버전(V1)"
+ },
+ {
+  "code": "320701",
+  "daebun": "기구반제품",
+  "jungbun": "K OLED",
+  "sobun": "KD OCM",
+  "desc": "제품군,인치,OLED type, OCM 형상, CURVED곡률값,CURVED 형태, Touch Type, OCM Cover 사양, 버전"
+ },
+ {
+  "code": "320702",
+  "daebun": "기구반제품",
+  "jungbun": "K OLED",
+  "sobun": "KD OTM",
+  "desc": "제품군,인치,OLED type, OCM 형상, CURVED곡률값,CURVED 형태, Touch Type, 버전"
+ },
+ {
+  "code": "330101",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "FRAME(M)_MP",
+  "desc": "적용모델,INCH,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "330102",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BKT SUB(M)_MP",
+  "desc": "적용모델,INCH,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "330103",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "G/PNL MOD(M)_MP",
+  "desc": "재질,높이(두께/돌출부),부착 위치,도장사양,색상,조립부품명,INCH,버전"
+ },
+ {
+  "code": "330104",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BKT MOUNT_MP",
+  "desc": "적용모델,INCH,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "330105",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BKT PCB_MP",
+  "desc": "적용모델,INCH,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "330106",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BKT SUB_MP",
+  "desc": "적용모델,INCH,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "330107",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "FRAME(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330108",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BASE(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330109",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "COVER(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330110",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "MOUNT(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330111",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "SUB(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330112",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "FRONT(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330113",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BACK(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330114",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "STAND(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330115",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "TOP_COVER(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330116",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BTM_COVER(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330117",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BACK_PL(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330118",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "BACK_SUB(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330119",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "C/TOP(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330120",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "C/BTM(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330121",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "WRAPPER(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "330122",
+  "daebun": "코텍",
+  "jungbun": "기구자재",
+  "sobun": "STIFFENER(P)_MP",
+  "desc": "사업부(G/P/M/L/C),모델명,구분 정보,재질,높이(두께/돌출부),색상,MOD,버전,대체품 자재코드"
+ },
+ {
+  "code": "340101",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "CVR",
+  "desc": "용도,세부기능,색상,도금,재질,적용모델,버전,추가정보"
+ },
+ {
+  "code": "340102",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "T/CVR",
+  "desc": "용도,색상,도금,재질,높이(두께/돌출부),적용모델,버전"
+ },
+ {
+  "code": "340103",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "B/CVR",
+  "desc": "용도,색상,도금,재질,두께,적용모델,버전"
+ },
+ {
+  "code": "340104",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "FRM",
+  "desc": "용도,세부기능,색상,도금,재질,적용모델,버전,추가정보"
+ },
+ {
+  "code": "340105",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "BKT",
+  "desc": "용도,세부기능,색상,도금,재질,적용모델,버전,추가정보"
+ },
+ {
+  "code": "340106",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "FRT/PART",
+  "desc": "용도,색상,도금,재질,높이(두께/돌출부),적용모델,버전"
+ },
+ {
+  "code": "340107",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "SHD",
+  "desc": "용도,색상,도금,재질,높이(두께/돌출부),적용모델,버전"
+ },
+ {
+  "code": "340108",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "WIN",
+  "desc": "용도,세부기능,색상,도금,재질,적용모델,버전,추가정보"
+ },
+ {
+  "code": "340109",
+  "daebun": "아이디스",
+  "jungbun": "기구자재",
+  "sobun": "D/CVR",
+  "desc": "용도,지름(PI),색상,도금,재질,적용모델,버전,추가정보"
+ },
+ {
+  "code": "350101",
+  "daebun": "아이디피",
+  "jungbun": "기구자재",
+  "sobun": "HANDLE(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "350102",
+  "daebun": "아이디피",
+  "jungbun": "기구자재",
+  "sobun": "INSULATE(M)",
+  "desc": "적용 모델,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "360101",
+  "daebun": "빅솔론",
+  "jungbun": "기구자재",
+  "sobun": "COVER(M)",
+  "desc": "사업부(G/P/M/L/C),4M 여부,구분 정보,모델명,재질 정보,높이(두께/돌출부),색상,MOD,버전,4M변경 이전코드"
+ },
+ {
+  "code": "360102",
+  "daebun": "빅솔론",
+  "jungbun": "기구자재",
+  "sobun": "LEVER(M)",
+  "desc": "적용 모델,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "360103",
+  "daebun": "빅솔론",
+  "jungbun": "기구자재",
+  "sobun": "GUIDE(M)",
+  "desc": "적용 모델,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "360104",
+  "daebun": "빅솔론",
+  "jungbun": "기구자재",
+  "sobun": "RACK(M)",
+  "desc": "적용 모델,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "360105",
+  "daebun": "빅솔론",
+  "jungbun": "기구자재",
+  "sobun": "DIFFUSION(M)",
+  "desc": "적용 모델,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "360106",
+  "daebun": "빅솔론",
+  "jungbun": "기구자재",
+  "sobun": "BUTTON(M)",
+  "desc": "적용 모델,용도,재질,FINISH(색상),FINISH(도금)"
+ },
+ {
+  "code": "400101",
+  "daebun": "SUB working",
+  "jungbun": "SUB WORKING",
+  "sobun": "SUB WORKING",
+  "desc": "모델명,SUB 작업명,추가정보"
+ },
+ {
+  "code": "501001",
+  "daebun": "완제품",
+  "jungbun": "TPR",
+  "sobun": "TPR",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501002",
+  "daebun": "완제품",
+  "jungbun": "TPR",
+  "sobun": "TPR-S",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501003",
+  "daebun": "완제품",
+  "jungbun": "TPR",
+  "sobun": "TPR-P",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501101",
+  "daebun": "완제품",
+  "jungbun": "TVD",
+  "sobun": "TVD",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501102",
+  "daebun": "완제품",
+  "jungbun": "TVD",
+  "sobun": "TVD-C",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501103",
+  "daebun": "완제품",
+  "jungbun": "TVD",
+  "sobun": "TVD-P",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501201",
+  "daebun": "완제품",
+  "jungbun": "MVD",
+  "sobun": "MVD",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501202",
+  "daebun": "완제품",
+  "jungbun": "MVD",
+  "sobun": "MVD-C",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501203",
+  "daebun": "완제품",
+  "jungbun": "MVD",
+  "sobun": "MVD-P",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501204",
+  "daebun": "완제품",
+  "jungbun": "MVD",
+  "sobun": "MVD-E",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501301",
+  "daebun": "완제품",
+  "jungbun": "UGA",
+  "sobun": "UGA",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501401",
+  "daebun": "완제품",
+  "jungbun": "BTN",
+  "sobun": "BTN",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501402",
+  "daebun": "완제품",
+  "jungbun": "BTN",
+  "sobun": "BTN-C",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501403",
+  "daebun": "완제품",
+  "jungbun": "BTN",
+  "sobun": "BTN-P",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501501",
+  "daebun": "완제품",
+  "jungbun": "PTD",
+  "sobun": "PTD",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501601",
+  "daebun": "완제품",
+  "jungbun": "SUB",
+  "sobun": "SUB",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501602",
+  "daebun": "완제품",
+  "jungbun": "SUB",
+  "sobun": "SUB-SG",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501603",
+  "daebun": "완제품",
+  "jungbun": "SUB",
+  "sobun": "SUB-P",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501801",
+  "daebun": "완제품",
+  "jungbun": "ARCADE",
+  "sobun": "ARCADE",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "501901",
+  "daebun": "완제품",
+  "jungbun": "LOT",
+  "sobun": "LOT",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "505001",
+  "daebun": "완제품",
+  "jungbun": "ATM",
+  "sobun": "ATM",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "505002",
+  "daebun": "완제품",
+  "jungbun": "ATM",
+  "sobun": "ATM-C",
+  "desc": "모델명, 거래선,(거래선 적용모델명) →모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "502001",
+  "daebun": "완제품",
+  "jungbun": "PD PDP",
+  "sobun": "PDP SET",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502101",
+  "daebun": "완제품",
+  "jungbun": "PD SIGNAGE",
+  "sobun": "VW",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502102",
+  "daebun": "완제품",
+  "jungbun": "PD SIGNAGE",
+  "sobun": "FPD",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502701",
+  "daebun": "완제품",
+  "jungbun": "IT MONITOR",
+  "sobun": "IT MONITOR",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선 모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502201",
+  "daebun": "완제품",
+  "jungbun": "MEETING&CLASSROOM\n-> PD TOUCH",
+  "sobun": "IFPD",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502202",
+  "daebun": "완제품",
+  "jungbun": "MEETING&CLASSROOM\n-> PD TOUCH",
+  "sobun": "TABLE",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502203",
+  "daebun": "완제품",
+  "jungbun": "MEETING&CLASSROOM\n-> PD TOUCH",
+  "sobun": "PODIUM",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502301",
+  "daebun": "완제품",
+  "jungbun": "RUGGED AVIONICS\n-> SPECIALTY",
+  "sobun": "ATC",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502303",
+  "daebun": "완제품",
+  "jungbun": "RUGGED MILITARY\n-> SPECIALTY",
+  "sobun": "MIL",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502305",
+  "daebun": "완제품",
+  "jungbun": "RUGGED AUTOMOBILE\n-> SPECIALTY",
+  "sobun": "CAR",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502306",
+  "daebun": "완제품",
+  "jungbun": "SPECIALTY",
+  "sobun": "OD",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502307",
+  "daebun": "완제품",
+  "jungbun": "SPECIALTY",
+  "sobun": "ATC-S",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502308",
+  "daebun": "완제품",
+  "jungbun": "SPECIALTY",
+  "sobun": "EDGE BOX",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @ 추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보) ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우,거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502309",
+  "daebun": "완제품",
+  "jungbun": "SPECIALTY",
+  "sobun": "HMI EV",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "502310",
+  "daebun": "완제품",
+  "jungbun": "SPECIALTY",
+  "sobun": "LED-OD",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503001",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL ULTRASOUND",
+  "sobun": "US",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503002",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL ULTRASOUND",
+  "sobun": "USCP",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503003",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL ULTRASOUND",
+  "sobun": "US HCU",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503004",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL ULTRASOUND",
+  "sobun": "US I/O BOX",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503101",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL SURGICAL",
+  "sobun": "SG",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503201",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL CLINICAL",
+  "sobun": "CR",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503301",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL DIAGNOSTIC",
+  "sobun": "DN",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503401",
+  "daebun": "완제품",
+  "jungbun": "MEDICAL MRI",
+  "sobun": "MRI",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503501",
+  "daebun": "완제품",
+  "jungbun": "PATIENT CARE",
+  "sobun": "PATIENT MONITOR",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "503601",
+  "daebun": "완제품",
+  "jungbun": "MEDCIAL IGS",
+  "sobun": "IGS",
+  "desc": "거래선 모델명(프로젝트명) or 당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "504001",
+  "daebun": "완제품",
+  "jungbun": "K LCM",
+  "sobun": "KE-LCM",
+  "desc": "거래선모델명 @추가 정보 옵션 ( 프로젝트명 )    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "504002",
+  "daebun": "완제품",
+  "jungbun": "K LCM",
+  "sobun": "KD-LCM",
+  "desc": "거래선모델명,거래선@추가 정보 옵션 ( 프로젝트명 )    ※추가정보 기재내역이 없을 경우 '@'미 표기"
+ },
+ {
+  "code": "504101",
+  "daebun": "완제품",
+  "jungbun": "K OLED",
+  "sobun": "KD-OSM",
+  "desc": "당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "504102",
+  "daebun": "완제품",
+  "jungbun": "K OLED",
+  "sobun": "KD-OCM",
+  "desc": "당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "504103",
+  "daebun": "완제품",
+  "jungbun": "K OLED",
+  "sobun": "KD-OTM",
+  "desc": "당사 모델명 @추가 정보 옵션(거래선명,출향지(UK/JP,UK,KR),기타정보)  ※ 당사모델이 거래선 요청에 의해 거래선모델명으로 파생되는 경우, 거래선 모델명(당사모델명) 표기."
+ },
+ {
+  "code": "504501",
+  "daebun": "완제품",
+  "jungbun": "CABINET",
+  "sobun": "CBN-G",
+  "desc": "모델명@거래선, 거래선 모델명,추가정보 ※추가정보 기재내역이 없을 경우 미표기"
+ },
+ {
+  "code": "504502",
+  "daebun": "완제품",
+  "jungbun": "CABINET",
+  "sobun": "CBN WRAP",
+  "desc": "Kortek Cabinet 모델명, 물류Type@거래선, 거래선 모델명, 추가정보 ※추가정보 기재내역이 없을 경우 미표기"
+ },
+ {
+  "code": "504503",
+  "daebun": "완제품",
+  "jungbun": "CABINET",
+  "sobun": "CBN BTN",
+  "desc": "Kortek Cabinet 모델명, 물류Type@거래선, 거래선 모델명, 추가정보 ※추가정보 기재내역이 없을 경우 미표기"
+ },
+ {
+  "code": "504504",
+  "daebun": "완제품",
+  "jungbun": "CABINET",
+  "sobun": "CBN SUB",
+  "desc": "Kortek Cabinet 모델명, 물류Type@거래선, 거래선 모델명, 추가정보 ※추가정보 기재내역이 없을 경우 미표기"
+ },
+ {
+  "code": "504505",
+  "daebun": "완제품",
+  "jungbun": "CABINET",
+  "sobun": "CBN-L",
+  "desc": "모델명@거래선, 거래선 모델명,추가정보 ※추가정보 기재내역이 없을 경우 미표기"
+ },
+ {
+  "code": "504601",
+  "daebun": "완제품",
+  "jungbun": "LED DISPLAY",
+  "sobun": "LED-MD",
+  "desc": "모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션    ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "504701",
+  "daebun": "완제품",
+  "jungbun": "LED SUB",
+  "sobun": "LED KIT",
+  "desc": "모델명,거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션 ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "504702",
+  "daebun": "완제품",
+  "jungbun": "LED SUB",
+  "sobun": "LED ACCESSARY",
+  "desc": "부품분류(PSU,KLDC,ETC),거래선(,거래선 적용모델명 or 기존 모델명)@추가 정보 옵션 ※추가정보 기재내역이 없을경우 '@'미표기"
+ },
+ {
+  "code": "508001",
+  "daebun": "완제품",
+  "jungbun": "CS ONLY",
+  "sobun": "GAME SET CS",
+  "desc": "적용모델명, 주요구성품"
+ },
+ {
+  "code": "508002",
+  "daebun": "완제품",
+  "jungbun": "CS ONLY",
+  "sobun": "PD CS",
+  "desc": "적용모델명, 주요구성품"
+ },
+ {
+  "code": "508003",
+  "daebun": "완제품",
+  "jungbun": "CS ONLY",
+  "sobun": "MED CS",
+  "desc": "적용모델명, 주요구성품"
+ },
+ {
+  "code": "700101",
+  "daebun": "상품",
+  "jungbun": "MOUNT",
+  "sobun": "MOUNT",
+  "desc": "색상,도금,재질,제조사 품명,추가정보"
+ },
+ {
+  "code": "700201",
+  "daebun": "상품",
+  "jungbun": "JIG",
+  "sobun": "JIG",
+  "desc": "제조사 품명,추가정보"
+ },
+ {
+  "code": "700301",
+  "daebun": "상품",
+  "jungbun": "TOUCH UPDATE TOOL",
+  "sobun": "UPDATE TOOL",
+  "desc": "제조사 품명,추가정보"
+ },
+ {
+  "code": "700501",
+  "daebun": "상품",
+  "jungbun": "ETC",
+  "sobun": "ETC",
+  "desc": "제조사 품명,추가정보"
+ },
+ {
+  "code": "900101",
+  "daebun": "미사용",
+  "jungbun": "OLD",
+  "sobun": "OLD",
+  "desc": "기존 description 사용,추가정보"
+ },
+ {
+  "code": "900102",
+  "daebun": "미사용",
+  "jungbun": "DELETE",
+  "sobun": "DELETE",
+  "desc": "삭제 내역 기재"
+ },
+ {
+  "code": "910101",
+  "daebun": "외주공정",
+  "jungbun": "OUTSOURCING PROCESS",
+  "sobun": "O/S PROCESS",
+  "desc": "단위공정,적용모델,공정자재,INCH,추가정보"
+ },
+ {
+  "code": "910201",
+  "daebun": "외주공정",
+  "jungbun": "용역",
+  "sobun": "SERVICE",
+  "desc": "Service 발생 내역"
+ },
+ {
+  "code": "920101",
+  "daebun": "회로자재",
+  "jungbun": "R&D TEMP",
+  "sobun": "개발용 신규 회로자재",
+  "desc": "개발용 신규자재 / 자재코드 채번 전"
+ },
+ {
+  "code": "920201",
+  "daebun": "DISPLAY",
+  "jungbun": "R&D TEMP",
+  "sobun": "개발용 신규 DISPLAY",
+  "desc": "개발용 신규자재 / 자재코드 채번 전"
+ },
+ {
+  "code": "920301",
+  "daebun": "전장자재",
+  "jungbun": "R&D TEMP",
+  "sobun": "개발용 신규 전장자재",
+  "desc": "개발용 신규자재 / 자재코드 채번 전"
+ },
+ {
+  "code": "920401",
+  "daebun": "기구자재",
+  "jungbun": "R&D TEMP",
+  "sobun": "개발용 신규 기구자재",
+  "desc": "개발용 신규자재 / 자재코드 채번 전"
+ },
+ {
+  "code": "920501",
+  "daebun": "포장자재",
+  "jungbun": "R&D TEMP",
+  "sobun": "개발용 신규 포장자재",
+  "desc": "개발용 신규자재 / 자재코드 채번 전"
+ },
+ {
+  "code": "930101",
+  "daebun": "공급자재",
+  "jungbun": "오리엔텍",
+  "sobun": "PS_PART",
+  "desc": "업체코드,대체표기,대체대상,제조사품명(품목명),규격"
+ },
+ {
+  "code": "930201",
+  "daebun": "공급자재",
+  "jungbun": "PARTS",
+  "sobun": "ETC PART",
+  "desc": "제조사 품명,고객사 정보,자재설명"
+ }
+]

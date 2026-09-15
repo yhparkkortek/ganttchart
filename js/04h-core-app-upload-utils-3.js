@@ -1560,6 +1560,97 @@
             return;
         }
 
+        // 📋 [2026-09-15 신규] "SAP에서 104477 승인원 표지 생성해줘" — 사내 별도 데스크톱 앱
+        //    ("연구소 가이드 시스템")의 exe를 분석해서 그대로 재현한 기능(자세한 재현 과정은
+        //    CLAUDE.md 참고). 출력형식/담당자/팀장/가승인원 여부처럼 한 메시지에 다 안 들어올
+        //    수 있는 항목이 많아, 다른 SAP 로컬 명령과 달리 대화가 여러 턴에 걸쳐 이어질 수
+        //    있는 유일한 경우 — window._ganttQaApprovalDraft에 지금까지 파악된 값을 계속
+        //    누적하다가 필수 항목이 다 모이면 그때 실제로 SAP 조회 + 파일 생성을 진행한다.
+        //    반드시 아래 배치 다운로드/단일 문서 열기 판정보다 먼저 체크해야 함 — "승인원"이라는
+        //    단어 자체는 저 판정들과 겹치지 않지만, 답변 대기 중(예: "담당자는 홍길동, 팀장은
+        //    김철수요"처럼 트리거 단어 없이 값만 채우는 후속 메시지)에는 이 블록이 먼저
+        //    가로채지 않으면 그 메시지가 엉뚱하게 일반 AI 질문으로 새어나간다.
+        const approvalDraft = window._ganttQaExtractApprovalUpdate ? window._ganttQaExtractApprovalUpdate(question) : null;
+        if (approvalDraft) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            input.value = '';
+
+            const missing = [];
+            if (!approvalDraft.format) missing.push(window._t('출력 형식(엑셀/워드/둘 다)', 'output format (Excel/Word/both)'));
+            if (!approvalDraft.writer) missing.push(window._t('담당자(Checked by) 이름', "the preparer's (Checked by) name"));
+            if (!approvalDraft.leader) missing.push(window._t('팀장(Approved by) 이름', "the team leader's (Approved by) name"));
+            if (approvalDraft.isPre === undefined) missing.push(window._t('가승인원 여부(정식승인원 / 가승인원)', 'whether this is a provisional approval (formal / provisional)'));
+
+            if (missing.length) {
+                const matLabel = approvalDraft.materials.join(', ');
+                const reply = window._t(
+                    `📋 자재 "${matLabel}"의 승인원 표지를 만들려면 아래 항목이 더 필요합니다 — 답을 이어서 말씀해주세요:\n- ${missing.join('\n- ')}\n\n(Revision 번호와 Remark는 생략하면 각각 "00"/빈 비고로 자동 처리됩니다)`,
+                    `📋 To generate the approval cover for material(s) "${matLabel}", I still need — just reply with the answers:\n- ${missing.join('\n- ')}\n\n(Revision number and Remark default to "00" / blank if omitted)`
+                );
+                window._ganttQaHistory.push({ role: 'ai', text: reply });
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에서 자재정보를 조회하는 중...', 'Looking up material info in SAP...'), pending: true });
+            window._renderGanttQaMessages();
+            let finalReply;
+            try {
+                let fetched = approvalDraft.fetched;
+                if (!fetched) {
+                    const fres = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/sap-approval-fetch?materials=' + encodeURIComponent(approvalDraft.materials.join(','))),
+                        Math.min(180000, 20000 + 8000 * approvalDraft.materials.length),
+                        window._t('SAP 승인원 정보 조회 시간 초과', 'SAP approval info lookup timed out')
+                    );
+                    fetched = await fres.json();
+                    approvalDraft.fetched = fetched;
+                }
+                if (!fetched.ok) {
+                    finalReply = '⚠️ ' + window._t('SAP 조회 실패: ', 'SAP lookup failed: ') + (fetched.error || window._t('알 수 없는 오류', 'unknown error'));
+                } else {
+                    const failItems = (fetched.results || []).filter(function(r) { return !r.ok; });
+                    const pendingIdx = window._ganttQaHistory.length - 1;
+                    if (window._ganttQaHistory[pendingIdx]) {
+                        window._ganttQaHistory[pendingIdx].text = '⏳ ' + window._t('표지 파일을 생성하는 중...', 'Generating cover files...');
+                        window._renderGanttQaMessages();
+                    }
+                    const gres = await window._withTimeout(
+                        fetch('http://127.0.0.1:5000/sap-approval-generate', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                results: fetched.results, format: approvalDraft.format,
+                                writer: approvalDraft.writer, leader: approvalDraft.leader,
+                                is_pre: approvalDraft.isPre, rev: approvalDraft.rev || '00',
+                                remark: approvalDraft.remark || ''
+                            })
+                        }),
+                        60000, window._t('승인원 표지 생성 시간 초과', 'Approval cover generation timed out')
+                    );
+                    const gdata = await gres.json();
+                    if (gdata.ok) {
+                        finalReply = '📄 ' + (gdata.message || window._t('승인원 표지가 생성되었습니다.', 'Approval cover generated.'));
+                        if (failItems.length) {
+                            finalReply += '\n\n' + window._t('⚠️ 조회 실패해서 제외된 자재: ', '⚠️ Materials excluded due to lookup failure: ')
+                                + failItems.map(function(f) { return f.code + (f.err ? `(${f.err})` : ''); }).join(', ');
+                        }
+                    } else {
+                        finalReply = '⚠️ ' + window._t('표지 생성 실패: ', 'Failed to generate cover: ') + (gdata.error || window._t('알 수 없는 오류', 'unknown error'));
+                    }
+                }
+            } catch (e) {
+                finalReply = '⚠️ ' + window._t('승인원 표지 생성 중 오류: ', 'Error while generating the approval cover: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: finalReply });
+            window._ganttQaApprovalDraft = null; // 성공/실패 무관하게 완료 후 초기화 — 다음 요청은 새로 시작
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
         //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
         //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
@@ -2393,6 +2484,65 @@
         //    같은 여부를 묻는 표현이 있으면 로컬 명령으로 가로채지 않고 평소처럼 AI에게 넘긴다.
         var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
         return !looksLikeQuestion && /(엑셀|excel|xlsx)/i.test(text) && /(출력|내보내|다운로드|저장|export|download)/i.test(text);
+    };
+
+    // 📋 [2026-09-15 신규] "승인원 표지 생성" 대화 상태 — window._ganttQaHistory(대화 내용)와
+    //    달리 이건 "지금까지 파악된 항목"만 담는 별도 상태다. 값: null(진행 중 요청 없음) 또는
+    //    { materials:[...], format, writer, leader, isPre, rev, remark, fetched }.
+    //    _ganttQaExtractApprovalUpdate가 매 메시지마다 갱신하고, sendGanttQaMessage가 필수
+    //    항목이 다 모였는지 보고 실행 여부를 결정한다. 대화 중간에 모달을 닫아도(브라우저
+    //    새로고침 전까지는) 유지된다 — 대화 내용 자체(_ganttQaHistory)는 모달을 닫으면
+    //    비워지지만 이 상태는 별개다.
+    window._ganttQaApprovalDraft = null;
+
+    // 요청 메시지 하나를 보고 승인원 표지 draft를 새로 시작하거나(트리거 단어+자재번호 포함)
+    // 기존 draft를 이어서 채운다(트리거 단어 없이 항목 값만 있는 후속 메시지). 관련 없는
+    // 메시지면 null — 이 경우 draft가 있어도 건드리지 않고 그냥 지나간다(예: 딴 얘기를 하다가
+    // 다시 돌아와 항목을 채울 수 있게).
+    window._ganttQaExtractApprovalUpdate = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        var isNewTrigger = /sap/i.test(text) && /승인원/.test(text) && /(표지|생성|만들|작성)/i.test(text);
+        var draft = window._ganttQaApprovalDraft;
+        if (!isNewTrigger && !draft) return null;
+
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (isNewTrigger && looksLikeQuestion) return null; // "승인원 표지도 만들 수 있어?" 류는 AI에게 넘김
+
+        if (isNewTrigger) {
+            var mats = (text.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, arr) { return arr.indexOf(m) === i; });
+            if (!mats.length) return null; // 자재번호 없이 트리거 단어만 있으면 대상 아님
+            draft = { materials: mats.slice(0, 30), fetched: null }; // 원본 앱과 동일하게 최대 30개
+            window._ganttQaApprovalDraft = draft;
+        }
+        if (!draft) return null;
+
+        // 이번 메시지에서 추가로 파악되는 값이 있으면 draft에 병합(이미 있는 값은 덮어씀 —
+        // "역시 워드로 바꿔줘" 같은 정정도 자연스럽게 반영되게).
+        if (/(둘\s*다|둘다|모두|both)/i.test(text)) {
+            draft.format = 'both';
+        } else {
+            var wantsXlsx = /(엑셀|excel|xlsx)/i.test(text);
+            var wantsDocx = /(워드|word|docx)/i.test(text);
+            if (wantsXlsx && wantsDocx) draft.format = 'both';
+            else if (wantsXlsx) draft.format = 'xlsx';
+            else if (wantsDocx) draft.format = 'docx';
+        }
+        // 💡 "담당자는 박용훈"처럼 명사 뒤에 조사(는/은/가/이)가 바로 붙는 한국어 어순을 감안
+        //    해서, "담당자"/"팀장" 뒤에 조사 하나를 건너뛸 수 있게 함(브라우저 테스트로 이
+        //    조사 처리가 빠졌던 버그를 발견해 수정, 2026-09-15).
+        var wm = text.match(/담당자(?:는|은|가|이)?\s*(?:이름)?\s*[:：]?\s*([가-힣]{2,4})/);
+        if (wm) draft.writer = wm[1];
+        var lm = text.match(/팀장(?:는|은|가|이)?\s*(?:이름)?\s*[:：]?\s*([가-힣]{2,4})/);
+        if (lm) draft.leader = lm[1];
+        if (/가승인원/.test(text)) draft.isPre = true;
+        else if (/정식\s*승인원?|정식\s*승인/.test(text)) draft.isPre = false;
+        var rm = text.match(/rev(?:ision)?\s*(?:번호)?\s*[:：]?\s*(\d{1,3})/i);
+        if (rm) draft.rev = rm[1].length === 1 ? ('0' + rm[1]) : rm[1];
+        var mk = text.match(/remark\s*[:：]\s*(.+)$/i) || text.match(/비고\s*[:：]\s*(.+)$/);
+        if (mk) draft.remark = mk[1].trim();
+
+        return draft;
     };
 
     // 📄 [2026-09-14 신규] "SAP에서 P01 문서 열어줘/다운로드해줘" — 질문 문자열만 보고 로컬에서

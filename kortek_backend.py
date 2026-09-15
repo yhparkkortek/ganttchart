@@ -1514,6 +1514,31 @@ def all_decrypt():
 #    다시 끌어오지 말 것(64비트라 어차피 못 씀).
 _SAP_BRIDGE_PATH = os.path.join(BASE_DIR, 'sap_bridge_32.py')
 
+# ── 승인원 표지 생성 — 자재그룹표(matgroups.json, 618건) ──────────────
+#    [2026-09-15 신규] 사내에서 쓰던 별도 데스크톱 앱("연구소 가이드 시스템")의 exe를 분석해
+#    그대로 재현한 기능 — MM03 화면엔 자재그룹 "코드"만 있고 명칭이 없어서, 그 앱에 내장돼
+#    있던 618건짜리 자재그룹표(코드→대분류/중분류/소분류/설명)에서 코드로 찾는다. 원본 앱의
+#    `_approval_group_name`과 동일하게, 표에 없는 코드(예: 사용금지된 코드)는 빈 값을
+#    반환하고 화면/응답에 "확인 필요"로 표시해서 사람이 직접 판단하게 한다 — Item Description
+#    앞부분으로 되짚는 등의 추측 로직은 원본 앱에서도 엉뚱한 이름이 채워지는 문제로 빠졌던
+#    것이라 여기서도 넣지 않는다.
+_MATGROUPS_PATH = os.path.join(BASE_DIR, 'matgroups.json')
+_MATGROUPS_BY_CODE = {}
+try:
+    with open(_MATGROUPS_PATH, encoding='utf-8') as _mg_f:
+        for _mg_entry in json.load(_mg_f):
+            _code = (_mg_entry.get('code') or '').strip()
+            if _code:
+                _MATGROUPS_BY_CODE[_code] = _mg_entry
+except Exception as _mg_err:
+    print(f"[승인원 표지] matgroups.json 로드 실패 — 자재그룹명 조회가 안 됩니다: {_mg_err}")
+
+
+def _approval_group_name(matkl):
+    """자재그룹 코드(matkl)로 618건 표에서 소분류명(Item Group)을 찾는다. 못 찾으면 빈 문자열."""
+    entry = _MATGROUPS_BY_CODE.get((matkl or '').strip())
+    return (entry.get('sobun') or '') if entry else ''
+
 
 def _run_sap_bridge(extra_args, timeout, log_prefix):
     """sap_bridge_32.py를 32비트 Python 서브프로세스로 실행하고 JSON 결과를 돌려주는 공용
@@ -1648,6 +1673,187 @@ def sap_where_used():
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-where-used?material=303410'}), 400
     data, status = _run_sap_bridge(['fetch_where_used', material, plant], 30, 'SAP 사용처 조회')
     return jsonify(data), status
+
+
+# ── 승인원 표지 생성 ──────────────────────────────────────────
+#    [2026-09-15 신규] "SAP에서 104477 승인원 표지 생성해줘" — 사내 별도 데스크톱 앱("연구소
+#    가이드 시스템")의 exe를 pyinstxtractor-ng로 풀고 main.pyc 바이트코드를 분석해서 그
+#    앱의 GuiApp._approval_* 메서드들을 그대로 재현했다(디컴파일러가 Python 3.13을 지원 안
+#    해서 완전한 소스 복원은 안 됐지만, docstring·상수 풀·바이트코드 흐름으로 충분히
+#    재구성함 — 셀 주소·필드 ID·VKey 값까지 전부 원본에서 확인한 값 그대로). 두 단계로 나눔:
+#    ① `/sap-approval-fetch` — SAP에서 자재정보만 조회(문서 생성 전 미리보기/확인용)
+#    ② `/sap-approval-generate` — 조회된 정보 + 사람이 채운 나머지 항목으로 실제 엑셀/워드
+#    파일을 만든다. AI 문답 쪽(js/04h)에서 이 둘을 연결해 "필요한 항목이 비어 있으면
+#    물어보고, 다 채워지면 생성"하는 흐름을 만든다.
+_APPROVAL_TEMPLATE_XLSX = os.path.join(BASE_DIR, 'templates', '승인원_양식.xlsx')
+_APPROVAL_TEMPLATE_DOCX = os.path.join(BASE_DIR, 'templates', '승인원_양식.docx')
+_APPROVAL_SHEET = '승인원표지'
+_APPROVAL_OUT_DIR = os.path.join('C:\\SAP_DMS', '승인원표지')  # ZDMSR004 다운로드와 같은 자리(C:\SAP_DMS) 아래 전용 폴더
+_APPROVAL_PRE_REMARK = '가승인원'
+# 엑셀 셀 주소 — 원본 앱 바이트코드의 APPROVAL_CELLS 상수를 그대로 옮김.
+_APPROVAL_CELLS = {
+    'group_no': 'C8', 'group_name': 'C9', 'item_code': 'C10', 'desc': 'C11', 'sub_desc': 'C12',
+    'dms': 'C13', 'remark': 'C14', 'chk_date': 'F20', 'chk_name': 'F21', 'apv_date': 'F28', 'apv_name': 'F29',
+}
+# 워드 표(중첩 표 0번, 1열=값) 행 번호 — 원본 앱의 APPROVAL_DOCX_ROWS.
+_APPROVAL_DOCX_ROWS = {'group_no': 1, 'group_name': 2, 'item_code': 3, 'desc': 4, 'sub_desc': 5, 'dms': 6, 'remark': 7}
+# 워드 표(중첩 표 1번) 서명란 (행, 열) — 원본 앱의 APPROVAL_DOCX_SIGN.
+_APPROVAL_DOCX_SIGN = {'chk_date': (1, 3), 'chk_name': (2, 3), 'apv_date': (5, 3), 'apv_name': (6, 3)}
+
+
+def _approval_fill_xlsx(tpl_path, out_path, r, ctx):
+    """엑셀 양식에 값을 채워 저장한다(원본 앱 `_approval_fill_xlsx` 재현)."""
+    import openpyxl
+    wb = openpyxl.load_workbook(tpl_path)
+    ws = wb[_APPROVAL_SHEET]
+    ws[_APPROVAL_CELLS['item_code']] = r['code']
+    ws[_APPROVAL_CELLS['desc']] = r.get('desc', '')
+    ws[_APPROVAL_CELLS['sub_desc']] = r.get('sub', '')
+    ws[_APPROVAL_CELLS['group_no']] = r.get('matkl', '')
+    ws[_APPROVAL_CELLS['group_name']] = r.get('group', '')
+    ws[_APPROVAL_CELLS['remark']] = ctx['remark']
+    ws[_APPROVAL_CELLS['dms']] = ctx['dms_text']
+    if ctx.get('name_chk'):
+        ws[_APPROVAL_CELLS['chk_name']] = ctx['name_chk']
+        ws[_APPROVAL_CELLS['chk_date']] = f"Date: {ctx['today']}"
+    if ctx.get('name_apv'):
+        ws[_APPROVAL_CELLS['apv_name']] = ctx['name_apv']
+        ws[_APPROVAL_CELLS['apv_date']] = f"Date: {ctx['today']}"
+    wb.save(out_path)
+
+
+def _approval_fill_docx(tpl_path, out_path, r, ctx):
+    """워드 양식에 값을 채워 저장한다(원본 앱 `_approval_fill_docx` 재현) — 양식은 큰 표 하나
+    안에 중첩 표가 5개 들어있는 구조(python-docx로 실제 열어서 확인함): 0번이 본문(자재그룹/
+    자재코드/... 7개 행), 1번이 서명란(담당자/팀장), 2~4번은 협력사 정보·문서번호·양식버전
+    (이 코드에서는 건드리지 않음 — 협력사에서 별도로 채워 넣는 영역)."""
+    from docx import Document
+    doc = Document(tpl_path)
+    outer_cell = doc.tables[0].cell(1, 0)
+    nested = outer_cell.tables
+    if len(nested) < 2:
+        raise RuntimeError('워드 양식의 표 구조가 예상과 다릅니다.')
+    t_main, t_sign = nested[0], nested[1]
+
+    values = {
+        'group_no': r.get('matkl', ''), 'group_name': r.get('group', ''), 'item_code': r['code'],
+        'desc': r.get('desc', ''), 'sub_desc': r.get('sub', ''), 'dms': ctx['dms_text'], 'remark': ctx['remark'],
+    }
+    for key, row_idx in _APPROVAL_DOCX_ROWS.items():
+        t_main.cell(row_idx, 1).text = str(values.get(key, ''))
+
+    if ctx.get('name_chk'):
+        rr, cc = _APPROVAL_DOCX_SIGN['chk_name']
+        t_sign.cell(rr, cc).text = ctx['name_chk']
+        rr, cc = _APPROVAL_DOCX_SIGN['chk_date']
+        t_sign.cell(rr, cc).text = f"Date: {ctx['today']}"
+    if ctx.get('name_apv'):
+        rr, cc = _APPROVAL_DOCX_SIGN['apv_name']
+        t_sign.cell(rr, cc).text = ctx['name_apv']
+        rr, cc = _APPROVAL_DOCX_SIGN['apv_date']
+        t_sign.cell(rr, cc).text = f"Date: {ctx['today']}"
+    doc.save(out_path)
+
+
+@app.route('/sap-approval-fetch', methods=['GET'])
+def sap_approval_fetch():
+    # "SAP에서 자재정보 가져오기" 단계 — 자재 여러 개(최대 30개, 원본 앱과 동일 상한)의
+    # 자재내역·자재그룹·Sub-Description을 SAP에서 조회하고, 자재그룹명은 matgroups.json에서
+    # 채운다. 파일 생성은 안 함 — /sap-approval-generate가 별도로 처리.
+    materials_str = (request.args.get('materials') or '').strip()
+    if not materials_str:
+        return jsonify({'ok': False, 'error': '자재번호 목록(materials 파라미터, 쉼표구분)이 필요합니다.'}), 400
+    materials = [m.strip() for m in materials_str.split(',') if m.strip()][:30]
+    timeout = min(180, 20 + 8 * len(materials))
+    data, status = _run_sap_bridge(['fetch_approval_info', ','.join(materials)], timeout, 'SAP 승인원 정보 조회')
+    if data.get('ok') and isinstance(data.get('results'), list):
+        for r in data['results']:
+            if r.get('ok'):
+                r['group'] = _approval_group_name(r.get('matkl', ''))
+                r['group_missing'] = not bool(r['group'])
+    return jsonify(data), status
+
+
+@app.route('/sap-approval-generate', methods=['POST'])
+def sap_approval_generate():
+    # "표지 생성" 단계 — /sap-approval-fetch로 얻은 자재정보 결과(results)와 사람이 채운
+    # 나머지 항목(출력형식/담당자/팀장/가승인원 여부/Revision/Remark)으로 실제 엑셀/워드
+    # 파일을 만든다. 파일명 규칙은 원본 앱과 동일: (가)승인원_자재코드_Rev00.
+    body = request.get_json(force=True, silent=True) or {}
+    results = body.get('results') or []
+    ok_results = [r for r in results if isinstance(r, dict) and r.get('ok') and r.get('code')]
+    if not ok_results:
+        return jsonify({'ok': False, 'error': '생성할 자재 정보가 없습니다. 먼저 SAP에서 자재정보를 조회해주세요.'}), 400
+
+    fmt = (body.get('format') or 'both').strip().lower()
+    if fmt not in ('xlsx', 'docx', 'both'):
+        fmt = 'both'
+    writer = (body.get('writer') or '').strip()
+    leader = (body.get('leader') or '').strip()
+    is_pre = bool(body.get('is_pre'))
+    rev = (body.get('rev') or '00').strip() or '00'
+    remark = (body.get('remark') or '').strip()
+    kind = (body.get('kind') or '').strip()
+    if kind not in ('New', 'Update'):
+        kind = 'New' if rev in ('00', '0') else 'Update'  # Revision이 있으면 보통 Update로 보는 게 합리적
+
+    # remark 가공 — 원본 앱 `_approval_generate` 로직 그대로(가승인원이면 그 문구를 보장, 완전히 비면 '.').
+    if is_pre:
+        if remark and _APPROVAL_PRE_REMARK not in remark:
+            remark = f'{_APPROVAL_PRE_REMARK} / {remark}'
+        elif not remark:
+            remark = _APPROVAL_PRE_REMARK
+    if not remark:
+        remark = '.'
+
+    dms_text = (('■' if kind == 'New' else '□') + ' New '
+                + ('■' if kind == 'Update' else '□') + f' Update (Revision: {rev} )')
+    ctx = {
+        'today': datetime.now(KST).strftime('%Y.%m.%d'),
+        'remark': remark, 'name_chk': writer, 'name_apv': leader, 'dms_text': dms_text,
+    }
+
+    need_xlsx = fmt in ('xlsx', 'both')
+    need_docx = fmt in ('docx', 'both')
+    if need_xlsx and not os.path.exists(_APPROVAL_TEMPLATE_XLSX):
+        return jsonify({'ok': False, 'error': f'엑셀 양식({_APPROVAL_TEMPLATE_XLSX})을 찾을 수 없습니다.'}), 500
+    if need_docx and not os.path.exists(_APPROVAL_TEMPLATE_DOCX):
+        return jsonify({'ok': False, 'error': f'워드 양식({_APPROVAL_TEMPLATE_DOCX})을 찾을 수 없습니다.'}), 500
+
+    prefix = _APPROVAL_PRE_REMARK if is_pre else '승인원'
+    try:
+        os.makedirs(_APPROVAL_OUT_DIR, exist_ok=True)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'저장 폴더({_APPROVAL_OUT_DIR})를 만들지 못했습니다: {e}'}), 500
+
+    made, failed = [], []
+    for r in ok_results:
+        base = f"{prefix}_{r['code']}_Rev{rev}"
+        if need_xlsx:
+            out_path = os.path.join(_APPROVAL_OUT_DIR, base + '.xlsx')
+            try:
+                _approval_fill_xlsx(_APPROVAL_TEMPLATE_XLSX, out_path, r, ctx)
+                made.append(out_path)
+            except Exception as e:
+                failed.append(f"{r['code']} (xlsx): {e}")
+        if need_docx:
+            out_path = os.path.join(_APPROVAL_OUT_DIR, base + '.docx')
+            try:
+                _approval_fill_docx(_APPROVAL_TEMPLATE_DOCX, out_path, r, ctx)
+                made.append(out_path)
+            except Exception as e:
+                failed.append(f"{r['code']} (docx): {e}")
+
+    # 다운로드 완료 후 폴더를 탐색기로 열어준다 — ZDMSR004 일괄 다운로드와 동일한 패턴.
+    try:
+        os.startfile(_APPROVAL_OUT_DIR)
+    except Exception:
+        pass
+
+    msg = f'승인원 표지 {len(made)}건이 생성되었습니다.'
+    if failed:
+        msg += f'\n\n실패 {len(failed)}건:\n' + '\n'.join(failed[:5])
+    return jsonify({'ok': True, 'made': made, 'failed': failed, 'folder': _APPROVAL_OUT_DIR, 'message': msg})
 
 
 # ══════════════════════════════════════════════════════════════

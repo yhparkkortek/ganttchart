@@ -508,6 +508,162 @@ def fetch_where_used(material, plant='1000'):
     return {'ok': True, 'source': source, 'material': material, 'text': text}
 
 
+# ── "승인원 표지 생성" 전용 헬퍼 ────────────────────────────────────────
+# 💡 [2026-09-15 신규] 사용자가 회사에서 쓰던 별도 데스크톱 앱("연구소 가이드 시스템",
+# PyInstaller로 배포된 Python/Tkinter 앱)의 exe를 주고 "이 기능을 AI 문답에도 추가해달라"고
+# 요청해서, 그 exe를 pyinstxtractor-ng로 풀고 main.pyc를 marshal로 읽어 바이트코드/상수를
+# 분석해서(디컴파일러가 Python 3.13을 지원 안 해서 완전한 소스 복원은 안 됐지만, 함수
+# docstring·상수 풀·바이트코드 흐름만으로 로직을 충분히 재구성함) 그 앱의 "승인원 표지 생성"
+# 기능(GuiApp._approval_* 메서드들)을 그대로 재현한 것. 아래 로직은 원본 앱의 실제 동작과
+# 최대한 동일하게 맞췄다 — 필드 ID(`wnd[0]/usr/ctxtRMMG1-MATNR`)·VKey(30)·탭 ID
+# (`tabpZU05`)·소트박스 타입 목록(`_APV_VALUE_TYPES`)까지 전부 원본 바이트코드에서 그대로
+# 확인한 값이다.
+_APV_VALUE_TYPES = ('GuiTextField', 'GuiCTextField', 'GuiComboBox', 'GuiTextEdit')
+
+
+def _approval_find_value(root, needles):
+    """화면을 훑어서 needles 중 하나가 ID에 들어간 '입력칸'을 찾아 값을 돌려준다(원본 앱의
+    `_approval_find_value`를 그대로 재현). 요소 ID 전체 경로를 코드에 박지 않는 이유: SAP
+    화면이 회사마다 커스터마이징되어 있어 경로가 제각각이고, 화면이 바뀌어도 필드 이름
+    (MAKTX, MATKL 등)만 그대로면 계속 동작하게 하려는 것 — needles는 앞에 올수록 우선순위가
+    높다(예: 'MARA-MATKL'을 먼저 찾고, 없으면 'MATKL'로 넓혀서 찾는다)."""
+    hits = {}
+
+    def walk(obj, depth=0):
+        if depth > 14:
+            return
+        try:
+            otype = obj.Type
+            oid = obj.Id
+        except Exception:
+            return
+        if otype in _APV_VALUE_TYPES:
+            up = (oid or '').upper()
+            for n in needles:
+                if n.upper() in up and n not in hits:
+                    try:
+                        hits[n] = (obj.Text or '').strip()
+                    except Exception:
+                        pass
+        try:
+            cnt = obj.Children.Count
+        except Exception:
+            return
+        for i in range(cnt):
+            try:
+                walk(obj.Children.Item(i), depth + 1)
+            except Exception:
+                continue
+
+    walk(root)
+    for n in needles:
+        if n in hits:
+            return hits[n]
+    return ''
+
+
+def _approval_read_long_text(session):
+    """'기본 데이터 텍스트' 탭(tabpZU05)의 여러 줄 설명(Sub-Description)을 읽는다. 화면
+    전체를 뒤지면 상단 툴바 같은 엉뚱한 Shell을 잡아서 'SAP.Toolbar.1' 같은 값이 나올 수
+    있어(원본 앱 주석 그대로), `wnd[0]/usr` 안쪽만 훑고 Id가 'SAP.'로 시작하는 툴바류는
+    걸러낸다."""
+    try:
+        usr = session.findById('wnd[0]/usr')
+    except Exception:
+        return ''
+    shell = _sap_find_shell_any(usr)
+    if shell is None:
+        return ''
+    try:
+        if (shell.Id or '').startswith('SAP.'):
+            return ''
+    except Exception:
+        pass
+    try:
+        return (shell.Text or '').strip()
+    except Exception:
+        return ''
+
+
+def _approval_read_one_material(session, wnd, material):
+    """자재 하나의 승인원 표지 정보를 SAP에서 읽어온다(원본 앱 `_approval_read_one` 재현).
+    반환: {'code','ok','desc','sub','matkl','sap_group','err'}."""
+    out = {'code': material, 'ok': False, 'desc': '', 'sub': '', 'matkl': '', 'sap_group': '', 'err': ''}
+    try:
+        try:
+            session.StartTransaction('MM03')
+        except Exception:
+            # StartTransaction이 없는 구버전 SAP GUI 대비 폴백(이 프로젝트의 기존 방식).
+            session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
+            wnd.sendVKey(0)
+        time.sleep(0.6)
+
+        candidates = _find_all_by_id_substring(wnd, 'RMMG1-MATNR')
+        matnr_field = None
+        for cand in candidates:
+            try:
+                cand.text = str(material)
+                matnr_field = cand
+                break
+            except Exception:
+                continue
+        if matnr_field is None:
+            out['err'] = '자재번호 입력 필드를 찾지 못했습니다.'
+            return out
+        wnd.sendVKey(0)
+        time.sleep(1.0)
+
+        # 뷰 선택 팝업 등 방어적 처리(추측성 — MM03 직접조회 경로와 동일 패턴).
+        try:
+            popup = session.findById('wnd[1]')
+            if popup is not None:
+                popup.sendVKey(0)
+                time.sleep(0.6)
+        except Exception:
+            pass
+
+        try:
+            sbar = session.findById('wnd[0]/sbar')
+            if getattr(sbar, 'MessageType', '') in ('E', 'A'):
+                out['err'] = (sbar.Text or '자재를 찾을 수 없습니다.').strip() or '자재를 찾을 수 없습니다.'
+                return out
+        except Exception:
+            pass
+
+        usr = session.findById('wnd[0]/usr')
+        out['desc'] = _approval_find_value(usr, ['MAKT-MAKTX', 'MAKTX'])
+        out['matkl'] = _approval_find_value(usr, ['MARA-MATKL', 'MATKL'])
+        out['sap_group'] = _approval_find_value(usr, ['T023T-WGBEZ', 'WGBEZ'])
+
+        wnd.sendVKey(30)  # 원본 앱이 쓰는 정확한 VKey — "추가 데이터" 화면을 버튼 클릭 없이 곧장 연다.
+        time.sleep(0.9)
+        _select_tab_if_present(wnd, 'tabpZU05')  # "기본 데이터 텍스트" 탭(tabpZU04 "문서 데이터"와는 다름)
+        time.sleep(0.8)
+        out['sub'] = _approval_read_long_text(session)
+
+        out['ok'] = True
+        return out
+    except Exception as e:
+        out['err'] = f'자재 조회 실패 ({e})'
+        return out
+
+
+def fetch_approval_info(materials):
+    """여러 자재의 승인원 표지 정보를 SAP에서 순서대로 읽어온다. materials는 자재번호
+    문자열 리스트(최대 30개 — 원본 앱과 동일한 상한)."""
+    materials = [str(m).strip() for m in (materials or []) if str(m).strip()][:30]
+    if not materials:
+        raise RuntimeError('자재번호를 지정해주세요.')
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+
+    results = []
+    for material in materials:
+        results.append(_approval_read_one_material(session, wnd, material))
+    return {'ok': True, 'results': results}
+
+
 # ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
 def _find_by_id_substring(container, substring, depth=0, max_depth=30, require_type=None):
     """창 트리를 재귀 탐색해 .Id에 특정 문자열이 포함된 첫 번째 컨트롤을 찾는다.
@@ -1054,6 +1210,10 @@ def main():
             material = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
             result = fetch_where_used(material, plant)
+        elif action == 'fetch_approval_info':
+            materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
+            result = fetch_approval_info(materials_list)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))

@@ -638,6 +638,80 @@ AI 문답 창에 "SAP" 단어가 들어간 질문을 하면, 사람이 **미리 
     의심할 것.
   - **완전한 해결책**: SAP GUI 패치 버전/설정 문제일 가능성이 있어, 필요하면 SAP Basis/GUI
     담당자에게 문의가 근본 해결에 더 가깝다 — 코드만으로는 이 이상 고치기 어렵다고 판단함.
+- **승인원 표지 생성("SAP에서 104477 승인원 표지 생성해줘", 2026-09-15 신규 — 기존 사내
+  데스크톱 앱을 역공학해서 그대로 재현)**: 사용자가 회사에서 따로 쓰던 "연구소 가이드
+  시스템"(PyInstaller로 배포된 Python/Tkinter exe)을 주고 "이 기능을 AI 문답에도 추가해달라"
+  고 요청 — 디컴파일러가 Python 3.13을 지원 안 해서(`decompyle3` 등은 3.8까지) 완전한 소스
+  복원은 못 했지만, `pyinstxtractor-ng`로 exe를 풀고 `main.pyc`를 `marshal.loads`로 직접
+  읽어 함수 docstring·상수 풀(co_consts)·`dis.dis` 바이트코드 흐름만으로 로직을 충분히
+  재구성했다(필드 ID·VKey 값·엑셀 셀 주소·워드 표 행/열까지 전부 원본 바이트코드에서 그대로
+  확인한 값). **역공학 방법 자체도 기록**: `py install 3.13`으로 대상과 같은 버전을 설치해야
+  `marshal.loads`가 성공한다(다른 마이너 버전 바이트코드는 포맷이 달라 실패) — 이후
+  "함수를 이름으로 찾기"보다 "상수 풀에 특정 한글 문자열이 들어있는 코드 객체 찾기"가 목표
+  기능을 빠르게 좁히는 데 더 효과적이었다(예: `'승인원'`이 들어간 코드 객체만 재귀 검색).
+  - **SAP 조회(MM03)**: `sap_bridge_32.py`의 `fetch_approval_info(materials)` —
+    `session.StartTransaction('MM03')`(원본 앱이 쓰는 방식 — `okcd` 텍스트 설정보다 깔끔한
+    표준 API, 실패하면 기존 `/nMM03` 방식으로 폴백) → 자재번호(`wnd[0]/usr/ctxtRMMG1-MATNR`)
+    입력 → `_approval_find_value(root, needles)`로 자재내역(`MAKT-MAKTX`/`MAKTX`)·자재그룹
+    코드(`MARA-MATKL`/`MATKL`) 읽기(needles 우선순위 폴백 탐색 — 우리 기존
+    `_find_by_id_substring`과 같은 철학이지만 여러 후보를 우선순위대로 시도한다는 점이 다름,
+    타입은 `GuiTextField`/`GuiCTextField`/`GuiComboBox`/`GuiTextEdit`로 한정) → **`wnd.
+    sendVKey(30)`**(원본 앱이 쓰는 정확한 VKey — 우리가 MM03 문서 열기에서 버튼을 찾아
+    눌렀던 "추가 데이터" 화면을 키보드 단축키로 곧장 연다, 버튼 ID를 찾을 필요가 없어 더
+    안정적) → **`tabpZU05`**("기본 데이터 텍스트" 탭 — `tabpZU04`"문서 데이터"와는 다른
+    탭이니 혼동 주의) 선택 → `_approval_read_long_text`로 여러 줄 설명 읽기(Id가 `SAP.`로
+    시작하는 툴바 Shell을 걸러내는 방어 로직 포함, 원본 앱 주석 그대로).
+  - **자재그룹명 — 618건 표(matgroups.json)**: MM03 화면엔 자재그룹 "코드"만 있고 명칭이
+    없어서(원본 앱 주석: "화면에서 확인함"), 원본 앱에 내장돼 있던 618건짜리 표(코드→대분류
+    `daebun`/중분류`jungbun`/소분류`sobun`/설명`desc`)에서 코드로 찾는다 — 그 표는 exe의
+    `content.json`(가이드 문서 내용, "자재그룹표 조회 및 추천" 페이지의 `matgroups` 키) 안에
+    고스란히 들어있어서 그대로 추출해 리포지토리 루트의 `matgroups.json`으로 옮겼다.
+    `kortek_backend.py`의 `_approval_group_name(matkl)`이 이 표에서 `sobun`을 찾아 반환,
+    없으면 빈 문자열(원본 앱처럼 "확인 필요"로 취급 — Item Description 앞부분으로 되짚는
+    추측 로직은 원본에서도 엉뚱한 이름이 채워지는 문제로 뺐다고 돼 있어 여기서도 안 넣음).
+  - **엑셀/워드 템플릿**: `templates/승인원_양식.xlsx`(시트명 `승인원표지`)·
+    `templates/승인원_양식.docx`를 exe의 `assets/`에서 그대로 복사해 리포에 넣음. 셀 주소는
+    원본 바이트코드의 `APPROVAL_CELLS` 상수 그대로: `C8`=자재그룹코드, `C9`=자재그룹명,
+    `C10`=자재코드, `C11`=자재내역, `C12`=Sub-Description, `C13`=DMS Upload(New/Update
+    체크박스+Revision), `C14`=Remark, `F20`/`F21`=담당자 날짜/이름, `F28`/`F29`=팀장
+    날짜/이름 — `kortek_backend.py`의 `_approval_fill_xlsx`가 openpyxl로 그대로 채움. 워드는
+    큰 표 하나 안에 **중첩 표가 5개** 들어있는 구조(python-docx로 직접 열어서 확인) — 0번
+    중첩표(8행×2열, 1~7행이 자재그룹코드~Remark)와 1번 중첩표(서명란, `(1,3)`=담당자날짜/
+    `(2,3)`=담당자이름/`(5,3)`=팀장날짜/`(6,3)`=팀장이름)만 채우고, 2~4번(협력사 정보/
+    문서번호/양식버전)은 건드리지 않음 — 원본 앱 UI 설명 그대로 "협력사(Provider) 영역과
+    하단 업체 정보는 비워둔 채로 생성되므로, 협력사에서 작성한 내용을 별도로 채워 넣어야
+    함". **⚠️ `cell.text = 값` 방식은 그 셀의 기존 서식(글꼴 등)을 초기화할 수 있음** —
+    실사용 확인 필요, 문제 있으면 `cell.paragraphs[0].runs`를 직접 다루는 방식으로 바꿀 것.
+  - **파일명/DMS Upload 표시 규칙**: 원본 앱과 동일 — 파일명 `(가)승인원_자재코드_Rev00`,
+    `dms_text`(C13/워드 dms 행) = `('■' if kind=='New' else '□') + ' New ' + ('■' if
+    kind=='Update' else '□') + f' Update (Revision: {rev} )'`. Revision이 "00"/"0"이 아니면
+    `kind`를 자동으로 `'Update'`로 추론(원본 앱은 UI 라디오 버튼으로 사람이 직접 고르지만,
+    AI 문답엔 그 라디오가 없어 이렇게 추론 — 사용자가 명시한 필수 항목 목록에도 New/Update
+    자체는 없었음). 가승인원 remark 가공도 원본 그대로: `is_pre`면 remark에 이미
+    "가승인원"이 없을 때만 `"가승인원 / {remark}"`로 앞에 붙이고, remark가 아예 비어 있으면
+    "가승인원" 하나만, 그래도 비면 `"."`.
+  - **AI 문답 통합 — 유일하게 여러 턴에 걸치는 SAP 로컬 명령**: 다른 SAP 로컬 명령(BOM/사용처/
+    문서 열기/배치 다운로드)은 전부 한 메시지 안에서 끝나는데, 이건 출력형식·담당자·팀장·
+    가승인원 여부처럼 한 메시지에 다 안 들어올 수 있는 항목이 많아 `window.
+    _ganttQaApprovalDraft`(대화 내용과 별개인 전용 상태, `null` 또는 `{materials, format,
+    writer, leader, isPre, rev, remark, fetched}`)에 지금까지 파악된 값을 계속 누적한다.
+    `js/04h`의 `_ganttQaExtractApprovalUpdate(question)` — "승인원"+"표지/생성/만들/작성"
+    +자재번호가 있으면 새 draft 시작, 없어도 기존 draft가 있으면 그 메시지에서 값만 더
+    채운다("담당자는 홍길동" 같은 후속 메시지 — **한국어 조사(는/은/가/이)가 명사 뒤에 바로
+    붙는 어순을 감안해서 정규식에 조사를 건너뛰는 부분을 넣어야 한다**는 걸 브라우저
+    테스트로 실제로 놓쳤다가 발견·수정함, 안 넣으면 "담당자는 홍길동"에서 이름을 못 뽑음).
+    필수 항목(출력형식/담당자/팀장/가승인원 여부 — Revision·Remark는 기본값이 있어 선택)이
+    덜 모였으면 빠진 항목만 콕 집어 되묻고, 다 모이면 `/sap-approval-fetch`(GET, 자재정보만
+    조회) → `/sap-approval-generate`(POST, 실제 파일 생성 — 이미 조회한 `fetched` 결과는
+    재사용해 SAP를 두 번 안 부름)를 순서대로 호출한다. 반드시 배치 다운로드/문서 열기 판정
+    보다 **먼저** 체크해야 함(안 그러면 트리거 단어 없는 후속 답변 메시지가 다른 로컬 명령
+    에도 안 걸리고 일반 AI 질문으로 새어나감). 생성 완료 후 draft는 성공/실패 무관하게
+    초기화(다음 요청은 새로 시작) — 저장 폴더는 ZDMSR004와 같은 패턴으로 자동 오픈
+    (`C:\SAP_DMS\승인원표지\`).
+  - **kortek_backend.zip 배포 파일에도 포함해야 함**: `matgroups.json`·`templates/` 없이는
+    다른 팀원 PC에서 이 기능이 아예 안 됨 — `.claude/settings.json`의 PostToolUse 훅
+    matcher와 `Compress-Archive -Path` 목록에 이 둘을 2026-09-15에 추가해뒀다(기존엔 `.py`
+    파일 변경 때만 재생성됐음).
 - **TIPR(웹 기반, 로그인 필요)은 아직 미구현** — SAP와 달리 "이미 인증된 세션에 올라타기"가 안 되고
   ID/PW 자동 로그인 자동화(Playwright 등)가 필요해 자격증명 저장 문제가 딸려온다. 사용자는 "서버에
   무리만 안 가면 ID/PW 자동 로그인도 괜찮다"고 확인했으므로, 구현 시 mail_config.json/
@@ -876,8 +950,10 @@ window.bringModalToFront('outer-wrap-id');                  // 열릴 때 즉시
 | `kortek_backend.bat` | 로컬에서 백엔드 실행하는 배치 스크립트. SAP 조회용 32비트 Python(`py install 3-32`)·pywin32도 최초 1회 자동 설치 |
 | `kortek_backend_install.bat` | **원클릭 설치 스크립트** — Windows 시작프로그램(`shell:startup`)에 자동 시작 바로가기 등록 + 지금 바로 최소화 실행까지 한 번에 처리. 내부적으로 PowerShell(`New-Object -ComObject WScript.Shell`)로 `.lnk` 생성, 인라인 `-Command` 대신 임시 `.ps1` 파일을 생성해 실행(따옴표/캐럿 이스케이프 문제 회피) |
 | `kortek_backend_start_minimized.vbs` | 위 설치 스크립트가 만드는 바로가기가 실제로 가리키는 대상 — `kortek_backend.bat`을 `WScript.Shell.Run(..., 7, False)`로 최소화 상태로 조용히 실행 (콘솔 창이 화면에 튀어나오지 않음) |
-| `kortek_backend.zip` | **다른 사용자 배포용 압축 파일** (`kortek_backend.py` + `sap_bridge_32.py` + `.bat` + `_install.bat` + `_start_minimized.vbs` 5개 포함). `kortek_backend.py` 또는 `sap_bridge_32.py` 수정 시 `.claude/settings.json`의 PostToolUse 훅이 자동으로 재생성함 (`Compress-Archive` 사용) — 단, 설치 스크립트 2개만 수정한 경우엔 훅이 안 걸리므로 수동으로 `Compress-Archive`를 다시 돌려야 함 |
-| `requirements.txt` | flask, flask-cors, requests, cryptography, google-auth (메인 64비트 환경용 — SAP용 32비트 pywin32는 별도, `kortek_backend.bat`이 자동 설치) |
+| `kortek_backend.zip` | **다른 사용자 배포용 압축 파일** (`kortek_backend.py` + `sap_bridge_32.py` + `.bat` + `_install.bat` + `_start_minimized.vbs` + `matgroups.json` + `templates/` 7개 포함, 2026-09-15부터). `kortek_backend.py`/`sap_bridge_32.py`/`matgroups.json`/`templates/` 아래 파일 수정 시 `.claude/settings.json`의 PostToolUse 훅이 자동으로 재생성함 (`Compress-Archive` 사용) — 단, 설치 스크립트 2개만 수정한 경우엔 훅이 안 걸리므로 수동으로 `Compress-Archive`를 다시 돌려야 함 |
+| `matgroups.json` | **[2026-09-15 신규]** 자재그룹 코드→명칭 618건 표("승인원 표지 생성" 기능용) — 사내 별도 앱의 exe를 역공학해서 추출. `kortek_backend.py`의 `_approval_group_name`이 사용 |
+| `templates/승인원_양식.xlsx`, `templates/승인원_양식.docx` | **[2026-09-15 신규]** "승인원 표지 생성" 엑셀/워드 양식 — 사내 별도 앱 exe의 `assets/`에서 그대로 복사. `kortek_backend.py`의 `_approval_fill_xlsx`/`_approval_fill_docx`가 채워 넣음 |
+| `requirements.txt` | flask, flask-cors, requests, cryptography, google-auth, openpyxl, python-docx (메인 64비트 환경용 — SAP용 32비트 pywin32는 별도, `kortek_backend.bat`이 자동 설치) |
 
 > **Notice 탭 오류 진단**: `kortek_backend.py`의 `/schedule` 엔드포인트는 나중에 추가된 기능이라 구버전 백엔드를 가진 사용자에게는 없음. 구버전은 `/schedule` 요청 시 404 반환 → `renderScheduleRuleTable()`이 `_scheduleRules = 'outdated'` 상태로 "구버전" 경고 메시지 표시. AI·메일 기능은 정상(다른 엔드포인트 사용)하면서 Notice만 안 되면 백엔드 구버전 의심.
 
