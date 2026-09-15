@@ -399,6 +399,103 @@ def fetch_bom(materials, plant='1000'):
     return {'ok': True, 'source': source, 'materials': materials, 'text': text}
 
 
+# ── "사용처 조회(역전개)" (CS15) 전용 헬퍼 ─────────────────────────────
+def _navigate_to_where_used_screen(session, wnd, material, plant='1000'):
+    """CS15("단일레벨 사용처리스트") — BOM 정전개(ZPP038, 이 자재가 뭘로 구성되는지)의 반대
+    방향, 즉 "이 자재가 어느 상위 품목에 쓰이는지"를 조회한다. 2026-09-15 실사용 SAP GUI
+    "기록 및 재생" 매크로("BOM 역전개(사용처리스트).vbs")로 얻은 컨트롤을 재현한 것 —
+    단, 아래 두 가지는 그 매크로에서 확실하지 않아 주의가 필요하다:
+    ⚠️⚠️ **자재번호 입력 필드가 이 매크로에 아예 안 나온다** — 녹화 당시 SAP가 이전 값을
+    기억하고 있어서 사람이 따로 입력할 필요가 없었던 것으로 추정된다. 그래서 필드 ID는
+    매크로에서 직접 확인된 게 아니라, 같은 화면의 체크박스 필드명(`RC29L-DIRKT`)에서
+    구조 접두사(`RC29L`)를 유추해 "MATNR" 문자열이 포함된 컨트롤을 찾는 방식으로
+    추측했다 — `_find_all_by_id_substring`으로 후보를 전부 모아 실제 입력 가능한 것부터
+    시도(MM03 자재번호 필드 찾기와 같은 방어적 패턴). 이 추측이 틀렸다면 RuntimeError로
+    명확히 실패한다(엉뚱한 자재로 조용히 조회되는 것보다 낫다).
+    ⚠️⚠️ 매크로에는 실행(F8) 이후 `tbar[1]/btn[45]` 클릭 → SAP 표준 선택 팝업(SAPLSPO5)
+    응답 → F4 → 다시 응답 → 뒤로가기 3번이 이어지는데, 이 시퀀스의 정확한 의도를 확신할
+    수 없어(어떤 조건에서 뜨는지, 결과에 필수적인지 불명확) 의도적으로 재현하지 않았다 —
+    실행(F8)까지만 자동화하고 결과 화면을 그대로 읽는다. 혹시 팝업이 뜨면 방어적으로
+    Enter만 한 번 시도한다. **이 부분이 실제로 필요하다는 게 확인되면(예: 조회 결과가
+    비거나 이상하면) 그 팝업이 뜬 상태를 다시 녹화해서 정확한 의도를 파악해야 한다.**"""
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nCS15'
+    wnd.sendVKey(0)
+    time.sleep(0.6)
+
+    candidates = _find_all_by_id_substring(wnd, 'MATNR')
+    matnr_field = None
+    last_err = None
+    for cand in candidates:
+        try:
+            cand.text = str(material)
+            matnr_field = cand
+            break
+        except Exception as e:
+            last_err = e
+            continue
+    if matnr_field is None:
+        raise RuntimeError(f'CS15 화면에서 자재번호 입력 필드를 찾지 못했습니다(마지막 오류: {last_err}) — 이 필드 ID는 실사용 녹화로 직접 확인된 게 아니라 추측한 것이라, 화면 구조가 다르면 실패할 수 있습니다.')
+
+    plant_field = _find_by_id_substring(wnd, 'WERKS')
+    if plant_field is not None:
+        try:
+            plant_field.text = str(plant)
+        except Exception:
+            pass  # 플랜트 필드가 없어도(매크로에도 없었음) 자재번호만으로 실행을 시도한다.
+
+    dirkt_chk = _find_by_id_substring(wnd, 'RC29L-DIRKT')
+    if dirkt_chk is not None:
+        try:
+            dirkt_chk.selected = True  # "직접 사용처만" — 매크로에서 확인된 설정
+        except Exception:
+            pass
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[5]').press()  # 매크로에 있던 클릭 — 정확한 기능은 불명, 그대로 재현
+    except Exception:
+        pass
+
+    try:
+        session.findById('wnd[0]/tbar[1]/btn[8]').press()  # 실행(F8)
+    except Exception as e:
+        raise RuntimeError(f'CS15 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(1.5)
+
+    # 방어적 팝업 처리(추측성 — 위 함수 설명 참고). 매크로의 SAPLSPO5 팝업 응답 시퀀스는
+    # 재현하지 않고, 팝업이 뜨면 Enter만 시도한다.
+    try:
+        popup = session.findById('wnd[1]')
+        if popup is not None:
+            popup.sendVKey(0)
+            time.sleep(0.5)
+    except Exception:
+        pass
+
+
+def fetch_where_used(material, plant='1000'):
+    """자재의 "사용처 리스트"(역전개, CS15)를 조회해 화면을 그대로 텍스트로 읽어온다.
+    2026-09-15 실사용 매크로로 확보 — 단, 자재번호 필드 ID는 추측이다(위
+    `_navigate_to_where_used_screen` 주석 참고). 현재는 자재 1개만 지원(복수 미구현 —
+    CS15의 "복수 선택" 팝업 여부는 아직 확인 안 됨)."""
+    if not material:
+        raise RuntimeError('자재번호를 지정해주세요.')
+    if isinstance(material, (list, tuple)):
+        raise RuntimeError('사용처 조회는 아직 자재 1개만 지원합니다(복수 조회는 미구현).')
+    plant = (plant or '1000').strip()
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _navigate_to_where_used_screen(session, wnd, material, plant)
+
+    body, source = _sap_dump_screen_body(wnd)
+    if not body:
+        return {'ok': False, 'error': f'자재 "{material}"의 사용처 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호가 올바른지, 혹은 이 자재를 사용하는 상위 품목이 실제로 없는지 확인해주세요.'}
+
+    header = f'[SAP 사용처 리스트(CS15, 역전개): 자재 {material}]\n'
+    text = header + '\n' + body
+    return {'ok': True, 'source': source, 'material': material, 'text': text}
+
+
 # ── "문서 열기" (open_document) 전용 헬퍼 ─────────────────────────────
 def _find_by_id_substring(container, substring, depth=0, max_depth=30, require_type=None):
     """창 트리를 재귀 탐색해 .Id에 특정 문자열이 포함된 첫 번째 컨트롤을 찾는다.
@@ -941,6 +1038,10 @@ def main():
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
             materials_param = materials_list if len(materials_list) > 1 else (materials_list[0] if materials_list else '')
             result = fetch_bom(materials_param, plant)
+        elif action == 'fetch_where_used':
+            material = sys.argv[2] if len(sys.argv) > 2 else ''
+            plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
+            result = fetch_where_used(material, plant)
         else:
             result = fetch_current_screen()
         print(json.dumps(result, ensure_ascii=False))

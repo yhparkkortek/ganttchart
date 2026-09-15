@@ -1633,6 +1633,23 @@ def sap_bom():
     return jsonify(data), status
 
 
+@app.route('/sap-where-used', methods=['GET'])
+def sap_where_used():
+    # 💡 [2026-09-15 신규] "SAP에서 303410 역전개/사용처 보여줘"처럼 질문에 "역전개"/"사용처"와
+    #    자재번호가 같이 언급되면(js/04h의 _aiFetchSapContext가 판정), CS15("단일레벨
+    #    사용처리스트")로 직접 이동해 그 자재가 어느 상위 품목에 쓰이는지 조회한다 — ZPP038
+    #    BOM 정전개의 반대 방향. 실제 컨트롤 조작은 sap_bridge_32.py의
+    #    fetch_where_used()/_navigate_to_where_used_screen()에 있다(2026-09-15 실사용 SAP
+    #    GUI "기록 및 재생" 매크로로 확보 — 단, 자재번호 입력 필드는 그 매크로에 안 나와서
+    #    추측한 것이니 실패하면 그 함수의 주석부터 확인할 것). 현재는 자재 1개만 지원.
+    material = (request.args.get('material') or '').strip()
+    plant = (request.args.get('plant') or '1000').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-where-used?material=303410'}), 400
+    data, status = _run_sap_bridge(['fetch_where_used', material, plant], 30, 'SAP 사용처 조회')
+    return jsonify(data), status
+
+
 # ══════════════════════════════════════════════════════════════
 if __name__ == '__main__':
     print("=" * 58)
