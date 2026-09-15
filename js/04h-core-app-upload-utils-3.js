@@ -1674,6 +1674,85 @@
             return;
         }
 
+        // 🤔 [2026-09-15 신규, 사용자 요청] SAP 문서 "출력" 모호성 해소 — 아래 배치 다운로드/단일
+        //    열기/문서 목록 판정들보다 먼저 체크해야 함(승인원 표지와 같은 이유: 트리거 단어 없는
+        //    후속 답변이 엉뚱하게 일반 AI 질문으로 새어나가면 안 됨). sapDocQuestion은 실제로
+        //    아래 세 판정 함수에 넘길 "유효 질문" — 애매해서 되묻는 중이면 사람의 짧은 답("저장
+        //    해줘"/"목록만 보여줘"/"P01")만으로는 저 판정 함수들이 인식 못 하므로, 기억해둔
+        //    자재번호를 다시 붙여서 합성한다(각 판정 함수가 요구하는 "열어/저장/문서" 등 동사가
+        //    포함되도록 합성 문구를 고름 — 예: 단일 자재 저장 의도는 실제로는 open_document가
+        //    다운로드+열기를 같이 하므로 "열어줘"로 합성).
+        let sapDocQuestion = question;
+        if (window._ganttQaSapDocClarify) {
+            const clarify = window._ganttQaSapDocClarify;
+            const replyText = question.trim();
+            if (clarify.stage === 'action') {
+                const wantsSave = /(저장|다운로드)/.test(replyText);
+                const wantsList = /(목록|보여|출력)/.test(replyText);
+                if (wantsSave && !wantsList) {
+                    if (clarify.materials.length >= 2) {
+                        sapDocQuestion = clarify.materials.join(',') + ' 문서 저장해줘';
+                        window._ganttQaSapDocClarify = null;
+                    } else {
+                        window._ganttQaHistory.push({ role: 'user', text: question });
+                        input.value = '';
+                        clarify.stage = 'docType';
+                        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                            `📄 어떤 문서 타입을 저장할까요? (예: P01) — 어떤 문서가 있는지 먼저 보고 싶으시면 "목록"이라고 말씀해주세요.`,
+                            `📄 Which document type would you like to save? (e.g. P01) — If you'd like to see what's available first, just say "list".`
+                        )});
+                        window._renderGanttQaMessages();
+                        input.focus();
+                        return;
+                    }
+                } else if (wantsList) {
+                    sapDocQuestion = clarify.materials[0] + ' 문서 목록 보여줘';
+                    window._ganttQaSapDocClarify = null;
+                } else {
+                    // 답을 못 알아들었거나 완전히 다른 얘기로 넘어감 — 조용히 해제하고 평소처럼 처리
+                    // (원본 question 그대로, sapDocQuestion도 원본 유지).
+                    window._ganttQaSapDocClarify = null;
+                }
+            } else if (clarify.stage === 'docType') {
+                const wantsList2 = /(목록|보여)/.test(replyText);
+                if (wantsList2) {
+                    sapDocQuestion = clarify.materials[0] + ' 문서 목록 보여줘';
+                    window._ganttQaSapDocClarify = null;
+                } else {
+                    const dt = window._ganttQaExtractSapDocTypeCode(replyText);
+                    if (dt) {
+                        sapDocQuestion = clarify.materials[0] + ' ' + dt + ' 문서 열어줘';
+                        window._ganttQaSapDocClarify = null;
+                    } else {
+                        window._ganttQaHistory.push({ role: 'user', text: question });
+                        input.value = '';
+                        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                            `📄 문서 타입을 못 알아들었어요 — "P01"처럼 알파벳+숫자 형식으로 다시 말씀해주시거나 "목록"이라고 해주세요.`,
+                            `📄 I couldn't recognize that document type — please reply with a format like "P01", or say "list".`
+                        )});
+                        window._renderGanttQaMessages();
+                        input.focus();
+                        return;
+                    }
+                }
+            }
+        } else {
+            const ambiguousMats = window._ganttQaExtractSapDocAmbiguous ? window._ganttQaExtractSapDocAmbiguous(question) : null;
+            if (ambiguousMats) {
+                window._ganttQaHistory.push({ role: 'user', text: question });
+                input.value = '';
+                window._ganttQaSapDocClarify = { materials: ambiguousMats, stage: 'action' };
+                const matLabel = ambiguousMats.join(', ');
+                window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                    `📄 자재 "${matLabel}"의 문서, 어떻게 도와드릴까요?\n- 파일을 저장(다운로드)해드릴까요?\n- 아니면 지금 어떤 문서가 있는지 목록만 보여드릴까요?`,
+                    `📄 What would you like me to do with the document(s) for material "${matLabel}"?\n- Should I save (download) the file?\n- Or just show you a list of what's available?`
+                )});
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+        }
+
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
         //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
         //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
@@ -1683,7 +1762,7 @@
         //    잘못 가로채져 "아직 내보낼 SAP 데이터가 없습니다"만 뜨던 버그로 확인됨(2026-09-15).
         //    ZDMSR004("DMS 첨부파일 일괄 다운로드 프로그램")를 실행해 한 번에 C:\SAP_DMS\로
         //    다운로드한다.
-        const sapBatchReq = window._ganttQaExtractSapBatchDownloadRequest ? window._ganttQaExtractSapBatchDownloadRequest(question) : null;
+        const sapBatchReq = window._ganttQaExtractSapBatchDownloadRequest ? window._ganttQaExtractSapBatchDownloadRequest(sapDocQuestion) : null;
         if (sapBatchReq) {
             window._ganttQaHistory.push({ role: 'user', text: question });
             window._ganttQaHistory.push({
@@ -1725,7 +1804,7 @@
         //    찾아 열고 원본 파일을 다운로드+실행한다. 질문에 자재번호(예: "106188")가 같이 있으면
         //    사람이 화면을 미리 열어둘 필요 없이 백엔드가 직접 MM03으로 이동해 조회한다. 비동기
         //    (백엔드 왕복)라 다른 로컬 명령들과 달리 별도 블록으로 처리.
-        const sapOpenDocReq = window._ganttQaExtractSapOpenDocRequest ? window._ganttQaExtractSapOpenDocRequest(question) : null;
+        const sapOpenDocReq = window._ganttQaExtractSapOpenDocRequest ? window._ganttQaExtractSapOpenDocRequest(sapDocQuestion) : null;
         if (sapOpenDocReq) {
             const sapOpenDocType = sapOpenDocReq.docType;
             const sapOpenDocMaterial = sapOpenDocReq.material;
@@ -1767,7 +1846,7 @@
         //    위 sapOpenDocReq가 null이었을 때만 여기로 온다(순서 중요). 특정 문서를 열지 않고
         //    먼저 그 자재의 "문서 데이터" 화면을 그대로 읽어와 보여준 뒤, 원하는 타입을 골라
         //    다시 물어보라고 안내한다.
-        const sapListDocsMaterial = window._ganttQaExtractSapListDocsRequest ? window._ganttQaExtractSapListDocsRequest(question) : null;
+        const sapListDocsMaterial = window._ganttQaExtractSapListDocsRequest ? window._ganttQaExtractSapListDocsRequest(sapDocQuestion) : null;
         if (sapListDocsMaterial) {
             window._ganttQaHistory.push({ role: 'user', text: question });
             window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`SAP에서 자재 "${sapListDocsMaterial}"의 문서 목록을 조회하는 중...`, `Looking up the document list for material "${sapListDocsMaterial}" in SAP...`), pending: true });
@@ -2677,6 +2756,34 @@
         var docType = window._ganttQaExtractSapDocTypeCode(text);
         return { materials: materials, docType: docType || 'P01' };
     };
+
+    // 🤔 [2026-09-15 신규, 사용자 요청] "104446 문서 출력해줘"처럼 "출력"이라는 동사 하나만으로는
+    //    "화면에 목록을 보여달라"는 건지 "파일을 저장(다운로드)해달라"는 건지 구분이 안 되는데,
+    //    예전엔 이걸 그냥 조용히 "문서 목록 보기"로 결정해버렸다(다른 명확한 동사가 없으면
+    //    _ganttQaExtractSapListDocsRequest가 기본으로 걸림). 사용자가 "파일을 저장하시길
+    //    원하시나요? 출력물을 원하시나요?"처럼 애매하면 먼저 물어보는 방식을 요청해서, "열어/
+    //    열기/보여/다운로드/저장/open"처럼 의도가 이미 명확한 동사가 하나도 없이 "출력"만 있는
+    //    경우만 애매하다고 판단해 가로챈다(의도가 이미 명확하면 기존 경로가 그대로 처리하므로
+    //    이 함수는 관여 안 함 — 새 마찰을 최소화). sendGanttQaMessage의 처리는 아래
+    //    window._ganttQaSapDocClarify 상태 + 연속 처리 블록 참고.
+    window._ganttQaExtractSapDocAmbiguous = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        if (!/(문서|파일)/.test(text)) return null;
+        if (!/출력/.test(text)) return null;
+        if (/(열어|열기|보여|다운로드|저장|open)/i.test(text)) return null;
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (looksLikeQuestion) return null;
+        var materials = (text.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
+        if (!materials.length) return null;
+        return materials;
+    };
+
+    // 🤔 [2026-09-15 신규] 위 _ganttQaExtractSapDocAmbiguous가 애매하다고 판단해 되물은 뒤,
+    //    사람의 다음 답("저장해줘"/"목록만 보여줘"/문서 타입 등)을 해석하는 상태 — 승인원 표지의
+    //    window._ganttQaApprovalDraft와 같은 패턴(대화 내용과 별개로 "지금까지 파악된 것"만
+    //    담음). null(진행 중 없음) 또는 {materials:[...], stage:'action'|'docType'}.
+    window._ganttQaSapDocClarify = null;
 
     // 💡 실제 XLSX 조립 — "엑셀로 내보내줘" 처리(sendGanttQaMessage) 전용으로 분리(다른 곳에서도
     //    "마지막 SAP 조회 결과를 엑셀로" 재사용할 수 있게 window에 노출). 그리드 조회(source:'grid')는
