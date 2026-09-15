@@ -221,6 +221,38 @@ def _find_by_id_substring(container, substring, depth=0, max_depth=30, require_t
     return None
 
 
+def _find_all_by_id_substring(container, substring, depth=0, max_depth=30, results=None):
+    """`_find_by_id_substring`과 달리 첫 매치에서 멈추지 않고 .Id에 substring이 포함된
+    모든 컨트롤을 순서대로 모아 반환한다. 같은 ID 문자열이 실제 입력 필드가 아닌 다른
+    컨트롤(매치코드/히스토리 아이콘 등)에도 들어있어 첫 매치가 틀릴 수 있는 경우, 호출부가
+    "찾은 것들을 순서대로 하나씩 시도"할 수 있게 하기 위한 용도(2026-09-15 신규 —
+    자재번호 필드 자동 입력 중 첫 매치가 .text를 설정할 수 없는 컨트롤이라 COM 오류
+    "Property 'Item.text' can not be set."가 난 문제를 방어하려고 추가)."""
+    if results is None:
+        results = []
+    try:
+        cid = container.Id or ''
+        if substring in cid:
+            results.append(container)
+    except Exception:
+        pass
+    if depth > max_depth:
+        return results
+    try:
+        children = container.Children
+    except Exception:
+        return results
+    if children is None:
+        return results
+    for i in range(children.Count):
+        try:
+            child = children.Item(i)
+        except Exception:
+            continue
+        _find_all_by_id_substring(child, substring, depth + 1, max_depth, results)
+    return results
+
+
 def _select_tab_if_present(wnd, id_substring):
     tab = _find_by_id_substring(wnd, id_substring)
     if tab is not None:
@@ -262,15 +294,33 @@ def _navigate_to_material_document_tab(session, wnd, material):
     있었을 가능성이 있다. 뷰 선택 이력이 없는 자재는 이 팝업이 뜰 수 있어, 방어적으로
     wnd[1]이 나타나면 Enter(기본 선택 확정)를 한 번 시도한다 — 이 경로는 실사용 녹화가
     없어 추측성 코드이니, 만약 특정 자재에서 계속 실패하면 그 팝업이 뜬 상태로 화면을
-    캡처해서 정확한 컨트롤을 다시 녹화해야 한다."""
+    캡처해서 정확한 컨트롤을 다시 녹화해야 한다.
+    ⚠️⚠️ [2026-09-15 실사용에서 확인] "RMMG1-MATNR" 문자열을 포함한 컨트롤이 화면에 하나가
+    아닐 수 있다(예: 매치코드/히스토리 드롭다운 버튼 등) — 첫 매치가 실제 입력 필드가 아니면
+    `.text = ...`가 COM 오류("Property 'Item.text' can not be set.")로 실패한다. 그래서
+    `_find_by_id_substring`(첫 매치만 반환) 대신 `_find_all_by_id_substring`으로 후보를 전부
+    모아, 녹화에서 확인된 타입(GuiCTextField, ID 접두사 `ctxt`)을 우선순위로 정렬한 뒤 실제로
+    값을 설정할 수 있는 첫 번째 후보를 채택한다."""
     session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM03'
     wnd.sendVKey(0)
     time.sleep(0.6)
 
-    matnr_field = _find_by_id_substring(wnd, 'RMMG1-MATNR')
-    if matnr_field is None:
+    candidates = _find_all_by_id_substring(wnd, 'RMMG1-MATNR')
+    if not candidates:
         raise RuntimeError('MM03 자재번호 입력 필드를 찾지 못했습니다 — SAP GUI가 예상과 다른 화면(예: 이미 다른 트랜잭션 진행 중)일 수 있습니다.')
-    matnr_field.text = str(material)
+    candidates.sort(key=lambda c: 0 if getattr(c, 'Type', None) == 'GuiCTextField' else 1)
+    matnr_field = None
+    last_err = None
+    for cand in candidates:
+        try:
+            cand.text = str(material)
+            matnr_field = cand
+            break
+        except Exception as e:
+            last_err = e
+            continue
+    if matnr_field is None:
+        raise RuntimeError(f'MM03 자재번호 입력 필드를 찾았지만 값을 설정하지 못했습니다. (마지막 오류: {last_err})')
     wnd.sendVKey(0)
     time.sleep(0.8)
 
