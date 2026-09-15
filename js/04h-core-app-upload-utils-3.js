@@ -2485,6 +2485,45 @@
     //    "마지막 SAP 조회 결과를 엑셀로" 재사용할 수 있게 window에 노출). 그리드 조회(source:'grid')는
     //    _sap_dump_grid(백엔드)가 만든 "제목행 + 탭구분 데이터행" 텍스트를 그대로 파싱하고,
     //    필드 조회(source:'fields', 그리드가 없는 화면)는 한 줄당 한 행짜리 단일 열로 내보낸다.
+    // 💡 [2026-09-15 신규] SAP 그리드 헤더가 "MTART/MATNR/WERKS" 같은 내부 필드 코드로 나오는
+    //    문제 — 원래는 코드가 `GetColumnTitle`(존재하지 않는 메서드명, 항상 조용히 실패)을
+    //    불러서 폴백으로 코드가 그대로 나왔었다. 정확한 메서드명(`GetDisplayedColumnTitle`)을
+    //    실사용 SAP GUI 세션에 직접 접속해 진단으로 확인했지만, **그 메서드가 반환하는 한글
+    //    텍스트 자체가 SAP GUI Scripting 내부에서 이미 깨져서 나온다**(U+FFFD 복구불가 손실
+    //    문자 확인 — Windows/SAP 세션 코드페이지는 둘 다 정상적으로 한국어(949/4110)였는데도
+    //    발생 — SAP GUI Scripting 자체의 한글 처리 버그로 추정, Python/JS 쪽에서 되돌릴 방법
+    //    없음). 그래서 API로 실시간으로 가져오는 대신, 자주 보이는 표준 SAP 필드명을 코드에
+    //    직접 매핑해두는 방식으로 우회한다 — 사용자와 상의해 "헤더만이라도 우선 고치기"로
+    //    결정함(전체 데이터 셀 값의 한글 손상은 별개의 더 큰 문제로, 이 사전으로는 해결 안 됨).
+    //    ⚠️ 아래 표의 앞부분(자재유형~플랜트)은 표준 SAP MARA/MARC 테이블 필드로 회사 무관하게
+    //    어느 SAP 시스템에서나 동일한 의미이니 신뢰도가 높다. `Z`로 시작하는 필드(ZDIV, ZMATNR
+    //    등)는 이 회사 ZMM009 리포트의 커스텀 필드라 표준 사전에 없고, 이전 실사용 화면
+    //    캡처의 컬럼 순서와 대조해 유추한 것이라 신뢰도가 상대적으로 낮다 — 잘못됐으면 알려주면
+    //    바로 고칠 것. 목록에 없는 필드는 이전처럼 코드 그대로 표시된다(틀린 한글보다는 원본
+    //    코드가 낫다는 판단).
+    window._SAP_FIELD_LABEL_MAP = {
+        // ── 표준 SAP 필드(MARA/MARC 등) — 높은 신뢰도 ──
+        MTART: '자재유형', MATNR: '자재', MATKL: '자재그룹', MEINS: '기본단위',
+        MAKTX: '자재내역', WERKS: '플랜트', LGORT: '저장위치', VKORG: '판매조직',
+        VTWEG: '유통경로', SPART: '사업부', MBRSH: '산업유형', BRGEW: '총중량',
+        NTGEW: '순중량', GEWEI: '중량단위', EKGRP: '구매그룹', DISPO: 'MRP 관리자',
+        DISGR: 'MRP 그룹', STRGR: '전략그룹', MSTAE: '플랜트 범위 자재상태',
+        MSTAV: '유통 자재상태', MSTDV: '유통 자재상태 유효일', BISMT: '기존자재번호',
+        NORMT: '산업표준내역', KTGRM: '자재계정지정그룹', PRCTR: '손익센터',
+        EXTWG: '외부자재그룹', MFRPN: '제조업체부품번호', UMREN: '환산분모',
+        UMREZ: '환산분자', GROES: '규격/치수', XCHPF: '배치관리', PEINH1: '가격단위',
+        MTPOS: '일반품목범주', MTPOS_MARA: '일반품목범주그룹', BSTME: '발주단위',
+        MVGR1: '자재그룹1', MVGR2: '자재그룹2', MVGR3: '자재그룹3', MVGR4: '자재그룹4',
+        MVGR5: '자재그룹5', TAXM1: '세금분류1', VERSG: '유효값 지정', RGEKZ: '역산가능여부',
+        DWERK: '기준플랜트', MEINH: '단위', SKTOF: '현금할인면제', TRAGR: '운송그룹',
+        LADGR: '적재그룹',
+        // ── 이 회사 ZMM009 커스텀 필드(Z접두사 등) — 이전 화면 캡처 대조 추정, 신뢰도 낮음 ──
+        ZDIV: 'Y/X', ZMATNR: '관련 패널품목', WGBEZ60: 'Group2', WGBEZ: 'Group1',
+        VINT1: '역방향소비기간', VINT2: '순방향소비기간', FERTH: '생산/검사 메모',
+        LGPRO: '생산저장위치', LGFSB: '외부조달 저장위치', STPRS1: '표준가',
+        STPRS2: '기간별 단가',
+    };
+
     window._exportSapDataToExcel = function(cached) {
         if (typeof XLSX === 'undefined') throw new Error(window._t('엑셀 라이브러리를 아직 불러오지 못했습니다. 잠시 후 다시 시도해주세요.', 'The Excel library has not loaded yet — please try again in a moment.'));
         var text = cached.text || '';
@@ -2499,6 +2538,13 @@
         var rows;
         if (cached.source === 'grid') {
             rows = lines.map(function(l) { return l.split('\t'); });
+            // 헤더 행(rows[0])의 필드 코드를 한글 라벨로 치환(사전에 없으면 코드 그대로 유지).
+            if (rows.length) {
+                rows[0] = rows[0].map(function(code) {
+                    var key = (code || '').trim();
+                    return window._SAP_FIELD_LABEL_MAP[key] || code;
+                });
+            }
         } else {
             rows = [[window._t('내용', 'Content')]].concat(lines.map(function(l) { return [l]; }));
         }

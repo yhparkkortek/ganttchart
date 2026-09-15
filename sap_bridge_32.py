@@ -102,7 +102,19 @@ def _sap_find_grid(container, depth=0):
 
 
 def _sap_dump_grid(shell):
-    """ALV 그리드의 보이는 열/행을 탭 구분 텍스트로 변환. 응답 크기 보호를 위해 최대 500행."""
+    """ALV 그리드의 보이는 열/행을 탭 구분 텍스트로 변환. 응답 크기 보호를 위해 최대 500행.
+    ⚠️⚠️ [2026-09-15 실사용 진단] `shell.GetColumnTitle(cid)`는 `GuiGridView`에 실제로
+    존재하는 메서드가 아니다(항상 예외 → 아래 except에서 원본 필드 코드 `cid`로 폴백) —
+    "진짜" 메서드 이름은 `GetDisplayedColumnTitle(cid)`이지만, **의도적으로 이걸로 고치지
+    않는다**: 실사용 SAP 세션에 직접 접속해 확인한 결과, 그 메서드가 반환하는 한글 텍스트가
+    SAP GUI Scripting 내부에서 이미 복구 불가능하게 깨져서 나온다(Python에서 받은 문자열에
+    유니코드 대체문자 U+FFFD가 섞여 있어 어떤 인코딩으로도 복구 불가 — Windows/SAP 세션
+    코드페이지는 둘 다 정상인데도 발생, SAP GUI Scripting 자체의 한글 처리 버그로 추정).
+    즉 "메서드 이름을 고치면" 코드(MTART 등, 최소한 읽을 순 있음) 대신 깨진 쓰레기 문자열이
+    나오게 되므로 지금처럼 실패시키고 코드로 폴백하는 게 더 낫다 — 한글 헤더는 대신
+    js/04h의 `window._SAP_FIELD_LABEL_MAP`(표준 SAP 필드명 사전)로 프런트엔드에서 치환한다.
+    자세한 진단 과정은 CLAUDE.md의 "SAP GUI Scripting ALV 그리드의 한글이 원천적으로 깨져서
+    나온다" 항목 참고."""
     try:
         col_ids = list(shell.ColumnOrder)
     except Exception:
