@@ -1445,15 +1445,40 @@ def _find_po_grid(session, wnd):
         return _find_by_id_substring(wnd, 'shellcont/shell', require_type='GuiShell')
 
 
+def _sap_close_stray_popups(session, max_windows=4):
+    """이전 시도가 중간에 실패해서(예: 협력사 검색 결과 없음) 팝업(wnd[1] 이상)이 열린 채로
+    남아있으면, 그 위에 새 트랜잭션 코드를 입력해도 씹히거나 엉뚱한 동작을 한다 — "SAP에서
+    뭔가 시도하다 멈추면 처음으로 돌아가서 트랜잭션 코드를 입력하고 다시 시도해야 하는데
+    못하고 있음"이라는 실사용 제보로 확인됨(2026-09-16). 재시도 직전에 항상 이 함수로
+    wnd[1]부터 위로 열려있는 창을 전부 닫아 깨끗한 상태(wnd[0]만 남은 상태)를 보장한다 —
+    닫을 게 없으면 조용히 통과."""
+    for i in range(max_windows, 0, -1):
+        try:
+            w = session.findById(f'wnd[{i}]')
+        except Exception:
+            continue
+        try:
+            w.close()
+        except Exception:
+            try:
+                w.sendVKey(12)  # F12 = 취소, close()가 안 먹는 팝업 대비 폴백
+            except Exception:
+                pass
+        time.sleep(0.3)
+
+
 def prepare_po_from_excel(excel_path, biz_reg_no, items, plant='1000'):
     """구매오더 생성 1단계 — 엑셀 업로드 후 각 품목 행에 협력사/세금코드/단가를 채우고
     저장 직전에 멈춘다. `items`는 엑셀에 넣은 행과 같은 순서의 리스트, 각 원소는
     {"unitPrice": 숫자} 형태(PDF에서 추출한 단가 — SAP에 저장된 값이 아니라 이 값을
-    그대로 SAP에 입력한다). 협력사는 `biz_reg_no`(사업자등록번호) 하나로 전체 PO에
-    한 번만 검색해 선택한다(사용자 제공 매크로가 row 0에서만 협력사를 선택했고, 한 PO는
-    보통 협력사 하나이므로 나머지 행에도 자동 적용되는 것으로 가정 — 실사용에서 행마다
-    협력사가 따로 적용 안 되는 것으로 확인되면 행마다 반복하도록 고쳐야 함)."""
+    그대로 SAP에 입력한다). 협력사/세금코드는 품목(행)마다 반복해서 검색·선택한다(아래
+    참고 — 처음엔 PO당 한 번이면 되는 줄 알았다가 실사용에서 틀렸음이 확인되어 고침).
+    ⚠️ 재시도 시 이전 실패로 남은 팝업을 먼저 정리한다(`_sap_close_stray_popups`) —
+    협력사 검색이 실패(사업자등록번호가 SAP에 없음 등)하면 "검색 결과 없음"류 팝업이
+    열린 채로 남는데, 그 상태에서 그냥 다시 이 함수를 호출하면 새 트랜잭션 진입 자체가
+    막히던 문제가 실사용에서 확인됨."""
     session = _get_sap_session()
+    _sap_close_stray_popups(session)
     wnd = session.findById('wnd[0]')
     wnd = _navigate_to_po_upload_screen(session, wnd, excel_path, plant)
 

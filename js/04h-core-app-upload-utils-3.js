@@ -364,6 +364,35 @@ ${attachText}`;
         let parsed;
         try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error(window._t('AI 응답 JSON 파싱에 실패했습니다: ', 'Failed to parse the AI response JSON: ') + e.message); }
         if (!parsed.items || !parsed.items.length) throw new Error(window._t('PDF에서 품목을 추출하지 못했습니다.', 'Could not extract any line items from the PDF.'));
+
+        // 🐛🐛 [2026-09-16 실사용 버그수정] 프롬프트의 "코텍이면 절대 협력사로 쓰지 말 것"
+        // 지시를 AI가 실제로 무시하고 우리 회사(코텍) 번호를 그대로 협력사로 뽑는 사고가
+        // 실사용에서 확인됨(세로쓰기 라벨이 깨져서 AI가 어느 쪽이 "공급자"인지 헷갈린 것으로
+        // 추정) — 프롬프트 지시만으로는 못 믿으므로, 코드 레벨에서 한 번 더 검증한다.
+        // bizRegNo가 코텍 자기 번호(1308144628)와 같으면, 첨부 원문에서 정규식으로 다른
+        // 사업자등록번호(NNN-NN-NNNNN 패턴)를 직접 찾아 대체한다 — 라벨 텍스트는 세로쓰기로
+        // 깨져도 번호 자체(숫자+하이픈)는 보통 가로쓰기라 훼손되지 않고 그대로 남아있어
+        // 이 방식이 AI의 판단보다 신뢰도가 높다.
+        const KORTEK_BIZ_NO = '1308144628'; // (주)코텍 자기 회사 사업자등록번호(130-81-44628) — 절대 협력사로 쓰면 안 됨
+        const normalizedBizNo = (parsed.bizRegNo || '').replace(/\D/g, '');
+        if (normalizedBizNo === KORTEK_BIZ_NO) {
+            const combinedText = attachments.map(function(a) { return a.text || ''; }).join('\n');
+            const allBizNos = (combinedText.match(/\d{3}-?\d{2}-?\d{5}/g) || [])
+                .map(function(s) { return s.replace(/-/g, ''); })
+                .filter(function(n) { return n.length === 10 && n !== KORTEK_BIZ_NO; });
+            const candidate = allBizNos[0];
+            const warnNote = candidate
+                ? window._t(`⚠️ AI가 처음엔 우리 회사(코텍) 사업자등록번호를 협력사로 잘못 추출해서, 문서에서 찾은 다른 사업자등록번호(${candidate})로 자동 정정했습니다 — 협력사명도 다시 확인해주세요.`, `⚠️ The AI initially extracted our own (KORTEK's) business registration number as the vendor — auto-corrected to another number found in the document (${candidate}). Please double-check the vendor name too.`)
+                : window._t('⚠️ 공급자 사업자등록번호를 우리 회사(코텍) 번호로 잘못 추출한 것 같은데, 문서에서 다른 번호를 찾지 못했습니다 — 직접 확인해서 알려주세요.', "⚠️ The extracted supplier's business registration number looks like our own (KORTEK's), but no other number was found in the document — please verify and provide the correct one.");
+            if (candidate) {
+                parsed.bizRegNo = candidate;
+                if (parsed.vendorName && parsed.vendorName.indexOf('코텍') !== -1) parsed.vendorName = ''; // 확실치 않으니 비워서 사람이 채우게
+            } else {
+                parsed.bizRegNo = '';
+                parsed.vendorName = '';
+            }
+            parsed.note = parsed.note ? `${parsed.note} ${warnNote}` : warnNote;
+        }
         return parsed;
     };
 
@@ -385,6 +414,66 @@ ${attachText}`;
             `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경").`,
             `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2's temp code should be 900201").`
         );
+    };
+
+    // 🐛 [2026-09-16 신규] 엑셀 생성 + SAP 업로드/입력(ZMMR060, 저장 전까지)을 한 곳으로
+    // 뽑음 — 처음 시도(ask_purpose 완료 시점)와 실패 후 재시도(sap_prep_failed 단계)가
+    // 똑같은 로직을 공유한다. 실패해도 draft(pd)를 버리지 않고 `sap_prep_failed` 단계로
+    // 남겨서, 사람이 잘못된 값(주로 사업자등록번호)만 고쳐서 이어서 재시도할 수 있게 한다 —
+    // "SAP에서 뭔가 시도하다 멈추면 처음부터 다시 해야 하는데 못 하고 있다"는 제보 반영.
+    window._ganttQaRunPoSapPrepareAndReport = async function(pd) {
+        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('구매오더 요청 엑셀을 생성하는 중...', 'Generating the purchase order request excel...'), pending: true });
+        window._renderGanttQaMessages();
+        const receiver = window.getActiveUserName ? window.getActiveUserName() : '';
+        const rows = pd.items.map(function(it) {
+            return {
+                '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
+                '필요일자': pd.invoiceDate, '구매그룹': '908', '프로젝트코드': pd.projectCode,
+                '수령인': receiver, '구매담당자 사번': pd.buyerEmpId, '요청사유': pd.reason,
+                'VINA PO': '', '목적': pd.purpose, '비고': '',
+            };
+        });
+        let finalReply;
+        try {
+            const exRes = await window._withTimeout(
+                fetch('http://127.0.0.1:5000/po-build-excel', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ rows: rows })
+                }), 30000, window._t('엑셀 생성 시간 초과', 'Excel generation timed out')
+            );
+            const exData = await exRes.json();
+            if (!exData.ok) throw new Error(exData.error || window._t('알 수 없는 오류', 'unknown error'));
+            pd.excelPath = exData.path;
+
+            if (window._ganttQaHistory.length) {
+                window._ganttQaHistory[window._ganttQaHistory.length - 1].text = '⏳ ' + window._t('SAP에 엑셀을 업로드하고 협력사/단가를 입력하는 중... (시간이 걸릴 수 있습니다)', 'Uploading the excel to SAP and filling in vendor/price... (this may take a while)');
+                window._renderGanttQaMessages();
+            }
+            const prepRes = await window._withTimeout(
+                fetch('http://127.0.0.1:5000/po-sap-prepare', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        excelPath: pd.excelPath, bizRegNo: pd.bizRegNo,
+                        items: pd.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
+                        plant: '1000'
+                    })
+                }), Math.min(120000, 40000 + 8000 * pd.items.length),
+                window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
+            );
+            const prepData = await prepRes.json();
+            if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
+            pd.stage = 'confirm_sap_prepare';
+            finalReply = window._t(
+                `✅ 엑셀 생성(${exData.fileName}) + SAP 업로드/입력까지 완료했습니다.\n\n${prepData.text || ''}\n\n📌 SAP에는 아직 저장(확정)되지 않았습니다 — 위 내용을 SAP 화면에서 직접 확인하신 후 "저장해줘"라고 답해주시면 실제로 저장하고 발주서 PDF까지 출력합니다. 취소하시려면 "취소"라고 답해주세요.`,
+                `✅ Generated the excel (${exData.fileName}) and uploaded/filled it into SAP.\n\n${prepData.text || ''}\n\n📌 This has NOT been saved in SAP yet — please review it directly in the SAP screen, then reply "save" to actually save it and print the purchase order PDF, or "cancel" to stop here.`
+            );
+        } catch (e) {
+            pd.stage = 'sap_prep_failed'; // draft는 유지 — 값만 고쳐서 재시도 가능하게
+            finalReply = '⚠️ ' + window._t('구매오더 준비 중 오류: ', 'Error while preparing the purchase order: ') + (e && e.message ? e.message : e)
+                + '\n\n' + window._t('사업자등록번호가 잘못됐으면 새 번호를 알려주시거나(예: "사업자등록번호는 2168144558"), "다시 시도"라고 답해서 이어서 재시도할 수 있습니다.', 'If the business registration number was wrong, tell me the new one (e.g. "biz reg no is 2168144558"), or reply "retry" to try again.');
+        }
+        window._ganttQaHistory.pop();
+        window._ganttQaHistory.push({ role: 'ai', text: finalReply });
     };
 
     window._aiFetchSapContext = async function(question) {
@@ -1963,6 +2052,15 @@ ${attachText}`;
 
             if (pd.stage === 'confirm_items') {
                 if (/^(확인|네|맞아|맞습니다|ok|okay|confirm|yes)\b/i.test(replyText) || /^(확인|네)$/.test(replyText)) {
+                    // 🐛 [2026-09-16 신규] 사업자등록번호가 비어있으면(코텍 자기 번호로 잘못
+                    // 추출돼 자동으로 비운 경우 포함) SAP 협력사 검색 자체가 실패할 게
+                    // 뻔하므로, 미리 사람에게 정확한 번호를 물어서 확보하고 넘어간다.
+                    if (!pd.bizRegNo || !/^\d{10}$/.test(pd.bizRegNo)) {
+                        window._ganttQaHistory.push({ role: 'ai', text: window._t('⚠️ 협력사 사업자등록번호가 확인되지 않았습니다 — 정확한 번호를 알려주세요(예: "2168144558").', "⚠️ The vendor's business registration number wasn't confirmed — please provide it (e.g. \"2168144558\").") });
+                        window._renderGanttQaMessages();
+                        input.focus();
+                        return;
+                    }
                     // 💡 [2026-09-15 사용자 요청] "품목명만으로는 임시코드 판단이 어려우니
                     // 물어봐야 한다" — AI 프롬프트를 "명확한 단서가 없으면 추측하지 말고 빈
                     // 문자열로 남길 것"으로 바꿔서(_ganttQaExtractPoItemsViaAi), 애매한
@@ -2050,59 +2148,34 @@ ${attachText}`;
                     return;
                 }
                 pd.purpose = purposeCode;
-
-                // 여기까지 다 모였으면 곧바로 엑셀 생성 → SAP 업로드+입력(저장 전까지)를 진행.
-                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('구매오더 요청 엑셀을 생성하는 중...', 'Generating the purchase order request excel...'), pending: true });
+                await window._ganttQaRunPoSapPrepareAndReport(pd);
                 window._renderGanttQaMessages();
-                const receiver = window.getActiveUserName ? window.getActiveUserName() : '';
-                const rows = pd.items.map(function(it) {
-                    return {
-                        '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
-                        '필요일자': pd.invoiceDate, '구매그룹': '908', '프로젝트코드': pd.projectCode,
-                        '수령인': receiver, '구매담당자 사번': pd.buyerEmpId, '요청사유': pd.reason,
-                        'VINA PO': '', '목적': pd.purpose, '비고': '',
-                    };
-                });
-                let finalReply;
-                try {
-                    const exRes = await window._withTimeout(
-                        fetch('http://127.0.0.1:5000/po-build-excel', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ rows: rows })
-                        }), 30000, window._t('엑셀 생성 시간 초과', 'Excel generation timed out')
-                    );
-                    const exData = await exRes.json();
-                    if (!exData.ok) throw new Error(exData.error || window._t('알 수 없는 오류', 'unknown error'));
-                    pd.excelPath = exData.path;
+                input.focus();
+                return;
+            }
 
-                    if (window._ganttQaHistory.length) {
-                        window._ganttQaHistory[window._ganttQaHistory.length - 1].text = '⏳ ' + window._t('SAP에 엑셀을 업로드하고 협력사/단가를 입력하는 중... (시간이 걸릴 수 있습니다)', 'Uploading the excel to SAP and filling in vendor/price... (this may take a while)');
-                        window._renderGanttQaMessages();
-                    }
-                    const prepRes = await window._withTimeout(
-                        fetch('http://127.0.0.1:5000/po-sap-prepare', {
-                            method: 'POST', headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                excelPath: pd.excelPath, bizRegNo: pd.bizRegNo,
-                                items: pd.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
-                                plant: '1000'
-                            })
-                        }), Math.min(120000, 40000 + 8000 * pd.items.length),
-                        window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
-                    );
-                    const prepData = await prepRes.json();
-                    if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
-                    pd.stage = 'confirm_sap_prepare';
-                    finalReply = window._t(
-                        `✅ 엑셀 생성(${exData.fileName}) + SAP 업로드/입력까지 완료했습니다.\n\n${prepData.text || ''}\n\n📌 SAP에는 아직 저장(확정)되지 않았습니다 — 위 내용을 SAP 화면에서 직접 확인하신 후 "저장해줘"라고 답해주시면 실제로 저장하고 발주서 PDF까지 출력합니다. 취소하시려면 "취소"라고 답해주세요.`,
-                        `✅ Generated the excel (${exData.fileName}) and uploaded/filled it into SAP.\n\n${prepData.text || ''}\n\n📌 This has NOT been saved in SAP yet — please review it directly in the SAP screen, then reply "save" to actually save it and print the purchase order PDF, or "cancel" to stop here.`
-                    );
-                } catch (e) {
-                    finalReply = '⚠️ ' + window._t('구매오더 준비 중 오류: ', 'Error while preparing the purchase order: ') + (e && e.message ? e.message : e);
-                    window._ganttQaPoDraft = null; // 실패하면 초기화(다음 요청은 새로 시작)
+            // 🐛 [2026-09-16 실사용 버그수정] SAP 준비 단계에서 실패하면(협력사 사업자등록번호가
+            // SAP에 없는 등) 원래는 draft를 통째로 버려서, 사람이 잘못된 값 하나만 고치고
+            // 싶어도 PDF 첨부부터 전부 다시 해야 했다 — "SAP에서 뭔가 시도하다 멈추면 처음
+            // 부터 다시 해야 하는데 못 하고 있음"이라는 제보로 확인. 이제 실패해도 draft를
+            // 유지하고 `sap_prep_failed` 단계로 넘어가서, 사업자등록번호를 고쳐서("사업자
+            // 등록번호는 2168144558") 또는 그냥 "다시 시도"라고 말해서 이어서 재시도할 수
+            // 있게 한다 — PDF 재첨부 불필요.
+            if (pd.stage === 'sap_prep_failed') {
+                const bizNoMatch = replyText.match(/\d{3}-?\d{2}-?\d{5}/) || replyText.match(/\d{10}/);
+                if (bizNoMatch) {
+                    pd.bizRegNo = bizNoMatch[0].replace(/-/g, '');
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t(`사업자등록번호를 "${pd.bizRegNo}"로 변경했습니다. 다시 시도합니다.`, `Updated the business registration number to "${pd.bizRegNo}". Retrying.`) });
+                    window._renderGanttQaMessages();
+                    await window._ganttQaRunPoSapPrepareAndReport(pd);
+                } else if (/(취소|그만|중단|cancel|stop)/i.test(replyText)) {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('🚫 구매오더 요청을 취소했습니다.', '🚫 Cancelled the purchase order request.') });
+                    window._ganttQaPoDraft = null;
+                } else if (/(다시|재시도|retry)/i.test(replyText)) {
+                    await window._ganttQaRunPoSapPrepareAndReport(pd);
+                } else {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('사업자등록번호가 잘못됐으면 새 번호를 알려주시고(예: "사업자등록번호는 2168144558"), 그대로 다시 시도하려면 "다시 시도"라고, 그만두려면 "취소"라고 답해주세요.', 'If the business registration number was wrong, tell me the new one (e.g. "biz reg no is 2168144558"); reply "retry" to try again as-is, or "cancel" to stop.') });
                 }
-                window._ganttQaHistory.pop();
-                window._ganttQaHistory.push({ role: 'ai', text: finalReply });
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
