@@ -509,28 +509,55 @@ def _navigate_to_where_used_screen(session, wnd, material, plant='1000'):
         pass
 
 
-def fetch_where_used(material, plant='1000'):
-    """자재의 "사용처 리스트"(역전개, CS15)를 조회해 화면을 그대로 텍스트로 읽어온다.
-    2026-09-15 실사용 매크로로 확보 — 단, 자재번호 필드 ID는 추측이다(위
-    `_navigate_to_where_used_screen` 주석 참고). 현재는 자재 1개만 지원(복수 미구현 —
-    CS15의 "복수 선택" 팝업 여부는 아직 확인 안 됨)."""
-    if not material:
+def fetch_where_used(materials, plant='1000'):
+    """자재 1개 또는 여러 개의 "사용처 리스트"(역전개, CS15)를 조회해 화면을 그대로 텍스트로
+    읽어온다. `materials`는 문자열(단일) 또는 리스트/튜플(복수, 2026-09-15 신규).
+    ⚠️⚠️ **`fetch_bom`(ZPP038)과 달리 복수 조회를 SAP 표준 "복수 선택" 팝업으로 한 번에
+    묶지 않고, 자재마다 CS15를 따로 실행해서 결과를 이어붙인다** — 처음엔 회사 커스텀 배치
+    리포트 ZPP046("자재 사용처 일괄조회")을 찾아 그 표준 복수 선택 팝업(S_MATNR)으로
+    시도해봤고 실제로 4개 자재 전부 SELECT-OPTIONS에 정상 등록되는 것까지 확인했지만,
+    실행 결과 자재 1개(104438)만 나오고 나머지 3개(104481/104477/117451)는 전혀 안 나오는
+    문제가 발견됐다 — 원인은 `_sap_dump_grid`의 "응답 크기 보호용 500행 캡"이 **여러 자재가
+    섞인 전체 결과 1803행 중 앞쪽 500행**만 잘라내는데, SAP이 자재번호(IDNRK)순으로 정렬해
+    반환하다 보니 제일 앞선 자재(104438) 혼자 사용처가 500건을 넘어 그 캡을 다 차지해버려
+    뒤에 오는 자재들의 결과가 통째로 잘려나간 것이었다(ZPP038 BOM은 자재 1개당 결과가
+    보통 수십 행이라 이 문제가 거의 안 드러남 — 자재당 사용처가 수백 건까지 나올 수 있는
+    CS15/ZPP046 특유의 문제). 자재마다 따로 실행하면 각자 500행 캡을 온전히 보장받으므로
+    이 방식을 택함 — 대신 자재 수만큼 SAP 화면 전환이 필요해 더 느리다(최대 10개로 제한).
+    진단 방법: `py -3-32`로 실제 세션에 접속해 `grid.RowCount`(전체 1803)와 `_sap_dump_grid`
+    출력 길이(500행에서 끊김, 끝에 "... (총 1803행 중 500행만 표시)" 문구)를 대조해 확정함."""
+    if not materials:
         raise RuntimeError('자재번호를 지정해주세요.')
-    if isinstance(material, (list, tuple)):
-        raise RuntimeError('사용처 조회는 아직 자재 1개만 지원합니다(복수 조회는 미구현).')
     plant = (plant or '1000').strip()
+    mat_list = list(materials) if isinstance(materials, (list, tuple)) else [materials]
+    mat_list = [str(m).strip() for m in mat_list if str(m).strip()][:10]
+    if not mat_list:
+        raise RuntimeError('자재번호를 지정해주세요.')
 
     session = _get_sap_session()
-    wnd = session.findById('wnd[0]')
-    _navigate_to_where_used_screen(session, wnd, material, plant)
+    sections = []
+    ok_count = 0
+    for mat in mat_list:
+        try:
+            wnd = session.findById('wnd[0]')
+            _navigate_to_where_used_screen(session, wnd, mat, plant)
+            wnd = session.findById('wnd[0]')
+            body, _source = _sap_dump_screen_body(wnd)
+            if body:
+                sections.append(f'[자재 {mat}]\n{body}')
+                ok_count += 1
+            else:
+                sections.append(f'[자재 {mat}]\n(사용처 데이터를 찾지 못했습니다 — 자재번호가 올바른지, 혹은 이 자재를 사용하는 상위 품목이 실제로 없는지 확인해주세요.)')
+        except Exception as e:
+            sections.append(f'[자재 {mat}]\n(조회 실패: {e})')
 
-    body, source = _sap_dump_screen_body(wnd)
-    if not body:
-        return {'ok': False, 'error': f'자재 "{material}"의 사용처 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호가 올바른지, 혹은 이 자재를 사용하는 상위 품목이 실제로 없는지 확인해주세요.'}
+    mat_label = ', '.join(mat_list)
+    if ok_count == 0:
+        return {'ok': False, 'error': f'자재 "{mat_label}"의 사용처 데이터를 찾지 못했습니다.'}
 
-    header = f'[SAP 사용처 리스트(CS15, 역전개): 자재 {material}]\n'
-    text = header + '\n' + body
-    return {'ok': True, 'source': source, 'material': material, 'text': text}
+    header = f'[SAP 사용처 리스트(CS15, 역전개): 자재 {mat_label}]\n'
+    text = header + '\n' + '\n\n'.join(sections)
+    return {'ok': True, 'source': 'grid', 'materials': mat_list, 'text': text}
 
 
 # ── "승인원 표지 생성" 전용 헬퍼 ────────────────────────────────────────
@@ -1264,9 +1291,11 @@ def main():
             materials_param = materials_list if len(materials_list) > 1 else (materials_list[0] if materials_list else '')
             result = fetch_bom(materials_param, plant)
         elif action == 'fetch_where_used':
-            material = sys.argv[2] if len(sys.argv) > 2 else ''
+            materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
-            result = fetch_where_used(material, plant)
+            materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
+            materials_param = materials_list if len(materials_list) > 1 else (materials_list[0] if materials_list else '')
+            result = fetch_where_used(materials_param, plant)
         elif action == 'fetch_approval_info':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]

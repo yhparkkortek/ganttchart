@@ -133,15 +133,22 @@
 
     window._aiFetchSapContext = async function(question) {
         try {
-            const whereUsedMatch = question && /(역전개|사용처)/.test(question) ? question.match(/\b(\d{5,8})\b/) : null;
+            // 💡 [2026-09-15 다중 자재 지원] 원래 첫 번째 자재번호만 뽑았는데(non-global 정규식),
+            //    "104438\n104481\n104477\n117451\n다중 사용처 조회해줘"처럼 여러 자재를 나열하면
+            //    나머지가 통째로 무시되던 버그 — bomNums와 동일하게 global 매치로 전부 모은다.
+            //    백엔드(sap_bridge_32.py의 fetch_where_used)가 자재마다 CS15를 따로 실행해
+            //    이어붙이는 방식으로 다중 조회를 지원함(ZPP046 배치 리포트의 500행 캡 공유 문제로
+            //    그 방식은 채택 안 함 — 자세한 진단은 CLAUDE.md/fetch_where_used docstring 참고).
+            const whereUsedNums = (question && /(역전개|사용처)/.test(question)) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
+            const whereUsedMatch = whereUsedNums.length > 0;
             const bomNums = (!whereUsedMatch && question && /bom/i.test(question)) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
             const bomMatch = bomNums.length > 0;
 
             let url, timeoutMs, timeoutMsgKo, timeoutMsgEn;
             if (whereUsedMatch) {
-                url = 'http://127.0.0.1:5000/sap-where-used?material=' + encodeURIComponent(whereUsedMatch[1]);
-                timeoutMs = 30000;
-                timeoutMsgKo = 'SAP 사용처 조회 30초 시간 초과'; timeoutMsgEn = 'SAP where-used lookup timed out after 30s';
+                url = 'http://127.0.0.1:5000/sap-where-used?material=' + encodeURIComponent(whereUsedNums.join(','));
+                timeoutMs = whereUsedNums.length <= 1 ? 30000 : Math.min(150000, 30000 + 20000 * whereUsedNums.length);
+                timeoutMsgKo = 'SAP 사용처 조회 시간 초과'; timeoutMsgEn = 'SAP where-used lookup timed out';
             } else if (bomMatch) {
                 url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(bomNums.join(','));
                 timeoutMs = Math.min(90000, 30000 + 10000 * bomNums.length);

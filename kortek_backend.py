@@ -1667,12 +1667,20 @@ def sap_where_used():
     #    BOM 정전개의 반대 방향. 실제 컨트롤 조작은 sap_bridge_32.py의
     #    fetch_where_used()/_navigate_to_where_used_screen()에 있다(2026-09-15 실사용 SAP
     #    GUI "기록 및 재생" 매크로로 확보 — 단, 자재번호 입력 필드는 그 매크로에 안 나와서
-    #    추측한 것이니 실패하면 그 함수의 주석부터 확인할 것). 현재는 자재 1개만 지원.
+    #    추측한 것이니 실패하면 그 함수의 주석부터 확인할 것).
+    # 💡 [2026-09-15 다중 자재 지원] material 파라미터에 쉼표로 여러 자재를 같이 주면
+    #    fetch_where_used가 자재마다 CS15를 따로 실행해 이어붙인다(ZPP038 BOM처럼 SAP 표준
+    #    "복수 선택" 팝업으로 한 번에 묶지 않는 이유는 sap_bridge_32.py의 fetch_where_used
+    #    docstring 참고 — ZPP046 배치 리포트를 시도했으나 _sap_dump_grid의 500행 캡이 여러
+    #    자재 결과에 걸쳐 공유되는 바람에 사용처가 많은 자재 하나가 캡을 다 차지해 나머지
+    #    자재 결과가 잘려나가는 문제가 실사용에서 확인돼, 자재별로 따로 실행하는 방식을 택함).
     material = (request.args.get('material') or '').strip()
     plant = (request.args.get('plant') or '1000').strip()
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-where-used?material=303410'}), 400
-    data, status = _run_sap_bridge(['fetch_where_used', material, plant], 30, 'SAP 사용처 조회')
+    material_count = len([m for m in material.split(',') if m.strip()])
+    timeout = 30 if material_count <= 1 else min(150, 30 + 20 * material_count)
+    data, status = _run_sap_bridge(['fetch_where_used', material, plant], timeout, 'SAP 사용처 조회')
     return jsonify(data), status
 
 
