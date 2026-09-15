@@ -2659,6 +2659,75 @@
         var mk = text.match(/remark\s*[:：]\s*(.+)$/i) || text.match(/비고\s*[:：]\s*(.+)$/);
         if (mk) draft.remark = mk[1].trim();
 
+        // 💡 [2026-09-15 신규, 사용자 요청] 줄단위 순서 매칭 폴백 — "엑셀/박용훈/박성준/
+        //    정식승인/해당없음"처럼 "담당자는"/"팀장은" 같은 라벨 없이 순서대로(한 줄씩 또는
+        //    쉼표로 나열해서 한 줄로) 답하면 위 라벨 기반 정규식이 하나도 못 건지고 계속
+        //    되묻던 문제 — 질문이 항상 "출력형식→담당자→팀장→가승인원여부(→Revision→
+        //    Remark)" 고정 순서로 나열되므로, 사용자도 대개 그 순서 그대로 답한다는 점에
+        //    착안했다. emptySlots는 위 라벨 기반 파싱이 끝난 *뒤* 상태 기준이라 이미 채워진
+        //    항목(예: "엑셀"이 어디 있든 키워드만으로 바로 잡히는 출력형식)은 자동으로 제외됨.
+        //    ⚠️ 그런데 "엑셀"/"정식승인" 같은 키워드 매칭은 줄 위치와 무관하게 전체 텍스트에서
+        //    바로 잡히므로, 그 줄을 그대로 두면 "줄 개수"에는 남아서 나머지 빈 항목과 순서가
+        //    밀려버린다(실제로 처음 이렇게 짰다가 "엑셀/박용훈/박성준/정식승인/해당없음" 5줄
+        //    중 담당자/팀장이 안 채워지는 회귀를 발견해 고침) — 그래서 이미 이번 메시지에서
+        //    값이 잡힌 필드에 해당하는 키워드/라벨을 포함한 줄은 `consumedPatterns`로 걸러내
+        //    "순서 매칭용 줄" 목록에서 아예 뺀다.
+        //    ⚠️ 라벨(담당자/팀장/rev/remark)을 조금이라도 썼으면(wm/lm/rm/mk 중 하나라도 매치)
+        //    이 폴백 자체를 건너뛴다 — "담당자는 김철수\n박영수"처럼 라벨+위치가 섞이면, 아직
+        //    안 채워진 필드가 고정 순서상 여러 개 있을 때 "그 다음 줄이 정확히 어느 빈 항목을
+        //    가리키는지" 확신할 수 없다(예: 이 예시에서 "박영수"는 팀장을 뜻한 것이지만,
+        //    "출력형식"이 아직 안 정해졌다면 고정 순서상 그게 먼저 걸려 잘못 배정될 위험이
+        //    있음 — 실제로 테스트하다 발견). 라벨을 하나도 안 써서 순서 전체를 그대로 믿을 수
+        //    있는 경우(엑셀/정식승인처럼 키워드만으로 잡히는 것 제외)에만 폴백을 적용한다.
+        var usedAnyLabel = !!(wm || lm || rm || mk);
+        var fieldSlots = [
+            { key: 'format', empty: !draft.format },
+            { key: 'writer', empty: !draft.writer },
+            { key: 'leader', empty: !draft.leader },
+            { key: 'isPre', empty: draft.isPre === undefined },
+            { key: 'rev', empty: !draft.rev },
+            { key: 'remark', empty: !draft.remark },
+        ];
+        var emptySlots = fieldSlots.filter(function(f) { return f.empty; });
+        if (!usedAnyLabel && emptySlots.length) {
+            var segments = text.split(/\r?\n/).map(function(s) { return s.trim(); }).filter(Boolean);
+            if (segments.length <= 1) segments = text.split(/[,，]/).map(function(s) { return s.trim(); }).filter(Boolean);
+            var consumedPatterns = [];
+            if (draft.format) consumedPatterns.push(/(둘\s*다|둘다|모두|both|엑셀|excel|xlsx|워드|word|docx)/i);
+            if (draft.isPre !== undefined) consumedPatterns.push(/(가승인원|정식)/);
+            if (wm) consumedPatterns.push(/담당자/);
+            if (lm) consumedPatterns.push(/팀장/);
+            if (rm) consumedPatterns.push(/rev(?:ision)?/i);
+            if (mk) consumedPatterns.push(/remark|비고/i);
+            var filteredSegments = segments.filter(function(seg) {
+                return !consumedPatterns.some(function(p) { return p.test(seg); });
+            });
+            var naLike = /^(해당\s*없음|없음|no|none|n\/a|-)$/i;
+            if (filteredSegments.length >= 1 && filteredSegments.length <= emptySlots.length) {
+                for (var i = 0; i < filteredSegments.length; i++) {
+                    var slot = emptySlots[i].key;
+                    var seg = filteredSegments[i];
+                    if (slot === 'format') {
+                        if (/(둘\s*다|둘다|모두|both)/i.test(seg)) draft.format = 'both';
+                        else if (/(엑셀|excel|xlsx)/i.test(seg)) draft.format = 'xlsx';
+                        else if (/(워드|word|docx)/i.test(seg)) draft.format = 'docx';
+                    } else if (slot === 'writer' || slot === 'leader') {
+                        var nameM = seg.match(/([가-힣]{2,4})/);
+                        if (nameM) draft[slot] = nameM[1];
+                    } else if (slot === 'isPre') {
+                        if (/가승인원/.test(seg)) draft.isPre = true;
+                        else if (/정식/.test(seg)) draft.isPre = false;
+                    } else if (slot === 'rev') {
+                        var revM = seg.match(/(\d{1,3})/);
+                        if (revM) draft.rev = revM[1].length === 1 ? ('0' + revM[1]) : revM[1];
+                        // "해당없음"류는 그냥 건너뜀(생략 시 기본값 "00" 적용, 위 안내문과 동일).
+                    } else if (slot === 'remark') {
+                        if (!naLike.test(seg)) draft.remark = seg;
+                    }
+                }
+            }
+        }
+
         return draft;
     };
 
