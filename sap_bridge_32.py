@@ -1644,14 +1644,15 @@ def _save_po_pdf_to_file(save_path):
             time.sleep(0.4)
         return None, titles
 
-    # ⚠️ [사용자 제안 반영] 임베드 뷰어에 따라 "다른 이름으로 저장" 단축키가 Ctrl+S가
-    # 아니라 Ctrl+Shift+S일 수 있어(Acrobat 계열이 "저장"과 "다른 이름으로 저장"을
-    # 구분하는 경우 흔함) — Ctrl+S를 먼저 시도하고 다이얼로그가 안 뜨면 Ctrl+Shift+S로
-    # 재시도한다. 둘 다 실패하면 그 시점에 열려있던 창 목록을 에러에 남겨 다음 디버깅
-    # 왕복을 줄인다.
+    # ⚠️ [2026-09-15 사용자 제안 반영, 2차 수정] 임베드 뷰어에 따라 "다른 이름으로 저장"
+    # 단축키가 Ctrl+S가 아니라 Ctrl+Shift+S일 수 있고(Acrobat 계열이 "저장"과 "다른
+    # 이름으로 저장"을 구분하는 경우 흔함), 사용자가 실사용 관찰로 "Ctrl+Shift+S가 맞는
+    # 것 같다"고 제보 — **Ctrl+Shift+S를 먼저 시도**하고, 혹시 몰라 Ctrl+S로 폴백한다
+    # (처음엔 반대 순서였다가 사용자 제보로 순서를 바꿈). 둘 다 실패하면 그 시점에
+    # 열려있던 창 목록을 에러에 남겨 다음 디버깅 왕복을 줄인다.
     save_dlg = None
     seen_titles = []
-    for shortcut in ('^s', '^+s'):
+    for shortcut in ('^+s', '^s'):
         sap_win.type_keys(shortcut, pause=0.05)
         time.sleep(1.5)
         save_dlg, titles = _find_save_dialog(5)
@@ -1724,7 +1725,11 @@ def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
         out_grid.currentCellColumn = ''
         out_grid.selectedRows = '0'
         session.findById('wnd[0]/tbar[1]/btn[13]').press()  # 출력(미리보기 표시) — 매크로에서 확인된 인덱스
-        time.sleep(2.0)
+        # ⚠️ [2026-09-15 사용자 실사용 관찰 반영] 미리보기가 뜨자마자 단축키를 보내면
+        # 렌더링이 덜 끝난 상태라 반응이 없거나(또는 뜬 걸 감지하기 전에 다른 요인으로
+        # 사라지는 것처럼 보임 — "다이얼로그가 금방 닫힌다"는 사용자 제보) 놓치는 것으로
+        # 보여, 3초 대기 후 단축키를 보내도록 늘림(기존 2초 → 3초).
+        time.sleep(3.0)
     except Exception as e:
         raise RuntimeError(f'구매오더("{po_number}") 발주서 미리보기 표시(ZMM018) 중 오류가 발생했습니다: {e} — ZMM018에서 오더번호 "{po_number}"로 직접 출력해주세요.')
 
