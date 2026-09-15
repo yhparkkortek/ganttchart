@@ -1051,8 +1051,14 @@ AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면(📎 버튼
   충분했다 — 백엔드/GAS 프록시를 전혀 안 건드림. **순수 이미지 첨부(텍스트 레이어 없는
   스캔본/사진)는 이 방식으로 안 됨** — 아직 미지원, 필요하면 GAS 프록시에 멀티모달 지원을
   추가해야 한다(현재 이 저장소엔 그 GAS 스크립트의 소스가 없음 — 외부 배포된 Apps Script).
-- **첨부 UI**: `js/04h`의 `openGanttQaModal`에 📎 버튼 + 숨겨진 `<input type="file"
-  accept=".pdf" multiple>` + 미리보기 칩 스트립(`#gantt-qa-attach-strip`) 추가.
+- **첨부 UI**: `js/04h`의 `openGanttQaModal`에 "첨부파일" 버튼(2026-09-16부터 아이콘이 아닌
+  2줄 텍스트 라벨, 초록 파스텔톤 — 사용자 요청으로 UI 변경, 대화삭제/음성문답과 나란히
+  배치) + 숨겨진 `<input type="file" accept=".pdf" multiple>` + 미리보기 칩 스트립
+  (`#gantt-qa-attach-strip`) 추가. 실제 파일 처리 로직은 `window._ganttQaProcessAttachedFiles
+  (fileList)`로 공용화되어 있어, 버튼 클릭(`_ganttQaHandleFileSelect`)과 **드래그앤드롭
+  (2026-09-16 신규, 사용자 요청)** 둘 다 이 함수를 재사용한다 — 모달 박스 전체
+  (`#gantt-qa-box`)에 `ondragover`/`ondragleave`/`ondrop`을 걸어 어디에 놓아도 받고,
+  드래그 중엔 초록 점선 테두리로 시각 표시한다(`_ganttQaHandleDragOver/DragLeave/Drop`).
   `window._ganttQaPendingAttachments`(배열)에 `{name, text}`로 쌓아두고, **다음 메시지를
   보낼 때** 그 첨부들을 소비한다(즉시 처리 안 함 — 사람이 여러 PDF를 첨부한 뒤 메시지
   없이 그냥 전송해도 처리되도록). ⚠️ **지금은 "구매오더 요청"이 첨부의 유일한 용도**라서

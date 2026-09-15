@@ -214,9 +214,10 @@
     // 보내면 항상 이 흐름을 탄다. 다른 첨부 용도가 추가되면 이 가정을 재검토할 것.
     window._ganttQaPendingAttachments = []; // [{name, text}]
 
-    window._ganttQaHandleFileSelect = async function(inputEl) {
-        const files = Array.from(inputEl.files || []);
-        inputEl.value = ''; // 같은 파일을 다시 골라도 change 이벤트가 발생하도록 초기화
+    // 파일 선택(📎 버튼)과 드래그앤드롭 둘 다 공유하는 실제 처리 로직 — PDF만 받아
+    // 텍스트를 추출해 대기 목록에 쌓는다.
+    window._ganttQaProcessAttachedFiles = async function(fileList) {
+        const files = Array.from(fileList || []);
         if (!files.length) return;
         if (typeof window._pcExtractPdfText !== 'function') {
             if (window.showToast) window.showToast(window._t('⚠️ PDF 읽기 기능을 아직 불러오지 못했습니다 — 잠시 후 다시 시도해주세요.', '⚠️ The PDF reader hasn\'t loaded yet — please try again in a moment.'), 'warning');
@@ -235,6 +236,32 @@
             }
         }
         window._ganttQaRenderAttachmentStrip();
+    };
+
+    window._ganttQaHandleFileSelect = async function(inputEl) {
+        const files = inputEl.files;
+        await window._ganttQaProcessAttachedFiles(files);
+        inputEl.value = ''; // 같은 파일을 다시 골라도 change 이벤트가 발생하도록 초기화
+    };
+
+    // 📎 [2026-09-16 신규, 사용자 요청] 드래그앤드롭 — 모달 어디에 놓아도(메시지 영역/입력창
+    // 등) 받도록 모달 박스 전체에 걸어둔다. 드래그 중엔 점선 테두리로 시각적 표시.
+    window._ganttQaHandleDragOver = function(ev) {
+        ev.preventDefault();
+        const box = document.getElementById('gantt-qa-box');
+        if (box) box.style.outline = '3px dashed #7cc494';
+    };
+    window._ganttQaHandleDragLeave = function(ev) {
+        ev.preventDefault();
+        const box = document.getElementById('gantt-qa-box');
+        if (box) box.style.outline = 'none';
+    };
+    window._ganttQaHandleDrop = async function(ev) {
+        ev.preventDefault();
+        const box = document.getElementById('gantt-qa-box');
+        if (box) box.style.outline = 'none';
+        const files = ev.dataTransfer && ev.dataTransfer.files;
+        await window._ganttQaProcessAttachedFiles(files);
     };
 
     window._ganttQaRemoveAttachment = function(idx) {
@@ -4132,7 +4159,7 @@ ${attachText}`;
             //    일부 환경에서 모달이 아예 안 보이는 렌더링 버그 발생 → 기본값을 완전 불투명(#fff)으로
             //    복원하고, 투명도는 헤더 슬라이더로 사용자가 직접 조절하는 방식으로 변경.
             modal.innerHTML = `
-            <div id="gantt-qa-box" onclick="event.stopPropagation()" style="pointer-events:all; position:fixed; background:#ffffff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
+            <div id="gantt-qa-box" onclick="event.stopPropagation()" ondragover="window._ganttQaHandleDragOver(event)" ondragleave="window._ganttQaHandleDragLeave(event)" ondrop="window._ganttQaHandleDrop(event)" style="pointer-events:all; position:fixed; background:#ffffff; border-radius:10px; width:var(--modal-w-md); max-width:92vw; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.22); top:50%; left:50%; transform:translate(-50%,-50%); resize:both; overflow:hidden; min-width:320px; min-height:380px;">
                 <div id="gantt-qa-drag" style="padding:10px 14px; border-bottom:1px solid #a5c8f0; font-weight:bold; font-size:14px; background:#e7f3ff; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center; cursor:grab; color:#1971c2;">
                     <span>💬 <span id="gantt-qa-title">${_qEn ? 'AI Q&A' : 'AI 문답'}</span></span>
                     <div style="display:flex; gap:5px; align-items:center;">
