@@ -1689,20 +1689,43 @@ def sap_bom():
     return jsonify(data), status
 
 
-@app.route('/open-downloads-folder', methods=['GET'])
-def open_downloads_folder():
-    # 💡 [2026-09-15 신규] "엑셀로 내보내줘" 로컬 명령(js/04h)이 성공하면 "해당 폴더로
-    #    이동하시겠습니까?"라고 묻고, 사용자가 승낙하면 이 엔드포인트를 호출한다. 그 내보내기는
-    #    브라우저의 XLSX.js가 트리거하는 일반 다운로드라(서버가 저장 경로를 알지 못함) 실제
-    #    파일이 떨어지는 곳은 브라우저의 기본 다운로드 폴더(대부분 %USERPROFILE%\Downloads)다 —
-    #    백엔드와 브라우저가 같은 PC에서 돌아가는 이 앱의 구조를 그대로 활용해 그 폴더를 그냥
-    #    열어준다(SAP GUI Scripting과 무관 — sap_bridge_32.py를 거치지 않고 여기서 직접 처리).
+_SAP_EXPORT_OUT_DIR = os.path.join('C:\\SAP_DMS', 'SAP조회')
+
+
+@app.route('/sap-save-export', methods=['POST'])
+def sap_save_export():
+    # 💡 [2026-09-16 신규, 사용자 요청 "SAP 관련 저장 경로는 C:\SAP_DMS로 통일해줘"] "엑셀로
+    #    내보내줘" 로컬 명령(js/04h의 _exportSapDataToExcel)이 예전엔 브라우저의 XLSX.js로
+    #    직접 다운로드를 트리거해서(서버가 저장 경로를 모름) 실제 파일이 브라우저 기본
+    #    다운로드 폴더(대부분 %USERPROFILE%\Downloads)에 떨어졌다 — 승인원 표지/구매오더/
+    #    ZDMSR004 배치 다운로드는 전부 C:\SAP_DMS\ 아래 자기 전용 폴더에 쓰는데 이 경로만
+    #    유일하게 어긋나 있었다. 이제 프런트가 XLSX 파일을 base64로 인코딩해 여기로 보내면
+    #    서버가 직접 C:\SAP_DMS\SAP조회\ 에 써서 나머지 SAP 기능들과 저장 위치를 통일한다 —
+    #    "해당 폴더로 이동하시겠습니까?"라고 되묻던 예전 흐름(/open-downloads-folder)도
+    #    더 이상 필요 없어져 제거함(경로를 이제 서버가 정확히 알므로 다른 SAP 기능들처럼
+    #    바로 자동으로 열어준다).
+    data = request.get_json(force=True) or {}
+    file_name = (data.get('fileName') or '').strip()
+    data_base64 = data.get('dataBase64') or ''
+    if not file_name or not data_base64:
+        return jsonify({'ok': False, 'error': 'fileName/dataBase64가 필요합니다.'}), 400
+    safe_name = re.sub(r'[\\/:*?"<>|]', '_', file_name)
     try:
-        downloads_dir = os.path.join(os.path.expanduser('~'), 'Downloads')
-        os.startfile(downloads_dir)
-        return jsonify({'ok': True, 'message': '다운로드 폴더를 열었습니다.'})
+        os.makedirs(_SAP_EXPORT_OUT_DIR, exist_ok=True)
     except Exception as e:
-        return jsonify({'ok': False, 'error': f'폴더를 여는 중 오류가 발생했습니다: {e}'}), 500
+        return jsonify({'ok': False, 'error': f'저장 폴더({_SAP_EXPORT_OUT_DIR})를 만들지 못했습니다: {e}'}), 500
+    out_path = os.path.join(_SAP_EXPORT_OUT_DIR, safe_name)
+    try:
+        with open(out_path, 'wb') as f:
+            f.write(base64.b64decode(data_base64))
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'파일 저장 중 오류가 발생했습니다: {e}'}), 500
+    try:
+        os.startfile(_SAP_EXPORT_OUT_DIR)
+    except Exception:
+        pass
+    return jsonify({'ok': True, 'path': out_path, 'folder': _SAP_EXPORT_OUT_DIR,
+                    'message': f'"{safe_name}" 파일을 {_SAP_EXPORT_OUT_DIR} 폴더에 저장했습니다. 탐색기로 그 폴더를 열었습니다.'})
 
 
 @app.route('/sap-where-used', methods=['GET'])
