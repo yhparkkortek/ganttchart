@@ -1546,12 +1546,22 @@ ${question}
                 return _moveDates(`<div style="padding-left:${pad}px; text-indent:-14px; margin-bottom:2px;">${mark}&nbsp;${bullet[2]}</div>`);
             }
             if (line.trim() === '') return '<div style="height:6px;"></div>';
+            // 💡 [2026-09-17 신규, 사용자 요청] "품목 내역" 조회 결과의 "자재번호[TAB]합친 내역"
+            //    줄처럼, 탭 문자로 두 값을 구분해 엑셀에 그대로 붙여넣기 좋게 만든 줄은 기본
+            //    `white-space:normal`로는 탭이 화면에서 스페이스 하나로 뭉개져 보이고(레이아웃상
+            //    시각적으로만 그런 게 아니라, 브라우저의 "렌더링된 대로 복사" 동작 때문에 실제
+            //    클립보드 복사 결과도 탭 대신 스페이스로 뭉개질 위험이 큼 — 엑셀에 붙였을 때
+            //    2개 열로 안 나뉘고 한 셀에 다 들어가 버리는 문제) — 탭 문자가 포함된 줄에만
+            //    `white-space:pre-wrap`을 줘서 탭이 그대로 보존되게 한다(긴 줄은 여전히 줄바꿈
+            //    되도록 `pre`가 아니라 `pre-wrap`을 씀). 탭이 없는 일반 줄은 기존 그대로 영향
+            //    없음 — 이 앱에서 AI 답변에 탭 문자를 쓰는 곳이 지금은 이 기능뿐이라 오탐 위험도 낮음.
+            const wsStyle = line.indexOf('\t') !== -1 ? 'white-space:pre-wrap; ' : '';
             // 💡 [2026-09-04 버그수정] 일반 문장도 chip 유무 확인 후 interactive 처리
             const hasLineChips = line.includes('ai-ref-chip');
             if (hasLineChips) {
-                return _moveDates(`<div style="margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`);
+                return _moveDates(`<div style="${wsStyle}margin-bottom:2px; cursor:pointer; border-radius:3px; transition:background .12s;" onmouseover="${_lineHover}" onmouseout="${_lineOut}" onclick="${_lineOnClick}">${line}</div>`);
             }
-            return _moveDates(`<div style="margin-bottom:2px;">${line}</div>`);
+            return _moveDates(`<div style="${wsStyle}margin-bottom:2px;">${line}</div>`);
         }).join('');
     };
 

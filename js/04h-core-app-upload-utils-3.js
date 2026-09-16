@@ -3064,8 +3064,19 @@ ${docsJson}`;
                             return `📦 ${r.code}\n⚠️ ` + window._t('조회 실패: ', 'Lookup failed: ') + (r.err || window._t('알 수 없는 오류', 'unknown error'));
                         }
                         const desc = r.desc || window._t('(없음)', '(none)');
-                        const sub = (r.sub || '').trim() || window._t('(없음)', '(none)');
-                        return `📦 ${r.code}\n` + window._t('품목: ', 'Item: ') + desc + '\n' + window._t('품목2: ', 'Item2: ') + sub;
+                        const subRaw = (r.sub || '').trim();
+                        const sub = subRaw || window._t('(없음)', '(none)');
+                        // 🆕 [2026-09-17 신규, 사용자 요청] 품목+품목2를 합친 전체 내역도 같이
+                        // 보여주되, 자재번호와 그 내역 사이를 탭(TAB) 문자로 구분한다("6자리 숫자와
+                        // 내역 사이에 tab key 넣어서 합친 것도 보여줘") — 엑셀에 그대로 붙여넣으면
+                        // 자재번호/내역이 자동으로 별도 열에 들어가게 하려는 용도. desc는 SAP 원본이
+                        // 40자에서 끊길 때 끝을 "="로 표시하는 관례가 있는데(예: "...USB="), 이건
+                        // 실제 내용이 아니라 SAP 자체의 연속 표시 문자이므로 품목2가 실제로 있을
+                        // 때만(=진짜로 이어지는 내용이 있을 때만) 그 끝 "="를 떼고 이어붙인다 —
+                        // 사용자가 직접 준 예시 2건(133025/133026, 둘 다 desc가 "="로 끝나는 경우)
+                        // 으로 정확히 검증함.
+                        const combinedDesc = subRaw ? (desc.replace(/=$/, '') + subRaw) : desc;
+                        return `📦 ${r.code}\t${combinedDesc}\n` + window._t('품목: ', 'Item: ') + desc + '\n' + window._t('품목2: ', 'Item2: ') + sub;
                     });
                     materialInfoReply = lines.join('\n\n');
                 } else {
