@@ -167,12 +167,76 @@
         return out;
     };
 
-    window._ganttQaBomOptionsQuestionText = function(materials) {
+    // 🔽 [2026-09-16 변경, 사용자 요청 "이미 하드코딩된 객관식 문의는 전부 드롭다운으로"]
+    // 원래는 자유 텍스트로 "단일 레벨, 가격 표시, 위치 정보 안 함"처럼 타이핑해서 답해야
+    // 했는데, 이것도 정해진 선택지(전개 방식 2개/Show price 예·아니오/Location 예·아니오)뿐인
+    // 객관식 질문이라 드롭다운 대상이다 — 다만 3개 질문의 선택지가 서로 달라서(전개 방식은
+    // 단일/다중, 나머지 둘은 예/아니오) 기존 "모든 항목이 같은 options를 공유하는" 다중
+    // 드롭다운으로는 못 담았다 — 그래서 각 항목이 자기만의 options를 가질 수 있도록
+    // _ganttQaRenderChoiceDropdownHtml을 확장한 뒤 이 함수에서 그 형태로 사용한다.
+    // buildAnswerText가 합성하는 문자열("단일 레벨, 가격 표시, 위치 정보 안 함")은 기존
+    // _ganttQaParseBomOptionReply가 파싱하는 정확히 그 문구 패턴 그대로라, 파서 쪽은 전혀
+    // 안 건드려도 된다(드롭다운은 입력 방식만 바꾸고 처리 로직은 그대로 재사용한다는 원칙).
+    window._ganttQaShowBomOptionsDropdown = function(materials) {
+        const _en = window._currentLang === 'en';
         const matLabel = materials.join(', ');
-        return window._t(
-            `📐 자재 "${matLabel}"의 BOM을 조회하기 전에 옵션을 선택해주세요:\n1) 전개 방식(Explosion type): 단일 레벨 / 다중 레벨\n2) Show price(표준가격) 표시할까요? (예/아니오)\n3) Location Information(재고위치) 표시할까요? (예/아니오)\n\n예시 답변: "단일 레벨, 가격 표시, 위치 정보 안 함"`,
-            `📐 Before looking up the BOM for material(s) "${matLabel}", please choose the options:\n1) Explosion type: Single level / Multi level\n2) Show price? (yes/no)\n3) Location Information? (yes/no)\n\nExample reply: "Single level, show price, no location info"`
-        );
+        const id = 'bom-options-' + Date.now();
+        window._ganttQaPendingChoiceDropdown = {
+            id: id, multi: true,
+            items: [
+                {
+                    label: _en ? '1) Explosion type' : '1) 전개 방식(Explosion type)',
+                    options: [
+                        { value: 'single', label: _en ? 'Single level' : '단일 레벨' },
+                        { value: 'multi', label: _en ? 'Multi level' : '다중 레벨' }
+                    ]
+                },
+                {
+                    label: _en ? '2) Show price?' : '2) Show price(표준가격)',
+                    options: [
+                        { value: 'yes', label: _en ? 'Yes' : '예 (표시)' },
+                        { value: 'no', label: _en ? 'No' : '아니오 (표시 안 함)' }
+                    ]
+                },
+                {
+                    label: _en ? '3) Location Information?' : '3) Location Information(재고위치)',
+                    options: [
+                        { value: 'yes', label: _en ? 'Yes' : '예 (표시)' },
+                        { value: 'no', label: _en ? 'No' : '아니오 (표시 안 함)' }
+                    ]
+                }
+            ],
+            buildAnswerText: function(selections) {
+                const parts = [];
+                if (selections[0]) parts.push(selections[0] === 'multi' ? '다중 레벨' : '단일 레벨');
+                if (selections[1]) parts.push('가격 ' + (selections[1] === 'yes' ? '표시' : '표시 안 함'));
+                if (selections[2]) parts.push('위치 정보 ' + (selections[2] === 'yes' ? '표시' : '안 함'));
+                return parts.join(', ');
+            }
+        };
+        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
+            `📐 자재 "${matLabel}"의 BOM을 조회하기 전에 아래에서 옵션을 선택해주세요.`,
+            `📐 Before looking up the BOM for material(s) "${matLabel}", please choose the options below.`
+        )});
+    };
+
+    // 🔽 [2026-09-16 변경, 위와 동일한 이유] "단일 조회를 말씀하셨는데 자재가 여러 개라 단일/복수
+    // 트랜잭션 중 뭘 쓸지" 되묻는 질문도 단일/복수 둘 중 하나뿐인 객관식이라 드롭다운으로 바꿈.
+    window._ganttQaShowBomTcodeDropdown = function(materialsCount) {
+        const _en = window._currentLang === 'en';
+        const id = 'bom-tcode-' + Date.now();
+        window._ganttQaPendingChoiceDropdown = {
+            id: id, multi: false,
+            options: [
+                { value: 'single', label: _en ? 'One at a time (ZPP033)' : '자재별 개별 조회 (ZPP033)' },
+                { value: 'multi', label: _en ? 'All at once (ZPP038)' : '한 번에 복수 조회 (ZPP038)' }
+            ],
+            buildAnswerText: function(sel) { return sel[0] === 'multi' ? '복수' : '단일'; }
+        };
+        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
+            `자재가 ${materialsCount}개인데 "단일" 조회를 말씀하셨어요 — 아래에서 골라주세요.`,
+            `You mentioned a "single" lookup but there are ${materialsCount} materials — please choose below.`
+        )});
     };
 
     // 🛒 [2026-09-15 신규] "구매오더 요청" — AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면
@@ -316,14 +380,19 @@
 
     window._ganttQaRenderChoiceDropdownHtml = function(draft) {
         const _en = window._currentLang === 'en';
-        const opts = draft.options.map(function(o) { return `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`; }).join('');
+        const opts = (draft.options || []).map(function(o) { return `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`; }).join('');
         if (draft.multi) {
+            // 💡 [2026-09-16 확장, 사용자 요청] 항목마다 선택지가 다른 경우(예: BOM 옵션 —
+            // "전개 방식"은 단일/다중, "Show price"는 예/아니오로 서로 다름)를 지원하기 위해
+            // 각 항목이 자기만의 options를 가질 수 있게 함 — 없으면 기존처럼 draft.options를
+            // 공유한다(PO 임시코드 선택처럼 모든 항목이 같은 표를 쓰는 기존 용도는 그대로 동작).
             const rows = draft.items.map(function(it, i) {
+                const rowOpts = (it.options ? it.options.map(function(o) { return `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`; }).join('') : opts);
                 return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
                     <span style="font-size:11.5px; color:#555; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</span>
                     <select id="qa-choice-${draft.id}-${i}" style="font-size:11.5px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; max-width:55%;">
                         <option value="">${_en ? '(choose)' : '(선택)'}</option>
-                        ${opts}
+                        ${rowOpts}
                     </select>
                 </div>`;
             }).join('');
@@ -2574,7 +2643,7 @@ ${attachText}`;
                 bd.stage = 'options';
                 window._ganttQaHistory.push({ role: 'user', text: question });
                 input.value = '';
-                window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaBomOptionsQuestionText(bd.materials) });
+                window._ganttQaShowBomOptionsDropdown(bd.materials);
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
@@ -2612,10 +2681,7 @@ ${attachText}`;
                     window._ganttQaHistory.push({ role: 'user', text: question });
                     input.value = '';
                     window._ganttQaBomDraft = { materials: bomTrig.materials, originalQuestion: question, stage: 'tcode' };
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                        `자재가 ${bomTrig.materials.length}개인데 "단일" 조회를 말씀하셨어요 — 자재별로 각각 단일 조회(ZPP033)할까요, 아니면 한 번에 복수 조회(ZPP038)할까요? ("단일" 또는 "복수"로 답해주세요)`,
-                        `You mentioned a "single" lookup but there are ${bomTrig.materials.length} materials — should I look each up individually (ZPP033), or all together (ZPP038)? Please reply "single" or "multiple".`
-                    )});
+                    window._ganttQaShowBomTcodeDropdown(bomTrig.materials.length);
                     window._renderGanttQaMessages();
                     input.focus();
                     return;
@@ -2631,7 +2697,7 @@ ${attachText}`;
                         explosion: inlineOpts.explosion, showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
                         stage: 'options'
                     };
-                    window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaBomOptionsQuestionText(bomTrig.materials) });
+                    window._ganttQaShowBomOptionsDropdown(bomTrig.materials);
                     window._renderGanttQaMessages();
                     input.focus();
                     return;
