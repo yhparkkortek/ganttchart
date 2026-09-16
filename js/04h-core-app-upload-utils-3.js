@@ -2642,6 +2642,25 @@ ${attachText}`;
             return;
         }
 
+        // 💡 [2026-09-16 신규, 사용자 요청] 와일드카드 "*"를 빼먹고 패턴 검색을 시도한 것으로
+        //    보이면(위 _ganttQaExtractSapPatternDownloadHint) 조용히 다른 로컬 명령/일반
+        //    AI 대화로 새어나가게 두지 않고, "*"를 넣어 다시 물어달라는 사용법 안내를 예시와
+        //    함께 즉시 보여준다 — AI 호출 없는 순수 로컬 명령이라 지연이 없다.
+        if (window._ganttQaExtractSapPatternDownloadHint && window._ganttQaExtractSapPatternDownloadHint(sapDocQuestion)) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({
+                role: 'ai',
+                text: window._t(
+                    '자재내역 패턴으로 조회하려면 와일드카드 "*"를 포함해서 말씀해주세요.\n예: "*01+01*150*로 조회된 아이템 승인원 다운로드해줘"',
+                    'To search by a description pattern, please include the wildcard "*".\nExample: "download the approval doc for items matching *01+01*150*"'
+                )
+            });
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
         //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
         //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
@@ -3728,6 +3747,35 @@ ${attachText}`;
         if (looksLikeQuestion) return null;
         var docType = window._ganttQaExtractSapDocTypeCode(text);
         return { pattern: patternToken, docType: docType || 'P01' };
+    };
+
+    // 💡 [2026-09-16 신규, 사용자 요청] "01+01*150 승인원 다운로드해줘"처럼 자재내역 패턴
+    //    검색을 하려는 게 분명해 보이는데 와일드카드 "*"를 빼먹은 경우 — 위
+    //    `_ganttQaExtractSapPatternDownloadRequest`는 `*`가 있는 토큰이 없으면 그냥 null을
+    //    반환하고 조용히 넘어가버려서, 사람은 "왜 반응이 없지"라고 헷갈리게 된다(패턴 없이는
+    //    AI가 일반 대화로 받아 "그런 자재를 찾을 수 없습니다" 류로 엉뚱하게 답할 위험도 있음).
+    //    이 코드베이스가 반복해온 "당연히 될 줄 알았는데 안 된다" 버그 패턴과 같은 종류라,
+    //    이번엔 아예 요청을 처리하는 대신 **명확한 사용법 안내로 먼저 되묻는다** — 승인원
+    //    표지의 "여러 턴 draft"들과 달리 상태를 남기지 않는 1회성 안내(사람이 "*"를 넣어
+    //    다시 물으면 위 함수가 정상적으로 트리거되므로 별도 후속 처리가 필요 없음).
+    //    판정 기준: 이미 `*`가 있으면(정상 트리거 대상이므로) 관여 안 함 + "문서/파일/승인원"
+    //    +"다운로드"류 동사는 있는데 + `+`로 이어진 코드 조각(이 회사 자재내역 패턴의 특징적
+    //    형태, 예: "01+01", "AP01+AP01" — 실사용 라이브 진단으로 확인한 실제 자재내역 표기
+    //    관례)이 있고 + 자재번호(5~8자리)가 2개 이상 명시되진 않은(그러면 기존 배치 다운로드
+    //    가 정상 처리) 경우만.
+    window._ganttQaExtractSapPatternDownloadHint = function(question) {
+        var text = (question || '').trim();
+        if (!text) return false;
+        if (text.indexOf('*') !== -1) return false; // 이미 * 있으면 정상 경로가 처리
+        if (!/(문서|파일|승인원)/.test(text)) return false;
+        if (!/(열어|열기|다운로드|출력|보여|저장|받아|open)/i.test(text)) return false;
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (looksLikeQuestion) return false;
+        var looksLikePatternFragment = /[0-9A-Za-z]+\+[0-9A-Za-z]+/.test(text);
+        if (!looksLikePatternFragment) return false;
+        var hasMatNums2 = (text.match(/\b\d{5,8}\b/g) || []).length >= 2;
+        if (hasMatNums2) return false; // 이미 자재번호 나열이면 기존 배치 다운로드가 처리
+        return true;
     };
 
     // 📥 [2026-09-15 신규, 같은 날 트리거 단어 확장] "SAP에서 133012, 133010, 101831 문서
