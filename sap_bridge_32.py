@@ -41,6 +41,7 @@
 import sys
 import os
 import json
+import re
 import time
 
 # 💡 [2026-09-14 버그수정] 이 스크립트는 kortek_backend.py가 subprocess.run(capture_output=True)로
@@ -1393,16 +1394,84 @@ def download_documents_batch(materials, doc_type='P01'):
 #      실행(F8)조차 하지 않고 이 팝업을 여는 용도로만 쓴다.
 #   2. 결과 화면은 GuiGridView가 아니라 "라벨 매트릭스"이지만(진단 스크립트로 `_sap_find_grid`/
 #      `_sap_find_shell_any` 둘 다 실패해서 확인함) 구조가 아주 규칙적이다 — 매치 1건이
-#      컬럼 하나에 대응하고(`lbl[44,col]`=자재번호, `lbl[1,col]`=자재내역, `lbl[39,col]`=언어),
-#      col은 3부터 시작해 매치 개수만큼 이어진다. 팝업 제목 자체(`wnd[1].Text`)에도
-#      "자재 번호 N 엔트리"로 건수가 그대로 나온다. **더블클릭으로 하나씩 고를 필요 없이
-#      컬럼을 순서대로 읽기만 하면 전체 매치를 한 번에 뽑을 수 있다** — 매크로보다 훨씬
+#      행(row) 하나에 대응하고(`lbl[열,행]` 형태의 GuiLabel들, 자재내역=1열/언어/자재번호
+#      순서로 배치), row는 3부터 시작해 매치 개수만큼 이어진다. 팝업 제목 자체(`wnd[1].Text`)
+#      에도 "자재 번호 N 엔트리"로 건수가 그대로 나온다. **더블클릭으로 하나씩 고를 필요 없이
+#      행을 순서대로 읽기만 하면 전체 매치를 한 번에 뽑을 수 있다** — 매크로보다 훨씬
 #      간단해짐. 실제 라이브 테스트: `*01+01*500*` → 2건(115505/114347),
 #      `*01+01*150*`(매크로 원본 패턴) → 4건(129305/108918/124887/114347) — 둘 다 컬럼
 #      순회로 정확히 추출 성공함.
 #   3. 검색 후에는 굳이 값을 "채택"(복사 버튼)할 필요가 없다 — 그냥 읽기만 하고
 #      취소(F12)로 닫으면 된다(ZMM009 자체를 실행할 필요가 없으므로 SELECT-OPTIONS에
 #      값을 채워 넣는 것 자체가 불필요).
+# ⚠️⚠️ [2026-09-16 실사용 버그수정] 자재번호 열 위치(처음 발견 당시 `lbl[44,row]`)는
+# **고정값이 아니다** — 실제로는 결과의 자재내역 텍스트 길이에 따라 화면이 열 너비를
+# 동적으로 재배치해서, "*06+06*200*"처럼 실제로는 SAP에 9건이 매치되는데도(팝업 제목이
+# "자재 번호 9 엔트리"로 정확히 뜨는 것까지 라이브로 확인함) 자재번호가 `lbl[46,row]`로
+# 두 칸 밀려 있어 하드코딩된 44번 열에서 `col=3`부터 연속 2회 실패로 즉시 포기하고 빈
+# 배열을 반환 — "패턴에 매치되는 자재가 없습니다"로 조용히 실패했다(실제로는 SAP 쪽엔
+# 데이터가 멀쩡히 있었음). 처음 발견 당시 테스트한 두 패턴(2건/4건, 짧은 자재내역)은
+# 우연히 44번 열이었을 뿐, 자재내역이 길어지는 케이스(이번처럼 9건, "HN BTB>06+06,0200,
+# #28,HD05+YH47,V1,LB01" 등 긴 문자열)에서는 열이 밀린다는 걸 놓쳤던 것 — **열 번호를
+# 하드코딩하지 말고, 헤더 행(row=1)의 "자재"/"자재내역" 라벨 텍스트를 매번 직접 읽어
+# 그 열 위치를 동적으로 찾아내도록 수정**(`_sap_read_material_label_matrix`). 앞으로 이
+# 라벨 매트릭스 구조를 가진 다른 SAP 검색도움말을 자동화할 때도, 열 번호를 한 번 발견
+# 했다고 고정값으로 믿지 말고 항상 헤더 행에서 동적으로 찾을 것.
+def _sap_read_material_label_matrix(session, max_results=200):
+    """자재 검색도움말(SAPLSDH4 "M: 자재 번호/자재 내역") 결과 화면의 라벨 매트릭스에서
+    자재번호/자재내역을 읽는다. 열 위치를 하드코딩하지 않고, 헤더 행(row=1)의 GuiLabel
+    텍스트("자재"/"자재내역")를 직접 매칭해 그 열 번호를 매번 새로 찾아낸다 — 위 주석
+    참고, 열 위치는 결과 텍스트 폭에 따라 화면마다 달라질 수 있다."""
+    usr = session.findById('wnd[1]/usr')
+    id_re = re.compile(r'lbl\[(\d+),(\d+)\]$')
+    header = {}  # {열번호: 헤더텍스트}
+    for i in range(usr.Children.Count):
+        child = usr.Children.ElementAt(i)
+        try:
+            child_id = child.Id
+        except Exception:
+            continue
+        m = id_re.search(child_id)
+        if not m:
+            continue
+        col, row = int(m.group(1)), int(m.group(2))
+        if row == 1:
+            try:
+                header[col] = (child.Text or '').strip()
+            except Exception:
+                pass
+
+    matnr_col = None
+    desc_col = None
+    for col, text in header.items():
+        if text in ('자재', 'Material', 'Material Number'):
+            matnr_col = col
+        elif text in ('자재내역', 'Material Description', 'Description'):
+            desc_col = col
+    if matnr_col is None:
+        raise RuntimeError('검색 결과 화면에서 "자재" 열 위치를 찾지 못했습니다 — 화면 레이아웃이 예상과 다를 수 있습니다.')
+
+    materials = []
+    row = 3
+    consecutive_misses = 0
+    while consecutive_misses < 2 and len(materials) < max_results:
+        try:
+            mat_lbl = session.findById(f'wnd[1]/usr/lbl[{matnr_col},{row}]')
+            desc = ''
+            if desc_col is not None:
+                try:
+                    desc = session.findById(f'wnd[1]/usr/lbl[{desc_col},{row}]').Text
+                except Exception:
+                    pass
+            materials.append({'matnr': mat_lbl.Text.strip(), 'desc': desc})
+            consecutive_misses = 0
+        except Exception:
+            consecutive_misses += 1
+        row += 1
+
+    return materials
+
+
 def resolve_materials_by_description_pattern(pattern, max_results=200):
     """자재내역(MAKT-MAKTX) 와일드카드 패턴으로 매치되는 자재번호 목록을 조회한다.
     MM60의 평범한 자재번호 필드에서 F4로 연 검색도움말(TAB001)에 패턴을 넣고, 결과
@@ -1461,22 +1530,7 @@ def resolve_materials_by_description_pattern(pattern, max_results=200):
     except Exception:
         raise RuntimeError('검색 실행 후 결과 팝업이 사라졌습니다 — 매치가 없거나 오류가 발생했을 수 있습니다.')
 
-    materials = []
-    col = 3
-    consecutive_misses = 0
-    while consecutive_misses < 2 and len(materials) < max_results:
-        try:
-            mat_lbl = session.findById(f'wnd[1]/usr/lbl[44,{col}]')
-            desc = ''
-            try:
-                desc = session.findById(f'wnd[1]/usr/lbl[1,{col}]').Text
-            except Exception:
-                pass
-            materials.append({'matnr': mat_lbl.Text.strip(), 'desc': desc})
-            consecutive_misses = 0
-        except Exception:
-            consecutive_misses += 1
-        col += 1
+    materials = _sap_read_material_label_matrix(session, max_results)
 
     # 결과는 읽기만 하고 아무것도 채택하지 않음 — 취소(F12)로 팝업을 닫는다.
     try:
