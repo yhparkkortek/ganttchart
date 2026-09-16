@@ -2088,10 +2088,20 @@ def _save_po_pdf_to_file(save_path):
     # 것 같다"고 제보 — **Ctrl+Shift+S를 먼저 시도**하고, 혹시 몰라 Ctrl+S로 폴백한다
     # (처음엔 반대 순서였다가 사용자 제보로 순서를 바꿈). 둘 다 실패하면 그 시점에
     # 열려있던 창 목록을 에러에 남겨 다음 디버깅 왕복을 줄인다.
+    # 🆕 [2026-09-17 신규, 사용자 요청으로 한 번 더 시도] 지금까지 3차례 실패했던 원인 후보
+    # 하나를 아직 안 바꿔봤다 — 단축키를 `sap_win.type_keys(...)`(특정 창 핸들에 WM_CHAR류
+    # 메시지를 보내는 방식)로 보내고 있었는데, 이 방식은 최상위 창(sap_win)을 대상으로 하지
+    # 그 안의(클릭으로 포커스를 옮겨둔) 임베드 PDF 뷰어 서브컨트롤을 대상으로 하지 않는다 —
+    # 구형 ActiveX/OLE 임베드 컨트롤은 이런 창 핸들 지정 합성 메시지 자체를 아예 무시하고,
+    # 진짜 OS 레벨 하드웨어 입력(SendInput)만 받아들이는 경우가 흔하다. 위에서 이미
+    # `from pywinauto.keyboard import send_keys`로 가져온 **모듈 최상위 `send_keys()`**(특정
+    # 창에 묶이지 않고, 그 순간 OS가 포커스를 준 대상에 SendInput으로 진짜 키 입력을 보냄)는
+    # 이 함수 끝의 `{ENTER}` 전송엔 이미 쓰고 있었으면서 정작 이 단축키 전송에는 안 쓰고
+    # 있었다 — `sap_win.type_keys()`를 이 모듈 최상위 `send_keys()`로 바꿔 시도.
     save_dlg = None
     seen_titles = []
     for shortcut in ('^+s', '^s'):
-        sap_win.type_keys(shortcut, pause=0.05)
+        send_keys(shortcut, pause=0.05)
         time.sleep(1.5)
         save_dlg, titles = _find_save_dialog(5)
         seen_titles = list(dict.fromkeys(seen_titles + titles))

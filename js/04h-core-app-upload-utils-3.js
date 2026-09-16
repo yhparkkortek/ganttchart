@@ -606,8 +606,13 @@ ${attachText}`;
         return parsed;
     };
 
-    window._ganttQaPoSummaryText = function(draft) {
+    // 💡 [2026-09-17 신규, 사용자 요청] 세금계산서/거래명세서 "복수 처리" 지원 — opts.noInstructions
+    // 를 추가해 배치 요약(_ganttQaPoBatchSummaryText)이 문서마다 이 함수를 재사용하면서 "확인/정정"
+    // 안내 문구는 배치 전체에서 딱 한 번만 붙이게 한다(기본값 false — 기존 단일 문서 호출부는
+    // 이 인자를 안 넘기므로 100% 하위호환).
+    window._ganttQaPoSummaryText = function(draft, opts) {
         const _en = window._currentLang === 'en';
+        const noInstructions = !!(opts && opts.noInstructions);
         const itemLines = draft.items.map(function(it, i) {
             const codeInfo = window._PO_TEMP_CODE_TABLE.find(function(r) { return r.code === it.tempCode; });
             // 🐛 [2026-09-15 버그수정] `it.tempCode || _en ? A : B` 는 연산자 우선순위 때문에
@@ -626,10 +631,253 @@ ${attachText}`;
         const currencyLine = (draft.currency && draft.currency !== 'KRW')
             ? window._t(`\n⚠️ 통화: ${draft.currency} (KRW가 아닙니다 — 맞는지 확인해주세요)`, `\n⚠️ Currency: ${draft.currency} (not KRW — please confirm this is correct)`)
             : '';
-        return window._t(
-            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}${currencyLine}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경", "통화는 USD로 변경").`,
-            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}${currencyLine}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2's temp code should be 900201", "currency should be USD").`
+        const header = window._t(
+            `📄 PDF에서 추출한 내용입니다 — 확인해주세요:\n\n사업자등록번호: ${draft.bizRegNo || '(미확인)'}\n공급자: ${draft.vendorName || '(미확인)'}\n작성일자: ${draft.invoiceDate || '(미확인)'}${currencyLine}\n\n[품목 ${draft.items.length}건]\n${itemLines}${noteLine}`,
+            `📄 Extracted from the PDF — please review:\n\nBiz. reg. no.: ${draft.bizRegNo || '(not found)'}\nVendor: ${draft.vendorName || '(not found)'}\nInvoice date: ${draft.invoiceDate || '(not found)'}${currencyLine}\n\n[${draft.items.length} item(s)]\n${itemLines}${noteLine}`
         );
+        if (noInstructions) return header;
+        return header + window._t(
+            '\n\n내용이 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "2번 임시코드는 900201로 변경", "통화는 USD로 변경").',
+            '\n\nReply "confirm" if this looks right, or tell me what to fix (e.g. "item 2\'s temp code should be 900201", "currency should be USD").'
+        );
+    };
+
+    // 🆕 [2026-09-17 신규, 사용자 요청] 여러 건의 세금계산서/거래명세서를 "한 번에" 처리 —
+    // 첨부된 파일마다 별도 문서(공급자/품목이 서로 다를 수 있음)로 보고 각각 추출한다.
+    // 파일이 1개면 문서도 1개라 기존 단일 문서 동작과 100% 동일 — 아래 함수들은 전부
+    // "문서가 여러 건일 수 있다"는 것만 다르고, 그 외 설계 원칙(드롭다운/버튼은 입력 방식만
+    // 바꾸고 처리 로직은 자유서술 AI 재추출 경로를 그대로 재사용)은 기존 PO 흐름과 동일하다.
+    window._ganttQaExtractPoDocumentsViaAi = async function(apiKey, attachments) {
+        const settled = await Promise.allSettled(attachments.map(function(a) {
+            return window._ganttQaExtractPoItemsViaAi(apiKey, [a], null);
+        }));
+        const docs = [];
+        const errors = [];
+        settled.forEach(function(r, i) {
+            if (r.status === 'fulfilled') docs.push(r.value);
+            else errors.push(attachments[i].name + ': ' + ((r.reason && r.reason.message) ? r.reason.message : r.reason));
+        });
+        if (!docs.length) throw new Error(errors.join('; ') || window._t('품목 추출에 실패했습니다.', 'Failed to extract line items.'));
+        return { docs: docs, errors: errors };
+    };
+
+    // 자유서술 정정 지시를 배치 전체(여러 문서)에 대해 한 번에 반영 — 기존 단일 문서
+    // correctionNote 재추출과 같은 설계(별도 파서 없이 AI에게 이전 결과 + 지시를 다시 맡김)를
+    // 문서 배열 단위로 확장한 것. "문서 N"이라는 표현을 1부터 시작하는 인덱스로 해석하도록
+    // 프롬프트에 명시해 임시코드 드롭다운의 배치 합성 문구("문서 2의 1번 품목은 ...")와
+    // 어휘를 맞췄다.
+    window._ganttQaExtractPoDocumentsCorrectionViaAi = async function(apiKey, docs, correctionNote) {
+        const { tempLines } = window._ganttQaPoOptionsTableText();
+        const docsJson = JSON.stringify(docs.map(function(d) {
+            return { bizRegNo: d.bizRegNo, invoiceDate: d.invoiceDate, vendorName: d.vendorName, currency: d.currency, items: d.items };
+        }), null, 2);
+        const prompt = `아래는 여러 건의 구매요청 문서에서 이미 추출된 결과(JSON 배열)입니다. 사람이 정정 지시를 줬습니다 — 그 지시를 반영해서 같은 구조의 JSON을 다시 만들어 응답하세요(설명 문구·코드블록 표시 없이 JSON만):
+{"documents": [ {"bizRegNo":"공급자 사업자등록번호(숫자만)", "invoiceDate":"YYYYMMDD", "vendorName":"공급자 상호", "currency":"KRW 또는 USD", "items":[{"desc":"품목명","qty":숫자,"unitPrice":숫자,"tempCode":"임시코드 또는 빈 문자열"}]} ]}
+⚠️ 문서 개수와 순서는 지시에서 명시적으로 추가/삭제/병합하라고 하지 않는 한 그대로 유지하세요. 지시에 나오는 "문서 N"/"N번 문서"는 1부터 시작하는 인덱스이니, 그 문서의 items 배열만 고치고 나머지 문서는 그대로 두세요.
+
+[임시코드 표]
+${tempLines}
+
+[정정 지시]
+${correctionNote}
+
+[기존 추출 결과 — 문서 배열]
+${docsJson}`;
+        const result = await window.callAiBackend(apiKey, prompt, {});
+        if (!result.ok) throw result.error || new Error(window._t('AI 재추출 실패', 'AI re-extraction failed'));
+        const text = window._extractGanttQaAiText(result);
+        const m = text.match(/\{[\s\S]*\}/);
+        if (!m) throw new Error(window._t('AI 응답에서 JSON을 찾지 못했습니다.', 'Could not find JSON in the AI response.'));
+        let parsed;
+        try { parsed = JSON.parse(m[0]); } catch (e) { throw new Error(window._t('AI 응답 JSON 파싱에 실패했습니다: ', 'Failed to parse the AI response JSON: ') + e.message); }
+        if (!parsed.documents || !parsed.documents.length) throw new Error(window._t('정정 결과에서 문서를 찾지 못했습니다.', 'No documents found in the correction result.'));
+        parsed.documents.forEach(function(d) {
+            const rawCurrency = (d.currency || '').toString().trim().toUpperCase();
+            d.currency = (rawCurrency === 'USD' || rawCurrency === 'US$' || rawCurrency === '$') ? 'USD' : 'KRW';
+        });
+        return parsed.documents;
+    };
+
+    window._ganttQaPoBatchSummaryText = function(docs) {
+        const multi = docs.length > 1;
+        const body = docs.map(function(doc, i) {
+            const docHeader = multi ? window._t(`\n━━━ 문서 ${i + 1}/${docs.length} ━━━\n`, `\n━━━ Document ${i + 1}/${docs.length} ━━━\n`) : '';
+            return docHeader + window._ganttQaPoSummaryText(doc, { noInstructions: true });
+        }).join('');
+        const instructions = window._t(
+            '\n\n내용이 모두 맞으면 "확인"이라고 답해주세요. 틀린 부분이 있으면 어떻게 고쳐야 하는지 말씀해주세요(예: "문서 2의 1번 임시코드는 900201로 변경").',
+            '\n\nReply "confirm" if everything looks right, or tell me what to fix (e.g. "document 2 item 1\'s temp code should be 900201").'
+        );
+        return body + instructions;
+    };
+
+    window._ganttQaPoFindMissingBizNoDocs = function(docs) {
+        return docs.map(function(d, i) { return { idx: i, doc: d }; })
+            .filter(function(x) { return !x.doc.bizRegNo || !/^\d{10}$/.test(x.doc.bizRegNo); });
+    };
+
+    window._ganttQaPoFindMissingTempCodeItems = function(docs) {
+        const out = [];
+        docs.forEach(function(doc, di) {
+            doc.items.forEach(function(it, ii) {
+                if (!it.tempCode || !window._PO_TEMP_CODE_TABLE.some(function(r) { return r.code === it.tempCode; })) {
+                    out.push({ docIdx: di, itemIdx: ii, it: it });
+                }
+            });
+        });
+        return out;
+    };
+
+    // 문서·품목 인덱스가 섞인 배치용 임시코드 드롭다운 — 기존 단일 문서 드롭다운과 동일한
+    // "선택 → buildAnswerText가 사람이 타이핑했을 법한 문장을 합성 → 기존 자유서술 정정
+    // 경로(_ganttQaExtractPoDocumentsCorrectionViaAi)로 그대로 흘려보냄" 패턴을 그대로 쓴다.
+    window._ganttQaPoShowTempCodeDropdown = function(missing) {
+        const tempDropdownId = 'po-tempcode-batch-' + Date.now();
+        const tempCodeOptions = window._PO_TEMP_CODE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; });
+        const applyAllItem = {
+            label: window._t('🔁 전체 문서·품목에 동일 코드 적용', '🔁 Apply the same code to ALL items in ALL documents'),
+            options: tempCodeOptions
+        };
+        const perItemItems = missing.map(function(x) {
+            return { label: `${x.docIdx + 1}-${x.itemIdx + 1}. ${x.it.desc}` };
+        });
+        window._ganttQaPendingChoiceDropdown = {
+            id: tempDropdownId, multi: true,
+            items: missing.length >= 2 ? [applyAllItem].concat(perItemItems) : perItemItems,
+            options: tempCodeOptions,
+            buildAnswerText: function(selections) {
+                if (missing.length >= 2 && selections[0]) {
+                    return window._t(`임시코드는 모든 문서의 모든 품목에 ${selections[0]}로 적용해줘`, `Apply temp code ${selections[0]} to every item in every document`);
+                }
+                const itemSelections = missing.length >= 2 ? selections.slice(1) : selections;
+                const parts = [];
+                itemSelections.forEach(function(code, idx) {
+                    if (code) parts.push(window._t(`문서 ${missing[idx].docIdx + 1}의 ${missing[idx].itemIdx + 1}번 품목은 ${code}`, `document ${missing[idx].docIdx + 1} item ${missing[idx].itemIdx + 1} should be ${code}`));
+                });
+                return parts.join(', ');
+            }
+        };
+        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: tempDropdownId, text: window._t(
+            '⚠️ 아래 품목은 임시코드를 자동으로 판단하기 어려웠습니다 — 아래에서 직접 선택해주세요:',
+            "⚠️ Couldn't confidently determine the temp code for these item(s) — please choose below:"
+        )});
+    };
+
+    // 🆕 [2026-09-17 신규] "품목 확인" 이후 다음에 뭘 해야 하는지 판단하는 중앙 디스패처 —
+    // "확인" 응답 직후, 사업자등록번호를 고친 직후, 임시코드 드롭다운/정정을 마친 직후 등
+    // 여러 지점에서 재사용된다. 사업자등록번호 → 임시코드 → 공용 4항목(프로젝트코드/사번/
+    // 요청사유/목적) 순으로 부족한 것부터 확인하고, 전부 채워지면 공용 4항목을 "한 번에" 묻는
+    // 단계(ask_shared)로 넘어간다 — 사용자가 요청한 "반복적인 질문을 한번에 받아서 처리".
+    window._ganttQaPoAdvanceAfterItemsConfirmed = function(pd) {
+        const missingBiz = window._ganttQaPoFindMissingBizNoDocs(pd.docs);
+        if (missingBiz.length) {
+            pd.stage = 'fix_biznos';
+            const lines = missingBiz.map(function(x) { return `${x.idx + 1}번(${x.doc.vendorName || (window._currentLang === 'en' ? 'unknown' : '미확인')})`; }).join(', ');
+            window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                `⚠️ 아래 문서는 협력사 사업자등록번호가 확인되지 않았습니다 — 알려주세요(예: "1번: 2168144558", 문서가 1건이면 번호만 말해도 됩니다):\n${lines}`,
+                `⚠️ These document(s) need a confirmed vendor business registration number (e.g. "1: 2168144558" — if there's only one document, just the number is fine):\n${lines}`
+            )});
+            return;
+        }
+        const missingTemp = window._ganttQaPoFindMissingTempCodeItems(pd.docs);
+        if (missingTemp.length) {
+            pd.stage = 'confirm_items'; // 드롭다운 답도 기존처럼 자유서술 정정 경로로 흘려보냄
+            window._ganttQaPoShowTempCodeDropdown(missingTemp);
+            return;
+        }
+        pd.stage = 'ask_shared';
+        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+            `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다. 아래 4가지를 한 번에 알려주세요(모든 문서에 공통으로 적용됩니다):\n1) 프로젝트코드\n2) 구매담당자 사번\n3) 요청사유\n4) 목적(P01~P05 — 예: P01)\n\n예시: "G2610OB, 2004051002, 샘플제작, P01"\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
+            `✅ Item confirmation is done for all ${pd.docs.length} document(s). Please give me these 4 things at once (applies to every document):\n1) Project code\n2) Buyer employee ID\n3) Reason for request\n4) Purpose (P01–P05 — e.g. P01)\n\nExample: "G2610OB, 2004051002, sample production, P01"\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
+        )});
+    };
+
+    // 🆕 [2026-09-17 신규, 사용자 요청] 문서 하나를 엑셀 생성 → SAP 업로드/입력 → **바로 이어서
+    // 저장까지** 처리한다 — 예전엔 여기서 멈춰 사람이 "저장해줘"라고 답할 때까지 기다렸지만
+    // (구매오더 저장은 SAP 재무적 커밋이라 사람 확인 후 정지로 설계했었음, CLAUDE.md 참고),
+    // 사용자가 "SAP 입력 시간이 기니까 처음 한 번만 확인하고 이후는 전부 자동으로, 자리를
+    // 비웠다 와도 다 되어있도록 해달라"고 명시적으로 요청해서 이 함수부터는 더 이상 멈추지
+    // 않는다 — 설계를 명시적으로 뒤집은 것이니 앞으로 이 코드를 다시 손볼 때 참고할 것.
+    // `confirm_save_po`(백엔드/SAP 브릿지)는 `prepare_po_from_excel`이 남긴 화면 그대로일
+    // 것을 전제하므로, 두 호출 사이에 절대 다른 요청이 끼어들지 않도록 이 함수 안에서
+    // 곧바로 이어서 호출한다.
+    window._ganttQaPrepareAndSaveOneDoc = async function(pd, doc) {
+        const receiver = window.getActiveUserName ? window.getActiveUserName() : '';
+        const rows = doc.items.map(function(it) {
+            return {
+                '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
+                '필요일자': doc.invoiceDate, '구매그룹': '908', '프로젝트코드': pd.projectCode,
+                '수령인': receiver, '구매담당자 사번': pd.buyerEmpId, '요청사유': pd.reason,
+                'VINA PO': '', '목적': pd.purpose, '비고': '',
+            };
+        });
+        const exRes = await window._withTimeout(
+            fetch('http://127.0.0.1:5000/po-build-excel', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ rows: rows })
+            }), 30000, window._t('엑셀 생성 시간 초과', 'Excel generation timed out')
+        );
+        const exData = await window._ganttQaParsePoApiResponse(exRes, '엑셀 생성', 'excel generation');
+        if (!exData.ok) throw new Error(exData.error || window._t('알 수 없는 오류', 'unknown error'));
+
+        const prepRes = await window._withTimeout(
+            fetch('http://127.0.0.1:5000/po-sap-prepare', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    excelPath: exData.path, bizRegNo: doc.bizRegNo,
+                    items: doc.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
+                    plant: '1000', currency: doc.currency || 'KRW'
+                })
+            }), Math.min(120000, 40000 + 8000 * doc.items.length),
+            window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
+        );
+        const prepData = await window._ganttQaParsePoApiResponse(prepRes, 'SAP 구매오더 준비', 'SAP purchase order preparation');
+        if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
+
+        const saveRes = await window._withTimeout(
+            fetch('http://127.0.0.1:5000/po-sap-confirm-save', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ purchasingOrg: '9000', plant: '1000' })
+            }), 60000, window._t('SAP 구매오더 저장 시간 초과', 'SAP purchase order save timed out')
+        );
+        const saveData = await window._ganttQaParsePoApiResponse(saveRes, 'SAP 구매오더 저장', 'SAP purchase order save');
+        if (!saveData.ok) throw new Error(saveData.error || window._t('알 수 없는 오류', 'unknown error'));
+        return { poNumber: saveData.poNumber, autoSaved: saveData.autoSaved, message: saveData.message };
+    };
+
+    // 🆕 [2026-09-17 신규] 배치 안의 모든 문서를 순차로(SAP GUI는 세션 1개라 병렬 불가) 자동
+    // 처리 — 한 문서가 실패해도 나머지는 계속 진행하고(자리를 비웠다 와도 "전부 다 됨"이
+    // 아니라 "각자 결과가 남아있음"을 보장하기 위함), 끝나면 문서별 성공/실패를 한 메시지로
+    // 요약한다. 실패한 문서는 이 배치 안에서 자동 재시도하지 않음 — 사람이 결과를 보고
+    // 필요하면 해당 문서만 다시 첨부/설명해서 새로 시작해야 한다.
+    window._ganttQaRunPoBatchAutomatically = async function(pd) {
+        const results = [];
+        for (let i = 0; i < pd.docs.length; i++) {
+            const doc = pd.docs[i];
+            const label = doc.vendorName || doc.bizRegNo || (i + 1);
+            window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`(${i + 1}/${pd.docs.length}) "${label}" 구매오더 처리 중... (SAP 입력에 시간이 걸릴 수 있습니다)`, `(${i + 1}/${pd.docs.length}) Processing purchase order for "${label}"... (SAP entry may take a while)`), pending: true });
+            window._renderGanttQaMessages();
+            try {
+                const r = await window._ganttQaPrepareAndSaveOneDoc(pd, doc);
+                results.push({ label: label, ok: true, poNumber: r.poNumber, autoSaved: r.autoSaved });
+            } catch (e) {
+                results.push({ label: label, ok: false, error: (e && e.message) ? e.message : String(e) });
+            }
+            window._ganttQaHistory.pop();
+        }
+        const lines = results.map(function(r, i) {
+            if (r.ok) {
+                return `✅ ${i + 1}. ${r.label} → ${window._t('오더번호', 'PO')} ${r.poNumber}` +
+                    (r.autoSaved ? window._t(' (PDF 자동저장·오픈 완료)', ' (PDF auto-saved and opened)') : window._t(' (PDF 미리보기가 열려있습니다 — 💾 아이콘으로 직접 저장해주세요)', ' (PDF preview is open — please save it manually via the 💾 icon)'));
+            }
+            return `⚠️ ${i + 1}. ${r.label} → ${window._t('실패', 'failed')}: ${r.error}`;
+        }).join('\n');
+        const successCount = results.filter(function(r) { return r.ok; }).length;
+        window._ganttQaHistory.push({ role: 'ai', text: window._t(
+            `🏁 구매오더 자동 처리를 마쳤습니다(${successCount}/${results.length}건 성공):\n${lines}`,
+            `🏁 Finished automatic purchase order processing (${successCount}/${results.length} succeeded):\n${lines}`
+        )});
+        window._ganttQaPoDraft = null;
     };
 
     // 🐛🐛 [2026-09-16 실사용 버그수정] 백엔드가 오래된 버전이거나 꺼져 있으면 `/po-build-excel`/
@@ -651,87 +899,6 @@ ${attachText}`;
             ));
             err.isBackendStale = true;
             throw err;
-        }
-    };
-
-    // 🐛 [2026-09-16 신규] 엑셀 생성 + SAP 업로드/입력(ZMMR060, 저장 전까지)을 한 곳으로
-    // 뽑음 — 처음 시도(ask_purpose 완료 시점)와 실패 후 재시도(sap_prep_failed 단계)가
-    // 똑같은 로직을 공유한다. 실패해도 draft(pd)를 버리지 않고 `sap_prep_failed` 단계로
-    // 남겨서, 사람이 잘못된 값(주로 사업자등록번호)만 고쳐서 이어서 재시도할 수 있게 한다 —
-    // "SAP에서 뭔가 시도하다 멈추면 처음부터 다시 해야 하는데 못 하고 있다"는 제보 반영.
-    window._ganttQaRunPoSapPrepareAndReport = async function(pd) {
-        window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('구매오더 요청 엑셀을 생성하는 중...', 'Generating the purchase order request excel...'), pending: true });
-        window._renderGanttQaMessages();
-        const receiver = window.getActiveUserName ? window.getActiveUserName() : '';
-        const rows = pd.items.map(function(it) {
-            return {
-                '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
-                '필요일자': pd.invoiceDate, '구매그룹': '908', '프로젝트코드': pd.projectCode,
-                '수령인': receiver, '구매담당자 사번': pd.buyerEmpId, '요청사유': pd.reason,
-                'VINA PO': '', '목적': pd.purpose, '비고': '',
-            };
-        });
-        let finalReply;
-        let finalButtons = null; // ✅ [2026-09-16 신규] 아래 각 분기가 채우면 확인용 클릭 버튼도 같이 보여줌
-        try {
-            const exRes = await window._withTimeout(
-                fetch('http://127.0.0.1:5000/po-build-excel', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ rows: rows })
-                }), 30000, window._t('엑셀 생성 시간 초과', 'Excel generation timed out')
-            );
-            const exData = await window._ganttQaParsePoApiResponse(exRes, '엑셀 생성', 'excel generation');
-            if (!exData.ok) throw new Error(exData.error || window._t('알 수 없는 오류', 'unknown error'));
-            pd.excelPath = exData.path;
-
-            if (window._ganttQaHistory.length) {
-                window._ganttQaHistory[window._ganttQaHistory.length - 1].text = '⏳ ' + window._t('SAP에 엑셀을 업로드하고 협력사/단가를 입력하는 중... (시간이 걸릴 수 있습니다)', 'Uploading the excel to SAP and filling in vendor/price... (this may take a while)');
-                window._renderGanttQaMessages();
-            }
-            const prepRes = await window._withTimeout(
-                fetch('http://127.0.0.1:5000/po-sap-prepare', {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        excelPath: pd.excelPath, bizRegNo: pd.bizRegNo,
-                        items: pd.items.map(function(it) { return { unitPrice: it.unitPrice }; }),
-                        plant: '1000', currency: pd.currency || 'KRW'
-                    })
-                }), Math.min(120000, 40000 + 8000 * pd.items.length),
-                window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
-            );
-            const prepData = await window._ganttQaParsePoApiResponse(prepRes, 'SAP 구매오더 준비', 'SAP purchase order preparation');
-            if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
-            pd.stage = 'confirm_sap_prepare';
-            finalReply = window._t(
-                `✅ 엑셀 생성(${exData.fileName}) + SAP 업로드/입력까지 완료했습니다.\n\n${prepData.text || ''}\n\n📌 SAP에는 아직 저장(확정)되지 않았습니다 — 위 내용을 SAP 화면에서 직접 확인하신 후 아래에서 선택해주세요.`,
-                `✅ Generated the excel (${exData.fileName}) and uploaded/filled it into SAP.\n\n${prepData.text || ''}\n\n📌 This has NOT been saved in SAP yet — please review it directly in the SAP screen, then choose below.`
-            );
-            finalButtons = [
-                { label: window._t('💾 저장해줘', '💾 Save it'), value: window._t('저장해줘', 'save'), style: 'confirm' },
-                { label: window._t('❌ 취소', '❌ Cancel'), value: window._t('취소', 'cancel'), style: 'cancel' }
-            ];
-        } catch (e) {
-            pd.stage = 'sap_prep_failed'; // draft는 유지 — 값만 고쳐서 재시도 가능하게
-            if (e && e.isBackendStale) {
-                // 이 경우는 값(사업자등록번호 등)이 잘못돼서가 아니라 백엔드 자체 문제이므로,
-                // "값을 고쳐보라"는 안내를 붙이면 오히려 혼란을 준다 — 재시작 안내만 명확히.
-                finalReply = '⚠️ ' + e.message + '\n\n' + window._t('백엔드를 재시작한 뒤 아래에서 선택하거나, 값이 잘못됐으면 직접 입력해 정정해주세요.', 'After restarting the backend, choose below, or type a correction if a value was wrong.');
-            } else {
-                finalReply = '⚠️ ' + window._t('구매오더 준비 중 오류: ', 'Error while preparing the purchase order: ') + (e && e.message ? e.message : e)
-                    + '\n\n' + window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시거나(예: "사업자등록번호는 2168144558", "목적은 P04로 변경"), 아래에서 선택할 수 있습니다.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value (e.g. "biz reg no is 2168144558", "purpose should be P04"), or choose below.');
-            }
-            // ✅ [2026-09-16 신규] 두 실패 분기 모두 "다시 시도"/"취소" 클릭 버튼을 같이 보여준다 —
-            // 자유 텍스트로 값을 정정하는 것도 여전히 가능(입력창은 버튼과 무관하게 항상 열려있음).
-            finalButtons = [
-                { label: window._t('🔁 다시 시도', '🔁 Retry'), value: window._t('다시 시도', 'retry'), style: 'neutral' },
-                { label: window._t('❌ 취소', '❌ Cancel'), value: window._t('취소', 'cancel'), style: 'cancel' }
-            ];
-        }
-        window._ganttQaHistory.pop();
-        if (finalButtons) {
-            window._ganttQaShowConfirmButtons(finalReply, finalButtons);
-        } else {
-            window._ganttQaHistory.push({ role: 'ai', text: finalReply });
         }
     };
 
@@ -2296,20 +2463,20 @@ ${attachText}`;
                     : window._ganttQaPendingAttachments.slice();
                 window._ganttQaPendingAttachments = [];
                 window._ganttQaRenderAttachmentStrip();
-                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('첨부 파일에서 품목 정보를 추출하는 중...', 'Extracting line items from the attachment...'), pending: true });
+                // 💡 [2026-09-17 신규, 사용자 요청] "세금계산서/거래명세서 복수 처리" — 첨부된
+                // 파일이 여러 개면 파일마다 별도 문서로 보고 각각 추출한다(파일 1개=문서 1개는
+                // 기존과 100% 동일한 동작). 아래 `docs` 배열이 이번 요청의 핵심 자료구조.
+                window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t(`첨부 파일 ${attachments.length}건에서 품목 정보를 추출하는 중...`, `Extracting line items from ${attachments.length} attached file(s)...`), pending: true });
                 window._renderGanttQaMessages();
                 try {
-                    const extracted = await window._ganttQaExtractPoItemsViaAi(apiKeyForPo, attachments, null);
-                    window._ganttQaPoDraft = {
-                        stage: 'confirm_items',
-                        bizRegNo: extracted.bizRegNo || '', invoiceDate: extracted.invoiceDate || '',
-                        vendorName: extracted.vendorName || '', items: extracted.items,
-                        currency: extracted.currency || 'KRW',
-                        note: extracted.note || '',
-                        projectCode: '', buyerEmpId: '', reason: '', purpose: '',
-                    };
+                    const { docs, errors } = await window._ganttQaExtractPoDocumentsViaAi(apiKeyForPo, attachments);
+                    window._ganttQaPoDraft = { stage: 'confirm_items', docs: docs, projectCode: '', buyerEmpId: '', reason: '', purpose: '' };
                     window._ganttQaHistory.pop();
-                    window._ganttQaShowConfirmButtons(window._ganttQaPoSummaryText(window._ganttQaPoDraft),
+                    let summaryText = window._ganttQaPoBatchSummaryText(docs);
+                    if (errors.length) {
+                        summaryText = window._t(`⚠️ 일부 파일은 추출에 실패해 건너뛰었습니다(${errors.length}건): ${errors.join('; ')}\n\n`, `⚠️ Skipped ${errors.length} file(s) that failed to extract: ${errors.join('; ')}\n\n`) + summaryText;
+                    }
+                    window._ganttQaShowConfirmButtons(summaryText,
                         [{ label: window._t('✅ 확인', '✅ Confirm'), value: window._t('확인', 'confirm'), style: 'confirm' }]);
                 } catch (e) {
                     window._ganttQaHistory.pop();
@@ -2327,84 +2494,18 @@ ${attachText}`;
 
             if (pd.stage === 'confirm_items') {
                 if (/^(확인|네|맞아|맞습니다|ok|okay|confirm|yes)\b/i.test(replyText) || /^(확인|네)$/.test(replyText)) {
-                    // 🐛 [2026-09-16 신규] 사업자등록번호가 비어있으면(코텍 자기 번호로 잘못
-                    // 추출돼 자동으로 비운 경우 포함) SAP 협력사 검색 자체가 실패할 게
-                    // 뻔하므로, 미리 사람에게 정확한 번호를 물어서 확보하고 넘어간다.
-                    if (!pd.bizRegNo || !/^\d{10}$/.test(pd.bizRegNo)) {
-                        window._ganttQaHistory.push({ role: 'ai', text: window._t('⚠️ 협력사 사업자등록번호가 확인되지 않았습니다 — 정확한 번호를 알려주세요(예: "2168144558").', "⚠️ The vendor's business registration number wasn't confirmed — please provide it (e.g. \"2168144558\").") });
-                        window._renderGanttQaMessages();
-                        input.focus();
-                        return;
-                    }
-                    // 💡 [2026-09-15 사용자 요청] "품목명만으로는 임시코드 판단이 어려우니
-                    // 물어봐야 한다" — AI 프롬프트를 "명확한 단서가 없으면 추측하지 말고 빈
-                    // 문자열로 남길 것"으로 바꿔서(_ganttQaExtractPoItemsViaAi), 애매한
-                    // 품목은 AI가 그럴듯하게 채워넣는 대신 여기서 확실히 걸러지도록 했다.
-                    const missingItems = pd.items.map(function(it, i) { return { i: i, it: it }; })
-                        .filter(function(x) { return !x.it.tempCode || !window._PO_TEMP_CODE_TABLE.some(function(r) { return r.code === x.it.tempCode; }); });
-                    if (missingItems.length) {
-                        // 🔽 [2026-09-16 신규] 임시코드도 정해진 13개 중 하나를 고르는 객관식이라
-                        // 품목별 드롭다운으로 물어본다 — 골라둔 것만 반영되고(전부 안 골라도 됨),
-                        // 그 결과 텍스트("N번은 코드")를 기존 자유서술 정정 경로(correctionNote)
-                        // 로 그대로 흘려보내므로 아직 안 고른 품목은 다음 턴에 다시 같은 방식으로
-                        // 물어보게 된다(기존 "여전히 비어있으면 재확인" 로직이 그대로 재사용됨).
-                        // 🔁 [2026-09-16 신규, 사용자 요청] 품목이 2개 이상이면 맨 위에 "전체 동일
-                        // 코드 적용" 행을 하나 더 추가한다 — "임시코드는 모두 900201로 적용해줘"류
-                        // 자유 텍스트는 이미 correctionNote → AI 재추출 경로로 원래도 이해되지만
-                        // (별도 파서가 없는 자유 서술이라 AI가 알아서 해석), 드롭다운에는 그 지름길이
-                        // 없었다 — 이 행을 고르면 개별 선택은 무시하고 그 코드를 모든 품목에 일괄
-                        // 적용하라는 지시 문장을 합성해 같은 AI 재추출 경로로 그대로 보낸다(새 파싱
-                        // 로직 없음 — 드롭다운은 입력 방식만 바꾼다는 기존 원칙 그대로).
-                        const tempDropdownId = 'po-tempcode-' + Date.now();
-                        const tempCodeOptions = window._PO_TEMP_CODE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; });
-                        const applyAllItem = {
-                            label: window._t('🔁 전체 품목에 동일 코드 적용', '🔁 Apply the same code to ALL items'),
-                            options: tempCodeOptions
-                        };
-                        const perItemItems = missingItems.map(function(x) { return { label: `${x.i + 1}. ${x.it.desc}` }; });
-                        window._ganttQaPendingChoiceDropdown = {
-                            id: tempDropdownId, multi: true,
-                            items: missingItems.length >= 2 ? [applyAllItem].concat(perItemItems) : perItemItems,
-                            options: tempCodeOptions,
-                            buildAnswerText: function(selections) {
-                                if (missingItems.length >= 2 && selections[0]) {
-                                    return window._t(`임시코드는 모두 ${selections[0]}로 적용해줘`, `Apply temp code ${selections[0]} to all items`);
-                                }
-                                const itemSelections = missingItems.length >= 2 ? selections.slice(1) : selections;
-                                const parts = [];
-                                itemSelections.forEach(function(code, idx) {
-                                    if (code) parts.push(`${missingItems[idx].i + 1}번은 ${code}`);
-                                });
-                                return parts.join(', ');
-                            }
-                        };
-                        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: tempDropdownId, text: window._t(
-                            '⚠️ 아래 품목은 임시코드를 자동으로 판단하기 어려웠습니다 — 아래에서 직접 선택해주세요:',
-                            "⚠️ Couldn't confidently determine the temp code for these item(s) — please choose below:"
-                        )});
-                        window._renderGanttQaMessages();
-                        input.focus();
-                        return;
-                    }
-                    pd.stage = 'ask_project';
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t('✅ 확인했습니다. 프로젝트코드를 알려주세요.', '✅ Got it. What\'s the project code?') });
+                    window._ganttQaPoAdvanceAfterItemsConfirmed(pd);
                 } else {
-                    // 확인이 아니면 정정 지시로 간주 — AI에게 다시 추출을 맡긴다(별도 파싱 없음).
+                    // 확인이 아니면 정정 지시로 간주 — AI에게 배치 전체를 다시 추출하게 맡긴다
+                    // (별도 파싱 없음 — 이 세션의 "드롭다운/버튼은 입력 방식만 바꾼다" 원칙을
+                    // 문서 여러 건짜리 배치로 확장한 것).
                     window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('정정 사항을 반영해서 다시 추출하는 중...', 'Re-extracting with your correction...'), pending: true });
                     window._renderGanttQaMessages();
                     try {
-                        // 원본 첨부 텍스트가 없으면(이미 소비됨) 정정 지시만으로는 재추출이 불가능하므로,
-                        // 기존 draft의 품목 목록을 텍스트로 재구성해 "이전 결과"로 같이 실어 보낸다.
-                        const prevAsText = [{ name: '(이전 추출 결과)', text: JSON.stringify({ bizRegNo: pd.bizRegNo, invoiceDate: pd.invoiceDate, vendorName: pd.vendorName, currency: pd.currency, items: pd.items }, null, 2) }];
-                        const extracted = await window._ganttQaExtractPoItemsViaAi(apiKeyForPo, prevAsText, replyText);
-                        pd.bizRegNo = extracted.bizRegNo || pd.bizRegNo;
-                        pd.invoiceDate = extracted.invoiceDate || pd.invoiceDate;
-                        pd.vendorName = extracted.vendorName || pd.vendorName;
-                        pd.items = extracted.items;
-                        pd.currency = extracted.currency || pd.currency || 'KRW';
-                        pd.note = extracted.note || '';
+                        const newDocs = await window._ganttQaExtractPoDocumentsCorrectionViaAi(apiKeyForPo, pd.docs, replyText);
+                        pd.docs = newDocs;
                         window._ganttQaHistory.pop();
-                        window._ganttQaShowConfirmButtons(window._ganttQaPoSummaryText(pd),
+                        window._ganttQaShowConfirmButtons(window._ganttQaPoBatchSummaryText(pd.docs),
                             [{ label: window._t('✅ 확인', '✅ Confirm'), value: window._t('확인', 'confirm'), style: 'confirm' }]);
                     } catch (e) {
                         window._ganttQaHistory.pop();
@@ -2416,180 +2517,128 @@ ${attachText}`;
                 return;
             }
 
-            if (pd.stage === 'ask_project') {
-                pd.projectCode = replyText;
-                pd.stage = 'ask_buyer';
-                window._ganttQaHistory.push({ role: 'ai', text: window._t('구매담당자 사번을 알려주세요.', 'What\'s the buyer\'s employee ID?') });
+            // 💡 [2026-09-17 신규] 협력사 사업자등록번호가 확인 안 된 문서가 있으면 여기서
+            // 잡는다 — 문서 번호를 붙여("1번: 2168144558") 여러 건을 한 메시지에 같이 고칠 수
+            // 있고, 문서가 1건뿐이면 번호만 말해도 된다(기존 단일 문서 동작과 동일).
+            if (pd.stage === 'fix_biznos') {
+                const pairs = Array.from(replyText.matchAll(/(\d+)\s*번\s*[:：]?\s*(\d{3}-?\d{2}-?\d{5}|\d{10})/g));
+                let applied = 0;
+                if (pairs.length) {
+                    pairs.forEach(function(m) {
+                        const idx = parseInt(m[1], 10) - 1;
+                        if (pd.docs[idx]) { pd.docs[idx].bizRegNo = m[2].replace(/-/g, ''); applied++; }
+                    });
+                } else {
+                    const stillMissing = window._ganttQaPoFindMissingBizNoDocs(pd.docs);
+                    const bare = replyText.match(/\d{3}-?\d{2}-?\d{5}|\b\d{10}\b/);
+                    if (bare && stillMissing.length === 1) {
+                        pd.docs[stillMissing[0].idx].bizRegNo = bare[0].replace(/-/g, '');
+                        applied++;
+                    }
+                }
+                if (!applied) {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('사업자등록번호를 인식하지 못했습니다 — "1번: 2168144558"처럼 문서 번호와 함께 알려주세요.', 'Could not recognize a business registration number — please include the document number, e.g. "1: 2168144558".') });
+                } else {
+                    window._ganttQaPoAdvanceAfterItemsConfirmed(pd);
+                }
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
             }
 
-            if (pd.stage === 'ask_buyer') {
-                pd.buyerEmpId = replyText;
-                pd.stage = 'ask_reason';
-                window._ganttQaHistory.push({ role: 'ai', text: window._t('요청사유를 알려주세요(예: 샘플제작).', 'What\'s the reason for the request (e.g. sample production)?') });
-                window._renderGanttQaMessages();
-                input.focus();
-                return;
-            }
-
-            if (pd.stage === 'ask_reason') {
-                pd.reason = replyText;
-                pd.stage = 'ask_purpose';
-                // 🔽 [2026-09-16 신규] 목적(P01~P05)은 정해진 5개 중 하나를 고르는 객관식 질문
-                // 이라 드롭다운으로 물어본다 — 위 window._ganttQaPendingChoiceDropdown 참고.
-                const purposeDropdownId = 'po-purpose-' + Date.now();
-                window._ganttQaPendingChoiceDropdown = {
-                    id: purposeDropdownId, multi: false,
-                    options: window._PO_PURPOSE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; }),
-                    buildAnswerText: function(sel) { return sel[0]; }
-                };
-                window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: purposeDropdownId, text: window._t('목적을 아래에서 선택해주세요.', 'Please choose a purpose below.') });
-                window._renderGanttQaMessages();
-                input.focus();
-                return;
-            }
-
-            if (pd.stage === 'ask_purpose') {
-                let purposeCode = (replyText.match(/P0[1-5]/i) || [])[0];
-                if (purposeCode) purposeCode = purposeCode.toUpperCase();
-                if (!purposeCode) {
-                    const hit = window._PO_PURPOSE_TABLE.find(function(r) { return replyText.indexOf(r.desc) !== -1; });
-                    if (hit) purposeCode = hit.code;
-                }
-                if (!purposeCode) {
-                    // 💡 [2026-09-16] 위 전역 중단 가드가 "처음부터"/"취소" 등은 먼저 가로채므로
-                    // 여기까진 안 오지만, 그 탈출구가 있다는 걸 사람이 모를 수 있어 재질문 메시지에
-                    // 명시적으로 언급해서 "계속 같은 오류만 반복된다"는 인상을 줄인다.
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t('목적 코드를 못 알아들었어요 — "P01"처럼 코드로 답해주세요(그만두려면 "취소"라고 답해주세요).', 'I couldn\'t recognize that purpose — please reply with a code like "P01" (or say "cancel" to stop).') });
-                    window._renderGanttQaMessages();
-                    input.focus();
-                    return;
-                }
-                pd.purpose = purposeCode;
-                await window._ganttQaRunPoSapPrepareAndReport(pd);
-                window._renderGanttQaMessages();
-                input.focus();
-                return;
-            }
-
-            // 🐛 [2026-09-16 실사용 버그수정] SAP 준비 단계에서 실패하면(협력사 사업자등록번호가
-            // SAP에 없는 등) 원래는 draft를 통째로 버려서, 사람이 잘못된 값 하나만 고치고
-            // 싶어도 PDF 첨부부터 전부 다시 해야 했다 — "SAP에서 뭔가 시도하다 멈추면 처음
-            // 부터 다시 해야 하는데 못 하고 있음"이라는 제보로 확인. 이제 실패해도 draft를
-            // 유지하고 `sap_prep_failed` 단계로 넘어가서, 사업자등록번호를 고쳐서("사업자
-            // 등록번호는 2168144558") 또는 그냥 "다시 시도"라고 말해서 이어서 재시도할 수
-            // 있게 한다 — PDF 재첨부 불필요.
-            // 🐛🐛 [2026-09-16 실사용 버그수정] 처음엔 사업자등록번호만 고칠 수 있었는데, 실제
-            // 실패 원인이 다른 필드(예: 목적 코드를 잘못 골랐거나 프로젝트코드가 틀린 경우)일
-            // 수도 있어 "틀린 곳 중간부터 다시 시작하고 싶은데 안 된다"는 제보로 확인 —
-            // 프로젝트코드/사번/요청사유/목적/통화도 같은 방식(라벨+값)으로 고칠 수 있게 확장.
-            // 승인원 표지 초안(`_ganttQaExtractApprovalUpdate`)의 "라벨 뒤 조사(는/은/가/이)를
-            // 건너뛴다" 패턴을 그대로 재사용.
-            if (pd.stage === 'sap_prep_failed') {
-                const changes = [];
-                const bizNoMatch = replyText.match(/사업자\s*등록\s*번호(?:는|은|가|이)?\s*[:：]?\s*(\d{3}-?\d{2}-?\d{5}|\d{10})/) || replyText.match(/\b(\d{3}-\d{2}-\d{5})\b/) || replyText.match(/\b(\d{10})\b/);
-                if (bizNoMatch) {
-                    pd.bizRegNo = bizNoMatch[1].replace(/-/g, '');
-                    changes.push(window._t(`사업자등록번호 → ${pd.bizRegNo}`, `biz reg no → ${pd.bizRegNo}`));
-                }
-                const projMatch = replyText.match(/프로젝트\s*코드(?:는|은|가|이)?\s*[:：]?\s*(\S+)/);
-                if (projMatch) {
-                    pd.projectCode = projMatch[1];
-                    changes.push(window._t(`프로젝트코드 → ${pd.projectCode}`, `project code → ${pd.projectCode}`));
-                }
+            // 💡 [2026-09-17 신규, 사용자 요청] "반복적인 질문을 한번에 받아서 처리" — 예전엔
+            // 프로젝트코드→사번→요청사유→목적을 4턴에 걸쳐 하나씩 물었는데, 이제 한 메시지로
+            // 전부 받는다. 라벨(프로젝트코드/사번/요청사유/목적)을 하나라도 썼으면 라벨 기반으로
+            // 파싱하고, 라벨을 전혀 안 쓰고 줄바꿈/쉼표로만 나열했으면(승인원 표지 초안과 동일한
+            // "줄단위 순서 매칭 폴백") 아직 안 채워진 항목 순서대로 배정한다.
+            if (pd.stage === 'ask_shared') {
+                // 🐛 [2026-09-17 버그수정] 아래 라벨/바로-P0X 파싱이 pd.* 값을 채우기 시작하기
+                // *전에* "원래 뭐가 비어 있었는지"를 스냅샷해둔다 — 부분 폴백(missingBefore
+                // 기반)이 이 스냅샷을 써야, 바로 아래에서 목적코드가 라벨 없이도 먼저 채워지는
+                // 부수효과 때문에 "아직 빈 항목 개수"가 실제 조각 개수와 어긋나는 걸 막을 수
+                // 있다(전체 4항목 나열 케이스와 같은 원인의 버그 — 부분 응답에서도 재현됨,
+                // 예: 남은 항목이 요청사유/목적 2개뿐인데 "샘플제작\nP01"로 답하면 목적이 먼저
+                // 채워져 버려 emptySlots가 1개로 잘못 계산되던 것을 브라우저 테스트로 확인함).
+                const missingBefore = ['projectCode', 'buyerEmpId', 'reason', 'purpose'].filter(function(k) { return !pd[k]; });
+                // 🐛 [2026-09-17 버그수정] `\S+`는 쉼표도 "공백 아님"이라 그대로 삼켜서
+                // "프로젝트코드는 G2610OB, 사번은..."처럼 콤마로 이어 쓰면 "G2610OB,"가 그대로
+                // 값에 들어가던 버그(엑셀에 잘못된 프로젝트코드가 그대로 실려 SAP 검증에서
+                // 막힐 위험) — 브라우저 테스트로 재현·확인 후 `[^\s,]+`로 콤마를 경계로 뺌.
+                const projMatch = replyText.match(/프로젝트\s*코드(?:는|은|가|이)?\s*[:：]?\s*([^\s,]+)/);
+                if (projMatch) pd.projectCode = projMatch[1];
                 const empMatch = replyText.match(/(?:구매담당자\s*)?사번(?:은|는|가|이)?\s*[:：]?\s*(\d{4,12})/);
-                if (empMatch) {
-                    pd.buyerEmpId = empMatch[1];
-                    changes.push(window._t(`구매담당자 사번 → ${pd.buyerEmpId}`, `buyer employee ID → ${pd.buyerEmpId}`));
-                }
-                // 다른 라벨(목적/프로젝트코드/사번/통화/사업자등록번호) 앞까지만 잡도록 lookahead로
-                // 경계를 둠 — 안 그러면 "요청사유는 샘플제작 목적은 P04"처럼 라벨이 콤마 없이
-                // 이어질 때 뒤 필드까지 통째로 요청사유에 먹혀버린다.
-                const reasonMatch = replyText.match(/요청\s*사유(?:는|은|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|목적|프로젝트\s*코드|사번|통화|사업자\s*등록\s*번호|$)/);
-                if (reasonMatch && reasonMatch[1].trim()) {
-                    pd.reason = reasonMatch[1].trim();
-                    changes.push(window._t(`요청사유 → ${pd.reason}`, `reason → ${pd.reason}`));
-                }
-                // 코드(P01~P05)는 라벨 없이 단독으로 언급돼도 인식하되(예: "P04"), 설명 문구로 고를
-                // 때는 반드시 "목적" 라벨 뒤에서만 매칭한다 — 라벨 없이 전체 텍스트에서 설명 문구를
-                // 찾으면 "요청사유는 기타 부품 교체"의 "기타"(P05 설명)처럼 다른 필드 값과 우연히
-                // 겹쳐 잘못된 목적으로 오인식할 위험이 있다.
+                if (empMatch) pd.buyerEmpId = empMatch[1];
+                const reasonMatch = replyText.match(/요청\s*사유(?:는|은|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|목적|프로젝트\s*코드|사번|$)/);
+                if (reasonMatch && reasonMatch[1].trim()) pd.reason = reasonMatch[1].trim();
                 let purposeCode = (replyText.match(/\bP0[1-5]\b/i) || [])[0];
                 if (purposeCode) purposeCode = purposeCode.toUpperCase();
-                if (!purposeCode) {
-                    const purposeLabelMatch = replyText.match(/목적(?:은|는|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|사번|프로젝트\s*코드|통화|사업자\s*등록\s*번호|$)/);
+                const mentionsPurposeLabel = /목적/.test(replyText);
+                if (!purposeCode && mentionsPurposeLabel) {
+                    const purposeLabelMatch = replyText.match(/목적(?:은|는|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|사번|프로젝트\s*코드|$)/);
                     if (purposeLabelMatch) {
                         const hit = window._PO_PURPOSE_TABLE.find(function(r) { return purposeLabelMatch[1].indexOf(r.desc) !== -1; });
                         if (hit) purposeCode = hit.code;
                     }
                 }
-                if (purposeCode) {
-                    pd.purpose = purposeCode;
-                    changes.push(window._t(`목적 → ${pd.purpose}`, `purpose → ${pd.purpose}`));
-                }
-                const currMatch = replyText.match(/통화(?:는|은|가|이)?\s*[:：]?\s*(KRW|USD|US\$|\$)/i);
-                if (currMatch) {
-                    pd.currency = /USD|US\$|\$/i.test(currMatch[1]) ? 'USD' : 'KRW';
-                    changes.push(window._t(`통화 → ${pd.currency}`, `currency → ${pd.currency}`));
-                }
+                if (purposeCode) pd.purpose = purposeCode;
 
-                if (changes.length) {
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t(`${changes.join(', ')}로 변경했습니다. 다시 시도합니다.`, `Updated ${changes.join(', ')}. Retrying.`) });
-                    window._renderGanttQaMessages();
-                    await window._ganttQaRunPoSapPrepareAndReport(pd);
-                } else if (/(취소|그만|중단|cancel|stop)/i.test(replyText)) {
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t('🚫 구매오더 요청을 취소했습니다.', '🚫 Cancelled the purchase order request.') });
-                    window._ganttQaPoDraft = null;
-                } else if (/^\s*(다시\s*(?:시도|해\s*줘|해\s*봐|해\s*주세요)?|재시도(?:해\s*줘|해\s*봐)?|retry)\s*\.?\s*$/i.test(replyText)) {
-                    // 🐛 [2026-09-16 실사용 버그수정] 원래 정규식 `/(다시|재시도|retry)/i`가 "다시"라는
-                    // 부분 문자열만 있으면 무조건 매치돼서, "여기서부터 다시 물어봐줘"처럼 실제로는
-                    // 특정 단계를 다시 물어봐 달라는 뜻인 긴 문장도 "그대로 재시도"로 오인해 매번
-                    // 같은 값으로 조용히 재시도하는 사고가 실사용에서 확인됨(백엔드가 원인이라 재시도
-                    // 자체는 매번 똑같이 실패해서 사용자는 "재시작이 안 된다"고 느꼈지만, 실제로는
-                    // 매번 재시도는 되고 있었음 — 다만 원치 않는 재시도였음). 짧은 재시도 문구로만
-                    // 좁혀서, 이런 긴 문장은 아래 "인식 못함" 분기로 빠지게 함.
-                    await window._ganttQaRunPoSapPrepareAndReport(pd);
-                } else {
-                    window._ganttQaShowConfirmButtons(
-                        window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시거나, 아래에서 선택해주세요.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value, or choose below.'),
-                        [
-                            { label: window._t('🔁 다시 시도', '🔁 Retry'), value: window._t('다시 시도', 'retry'), style: 'neutral' },
-                            { label: window._t('❌ 취소', '❌ Cancel'), value: window._t('취소', 'cancel'), style: 'cancel' }
-                        ]
-                    );
-                }
-                window._renderGanttQaMessages();
-                input.focus();
-                return;
-            }
-
-            if (pd.stage === 'confirm_sap_prepare') {
-                if (/(저장|save|확인|네|예)/i.test(replyText) && !/(취소|안\s*함|아니|no\b|cancel)/i.test(replyText)) {
-                    window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP에 저장하고 발주서 PDF를 출력하는 중...', 'Saving in SAP and printing the purchase order PDF...'), pending: true });
-                    window._renderGanttQaMessages();
-                    let saveReply;
-                    try {
-                        const saveRes = await window._withTimeout(
-                            fetch('http://127.0.0.1:5000/po-sap-confirm-save', {
-                                method: 'POST', headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ purchasingOrg: '9000', plant: '1000' })
-                            }), 60000, window._t('SAP 구매오더 저장 시간 초과', 'SAP purchase order save timed out')
-                        );
-                        const saveData = await saveRes.json();
-                        saveReply = saveData.ok
-                            ? '📄 ' + (saveData.message || window._t('구매오더가 저장되었습니다.', 'Purchase order saved.'))
-                            : '⚠️ ' + window._t('저장 실패: ', 'Save failed: ') + (saveData.error || window._t('알 수 없는 오류', 'unknown error'));
-                    } catch (e) {
-                        saveReply = '⚠️ ' + window._t('저장 중 오류: ', 'Error while saving: ') + (e && e.message ? e.message : e);
+                const usedLabel = !!(projMatch || empMatch || reasonMatch || mentionsPurposeLabel);
+                if (!usedLabel) {
+                    // 🐛 [2026-09-17 버그수정] 목적 코드(P01~P05)는 라벨 없이도 바로 위에서 이미
+                    // 뽑히므로("목적은" 없이 그냥 "P01"만 있어도 purposeCode가 채워짐), 사용자가
+                    // "G2610OB, 2004051002, 샘플제작, P01"처럼 4개를 전부 순서대로 콤마로 나열한
+                    // 정상적인 답을 줘도 pd.purpose가 이미 채워진 상태라 "아직 안 채워진 항목
+                    // 개수"(emptySlots.length=3)와 "실제 조각 개수"(parts.length=4)가 어긋나
+                    // 아래 폴백이 통째로 스킵되던 버그 — 브라우저 모킹 테스트로 실제 재현 확인함.
+                    // 먼저 "전체 4항목을 순서대로 나열"한 경우(parts.length === 4)를 우선
+                    // 시도하고(이미 채워진 필드는 덮어쓰지 않고 건너뜀), 그게 아니면 기존처럼
+                    // "아직 빈 항목만 순서대로 나열"한 경우로 폴백한다.
+                    const order = ['projectCode', 'buyerEmpId', 'reason', 'purpose'];
+                    const parts = replyText.split(/\n|,/).map(function(s) { return s.trim(); }).filter(Boolean);
+                    const assign = function(key, v) {
+                        if (pd[key]) return; // 이미 채워진 필드는 덮어쓰지 않음
+                        if (key === 'purpose') {
+                            const pc = (v.match(/\bP0[1-5]\b/i) || [])[0];
+                            if (pc) pd.purpose = pc.toUpperCase();
+                        } else {
+                            pd[key] = v;
+                        }
+                    };
+                    if (parts.length === order.length) {
+                        order.forEach(function(key, i) { assign(key, parts[i]); });
+                    } else if (parts.length && parts.length === missingBefore.length) {
+                        missingBefore.forEach(function(key, i) { assign(key, parts[i]); });
                     }
-                    window._ganttQaHistory.pop();
-                    window._ganttQaHistory.push({ role: 'ai', text: saveReply });
-                } else {
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t('🚫 저장을 취소했습니다 — SAP 화면은 채워진 상태로 그대로 남아있으니 필요하면 직접 저장하거나 취소해주세요.', '🚫 Save cancelled — the SAP screen is left as-is (filled in), so please save or cancel it directly in SAP if needed.') });
                 }
-                window._ganttQaPoDraft = null; // 성공/실패/취소 무관하게 완료 후 초기화
+
+                const stillMissing = [];
+                if (!pd.projectCode) stillMissing.push(window._t('프로젝트코드', 'project code'));
+                if (!pd.buyerEmpId) stillMissing.push(window._t('구매담당자 사번', "buyer's employee ID"));
+                if (!pd.reason) stillMissing.push(window._t('요청사유', 'reason'));
+                if (!pd.purpose) stillMissing.push(window._t('목적(P01~P05)', 'purpose (P01–P05)'));
+
+                if (stillMissing.length) {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                        `아직 필요한 정보: ${stillMissing.join(', ')} — 한 번에 알려주세요.`,
+                        `Still need: ${stillMissing.join(', ')} — please give them all at once.`
+                    )});
+                    window._renderGanttQaMessages();
+                    input.focus();
+                    return;
+                }
+
+                // ✅ [2026-09-17 신규, 사용자 요청] 여기서부터는 더 이상 사람에게 묻지 않고
+                // 문서마다 엑셀 생성 ~ SAP 저장 ~ 발주서 출력까지 전부 자동으로 진행한다 —
+                // "SAP 입력하는 시간이 기니까 처음 한 번만 확인하고 후단은 전부 자동으로,
+                // 자리를 비웠다 와도 다 되어있도록" 요청 반영. 기존엔 저장 직전에 반드시
+                // 멈춰 사람 확인을 받도록 설계했었는데(CLAUDE.md 참고), 이번에 명시적으로
+                // 뒤집힌 결정이다.
+                window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                    `✅ 확인했습니다. 총 ${pd.docs.length}건의 구매오더를 자동으로 순차 처리합니다 — 완료될 때까지 기다려주시거나 나중에 다시 확인해주세요.`,
+                    `✅ Got it. Automatically processing ${pd.docs.length} purchase order(s) in sequence — this may take a while, feel free to check back later.`
+                )});
+                window._renderGanttQaMessages();
+                await window._ganttQaRunPoBatchAutomatically(pd);
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
