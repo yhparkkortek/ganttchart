@@ -3254,7 +3254,15 @@ ${docsJson}`;
             //    실사용에서 확인됨(둘 다 "엑셀"+"출력" 키워드만으로 이 블록에 걸리는데, 캐시가
             //    "있기만 하면" 내용 일치 여부를 안 보고 그냥 썼던 게 원인). 자재번호가 없는
             //    순수 "엑셀로 저장해줘"류 후속 메시지는 여전히 기존처럼 캐시를 그대로 재사용.
-            const looksLikeFreshSapRequest = window._questionMentionsSapIntent && window._questionMentionsSapIntent(question);
+            // 🐛🐛 [2026-09-17 실사용 버그수정] "133025,133026 엑셀 출력해줘"/"ZMM009로 조회해서
+            // 133025,133026 엑셀 출력해줘"처럼 자재번호는 있지만 "sap"/"bom"/"역전개"/"사용처"
+            // 단어가 전혀 없는 요청은 `_questionMentionsSapIntent`가 false를 반환해서(그 함수는
+            // 이 네 신호만 봄), 매번 이미 있던 옛날 캐시(`_lastSapFetchResult`)를 그대로
+            // 재사용했다 — 사용자가 뭐라고 다시 말해도(다른 자재번호, 다른 트랜잭션 이름을
+            // 명시해도) 항상 똑같은 예전 결과("SAP_MM03_...xlsx")만 나오던 사고. 이 export
+            // 요청 블록 안에서만(다른 곳의 `_questionMentionsSapIntent` 용도엔 영향 없도록
+            // 국소적으로) 자재번호(5~8자리)가 질문에 있으면 그것만으로도 "새 조회"로 취급한다.
+            const looksLikeFreshSapRequest = (window._questionMentionsSapIntent && window._questionMentionsSapIntent(question)) || /\b\d{5,8}\b/.test(question);
             if (!cached || !cached.text || looksLikeFreshSapRequest) {
                 window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('SAP 데이터를 조회하는 중...', 'Looking up SAP data...'), pending: true });
                 window._renderGanttQaMessages();
