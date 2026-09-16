@@ -477,6 +477,24 @@
         window._ganttQaHistory.push({ role: 'ai', confirmButtonsId: id, text: text });
     };
 
+    // 📋 [2026-09-16 신규, 사용자 요청] "이전 내용(복사 붙여넣기) 이어서" — PDF를 다시 첨부하지
+    // 않고, 이전 AI 답변(예: 품목 확인 요약)이나 원본 문서 텍스트를 그대로 복사해 붙여넣기만
+    // 해도 구매오더 추출을 이어갈 수 있게 한다. 이미 PO draft가 진행 중이거나(그 흐름이
+    // 우선) 파일이 첨부돼 있으면(첨부가 항상 우선 — 위 "새 첨부 우선" 규칙과 동일한 이유)
+    // 이 경로는 관여하지 않는다 — 순수하게 "아무 draft도 없는 상태에서 PO스러운 텍스트를
+    // 붙여넣었을 때" 새 추출을 시작하는 진입점 하나만 추가하는 것. 짧은 일반 질문까지 오인하지
+    // 않도록 최소 길이(40자)와 PO 문서 특유의 키워드+숫자 동시 존재를 요구함.
+    window._ganttQaExtractPastedPoContext = function(text) {
+        if (!text) return false;
+        const trimmed = text.trim();
+        if (trimmed.length < 40) return false;
+        if (window._ganttQaPoDraft) return false;
+        if (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) return false;
+        const markerRe = /(사업자등록번호|공급자|공급받는자|세금계산서|거래명세서|견적서|품목|Invoice|Vendor)/i;
+        if (!markerRe.test(trimmed)) return false;
+        return /\d{2,}/.test(trimmed);
+    };
+
     // PDF 텍스트(들)에서 품목 정보를 AI로 추출 — 다중 항목 전부 추출, 임시코드는 AI가 표를
     // 보고 가장 가까운 것을 제안(애매하면 사람이 확인). correctionNote가 있으면 이전 추출
     // 결과에 대한 사람의 정정 지시를 같이 실어 재추출한다(별도 파싱 로직 없이 AI에게 다시
@@ -2201,6 +2219,45 @@ ${attachText}`;
             return;
         }
 
+        // 🛑 [2026-09-16 신규, 실사용 버그수정] "처음부터 다시"/"취소"/"그만" — 여러 턴 draft
+        //    (PO/BOM/승인원 표지/SAP 문서 모호성/드롭다운/확인버튼) 진행 중일 때, 사람이 중단·
+        //    재시작을 요청하면 그 draft가 정확히 뭘 기대하고 있었든 상관없이 무조건 정리하고
+        //    새 화제로 넘어갈 수 있게 한다. **반드시 아래 모든 draft별 단계 핸들러보다 먼저
+        //    체크해야 함** — 실사용에서 PO "목적" 질문 단계(ask_purpose)가 "P0X 형식으로
+        //    답해주세요"만 무한 반복하고 "처음부터 다시"/"취소"/"다시"류 어떤 말에도 반응하지
+        //    않아, 사용자가 "잉"/"아오"까지 시도하다 결국 포기한 사고로 발견됨 — 원인은 개별
+        //    단계 핸들러마다 각자 취소 키워드를 챙기는 기존 방식(`sap_prep_failed` 단계만
+        //    "취소"를 인식했고, `ask_project`/`ask_buyer`/`ask_reason`/`ask_purpose` 등
+        //    나머지 단계는 탈출구 자체가 없었음)이라, 새 단계를 추가할 때마다 깜빡하기 쉬웠다
+        //    — 그래서 모든 draft 상태를 한 곳에서 감시하는 전역 가드로 통합했다. draft가 아예
+        //    하나도 없으면(=평범한 대화 중) 이 정규식은 관여하지 않고 그냥 일반 AI 대화로
+        //    흘려보낸다(안 그러면 "이 프로젝트 취소됐어?"류 정상적인 질문까지 잘못 가로챌
+        //    위험이 있음) — 전체 메시지가 정확히 이 짧은 문구와 일치할 때만 매치되도록
+        //    좁혀서(`sap_prep_failed`의 기존 "다시 시도" 정규식과 같은 안전장치) "취소 관련
+        //    업무를 물어보는" 같은 긴 문장을 오인하지 않는다.
+        const INTERRUPT_RE = /^\s*(처음부터\s*(다시)?|취소|그만|중단|초기화|리셋|cancel|reset|restart|start\s*over)\s*[.!?~]*\s*$/i;
+        const hasAnyActiveQaDraft = !!(window._ganttQaPoDraft || window._ganttQaBomDraft ||
+            window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
+            window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons);
+        if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
+            window._ganttQaPoDraft = null;
+            window._ganttQaBomDraft = null;
+            window._ganttQaBomResolvedOptions = null;
+            window._ganttQaApprovalDraft = null;
+            window._ganttQaSapDocClarify = null;
+            window._ganttQaPendingChoiceDropdown = null;
+            window._ganttQaPendingConfirmButtons = null;
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                '🛑 진행 중이던 작업을 중단했습니다. 새로운 질문이나 요청을 말씀해주세요.',
+                "🛑 Stopped the in-progress task. Feel free to ask something new."
+            )});
+            input.value = '';
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 🛒 [2026-09-15 신규] "구매오더 요청" — PDF 첨부(📎) + 전송 → AI로 품목 추출 →
         //    확인/정정 → 프로젝트코드/구매담당자 사번/요청사유/목적 순차질문 → 엑셀 생성 →
         //    ZMMR060 업로드+협력사/세금코드/단가 입력 → **저장 직전 확인** → (사람이 승낙하면)
@@ -2210,7 +2267,8 @@ ${attachText}`;
         //    다른 모든 로컬 명령보다 먼저 체크해야 함(트리거 단어 없는 후속 답변이 엉뚱하게
         //    다른 로컬 명령/일반 AI 질문으로 새면 안 되므로, 첨부 자체가 유일한 용도인 지금은
         //    최우선 순위로 둠).
-        if (window._ganttQaPoDraft || (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length)) {
+        const pastedPoContext = window._ganttQaExtractPastedPoContext(question);
+        if (window._ganttQaPoDraft || (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) || pastedPoContext) {
             const apiKeyForPo = window.getActiveAiKey ? window.getActiveAiKey() : null;
             if (!apiKeyForPo && !window._ganttQaPoDraft) {
                 alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.'));
@@ -2224,11 +2282,18 @@ ${attachText}`;
             // 추출해서, draft가 남아있는 상태에서 다른 문서를 새로 첨부하면 그 새 파일은
             // 조용히 무시되고 계속 "이전 정보만 출력"되던 버그가 실사용에서 확인됨(첨부
             // 자체가 "이 문서로 다시 하겠다"는 의사표시이므로, 새 첨부가 항상 우선).
-            if (window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) {
+            // 📋 [2026-09-16 신규] 붙여넣은 PO 텍스트(pastedPoContext)도 같은 분기로 합류—
+            // "가짜 첨부" `[{name:'(붙여넣은 텍스트)', text: question}]`로 감싸서 기존 추출
+            // 경로를 그대로 재사용한다(새 fetch/파싱 로직 없음, 이 세션 전체의 설계 원칙과
+            // 동일). pastedPoContext는 위 헬퍼가 이미 "draft 없음 + 첨부 없음"만 통과시키므로
+            // 여기서 다시 그 조건을 검사할 필요 없음.
+            if ((window._ganttQaPendingAttachments && window._ganttQaPendingAttachments.length) || pastedPoContext) {
                 window._ganttQaPoDraft = null;
                 window._ganttQaHistory.push({ role: 'user', text: question });
                 input.value = '';
-                const attachments = window._ganttQaPendingAttachments.slice();
+                const attachments = pastedPoContext
+                    ? [{ name: window._t('(붙여넣은 텍스트)', '(pasted text)'), text: question }]
+                    : window._ganttQaPendingAttachments.slice();
                 window._ganttQaPendingAttachments = [];
                 window._ganttQaRenderAttachmentStrip();
                 window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + window._t('첨부 파일에서 품목 정보를 추출하는 중...', 'Extracting line items from the attachment...'), pending: true });
@@ -2283,14 +2348,31 @@ ${attachText}`;
                         // 그 결과 텍스트("N번은 코드")를 기존 자유서술 정정 경로(correctionNote)
                         // 로 그대로 흘려보내므로 아직 안 고른 품목은 다음 턴에 다시 같은 방식으로
                         // 물어보게 된다(기존 "여전히 비어있으면 재확인" 로직이 그대로 재사용됨).
+                        // 🔁 [2026-09-16 신규, 사용자 요청] 품목이 2개 이상이면 맨 위에 "전체 동일
+                        // 코드 적용" 행을 하나 더 추가한다 — "임시코드는 모두 900201로 적용해줘"류
+                        // 자유 텍스트는 이미 correctionNote → AI 재추출 경로로 원래도 이해되지만
+                        // (별도 파서가 없는 자유 서술이라 AI가 알아서 해석), 드롭다운에는 그 지름길이
+                        // 없었다 — 이 행을 고르면 개별 선택은 무시하고 그 코드를 모든 품목에 일괄
+                        // 적용하라는 지시 문장을 합성해 같은 AI 재추출 경로로 그대로 보낸다(새 파싱
+                        // 로직 없음 — 드롭다운은 입력 방식만 바꾼다는 기존 원칙 그대로).
                         const tempDropdownId = 'po-tempcode-' + Date.now();
+                        const tempCodeOptions = window._PO_TEMP_CODE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; });
+                        const applyAllItem = {
+                            label: window._t('🔁 전체 품목에 동일 코드 적용', '🔁 Apply the same code to ALL items'),
+                            options: tempCodeOptions
+                        };
+                        const perItemItems = missingItems.map(function(x) { return { label: `${x.i + 1}. ${x.it.desc}` }; });
                         window._ganttQaPendingChoiceDropdown = {
                             id: tempDropdownId, multi: true,
-                            items: missingItems.map(function(x) { return { label: `${x.i + 1}. ${x.it.desc}` }; }),
-                            options: window._PO_TEMP_CODE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; }),
+                            items: missingItems.length >= 2 ? [applyAllItem].concat(perItemItems) : perItemItems,
+                            options: tempCodeOptions,
                             buildAnswerText: function(selections) {
+                                if (missingItems.length >= 2 && selections[0]) {
+                                    return window._t(`임시코드는 모두 ${selections[0]}로 적용해줘`, `Apply temp code ${selections[0]} to all items`);
+                                }
+                                const itemSelections = missingItems.length >= 2 ? selections.slice(1) : selections;
                                 const parts = [];
-                                selections.forEach(function(code, idx) {
+                                itemSelections.forEach(function(code, idx) {
                                     if (code) parts.push(`${missingItems[idx].i + 1}번은 ${code}`);
                                 });
                                 return parts.join(', ');
@@ -2377,7 +2459,10 @@ ${attachText}`;
                     if (hit) purposeCode = hit.code;
                 }
                 if (!purposeCode) {
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t('목적 코드를 못 알아들었어요 — "P01"처럼 코드로 답해주세요.', 'I couldn\'t recognize that purpose — please reply with a code like "P01".') });
+                    // 💡 [2026-09-16] 위 전역 중단 가드가 "처음부터"/"취소" 등은 먼저 가로채므로
+                    // 여기까진 안 오지만, 그 탈출구가 있다는 걸 사람이 모를 수 있어 재질문 메시지에
+                    // 명시적으로 언급해서 "계속 같은 오류만 반복된다"는 인상을 줄인다.
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('목적 코드를 못 알아들었어요 — "P01"처럼 코드로 답해주세요(그만두려면 "취소"라고 답해주세요).', 'I couldn\'t recognize that purpose — please reply with a code like "P01" (or say "cancel" to stop).') });
                     window._renderGanttQaMessages();
                     input.focus();
                     return;
