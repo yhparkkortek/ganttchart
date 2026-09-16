@@ -16,7 +16,22 @@
     var _query  = '';          // 현재 검색어
     var _mode   = 'highlight'; // 'highlight' | 'filter' (filter=비매칭 숨기기)
     var _matchedIndices = [];  // 매칭된 globalData 인덱스 목록
-    var _selected = new Set(); // 체크박스 선택된 인덱스 목록
+    // 🐛🐛 [2026-09-16 실사용 버그수정] "AI 검색 후 V 체크해서 일괄 삭제할 때 어떤 행(특히
+    // 오래전 분석된 메일 업무)은 안 지워진다"는 제보 — 원인은 이 Set에 globalData "배열
+    // 인덱스"(숫자)를 담아뒀던 것. 체크한 뒤 삭제 버튼을 누르기 전 사이에 표(`#table-body`)가
+    // 한 번이라도 다시 그려지면(메일 자동등록 파이프라인이 새 업무를 끼워넣거나, 자동저장이
+    // 서버 병합 결과를 반영하는 등 — 이 앱은 배경에서 이런 재렌더가 흔히 일어남)
+    // `window.ganttSearchObserve`의 MutationObserver(아래)가 그 즉시 이 Set을 통째로 비워버려서
+    // 사용자가 이미 체크해둔 항목들이 조용히 선택 해제됐다 — 그 상태에서 계속 몇 개를 더
+    // 체크하고 삭제를 누르면 "재렌더 이전에 체크했던(먼저 훑어본, 그래서 화면 위쪽/오래된
+    // 항목일 가능성이 높은) 것들만 빠진 채" 삭제됐다. **수정**: 인덱스 대신 행 "객체 참조"를
+    // 담도록 바꿈 — globalData의 행 객체는 재렌더돼도 같은 객체가 재사용되므로(속성만 갱신,
+    // 배열이 통째로 새로 만들어지지 않음) 배열 안에서의 위치(인덱스)가 바뀌어도 객체 자체의
+    // 동일성은 그대로 유지된다. 그래서 더 이상 재렌더 때마다 선택을 비울 필요가 없어졌고
+    // (아래 MutationObserver에서 그 clear() 호출을 제거함), 실제 삭제 시점에는 항상
+    // `globalData.indexOf(row)`로 "지금" 위치를 다시 찾아서 지우므로 그 사이 몇 번을
+    // 재렌더/재배치했든 항상 정확한 행이 삭제된다.
+    var _selected = new Set(); // 체크박스로 선택된 "행 객체" 집합(배열 인덱스 아님 — 위 설명 참고)
     var _navIndex = -1;        // 현재 네비게이션 위치 (-1=미선택)
     var _debounceTimer = null; // 검색 debounce 타이머
     var _lastAutoNavQuery = ''; // 자동 이동 마지막 적용 쿼리
@@ -517,17 +532,21 @@
                 cb.className = 'gantt-ai-cb';
                 cb.style.cssText = 'width:14px;height:14px;cursor:pointer;flex-shrink:0;accent-color:#d63384;';
                 cb.addEventListener('change', function() {
-                    if (this.checked) _selected.add(idx);
-                    else _selected.delete(idx);
+                    // 클릭 시점에 항상 이 <tr>이 "지금" 가리키는 행을 다시 읽는다(재렌더로
+                    // idx가 바뀌었을 가능성에 대비 — 위 _selected 선언부 주석 참고).
+                    var row = globalData[parseInt(tr.getAttribute('data-row-index'), 10)];
+                    if (!row) return;
+                    if (this.checked) _selected.add(row);
+                    else _selected.delete(row);
                     _updateBulkBar(true);
                 });
                 flexWrap.insertBefore(cb, flexWrap.firstChild);
             }
-            cb.checked = _selected.has(idx);
+            cb.checked = _selected.has(globalData[idx]);
             cb.style.display = '';
         } else if (cb) {
             cb.style.display = 'none';
-            _selected.delete(idx);
+            _selected.delete(globalData[idx]);
         }
     }
 
@@ -559,11 +578,11 @@
 
         document.getElementById('gantt-ai-bulk-selall').addEventListener('click', function() {
             _selected.clear();
-            _matchedIndices.forEach(function(i) { _selected.add(i); });
+            _matchedIndices.forEach(function(i) { if (globalData[i]) _selected.add(globalData[i]); });
             var tbody = document.getElementById('table-body');
             if (tbody) tbody.querySelectorAll('.gantt-ai-cb').forEach(function(cb) {
                 var idx = parseInt(cb.closest('tr').getAttribute('data-row-index'), 10);
-                cb.checked = _matchedIndices.includes(idx);
+                cb.checked = _selected.has(globalData[idx]);
             });
             _updateBulkBar(true);
         });
@@ -581,8 +600,8 @@
 
         document.getElementById('gantt-ai-bulk-dellearn').addEventListener('click', function() {
             if (!_selected.size) return;
-            var aiSelected = Array.from(_selected).filter(function(i) {
-                return globalData[i] && globalData[i]._aiRegistered;
+            var aiSelected = Array.from(_selected).filter(function(row) {
+                return row && row._aiRegistered;
             });
             if (!aiSelected.length) {
                 alert(window._t('선택한 업무 중 AI 등록 업무가 없습니다.\n일반 "일괄 삭제"를 이용하세요.', 'None of the selected tasks were AI-registered.\nPlease use the regular "Batch Delete" instead.'));
@@ -593,13 +612,11 @@
 
         document.getElementById('gantt-ai-bulk-untag').addEventListener('click', function() {
             if (!_selected.size) return;
-            var idxs = Array.from(_selected).filter(function(i) {
-                return globalData[i] && globalData[i]._aiRegistered;
+            var rows = Array.from(_selected).filter(function(row) {
+                return row && row._aiRegistered;
             });
-            if (!idxs.length) { alert(window._t('AI 등록 업무가 선택되지 않았습니다.', 'No AI-registered tasks were selected.')); return; }
-            idxs.forEach(function(i) {
-                var row = globalData[i];
-                if (!row) return;
+            if (!rows.length) { alert(window._t('AI 등록 업무가 선택되지 않았습니다.', 'No AI-registered tasks were selected.')); return; }
+            rows.forEach(function(row) {
                 // AI 태그(＊AI📧) 제거 + 메타 지우기
                 ['_origDev','_origT1','_origT2','_origT3','_origT4'].forEach(function(k) {
                     if (row[k]) row[k] = row[k].replace(/\s*＊AI📧\s*$/, '').trim();
@@ -609,7 +626,7 @@
             _selected.clear();
             _clearSearch();
             window.recalculateSchedules();
-            window._showAiToast && window._showAiToast('🏷️ AI 태그 ' + idxs.length + '건 해제됨');
+            window._showAiToast && window._showAiToast('🏷️ AI 태그 ' + rows.length + '건 해제됨');
         });
     }
 
@@ -630,12 +647,17 @@
     // ─── 일괄 삭제 ─────────────────────────────────────────────────────────────
 
     function _batchDelete(withLearning) {
-        var idxs = Array.from(_selected).sort(function(a,b) { return b - a; }); // 내림차순
+        // _selected는 행 "객체" 집합이라(위 선언부 주석 참고) 정렬 순서는 중요하지 않다 —
+        // 각 행을 지우기 직전에 항상 `globalData.indexOf(row)`로 "지금" 위치를 다시 찾으므로,
+        // 이 루프 도중이든 그 이전이든 배열이 몇 번을 재배치됐든 항상 정확한 행이 지워진다.
+        var targetRows = Array.from(_selected);
         var learned = 0;
+        var deletedCount = 0;
 
-        idxs.forEach(function(idx) {
-            var row = globalData[idx];
+        targetRows.forEach(function(row) {
             if (!row) return;
+            var idx = globalData.indexOf(row);
+            if (idx === -1) return; // 이미 다른 경로로 삭제된 경우 등 — 조용히 건너뜀
             var l = row._level;
             var taskName = (l===0?row._origDev:l===1?row._origT1:l===2?row._origT2:l===3?row._origT3:row._origT4) || '업무';
 
@@ -660,6 +682,7 @@
             }
 
             globalData.splice(idx, 1);
+            deletedCount++;
             window.changeLogs && window.changeLogs.push({
                 time: new Date().toLocaleString('ko-KR'),
                 userName: window.currentUserName || '비로그인',
@@ -672,7 +695,7 @@
         _clearSearch();
         window.recalculateSchedules();
 
-        var msg = idxs.length + '건 삭제됨';
+        var msg = deletedCount + '건 삭제됨';
         if (withLearning && learned) msg += ' / ' + learned + '건 학습 기록';
         window._showAiToast && window._showAiToast('🗑️ ' + msg);
     }
@@ -1389,8 +1412,14 @@
         if (!tbody) return;
         _observer = new MutationObserver(function() {
             if (_query) {
-                // 재렌더 직후이므로 체크박스 재생성 필요
-                _selected.clear();
+                // 🐛🐛 [2026-09-16 실사용 버그수정] 여기서 매번 `_selected.clear()`를 불렀던 게
+                // "V 체크 후 일괄 삭제했는데 일부(특히 오래전 메일 업무)가 안 지워진다"는 제보의
+                // 실제 원인이었다 — 표가 재렌더될 때마다(메일 자동등록/자동저장 등 배경 작업으로
+                // 수시로 일어남) 사용자가 이미 체크해둔 선택을 조용히 통째로 비워버려서, 재렌더
+                // 이전에 체크한 항목들이 삭제 대상에서 빠졌다. `_selected`가 이제 배열 인덱스가
+                // 아니라 행 객체 참조를 담으므로(위 `_selected` 선언부 주석 참고) 재렌더로 인덱스가
+                // 바뀌어도 선택 자체는 유효하게 유지된다 — 더 이상 여기서 비울 필요가 없다.
+                // 체크박스는 재렌더로 새 DOM에 다시 붙어야 하므로 `_applySearch()`는 그대로 호출.
                 _applySearch();
             }
         });
