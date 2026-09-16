@@ -2706,6 +2706,53 @@ ${attachText}`;
             return;
         }
 
+        // 📦 [2026-09-16 신규, 사용자 요청] "123456 품목 내역 보여줘"류 — 자재번호(들)의
+        //    품목(자재내역, ≤40자)/품목2(40자 초과 연속분) 둘 다 항상 같이 보여준다("품목 내역
+        //    조회하면 기본적으로 2개 품목 모두 출력해줘"). "문서"/"파일" 키워드를 요구하는
+        //    문서열기/목록/배치다운로드 판정들과 겹칠 일이 없어 그 판정들보다 먼저 체크해도
+        //    안전 — 자재번호 앵커 + "품목/자재"+"내역/정보/설명" 조합이라 오탐 위험도 낮음.
+        const sapMaterialInfoReq = window._ganttQaExtractMaterialInfoRequest ? window._ganttQaExtractMaterialInfoRequest(sapDocQuestion) : null;
+        if (sapMaterialInfoReq) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({
+                role: 'ai',
+                text: '⏳ ' + window._t(
+                    `SAP에서 자재 ${sapMaterialInfoReq.length}개의 품목 내역을 조회하는 중...`,
+                    `Looking up item description(s) for ${sapMaterialInfoReq.length} material(s) in SAP...`
+                ),
+                pending: true
+            });
+            input.value = '';
+            window._renderGanttQaMessages();
+            let materialInfoReply;
+            try {
+                const url = 'http://127.0.0.1:5000/sap-approval-fetch?materials=' + encodeURIComponent(sapMaterialInfoReq.join(','));
+                const timeoutMs = Math.min(200000, 30000 + 10000 * sapMaterialInfoReq.length);
+                const res = await window._withTimeout(fetch(url), timeoutMs, window._t('SAP 품목 내역 조회 시간 초과', 'Looking up SAP item description(s) timed out'));
+                const data = await res.json();
+                if (data.ok && Array.isArray(data.results)) {
+                    const lines = data.results.map(function(r) {
+                        if (!r.ok) {
+                            return `📦 ${r.code}\n⚠️ ` + window._t('조회 실패: ', 'Lookup failed: ') + (r.err || window._t('알 수 없는 오류', 'unknown error'));
+                        }
+                        const desc = r.desc || window._t('(없음)', '(none)');
+                        const sub = (r.sub || '').trim() || window._t('(없음)', '(none)');
+                        return `📦 ${r.code}\n` + window._t('품목: ', 'Item: ') + desc + '\n' + window._t('품목2: ', 'Item2: ') + sub;
+                    });
+                    materialInfoReply = lines.join('\n\n');
+                } else {
+                    materialInfoReply = '⚠️ ' + window._t('품목 내역 조회 실패: ', 'Failed to look up item description(s): ') + (data.error || window._t('알 수 없는 오류', 'unknown error'));
+                }
+            } catch (e) {
+                materialInfoReply = '⚠️ ' + window._t('품목 내역 조회 실패: ', 'Failed to look up item description(s): ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: materialInfoReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
         //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
         //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
@@ -3853,6 +3900,31 @@ ${attachText}`;
         if (materials.length < 2) return null; // 자재 1개면 기존 단일 경로가 처리
         var docType = window._ganttQaExtractSapDocTypeCode(text);
         return { materials: materials, docType: docType || 'P01' };
+    };
+
+    // 📦 [2026-09-16 신규, 사용자 요청] "123456 품목 내역 보여줘"/"123456,654321 품목 내역
+    // 알려줘" — 자재번호(들)로 "품목"(자재내역, MAKT-MAKTX, 40자 제한)을 물어보는 요청.
+    // ⚠️⚠️ SAP에는 이 설명이 실제로는 2개 필드로 나뉘어 있다는 게 라이브 진단+사용자 제공
+    // 스크린샷으로 확인됨: MM03 메인 화면의 자재내역(MAKTX)은 딱 40자까지만 담기고, 이름이
+    // 40자를 넘으면 나머지가 "추가 데이터 → 기본 데이터 텍스트"(tabpZU05) 장문 텍스트에
+    // 이어서 들어간다(사용자가 자재 132931로 실제 확인: MAKTX="GLASS CHEM>320,-,
+    // STELLATPR,727X433.8,3T="(40자로 끊김) + 기본 데이터 텍스트=", BLK,-,ASF,-"). ZMM009
+    // 같은 다중조회 화면에도 이 둘이 "자재내역(KO)"/"자재내역2(KO)" 두 컬럼으로 그대로
+    // 노출됨(사용자 스크린샷으로 확인) — 즉 "품목2"는 새로 조회할 SAP 데이터가 아니라 이미
+    // "승인원 표지" 기능이 자재마다 읽고 있던 바로 그 두 값(desc/sub)이다. **그래서 새 SAP
+    // 자동화를 하나도 안 만들고, 이미 라이브 검증된 fetch_approval_info(자재마다 MM03 진입
+    // → MAKTX 읽기 → VKey(30)로 "추가 데이터" 화면 진입 → tabpZU05 선택 → 장문 텍스트 읽기)
+    // 와 그걸 감싼 백엔드 GET /sap-approval-fetch를 그대로 재사용한다** — "승인원 표지
+    // 생성" 여러 턴 draft(window._ganttQaApprovalDraft)와는 완전히 무관한 별도의 1회성
+    // 조회 명령(담당자/팀장 등을 안 물어봄, 그냥 바로 조회해서 보여줌)이라 별개 함수로 뺐다.
+    window._ganttQaExtractMaterialInfoRequest = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        if (!/(품목|자재)/.test(text)) return null;
+        if (!/(내역|정보|설명)/.test(text)) return null;
+        var materials = (text.match(/\b\d{5,8}\b/g) || []).filter(function(m, i, a) { return a.indexOf(m) === i; });
+        if (!materials.length) return null;
+        return materials;
     };
 
     // 🤔 [2026-09-15 신규, 사용자 요청] "104446 문서 출력해줘"처럼 "출력"이라는 동사 하나만으로는
