@@ -2667,12 +2667,62 @@ ${docsJson}`;
             if (approvalDraft.isPre === undefined) missing.push(window._t('가승인원 여부(정식승인원 / 가승인원)', 'whether this is a provisional approval (formal / provisional)'));
 
             if (missing.length) {
+                // 🔽 [2026-09-17 신규, 사용자 요청] "드롭다운/클릭이 안 되어 있다"는 제보로
+                // 발견 — 이 질문은 4개 항목을 텍스트 한 덩어리로만 물어봐서, 그중 정해진
+                // 선택지가 있는 "출력 형식"/"가승인원 여부"까지 전부 타이핑해야 했다. 위
+                // "🔽 AI 문답 객관식 질문 — 드롭다운" 원칙(정해진 목록에서 고르는 질문은 항상
+                // 드롭다운)이 이 두 항목엔 적용이 안 돼 있었던 것 — 이름(담당자/팀장)은 정해진
+                // 목록이 없으니 그대로 자유 텍스트로 남겨두고, 나머지 둘만 BOM 옵션 드롭다운과
+                // 같은 "항목마다 다른 선택지" 멀티 드롭다운으로 전환한다. 선택 결과는 기존
+                // `_ganttQaExtractApprovalUpdate`의 키워드 매칭(예: "엑셀"/"정식승인원")과
+                // 그대로 맞아떨어지는 문자열로 합성해 흘려보내므로 파서는 전혀 안 건드림.
                 const matLabel = approvalDraft.materials.join(', ');
+                const categoricalMissing = [];
+                if (!approvalDraft.format) {
+                    categoricalMissing.push({
+                        label: window._t('출력 형식', 'Output format'),
+                        options: [
+                            { value: '엑셀', label: window._t('엑셀', 'Excel') },
+                            { value: '워드', label: window._t('워드', 'Word') },
+                            { value: '둘 다', label: window._t('둘 다', 'Both') }
+                        ]
+                    });
+                }
+                if (approvalDraft.isPre === undefined) {
+                    categoricalMissing.push({
+                        label: window._t('가승인원 여부', 'Provisional approval?'),
+                        options: [
+                            { value: '정식승인원', label: window._t('정식승인원', 'Formal approval') },
+                            { value: '가승인원', label: window._t('가승인원', 'Provisional approval') }
+                        ]
+                    });
+                }
+                const nameMissing = [];
+                if (!approvalDraft.writer) nameMissing.push(window._t('담당자(Checked by) 이름', "the preparer's (Checked by) name"));
+                if (!approvalDraft.leader) nameMissing.push(window._t('팀장(Approved by) 이름', "the team leader's (Approved by) name"));
+                const nameLine = nameMissing.length
+                    ? window._t(`\n\n그리고 아래 이름도 이어서 말씀해주세요:\n- ${nameMissing.join('\n- ')}`, `\n\nAlso, please reply with:\n- ${nameMissing.join('\n- ')}`)
+                    : '';
                 const reply = window._t(
-                    `📋 자재 "${matLabel}"의 승인원 표지를 만들려면 아래 항목이 더 필요합니다 — 답을 이어서 말씀해주세요:\n- ${missing.join('\n- ')}\n\n(Revision 번호와 Remark는 생략하면 각각 "00"/빈 비고로 자동 처리됩니다)`,
-                    `📋 To generate the approval cover for material(s) "${matLabel}", I still need — just reply with the answers:\n- ${missing.join('\n- ')}\n\n(Revision number and Remark default to "00" / blank if omitted)`
+                    `📋 자재 "${matLabel}"의 승인원 표지를 만들려면 아래 항목이 더 필요합니다.`,
+                    `📋 To generate the approval cover for material(s) "${matLabel}", I still need the following.`
+                ) + nameLine + window._t(
+                    '\n\n(Revision 번호와 Remark는 생략하면 각각 "00"/빈 비고로 자동 처리됩니다)',
+                    '\n\n(Revision number and Remark default to "00" / blank if omitted)'
                 );
-                window._ganttQaHistory.push({ role: 'ai', text: reply });
+                if (categoricalMissing.length) {
+                    const dropdownId = 'approval-choice-' + Date.now();
+                    window._ganttQaPendingChoiceDropdown = {
+                        id: dropdownId, multi: true,
+                        items: categoricalMissing,
+                        buildAnswerText: function(selections) {
+                            return selections.filter(function(v) { return !!v; }).join(', ');
+                        }
+                    };
+                    window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: dropdownId, text: reply });
+                } else {
+                    window._ganttQaHistory.push({ role: 'ai', text: reply });
+                }
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
