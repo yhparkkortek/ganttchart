@@ -430,6 +430,53 @@
         window.sendGanttQaMessage();
     };
 
+    // ✅ [2026-09-16 신규, 사용자 요청] "확인/저장해줘/보내줘/취소"처럼 정해진 표가 아니라 그때
+    // 그때 다른 짧은 확인성 답변(1~3개)을 기대하는 질문은 드롭다운(위 선택지 헬퍼, 표가 있는
+    // 객관식용)이 아니라 **메일/공지/알람 초안이 이미 쓰고 있던 "이대로 보내기/취소" 버튼과
+    // 완전히 같은 스타일**의 클릭 버튼으로 답할 수 있게 한다 — 사용자가 "확인, 저장해줘,
+    // 보내줘, 기타... 클릭해서 대답하는 방식으로 해달라"고 요청, PO 품목 확인 단계("확인"
+    // 이라고 답해주세요)를 구체적 예시로 듦. 메일 초안 등은 이미 이 버튼 패턴이 있었지만
+    // SAP/구매오더 쪽의 "짧은 문구로 답해달라"는 질문들엔 아직 없었다(CLAUDE.md "⚡ AI 문답
+    // 확인성 질문" 절 참고). **선택값을 처리하는 새 로직을 따로 만들지 않는다** — 버튼을
+    // 누르면 그 버튼의 문구를 그대로 입력창에 채우고 기존 sendGanttQaMessage()를 호출할
+    // 뿐이라, 타이핑으로 같은 문구를 직접 쳐서 보내는 것과 100% 동일하게 처리된다(기존
+    // 단계별 파서/AI 판단 로직 무수정). 자유 텍스트 입력은 버튼과 무관하게 항상 그대로
+    // 가능(정정 등 표에 없는 답이 필요한 경우를 위해).
+    window._ganttQaPendingConfirmButtons = null; // {id, buttons:[{label, value, style:'confirm'|'cancel'|'neutral'}]}
+
+    window._ganttQaRenderConfirmButtonsHtml = function(draft) {
+        const btns = draft.buttons.map(function(b) {
+            const isConfirm = b.style === 'confirm';
+            const isCancel = b.style === 'cancel';
+            const bg = isConfirm ? '#e6f6ea' : (isCancel ? '#f8f9fa' : '#e7f3ff');
+            const border = isConfirm ? '#a8dab8' : (isCancel ? '#ccc' : '#a5c8f0');
+            const color = isConfirm ? '#1f7a3d' : (isCancel ? '#555' : '#1971c2');
+            const hoverBg = isConfirm ? '#c9ecd3' : (isCancel ? '#e9ecef' : '#d3e8fd');
+            const hoverBorder = isConfirm ? '#7cc494' : (isCancel ? '#ccc' : '#7cb3ea');
+            return `<button onclick="window._ganttQaSubmitConfirmButton('${draft.id}', '${escapeHtml(b.value).replace(/'/g, "\\'")}')" onmouseover="this.style.background='${hoverBg}'; this.style.borderColor='${hoverBorder}';" onmouseout="this.style.background='${bg}'; this.style.borderColor='${border}';" style="font-size:11.5px; padding:5px 12px; border:1px solid ${border}; background:${bg}; color:${color}; border-radius:6px; font-weight:${isConfirm ? 'bold' : 'normal'}; cursor:pointer; transition:background .15s, border-color .15s;">${escapeHtml(b.label)}</button>`;
+        }).join('');
+        return `<div style="display:flex; justify-content:flex-end; gap:6px; margin-top:6px; flex-wrap:wrap;">${btns}</div>`;
+    };
+
+    window._ganttQaSubmitConfirmButton = function(id, value) {
+        const draft = window._ganttQaPendingConfirmButtons;
+        if (!draft || draft.id !== id) return;
+        window._ganttQaPendingConfirmButtons = null;
+        const input = document.getElementById('gantt-qa-input');
+        if (!input) return;
+        input.value = value;
+        window.sendGanttQaMessage();
+    };
+
+    // 호출부 공용 헬퍼 — text와 buttons를 넘기면 draft 등록 + choiceDropdown과 동일한 패턴으로
+    // 히스토리에 confirmButtonsId를 실어 푸시까지 한 번에 처리(호출부가 매번 id를 직접 만들
+    // 필요 없게).
+    window._ganttQaShowConfirmButtons = function(text, buttons) {
+        const id = 'qa-confirm-' + Date.now();
+        window._ganttQaPendingConfirmButtons = { id: id, buttons: buttons };
+        window._ganttQaHistory.push({ role: 'ai', confirmButtonsId: id, text: text });
+    };
+
     // PDF 텍스트(들)에서 품목 정보를 AI로 추출 — 다중 항목 전부 추출, 임시코드는 AI가 표를
     // 보고 가장 가까운 것을 제안(애매하면 사람이 확인). correctionNote가 있으면 이전 추출
     // 결과에 대한 사람의 정정 지시를 같이 실어 재추출한다(별도 파싱 로직 없이 AI에게 다시
@@ -607,6 +654,7 @@ ${attachText}`;
             };
         });
         let finalReply;
+        let finalButtons = null; // ✅ [2026-09-16 신규] 아래 각 분기가 채우면 확인용 클릭 버튼도 같이 보여줌
         try {
             const exRes = await window._withTimeout(
                 fetch('http://127.0.0.1:5000/po-build-excel', {
@@ -637,22 +685,36 @@ ${attachText}`;
             if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
             pd.stage = 'confirm_sap_prepare';
             finalReply = window._t(
-                `✅ 엑셀 생성(${exData.fileName}) + SAP 업로드/입력까지 완료했습니다.\n\n${prepData.text || ''}\n\n📌 SAP에는 아직 저장(확정)되지 않았습니다 — 위 내용을 SAP 화면에서 직접 확인하신 후 "저장해줘"라고 답해주시면 실제로 저장하고 발주서 PDF까지 출력합니다. 취소하시려면 "취소"라고 답해주세요.`,
-                `✅ Generated the excel (${exData.fileName}) and uploaded/filled it into SAP.\n\n${prepData.text || ''}\n\n📌 This has NOT been saved in SAP yet — please review it directly in the SAP screen, then reply "save" to actually save it and print the purchase order PDF, or "cancel" to stop here.`
+                `✅ 엑셀 생성(${exData.fileName}) + SAP 업로드/입력까지 완료했습니다.\n\n${prepData.text || ''}\n\n📌 SAP에는 아직 저장(확정)되지 않았습니다 — 위 내용을 SAP 화면에서 직접 확인하신 후 아래에서 선택해주세요.`,
+                `✅ Generated the excel (${exData.fileName}) and uploaded/filled it into SAP.\n\n${prepData.text || ''}\n\n📌 This has NOT been saved in SAP yet — please review it directly in the SAP screen, then choose below.`
             );
+            finalButtons = [
+                { label: window._t('💾 저장해줘', '💾 Save it'), value: window._t('저장해줘', 'save'), style: 'confirm' },
+                { label: window._t('❌ 취소', '❌ Cancel'), value: window._t('취소', 'cancel'), style: 'cancel' }
+            ];
         } catch (e) {
             pd.stage = 'sap_prep_failed'; // draft는 유지 — 값만 고쳐서 재시도 가능하게
             if (e && e.isBackendStale) {
                 // 이 경우는 값(사업자등록번호 등)이 잘못돼서가 아니라 백엔드 자체 문제이므로,
                 // "값을 고쳐보라"는 안내를 붙이면 오히려 혼란을 준다 — 재시작 안내만 명확히.
-                finalReply = '⚠️ ' + e.message + '\n\n' + window._t('백엔드를 재시작한 뒤 "다시 시도"라고 답해주세요.', 'After restarting the backend, reply "retry" to try again.');
+                finalReply = '⚠️ ' + e.message + '\n\n' + window._t('백엔드를 재시작한 뒤 아래에서 선택하거나, 값이 잘못됐으면 직접 입력해 정정해주세요.', 'After restarting the backend, choose below, or type a correction if a value was wrong.');
             } else {
                 finalReply = '⚠️ ' + window._t('구매오더 준비 중 오류: ', 'Error while preparing the purchase order: ') + (e && e.message ? e.message : e)
-                    + '\n\n' + window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시거나(예: "사업자등록번호는 2168144558", "목적은 P04로 변경"), "다시 시도"라고 답해서 그대로 재시도, "취소"로 중단할 수 있습니다.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value (e.g. "biz reg no is 2168144558", "purpose should be P04"), reply "retry" to try again as-is, or "cancel" to stop.');
+                    + '\n\n' + window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시거나(예: "사업자등록번호는 2168144558", "목적은 P04로 변경"), 아래에서 선택할 수 있습니다.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value (e.g. "biz reg no is 2168144558", "purpose should be P04"), or choose below.');
             }
+            // ✅ [2026-09-16 신규] 두 실패 분기 모두 "다시 시도"/"취소" 클릭 버튼을 같이 보여준다 —
+            // 자유 텍스트로 값을 정정하는 것도 여전히 가능(입력창은 버튼과 무관하게 항상 열려있음).
+            finalButtons = [
+                { label: window._t('🔁 다시 시도', '🔁 Retry'), value: window._t('다시 시도', 'retry'), style: 'neutral' },
+                { label: window._t('❌ 취소', '❌ Cancel'), value: window._t('취소', 'cancel'), style: 'cancel' }
+            ];
         }
         window._ganttQaHistory.pop();
-        window._ganttQaHistory.push({ role: 'ai', text: finalReply });
+        if (finalButtons) {
+            window._ganttQaShowConfirmButtons(finalReply, finalButtons);
+        } else {
+            window._ganttQaHistory.push({ role: 'ai', text: finalReply });
+        }
     };
 
     window._aiFetchSapContext = async function(question) {
@@ -2182,7 +2244,8 @@ ${attachText}`;
                         projectCode: '', buyerEmpId: '', reason: '', purpose: '',
                     };
                     window._ganttQaHistory.pop();
-                    window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaPoSummaryText(window._ganttQaPoDraft) });
+                    window._ganttQaShowConfirmButtons(window._ganttQaPoSummaryText(window._ganttQaPoDraft),
+                        [{ label: window._t('✅ 확인', '✅ Confirm'), value: window._t('확인', 'confirm'), style: 'confirm' }]);
                 } catch (e) {
                     window._ganttQaHistory.pop();
                     window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('품목 추출 실패: ', 'Failed to extract line items: ') + (e && e.message ? e.message : e) });
@@ -2259,7 +2322,8 @@ ${attachText}`;
                         pd.currency = extracted.currency || pd.currency || 'KRW';
                         pd.note = extracted.note || '';
                         window._ganttQaHistory.pop();
-                        window._ganttQaHistory.push({ role: 'ai', text: window._ganttQaPoSummaryText(pd) });
+                        window._ganttQaShowConfirmButtons(window._ganttQaPoSummaryText(pd),
+                            [{ label: window._t('✅ 확인', '✅ Confirm'), value: window._t('확인', 'confirm'), style: 'confirm' }]);
                     } catch (e) {
                         window._ganttQaHistory.pop();
                         window._ganttQaHistory.push({ role: 'ai', text: '⚠️ ' + window._t('재추출 실패: ', 'Re-extraction failed: ') + (e && e.message ? e.message : e) });
@@ -2403,7 +2467,13 @@ ${attachText}`;
                     // 좁혀서, 이런 긴 문장은 아래 "인식 못함" 분기로 빠지게 함.
                     await window._ganttQaRunPoSapPrepareAndReport(pd);
                 } else {
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시고(예: "사업자등록번호는 2168144558", "목적은 P04"), 그대로 다시 시도하려면 "다시 시도"라고, 그만두려면 "취소"라고 답해주세요.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value (e.g. "biz reg no is 2168144558", "purpose should be P04"); reply "retry" to try again as-is, or "cancel" to stop.') });
+                    window._ganttQaShowConfirmButtons(
+                        window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시거나, 아래에서 선택해주세요.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value, or choose below.'),
+                        [
+                            { label: window._t('🔁 다시 시도', '🔁 Retry'), value: window._t('다시 시도', 'retry'), style: 'neutral' },
+                            { label: window._t('❌ 취소', '❌ Cancel'), value: window._t('취소', 'cancel'), style: 'cancel' }
+                        ]
+                    );
                 }
                 window._renderGanttQaMessages();
                 input.focus();
@@ -2545,8 +2615,13 @@ ${attachText}`;
             const clarify = window._ganttQaSapDocClarify;
             const replyText = question.trim();
             if (clarify.stage === 'action') {
-                const wantsSave = /(저장|다운로드)/.test(replyText);
-                const wantsList = /(목록|보여|출력)/.test(replyText);
+                // 💡 [2026-09-16] 클릭형 확인 버튼(위 window._ganttQaShowConfirmButtons)이 영문
+                // 모드에서는 "save"/"show list"처럼 영문 문구를 그대로 사용자 메시지로 보내므로,
+                // 원래 한국어 키워드만 인식하던 이 정규식이 영문 버튼 클릭에도 반응하도록 확장함
+                // (기존엔 영문 사용자가 자유 텍스트로 "save"라고 타이핑해도 애초에 인식이 안 되던
+                // 잠재 버그였는데, 버튼이 생기면서 이 경로를 훨씬 더 자주 타게 돼 같이 고침).
+                const wantsSave = /(저장|다운로드|save|download)/i.test(replyText);
+                const wantsList = /(목록|보여|출력|list|show)/i.test(replyText);
                 if (wantsSave && !wantsList) {
                     if (clarify.materials.length >= 2) {
                         sapDocQuestion = clarify.materials.join(',') + ' 문서 저장해줘';
@@ -2601,10 +2676,13 @@ ${attachText}`;
                 input.value = '';
                 window._ganttQaSapDocClarify = { materials: ambiguousMats, stage: 'action' };
                 const matLabel = ambiguousMats.join(', ');
-                window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                    `📄 자재 "${matLabel}"의 문서, 어떻게 도와드릴까요?\n- 파일을 저장(다운로드)해드릴까요?\n- 아니면 지금 어떤 문서가 있는지 목록만 보여드릴까요?`,
-                    `📄 What would you like me to do with the document(s) for material "${matLabel}"?\n- Should I save (download) the file?\n- Or just show you a list of what's available?`
-                )});
+                window._ganttQaShowConfirmButtons(
+                    window._t(`📄 자재 "${matLabel}"의 문서, 어떻게 도와드릴까요?`, `📄 What would you like me to do with the document(s) for material "${matLabel}"?`),
+                    [
+                        { label: window._t('💾 저장(다운로드)', '💾 Save (download)'), value: window._t('저장해줘', 'save'), style: 'confirm' },
+                        { label: window._t('📋 목록만 보기', '📋 Show list only'), value: window._t('목록 보여줘', 'show list'), style: 'neutral' }
+                    ]
+                );
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
