@@ -2049,9 +2049,15 @@ def po_print_via_zmm018():
 # 띄워 사용자가 버튼을 누르면 로컬 백엔드가 스스로 그 파일들을 GitHub raw에서 받아 자기 자신의
 # 디렉터리(BASE_DIR)에 덮어쓴다(`/self-update`) — 버전 번호를 별도로 관리하지 않고 매번 GitHub의
 # 실제 파일 내용과 직접 바이트 비교하므로 "버전 올리는 걸 깜빡해서 갱신 감지가 안 되는" 문제가
-# 없다. **자동 재시작은 하지 않는다** — 실행 중인 백엔드 프로세스 자신을 안전하게 재기동시키는
-# 로직(포트 점유 해제 타이밍 등)은 복잡도·위험도에 비해 이득이 적어, 덮어쓰기까지만 자동화하고
-# "백엔드를 다시 켜 주세요" 안내는 사람이 직접 하게 한다(요청대로).
+# 없다.
+# ⚠️⚠️ [2026-09-16 재검토 후 결정 변경] 원래는 "자동 재시작은 하지 않는다"(포트 점유 해제
+# 타이밍 등 복잡도·위험도 대비 이득이 적다고 판단)였으나, SAP 디버깅 중 백엔드가 자주 바뀌고
+# 다른 사용자 PC는 시작프로그램으로 한 번 켜진 뒤 사람이 재시작을 깜빡하기 쉽다는 실사용
+# 문제(구버전 백엔드가 새 SAP 엔드포인트 요청에 HTML 404를 돌려줘 "Unexpected token JSON"
+# 오류로 오인되던 사고)가 반복돼, 사용자 요청으로 자동 재시작을 다시 구현하기로 결정함 —
+# 아래 `_spawn_restarted_backend()` 참고. 실패해도(새 프로세스 기동 실패 등) 예외 없이 조용히
+# `restarting: False`로 응답해 프런트가 기존처럼 "수동으로 재시작해주세요" 안내로 자연히
+# 폴백하게 한다.
 _GITHUB_RAW_BASE = 'https://raw.githubusercontent.com/yhparkkortek/ganttchart/main'
 # kortek_backend.zip에 포함되는 배포 대상 파일 목록과 동일하게 유지할 것(.claude/settings.json의
 # PostToolUse 훅 Compress-Archive 목록 참고) — 새 배포 파일이 추가되면 여기도 같이 추가해야 함.
@@ -2093,6 +2099,35 @@ def self_check_update():
     return jsonify({'ok': True, 'outdated': len(changed) > 0, 'changedFiles': changed, 'errors': errors})
 
 
+def _spawn_restarted_backend():
+    """새 `kortek_backend.py` 프로세스를 별도 콘솔로 띄운다 — 새 프로세스는 포트 5000이
+    아직 이전(지금 실행 중인) 프로세스에 점유돼 있으면 `_run_flask_with_port_retry`가
+    자동으로 재시도하므로, 여기서는 타이밍을 정확히 맞출 필요 없이 그냥 곧바로 띄우기만
+    하면 된다. `CREATE_NEW_CONSOLE`로 띄워서 사람이 재시작이 실제로 일어났음을(새 콘솔
+    창이 뜸) 눈으로 확인할 수 있게 한다 — 완전히 숨기면(DETACHED_PROCESS) 조용히 실패해도
+    아무도 모르는 게 더 위험하다고 판단."""
+    script_path = os.path.join(BASE_DIR, 'kortek_backend.py')
+    creationflags = 0
+    if sys.platform == 'win32':
+        creationflags = subprocess.CREATE_NEW_CONSOLE
+    subprocess.Popen(
+        [sys.executable, script_path],
+        cwd=BASE_DIR,
+        creationflags=creationflags,
+        close_fds=True,
+    )
+
+
+def _delayed_self_exit(delay_sec=0.6):
+    """지금 응답을 클라이언트에게 다 보낼 시간을 준 뒤(0.6초) 이 프로세스를 종료해 포트
+    5000을 반납한다 — 응답을 먼저 안 보내고 바로 죽으면 요청자는 연결이 끊긴 것으로만
+    보여 재시작이 실제로 성공했는지 알 방법이 없다."""
+    def _exit():
+        time.sleep(delay_sec)
+        os._exit(0)
+    threading.Thread(target=_exit, daemon=True).start()
+
+
 @app.route('/self-update', methods=['POST'])
 def self_update():
     updated, errors = [], []
@@ -2110,7 +2145,41 @@ def self_update():
             updated.append(rel_path)
         except Exception as e:
             errors.append(f'{rel_path}: 저장 실패 - {e}')
-    return jsonify({'ok': len(errors) == 0, 'updatedFiles': updated, 'errors': errors})
+
+    ok = len(errors) == 0
+    restarting = False
+    if ok and updated:
+        try:
+            _spawn_restarted_backend()
+            restarting = True
+        except Exception as e:
+            # 새 프로세스를 못 띄워도 파일 갱신 자체는 이미 끝났으니 오류로 취급하지 않고,
+            # restarting:False만 알려서 프런트가 수동 재시작 안내로 폴백하게 한다.
+            errors.append(f'자동 재시작 시도 실패(파일은 갱신됨, 수동 재시작 필요) - {e}')
+
+    response = jsonify({'ok': ok, 'updatedFiles': updated, 'errors': errors, 'restarting': restarting})
+    if restarting:
+        # 응답을 다 만든 뒤에만 종료를 예약 — 아래 return으로 클라이언트에 응답이 나간 다음에
+        # 이 스레드가 깨어나 프로세스를 종료한다.
+        _delayed_self_exit()
+    return response
+
+
+def _run_flask_with_port_retry(max_wait_sec=15):
+    """`/self-update`의 자동 재시작(`_spawn_restarted_backend`)이 새 프로세스를 띄운 시점에
+    이전 프로세스가 아직 포트 5000을 반납하기 전일 수 있다(`_delayed_self_exit`이 0.6초 뒤
+    종료하지만, 그 사이 새 프로세스가 먼저 뜰 수도 있음) — 정확한 타이밍을 맞추는 대신,
+    바인드 실패(OSError, Windows에서는 통상 WinError 10048 "각 소켓 주소는 한 번만 사용할
+    수 있습니다")를 잡아 포트가 열릴 때까지 짧게 재시도하는 쪽이 더 안전하다고 판단함."""
+    start = time.time()
+    while True:
+        try:
+            app.run(host='127.0.0.1', port=5000, debug=False)
+            return
+        except OSError as e:
+            if time.time() - start > max_wait_sec:
+                raise
+            time.sleep(0.5)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -2130,4 +2199,4 @@ if __name__ == '__main__':
     print("  종료 : Ctrl+C 또는 창 닫기")
     print("=" * 58)
     threading.Thread(target=_scheduler_loop, daemon=True).start()
-    app.run(host='127.0.0.1', port=5000, debug=False)
+    _run_flask_with_port_retry()

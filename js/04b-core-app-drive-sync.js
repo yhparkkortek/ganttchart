@@ -309,16 +309,23 @@
         tokenClient.requestAccessToken({prompt: 'consent'});
     }
 
-    // ── 로컬 백엔드(kortek_backend.py) 자동 업데이트 (2026-09-15 신규) ──────────────
+    // ── 로컬 백엔드(kortek_backend.py) 자동 업데이트 (2026-09-15 신규, 2026-09-16 확장) ──
     // 배경: 이 앱은 GitHub Pages(정적 프런트) + 각자 PC의 로컬 백엔드(127.0.0.1:5000) 구조라,
     // kortek_backend.py/sap_bridge_32.py 등이 바뀔 때마다 사람이 kortek_backend.zip을 다시 받아
     // 기존 폴더에 수동으로 덮어써야 했다 — 이 절차를 잊으면 그 PC는 계속 구버전 백엔드로 남는다.
-    // 그래서 구글 로그인 성공 직후(위 tokenClient.callback) 로컬 백엔드에게 "GitHub main과 내용이
-    // 다른 파일이 있는지" 물어보고(`/self-check-update`, kortek_backend.py 참고 — 버전 번호 대신
-    // 매번 실제 파일 바이트를 직접 비교하므로 버전 올리는 걸 깜빡할 위험이 없음), 다르면 배너로
-    // 알려서 사용자가 누르면 로컬 백엔드가 스스로 파일을 받아 자기 자신을 덮어쓴다(`/self-update`).
-    // ⚠️ 자동 재시작은 하지 않음(의도적) — 덮어쓰기 후 "백엔드를 다시 켜 달라"는 안내만 띄운다.
-    // 백엔드가 꺼져있거나 오프라인이면 조용히 아무것도 안 함(선택 기능이라 에러를 노출하지 않음).
+    // `/self-check-update`(kortek_backend.py 참고 — 버전 번호 대신 매번 실제 파일 바이트를
+    // 직접 비교하므로 버전 올리는 걸 깜빡할 위험이 없음)로 다른 게 있는지 물어보고, 다르면
+    // 배너로 알려서 사용자가 누르면 로컬 백엔드가 스스로 파일을 받아 자기 자신을 덮어쓰고
+    // (`/self-update`) **이제는 자동으로 재시작까지 시도한다**(2026-09-16, 아래 참고).
+    // ⚠️⚠️ [2026-09-16 버그수정] 원래 이 체크는 "구글 로그인 성공 직후"에만 호출됐는데, SAP
+    // 디버깅 중 실제로 겪은 사고 — 이미 로그인된 상태로 켜둔 PC(시작프로그램으로 자동 실행,
+    // 조용한 토큰 갱신 `startSilentTokenRefresh`만 도는 상태)는 다시 로그인 버튼을 누를 일이
+    // 없어 이 체크가 평생 한 번도 안 돌았다. 그 결과 구버전 백엔드가 새 SAP 엔드포인트 요청에
+    // HTML 404를 돌려줘 "Unexpected token JSON" 오류로 이어졌다(값이 잘못된 줄 알고 계속
+    // 사업자등록번호를 고쳐본 사고). **수정**: 이 체크는 Google 로그인과 무관하게 로컬
+    // 백엔드에만 묻는 순수 조회라 — 페이지 로드 시 항상 한 번 실행하도록 아래에서 호출한다
+    // (로그인 성공 직후 호출도 남겨둠 — 중복 호출이지만 가벼운 조회라 무해, 로그인 흐름 자체
+    // 에서 곧바로 갱신되는지도 계속 확인 가능).
     window.checkBackendUpdate = async function() {
         try {
             const res = await fetch('http://127.0.0.1:5000/self-check-update', { signal: AbortSignal.timeout(4000) });
@@ -329,6 +336,9 @@
             // 백엔드 미실행/네트워크 오류 — 조용히 무시
         }
     };
+    // 페이지를 열 때마다(로그인 여부 무관) 한 번 확인 — 다른 팀원이 바로 배너를 보게 하는 게
+    // 목적이므로 로그인 이벤트를 타지 않고 그냥 로드 후 3초 뒤 실행한다.
+    setTimeout(() => { if (typeof window.checkBackendUpdate === 'function') window.checkBackendUpdate(); }, 3000);
 
     window._showBackendUpdateBanner = function(changedFiles) {
         if (document.getElementById('backend-update-banner')) return; // 이미 떠있음(중복 방지)
@@ -348,6 +358,23 @@
         document.getElementById('backend-update-dismiss-btn').onclick = function() { el.remove(); };
     };
 
+    // 🔄 [2026-09-16 신규] 자동 재시작 확인 — `/self-update`가 `restarting:true`를 반환하면
+    // 백엔드 프로세스는 응답을 보낸 직후 스스로 종료하고 새 프로세스가 뜨는 중이다(포트가
+    // 짧게 비어있는 구간이 생긴다). 정확한 시점을 알 수 없으므로 `/health`를 짧은 간격으로
+    // 반복 조회해 "다시 응답하기 시작하는" 시점을 확인한다 — 응답이 오면 성공, `maxWaitMs`
+    // 안에 안 오면 자동 재시작이 실패했을 가능성이 높다고 보고 수동 안내로 폴백한다.
+    window._pollBackendHealthUntilUp = async function(maxWaitMs, intervalMs) {
+        const deadline = Date.now() + maxWaitMs;
+        while (Date.now() < deadline) {
+            await new Promise(function(r) { setTimeout(r, intervalMs); });
+            try {
+                const res = await fetch('http://127.0.0.1:5000/health', { signal: AbortSignal.timeout(2000) });
+                if (res.ok) return true;
+            } catch (e) { /* 아직 안 뜸 — 계속 재시도 */ }
+        }
+        return false;
+    };
+
     window._applyBackendUpdate = async function() {
         const _en = window._currentLang === 'en';
         const btn = document.getElementById('backend-update-apply-btn');
@@ -357,13 +384,35 @@
             const data = await res.json();
             const banner = document.getElementById('backend-update-banner');
             if (banner) banner.remove();
-            if (data && data.ok) {
-                window.showToast(_en
-                    ? '✅ Backend files updated to the latest version. Please close the backend console window and run kortek_backend.bat again.'
-                    : '✅ 백엔드 파일이 최신 버전으로 업데이트되었습니다. 백엔드 콘솔 창을 닫고 kortek_backend.bat을 다시 실행해 주세요.',
-                    'success', 8000);
-            } else {
+            if (!data || !data.ok) {
                 window.showToast(_en ? '⚠️ Some backend files failed to update.' : '⚠️ 백엔드 업데이트 중 일부 파일을 받지 못했습니다.', 'warning', 6000);
+                return;
+            }
+            if (!data.restarting) {
+                // ⚠️ [2026-09-16 신규] 파일은 갱신됐지만 자동 재시작을 시도하지 않았거나(예: 새로
+                // 받은 파일이 없었던 경우) 재시작 프로세스 기동 자체가 실패한 경우 — 기존처럼
+                // 수동 재시작 안내로 폴백한다(errors에 재시작 실패 사유가 같이 실려올 수 있음).
+                window.showToast(_en
+                    ? '✅ Backend files updated. Please close the backend console window and run kortek_backend.bat again to apply it.'
+                    : '✅ 백엔드 파일이 업데이트되었습니다. 반영하려면 백엔드 콘솔 창을 닫고 kortek_backend.bat을 다시 실행해 주세요.',
+                    'success', 8000);
+                return;
+            }
+            window.showToast(_en ? '🔄 Restarting the backend automatically...' : '🔄 백엔드를 자동으로 재시작하는 중입니다...', 'info', 6000);
+            const up = await window._pollBackendHealthUntilUp(15000, 1200);
+            if (up) {
+                window.showToast(_en
+                    ? '✅ Backend restarted automatically and is up to date.'
+                    : '✅ 백엔드가 자동으로 재시작되어 최신 버전이 적용됐습니다.',
+                    'success', 6000);
+            } else {
+                // 자동 재시작을 시도는 했으나(새 콘솔 창이 떴을 수도 있음) 15초 안에 확인이
+                // 안 됨 — 새 프로세스가 못 뜬 것일 수도, 단순히 느린 것일 수도 있으니 안전하게
+                // 수동 확인/재시작으로 안내한다(무한정 조용히 기다리게 두지 않음).
+                window.showToast(_en
+                    ? '⚠️ Could not confirm the automatic restart within 15s — please check for a new backend console window, or close it and run kortek_backend.bat manually.'
+                    : '⚠️ 자동 재시작을 15초 안에 확인하지 못했습니다 — 새로 뜬 백엔드 콘솔 창이 있는지 확인하시거나, 직접 콘솔을 닫고 kortek_backend.bat을 다시 실행해 주세요.',
+                    'warning', 9000);
             }
         } catch (e) {
             console.warn('[백엔드 자동업데이트] 실패:', e);
