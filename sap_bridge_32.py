@@ -304,6 +304,76 @@ def fetch_current_screen():
 
 
 # ── "BOM 조회" (ZPP038) 전용 헬퍼 ──────────────────────────────────────
+# ⚠️⚠️ [2026-09-16 신규, 사용자 요청] "SAP ID를 공용으로 쓰는데 다른 팀원이 ALV 레이아웃을
+# 바꿔놓으면 원하는 컬럼을 못 받는다 — 항상 이 레이아웃으로 조회하게 하드코딩할 수 있냐"는
+# 요청으로 추가. 라이브 진단으로 확인함: ZPP033(단일 자재) BOM 전개 결과 그리드의 툴바
+# 버튼 `&MB_VARIANT`("레이아웃 선택")를 누르면 회사 공용 레이아웃 목록(전역 변형, 이름이
+# 전부 "/"로 시작 — 예: `/STD_MC`, `/CH_1` 등, 총 56건)이 담긴 팝업이 뜨고, 그 안의 자체
+# 그리드(`VARIANT`/`TEXT`/`DEFAULT` 3컬럼)에서 원하는 행을 `DoubleClick(row, 'VARIANT')`
+# 하면 그 즉시 팝업이 닫히고 메인 그리드 컬럼 구성이 그 레이아웃으로 바뀐다 — 사용자가 준
+# 스크린샷 속 `/STD_MC`(기본 세팅으로 체크돼 있던 것)로 실제 전환해 컬럼이 달라지는 것까지
+# 라이브로 확인함(`/CH_1`로 바꿨다가 다시 `/STD_MC`로 복귀시켜 컬럼이 정확히 원래대로
+# 돌아오는 것도 확인). **주의: `DoubleClickCell`이 아니라 `DoubleClick`(그리드 전용 메서드
+# 이름이 다름, `dir()`로 실제 멤버 확인해서 알아냄)** — 이름이 비슷해서 헷갈리기 쉬움.
+# ⚠️ **ZPP038(복수 자재)은 별도 레이아웃 카탈로그를 쓴다** — 같은 진단으로 확인해보니
+# ZPP038엔 `/STD_MC`가 아예 없음(23건 중 없음, ZPP033은 56건 중에 있음) — 그래서 이
+# 강제 적용은 **그 이름이 없으면 조용히 건너뛰고 지금 화면을 그대로 쓰는** 방어적 설계다
+# (강제 레이아웃은 "있으면 좋은" 보조 기능이지, 없다고 조회 자체를 막을 이유가 아님). 앞으로
+# ZPP038에도 이런 고정 레이아웃이 필요해지면, 그 화면에 맞는 전역 레이아웃 이름을 별도로
+# 확인해서 `_BOM_MULTI_LAYOUT_VARIANT` 같은 새 상수로 추가할 것 — 지금은 사용자가 실제로
+# 보여준 화면(ZPP033 단일 자재)만 커버함.
+_BOM_LAYOUT_VARIANT = '/STD_MC'  # 이 이름을 바꾸면 그 즉시 새 레이아웃이 강제 적용됨
+
+
+def _sap_select_alv_layout(session, grid, variant_name):
+    """ALV 그리드 툴바의 "레이아웃 선택"(`&MB_VARIANT`) 팝업을 열어, `variant_name`과 정확히
+    일치하는 저장된 레이아웃(전역 변형)을 찾아 적용한다. 실패 경로(팝업이 안 뜨거나, 그
+    이름의 레이아웃이 이 화면 카탈로그에 없거나, 컨트롤을 못 찾는 경우) 전부 조용히
+    `False`를 반환하고 팝업을 취소(F12)로 정리한 뒤 지금 화면을 그대로 둔다 — 예외를
+    던지지 않는다(호출부가 "레이아웃 강제 실패"를 조회 자체의 실패로 만들지 않기 위함)."""
+    try:
+        grid.PressToolbarButton('&MB_VARIANT')
+    except Exception:
+        return False
+    try:
+        popup = session.findById('wnd[1]')
+    except Exception:
+        return False
+    try:
+        inner = session.findById(popup.Id + '/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell')
+    except Exception:
+        inner = None
+    if inner is None:
+        try:
+            popup.sendVKey(12)
+        except Exception:
+            pass
+        return False
+    found_row = None
+    try:
+        for r in range(inner.RowCount):
+            if (inner.GetCellValue(r, 'VARIANT') or '').strip() == variant_name:
+                found_row = r
+                break
+    except Exception:
+        found_row = None
+    if found_row is None:
+        try:
+            popup.sendVKey(12)
+        except Exception:
+            pass
+        return False
+    try:
+        inner.DoubleClick(found_row, 'VARIANT')
+        return True
+    except Exception:
+        try:
+            popup.sendVKey(12)
+        except Exception:
+            pass
+        return False
+
+
 def _navigate_to_bom_screen(session, wnd, materials, plant='1000', use_single_tcode=None,
                              explosion='single', show_price=False, show_location=False):
     """ZPP038("BOM 전개 (Multiple)", 복수 자재) 또는 ZPP033("BOM 전개", 단일 자재 전용)로
@@ -450,6 +520,17 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
                                            explosion=explosion, show_price=show_price,
                                            show_location=show_location)
     wnd = session.findById('wnd[0]')
+
+    # ⚠️⚠️ [2026-09-16 신규] SAP ID를 팀이 공용으로 쓰다 보니 다른 팀원이 ALV 레이아웃을
+    # 바꿔놓으면 이 조회가 매번 다른 컬럼 구성을 읽어올 위험이 있다 — 결과를 읽기 전에
+    # 항상 고정 레이아웃(_BOM_LAYOUT_VARIANT)으로 강제 전환을 시도한다. ZPP033(단일
+    # 자재)에서만 실사용 확인됐고, ZPP038(복수)은 이 레이아웃 자체가 카탈로그에 없어
+    # 조용히 건너뛴다(_sap_select_alv_layout 참고 — 실패해도 예외를 던지지 않으므로
+    # 이 조회 자체를 막지 않음).
+    grid_for_layout = _sap_find_grid(wnd)
+    if grid_for_layout is not None:
+        _sap_select_alv_layout(session, grid_for_layout, _BOM_LAYOUT_VARIANT)
+        wnd = session.findById('wnd[0]')  # 레이아웃 적용 후 화면이 다시 그려지므로 참조 갱신
 
     body, source = _sap_dump_screen_body(wnd)
 

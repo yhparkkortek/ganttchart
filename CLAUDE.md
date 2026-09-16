@@ -726,18 +726,39 @@ Shortcut, `-system=/-client=/-user=/-pw=` 옵션으로 실행+로그인+특정 �
      하드코딩돼 있었음. `kortek_backend.py`의 `/sap-bom`이 `tcode`(single/multi/auto)·
      `explosion`(single/multi)·`show_price`·`show_location` 쿼리파라미터를 그대로
      `sap_bridge_32.py`에 위치 인자로 전달.
-  3. **엑셀 내보내기 후 "해당 폴더로 이동하시겠습니까?"**: "엑셀로 내보내줘" 로컬 명령
-     (`_ganttQaExtractSapExportRequest` 처리 블록)이 성공하면 답변 끝에 이동 여부를 묻고
-     `window._ganttQaOpenFolderConfirm = true`를 세운다 — 다음 메시지를 그 답으로 해석하는
-     블록을 `sendGanttQaMessage` 맨 앞(음성/알람 로컬 명령 바로 다음, API 키 없어도 동작)에
-     둠. **이 내보내기는 브라우저의 XLSX.js가 트리거하는 일반 다운로드라 서버가 실제 저장
-     경로를 알지 못한다** — ZDMSR004 배치 다운로드/승인원 표지처럼 서버가 직접 고정 폴더
-     (`C:\SAP_DMS\...`)에 쓰는 게 아니므로, "해당 폴더"는 브라우저의 기본 다운로드 폴더
-     (대부분 `%USERPROFILE%\Downloads`)로 간주해 새 엔드포인트 `kortek_backend.py`의
-     `/open-downloads-folder`(SAP GUI와 무관 — `sap_bridge_32.py`를 거치지 않고
-     `os.startfile()`만 호출)를 부른다. 부정/무관한 답이면(승인원 표지의 "무관한 답이면
-     조용히 해제" 패턴과 동일) 그냥 아무 일도 안 하고 끝냄 — 엉뚱하게 일반 AI 질문으로
-     새어나가지 않도록 항상 이 블록에서 `return`한다.
+  3. **엑셀 내보내기 후 "해당 폴더로 이동하시겠습니까?" — ⚠️ [2026-09-16 갱신] 이 문단은
+     더 이상 유효하지 않음**: 원래는 브라우저 XLSX.js 다운로드라 서버가 저장 경로를 몰라서
+     매번 이동 여부를 되물어야 했는데, "SAP 관련 저장 경로는 C:\SAP_DMS로 통일해줘"라는
+     요청으로 이 되묻기 흐름(`_ganttQaOpenFolderConfirm`/`/open-downloads-folder`) 자체를
+     완전히 제거했다 — 지금은 서버(`/sap-save-export`)가 `C:\SAP_DMS\SAP조회\`에 직접 저장
+     하고 자동으로 폴더를 여는 것으로 단순화됨. 자세한 내용은 아래 "🐛🐛 저장 경로를
+     C:\SAP_DMS로 통일" 절 참고.
+  4. **⚠️⚠️ [2026-09-16 신규, 사용자 요청] ALV 레이아웃 강제 고정 — "SAP ID를 공용으로 쓰는데
+     팀원이 레이아웃을 바꾸면 원하는 컬럼을 못 받는다"**: 사용자가 ZPP033 결과 화면에서
+     "레이아웃 선택" 팝업을 직접 캡처(자기 레이아웃 `/STD_MC`가 "기본 세팅"으로 체크된
+     화면)해서 "이걸로 항상 조회하게 하드코딩할 수 있냐"고 요청 — 라이브 진단으로 실제 SAP
+     세션에 접속해 메커니즘을 확인함: ALV 그리드 툴바 함수코드 `&MB_VARIANT`("레이아웃
+     선택")를 `grid.PressToolbarButton('&MB_VARIANT')`로 누르면 회사 공용(전역, 이름이 전부
+     `/`로 시작) 레이아웃 목록 팝업이 뜨고, 그 안의 자체 그리드(`VARIANT`/`TEXT`/`DEFAULT`
+     3컬럼)에서 원하는 행을 **`DoubleClick(row, 'VARIANT')`**(⚠️ `DoubleClickCell`이 아님 —
+     이 팝업 그리드의 실제 멤버 이름은 `DoubleClick`, `dir()`로 직접 확인해서 알아냄)하면
+     즉시 팝업이 닫히고 메인 그리드 컬럼이 그 레이아웃으로 바뀐다. **실사용 검증**: `/CH_1`로
+     일부러 바꿔서 "팀원이 레이아웃을 바꾼" 상황을 재현한 뒤, 실제 `fetch_bom()` 함수를
+     그대로 호출해 — 강제 적용 없이는 그 바뀐 컬럼이 그대로 나왔을 상황에서 — 결과가 정확히
+     `/STD_MC`의 컬럼 구성(`IDNRK/OJTXP/MMSTA/MENGE/MMEIN/WGBEZ60`)으로 돌아오는 것까지
+     end-to-end로 확인함. **구현**: 새 상수 `_BOM_LAYOUT_VARIANT = '/STD_MC'`(이름만 바꾸면
+     바로 다른 레이아웃으로 전환됨) + 새 헬퍼 `_sap_select_alv_layout(session, grid,
+     variant_name)` — `fetch_bom`이 `_navigate_to_bom_screen` 직후, 결과를 읽기(`_sap_dump_
+     screen_body`) 전에 항상 호출한다. **⚠️ ZPP038(복수 자재)은 별도 레이아웃 카탈로그를
+     쓴다** — 같은 진단으로 확인해보니 ZPP038엔 `/STD_MC`가 아예 없음(23건 중 없음, ZPP033은
+     56건 중에 있음) — 그래서 `_sap_select_alv_layout`은 **찾는 이름이 카탈로그에 없으면
+     예외 없이 조용히 `False`를 반환하고 지금 화면을 그대로 두는 방어적 설계**다(강제
+     레이아웃은 "있으면 좋은" 보조 기능이지, 없다고 조회 자체를 막을 이유가 아님) — 지금은
+     ZPP033(단일 자재) 조회에서만 실제로 적용되고, ZPP038(복수)은 조용히 건너뛴다. **앞으로
+     ZPP038에도 고정 레이아웃이 필요해지면**: 그 화면에 맞는 전역 레이아웃 이름을 별도로
+     확인해서(같은 방식으로 `&MB_VARIANT` 팝업을 라이브로 열어 목록 확인) 새 상수(예:
+     `_BOM_MULTI_LAYOUT_VARIANT`)를 추가하고 `fetch_bom`에서 `used_single` 여부로 분기해서
+     맞는 이름을 넘길 것 — 지금은 사용자가 실제로 캡처해서 보여준 화면(ZPP033)만 커버함.
 - **사용처 조회/역전개("SAP에서 303410 역전개 보여줘"/"...사용처 알려줘", 2026-09-15 신규 —
   "BOM 역전개(사용처리스트).vbs" 매크로로 확보)**: BOM 정전개(ZPP038, "이 자재는 뭘로
   구성되는가")의 반대 방향 — "이 자재가 어느 상위 품목에 쓰이는가"를 CS15("단일레벨
