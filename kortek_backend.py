@@ -1639,6 +1639,25 @@ def sap_download_documents_batch():
     return jsonify(data), status
 
 
+@app.route('/sap-download-documents-by-pattern', methods=['GET'])
+def sap_download_documents_by_pattern():
+    # 💡 [2026-09-16 신규] "*01+01*500*로 조회된 아이템 승인원 다운로드해줘"처럼 자재번호를
+    #    직접 나열하는 대신 자재내역(MAKT-MAKTX) 와일드카드 패턴으로 매치되는 자재를 전부
+    #    찾아 문서를 다운로드한다. 자재번호를 구하는 단계(MM60의 자재번호 필드에서 F4로
+    #    연 검색도움말을 라벨 매트릭스로 읽는 방식 — 실사용 라이브 진단으로 확인함, 위
+    #    sap_bridge_32.py의 "자재내역 와일드카드 패턴으로..." 절 참고)와 다운로드 단계
+    #    (기존 download_documents_batch 재사용, 7개씩 묶어 순차 실행)를 하나로 묶은
+    #    download_documents_by_pattern()을 그대로 호출한다.
+    pattern = (request.args.get('pattern') or '').strip()
+    doc_type = (request.args.get('type') or 'P01').strip()
+    if not pattern:
+        return jsonify({'ok': False, 'error': '검색 패턴(pattern 파라미터)이 필요합니다. 예: /sap-download-documents-by-pattern?pattern=*01+01*500*&type=P01'}), 400
+    # 검색(자재 수 미상, 최대 200건 안전장치) + 다운로드(7개씩 청크)까지 다 포함되므로
+    # 넉넉하게 잡는다 — 실사용에서 매치 건수가 아주 많으면 이 값도 같이 늘려야 할 수 있음.
+    data, status = _run_sap_bridge(['download_documents_by_pattern', pattern, doc_type], 240, 'SAP 패턴 검색 + 문서 일괄 다운로드')
+    return jsonify(data), status
+
+
 @app.route('/sap-bom', methods=['GET'])
 def sap_bom():
     # 💡 [2026-09-15 신규] "SAP에서 502572 BOM 열어서 엑셀로 출력해줘"처럼 질문에 "BOM"과

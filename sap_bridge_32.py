@@ -1379,6 +1379,154 @@ def download_documents_batch(materials, doc_type='P01'):
     }
 
 
+# ── 자재내역 와일드카드 패턴으로 자재번호 조회 + 승인원(P01) 일괄 다운로드 (2026-09-16 신규) ──
+# "*01+01*500*로 조회된 아이템 승인원 다운로드해줘" 요청을 지원한다. 사용자가 준 매크로
+# ("디스크립션 검색.vbs")는 ZMM009 화면에서 자재(MATNR) "복수 선택" 팝업을 열고 그 안에서
+# F4로 자재 검색도움말(SAPLSDH4, "M: 자재 번호/자재 내역" 탭)을 띄워 와일드카드로 검색한 뒤,
+# 결과에서 원하는 항목을 더블클릭으로 하나씩 골라 담는 방식이었다 — 여러 건을 한 번에
+# 뽑는 방법은 아니었다(매크로 자체가 사람이 결과를 보면서 3건을 수동으로 고른 기록).
+# **2026-09-16 실사용 라이브 진단으로 훨씬 단순한 경로를 확인함**:
+#   1. 이 검색도움말은 ZMM009의 "복수 선택" 팝업을 거칠 필요가 없다 — MM60("자재 목록
+#      표시")처럼 훨씬 단순한 화면의 평범한 단일값 자재번호 필드에서 그냥 F4만 눌러도
+#      똑같은 "값 범위 제한" 팝업(TAB001="M: 자재 번호/자재 내역")이 바로 뜬다. 그래서
+#      ZMM009의 필수 입력 3개(플랜트/판매조직/유통경로)를 전혀 거칠 필요가 없다 — MM60은
+#      실행(F8)조차 하지 않고 이 팝업을 여는 용도로만 쓴다.
+#   2. 결과 화면은 GuiGridView가 아니라 "라벨 매트릭스"이지만(진단 스크립트로 `_sap_find_grid`/
+#      `_sap_find_shell_any` 둘 다 실패해서 확인함) 구조가 아주 규칙적이다 — 매치 1건이
+#      컬럼 하나에 대응하고(`lbl[44,col]`=자재번호, `lbl[1,col]`=자재내역, `lbl[39,col]`=언어),
+#      col은 3부터 시작해 매치 개수만큼 이어진다. 팝업 제목 자체(`wnd[1].Text`)에도
+#      "자재 번호 N 엔트리"로 건수가 그대로 나온다. **더블클릭으로 하나씩 고를 필요 없이
+#      컬럼을 순서대로 읽기만 하면 전체 매치를 한 번에 뽑을 수 있다** — 매크로보다 훨씬
+#      간단해짐. 실제 라이브 테스트: `*01+01*500*` → 2건(115505/114347),
+#      `*01+01*150*`(매크로 원본 패턴) → 4건(129305/108918/124887/114347) — 둘 다 컬럼
+#      순회로 정확히 추출 성공함.
+#   3. 검색 후에는 굳이 값을 "채택"(복사 버튼)할 필요가 없다 — 그냥 읽기만 하고
+#      취소(F12)로 닫으면 된다(ZMM009 자체를 실행할 필요가 없으므로 SELECT-OPTIONS에
+#      값을 채워 넣는 것 자체가 불필요).
+def resolve_materials_by_description_pattern(pattern, max_results=200):
+    """자재내역(MAKT-MAKTX) 와일드카드 패턴으로 매치되는 자재번호 목록을 조회한다.
+    MM60의 평범한 자재번호 필드에서 F4로 연 검색도움말(TAB001)에 패턴을 넣고, 결과
+    라벨 매트릭스를 컬럼 순서대로 읽어 전부 추출한다 — 어떤 값도 선택/채택하지 않고
+    읽기만 하므로 SAP 데이터에 아무 영향이 없다.
+    ⚠️ max_results는 실사용 UX 요구사항이 아니라(사용자가 "건수가 많아도 그냥 다운로드"를
+    선택함, 2026-09-16) 패턴이 사실상 전체 자재를 매치하는 극단적인 경우(예: "*" 단독)에
+    무한정 컬럼을 순회하며 멈추지 않는 사고를 막기 위한 기술적 안전장치일 뿐이다."""
+    pattern = (pattern or '').strip()
+    if not pattern:
+        raise RuntimeError('검색할 자재내역 패턴이 없습니다.')
+
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    _sap_close_stray_popups(session)
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nMM60'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+
+    matnr_field = _find_by_id_substring(wnd, 'ctxtMS_MATNR-LOW')
+    if matnr_field is None:
+        raise RuntimeError('MM60 화면에서 자재번호 입력 필드를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다.')
+    matnr_field.text = ''
+    matnr_field.setFocus()
+    matnr_field.caretPosition = 0
+    wnd.sendVKey(4)
+    time.sleep(0.8)
+
+    popup = None
+    for _ in range(10):
+        try:
+            popup = session.findById('wnd[1]')
+            break
+        except Exception:
+            time.sleep(0.4)
+    if popup is None:
+        raise RuntimeError('자재 검색도움말 팝업이 뜨지 않았습니다.')
+
+    tabstrip = _find_by_id_substring(popup, 'G_SELONETABSTRIP')
+    if tabstrip is None:
+        raise RuntimeError('자재 검색도움말에 예상한 "M: 자재 번호/자재 내역" 탭 구조가 없습니다 — SAP 화면 구성이 바뀌었을 수 있습니다.')
+
+    field_id = "wnd[1]/usr/tabsG_SELONETABSTRIP/tabpTAB001/ssubSUBSCR_PRESEL:SAPLSDH4:0220/sub:SAPLSDH4:0220/txtG_SELFLD_TAB-LOW[0,24]"
+    try:
+        field = session.findById(field_id)
+    except Exception as e:
+        raise RuntimeError(f'자재내역 검색 입력 필드를 찾지 못했습니다: {e}')
+    field.text = pattern
+    field.caretPosition = len(pattern)
+    popup.sendVKey(0)
+    time.sleep(1.2)
+
+    try:
+        popup = session.findById('wnd[1]')
+    except Exception:
+        raise RuntimeError('검색 실행 후 결과 팝업이 사라졌습니다 — 매치가 없거나 오류가 발생했을 수 있습니다.')
+
+    materials = []
+    col = 3
+    consecutive_misses = 0
+    while consecutive_misses < 2 and len(materials) < max_results:
+        try:
+            mat_lbl = session.findById(f'wnd[1]/usr/lbl[44,{col}]')
+            desc = ''
+            try:
+                desc = session.findById(f'wnd[1]/usr/lbl[1,{col}]').Text
+            except Exception:
+                pass
+            materials.append({'matnr': mat_lbl.Text.strip(), 'desc': desc})
+            consecutive_misses = 0
+        except Exception:
+            consecutive_misses += 1
+        col += 1
+
+    # 결과는 읽기만 하고 아무것도 채택하지 않음 — 취소(F12)로 팝업을 닫는다.
+    try:
+        session.findById('wnd[1]').sendVKey(12)
+    except Exception:
+        pass
+
+    if len(materials) >= max_results:
+        raise RuntimeError(f'패턴 "{pattern}"이 너무 광범위합니다(최소 {max_results}건 이상 매치) — 더 구체적인 패턴으로 다시 시도해주세요.')
+
+    return materials
+
+
+def download_documents_by_pattern(pattern, doc_type='P01'):
+    """자재내역 와일드카드 패턴으로 매치된 자재 전부의 문서를 다운로드한다 —
+    `resolve_materials_by_description_pattern`으로 자재번호 목록을 구한 뒤, 이미 검증된
+    `download_documents_batch`를 그대로 재사용한다. ZDMSR004의 "복수 선택" 팝업은 한
+    화면에 보이는 입력 행이 7개까지만 실사용 확인됐고 8개 이상은 스크롤 코드는 있지만
+    미검증이라(CLAUDE.md 참고), 매치가 많을 때는 7개씩 묶어 `download_documents_batch`를
+    여러 번(ZDMSR004을 매번 새로 진입) 순차 호출해 이미 검증된 크기 안에서만 동작하게
+    한다 — 느리지만 안전한 선택."""
+    resolved = resolve_materials_by_description_pattern(pattern)
+    if not resolved:
+        return {
+            'ok': True,
+            'pattern': pattern,
+            'materials': [],
+            'docType': doc_type,
+            'message': f'패턴 "{pattern}"에 매치되는 자재가 없습니다.',
+        }
+
+    materials = [m['matnr'] for m in resolved]
+    chunk_size = 7
+    all_results = []
+    for i in range(0, len(materials), chunk_size):
+        chunk = materials[i:i + chunk_size]
+        result = download_documents_batch(chunk, doc_type)
+        all_results.append(result)
+
+    return {
+        'ok': True,
+        'pattern': pattern,
+        'materials': materials,
+        'matchDetails': resolved,
+        'docType': doc_type,
+        'chunks': len(all_results),
+        'message': f'패턴 "{pattern}"에 매치된 자재 {len(materials)}건({", ".join(materials)})의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다.',
+    }
+
+
 # ── "구매오더 요청"(ZMMR060 → ZMM018) 전용 헬퍼 (2026-09-15 신규) ──────────
 # AI 문답에 전자세금계산서/견적서 PDF를 첨부하면 항목을 추출해 만든 BDC Upload 엑셀을
 # ZMMR060에 업로드해 구매오더를 생성하고, 저장 직전에 사람이 확인하도록 두 단계로 나눴다
@@ -1850,6 +1998,10 @@ def main():
             materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
             materials = [m.strip() for m in materials_str.split(',') if m.strip()]
             result = download_documents_batch(materials, doc_type)
+        elif action == 'download_documents_by_pattern':
+            pattern = sys.argv[2] if len(sys.argv) > 2 else ''
+            doc_type = sys.argv[3] if len(sys.argv) > 3 else 'P01'
+            result = download_documents_by_pattern(pattern, doc_type)
         elif action == 'fetch_bom':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'

@@ -2601,6 +2601,47 @@ ${attachText}`;
             }
         }
 
+        // 🔍 [2026-09-16 신규] "*01+01*500*로 조회된 아이템 승인원 다운로드해줘" — 와일드카드
+        //    패턴(*가 포함된 토큰)이 있으면 자재번호를 직접 나열하는 아래 배치 다운로드 판정보다
+        //    먼저 체크한다(패턴 자체가 이미 자재번호 목록과는 성격이 다른, 훨씬 더 구체적인
+        //    신호라 순서 문제로 다른 핸들러와 충돌할 일은 적지만, 이 프로젝트의 기존 관례대로
+        //    "더 구체적인 요청을 먼저 확인"하는 순서를 지킨다).
+        const sapPatternReq = window._ganttQaExtractSapPatternDownloadRequest ? window._ganttQaExtractSapPatternDownloadRequest(sapDocQuestion) : null;
+        if (sapPatternReq) {
+            window._ganttQaHistory.push({ role: 'user', text: question });
+            window._ganttQaHistory.push({
+                role: 'ai',
+                text: '⏳ ' + window._t(
+                    `SAP에서 "${sapPatternReq.pattern}" 패턴으로 자재를 조회한 뒤 "${sapPatternReq.docType}" 문서를 일괄 다운로드하는 중... (시간이 걸릴 수 있습니다)`,
+                    `Searching SAP for materials matching "${sapPatternReq.pattern}" and batch-downloading "${sapPatternReq.docType}" documents... (this may take a while)`
+                ),
+                pending: true
+            });
+            input.value = '';
+            window._renderGanttQaMessages();
+            let sapPatternReply;
+            try {
+                const url = 'http://127.0.0.1:5000/sap-download-documents-by-pattern?pattern='
+                    + encodeURIComponent(sapPatternReq.pattern)
+                    + '&type=' + encodeURIComponent(sapPatternReq.docType);
+                const res = await window._withTimeout(
+                    fetch(url), 240000,
+                    window._t('SAP 패턴 검색 + 문서 일괄 다운로드 시간 초과', 'SAP pattern search + batch document download timed out')
+                );
+                const data = await res.json();
+                sapPatternReply = data.ok
+                    ? ('📥 ' + (data.message || window._t('패턴 검색 + 일괄 다운로드가 완료됐습니다.', 'Pattern search + batch download completed.')))
+                    : ('⚠️ ' + window._t('SAP 패턴 검색/다운로드 실패: ', 'Failed to search/download by pattern in SAP: ') + (data.error || window._t('알 수 없는 오류', 'unknown error')));
+            } catch (e) {
+                sapPatternReply = '⚠️ ' + window._t('SAP 패턴 검색/다운로드 실패: ', 'Failed to search/download by pattern in SAP: ') + (e && e.message ? e.message : e);
+            }
+            window._ganttQaHistory.pop();
+            window._ganttQaHistory.push({ role: 'ai', text: sapPatternReply });
+            window._renderGanttQaMessages();
+            input.focus();
+            return;
+        }
+
         // 📥 [2026-09-15 신규] "SAP에서 133012, 133010, 101831 문서 다운로드해줘"처럼 자재번호
         //    2개 이상 + 다운로드/저장 요청 — 아래 단일 문서 열기 판정 및 "엑셀로 내보내줘" 판정
         //    보다 먼저 체크해야 함(셋 다 "다운로드"/"엑셀" 같은 단어를 부분적으로 공유해서, 순서가
@@ -3663,6 +3704,30 @@ ${attachText}`;
         var matM = text.match(/\b(\d{5,8})\b/);
         if (!matM) return null;
         return matM[1];
+    };
+
+    // 🔍 [2026-09-16 신규] "*01+01*500*로 조회된 아이템 승인원 다운로드해줘"처럼 자재번호를
+    //    직접 나열하는 대신 자재내역(설명) 와일드카드 패턴으로 매치되는 자재를 전부 찾아
+    //    문서를 다운로드하는 요청 — 사용자가 제공한 SAP GUI 매크로("디스크립션 검색.vbs")로
+    //    발견한 기능이지만, 실사용 라이브 진단 결과 매크로보다 훨씬 단순하게 구현 가능함을
+    //    확인함(MM60의 평범한 자재번호 필드에서 F4만 누르면 같은 검색도움말이 뜨고, 결과를
+    //    "라벨 매트릭스"로 전부 읽을 수 있어 매크로처럼 하나씩 더블클릭해 고를 필요가 없음
+    //    — sap_bridge_32.py의 resolve_materials_by_description_pattern 주석 참고).
+    //    트리거는 "*"가 포함된 공백-구분 토큰 하나(패턴 자체) + "문서/승인원" + "다운로드"류
+    //    동사 — 패턴 자체가 이미 충분히 구체적인 신호라 "SAP" 단어 없이도 인식한다(이
+    //    프로젝트의 기존 관례 — 자재번호 anchor가 있는 로컬 명령들과 동일한 원칙).
+    window._ganttQaExtractSapPatternDownloadRequest = function(question) {
+        var text = (question || '').trim();
+        if (!text) return null;
+        var tokens = text.split(/\s+/);
+        var patternToken = tokens.filter(function(t) { return t.indexOf('*') !== -1; })[0];
+        if (!patternToken) return null;
+        if (!/(문서|파일|승인원)/.test(text)) return null;
+        if (!/(열어|열기|다운로드|출력|보여|저장|받아|open)/i.test(text)) return null;
+        var looksLikeQuestion = /[?？]\s*$/.test(text) || /(가능|되나|될까|되는지|하나요)/.test(text);
+        if (looksLikeQuestion) return null;
+        var docType = window._ganttQaExtractSapDocTypeCode(text);
+        return { pattern: patternToken, docType: docType || 'P01' };
     };
 
     // 📥 [2026-09-15 신규, 같은 날 트리거 단어 확장] "SAP에서 133012, 133010, 101831 문서
