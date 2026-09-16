@@ -443,6 +443,28 @@ ${attachText}`;
         );
     };
 
+    // 🐛🐛 [2026-09-16 실사용 버그수정] 백엔드가 오래된 버전이거나 꺼져 있으면 `/po-build-excel`/
+    // `/po-sap-prepare`가 JSON 대신 HTML(404/에러 페이지)을 돌려주는데, 그걸 그냥 `.json()`으로
+    // 파싱하면 "Unexpected token '<', "<!doctype "... is not valid JSON"이라는 정체불명의 오류가
+    // 나서 사람이 "사업자등록번호가 잘못됐나?"로 오해하고 애먼 값을 계속 고쳐보게 만든다(실사용
+    // 제보 — 자동 시작 프로그램으로 켜둔 채 재다운로드/재시작을 한 번도 안 한 다른 PC에서 재현됨,
+    // 자동 업데이트는 파일만 갱신하고 실행 중인 프로세스는 재시작하지 않는다는 기존 설계 때문에
+    // 이런 PC가 계속 구버전으로 남을 수 있음). 응답을 먼저 텍스트로 받아 직접 JSON.parse해서
+    // 실패 시 이 상황임을 명확히 구분해 안내한다.
+    window._ganttQaParsePoApiResponse = async function(res, stepKo, stepEn) {
+        const raw = await res.text();
+        try {
+            return JSON.parse(raw);
+        } catch (e) {
+            const err = new Error(window._t(
+                `${stepKo} 응답을 해석할 수 없습니다(HTTP ${res.status}) — 이 PC의 로컬 백엔드(kortek_backend.py)가 꺼져 있거나 오래된 버전이라 이 기능이 없을 수 있습니다. 백엔드 콘솔을 닫고 kortek_backend.bat을 다시 실행해보세요(자동 업데이트 배너는 파일만 갱신할 뿐 실행 중인 프로세스를 재시작하지 않습니다 — 재시작해야 반영됩니다).`,
+                `Could not parse the ${stepEn} response (HTTP ${res.status}) — the local backend (kortek_backend.py) on this PC may be off or running an old version missing this feature. Try closing the backend console and re-running kortek_backend.bat (the auto-update banner only refreshes files; it doesn't restart the running process — a restart is required).`
+            ));
+            err.isBackendStale = true;
+            throw err;
+        }
+    };
+
     // 🐛 [2026-09-16 신규] 엑셀 생성 + SAP 업로드/입력(ZMMR060, 저장 전까지)을 한 곳으로
     // 뽑음 — 처음 시도(ask_purpose 완료 시점)와 실패 후 재시도(sap_prep_failed 단계)가
     // 똑같은 로직을 공유한다. 실패해도 draft(pd)를 버리지 않고 `sap_prep_failed` 단계로
@@ -468,7 +490,7 @@ ${attachText}`;
                     body: JSON.stringify({ rows: rows })
                 }), 30000, window._t('엑셀 생성 시간 초과', 'Excel generation timed out')
             );
-            const exData = await exRes.json();
+            const exData = await window._ganttQaParsePoApiResponse(exRes, '엑셀 생성', 'excel generation');
             if (!exData.ok) throw new Error(exData.error || window._t('알 수 없는 오류', 'unknown error'));
             pd.excelPath = exData.path;
 
@@ -487,7 +509,7 @@ ${attachText}`;
                 }), Math.min(120000, 40000 + 8000 * pd.items.length),
                 window._t('SAP 구매오더 준비 시간 초과', 'SAP purchase order preparation timed out')
             );
-            const prepData = await prepRes.json();
+            const prepData = await window._ganttQaParsePoApiResponse(prepRes, 'SAP 구매오더 준비', 'SAP purchase order preparation');
             if (!prepData.ok) throw new Error(prepData.error || window._t('알 수 없는 오류', 'unknown error'));
             pd.stage = 'confirm_sap_prepare';
             finalReply = window._t(
@@ -496,8 +518,14 @@ ${attachText}`;
             );
         } catch (e) {
             pd.stage = 'sap_prep_failed'; // draft는 유지 — 값만 고쳐서 재시도 가능하게
-            finalReply = '⚠️ ' + window._t('구매오더 준비 중 오류: ', 'Error while preparing the purchase order: ') + (e && e.message ? e.message : e)
-                + '\n\n' + window._t('사업자등록번호가 잘못됐으면 새 번호를 알려주시거나(예: "사업자등록번호는 2168144558"), "다시 시도"라고 답해서 이어서 재시도할 수 있습니다.', 'If the business registration number was wrong, tell me the new one (e.g. "biz reg no is 2168144558"), or reply "retry" to try again.');
+            if (e && e.isBackendStale) {
+                // 이 경우는 값(사업자등록번호 등)이 잘못돼서가 아니라 백엔드 자체 문제이므로,
+                // "값을 고쳐보라"는 안내를 붙이면 오히려 혼란을 준다 — 재시작 안내만 명확히.
+                finalReply = '⚠️ ' + e.message + '\n\n' + window._t('백엔드를 재시작한 뒤 "다시 시도"라고 답해주세요.', 'After restarting the backend, reply "retry" to try again.');
+            } else {
+                finalReply = '⚠️ ' + window._t('구매오더 준비 중 오류: ', 'Error while preparing the purchase order: ') + (e && e.message ? e.message : e)
+                    + '\n\n' + window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시거나(예: "사업자등록번호는 2168144558", "목적은 P04로 변경"), "다시 시도"라고 답해서 그대로 재시도, "취소"로 중단할 수 있습니다.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value (e.g. "biz reg no is 2168144558", "purpose should be P04"), reply "retry" to try again as-is, or "cancel" to stop.');
+            }
         }
         window._ganttQaHistory.pop();
         window._ganttQaHistory.push({ role: 'ai', text: finalReply });
@@ -2190,20 +2218,78 @@ ${attachText}`;
             // 유지하고 `sap_prep_failed` 단계로 넘어가서, 사업자등록번호를 고쳐서("사업자
             // 등록번호는 2168144558") 또는 그냥 "다시 시도"라고 말해서 이어서 재시도할 수
             // 있게 한다 — PDF 재첨부 불필요.
+            // 🐛🐛 [2026-09-16 실사용 버그수정] 처음엔 사업자등록번호만 고칠 수 있었는데, 실제
+            // 실패 원인이 다른 필드(예: 목적 코드를 잘못 골랐거나 프로젝트코드가 틀린 경우)일
+            // 수도 있어 "틀린 곳 중간부터 다시 시작하고 싶은데 안 된다"는 제보로 확인 —
+            // 프로젝트코드/사번/요청사유/목적/통화도 같은 방식(라벨+값)으로 고칠 수 있게 확장.
+            // 승인원 표지 초안(`_ganttQaExtractApprovalUpdate`)의 "라벨 뒤 조사(는/은/가/이)를
+            // 건너뛴다" 패턴을 그대로 재사용.
             if (pd.stage === 'sap_prep_failed') {
-                const bizNoMatch = replyText.match(/\d{3}-?\d{2}-?\d{5}/) || replyText.match(/\d{10}/);
+                const changes = [];
+                const bizNoMatch = replyText.match(/사업자\s*등록\s*번호(?:는|은|가|이)?\s*[:：]?\s*(\d{3}-?\d{2}-?\d{5}|\d{10})/) || replyText.match(/\b(\d{3}-\d{2}-\d{5})\b/) || replyText.match(/\b(\d{10})\b/);
                 if (bizNoMatch) {
-                    pd.bizRegNo = bizNoMatch[0].replace(/-/g, '');
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t(`사업자등록번호를 "${pd.bizRegNo}"로 변경했습니다. 다시 시도합니다.`, `Updated the business registration number to "${pd.bizRegNo}". Retrying.`) });
+                    pd.bizRegNo = bizNoMatch[1].replace(/-/g, '');
+                    changes.push(window._t(`사업자등록번호 → ${pd.bizRegNo}`, `biz reg no → ${pd.bizRegNo}`));
+                }
+                const projMatch = replyText.match(/프로젝트\s*코드(?:는|은|가|이)?\s*[:：]?\s*(\S+)/);
+                if (projMatch) {
+                    pd.projectCode = projMatch[1];
+                    changes.push(window._t(`프로젝트코드 → ${pd.projectCode}`, `project code → ${pd.projectCode}`));
+                }
+                const empMatch = replyText.match(/(?:구매담당자\s*)?사번(?:은|는|가|이)?\s*[:：]?\s*(\d{4,12})/);
+                if (empMatch) {
+                    pd.buyerEmpId = empMatch[1];
+                    changes.push(window._t(`구매담당자 사번 → ${pd.buyerEmpId}`, `buyer employee ID → ${pd.buyerEmpId}`));
+                }
+                // 다른 라벨(목적/프로젝트코드/사번/통화/사업자등록번호) 앞까지만 잡도록 lookahead로
+                // 경계를 둠 — 안 그러면 "요청사유는 샘플제작 목적은 P04"처럼 라벨이 콤마 없이
+                // 이어질 때 뒤 필드까지 통째로 요청사유에 먹혀버린다.
+                const reasonMatch = replyText.match(/요청\s*사유(?:는|은|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|목적|프로젝트\s*코드|사번|통화|사업자\s*등록\s*번호|$)/);
+                if (reasonMatch && reasonMatch[1].trim()) {
+                    pd.reason = reasonMatch[1].trim();
+                    changes.push(window._t(`요청사유 → ${pd.reason}`, `reason → ${pd.reason}`));
+                }
+                // 코드(P01~P05)는 라벨 없이 단독으로 언급돼도 인식하되(예: "P04"), 설명 문구로 고를
+                // 때는 반드시 "목적" 라벨 뒤에서만 매칭한다 — 라벨 없이 전체 텍스트에서 설명 문구를
+                // 찾으면 "요청사유는 기타 부품 교체"의 "기타"(P05 설명)처럼 다른 필드 값과 우연히
+                // 겹쳐 잘못된 목적으로 오인식할 위험이 있다.
+                let purposeCode = (replyText.match(/\bP0[1-5]\b/i) || [])[0];
+                if (purposeCode) purposeCode = purposeCode.toUpperCase();
+                if (!purposeCode) {
+                    const purposeLabelMatch = replyText.match(/목적(?:은|는|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|사번|프로젝트\s*코드|통화|사업자\s*등록\s*번호|$)/);
+                    if (purposeLabelMatch) {
+                        const hit = window._PO_PURPOSE_TABLE.find(function(r) { return purposeLabelMatch[1].indexOf(r.desc) !== -1; });
+                        if (hit) purposeCode = hit.code;
+                    }
+                }
+                if (purposeCode) {
+                    pd.purpose = purposeCode;
+                    changes.push(window._t(`목적 → ${pd.purpose}`, `purpose → ${pd.purpose}`));
+                }
+                const currMatch = replyText.match(/통화(?:는|은|가|이)?\s*[:：]?\s*(KRW|USD|US\$|\$)/i);
+                if (currMatch) {
+                    pd.currency = /USD|US\$|\$/i.test(currMatch[1]) ? 'USD' : 'KRW';
+                    changes.push(window._t(`통화 → ${pd.currency}`, `currency → ${pd.currency}`));
+                }
+
+                if (changes.length) {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t(`${changes.join(', ')}로 변경했습니다. 다시 시도합니다.`, `Updated ${changes.join(', ')}. Retrying.`) });
                     window._renderGanttQaMessages();
                     await window._ganttQaRunPoSapPrepareAndReport(pd);
                 } else if (/(취소|그만|중단|cancel|stop)/i.test(replyText)) {
                     window._ganttQaHistory.push({ role: 'ai', text: window._t('🚫 구매오더 요청을 취소했습니다.', '🚫 Cancelled the purchase order request.') });
                     window._ganttQaPoDraft = null;
-                } else if (/(다시|재시도|retry)/i.test(replyText)) {
+                } else if (/^\s*(다시\s*(?:시도|해\s*줘|해\s*봐|해\s*주세요)?|재시도(?:해\s*줘|해\s*봐)?|retry)\s*\.?\s*$/i.test(replyText)) {
+                    // 🐛 [2026-09-16 실사용 버그수정] 원래 정규식 `/(다시|재시도|retry)/i`가 "다시"라는
+                    // 부분 문자열만 있으면 무조건 매치돼서, "여기서부터 다시 물어봐줘"처럼 실제로는
+                    // 특정 단계를 다시 물어봐 달라는 뜻인 긴 문장도 "그대로 재시도"로 오인해 매번
+                    // 같은 값으로 조용히 재시도하는 사고가 실사용에서 확인됨(백엔드가 원인이라 재시도
+                    // 자체는 매번 똑같이 실패해서 사용자는 "재시작이 안 된다"고 느꼈지만, 실제로는
+                    // 매번 재시도는 되고 있었음 — 다만 원치 않는 재시도였음). 짧은 재시도 문구로만
+                    // 좁혀서, 이런 긴 문장은 아래 "인식 못함" 분기로 빠지게 함.
                     await window._ganttQaRunPoSapPrepareAndReport(pd);
                 } else {
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t('사업자등록번호가 잘못됐으면 새 번호를 알려주시고(예: "사업자등록번호는 2168144558"), 그대로 다시 시도하려면 "다시 시도"라고, 그만두려면 "취소"라고 답해주세요.', 'If the business registration number was wrong, tell me the new one (e.g. "biz reg no is 2168144558"); reply "retry" to try again as-is, or "cancel" to stop.') });
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t('사업자등록번호/프로젝트코드/사번/요청사유/목적/통화 중 잘못된 값이 있으면 알려주시고(예: "사업자등록번호는 2168144558", "목적은 P04"), 그대로 다시 시도하려면 "다시 시도"라고, 그만두려면 "취소"라고 답해주세요.', 'If the business registration number, project code, employee ID, reason, purpose, or currency was wrong, tell me the correct value (e.g. "biz reg no is 2168144558", "purpose should be P04"); reply "retry" to try again as-is, or "cancel" to stop.') });
                 }
                 window._renderGanttQaMessages();
                 input.focus();
