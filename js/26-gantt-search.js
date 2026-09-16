@@ -494,9 +494,20 @@
 
     // ─── 행별 체크박스 ──────────────────────────────────────────────────────────
 
+    // 🐛 [2026-09-16 실사용 버그수정] "AI 검색에서 조회하고 V 체크할 때 배경에 있는 핀셋이
+    // 눌려지는" 버그 — 원인은 이 체크박스를 `.no-td`(No. 열) 셀에 `position:absolute;left:2px`
+    // 로 얹었는데, 그 셀의 실제 내용(📌 핀 + 번호)은 flexbox로 **가운데 정렬**돼 있어서
+    // 절대좌표 left:2px가 항상 그 가운데 정렬된 내용과 겹칠 위험이 있었고, 특히 알림이 켜진
+    // 행은 핀 아이콘이 `transform:scale(1.3)`로 30% 커져서(04j-core-app-upload-utils-5.js의
+    // .no-td 렌더링) 체크박스의 14×14px 히트박스를 벗어나 삐져나온 핀 영역에 클릭이 그대로
+    // 핀 쪽으로 히트되며 알림이 잘못 토글됐다. **수정**: 절대좌표 오버레이 대신, `.no-td` 안의
+    // 기존 flex 컨테이너(핀+번호를 감싼 div) 맨 앞에 체크박스를 **정적(static) flex 항목으로**
+    // 끼워 넣는다 — flexbox가 자리를 자연스럽게 배분하므로 핀이 확대돼도 물리적으로 겹칠 수
+    // 없다(좌표 계산에 의존하지 않는 구조적 해결).
     function _updateRowCheckbox(tr, idx, show) {
         var firstTd = tr.querySelector('td:first-child');
         if (!firstTd) return;
+        var flexWrap = firstTd.querySelector(':scope > div') || firstTd;
 
         var cb = tr.querySelector('.gantt-ai-cb');
         if (show) {
@@ -504,16 +515,13 @@
                 cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.className = 'gantt-ai-cb';
-                cb.style.cssText =
-                    'position:absolute;left:2px;top:50%;transform:translateY(-50%);' +
-                    'width:14px;height:14px;cursor:pointer;z-index:2;accent-color:#d63384;';
+                cb.style.cssText = 'width:14px;height:14px;cursor:pointer;flex-shrink:0;accent-color:#d63384;';
                 cb.addEventListener('change', function() {
                     if (this.checked) _selected.add(idx);
                     else _selected.delete(idx);
                     _updateBulkBar(true);
                 });
-                firstTd.style.position = 'relative';
-                firstTd.insertBefore(cb, firstTd.firstChild);
+                flexWrap.insertBefore(cb, flexWrap.firstChild);
             }
             cb.checked = _selected.has(idx);
             cb.style.display = '';

@@ -1647,6 +1647,12 @@ ${question}
                     <button onclick="window._aiCancelPendingOpenExecDraft('${m.openExecDraftId}')" onmouseover="this.style.background='#e9ecef';" onmouseout="this.style.background='#f8f9fa';" style="font-size:11.5px; padding:5px 12px; border:1px solid #ccc; background:#f8f9fa; color:#555; border-radius:6px; cursor:pointer; transition:background .15s;">${window._currentLang === 'en' ? 'Cancel' : '취소'}</button>
                 </div>`
                 : '';
+            // 🔽 [2026-09-16 신규, 사용자 요청] 객관식(고정 목록) 질문은 자유 텍스트 대신 드롭다운으로
+            //    답하게 한다 — window._ganttQaPendingChoiceDropdown(js/04h)이 채워둔 상태를 이
+            //    메시지의 choiceDropdownId와 대조해서만 그린다(다른 draft 카드들과 동일한 패턴).
+            const choiceDropdownHtml = (!isUser && m.choiceDropdownId && window._ganttQaPendingChoiceDropdown && window._ganttQaPendingChoiceDropdown.id === m.choiceDropdownId)
+                ? window._ganttQaRenderChoiceDropdownHtml(window._ganttQaPendingChoiceDropdown)
+                : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
@@ -1657,6 +1663,7 @@ ${question}
                 ${ganttEditDraftHtml ? `<div style="max-width:82%; width:100%;">${ganttEditDraftHtml}</div>` : ''}
                 ${ganttAddDraftHtml ? `<div style="max-width:82%; width:100%;">${ganttAddDraftHtml}</div>` : ''}
                 ${openExecDraftHtml ? `<div style="max-width:82%; width:100%;">${openExecDraftHtml}</div>` : ''}
+                ${choiceDropdownHtml ? `<div style="max-width:82%; width:100%;">${choiceDropdownHtml}</div>` : ''}
             </div>`;
         }).join('');
         box.scrollTop = box.scrollHeight;

@@ -306,6 +306,64 @@
         return { tempLines, purposeLines };
     };
 
+    // 🔽 [2026-09-16 신규, 사용자 요청] AI 문답이 정해진 목록(객관식) 중에서 고르게 하는 질문은
+    // 자유 텍스트 입력 대신 드롭다운으로 물어본다 — 표를 채팅에 길게 나열하고 코드/문구를
+    // 정확히 타이핑해야 했던 기존 방식은 오타·형식 실수(예: "P1"을 "P01"로 인식 못함) 위험이
+    // 있었다. "구매오더 요청"의 목적(P01~P05)/임시코드(900101~900501) 선택부터 적용 —
+    // 앞으로 새 객관식 질문을 추가할 때도 이 헬퍼를 재사용할 것(CLAUDE.md "🔽 AI 문답
+    // 객관식 질문" 절 참고). **선택값을 처리하는 새 로직을 따로 만들지 않는다** — 드롭다운은
+    // 순전히 입력 방식만 바꾸는 것이고, 선택하면 사람이 타이핑했을 법한 문자열을 합성해
+    // 입력창에 넣고 기존 sendGanttQaMessage()를 그대로 호출한다 — 그러면 그 문자열을 해석
+    // 하는 기존 단계별 파서(코드 정규화/유효성 검사 등)가 아무 수정 없이 그대로 처리한다.
+    window._ganttQaPendingChoiceDropdown = null; // {id, multi, options:[{value,label}], items?:[{label}], buildAnswerText(selections)}
+
+    window._ganttQaRenderChoiceDropdownHtml = function(draft) {
+        const _en = window._currentLang === 'en';
+        const opts = draft.options.map(function(o) { return `<option value="${escapeHtml(o.value)}">${escapeHtml(o.label)}</option>`; }).join('');
+        if (draft.multi) {
+            const rows = draft.items.map(function(it, i) {
+                return `<div style="display:flex; align-items:center; gap:6px; margin-bottom:5px;">
+                    <span style="font-size:11.5px; color:#555; flex:1; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${escapeHtml(it.label)}">${escapeHtml(it.label)}</span>
+                    <select id="qa-choice-${draft.id}-${i}" style="font-size:11.5px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; max-width:55%;">
+                        <option value="">${_en ? '(choose)' : '(선택)'}</option>
+                        ${opts}
+                    </select>
+                </div>`;
+            }).join('');
+            return `<div style="margin-top:6px; padding:8px; background:#fff; border:1px solid #dee2e6; border-radius:6px;">
+                ${rows}
+                <div style="display:flex; justify-content:flex-end; margin-top:4px;">
+                    <button onclick="window._ganttQaSubmitChoiceDropdown('${draft.id}')" style="font-size:11.5px; padding:5px 12px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:6px; font-weight:bold; cursor:pointer;">${_en ? '✅ Confirm' : '✅ 선택 완료'}</button>
+                </div>
+            </div>`;
+        }
+        return `<div style="margin-top:6px;">
+            <select id="qa-choice-${draft.id}-0" onchange="window._ganttQaSubmitChoiceDropdown('${draft.id}')" style="font-size:11.5px; padding:5px 8px; border:1px solid #ccc; border-radius:6px; width:100%;">
+                <option value="">${_en ? '(choose one)' : '(선택해주세요)'}</option>
+                ${opts}
+            </select>
+        </div>`;
+    };
+
+    window._ganttQaSubmitChoiceDropdown = function(id) {
+        const draft = window._ganttQaPendingChoiceDropdown;
+        if (!draft || draft.id !== id) return;
+        const count = draft.multi ? draft.items.length : 1;
+        const selections = [];
+        for (let i = 0; i < count; i++) {
+            const sel = document.getElementById(`qa-choice-${id}-${i}`);
+            selections.push(sel ? sel.value : '');
+        }
+        if (selections.every(function(v) { return !v; })) return; // 아무 것도 안 고르면 무시
+        const answerText = draft.buildAnswerText(selections);
+        if (!answerText) return;
+        window._ganttQaPendingChoiceDropdown = null;
+        const input = document.getElementById('gantt-qa-input');
+        if (!input) return;
+        input.value = answerText;
+        window.sendGanttQaMessage();
+    };
+
     // PDF 텍스트(들)에서 품목 정보를 AI로 추출 — 다중 항목 전부 추출, 임시코드는 AI가 표를
     // 보고 가장 가까운 것을 제안(애매하면 사람이 확인). correctionNote가 있으면 이전 추출
     // 결과에 대한 사람의 정정 지시를 같이 실어 재추출한다(별도 파싱 로직 없이 AI에게 다시
@@ -2124,11 +2182,27 @@ ${attachText}`;
                     const missingItems = pd.items.map(function(it, i) { return { i: i, it: it }; })
                         .filter(function(x) { return !x.it.tempCode || !window._PO_TEMP_CODE_TABLE.some(function(r) { return r.code === x.it.tempCode; }); });
                     if (missingItems.length) {
-                        const { tempLines } = window._ganttQaPoOptionsTableText();
-                        const missingList = missingItems.map(function(x) { return `${x.i + 1}. ${x.it.desc}`; }).join('\n');
-                        window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                            `⚠️ 아래 품목은 임시코드를 자동으로 판단하기 어려웠습니다 — 직접 알려주세요:\n${missingList}\n\n[임시코드 표]\n${tempLines}\n\n예: "2번은 900201" 또는 여러 개가 같으면 "2~5번은 900302"처럼 답해주셔도 됩니다.`,
-                            `⚠️ Couldn't confidently determine the temp code for these item(s) — please specify:\n${missingList}\n\n[Temp code table]\n${tempLines}\n\nE.g. "item 2 should be 900201", or "items 2-5 should be 900302" if several share the same code.`
+                        // 🔽 [2026-09-16 신규] 임시코드도 정해진 13개 중 하나를 고르는 객관식이라
+                        // 품목별 드롭다운으로 물어본다 — 골라둔 것만 반영되고(전부 안 골라도 됨),
+                        // 그 결과 텍스트("N번은 코드")를 기존 자유서술 정정 경로(correctionNote)
+                        // 로 그대로 흘려보내므로 아직 안 고른 품목은 다음 턴에 다시 같은 방식으로
+                        // 물어보게 된다(기존 "여전히 비어있으면 재확인" 로직이 그대로 재사용됨).
+                        const tempDropdownId = 'po-tempcode-' + Date.now();
+                        window._ganttQaPendingChoiceDropdown = {
+                            id: tempDropdownId, multi: true,
+                            items: missingItems.map(function(x) { return { label: `${x.i + 1}. ${x.it.desc}` }; }),
+                            options: window._PO_TEMP_CODE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; }),
+                            buildAnswerText: function(selections) {
+                                const parts = [];
+                                selections.forEach(function(code, idx) {
+                                    if (code) parts.push(`${missingItems[idx].i + 1}번은 ${code}`);
+                                });
+                                return parts.join(', ');
+                            }
+                        };
+                        window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: tempDropdownId, text: window._t(
+                            '⚠️ 아래 품목은 임시코드를 자동으로 판단하기 어려웠습니다 — 아래에서 직접 선택해주세요:',
+                            "⚠️ Couldn't confidently determine the temp code for these item(s) — please choose below:"
                         )});
                         window._renderGanttQaMessages();
                         input.focus();
@@ -2184,8 +2258,15 @@ ${attachText}`;
             if (pd.stage === 'ask_reason') {
                 pd.reason = replyText;
                 pd.stage = 'ask_purpose';
-                const { purposeLines } = window._ganttQaPoOptionsTableText();
-                window._ganttQaHistory.push({ role: 'ai', text: window._t(`목적을 아래 표에서 골라주세요(코드 또는 내역으로 답해주세요):\n${purposeLines}`, `Please pick a purpose from the table below (reply with the code or the description):\n${purposeLines}`) });
+                // 🔽 [2026-09-16 신규] 목적(P01~P05)은 정해진 5개 중 하나를 고르는 객관식 질문
+                // 이라 드롭다운으로 물어본다 — 위 window._ganttQaPendingChoiceDropdown 참고.
+                const purposeDropdownId = 'po-purpose-' + Date.now();
+                window._ganttQaPendingChoiceDropdown = {
+                    id: purposeDropdownId, multi: false,
+                    options: window._PO_PURPOSE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; }),
+                    buildAnswerText: function(sel) { return sel[0]; }
+                };
+                window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: purposeDropdownId, text: window._t('목적을 아래에서 선택해주세요.', 'Please choose a purpose below.') });
                 window._renderGanttQaMessages();
                 input.focus();
                 return;
