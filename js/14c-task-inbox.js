@@ -763,6 +763,20 @@ window._toggleMailRawTranslation = async function() {
     btn.textContent = '⏳ ' + (_en ? 'Translating...' : '번역 중...');
 
     try {
+        // 💡 [2026-09-16 속도개선] 이 앱의 메일은 대부분 헤더/서명/한글 문단이 다수라, 라틴·중국어·
+        // 일본어 문자가 전혀 없는(=한국어이거나 숫자·기호뿐인) 블록은 애초에 번역할 이유가 없다.
+        // 예전엔 이런 블록까지 전부 AI에 보내 "번역 불필요"라고 판단만 시켰는데, 그 판단 자체가
+        // AI 호출 왕복(청크 수)을 늘려 전체 번역 속도를 늦추고 있었다 — 사용자가 "문단마다 번역해서
+        // 느린가"라고 물어본 게 정확히 이 부분(청크 수가 불필요하게 많다는 것)을 가리켰다. 정규식
+        // 하나로 이런 블록을 미리 걸러 AI 호출 대상에서 아예 제외하면, 실제 외국어가 섞인 블록만
+        // 남아 청크 수(=왕복 횟수)가 크게 줄어든다 — 정확도 손실 없음(한국어만 있는 블록은 원래도
+        // AI가 "번역 안 함"으로 판정하던 것과 결과가 같고, 그 판정을 로컬에서 대신 내리는 것뿐).
+        const FOREIGN_LETTER_RE = /[A-Za-zÀ-ɏ぀-ヿ一-鿿]/;
+        const blocksToTranslate = [];
+        blocks.forEach(function(b, i) {
+            if (FOREIGN_LETTER_RE.test(b)) blocksToTranslate.push({ idx: i, block: b });
+        });
+
         // 💡 [2026-09-14 버그수정] 원문이 길고(빈 줄이 없어 줄 단위로 잘게 쪼개짐) 블록 수가 많으면,
         // 한 번의 요청에 모든 블록의 JSON을 다 담아 응답하라고 시키는 게 모델의 출력 토큰 한도를
         // 넘겨 응답이 중간에 잘리는 경우가 있었다 — 그러면 배열이 "]"로 안 닫힌 채 끊겨서 아래 정규식이
@@ -771,8 +785,8 @@ window._toggleMailRawTranslation = async function() {
         // 일부 청크만 실패해도 나머지는 정상 표시되도록(부분 성공) 완화했다.
         const CHUNK_SIZE = 25;
         const chunks = [];
-        for (let start = 0; start < blocks.length; start += CHUNK_SIZE) {
-            chunks.push(blocks.slice(start, start + CHUNK_SIZE).map(function(b, j) { return { idx: start + j, block: b }; }));
+        for (let start = 0; start < blocksToTranslate.length; start += CHUNK_SIZE) {
+            chunks.push(blocksToTranslate.slice(start, start + CHUNK_SIZE));
         }
 
         const extractAiText = function(result) {
@@ -782,13 +796,18 @@ window._toggleMailRawTranslation = async function() {
         };
 
         let firstFailure = null;
-        const chunkResults = await Promise.all(chunks.map(async function(chunk) {
+        const chunkResults = chunks.length ? await Promise.all(chunks.map(async function(chunk) {
             const blockListText = chunk.map(function(c) { return c.idx + ': ' + c.block; }).join('\n');
-            const prompt = '당신은 번역 보조 AI입니다. 아래는 이메일 원문을 줄/문단 단위 블록으로 나눈 것입니다.\n'
-                + '각 블록이 영어 등 한국어가 아닌 언어로 되어 있으면 자연스러운 한국어로 번역하고, 이미 한국어이거나 번역할 의미가 없는 경우(단순 날짜·기호·매우 짧은 헤더 등)에는 번역하지 마세요.\n\n'
+            // 💡 [2026-09-16 속도개선] 번역이 필요 없는 블록까지 매번 {"translate":false,"ko":""}로
+            // 응답에 채우게 하면 출력 토큰이 그만큼 늘어 응답이 느려지고 잘릴 위험도 커진다 — 이제
+            // 블록 자체를 위에서 미리 걸렀으므로(외국어 문자가 있는 것만 이 프롬프트에 옴) 대부분
+            // 번역이 필요하지만, 그래도 AI가 "짧은 코드/암호 같은 문자열이라 번역 무의미"로 판단할
+            // 수 있는 경우를 위해 필요 없는 항목은 아예 배열에서 빼라고 지시해 출력을 더 줄인다.
+            const prompt = '당신은 번역 보조 AI입니다. 아래는 이메일 원문을 줄/문단 단위 블록으로 나눈 것입니다(외국어 문자가 포함된 블록만 추려서 보냈습니다).\n'
+                + '각 블록이 영어 등 한국어가 아닌 언어로 되어 있으면 자연스러운 한국어로 번역하세요. 이미 한국어이거나 단순 코드·기호·매우 짧은 헤더 등 번역할 의미가 없는 블록은 아예 응답 배열에서 제외하세요.\n\n'
                 + '[블록 목록]\n' + blockListText + '\n\n'
-                + '다음 JSON 배열 형식으로만 답하세요 (블록의 idx·개수·순서를 정확히 그대로 유지, 마크다운 코드블록(```)이나 설명 문장 없이 JSON 배열 하나만 출력):\n'
-                + '[{"idx": ' + chunk[0].idx + ', "translate": true 또는 false, "ko": "번역문 또는 빈 문자열"}, ...]';
+                + '다음 JSON 배열 형식으로만 답하세요 (번역이 필요한 블록만 담고, 필요 없는 블록은 배열에서 제외 — idx는 원본 그대로 유지, 마크다운 코드블록(```)이나 설명 문장 없이 JSON 배열 하나만 출력):\n'
+                + '[{"idx": ' + chunk[0].idx + ', "ko": "번역문"}, ...]';
             try {
                 const result = await window.callAiBackend(apiKey, prompt, {});
                 if (!result.ok) throw result.error || new Error(window._t('번역 실패', 'Translation failed'));
@@ -803,17 +822,21 @@ window._toggleMailRawTranslation = async function() {
                 if (!firstFailure) firstFailure = e;
                 return null;
             }
-        }));
+        })) : [];
 
         const parsed = [];
         let anySucceeded = false;
         chunkResults.forEach(function(r) { if (r) { anySucceeded = true; parsed.push.apply(parsed, r); } });
-        if (!anySucceeded) throw firstFailure || new Error(window._t('번역 실패', 'Translation failed'));
+        // 💡 [2026-09-16] 위에서 외국어 문자가 있는 블록만 걸러 보냈으므로, 애초에 그런 블록이
+        // 하나도 없었으면(blocksToTranslate가 비어 chunks 자체가 없었으면) chunkResults도 비고
+        // anySucceeded는 항상 false다 — 이건 "번역이 실패한 것"이 아니라 "번역할 게 없는 것"이므로
+        // 청크가 하나라도 있었을 때만 실패로 취급한다(안 그러면 순수 한글 메일마다 매번 에러가 남).
+        if (chunks.length && !anySucceeded) throw firstFailure || new Error(window._t('번역 실패', 'Translation failed'));
 
         const html = blocks.map(function(b, i) {
             const entry = parsed.find(function(p) { return p.idx === i; });
             const escaped = escapeHtml(b).replace(/\n/g, '<br>');
-            if (entry && entry.translate && entry.ko && String(entry.ko).trim()) {
+            if (entry && entry.ko && String(entry.ko).trim()) {
                 return '<div style="margin-bottom:10px;">'
                     + '<div style="color:#333; white-space:pre-wrap;">' + escaped + '</div>'
                     + '<div style="color:#1971c2; background:#eef6ff; border-left:3px solid #a5c8f0; padding:4px 8px; margin-top:3px; border-radius:0 4px 4px 0; white-space:pre-wrap;">🇰🇷 ' + escapeHtml(String(entry.ko).trim()) + '</div>'
