@@ -1351,6 +1351,31 @@ def download_documents_batch(materials, doc_type='P01'):
         raise RuntimeError(f'ZDMSR004 실행(F8) 중 오류가 발생했습니다: {e}')
     time.sleep(1.5)
 
+    # ⚠️⚠️ [2026-09-16 실사용 버그수정] 아래 "결과 그리드 전체 선택 후 다운로드" 직전에 그리드를
+    # 먼저 읽어 "문서번호(DOKNR)→자재번호(MATNR)" 매핑을 확보해둔다 — 이 함수가 원래 반환하던
+    # 메시지("자재별 하위 폴더 자동 생성")는 사실이 아니었다: ZDMSR004는 폴더를 **문서번호**로
+    # 만들지 자재번호로 만들지 않는다(실사용 제보로 확인 — 사용자가 캡처해준 C:\SAP_DMS\ 화면에
+    # `P01202101796`류 문서번호 폴더만 잔뜩 있고, 그 6자리 자재번호와 어떻게 매칭되는지, 같은
+    # 자재의 문서가 여러 건(리비전)일 때 어느 게 "내역(1)"/"내역(2)"인지 전혀 알 수 없다는
+    # 지적). 라이브 진단으로 그리드 컬럼을 확인해보니 `MATNR`/`DOKNR` 필드가 그대로 있어(표시
+    # 라벨은 SAP GUI Scripting 한글 인코딩 버그로 깨지지만 — CLAUDE.md의 "ALV 그리드 한글이
+    # 깨진다" 절 참고 — 기술 필드명 `GetCellValue(row, 'MATNR')`는 정상 작동), 다운로드 전에
+    # 이 매핑을 미리 읽어둘 수 있다는 걸 확인함. 그리드는 다음 조회에서 초기화되므로 반드시
+    # "다운로드 버튼을 누르기 전"인 지금 읽어야 한다.
+    matnr_by_doknr = {}
+    try:
+        grid_probe = session.findById('wnd[0]/shellcont/shell')
+        for r in range(grid_probe.RowCount):
+            try:
+                doknr = str(grid_probe.GetCellValue(r, 'DOKNR')).strip()
+                matnr = str(grid_probe.GetCellValue(r, 'MATNR')).strip()
+                if doknr and matnr and doknr not in matnr_by_doknr:
+                    matnr_by_doknr[doknr] = matnr
+            except Exception:
+                continue
+    except Exception:
+        pass  # 매핑 확보에 실패해도 다운로드 자체는 계속 진행 — 폴더명 개선은 최선노력일 뿐
+
     # 결과 그리드 전체 선택 후 다운로드.
     try:
         grid = session.findById('wnd[0]/shellcont/shell')
@@ -1362,6 +1387,34 @@ def download_documents_batch(materials, doc_type='P01'):
         raise RuntimeError(f'결과 목록에서 전체 선택 후 다운로드하는 중 오류가 발생했습니다(자재를 찾지 못해 결과가 비어 있을 수도 있습니다): {e}')
     time.sleep(1.5)
 
+    # 💡 [2026-09-16 신규] 위에서 확보한 매핑으로 다운로드된 <문서번호> 폴더를
+    # <자재번호>_<문서번호>로 이름을 바꾼다 — 이러면 폴더명만 보고도 바로 어느 자재의 문서인지
+    # 알 수 있고, 같은 자재가 문서번호(리비전)만 다르게 여러 개 있는 경우도 전부 같은 자재번호
+    # 접두사를 공유해 한눈에 같은 자재 것임을 알 수 있다. SAP 리포트가 서버 쪽에서 이미
+    # <문서번호> 폴더를 만들어버리므로(경로가 ABAP 내부에 고정돼 있어 SAP 쪽 파일명 자체는
+    # 바꿀 방법이 없음 — CLAUDE.md의 ZDMSR004 절 참고) 다운로드 직후 로컬 파일시스템에서
+    # 후처리로 이름을 바꾸는 방식을 택함. 이미 그 이름으로 폴더가 있으면(재실행 등) 건드리지
+    # 않고, 실패해도(폴더가 아직 안 생겼거나 권한 문제) 다운로드 자체는 이미 끝난 뒤이므로
+    # 조용히 넘어간다.
+    renamed_map = {}  # {원래 문서번호 폴더명: 새 폴더명}
+    try:
+        base_dir = r'C:\SAP_DMS'
+        for doknr, matnr in matnr_by_doknr.items():
+            src = os.path.join(base_dir, doknr)
+            if not os.path.isdir(src):
+                continue
+            dst_name = f'{matnr}_{doknr}'
+            dst = os.path.join(base_dir, dst_name)
+            if os.path.isdir(dst):
+                continue
+            try:
+                os.rename(src, dst)
+                renamed_map[doknr] = dst_name
+            except Exception:
+                continue
+    except Exception:
+        pass
+
     # 💡 [2026-09-15 신규] 다운로드 완료 후 C:\SAP_DMS\ 폴더를 탐색기로 열어준다 — 백엔드와
     # SAP GUI가 같은 PC에서 돌아가는 구조라(파일을 옮길 필요 자체가 없다는 이 프로젝트의 기존
     # 설계 원칙 그대로) os.startfile로 로컬 탐색기를 바로 띄울 수 있다. 폴더 여는 것 자체가
@@ -1372,11 +1425,27 @@ def download_documents_batch(materials, doc_type='P01'):
     except Exception:
         pass
 
+    # 자재번호 → 문서번호(들) 역매핑 — 이름 변경이 실패했어도 채팅 응답 문구로 매칭 정보를
+    # 그대로 전달할 수 있게 대비(벨트 앤 서스펜더스: 폴더명 개선이 안 돼도 최소한 텍스트로는
+    # 사용자가 알 수 있어야 한다).
+    doknrs_by_matnr = {}
+    for doknr, matnr in matnr_by_doknr.items():
+        doknrs_by_matnr.setdefault(matnr, []).append(doknr)
+    mapping_lines = [f'{matnr}: ' + ', '.join(doknrs) for matnr, doknrs in doknrs_by_matnr.items()]
+    mapping_text = ' / '.join(mapping_lines)
+
+    if renamed_map:
+        folder_note = f'폴더명을 <자재번호>_<문서번호> 형태로 바꿔뒀습니다({len(renamed_map)}건) — 폴더명만 보고 바로 매칭됩니다.'
+    else:
+        folder_note = f'폴더는 여전히 문서번호로 표시됩니다 — 자재번호 매칭: {mapping_text}' if mapping_text else '자재-문서 매칭 정보를 확보하지 못했습니다(그리드 조회 실패).'
+
     return {
         'ok': True,
         'materials': materials,
         'docType': doc_type,
-        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다(자재별 하위 폴더 자동 생성). 탐색기로 그 폴더를 열었습니다.',
+        'matnrByDoknr': matnr_by_doknr,
+        'renamedFolders': renamed_map,
+        'message': f'{len(materials)}개 자재의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다. {folder_note} 탐색기로 그 폴더를 열었습니다.',
     }
 
 
@@ -1565,10 +1634,27 @@ def download_documents_by_pattern(pattern, doc_type='P01'):
     materials = [m['matnr'] for m in resolved]
     chunk_size = 7
     all_results = []
+    renamed_map = {}  # {문서번호: 새 폴더명} — 전체 청크 통합
     for i in range(0, len(materials), chunk_size):
         chunk = materials[i:i + chunk_size]
         result = download_documents_batch(chunk, doc_type)
         all_results.append(result)
+        renamed_map.update(result.get('renamedFolders') or {})
+
+    # ⚠️⚠️ [2026-09-16 실사용 버그수정] "와일드카드 패턴으로 9건이 매치돼 다운로드됐는데, 폴더가
+    # 전부 문서번호(P01202101796류)라 애초에 물어본 패턴(예: *06+06*200*)의 어느 항목이 어느
+    # 폴더인지, 같은 자재가 문서번호만 다르게 여러 개("내역(1)(2)")일 때 뭐가 뭔지 전혀 알 수
+    # 없다"는 제보 — `download_documents_batch`가 이제 문서번호→자재번호 매핑을 확보해 폴더명을
+    # <자재번호>_<문서번호>로 바꿔주므로(위 함수 참고), 여기서는 그 결과를 모아 패턴 검색으로
+    # 이미 알고 있는 자재내역(desc)까지 같이 붙여 사람이 바로 알아볼 수 있는 요약 문구를 만든다.
+    desc_by_matnr = {m['matnr']: m.get('desc', '') for m in resolved}
+    lines = []
+    for matnr in materials:
+        desc = desc_by_matnr.get(matnr, '')
+        folders = sorted(name for doknr, name in renamed_map.items() if name.startswith(matnr + '_'))
+        folder_part = ', '.join(folders) if folders else '(폴더명 변경 실패 — 문서번호 폴더 그대로)'
+        lines.append(f'{matnr}({desc}) → {folder_part}')
+    mapping_summary = '\n'.join(lines)
 
     return {
         'ok': True,
@@ -1577,7 +1663,8 @@ def download_documents_by_pattern(pattern, doc_type='P01'):
         'matchDetails': resolved,
         'docType': doc_type,
         'chunks': len(all_results),
-        'message': f'패턴 "{pattern}"에 매치된 자재 {len(materials)}건({", ".join(materials)})의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다.',
+        'renamedFolders': renamed_map,
+        'message': f'패턴 "{pattern}"에 매치된 자재 {len(materials)}건({", ".join(materials)})의 "{doc_type}" 문서를 C:\\SAP_DMS\\ 폴더로 다운로드했습니다. 자재별 매칭:\n{mapping_summary}',
     }
 
 
