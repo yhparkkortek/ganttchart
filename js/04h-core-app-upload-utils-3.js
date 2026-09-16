@@ -936,6 +936,16 @@ ${docsJson}`;
             const wantsBatchWhereUsed = whereUsedMatch && /(다중|일괄|복수)/.test(question);
             const bomNums = (!whereUsedMatch && question && /bom/i.test(question)) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
             const bomMatch = bomNums.length > 0;
+            // 🆕 [2026-09-17 신규, 사용자 요청] "133025,133026 엑셀 출력해줘"처럼 BOM/사용처/
+            // 역전개 키워드 없이 자재번호만 있는 요청의 기본 조회 경로를 ZMM009로 바꿔달라는
+            // 요청 — 사용자가 직접 준 SAP GUI "기록 및 재생" 매크로로 정확한 필드 ID를 확보해
+            // `sap_bridge_32.py`의 fetch_zmm009_material_list()로 구현함(추측 아님). 예전엔
+            // 이 경우 전부 맨 아래 else(범용 `/sap-fetch` — "지금 SAP GUI 화면에 뭐가 떠
+            // 있든 그걸 그대로 읽기")로 빠져서, 자재번호나 트랜잭션 이름을 뭐라고 말하든
+            // 결과가 항상 똑같았다(화면이 안 바뀌면 내용도 안 바뀌므로) — 이제 자재번호가
+            // 있으면 실제로 ZMM009로 이동해서 그 자재들을 조회한다.
+            const zmm009Nums = (!whereUsedMatch && !bomMatch && question) ? (question.match(/\b\d{5,8}\b/g) || []) : [];
+            const zmm009Match = zmm009Nums.length > 0;
 
             let url, timeoutMs, timeoutMsgKo, timeoutMsgEn;
             if (whereUsedMatch && wantsBatchWhereUsed) {
@@ -965,6 +975,10 @@ ${docsJson}`;
                     + '&show_price=' + priceParam + '&show_location=' + locParam;
                 timeoutMs = Math.min(90000, 30000 + 10000 * bomNums.length);
                 timeoutMsgKo = 'SAP BOM 조회 시간 초과'; timeoutMsgEn = 'SAP BOM lookup timed out';
+            } else if (zmm009Match) {
+                url = 'http://127.0.0.1:5000/sap-zmm009?material=' + encodeURIComponent(zmm009Nums.join(','));
+                timeoutMs = Math.min(150000, 30000 + 15000 * zmm009Nums.length);
+                timeoutMsgKo = 'SAP ZMM009 자재 조회 시간 초과'; timeoutMsgEn = 'SAP ZMM009 material lookup timed out';
             } else {
                 url = 'http://127.0.0.1:5000/sap-fetch';
                 timeoutMs = 15000;

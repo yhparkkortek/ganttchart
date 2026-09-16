@@ -757,6 +757,99 @@ def fetch_where_used_batch(materials, plant='1000'):
     return {'ok': True, 'source': source, 'materials': mat_list, 'text': text}
 
 
+def fetch_zmm009_material_list(materials, storage_location='1000'):
+    """ZMM009("자재 List(복수조회)")로 여러 자재를 한 번에 조회한다 — 2026-09-17, 사용자가
+    "SAP에서 자재번호+엑셀 출력해줘"류 요청을 할 때 ZMM009를 기본 경로로 써달라고 요청해서
+    추가함. 사용자가 직접 준 SAP GUI "기록 및 재생" 매크로(ZMM009.vbs)에서 그대로 가져온
+    정확한 필드 ID·버튼 시퀀스(추측 아님):
+    ① `/nZMM009` 진입 → ② `ctxtP_LGORT-LOW`(저장위치, 매크로에서 "1000") 입력 →
+    ③ 자재코드 "복수 선택" 버튼(`btn%_P_MATNR_%_APP_%-VALU_PUSH`) → ④ 팝업 입력 표
+    (`_SAP_MULTI_SELECT_POPUP_TABLE` — ZDMSR004/ZPP046이 이미 쓰고 있는 것과 **완전히 동일한
+    SAP 표준 팝업 구조**임을 이번 매크로의 버튼 시퀀스가 정확히 일치하는 것으로 확인: 아래 ⑤)
+    에 자재번호를 채우고 → ⑤ `wnd[1]/tbar[0]/btn[24]` → `wnd[1]/tbar[0]/btn[8]`(순서대로,
+    ZDMSR004와 동일) → ⑥ `tbar[1]/btn[8]`(실행/F8). 결과는 특정 트랜잭션 전용 파서를 만들지
+    않는다는 이 코드베이스의 기존 설계 원칙대로 `_sap_dump_screen_body`(그리드→트리→필드
+    순서로 시도하는 범용 덤프)로 그대로 읽는다.
+    ⚠️⚠️ 매크로에는 이 뒤로 결과 그리드의 특정 행(자재 하나)을 더블클릭해 MM03 문서 화면까지
+    드릴다운하는 단계가 이어지는데, 그건 이미 별도로 구현된 "ZMM009 리스트에서 바로 문서
+    열기" 기능(`_open_material_from_current_list` 등)의 몫이라 여기서는 재현하지 않는다 —
+    이 함수는 "여러 자재를 리스트로 조회"하는 부분(매크로의 앞부분)까지만 담당한다.
+    ⚠️ ZDMSR004와 마찬가지로 팝업 한 화면에 보이는 입력 행 수(스크롤 없이) 이상을 넣을 때의
+    동작은 검증 안 됨 — 8개 이상 자재로 문제가 생기면 이 스크롤 로직부터 의심할 것."""
+    session = _get_sap_session()
+    wnd = session.findById('wnd[0]')
+    mat_list = list(materials) if isinstance(materials, (list, tuple)) else [materials]
+    mat_list = [str(m).strip() for m in mat_list if str(m).strip()]
+    if not mat_list:
+        raise RuntimeError('자재번호를 지정해주세요.')
+    storage_location = (storage_location or '1000').strip()
+
+    session.findById('wnd[0]/tbar[0]/okcd').text = '/nZMM009'
+    wnd.sendVKey(0)
+    time.sleep(0.8)
+    wnd = session.findById('wnd[0]')
+
+    loc_field = _set_text_on_best_candidate(wnd, 'P_LGORT-LOW', storage_location)
+    if loc_field is None:
+        raise RuntimeError('ZMM009 화면에서 저장위치 입력 필드(P_LGORT)를 찾지 못했습니다 — 화면 구조가 예상과 다를 수 있습니다.')
+
+    multi_btn = _find_by_id_substring(wnd, '%_P_MATNR_%_APP_%-VALU_PUSH')
+    if multi_btn is None:
+        raise RuntimeError('ZMM009 화면에서 "자재코드 복수 선택" 버튼을 찾지 못했습니다.')
+    multi_btn.press()
+    time.sleep(0.8)
+
+    try:
+        table = session.findById(_SAP_MULTI_SELECT_POPUP_TABLE)
+    except Exception:
+        raise RuntimeError('"자재코드 복수 선택" 팝업의 입력 표를 찾지 못했습니다.')
+    try:
+        visible_rows = table.VisibleRowCount or 7
+    except Exception:
+        visible_rows = 7
+    idx = 0
+    while idx < len(mat_list):
+        if idx > 0:
+            try:
+                table.FirstVisibleRow = idx
+                time.sleep(0.3)
+            except Exception:
+                pass
+        batch = mat_list[idx: idx + visible_rows]
+        for row_offset, mat in enumerate(batch):
+            cell_id = f"{_SAP_MULTI_SELECT_POPUP_TABLE}/ctxtRSCSEL_255-SLOW_I[1,{row_offset}]"
+            try:
+                session.findById(cell_id).text = mat
+            except Exception as e:
+                raise RuntimeError(f'"자재코드 복수 선택" 팝업에 {idx + row_offset + 1}번째 자재("{mat}")를 입력하지 못했습니다: {e}')
+        idx += len(batch)
+
+    try:
+        session.findById('wnd[1]/tbar[0]/btn[24]').press()
+        time.sleep(0.3)
+        session.findById('wnd[1]/tbar[0]/btn[8]').press()
+    except Exception as e:
+        raise RuntimeError(f'"자재코드 복수 선택" 팝업을 확인하는 중 오류가 발생했습니다: {e}')
+    time.sleep(0.8)
+
+    wnd = session.findById('wnd[0]')
+    try:
+        wnd.findById('tbar[1]/btn[8]').press()  # 실행(F8)
+    except Exception as e:
+        raise RuntimeError(f'ZMM009 실행(F8) 중 오류가 발생했습니다: {e}')
+    time.sleep(1.5)
+
+    wnd = session.findById('wnd[0]')
+    body, source = _sap_dump_screen_body(wnd)
+    mat_label = ', '.join(mat_list)
+    if not body:
+        return {'ok': False, 'error': f'자재 "{mat_label}"의 조회 결과를 찾지 못했습니다 — 자재번호/저장위치가 올바른지 확인해주세요.'}
+
+    header = f'[SAP 자재 List(ZMM009): 자재 {mat_label}]\n'
+    text = header + '\n' + body
+    return {'ok': True, 'source': source, 'materials': mat_list, 'text': text}
+
+
 # ── "승인원 표지 생성" 전용 헬퍼 ────────────────────────────────────────
 # 💡 [2026-09-15 신규] 사용자가 회사에서 쓰던 별도 데스크톱 앱("연구소 가이드 시스템",
 # PyInstaller로 배포된 Python/Tkinter 앱)의 exe를 주고 "이 기능을 AI 문답에도 추가해달라"고
@@ -2261,6 +2354,11 @@ def main():
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
             result = fetch_approval_info(materials_list)
+        elif action == 'fetch_zmm009_material_list':
+            materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
+            storage_location = sys.argv[3] if len(sys.argv) > 3 else '1000'
+            materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
+            result = fetch_zmm009_material_list(materials_list, storage_location)
         elif action == 'prepare_po_from_excel':
             excel_path = sys.argv[2] if len(sys.argv) > 2 else ''
             biz_reg_no = sys.argv[3] if len(sys.argv) > 3 else ''

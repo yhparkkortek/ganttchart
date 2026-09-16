@@ -1772,6 +1772,23 @@ def sap_where_used_batch():
     return jsonify(data), status
 
 
+@app.route('/sap-zmm009', methods=['GET'])
+def sap_zmm009():
+    # 💡 [2026-09-17 신규, 사용자 요청] "133025,133026 엑셀 출력해줘"처럼 자재번호(들)만
+    #    주어지고 BOM/사용처/역전개 키워드가 없는 요청의 기본 조회 경로 — 사용자가 "ZMM009를
+    #    기본으로 쓰면 좋겠다"고 요청해서 추가함. 실제 컨트롤 조작은 sap_bridge_32.py의
+    #    fetch_zmm009_material_list()에 있다(사용자가 준 SAP GUI "기록 및 재생" 매크로에서
+    #    그대로 가져온 정확한 필드 ID/버튼 시퀀스 — 추측 아님).
+    material = (request.args.get('material') or '').strip()
+    loc = (request.args.get('loc') or '1000').strip()
+    if not material:
+        return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-zmm009?material=133025,133026'}), 400
+    materials = [m.strip() for m in material.split(',') if m.strip()]
+    timeout = min(150, 30 + 15 * len(materials))
+    data, status = _run_sap_bridge(['fetch_zmm009_material_list', ','.join(materials), loc], timeout, 'SAP ZMM009 자재 조회')
+    return jsonify(data), status
+
+
 # ── 승인원 표지 생성 ──────────────────────────────────────────
 #    [2026-09-15 신규] "SAP에서 104477 승인원 표지 생성해줘" — 사내 별도 데스크톱 앱("연구소
 #    가이드 시스템")의 exe를 pyinstxtractor-ng로 풀고 main.pyc 바이트코드를 분석해서 그
