@@ -2090,6 +2090,15 @@ _SELF_UPDATE_FILES = [
     'templates/승인원_양식.xlsx',
     'templates/승인원_양식.docx',
 ]
+# ⚠️⚠️ [2026-09-16 실사용 버그수정] Windows 배치(.bat)/VBScript(.vbs) 파일은 git이 텍스트
+# 파일을 저장소 안에서는 항상 LF로 정규화해 저장하므로(로컬 작업 사본의 줄바꿈과 무관하게)
+# GitHub raw도 항상 LF-only 바이트를 돌려준다 — 그걸 그대로 바이트 그대로 써버리면(기존 코드)
+# 사용자 PC에는 LF-only .bat/.vbs 파일이 생긴다. cmd.exe의 배치 파서는 특히 이 파일들처럼
+# 괄호로 감싼 `IF (...) ELSE (...)` 블록이 많을 때 LF-only 줄바꿈에서 오동작하거나
+# ("...was unexpected at this time." 류 오류, 또는 블록이 조용히 실행 안 됨), 옛 스타일
+# 메모장에서는 줄바꿈 자체를 인식 못해 텍스트가 한 줄로 뭉쳐 보인다("파일이 이상함"이라는
+# 실사용 제보의 실제 원인으로 추정) — 이 확장자들은 항상 CRLF로 정규화해서 써야 한다.
+_SELF_UPDATE_CRLF_EXTS = ('.bat', '.vbs')
 
 
 def _fetch_github_raw(rel_path):
@@ -2097,6 +2106,17 @@ def _fetch_github_raw(rel_path):
     resp = requests.get(url, timeout=10)
     resp.raise_for_status()
     return resp.content
+
+
+def _normalize_for_compare(rel_path, data):
+    """`.bat`/`.vbs`는 로컬에 항상 CRLF로 써두는데(아래 `/self-update`의
+    `_SELF_UPDATE_CRLF_EXTS` 참고) GitHub raw는 git이 LF로 정규화해 저장한 바이트를 그대로
+    돌려주므로, 줄바꿈만 다르고 내용은 같은 경우까지 매번 "구버전"으로 오탐하지 않도록
+    비교 직전에 양쪽 다 LF로 맞춰서 비교한다 — 실제 파일 갱신(`/self-update`)에는 영향
+    없음(그쪽은 항상 CRLF로 쓰는 로직 그대로 유지)."""
+    if rel_path.lower().endswith(_SELF_UPDATE_CRLF_EXTS):
+        return data.replace(b'\r\n', b'\n')
+    return data
 
 
 @app.route('/self-check-update', methods=['GET'])
@@ -2113,7 +2133,7 @@ def self_check_update():
         if os.path.exists(local_path):
             with open(local_path, 'rb') as f:
                 local_bytes = f.read()
-        if remote_bytes != local_bytes:
+        if _normalize_for_compare(rel_path, remote_bytes) != _normalize_for_compare(rel_path, local_bytes):
             changed.append(rel_path)
     return jsonify({'ok': True, 'outdated': len(changed) > 0, 'changedFiles': changed, 'errors': errors})
 
@@ -2159,8 +2179,14 @@ def self_update():
         local_path = os.path.join(BASE_DIR, rel_path)
         try:
             os.makedirs(os.path.dirname(local_path), exist_ok=True)
+            write_bytes = remote_bytes
+            if rel_path.lower().endswith(_SELF_UPDATE_CRLF_EXTS):
+                # 먼저 혹시 있을 CRLF를 LF로 되돌린 뒤 전부 CRLF로 바꿔서, 원본이 LF-only든
+                # 이미 CRLF든 결과가 항상 깨끗한 CRLF가 되게 한다(CRLF를 또 CRLF화해서
+                # CRCRLF가 되는 사고 방지).
+                write_bytes = remote_bytes.replace(b'\r\n', b'\n').replace(b'\n', b'\r\n')
             with open(local_path, 'wb') as f:
-                f.write(remote_bytes)
+                f.write(write_bytes)
             updated.append(rel_path)
         except Exception as e:
             errors.append(f'{rel_path}: 저장 실패 - {e}')

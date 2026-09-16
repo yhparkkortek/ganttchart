@@ -1716,6 +1716,35 @@ AI 문답 창에 전자세금계산서/견적서 PDF를 첨부하면(📎 버튼
   `_SELF_UPDATE_FILES`와 `.claude/settings.json` PostToolUse 훅의 `Compress-Archive -Path` 목록이
   서로 어긋나면, "zip엔 있는데 자동 업데이트 대상엔 없는 파일"이 생겨 일부 PC만 그 파일이 계속
   구버전으로 남는 문제가 생긴다 — 새 배포 파일을 추가할 때 두 곳 다 같이 고칠 것.
+- **⚠️⚠️ [2026-09-16 실사용 버그수정] `.bat`/`.vbs` 파일이 LF-only로 배포돼 "파일이 이상하다"는
+  제보로 이어짐** — git은 저장소 안에 텍스트 파일을 항상 LF로 정규화해서 저장한다(로컬 작업
+  사본의 실제 줄바꿈과 무관) — 실제로 `git show HEAD:kortek_backend.bat`을 바이트 단위로 까보면
+  CR이 전혀 없는 순수 LF였다. 이 저장소는 `.gitattributes`가 없어 이 정규화를 막을 방법이
+  없고, 로컬 작업 사본 자체도(원인은 특정 못함 — 아마 최초 작성 시점부터 LF로 저장돼 있었고
+  `core.autocrlf=true`는 checkout 시에만 개입해 이후로는 그대로 유지된 것으로 추정) 실제로
+  LF-only였다. 그 결과 **`kortek_backend.zip`(Compress-Archive가 작업 사본 파일을 그대로
+  압축)과 `/self-update`(GitHub raw가 git의 LF 저장 바이트를 그대로 돌려줌) 두 배포 경로 모두
+  LF-only `.bat`/`.vbs` 파일을 사용자 PC에 심어왔다.** Windows `cmd.exe`의 배치 파서는
+  특히 이 파일들처럼 괄호로 감싼 `IF (...) ELSE (...)` 블록이 많을 때 LF-only 줄바꿈에서
+  오동작할 수 있고(줄이 씹히거나 블록이 조용히 안 돌 수 있음), 옛 스타일 메모장은 LF만으로는
+  줄바꿈 자체를 인식 못해 전체 텍스트가 한 줄로 뭉쳐 보인다 — **"덮어씌워진 파일이 이상하다"는
+  실사용 제보의 실제 원인으로 확정**(사용자가 메모장으로 열어 한 줄로 뭉친 걸 봤을 가능성이
+  높음). **수정**: ① 저장소 작업 사본의 `kortek_backend.bat`/`kortek_backend_install.bat`/
+  `kortek_backend_start_minimized.vbs` 세 파일을 CRLF로 정규화(내용은 동일, 줄바꿈만 변경) —
+  `kortek_backend.zip`은 이제부터 항상 CRLF로 빌드됨. ② `kortek_backend.py`의 `/self-update`가
+  `.bat`/`.vbs` 확장자(`_SELF_UPDATE_CRLF_EXTS`)는 GitHub에서 받은 바이트를 그대로 쓰지 않고
+  `b'\r\n'→b'\n'→b'\r\n'` 왕복으로 항상 CRLF로 정규화한 뒤 저장하도록 수정 — 원본이 LF든 이미
+  CRLF든 결과가 항상 깨끗한 CRLF가 되게 해서(CRLF를 또 변환해 CRCRLF가 되는 사고 방지), git이
+  앞으로도 계속 LF로 저장하는 것과 무관하게 사용자 PC에는 항상 올바른 CRLF 파일이 생기도록
+  방어함. ③ **이 수정과 짝을 이루는 함정**: `/self-check-update`가 그냥 원본 바이트를
+  그대로 비교하면, git의 LF 저장 바이트 vs 이제 항상 CRLF인 로컬 파일이 **내용은 같은데
+  줄바꿈만 달라서 매번 "구버전"으로 오탐**하게 된다(②의 수정이 ①·③ 없이 이것만 배포되면
+  이 새 오탐이 생김). 새 헬퍼 `_normalize_for_compare(rel_path, data)`가 `.bat`/`.vbs`만
+  비교 직전에 LF로 맞춰서(정규화된 로컬 CRLF ↔ git의 LF가 같은 내용이면 "같다"로 판정)
+  비교하도록 `/self-check-update`도 같이 고침 — 실제 배포(쓰기) 로직은 그대로 CRLF 유지, 비교
+  로직만 줄바꿈에 관대하게 만든 것. 이 세 가지(①②③)를 다 해야 완전한 수정이라는 점을 기억할 것
+  — 하나라도 빠지면 "새 사용자는 여전히 LF-only를 받거나" 또는 "정상 파일인데 계속 업데이트
+  배너가 뜨는" 회귀가 생긴다.
 
 ### 🌐 다국어(i18n) 지원 규칙 — 새 UI 문구 추가 시 반드시 확인 (2026-09-12)
 

@@ -1,0 +1,10 @@
+# ⚠️⚠️ [2026-09-16 신규] Windows 배치(.bat)/VBScript(.vbs) 파일은 반드시 CRLF로 체크아웃되게
+# 강제한다 — 이 저장소에 .gitattributes가 없던 동안 이 파일들이 LF-only로 저장소에 들어가서,
+# kortek_backend.zip/자동 업데이트(kortek_backend.py의 /self-update) 둘 다로 배포된 .bat/.vbs가
+# cmd.exe의 IF(...)ELSE(...) 블록에서 오동작하고 메모장에서는 한 줄로 뭉쳐 보이는 실사용 버그로
+# 이어졌다(CLAUDE.md "kortek_backend.zip 배포 파일 목록" 절 참고). 이 규칙은 새로 clone/checkout
+# 하는 경우를 커버하고, 이미 체크아웃된 사본이 다시 LF로 저장되는 것까지 막지는 못하므로(외부
+# 도구가 체크아웃 필터를 거치지 않고 직접 파일을 쓰는 경우) kortek_backend.py의 /self-update가
+# 런타임에도 항상 CRLF로 정규화해서 쓰도록 별도로 방어하고 있다.
+*.bat text eol=crlf
+*.vbs text eol=crlf
