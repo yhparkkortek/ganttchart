@@ -1679,12 +1679,16 @@ def sap_bom():
     explosion = (request.args.get('explosion') or 'single').strip()  # 'single'|'multi'
     show_price = (request.args.get('show_price') or '0').strip()
     show_location = (request.args.get('show_location') or '0').strip()
+    # 🆕 [2026-09-17 신규, 사용자 요청] ALV 레이아웃을 더 이상 /STD_MC로 하드코딩하지 않고
+    # AI 문답의 BOM 옵션 드롭다운에서 사람이 고른 값을 받는다 — 안 오면(하위호환) 빈 문자열을
+    # 그대로 넘겨 sap_bridge_32.py의 기본값(_BOM_LAYOUT_VARIANT)이 적용되게 함.
+    layout = (request.args.get('layout') or '').strip()
     if not material:
         return jsonify({'ok': False, 'error': '자재번호(material 파라미터)가 필요합니다. 예: /sap-bom?material=502572'}), 400
     material_count = len([m for m in material.split(',') if m.strip()])
     timeout = 30 if material_count <= 1 else min(90, 30 + 10 * material_count)
     data, status = _run_sap_bridge(
-        ['fetch_bom', material, plant, tcode_mode, explosion, show_price, show_location],
+        ['fetch_bom', material, plant, tcode_mode, explosion, show_price, show_location, layout],
         timeout, 'SAP BOM 조회')
     return jsonify(data), status
 

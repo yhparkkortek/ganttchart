@@ -164,6 +164,12 @@
         if (priceSeg) out.showPrice = !/(x|아니오|제외|안\s*함|no\b|미표시|없음)/i.test(priceSeg);
         const locSeg = (text.match(/(로케이션|위치|location)[^,，\n]*/i) || [])[0];
         if (locSeg) out.showLocation = !/(x|아니오|제외|안\s*함|no\b|미표시|없음)/i.test(locSeg);
+        // 🆕 [2026-09-17 신규] 레이아웃 코드는 "/CHKIM STD"처럼 공백이 들어간 값도 있어서
+        // 쉼표/공백 경계로 자르면 안 됨 — 드롭다운이 항상 따옴표로 감싸 합성하므로 그 패턴을
+        // 그대로 찾는다(자유 텍스트로 직접 타이핑하는 경우도 같은 형식을 요구 — 이 값은
+        // 드롭다운이 주 사용처라 자유 텍스트 지원은 부차적).
+        const layoutSeg = text.match(/레이아웃\s*[:：]?\s*"([^"]+)"/) || text.match(/layout\s*[:：]?\s*"([^"]+)"/i);
+        if (layoutSeg) out.layout = layoutSeg[1];
         return out;
     };
 
@@ -177,6 +183,72 @@
     // buildAnswerText가 합성하는 문자열("단일 레벨, 가격 표시, 위치 정보 안 함")은 기존
     // _ganttQaParseBomOptionReply가 파싱하는 정확히 그 문구 패턴 그대로라, 파서 쪽은 전혀
     // 안 건드려도 된다(드롭다운은 입력 방식만 바꾸고 처리 로직은 그대로 재사용한다는 원칙).
+    // 🆕 [2026-09-17 신규, 사용자 요청] "ALV 레이아웃을 /STD_MC로 하드코딩하지 말고 매번
+    // 물어봐달라" — 사용자가 실제 SAP "레이아웃 선택" 팝업에 있는 전체 목록(팀이 실제로
+    // 쓰는 개인/공용 레이아웃 60여 개)을 그대로 줘서, 그 목록을 드롭다운 선택지로 그대로
+    // 옮김(추측 아님 — 코드/설명 둘 다 사용자가 붙여넣은 원문 그대로). 값이 비어있으면
+    // (=드롭다운에서 아무것도 안 고르면) 기존 기본값 "/STD_MC"로 자동 폴백하므로, 굳이
+    // 고르지 않아도 예전과 동일하게 동작한다 — 이 목록에 없는 레이아웃이 나중에 더 생기면
+    // 이 배열에 `{value, label}` 형태로 추가하면 됨.
+    window._SAP_BOM_LAYOUT_OPTIONS = [
+        { value: '/CDH', label: '/CDH — BOM전개 MC가' },
+        { value: '/CH_1', label: '/CH_1 — BOM 전개-재고' },
+        { value: '/CHKIM STD', label: '/CHKIM STD — BOM전개' },
+        { value: '/CJJ', label: '/CJJ — BOM전개 표준화율산출' },
+        { value: '/CWJ1', label: '/CWJ1 — BOM전개' },
+        { value: '/CWJ2', label: '/CWJ2 — BOM전개/표준화율' },
+        { value: '/DHEVAN', label: '/DHEVAN — MC Table' },
+        { value: '/DY', label: '/DY — BOM전개단가' },
+        { value: '/HAN', label: '/HAN — BOM전개' },
+        { value: '/HC', label: '/HC — BOM전개단가' },
+        { value: '/HHJ', label: '/HHJ — BOM전개' },
+        { value: '/HU', label: '/HU — BOM전개' },
+        { value: '/HY', label: '/HY — BOM전개' },
+        { value: '/HY2', label: '/HY2 — BOM전개' },
+        { value: '/HY3', label: '/HY3 — BOM전개단가' },
+        { value: '/HY4', label: '/HY4 — BOM전개단가-MC산출용전개편' },
+        { value: '/JH', label: '/JH — BOM전개' },
+        { value: '/JH2', label: '/JH2 — BOM전개단가' },
+        { value: '/JHM', label: '/JHM — BOM전개 소요량' },
+        { value: '/JKB1', label: '/JKB1 — BOM전개' },
+        { value: '/JMS', label: '/JMS — BOM전개' },
+        { value: '/JMS 2', label: '/JMS 2 — BOM전개 Board' },
+        { value: '/JYP_MC', label: '/JYP_MC — 표준MC' },
+        { value: '/KDK_BOM', label: '/KDK_BOM — BOM전개' },
+        { value: '/KDY', label: '/KDY — BOM전개' },
+        { value: '/KH', label: '/KH — BOM 전개 순서변경' },
+        { value: '/KH2', label: '/KH2 — BOM전개' },
+        { value: '/KH3', label: '/KH3 — BOM 전개-재고' },
+        { value: '/KMS-LT', label: '/KMS-LT — BOM전개' },
+        { value: '/KPI_BOM', label: '/KPI_BOM — BOM전개' },
+        { value: '/L', label: '/L — BOM전개' },
+        { value: '/LEE_MC', label: '/LEE_MC — MC' },
+        { value: '/LJH_TEST', label: '/LJH_TEST — BOM전개' },
+        { value: '/LKY', label: '/LKY — BOM전개' },
+        { value: '/LOC', label: '/LOC — LOC' },
+        { value: '/LSH', label: '/LSH — BOM전개-간' },
+        { value: '/LSH MC', label: '/LSH MC — MC' },
+        { value: '/MJ', label: '/MJ — BOM MC' },
+        { value: '/PJKR', label: '/PJKR — 표준품사' },
+        { value: '/PP', label: '/PP — BOM전개' },
+        { value: '/PP4', label: '/PP4 — BOM전개' },
+        { value: '/PSW', label: '/PSW — 박석원' },
+        { value: '/S1', label: '/S1 — BOM전개-간' },
+        { value: '/SEOK_BOM1', label: '/SEOK_BOM1 — BOM전개' },
+        { value: '/SEOK_설치지점_재', label: '/SEOK_설치지점_재 — BOM전개' },
+        { value: '/SGKIM', label: '/SGKIM — BOM전개' },
+        { value: '/SH', label: '/SH — BOM전개' },
+        { value: '/SHIN', label: '/SHIN — BOM전개' },
+        { value: '/SHKIM', label: '/SHKIM — BOM전개' },
+        { value: '/SJ', label: '/SJ — BOM전개' },
+        { value: '/SSS1', label: '/SSS1 — BOM/편집' },
+        { value: '/ST', label: '/ST — BOM 전개-재고' },
+        { value: '/STD_MC', label: '/STD_MC — 임시 저장 (기본값)' },
+        { value: '/YJM', label: '/YJM — BOM전개_단가' },
+        { value: '/백준기', label: '/백준기 — BOM전개단가-GANTT' },
+        { value: '/장정범', label: '/장정범 — 장정범' }
+    ];
+
     window._ganttQaShowBomOptionsDropdown = function(materials) {
         const _en = window._currentLang === 'en';
         const matLabel = materials.join(', ');
@@ -204,6 +276,10 @@
                         { value: 'yes', label: _en ? 'Yes' : '예 (표시)' },
                         { value: 'no', label: _en ? 'No' : '아니오 (표시 안 함)' }
                     ]
+                },
+                {
+                    label: _en ? '4) ALV layout (optional)' : '4) 레이아웃(ALV Layout, 선택사항)',
+                    options: window._SAP_BOM_LAYOUT_OPTIONS
                 }
             ],
             buildAnswerText: function(selections) {
@@ -211,12 +287,16 @@
                 if (selections[0]) parts.push(selections[0] === 'multi' ? '다중 레벨' : '단일 레벨');
                 if (selections[1]) parts.push('가격 ' + (selections[1] === 'yes' ? '표시' : '표시 안 함'));
                 if (selections[2]) parts.push('위치 정보 ' + (selections[2] === 'yes' ? '표시' : '안 함'));
+                // 🆕 레이아웃 코드에 공백이 들어간 것도 있어서(예: "/CHKIM STD") 쉼표/공백
+                // 기반 파싱과 안 겹치게 따옴표로 감싸서 합성 — _ganttQaParseBomOptionReply가
+                // 같은 따옴표 패턴으로 파싱함.
+                if (selections[3]) parts.push(`레이아웃: "${selections[3]}"`);
                 return parts.join(', ');
             }
         };
         window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: id, text: window._t(
-            `📐 자재 "${matLabel}"의 BOM을 조회하기 전에 아래에서 옵션을 선택해주세요.`,
-            `📐 Before looking up the BOM for material(s) "${matLabel}", please choose the options below.`
+            `📐 자재 "${matLabel}"의 BOM을 조회하기 전에 아래에서 옵션을 선택해주세요(레이아웃을 고르지 않으면 기본값 "/STD_MC"가 적용됩니다).`,
+            `📐 Before looking up the BOM for material(s) "${matLabel}", please choose the options below (if you skip the layout, the default "/STD_MC" is used).`
         )});
     };
 
@@ -963,16 +1043,19 @@ ${docsJson}`;
                 let tcodeParam = 'auto', explosionParam = 'single', priceParam = '0', locParam = '0';
                 const bomKey = bomNums.slice().sort().join(',');
                 const resolvedOpts = window._ganttQaBomResolvedOptions;
+                let layoutParam = ''; // 🆕 비어있으면 백엔드가 기존 기본값(/STD_MC)을 그대로 씀
                 if (resolvedOpts && resolvedOpts.materialsKey === bomKey) {
                     tcodeParam = resolvedOpts.useSingleTcode === true ? 'single' : (resolvedOpts.useSingleTcode === false ? 'multi' : 'auto');
                     explosionParam = resolvedOpts.explosion || 'single';
                     priceParam = resolvedOpts.showPrice ? '1' : '0';
                     locParam = resolvedOpts.showLocation ? '1' : '0';
+                    layoutParam = resolvedOpts.layout || '';
                     window._ganttQaBomResolvedOptions = null;
                 }
                 url = 'http://127.0.0.1:5000/sap-bom?material=' + encodeURIComponent(bomNums.join(','))
                     + '&tcode=' + tcodeParam + '&explosion=' + explosionParam
-                    + '&show_price=' + priceParam + '&show_location=' + locParam;
+                    + '&show_price=' + priceParam + '&show_location=' + locParam
+                    + '&layout=' + encodeURIComponent(layoutParam);
                 timeoutMs = Math.min(90000, 30000 + 10000 * bomNums.length);
                 timeoutMsgKo = 'SAP BOM 조회 시간 초과'; timeoutMsgEn = 'SAP BOM lookup timed out';
             } else if (zmm009Match) {
@@ -2943,16 +3026,18 @@ ${docsJson}`;
                 if (parsed.explosion !== undefined) bd.explosion = parsed.explosion;
                 if (parsed.showPrice !== undefined) bd.showPrice = parsed.showPrice;
                 if (parsed.showLocation !== undefined) bd.showLocation = parsed.showLocation;
+                if (parsed.layout !== undefined) bd.layout = parsed.layout;
                 if (bd.explosion === undefined) bd.explosion = 'single';
                 if (bd.showPrice === undefined) bd.showPrice = false;
                 if (bd.showLocation === undefined) bd.showLocation = false;
+                if (bd.layout === undefined) bd.layout = '/STD_MC'; // 🆕 레이아웃을 안 고르면 기존 기본값 유지
 
                 window._ganttQaHistory.push({ role: 'user', text: question });
                 input.value = '';
                 window._ganttQaBomResolvedOptions = {
                     materialsKey: bd.materials.slice().sort().join(','),
                     useSingleTcode: bd.useSingleTcode, explosion: bd.explosion,
-                    showPrice: bd.showPrice, showLocation: bd.showLocation
+                    showPrice: bd.showPrice, showLocation: bd.showLocation, layout: bd.layout
                 };
                 question = bd.originalQuestion; // 원래 질문으로 되돌려 정상 흐름 재개
                 sapDocQuestion = question;
@@ -2992,11 +3077,14 @@ ${docsJson}`;
                     input.focus();
                     return;
                 }
-                // 옵션이 한 메시지에 전부 이미 있음 — 되묻지 않고 바로 진행
+                // 옵션이 한 메시지에 전부 이미 있음 — 되묻지 않고 바로 진행. 레이아웃은
+                // 이 "이미 다 있으면 안 물어보고 진행" 판정에서 제외된 선택 항목이라(위
+                // if문이 explosion/showPrice/showLocation만 검사) 안 왔으면 조용히 기본값.
                 window._ganttQaBomResolvedOptions = {
                     materialsKey: bomTrig.materials.slice().sort().join(','),
                     useSingleTcode: useSingleTcode, explosion: inlineOpts.explosion,
-                    showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation
+                    showPrice: inlineOpts.showPrice, showLocation: inlineOpts.showLocation,
+                    layout: inlineOpts.layout || '/STD_MC'
                 };
                 // question은 그대로 두고 아래 정상 흐름(로컬명령/AI 호출)으로 계속 진행 — return 없음
             }

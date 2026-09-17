@@ -500,7 +500,7 @@ def _navigate_to_bom_screen(session, wnd, materials, plant='1000', use_single_tc
 
 
 def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single',
-              show_price=False, show_location=False):
+              show_price=False, show_location=False, layout_variant=None):
     """자재 1개 또는 여러 개의 BOM(ZPP033 단일 또는 ZPP038 복수, "BOM 전개")을 조회해 화면을
     그대로 텍스트로 읽어온다. `materials`는 문자열(단일) 또는 리스트/튜플(복수). 결과 화면을
     "그리드 → 트리 → 필드" 순서로 시도해 읽는다(_sap_dump_screen_body) — ZPP038/ZPP033 둘 다
@@ -523,13 +523,17 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
 
     # ⚠️⚠️ [2026-09-16 신규] SAP ID를 팀이 공용으로 쓰다 보니 다른 팀원이 ALV 레이아웃을
     # 바꿔놓으면 이 조회가 매번 다른 컬럼 구성을 읽어올 위험이 있다 — 결과를 읽기 전에
-    # 항상 고정 레이아웃(_BOM_LAYOUT_VARIANT)으로 강제 전환을 시도한다. ZPP033(단일
-    # 자재)에서만 실사용 확인됐고, ZPP038(복수)은 이 레이아웃 자체가 카탈로그에 없어
-    # 조용히 건너뛴다(_sap_select_alv_layout 참고 — 실패해도 예외를 던지지 않으므로
-    # 이 조회 자체를 막지 않음).
+    # 항상 고정 레이아웃으로 강제 전환을 시도한다. ZPP033(단일 자재)에서만 실사용
+    # 확인됐고, ZPP038(복수)은 이 레이아웃 자체가 카탈로그에 없어 조용히 건너뛴다
+    # (_sap_select_alv_layout 참고 — 실패해도 예외를 던지지 않으므로 이 조회 자체를
+    # 막지 않음). 🆕 [2026-09-17 신규, 사용자 요청] 예전엔 `_BOM_LAYOUT_VARIANT`
+    # (`/STD_MC`)로 무조건 고정했는데, 팀이 실제로 쓰는 레이아웃 목록(60여 개)을 주며
+    # "하드코딩하지 말고 매번 물어봐달라"고 요청 — `layout_variant` 인자가 오면 그걸
+    # 우선 쓰고, 안 오면(하위호환) 기존 기본값을 그대로 쓴다.
+    layout_variant = layout_variant or _BOM_LAYOUT_VARIANT
     grid_for_layout = _sap_find_grid(wnd)
     if grid_for_layout is not None:
-        _sap_select_alv_layout(session, grid_for_layout, _BOM_LAYOUT_VARIANT)
+        _sap_select_alv_layout(session, grid_for_layout, layout_variant)
         wnd = session.findById('wnd[0]')  # 레이아웃 적용 후 화면이 다시 그려지므로 참조 갱신
 
     body, source = _sap_dump_screen_body(wnd)
@@ -2334,11 +2338,13 @@ def main():
             explosion = sys.argv[5] if len(sys.argv) > 5 else 'single'  # 'single'|'multi'
             show_price = (sys.argv[6] if len(sys.argv) > 6 else '0') in ('1', 'true', 'True')
             show_location = (sys.argv[7] if len(sys.argv) > 7 else '0') in ('1', 'true', 'True')
+            layout_variant = sys.argv[8] if len(sys.argv) > 8 and sys.argv[8].strip() else None
             materials_list = [m.strip() for m in materials_arg.split(',') if m.strip()]
             materials_param = materials_list if len(materials_list) > 1 else (materials_list[0] if materials_list else '')
             use_single_tcode = {'single': True, 'multi': False}.get(tcode_mode, None)
             result = fetch_bom(materials_param, plant, use_single_tcode=use_single_tcode,
-                                explosion=explosion, show_price=show_price, show_location=show_location)
+                                explosion=explosion, show_price=show_price, show_location=show_location,
+                                layout_variant=layout_variant)
         elif action == 'fetch_where_used':
             materials_arg = sys.argv[2] if len(sys.argv) > 2 else ''
             plant = sys.argv[3] if len(sys.argv) > 3 else '1000'
