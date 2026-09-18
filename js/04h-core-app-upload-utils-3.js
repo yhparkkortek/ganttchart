@@ -857,6 +857,44 @@ ${docsJson}`;
         )});
     };
 
+    // 🔽 [2026-09-18 버그수정] "ask_shared"(프로젝트코드/사번/요청사유/목적 4항목) 질문이
+    // 순수 자유 텍스트로만 물어보고 있었음 — 목적(P01~P05)은 고정 5개 선택지인데도 위 "🔽 AI
+    // 문답 객관식 질문 — 드롭다운" 원칙(정해진 목록에서 고르는 질문은 항상 드롭다운, 승인원
+    // 표지의 출력형식/가승인원 여부에 이미 적용된 것과 동일한 원칙)이 2026-09-17에 4항목을
+    // 한 메시지로 합치는 배치 자동화 재작성을 하면서 빠진 채로 남아있었다 — "드롭다운형태로
+    // 한번에 물어보라는건데 드롭다운을 없애버렸다"는 실사용 제보로 발견. 프로젝트코드/사번/
+    // 요청사유는 정해진 목록이 없어 그대로 자유 텍스트로 남기고, 목적만 승인원 표지의
+    // categoricalMissing과 동일한 패턴으로 드롭다운을 붙인다. **선택값을 처리하는 새 로직은
+    // 만들지 않는다** — buildAnswerText가 "P0X" 문자열을 그대로 합성해 입력창에 넣고
+    // sendGanttQaMessage()를 그대로 호출하면, 그 문자열은 아래 ask_shared 파서의 기존 목적코드
+    // 정규식(`\bP0[1-5]\b`)에 그대로 걸린다. 이 함수는 최초 진입(ask_shared 시작) 시점과, 일부만
+    // 채워진 채 재질문할 때 양쪽에서 재사용된다 — 아직 값이 없는 항목만 매번 새로 계산해서
+    // 보여주므로, 사용자가 "이전으로 돌아가서 드롭다운으로 보여줘"처럼 재질문을 요구해도(그
+    // 문구 자체는 필드 값으로 파싱되지 않아 stillMissing 재질문 경로로 떨어짐) 다음 재질문에는
+    // 항상 드롭다운이 포함된 채로 다시 나온다.
+    window._ganttQaPoAskSharedPrompt = function(pd, introText) {
+        const textMissing = [];
+        if (!pd.projectCode) textMissing.push(window._t('프로젝트코드', 'project code'));
+        if (!pd.buyerEmpId) textMissing.push(window._t("구매담당자 사번", "buyer's employee ID"));
+        if (!pd.reason) textMissing.push(window._t('요청사유', 'reason'));
+        const textLine = textMissing.length
+            ? window._t(`아래 항목을 알려주세요: ${textMissing.join(', ')}`, `Please provide: ${textMissing.join(', ')}`)
+            : '';
+        const reply = introText + (textLine ? '\n\n' + textLine : '');
+        if (!pd.purpose) {
+            const dropdownId = 'po-purpose-' + Date.now();
+            const purposeOptions = window._PO_PURPOSE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; });
+            window._ganttQaPendingChoiceDropdown = {
+                id: dropdownId, multi: true,
+                items: [{ label: window._t('목적(P01~P05)', 'Purpose (P01–P05)'), options: purposeOptions }],
+                buildAnswerText: function(selections) { return selections.filter(function(v) { return !!v; }).join(', '); }
+            };
+            window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: dropdownId, text: reply });
+        } else {
+            window._ganttQaHistory.push({ role: 'ai', text: reply });
+        }
+    };
+
     // 🆕 [2026-09-17 신규] "품목 확인" 이후 다음에 뭘 해야 하는지 판단하는 중앙 디스패처 —
     // "확인" 응답 직후, 사업자등록번호를 고친 직후, 임시코드 드롭다운/정정을 마친 직후 등
     // 여러 지점에서 재사용된다. 사업자등록번호 → 임시코드 → 공용 4항목(프로젝트코드/사번/
@@ -880,10 +918,10 @@ ${docsJson}`;
             return;
         }
         pd.stage = 'ask_shared';
-        window._ganttQaHistory.push({ role: 'ai', text: window._t(
-            `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다. 아래 4가지를 한 번에 알려주세요(모든 문서에 공통으로 적용됩니다):\n1) 프로젝트코드\n2) 구매담당자 사번\n3) 요청사유\n4) 목적(P01~P05 — 예: P01)\n\n예시: "G2610OB, 2004051002, 샘플제작, P01"\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
-            `✅ Item confirmation is done for all ${pd.docs.length} document(s). Please give me these 4 things at once (applies to every document):\n1) Project code\n2) Buyer employee ID\n3) Reason for request\n4) Purpose (P01–P05 — e.g. P01)\n\nExample: "G2610OB, 2004051002, sample production, P01"\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
-        )});
+        window._ganttQaPoAskSharedPrompt(pd, window._t(
+            `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다. 아래 항목을 한 번에 알려주세요(모든 문서에 공통으로 적용됩니다) — 목적은 아래 드롭다운에서 선택해주세요.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
+            `✅ Item confirmation is done for all ${pd.docs.length} document(s). Please give me the following at once (applies to every document) — choose the purpose from the dropdown below.\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
+        ));
     };
 
     // 🆕 [2026-09-17 신규, 사용자 요청] 문서 하나를 엑셀 생성 → SAP 업로드/입력 → **바로 이어서
@@ -2729,10 +2767,11 @@ ${docsJson}`;
                 if (!pd.purpose) stillMissing.push(window._t('목적(P01~P05)', 'purpose (P01–P05)'));
 
                 if (stillMissing.length) {
-                    window._ganttQaHistory.push({ role: 'ai', text: window._t(
-                        `아직 필요한 정보: ${stillMissing.join(', ')} — 한 번에 알려주세요.`,
-                        `Still need: ${stillMissing.join(', ')} — please give them all at once.`
-                    )});
+                    // 🔽 [2026-09-18 버그수정] 목적(P01~P05)이 아직 비어있으면 텍스트로 재나열하는
+                    // 대신 드롭다운을 다시 붙여서 보여준다(_ganttQaPoAskSharedPrompt 참고) — 예전엔
+                    // 재질문도 순수 텍스트라, 사용자가 뭘 입력해도(심지어 "드롭다운으로 보여줘"
+                    // 같은 요청도) 값으로 인식되지 않으면 텍스트만 반복 재출력되고 있었다.
+                    window._ganttQaPoAskSharedPrompt(pd, window._t('아직 필요한 정보가 있습니다.', 'A bit more info is still needed.'));
                     window._renderGanttQaMessages();
                     input.focus();
                     return;
