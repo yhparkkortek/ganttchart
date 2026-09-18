@@ -857,37 +857,137 @@ ${docsJson}`;
         )});
     };
 
-    // 🔽 [2026-09-18 버그수정] "ask_shared"(프로젝트코드/사번/요청사유/목적 4항목) 질문이
-    // 순수 자유 텍스트로만 물어보고 있었음 — 목적(P01~P05)은 고정 5개 선택지인데도 위 "🔽 AI
-    // 문답 객관식 질문 — 드롭다운" 원칙(정해진 목록에서 고르는 질문은 항상 드롭다운, 승인원
-    // 표지의 출력형식/가승인원 여부에 이미 적용된 것과 동일한 원칙)이 2026-09-17에 4항목을
-    // 한 메시지로 합치는 배치 자동화 재작성을 하면서 빠진 채로 남아있었다 — "드롭다운형태로
-    // 한번에 물어보라는건데 드롭다운을 없애버렸다"는 실사용 제보로 발견. 프로젝트코드/사번/
-    // 요청사유는 정해진 목록이 없어 그대로 자유 텍스트로 남기고, 목적만 승인원 표지의
-    // categoricalMissing과 동일한 패턴으로 드롭다운을 붙인다. **선택값을 처리하는 새 로직은
-    // 만들지 않는다** — buildAnswerText가 "P0X" 문자열을 그대로 합성해 입력창에 넣고
-    // sendGanttQaMessage()를 그대로 호출하면, 그 문자열은 아래 ask_shared 파서의 기존 목적코드
-    // 정규식(`\bP0[1-5]\b`)에 그대로 걸린다. 이 함수는 최초 진입(ask_shared 시작) 시점과, 일부만
-    // 채워진 채 재질문할 때 양쪽에서 재사용된다 — 아직 값이 없는 항목만 매번 새로 계산해서
-    // 보여주므로, 사용자가 "이전으로 돌아가서 드롭다운으로 보여줘"처럼 재질문을 요구해도(그
-    // 문구 자체는 필드 값으로 파싱되지 않아 stillMissing 재질문 경로로 떨어짐) 다음 재질문에는
-    // 항상 드롭다운이 포함된 채로 다시 나온다.
-    window._ganttQaPoAskSharedPrompt = function(pd, introText) {
-        const textMissing = [];
-        if (!pd.projectCode) textMissing.push(window._t('프로젝트코드', 'project code'));
-        if (!pd.buyerEmpId) textMissing.push(window._t("구매담당자 사번", "buyer's employee ID"));
-        if (!pd.reason) textMissing.push(window._t('요청사유', 'reason'));
-        const textLine = textMissing.length
-            ? window._t(`아래 항목을 알려주세요: ${textMissing.join(', ')}`, `Please provide: ${textMissing.join(', ')}`)
-            : '';
-        const reply = introText + (textLine ? '\n\n' + textLine : '');
-        if (!pd.purpose) {
-            const dropdownId = 'po-purpose-' + Date.now();
+    // 🔽 [2026-09-18 설계 변경, 사용자 요청] 프로젝트코드/사번/요청사유/목적 4항목은 원래
+    // "모든 문서에 공통"이라고 가정하고 배치 전체(pd)에서 딱 한 번만 물었는데, 사용자가
+    // "복수 발주서라면 필수 입력값이 전부 다를 것으로 판단하는 게 기본값이어야 한다 — 값이
+    // 겹치는 경우가 오히려 드물다"고 명확히 정정함. 그래서 이 4항목은 이제 **문서(doc)별로
+    // 따로** 받는 것을 기본으로 하고, 실제로 값이 같은 드문 경우를 위해 "전체 동일: ..."
+    // 한 줄 답변 지름길만 남긴다(반대 방향이 아니라 — "공통이 디폴트, 예외만 개별 지정"이
+    // 아니라 "개별이 디폴트, 동일할 때만 지름길 사용"). 문서가 1건뿐이면 굳이 번호를 붙일
+    // 필요가 없으므로 예전과 100% 동일하게 동작한다(아래 isMulti 분기 참고).
+    //
+    // 목적(P01~P05)은 고정 5개 선택지라 위 "🔽 AI 문답 객관식 질문 — 드롭다운" 원칙(정해진
+    // 목록은 항상 드롭다운)을 그대로 적용 — 문서가 여러 건이면 PO 임시코드 배치 드롭다운
+    // (`_ganttQaPoShowTempCodeDropdown`)과 완전히 동일한 패턴(마스터 "전체 동일 적용" 행 +
+    // 문서별 행)을 재사용한다. **선택값을 처리하는 새 로직은 만들지 않는다** —
+    // buildAnswerText가 "N번: 목적 P0X" 또는 "전체 동일: 목적 P0X" 문자열을 그대로 합성해
+    // 입력창에 넣고 sendGanttQaMessage()를 호출하면, 아래 _ganttQaParsePoFieldsInto/
+    // ask_fields 파서가 그대로 처리한다.
+    window._ganttQaParsePoFieldsInto = function(doc, replyText) {
+        const missingBefore = ['projectCode', 'buyerEmpId', 'reason', 'purpose'].filter(function(k) { return !doc[k]; });
+        const projMatch = replyText.match(/프로젝트\s*코드(?:는|은|가|이)?\s*[:：]?\s*([^\s,]+)/);
+        if (projMatch) doc.projectCode = projMatch[1];
+        const empMatch = replyText.match(/(?:구매담당자\s*)?사번(?:은|는|가|이)?\s*[:：]?\s*(\d{4,12})/);
+        if (empMatch) doc.buyerEmpId = empMatch[1];
+        const reasonMatch = replyText.match(/요청\s*사유(?:는|은|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|목적|프로젝트\s*코드|사번|$)/);
+        if (reasonMatch && reasonMatch[1].trim()) doc.reason = reasonMatch[1].trim();
+        let purposeCode = (replyText.match(/\bP0[1-5]\b/i) || [])[0];
+        if (purposeCode) purposeCode = purposeCode.toUpperCase();
+        const mentionsPurposeLabel = /목적/.test(replyText);
+        if (!purposeCode && mentionsPurposeLabel) {
+            const purposeLabelMatch = replyText.match(/목적(?:은|는|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|사번|프로젝트\s*코드|$)/);
+            if (purposeLabelMatch) {
+                const hit = window._PO_PURPOSE_TABLE.find(function(r) { return purposeLabelMatch[1].indexOf(r.desc) !== -1; });
+                if (hit) purposeCode = hit.code;
+            }
+        }
+        if (purposeCode) doc.purpose = purposeCode;
+
+        const usedLabel = !!(projMatch || empMatch || reasonMatch || mentionsPurposeLabel);
+        if (!usedLabel) {
+            const order = ['projectCode', 'buyerEmpId', 'reason', 'purpose'];
+            const parts = replyText.split(/\n|,/).map(function(s) { return s.trim(); }).filter(Boolean);
+            const assign = function(key, v) {
+                if (doc[key]) return; // 이미 채워진 필드는 덮어쓰지 않음
+                if (key === 'purpose') {
+                    const pc = (v.match(/\bP0[1-5]\b/i) || [])[0];
+                    if (pc) doc.purpose = pc.toUpperCase();
+                } else {
+                    doc[key] = v;
+                }
+            };
+            if (parts.length === order.length) {
+                order.forEach(function(key, i) { assign(key, parts[i]); });
+            } else if (parts.length && parts.length === missingBefore.length) {
+                missingBefore.forEach(function(key, i) { assign(key, parts[i]); });
+            }
+        }
+    };
+
+    window._ganttQaPoDocIsIncomplete = function(doc) {
+        return !doc.projectCode || !doc.buyerEmpId || !doc.reason || !doc.purpose;
+    };
+
+    window._ganttQaPoAskFieldsPrompt = function(pd, introText) {
+        const isMulti = pd.docs.length > 1;
+        if (!isMulti) {
+            // 문서가 1건이면 번호를 붙일 필요가 없으므로 기존(2026-09-17 이전) 단일 문서
+            // 동작과 100% 동일 — docs[0]을 기준으로 자유 텍스트 3항목 + 목적 드롭다운.
+            const doc = pd.docs[0];
+            const textMissing = [];
+            if (!doc.projectCode) textMissing.push(window._t('프로젝트코드', 'project code'));
+            if (!doc.buyerEmpId) textMissing.push(window._t("구매담당자 사번", "buyer's employee ID"));
+            if (!doc.reason) textMissing.push(window._t('요청사유', 'reason'));
+            const textLine = textMissing.length
+                ? window._t(`아래 항목을 알려주세요: ${textMissing.join(', ')}`, `Please provide: ${textMissing.join(', ')}`)
+                : '';
+            const reply = introText + (textLine ? '\n\n' + textLine : '');
+            if (!doc.purpose) {
+                const dropdownId = 'po-purpose-' + Date.now();
+                const purposeOptions = window._PO_PURPOSE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; });
+                window._ganttQaPendingChoiceDropdown = {
+                    id: dropdownId, multi: true,
+                    items: [{ label: window._t('목적(P01~P05)', 'Purpose (P01–P05)'), options: purposeOptions }],
+                    buildAnswerText: function(selections) { return selections.filter(function(v) { return !!v; }).join(', '); }
+                };
+                window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: dropdownId, text: reply });
+            } else {
+                window._ganttQaHistory.push({ role: 'ai', text: reply });
+            }
+            return;
+        }
+
+        // 문서가 2건 이상 — 기본은 "문서마다 다르다"고 가정, 문서별로 뭐가 빠졌는지 나열.
+        const incomplete = pd.docs.map(function(d, i) { return { idx: i, doc: d }; })
+            .filter(function(x) { return window._ganttQaPoDocIsIncomplete(x.doc); });
+        const docLabel = function(x) { return x.doc.vendorName || (window._currentLang === 'en' ? `Doc ${x.idx + 1}` : `${x.idx + 1}번`); };
+        const lines = incomplete.map(function(x) {
+            const need = [];
+            if (!x.doc.projectCode) need.push(window._t('프로젝트코드', 'project code'));
+            if (!x.doc.buyerEmpId) need.push(window._t('사번', "buyer's ID"));
+            if (!x.doc.reason) need.push(window._t('요청사유', 'reason'));
+            if (!x.doc.purpose) need.push(window._t('목적', 'purpose'));
+            return `${x.idx + 1}번(${docLabel(x)}): ${need.join(', ')}`;
+        }).join('\n');
+        const guide = window._t(
+            `문서 번호를 붙여서 알려주세요(예: "1번: G2610OB, 2004051002, 샘플제작, P01"). 여러 문서가 전부 같은 값이면 드문 경우겠지만 "전체 동일: G2610OB, 2004051002, 샘플제작, P01"처럼 한 번만 답해도 됩니다.`,
+            `Please answer per document, with its number (e.g. "1: G2610OB, 2004051002, sample production, P01"). If — less commonly — all documents truly share the same values, you can answer once with "same for all: G2610OB, 2004051002, sample production, P01".`
+        );
+        const reply = introText + '\n\n' + lines + '\n\n' + guide;
+
+        const purposeMissing = incomplete.filter(function(x) { return !x.doc.purpose; });
+        if (purposeMissing.length) {
+            const dropdownId = 'po-purpose-batch-' + Date.now();
             const purposeOptions = window._PO_PURPOSE_TABLE.map(function(r) { return { value: r.code, label: `${r.code} ${r.desc}` }; });
+            const applyAllItem = {
+                label: window._t('🔁 전체 문서에 동일 목적 적용', '🔁 Apply the same purpose to ALL documents'),
+                options: purposeOptions
+            };
+            const perDocItems = purposeMissing.map(function(x) { return { label: docLabel(x), options: purposeOptions }; });
             window._ganttQaPendingChoiceDropdown = {
                 id: dropdownId, multi: true,
-                items: [{ label: window._t('목적(P01~P05)', 'Purpose (P01–P05)'), options: purposeOptions }],
-                buildAnswerText: function(selections) { return selections.filter(function(v) { return !!v; }).join(', '); }
+                items: purposeMissing.length >= 2 ? [applyAllItem].concat(perDocItems) : perDocItems,
+                buildAnswerText: function(selections) {
+                    if (purposeMissing.length >= 2 && selections[0]) {
+                        return window._t(`전체 동일: 목적 ${selections[0]}`, `same for all: purpose ${selections[0]}`);
+                    }
+                    const docSelections = purposeMissing.length >= 2 ? selections.slice(1) : selections;
+                    const parts = [];
+                    docSelections.forEach(function(code, i) {
+                        if (code) parts.push(window._t(`${purposeMissing[i].idx + 1}번: 목적 ${code}`, `${purposeMissing[i].idx + 1}: purpose ${code}`));
+                    });
+                    return parts.join('\n');
+                }
             };
             window._ganttQaHistory.push({ role: 'ai', choiceDropdownId: dropdownId, text: reply });
         } else {
@@ -897,9 +997,9 @@ ${docsJson}`;
 
     // 🆕 [2026-09-17 신규] "품목 확인" 이후 다음에 뭘 해야 하는지 판단하는 중앙 디스패처 —
     // "확인" 응답 직후, 사업자등록번호를 고친 직후, 임시코드 드롭다운/정정을 마친 직후 등
-    // 여러 지점에서 재사용된다. 사업자등록번호 → 임시코드 → 공용 4항목(프로젝트코드/사번/
-    // 요청사유/목적) 순으로 부족한 것부터 확인하고, 전부 채워지면 공용 4항목을 "한 번에" 묻는
-    // 단계(ask_shared)로 넘어간다 — 사용자가 요청한 "반복적인 질문을 한번에 받아서 처리".
+    // 여러 지점에서 재사용된다. 사업자등록번호 → 임시코드 → 문서별 4항목(프로젝트코드/사번/
+    // 요청사유/목적) 순으로 부족한 것부터 확인하고, 전부 채워지면 4항목을 묻는 단계
+    // (ask_fields, 2026-09-18 이전 이름은 ask_shared)로 넘어간다.
     window._ganttQaPoAdvanceAfterItemsConfirmed = function(pd) {
         const missingBiz = window._ganttQaPoFindMissingBizNoDocs(pd.docs);
         if (missingBiz.length) {
@@ -917,10 +1017,10 @@ ${docsJson}`;
             window._ganttQaPoShowTempCodeDropdown(missingTemp);
             return;
         }
-        pd.stage = 'ask_shared';
-        window._ganttQaPoAskSharedPrompt(pd, window._t(
-            `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다. 아래 항목을 한 번에 알려주세요(모든 문서에 공통으로 적용됩니다) — 목적은 아래 드롭다운에서 선택해주세요.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
-            `✅ Item confirmation is done for all ${pd.docs.length} document(s). Please give me the following at once (applies to every document) — choose the purpose from the dropdown below.\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
+        pd.stage = 'ask_fields';
+        window._ganttQaPoAskFieldsPrompt(pd, window._t(
+            `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
+            `✅ Item confirmation is done for all ${pd.docs.length} document(s).\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
         ));
     };
 
@@ -938,9 +1038,9 @@ ${docsJson}`;
         const rows = doc.items.map(function(it) {
             return {
                 '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
-                '필요일자': doc.invoiceDate, '구매그룹': '908', '프로젝트코드': pd.projectCode,
-                '수령인': receiver, '구매담당자 사번': pd.buyerEmpId, '요청사유': pd.reason,
-                'VINA PO': '', '목적': pd.purpose, '비고': '',
+                '필요일자': doc.invoiceDate, '구매그룹': '908', '프로젝트코드': doc.projectCode,
+                '수령인': receiver, '구매담당자 사번': doc.buyerEmpId, '요청사유': doc.reason,
+                'VINA PO': '', '목적': doc.purpose, '비고': '',
             };
         });
         const exRes = await window._withTimeout(
@@ -2619,7 +2719,12 @@ ${docsJson}`;
                 window._renderGanttQaMessages();
                 try {
                     const { docs, errors } = await window._ganttQaExtractPoDocumentsViaAi(apiKeyForPo, attachments);
-                    window._ganttQaPoDraft = { stage: 'confirm_items', docs: docs, projectCode: '', buyerEmpId: '', reason: '', purpose: '' };
+                    // 🔽 [2026-09-18 설계 변경, 사용자 요청] 프로젝트코드/사번/요청사유/목적은
+                    // 더 이상 pd(배치 전체) 레벨의 "모든 문서 공통" 값이 아니라 문서(doc)별로
+                    // 따로 받는다 — "복수 발주서라면 필수 입력값이 전부 다를 것으로 판단하는 게
+                    // 기본값이어야 한다. 값이 겹치는 건 오히려 드문 경우"라는 사용자 판단을 반영.
+                    // 아래 _ganttQaPoAskFieldsPrompt/_ganttQaParsePoFieldsInto 참고.
+                    window._ganttQaPoDraft = { stage: 'confirm_items', docs: docs };
                     window._ganttQaHistory.pop();
                     let summaryText = window._ganttQaPoBatchSummaryText(docs);
                     if (errors.length) {
@@ -2695,83 +2800,44 @@ ${docsJson}`;
                 return;
             }
 
-            // 💡 [2026-09-17 신규, 사용자 요청] "반복적인 질문을 한번에 받아서 처리" — 예전엔
-            // 프로젝트코드→사번→요청사유→목적을 4턴에 걸쳐 하나씩 물었는데, 이제 한 메시지로
-            // 전부 받는다. 라벨(프로젝트코드/사번/요청사유/목적)을 하나라도 썼으면 라벨 기반으로
-            // 파싱하고, 라벨을 전혀 안 쓰고 줄바꿈/쉼표로만 나열했으면(승인원 표지 초안과 동일한
-            // "줄단위 순서 매칭 폴백") 아직 안 채워진 항목 순서대로 배정한다.
-            if (pd.stage === 'ask_shared') {
-                // 🐛 [2026-09-17 버그수정] 아래 라벨/바로-P0X 파싱이 pd.* 값을 채우기 시작하기
-                // *전에* "원래 뭐가 비어 있었는지"를 스냅샷해둔다 — 부분 폴백(missingBefore
-                // 기반)이 이 스냅샷을 써야, 바로 아래에서 목적코드가 라벨 없이도 먼저 채워지는
-                // 부수효과 때문에 "아직 빈 항목 개수"가 실제 조각 개수와 어긋나는 걸 막을 수
-                // 있다(전체 4항목 나열 케이스와 같은 원인의 버그 — 부분 응답에서도 재현됨,
-                // 예: 남은 항목이 요청사유/목적 2개뿐인데 "샘플제작\nP01"로 답하면 목적이 먼저
-                // 채워져 버려 emptySlots가 1개로 잘못 계산되던 것을 브라우저 테스트로 확인함).
-                const missingBefore = ['projectCode', 'buyerEmpId', 'reason', 'purpose'].filter(function(k) { return !pd[k]; });
-                // 🐛 [2026-09-17 버그수정] `\S+`는 쉼표도 "공백 아님"이라 그대로 삼켜서
-                // "프로젝트코드는 G2610OB, 사번은..."처럼 콤마로 이어 쓰면 "G2610OB,"가 그대로
-                // 값에 들어가던 버그(엑셀에 잘못된 프로젝트코드가 그대로 실려 SAP 검증에서
-                // 막힐 위험) — 브라우저 테스트로 재현·확인 후 `[^\s,]+`로 콤마를 경계로 뺌.
-                const projMatch = replyText.match(/프로젝트\s*코드(?:는|은|가|이)?\s*[:：]?\s*([^\s,]+)/);
-                if (projMatch) pd.projectCode = projMatch[1];
-                const empMatch = replyText.match(/(?:구매담당자\s*)?사번(?:은|는|가|이)?\s*[:：]?\s*(\d{4,12})/);
-                if (empMatch) pd.buyerEmpId = empMatch[1];
-                const reasonMatch = replyText.match(/요청\s*사유(?:는|은|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|목적|프로젝트\s*코드|사번|$)/);
-                if (reasonMatch && reasonMatch[1].trim()) pd.reason = reasonMatch[1].trim();
-                let purposeCode = (replyText.match(/\bP0[1-5]\b/i) || [])[0];
-                if (purposeCode) purposeCode = purposeCode.toUpperCase();
-                const mentionsPurposeLabel = /목적/.test(replyText);
-                if (!purposeCode && mentionsPurposeLabel) {
-                    const purposeLabelMatch = replyText.match(/목적(?:은|는|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|사번|프로젝트\s*코드|$)/);
-                    if (purposeLabelMatch) {
-                        const hit = window._PO_PURPOSE_TABLE.find(function(r) { return purposeLabelMatch[1].indexOf(r.desc) !== -1; });
-                        if (hit) purposeCode = hit.code;
-                    }
-                }
-                if (purposeCode) pd.purpose = purposeCode;
-
-                const usedLabel = !!(projMatch || empMatch || reasonMatch || mentionsPurposeLabel);
-                if (!usedLabel) {
-                    // 🐛 [2026-09-17 버그수정] 목적 코드(P01~P05)는 라벨 없이도 바로 위에서 이미
-                    // 뽑히므로("목적은" 없이 그냥 "P01"만 있어도 purposeCode가 채워짐), 사용자가
-                    // "G2610OB, 2004051002, 샘플제작, P01"처럼 4개를 전부 순서대로 콤마로 나열한
-                    // 정상적인 답을 줘도 pd.purpose가 이미 채워진 상태라 "아직 안 채워진 항목
-                    // 개수"(emptySlots.length=3)와 "실제 조각 개수"(parts.length=4)가 어긋나
-                    // 아래 폴백이 통째로 스킵되던 버그 — 브라우저 모킹 테스트로 실제 재현 확인함.
-                    // 먼저 "전체 4항목을 순서대로 나열"한 경우(parts.length === 4)를 우선
-                    // 시도하고(이미 채워진 필드는 덮어쓰지 않고 건너뜀), 그게 아니면 기존처럼
-                    // "아직 빈 항목만 순서대로 나열"한 경우로 폴백한다.
-                    const order = ['projectCode', 'buyerEmpId', 'reason', 'purpose'];
-                    const parts = replyText.split(/\n|,/).map(function(s) { return s.trim(); }).filter(Boolean);
-                    const assign = function(key, v) {
-                        if (pd[key]) return; // 이미 채워진 필드는 덮어쓰지 않음
-                        if (key === 'purpose') {
-                            const pc = (v.match(/\bP0[1-5]\b/i) || [])[0];
-                            if (pc) pd.purpose = pc.toUpperCase();
+            // 🔽 [2026-09-18 설계 변경, 사용자 요청] 프로젝트코드/사번/요청사유/목적은 이제
+            // 문서(doc)별로 따로 받는 게 기본값이다 — "복수 발주서면 필수 입력값이 전부 다를
+            // 것으로 가정하는 게 맞고, 값이 겹치는 건 오히려 드문 경우"라는 사용자 판단 반영.
+            // 문서가 1건뿐이면 번호 없이 그대로(기존 동작 그대로), 2건 이상이면 "N번: ..."
+            // 형식(문서별) 또는 드문 경우를 위한 "전체 동일: ..." 지름길 중 하나로 받는다.
+            if (pd.stage === 'ask_fields') {
+                const isMulti = pd.docs.length > 1;
+                if (!isMulti) {
+                    window._ganttQaParsePoFieldsInto(pd.docs[0], replyText);
+                } else {
+                    // ① "전체 동일: ..." — 드문 경우를 위한 지름길, 모든 문서에 같은 텍스트를 적용
+                    const allSameMatch = replyText.match(/^\s*(?:전체\s*동일|모두\s*동일|전부\s*동일|공통|same\s*for\s*all|all\s*same)\s*[:：]?\s*([\s\S]+)$/i);
+                    if (allSameMatch) {
+                        pd.docs.forEach(function(doc) { window._ganttQaParsePoFieldsInto(doc, allSameMatch[1]); });
+                    } else {
+                        // ② "N번: ..." (또는 "N: ...") — 문서별 답변. "번"은 선택(영문 입력 대응).
+                        const perDocLines = Array.from(replyText.matchAll(/(\d+)\s*번?\s*[:：]\s*([^\n]+)/g));
+                        if (perDocLines.length) {
+                            perDocLines.forEach(function(m) {
+                                const idx = parseInt(m[1], 10) - 1;
+                                if (pd.docs[idx]) window._ganttQaParsePoFieldsInto(pd.docs[idx], m[2]);
+                            });
                         } else {
-                            pd[key] = v;
+                            // ③ 문서 번호를 안 붙였어도, 아직 미완성인 문서가 정확히 1건이면
+                            //    단일 문서 UX와 동일하게 그 문서에 그대로 적용(편의상 폴백).
+                            const incompleteNow = pd.docs.filter(window._ganttQaPoDocIsIncomplete);
+                            if (incompleteNow.length === 1) {
+                                window._ganttQaParsePoFieldsInto(incompleteNow[0], replyText);
+                            }
+                            // 그 외(2건 이상 미완성인데 번호도 없음)는 아무 것도 채우지 않고
+                            // 아래 재질문에서 "문서 번호를 붙여달라"는 안내를 다시 보여준다.
                         }
-                    };
-                    if (parts.length === order.length) {
-                        order.forEach(function(key, i) { assign(key, parts[i]); });
-                    } else if (parts.length && parts.length === missingBefore.length) {
-                        missingBefore.forEach(function(key, i) { assign(key, parts[i]); });
                     }
                 }
 
-                const stillMissing = [];
-                if (!pd.projectCode) stillMissing.push(window._t('프로젝트코드', 'project code'));
-                if (!pd.buyerEmpId) stillMissing.push(window._t('구매담당자 사번', "buyer's employee ID"));
-                if (!pd.reason) stillMissing.push(window._t('요청사유', 'reason'));
-                if (!pd.purpose) stillMissing.push(window._t('목적(P01~P05)', 'purpose (P01–P05)'));
-
-                if (stillMissing.length) {
-                    // 🔽 [2026-09-18 버그수정] 목적(P01~P05)이 아직 비어있으면 텍스트로 재나열하는
-                    // 대신 드롭다운을 다시 붙여서 보여준다(_ganttQaPoAskSharedPrompt 참고) — 예전엔
-                    // 재질문도 순수 텍스트라, 사용자가 뭘 입력해도(심지어 "드롭다운으로 보여줘"
-                    // 같은 요청도) 값으로 인식되지 않으면 텍스트만 반복 재출력되고 있었다.
-                    window._ganttQaPoAskSharedPrompt(pd, window._t('아직 필요한 정보가 있습니다.', 'A bit more info is still needed.'));
+                const stillIncomplete = pd.docs.some(window._ganttQaPoDocIsIncomplete);
+                if (stillIncomplete) {
+                    window._ganttQaPoAskFieldsPrompt(pd, window._t('아직 필요한 정보가 있습니다.', 'A bit more info is still needed.'));
                     window._renderGanttQaMessages();
                     input.focus();
                     return;
