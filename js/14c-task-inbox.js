@@ -50,6 +50,15 @@ window.TaskInbox = {
     //       업무 행(row._mailRaw)에도 같은 원문이 저장돼 있어(buildMailTaskRow), 여기서 지워도 안 사라짐.
     //    ② 그래도 부족하면(항목 수 자체가 너무 많음) 오래된 완료 항목부터 정리(최근 N건만 유지) — '대기'
     //       항목은 아직 사람이 처리해야 할 것들이라 개수와 무관하게 전부 보존한다.
+    //    ③ 🐛 [2026-09-18 버그수정] "완료 항목엔 원문이 없다"고 나오는데도 저장공간이 계속 가득 차는
+    //       사례 — 완료 항목이 아니라 '대기' 항목 자체가 대량으로 쌓여(메일 자동매칭이 애매해 사람 확인을
+    //       기다리는 채로 방치된 경우 등) 용량을 다 쓰는 경우가 있었다. 위 ①②는 '대기' 항목을 전혀 건드리지
+    //       않아서, 이 경우 자동 복구도 실패하고 수동 "🧹 저장공간 정리" 버튼도 "정리할 항목 없음"만 반복
+    //       했다(업무 보관함.js의 window.inboxCleanupStorage가 여기 KEEP_PENDING_RAW_MAX를 그대로 재사용
+    //       해 같은 기준으로 판단·안내함). 업무 자체(task)는 절대 지우지 않고, 오래된 '대기' 항목의 메일
+    //       본문(mailRaw.body2000 — mailRaw 중 가장 큰 필드)만 정리한다. 최근 KEEP_PENDING_RAW_MAX개는
+    //       아직 처리 전이라 "원문 보기"가 계속 필요할 가능성이 커서 그대로 둔다.
+    KEEP_PENDING_RAW_MAX: 200,
     _shrinkForQuota: function(list) {
         const KEEP_DONE_MAX = 300;
         let shrunk = list.map(function(it) {
@@ -59,6 +68,18 @@ window.TaskInbox = {
         const done = shrunk.filter(function(it) { return it.status !== '대기'; })
             .sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
         if (done.length > KEEP_DONE_MAX) shrunk = pending.concat(done.slice(0, KEEP_DONE_MAX));
+
+        const KEEP_PENDING_RAW_MAX = this.KEEP_PENDING_RAW_MAX;
+        const pendingWithRaw = shrunk.filter(function(it) { return it.status === '대기' && it.mailRaw && it.mailRaw.body2000; })
+            .sort(function(a, b) { return (b.addedAt || '').localeCompare(a.addedAt || ''); });
+        if (pendingWithRaw.length > KEEP_PENDING_RAW_MAX) {
+            const staleUids = {};
+            pendingWithRaw.slice(KEEP_PENDING_RAW_MAX).forEach(function(it) { staleUids[it.uid] = true; });
+            shrunk = shrunk.map(function(it) {
+                if (!staleUids[it.uid]) return it;
+                return Object.assign({}, it, { mailRaw: Object.assign({}, it.mailRaw, { body2000: null }), _mailRawBodyStripped: true });
+            });
+        }
         return shrunk;
     },
     add: function(task, meta) {
@@ -1293,13 +1314,23 @@ window.inboxCleanupStorage = function() {
     const beforeBytes = JSON.stringify(before).length;
     const strippedCount = before.filter(function(it) { return it.status !== '대기' && it.mailRaw; }).length;
     const doneCount = before.filter(function(it) { return it.status !== '대기'; }).length;
-    if (!strippedCount && doneCount <= 300) {
+    // 🐛 [2026-09-18 버그수정] 완료 항목만 보고 "정리할 항목 없음"이라 답하던 버그 — 저장공간이 가득
+    // 차는 원인이 완료 항목이 아니라 '대기' 항목 자체가 쌓인 것일 수도 있음(_shrinkForQuota의 ③ 참고).
+    // 같은 기준(KEEP_PENDING_RAW_MAX)으로 판단해야 실제 정리 결과와 안내 문구가 어긋나지 않는다.
+    const KEEP_PENDING_RAW_MAX = window.TaskInbox.KEEP_PENDING_RAW_MAX;
+    const stalePendingCount = Math.max(0, before.filter(function(it) { return it.status === '대기' && it.mailRaw && it.mailRaw.body2000; }).length - KEEP_PENDING_RAW_MAX);
+    if (!strippedCount && doneCount <= 300 && !stalePendingCount) {
         alert(_en ? 'Nothing to clean up — no bulky completed items found.' : '정리할 항목이 없습니다. (완료 항목에 남은 메일 원문이 없거나 이미 정리돼 있습니다)');
         return;
     }
-    if (!confirm(_en
+    const extra = stalePendingCount
+        ? (_en
+            ? ` Also, the mail body of ${stalePendingCount} old pending item(s) will be trimmed (the task itself is kept, only the long body is cleared; the most recent ${KEEP_PENDING_RAW_MAX} pending items are left untouched).`
+            : ` 대기 항목 중 오래된 ${stalePendingCount}건의 메일 본문도 함께 정리합니다(업무 자체는 지우지 않고 긴 본문만 비웁니다 — 최근 ${KEEP_PENDING_RAW_MAX}건은 그대로 둡니다).`)
+        : '';
+    if (!confirm((_en
         ? `Clear the stored mail source from ${strippedCount} completed item(s) (kept in their placed project already), and if there are more than 300 completed items, keep only the most recent 300?`
-        : `완료(배치됨/전송됨) 항목 ${strippedCount}건의 저장된 메일 원문을 지우고(이미 배치된 프로젝트 쪽엔 그대로 남아있습니다), 완료 항목이 300건을 넘으면 최근 300건만 남기고 정리할까요?`)) return;
+        : `완료(배치됨/전송됨) 항목 ${strippedCount}건의 저장된 메일 원문을 지우고(이미 배치된 프로젝트 쪽엔 그대로 남아있습니다), 완료 항목이 300건을 넘으면 최근 300건만 남기고 정리할까요?`) + extra)) return;
     const after = window.TaskInbox._shrinkForQuota(before);
     window.TaskInbox.save(after);
     const afterBytes = JSON.stringify(after).length;
