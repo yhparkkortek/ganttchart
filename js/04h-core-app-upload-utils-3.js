@@ -4879,6 +4879,18 @@ ${docsJson}`;
         rec.continuous = true;
         rec.maxAlternatives = 1;
         let finalTranscript = '';
+        // 🐛 [2026-09-18 버그수정] "음성으로 명령 내리면 단어를 반복해서 받아쓴다" 제보 — 바로 위
+        //    2026-09-09 수정(continuous=true 전환)의 부작용이었다. continuous=false일 때는 발화
+        //    1건당 결과가 딱 한 번씩만 오니 e.resultIndex부터 finalTranscript에 그냥 이어붙여도(+=)
+        //    안전했는데, continuous=true에서는(특히 모바일 Chrome/Android SpeechRecognition
+        //    구현체에서 흔히 보고되는 결함) 이미 isFinal로 확정된 구간을 e.resultIndex가 다시
+        //    가리키며 재전송하는 경우가 있다 — 그때마다 이미 붙어있는 문장 뒤에 같은 단어를 또
+        //    이어붙이니 "단어 반복" 증상이 된다. 수정: 문자열을 계속 이어붙이는(+=) 방식 대신,
+        //    결과 인덱스별로 슬롯을 두고(finalSegments[i]) 매번 "그 자리 값을 덮어쓰는" 방식으로
+        //    바꿨다 — 같은 인덱스가 몇 번을 다시 와도 그 자리 텍스트만 갱신될 뿐 누적되지 않는다
+        //    (엔진이 resultIndex를 올바르게 매번 새 구간으로만 보내주는 정상 케이스에서도 결과는
+        //    동일하므로 회귀 없음).
+        let finalSegments = [];
         let _silenceTimer = null;
         const NO_SPEECH_MS = 8000; // 마이크를 켠 뒤 이 시간 안에 말을 시작 안 하면 포기하고 종료
         const PAUSE_MS = 3000;     // 한 번이라도 말한 뒤, 이만큼 조용해지면 "다 말했다"로 보고 종료
@@ -4890,11 +4902,15 @@ ${docsJson}`;
 
         rec.onresult = function(e) {
             let interim = '';
-            for (let i = e.resultIndex; i < e.results.length; i++) {
+            // 💡 위 주석 참고 — resultIndex부터가 아니라 매번 e.results 전체를 인덱스 기준으로
+            //    다시 훑는다(누적 아님, 매번 최신 상태로 재구성). interim은 이벤트마다 새로 계산되니
+            //    원래도 중복 위험이 없었고, final만 슬롯 덮어쓰기로 바꾸면 충분하다.
+            for (let i = 0; i < e.results.length; i++) {
                 const t = e.results[i][0].transcript;
-                if (e.results[i].isFinal) finalTranscript += t;
+                if (e.results[i].isFinal) finalSegments[i] = t;
                 else interim += t;
             }
+            finalTranscript = finalSegments.join('');
             const input = document.getElementById('gantt-qa-input');
             if (input) input.value = finalTranscript + interim;
             _armSilenceTimeout(PAUSE_MS); // 말이 들어올 때마다 타이머 리셋 — 계속 말하는 동안은 절대 안 끊김
