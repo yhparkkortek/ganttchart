@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreCompact\\\",\\\"additionalContext\\\":\\\"[자동 훅] 컨텍스트를 압축하기 전에: 지금까지 대화에서 이 저장소(ganttchart)에 앞으로도 계속 적용될 새로운 규칙/결정/파일구조 변경 사항이 생겼는지 검토하라. 있다면 압축 전에 CLAUDE.md를 Edit로 갱신한 뒤 계속 진행하라. 일회성 설명/질답/이번 한 번만 유효한 내용은 넣지 마라. 갱신할 내용이 없으면 아무것도 하지 말고 조용히 넘어가라.\\\"}}\""
+            "command": "echo \"{\\\"hookSpecificOutput\\\":{\\\"hookEventName\\\":\\\"PreCompact\\\",\\\"additionalContext\\\":\\\"[자동 훅] 컨텍스트를 압축하기 전에: 지금까지 대화에서 이 저장소(ganttchart)에 앞으로도 계속 적용될 새로운 규칙/결정/파일구조 변경 사항이 생겼는지 검토하라. 있다면 압축 전에 갱신한 뒤 계속 진행하라. 단 CLAUDE.md는 매 세션 통째로 로드되어 토큰을 소비하므로 상세한 트러블슈팅/디버깅 이력/검증 내용은 docs/ 아래 해당 주제 문서(sap-lookup.md, ai-qa.md 등)에 추가하고, CLAUDE.md에는 색인의 꼭 기억할 것 형태로 한 줄만 보태라. 일회성 설명/질답/이번 한 번만 유효한 내용은 넣지 마라. 갱신할 내용이 없으면 아무것도 하지 말고 조용히 넘어가라.\\\"}}\""
           }
         ]
       }
