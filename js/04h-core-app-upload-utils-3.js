@@ -3588,7 +3588,7 @@ ${docsJson}`;
 
         window._ganttQaSending = true;
         const priorHistory = window._ganttQaHistory.slice(); // 이번 질문/답변을 넣기 전 시점의 대화만 컨텍스트로 사용
-        if (!_skipUserHistoryPush) window._ganttQaHistory.push({ role: 'user', text: question });
+        if (!_skipUserHistoryPush) window._ganttQaHistory.push({ role: 'user', text: question, route: _qaRoute }); // route: 말풍선 색(분류별) 결정용
         input.value = '';
         input.disabled = true;
         const sendBtn = document.getElementById('gantt-qa-send-btn');

@@ -1595,8 +1595,11 @@ ${question}
             //    "지금 어디까지 선택됐는지"가 거의 안 보였다 — 그래서 복사하려고 드래그해도 선택 범위를
             //    확인할 수 없었음. 배경을 흐린 파랑으로, 글자는 진한 파랑으로 바꿔서 선택 하이라이트가
             //    배경과 뚜렷이 구분되게 한다(선택 안 된 상태에서도 읽기 편함은 그대로 유지).
-            const bg = isUser ? '#e7f3ff' : (m.error ? '#fff0f0' : '#f1f3f5');
-            const fg = isUser ? '#0056b3' : (m.error ? '#c92a2a' : '#333');
+            // 🎨 [2026-09-21] 질문 분류별 말풍선 색(SAP=빨강/프로젝트=초록/추론=살구, 자동=기존 파랑·회색) — 팔레트는 js/33 _qaClassPalette(데이터). 오류 메시지는 항상 빨강 그대로.
+            const _pal = (!m.error && m.route && window._qaPaletteFor) ? window._qaPaletteFor(m.route.cls) : null;
+            const bg = _pal ? (isUser ? _pal.userBg : _pal.aiBg) : (isUser ? '#e7f3ff' : (m.error ? '#fff0f0' : '#f1f3f5'));
+            const fg = (_pal && isUser) ? _pal.userFg : (isUser ? '#0056b3' : (m.error ? '#c92a2a' : '#333'));
+            const _bd = _pal ? 'border:1px solid ' + _pal.accent + ';' : '';
             const body = isUser
                 ? `<div style="white-space:pre-wrap; word-break:break-word;">${escapeHtml(m.text)}</div>`
                 : `<div style="word-break:break-word;">${window._mdToHtml(m.text)}</div>`;
@@ -1685,7 +1688,7 @@ ${question}
                 ? window._ganttQaRenderConfirmButtonsHtml(window._ganttQaPendingConfirmButtons)
                 : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
-                <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
+                <div style="max-width:82%; padding:9px 12px; border-radius:10px; ${_bd} background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
                 ${reaskHintHtml ? `<div style="max-width:82%; width:100%;">${reaskHintHtml}</div>` : ''}
                 ${mailDraftHtml ? `<div style="max-width:82%; width:100%;">${mailDraftHtml}</div>` : ''}

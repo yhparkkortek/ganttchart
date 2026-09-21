@@ -153,6 +153,17 @@
     }
     window._qaLogRoute = logRoute;
 
+    // ── 🎨 분류별 색(데이터) — 2026-09-21, 사용자 지시: 자동=파랑(현재색) / 프로젝트=초록 / 추론=살구 / SAP=빨강 (기본 파스텔 R·G·B + 살구) ──
+    // userBg/userFg: 내 질문 말풍선, aiBg: 답변 말풍선(더 연하게), accent: 테두리, sel*: 분류 선택 상자. 색을 바꾸고 싶으면 이 표만 고치면 된다.
+    window._qaClassPalette = window._qaClassPalette || {
+        auto:    { userBg: '#e7f3ff', userFg: '#0056b3', aiBg: '#f1f3f5', accent: '#a5c8f0', selBg: '#e7f3ff', selFg: '#1971c2', selBorder: '#a5c8f0' },
+        project: { userBg: '#dff3e4', userFg: '#1f6b3a', aiBg: '#f0faf2', accent: '#9ccfab', selBg: '#e6f6ea', selFg: '#1f7a3d', selBorder: '#a8dab8' },
+        general: { userBg: '#ffe6d1', userFg: '#9a4a12', aiBg: '#fff4ea', accent: '#f2b98a', selBg: '#ffeedd', selFg: '#a24a12', selBorder: '#f2b98a' },
+        sap:     { userBg: '#fde3e1', userFg: '#a8322a', aiBg: '#fff1f0', accent: '#eea59f', selBg: '#fbe4e2', selFg: '#b1432f', selBorder: '#eeb0ac' }
+    };
+    /** 말풍선 색을 바꿀 분류만 팔레트를 돌려준다(auto/other/action은 null → 기존 파랑·회색 그대로). */
+    window._qaPaletteFor = function (cls) { return (cls === 'sap' || cls === 'project' || cls === 'general') ? window._qaClassPalette[cls] : null; };
+
     // ── 분류 지정(0단계) — "자주 쓰는 질문" 줄 오른쪽의 작은 선택 상자 ─────────────────────
     // 🧹 [2026-09-21 UI 정리] 예전엔 입력창 위에 칩 4개 줄을 따로 띄웠는데 화면을 너무 차지해서, 이미 있는 "자주 쓰는 질문" 줄에 합쳤다.
     window._qaForceClass = '';
@@ -177,9 +188,9 @@
             lab.title = T('질문을 어떻게 이해할지 직접 지정합니다. 입력창에 #sap / #프로젝트 / #추론 을 앞에 붙여도 됩니다.', 'Choose how the question is understood. You can also prefix #sap / #project / #general.');
             var cur = window._qaForceClass || '';
             sel.innerHTML = CHIPS.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === cur ? ' selected' : '') + '>' + esc(T(c[1], c[2])) + '</option>'; }).join('');
-            sel.style.borderColor = cur ? '#7fb0dd' : '#ccc';       // 직접 지정 중이면 눈에 띄게
-            sel.style.background = cur ? '#dbeafb' : '#fff';
-            sel.style.color = cur ? '#1971c2' : '#333';
+            var pal = window._qaClassPalette[cur || 'auto'] || window._qaClassPalette.auto;      // 🎨 값별 파스텔(자동=파랑/SAP=빨강/프로젝트=초록/추론=살구)
+            sel.style.borderColor = pal.selBorder; sel.style.background = pal.selBg; sel.style.color = pal.selFg; sel.style.fontWeight = 'bold';
+            Array.prototype.forEach.call(sel.options, function (o) { var op = window._qaClassPalette[o.value || 'auto']; o.style.background = op.selBg; o.style.color = op.selFg; });
         } catch (e) { /* ignore */ }
     }
     (function wrapOpen(tries) {
@@ -196,7 +207,8 @@
         var meta = CLASSES[r.cls] || CLASSES.auto;
         var tip = (r.forced ? T('직접 지정', 'Chosen by you') : T('자동 판단', 'Auto')) + (r.reasons && r.reasons.length ? ' — ' + r.reasons.join(' / ') : '');
         var short = r.cls === 'auto' ? T('자동', 'Auto') : T(meta.ko, meta.en);
-        return '<span style="display:inline-flex; align-items:center; gap:4px; font-size:10.5px; color:#999;">' +
+        var _lp = window._qaPaletteFor(r.cls);
+        return '<span style="display:inline-flex; align-items:center; gap:4px; font-size:10.5px; color:' + (_lp ? _lp.userFg : '#999') + ';">' +
             '<span title="' + esc(tip) + '">' + meta.icon + ' ' + esc(short) + (r.forced ? ' ' + esc(T('(지정)', '(set)')) : '') + '</span>' +
             '<button onclick="window._qaToggleReroute(\'' + esc(m.uid) + '\')" title="' + esc(T('다른 분류로 다시 답변받기', 'Re-answer as another type')) + '" style="font-size:11px; padding:0 5px; border:1px solid #dde3ea; background:#fff; color:#888; border-radius:9px; cursor:pointer; line-height:16px;">⇄</button></span>';
     };
@@ -226,7 +238,7 @@
 
     // ── 응답 도우미 ──────────────────────────────────────────────────
     function newUid() { return 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6); }
-    function pushUser(question, input) { window._ganttQaHistory.push({ role: 'user', text: question }); if (input) input.value = ''; }
+    function pushUser(question, input, route) { window._ganttQaHistory.push({ role: 'user', text: question, route: route }); if (input) input.value = ''; }
     function pushAi(text, question, route, extra) {
         window._ganttQaHistory.push(Object.assign({ role: 'ai', text: text, uid: newUid(), question: question, route: route }, extra || {}));
     }
@@ -234,7 +246,7 @@
 
     // ── 자재내역 패턴 조회(새 로컬 명령) ─────────────────────────────
     async function runPatternLookup(question, pattern, input, route) {
-        pushUser(question, input);
+        pushUser(question, input, route);
         window._ganttQaHistory.push({ role: 'ai', text: '⏳ ' + T('SAP에서 자재내역 "' + pattern + '" 패턴을 검색하는 중...', 'Searching SAP for description pattern "' + pattern + '"...'), pending: true });
         window._renderGanttQaMessages();
         var reply;
@@ -265,7 +277,7 @@
 
     // ── 지원하지 않는 SAP 요청: 가짜 답변 대신 안내 + 적립 ─────────────
     function runUnsupported(question, input, route, cls) {
-        pushUser(question, input);
+        pushUser(question, input, route);
         var en = window._currentLang === 'en';
         var caps = window._qaMatchCapabilities ? window._qaMatchCapabilities(question).slice(0, 2) : [];
         var msg = '🏭 ' + T('SAP 요청으로 이해했지만, 아직 이 유형은 직접 조회하지 못합니다. (SAP에 없는 정보를 지어내지 않기 위해 프로젝트 데이터로 추측해 답하지 않았습니다.)',
