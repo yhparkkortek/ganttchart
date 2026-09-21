@@ -791,14 +791,31 @@
             // 💡 [진단용 계측] "저장이 느리다"의 원인이 업로드 자체인지(=구글/네트워크), 아니면 그 앞단
             //    처리인지 바로 구분할 수 있게 업로드 구간과 전송 크기를 따로 잰다.
             const _tUp0 = performance.now();
-            let response = await fetch(url, {
-                method: fileId ? 'PATCH' : 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': `multipart/related; boundary="${boundary}"`
-                },
-                body: multipartRequestBody
-            });
+            window._lastSaveUploadKB = Math.round(multipartRequestBody.length / 1024); // catch 블록의 "Failed to fetch" 진단 메시지용
+            const _doUpload = function() {
+                return fetch(url, {
+                    method: fileId ? 'PATCH' : 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': `multipart/related; boundary="${boundary}"`
+                    },
+                    body: multipartRequestBody
+                });
+            };
+            let response;
+            try {
+                response = await _doUpload();
+            } catch (_upErr) {
+                // 🐛 [2026-09-21] "Failed to fetch"(TypeError)는 응답을 받기도 전에 연결이 끊긴 것 — 대개 일시적인
+                //    네트워크 흔들림(Wi-Fi 전환·절전 복귀·VPN/프록시)이다. 기존 파일 덮어쓰기(PATCH)는 같은 내용을
+                //    다시 보내도 결과가 같으므로(멱등) 한 번만 조용히 재시도한다. 새 파일 생성(POST)은 첫 요청이
+                //    실제로 성공했을 수 있어 재시도하면 파일이 중복 생성될 위험이 있으니 재시도하지 않는다.
+                if (fileId && _upErr instanceof TypeError) {
+                    console.warn('[저장] 업로드 네트워크 오류 — 1.5초 후 1회 재시도:', _upErr.message);
+                    await new Promise(function(r) { setTimeout(r, 1500); });
+                    response = await _doUpload();
+                } else { throw _upErr; }
+            }
             const _upMs = Math.round(performance.now() - _tUp0);
             const _upKB = Math.round(multipartRequestBody.length / 1024);
             console.info(`[저장 계측] 업로드: ${_upMs}ms · 전송크기: ${_upKB}KB (${(_upKB / Math.max(_upMs,1) * 1000 / 1024).toFixed(1)}MB/s)`);
@@ -922,7 +939,19 @@
             //    보여주려던 "구글 드라이브 전송 시스템 에러" 메시지 자체가 통째로 묻혀버렸다(실제 에러
             //    대신 이 새 에러로 조용히 reject됨). catch 블록에서 다시 계산해서 이 문제를 없앤다.
             const _svEn = window._currentLang === 'en';
-            const _sysErrMsg = _svEn ? "Google Drive system error: " + err.message : "구글 드라이브 전송 시스템 에러: " + err.message;
+            let _sysErrMsg = _svEn ? "Google Drive system error: " + err.message : "구글 드라이브 전송 시스템 에러: " + err.message;
+            // 🐛 [2026-09-21] "Failed to fetch"는 구글이 거절한 게 아니라 요청이 서버까지 못 갔거나 응답 전에 끊긴 것 —
+            //    원인(네트워크/VPN/광고차단/전송 크기)을 사용자가 바로 구분할 수 있게 안내하고 로컬 백업을 남긴다.
+            const _isNetErr = err instanceof TypeError && /failed to fetch|networkerror|load failed|network request failed/i.test(String(err.message || ''));
+            if (_isNetErr) {
+                const _kb = window._lastSaveUploadKB;
+                _sysErrMsg += _svEn
+                    ? "\n\nThe request never reached Google (network cut before any response). Check: ① internet/VPN/proxy connection ② ad-blocker or security extension blocking googleapis.com ③ the payload size (" + (_kb || '?') + "KB). Your edits are backed up locally; press Save again once the connection is back."
+                    : "\n\n구글이 거절한 것이 아니라 요청이 구글까지 가지 못했거나 응답 전에 끊긴 경우입니다. 확인: ① 인터넷/VPN/프록시 연결 ② 광고차단·보안 확장프로그램이 googleapis.com을 막는지 ③ 전송 크기(" + (_kb || '?') + "KB). 편집 내용은 로컬에 백업했으니 연결이 돌아온 뒤 다시 저장해 주세요.";
+                try { if (window._saveLocalBackup) window._saveLocalBackup('drive-save-network-error'); } catch (e) { /* 백업 실패는 무시 */ }
+                try { if (window._issueLog) window._issueLog({ domain: 'drive', kind: 'fe_network_fail', rid: '', route: 'drive-save',
+                    result: { ok: false, http: 0, durMs: 0, errorRaw: String(err.message || err) + ' · ' + (_kb || '?') + 'KB · online=' + navigator.onLine } }); } catch (e) { /* 수집 실패는 무시 */ }
+            }
             window._lastSaveBlockReason = _sysErrMsg;
             if (opts.suppressAlert) {
                 if (window.showToast) window.showToast(_sysErrMsg, 'error', 8000);
