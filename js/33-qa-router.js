@@ -182,12 +182,13 @@
                 lab = document.createElement('label'); lab.id = 'gantt-qa-route-label'; lab.htmlFor = 'gantt-qa-route-select';
                 lab.style.cssText = 'font-size:10.5px; color:#888; white-space:nowrap;' + (col ? '' : ' margin-left:6px;');
                 sel = document.createElement('select'); sel.id = 'gantt-qa-route-select';
-                sel.style.cssText = 'width:100%; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px;' + (col ? '' : ' max-width:120px;');
+                sel.style.cssText = 'flex:1; width:100%; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px;' + (col ? '' : ' max-width:120px;');
                 sel.onchange = function () { window._qaSetForce(sel.value); };
-                row.appendChild(lab); row.appendChild(sel);
+                if (col) { lab = null; row.appendChild(sel); } else { row.appendChild(lab); row.appendChild(sel); }   // 3칸 줄에서는 라벨 없이 선택 상자만
             }
-            lab.textContent = '🏷 ' + T('분류', 'Type');
-            lab.title = T('질문을 어떻게 이해할지 직접 지정합니다. 입력창에 #sap / #프로젝트 / #추론 을 앞에 붙여도 됩니다.', 'Choose how the question is understood. You can also prefix #sap / #project / #general.');
+            var tipTxt = T('질문을 어떻게 이해할지 직접 지정합니다. 입력창에 #sap / #프로젝트 / #추론 을 앞에 붙여도 됩니다.', 'Choose how the question is understood. You can also prefix #sap / #project / #general.');
+            if (lab) { lab.textContent = '🏷 ' + T('분류', 'Type'); lab.title = tipTxt; }
+            sel.title = tipTxt;
             var cur = window._qaForceClass || '';
             sel.innerHTML = CHIPS.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === cur ? ' selected' : '') + '>' + esc(T(c[1], c[2])) + '</option>'; }).join('');
             var pal = window._qaClassPalette[cur || 'auto'] || window._qaClassPalette.auto;      // 🎨 값별 파스텔(자동=파랑/SAP=빨강/프로젝트=초록/추론=살구)
