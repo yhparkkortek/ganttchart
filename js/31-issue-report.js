@@ -30,8 +30,11 @@
         var r = e.result || {};
         return [e.domain || '', e.kind || '', e.route || '', e.stage || '', String(r.errorNorm || '').slice(0, 80), (e.snapshot && e.snapshot.tcode) || ''].join('|');
     }
+    var ENV_RE = /SAP GUI Scripting|SAP GUI가 켜져|로그인해주세요|열려 있는 SAP 연결|32비트 Python|pywin32/;
     function layerHint(c) {
         var n = c.errorNorm || '';
+        // 사용자 환경 문제(SAP 미실행/미로그인/스크립팅 미설정/32비트 런타임) — 코드 버그가 아니므로 따로 표시하고 점수도 낮춘다
+        if (ENV_RE.test(n)) return t('환경: SAP 미실행/미로그인/설정(코드 문제 아님)', 'Env: SAP not running/logged in/configured (not a code bug)');
         if (c.kind === 'fe_stale_backend') return t('배포: 구버전/꺼진 백엔드', 'Deploy: stale/offline backend');
         if (c.kind === 'fe_network_fail') return t('환경/타임아웃(③ 코드 or 환경)', 'Env/timeout');
         if (c.kind === 'degraded_layout') return t('③ 코드·지식: 레이아웃 카탈로그', '③ code/knowledge: layout catalog');
@@ -91,7 +94,8 @@
             var mostlyConcurrent = c.count > 0 && c.concurrent / c.count > 0.5;
             if (mostlyConcurrent) c.layerHint = t('⚠ 세션 충돌 의심 — ', '⚠ Possible session clash — ') + c.layerHint;
             var reactionN = Object.keys(c.reactions).reduce(function (a, k) { return a + c.reactions[k]; }, 0);
-            c.score = c.userCount * (c.count + c.recentCount + reactionN) * (mostlyConcurrent ? 0.5 : 1);
+            c.isEnv = ENV_RE.test(c.errorNorm || '');
+            c.score = c.userCount * (c.count + c.recentCount + reactionN) * (mostlyConcurrent ? 0.5 : 1) * (c.isEnv ? 0.3 : 1);   // 환경 문제는 코드 수정 대상이 아니므로 순위를 낮춤
             var rs = resolved[c.sig];
             c.resolved = rs || null;
             c.recurred = !!(rs && c.events.some(function (e) { return e.ts > rs.at; }));
@@ -153,22 +157,49 @@
             clusters: _state.clusters.map(function (c, i) {
                 return { rank: i + 1, sig: c.sig, kind: c.kind, domain: c.domain, route: c.route, stage: c.stage, errorNorm: c.errorNorm, tcode: c.tcode,
                     count: c.count, recentCount: c.recentCount, users: c.userCount, first: c.first, last: c.last, score: Math.round(c.score * 10) / 10,
-                    layerHint: c.layerHint, envBackends: c.envBackends, concurrent: c.concurrent, reactions: c.reactions,
+                    layerHint: c.layerHint, isEnvIssue: c.isEnv, envBackends: c.envBackends, concurrent: c.concurrent, reactions: c.reactions,
                     resolved: c.resolved, recurred: c.recurred, samples: c.samples, snapshot: c.snapshot };
             })
         };
     }
+    /** Drive 폴더 안의 같은 이름 파일을 갱신(없으면 생성) — digest를 하루 1개로 덮어쓴다. */
+    async function driveUpsertJson(token, folderId, name, obj) {
+        var files = await driveList(token, "name='" + name + "' and trashed=false and '" + folderId + "' in parents");
+        var payload = JSON.stringify(obj, null, 1);
+        var r;
+        if (files.length) {
+            r = await fetch('https://www.googleapis.com/upload/drive/v3/files/' + files[0].id + '?uploadType=media&supportsAllDrives=true', { method: 'PATCH', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: payload });
+        } else {
+            var bd = 'dg' + Date.now();
+            var body = '--' + bd + '\r\n' + 'Content-Type: application/json; charset=UTF-8' + '\r\n' + '\r\n' + JSON.stringify({ name: name, parents: [folderId], mimeType: 'application/json' }) + '\r\n' + '--' + bd + '\r\n' + 'Content-Type: application/json' + '\r\n' + '\r\n' + payload + '\r\n' + '--' + bd + '--';
+            r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'multipart/related; boundary=' + bd }, body: body });
+        }
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+    }
+    /** 내보내기 — ① 로컬 C:\SAP_DMS\SAP이슈\(Claude가 읽는 파일) ② Google Drive Backups/SAP_Issues/(팀 공용). 한쪽이 실패해도 다른 쪽은 진행한다. */
     window._issueExportDigest = async function () {
+        var d = new Date(), p = function (n) { return n < 10 ? '0' + n : '' + n; };
+        var fileName = 'digest_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
+        var digest = buildDigest(), localPath = null, localErr = null, driveOk = false, driveErr = null;
         try {
-            var d = new Date(), p = function (n) { return n < 10 ? '0' + n : '' + n; };
-            var fileName = 'digest_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
-            var r = await fetch(API + '/issue-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: fileName, data: buildDigest() }) });
-            var ct = r.headers.get('content-type') || '';
-            if (ct.indexOf('json') < 0) throw new Error(t('백엔드가 구버전이거나 꺼져 있습니다 — kortek_backend.bat을 다시 실행해주세요.', 'Backend is outdated or offline — restart kortek_backend.bat.'));
+            var r = await fetch(API + '/issue-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: fileName, data: digest }) });
+            if ((r.headers.get('content-type') || '').indexOf('json') < 0) throw new Error(t('백엔드가 구버전이거나 꺼져 있습니다 — kortek_backend.bat을 다시 실행해주세요.', 'Backend is outdated or offline — restart kortek_backend.bat.'));
             var j = await r.json();
             if (!j.ok) throw new Error(j.error || 'export failed');
-            if (window.showToast) window.showToast(t('✅ 리포트를 저장했습니다: ', '✅ Report saved: ') + j.path, 'info');
-        } catch (e) { alert(t('내보내기 실패: ', 'Export failed: ') + (e.message || e)); }
+            localPath = j.path;
+        } catch (e) { localErr = e.message || String(e); }
+        try {
+            var token = getToken();
+            if (!token) throw new Error(t('구글 드라이브 미연동', 'Google Drive not connected'));
+            var folderId = _state.folderId || await window._issueGetFolder(token);
+            await driveUpsertJson(token, folderId, fileName, digest);
+            driveOk = true;
+        } catch (e) { driveErr = e.message || String(e); }
+        if (!localPath && !driveOk) { alert(t('내보내기 실패\n\n로컬: ', 'Export failed\nLocal: ') + localErr + '\nDrive: ' + driveErr); return; }
+        var parts = [];
+        if (localPath) parts.push(t('로컬 ', 'Local ') + localPath);
+        if (driveOk) parts.push('Google Drive(Backups/SAP_Issues/' + fileName + ')');
+        if (window.showToast) window.showToast(t('✅ 리포트 저장 — ', '✅ Report saved — ') + parts.join(' + ') + (localErr ? t(' (로컬 실패: ', ' (local failed: ') + localErr + ')' : '') + (driveErr ? t(' (Drive 실패: ', ' (Drive failed: ') + driveErr + ')' : ''), 'info');
     };
 
     // ── 화면 ───────────────────────────────────────────────────────────

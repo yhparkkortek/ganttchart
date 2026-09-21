@@ -1575,7 +1575,7 @@ def _issue_mask(text, limit=400):
     """저장 전 마스킹 — 사업자번호/5자리↑ 숫자열/메일/사용자 경로."""
     try:
         t = str(text)
-        t = re.sub(r'\b\d{3}-?\d{2}-?\d{5}\b', '#biz', t)
+        t = re.sub(r'\b\d{3}-\d{2}-\d{5}\b', '#biz', t)  # 하이픈 형태만 — 하이픈 없는 10자리(COM 오류코드 등)는 아래 5자리↑ 규칙이 '#'로 처리
         t = re.sub(r'\d{5,}', '#', t)
         t = re.sub(r'[\w.+-]+@[\w-]+\.[\w.-]+', '#mail', t)
         t = re.sub(r'(?i)([A-Z]:[\\/]Users[\\/])[^\\/\s"\']+', r'\1<user>', t)

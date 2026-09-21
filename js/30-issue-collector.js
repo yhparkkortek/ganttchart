@@ -32,7 +32,7 @@
     window._issueMask = function (text, limit) {
         try {
             var t = String(text == null ? '' : text);
-            t = t.replace(/\b\d{3}-?\d{2}-?\d{5}\b/g, '#biz');
+            t = t.replace(/\b\d{3}-\d{2}-\d{5}\b/g, '#biz');   // 하이픈 형태만 — 하이픈 없는 10자리(COM 오류코드 등)는 아래 5자리↑ 규칙이 '#'로 처리
             t = t.replace(/\d{5,}/g, '#');
             t = t.replace(/[\w.+-]+@[\w-]+\.[\w.-]+/g, '#mail');
             t = t.replace(/([A-Za-z]:[\\/]Users[\\/])[^\\/\s"']+/gi, '$1<user>');
