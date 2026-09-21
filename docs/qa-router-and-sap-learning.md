@@ -40,8 +40,8 @@
 
 ## 3. 훅 위치 (거대 파일엔 최소한만)
 
-`js/04h-core-app-upload-utils-3.js`의 `sendGanttQaMessage`: **H1** 맨 앞 접두어 파싱(`_qaParsePrefix`), **H2** 로컬 명령들 이후·`apiKey` 확인 직전 `_qaRouteAndMaybeHandle`(handled면 return), **H3** SAP 게이트에 `_qaRoute.useSapContext` OR,
-**H4** general이면 `_qaBuildGeneralPrompt` 사용, **H5** AI 답변 메시지에 `route` 부착. `js/04g`: 답변 아래 `_qaRouteBadgeHtml(m)` 1줄. 입력창 칩은 `openGanttQaModal`을 래핑해 `ensureChips()`가 삽입(모달 템플릿은 안 건드림).
+`js/04h-core-app-upload-utils-3.js`의 `sendGanttQaMessage`: **H1** 맨 앞 접두어 파싱(`_qaParsePrefix`), **H2** 로컬 명령들 이후·`apiKey` 확인 직전 `_qaRouteAndMaybeHandle`(handled면 return), **H3** SAP 게이트에 `_qaRoute.useSapContext` OR(단, 사람이 프로젝트/추론으로 **직접 지정**했으면 "SAP" 단어가 있어도 현재 SAP 화면을 읽지 않음),
+**H4** general이면 `_qaBuildGeneralPrompt` 사용, **H5** AI 답변 메시지에 `route` 부착. `js/04g`: 답변 푸터 한 줄에 `_qaRouteInlineHtml(m)`(왼쪽 분류·⇄) + `_qaRerouteRowHtml(m)`(펼침 행). 분류 선택 상자는 `openGanttQaModal`을 래핑해 `ensureChips()`가 "자주 쓰는 질문" 줄에 삽입(모달 템플릿은 안 건드림).
 **새 분류 규칙은 `_qaClassify` 한 곳에만** 넣을 것(테스트가 그 함수를 직접 부른다).
 
 ## 4. 미지원 SAP 요청 = 정직하게 안내 + 적립

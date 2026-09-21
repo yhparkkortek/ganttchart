@@ -3627,7 +3627,9 @@ ${docsJson}`;
         //    실어 보낸다(질문마다 항상 조회하면 느려지고 불필요하므로, 언급이 있을 때만 — CLAUDE.md
         //    "SAP/TIPR" 결정 사항 참고).
         let sapText = null;
-        if (window._questionMentionsSapIntent(question) || (_qaRoute && _qaRoute.useSapContext)) {
+        // 🏷 사람이 직접 프로젝트/추론으로 지정했으면 "SAP" 단어가 있어도 지금 SAP 화면을 읽어 오지 않는다(지정을 존중 — 옛 화면이 답에 섞이던 문제)
+        const _qaSapSuppressed = !!(_qaRoute && _qaRoute.forced && _qaRoute.cls !== 'sap');
+        if ((!_qaSapSuppressed && window._questionMentionsSapIntent(question)) || (_qaRoute && _qaRoute.useSapContext)) {
             const pendingIdx2 = window._ganttQaHistory.length - 1;
             if (window._ganttQaHistory[pendingIdx2]) {
                 window._ganttQaHistory[pendingIdx2].text = '⏳ ' + window._t('SAP 화면 조회 중...', 'Reading SAP screen...');
