@@ -137,6 +137,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | 7 | 다중 프로젝트 배분 (`gantt_ai_reassign_queue_v1`) | `14a`, `15a`, HTML |
 | 8 | 토픽 오염 감지·AI 자가진단 (`_tcGetScore`, `_tcRunDiagnosis`, `_tcApplyFix`) | `27-topic-contamination.js` |
 | 9 | 완전 미분류 메일 군집 감지 → 신규 프로젝트 생성 제안 (`_ncdRecordCandidate`, `_ncdCheckAndSuggest`) | `29-new-project-cluster-detect.js` |
+| 10 | SAP·AI 문답 이슈 수집(실패 자동 기록+화면 스냅샷+🚩 신고) → Drive 샤드 → 관리자 군집 리포트 → 내보내 Claude가 진단 (`docs/phase10-issue-learning-design.md`) | `30-issue-collector.js`, `31-issue-report.js`, `kortek_backend.py`(이슈 수집 블록), `sap_bridge_32.py`(스냅샷) |
 
 ## 📚 상세 문서(`docs/`) 색인 — 해당 작업을 할 때만 읽을 것
 
@@ -197,6 +198,10 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/admin-password.md` — 🔑 관리자("팀") 비밀번호
 - **읽을 때**: 비밀번호 확인 게이트, 메일/텔레그램 설정 암복호화, Drive 팀 비밀번호 동기화.
 - 하드코딩 기본값 없음(소스 공개). 새 게이트는 반드시 `adminPwMatches()` 사용, `saveAllToDrive`/`loadAllFromDrive`는 비밀번호가 비어있으면 차단. 구글 로그인(OAuth)과는 완전히 별개.
+
+### `docs/phase10-issue-learning-design.md` — 📊 Phase 10 이슈 수집/군집/학습 루프
+- **읽을 때**: 이슈 수집·🚩 신고·이슈 리포트·화면 스냅샷·`issue_events.jsonl`·`/issue-*` 엔드포인트를 만들거나 고칠 때, "이슈 정리해줘" 요청(내보낸 `C:\SAP_DMS\SAP이슈\digest_*.json` 읽기).
+- 수집은 본 기능을 절대 방해하면 안 됨(전 구간 try/catch, 원본 fetch 결과 그대로). 요청 상관 id는 **쿼리 `_rid`**(커스텀 헤더 금지 — 백엔드 CORS가 `Content-Type`만 허용해 구버전이 깨짐). 저장 전 마스킹(자재번호·사업자번호·메일·사용자경로), 스냅샷은 구조만(필드 값 없음), AI 문답 답변 본문은 저장 안 함. Drive는 `Backups/SAP_Issues/`에 사용자·월별 샤드(동시 쓰기 충돌 없음). 즉시 끄기: `localStorage.gantt_issue_collect_off='1'`.
 
 ### 백엔드
 | 파일 | 역할 |

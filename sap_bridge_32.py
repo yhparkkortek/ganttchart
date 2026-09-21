@@ -56,6 +56,15 @@ if hasattr(sys.stdout, 'reconfigure'):
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
 
+# 🆕 [2026-09-21, Phase 10] 실패 시점의 "어느 단계였는지" 표지. 처음엔 fetch_bom 등 진단이 모호했던
+#    지점에만 점진적으로 심는다(없으면 이슈 수집은 오류 문구+화면 스냅샷만으로 군집화).
+_CUR_STAGE = ['']
+
+
+def _stage(name):
+    _CUR_STAGE[0] = name
+
+
 def _get_sap_session():
     """이미 로그인돼 열려 있는 SAP GUI의 첫 번째 연결/세션을 가져온다."""
     import win32com.client
@@ -327,51 +336,59 @@ _BOM_LAYOUT_VARIANT = '/STD_MC'  # 이 이름을 바꾸면 그 즉시 새 레이
 
 def _sap_select_alv_layout(session, grid, variant_name):
     """ALV 그리드 툴바의 "레이아웃 선택"(`&MB_VARIANT`) 팝업을 열어, `variant_name`과 정확히
-    일치하는 저장된 레이아웃(전역 변형)을 찾아 적용한다. 실패 경로(팝업이 안 뜨거나, 그
-    이름의 레이아웃이 이 화면 카탈로그에 없거나, 컨트롤을 못 찾는 경우) 전부 조용히
-    `False`를 반환하고 팝업을 취소(F12)로 정리한 뒤 지금 화면을 그대로 둔다 — 예외를
-    던지지 않는다(호출부가 "레이아웃 강제 실패"를 조회 자체의 실패로 만들지 않기 위함)."""
+    일치하는 저장된 레이아웃(전역 변형)을 찾아 적용한다.
+    반환값: `(성공여부: bool, 진단정보: str)` — 실패해도 예외를 던지지 않고(호출부가 "레이아웃
+    강제 실패"를 조회 자체의 실패로 만들지 않기 위함) 지금 화면을 그대로 둔다. 다만 **실패
+    사유는 반드시 진단정보로 돌려준다**(2026-09-21, Phase 10) — 예전엔 `bool`만 반환해서
+    "고른 레이아웃이 왜 안 먹는지"를 어디서도 알 수 없었다(호출부가 결과 헤더에 남김).
+    진단정보: `''`(성공) | `button_failed` | `no_popup` | `no_popup_grid` |
+    `not_in_catalog:<이 화면 카탈로그의 실제 레이아웃 이름 최대 15개>` | `doubleclick_failed`"""
+    def _cancel():
+        try:
+            session.findById('wnd[1]').sendVKey(12)
+        except Exception:
+            pass
     try:
         grid.PressToolbarButton('&MB_VARIANT')
     except Exception:
-        return False
+        return False, 'button_failed'
+    time.sleep(0.4)  # 팝업이 뜰 시간
     try:
         popup = session.findById('wnd[1]')
     except Exception:
-        return False
+        return False, 'no_popup'
     try:
         inner = session.findById(popup.Id + '/usr/ssubD0500_SUBSCREEN:SAPLSLVC_DIALOG:0501/cntlG51_CONTAINER/shellcont/shell')
     except Exception:
         inner = None
     if inner is None:
-        try:
-            popup.sendVKey(12)
-        except Exception:
-            pass
-        return False
+        _cancel()
+        return False, 'no_popup_grid'
+    names = []
     found_row = None
     try:
         for r in range(inner.RowCount):
-            if (inner.GetCellValue(r, 'VARIANT') or '').strip() == variant_name:
+            v = (inner.GetCellValue(r, 'VARIANT') or '').strip()
+            names.append(v)
+            if found_row is None and v == variant_name:
                 found_row = r
-                break
+        if found_row is None:  # 1차 정확 일치 실패 → 대소문자만 다른 경우까지 2차 시도
+            for r, v in enumerate(names):
+                if v.lower() == (variant_name or '').strip().lower():
+                    found_row = r
+                    break
     except Exception:
         found_row = None
     if found_row is None:
-        try:
-            popup.sendVKey(12)
-        except Exception:
-            pass
-        return False
+        _cancel()
+        return False, 'not_in_catalog:' + ' | '.join(names[:15])
     try:
         inner.DoubleClick(found_row, 'VARIANT')
-        return True
+        time.sleep(0.5)  # 그리드가 새 레이아웃으로 다시 그려질 시간
+        return True, ''
     except Exception:
-        try:
-            popup.sendVKey(12)
-        except Exception:
-            pass
-        return False
+        _cancel()
+        return False, 'doubleclick_failed'
 
 
 def _navigate_to_bom_screen(session, wnd, materials, plant='1000', use_single_tcode=None,
@@ -531,11 +548,14 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
     # "하드코딩하지 말고 매번 물어봐달라"고 요청 — `layout_variant` 인자가 오면 그걸
     # 우선 쓰고, 안 오면(하위호환) 기존 기본값을 그대로 쓴다.
     layout_variant = layout_variant or _BOM_LAYOUT_VARIANT
+    _stage('bom_layout')
+    layout_applied, layout_diag = None, ''
     grid_for_layout = _sap_find_grid(wnd)
     if grid_for_layout is not None:
-        _sap_select_alv_layout(session, grid_for_layout, layout_variant)
+        layout_applied, layout_diag = _sap_select_alv_layout(session, grid_for_layout, layout_variant)
         wnd = session.findById('wnd[0]')  # 레이아웃 적용 후 화면이 다시 그려지므로 참조 갱신
 
+    _stage('bom_dump')
     body, source = _sap_dump_screen_body(wnd)
 
     mat_label = ', '.join(materials) if isinstance(materials, (list, tuple)) else str(materials)
@@ -545,8 +565,16 @@ def fetch_bom(materials, plant='1000', use_single_tcode=None, explosion='single'
         return {'ok': False, 'error': f'자재 "{mat_label}"의 BOM 화면에서 읽을 수 있는 데이터를 찾지 못했습니다 — 자재번호/플랜트가 올바른지 확인해주세요.'}
 
     header = f'[SAP BOM 전개({tcode_label}): 자재 {mat_label}, 플랜트 {plant}]\n'
+    # 🆕 [2026-09-21, Phase 10] 레이아웃 적용 결과를 결과 텍스트에도 남긴다 — 실패해도 조회는
+    #    막지 않지만(기본 화면 레이아웃으로 계속) "왜 선택한 레이아웃이 안 먹는지"가 AI 답변과
+    #    이슈 수집(layoutApplied 필드) 양쪽에서 보이도록.
+    if layout_applied is True:
+        header += f'[레이아웃: "{layout_variant}" 적용됨]\n'
+    elif layout_applied is False:
+        header += f'[레이아웃: "{layout_variant}" 적용 실패({layout_diag}) — 화면 기본값 사용]\n'
     text = header + '\n' + body
-    return {'ok': True, 'source': source, 'materials': materials, 'tcode': tcode_label, 'text': text}
+    return {'ok': True, 'source': source, 'materials': materials, 'tcode': tcode_label, 'text': text,
+            'layoutApplied': layout_applied, 'layoutRequested': layout_variant, 'layoutDiag': layout_diag}
 
 
 # ── "사용처 조회(역전개)" (CS15) 전용 헬퍼 ─────────────────────────────
@@ -2307,6 +2335,130 @@ def print_po_via_zmm018(po_number, purchasing_org='9000', plant='1000'):
             'message': f'구매오더 "{po_number}"의 발주서 미리보기가 열렸습니다. 미리보기 하단의 💾 저장 아이콘을 눌러 "{po_number}.pdf"로 직접 저장해주세요(자동 저장이 아직 지원되지 않습니다).'}
 
 
+# ── 🆕 [2026-09-21, Phase 10] 실패 화면 스냅샷 — "구조만" 저장 (docs/phase10-issue-learning-design.md §3-C) ──
+# 목적: 사용자의 라이브 SAP 세션 없이도 "라벨 컨트롤에 값을 넣음/그리드 열 위치 밀림/팝업 잔존/필수 필드
+# 미입력" 같은 실패 유형을 원격으로 판별. 읽기 전용(클릭·입력 없음), 자체 예외 처리, 시간·크기 상한.
+# 필드 **값**(GuiTextField/GuiCTextField/테이블·그리드 셀)은 저장하지 않는다 — 캡션성 컨트롤
+# (라벨/버튼/탭/제목)의 Text와 상태바 문구만 저장하고, 5자리 이상 숫자열은 '#'으로 마스킹한다.
+_SNAP_CAPTION_TYPES = ('GuiLabel', 'GuiButton', 'GuiTab', 'GuiTitlebar')
+_SNAP_SKIP_DESCEND = ('GuiMenubar', 'GuiTitlebar', 'GuiStatusbar', 'GuiTableControl', 'GuiTree')
+_SNAP_MAX_NODES = 200
+_SNAP_MAX_SECONDS = 2.0
+_SNAP_MAX_BYTES = 24000
+
+
+def _snap_mask(text, limit=120):
+    try:
+        t = re.sub(r'\d{5,}', '#', str(text))
+        t = re.sub(r'[\w.+-]+@[\w-]+\.[\w.-]+', '#mail', t)
+        return t[:limit]
+    except Exception:
+        return ''
+
+
+def _capture_failure_snapshot():
+    """실패 직후 지금 SAP 화면의 구조를 dict로 반환한다. 세션을 못 얻거나 어떤 이유로든 실패하면
+    None — 절대 예외를 던지지 않는다(실패 보고 자체를 방해하면 안 됨)."""
+    t0 = time.time()
+    try:
+        session = _get_sap_session()
+    except Exception:
+        return None
+    snap = {}
+    try:
+        info = session.Info
+        for k, attr in (('tcode', 'Transaction'), ('program', 'Program'), ('screen', 'ScreenNumber')):
+            try:
+                snap[k] = str(getattr(info, attr))
+            except Exception:
+                pass
+    except Exception:
+        pass
+    try:
+        snap['windows'] = int(session.Children.Count)  # 2 이상이면 팝업이 남아있다는 뜻
+    except Exception:
+        pass
+    try:
+        sb = session.findById('wnd[0]/sbar')
+        snap['status'] = {'t': str(sb.MessageType), 'text': _snap_mask(sb.Text, 200)}
+    except Exception:
+        pass
+    nodes = []
+    try:
+        win_count = int(session.Children.Count)
+    except Exception:
+        win_count = 1
+    for wi in range(min(win_count, 3)):
+        try:
+            wnd = session.findById('wnd[%d]' % wi)
+        except Exception:
+            continue
+        try:
+            nodes.append(['GuiWindow', 'wnd[%d]' % wi, '', 1, _snap_mask(wnd.Text, 80)])
+        except Exception:
+            pass
+        queue = [(wnd, 0)]
+        while queue and len(nodes) < _SNAP_MAX_NODES and (time.time() - t0) < _SNAP_MAX_SECONDS:
+            node, depth = queue.pop(0)
+            try:
+                children = node.Children
+                count = children.Count
+            except Exception:
+                continue
+            for ci in range(count):
+                if len(nodes) >= _SNAP_MAX_NODES or (time.time() - t0) >= _SNAP_MAX_SECONDS:
+                    break
+                try:
+                    ch = children(ci)
+                    ctype = str(ch.Type)
+                    cid = str(ch.Id)
+                    rel = cid.split('ses[0]/', 1)[-1] if 'ses[0]/' in cid else cid
+                    try:
+                        chg = 1 if ch.Changeable else 0
+                    except Exception:
+                        chg = -1
+                    rec = [ctype, rel, str(getattr(ch, 'Name', '') or ''), chg]
+                    if ctype in _SNAP_CAPTION_TYPES:
+                        try:
+                            rec.append(_snap_mask(ch.Text, 60))
+                        except Exception:
+                            pass
+                    elif ctype == 'GuiShell':
+                        try:  # ALV 그리드는 행/열 수와 컬럼 기술명만(값 없음)
+                            rec.append({'rows': int(ch.RowCount), 'cols': [str(c) for c in list(ch.ColumnOrder)[:30]]})
+                        except Exception:
+                            pass
+                    nodes.append(rec)
+                    if ctype not in _SNAP_SKIP_DESCEND and depth < 8:
+                        queue.append((ch, depth + 1))
+                except Exception:
+                    continue
+    snap['tree'] = nodes
+    snap['truncated'] = len(nodes) >= _SNAP_MAX_NODES or (time.time() - t0) >= _SNAP_MAX_SECONDS
+    # 크기 상한 — 넘으면 트리를 앞에서부터 줄인다
+    try:
+        while len(json.dumps(snap, ensure_ascii=False)) > _SNAP_MAX_BYTES and snap['tree']:
+            snap['tree'] = snap['tree'][:max(1, int(len(snap['tree']) * 0.8))]
+            snap['truncated'] = True
+    except Exception:
+        return None
+    snap['ms'] = int((time.time() - t0) * 1000)
+    return snap
+
+
+def _attach_failure_info(result):
+    """실패 결과(dict)에 stage/snapshot을 붙여 돌려준다 — 수집 실패는 절대 결과를 바꾸지 않는다."""
+    try:
+        if _CUR_STAGE[0]:
+            result['stage'] = _CUR_STAGE[0]
+        snap = _capture_failure_snapshot()
+        if snap:
+            result['snapshot'] = snap
+    except Exception:
+        pass
+    return result
+
+
 def main():
     try:
         import win32com.client  # noqa: F401  (설치 여부 확인용)
@@ -2384,13 +2536,15 @@ def main():
             result = print_po_via_zmm018(po_number, purchasing_org, plant)
         else:
             result = fetch_current_screen()
+        if isinstance(result, dict) and result.get('ok') is False:
+            _attach_failure_info(result)
         print(json.dumps(result, ensure_ascii=False))
     except RuntimeError as e:
-        print(json.dumps({'ok': False, 'error': str(e)}, ensure_ascii=False))
+        print(json.dumps(_attach_failure_info({'ok': False, 'error': str(e)}), ensure_ascii=False))
     except Exception as e:
         import traceback
         traceback.print_exc(file=sys.stderr)
-        print(json.dumps({'ok': False, 'error': 'SAP 연결 중 예상치 못한 오류가 발생했습니다. (' + str(e) + ')'}, ensure_ascii=False))
+        print(json.dumps(_attach_failure_info({'ok': False, 'error': 'SAP 연결 중 예상치 못한 오류가 발생했습니다. (' + str(e) + ')'}), ensure_ascii=False))
 
 
 if __name__ == '__main__':

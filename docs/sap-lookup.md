@@ -1133,3 +1133,6 @@ Shortcut, `-system=/-client=/-user=/-pw=` 옵션으로 실행+로그인+특정 �
   무리만 안 가면 ID/PW 자동 로그인도 괜찮다"고 확인했으므로, 구현 시 mail_config.json/
   telegram_config.json과 동일하게 `/all/encrypt`·`/all/decrypt` 패턴으로 로컬 암호화 저장하는
   구조를 그대로 재사용할 것(관리자 비밀번호 체계는 위 "🔑 관리자 비밀번호" 절 참고).
+
+
+  - **⚠️ 정정(2026-09-21, Phase 10)**: 바로 위 "적용 실패 사유를 결과 헤더에 남기는 수정"은 이 문서(옛 CLAUDE.md)에만 기록됐고 **실제 `sap_bridge_32.py`에는 반영되지 않은 상태**였다(커밋 이력으로 확인 — 그래서 레이아웃이 안 먹어도 사유를 알 수 없었음). 2026-09-21에 실제로 구현함: `_sap_select_alv_layout`이 `(성공여부, 진단)`을 반환하고 `fetch_bom`이 `[레이아웃: "X" 적용 실패(사유) — 화면 기본값 사용]` 헤더와 `layoutApplied/layoutRequested/layoutDiag`를 돌려준다(이슈 수집이 `degraded_layout`로 기록). **라이브 SAP 검증은 아직 안 됨.** 교훈: 문서에 "수정함"이라고 적힌 것도 코드/커밋으로 다시 확인할 것.

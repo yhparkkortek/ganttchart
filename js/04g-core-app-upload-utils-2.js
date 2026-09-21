@@ -1611,6 +1611,7 @@ ${question}
                     <span style="font-size:10px; color:#aaa; margin-right:2px;">도움이 되었나요?</span>
                     <button onclick="window.saveGanttQaFeedback('${m.uid}','good')" style="font-size:11px; padding:2px 8px; border:1px solid #a8dab8; background:${goodActive ? '#c9ecd3' : '#e6f6ea'}; color:#1f7a3d; border-radius:5px; font-weight:bold; cursor:pointer;">👍</button>
                     <button onclick="window.saveGanttQaFeedback('${m.uid}','bad')" style="font-size:11px; padding:2px 8px; border:1px solid #eeb0ac; background:${badActive ? '#f5c2bd' : '#fbe4e2'}; color:#b1432f; border-radius:5px; font-weight:bold; cursor:pointer;">👎</button>
+                    <button onclick="window._issueOpenReport && window._issueOpenReport('${m.uid}')" title="문제 신고 — 팀 이슈 리포트에 반영됩니다" style="font-size:11px; padding:2px 8px; border:1px solid #ffe08a; background:#fff8e6; color:#7a5210; border-radius:5px; font-weight:bold; cursor:pointer;">🚩</button>
                     ${badActive ? `<button onclick="window.openQaImproveCommentModal('${m.uid}')" style="font-size:10.5px; padding:2px 8px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer; white-space:nowrap;">💡 의견</button>` : ''}
                 </div>`;
             })() : '';

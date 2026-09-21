@@ -19,3 +19,7 @@ env/
 .vscode/
 .idea/
 *.swp
+
+# Phase 10 이슈 수집 로컬 우편함
+issue_events.jsonl
+issue_events.cursor

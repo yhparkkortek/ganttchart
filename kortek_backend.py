@@ -52,7 +52,7 @@ from datetime         import datetime, timezone, timedelta
 from urllib.parse     import quote
 
 import requests
-from flask      import Flask, request, jsonify
+from flask      import Flask, request, jsonify, g
 from flask_cors import CORS
 
 try:
@@ -1541,6 +1541,269 @@ def _approval_group_name(matkl):
     return (entry.get('sobun') or '') if entry else ''
 
 
+# ══════════════════════════════════════════════════════════════
+# 🆕 [2026-09-21, Phase 10] SAP/구매오더/AI 문답 이슈 수집 — 로컬 우편함(issue_events.jsonl)
+#    설계: docs/phase10-issue-learning-design.md
+#    - /sap-*, /po-* 호출 중 "실패·느림·레이아웃 미적용"만 한 줄씩 기록(성공은 기록 안 함).
+#    - 백엔드는 Drive 토큰이 없으므로 여기에 쌓아두고, 브라우저가 /issue-drain으로 가져가
+#      Drive에 올린 뒤 /issue-ack로 확정한다(최소 1회 전달 + 이벤트 id로 중복 제거).
+#    - 저장 전 마스킹(자재번호·사업자번호·메일·사용자 경로). 수집 코드는 어떤 경우에도 본 기능을
+#      방해하지 않는다(모든 구간 try/except).
+# ══════════════════════════════════════════════════════════════
+_ISSUE_FILE        = os.path.join(BASE_DIR, 'issue_events.jsonl')
+_ISSUE_CURSOR_FILE = os.path.join(BASE_DIR, 'issue_events.cursor')
+_ISSUE_EXPORT_DIR  = r'C:\SAP_DMS\SAP이슈'
+_ISSUE_MAX_BYTES   = 5 * 1024 * 1024
+_ISSUE_SLOW_MS     = 60000
+_ISSUE_LOCK        = threading.Lock()
+_ISSUE_ACTIVE      = {}   # rid -> {'overlap': bool}  (SAP 호출이 동시에 겹쳤는지 — 세션 충돌 의심 표시용)
+_ISSUE_SKIP_MASK_KEYS = {'id', 'ts', 'rid', 'route', 'kind', 'domain', 'v', 'stage', 'tcode', 'program', 'screen', 'user'}
+
+
+def _issue_file_hash(name):
+    try:
+        with open(os.path.join(BASE_DIR, name), 'rb') as f:
+            return hashlib.sha1(f.read().replace(b'\r\n', b'\n')).hexdigest()[:8]
+    except Exception:
+        return ''
+
+
+_ISSUE_ENV = {'backend': _issue_file_hash('kortek_backend.py'), 'bridge': _issue_file_hash('sap_bridge_32.py')}
+
+
+def _issue_mask(text, limit=400):
+    """저장 전 마스킹 — 사업자번호/5자리↑ 숫자열/메일/사용자 경로."""
+    try:
+        t = str(text)
+        t = re.sub(r'\b\d{3}-?\d{2}-?\d{5}\b', '#biz', t)
+        t = re.sub(r'\d{5,}', '#', t)
+        t = re.sub(r'[\w.+-]+@[\w-]+\.[\w.-]+', '#mail', t)
+        t = re.sub(r'(?i)([A-Z]:[\\/]Users[\\/])[^\\/\s"\']+', r'\1<user>', t)
+        return t[:limit]
+    except Exception:
+        return ''
+
+
+def _issue_norm(text):
+    """군집 시그니처용 정규화 — 마스킹 + 따옴표 안 문자열/공백 정리."""
+    t = _issue_mask(text, 300)
+    t = re.sub(r'"[^"]*"', '"?"', t)
+    t = re.sub(r"'[^']*'", "'?'", t)
+    return re.sub(r'\s+', ' ', t).strip()[:120]
+
+
+def _issue_mask_deep(obj, key=None):
+    if isinstance(obj, str):
+        return obj if key in _ISSUE_SKIP_MASK_KEYS else _issue_mask(obj)
+    if isinstance(obj, dict):
+        return {k: _issue_mask_deep(v, k) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_issue_mask_deep(v, key) for v in obj]
+    return obj
+
+
+def _issue_params():
+    """요청 파라미터의 "형태"만(값이 아니라 개수/열거형) — 기밀 값은 저장하지 않는다."""
+    p = {}
+    try:
+        for k in ('material', 'materials'):
+            v = request.args.get(k)
+            if v:
+                p['materialCount'] = len([x for x in re.split(r'[,\s]+', v) if x])
+        for k in ('tcode', 'explosion', 'show_price', 'show_location', 'type', 'loc', 'plant', 'layout'):
+            v = request.args.get(k)
+            if v is not None:
+                p[k] = v[:40]
+        pat = request.args.get('pattern')
+        if pat:
+            p['patternLen'] = len(pat)
+            p['patternHasWildcard'] = '*' in pat
+        if request.is_json:
+            j = request.get_json(silent=True) or {}
+            if isinstance(j.get('items'), list):
+                p['itemCount'] = len(j['items'])
+            if isinstance(j.get('rows'), list):
+                p['rowCount'] = len(j['rows'])
+            for k in ('currency', 'plant', 'purchasingOrg'):
+                if j.get(k):
+                    p[k] = str(j[k])[:20]
+    except Exception:
+        pass
+    return p
+
+
+def _issue_append(event):
+    """이벤트 1건을 우편함에 추가. 5MB 초과 시 오래된 절반을 버린다."""
+    try:
+        line = json.dumps(_issue_mask_deep(event), ensure_ascii=False) + '\n'
+        with _ISSUE_LOCK:
+            try:
+                if os.path.exists(_ISSUE_FILE) and os.path.getsize(_ISSUE_FILE) > _ISSUE_MAX_BYTES:
+                    with open(_ISSUE_FILE, 'rb') as f:
+                        lines = f.read().splitlines(True)
+                    with open(_ISSUE_FILE, 'wb') as f:
+                        f.writelines(lines[len(lines) // 2:])
+                    with open(_ISSUE_CURSOR_FILE, 'w') as f:
+                        f.write('0')  # 오프셋이 바뀌므로 커서 초기화(중복은 id로 제거됨)
+            except Exception:
+                pass
+            with open(_ISSUE_FILE, 'ab') as f:
+                f.write(line.encode('utf-8'))
+    except Exception as e:
+        print(f"[이슈 수집] 기록 실패(무시): {e}")
+
+
+def _issue_read_cursor():
+    try:
+        with open(_ISSUE_CURSOR_FILE, 'r') as f:
+            return max(0, int(f.read().strip() or '0'))
+    except Exception:
+        return 0
+
+
+@app.before_request
+def _issue_before_request():
+    try:
+        path = request.path
+        if request.method == 'OPTIONS' or not (path.startswith('/sap-') or path.startswith('/po-')):
+            return None
+        g._issue_t0 = time.time()
+        g._issue_rid = (request.args.get('_rid') or '')[:40] or ('b_' + uuid.uuid4().hex[:8])
+        with _ISSUE_LOCK:
+            overlap = bool(_ISSUE_ACTIVE)
+            for st in _ISSUE_ACTIVE.values():
+                st['overlap'] = True
+            _ISSUE_ACTIVE[g._issue_rid] = {'overlap': overlap}
+    except Exception:
+        pass
+    return None
+
+
+@app.after_request
+def _issue_after_request(resp):
+    try:
+        rid = getattr(g, '_issue_rid', None)
+        if not rid:
+            return resp
+        with _ISSUE_LOCK:
+            st = _ISSUE_ACTIVE.pop(rid, {'overlap': False})
+        dur_ms = int((time.time() - getattr(g, '_issue_t0', time.time())) * 1000)
+        data = resp.get_json(silent=True) if (resp.mimetype or '').endswith('json') else None
+        ok = data.get('ok') if isinstance(data, dict) else None
+        path = request.path
+        if resp.status_code >= 400 or ok is False:
+            kind = 'call_fail'
+        elif isinstance(data, dict) and data.get('layoutApplied') is False:
+            kind = 'degraded_layout'
+        elif dur_ms > _ISSUE_SLOW_MS:
+            kind = 'call_slow'
+        else:
+            return resp
+        err = ''
+        if isinstance(data, dict):
+            err = str(data.get('error') or data.get('layoutDiag') or '')
+        elif resp.status_code >= 400:
+            err = f'HTTP {resp.status_code} (JSON 아님)'
+        snap = getattr(g, 'issue_snap', None)
+        event = {
+            'id': 'ev_%s_%s' % (format(int(time.time() * 1000), 'x'), uuid.uuid4().hex[:4]),
+            'v': 1,
+            'ts': datetime.now(KST).isoformat(timespec='seconds'),
+            'domain': 'po' if path.startswith('/po-') else 'sap',
+            'kind': kind,
+            'rid': rid,
+            'route': path,
+            'params': _issue_params(),
+            'result': {'ok': ok, 'http': resp.status_code, 'durMs': dur_ms,
+                       'errorRaw': _issue_mask(err), 'errorNorm': _issue_norm(err)},
+            'env': dict(_ISSUE_ENV),
+        }
+        if isinstance(data, dict) and 'layoutApplied' in data:
+            event['result']['layout'] = {'applied': data.get('layoutApplied'), 'requested': data.get('layoutRequested'), 'diag': data.get('layoutDiag')}
+        if getattr(g, 'issue_stage', None):
+            event['stage'] = g.issue_stage
+        if snap:
+            event['snapshot'] = snap
+        if st.get('overlap'):
+            event['flags'] = ['concurrent_session_suspect']
+        _issue_append(event)
+    except Exception as e:
+        print(f"[이슈 수집] after_request 실패(무시): {e}")
+    return resp
+
+
+@app.route('/issue-drain', methods=['GET'])
+def issue_drain():
+    """브라우저가 미전달 이벤트를 가져간다. 응답의 next를 /issue-ack로 돌려줘야 확정된다."""
+    try:
+        mx = max(1, min(int(request.args.get('max', '200')), 500))
+        cursor = _issue_read_cursor()
+        events, consumed = [], cursor
+        with _ISSUE_LOCK:
+            if not os.path.exists(_ISSUE_FILE):
+                return jsonify({'ok': True, 'events': [], 'next': 0})
+            size = os.path.getsize(_ISSUE_FILE)
+            if cursor > size:
+                cursor = consumed = 0
+            with open(_ISSUE_FILE, 'rb') as f:
+                f.seek(cursor)
+                while len(events) < mx:
+                    raw = f.readline()
+                    if not raw:
+                        break
+                    consumed += len(raw)
+                    try:
+                        events.append(json.loads(raw.decode('utf-8')))
+                    except Exception:
+                        continue
+        return jsonify({'ok': True, 'events': events, 'next': consumed})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/issue-ack', methods=['POST'])
+def issue_ack():
+    """업로드가 끝난 이벤트까지 커서를 확정. 전부 소진했으면 우편함 파일을 비운다."""
+    try:
+        cur = int((request.get_json(silent=True) or {}).get('cursor', 0))
+        with _ISSUE_LOCK:
+            size = os.path.getsize(_ISSUE_FILE) if os.path.exists(_ISSUE_FILE) else 0
+            cur = max(0, min(cur, size))
+            if size and cur >= size:
+                open(_ISSUE_FILE, 'wb').close()
+                cur = 0
+            with open(_ISSUE_CURSOR_FILE, 'w') as f:
+                f.write(str(cur))
+        return jsonify({'ok': True, 'cursor': cur})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+@app.route('/issue-export', methods=['POST'])
+def issue_export():
+    """이슈 리포트(군집 요약 JSON)를 C:\\SAP_DMS\\SAP이슈\\ 에 저장 — 브라우저 다운로드가 아니라
+    서버 저장으로 다른 SAP 기능들과 저장 위치를 통일한다."""
+    try:
+        body = request.get_json(silent=True) or {}
+        data = body.get('data')
+        if data is None:
+            return jsonify({'ok': False, 'error': 'data가 없습니다.'}), 400
+        name = re.sub(r'[^0-9A-Za-z_.\-가-힣]', '_', str(body.get('fileName') or ''))[:80]
+        if not name.lower().endswith('.json'):
+            name = (name or 'digest_' + datetime.now(KST).strftime('%Y%m%d')) + '.json'
+        os.makedirs(_ISSUE_EXPORT_DIR, exist_ok=True)
+        path = os.path.join(_ISSUE_EXPORT_DIR, name)
+        with open(path, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=1)
+        try:
+            os.startfile(_ISSUE_EXPORT_DIR)
+        except Exception:
+            pass
+        return jsonify({'ok': True, 'path': path})
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 def _run_sap_bridge(extra_args, timeout, log_prefix):
     """sap_bridge_32.py를 32비트 Python 서브프로세스로 실행하고 JSON 결과를 돌려주는 공용
     헬퍼 — /sap-fetch와 /sap-open-document가 똑같이 쓴다(2026-09-14, 두 번째 엔드포인트
@@ -1571,6 +1834,12 @@ def _run_sap_bridge(extra_args, timeout, log_prefix):
         print(f"[{log_prefix} 실패] sap_bridge_32.py 출력 JSON 파싱 실패. stdout: {proc.stdout!r} stderr: {proc.stderr!r}")
         return {'ok': False, 'error': f'{log_prefix} 결과를 해석하지 못했습니다. 백엔드 콘솔 창의 로그를 확인하세요.'}, 500
 
+    try:  # Phase 10: 브라우저 응답에는 싣지 않고 이슈 이벤트 로그로만 보낸다
+        if isinstance(data, dict):
+            g.issue_snap = data.pop('snapshot', None)
+            g.issue_stage = data.pop('stage', None)
+    except Exception:
+        pass
     if data.get('ok'):
         print(f"[{log_prefix}] {data}")
     else:

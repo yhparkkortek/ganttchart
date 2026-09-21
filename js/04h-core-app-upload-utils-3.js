@@ -2665,6 +2665,7 @@ ${docsJson}`;
             window._ganttQaApprovalDraft || window._ganttQaSapDocClarify ||
             window._ganttQaPendingChoiceDropdown || window._ganttQaPendingConfirmButtons);
         if (hasAnyActiveQaDraft && INTERRUPT_RE.test(question)) {
+            try { window._issueLogInterrupt && window._issueLogInterrupt(); } catch (e) { /* Phase 10 수집 — 실패해도 무시 */ }
             window._ganttQaPoDraft = null;
             window._ganttQaBomDraft = null;
             window._ganttQaBomResolvedOptions = null;
