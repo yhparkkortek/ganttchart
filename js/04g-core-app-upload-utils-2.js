@@ -1683,6 +1683,7 @@ ${question}
                 : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
+                ${(!isUser && m.route && window._qaRouteBadgeHtml) ? `<div style="max-width:82%; width:100%;">${window._qaRouteBadgeHtml(m)}</div>` : ''}
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
                 ${reaskHintHtml ? `<div style="max-width:82%; width:100%;">${reaskHintHtml}</div>` : ''}
                 ${mailDraftHtml ? `<div style="max-width:82%; width:100%;">${mailDraftHtml}</div>` : ''}

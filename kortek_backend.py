@@ -1927,6 +1927,19 @@ def sap_download_documents_by_pattern():
     return jsonify(data), status
 
 
+@app.route('/sap-material-pattern', methods=['GET'])
+def sap_material_pattern():
+    # 💡 [2026-09-21, Phase 11] "SMAJ12A* 조회해줘"처럼 자재내역(MAKT-MAKTX) 와일드카드 패턴만 주고 "매치되는
+    #    자재 목록"을 보고 싶을 때 — 다운로드 없이 목록(자재번호+자재내역)만 돌려준다. 실제 SAP 조작은 이미
+    #    실사용 검증된 sap_bridge_32.py의 resolve_materials_by_description_pattern()(MM60 F4 검색도움말을
+    #    읽기만 하고 취소 — SAP 데이터에 영향 없음)을 그대로 재사용한다.
+    pattern = (request.args.get('pattern') or '').strip()
+    if not pattern:
+        return jsonify({'ok': False, 'error': '검색 패턴(pattern 파라미터)이 필요합니다. 예: /sap-material-pattern?pattern=SMAJ12A*'}), 400
+    data, status = _run_sap_bridge(['resolve_pattern', pattern], 90, 'SAP 자재내역 패턴 조회')
+    return jsonify(data), status
+
+
 @app.route('/sap-bom', methods=['GET'])
 def sap_bom():
     # 💡 [2026-09-15 신규] "SAP에서 502572 BOM 열어서 엑셀로 출력해줘"처럼 질문에 "BOM"과

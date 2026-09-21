@@ -138,6 +138,7 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 | 8 | 토픽 오염 감지·AI 자가진단 (`_tcGetScore`, `_tcRunDiagnosis`, `_tcApplyFix`) | `27-topic-contamination.js` |
 | 9 | 완전 미분류 메일 군집 감지 → 신규 프로젝트 생성 제안 (`_ncdRecordCandidate`, `_ncdCheckAndSuggest`) | `29-new-project-cluster-detect.js` |
 | 10 | SAP·AI 문답 이슈 수집(실패 자동 기록+화면 스냅샷+🚩 신고) → Drive 샤드 → 관리자 군집 리포트 → 내보내 Claude가 진단 (`docs/phase10-issue-learning-design.md`) | `30-issue-collector.js`, `31-issue-report.js`, `kortek_backend.py`(이슈 수집 블록), `sap_bridge_32.py`(스냅샷) |
+| 11 | AI 문답 질문 라우터(SAP/프로젝트/일반 분류, 칩·접두어·배지·다시 분류) + SAP 적립학습(미지원 요청 적립·🚩 새 기능 요청·AI 추론 원장) (`docs/qa-router-and-sap-learning.md`) | `32-sap-capabilities.js`, `33-qa-router.js`, `31-issue-report.js`(학습 탭), `30-issue-collector.js`(🚩 분류) |
 
 ## 📚 상세 문서(`docs/`) 색인 — 해당 작업을 할 때만 읽을 것
 
@@ -202,6 +203,11 @@ Telegram 알람 + 주간 업무 보고 + 캘린더 뷰를 하나의 페이지에
 ### `docs/phase10-issue-learning-design.md` — 📊 Phase 10 이슈 수집/군집/학습 루프
 - **읽을 때**: 이슈 수집·🚩 신고·이슈 리포트·화면 스냅샷·`issue_events.jsonl`·`/issue-*` 엔드포인트를 만들거나 고칠 때, "이슈 정리해줘" 요청(내보낸 `C:\SAP_DMS\SAP이슈\digest_*.json` 읽기).
 - 수집은 본 기능을 절대 방해하면 안 됨(전 구간 try/catch, 원본 fetch 결과 그대로). 요청 상관 id는 **쿼리 `_rid`**(커스텀 헤더 금지 — 백엔드 CORS가 `Content-Type`만 허용해 구버전이 깨짐). 저장 전 마스킹(자재번호·사업자번호·메일·사용자경로), 스냅샷은 구조만(필드 값 없음), AI 문답 답변 본문은 저장 안 함. Drive는 `Backups/SAP_Issues/`에 사용자·월별 샤드(동시 쓰기 충돌 없음). 즉시 끄기: `localStorage.gantt_issue_collect_off='1'`.
+
+### `docs/qa-router-and-sap-learning.md` — 🧭 질문 라우터 + SAP 적립학습 (Phase 11)
+- **읽을 때**: AI 문답 질문 분류(SAP/프로젝트/일반), 칩·접두어·배지, 미지원 SAP 요청 처리, SAP 기능 카탈로그, 학습 적립 탭/원장, "이슈 정리해줘"에서 `learning`(신규 기능 후보) 읽기.
+- **라우터는 확실할 때만 동작을 바꾸고 애매하면 기존(legacy) 경로 그대로.** 새 분류 규칙은 `_qaClassify` 한 곳에만. 지원하지 않는 SAP 요청에 프로젝트 데이터로 **지어내서 답하지 말 것**(안내 + 적립).
+- **새 SAP 기능을 구현하면 `SAP_CAPABILITIES`(`js/32`)에 항목 추가**(kw는 그 기능만의 구체적 단어만 — 조회/자재/문서 같은 일반어 금지) 하고 리포트 학습 탭에서 `구현됨` 처리. 신규 기능의 필드 ID는 라이브 트리 덤프 1회 또는 사용자의 "기록 및 재생" 매크로로 확정(추측은 틀린 전례 있음).
 
 ### 백엔드
 | 파일 | 역할 |

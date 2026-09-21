@@ -13,7 +13,8 @@
     var RECENT_DAYS = 14;
     var LOAD_MONTHS = 3;
     var REACTION_KINDS = { user_flag: 1, user_thumbs_down: 1, reask: 1, interrupt: 1 };
-    var _state = { events: [], clusters: [], resolved: {}, resolvedFileId: null, folderId: null, loadedAt: null };
+    var LEARN_KINDS = { sap_unsupported: 1, sap_feature_request: 1, route_wrong: 1, reroute: 1 };   // Phase 11 — 학습 적립 탭이 다루는 종류(이슈 군집에서는 제외)
+    var _state = { events: [], clusters: [], resolved: {}, resolvedFileId: null, folderId: null, loadedAt: null, ledger: {}, learn: [], view: 'issues' };
 
     function t(ko, en) { return window._t ? window._t(ko, en) : ko; }
     function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
@@ -26,7 +27,7 @@
 
     // ── 군집 (순수 함수) ───────────────────────────────────────────────
     function sigOf(e) {
-        if (REACTION_KINDS[e.kind]) return null;   // 반응 이벤트는 호출 군집에 연결하거나 별도 군집
+        if (REACTION_KINDS[e.kind] || LEARN_KINDS[e.kind]) return null;   // 반응 이벤트는 호출 군집에 연결하거나 별도 군집, 학습 이벤트는 학습 탭에서
         var r = e.result || {};
         return [e.domain || '', e.kind || '', e.route || '', e.stage || '', String(r.errorNorm || '').slice(0, 80), (e.snapshot && e.snapshot.tcode) || ''].join('|');
     }
@@ -130,9 +131,12 @@
         _state.events = events;
         _state.resolvedFileId = resFile ? resFile.id : null;
         _state.resolved = resFile ? (await driveJson(token, resFile.id)) || {} : {};
+        var learnFile = files.filter(function (f) { return f.name === 'sap_learning.json'; })[0] || null;
+        _state.ledger = learnFile ? (await driveJson(token, learnFile.id)) || {} : {};
         _state.loadedAt = new Date().toISOString();
         _state.shardCount = shards.length;
         _state.clusters = window._issueCluster(events, _state.resolved);
+        refreshLearn();
     }
     async function saveResolved() {
         var token = getToken(); var payload = JSON.stringify(_state.resolved);
@@ -180,7 +184,7 @@
     window._issueExportDigest = async function () {
         var d = new Date(), p = function (n) { return n < 10 ? '0' + n : '' + n; };
         var fileName = 'digest_' + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + '.json';
-        var digest = buildDigest(), localPath = null, localErr = null, driveOk = false, driveErr = null;
+        var digest = buildDigest(); digest.learning = learnDigest(); var localPath = null, localErr = null, driveOk = false, driveErr = null;
         try {
             var r = await fetch(API + '/issue-export', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ fileName: fileName, data: digest }) });
             if ((r.headers.get('content-type') || '').indexOf('json') < 0) throw new Error(t('백엔드가 구버전이거나 꺼져 있습니다 — kortek_backend.bat을 다시 실행해주세요.', 'Backend is outdated or offline — restart kortek_backend.bat.'));
@@ -204,7 +208,7 @@
 
     // ── 화면 ───────────────────────────────────────────────────────────
     function fmt(ts) { try { var d = new Date(ts); return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); } catch (e) { return ts || ''; } }
-    function render() {
+    function renderIssues() {
         var body = document.getElementById('issue-rpt-body'); if (!body) return;
         var cs = _state.clusters;
         var head = '<div style="font-size:12px; color:#666; margin-bottom:8px;">' +
@@ -260,6 +264,155 @@
         catch (e) { if (body) body.innerHTML = '<div style="padding:30px; text-align:center; color:#c92a2a;">' + esc(e.message || e) + '</div>'; }
     };
 
+    // ── Phase 11: SAP 학습 적립 (설계: docs/qa-router-and-sap-learning.md) ─────────────────────
+    // "지원하지 않는 SAP 요청 / 🚩 새 기능 요청 / 질문 분류 교정"을 같은 종류끼리 묶어 수요순으로 쌓고,
+    // 기존 기능과의 유사도(변형 vs 신규)를 결정론적으로 판정한 뒤, 사람이 원할 때만 AI가 구현 가설을 추론한다.
+    // 결과(상태/가설)는 Drive sap_learning.json에 남아 세션·사람이 바뀌어도 이어진다 — Claude가 "이슈 정리해줘"로 읽는다.
+    var STATUS = { new: ['접수', 'New'], reviewing: ['검토중', 'Reviewing'], done: ['구현됨', 'Done'], hold: ['보류', 'On hold'] };
+
+    function learnVerdict(c) {
+        if (c.group === 'route') return { id: 'route', label: t('🧭 라우팅 교정', '🧭 Routing correction'), tip: t('질문 분류 규칙(33번 라우터)을 보강할 후보', 'Candidate to improve routing rules') };
+        if (c.topScore >= 0.6) return { id: 'variant', label: t('🔁 기존 기능의 변형', '🔁 Variant of existing'), tip: t('이미 있는 기능이지만 표현/파라미터를 못 알아들었을 가능성 — 트리거·라우팅 보강', 'Existing capability, maybe wording/params not recognized') };
+        if (c.topScore >= 0.3) return { id: 'similar', label: t('🔀 기존 기능과 유사', '🔀 Similar to existing'), tip: t('기존 기능을 확장하면 될 수 있음', 'May be an extension of an existing capability') };
+        return { id: 'new', label: t('🆕 신규 기능 후보', '🆕 New capability candidate'), tip: t('카탈로그에 없는 새 요청', 'Not in the catalog') };
+    }
+
+    /** events + ledger → 수요순 학습 군집. (순수 함수) */
+    window._issueLearnClusters = function (events, ledger) {
+        ledger = ledger || {};
+        var map = {};
+        (events || []).forEach(function (e) {
+            if (!LEARN_KINDS[e.kind]) return;
+            var p = e.params || {};
+            var group = (e.kind === 'reroute' || e.kind === 'route_wrong') ? 'route' : 'sap';
+            var sig = p.sig || '(sig 없음)';
+            var key = group + '|' + sig + (group === 'route' ? '|' + (p.from || p.routeCls || '') + '>' + (p.to || '') : '');
+            var c = map[key];
+            if (!c) c = map[key] = { key: key, group: group, sig: sig, count: 0, requests: 0, users: {}, first: e.ts, last: e.ts, kinds: {}, tsList: [], samples: [], notes: [], capVotes: {}, capTitles: {} };
+            c.count++;
+            if (e.kind === 'sap_feature_request') c.requests++;
+            c.users[e.user || '?'] = 1;
+            c.kinds[e.kind] = (c.kinds[e.kind] || 0) + 1;
+            c.tsList.push(e.ts);
+            if (e.ts < c.first) c.first = e.ts;
+            if (e.ts > c.last) c.last = e.ts;
+            if (c.samples.length < 3) c.samples.push({ ts: e.ts, user: e.user, q: p.q || '' });
+            if (e.user_note && c.notes.length < 3) c.notes.push(e.user_note);
+            (p.caps || []).forEach(function (cp) { c.capVotes[cp.id] = (c.capVotes[cp.id] || 0) + cp.score; c.capTitles[cp.id] = cp.title; });
+        });
+        var out = Object.keys(map).map(function (k) { return map[k]; });
+        out.forEach(function (c) {
+            c.userList = Object.keys(c.users); c.userCount = c.userList.length; delete c.users;
+            var best = null;
+            Object.keys(c.capVotes).forEach(function (id) { if (best === null || c.capVotes[id] > c.capVotes[best]) best = id; });
+            c.topCap = best; c.topCapTitle = best ? c.capTitles[best] : ''; c.topScore = best ? Math.round(c.capVotes[best] / c.count * 100) / 100 : 0;
+            c.verdict = learnVerdict(c);
+            c.score = c.userCount * (c.count + c.requests * 2);
+            var lg = ledger[c.key] || null; c.ledger = lg;
+            c.reRequested = !!(lg && lg.status === 'done' && lg.doneAt && c.tsList.some(function (ts) { return ts > lg.doneAt; }));
+        });
+        out.sort(function (a, b) { return b.score - a.score; });
+        return out;
+    };
+
+    function learnDigest() {
+        return (_state.learn || []).map(function (c, i) {
+            return { rank: i + 1, key: c.key, group: c.group, sig: c.sig, verdict: c.verdict.id, count: c.count, featureRequests: c.requests, users: c.userCount, first: c.first, last: c.last,
+                topCapability: c.topCap, topCapabilityScore: c.topScore, samples: c.samples, notes: c.notes,
+                status: c.ledger ? c.ledger.status : 'new', hypothesis: c.ledger ? c.ledger.hypothesis || null : null, reRequestedAfterDone: c.reRequested };
+        });
+    }
+
+    function buildInferPrompt(c) {
+        var samples = c.samples.map(function (s, i) { return (i + 1) + ') ' + s.q; }).join('\n');
+        var notes = c.notes.length ? c.notes.join(' / ') : '(없음)';
+        return '당신은 SAP GUI Scripting 자동화 전문가입니다. 아래는 사내 AI 문답에서 "지원하지 않는 SAP 요청"으로 적립된 같은 종류의 요청들과, 현재 이 앱이 지원하는 SAP 기능 목록입니다.\n' +
+            '이 요청이 (a) 기존 기능의 변형(표현이나 파라미터를 못 알아들은 것)인지 (b) 신규 기능인지 판정하고, 신규라면 가능성이 높은 트랜잭션 후보와 구현에 필요한 정보를 추론하세요. 추측은 추측이라고 표시하세요.\n\n' +
+            '[현재 지원 기능(JSON)]\n' + (window._qaCapabilityCompactJson ? window._qaCapabilityCompactJson() : '[]') + '\n\n' +
+            '[적립된 요청 — ' + c.count + '건, ' + c.userCount + '명, 새 기능 요청 ' + c.requests + '건]\n' + samples + '\n[사용자 메모] ' + notes + '\n' +
+            '[결정론적 유사도] 가장 비슷한 기존 기능: ' + (c.topCapTitle || '없음') + ' (' + c.topScore + ')\n\n' +
+            '반드시 JSON 하나로만 답하세요(설명 문장 금지):\n' +
+            '{"kind":"variant 또는 new","similarTo":["기존 기능 id"],"tcodeCandidates":["트랜잭션 코드"],"mode":"read 또는 write","neededFromUser":["구현에 필요한 정보 — 예: SAP GUI 기록 및 재생 매크로, 화면 캡처"],"steps":["구현 단계 추정"],"risk":"낮음 또는 중간 또는 높음","confidence":"상 또는 중 또는 하","summary":"한 문장 요약"}';
+    }
+    function parseJsonLoose(text) {
+        var s = String(text || ''), a = s.indexOf('{'), b = s.lastIndexOf('}');
+        if (a < 0 || b <= a) return null;
+        try { return JSON.parse(s.slice(a, b + 1)); } catch (e) { return null; }
+    }
+    async function saveLedger() {
+        var token = getToken();
+        if (!token) throw new Error(t('구글 드라이브 미연동', 'Google Drive not connected'));
+        var folderId = _state.folderId || await window._issueGetFolder(token);
+        await driveUpsertJson(token, folderId, 'sap_learning.json', _state.ledger);
+    }
+    function refreshLearn() { _state.learn = window._issueLearnClusters(_state.events, _state.ledger); }
+
+    window._issueLearnSetStatus = async function (i, st) {
+        var c = (_state.learn || [])[i]; if (!c) return;
+        try {
+            var prev = _state.ledger[c.key] || {};
+            _state.ledger[c.key] = Object.assign({}, prev, { status: st, at: new Date().toISOString(), by: window.currentUserName || '', doneAt: st === 'done' ? new Date().toISOString() : (prev.doneAt || null) });
+            await saveLedger(); refreshLearn(); render();
+        } catch (e) { alert(t('저장 실패: ', 'Save failed: ') + (e.message || e)); }
+    };
+    window._issueLearnInfer = async function (i) {
+        var c = (_state.learn || [])[i]; if (!c) return;
+        var key = window.getActiveAiKey && window.getActiveAiKey();
+        if (!key) { alert(t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력해주세요.', 'Please set your AI API key first.')); return; }
+        var btn = document.getElementById('issue-learn-infer-' + i); if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+        try {
+            var p = window.callAiBackend(key, buildInferPrompt(c), {});
+            var res = await (window._withTimeout ? window._withTimeout(p, 60000, t('AI 응답 시간 초과', 'AI timed out')) : p);
+            if (!res || !res.ok) throw (res && res.error) || new Error('AI 호출 실패');
+            var text = window._extractGanttQaAiText ? window._extractGanttQaAiText(res) : String(res.text || '');
+            var j = parseJsonLoose(text);
+            if (!j) throw new Error(t('AI 응답을 JSON으로 해석하지 못했습니다.', 'Could not parse the AI response as JSON.'));
+            var prev = _state.ledger[c.key] || { status: 'reviewing' };
+            _state.ledger[c.key] = Object.assign({}, prev, { status: prev.status === 'new' || !prev.status ? 'reviewing' : prev.status, hypothesis: Object.assign({}, j, { at: new Date().toISOString(), by: window.currentUserName || '' }) });
+            await saveLedger(); refreshLearn(); render();
+        } catch (e) { alert(t('AI 추론 실패: ', 'AI inference failed: ') + (e.message || e)); if (btn) { btn.disabled = false; btn.textContent = t('🤖 AI 추론', '🤖 Infer'); } }
+    };
+
+    function renderLearn() {
+        var body = document.getElementById('issue-rpt-body'); if (!body) return;
+        var cs = _state.learn || [];
+        var head = '<div style="font-size:12px; color:#666; margin-bottom:8px; line-height:1.5;">' + esc(t('지원하지 않는 SAP 요청 · 🚩 새 기능 요청 · 질문 분류 교정을 같은 종류끼리 묶어 수요순으로 보여줍니다. 구현하면 [구현됨]으로 표시하세요 — 그 뒤에도 같은 요청이 오면 🔁로 강조됩니다.', 'Unsupported SAP requests, feature requests and routing corrections grouped by intent. Mark Done after implementing; repeats afterwards are flagged.')) + '</div>';
+        if (!cs.length) { body.innerHTML = head + '<div style="padding:30px; text-align:center; color:#999;">' + esc(t('적립된 요청이 없습니다.', 'Nothing accumulated yet.')) + '</div>'; return; }
+        var rows = cs.map(function (c, i) {
+            var lg = c.ledger || {}, st = lg.status || 'new';
+            var opts = Object.keys(STATUS).map(function (k) { return '<option value="' + k + '"' + (k === st ? ' selected' : '') + '>' + esc(t(STATUS[k][0], STATUS[k][1])) + '</option>'; }).join('');
+            var samples = c.samples.map(function (s) { return '<div style="color:#555;">· ' + esc(s.q || '(질문 없음)') + ' <span style="color:#aaa;">' + esc(s.user || '') + ' ' + esc(fmt(s.ts)) + '</span></div>'; }).join('');
+            var notes = c.notes.length ? '<div style="margin-top:3px; color:#7a5210;">📝 ' + esc(c.notes.join(' / ')) + '</div>' : '';
+            var hyp = lg.hypothesis ? (function (h) {
+                return '<div style="margin-top:6px; padding:6px 8px; background:#f3f9ff; border:1px solid #cfe2f6; border-radius:6px; font-size:11.5px; line-height:1.55;">' +
+                    '<b>🤖 ' + esc(t('AI 추론', 'AI inference')) + '</b> (' + esc(h.confidence || '?') + ') — ' + esc(h.summary || '') +
+                    '<div>' + esc(t('종류', 'Kind')) + ': ' + esc(h.kind || '') + ' · ' + esc(t('모드', 'Mode')) + ': ' + esc(h.mode || '') + ' · ' + esc(t('위험', 'Risk')) + ': ' + esc(h.risk || '') + '</div>' +
+                    (h.tcodeCandidates && h.tcodeCandidates.length ? '<div>tcode: ' + esc(h.tcodeCandidates.join(', ')) + '</div>' : '') +
+                    (h.similarTo && h.similarTo.length ? '<div>' + esc(t('유사 기능', 'Similar')) + ': ' + esc(h.similarTo.join(', ')) + '</div>' : '') +
+                    (h.neededFromUser && h.neededFromUser.length ? '<div>' + esc(t('필요한 정보', 'Needed')) + ': ' + esc(h.neededFromUser.join(' / ')) + '</div>' : '') +
+                    (h.steps && h.steps.length ? '<div>' + esc(t('단계', 'Steps')) + ': ' + esc(h.steps.join(' → ')) + '</div>' : '') + '</div>';
+            })(lg.hypothesis) : '';
+            var reBadge = c.reRequested ? ' <span style="background:#ffe3e3; color:#c92a2a; padding:1px 6px; border-radius:8px; font-size:10.5px; font-weight:bold;">🔁 ' + esc(t('구현 후 재요청', 'Re-requested')) + '</span>' : '';
+            return '<tr style="border-top:1px solid #eee; vertical-align:top;">' +
+                '<td style="padding:6px; color:#999;">' + (i + 1) + '</td>' +
+                '<td style="padding:6px; white-space:nowrap;"><b>' + c.count + '</b>' + esc(t('건', '')) + ' / ' + c.userCount + esc(t('명', ' users')) + (c.requests ? '<div style="font-size:10.5px; color:#1971c2;">🚩 ' + esc(t('요청', 'req')) + ' ' + c.requests + '</div>' : '') + '<div style="font-size:10.5px; color:#999;">' + esc(fmt(c.last)) + '</div></td>' +
+                '<td style="padding:6px; word-break:break-all;">' + samples + notes + hyp + '</td>' +
+                '<td style="padding:6px; font-size:11.5px;" title="' + esc(c.verdict.tip) + '">' + esc(c.verdict.label) + reBadge + (c.topCapTitle ? '<div style="color:#888;">' + esc(t('가장 비슷: ', 'Closest: ')) + esc(c.topCapTitle) + ' (' + Math.round(c.topScore * 100) + '%)</div>' : '') + '</td>' +
+                '<td style="padding:6px; white-space:nowrap;"><select onchange="window._issueLearnSetStatus(' + i + ', this.value)" style="font-size:11px; padding:2px 4px;">' + opts + '</select> ' +
+                (c.group === 'sap' ? '<button id="issue-learn-infer-' + i + '" onclick="window._issueLearnInfer(' + i + ')" style="font-size:11px; padding:2px 8px; border:1px solid #a5c8f0; background:#e7f3ff; color:#1971c2; border-radius:5px; cursor:pointer;">' + esc(t('🤖 AI 추론', '🤖 Infer')) + '</button>' : '') + '</td></tr>';
+        }).join('');
+        body.innerHTML = head + '<table style="width:100%; border-collapse:collapse; font-size:12.5px;"><thead><tr style="text-align:left; color:#7a5210; background:#fff8e6;">' +
+            '<th style="padding:6px;">#</th><th style="padding:6px;">' + esc(t('수요', 'Demand')) + '</th><th style="padding:6px;">' + esc(t('요청 · 추론', 'Requests · inference')) + '</th><th style="padding:6px;">' + esc(t('판정', 'Verdict')) + '</th><th style="padding:6px;">' + esc(t('상태', 'Status')) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    }
+    window._issueRptView = function (v) { _state.view = v; render(); };
+    function renderTabs() {
+        var el = document.getElementById('issue-rpt-tabs'); if (!el) return;
+        var mk = function (id, label) { var on = (_state.view || 'issues') === id; return '<button onclick="window._issueRptView(\'' + id + '\')" style="font-size:12px; padding:5px 14px; border:1px solid ' + (on ? '#e0b64a' : '#e3e3e3') + '; border-bottom:none; background:' + (on ? '#fff8e6' : '#fafafa') + '; color:' + (on ? '#7a5210' : '#777') + '; font-weight:' + (on ? 'bold' : 'normal') + '; border-radius:8px 8px 0 0; cursor:pointer;">' + esc(label) + '</button>'; };
+        el.innerHTML = mk('issues', t('🧾 이슈 군집', '🧾 Issue clusters') + ' (' + (_state.clusters || []).length + ')') + ' ' + mk('learn', t('🧠 SAP 학습 적립', '🧠 SAP learning') + ' (' + (_state.learn || []).length + ')');
+    }
+
+    function render() { renderTabs(); if ((_state.view || 'issues') === 'learn') renderLearn(); else renderIssues(); }
+
     window.openIssueReportModal = function () {
         try {
             if (window.verifyAdminPassword && !window.verifyAdminPassword(t('🔒 이슈 리포트를 열려면 관리자 비밀번호를 입력하세요.\n(대/소문자 구분 없음)', '🔒 Enter the admin password to open the issue report.\n(case-insensitive)'))) return;
@@ -275,6 +428,7 @@
                     '<button id="issue-rpt-reload" onclick="window._issueRptReload()" style="font-size:11.5px; padding:4px 10px; border:1px solid #ffe08a; background:#fff; color:#7a5210; border-radius:6px; cursor:pointer;"></button>' +
                     '<button id="issue-rpt-export" onclick="window._issueExportDigest()" style="font-size:11.5px; padding:4px 10px; border:1px solid #ffe08a; background:#fff; color:#7a5210; border-radius:6px; cursor:pointer;"></button>' +
                     '<button onclick="event.stopPropagation(); document.getElementById(\'issue-rpt-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></span></div>' +
+                    '<div id="issue-rpt-tabs" style="padding:8px 18px 0; display:flex; gap:4px; border-bottom:1px solid #e0b64a;"></div>' +
                     '<div id="issue-rpt-body" style="padding:14px 18px; overflow:auto; flex:1;"></div></div>';
                 document.body.appendChild(modal);
                 if (window._makeDraggable) { try { window._makeDraggable('issue-rpt-box', 'issue-rpt-handle'); } catch (e) { /* ignore */ } }

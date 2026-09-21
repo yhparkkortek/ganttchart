@@ -2495,6 +2495,10 @@ def main():
             materials_str = sys.argv[3] if len(sys.argv) > 3 else ''
             materials = [m.strip() for m in materials_str.split(',') if m.strip()]
             result = download_documents_batch(materials, doc_type)
+        elif action == 'resolve_pattern':
+            pattern = sys.argv[2] if len(sys.argv) > 2 else ''
+            mats = resolve_materials_by_description_pattern(pattern)
+            result = {'ok': True, 'pattern': pattern, 'count': len(mats), 'materials': mats}
         elif action == 'download_documents_by_pattern':
             pattern = sys.argv[2] if len(sys.argv) > 2 else ''
             doc_type = sys.argv[3] if len(sys.argv) > 3 else 'P01'

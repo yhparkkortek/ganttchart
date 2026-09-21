@@ -2593,6 +2593,8 @@ ${docsJson}`;
         if (!input) return;
         let question = input.value.trim();
         if (!question) return;
+        // 🏷 [Phase 11] 접두어(#sap / #프로젝트 / #추론)로 분류를 직접 지정한 경우 — 접두어를 떼고 그 턴에만 적용
+        try { const _qpf = window._qaParsePrefix && window._qaParsePrefix(question); if (_qpf) { question = _qpf.question; window._qaTurnForced = _qpf.cls; if (!question) return; } else { window._qaTurnForced = null; } } catch (e) { /* 라우터 실패는 무시 */ }
         // 💡 [2026-09-15 신규] BOM 옵션 draft가 완료되면 "원래 질문"으로 되돌려(question 재대입)
         //    정상 AI 흐름을 재개한다(아래 BOM draft 블록 참고) — 그 경우 원래 질문은 이미 draft
         //    시작 시점에 한 번 히스토리에 들어가 있으므로, 아래(1965행 부근)에서 또 넣지 않도록
@@ -3546,6 +3548,15 @@ ${docsJson}`;
             return;
         }
 
+        // 🏷 [Phase 11] 질문 라우터 — 확실할 때만 동작을 바꾼다(SAP 패턴 조회/미지원 SAP 안내/일반 추론). 애매하면 기존 경로 그대로.
+        let _qaRoute = null;
+        try {
+            if (window._qaRouteAndMaybeHandle) {
+                const _rr = await window._qaRouteAndMaybeHandle(question, input);
+                if (_rr && _rr.handled) return;
+                _qaRoute = _rr && _rr.route;
+            }
+        } catch (e) { console.warn('[QA 라우터] 무시하고 기존 경로로 진행:', e); }
         const apiKey = window.getActiveAiKey ? window.getActiveAiKey() : null;
         if (!apiKey) { alert(window._t('먼저 [🤖 AI 도구 → ⚙️ 설정 → AI 분석 설정]에서 AI API 키를 입력하고 저장해주세요.', 'Please enter and save your AI API key in [🤖 AI Tools → ⚙️ Settings → AI Analysis Settings] first.')); return; }
 
@@ -3605,7 +3616,7 @@ ${docsJson}`;
         //    실어 보낸다(질문마다 항상 조회하면 느려지고 불필요하므로, 언급이 있을 때만 — CLAUDE.md
         //    "SAP/TIPR" 결정 사항 참고).
         let sapText = null;
-        if (window._questionMentionsSapIntent(question)) {
+        if (window._questionMentionsSapIntent(question) || (_qaRoute && _qaRoute.useSapContext)) {
             const pendingIdx2 = window._ganttQaHistory.length - 1;
             if (window._ganttQaHistory[pendingIdx2]) {
                 window._ganttQaHistory[pendingIdx2].text = '⏳ ' + window._t('SAP 화면 조회 중...', 'Reading SAP screen...');
@@ -3629,7 +3640,9 @@ ${docsJson}`;
             //    걸렸으면 코드/Drive 조회 문제, AI 응답 생성이 오래 걸렸으면 AI 백엔드(무료 등급
             //    등)가 느린 것이라 코드로는 더 손댈 부분이 없다는 뜻.
             const _tQa0 = performance.now();
-            const prompt = await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, manualOtherProjectTexts, sapText);
+            const prompt = (_qaRoute && _qaRoute.cls === 'general' && window._qaBuildGeneralPrompt)
+                ? window._qaBuildGeneralPrompt(qaQuestionForPrompt, priorHistory)   // 🏷 일반 추론 — 프로젝트 JSON 미포함(빠르고 싸며 데이터 없다는 오답 방지)
+                : await window._buildGanttQaPrompt(qaQuestionForPrompt, priorHistory, null, manualOtherProjectTexts, sapText);
             const _tQa1 = performance.now();
             const _ctxMs = Math.round(_tQa1 - _tQa0);
             console.info(`[AI 문답 계측] 컨텍스트/프롬프트 조립: ${_ctxMs}ms (프롬프트 길이: ${prompt.length.toLocaleString()}자)`);
@@ -3666,6 +3679,7 @@ ${docsJson}`;
             //    질문과 묶어서 기록하고, 나중에 [🤖 일괄개선]이 "무슨 질문에 어떻게 잘못 답했는지"를
             //    AI에게 다시 보여줄 수 있게 한다.
             window._ganttQaHistory.push({ role: 'ai', text: processed.text, uid: 'qamsg_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6), question: question, mailDraftId: processed.mailDraftId, noticeDraftId: processed.noticeDraftId, alarmDraftId: processed.alarmDraftId, ganttEditDraftId: processed.ganttEditDraftId, ganttAddDraftId: processed.ganttAddDraftId, openExecDraftId: processed.openExecDraftId });
+            if (_qaRoute) { try { window._ganttQaHistory[window._ganttQaHistory.length - 1].route = _qaRoute; } catch (e) { /* ignore */ } }
         } catch (e) {
             window._ganttQaHistory.pop();
             window._ganttQaHistory.push({ role: 'ai', text: '⚠️ 오류: ' + (e && e.message ? e.message : e), error: true });

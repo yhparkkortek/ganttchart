@@ -247,16 +247,28 @@
         var cut = Date.now() - (minutes || 10) * 60000;
         return (window._issueRecentSap || []).filter(function (x) { return x.ts >= cut; }).map(function (x) { return x.rid; });
     }
+    var LEARN_KINDS = { sap_feature_request: 1, route_wrong: 1, sap_unsupported: 1, reroute: 1 };   // Phase 11 — 리포트의 "SAP 학습 적립"이 다루는 종류
+    function msgOf(uid) {
+        try { var h = window._ganttQaHistory || []; for (var k = 0; k < h.length; k++) { if (h[k].uid === uid) return h[k]; } } catch (e) { /* ignore */ }
+        return null;
+    }
     /** AI 문답 반응 이벤트. 질문은 마스킹한 앞 160자만 저장(답변 본문은 저장하지 않음 — 사내 기밀 정책 미확정). */
     window._issueLogQa = function (kind, extra) {
         try {
             var x = extra || {};
             var rids = recentRids(10);
             var q = x.question != null ? x.question : (x.uid ? questionOf(x.uid) : '');
+            var params = { q: window._issueMask(q, 160), qLen: String(q || '').length, rids: rids, activeDraft: x.activeDraft || undefined };
+            if (x.cat) params.cat = x.cat;
+            var msg = x.uid ? msgOf(x.uid) : null;
+            if (msg && msg.route) params.routeCls = msg.route.cls;
+            if (LEARN_KINDS[kind]) {   // 같은 종류의 요청끼리 묶고(sig) 기존 SAP 기능과의 유사도(caps)를 남긴다 — 학습 적립용
+                params.sig = window._qaIntentSig ? window._qaIntentSig(params.q) : '';
+                params.caps = window._qaMatchCapabilities ? window._qaMatchCapabilities(q).slice(0, 3) : [];
+            }
             return window._issueLog({
-                domain: rids.length ? 'sap' : 'qa', kind: kind, rid: rids.length ? rids[rids.length - 1] : '', route: '',
-                params: { q: window._issueMask(q, 160), qLen: String(q || '').length, rids: rids, activeDraft: x.activeDraft || undefined },
-                user_note: x.note || undefined
+                domain: (kind === 'sap_feature_request' || rids.length) ? 'sap' : 'qa', kind: kind, rid: rids.length ? rids[rids.length - 1] : '', route: '',
+                params: params, user_note: x.note || undefined
             });
         } catch (e) { return null; }
     };
@@ -309,6 +321,7 @@
                     '<button onclick="event.stopPropagation(); document.getElementById(\'issue-report-modal\').style.display=\'none\'" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); color:var(--modal-icon-text); border-radius:6px; font-size:16px; cursor:pointer; width:28px; height:28px;">✕</button></div>' +
                     '<div style="padding:16px 18px;">' +
                     '<div id="issue-report-hint" style="font-size:12px; color:#666; margin-bottom:8px; line-height:1.5;"></div>' +
+                    '<select id="issue-report-cat" style="width:100%; box-sizing:border-box; padding:6px 8px; margin-bottom:8px; border:1px solid #ddd; border-radius:6px; font-size:12.5px;"></select>' +
                     '<textarea id="issue-report-note" rows="3" maxlength="200" style="width:100%; box-sizing:border-box; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:13px; resize:vertical;"></textarea>' +
                     '<div style="display:flex; justify-content:flex-end; gap:8px; margin-top:12px;">' +
                     '<button id="issue-report-cancel" style="padding:7px 16px; background:#f8f9fa; color:#666; border:1px solid #ccc; border-radius:6px; font-size:12.5px; cursor:pointer;"></button>' +
@@ -322,12 +335,19 @@
                 '어떤 점이 문제였나요? 짧게 적어주세요(선택). 자재번호 등 숫자·이메일은 저장 전에 자동으로 가려집니다. 팀 이슈 리포트에 반영됩니다.',
                 'What went wrong? A short note is enough (optional). Long numbers and emails are masked before saving. It will appear in the team issue report.');
             document.getElementById('issue-report-note').value = '';
+            var catEl = document.getElementById('issue-report-cat'), noteEl = document.getElementById('issue-report-note');
+            catEl.innerHTML = '<option value="flag">' + t('답변이 틀렸거나 이상함', 'The answer was wrong or odd') + '</option>' +
+                '<option value="route">' + t('질문을 잘못 이해함 (SAP/프로젝트/추론 분류)', 'Misunderstood the question type (SAP/project/general)') + '</option>' +
+                '<option value="feature">' + t('🏭 SAP에서 이것도 해줬으면 (새 기능 요청)', '🏭 Please add this SAP capability (feature request)') + '</option>';
+            var setPh = function () { noteEl.placeholder = catEl.value === 'feature' ? t('어느 화면(tcode)에서 어떻게 하시는지 적어주세요 — 예: MB51에서 자재번호로 이동내역 조회', 'Which screen (tcode) and steps? e.g. MB51 material movements by material') : ''; };
+            catEl.onchange = setPh; setPh();
             document.getElementById('issue-report-cancel').textContent = t('취소', 'Cancel');
             document.getElementById('issue-report-submit').textContent = t('신고', 'Report');
             document.getElementById('issue-report-cancel').onclick = function () { modal.style.display = 'none'; };
             document.getElementById('issue-report-submit').onclick = function () {
                 var note = document.getElementById('issue-report-note').value || '';
-                window._issueLogQa('user_flag', { uid: uid, note: note });
+                var kindMap = { flag: 'user_flag', route: 'route_wrong', feature: 'sap_feature_request' };
+                window._issueLogQa(kindMap[catEl.value] || 'user_flag', { uid: uid, note: note, cat: catEl.value });
                 modal.style.display = 'none';
                 scheduleFlush(3000);
                 if (window.showToast) window.showToast(t('🚩 신고가 접수되었습니다. 팀 이슈 리포트에 반영됩니다.', '🚩 Reported. It will appear in the team issue report.'), 'info');
