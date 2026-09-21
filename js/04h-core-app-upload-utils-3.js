@@ -857,13 +857,14 @@ ${docsJson}`;
         )});
     };
 
-    // 🔽 [2026-09-18 설계 변경, 사용자 요청] 프로젝트코드/사번/요청사유/목적 4항목은 원래
-    // "모든 문서에 공통"이라고 가정하고 배치 전체(pd)에서 딱 한 번만 물었는데, 사용자가
-    // "복수 발주서라면 필수 입력값이 전부 다를 것으로 판단하는 게 기본값이어야 한다 — 값이
-    // 겹치는 경우가 오히려 드물다"고 명확히 정정함. 그래서 이 4항목은 이제 **문서(doc)별로
-    // 따로** 받는 것을 기본으로 하고, 실제로 값이 같은 드문 경우를 위해 "전체 동일: ..."
-    // 한 줄 답변 지름길만 남긴다(반대 방향이 아니라 — "공통이 디폴트, 예외만 개별 지정"이
-    // 아니라 "개별이 디폴트, 동일할 때만 지름길 사용"). 문서가 1건뿐이면 굳이 번호를 붙일
+    // 🔽 [2026-09-18 설계 변경, 사용자 요청] 프로젝트코드/요청사유/목적 3항목은 "복수 발주서면
+    // 문서마다 다를 것"을 기본으로 가정해 문서(doc)별로 따로 받고, 실제로 값이 같은 드문
+    // 경우를 위해 "전체 동일: ..." 한 줄 답변 지름길만 남긴다. **사번(구매담당자)만은
+    // 예외** — 사용자가 "사번은 작성자가 같은 경우가 많다"고 정정해줘서, 문서 개수와
+    // 무관하게 항상 배치 전체 공통(`pd.buyerEmpId`)으로 딱 한 번만 물어본다(아래
+    // `ask_buyer` 단계, `_ganttQaPoAdvanceAfterItemsConfirmed`가 `ask_fields`보다 먼저
+    // 체크). 그래서 이 함수(`_ganttQaParsePoFieldsInto`)와 `_ganttQaPoDocIsIncomplete`는
+    // 이제 사번을 전혀 다루지 않는다 — 문서가 1건뿐이면 나머지 3항목도 굳이 번호를 붙일
     // 필요가 없으므로 예전과 100% 동일하게 동작한다(아래 isMulti 분기 참고).
     //
     // 목적(P01~P05)은 고정 5개 선택지라 위 "🔽 AI 문답 객관식 질문 — 드롭다운" 원칙(정해진
@@ -874,18 +875,16 @@ ${docsJson}`;
     // 입력창에 넣고 sendGanttQaMessage()를 호출하면, 아래 _ganttQaParsePoFieldsInto/
     // ask_fields 파서가 그대로 처리한다.
     window._ganttQaParsePoFieldsInto = function(doc, replyText) {
-        const missingBefore = ['projectCode', 'buyerEmpId', 'reason', 'purpose'].filter(function(k) { return !doc[k]; });
+        const missingBefore = ['projectCode', 'reason', 'purpose'].filter(function(k) { return !doc[k]; });
         const projMatch = replyText.match(/프로젝트\s*코드(?:는|은|가|이)?\s*[:：]?\s*([^\s,]+)/);
         if (projMatch) doc.projectCode = projMatch[1];
-        const empMatch = replyText.match(/(?:구매담당자\s*)?사번(?:은|는|가|이)?\s*[:：]?\s*(\d{4,12})/);
-        if (empMatch) doc.buyerEmpId = empMatch[1];
-        const reasonMatch = replyText.match(/요청\s*사유(?:는|은|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|목적|프로젝트\s*코드|사번|$)/);
+        const reasonMatch = replyText.match(/요청\s*사유(?:는|은|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|목적|프로젝트\s*코드|$)/);
         if (reasonMatch && reasonMatch[1].trim()) doc.reason = reasonMatch[1].trim();
         let purposeCode = (replyText.match(/\bP0[1-5]\b/i) || [])[0];
         if (purposeCode) purposeCode = purposeCode.toUpperCase();
         const mentionsPurposeLabel = /목적/.test(replyText);
         if (!purposeCode && mentionsPurposeLabel) {
-            const purposeLabelMatch = replyText.match(/목적(?:은|는|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|사번|프로젝트\s*코드|$)/);
+            const purposeLabelMatch = replyText.match(/목적(?:은|는|가|이)?\s*[:：]?\s*([\s\S]+?)(?=,|프로젝트\s*코드|$)/);
             if (purposeLabelMatch) {
                 const hit = window._PO_PURPOSE_TABLE.find(function(r) { return purposeLabelMatch[1].indexOf(r.desc) !== -1; });
                 if (hit) purposeCode = hit.code;
@@ -893,9 +892,9 @@ ${docsJson}`;
         }
         if (purposeCode) doc.purpose = purposeCode;
 
-        const usedLabel = !!(projMatch || empMatch || reasonMatch || mentionsPurposeLabel);
+        const usedLabel = !!(projMatch || reasonMatch || mentionsPurposeLabel);
         if (!usedLabel) {
-            const order = ['projectCode', 'buyerEmpId', 'reason', 'purpose'];
+            const order = ['projectCode', 'reason', 'purpose'];
             const parts = replyText.split(/\n|,/).map(function(s) { return s.trim(); }).filter(Boolean);
             const assign = function(key, v) {
                 if (doc[key]) return; // 이미 채워진 필드는 덮어쓰지 않음
@@ -915,18 +914,18 @@ ${docsJson}`;
     };
 
     window._ganttQaPoDocIsIncomplete = function(doc) {
-        return !doc.projectCode || !doc.buyerEmpId || !doc.reason || !doc.purpose;
+        return !doc.projectCode || !doc.reason || !doc.purpose;
     };
 
     window._ganttQaPoAskFieldsPrompt = function(pd, introText) {
         const isMulti = pd.docs.length > 1;
         if (!isMulti) {
-            // 문서가 1건이면 번호를 붙일 필요가 없으므로 기존(2026-09-17 이전) 단일 문서
-            // 동작과 100% 동일 — docs[0]을 기준으로 자유 텍스트 3항목 + 목적 드롭다운.
+            // 문서가 1건이면 번호를 붙일 필요가 없으므로 기존 단일 문서 동작과 100% 동일 —
+            // docs[0]을 기준으로 자유 텍스트 2항목(프로젝트코드/요청사유) + 목적 드롭다운.
+            // 사번은 이 단계 전에 ask_buyer에서 이미 pd.buyerEmpId로 확보돼 있다.
             const doc = pd.docs[0];
             const textMissing = [];
             if (!doc.projectCode) textMissing.push(window._t('프로젝트코드', 'project code'));
-            if (!doc.buyerEmpId) textMissing.push(window._t("구매담당자 사번", "buyer's employee ID"));
             if (!doc.reason) textMissing.push(window._t('요청사유', 'reason'));
             const textLine = textMissing.length
                 ? window._t(`아래 항목을 알려주세요: ${textMissing.join(', ')}`, `Please provide: ${textMissing.join(', ')}`)
@@ -947,21 +946,21 @@ ${docsJson}`;
             return;
         }
 
-        // 문서가 2건 이상 — 기본은 "문서마다 다르다"고 가정, 문서별로 뭐가 빠졌는지 나열.
+        // 문서가 2건 이상 — 프로젝트코드/요청사유/목적은 "문서마다 다르다"고 가정, 문서별로
+        // 뭐가 빠졌는지 나열(사번은 ask_buyer에서 이미 공통으로 확보됨 — 여기 관여 안 함).
         const incomplete = pd.docs.map(function(d, i) { return { idx: i, doc: d }; })
             .filter(function(x) { return window._ganttQaPoDocIsIncomplete(x.doc); });
         const docLabel = function(x) { return x.doc.vendorName || (window._currentLang === 'en' ? `Doc ${x.idx + 1}` : `${x.idx + 1}번`); };
         const lines = incomplete.map(function(x) {
             const need = [];
             if (!x.doc.projectCode) need.push(window._t('프로젝트코드', 'project code'));
-            if (!x.doc.buyerEmpId) need.push(window._t('사번', "buyer's ID"));
             if (!x.doc.reason) need.push(window._t('요청사유', 'reason'));
             if (!x.doc.purpose) need.push(window._t('목적', 'purpose'));
             return `${x.idx + 1}번(${docLabel(x)}): ${need.join(', ')}`;
         }).join('\n');
         const guide = window._t(
-            `문서 번호를 붙여서 알려주세요(예: "1번: G2610OB, 2004051002, 샘플제작, P01"). 여러 문서가 전부 같은 값이면 드문 경우겠지만 "전체 동일: G2610OB, 2004051002, 샘플제작, P01"처럼 한 번만 답해도 됩니다.`,
-            `Please answer per document, with its number (e.g. "1: G2610OB, 2004051002, sample production, P01"). If — less commonly — all documents truly share the same values, you can answer once with "same for all: G2610OB, 2004051002, sample production, P01".`
+            `문서 번호를 붙여서 알려주세요(예: "1번: G2610OB, 샘플제작, P01"). 여러 문서가 전부 같은 값이면 드문 경우겠지만 "전체 동일: G2610OB, 샘플제작, P01"처럼 한 번만 답해도 됩니다.`,
+            `Please answer per document, with its number (e.g. "1: G2610OB, sample production, P01"). If — less commonly — all documents truly share the same values, you can answer once with "same for all: G2610OB, sample production, P01".`
         );
         const reply = introText + '\n\n' + lines + '\n\n' + guide;
 
@@ -1017,10 +1016,20 @@ ${docsJson}`;
             window._ganttQaPoShowTempCodeDropdown(missingTemp);
             return;
         }
+        // 사번은 배치 전체 공통으로 딱 한 번만 묻는다(사용자: "작성자가 같은 경우가 많다").
+        // 이미 채워져 있으면(예: 사용자가 앞 단계 답변에 미리 적어둔 경우) 건너뛴다.
+        if (!pd.buyerEmpId) {
+            pd.stage = 'ask_buyer';
+            window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다.\n\n구매담당자 사번을 알려주세요(예: 2004051002) — 모든 문서에 공통으로 적용됩니다.`,
+                `✅ Item confirmation is done for all ${pd.docs.length} document(s).\n\nPlease provide the buyer's employee ID (e.g. 2004051002) — it applies to every document.`
+            )});
+            return;
+        }
         pd.stage = 'ask_fields';
         window._ganttQaPoAskFieldsPrompt(pd, window._t(
-            `✅ 문서 ${pd.docs.length}건 모두 품목 확인이 끝났습니다.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
-            `✅ Item confirmation is done for all ${pd.docs.length} document(s).\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
+            `이제 문서별 정보(프로젝트코드/요청사유/목적)가 필요합니다.\n\n이후 과정(엑셀 생성 ~ SAP 업로드 ~ 저장 ~ 발주서 출력)은 모두 자동으로 진행되며, 문서마다 다시 확인을 묻지 않습니다.`,
+            `Now I need the per-document info (project code / reason / purpose).\n\nEverything after this (excel → SAP upload → save → PO printing) will run automatically without asking again per document.`
         ));
     };
 
@@ -1039,7 +1048,7 @@ ${docsJson}`;
             return {
                 '자재코드': it.tempCode, '자재명': it.desc, '요청수량': it.qty,
                 '필요일자': doc.invoiceDate, '구매그룹': '908', '프로젝트코드': doc.projectCode,
-                '수령인': receiver, '구매담당자 사번': doc.buyerEmpId, '요청사유': doc.reason,
+                '수령인': receiver, '구매담당자 사번': pd.buyerEmpId, '요청사유': doc.reason,
                 'VINA PO': '', '목적': doc.purpose, '비고': '',
             };
         });
@@ -2805,7 +2814,30 @@ ${docsJson}`;
             // 것으로 가정하는 게 맞고, 값이 겹치는 건 오히려 드문 경우"라는 사용자 판단 반영.
             // 문서가 1건뿐이면 번호 없이 그대로(기존 동작 그대로), 2건 이상이면 "N번: ..."
             // 형식(문서별) 또는 드문 경우를 위한 "전체 동일: ..." 지름길 중 하나로 받는다.
+            // 사번(배치 전체 공통, 한 번만) — 라벨("사번: X")이 있으면 그 값을, 없으면 이 단계가
+            // 사번만 묻고 있으므로 4~12자리 숫자 하나를 그대로 사번으로 받는다.
+            if (pd.stage === 'ask_buyer') {
+                const labeled = replyText.match(/(?:구매담당자\s*)?사번(?:은|는|가|이)?\s*[:：]?\s*(\d{4,12})/);
+                const bare = labeled ? null : replyText.match(/\b\d{4,12}\b/);
+                const emp = labeled ? labeled[1] : (bare ? bare[0] : '');
+                if (emp) {
+                    pd.buyerEmpId = emp;
+                    window._ganttQaPoAdvanceAfterItemsConfirmed(pd);
+                } else {
+                    window._ganttQaHistory.push({ role: 'ai', text: window._t(
+                        '사번을 인식하지 못했습니다 — 숫자로만 알려주세요(예: 2004051002).',
+                        "Couldn't recognize the employee ID — please give digits only (e.g. 2004051002)."
+                    )});
+                }
+                window._renderGanttQaMessages();
+                input.focus();
+                return;
+            }
+
             if (pd.stage === 'ask_fields') {
+                // 사번을 이 단계에서 "사번은 X"로 고쳐 말해도 반영(공통값이라 문서 번호 불필요)
+                const empFix = replyText.match(/(?:구매담당자\s*)?사번(?:은|는|가|이)?\s*[:：]?\s*(\d{4,12})/);
+                if (empFix) pd.buyerEmpId = empFix[1];
                 const isMulti = pd.docs.length > 1;
                 if (!isMulti) {
                     window._ganttQaParsePoFieldsInto(pd.docs[0], replyText);
