@@ -2538,6 +2538,7 @@ ${docsJson}`;
         hist.push(text);
         if (hist.length > _QA_INPUT_HIST_MAX) hist.shift();
         window._ganttQaInputHistoryPos = -1; // 새 질문이 쌓이면 탐색 위치는 항상 초기화
+        window._ganttQaInputShown = null;
         try { localStorage.setItem(_QA_INPUT_HIST_KEY, JSON.stringify(hist)); } catch (e) { /* 저장 실패는 무시(용량 초과 등) */ }
     };
 
@@ -2556,9 +2557,16 @@ ${docsJson}`;
             return;
         }
         const textarea = event.target;
+        // 🐛 [2026-09-21 버그수정, 사용자 제보] 글을 쓰던 중 위쪽 줄을 고치려고 ↑를 누르면(커서가 맨 앞에 닿는 순간) 예전 질문이 통째로
+        //    덮어써서 쓰던 글이 사라졌다. 규칙: ① 입력창이 **비어 있을 때만** 히스토리 탐색을 시작한다(글을 쓰는 중엔 ↑↓가 평소처럼
+        //    커서 이동만 한다) ② 탐색을 시작한 뒤에도 입력창 내용이 "불러온 그대로"일 때만 계속 훑는다 — 한 글자라도 고치면 탐색을
+        //    끝내고 평소 동작으로 돌아간다(고친 글이 다시 덮어써지지 않게).
+        if (window._ganttQaInputHistoryPos !== -1 && textarea.value !== window._ganttQaInputShown) {
+            window._ganttQaInputHistoryPos = -1; window._ganttQaInputShown = null;
+        }
         const navigating = window._ganttQaInputHistoryPos !== -1;
         if (event.key === 'ArrowUp') {
-            if (!navigating && (textarea.selectionStart !== 0 || textarea.selectionEnd !== 0)) return;
+            if (!navigating && textarea.value.trim() !== '') return; // 글을 쓰는 중 — 이전 글 불러오기 금지
             const hist = window._ganttQaInputHistory || [];
             if (!hist.length) return;
             event.preventDefault();
@@ -2569,6 +2577,7 @@ ${docsJson}`;
             if (window._ganttQaInputHistoryPos > 0) {
                 window._ganttQaInputHistoryPos--;
                 textarea.value = hist[window._ganttQaInputHistoryPos];
+                window._ganttQaInputShown = textarea.value;
                 const len = textarea.value.length;
                 textarea.setSelectionRange(len, len);
             }
@@ -2580,8 +2589,10 @@ ${docsJson}`;
             if (window._ganttQaInputHistoryPos >= hist2.length) {
                 window._ganttQaInputHistoryPos = -1;
                 textarea.value = window._ganttQaInputDraft || '';
+                window._ganttQaInputShown = null;
             } else {
                 textarea.value = hist2[window._ganttQaInputHistoryPos];
+                window._ganttQaInputShown = textarea.value;
             }
             const newLen = textarea.value.length;
             textarea.setSelectionRange(newLen, newLen);

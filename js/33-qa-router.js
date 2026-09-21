@@ -6,7 +6,7 @@
    프로젝트 데이터 답변("데이터에서 확인되지 않습니다 … AI 추론")으로 새는 일이 있었다.
 
    3단계 라우터 — 규칙 우선, 확실할 때만 동작을 바꾸고 애매하면 기존 경로(legacy)를 그대로 쓴다.
-     0) 명시 지정: 입력창 위 칩(자동/SAP/프로젝트/추론) 또는 "#sap ", "#프로젝트 ", "#추론 " 접두어
+     0) 명시 지정: "자주 쓰는 질문" 줄의 분류 선택 상자(자동/SAP/프로젝트/추론) 또는 "#sap ", "#프로젝트 ", "#추론 " 접두어
      1) 규칙 점수(AI 호출 없음): SAP 신호(SAP 단어/tcode/자재번호/와일드카드 패턴/기능 키워드) vs 프로젝트 신호
         (업무·일정·담당자 어휘 + "질문 속 부품번호가 실제 프로젝트 데이터에 있는가" 존재 확인) vs 일반 추론 …
      2) (예정) 애매할 때만 AI 분류 — 데이터가 쌓인 뒤
@@ -153,25 +153,33 @@
     }
     window._qaLogRoute = logRoute;
 
-    // ── 칩(0단계) ──────────────────────────────────────────────────────
+    // ── 분류 지정(0단계) — "자주 쓰는 질문" 줄 오른쪽의 작은 선택 상자 ─────────────────────
+    // 🧹 [2026-09-21 UI 정리] 예전엔 입력창 위에 칩 4개 줄을 따로 띄웠는데 화면을 너무 차지해서, 이미 있는 "자주 쓰는 질문" 줄에 합쳤다.
     window._qaForceClass = '';
     var CHIPS = [['', '자동', 'Auto'], ['sap', '🏭 SAP', '🏭 SAP'], ['project', '📊 프로젝트', '📊 Project'], ['general', '💡 추론', '💡 General']];
     window._qaSetForce = function (cls) { window._qaForceClass = cls || ''; ensureChips(); var i = document.getElementById('gantt-qa-input'); if (i) i.focus(); };
     function ensureChips() {
         try {
-            var strip = document.getElementById('gantt-qa-attach-strip');
-            if (!strip) return;
-            var row = document.getElementById('gantt-qa-route-chips');
-            if (!row) {
-                row = document.createElement('div'); row.id = 'gantt-qa-route-chips';
-                row.style.cssText = 'padding:6px 14px 0; display:flex; gap:6px; align-items:center; flex-wrap:wrap; font-size:11px; color:#666;';
-                strip.parentNode.insertBefore(row, strip);
+            var freq = document.getElementById('gantt-qa-freq-select');
+            if (!freq || !freq.parentNode) return;
+            var oldRow = document.getElementById('gantt-qa-route-chips'); if (oldRow && oldRow.parentNode) oldRow.parentNode.removeChild(oldRow);   // 이전 버전의 칩 줄 정리
+            var row = freq.parentNode;
+            var lab = document.getElementById('gantt-qa-route-label'), sel = document.getElementById('gantt-qa-route-select');
+            if (!sel) {
+                lab = document.createElement('label'); lab.id = 'gantt-qa-route-label'; lab.htmlFor = 'gantt-qa-route-select';
+                lab.style.cssText = 'font-size:10.5px; color:#888; white-space:nowrap; margin-left:6px;';
+                sel = document.createElement('select'); sel.id = 'gantt-qa-route-select';
+                sel.style.cssText = 'font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; max-width:120px;';
+                sel.onchange = function () { window._qaSetForce(sel.value); };
+                row.appendChild(lab); row.appendChild(sel);
             }
-            row.innerHTML = '<span title="' + esc(T('질문을 어떻게 이해할지 직접 지정합니다. 입력창에 #sap / #프로젝트 / #추론 을 앞에 붙여도 됩니다.', 'Choose how the question is understood. You can also prefix #sap / #project / #general.')) + '">🏷 ' + esc(T('분류', 'Type')) + '</span>' +
-                CHIPS.map(function (c) {
-                    var on = (window._qaForceClass || '') === c[0];
-                    return '<button onclick="window._qaSetForce(\'' + c[0] + '\')" style="font-size:11px; padding:2px 9px; border-radius:11px; cursor:pointer; border:1px solid ' + (on ? '#7fb0dd' : '#ccd6e0') + '; background:' + (on ? '#dbeafb' : '#fff') + '; color:' + (on ? '#1971c2' : '#555') + '; font-weight:' + (on ? 'bold' : 'normal') + ';">' + esc(T(c[1], c[2])) + '</button>';
-                }).join('');
+            lab.textContent = '🏷 ' + T('분류', 'Type');
+            lab.title = T('질문을 어떻게 이해할지 직접 지정합니다. 입력창에 #sap / #프로젝트 / #추론 을 앞에 붙여도 됩니다.', 'Choose how the question is understood. You can also prefix #sap / #project / #general.');
+            var cur = window._qaForceClass || '';
+            sel.innerHTML = CHIPS.map(function (c) { return '<option value="' + c[0] + '"' + (c[0] === cur ? ' selected' : '') + '>' + esc(T(c[1], c[2])) + '</option>'; }).join('');
+            sel.style.borderColor = cur ? '#7fb0dd' : '#ccc';       // 직접 지정 중이면 눈에 띄게
+            sel.style.background = cur ? '#dbeafb' : '#fff';
+            sel.style.color = cur ? '#1971c2' : '#333';
         } catch (e) { /* ignore */ }
     }
     (function wrapOpen(tries) {
@@ -182,18 +190,27 @@
         } else if (tries < 20) { setTimeout(function () { wrapOpen(tries + 1); }, 500); }
     })(0);
 
-    // ── 배지 + 다시 분류 ────────────────────────────────────────────
-    window._qaRouteBadgeHtml = function (m) {
+    // ── 답변 아래 분류 표시(한 줄, 왼쪽) + ⇄ 다시 분류(펼침) ──────────────────────────────
+    window._qaRouteInlineHtml = function (m) {
         var r = m && m.route; if (!r) return '';
         var meta = CLASSES[r.cls] || CLASSES.auto;
         var tip = (r.forced ? T('직접 지정', 'Chosen by you') : T('자동 판단', 'Auto')) + (r.reasons && r.reasons.length ? ' — ' + r.reasons.join(' / ') : '');
+        var short = r.cls === 'auto' ? T('자동', 'Auto') : T(meta.ko, meta.en);
+        return '<span style="display:inline-flex; align-items:center; gap:4px; font-size:10.5px; color:#999;">' +
+            '<span title="' + esc(tip) + '">' + meta.icon + ' ' + esc(short) + (r.forced ? ' ' + esc(T('(지정)', '(set)')) : '') + '</span>' +
+            '<button onclick="window._qaToggleReroute(\'' + esc(m.uid) + '\')" title="' + esc(T('다른 분류로 다시 답변받기', 'Re-answer as another type')) + '" style="font-size:11px; padding:0 5px; border:1px solid #dde3ea; background:#fff; color:#888; border-radius:9px; cursor:pointer; line-height:16px;">⇄</button></span>';
+    };
+    window._qaRerouteRowHtml = function (m) {
+        var r = m && m.route; if (!r) return '';
         var btns = ['sap', 'project', 'general'].filter(function (c) { return c !== r.cls; }).map(function (c) {
             var mm = CLASSES[c];
-            return '<button onclick="window._qaReroute(\'' + esc(m.uid) + '\',\'' + c + '\')" title="' + esc(T('이 분류로 다시 답변받기', 'Re-answer as this type')) + '" style="font-size:10.5px; padding:1px 7px; border:1px solid #ccd6e0; background:#fff; color:#555; border-radius:9px; cursor:pointer;">' + mm.icon + ' ' + esc(T(mm.ko, mm.en)) + esc(T('로', '')) + '</button>';
+            return '<button onclick="window._qaReroute(\'' + esc(m.uid) + '\',\'' + c + '\')" style="font-size:10.5px; padding:1px 8px; border:1px solid #ccd6e0; background:#fff; color:#555; border-radius:9px; cursor:pointer;">' + mm.icon + ' ' + esc(T(mm.ko, mm.en)) + esc(T('로', '')) + '</button>';
         }).join(' ');
-        return '<div style="display:flex; justify-content:flex-end; align-items:center; gap:6px; margin-top:4px; font-size:10.5px; color:#888; flex-wrap:wrap;">' +
-            '<span title="' + esc(tip) + '">🏷 ' + meta.icon + ' ' + esc(T(meta.ko, meta.en)) + (r.forced ? ' ' + esc(T('(지정)', '(set)')) : '') + '</span>' +
-            '<span style="color:#aaa;">' + esc(T('다시 분류:', 'Retry as:')) + '</span>' + btns + '</div>';
+        return '<div id="qa-reroute-' + esc(m.uid) + '" style="display:none; justify-content:flex-end; align-items:center; gap:6px; margin-top:3px; font-size:10.5px; color:#888; flex-wrap:wrap;">' +
+            '<span>' + esc(T('다시 분류:', 'Retry as:')) + '</span>' + btns + '</div>';
+    };
+    window._qaToggleReroute = function (uid) {
+        try { var el = document.getElementById('qa-reroute-' + uid); if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'flex' : 'none'; } catch (e) { /* ignore */ }
     };
     window._qaReroute = function (uid, cls) {
         try {

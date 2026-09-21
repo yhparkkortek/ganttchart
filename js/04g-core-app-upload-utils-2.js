@@ -1607,13 +1607,16 @@ ${question}
                 const fb = window._qaFeedbackFor(m.uid);
                 const goodActive = fb && fb.rating === 'good';
                 const badActive = fb && fb.rating === 'bad';
-                return `<div style="display:flex; justify-content:flex-end; gap:4px; margin-top:4px; align-items:center;">
+                // 🧹 [2026-09-21 UI 정리] 분류 표시 + 피드백을 한 줄로 합침(왼쪽: 분류·⇄ 다시 분류, 오른쪽: 👍👎🚩). 다시 분류 선택지는 ⇄를 눌렀을 때만 펼침.
+                const _routeLeft = (m.route && window._qaRouteInlineHtml) ? window._qaRouteInlineHtml(m) : '';
+                const _routeRow = (m.route && window._qaRerouteRowHtml) ? window._qaRerouteRowHtml(m) : '';
+                return `<div style="display:flex; justify-content:space-between; gap:6px; margin-top:4px; align-items:center; flex-wrap:wrap;"><span>${_routeLeft}</span><span style="display:inline-flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:flex-end;">
                     <span style="font-size:10px; color:#aaa; margin-right:2px;">도움이 되었나요?</span>
                     <button onclick="window.saveGanttQaFeedback('${m.uid}','good')" style="font-size:11px; padding:2px 8px; border:1px solid #a8dab8; background:${goodActive ? '#c9ecd3' : '#e6f6ea'}; color:#1f7a3d; border-radius:5px; font-weight:bold; cursor:pointer;">👍</button>
                     <button onclick="window.saveGanttQaFeedback('${m.uid}','bad')" style="font-size:11px; padding:2px 8px; border:1px solid #eeb0ac; background:${badActive ? '#f5c2bd' : '#fbe4e2'}; color:#b1432f; border-radius:5px; font-weight:bold; cursor:pointer;">👎</button>
                     <button onclick="window._issueOpenReport && window._issueOpenReport('${m.uid}')" title="문제 신고 — 팀 이슈 리포트에 반영됩니다" style="font-size:11px; padding:2px 8px; border:1px solid #ffe08a; background:#fff8e6; color:#7a5210; border-radius:5px; font-weight:bold; cursor:pointer;">🚩</button>
                     ${badActive ? `<button onclick="window.openQaImproveCommentModal('${m.uid}')" style="font-size:10.5px; padding:2px 8px; border:1px solid #a8dab8; background:#e6f6ea; color:#1f7a3d; border-radius:5px; cursor:pointer; white-space:nowrap;">💡 의견</button>` : ''}
-                </div>`;
+                </span></div>${_routeRow}`;
             })() : '';
             // 💡 [2026-09-08 신규] 재질문 패턴 감지 힌트 — 방금 질문이 이 답변 직후에 나온 이전 질문과
             //    거의 같으면(window._ganttQaCheckReaskPattern) "이 답변에 문제가 있었을 수도 있다"고
@@ -1683,7 +1686,6 @@ ${question}
                 : '';
             return `<div style="display:flex; flex-direction:column; align-items:${isUser ? 'flex-end' : 'flex-start'}; margin-bottom:10px;">
                 <div style="max-width:82%; padding:9px 12px; border-radius:10px; background:${bg}; color:${fg}; font-size:12.5px; line-height:1.55;">${body}</div>
-                ${(!isUser && m.route && window._qaRouteBadgeHtml) ? `<div style="max-width:82%; width:100%;">${window._qaRouteBadgeHtml(m)}</div>` : ''}
                 ${feedbackHtml ? `<div style="max-width:82%; width:100%;">${feedbackHtml}</div>` : ''}
                 ${reaskHintHtml ? `<div style="max-width:82%; width:100%;">${reaskHintHtml}</div>` : ''}
                 ${mailDraftHtml ? `<div style="max-width:82%; width:100%;">${mailDraftHtml}</div>` : ''}
