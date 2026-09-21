@@ -1242,14 +1242,6 @@
         if (_mfDropSub) _mfDropSub.textContent = _en ? '.eml / .html / .txt up to 500 files' : '.eml / .html / .txt 최대 500개';
 
         // [AI 문답 모달] 정적 UI (2026-09-07 신설) — 열려있는 상태로 언어 전환해도 즉시 반영
-        const _qaDesc = document.getElementById('gantt-qa-desc');
-        if (_qaDesc) _qaDesc.textContent = _en
-            ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Conversation content isn\'t saved — only the question text is kept, anonymously, to power the "Frequently asked" suggestions)'
-            : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화 내용 자체는 저장되지 않으며, 질문 문구만 "자주 묻는 질문" 추천에 쓰입니다)';
-        const _qaDelayNotice = document.getElementById('gantt-qa-delay-notice');
-        if (_qaDelayNotice) _qaDelayNotice.textContent = _en
-            ? '⏱️ Some questions may take a bit longer to answer — if so, we\'ll keep you posted on screen.'
-            : '⏱️ 질문에 따라 답변이 조금 늦어질 수 있어요 — 그럴 땐 화면에 진행 상황을 안내해드려요.';
         const _qaTargetLabel = document.getElementById('gantt-qa-target-label');
         if (_qaTargetLabel) _qaTargetLabel.textContent = _en ? '📂 Target' : '📂 질문 대상';
         // 드롭다운은 선택된 값을 잃지 않도록 옵션 텍스트만 다시 채움(재조회 없이 즉시 반영)
@@ -1274,11 +1266,13 @@
                 ? (_en ? `Ask about [${_qaTarget.label}]... (Enter=Send, Shift+Enter=New line)` : `[${_qaTarget.label}] 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)`)
                 : (_en ? 'Ask about this project... (Enter=Send, Shift+Enter=New line)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈)');
         }
+        const _qaAttachBtn = document.getElementById('gantt-qa-attach-btn');
+        if (_qaAttachBtn) _qaAttachBtn.textContent = _en ? 'Attach' : '첨부파일';
         const _qaSendBtn = document.getElementById('gantt-qa-send-btn');
         if (_qaSendBtn) _qaSendBtn.textContent = _en ? 'Send' : '전송';
         const _qaClearBtn = document.getElementById('gantt-qa-clear-btn');
         if (_qaClearBtn) {
-            _qaClearBtn.innerHTML = _en ? 'Clear<br>Chat' : '대화<br>삭제';
+            _qaClearBtn.textContent = _en ? 'Clear' : '대화삭제';
             _qaClearBtn.title = _en ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다';
         }
         // 🎙️ [2026-09-08 신규] 음성 챗 버튼 — 🔊/🔇는 아이콘 그대로 title만, 음성문답/글자문답은

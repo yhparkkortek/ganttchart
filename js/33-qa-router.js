@@ -165,22 +165,24 @@
     window._qaPaletteFor = function (cls) { return (cls === 'sap' || cls === 'project' || cls === 'general') ? window._qaClassPalette[cls] : null; };
 
     // ── 분류 지정(0단계) — "자주 쓰는 질문" 줄 오른쪽의 작은 선택 상자 ─────────────────────
-    // 🧹 [2026-09-21 UI 정리] 예전엔 입력창 위에 칩 4개 줄을 따로 띄웠는데 화면을 너무 차지해서, 이미 있는 "자주 쓰는 질문" 줄에 합쳤다.
+    // 🧹 [2026-09-21 UI 정리] 예전엔 입력창 위에 칩 4개 줄을 따로 띄웠는데 화면을 너무 차지해서 드롭다운으로 합쳤고, 지금은 입력창 바로 위
+    //    3칸 줄(질문 대상 / 자주 쓰는 질문 / 분류)의 세 번째 칸(#gantt-qa-route-col, js/04h)에 들어간다.
     window._qaForceClass = '';
     var CHIPS = [['', '자동', 'Auto'], ['sap', '🏭 SAP', '🏭 SAP'], ['project', '📊 프로젝트', '📊 Project'], ['general', '💡 추론', '💡 General']];
     window._qaSetForce = function (cls) { window._qaForceClass = cls || ''; ensureChips(); var i = document.getElementById('gantt-qa-input'); if (i) i.focus(); };
     function ensureChips() {
         try {
+            var col = document.getElementById('gantt-qa-route-col');   // 입력창 위 3칸(질문 대상/자주 쓰는 질문/분류) 중 세 번째 칸
             var freq = document.getElementById('gantt-qa-freq-select');
-            if (!freq || !freq.parentNode) return;
+            if (!col && (!freq || !freq.parentNode)) return;
             var oldRow = document.getElementById('gantt-qa-route-chips'); if (oldRow && oldRow.parentNode) oldRow.parentNode.removeChild(oldRow);   // 이전 버전의 칩 줄 정리
-            var row = freq.parentNode;
+            var row = col || freq.parentNode;
             var lab = document.getElementById('gantt-qa-route-label'), sel = document.getElementById('gantt-qa-route-select');
             if (!sel) {
                 lab = document.createElement('label'); lab.id = 'gantt-qa-route-label'; lab.htmlFor = 'gantt-qa-route-select';
-                lab.style.cssText = 'font-size:10.5px; color:#888; white-space:nowrap; margin-left:6px;';
+                lab.style.cssText = 'font-size:10.5px; color:#888; white-space:nowrap;' + (col ? '' : ' margin-left:6px;');
                 sel = document.createElement('select'); sel.id = 'gantt-qa-route-select';
-                sel.style.cssText = 'font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; max-width:120px;';
+                sel.style.cssText = 'width:100%; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px;' + (col ? '' : ' max-width:120px;');
                 sel.onchange = function () { window._qaSetForce(sel.value); };
                 row.appendChild(lab); row.appendChild(sel);
             }

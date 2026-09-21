@@ -5254,54 +5254,52 @@ ${docsJson}`;
                         <button onclick="event.stopPropagation(); window._ganttQaCloseModal()" style="background:var(--modal-icon-bg); border:1px solid var(--modal-icon-border); border-radius:6px; color:var(--modal-icon-text); font-size:16px; cursor:pointer; width:26px; height:26px; padding:0; line-height:1; flex-shrink:0; display:flex; align-items:center; justify-content:center; transition:0.15s;" onmouseover="this.style.background='var(--modal-icon-hover-bg)'; this.style.borderColor='#adb5bd';" onmouseout="this.style.background='var(--modal-icon-bg)'; this.style.borderColor='var(--modal-icon-border)';">✕</button>
                     </div>
                 </div>
-                <div id="gantt-qa-desc" style="padding:8px 18px 0; font-size:10.5px; color:#999;">${_qEn ? 'Answers based on the currently open project\'s Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · Address Book (name/dept/title) data. (Conversation content isn\'t saved — only the question text is kept, anonymously, to power the "Frequently asked" suggestions)' : '현재 열려있는 프로젝트의 Gantt · Summary · Customer SPEC · M.C Table · Elec Parts · 주소록(이름/부서/직함) 데이터를 근거로 답변합니다. (대화 내용 자체는 저장되지 않으며, 질문 문구만 "자주 묻는 질문" 추천에 쓰입니다)'}</div>
-                <!-- 💡 [2026-09-08 신규] "답변이 늦어지면 사용자가 문제라고 오해하지 않게, 미리 안내해두면
-                     좋겠다"는 요청 — 질문하기 전부터 "늦어질 수도 있다"는 기대치를 심어둬서, 실제로 늦어질
-                     때 뜨는 단계별 안내(_ganttQaStartWaitingHints)가 "어? 왜 이러지"가 아니라 "아, 미리
-                     말해준 그거구나"로 받아들여지게 한다. -->
-                <div id="gantt-qa-delay-notice" style="padding:4px 18px 0; font-size:10.5px; color:#adb5bd;">${_qEn ? '⏱️ Some questions may take a bit longer to answer — if so, we\'ll keep you posted on screen.' : '⏱️ 질문에 따라 답변이 조금 늦어질 수 있어요 — 그럴 땐 화면에 진행 상황을 안내해드려요.'}</div>
-                <!-- 💡 [2026-09-07 신규] 다른 프로젝트를 직접 골라서 물어보기 — AI가 스스로 판단해 찾아가는
-                     자동 경로(🌐 다른 프로젝트 조회 규칙)와 별개로, 사람이 미리 지정해두면 왕복 없이 바로 답한다. -->
-                <div style="padding:6px 18px 0; display:flex; align-items:center; gap:6px;">
-                    <label id="gantt-qa-target-label" for="gantt-qa-target-project" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '📂 Target' : '📂 질문 대상'}</label>
-                    <select id="gantt-qa-target-project" onchange="window._ganttQaOnTargetChange()" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
-                        <option value="">${_qEn ? 'Current project' : '현재 프로젝트'}</option>
-                    </select>
-                    <!-- 💡 [2026-09-07 신규] "질문 대상"만 고르면 왕복 없이 답하는 가벼운 조회 경로와 별개로,
-                         진짜로 그 프로젝트를 열어서(=현재 프로젝트로 전환) 100% 동일한 조건으로 묻고 싶을
-                         때를 위한 지름길 — AI가 실행형 요청에서만 띄우던 [[ACTION:OPEN_PROJECT_TO_EDIT]]
-                         확인카드와 똑같이 executeLoadFile을 그대로 재사용한다. 다른 프로젝트가 선택된
-                         동안에만 보임(현재 프로젝트일 땐 열 대상이 없으므로 숨김).
-                    -->
-                    <button id="gantt-qa-target-open-btn" onclick="window._ganttQaOpenTargetProject(this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_qEn ? 'Open this project (switch the current tab to it) and ask exactly as if it were already open' : '이 프로젝트를 열어서(현재 탭이 이 프로젝트로 전환됨) 실제로 열람 중인 것과 동일한 조건으로 질문합니다'}" style="display:none; flex-shrink:0; font-size:11px; padding:3px 10px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? '🔓 Open' : '🔓 열기'}</button>
-                </div>
-                <!-- 💡 [2026-09-12 신규] "자주 쓰는 질문" — 예전엔 채팅이 비어있을 때만(_renderGanttQaMessages
-                     안에서) 잠깐 보이다가 질문 한 번 하면 사라졌음("한 번 대화하면 안 나오네" 실사용 피드백).
-                     대화 중에도 계속 골라 쓸 수 있게 위 "질문 대상"과 같은 자리에 항상 보이는 행으로 고정.
-                     선택하면 입력창에 채워짐(바로 전송 안 됨) — window._ganttQaFillQuestion 재사용. -->
-                <div style="padding:4px 18px 0; display:flex; align-items:center; gap:6px;">
-                    <label id="gantt-qa-freq-label" for="gantt-qa-freq-select" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '💡 Frequently used' : '💡 자주 쓰는 질문'}</label>
-                    <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="flex:1; min-width:0; font-size:11px; padding:3px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
-                        <option value="">${_qEn ? '(select a question)' : '(질문 선택하기)'}</option>
-                    </select>
-                </div>
                 <div id="gantt-qa-messages" style="overflow-y:auto; flex:1; padding:12px 16px; background:transparent;"></div>
                 <!-- 📎 [2026-09-15 신규] "구매오더 요청" 기능용 PDF 첨부 — 지금은 이 용도가
                      유일한 첨부 기능이라, 첨부가 있는 채로 전송하면 항상 구매오더 추출 흐름을
                      탄다(window._ganttQaPendingAttachments 참고). 나중에 다른 첨부 용도가
                      추가되면 이 가정을 반드시 재검토할 것. -->
                 <div id="gantt-qa-attach-strip" style="display:none; padding:6px 14px 0; flex-wrap:wrap; gap:6px;"></div>
-                <div style="padding:10px 14px; border-top:1px solid #d0dde8; background:#f6f8fa; display:flex; gap:8px; align-items:stretch;">
-                    <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex-shrink:0; padding:0 16px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear<br>Chat' : '대화<br>삭제'}</button>
-                    <!-- 📎 [2026-09-15 UI 변경, 사용자 요청] 아이콘 대신 다른 버튼들과 통일된
-                         2줄 텍스트 라벨로, 색상은 초록 파스텔톤(이 앱의 "확인/승낙" 계열 버튼과
-                         동일한 팔레트 — 🔓 열기/🤖 요청 버튼 참고)으로, 음성문답 버튼과 자리를
-                         바꿔서(첨부 → 음성문답 순서) 배치. -->
-                    <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a PDF (e.g. tax invoice/quote) — used for Purchase Order requests' : 'PDF 첨부(전자세금계산서/견적서 등) — 구매오더 요청에 사용됩니다'}" style="flex-shrink:0; padding:0 16px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach<br>File' : '첨부<br>파일'}</button>
+                <!-- 🧹 [2026-09-21 UI 정리, 사용자 요청] 위쪽의 설명 2줄(데이터 근거·답변 지연 안내)은 삭제했고, 질문 대상 / 자주 쓰는 질문 / 분류
+                     드롭다운 3개는 입력창 바로 위로 옮겼다(같은 폭 3등분). 커다란 [대화 삭제] 버튼은 없애고 [첨부 파일] 밑의 작은 버튼으로 합쳐서
+                     그만큼 입력창을 넓혔다.
+                     • 질문 대상: "질문 대상"만 고르면 왕복 없이 답하는 가벼운 조회 경로와 별개로, 진짜로 그 프로젝트를 열어서(=현재 프로젝트로 전환) 100% 동일한
+                       조건으로 묻고 싶을 때를 위한 [🔓 열기] 지름길 — executeLoadFile 재사용. 다른 프로젝트가 선택된 동안에만 보임.
+                     • 자주 쓰는 질문: 대화 중에도 계속 골라 쓸 수 있게 항상 보이는 드롭다운. 선택하면 입력창에 채워짐(바로 전송 안 됨) — _ganttQaFillQuestion 재사용.
+                     • 분류(#gantt-qa-route-col): 질문 라우터(js/33 ensureChips)가 이 칸 안에 라벨+선택 상자를 만든다. -->
+                <div style="border-top:1px solid #d0dde8; background:#f6f8fa;">
+                <div style="padding:8px 14px 0; display:flex; gap:8px; align-items:flex-end;">
+                    <div style="flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                        <label id="gantt-qa-target-label" for="gantt-qa-target-project" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '📂 Target' : '📂 질문 대상'}</label>
+                        <div style="display:flex; gap:4px; min-width:0;">
+                            <select id="gantt-qa-target-project" onchange="window._ganttQaOnTargetChange()" style="flex:1; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
+                                <option value="">${_qEn ? 'Current project' : '현재 프로젝트'}</option>
+                            </select>
+                            <button id="gantt-qa-target-open-btn" onclick="window._ganttQaOpenTargetProject(this)" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';" title="${_qEn ? 'Open this project (switch the current tab to it) and ask exactly as if it were already open' : '이 프로젝트를 열어서(현재 탭이 이 프로젝트로 전환됨) 실제로 열람 중인 것과 동일한 조건으로 질문합니다'}" style="display:none; flex-shrink:0; height:26px; box-sizing:border-box; font-size:11px; padding:0 8px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? '🔓 Open' : '🔓 열기'}</button>
+                        </div>
+                    </div>
+                    <div style="flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:2px;">
+                        <label id="gantt-qa-freq-label" for="gantt-qa-freq-select" style="font-size:10.5px; color:#888; white-space:nowrap;">${_qEn ? '💡 Frequently used' : '💡 자주 쓰는 질문'}</label>
+                        <select id="gantt-qa-freq-select" onchange="if(this.value){ window._ganttQaFillQuestion(this.value); this.selectedIndex=0; }" style="width:100%; min-width:0; height:26px; box-sizing:border-box; font-size:11px; padding:2px 6px; border:1px solid #ccc; border-radius:5px; background:#fff; color:#333;">
+                            <option value="">${_qEn ? '(select a question)' : '(질문 선택하기)'}</option>
+                        </select>
+                    </div>
+                    <div id="gantt-qa-route-col" style="flex:1 1 0; min-width:0; display:flex; flex-direction:column; gap:2px;"></div>
+                </div>
+                <div style="padding:8px 14px 10px; display:flex; gap:8px; align-items:stretch;">
+                    <!-- 📎 [2026-09-15 UI 변경, 사용자 요청] 다른 버튼들과 통일된 텍스트 라벨, 색상은 초록 파스텔톤(이 앱의 "확인/승낙" 계열 — 🔓 열기/🤖 요청 버튼 참고).
+                         "구매오더 요청" 기능용 PDF 첨부 — 지금은 이 용도가 유일한 첨부 기능이라, 첨부가 있는 채로 전송하면 항상 구매오더 추출 흐름을 탄다
+                         (window._ganttQaPendingAttachments 참고). 나중에 다른 첨부 용도가 추가되면 이 가정을 반드시 재검토할 것.
+                         [2026-09-21] 대화 삭제 버튼을 이 밑으로 합침(위아래 반반). -->
+                    <div style="flex-shrink:0; display:flex; flex-direction:column; gap:6px;">
+                        <button id="gantt-qa-attach-btn" onclick="document.getElementById('gantt-qa-file-input').click()" title="${_qEn ? 'Attach a PDF (e.g. tax invoice/quote) — used for Purchase Order requests' : 'PDF 첨부(전자세금계산서/견적서 등) — 구매오더 요청에 사용됩니다'}" style="flex:1; padding:0 14px; background:#e6f6ea; color:#1f7a3d; border:1px solid #a8dab8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; text-align:center; transition:background .15s, border-color .15s;" onmouseover="this.style.background='#c9ecd3'; this.style.borderColor='#7cc494';" onmouseout="this.style.background='#e6f6ea'; this.style.borderColor='#a8dab8';">${_qEn ? 'Attach' : '첨부파일'}</button>
+                        <button id="gantt-qa-clear-btn" onclick="window.clearGanttQaChat()" onmouseover="this.style.background='#f8d4d4'; this.style.borderColor='#e59a9a';" onmouseout="this.style.background='#fdecec'; this.style.borderColor='#f0b8b8';" title="${_qEn ? 'Clear all messages in the current chat' : '현재 대화 내용을 모두 지웁니다'}" style="flex:1; padding:0 14px; background:#fdecec; color:#b03a3a; border:1px solid #f0b8b8; border-radius:6px; font-size:12px; font-weight:bold; cursor:pointer; white-space:nowrap; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Clear' : '대화삭제'}</button>
+                    </div>
                     <input type="file" id="gantt-qa-file-input" accept=".pdf,application/pdf" multiple style="display:none;" onchange="window._ganttQaHandleFileSelect(this)">
-                    <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Voice<br>Q&A' : '음성<br>문답'}</button>
-                    <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line, ↑↓=History)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈, ↑↓=이전 질문)'}" style="flex:1; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="window._ganttQaHandleInputKeydown(event)"></textarea>
+                    <button id="gantt-qa-mic-btn" onclick="window._ganttQaToggleMic()" title="${_qEn ? 'Turn on voice Q&A — speak your question, hear the answer' : '음성문답 모드 켜기 — 말로 묻고 답도 음성으로 들을 수 있습니다'}" style="flex-shrink:0; padding:0 14px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:normal; line-height:1.25; text-align:center; transition:background .15s, border-color .15s;">${_qEn ? 'Voice<br>Q&A' : '음성<br>문답'}</button>
+                    <textarea id="gantt-qa-input" rows="3" placeholder="${_qEn ? 'Ask about this project... (Enter=Send, Shift+Enter=New line, ↑↓=History)' : '이 프로젝트에 대해 질문해보세요... (Enter=전송, Shift+Enter=줄바꿈, ↑↓=이전 질문)'}" style="flex:1; min-width:0; resize:none; padding:8px 10px; border:1px solid #b4c3d2; border-radius:6px; font-size:12.5px; font-family:inherit; line-height:1.4; background:#fff;" onkeydown="window._ganttQaHandleInputKeydown(event)"></textarea>
                     <button id="gantt-qa-send-btn" onclick="window.sendGanttQaMessage()" onmouseover="this.style.background='#cfe6fa'; this.style.borderColor='#7fb0dd';" onmouseout="this.style.background='#e8f4fd'; this.style.borderColor='#a5c8f0';" style="padding:0 16px; background:#e8f4fd; color:#1a4f7a; border:1px solid #a5c8f0; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer; white-space:nowrap; transition:background .15s, border-color .15s;">${_qEn ? 'Send' : '전송'}</button>
+                </div>
                 </div>
             </div>`;
             document.body.appendChild(modal);
